@@ -15,7 +15,7 @@ import {
   toolDialectSchema
 } from '@/schemas/completion-stream'
 import { type McpClientInput } from '@/schemas/mcp-adapter'
-import { toolSchema } from '@/schemas/tools'
+import { toolSchema, toolSearchOptionsSchema } from '@/schemas/tools'
 
 const mcpClientInputSchema = z.custom<McpClientInput>()
 
@@ -32,7 +32,8 @@ const batchPromptBaseSchema = z
       .describe('Optional per-prompt sampling / generation parameters.'),
     responseFormat: responseFormatSchema
       .optional()
-      .describe('Optional per-prompt structured-output constraint.')
+      .describe('Optional per-prompt structured-output constraint.'),
+    toolSearch: toolSearchOptionsSchema.optional()
   })
   .strict()
 

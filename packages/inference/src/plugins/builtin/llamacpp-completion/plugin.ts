@@ -173,7 +173,7 @@ export const llmPlugin = definePlugin({
         // includes whatever an earlier `tool_search` loaded.
         const toolsByPosition = request.prompts.map(
           (prompt) =>
-            resolveDeferredTools(prompt.tools, prompt.history)?.toolsToRender ??
+            resolveDeferredTools(prompt.tools, prompt.history, prompt.toolSearch)?.toolsToRender ??
             prompt.tools?.map(toWireTool) ??
             []
         )
@@ -412,7 +412,9 @@ export const llmPlugin = definePlugin({
             modelId: request.modelId,
             kvCache: request.kvCache,
             prefill: request.prefill,
+            seedFrom: request.seedFrom,
             ...(toolsActive && request.tools && { tools: request.tools }),
+            ...(request.toolSearch && { toolSearch: request.toolSearch }),
             ...(request.generationParams && { generationParams: request.generationParams }),
             ...(toolsActive && { toolDialect: dialect }),
             ...(request.responseFormat && { responseFormat: request.responseFormat })
@@ -438,7 +440,8 @@ export const llmPlugin = definePlugin({
             result = await stream.next()
           }
 
-          const { modelExecutionMs, stats, toolCalls, stoppedAtContextBoundary } = result.value
+          const { modelExecutionMs, stats, toolCalls, stoppedAtContextBoundary, stopReason } =
+            result.value
           // Cancellation rides the done path: observable via the last event's
           // stopReason; client aggregates reject with InferenceCancelledError.
           const cancelled = ctx.signal.aborted
@@ -457,6 +460,7 @@ export const llmPlugin = definePlugin({
           const terminalEvents = normalizer.finish({
             ...(stats && { stats }),
             ...(toolCalls.length > 0 && { toolCalls }),
+            ...(stopReason && { stopReason }),
             ...(cancelled && { stopReason: 'cancelled' as const }),
             ...(lengthStop && { stopReason: 'length' as const })
           })

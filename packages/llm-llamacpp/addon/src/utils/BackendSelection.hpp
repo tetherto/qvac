@@ -87,6 +87,8 @@ std::pair<BackendType, std::string> chooseBackend(
 /// families in priority order (e.g. {"cuda", "vulkan"}). Entries with no device
 /// present are skipped; if none match, selection falls through to the normal
 /// cascade rather than failing, because an absent device is not a config error.
+/// The AMD XDNA NPU is reachable only through the override; the cascade never
+/// picks it.
 ///
 /// For BitNet models with TQ1_0/TQ2_0 quantization on Adreno GPUs:
 ///   - Adreno 800+: prefer Vulkan over OpenCL
@@ -133,6 +135,9 @@ struct SplitDeviceSelection {
   // The subset dropped only because a twin could not be ruled out, with no
   // device id to compare. The caller warns about them.
   std::vector<std::string> droppedAmbiguousDevices;
+  // Devices that are never selected automatically but that an explicit
+  // `devices` list may name: the AMD XDNA NPU.
+  std::vector<SplitDevice> optInDevices;
 };
 
 /// @brief The authoritative allowlisted device set for multi-GPU modes.
@@ -199,7 +204,8 @@ bool shouldWarnAboutJitCache();
 ///
 /// Selection mirrors qvac-fabric's device ordering while applying this addon's
 /// supported-backend allowlist:
-///   - CUDA, RPC, Vulkan, Metal and Adreno OpenCL devices are eligible.
+///   - CUDA, RPC, Vulkan, Metal and Adreno OpenCL devices are eligible. XDNA
+///     NPU devices go to `optInDevices` instead, for an explicit `devices`.
 ///   - RPC devices are prepended and do not suppress a local integrated GPU.
 ///   - Local discrete GPUs when any are present, otherwise the first
 ///     integrated GPU plus any later one sharing its backend registry handle.

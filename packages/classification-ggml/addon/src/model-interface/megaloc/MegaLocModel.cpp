@@ -13,7 +13,6 @@
 #include <ggml.h>
 #include <gguf.h>
 #include <inference-addon-cpp/Errors.hpp>
-#include <qvac-fabric.h>
 
 namespace classification_ggml::megaloc {
 namespace {
@@ -33,22 +32,9 @@ using Gguf = std::unique_ptr<gguf_context, decltype(&gguf_free)>;
 
 } // namespace
 
-int backendId(const char* name) {
-  const std::string value(name);
-  if (value.starts_with("CPU"))
-    return 0;
-  if (value.starts_with("Metal") || value.starts_with("MTL"))
-    return 1;
-  if (value.starts_with("CUDA"))
-    return 2;
-  if (value.starts_with("Vulkan"))
-    return 3;
-  if (value.starts_with("OpenCL") || value.starts_with("GPUOpenCL"))
-    return 4;
-  return 99;
-}
-
 struct MegaLocModel::Impl {
+  // Declared first so the backends outlive every buffer and the scheduler.
+  std::unique_ptr<GgmlBackends> backends;
   ggml_backend_t device = nullptr;
   ggml_backend_t cpu = nullptr;
   ggml_backend_buffer_t weightBuffer = nullptr;
@@ -75,10 +61,6 @@ struct MegaLocModel::Impl {
     if (weightBuffer)
       ggml_backend_buffer_free(weightBuffer);
     weights.reset();
-    if (cpu && cpu != device)
-      ggml_backend_free(cpu);
-    if (device)
-      ggml_backend_free(device);
   }
 
   Tensor* weight(const std::string& name) { return tensors.at(name); }
@@ -442,44 +424,11 @@ void MegaLocModel::load() {
   check(
       config_.threads > 0 && config_.threads <= 1024,
       "threads must be between 1 and 1024");
-#if defined(GGML_BACKEND_DL)
-  if (config_.backendsDir.empty())
-    qvac_fabric_load_backends();
-  else
-    ggml_backend_load_all_from_path(config_.backendsDir.c_str());
-#endif
   auto state = std::make_unique<Impl>();
-  auto* selected = config_.backend.empty()
-                       ? ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU)
-                       : ggml_backend_dev_by_name(config_.backend.c_str());
-  if (!selected && config_.backend.starts_with("Metal")) {
-    const auto name = "MTL" + config_.backend.substr(5);
-    selected = ggml_backend_dev_by_name(name == "MTL" ? "MTL0" : name.c_str());
-  }
-  if (!selected && config_.backend.empty())
-    selected = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_IGPU);
-  if (!selected && config_.backend.empty())
-    selected = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-  check(
-      selected != nullptr,
-      "requested backend is unavailable: " + config_.backend);
-  state->device = ggml_backend_dev_init(selected, nullptr);
-  if (!state->device)
-    throw StatusError(InternalError, "MegaLoc backend initialization failed");
-  state->cpu =
-      ggml_backend_dev_type(selected) == GGML_BACKEND_DEVICE_TYPE_CPU
-          ? state->device
-          : ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, nullptr);
-  if (!state->cpu)
-    throw StatusError(
-        InternalError, "MegaLoc CPU backend initialization failed");
-  auto* registry =
-      ggml_backend_dev_backend_reg(ggml_backend_get_device(state->cpu));
-  auto setThreads = reinterpret_cast<void (*)(ggml_backend_t, int)>(
-      ggml_backend_reg_get_proc_address(
-          registry, "ggml_backend_set_n_threads"));
-  if (setThreads)
-    setThreads(state->cpu, config_.threads);
+  state->backends = std::make_unique<GgmlBackends>(
+      config_.backend, config_.backendsDir, config_.threads, "MegaLoc");
+  state->device = state->backends->device();
+  state->cpu = state->backends->cpu();
   state->loadWeights(config_.modelPath);
   state->build();
   impl_ = std::move(state);

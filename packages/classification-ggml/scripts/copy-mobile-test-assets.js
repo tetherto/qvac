@@ -169,15 +169,42 @@ function main() {
   copyWeightsToTestAssets()
   copyTestImagesToTestAssets()
   const fixtures = path.join(ADDON_DIR, 'test', 'fixtures')
-  for (const quant of ['f16', 'mixed']) {
-    const variable = `QVAC_MEGALOC_${quant.toUpperCase()}_MODEL_PATH`
-    const source = process.env[variable] || path.join(fixtures, `megaloc-${quant}.gguf`)
+  // [file, path override, model, conversion guide, runner in integration.auto.cjs]
+  const models = [
+    ['megaloc-f16.gguf', 'QVAC_MEGALOC_F16_MODEL_PATH', 'MegaLoc', 'docs/megaloc.md', 'runMegaloc'],
+    [
+      'megaloc-mixed.gguf',
+      'QVAC_MEGALOC_MIXED_MODEL_PATH',
+      'MegaLoc',
+      'docs/megaloc.md',
+      'runMegaloc'
+    ],
+    [
+      'bridgedepth-vits-f32.gguf',
+      'QVAC_BRIDGEDEPTH_MODEL_PATH',
+      'BridgeDepth',
+      'docs/bridgedepth.md',
+      'runBridgedepth'
+    ]
+  ]
+  // A manual dispatch can pick runners with a mocha grep over their names
+  // (docs/ci/MOBILE-ON-DEMAND.md). Models only unselected runners use stay out
+  // of the app, so a filtered run does not build and upload them.
+  const testFilter = process.env.MOBILE_TESTS_FILTER
+    ? new RegExp(process.env.MOBILE_TESTS_FILTER)
+    : null
+  for (const [filename, variable, model, guide, runner] of models) {
+    if (testFilter && !testFilter.test(runner)) {
+      console.log(`[mobile:copy-prebuilds] ${runner} not selected, skipping ${filename}`)
+      continue
+    }
+    const source = process.env[variable] || path.join(fixtures, filename)
     if (!fs.existsSync(source)) {
       throw new Error(
-        `Convert the MegaLoc test models first (docs/megaloc.md), or set ${variable}: ${source}`
+        `Convert the ${model} test models first (${guide}), or set ${variable}: ${source}`
       )
     }
-    fs.copyFileSync(source, path.join(TEST_ASSETS_DIR, `megaloc-${quant}.gguf.bin`))
+    fs.copyFileSync(source, path.join(TEST_ASSETS_DIR, `${filename}.bin`))
   }
   for (const filename of fs.readdirSync(fixtures)) {
     if (filename.endsWith('.bin') || filename.endsWith('.png')) {

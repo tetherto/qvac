@@ -1102,6 +1102,57 @@ function registerScriptedModel(
   return conversations
 }
 
+for (const stream of [false, true]) {
+  for (const kvCache of [undefined, true, 'terminal-reason-cache']) {
+    for (const scenario of [
+      { native: 'eos', expected: 'eos', generatedTokens: 1 },
+      { native: 'antiprompt', expected: 'stopSequence', generatedTokens: 1 },
+      { native: 'contextOverflow', expected: 'length', generatedTokens: 1 },
+      { native: 'predictionLimit', expected: 'length', generatedTokens: 2 },
+      { native: 'none', expected: undefined, generatedTokens: 1 },
+      { native: 'eos', expected: 'cancelled', generatedTokens: 1, cancel: true }
+    ]) {
+      test(`completion: terminal reason ${scenario.expected}, stream=${stream}, cache=${kvCache}`, async (t) => {
+        await setIsolatedHome()
+        clearRegistry()
+        const modelId = `terminal-reason-${Date.now()}`
+        registerScriptedModel(modelId, [], [], {
+          config: { predict: 2 },
+          ...(scenario.cancel && { cancelOnRun: 1 }),
+          statsOnRun: () => ({
+            stopReason: scenario.native,
+            generatedTokens: scenario.generatedTokens
+          })
+        })
+        const handler = llmPlugin.handlers.completionStream.handler as unknown as LooseHandler
+        const events: { type: string; stopReason?: string }[] = []
+        try {
+          for await (const frame of handler({
+            modelId,
+            requestId: `${modelId}-1`,
+            history: [user('Hello')],
+            stream,
+            ...(kvCache !== undefined && { kvCache })
+          })) {
+            const response = frame as { events?: { type: string; stopReason?: string }[] }
+            events.push(...(response.events ?? []))
+          }
+          const done = events.filter((event) => event.type === 'completionDone')
+          t.is(done.length, 1, 'one terminal event')
+          t.is(
+            done[0]?.stopReason,
+            scenario.expected,
+            'native reason with limit/cancellation precedence'
+          )
+        } finally {
+          unregisterModel(modelId)
+          clearRegistry()
+        }
+      })
+    }
+  }
+}
+
 // Once the run returns, the file holds whatever the addon kept — it commits
 // or rolls back the request itself — so a named key keeps it whatever the stop.
 const keptAfterStop: {

@@ -319,6 +319,75 @@ class QvacCompletionApiTest {
     }
 
     @Test
+    fun toolSearchLimitsAndDeferredToolsReachTheWire() = runTest {
+        val transport = ApiTransport(
+            stream = flowOf(
+                completionFrame(done = true, event("completionDone", 0) { put("stopReason", "eos") }),
+            ),
+            duplexFactory = {
+                flowOf(
+                    buildJsonObject {
+                        put("type", "completionOrchestrate")
+                        put("turn", 0)
+                        put("events", buildJsonArray { add(event("completionDone", 0) { put("stopReason", "eos") }) })
+                    },
+                    buildJsonObject { put("type", "completionOrchestrate"); put("done", true) },
+                )
+            },
+        )
+        val tools = listOf(
+            QvacTool("create_issue", "Open an issue", deferLoading = true, group = "github") { JsonPrimitive("ok") },
+            QvacTool("get_weather", "Get weather") { JsonPrimitive("sunny") },
+        )
+        val options = QvacCompletionOptions(toolSearch = QvacToolSearchLimits(defaultLimit = 2, maxLimit = 5))
+        val client = QvacClient(transport)
+        try {
+            client.completion.run("model", listOf(QvacMessage.user("hi")), tools, options).final.await()
+            val streamed = transport.lastPayload!!
+            client.completion.orchestrate("model", listOf(QvacMessage.user("hi")), tools, options = options).final.await()
+            val orchestrated = transport.lastPayload!!
+
+            for (payload in listOf(streamed, orchestrated)) {
+                val limits = payload.getValue("toolSearch").jsonObject
+                assertEquals(2, limits.getValue("defaultLimit").jsonPrimitive.content.toInt())
+                assertEquals(5, limits.getValue("maxLimit").jsonPrimitive.content.toInt())
+                val (deferred, loaded) = payload.getValue("tools").jsonArray.map { it.jsonObject }
+                assertEquals(JsonPrimitive(true), deferred["deferLoading"])
+                assertEquals("github", deferred["group"]?.jsonPrimitive?.content)
+                assertEquals(null, loaded["deferLoading"])
+            }
+
+            client.completion.run("model", listOf(QvacMessage.user("hi")), tools).final.await()
+            assertEquals(null, transport.lastPayload?.get("toolSearch"), "no limits unless set")
+        } finally {
+            client.close()
+        }
+    }
+
+    @Test
+    fun positionalHandlerAndTrailingLambdaStillBuildTools() {
+        val handler: QvacToolHandler = { JsonPrimitive("ok") }
+        val positional = QvacTool("lookup", "Look up a value", emptyMap(), emptySet(), null, handler)
+        assertEquals(handler, positional.handler)
+        assertFalse(positional.deferLoading)
+        assertEquals(null, positional.group)
+
+        val trailing = QvacTool("lookup", "Look up a value") { JsonPrimitive("ok") }
+        assertTrue(trailing.handler != null)
+        assertFalse(trailing.deferLoading)
+    }
+
+    @Test
+    fun invalidToolSearchLimitsAreRejected() {
+        assertFailsWith<IllegalArgumentException> { QvacToolSearchLimits(defaultLimit = 0) }
+        assertFailsWith<IllegalArgumentException> { QvacToolSearchLimits(maxLimit = 0) }
+        assertFailsWith<IllegalArgumentException> { QvacToolSearchLimits(defaultLimit = 4, maxLimit = 2) }
+        assertFailsWith<IllegalArgumentException> { QvacToolSearchLimits(defaultLimit = 9) }
+        QvacToolSearchLimits(maxLimit = 1)
+        QvacToolSearchLimits(defaultLimit = 8)
+    }
+
+    @Test
     fun kvCacheAndToolDialectUseContractValues() = runTest {
         val transport = ApiTransport(
             stream = flowOf(
@@ -467,6 +536,43 @@ class QvacCompletionApiTest {
         }
         assertFailsWith<IllegalArgumentException> {
             QvacMessage("assistant", "hi", toolCallId = "call_1")
+        }
+    }
+
+    @Test
+    fun orderedPartsReachTheWireInOrder() = runTest {
+        val history = sentPayload(
+            listOf(
+                QvacMessage.user(
+                    listOf(
+                        QvacContentPart.Text("Compare"),
+                        QvacContentPart.Media("/a.jpg"),
+                        QvacContentPart.Text("with"),
+                        QvacContentPart.Media("/b.jpg"),
+                    ),
+                ),
+            ),
+        )["history"]!!.jsonArray.map { it.jsonObject }
+
+        assertEquals(
+            buildJsonArray {
+                add(buildJsonObject { put("type", "text"); put("text", "Compare") })
+                add(buildJsonObject { put("type", "media"); put("path", "/a.jpg") })
+                add(buildJsonObject { put("type", "text"); put("text", "with") })
+                add(buildJsonObject { put("type", "media"); put("path", "/b.jpg") })
+            },
+            history[0]["content"],
+        )
+        assertFalse("attachments" in history[0])
+    }
+
+    @Test
+    fun invalidPartsAreRejected() {
+        val parts = listOf(QvacContentPart.Text("hi"))
+        assertFailsWith<IllegalArgumentException> { QvacMessage("assistant", "", parts = parts) }
+        assertFailsWith<IllegalArgumentException> { QvacMessage("user", "hi", parts = parts) }
+        assertFailsWith<IllegalArgumentException> {
+            QvacMessage("user", "", attachments = listOf(QvacAttachment("/a.jpg")), parts = parts)
         }
     }
 

@@ -24,7 +24,7 @@ their own flag:
 qvac serve --openai
 ```
 
-Any system compatible with the [OpenAI REST API](https://developers.openai.com/api/reference/overview) can then point to `http://localhost:11434/v1/` and work without changes.
+Any system compatible with the [OpenAI REST API](https://developers.openai.com/api/reference/overview) can then point to `http://localhost:11435/v1/` and work without changes.
 
 Pass `--no-default` to leave the QVAC surface out. Introspection
 (`/openapi.json`, and `/docs` with `--docs`) is always served and describes
@@ -114,7 +114,7 @@ qvac serve --openai
 Send a request:
 
 ```bash
-curl http://localhost:11434/v1/chat/completions \
+curl http://localhost:11435/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "my-llm",
@@ -225,7 +225,7 @@ Relevant options are summarized below; run `qvac serve --help` for the exact gen
 | `--openai` | Mount the OpenAI-compatible surface |
 | `--no-default` | Do not mount the QVAC surface |
 | `-c, --config <path>` | Config file path (default: auto-detect `qvac.config.*`) |
-| `-p, --port <number>` | Port to listen on (default: `11434`) |
+| `-p, --port <number>` | Port to listen on (default: `11435`) |
 | `-H, --host <address>` | Host to bind to (default: `127.0.0.1`) |
 | `--model <alias>` | Model alias to preload (repeatable; must be in config) |
 | `--api-key <key>` | Require Bearer token authentication |
@@ -295,7 +295,7 @@ Uploads are capped at 100 MB per file and 10 files per request.
 
 ### KV cache
 
-Chat requests cache each conversation's prefix under `~/.qvac/kv-cache`, so a follow-up turn only prefills the new tail. Chat is the only endpoint that caches — Responses and Legacy completions run uncached and leave nothing here to reclaim. The directory grows on the order of hundreds of megabytes per conversation, but it is **bounded** — you do not need to write a sweeper of your own.
+Chat requests automatically cache each conversation's prefix under `~/.qvac/kv-cache`, so a follow-up turn only prefills the new tail. [Responses](#responses) can opt into named sessions; Legacy completions run uncached. Automatic and Responses caches grow on the order of hundreds of megabytes per conversation, but are **bounded** — you do not need to write a sweeper of your own.
 
 | Bound | Value |
 | --- | --- |
@@ -306,7 +306,7 @@ Chat requests cache each conversation's prefix under `~/.qvac/kv-cache`, so a fo
 Caches held by an in-flight request are never evicted.
 
 <Callout type="warn">
-**Named caches are not covered.** The policy applies only to the *automatic* caches these endpoints create. A caller-owned named cache — `completion({ kvCache: "my-session" })` through the SDK — is exempt from both the quota and the TTL, and the endpoint below never touches it. Clean those up with [`deleteCache({ kvCacheKey })`](/sdk/reference/api#deletecache). The server itself only ever creates automatic caches; it does not use named keys.
+**Other named caches are not covered.** Responses sessions get the same quota and TTL (counted separately from automatic caches), and the endpoint below reclaims them too. Because other QVAC processes can share the directory, the quota and the endpoint only delete Responses caches this server has used; the 24-hour TTL applies to all of them. A cache that any running QVAC process is using is never deleted. Other caller-owned named caches, such as `completion({ kvCache: "my-session" })` through the SDK, are exempt from both, and the endpoint never touches them. Clean those up with [`deleteCache({ kvCacheKey })`](/sdk/reference/api#deletecache).
 </Callout>
 
 ### `DELETE /qvac/v1/kv_cache`
@@ -314,7 +314,7 @@ Caches held by an in-flight request are never evicted.
 Frees every automatic KV cache no in-flight request is using, immediately, rather than waiting for the quota or the TTL. Use it when reclaiming disk matters more than keeping conversations warm: deleting a cache costs the next turn a full prefill instead of a partial one, and loses no conversation content, since a KV cache is derived data.
 
 ```bash
-curl -X DELETE http://localhost:11434/qvac/v1/kv_cache
+curl -X DELETE http://localhost:11435/qvac/v1/kv_cache
 ```
 
 Response:
@@ -383,7 +383,7 @@ The batch succeeds or fails as a whole. The request blocks until every prompt fi
 client disconnect cancels it.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/chat/batch \
+curl -sS http://localhost:11435/qvac/v1/chat/batch \
   -H "Content-Type: application/json" \
   -d '{"model":"my-llm","prompts":[
         {"id":"cherry","messages":[{"role":"user","content":"Reply with only the word CHERRY."}]},
@@ -440,7 +440,7 @@ Every figure is a metric with a `status`. Only `supported` carries a `value`, wi
 not give a trustworthy number, and may carry a `reason`.
 
 ```bash
-curl -sS "http://localhost:11434/qvac/v1/system?sample=true"
+curl -sS "http://localhost:11435/qvac/v1/system?sample=true"
 ```
 
 ```json
@@ -483,7 +483,7 @@ While the runtime is `suspending`, `suspended` or `resuming`, every route except
 #### `GET /qvac/v1/runtime/state`
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/runtime/state
+curl -sS http://localhost:11435/qvac/v1/runtime/state
 ```
 
 ```json
@@ -523,7 +523,7 @@ load say, gets `503 runtime_suspended`. Both are idempotent and return the state
 runtime in.
 
 ```bash
-curl -sS -X POST http://localhost:11434/qvac/v1/runtime/suspend \
+curl -sS -X POST http://localhost:11435/qvac/v1/runtime/suspend \
   -H "Authorization: Bearer $QVAC_API_KEY"
 ```
 
@@ -580,7 +580,7 @@ llama.cpp load with a verdict, empty otherwise. A row's `id` is the PCI bus ID
 where the backend reports one, so the same GPU matches across engines.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/models/fit \
+curl -sS http://localhost:11435/qvac/v1/models/fit \
   -H "Content-Type: application/json" \
   -d '{"models":[{"model":"my-llm","modelConfig":{"ctx_size":8192}}]}'
 ```
@@ -680,7 +680,7 @@ finishes. Both end with one `translation.done` event, then `data: [DONE]`.
 A client disconnect cancels the request and its result is dropped.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/translate \
+curl -sS http://localhost:11435/qvac/v1/translate \
   -H "Content-Type: application/json" \
   -d '{"model":"ta-en","text":"வணக்கம் உலகம்"}'
 ```
@@ -752,7 +752,7 @@ OCR cannot be cancelled: a client disconnect drops the result, but the image is
 still read to the end.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/ocr \
+curl -sS http://localhost:11435/qvac/v1/ocr \
   -F model=ocr-en \
   -F image=@receipt.png
 ```
@@ -819,7 +819,7 @@ Classification cannot be cancelled: a client disconnect drops the result, but th
 still classified.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/classifications \
+curl -sS http://localhost:11435/qvac/v1/classifications \
   -F model=classifier \
   -F image=@photo.jpg \
   -F top_k=1
@@ -879,7 +879,7 @@ request after start-up connects to the registry over P2P and can take several
 seconds.
 
 ```bash
-curl -sS "http://localhost:11434/qvac/v1/registry/models?addon=llm&search=qwen3&limit=1"
+curl -sS "http://localhost:11435/qvac/v1/registry/models?addon=llm&search=qwen3&limit=1"
 ```
 
 ```json
@@ -920,7 +920,7 @@ Fetch one registry entry by the `registrySource` and `registryPath` a list row
 carries. Same shape as a list row. Both params are required.
 
 ```bash
-curl -sS -G http://localhost:11434/qvac/v1/registry/models/lookup \
+curl -sS -G http://localhost:11435/qvac/v1/registry/models/lookup \
   --data-urlencode registrySource=hf \
   --data-urlencode registryPath=unsloth/Qwen3-0.6B-GGUF/blob/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q4_0.gguf
 ```
@@ -961,7 +961,7 @@ Upscaling cannot be cancelled: a client disconnect drops the result, but the
 image is still upscaled to the end.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/images/upscale \
+curl -sS http://localhost:11435/qvac/v1/images/upscale \
   -F model=upscaler -F image=@photo.png -F repeats=1
 ```
 
@@ -1036,7 +1036,7 @@ The other `audioGen()` fields (`bpm`, `keyscale`, `timesignature`, `vocalLanguag
 accepted under the same names.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/audio/generations \
+curl -sS http://localhost:11435/qvac/v1/audio/generations \
   -H 'Content-Type: application/json' \
   -d '{ "model": "music", "caption": "calm lofi piano", "lyrics": "[Instrumental]", "duration": 30 }'
 ```
@@ -1076,7 +1076,7 @@ above full scale; the job then fails with `audio_edit_failed` (`sourceAudio must
 in [-1, 1]`). Lowering the source's gain avoids it.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/audio/edits \
+curl -sS http://localhost:11435/qvac/v1/audio/edits \
   -F model=music \
   -F sourceAudio=@song.wav \
   -F 'operations=[{"type":"repaint","caption":"analog synth solo","start":10,"end":20}]'
@@ -1269,9 +1269,9 @@ then `[DONE]`. A block that fails after its first frame ends the stream with an 
 event and no `[DONE]`. A client disconnect cancels the block.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/world/scenes \
+curl -sS http://localhost:11435/qvac/v1/world/scenes \
   -F model=abot-world -F prompt='| unknown | A forest path' -F image=@first-frame.jpg
-curl -sS http://localhost:11434/qvac/v1/world/scenes/scene_3f1c.../steps \
+curl -sS http://localhost:11435/qvac/v1/world/scenes/scene_3f1c.../steps \
   -H 'Content-Type: application/json' -d '{"keys":["W"]}'
 ```
 
@@ -1353,7 +1353,7 @@ endpoints.
 | `stream`  | `boolean` | No       | Call a streaming handler and answer with SSE (default false) |
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/plugins/echo-plugin/invoke \
+curl -sS http://localhost:11435/qvac/v1/plugins/echo-plugin/invoke \
   -H "Authorization: Bearer $QVAC_API_KEY" -H "Content-Type: application/json" \
   -d '{"model": "echo", "handler": "echo", "params": {"text": "hi"}}'
 ```
@@ -1456,7 +1456,7 @@ usable: one that is not preloaded loads on the first request that names it.
 List all configured models (loaded or not — each loads on first request).
 
 ```bash
-curl http://localhost:11434/v1/models
+curl http://localhost:11435/v1/models
 ```
 
 Response:
@@ -1475,7 +1475,7 @@ Response:
 Get details of a configured model (whether or not it is currently loaded).
 
 ```bash
-curl http://localhost:11434/v1/models/my-llm
+curl http://localhost:11435/v1/models/my-llm
 ```
 
 #### `DELETE /v1/models/:id`
@@ -1485,7 +1485,7 @@ reloadable — the next request that names it loads it again. There is no separa
 load endpoint; send a normal request (or set `preload: true`) to load a model.
 
 ```bash
-curl -X DELETE http://localhost:11434/v1/models/my-llm
+curl -X DELETE http://localhost:11435/v1/models/my-llm
 ```
 
 Response:
@@ -1511,7 +1511,7 @@ Filter with query params (combined with AND): `search` (id substring), `role`
 `quantization`, `engine`, `configured`, `limit` (omit for no limit), `offset`.
 
 ```bash
-curl 'http://localhost:11434/v1/models/catalog?role=chat&limit=20'
+curl 'http://localhost:11435/v1/models/catalog?role=chat&limit=20'
 ```
 
 Response: `{ "object": "list", "data": [ … ], "has_more": <bool> }`, each entry:
@@ -1548,7 +1548,7 @@ Generate a chat completion. Supports both blocking and streaming (SSE) modes, to
 **Blocking request:**
 
 ```bash
-curl http://localhost:11434/v1/chat/completions \
+curl http://localhost:11435/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "my-llm",
@@ -1561,7 +1561,7 @@ curl http://localhost:11434/v1/chat/completions \
 **Streaming request (server-sent events):**
 
 ```bash
-curl http://localhost:11434/v1/chat/completions \
+curl http://localhost:11435/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "my-llm",
@@ -1573,7 +1573,7 @@ curl http://localhost:11434/v1/chat/completions \
 **Tool calling:**
 
 ```bash
-curl http://localhost:11434/v1/chat/completions \
+curl http://localhost:11435/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "my-llm",
@@ -1598,7 +1598,7 @@ A `tools` request for a model loaded without `config.tools: true` returns `400 t
 **Forcing a tool call** with `tool_choice`:
 
 ```bash
-curl http://localhost:11434/v1/chat/completions \
+curl http://localhost:11435/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "my-llm",
@@ -1633,14 +1633,32 @@ shape has no field for it.
 
 #### Message content
 
-`messages[].content` accepts both the plain string form and the OpenAI **array-of-parts** form (`[{ "type": "text", "text": "…" }, …]`) that modern clients such as Cline and Open WebUI send. Parts of type `text` are concatenated into a single string; non-text parts (`image_url`, `input_audio`, `file`) are **silently dropped** — the chat surface is text-only and vision is out of scope. Both shapes below are valid:
+`messages[].content` accepts a plain string or an OpenAI array of `text` and
+`image_url` parts. User messages with images preserve the order of every text and
+image part, so each image reaches the model where the client placed it. Text-only
+arrays are joined into one string without separators. On other roles, images are
+sent as attachments before the joined text.
+
+Both shapes below are valid.
 
 ```jsonc
 // string form
 { "role": "user", "content": "Describe a sunset." }
 
-// array form (non-text parts ignored)
-{ "role": "user", "content": [{ "type": "text", "text": "Describe a sunset." }] }
+// array form, preserving text and image order
+{
+  "role": "user",
+  "content": [
+    { "type": "text", "text": "Describe this image: " },
+    {
+      "type": "image_url",
+      "image_url": {
+        "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+      }
+    },
+    { "type": "text", "text": " What colors do you see?" }
+  ]
+}
 ```
 
 #### Generation parameters
@@ -1676,7 +1694,7 @@ Models that emit `<think>…</think>` blocks (e.g. Qwen3.5) have their reasoning
 `response_format.type` accepts `text` (default), `json_object`, and `json_schema`. When `json_schema` is used, the request must also carry `json_schema.schema` (a JSON Schema object) and may include `json_schema.name` and `json_schema.strict`.
 
 ```bash
-curl http://localhost:11434/v1/chat/completions \
+curl http://localhost:11435/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "my-llm",
@@ -1724,7 +1742,6 @@ Each choice carries a `finish_reason` that reflects how generation actually ende
 - **`prompt_tokens`** — real prompt token count when the SDK reports it, else `0`.
 - **`completion_tokens`** — the SDK's `generatedTokens` when available, falling back to a whitespace word count of the output.
 - **`total_tokens`** — the sum of the two.
-- **`prompt_tokens_details.cached_tokens`** — present only when the SDK reports a KV-cache hit; it is the count of prompt tokens reused from a previous turn's cache, not the full prompt size.
 
 Blocking and streaming share the same accounting, so counts do not drift between the two paths. By default a **streaming** response carries no `usage` object; set `stream_options: { include_usage: true }` to receive it as a trailing SSE chunk whose `choices` array is empty (it follows the `finish_reason` / `tool_calls` chunk), matching OpenAI's streaming shape.
 
@@ -1747,7 +1764,7 @@ Create a response.
 **Blocking request:**
 
 ```bash
-curl http://localhost:11434/v1/responses \
+curl http://localhost:11435/v1/responses \
   -H "Content-Type: application/json" \
   -d '{
     "model": "my-llm",
@@ -1759,7 +1776,7 @@ curl http://localhost:11434/v1/responses \
 **Streaming request (SSE):**
 
 ```bash
-curl http://localhost:11434/v1/responses \
+curl http://localhost:11435/v1/responses \
   -H "Content-Type: application/json" \
   -d '{
     "model": "my-llm",
@@ -1771,7 +1788,7 @@ curl http://localhost:11434/v1/responses \
 **Multi-turn via `previous_response_id`:**
 
 ```bash
-curl http://localhost:11434/v1/responses \
+curl http://localhost:11435/v1/responses \
   -H "Content-Type: application/json" \
   -d '{
     "model": "my-llm",
@@ -1781,6 +1798,16 @@ curl http://localhost:11434/v1/responses \
 ```
 
 The same generation parameters (`temperature`, `top_p`, `seed`, `max_output_tokens` / `max_tokens`, `frequency_penalty`, `presence_penalty`, `reasoning_budget`) and the same `response_format` rules as `/v1/chat/completions` apply.
+
+**Opt-in KV cache:** send `X-QVAC-KV-Cache-Key: <stable-session-key>` on every request in a conversation, or put the key in the body:
+
+```json
+{ "metadata": { "qvac_kv_cache_key": "my-session" } }
+```
+
+OpenAI's `prompt_cache_key` works as well, so clients that already send one per conversation (Codex does) get a cache without extra configuration. Precedence is header, then `metadata.qvac_kv_cache_key`, then `prompt_cache_key`; send the header only once, since a repeated header is rejected. A supplied key must be a string containing at least one non-whitespace character and no more than 512 UTF-8 bytes, measured before hashing. Invalid keys return `400 invalid_kv_cache_key`. Keys are hashed with SHA-256 before filesystem use; the same exact key selects the same named SDK session in blocking and streaming requests, including tool turns. Use a separate key per conversation, resend it with the growing history (or `previous_response_id`), and serialize turns within a session. A key selects a cache, not stored history. With no key, Responses remains uncached; `store` and `previous_response_id` do not opt in or inherit a key.
+
+On a request with a key, `usage.qvac_cache_tokens` reports the SDK's `cacheTokens`. This is the SDK's cache occupancy, **not** a per-request count of reused prompt tokens, so it is not mapped to OpenAI's `input_tokens_details.cached_tokens`. Streaming includes the same diagnostic in the final response event. Existing `input_tokens` / `total_tokens` accounting is unchanged. Named cache files outlive the volatile Responses store: `store: false` does not disable an explicitly requested cache, and deleting a response does not delete its cache. They are bounded by the same quota and TTL as automatic caches; see [KV cache](#kv-cache).
 
 <Callout type="warn">
 **Volatile state.** Stored responses live in process memory only — there is no disk or P2P persistence. They expire on server restart, after the per-entry TTL (1 h by default), or when the LRU cap (256 entries) evicts them. Each response carries the `X-QVAC-Stub: responses-volatile` header. Pass `store: false` in the request body to skip persistence entirely.
@@ -1801,7 +1828,7 @@ When a streamed response fails after it has started (for example `context_length
 Retrieve a previously stored response by id.
 
 ```bash
-curl http://localhost:11434/v1/responses/resp_abc123
+curl http://localhost:11435/v1/responses/resp_abc123
 ```
 
 #### `DELETE /v1/responses/:id`
@@ -1809,7 +1836,7 @@ curl http://localhost:11434/v1/responses/resp_abc123
 Delete a stored response.
 
 ```bash
-curl -X DELETE http://localhost:11434/v1/responses/resp_abc123
+curl -X DELETE http://localhost:11435/v1/responses/resp_abc123
 ```
 
 #### `GET /v1/responses/:id/input_items`
@@ -1817,7 +1844,7 @@ curl -X DELETE http://localhost:11434/v1/responses/resp_abc123
 Paginate the original `input` items of a stored response. Accepts `limit` and `after` query parameters.
 
 ```bash
-curl "http://localhost:11434/v1/responses/resp_abc123/input_items?limit=20"
+curl "http://localhost:11435/v1/responses/resp_abc123/input_items?limit=20"
 ```
 
 ### Legacy completions
@@ -1831,7 +1858,7 @@ Generate a text completion from a raw prompt.
 **Blocking, single prompt:**
 
 ```bash
-curl http://localhost:11434/v1/completions \
+curl http://localhost:11435/v1/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"my-llm","prompt":"Say hello in one word.","max_tokens":16}'
 ```
@@ -1839,7 +1866,7 @@ curl http://localhost:11434/v1/completions \
 **Streaming (single prompt only):**
 
 ```bash
-curl http://localhost:11434/v1/completions \
+curl http://localhost:11435/v1/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"my-llm","prompt":"Say hello in one word.","stream":true}'
 ```
@@ -1847,7 +1874,7 @@ curl http://localhost:11434/v1/completions \
 **Multi-prompt fan-out (blocking only):**
 
 ```bash
-curl http://localhost:11434/v1/completions \
+curl http://localhost:11435/v1/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"my-llm","prompt":["Reply with alpha.","Reply with beta."],"max_tokens":8}'
 ```
@@ -1877,7 +1904,7 @@ Generate text embeddings. Accepts a single string or a batch of strings.
 **Single input:**
 
 ```bash
-curl http://localhost:11434/v1/embeddings \
+curl http://localhost:11435/v1/embeddings \
   -H "Content-Type: application/json" \
   -d '{
     "model": "my-embed",
@@ -1888,7 +1915,7 @@ curl http://localhost:11434/v1/embeddings \
 **Batch input:**
 
 ```bash
-curl http://localhost:11434/v1/embeddings \
+curl http://localhost:11435/v1/embeddings \
   -H "Content-Type: application/json" \
   -d '{
     "model": "my-embed",
@@ -1969,7 +1996,7 @@ Each question has one of these types:
 Conversation items support user, developer, system, and assistant messages. System messages become developer messages. Content can be a string; content arrays use `input_text` for non-assistant messages and `output_text` or `refusal` for assistant messages. Function and custom tool calls can be included with their matching outputs as evidence. Each output must refer to an earlier call of the same type. The server does not execute tools.
 
 ```bash
-curl http://localhost:11434/v1/decisions \
+curl http://localhost:11435/v1/decisions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "laya-multilingual-322m-q8-0",
@@ -2028,7 +2055,7 @@ Transcribe audio using Whisper or Parakeet models. Uses `multipart/form-data`. R
 **JSON response (default):**
 
 ```bash
-curl http://localhost:11434/v1/audio/transcriptions \
+curl http://localhost:11435/v1/audio/transcriptions \
   -F "file=@audio.wav" \
   -F "model=whisper" \
   -F "response_format=json"
@@ -2039,7 +2066,7 @@ Response: `{ "text": "transcribed text here" }`
 **Plain text response:**
 
 ```bash
-curl http://localhost:11434/v1/audio/transcriptions \
+curl http://localhost:11435/v1/audio/transcriptions \
   -F "file=@audio.wav" \
   -F "model=whisper" \
   -F "response_format=text"
@@ -2048,7 +2075,7 @@ curl http://localhost:11434/v1/audio/transcriptions \
 **With prompt** (Whisper uses it as `initial_prompt`):
 
 ```bash
-curl http://localhost:11434/v1/audio/transcriptions \
+curl http://localhost:11435/v1/audio/transcriptions \
   -F "file=@audio.wav" \
   -F "model=whisper" \
   -F "prompt=President Kennedy speech about space exploration"
@@ -2074,7 +2101,7 @@ Unsupported `response_format` values (`srt`, `vtt`, `verbose_json`) return a `40
 Translate audio into **English** text. Maps to Whisper's translate task (not "transcribe then run a text translator"). Uses `multipart/form-data`.
 
 ```bash
-curl http://localhost:11434/v1/audio/translations \
+curl http://localhost:11435/v1/audio/translations \
   -F "file=@sample.wav" \
   -F "model=whisper-translate" \
   -F "response_format=json"
@@ -2117,7 +2144,7 @@ Use the virtual SDK type **`whispercpp-audio-translation`** in `serve.models`. T
 OpenAI-compatible text-to-speech, backed by the SDK's `textToSpeech` capability (Chatterbox or Supertonic). Body is JSON, response body is binary audio.
 
 ```bash
-curl http://localhost:11434/v1/audio/speech \
+curl http://localhost:11435/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{"model":"my-tts","voice":"alloy","input":"Hello from QVAC."}' \
   --output speech.wav
@@ -2229,7 +2256,7 @@ data: {"type":"speech.audio.done","usage":{"input_tokens":0,"output_tokens":0,"t
 - The stream has no `[DONE]` sentinel. `speech.audio.done` is the last event.
 
 ```bash
-curl -N http://localhost:11434/v1/audio/speech \
+curl -N http://localhost:11435/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{"model":"my-tts","voice":"alloy","input":"Hello from QVAC.","response_format":"pcm","stream_format":"sse"}'
 ```
@@ -2273,7 +2300,7 @@ Text-to-image and image-to-image endpoints backed by any alias whose endpoint ca
 Text-to-image generation backed by the SDK's `diffusion()` primitive.
 
 ```bash
-curl http://localhost:11434/v1/images/generations \
+curl http://localhost:11435/v1/images/generations \
   -H "Content-Type: application/json" \
   -d '{
     "model": "my-diffusion",
@@ -2380,7 +2407,7 @@ Validation error response envelopes now include the failing-field path in the `m
 Image-to-image (img2img) edits. Uses `multipart/form-data`. Shares the same validation, response shape, and `response_format` rules as `/v1/images/generations`.
 
 ```bash
-curl http://localhost:11434/v1/images/edits \
+curl http://localhost:11435/v1/images/edits \
   -F "image=@input.png" \
   -F "model=my-diffusion" \
   -F "prompt=oil painting style, warm lighting" \
@@ -2403,7 +2430,7 @@ curl http://localhost:11434/v1/images/edits \
 For multi-reference editing with FLUX.2 or Qwen-Image-2.1, send repeated `image[]` files:
 
 ```bash
-curl http://localhost:11434/v1/images/edits \
+curl http://localhost:11435/v1/images/edits \
   -F "image[]=@reference-a.png" \
   -F "image[]=@reference-b.png" \
   -F "model=my-diffusion" \
@@ -2425,7 +2452,7 @@ The `/v1/files` endpoints expose an **in-memory** ephemeral file store used as t
 Upload bytes (multipart).
 
 ```bash
-curl http://localhost:11434/v1/files \
+curl http://localhost:11435/v1/files \
   -F "file=@notes.txt" \
   -F "purpose=assistants"
 ```
@@ -2495,19 +2522,19 @@ Attach a previously-uploaded `/v1/files` entry (UTF-8 text content).
 **End-to-end ingest + search:**
 
 ```bash
-curl http://localhost:11434/v1/vector_stores \
+curl http://localhost:11435/v1/vector_stores \
   -H "Content-Type: application/json" \
   -d '{"name":"my-docs"}'
 
-curl http://localhost:11434/v1/files \
+curl http://localhost:11435/v1/files \
   -F "file=@notes.txt" \
   -F "purpose=assistants"
 
-curl http://localhost:11434/v1/vector_stores/vs_my-docs/files \
+curl http://localhost:11435/v1/vector_stores/vs_my-docs/files \
   -H "Content-Type: application/json" \
   -d '{"file_id":"file-abc123"}'
 
-curl http://localhost:11434/v1/vector_stores/vs_my-docs/search \
+curl http://localhost:11435/v1/vector_stores/vs_my-docs/search \
   -H "Content-Type: application/json" \
   -d '{"query":"what is in the notes?","max_num_results":4}'
 ```
@@ -2592,7 +2619,7 @@ Returns `200` with the `Video` resource at `status: "queued"`.
 **Text-to-video (txt2vid)** — JSON body with `prompt`, no reference image:
 
 ```bash
-curl http://localhost:11434/v1/videos \
+curl http://localhost:11435/v1/videos \
   -H "Content-Type: application/json" \
   -d '{
     "model": "wan-t2v",
@@ -2613,7 +2640,7 @@ curl http://localhost:11434/v1/videos \
 Multipart file field (what the OpenAI SDK sends for a local `File`/`Blob`):
 
 ```bash
-curl http://localhost:11434/v1/videos \
+curl http://localhost:11435/v1/videos \
   -F "model=wan-i2v" \
   -F "prompt=the cat slowly turns its head and blinks" \
   -F "input_reference=@cat.png" \
@@ -2625,7 +2652,7 @@ curl http://localhost:11434/v1/videos \
 JSON with a base64 data URI or public HTTP(S) URL (≤ 100 MB, 30 s fetch timeout). The server refuses loopback, private, link-local and cloud-metadata addresses, including after a redirect or DNS resolution:
 
 ```bash
-curl http://localhost:11434/v1/videos \
+curl http://localhost:11435/v1/videos \
   -H "Content-Type: application/json" \
   -d '{
     "model": "wan-i2v",
@@ -2638,7 +2665,7 @@ curl http://localhost:11434/v1/videos \
 JSON referencing a file previously uploaded via `POST /v1/files`:
 
 ```bash
-curl http://localhost:11434/v1/videos \
+curl http://localhost:11435/v1/videos \
   -H "Content-Type: application/json" \
   -d '{
     "model": "wan-i2v",
@@ -2695,7 +2722,7 @@ The `Video` resource returned by `POST` (and by `GET /v1/videos/:id`):
 Poll job status. `status` cycles `queued` → `in_progress` → `completed` / `failed`. Returns the same `Video` resource shape.
 
 ```bash
-curl http://localhost:11434/v1/videos/video_abc123
+curl http://localhost:11435/v1/videos/video_abc123
 ```
 
 #### `GET /v1/videos/:id/content`
@@ -2703,7 +2730,7 @@ curl http://localhost:11434/v1/videos/video_abc123
 Download the rendered bytes (only valid once `status` is `completed`).
 
 ```bash
-curl http://localhost:11434/v1/videos/video_abc123/content --output out.mp4
+curl http://localhost:11435/v1/videos/video_abc123/content --output out.mp4
 ```
 
 - **Default container** is `video/mp4` (fragmented MP4) **when `ffmpeg` is on the server's `PATH` at startup**; otherwise it falls back to `video/avi` (the SDK's native MJPG-AVI) and logs a warning once.
@@ -2773,7 +2800,7 @@ qvac serve --openai --api-key my-secret-token
 Clients must then include the token in the `Authorization` header:
 
 ```bash
-curl http://localhost:11434/v1/models \
+curl http://localhost:11435/v1/models \
   -H "Authorization: Bearer my-secret-token"
 ```
 
@@ -2804,7 +2831,7 @@ The server exposes a machine-readable OpenAPI 3.1.0 document derived from the sa
 Always exposed (no flag required). Returns the full OpenAPI 3.1.0 document as JSON.
 
 ```bash
-curl http://localhost:11434/openapi.json
+curl http://localhost:11435/openapi.json
 ```
 
 Each operation in the document carries `summary`, `tags`, a full markdown `description`, the request body schema, and the response schema. Tags group endpoints by domain (Chat, Completions, Embeddings, Responses, Audio, Images, Files, Vector Stores, Models).
@@ -2815,7 +2842,7 @@ Swagger UI, opt-in via the `--docs` flag. Off by default to keep the production 
 
 ```bash
 qvac serve --openai --docs
-open http://localhost:11434/docs
+open http://localhost:11435/docs
 ```
 
 `--docs` adds same-port `localhost`, `127.0.0.1`, and `[::1]` origins to CORS so a locally opened Swagger UI can use "Try it out." When the configured `--host` is itself loopback, its same-port origin is added too. It does not trust a bound non-loopback host, a port-forwarded origin, or arbitrary websites. Add each additional browser origin with `--cors-origin` or `serve.cors.origins`.
