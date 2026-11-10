@@ -101,10 +101,22 @@ export function parakeetFitRequest(load: FitLoad): FitRequestPlan {
     }
   }
 
+  // The addon projects one model, and a speaker-attributed load holds two,
+  // so a one-model verdict would understate it.
+  if (config.speakerAttribution !== undefined) {
+    return {
+      unknown:
+        'the fitter projects one model; assess the speaker-attribution diarization model as its own load'
+    }
+  }
+
   const request: ParakeetFitRequest = {
     engine: 'parakeet',
     modelPath: load.modelPath,
     gpuLayers: gpuLayersFromGate(config.useGPU),
+    // An explicit selector projects on that device and overrides the GPU gate,
+    // as it does at load; a missing device rejects the fit.
+    ...(config.backend !== undefined && { backend: config.backend }),
     ...(config.maxThreads !== undefined && { threads: config.maxThreads }),
     // The long-form window bounds the offline encoder graph the projection
     // sizes, so an explicit window (or the one-pass sentinel) reaches the fit.

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { toolSchema } from '@/schemas/tools'
+import { toolSchema, toolSearchOptionsSchema } from '@/schemas/tools'
 import { TOOL_SEARCH_NAME } from '@/utils/tools/defer'
 import { completionEventSchema } from '@/schemas/completion-event'
 import { REASONING_BUDGET_MAX } from '@/schemas/llamacpp-config'
@@ -349,6 +349,7 @@ const completionClientParamsBaseSchema = completionParamsSchema.extend({
     .describe(
       'Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call.'
     ),
+  toolSearch: toolSearchOptionsSchema.optional(),
   stream: z
     .boolean()
     .describe('Whether to stream tokens (`true`) or return the complete response once (`false`).'),

@@ -49,6 +49,7 @@ type CompletionParams = Omit<CompletionClientParams, 'tools'> & {
  * @param params.stream - Whether to stream tokens (true) or return complete response (false). Defaults to true
  * @param params.tools - Optional array of tools (can be simple ToolInput with Zod schemas or full Tool objects)
  * @param params.mcp - Optional array of MCP client inputs for tool integration
+ * @param params.toolSearch - Limits on what the built-in `tool_search` loads per call, used when a tool sets `deferLoading`: `defaultLimit` (default 3) is how many tool definitions one call loads when the model does not ask for a number with the call's `limit` argument; `maxLimit` (default 8) is the most one call can load, and a larger `limit` is lowered to it. The model is told these limits in the tool definitions at the front of the prompt, so set them once per conversation; changing them re-prefills from there. When you run the search yourself, pass these same params to `executeToolSearch`.
  * @param params.captureThinking - Best-effort parsing of `<think>` blocks into `thinkingDelta` events; `final.raw.fullText` always preserves the original output
  * @param params.emitRawDeltas - When true, every raw model token is also emitted as a `rawDelta` event
  * @param params.toolDialect - Override the SDK's dialect detection, which uses the model name, then the GGUF `general.architecture`, then `"hermes"`. Supported values: `"hermes"`, `"pythonic"`, `"json"`, `"harmony"`, `"qwen35"` (Qwen3.5/3.6/3.8), `"gemma4"`, `"dsml"` (DeepSeek V3.2/V4). Use when detection picks the wrong dialect for your model. Drives both streaming frame detection and finalization parsing.
@@ -222,6 +223,7 @@ export function completion(params: CompletionParams): CompletionRun {
         kvCache: params.kvCache,
         prefill: params.prefill,
         tools: allTools.length > 0 ? allTools : undefined,
+        toolSearch: params.toolSearch,
         stream: params.stream ?? true,
         generationParams: params.generationParams,
         captureThinking: params.captureThinking,
