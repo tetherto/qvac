@@ -109,13 +109,13 @@ export const modelLoadLlmLoadModeNone: TestDefinition = {
   }
 }
 
-// On a host without a listed XDNA NPU the addon skips the name and loads on its default order, so
-// the load passes only if the SDK accepts `xdna` and the addon does not reject it.
-export const modelLoadLlmXdnaBackend: TestDefinition = {
-  testId: 'model-load-llm-xdna-backend',
+// On a host without a listed NPU the addon falls back to the GPU order, then the CPU, so the load
+// passes only if the SDK accepts `device: 'npu'` and the addon does not reject it.
+export const modelLoadLlmNpuDevice: TestDefinition = {
+  testId: 'model-load-llm-npu-device',
   params: {},
   expectation: { validation: 'type', expectedType: 'string' },
-  steps: loadsWithConfig('llm', { verbosity: 0, ctx_size: 2048, backend: ['xdna'] }),
+  steps: loadsWithConfig('llm', { verbosity: 0, ctx_size: 2048, device: 'npu' }),
   metadata: {
     category: 'model',
     dependency: 'none',
@@ -556,7 +556,7 @@ const catalog: TestDefinition[] = [
   // Model tests (first section)
   modelLoadLlm,
   modelLoadLlmLoadModeNone,
-  modelLoadLlmXdnaBackend,
+  modelLoadLlmNpuDevice,
   modelLoadLlmLegacyNoMmapRejected,
   modelLoadLlmPromptCacheKeys,
   modelLoadLlmCacheCheckpointsOutOfRangeRejected,

@@ -13,7 +13,7 @@ import { AbstractModelExecutor } from './abstract-model-executor.js'
 import {
   modelLoadLlm,
   modelLoadLlmLoadModeNone,
-  modelLoadLlmXdnaBackend,
+  modelLoadLlmNpuDevice,
   modelLoadLlmLegacyNoMmapRejected,
   modelLoadLlmPromptCacheKeys,
   modelLoadLlmCacheCheckpointsOutOfRangeRejected,
@@ -35,7 +35,7 @@ import {
 const modelLoadTests = [
   modelLoadLlm,
   modelLoadLlmLoadModeNone,
-  modelLoadLlmXdnaBackend,
+  modelLoadLlmNpuDevice,
   modelLoadLlmLegacyNoMmapRejected,
   modelLoadLlmPromptCacheKeys,
   modelLoadLlmCacheCheckpointsOutOfRangeRejected,
@@ -60,7 +60,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
   protected handlers = {
     [modelLoadLlm.testId]: this.loadLlm.bind(this),
     [modelLoadLlmLoadModeNone.testId]: this.loadLlmWithLoadMode.bind(this),
-    [modelLoadLlmXdnaBackend.testId]: this.loadLlmWithXdnaBackend.bind(this),
+    [modelLoadLlmNpuDevice.testId]: this.loadLlmWithNpuDevice.bind(this),
     [modelLoadLlmLegacyNoMmapRejected.testId]: this.rejectLegacyNoMmap.bind(this),
     [modelLoadLlmPromptCacheKeys.testId]: this.loadLlmWithPromptCacheKeys.bind(this),
     [modelLoadLlmCacheCheckpointsOutOfRangeRejected.testId]:
@@ -303,16 +303,16 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
     }
   }
 
-  async loadLlmWithXdnaBackend(
-    _params: typeof modelLoadLlmXdnaBackend.params,
-    expectation: typeof modelLoadLlmXdnaBackend.expectation
+  async loadLlmWithNpuDevice(
+    _params: typeof modelLoadLlmNpuDevice.params,
+    expectation: typeof modelLoadLlmNpuDevice.expectation
   ): Promise<TestResult> {
-    const dep = 'llm-xdna-backend'
+    const dep = 'llm-npu-device'
     try {
       const modelId = await loadModel({
         modelSrc: LLAMA_3_2_1B_INST_Q4_0,
         modelType: 'llamacpp-completion',
-        modelConfig: { verbosity: 0, ctx_size: 2048, backend: ['xdna'] }
+        modelConfig: { verbosity: 0, ctx_size: 2048, device: 'npu' }
       })
       this.resources.register(dep, modelId)
       return ValidationHelpers.validate(modelId, expectation)
