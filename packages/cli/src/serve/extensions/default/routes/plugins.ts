@@ -163,6 +163,9 @@ export function pluginRoutes(ops: PluginOperations = SDK_OPERATIONS): FastifyPlu
 
         initSSE(reply)
         const raw = reply.raw
+        const closed = new Promise<typeof CLOSED>((resolve) =>
+          raw.once('close', () => resolve(CLOSED))
+        )
         const base = { model: alias, handler }
         let next = first
         let index = 0
@@ -175,13 +178,16 @@ export function pluginRoutes(ops: PluginOperations = SDK_OPERATIONS): FastifyPlu
           })
           // Hold the next chunk until a slow client catches up.
           if (raw.writableNeedDrain) await writable(raw)
-          if (raw.destroyed) {
-            await chunks.return(undefined)
-            return undefined
-          }
-          next = await chunks.next().catch((err: unknown) => {
+          if (raw.destroyed) return release(chunks)
+          const read = chunks.next().catch((err: unknown) => {
             throw toHttpError(err)
           })
+          const step = await Promise.race([read, closed])
+          if (step === CLOSED) {
+            read.catch(() => {})
+            return release(chunks)
+          }
+          next = step
         }
         sendSSE(raw, { object: 'plugin.invocation.done', ...base })
         endSSE(raw)
@@ -189,6 +195,15 @@ export function pluginRoutes(ops: PluginOperations = SDK_OPERATIONS): FastifyPlu
       }
     )
   }
+}
+
+const CLOSED = Symbol('closed')
+
+// A pending `next()` holds the generator, so its `return()` lands after the
+// handler's next chunk; nothing waits for it.
+function release(chunks: AsyncGenerator<unknown>): undefined {
+  chunks.return(undefined).catch(() => {})
+  return undefined
 }
 
 function writable(raw: ServerResponse): Promise<void> {
