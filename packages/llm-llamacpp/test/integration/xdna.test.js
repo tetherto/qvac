@@ -4,7 +4,8 @@
 //
 // Two kinds of test:
 //   - A fallback smoke test that runs on every desktop host without an NPU:
-//     `device: 'npu'` finds no device and falls back to the CPU.
+//     `device: 'npu'` finds no device and falls back to the GPU order, then
+//     the CPU.
 //   - Hardware tests that run only on a host whose accel device is bound to the
 //     amdxdna driver. They also need XRT 2.25 or newer under /opt/xilinx/xrt
 //     and read/write access to the /dev/accel node; without either fabric does
@@ -66,7 +67,7 @@ const PROMPT = [
 ]
 
 const CHOSEN_NPU_RE = /Chosen NPU Backend/
-const NO_NPU_RE = /No NPU device found; falling back to CPU/
+const NO_NPU_RE = /No NPU device found; falling back to the GPU backend order, then CPU/
 // llama.cpp names each weight buffer after its buffer type; the XDNA device's
 // is XDNA_Host.
 const XDNA_BUFFER_RE = /\bXDNA\w*\s+model buffer size\s*=/i
@@ -154,7 +155,7 @@ function assertRanOnNpu(t, { output, kvTypes, backendDevice, logText }) {
 }
 
 safeTest(
-  'xdna: device npu falls back to the CPU when no NPU is present',
+  'xdna: device npu falls back to the GPU order, then the CPU, when no NPU is present',
   { timeout: 900_000, skip: isMobile || hasNpu },
   async (t) => {
     const result = await loadAndRun(FALLBACK_MODEL, { device: 'npu' })
@@ -162,7 +163,10 @@ safeTest(
     t.ok(result.output.length > 0, 'fallback run produced output')
     t.ok(NO_NPU_RE.test(result.logText), 'missing NPU was logged')
     t.absent(CHOSEN_NPU_RE.test(result.logText), 'the NPU was not chosen')
-    t.is(result.backendDevice, 'cpu', 'stats report the CPU fallback')
+    t.ok(
+      result.backendDevice === 'gpu' || result.backendDevice === 'cpu',
+      `stats report the GPU or CPU fallback (got ${result.backendDevice})`
+    )
     t.absent(XDNA_BUFFER_RE.test(result.logText), 'no weights were placed in an XDNA buffer')
   }
 )

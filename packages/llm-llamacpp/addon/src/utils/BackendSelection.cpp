@@ -551,6 +551,9 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     std::optional<int>* outAdrenoVersion, const bool isFinetuning,
     bool* outIsMaliGpu, const std::vector<std::string>& backendOverride) {
 
+  // An NPU request with no NPU listed continues as a GPU request, so it falls
+  // back through the GPU order and then to the CPU.
+  BackendType searchType = preferredBackendType;
   if (preferredBackendType == BackendType::NPU) {
     if (isFinetuning) {
       throw qvac_errors::StatusError(
@@ -570,23 +573,22 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
         }
       }
     }
-    if (npuCount == 0) {
-      bckI.llamaLogCallback(
-          GGML_LOG_LEVEL_WARN,
-          "No NPU device found; falling back to CPU",
-          nullptr);
-      bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen CPU", nullptr);
-      return {BackendType::CPU, "none"};
+    if (npuCount > 0) {
+      const std::string text =
+          npuCount == 1
+              ? string_format("Chosen NPU Backend: %s", chosen.c_str())
+              : string_format(
+                    "Chosen NPU Backend: %s, the first of %zu NPU devices",
+                    chosen.c_str(),
+                    npuCount);
+      bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, text.c_str(), nullptr);
+      return {BackendType::NPU, chosen};
     }
-    const std::string text =
-        npuCount == 1
-            ? string_format("Chosen NPU Backend: %s", chosen.c_str())
-            : string_format(
-                  "Chosen NPU Backend: %s, the first of %zu NPU devices",
-                  chosen.c_str(),
-                  npuCount);
-    bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, text.c_str(), nullptr);
-    return {BackendType::NPU, chosen};
+    bckI.llamaLogCallback(
+        GGML_LOG_LEVEL_WARN,
+        "No NPU device found; falling back to the GPU backend order, then CPU",
+        nullptr);
+    searchType = BackendType::GPU;
   }
 
   std::vector<std::string> gpuBackends;
@@ -600,7 +602,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
   std::optional<int> maxAdrenoVersion;
   bool sawMaliGpu = false;
 
-  if (preferredBackendType == BackendType::GPU) {
+  if (searchType == BackendType::GPU) {
     bool loopAllDevices = true;
     std::optional<MainGpuType> gpuType = std::nullopt;
     if (mainGpu.has_value()) {
@@ -727,7 +729,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
   // Skipped entirely for a CPU load. No devices are enumerated in that case, so
   // the block could only ever reach its "matched no available device" warning,
   // which would be noise on a deliberate device:'cpu' request.
-  if (!backendOverride.empty() && preferredBackendType == BackendType::GPU) {
+  if (!backendOverride.empty() && searchType == BackendType::GPU) {
     for (const std::string& family : backendOverride) {
       for (const std::vector<std::string>* candidates :
            {&openClBackends,
@@ -773,7 +775,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     return {BackendType::GPU, igpuBackends.front()};
   }
 
-  if (preferredBackendType == BackendType::GPU && !hadEligibleGpu &&
+  if (searchType == BackendType::GPU && !hadEligibleGpu &&
       !rejectedDevices.empty() && bckI.llamaLogCallback != nullptr) {
     std::string message = "No eligible GPU backend found; rejected ";
     for (size_t index = 0; index < rejectedDevices.size(); ++index) {

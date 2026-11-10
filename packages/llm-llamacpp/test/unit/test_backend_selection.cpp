@@ -1677,14 +1677,44 @@ TEST_F(BackendSelectionTest, DeviceNpuPicksXdnaBesideDiscreteGpu) {
       mockBackend, BackendType::NPU, BackendType::NPU, "xdna0");
 }
 
-TEST_F(BackendSelectionTest, DeviceNpuWithoutNpuFallsBackToCpu) {
+// With no NPU listed, an NPU request runs the GPU order, then the CPU.
+TEST_F(BackendSelectionTest, DeviceNpuWithoutNpuFallsBackToGpu) {
   mockBackend.addDevice(createIGPUDevice(RADEON_DESC, VULKAN0_BACK));
+  expectChosenForPreference(
+      mockBackend, BackendType::NPU, BackendType::GPU, "vulkan0");
+  EXPECT_TRUE(loggedAt(
+      mockBackend,
+      GGML_LOG_LEVEL_WARN,
+      "No NPU device found; falling back to the GPU backend order, then CPU"));
+}
+
+TEST_F(BackendSelectionTest, DeviceNpuFallbackPrefersCudaLikeGpu) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  expectChosenForPreference(
+      mockBackend, BackendType::NPU, BackendType::GPU, "cuda0");
+}
+
+TEST_F(BackendSelectionTest, DeviceNpuWithoutNpuOrGpuFallsBackToCpu) {
+  mockBackend.addDevice(createIGPUDevice("Mali-G720", "OpenCL0"));
   expectChosenForPreference(
       mockBackend, BackendType::NPU, BackendType::CPU, "none");
   EXPECT_TRUE(loggedAt(
       mockBackend,
       GGML_LOG_LEVEL_WARN,
-      "No NPU device found; falling back to CPU"));
+      "No NPU device found; falling back to the GPU backend order, then CPU"));
+  EXPECT_TRUE(loggedAt(
+      mockBackend, GGML_LOG_LEVEL_WARN, "No eligible GPU backend found"));
+}
+
+// The GPU guards still apply on the fallback: BitNet TQ on Adreno <800 stays
+// on the CPU.
+TEST_F(BackendSelectionTest, DeviceNpuFallbackKeepsAdrenoGuards) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createIGPUDevice(ADRENO_DESC, VULKAN0_BACK));
+  MockModelMetaData bitnetMeta(true, "bitnet");
+  expectChosenWithMetadata(
+      mockBackend, BackendType::NPU, BackendType::CPU, "none", bitnetMeta);
 }
 
 TEST_F(BackendSelectionTest, DeviceNpuRejectsFinetuning) {

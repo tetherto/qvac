@@ -62,8 +62,8 @@ On an XDNA2 NPU (Strix Point, Strix Halo, Krackan) with XRT 2.25 or newer instal
 process can read and write its `/dev/accel` node; otherwise fabric logs that it is not listed.
 
 - The NPU is its own device class, beside `gpu` and `cpu`, and `device: "gpu"` never picks it.
-  Select it with `device: "npu"`, which takes the first NPU fabric lists and falls back to the
-  CPU with a warning when none is listed. `device: "npu"` cannot be combined with `backend`, `devices`, `split-mode`,
+  Select it with `device: "npu"`, which takes the first NPU fabric lists. When none is listed it
+  warns and falls back to the normal GPU order, then the CPU. `device: "npu"` cannot be combined with `backend`, `devices`, `split-mode`,
   `main-gpu`, `rpc-servers` or finetuning. Runtime stats report `backendDevice: "npu"`.
 - `devices: "XDNA0"` also selects the NPU explicitly. `backend` takes GPU families only.
 - Fabric lists the NPU without opening it. The first load that uses `XDNA0` opens it and

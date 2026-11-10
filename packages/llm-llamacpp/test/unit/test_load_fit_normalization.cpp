@@ -2634,6 +2634,27 @@ TEST_F(LoadFitNormalizationTest, NpuLoadKeepsF16KvAndCpuProjector) {
   }
 }
 
+// With no NPU, chooseBackend resolves an NPU request through the GPU order;
+// a GPU it lands on loads as an ordinary GPU load.
+TEST_F(LoadFitNormalizationTest, NpuFallbackToGpuLoadsAsGpu) {
+  auto config = baseConfig();
+  config["device"] = "npu";
+  config["flash-attn"] = "on";
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  EXPECT_TRUE(result.params.mmproj_use_gpu);
+  EXPECT_EQ(result.params.cache_type_k, GGML_TYPE_Q8_0);
+  EXPECT_EQ(result.params.cache_type_v, GGML_TYPE_Q8_0);
+}
+
+// ...and with no GPU either, as a CPU load.
 TEST_F(LoadFitNormalizationTest, NpuWithoutDeviceFallsBackToCpu) {
   auto config = baseConfig();
   config["device"] = "npu";

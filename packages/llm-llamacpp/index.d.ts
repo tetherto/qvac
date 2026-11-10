@@ -143,8 +143,8 @@ declare namespace LlmLlamacpp {
     interface LlamaConfig {
         /**
          * Device class to run on: `'gpu'`, `'cpu'` or `'npu'`. `'npu'` selects the
-         * first NPU fabric lists, the AMD XDNA NPU on Linux x64, falls back to CPU
-         * when there is none, and
+         * first NPU fabric lists, the AMD XDNA NPU on Linux x64, falls back to the
+         * GPU order and then the CPU when there is none, and
          * cannot be combined with `backend`, `devices`, `split-mode`, `main-gpu`,
          * `rpc-servers` or finetuning. GPU selection never picks the NPU.
          */
