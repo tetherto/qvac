@@ -300,6 +300,7 @@ async function performHttpDownload(
   const writeStreamOptions =
     startOffset > 0 && response.status === 206 ? { flags: 'a' as const } : {}
   const writeStream = fs.createWriteStream(modelPath, writeStreamOptions)
+  const writeStreamClosed = new Promise<void>((resolve) => writeStream.once('close', resolve))
 
   // Get the response body
   const body = response.body
@@ -391,7 +392,9 @@ async function performHttpDownload(
       throw new ResponseBodyNotReadableError()
     }
   } catch (error) {
+    // Let an in-flight write land before the caller can release its lock.
     writeStream.destroy()
+    await writeStreamClosed
     logger.error('Error during download:', error instanceof Error ? error.message : String(error))
     throw error instanceof Error ? error : new Error(String(error))
   }
@@ -679,6 +682,8 @@ async function downloadShardedModelFromHttp(
     async (ctx) => {
       await using _downloadLock = await acquireDownloadLock(downloadKey, ctx.signal)
       try {
+        // The previous holder may have cleared the cache while this one waited.
+        await fsPromises.mkdir(shardDir, { recursive: true })
         const shardStates: ShardDownloadState[] = await Promise.all(
           shardInfos.map(async (shard, index) => {
             const shardPath = path.join(shardDir, shard.filename)

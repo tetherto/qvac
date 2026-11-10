@@ -350,6 +350,73 @@ test('downloadModelFromHttp: a failed shard stops the other shards before the do
   t.ok(stopped, 'the other shard download was stopped')
 })
 
+test('downloadModelFromHttp: a sharded download that waited recreates a folder the previous holder cleared', async (t) => {
+  useTestCacheDir()
+  const server = await startGatedServer()
+  const url = `${server.base}/cleared-${Math.random().toString(16).slice(2)}/model-00001-of-00002.gguf`
+  const { cacheKey } = parsePatternBasedShardUrl(url)
+  t.teardown(async () => {
+    await server.close()
+    fs.rmSync(getShardedModelCacheDir(cacheKey), { recursive: true, force: true })
+  })
+
+  const first = downloadModelFromHttp(url).catch((error: unknown) => error)
+  await waitUntil(() => server.halfSent())
+  // Cancel with clearCache, which deletes the shard folder, while a second
+  // download of the same model waits for the lock.
+  cancelTransfer(`http-sharded:${cacheKey}`, true)
+  const second = downloadModelFromHttp(url)
+  t.ok((await first) instanceof DownloadCancelledError, 'the first download is cancelled')
+  server.release()
+
+  const firstShard = await second.catch((error: unknown) => error)
+  t.is(typeof firstShard, 'string', `the waiting download completes ${String(firstShard)}`)
+  if (typeof firstShard !== 'string') return
+  t.ok(bytesEqual(fs.readFileSync(firstShard) as Buffer, CONTENT), 'the shard is intact')
+})
+
+test('downloadModelFromHttp: a cancelled download releases its lock only after its last write lands', async (t) => {
+  const cacheDir = useTestCacheDir()
+  const server = await startGatedServer()
+  const url = `${server.base}/slow-write-${Math.random().toString(16).slice(2)}.gguf`
+  const key = createHttpDownloadKey(url)
+  let writeStreamClosed = false
+  const createWriteStream = fs.createWriteStream
+  // Slow every write to the partial file so one is in flight when the download is cancelled.
+  fs.createWriteStream = (...args: Parameters<typeof createWriteStream>) => {
+    const stream = createWriteStream(...args)
+    if (String(args[0]).endsWith('.part')) {
+      const slow = stream as unknown as { _writev(batch: unknown, cb: () => void): void }
+      const writev = slow._writev.bind(stream)
+      slow._writev = (batch, cb) => setTimeout(() => writev(batch, cb), 300)
+      stream.on('close', () => {
+        writeStreamClosed = true
+      })
+    }
+    return stream
+  }
+  t.teardown(async () => {
+    fs.createWriteStream = createWriteStream
+    await server.close()
+    const modelPath = cachedHttpPath(cacheDir, url, url.split('/').pop()!)
+    fs.rmSync(partialDownloadPath(modelPath), { force: true })
+  })
+
+  const download = downloadModelFromHttp(url).catch((error: unknown) => error)
+  await waitUntil(() => server.halfSent())
+  cancelTransfer(key)
+
+  let lock: AsyncDisposable | null = null
+  for (let i = 0; i < 500 && !lock; i++) {
+    lock = await tryAcquireDownloadLocks([key])
+    if (!lock) await sleep(5)
+  }
+  t.ok(lock, 'the cancelled download releases its lock')
+  t.ok(writeStreamClosed, 'its partial file was closed before the lock was released')
+  await lock?.[Symbol.asyncDispose]()
+  t.ok((await download) instanceof DownloadCancelledError, 'the download is cancelled')
+})
+
 test('deleteCache: refused while another process downloads the model, and deletes nothing', async (t) => {
   const cacheDir = useTestCacheDir()
   let cleared = false
@@ -666,6 +733,8 @@ test('renameWithCachedChecksum: moves the file and still detects later changes',
 
   const changed = Buffer.from(CONTENT)
   changed[0] = (changed[0]! + 1) % 251
+  // Linux file timestamps are coarse; wait so the rewrite gets a new one.
+  await sleep(20)
   fs.writeFileSync(to, changed)
   t.is(
     await calculateCachedFileChecksum(to),
