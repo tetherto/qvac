@@ -99,7 +99,7 @@ describe('cli: verify bundle', () => {
   it('--help shows options', async () => {
     const r = await runCli(['verify', 'bundle', '--help'])
     assert.equal(r.code, 0)
-    for (const s of ['--addons-source', '--host', '--bare-runtime-version', '--config']) {
+    for (const s of ['--addons-source', '--host', '--project-root', '--offline']) {
       assert.ok(r.output.includes(s), `missing ${s}`)
     }
   })
@@ -144,43 +144,6 @@ describe('cli: verify bundle', () => {
     ])
     assert.equal(r.code, 0)
     assert.ok(r.output.includes('verification passed'))
-  })
-
-  it('rejects malformed --bare-runtime-version', async (t) => {
-    const dir = await tmpProject(t)
-    await mkdir(join(dir, 'node_modules'))
-    const r = await runCli([
-      'verify',
-      'bundle',
-      '--addons-source',
-      join(dir, 'node_modules'),
-      '--host',
-      'darwin-arm64',
-      '--bare-runtime-version',
-      'not-a-version'
-    ])
-    assert.equal(r.code, 1)
-    assert.ok(
-      r.output.includes('Invalid Bare runtime version') && r.output.includes('not-a-version')
-    )
-  })
-
-  it('rejects malformed bareRuntimeVersion in qvac.config.json', async (t) => {
-    const dir = await tmpProject(t)
-    await mkdir(join(dir, 'node_modules'))
-    await writeFile(join(dir, 'qvac.config.json'), '{"bareRuntimeVersion": "garbage"}')
-    const r = await runCli([
-      'verify',
-      'bundle',
-      '--addons-source',
-      join(dir, 'node_modules'),
-      '--host',
-      'darwin-arm64',
-      '--project-root',
-      dir
-    ])
-    assert.equal(r.code, 1)
-    assert.ok(r.output.includes('Invalid Bare runtime version') && r.output.includes('garbage'))
   })
 })
 

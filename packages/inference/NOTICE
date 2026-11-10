@@ -886,7 +886,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-posix
   bare-process@4.5.1
     https://github.com/holepunchto/bare-process
-  bare-rpc@1.3.8
+  bare-rpc@1.3.9
     https://github.com/holepunchto/bare-rpc
   bare-semver@1.1.0
     https://github.com/holepunchto/bare-semver
