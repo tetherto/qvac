@@ -4,6 +4,7 @@
 #include <unordered_map>
 
 #include <gtest/gtest.h>
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "model-interface/LlamaFinetuner.hpp"
 #include "model-interface/LlamaModel.hpp"
@@ -219,46 +220,28 @@ TEST(FinetunePendingPauseTest, InternalReloadDoesNotRequestFinetunePause) {
       << "an ordinary finetune must start without a pause from its own reload";
 }
 
-namespace {
-
-LlamaModel makeUnloadedModelOn(const std::string& device) {
-  std::unordered_map<std::string, std::string> config;
-  config["device"] = device;
-  return LlamaModel("nonexistent_model.gguf", "", std::move(config));
-}
-
-// Empty when validation passes or fails for another reason: an unloaded model
-// has no metadata, so the architecture check rejects it after the NPU check.
-std::string npuRejection(LlamaFinetuner& finetuner) {
-  try {
-    LlamaFinetunerTestPeer::validateModelForFinetuning(finetuner);
-  } catch (const std::exception& error) {
-    const std::string message = error.what();
-    if (message.find("Finetuning does not run on the NPU") !=
-        std::string::npos) {
-      return message;
-    }
+// finetune() runs this check before it reloads the model, for both NPU
+// routes. The runtime device class: 0 = CPU, 1 = GPU, 2 = NPU.
+TEST(FinetuneNpuTest, DeviceNpuIsRejectedEvenAfterFallback) {
+  const std::unordered_map<std::string, std::string> config{{"device", "npu"}};
+  for (const int64_t device : {0, 1, 2}) {
+    EXPECT_THROW(
+        LlamaFinetuner::rejectNpuTarget(config, device),
+        qvac_errors::StatusError)
+        << device;
   }
-  return "";
 }
 
-} // namespace
-
-// Rejected before finetune() reloads the model, for both NPU routes.
-TEST(FinetuneNpuTest, DeviceNpuIsRejected) {
-  LlamaModel model = makeUnloadedModelOn("npu");
-  EXPECT_FALSE(npuRejection(model.finetuner()).empty());
-}
-
-// devices: 'XDNA0' loads on the NPU alone and reports backendDevice 2.
+// devices: 'XDNA0' loads on the NPU alone and reports device class 2.
 TEST(FinetuneNpuTest, LoadOnTheNpuIsRejected) {
-  LlamaModel model = makeUnloadedModelOn("gpu");
-  LlamaModelTestPeer::setRuntimeBackendDevice(model, 2);
-  EXPECT_FALSE(npuRejection(model.finetuner()).empty());
+  const std::unordered_map<std::string, std::string> config{
+      {"device", "gpu"}, {"devices", "XDNA0"}};
+  EXPECT_THROW(
+      LlamaFinetuner::rejectNpuTarget(config, 2), qvac_errors::StatusError);
 }
 
-TEST(FinetuneNpuTest, GpuLoadIsNotRejectedForTheNpu) {
-  LlamaModel model = makeUnloadedModelOn("gpu");
-  LlamaModelTestPeer::setRuntimeBackendDevice(model, 1);
-  EXPECT_TRUE(npuRejection(model.finetuner()).empty());
+TEST(FinetuneNpuTest, GpuAndCpuLoadsAreAccepted) {
+  EXPECT_NO_THROW(LlamaFinetuner::rejectNpuTarget({{"device", "gpu"}}, 1));
+  EXPECT_NO_THROW(LlamaFinetuner::rejectNpuTarget({{"device", "cpu"}}, 0));
+  EXPECT_NO_THROW(LlamaFinetuner::rejectNpuTarget({}, 0));
 }
