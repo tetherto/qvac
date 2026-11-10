@@ -2261,42 +2261,6 @@ CLIP_VISION_H = ModelConstant(
     params="",
 )
 
-DEEPSEEK_V4_1_552B_A16B_DSPARK_Q8_0 = ModelConstant(
-    name="DEEPSEEK_V4_1_552B_A16B_DSPARK_Q8_0",
-    src="registry://hf/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/dspark-DeepSeek-V4.1-Flash-1017-Q8_0.gguf",
-    registry_path="unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/dspark-DeepSeek-V4.1-Flash-1017-Q8_0.gguf",
-    registry_source="hf",
-    blob_core_key="106dc5cf3342f0aea7c08503f9b0b8368ce829d32ff532477923de051eccddaa",
-    blob_block_offset=8020543,
-    blob_block_length=121719,
-    blob_byte_offset=525631623853,
-    model_id="dspark-DeepSeek-V4.1-Flash-1017-Q8_0.gguf",
-    expected_size=7976914240,
-    sha256_checksum="6ba6ac1b331c540691a209e7fc97dec2a24e295acb1e755c84c7d24a4373927a",
-    addon="llm",
-    engine="llamacpp-completion",
-    quantization="q8_0",
-    params="552B-A16B",
-)
-
-DEEPSEEK_V4_1_552B_A16B_MULTIMODAL_UD_Q4_K_XL_SHARD = ModelConstant(
-    name="DEEPSEEK_V4_1_552B_A16B_MULTIMODAL_UD_Q4_K_XL_SHARD",
-    src="registry://hf/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00001-of-00009.gguf",
-    registry_path="unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00001-of-00009.gguf",
-    registry_source="hf",
-    blob_core_key="106dc5cf3342f0aea7c08503f9b0b8368ce829d32ff532477923de051eccddaa",
-    blob_block_offset=625156,
-    blob_block_length=89,
-    blob_byte_offset=40968376640,
-    model_id="DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00001-of-00009.gguf",
-    expected_size=297949543981,
-    sha256_checksum="cc15d470afcb030558bbc4d8e2ccd840182e2e95de1a95198138efe63a5fd99f",
-    addon="llm",
-    engine="llamacpp-completion",
-    quantization="UD-Q4_K_XL",
-    params="552B-A16B",
-)
-
 DEEPSEEK_V4_304B_INST_UD_IQ2_M_SHARD = ModelConstant(
     name="DEEPSEEK_V4_304B_INST_UD_IQ2_M_SHARD",
     src="registry://hf/unsloth/DeepSeek-V4-Flash-0731-GGUF/resolve/109848da2469efe1f1aab9e11acea08a065ccd4f/UD-IQ2_M/DeepSeek-V4-Flash-0731-UD-IQ2_M-00001-of-00003.gguf",
@@ -3771,24 +3735,6 @@ MEGALOC_MIXED = ModelConstant(
     engine="ggml-image-embedding",
     quantization="f16-q6_k",
     params="",
-)
-
-MMPROJ_DEEPSEEK_V4_1_552B_A16B_MULTIMODAL_F16 = ModelConstant(
-    name="MMPROJ_DEEPSEEK_V4_1_552B_A16B_MULTIMODAL_F16",
-    src="registry://hf/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/mmproj-F16.gguf",
-    registry_path="unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/mmproj-F16.gguf",
-    registry_source="hf",
-    blob_core_key="106dc5cf3342f0aea7c08503f9b0b8368ce829d32ff532477923de051eccddaa",
-    blob_block_offset=8142263,
-    blob_block_length=14817,
-    blob_byte_offset=533608545005,
-    model_id="mmproj-F16.gguf",
-    expected_size=971004064,
-    sha256_checksum="dad8ad13f1d9a25757e121592d7b4f8ca83620d1172048004998b7c0b964b18e",
-    addon="llm",
-    engine="llamacpp-completion",
-    quantization="f16",
-    params="552B-A16B",
 )
 
 MMPROJ_EMBEDDINGGEMMA_2_Q8_0 = ModelConstant(
@@ -8813,8 +8759,6 @@ __all__ = [
     "BITNET_1B_BASE_TQ2_0",
     "BITNET_B1_58_3B_BASE_TQ2_0",
     "CLIP_VISION_H",
-    "DEEPSEEK_V4_1_552B_A16B_DSPARK_Q8_0",
-    "DEEPSEEK_V4_1_552B_A16B_MULTIMODAL_UD_Q4_K_XL_SHARD",
     "DEEPSEEK_V4_304B_INST_UD_IQ2_M_SHARD",
     "DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_SHARD",
     "DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_TENSORS",
@@ -8897,7 +8841,6 @@ __all__ = [
     "MEDGEMMA_4B_IT_Q8_0_SHARD",
     "MEGALOC_F16",
     "MEGALOC_MIXED",
-    "MMPROJ_DEEPSEEK_V4_1_552B_A16B_MULTIMODAL_F16",
     "MMPROJ_EMBEDDINGGEMMA_2_Q8_0",
     "MMPROJ_GEMMA4_2B_MULTIMODAL_BF16",
     "MMPROJ_GEMMA4_2B_MULTIMODAL_F16",
