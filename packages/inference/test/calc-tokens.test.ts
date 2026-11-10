@@ -100,7 +100,11 @@ test('calcTokens contract requires text or a non-empty history', (t) => {
       history: [{ role: 'user', content: 'Hello' }]
     }).success
   )
-  t.absent(calcTokensRequestSchema.safeParse({ type: 'calcTokens', modelId: 'llm' }).success)
+  const missingPrompt = calcTokensRequestSchema.safeParse({ type: 'calcTokens', modelId: 'llm' })
+  t.absent(missingPrompt.success)
+  if (!missingPrompt.success) {
+    t.ok(missingPrompt.error.message.includes('At least one prompt source is required'))
+  }
   t.absent(
     calcTokensRequestSchema.safeParse({
       type: 'calcTokens',

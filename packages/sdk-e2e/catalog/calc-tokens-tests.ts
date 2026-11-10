@@ -104,9 +104,11 @@ function rejectsInvalid(
   }
 }
 
-export const calcTokensRejectsMissingPrompt = rejectsInvalid('calc-tokens-rejects-missing-prompt', {
-  modelId: 'calc-tokens-invalid'
-})
+export const calcTokensRejectsMissingPrompt = rejectsInvalid(
+  'calc-tokens-rejects-missing-prompt',
+  { modelId: 'calc-tokens-invalid' },
+  'At least one prompt source is required'
+)
 
 export const calcTokensRejectsUnknownKey = rejectsInvalid(
   'calc-tokens-rejects-unknown-key',

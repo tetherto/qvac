@@ -62,12 +62,17 @@ test('calcTokens converts Zod tool inputs like completion', async (t) => {
 
 test('calcTokens rejects invalid input before RPC', async (t) => {
   let called = false
+  let missingPromptError = ''
   await t.exception(() =>
     createCalcTokensCall({ modelId: 'llm' } as typeof params, undefined, async () => {
       called = true
       return { type: 'calcTokens', tokens: 1 }
+    }).catch((error) => {
+      missingPromptError = String(error)
+      throw error
     })
   )
+  t.ok(missingPromptError.includes('At least one prompt source is required'))
   t.absent(called)
 
   let attachmentError = ''

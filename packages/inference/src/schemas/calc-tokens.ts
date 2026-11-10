@@ -20,10 +20,7 @@ const commonFields = {
 }
 const promptFields = { ...commonFields, text: text.optional(), history: history.optional() }
 
-function hasPrompt(value: {
-  text?: string | undefined
-  history?: readonly object[] | undefined
-}) {
+function hasPrompt(value: { text?: string | undefined; history?: readonly object[] | undefined }) {
   return value.text !== undefined || (value.history?.length ?? 0) > 0
 }
 
@@ -57,7 +54,7 @@ type CalcTokensHistoryMessage = NonNullable<CalcTokensParamsShape['history']>[nu
 export type CalcTokensParams =
   | (Omit<CalcTokensParamsShape, 'text'> & { text: string })
   | (Omit<CalcTokensParamsShape, 'history'> & {
-      history: [CalcTokensHistoryMessage, ...CalcTokensHistoryMessage[]]
+      history: CalcTokensHistoryMessage[]
     })
 export type CalcTokensRequest = z.infer<typeof calcTokensRequestSchema>
 export type CalcTokensResponse = z.infer<typeof calcTokensResponseSchema>
