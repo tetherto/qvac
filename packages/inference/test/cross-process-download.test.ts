@@ -271,7 +271,23 @@ test('tryAcquireDownloadLocks: releases the locks it took when a later one canno
   await lock?.[Symbol.asyncDispose]()
 })
 
-test('downloadModelFromHttp: a cached model still loads when the lock directory is read-only', async (t) => {
+// Makes each directory read-only until `restore()`. `effective` is false when
+// that has no effect, for example when running as root.
+function makeReadOnly(dirs: string[]): { effective: boolean; restore: () => void } {
+  const modes = dirs.map((dir) => fs.statSync(dir).mode & 0o777)
+  for (const dir of dirs) fs.chmodSync(dir, 0o555)
+  const effective = dirs.every((dir) => {
+    try {
+      fs.accessSync(dir, fs.constants.W_OK)
+      return false
+    } catch {
+      return true
+    }
+  })
+  return { effective, restore: () => dirs.forEach((dir, i) => fs.chmodSync(dir, modes[i]!)) }
+}
+
+test('downloadModelFromHttp: a cached model still loads from a read-only models directory', async (t) => {
   const cacheDir = useTestCacheDir()
   const server = await startGatedServer()
   const url = `${server.base}/read-only-${Math.random().toString(16).slice(2)}.gguf`
@@ -279,12 +295,16 @@ test('downloadModelFromHttp: a cached model still loads when the lock directory 
   const lockDir = path.join(cacheDir, '.locks')
   fs.mkdirSync(lockDir, { recursive: true })
   fs.writeFileSync(modelPath, CONTENT)
-  fs.chmodSync(lockDir, 0o555)
+  const readOnly = makeReadOnly([cacheDir, lockDir])
   t.teardown(async () => {
-    fs.chmodSync(lockDir, 0o755)
+    readOnly.restore()
     await server.close()
     fs.rmSync(modelPath, { force: true })
   })
+  if (!readOnly.effective) {
+    t.comment('directories stay writable for this user, so the case cannot be set up')
+    return
+  }
 
   const result = await downloadModelFromHttp(url).catch((error: unknown) => error)
   t.is(
@@ -293,6 +313,45 @@ test('downloadModelFromHttp: a cached model still loads when the lock directory 
     `the cached model is used ${result instanceof Error ? result.message : ''}`
   )
   t.is(server.gets(), 0, 'nothing is downloaded')
+})
+
+test('a writable models directory without a writable lock refuses downloads and deletion', async (t) => {
+  const cacheDir = useTestCacheDir()
+  stubClient(t, { clearBlob: async () => {} })
+  const server = await startGatedServer()
+  const url = `${server.base}/no-lock-${Math.random().toString(16).slice(2)}.gguf`
+  const modelPath = cachedHttpPath(cacheDir, url, url.split('/').pop()!)
+  const registryPartial = partialDownloadPath(
+    getSingleFileCachePath(QWEN3_600M_INST_Q4.registryPath)
+  )
+  const lockDir = path.join(cacheDir, '.locks')
+  fs.mkdirSync(path.dirname(registryPartial), { recursive: true })
+  fs.writeFileSync(registryPartial, 'another process download')
+  const readOnly = makeReadOnly([lockDir])
+  t.teardown(async () => {
+    readOnly.restore()
+    await server.close()
+    fs.rmSync(partialDownloadPath(modelPath), { force: true })
+    fs.rmSync(registryPartial, { force: true })
+  })
+  if (!readOnly.effective) {
+    t.comment('the lock directory stays writable for this user, so the case cannot be set up')
+    return
+  }
+  // Serve in full, so a download that wrongly runs without the lock finishes fast.
+  server.release()
+
+  const result = await downloadModelFromHttp(url).catch((error: unknown) => error)
+  t.ok(result instanceof Error, 'the download fails instead of running without the lock')
+  t.is(server.gets(), 0, 'nothing is downloaded')
+  t.absent(fs.existsSync(partialDownloadPath(modelPath)), 'no partial file is written')
+
+  const deletion = await handleDeleteCache({
+    type: 'deleteCache',
+    modelSrc: QWEN3_600M_INST_Q4.src
+  })
+  t.is(deletion.success, false, 'deletion is refused')
+  t.ok(fs.existsSync(registryPartial), 'the other download partial file is untouched')
 })
 
 test('downloadModelFromHttp: an archive download holds its lock until the archive is written', async (t) => {

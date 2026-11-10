@@ -1,4 +1,4 @@
-import { promises as fsPromises } from 'bare-fs'
+import fs, { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import fsx from 'fs-native-extensions'
 import type { AbortSignal } from 'bare-abort-controller'
@@ -17,10 +17,12 @@ interface LockFile extends AsyncDisposable {
 
 const NO_WRITE_ACCESS = new Set(['EACCES', 'EPERM', 'EROFS'])
 
-// `null` without write access to the lock directory, for example a prefilled
-// read-only models directory: nothing can download there, so nothing to lock.
+// `null` for a models directory this process cannot write, such as a prefilled
+// read-only cache: it can neither download nor delete there. A writable models
+// directory whose lock cannot be created fails instead of running unlocked.
 async function openLockFile(resourceKey: string): Promise<LockFile | null> {
-  const lockDir = path.join(getModelsCacheDir(), LOCK_DIR_NAME)
+  const modelsDir = getModelsCacheDir()
+  const lockDir = path.join(modelsDir, LOCK_DIR_NAME)
   let handle: Awaited<ReturnType<typeof fsPromises.open>>
   try {
     await fsPromises.mkdir(lockDir, { recursive: true })
@@ -31,10 +33,10 @@ async function openLockFile(resourceKey: string): Promise<LockFile | null> {
     )
   } catch (error) {
     if (!NO_WRITE_ACCESS.has((error as { code?: string }).code ?? '')) throw error
-    logger.warn(
-      `⚠️ Cannot create a lock for ${resourceKey} in the models directory; continuing without cross-process coordination`,
-      { error }
-    )
+    if (await isWritable(modelsDir)) throw error
+    logger.warn(`⚠️ The models directory is read-only; reading ${resourceKey} without a lock`, {
+      error
+    })
     return null
   }
   return {
@@ -45,6 +47,13 @@ async function openLockFile(resourceKey: string): Promise<LockFile | null> {
         logger.debug('Failed to close download lock', { resourceKey, error })
       })
   }
+}
+
+function isWritable(dir: string): Promise<boolean> {
+  return fsPromises.access(dir, fs.constants.W_OK).then(
+    () => true,
+    () => false
+  )
 }
 
 // False while another holder has the lock. A filesystem without lock support
