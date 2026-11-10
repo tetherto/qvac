@@ -417,7 +417,7 @@ QVAC_INDEXER_KEYS=<indexer1-z32-public-key>,<indexer2-z32-public-key>
 
 When a live model sync contains at least one new model, the client queries each configured indexer for available space on its registry `--storage` filesystem and selects the indexer with the most space. Metadata-only and deprecation-only syncs retain the normal random selection. In all cases, the client only accepts peers whose public key matches the configured keys.
 
-Capacity-aware selection assumes that registry storage, `MODEL_DRIVES_STORAGE`, and `TEMP_STORAGE` reside on the same attached filesystem on each indexer. Hugging Face ingestion may temporarily require approximately twice the artifact size because the downloaded cache is copied into temporary ingestion storage.
+Capacity-aware selection assumes that registry storage, `MODEL_DRIVES_STORAGE`, and `TEMP_STORAGE` reside on the same attached filesystem on each indexer. Allow approximately twice the artifact size for Hugging Face ingestion: the temporary artifact coexists with its Hyperblobs copy until ingestion and replication finish.
 
 If `QVAC_INDEXER_KEYS` is not set, the client falls back to topic-based discovery (backward compatible).
 
@@ -439,6 +439,12 @@ node scripts/bin.js sync-models \
 ```
 
 The sync script adds new models and updates metadata for existing models. Licenses are auto-created from `data/licenses/` when needed.
+
+Hugging Face downloads stream into `<TEMP_STORAGE>/<model-path-hash>/<filename>.incomplete`, then rename to the artifact filename after completion. `TEMP_STORAGE` defaults to a `temp` directory beside `MODEL_DRIVES_STORAGE`. The server removes the per-model directory after ingestion succeeds or fails; there is no shared Hugging Face cache. The downloader makes up to three attempts for transient HTTP/network errors. Within an ingest it resumes a partial download using a strong ETag and validated byte ranges. If a server ignores Range or changes the representation, a full response replaces the partial file. Partial downloads are not resumed after exhausted retries or process restarts; abrupt termination can leave temporary files on disk.
+
+Server logs report download progress every 30 seconds, including bytes received, expected size when available, attempt elapsed time, and time since the last received chunk. Failed attempts include the error message, cause, network code, and socket byte counters. Inspect the selected indexer's logs to distinguish downloading from later hashing, blob writing, or replication.
+
+The `add-model` RPC has a one-hour response deadline covering the entire ingest. That deadline does not cancel work on the server. After a response deadline or ambiguous channel closure, sync polls the registry for up to another hour before reporting failure; it does not resubmit the ingest during recovery.
 
 ### Filling Fit Blobs
 

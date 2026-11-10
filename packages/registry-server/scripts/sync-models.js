@@ -282,7 +282,12 @@ function isAmbiguousRpcError(err) {
   if (!err) return false
 
   const code = err.code || err.cause?.code
-  if (code === 'ETIMEDOUT' || code === 'CHANNEL_CLOSED' || code === 'CHANNEL_DESTROYED') {
+  if (
+    code === 'ETIMEDOUT' ||
+    code === 'TIMEOUT_EXCEEDED' ||
+    code === 'CHANNEL_CLOSED' ||
+    code === 'CHANNEL_DESTROYED'
+  ) {
     return true
   }
 
