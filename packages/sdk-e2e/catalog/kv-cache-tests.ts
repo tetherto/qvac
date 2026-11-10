@@ -614,15 +614,18 @@ export const kvCacheToolSetChange: TestDefinition = {
 }
 
 /**
- * `tool_choice: 'required'` on a warm turn forces a call: the grammar is armed from the tool block
- * every turn carries, so a prompt that would otherwise be answered in prose calls the tool.
+ * `tool_choice: 'required'` on a warm turn arms the tool grammar from the tool block every turn
+ * carries: the addon refuses a `required` turn it cannot arm, so this one completing with a call
+ * shows the grammar was armed over the cached prefix. The turn asks for a calculation because the
+ * grammar only forbids ending without a call, and a prose answer can loop until the context fills
+ * before the model reaches one.
  */
 export const kvCacheWarmToolChoiceRequired: TestDefinition = {
   testId: 'kv-cache-warm-tool-choice-required',
   params: {
     cacheKey: 'warm-tool-choice-required-session',
     tools: [CALCULATOR_TOOL],
-    messages: ['What is 10 + 20?', 'Say hello.'],
+    messages: ['What is 10 + 20?', 'Now what is 5 + 5?'],
     stream: true,
     generationParams: { temp: 0, top_k: 1, seed: 42 },
     requiredGenerationParams: { temp: 0, top_k: 1, seed: 42, tool_choice: 'required' },
@@ -745,6 +748,211 @@ export const kvCacheCancelKeepsCommittedCache: TestDefinition = {
   },
   expectation: { validation: 'function', fn: () => true },
   metadata: { category: 'kv-cache', dependency: 'llm', estimatedDurationMs: 60000 }
+}
+
+const SEED_SYSTEM = 'You are the seed test assistant. Follow the user instructions. Be brief.'
+const SEED_HISTORY = [{ role: 'system', content: SEED_SYSTEM }]
+const SEED_QUESTION = [
+  ...SEED_HISTORY,
+  { role: 'user', content: 'Reply with only the word APPLE.' }
+]
+const SEED_GENERATION = { temp: 0, top_k: 1, seed: 42, predict: 32 }
+
+const seedCompletion = (
+  as: string,
+  history: unknown,
+  cache: { kvCache: string; seedFrom?: string; prefill?: boolean }
+): Step => ({
+  call: {
+    method: 'completion',
+    collect: 'text',
+    as,
+    params: {
+      modelId: '$model',
+      history,
+      stream: false,
+      generationParams: '$params.generationParams',
+      ...cache
+    }
+  }
+})
+
+/**
+ * A primed base seeds a chat after the model was reloaded, so nothing in memory can serve the
+ * prompt and the reuse has to come from the file `seedFrom` names: the seeded first turn decodes
+ * only the question, the cold run of the same prompt decodes all of it.
+ */
+export const kvCacheSeedFromBase: TestDefinition = {
+  testId: 'kv-cache-seed-from-base',
+  params: {
+    dependency: 'llm-shared-cache',
+    baseKey: 'seed-base-session',
+    chatKey: 'seed-chat-session',
+    coldKey: 'seed-cold-session',
+    history: SEED_HISTORY,
+    question: SEED_QUESTION,
+    generationParams: SEED_GENERATION
+  },
+  expectation: { validation: 'contains-all', contains: ['APPLE'] },
+  steps: [
+    { useModel: { deps: ['llm-shared-cache'], as: 'model' } },
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.baseKey' } } },
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.chatKey' } } },
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.coldKey' } } },
+    seedCompletion('cold', '$params.question', { kvCache: '$params.coldKey' }),
+    seedCompletion('prime', '$params.history', { kvCache: '$params.baseKey', prefill: true }),
+    { project: { from: '$prime', path: 'stats.cacheTokens', as: 'primedTokens' } },
+    { call: { method: 'evictResource', params: { dep: 'llm-shared-cache' } } },
+    { useModel: { deps: ['llm-shared-cache'], as: 'model' } },
+    seedCompletion('seeded', '$params.question', {
+      kvCache: '$params.chatKey',
+      seedFrom: '$params.baseKey'
+    }),
+    { project: { from: '$seeded', path: 'text', as: 'answer' } },
+    { assert: { on: '$answer', use: 'expectation' } },
+    { project: { from: '$cold', path: 'stats.promptTokens', as: 'coldTokens' } },
+    { project: { from: '$seeded', path: 'stats.promptTokens', as: 'warmTokens' } },
+    {
+      compare: {
+        left: '$coldTokens',
+        right: '$warmTokens',
+        named: 'prefillReuse',
+        with: { primedTokens: '$primedTokens' }
+      }
+    }
+  ],
+  finally: [
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.baseKey' } } },
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.chatKey' } } },
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.coldKey' } } }
+  ],
+  suites: ['smoke'],
+  metadata: { category: 'kv-cache', dependency: 'llm-shared-cache', estimatedDurationMs: 90000 }
+}
+
+/** `seedFrom` on a chat that already has a cache changes nothing, even when the source is missing. */
+export const kvCacheSeedIgnoredOnceCached: TestDefinition = {
+  testId: 'kv-cache-seed-ignored-once-cached',
+  params: { chatKey: 'seed-ignored-session', generationParams: SEED_GENERATION },
+  expectation: { validation: 'contains-all', contains: ['APPLE'] },
+  steps: [
+    { useModel: { deps: ['llm-shared-cache'], as: 'model' } },
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.chatKey' } } },
+    seedCompletion('first', SEED_QUESTION, { kvCache: '$params.chatKey' }),
+    { project: { from: '$first', path: 'text', as: 'firstText' } },
+    seedCompletion(
+      'second',
+      [
+        ...SEED_QUESTION,
+        { role: 'assistant', content: '$firstText' },
+        { role: 'user', content: 'Reply with only the word APPLE again.' }
+      ],
+      { kvCache: '$params.chatKey', seedFrom: 'seed-source-that-does-not-exist' }
+    ),
+    { project: { from: '$second', path: 'text', as: 'text' } },
+    { assert: { on: '$text', use: 'expectation' } }
+  ],
+  finally: [{ call: { method: 'deleteCache', params: { kvCacheKey: '$params.chatKey' } } }],
+  metadata: { category: 'kv-cache', dependency: 'llm-shared-cache', estimatedDurationMs: 40000 }
+}
+
+/** The refusals: no named key, a source that does not exist, a source saved under another system prompt, a model that did not opt in to sharing. */
+const seedRefusal = (
+  params: Record<string, unknown>,
+  code: number,
+  before: Step[] = [],
+  dep = 'llm-shared-cache'
+): Step[] => [
+  { useModel: { deps: [dep], as: 'model' } },
+  ...before,
+  {
+    callError: {
+      method: 'completion',
+      collect: 'text',
+      params: { modelId: '$model', stream: false, generationParams: SEED_GENERATION, ...params },
+      as: 'err'
+    }
+  },
+  { assert: { on: '$err', named: 'errorMatches', with: { code } } }
+]
+
+export const kvCacheSeedWithoutNamedKey: TestDefinition = {
+  testId: 'kv-cache-seed-without-named-key',
+  params: {},
+  expectation: { validation: 'function', fn: () => true },
+  steps: seedRefusal(
+    { history: SEED_QUESTION, kvCache: true, seedFrom: 'seed-base-session' },
+    53204
+  ),
+  metadata: { category: 'kv-cache', dependency: 'llm-shared-cache', estimatedDurationMs: 10000 }
+}
+
+export const kvCacheSeedMissingSource: TestDefinition = {
+  testId: 'kv-cache-seed-missing-source',
+  params: { chatKey: 'seed-missing-source-chat' },
+  expectation: { validation: 'function', fn: () => true },
+  steps: seedRefusal(
+    {
+      history: SEED_QUESTION,
+      kvCache: '$params.chatKey',
+      seedFrom: 'seed-source-that-does-not-exist'
+    },
+    53205,
+    [{ call: { method: 'deleteCache', params: { kvCacheKey: '$params.chatKey' } } }]
+  ),
+  finally: [{ call: { method: 'deleteCache', params: { kvCacheKey: '$params.chatKey' } } }],
+  metadata: { category: 'kv-cache', dependency: 'llm-shared-cache', estimatedDurationMs: 10000 }
+}
+
+export const kvCacheSeedDifferentSystemPrompt: TestDefinition = {
+  testId: 'kv-cache-seed-different-system-prompt',
+  params: {
+    baseKey: 'seed-system-base',
+    chatKey: 'seed-system-chat',
+    generationParams: SEED_GENERATION
+  },
+  expectation: { validation: 'function', fn: () => true },
+  steps: seedRefusal(
+    {
+      history: [
+        { role: 'system', content: 'You are a pirate. Answer in one sentence.' },
+        { role: 'user', content: 'Reply with only the word APPLE.' }
+      ],
+      kvCache: '$params.chatKey',
+      seedFrom: '$params.baseKey'
+    },
+    53205,
+    [
+      { call: { method: 'deleteCache', params: { kvCacheKey: '$params.baseKey' } } },
+      { call: { method: 'deleteCache', params: { kvCacheKey: '$params.chatKey' } } },
+      seedCompletion('base', SEED_HISTORY, { kvCache: '$params.baseKey', prefill: true })
+    ]
+  ),
+  finally: [
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.baseKey' } } },
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.chatKey' } } }
+  ],
+  metadata: { category: 'kv-cache', dependency: 'llm-shared-cache', estimatedDurationMs: 30000 }
+}
+
+export const kvCacheSeedWithoutSharing: TestDefinition = {
+  testId: 'kv-cache-seed-without-sharing',
+  params: {
+    dependency: 'llm',
+    history: SEED_QUESTION,
+    kvCache: 'seed-chat-session',
+    seedFrom: 'seed-base-session',
+    code: 53206,
+    generationParams: SEED_GENERATION
+  },
+  expectation: { validation: 'function', fn: () => true },
+  steps: seedRefusal(
+    { history: '$params.history', kvCache: '$params.kvCache', seedFrom: '$params.seedFrom' },
+    53206,
+    [],
+    'llm'
+  ),
+  metadata: { category: 'kv-cache', dependency: 'llm', estimatedDurationMs: 10000 }
 }
 
 export const kvCacheSharedPrefixDefaultIsolated: TestDefinition = {
@@ -872,6 +1080,12 @@ export const kvCacheSharedPrefixOptIn: TestDefinition = {
 }
 
 export const kvCacheTests = [
+  kvCacheSeedFromBase,
+  kvCacheSeedIgnoredOnceCached,
+  kvCacheSeedWithoutNamedKey,
+  kvCacheSeedMissingSource,
+  kvCacheSeedDifferentSystemPrompt,
+  kvCacheSeedWithoutSharing,
   ...kvCachePrefillTests,
   kvCacheSharedPrefixDefaultIsolated,
   kvCacheCancelKeepsCommittedCache,
