@@ -169,6 +169,28 @@ const reader = rag.scoped({ namespace: 'handbook', documentIds: ['leave-policy',
 await reader.search({ vector: queryVector, spaceId, k: 5, scope: { documentIds: ['travel'] } })
 ```
 
+## Memory
+
+Process RSS for one namespace of 100,000 chunks × 768 dimensions with `q8` storage, measured with `scripts/bench-index.ts` on an M-series Mac:
+
+| Open path                           | RSS after 50 searches | Peak RSS    |
+| ----------------------------------- | --------------------- | ----------- |
+| Cold open from a snapshot           | ~290 MiB              | ~320 MiB    |
+| Rebuild from HyperDB (no snapshot)  | 815–834 MiB           | 815–979 MiB |
+| Scan, without `@qvac/turbovec-ggml` | ~770 MiB              | ~770 MiB    |
+
+Budget about 1 GiB for the first open of a namespace without a snapshot and about 320 MiB once a snapshot exists. Pass `index.dir` so later opens load the snapshot. To reproduce:
+
+```bash
+npm run build
+bare scripts/bench-index.ts ingest  /tmp/rag-bench --chunks 100000 --dims 768 --storage q8
+bare scripts/bench-index.ts rebuild /tmp/rag-bench
+bare scripts/bench-index.ts cold    /tmp/rag-bench
+bare scripts/bench-index.ts scan    /tmp/rag-bench
+```
+
+Each phase runs in its own process and prints its RSS, peak RSS and search latency as JSON.
+
 ## Errors
 
 Every error is a `QvacErrorRAG` with a code from `ERR_CODES`, importable from `@qvac/rag` or `@qvac/rag/errors`. Corestore and HyperDB failures, including `ready()` on storage another process holds, surface as `DB_OPERATION_FAILED` with the original error as `cause`. An index that can't be built or searched is never an error: that namespace's searches scan until the RAG is reopened.
