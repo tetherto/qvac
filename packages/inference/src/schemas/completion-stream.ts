@@ -44,15 +44,13 @@ export const attachmentSchema = z.object({
  * the turn, so text that refers to "this image" sits next to it; `attachments`
  * cannot express that because every attachment is sent before the text.
  */
-const historyTextContentPartSchema = z
-  .object({
-    type: z.literal('text'),
-    text: z.string().describe('Text rendered at this position in the turn.')
-  })
-  .strict()
-
 export const historyContentPartSchema = z.discriminatedUnion('type', [
-  historyTextContentPartSchema,
+  z
+    .object({
+      type: z.literal('text'),
+      text: z.string().describe('Text rendered at this position in the turn.')
+    })
+    .strict(),
   z
     .object({
       type: z.literal('media'),
@@ -314,7 +312,9 @@ export const historyMessageWithoutAttachmentsSchema = historyMessageObjectSchema
     content: z
       .union([z.string(), z.array(historyContentPartSchema)])
       .nullish()
-      .describe('Text-only message content to count without loading media.'),
+      .describe(
+        'Message content to count; media parts are rejected with guidance to use completion().'
+      ),
     attachments: z
       .array(attachmentSchema)
       .max(0, 'calcTokens does not support attachments; use completion() for attachments.')

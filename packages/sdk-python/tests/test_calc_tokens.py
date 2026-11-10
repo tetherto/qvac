@@ -6,6 +6,9 @@ from pydantic import ValidationError
 
 from tetherto.qvac_sdk._generated import CalcTokensRequest
 from tetherto.qvac_sdk._generated.methods import calc_tokens
+from tetherto.qvac_sdk._generated.models import (
+    CalcTokensHistoryMessageContentItemMedia,
+)
 
 
 class FakeTransport:
@@ -118,6 +121,9 @@ def test_calc_tokens_generated_model_accepts_media_for_worker_validation() -> No
 
     assert request.history is not None
     assert request.history[0].content is not None
+    assert isinstance(
+        request.history[0].content[0], CalcTokensHistoryMessageContentItemMedia
+    )
 
 
 def test_calc_tokens_accepts_completion_compatible_empty_attachments() -> None:
