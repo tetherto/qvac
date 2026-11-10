@@ -1,10 +1,12 @@
 #pragma once
 
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <utility>
@@ -207,6 +209,57 @@ inline js_value_t* activate(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
+/// The raw RGB trio `{width, height, channels}` on an input object. None
+/// present means encoded JPEG/PNG and returns nullopt; all three means raw RGB.
+/// `label` starts each message ("Image", "Stereo"), `maxSide` bounds width and
+/// height, and `truncate` keeps MobileNet's truncation of fractional values.
+inline std::optional<RawRgbDims> parseRawRgbDims(
+    js_env_t* env, jsu::Object& inputObj, const std::string& label,
+    double maxSide, bool truncate) {
+  auto widthOpt = inputObj.getOptionalProperty<jsu::Number>(env, "width");
+  auto heightOpt = inputObj.getOptionalProperty<jsu::Number>(env, "height");
+  auto channelsOpt = inputObj.getOptionalProperty<jsu::Number>(env, "channels");
+  const int provided = (widthOpt.has_value() ? 1 : 0) +
+                       (heightOpt.has_value() ? 1 : 0) +
+                       (channelsOpt.has_value() ? 1 : 0);
+  if (provided == 0)
+    return std::nullopt;
+  if (provided != 3) {
+    throw StatusError(
+        InvalidArgument,
+        "Raw RGB input requires all of 'width', 'height', and 'channels' "
+        "to be provided together; received " +
+            std::to_string(provided) + " of 3");
+  }
+  const auto number = [env, truncate](jsu::Number value) {
+    const double raw = value.as<double>(env);
+    return truncate ? std::trunc(raw) : raw;
+  };
+  const double w = number(*widthOpt);
+  const double h = number(*heightOpt);
+  const double c = number(*channelsOpt);
+  for (const auto& [name, value] :
+       {std::pair{"width", w}, std::pair{"height", h}}) {
+    if (!std::isfinite(value) || value <= 0 || std::floor(value) != value ||
+        value > maxSide) {
+      throw StatusError(
+          InvalidArgument,
+          label + " '" + name + "' must be a positive integer up to " +
+              std::to_string(static_cast<int64_t>(maxSide)) +
+              " when passing raw RGB bytes; got " + std::to_string(value));
+    }
+  }
+  if (c != 3) {
+    throw StatusError(
+        InvalidArgument,
+        label +
+            " 'channels' must be exactly 3 (RGB) when passing raw RGB bytes; "
+            "got " +
+            std::to_string(c));
+  }
+  return RawRgbDims{static_cast<uint32_t>(w), static_cast<uint32_t>(h), 3};
+}
+
 /// `{ type: 'stereo', left, right, width?, height?, channels? }`: two encoded
 /// JPEG/PNG views, or two raw RGB views sharing one set of dimensions.
 inline bridgedepth::StereoInput
@@ -231,46 +284,10 @@ parseStereoInput(js_env_t* env, jsu::Object& inputObj) {
     return image;
   };
   bridgedepth::StereoInput pair{view("left"), view("right")};
-
-  auto widthOpt = inputObj.getOptionalProperty<jsu::Number>(env, "width");
-  auto heightOpt = inputObj.getOptionalProperty<jsu::Number>(env, "height");
-  auto channelsOpt = inputObj.getOptionalProperty<jsu::Number>(env, "channels");
-  const int provided = (widthOpt.has_value() ? 1 : 0) +
-                       (heightOpt.has_value() ? 1 : 0) +
-                       (channelsOpt.has_value() ? 1 : 0);
-  if (provided != 0 && provided != 3) {
-    throw StatusError(
-        InvalidArgument,
-        "Raw RGB input requires all of 'width', 'height', and 'channels' "
-        "to be provided together; received " +
-            std::to_string(provided) + " of 3");
-  }
-  if (provided == 3) {
-    const double w = widthOpt->as<double>(env);
-    const double h = heightOpt->as<double>(env);
-    const double c = channelsOpt->as<double>(env);
-    for (const auto& [name, value] :
-         {std::pair{"width", w}, std::pair{"height", h}}) {
-      if (!std::isfinite(value) || value <= 0 || std::floor(value) != value ||
-          value > bridgedepth::MAX_SIDE) {
-        throw StatusError(
-            InvalidArgument,
-            std::string("Stereo '") + name +
-                "' must be a positive integer up to " +
-                std::to_string(bridgedepth::MAX_SIDE) + "; got " +
-                std::to_string(value));
-      }
-    }
-    if (c != 3) {
-      throw StatusError(
-          InvalidArgument,
-          "Stereo 'channels' must be exactly 3 (RGB); got " +
-              std::to_string(c));
-    }
-    const RawRgbDims dims{
-        static_cast<uint32_t>(w), static_cast<uint32_t>(h), 3};
-    pair.left.rawRgb = dims;
-    pair.right.rawRgb = dims;
+  if (auto dims = parseRawRgbDims(
+          env, inputObj, "Stereo", bridgedepth::MAX_SIDE, false)) {
+    pair.left.rawRgb = *dims;
+    pair.right.rawRgb = *dims;
   }
   if (inputObj.getOptionalProperty<jsu::Number>(env, "topK")) {
     throw StatusError(
@@ -317,59 +334,16 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   }
   cppInput.data.assign(span.begin(), span.end());
 
-  // {width, height, channels} are an all-or-nothing trio: zero present
-  // means encoded JPEG/PNG, three present means raw RGB.
-  auto widthOpt = inputObj.getOptionalProperty<jsu::Number>(env, "width");
-  auto heightOpt = inputObj.getOptionalProperty<jsu::Number>(env, "height");
-  auto channelsOpt = inputObj.getOptionalProperty<jsu::Number>(env, "channels");
-  const int provided = (widthOpt.has_value() ? 1 : 0) +
-                       (heightOpt.has_value() ? 1 : 0) +
-                       (channelsOpt.has_value() ? 1 : 0);
-  if (provided != 0 && provided != 3) {
-    throw StatusError(
-        InvalidArgument,
-        "Raw RGB input requires all of 'width', 'height', and 'channels' "
-        "to be provided together; received " +
-            std::to_string(provided) + " of 3");
-  }
-  if (provided == 3) {
-    // Preserve MobileNet's truncation; embedding dimensions are strict.
-    const bool embedding = type == "embedding";
-    const auto number = [embedding, env](jsu::Number value) {
-      const double raw = value.as<double>(env);
-      return embedding ? raw : std::trunc(raw);
-    };
-    const double w = number(*widthOpt);
-    const double h = number(*heightOpt);
-    const double c = number(*channelsOpt);
-    const double maximum = embedding ? preprocess::MAX_IMAGE_DIMENSION
-                                     : std::numeric_limits<int32_t>::max();
-    if (!std::isfinite(w) || w <= 0 || std::floor(w) != w || w > maximum) {
-      throw StatusError(
-          InvalidArgument,
-          "Image 'width' must be a positive integer when passing raw RGB "
-          "bytes; got " +
-              std::to_string(w));
-    }
-    if (!std::isfinite(h) || h <= 0 || std::floor(h) != h || h > maximum) {
-      throw StatusError(
-          InvalidArgument,
-          "Image 'height' must be a positive integer when passing raw RGB "
-          "bytes; got " +
-              std::to_string(h));
-    }
-    if (c != 3) {
-      throw StatusError(
-          InvalidArgument,
-          "Image 'channels' must be exactly 3 (RGB) when passing raw RGB "
-          "bytes; got " +
-              std::to_string(c));
-    }
-    cppInput.rawRgb = RawRgbDims{
-        static_cast<uint32_t>(w),
-        static_cast<uint32_t>(h),
-        static_cast<uint32_t>(c)};
-  }
+  // MobileNet keeps its truncation of fractional sizes; embedding dimensions
+  // are strict and bounded by the preprocessor's limit.
+  const bool embedding = type == "embedding";
+  cppInput.rawRgb = parseRawRgbDims(
+      env,
+      inputObj,
+      "Image",
+      embedding ? preprocess::MAX_IMAGE_DIMENSION
+                : std::numeric_limits<int32_t>::max(),
+      !embedding);
 
   auto topKOpt = inputObj.getOptionalProperty<jsu::Number>(env, "topK");
   if (type == "embedding" && topKOpt)

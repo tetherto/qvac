@@ -56,6 +56,8 @@
     "megaloc.d.ts",
     "bridgedepth.js",
     "bridgedepth.d.ts",
+    "ggml-model.js",
+    "ggml-model.d.ts",
     "scripts/convert-megaloc.py",
     "scripts/convert-bridgedepth.py",
     "LICENSE-MegaLoc",
