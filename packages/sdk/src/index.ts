@@ -247,6 +247,9 @@ export {
   executeToolSearch,
   loadedToolNames,
   searchDeferredTools,
+  resolveToolSearchSource,
+  type ToolSearchOptions,
+  type ToolSearchSource,
   type McpClient,
   type McpClientInput,
   type OCRClientParams,
@@ -405,7 +408,10 @@ export {
   RequestNotFoundError,
   RequestRejectedByPolicyError,
   TranslationFailedError,
-  AudioEncodeFailedError
+  AudioEncodeFailedError,
+  InvalidSeedFromParamsError,
+  KvCacheSeedSourceNotFoundError,
+  KvCacheSeedSharingDisabledError
 } from './utils/errors-server'
 
 // `WorkerCrashedError` and `WorkerShutdownError` are thrown by the

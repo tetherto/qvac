@@ -15,17 +15,30 @@ import {
   type TranscribeSegment,
   type CreateModelParams,
   type PluginModelResult,
+  type ResolveContext,
   type ResolveResult
 } from '@/schemas/index'
 import { ModelLoadFailedError, LegacyParakeetModelDeprecatedError } from '@/errors/index'
 import { transcribe, transcribeStream } from '@/plugins/ops/transcribe'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
 import { attachBackendDiagnostics } from '@/profiling/backend-diagnostics'
-import { buildParakeetEngineConfig } from '@/plugins/builtin/asr-ggml/config'
+import {
+  buildParakeetEngineConfig,
+  SPEAKER_ATTRIBUTION_MODEL_PATH
+} from '@/plugins/builtin/asr-ggml/config'
 import { parakeetFitRequest } from '@/plugins/builtin/asr-ggml/fit'
 import { createAsrModelLogger } from '@/plugins/builtin/asr-ggml/logging'
 
-function resolveParakeetConfig(cfg: ParakeetConfig): Promise<ResolveResult<ParakeetConfig>> {
+/**
+ * Rejects the pre-0.6 ONNX fields and resolves the speaker-attribution
+ * diarization model, when one is configured, to the path the addon loads
+ * beside the ASR model. The config keeps its `modelSrc`, as the stored load
+ * config; the engine config builder swaps in the resolved path.
+ */
+async function resolveParakeetConfig(
+  cfg: ParakeetConfig,
+  ctx: ResolveContext
+): Promise<ResolveResult<ParakeetConfig, typeof SPEAKER_ATTRIBUTION_MODEL_PATH>> {
   const cfgRecord = cfg as unknown as Record<string, unknown>
   const legacyFields = LEGACY_PARAKEET_ONNX_MODEL_CONFIG_FIELDS.filter(
     (name) => cfgRecord[name] !== undefined
@@ -33,7 +46,14 @@ function resolveParakeetConfig(cfg: ParakeetConfig): Promise<ResolveResult<Parak
   if (legacyFields.length > 0) {
     throw new LegacyParakeetModelDeprecatedError(legacyFields)
   }
-  return Promise.resolve({ config: cfg })
+  if (cfg.speakerAttribution === undefined) {
+    return { config: cfg }
+  }
+  const diarizationModelPath = await ctx.resolveModelPath(cfg.speakerAttribution.modelSrc)
+  return {
+    config: cfg,
+    artifacts: { [SPEAKER_ATTRIBUTION_MODEL_PATH]: diarizationModelPath }
+  }
 }
 
 function createParakeetModel(params: CreateModelParams): PluginModelResult {
@@ -48,7 +68,7 @@ function createParakeetModel(params: CreateModelParams): PluginModelResult {
 
   const model = new ASRGgml({
     files: { model: modelPath },
-    config: buildParakeetEngineConfig(config),
+    config: buildParakeetEngineConfig(config, params.artifacts),
     enableStats: true,
     logger
   })
@@ -64,8 +84,8 @@ export const parakeetPlugin = definePlugin({
   fitRequest: parakeetFitRequest,
   assessFit: ASRGgml.assessFit,
 
-  resolveConfig(cfg: ParakeetConfig): Promise<ResolveResult<ParakeetConfig>> {
-    return resolveParakeetConfig(cfg)
+  resolveConfig(cfg: ParakeetConfig, ctx: ResolveContext) {
+    return resolveParakeetConfig(cfg, ctx)
   },
 
   createModel(params: CreateModelParams): PluginModelResult {
@@ -196,13 +216,24 @@ export const parakeetPlugin = definePlugin({
                     probability: value.probability,
                     ...(value.source && { source: value.source }),
                     ...(value.timestamp !== undefined && { timestamp: value.timestamp }),
+                    ...(value.chunkIndex !== undefined && { chunkIndex: value.chunkIndex }),
                     ...(value.speakerId !== undefined && { speakerId: value.speakerId })
                   }
                 }
               } else if (value.type === 'endOfTurn') {
+                // The shared op already normalized the addon event to the
+                // parakeet variant; forward the native timing and confidence
+                // only when the engine sent them.
+                const { timestamp, chunkIndex, confidence } =
+                  value.source === 'parakeet' ? value : {}
                 yield {
                   type: 'transcribeStream' as const,
-                  endOfTurn: { source: 'parakeet' as const }
+                  endOfTurn: {
+                    source: 'parakeet' as const,
+                    ...(timestamp !== undefined && { timestamp }),
+                    ...(chunkIndex !== undefined && { chunkIndex }),
+                    ...(confidence !== undefined && { confidence })
+                  }
                 }
               }
               result = await iterator.next()
