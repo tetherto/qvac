@@ -40,7 +40,8 @@ process, so downloads are also coordinated on disk:
   after the cache resource it writes: the registry path for registry downloads,
   the source for HTTP and Hyperdrive. A process asking for the same model waits,
   then finds the model through its normal cache check. The OS releases the lock
-  when the holder exits. Cancelling while waiting deletes nothing.
+  when the holder exits. Cancelling while waiting deletes nothing. A read-only
+  models directory takes no lock, so its cached models still load.
 - Cache checks never delete a mismatched file; the download that follows
   replaces it. Cancelling with `clearCache` deletes only the partial file, or the
   shard or companion-set directory, that the cancelled download was writing

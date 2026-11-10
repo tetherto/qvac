@@ -271,6 +271,30 @@ test('tryAcquireDownloadLocks: releases the locks it took when a later one canno
   await lock?.[Symbol.asyncDispose]()
 })
 
+test('downloadModelFromHttp: a cached model still loads when the lock directory is read-only', async (t) => {
+  const cacheDir = useTestCacheDir()
+  const server = await startGatedServer()
+  const url = `${server.base}/read-only-${Math.random().toString(16).slice(2)}.gguf`
+  const modelPath = cachedHttpPath(cacheDir, url, url.split('/').pop()!)
+  const lockDir = path.join(cacheDir, '.locks')
+  fs.mkdirSync(lockDir, { recursive: true })
+  fs.writeFileSync(modelPath, CONTENT)
+  fs.chmodSync(lockDir, 0o555)
+  t.teardown(async () => {
+    fs.chmodSync(lockDir, 0o755)
+    await server.close()
+    fs.rmSync(modelPath, { force: true })
+  })
+
+  const result = await downloadModelFromHttp(url).catch((error: unknown) => error)
+  t.is(
+    result,
+    modelPath,
+    `the cached model is used ${result instanceof Error ? result.message : ''}`
+  )
+  t.is(server.gets(), 0, 'nothing is downloaded')
+})
+
 test('downloadModelFromHttp: an archive download holds its lock until the archive is written', async (t) => {
   useTestCacheDir()
   const server = await startGatedServer()

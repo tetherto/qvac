@@ -15,14 +15,28 @@ interface LockFile extends AsyncDisposable {
   fd: number
 }
 
-async function openLockFile(resourceKey: string): Promise<LockFile> {
+const NO_WRITE_ACCESS = new Set(['EACCES', 'EPERM', 'EROFS'])
+
+// `null` without write access to the lock directory, for example a prefilled
+// read-only models directory: nothing can download there, so nothing to lock.
+async function openLockFile(resourceKey: string): Promise<LockFile | null> {
   const lockDir = path.join(getModelsCacheDir(), LOCK_DIR_NAME)
-  await fsPromises.mkdir(lockDir, { recursive: true })
-  // Not 'a': Windows refuses to lock a handle opened for append only.
-  const handle = await fsPromises.open(
-    path.join(lockDir, `${generateShortHash(resourceKey)}.lock`),
-    'a+'
-  )
+  let handle: Awaited<ReturnType<typeof fsPromises.open>>
+  try {
+    await fsPromises.mkdir(lockDir, { recursive: true })
+    // Not 'a': Windows refuses to lock a handle opened for append only.
+    handle = await fsPromises.open(
+      path.join(lockDir, `${generateShortHash(resourceKey)}.lock`),
+      'a+'
+    )
+  } catch (error) {
+    if (!NO_WRITE_ACCESS.has((error as { code?: string }).code ?? '')) throw error
+    logger.warn(
+      `⚠️ Cannot create a lock for ${resourceKey} in the models directory; continuing without cross-process coordination`,
+      { error }
+    )
+    return null
+  }
   return {
     fd: handle.fd,
     // Closing the descriptor releases its lock.
@@ -58,6 +72,7 @@ export async function acquireDownloadLock(
 ): Promise<AsyncDisposable> {
   if (signal.aborted) throw new DownloadCancelledError()
   const lock = await openLockFile(resourceKey)
+  if (!lock) return { [Symbol.asyncDispose]: async () => {} }
   try {
     if (!tryLock(lock, resourceKey)) {
       logger.info(`⏳ ${resourceKey} is being downloaded elsewhere; waiting for it to finish`)
@@ -85,6 +100,7 @@ export async function tryAcquireDownloadLocks(
   try {
     for (const resourceKey of resourceKeys) {
       const lock = await openLockFile(resourceKey)
+      if (!lock) continue
       held.push(lock)
       if (!tryLock(lock, resourceKey)) {
         await releaseAll()
