@@ -14,6 +14,7 @@ import { resolveBundledAssetUri } from './asset-uri.js'
 import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
 import { ModelLoadingExecutor } from '../shared/executors/model-loading-executor.js'
 import { CompletionExecutor } from '../shared/executors/completion-executor.js'
+import { CalcTokensExecutor } from '../shared/executors/calc-tokens-executor.js'
 import { EmbeddingExecutor } from '../shared/executors/embedding-executor.js'
 import { ToolsExecutor } from '../shared/executors/tools-executor.js'
 import { DeferredToolsExecutor } from '../shared/executors/deferred-tools-executor.js'
@@ -206,6 +207,7 @@ export const executor = createExecutor({
       resolveAttachmentPath: resolveBatchAttachmentPath
     }),
     new CompletionExecutor(resources),
+    new CalcTokensExecutor(resources),
     new MobileTranscriptionExecutor(resources),
     new MobileTranscribeStreamEventsExecutor(resources),
     new EmbeddingExecutor(resources),
