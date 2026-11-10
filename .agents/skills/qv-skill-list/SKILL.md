@@ -120,7 +120,7 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 | Skill | Purpose | Use when |
 |-------|---------|----------|
 | [`qv-docs-update`](../qv-docs-update/SKILL.md) | Updates a package's documentation after a change to its code, for any software the docs website documents: regenerates the API facts and fixes the pages whose bindings drifted. | You added or changed a feature and the docs need to catch up. **Manual:** `/qv-docs-update` |
-| [`qv-docs-scaffold`](../qv-docs-scaffold/SKILL.md) | Creates an internal package's documentation for Ecosystem → Packages: versions file, required pages from the scaffolds, generated API reference, bindings. | A package the products are built on gets documented for the first time. **Manual:** `/qv-docs-scaffold` |
+| [`qv-docs-scaffold`](../qv-docs-scaffold/SKILL.md) | Creates an internal package's documentation for Ecosystem → Packages: versions file, required pages from the scaffolds, hand-written API reference, bindings. | A package the products are built on gets documented for the first time. **Manual:** `/qv-docs-scaffold` |
 
 ---
 

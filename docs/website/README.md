@@ -96,8 +96,9 @@ manifest every version-shaped surface reads, and no other module reads them.
   own, with a tab. A `platform` package is listed under Ecosystem → Packages,
   at `path` `/ecosystem/packages/<name>`; its lines work exactly like a
   collection's, current line and switcher included. `/qv-docs-scaffold`
-  creates a package's documentation, and `npm run docs:api -- packages/<name>`
-  generates its API reference from its declarations.
+  creates a package's documentation. Its API reference is written by hand and
+  binds `surface`; `npm run docs:api -- packages/<name>` writes the surface
+  data the binding check compares it against.
 - **No number of lines is imposed.** A line stays published until the team
   stops supporting it. Retiring it is one edit: move its version from `lines`
   to `retired`. The materializer then removes its folder, and its addresses

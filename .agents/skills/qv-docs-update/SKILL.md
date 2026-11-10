@@ -20,7 +20,8 @@ Run this skill only when the developer asks. The API must be stable: prose writt
 
 - Every documented software has a versions file, `docs/website/versions/<slug>.json`. Its `paths` list the folders the documentation reads, the first being the **documentation root**, `<package>/docs/users/`. Its `kind` is `product` or `platform`. Read the versions files; never assume which software exists.
 - The documentation root on the current branch is the line this branch documents: the unreleased version on `main`, a released version on its release branch. Write there and nowhere else.
-- **Facts come from data.** API signatures, request and response fields, model lists, CLI commands and options, and HTTP operations are generated into `<documentation root>/_generated/` and the software's contract, and rendered by data components (`<SchemaTable>`, `<ModelsTable>`, `<FunctionReference>`, `<CliReference>`, `<OpenApiReference>`). Reference pages are generated too. Never write such a fact as prose: regenerate it.
+- **Some facts come from data.** Model lists, CLI commands and options, and HTTP operations are generated into `<documentation root>/_generated/` and the software's contract, and rendered by data components (`<SchemaTable>`, `<ModelsTable>`, `<CliReference>`, `<OpenApiReference>`). Never write such a fact as prose: regenerate it.
+- **API reference pages are written by hand.** An SDK function's page (`reference/api/<function>.mdx`) and a package's `api.mdx` state signatures, options, and types in tables, read from the source: the client function, its TypeScript types, and the Zod schemas behind them. When a bound symbol changes, update the tables of every page `docs:bindings` names.
 - **Prose is bound to the API.** A hand-written page declares the symbols it describes in its frontmatter, `binds: [fn:translate, command:qvac serve, "endpoint:POST /v1/chat/completions"]`. `api-bindings.lock.json` records the surface each binding was reviewed against. `npm run docs:bindings` (from `docs/website`) names every page whose bound surface changed, and every public symbol no page binds. `npm run docs:lock` records the review.
 
 ## What this skill reads and writes
@@ -263,9 +264,10 @@ Source impact:
 completion() accepts an optional maxTokens that caps the tokens generated.
 
 Regenerated:
-- @qvac/sdk: contract, _generated/js-api.json, reference/api/completion.mdx
+- @qvac/sdk: contract, _generated/js-api.json
 
 Targets:
+- packages/sdk/docs/users/reference/api/completion.mdx  "CompletionOptions" table  via binding (fn:completion)
 - packages/sdk/docs/users/ai-capabilities/text-generation.mdx  "Features"  via binding (fn:completion)
 
 Reviewed without change:

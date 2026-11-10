@@ -10,9 +10,9 @@ URLs are written as the site serves them: version-less, so a link resolves withi
 
 ## Facts and prose never share a passage
 
-Data components render the facts: `<SchemaTable fn>` the fields of a request, `<ModelsTable engines>` the models of an engine, `<FunctionReference>` a whole function, `<CliReference command>` a command's arguments and options, `<OpenApiReference>` the HTTP operations. Prose says what a reader does with them: when to reach for a field, how options interact, what to watch for.
+Data components render the facts that have a clean source: `<SchemaTable fn>` the fields of a request, `<ModelsTable engines>` the models of an engine, `<CliReference command>` a command's arguments and options, `<OpenApiReference>` the HTTP operations. API reference pages are the exception: an SDK function's page and a package's `api.mdx` state options and types in hand-written tables, read from the source. Prose says what a reader does with the facts: when to reach for a field, how options interact, what to watch for.
 
-- Never write a field list, a model list, an option table, or an operation list by hand. If a page needs one, use its component.
+- Outside the API reference pages, never write a field list, a model list, an option table, or an operation list by hand. If a guide needs one, link the function's reference page, or use the data component.
 - Never repeat in prose what a component on the same page renders. Point at it instead.
 - A missing description is fixed in the source schema, where every channel reads it, not in the page.
 
@@ -111,7 +111,7 @@ Some pages annotate an item with a trailing em-dash note:
 1. [`loadModel()`](/sdk/reference/api/loadModel) — load with `modelConfig.parallel >= 2`.
 ```
 
-A function's reference page is `/sdk/reference/api/<function>`, with the function's exact name: `assessModelFit()` links to `/sdk/reference/api/assessModelFit`. Take the name from the generated reference (`reference/api/`), not from the source filename: `completion-stream.ts` exports `completion`.
+A function's reference page is `/sdk/reference/api/<function>`, with the function's exact name: `assessModelFit()` links to `/sdk/reference/api/assessModelFit`. Take the name from the reference pages (`reference/api/`), not from the source filename: `completion-stream.ts` exports `completion`.
 
 Link a symbol to its reference page whenever one exists. A link is for the reader; what routes a change to the page is its `binds`, so add the symbol there too.
 

@@ -52,9 +52,9 @@ Content falls into two categories:
 |---|---|---|
 | Manual content (guides, tutorials, addons) | one collection folder per top level: `content/docs/ecosystem/`, `content/docs/sdk/`, `content/docs/cli/`, `content/docs/resources/` | Yes |
 | The line being written, per versioned collection | the software's `packages/<pkg>/docs/users/` | Yes, but not served in production |
-| SDK API data (generated) | `packages/sdk/docs/users/_generated/` and the reference stubs in `packages/sdk/docs/users/reference/api/` | Yes, kept fresh by `npm run docs:sdk-api -- --check` |
+| SDK API data (generated) | `packages/sdk/docs/users/_generated/`, the API index and its `meta.json` in `packages/sdk/docs/users/reference/api/` | Yes, kept fresh by `npm run docs:sdk-api -- --check` |
 
-The SDK API reference is **rendered from data**, never written by hand. Field facts — types, nesting, constraints, descriptions — come from the SDK's exported contract (`packages/sdk/contract/`, generated from its Zod schemas). The client functions come from `packages/sdk/docs/users/_generated/`: `js-api.json`, extracted by TypeDoc, and `python-api.json`, read from the Python client's source. Each line renders the data of its own commit.
+The SDK API reference is **written by hand**: one page per function, `reference/api/<function>.mdx`, in the table format of the SDK's Configuration page. Generated tables could not state the reference correctly: the function's options are TypeScript types without descriptions, the descriptions live only in the contract's wire schema, and joining the two breaks on nested unions, generics, and client-only options. Each page binds its function, `binds: [fn:<function>]`, so a change to the function's signature or types fails `npm run docs:bindings` and names the page to update. The generated data is what the binding check compares against: the contract (`packages/sdk/contract/`, generated from the SDK's Zod schemas), and `packages/sdk/docs/users/_generated/`: `js-api.json`, extracted by TypeDoc, and `python-api.json`, read from the Python client's source. Each line reads the data of its own commit.
 
 **The site publishes no release-notes pages.** Each line's sidebar carries a `Release Notes` entry that links out to that minor's GitHub release, which is where the changelog already lives. The release notes a release authors (`qv-sdk-changelog`) therefore reach readers through GitHub, and a patch release touches `docs/website` not at all.
 
@@ -70,18 +70,20 @@ packages/sdk (TypeDoc) + packages/sdk-python (source)
   │  npm run docs:sdk-api
   ▼
 packages/sdk/docs/users/_generated/{js-api,python-api}.json
-packages/sdk/docs/users/reference/api/<function>.mdx   (one stub per function)
+packages/sdk/docs/users/reference/api/{index.mdx,meta.json}
   │  build: materialize the line, then render
   ▼
-reference pages   ── <FunctionReference>, <SchemaTable>, <ModelsTable>
-Markdown twins    ── the same components rendered as cards
+guide pages      ── <SchemaTable>, <ModelsTable>, where a guide embeds data
+Markdown twins   ── the same components rendered as cards
 <function>.schema.json   ── scripts/write-schema-slices.ts, after next build
 ```
 
 - `<SchemaTable fn>` renders a function's request fields as nested tables,
   with a JavaScript/Python switch for field names.
 - `<ModelsTable engines>` lists the registry models of the given engines.
-- `<FunctionReference fn>` renders a function's whole reference page.
+- `<FunctionReference fn>` renders a reference page from the data. The
+  generator writes such a stub only for a public function that has no page
+  yet; `docs:bindings` then fails until a hand-written page binds it.
 
 In a page's Markdown twin, each component renders as a card: a TypeScript
 type for fields, a list for models. `npm run docs:sdk-descriptions` lists the
@@ -140,8 +142,10 @@ npm run docs:sdk-api            # regenerate after changing the SDK's public API
 npm run docs:sdk-api -- --check # fail when the committed data is stale
 ```
 
-It writes `packages/sdk/docs/users/_generated/` and the reference stubs in
-`packages/sdk/docs/users/reference/api/`. Commit both with the SDK change.
+It writes `packages/sdk/docs/users/_generated/`, the API index, and its
+`meta.json`. It never overwrites a hand-written reference page. Commit the
+output with the SDK change, then update the reference pages
+`docs:bindings` names.
 
 **Flags:**
 
@@ -471,7 +475,7 @@ All scripts live in `docs/website/scripts/` and are designed to run with Bun.
 | `write-schema-slices.ts` | -- | After `next build`: publishes each function's `<fn>.schema.json` beside its reference page. The broken-link check sees only pages and `public/` assets, so the build passes it `--ignore '/**/*.schema.json'`. |
 | `write-line-redirects.ts` | -- | After `next build`: expands the documentation-line markers of `out/_redirects` |
 | `materialize-lines.ts` | `docs:materialize` | Materializes every pinned line from its commit; `--override`, `--include-dev`, and the same flags from `DOCS_MATERIALIZE_FLAGS` |
-| `api-reference/generate-package-api.ts` | `docs:api` | Writes a package's API reference: `_generated/api.json`, normalized from TypeDoc by `api-reference/package-api.ts`, and the generated `api.mdx`. Needs the package's dependencies installed. `--check` fails when stale. |
+| `api-reference/generate-package-api.ts` | `docs:api` | Writes a package's surface data, `_generated/api.json`, normalized from TypeDoc by `api-reference/package-api.ts`. The binding check projects the package's surface from it; the `api.mdx` page is written by hand. Needs the package's dependencies installed. `--check` fails when stale. |
 | `contract/check-contract.ts` | `docs:contract` | Checks each documentation root against its kind's required pages (`contract/kinds.json`) and a package overview's link to its product; runs on pull requests, never in the build |
 | `bindings/check-bindings.ts` | `docs:bindings`, `docs:lock` | Checks each package's page bindings against its projected surface and `api-bindings.lock.json`; `--write` (`docs:lock`) records the review |
 | `update-pins.ts` | -- | Pins the lines a release branch publishes in their versions files; run by `docs-pin-update.yml` |

@@ -9,7 +9,8 @@
  * against its kind's definition, `contract/kinds.json`:
  *
  * - every required page exists, as `<page>.mdx` or a `<page>/` folder;
- * - a page the definition marks generated carries the generator's marker;
+ * - a page the definition gives a `binds` symbol binds it, so the binding
+ *   check holds the page to that part of the API;
  * - a `platform` package's overview links a product, the canonical way to use
  *   its capability.
  *
@@ -21,7 +22,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs'
 import * as path from 'node:path'
 import { declaredSoftware } from '../../src/lib/versions'
 import type { VersionsFile } from '../../src/lib/versions-file'
-import { isGeneratedPage } from '../bindings/bindings'
+import { bindsOf } from '../bindings/bindings'
 
 const WEBSITE = path.resolve(import.meta.dirname, '..', '..')
 const MONOREPO = path.resolve(WEBSITE, '..', '..')
@@ -29,7 +30,8 @@ const MONOREPO = path.resolve(WEBSITE, '..', '..')
 export interface RequiredPage {
   id: string
   page: string
-  generated?: boolean
+  /** A symbol the page must bind, such as `surface`. */
+  binds?: string
   states: string
 }
 
@@ -70,8 +72,8 @@ export function checkContract(
       problems.push(`${label}: missing the ${required.id} page, \`${required.page}.mdx\` — ${required.states}`)
       continue
     }
-    if (required.generated && (!file || !isGeneratedPage(readFileSync(file, 'utf-8')))) {
-      problems.push(`${label}: \`${required.page}\` is not the generated page — ${required.states}`)
+    if (required.binds && (!file || !bindsOf(readFileSync(file, 'utf-8')).includes(required.binds))) {
+      problems.push(`${label}: \`${required.page}\` does not bind \`${required.binds}\` — ${required.states}`)
     }
   }
 
