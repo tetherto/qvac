@@ -4,6 +4,7 @@ import {
   createRequestRegistry as createRegistry,
   type RequestRegistry
 } from '@/runtime/request-registry'
+import { assertSessionOpen } from '@/runtime/session-registry'
 import type { Logger, LogTransport } from '@/logging/types'
 import type { LogLevel } from '@qvac/logging'
 
@@ -30,7 +31,10 @@ export type RequestKind =
   | 'audiogen'
   | 'tts'
   | 'ocr'
+  | 'classification'
   | 'vla'
+  | 'plugin'
+  | 'vectorIndex'
   | 'finetune'
   | 'loadModel'
   | 'downloadAsset'
@@ -69,6 +73,14 @@ export type RequestState = 'running' | 'cancelling' | 'completed' | 'failed' | '
  */
 export interface RequestContext {
   readonly requestId: string
+  /** Caller session the request belongs to; the owner session when the request named none. */
+  readonly sessionId: string
+  /**
+   * `(sessionId, requestId)` joined into the registry's storage key. Hand this,
+   * not `requestId`, to native code that keys jobs by id: two sessions may reuse
+   * one request id, and the addon has no session of its own to tell them apart.
+   */
+  readonly registryKey: string
   readonly kind: RequestKind
   readonly modelId: string | undefined
   readonly signal: AbortSignal
@@ -211,7 +223,7 @@ function installDefaultPolicies(r: RequestRegistry): void {
 
 export function getRequestRegistry(): RequestRegistry {
   if (!registry) {
-    registry = createRegistry()
+    registry = createRegistry({ assertSessionOpen })
     installDefaultPolicies(registry)
   }
   return registry

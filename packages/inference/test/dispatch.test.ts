@@ -7,7 +7,13 @@ import { send, stream, close } from '@/dispatch'
 import { registerPlugin, clearPlugins } from '@/plugins'
 import { ModelType } from '@/schemas'
 import type { Request, Response } from '@/schemas'
-import { PluginsNotRegisteredError, RequestValidationFailedError } from '@/errors'
+import {
+  OwnerOnlyError as OwnerOnly,
+  PluginsNotRegisteredError,
+  RequestValidationFailedError,
+  SessionNotOpenError as SessionNotOpen
+} from '@/errors'
+import { clearSessions, openSession } from '@/runtime/session-registry'
 import { makeFakePlugin } from './fixtures/fake-plugin'
 import { TEST_CACHE_DIR } from './fixtures/test-cache'
 
@@ -15,6 +21,9 @@ import { TEST_CACHE_DIR } from './fixtures/test-cache'
 // reads HOME once (bare-env is the live module object the engine reads), so
 // point it at a throwaway dir before any dispatch runs.
 env['HOME'] = path.join(os.tmpdir(), `qvac-inference-test-${os.pid()}`)
+
+const OwnerOnlyError = OwnerOnly as unknown as new () => Error
+const SessionNotOpenError = SessionNotOpen as unknown as new () => Error
 
 function fakeRequest(type: string): Request {
   return { type } as unknown as Request
@@ -38,6 +47,43 @@ test('send dispatches a model-free request in-process to its handler', async fun
     t.is(response.type, 'heartbeat', 'the heartbeat handler answered')
     t.is(typeof response.number, 'number', 'and returned its payload')
   } finally {
+    await close()
+    clearPlugins()
+  }
+})
+
+test('send refuses a runtime-wide operation from a session before its handler runs', async function (t) {
+  clearPlugins()
+  clearSessions()
+  registerPlugin(makeFakePlugin(ModelType.llamacppCompletion))
+  openSession('s-owner-only')
+  try {
+    const heartbeat = await send({ type: 'heartbeat', sessionId: 's-owner-only' } as Request)
+    t.is(heartbeat.type, 'heartbeat', 'an ordinary request runs as the session')
+    await t.exception(
+      () => send({ type: 'suspend', sessionId: 's-owner-only' } as Request),
+      OwnerOnlyError,
+      'suspend from a session is refused'
+    )
+    await t.exception(
+      () => send({ type: 'deleteCache', all: true, sessionId: 's-owner-only' } as Request),
+      OwnerOnlyError,
+      'deleteCache from a session is refused'
+    )
+    await t.exception(
+      () => send({ type: 'suspend', sessionId: 'never-opened' } as Request),
+      SessionNotOpenError,
+      'an unknown session fails the open check first'
+    )
+    const state = (await send({
+      type: 'state',
+      sessionId: 's-owner-only'
+    } as Request)) as Response & {
+      state: string
+    }
+    t.is(state.state, 'active', 'the runtime was never suspended')
+  } finally {
+    clearSessions()
     await close()
     clearPlugins()
   }

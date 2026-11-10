@@ -23,6 +23,8 @@ import {
   sendLogToStreams
 } from '@/runtime/logging-stream-registry'
 import { untilAborted } from '@/utils/until-aborted'
+import { handleCloseSession, handleOpenSession } from '@/handlers/session'
+import { clearSessions } from '@/runtime/session-registry'
 import { makeFakePlugin } from './fixtures/fake-plugin'
 
 // Keep the storage lock out of the real home.
@@ -131,6 +133,31 @@ test('a logging stream with an aborted signal opens no subscription', async func
     await tick()
     t.absent(subscribed('model-a'), 'nothing registered')
   } finally {
+    await tearDown()
+  }
+})
+
+test("closing a session ends its logging streams and leaves the owner's", async function (t) {
+  setUp()
+  try {
+    const sessionId = 'log-session'
+    handleOpenSession({ type: 'openSession', sessionId })
+    const sessionLogs = stream({ type: 'loggingStream', id: 'model-s', sessionId } as Request)
+    const ownerController = new AbortController()
+    const ownerLogs = loggingStream({ id: 'model-o' }, { signal: ownerController.signal })
+    const sessionRead = sessionLogs.next()
+    const ownerRead = ownerLogs.next()
+    t.ok(await waitFor(() => subscribed('model-s') && subscribed('model-o')), 'both registered')
+
+    await handleCloseSession({ type: 'closeSession', sessionId })
+
+    t.ok((await sessionRead).done, 'the session stream ends without another log')
+    t.absent(subscribed('model-s'), 'the session subscription is released')
+    t.ok(subscribed('model-o'), 'the owner subscription stays')
+    ownerController.abort(new Error('stop'))
+    t.ok((await ownerRead).done)
+  } finally {
+    clearSessions()
     await tearDown()
   }
 })
@@ -254,6 +281,13 @@ test('a plugin stream ignores the signal and runs to its end', async function (t
     release()
 
     t.is(tokenOf(await responses.next()), 'b', 'the stream keeps running after the abort')
+    const last = await responses.next()
+    t.is(
+      (last.value as unknown as { done: boolean }).done,
+      true,
+      'the stream ends with the handler'
+    )
+    t.ok((await responses.next()).done, 'nothing follows the done frame')
   } finally {
     unregisterModel('gated-model')
     await tearDown()
