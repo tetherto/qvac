@@ -441,7 +441,7 @@ jobs:
           --skip-build
           --skip-snap-install
 
-      # Trusted events testing their own commit only.
+      # Trusted events on main testing their own commit only.
       # Not `cp -n`: it exits 1 on existing files in coreutils 9.2-9.4.
       - name: Collect Snap downloads for the cache
         id: snap-collect
@@ -449,6 +449,7 @@ jobs:
           !cancelled() &&
           steps.models-cache.outputs.complete == 'false' &&
           contains(fromJSON('["push","schedule","workflow_dispatch","merge_group"]'), github.event_name) &&
+          github.ref == 'refs/heads/main' &&
           (inputs.test-version == '' || inputs.test-version == github.sha)
         continue-on-error: true
         shell: bash

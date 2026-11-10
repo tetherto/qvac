@@ -96089,7 +96089,8 @@ async function mapWithConcurrency(items, limit, worker) {
 
 
 
-// A13: never save from PR code, even if a caller is mis-wired.
+// A13: only main saves, never PR code, even if a caller is mis-wired. pull_request_target runs
+// on refs/heads/main too, so the event is checked as well.
 const TRUSTED_EVENTS = new Set(['push', 'schedule', 'workflow_dispatch', 'merge_group'])
 const CONCURRENCY = 4
 
@@ -96165,8 +96166,9 @@ async function saveEntry(entry, lookupAttempts) {
 
 async function save(plan, failOnError) {
   const event = process.env.GITHUB_EVENT_NAME ?? ''
-  if (!TRUSTED_EVENTS.has(event)) {
-    core.warning(`Not saving model cache entries from a ${event || 'unknown'} run`)
+  const ref = process.env.GITHUB_REF ?? ''
+  if (!TRUSTED_EVENTS.has(event) || ref !== 'refs/heads/main') {
+    core.warning(`Not saving model cache entries from a ${event || 'unknown'} run on ${ref}`)
     return
   }
   const outcomes = await mapWithConcurrency(plan.entries, CONCURRENCY, (entry) =>
