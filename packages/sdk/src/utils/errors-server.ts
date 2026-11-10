@@ -803,6 +803,48 @@ export class InvalidDeleteCacheParamsError extends QvacErrorBase {
   }
 }
 
+export class InvalidSeedFromParamsError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(createErrorOptions(SDK_SERVER_ERROR_CODES.INVALID_SEED_FROM_PARAMS, undefined, cause))
+  }
+}
+
+export class KvCacheSeedSourceNotFoundError extends QvacErrorBase {
+  readonly seedFrom: string
+  readonly modelId: string
+
+  constructor(seedFrom: string, modelId: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.KV_CACHE_SEED_SOURCE_NOT_FOUND,
+        [seedFrom, modelId],
+        cause
+      )
+    )
+    this.seedFrom = seedFrom
+    this.modelId = modelId
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { seedFrom: this.seedFrom, modelId: this.modelId }
+  }
+}
+
+export class KvCacheSeedSharingDisabledError extends QvacErrorBase {
+  readonly modelId: string
+
+  constructor(modelId: string, cause?: unknown) {
+    super(
+      createErrorOptions(SDK_SERVER_ERROR_CODES.KV_CACHE_SEED_SHARING_DISABLED, [modelId], cause)
+    )
+    this.modelId = modelId
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { modelId: this.modelId }
+  }
+}
+
 export class CacheDirNotAbsoluteError extends QvacErrorBase {
   constructor(cause?: unknown) {
     super(createErrorOptions(SDK_SERVER_ERROR_CODES.CACHE_DIR_NOT_ABSOLUTE, undefined, cause))
