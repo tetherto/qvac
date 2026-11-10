@@ -158,23 +158,19 @@ test('captureThinking true: separate reasoning blocks stay on separate lines', (
     baseConfig({ capabilities: THINKING_CAPS, captureThinking: true })
   )
   const events = [
-    ...pushAll(n, ['<think>first\n</think>answer', '<think>\n', 'second', '\n</think>']),
+    ...pushAll(n, [
+      '<think>first\n</think>answer',
+      '<think>\n',
+      'second',
+      '\n</think>',
+      '<think>\n\n</think>'
+    ]),
     ...n.finish()
   ]
 
-  t.is(n.getAccumulated().thinkingText, 'first\nsecond')
+  t.is(n.getAccumulated().thinkingText, 'first\nsecond', 'an empty block adds no separator')
   t.is(texts(events, 'thinkingDelta').join(''), 'first\nsecond', 'deltas carry the separator')
   t.is(n.getAccumulated().contentText, 'answer')
-})
-
-test('captureThinking true: an empty second reasoning block adds no separator', (t) => {
-  const n = createCompletionNormalizer(
-    baseConfig({ capabilities: THINKING_CAPS, captureThinking: true })
-  )
-  pushAll(n, ['<think>first</think>answer<think>\n\n</think>'])
-  n.finish()
-
-  t.is(n.getAccumulated().thinkingText, 'first')
 })
 
 test('captureThinking true: reasoning cut off before its close drops trailing whitespace', (t) => {
@@ -185,16 +181,6 @@ test('captureThinking true: reasoning cut off before its close drops trailing wh
   n.finish()
 
   t.is(n.getAccumulated().thinkingText, 'half way')
-})
-
-test('harmony analysis frame: edge newlines in the reasoning are dropped', (t) => {
-  const n = createCompletionNormalizer(
-    baseConfig({ capabilities: NONE_CAPS, toolDialect: 'harmony', captureThinking: true })
-  )
-  pushAll(n, ['<|channel|>analysis<|message|>\nplan\n<|end|>'])
-  n.finish()
-
-  t.is(n.getAccumulated().thinkingText, 'plan')
 })
 
 test('captureThinking true: an empty think block leaves no leading whitespace', (t) => {
@@ -238,12 +224,12 @@ test('gemma4 thought frame: blank line after the frame is dropped', (t) => {
   t.is(n.getAccumulated().contentText, 'after')
 })
 
-test('harmony final frame: blank line after the analysis channel is dropped', (t) => {
+test('harmony: framing newlines are dropped from the analysis and final channels', (t) => {
   const n = createCompletionNormalizer(
     baseConfig({ capabilities: NONE_CAPS, toolDialect: 'harmony', captureThinking: true })
   )
   pushAll(n, [
-    '<|channel|>analysis<|message|>plan<|end|>',
+    '<|channel|>analysis<|message|>\nplan\n<|end|>',
     '<|start|>assistant<|channel|>final<|message|>',
     '\n\nAnswer',
     '<|return|>'
