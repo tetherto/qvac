@@ -2,7 +2,7 @@
 
 Embedded ingestion and retrieval for QVAC apps. `@qvac/rag` stores document chunks and their embeddings in HyperDB and answers scoped vector searches over them. It runs on Bare and Node, and does not depend on `@qvac/sdk` or `@qvac/inference`.
 
-It ingests text, pre-chunked text or chunks with precomputed embeddings, and searches them with an exact scan. Text is chunked with [`rag-extract/chunk`](https://github.com/tetherto/rag-extract) and embedded through an embeddings port you supply. A TurboVec index is not in this release yet.
+It ingests text, pre-chunked text or chunks with precomputed embeddings. Text is chunked with [`rag-extract/chunk`](https://github.com/tetherto/rag-extract) and embedded through an embeddings port you supply. Search uses a TurboVec index per namespace when `@qvac/turbovec-ggml` is installed, and an exact scan of HyperDB otherwise.
 
 ## Installation
 
@@ -12,13 +12,22 @@ npm install @qvac/rag corestore
 
 On runtimes without a Node-style `crypto.createHash` (browser, React Native), install a compatible polyfill such as `crypto-browserify`.
 
+For indexed search on Bare, also install the optional peer:
+
+```bash
+npm install @qvac/turbovec-ggml
+```
+
 ## Usage
 
 ```ts
 import Corestore from 'corestore'
 import { createRag } from '@qvac/rag'
 
-const rag = createRag({ corestore: new Corestore('./rag-storage') })
+const rag = createRag({
+  corestore: new Corestore('./rag-storage'),
+  index: { dir: './rag-index' }
+})
 await rag.ready()
 
 const { spaceId } = await rag.createNamespace({
@@ -76,7 +85,7 @@ See [`examples/quickstart.ts`](examples/quickstart.ts) for a runnable version.
 
 ## API
 
-### `createRag({ corestore, embeddings?, chunking? })`
+### `createRag({ corestore, embeddings?, chunking?, index? })`
 
 Creates a RAG instance on a caller-owned Corestore. `embeddings` is an `EmbeddingsPort`, needed only for text and pre-chunked ingest and for text query search:
 
@@ -91,15 +100,30 @@ interface EmbeddingsPort {
 
 The port must be in the namespace's space: `computeSpaceId(port.space)` has to equal the namespace's `spaceId`, or text ingest and text search fail with `EMBEDDING_SPACE_MISMATCH` before anything is embedded. Without a port they fail with `DEPENDENCY_REQUIRED`. A port that throws surfaces as `EMBEDDING_FAILED`, and one that returns the wrong number of values as `EMBEDDING_DIMENSION_MISMATCH`.
 
-`chunking` is `{ chunkSize?, chunkOverlap? }` in tokens, passed to `rag-extract/chunk` for text documents (defaults 256 and 50). `chunkOverlap` must be smaller than `chunkSize`. `close()` waits for calls already in progress, then closes the RAG's HyperDB but leaves the Corestore open; calls made after it fail with `NOT_READY`. Call `ready()` before any other method.
+`chunking` is `{ chunkSize?, chunkOverlap? }` in tokens, passed to `rag-extract/chunk` for text documents (defaults 256 and 50). `chunkOverlap` must be smaller than `chunkSize`.
 
-### `createNamespace({ name, space })`
+`index` configures the vector index, used only when `@qvac/turbovec-ggml` loads:
 
-Creates a namespace pinned to one embedding space and returns `{ name, spaceId, revision }`. `spaceId` is a hash of every field of `space`, so two spaces with the same dimensions but a different model, encoding or metric never match. Calling it again with the same space returns the existing namespace; a different space fails with `NAMESPACE_EXISTS`.
+- `dir`: directory for index snapshots. Without it, each namespace's index is built from HyperDB the first time it is searched after `ready()`, and kept in memory only.
+- `snapshotEvery`: committed batches between snapshots, default 256. A snapshot is also written on `close()`.
+
+The index is derived from HyperDB and never trusted on its own. On open it loads the snapshot if it matches the namespace's revision, replays the batches committed since if it is behind, and rebuilds from the stored chunks otherwise. Deleting the snapshot directory is always safe. `close()` waits for calls already in progress, then closes the RAG's HyperDB but leaves the Corestore open; calls made after it fail with `NOT_READY`. Call `ready()` before any other method.
+
+### `createNamespace({ name, space, index? })`
+
+Creates a namespace pinned to one embedding space and returns `{ name, spaceId, revision, index: { storage } }`. `spaceId` is a hash of every field of `space`, so two spaces with the same dimensions but a different model, encoding or metric never match. Calling it again with the same space returns the existing namespace; a different space fails with `NAMESPACE_EXISTS`.
 
 `documentEncoding`, `queryEncoding` and `preprocessing` only identify the space; `@qvac/rag` never applies them. Add the document and query prefixes yourself before embedding, or in your embeddings port. Nothing checks that you did, and skipping them only makes results worse.
 
 `computeSpaceId(space)` returns the same ID without touching storage.
+
+`index.storage` sets how the namespace's index stores vectors and is fixed at creation; asking for a different one later fails with `NAMESPACE_EXISTS`.
+
+| Storage                      | Dimensions                    | Notes                                                            |
+| ---------------------------- | ----------------------------- | ---------------------------------------------------------------- |
+| `q8` (default)               | any                           | 8-bit quantized                                                  |
+| `f32`                        | any                           | full precision                                                   |
+| `turbovec-q4`, `turbovec-q2` | divisible by 8, at most 1,024 | TurboVec 4- and 2-bit; embedding components must stay below 1e16 |
 
 ### `ingest({ namespace, documents }, { signal?, onProgress? }?)`
 
@@ -126,7 +150,7 @@ Deletes the documents and their chunks in one batch. Unknown IDs are ignored. Re
 
 ### `search({ scope, vector, spaceId, k, signal? })` / `search({ scope, query, k, signal? })`
 
-A text `query` is embedded with the port's `embedQuery` and searched in the port's space, so it takes no `spaceId`. Returns up to `k` hits `{ namespace, documentId, chunkId, ordinal, content, metadataJson?, documentMetadata?, score }`, best first. `metadataJson` is the chunk's and `documentMetadata` is the document's `metadata` from ingest. `spaceId` is the space the query was embedded in; a different one fails with `EMBEDDING_SPACE_MISMATCH`, even when its dimensions match. The score is the dot product, or the cosine similarity for `cosine` spaces. An aborted `signal` stops the scan between batches with `OPERATION_CANCELLED`.
+A text `query` is embedded with the port's `embedQuery` and searched in the port's space, so it takes no `spaceId`. Returns up to `k` hits `{ namespace, documentId, chunkId, ordinal, content, metadataJson?, documentMetadata?, score }`, best first. `metadataJson` is the chunk's and `documentMetadata` is the document's `metadata` from ingest. `spaceId` is the space the query was embedded in; a different one fails with `EMBEDDING_SPACE_MISMATCH`, even when its dimensions match. The score is the dot product, or the cosine similarity for `cosine` spaces, computed from the stored float32 vectors either way. With the index, candidates come from TurboVec and are rescored exactly; a candidate HyperDB no longer maps to a current chunk is dropped. An aborted `signal` fails with `OPERATION_CANCELLED`; the scan checks it between batches, and a search waiting for an index to load or rebuild stops waiting, while the rebuild finishes for later searches. Equal scores rank in scope order for a `documentIds` list and in document ID order otherwise, with and without the index.
 
 `scope` is `{ namespace, documentIds? }`. Only chunks inside the scope are read and ranked, so a restricted search fills its top `k` from allowed documents. Search fails closed:
 
@@ -146,7 +170,7 @@ await reader.search({ vector: queryVector, spaceId, k: 5, scope: { documentIds: 
 
 ## Errors
 
-Every error is a `QvacErrorRAG` with a code from `ERR_CODES`, importable from `@qvac/rag` or `@qvac/rag/errors`. Corestore and HyperDB failures, including `ready()` on storage another process holds, surface as `DB_OPERATION_FAILED` with the original error as `cause`.
+Every error is a `QvacErrorRAG` with a code from `ERR_CODES`, importable from `@qvac/rag` or `@qvac/rag/errors`. Corestore and HyperDB failures, including `ready()` on storage another process holds, surface as `DB_OPERATION_FAILED` with the original error as `cause`. An index that can't be built or searched is never an error: that namespace's searches scan until the RAG is reopened.
 
 ## Development
 
@@ -154,7 +178,8 @@ Every error is a `QvacErrorRAG` with a code from `ERR_CODES`, importable from `@
 npm run build:hyperdb-spec   # regenerate src/db/hyperspec after a schema change
 npm run typecheck
 npm run lint
-npm run test:unit
+npm run test:unit                      # index tests need @qvac/turbovec-ggml to load
+bare scripts/bench-index.ts --help     # index RAM and open-time benchmark, not run in CI
 ```
 
 ## License

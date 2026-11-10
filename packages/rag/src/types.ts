@@ -29,23 +29,41 @@ export interface ChunkingOptions {
   chunkOverlap?: number
 }
 
+// How a namespace's vector index stores vectors. `q8` works for any
+// dimension; the TurboVec modes need dimensions divisible by 8 and at most 1,024.
+export type IndexStorage = 'f32' | 'q8' | 'turbovec-q4' | 'turbovec-q2'
+
+export interface IndexOptions {
+  // Directory for index snapshots. Without it, indexes stay in memory and
+  // are rebuilt from the database the first time each namespace is searched.
+  dir?: string
+  // Committed batches between snapshots. Defaults to 256.
+  snapshotEvery?: number
+}
+
 export interface CreateRagOptions {
   corestore: Corestore
   // Needed for text and pre-chunked ingest and for text query search.
   embeddings?: EmbeddingsPort
   // Applies to text documents only; pre-chunked input keeps its chunks.
   chunking?: ChunkingOptions
+  // Used only when `@qvac/turbovec-ggml` is installed; without it search
+  // scans the database.
+  index?: IndexOptions
 }
 
 export interface CreateNamespaceParams {
   name: string
   space: EmbeddingSpace
+  // Fixed at creation. Defaults to `{ storage: 'q8' }`.
+  index?: { storage?: IndexStorage }
 }
 
 export interface NamespaceInfo {
   name: string
   spaceId: string
   revision: number
+  index: { storage: IndexStorage }
 }
 
 export interface EmbeddedChunkInput {

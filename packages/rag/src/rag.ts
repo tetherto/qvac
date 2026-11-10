@@ -42,8 +42,17 @@ import {
   type ValidTextChunk
 } from './input.js'
 import { intersectScope, parseScope } from './scope.js'
-import { scanSearch, throwIfAborted, type SearchQuery } from './search.js'
+import { checkQuery, scanSearch, throwIfAborted, type SearchQuery } from './search.js'
 import { computeSpaceId, parseEmbeddingSpace } from './space.js'
+import { parseIndexOptions, parseIndexStorage } from './vector-index/options.js'
+import {
+  DEFAULT_INDEX_STORAGE,
+  createIndexRegistry,
+  type IndexConfig,
+  type IndexRegistry
+} from './vector-index/registry.js'
+import { indexSearch } from './vector-index/search.js'
+import { TURBOVEC_MAX_COMPONENT } from './vector-index/native.js'
 import type {
   Hypercore,
   HyperDBInstance,
@@ -58,6 +67,7 @@ import type {
   IngestedDocument,
   IngestOptions,
   IngestParams,
+  IndexStorage,
   IngestResult,
   NamespaceInfo,
   Rag,
@@ -69,14 +79,25 @@ import type {
 } from './types.js'
 
 const CORE_NAME = 'qvac-rag'
+const SEARCH_INDEX_ATTEMPTS = 3
+
+interface SearchHandles {
+  instance: HyperDBInstance
+  indexRegistry: IndexRegistry
+}
 
 // One HyperDB per core, shared by every RAG opened on it. Separate instances
 // would each serialize only their own transactions and overwrite each other.
 // Databases are keyed by the state every session of one core shares, so a
 // Corestore session or wrapper finds the same writer, and two directories
 // holding a core with the same key do not.
+interface OpenDatabase {
+  db: HyperDBInstance
+  indexes: IndexRegistry
+}
+
 interface SharedDatabase {
-  opening: Promise<HyperDBInstance>
+  opening: Promise<OpenDatabase>
   refs: number
 }
 
@@ -84,7 +105,7 @@ const sharedDatabases = new WeakMap<object, SharedDatabase>()
 
 async function acquireDatabase(
   core: Hypercore
-): Promise<{ db: HyperDBInstance; release: () => Promise<void> }> {
+): Promise<OpenDatabase & { release: () => Promise<void> }> {
   let identity: object | null = null
   try {
     await core.ready()
@@ -115,8 +136,8 @@ async function acquireDatabase(
   acquired.refs++
   try {
     if (reused) await core.close()
-    const db = await acquired.opening
-    return { db, release: () => releaseDatabase(key, acquired) }
+    const { db, indexes } = await acquired.opening
+    return { db, indexes, release: () => releaseDatabase(key, acquired) }
   } catch (error) {
     acquired.refs--
     throw error
@@ -126,10 +147,13 @@ async function acquireDatabase(
 async function releaseDatabase(key: object, entry: SharedDatabase): Promise<void> {
   if (--entry.refs > 0) return
   if (sharedDatabases.get(key) === entry) sharedDatabases.delete(key)
-  await (await entry.opening).close()
+  const { db, indexes } = await entry.opening
+  // Snapshots on close prune mutations, which needs the database still open.
+  await indexes.close()
+  await db.close()
 }
 
-async function openDatabase(core: Hypercore): Promise<HyperDBInstance> {
+async function openDatabase(core: Hypercore): Promise<OpenDatabase> {
   const instance = HyperDB.bee(core, dbSpec, { autoUpdate: true })
   try {
     await instance.ready()
@@ -137,7 +161,12 @@ async function openDatabase(core: Hypercore): Promise<HyperDBInstance> {
     await instance.close().catch(() => {})
     throw error
   }
-  return instance
+  return { db: instance, indexes: createIndexRegistry(instance, toHex(core.key)) }
+}
+
+function toHex(bytes: Uint8Array | null | undefined): string {
+  if (!bytes) return 'unknown'
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
 export function createRag(options: CreateRagOptions): Rag {
@@ -151,7 +180,9 @@ export function createRag(options: CreateRagOptions): Rag {
   const embedder = createEmbedder(options.embeddings)
   const chunker = createChunker(options.chunking)
 
+  const indexConfig: IndexConfig = parseIndexOptions(options.index)
   let db: HyperDBInstance | null = null
+  let indexes: IndexRegistry | null = null
   let release: (() => Promise<void>) | null = null
   let opening: Promise<void> | null = null
   let closed = false
@@ -174,6 +205,7 @@ export function createRag(options: CreateRagOptions): Rag {
     await corestore.ready()
     const acquired = await acquireDatabase(corestore.get({ name: CORE_NAME }))
     db = acquired.db
+    indexes = acquired.indexes
     release = acquired.release
   }
 
@@ -191,6 +223,7 @@ export function createRag(options: CreateRagOptions): Rag {
     if (opening) await opening.catch(() => {})
     await Promise.allSettled(inflight)
     db = null
+    indexes = null
     const releasing = release
     release = null
     if (releasing) await releasing()
@@ -212,10 +245,20 @@ export function createRag(options: CreateRagOptions): Rag {
     return db
   }
 
+  function registry(): IndexRegistry {
+    database()
+    return indexes as IndexRegistry
+  }
+
+  function searchHandles(): SearchHandles {
+    return { instance: database(), indexRegistry: registry() }
+  }
+
   async function createNamespace(params: CreateNamespaceParams): Promise<NamespaceInfo> {
     const name = parseNamespaceName(params?.name)
     const space = parseEmbeddingSpace(params?.space)
     const spaceId = computeSpaceId(space)
+    const requested = parseIndexStorage(params?.index, space.dimensions)
 
     return await withTransaction(database(), async (tx) => {
       const existing = await tx.get<NamespaceRecord>(NAMESPACES, { name })
@@ -226,8 +269,16 @@ export function createRag(options: CreateRagOptions): Rag {
             adds: `'${name}' is bound to embedding space ${existing.spaceId}`
           })
         }
-        return { name, spaceId, revision: existing.revision }
+        const storage = storageOf(existing)
+        if (requested !== undefined && requested !== storage) {
+          throw new QvacErrorRAG({
+            code: ERR_CODES.NAMESPACE_EXISTS,
+            adds: `'${name}' uses index storage '${storage}'`
+          })
+        }
+        return { name, spaceId, revision: existing.revision, index: { storage } }
       }
+      const storage = requested ?? DEFAULT_INDEX_STORAGE
       if (!(await tx.get<SpaceRecord>(SPACES, { spaceId }))) {
         await tx.insert(SPACES, { spaceId, ...space })
       }
@@ -236,10 +287,11 @@ export function createRag(options: CreateRagOptions): Rag {
         spaceId,
         revision: 0,
         nextNativeId: encodeNativeId(FIRST_NATIVE_ID),
-        createdAt: new Date()
+        createdAt: new Date(),
+        indexStorage: storage
       })
       await tx.flush()
-      return { name, spaceId, revision: 0 }
+      return { name, spaceId, revision: 0, index: { storage } }
     })
   }
 
@@ -250,12 +302,13 @@ export function createRag(options: CreateRagOptions): Rag {
     const { namespace, documents } = parseIngest(params)
     const { signal, onProgress } = parseIngestOptions(options)
     const instance = database()
+    const indexRegistry = registry()
     const { ns, space } = await withSnapshot(instance, (reader) => readNamespace(reader, namespace))
     const port = documents.some((entry) => entry.kind !== 'embedded')
       ? requireEmbedder(namespace, space)
       : null
     for (const entry of documents) {
-      if (entry.kind === 'embedded') checkChunks(namespace, space, entry.document)
+      if (entry.kind === 'embedded') checkChunks(namespace, ns, space, entry.document)
     }
 
     const jobs = prepareJobs(documents, chunker, onProgress)
@@ -280,9 +333,11 @@ export function createRag(options: CreateRagOptions): Rag {
         // write still skips this document.
         const job = jobs[next]
         const document = toValidDocument(job, space.spaceId)
-        checkChunks(namespace, space, document)
+        checkChunks(namespace, ns, space, document)
         const committed = await withTransaction(instance, (tx) =>
-          signal?.aborted ? Promise.resolve(null) : commitDocument(tx, namespace, document)
+          signal?.aborted
+            ? Promise.resolve(null)
+            : commitDocument(tx, indexRegistry, namespace, document)
         )
         if (!committed) return false
         // A large call would otherwise hold every vector it embedded until it returns.
@@ -344,6 +399,7 @@ export function createRag(options: CreateRagOptions): Rag {
 
   async function deleteDocuments(params: DeleteDocumentsParams): Promise<DeleteDocumentsResult> {
     const { namespace, documentIds } = parseDelete(params)
+    const indexRegistry = registry()
     return await withTransaction(database(), async (tx) => {
       const ns = await getNamespace(tx, namespace)
       const deleted: string[] = []
@@ -359,7 +415,9 @@ export function createRag(options: CreateRagOptions): Rag {
       if (deleted.length === 0) return { deleted, revision: ns.revision }
 
       const revision = await appendMutation(tx, ns, [], removed, ns.nextNativeId)
+      await indexRegistry.prune(tx, namespace)
       await tx.flush()
+      await indexRegistry.apply(namespace, revision, [], () => new Float32Array(0), removed)
       return { deleted, revision }
     })
   }
@@ -368,10 +426,10 @@ export function createRag(options: CreateRagOptions): Rag {
   async function search(params: SearchParams): Promise<SearchHit[]> {
     const request = parseSearch(params)
     const scope = parseScope(request.scope)
-    const instance = database()
-    const query = await resolveQuery(instance, scope, request)
+    const handles = searchHandles()
+    const query = await resolveQuery(handles.instance, scope, request)
     if (!query) return []
-    return await runSearch(instance, scope, query, request.k, {
+    return await runSearch(handles, scope, query, request.k, {
       strict: true,
       signal: request.signal
     })
@@ -386,10 +444,10 @@ export function createRag(options: CreateRagOptions): Rag {
       async search(params: ScopedSearchParams): Promise<SearchHit[]> {
         const request = parseSearch({ scope: undefined, ...params })
         const narrowed = intersectScope(bound, request.scope)
-        const instance = database()
-        const query = await resolveQuery(instance, narrowed, request)
+        const handles = searchHandles()
+        const query = await resolveQuery(handles.instance, narrowed, request)
         if (!query) return []
-        return await runSearch(instance, narrowed, query, request.k, {
+        return await runSearch(handles, narrowed, query, request.k, {
           strict: false,
           signal: request.signal
         })
@@ -417,19 +475,32 @@ export function createRag(options: CreateRagOptions): Rag {
     return { vector: await port.embedQuery(request.query, request.signal), spaceId: port.spaceId }
   }
 
-  // `instance` is taken before the call's first await, so close() can't drain
-  // between resolving the query and the scan.
-  function runSearch(
-    instance: HyperDBInstance,
+  // A commit landing between the reader's snapshot and the index lookup makes
+  // the index stale for that reader; a few retries on a fresh snapshot usually
+  // line them up, and the scan is always consistent with its reader. The
+  // handles are taken before the call's first await, so close() can't drain
+  // between resolving the query and the search.
+  async function runSearch(
+    { instance, indexRegistry }: SearchHandles,
     scope: SearchScope,
     query: SearchQuery,
     k: number,
     options: { strict: boolean; signal?: AbortSignal }
   ): Promise<SearchHit[]> {
-    return withSnapshot(instance, async (reader) => {
-      const { space } = await readNamespace(reader, scope.namespace)
-      return scanSearch(reader, space, scope, query, k, options)
-    })
+    const open = () => indexRegistry.open(scope.namespace, indexConfig)
+    for (let attempt = 0; ; attempt++) {
+      const result = await withSnapshot(instance, async (reader) => {
+        const { ns, space } = await readNamespace(reader, scope.namespace)
+        // A bad query fails before it can trigger an index rebuild.
+        checkQuery(space, scope, query)
+        const scan = () => scanSearch(reader, space, scope, query, k, options)
+        if (attempt === SEARCH_INDEX_ATTEMPTS) return await scan()
+        const hits = await indexSearch(reader, ns.revision, space, scope, query, k, open, options)
+        if (hits === 'unavailable') return await scan()
+        return hits
+      })
+      if (result !== 'stale') return result
+    }
   }
 
   return {
@@ -502,6 +573,7 @@ function toValidDocument(job: IngestJob, spaceId: string): ValidDocument {
 
 async function commitDocument(
   tx: HyperDBTransaction,
+  indexes: IndexRegistry,
   namespace: string,
   document: ValidDocument
 ): Promise<{ document: IngestedDocument; revision: number }> {
@@ -551,7 +623,9 @@ async function commitDocument(
     updatedAt: new Date()
   })
   const revision = await appendMutation(tx, ns, added, removed, encodeNativeId(nextId))
+  await indexes.prune(tx, namespace)
   await tx.flush()
+  await indexes.apply(namespace, revision, added, () => concatEmbeddings(document), removed)
 
   return {
     document: { id: document.id, generation, chunkCount: document.chunks.length },
@@ -595,7 +669,24 @@ async function appendMutation(
   return revision
 }
 
-function checkChunks(namespace: string, space: SpaceRecord, document: ValidDocument): void {
+function concatEmbeddings(document: ValidDocument): Float32Array {
+  const dims = document.chunks[0]?.embedding.length ?? 0
+  const vectors = new Float32Array(document.chunks.length * dims)
+  document.chunks.forEach((chunk, i) => vectors.set(chunk.embedding, i * dims))
+  return vectors
+}
+
+function storageOf(ns: NamespaceRecord): IndexStorage {
+  return (ns.indexStorage as IndexStorage | undefined) ?? DEFAULT_INDEX_STORAGE
+}
+
+function checkChunks(
+  namespace: string,
+  ns: NamespaceRecord,
+  space: SpaceRecord,
+  document: ValidDocument
+): void {
+  const turbovec = storageOf(ns).startsWith('turbovec-')
   for (const chunk of document.chunks) {
     if (chunk.spaceId !== space.spaceId) {
       throw new QvacErrorRAG({
@@ -607,6 +698,12 @@ function checkChunks(namespace: string, space: SpaceRecord, document: ValidDocum
       throw new QvacErrorRAG({
         code: ERR_CODES.EMBEDDING_DIMENSION_MISMATCH,
         adds: `chunk '${chunk.id}' has ${chunk.embedding.length} dimensions, namespace '${namespace}' expects ${space.dimensions}`
+      })
+    }
+    if (turbovec && chunk.embedding.some((value) => Math.abs(value) >= TURBOVEC_MAX_COMPONENT)) {
+      throw new QvacErrorRAG({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: `chunk '${chunk.id}' has a component of magnitude 1e16 or more, which '${storageOf(ns)}' storage can't index`
       })
     }
   }

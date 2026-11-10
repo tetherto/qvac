@@ -34,19 +34,7 @@ export async function scanSearch(
   options: { strict: boolean; signal?: AbortSignal }
 ): Promise<SearchHit[]> {
   throwIfAborted(options.signal)
-  // Matching dimensions do not make two embedding spaces comparable.
-  if (spaceId !== space.spaceId) {
-    throw new QvacErrorRAG({
-      code: ERR_CODES.EMBEDDING_SPACE_MISMATCH,
-      adds: `query is in space ${spaceId}, namespace '${scope.namespace}' is in ${space.spaceId}`
-    })
-  }
-  if (query.length !== space.dimensions) {
-    throw new QvacErrorRAG({
-      code: ERR_CODES.EMBEDDING_DIMENSION_MISMATCH,
-      adds: `query has ${query.length} dimensions, namespace '${scope.namespace}' expects ${space.dimensions}`
-    })
-  }
+  checkQuery(space, scope, { vector: query, spaceId })
   if (scope.documentIds !== undefined && scope.documentIds.length === 0) return []
 
   const ranges = await resolveRanges(reader, scope, options.strict)
@@ -72,12 +60,7 @@ export async function scanSearch(
 
   for (const range of ranges) {
     for await (const chunk of reader.find<ChunkRecord>(CHUNKS, range)) {
-      if (chunk.vector.byteLength !== dims * 4) {
-        throw new QvacErrorRAG({
-          code: ERR_CODES.DB_OPERATION_FAILED,
-          adds: `stored vector for '${chunk.documentId}' chunk ${chunk.ordinal} has the wrong size`
-        })
-      }
+      checkStoredVector(chunk, dims)
       decodeVectorInto(chunk.vector, vectors, batch.length * dims)
       batch.push(chunk)
       if (batch.length === SCAN_BATCH_SIZE) {
@@ -94,8 +77,37 @@ export async function scanSearch(
   return hits
 }
 
+export function checkQuery(
+  space: SpaceRecord,
+  scope: SearchScope,
+  { vector: query, spaceId }: SearchQuery
+): void {
+  // Matching dimensions do not make two embedding spaces comparable.
+  if (spaceId !== space.spaceId) {
+    throw new QvacErrorRAG({
+      code: ERR_CODES.EMBEDDING_SPACE_MISMATCH,
+      adds: `query is in space ${spaceId}, namespace '${scope.namespace}' is in ${space.spaceId}`
+    })
+  }
+  if (query.length !== space.dimensions) {
+    throw new QvacErrorRAG({
+      code: ERR_CODES.EMBEDDING_DIMENSION_MISMATCH,
+      adds: `query has ${query.length} dimensions, namespace '${scope.namespace}' expects ${space.dimensions}`
+    })
+  }
+}
+
+export function checkStoredVector(chunk: ChunkRecord, dims: number): void {
+  if (chunk.vector.byteLength !== dims * 4) {
+    throw new QvacErrorRAG({
+      code: ERR_CODES.DB_OPERATION_FAILED,
+      adds: `stored vector for '${chunk.documentId}' chunk ${chunk.ordinal} has the wrong size`
+    })
+  }
+}
+
 // Reads each hit's document once, from the same snapshot as the scan.
-async function attachDocumentMetadata(
+export async function attachDocumentMetadata(
   reader: HyperDBReader,
   namespace: string,
   hits: SearchHit[]
@@ -116,10 +128,7 @@ async function attachDocumentMetadata(
   }
 }
 
-// Resolves the scope to key ranges over current-generation chunks. When
-// `strict`, a document that isn't in the namespace fails the whole search;
-// otherwise it is skipped, so a bound scope whose documents were deleted
-// degrades to fewer or no hits instead of an error.
+// Resolves the scope to key ranges over current-generation chunks.
 async function resolveRanges(
   reader: HyperDBReader,
   scope: SearchScope,
@@ -129,29 +138,44 @@ async function resolveRanges(
   if (documentIds === undefined) {
     return [{ gte: { namespace }, lte: { namespace } }]
   }
+  return (await resolveDocuments(reader, scope, strict)).map((document) => {
+    const key = { namespace, documentId: document.documentId, generation: document.generation }
+    return { gte: key, lte: key }
+  })
+}
+
+// Reads the scope's documents. When `strict`, a document that isn't in the
+// namespace fails the whole search; otherwise it is skipped, so a bound scope
+// whose documents were deleted degrades to fewer or no hits instead of an error.
+export async function resolveDocuments(
+  reader: HyperDBReader,
+  scope: SearchScope,
+  strict: boolean
+): Promise<DocumentRecord[]> {
+  const { namespace, documentIds = [] } = scope
   const documents = await Promise.all(
     documentIds.map((documentId) =>
       reader.get<DocumentRecord>(DOCUMENTS, { namespace, documentId })
     )
   )
-  const ranges: object[] = []
+  const found: DocumentRecord[] = []
   documents.forEach((document, i) => {
-    if (!document) {
-      if (!strict) return
-      throw new QvacErrorRAG({
-        code: ERR_CODES.DOCUMENT_OUT_OF_SCOPE,
-        adds: `'${documentIds[i]}' in '${namespace}'`
-      })
+    if (document) {
+      found.push(document)
+      return
     }
-    const key = { namespace, documentId: document.documentId, generation: document.generation }
-    ranges.push({ gte: key, lte: key })
+    if (!strict) return
+    throw new QvacErrorRAG({
+      code: ERR_CODES.DOCUMENT_OUT_OF_SCOPE,
+      adds: `'${documentIds[i]}' in '${namespace}'`
+    })
   })
-  return ranges
+  return found
 }
 
 // Cached rows resolve through microtasks alone, so without a turn of the event
 // loop an abort scheduled by a timer or UI event could never run mid-scan.
-async function yieldForAbort(signal: AbortSignal | undefined): Promise<void> {
+export async function yieldForAbort(signal: AbortSignal | undefined): Promise<void> {
   if (!signal) return
   await new Promise<void>((resolve) => {
     if (timers.setImmediate) timers.setImmediate(resolve)
@@ -182,6 +206,11 @@ function offer(top: Ranked[], k: number, score: number, chunk: ChunkRecord): voi
     if (top[mid].score >= score) low = mid + 1
     else high = mid
   }
+  top.splice(low, 0, { score, hit: toHit(chunk, score) })
+  if (top.length > k) top.pop()
+}
+
+export function toHit(chunk: ChunkRecord, score: number): SearchHit {
   const hit: SearchHit = {
     namespace: chunk.namespace,
     documentId: chunk.documentId,
@@ -191,17 +220,16 @@ function offer(top: Ranked[], k: number, score: number, chunk: ChunkRecord): voi
     score
   }
   if (typeof chunk.metadataJson === 'string') hit.metadataJson = chunk.metadataJson
-  top.splice(low, 0, { score, hit })
-  if (top.length > k) top.pop()
+  return hit
 }
 
-function dot(query: Float32Array, vectors: Float32Array, offset: number): number {
+export function dot(query: Float32Array, vectors: Float32Array, offset: number): number {
   let sum = 0
   for (let i = 0; i < query.length; i++) sum += query[i] * vectors[offset + i]
   return sum
 }
 
-function norm(vectors: Float32Array, offset: number, length: number): number {
+export function norm(vectors: Float32Array, offset: number, length: number): number {
   let sum = 0
   for (let i = 0; i < length; i++) sum += vectors[offset + i] * vectors[offset + i]
   return Math.sqrt(sum)
