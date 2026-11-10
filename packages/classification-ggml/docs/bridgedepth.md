@@ -43,42 +43,14 @@ copies between the device and the CPU around each of them.
 
 ## Accuracy
 
-The test fixture is a synthetic 100 x 200 pair (8 px background and 20 px
-foreground disparity), compared with the original PyTorch model in FP32 on CPU.
-
-| Backend | Reference DPN seeds, within 0.05 px | Own seeds, within 0.2 px |
-|---|---|---|
-| CPU (Apple M5 Pro) | 99.99% | 99.76% |
-| Metal (Apple M5 Pro) | 99.75% | 99.77% |
-| CPU (Linux x64) | 99.99% | 99.8%* |
-| CUDA (Tesla T4) | 99.93% | 99.8%* |
-| Vulkan (Tesla T4) | 99.63% | 99.8%* |
-
-\* Measured before the top-k tie order below was fixed.
-
-The DPN picks two disparity proposals per pixel with a top-k over 40
-candidates, most of which tie at the same masked value. torch.topk keeps the
-lowest tied index, and this port does the same. A tie choice that changes from
-pixel to pixel costs accuracy, see below; one fixed rule does not. torch.topk
-itself keeps a higher tied index in about 1.4% of the fixture's rows, which is
-where the own-seed misses are. Feeding the reference seeds removes that and
-isolates every other operation. Metal, and Vulkan on devices
-with fp16 or coopmat2, stage F32 matrix products in half precision, which
-accounts for their lower first column.
-
-Against ground truth, with the metrics and valid-pixel rules of the
-`bench-vits` fork's `scripts/bench_backbones.py` (lower is better):
-
-| | ETH3D bad 1.0 | Middlebury-Q bad 2.0 | Middlebury-H bad 2.0 |
-|---|---|---|---|
-| This port, CPU (Apple M5 Pro) | 1.59% | 4.80% | 7.59% |
-| This port, Metal (Apple M5 Pro) | 1.57% | 4.81% | 7.62% |
-| PyTorch ViT-S, CPU | 1.61% | 4.86% | 7.67% |
-
-ETH3D is the 27 two-view training pairs, Middlebury the 15 MiddEval3 training
-pairs at quarter and half resolution. The PyTorch row runs the mono branch with
-its default fp16 autocast; in FP32 ETH3D reads 1.61% as well. With a tie choice
-that varies per pixel, as `ggml_top_k` alone gives, ETH3D reads 1.68%.
+The tests compare the port with the original PyTorch model in FP32 on CPU,
+on a synthetic 100 x 200 pair. The DPN picks two disparity proposals per pixel
+with a top-k over 40 candidates, most of which tie at the same masked value.
+torch.topk keeps the lowest tied index and this port does the same: a tie
+choice that changes from pixel to pixel costs accuracy, one fixed rule does
+not. Metal, and Vulkan on devices with fp16 or coopmat2, stage F32 matrix
+products in half precision, so they sit slightly further from the reference
+than CPU and CUDA.
 
 The CUDA backend uses the CUDA 13 runtime installed on the host
 (`libcudart.so.13`, `libcublas.so.13`, `libcublasLt.so.13` on Linux); Fabric
