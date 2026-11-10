@@ -440,12 +440,6 @@ node scripts/bin.js sync-models \
 
 The sync script adds new models and updates metadata for existing models. Licenses are auto-created from `data/licenses/` when needed.
 
-Hugging Face downloads stream into `<TEMP_STORAGE>/<model-path-hash>/<filename>.incomplete`, then rename to the artifact filename after completion. `TEMP_STORAGE` defaults to a `temp` directory beside `MODEL_DRIVES_STORAGE`. The server removes the per-model directory after ingestion succeeds or fails; there is no shared Hugging Face cache. The downloader makes up to three attempts for transient HTTP/network errors. Within an ingest it resumes a partial download using a strong ETag and validated byte ranges. If a server ignores Range or changes the representation, a full response replaces the partial file. Partial downloads are not resumed after exhausted retries or process restarts; abrupt termination can leave temporary files on disk.
-
-Server logs report download progress every 30 seconds, including bytes received, expected size when available, attempt elapsed time, and time since the last received chunk. Failed attempts include the error message, cause, network code, and socket byte counters. Inspect the selected indexer's logs to distinguish downloading from later hashing, blob writing, or replication.
-
-The `add-model` RPC has a one-hour response deadline covering the entire ingest. That deadline does not cancel work on the server. After a response deadline or ambiguous channel closure, sync polls the registry for up to another hour before reporting failure; it does not resubmit the ingest during recovery.
-
 ### Filling Fit Blobs
 
 Records ingested before `@qvac/registry-schema` 0.4.0 carry no `fitBlobBinding`, the pointer to a weightless description of the artifact, and neither do records whose format gained a reader after they were ingested, such as the whisper.cpp, BCI and nmt.cpp `.bin` and `.spm` artifacts. Filling it is a manual operation, run through the **Fill Fit Blobs (Registry-server)** workflow or, on a node, with the script directly:
