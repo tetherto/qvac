@@ -224,9 +224,7 @@ export async function main(launchOptions: LaunchOptions) {
   }
 
   options.version ??= pkg.version
-  updates = options.standalone
-    ? await startUpdater(options.entries as Parameters<typeof startUpdater>[0])
-    : null
+  updates = options.standalone ? await startUpdater(options.entries!) : null
   if (options.command) {
     await runCli()
   } else {

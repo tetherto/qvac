@@ -15,8 +15,6 @@ import.meta.asset('./runtime/')
 const entries = {
   sidecar: import.meta.asset('./runtime/sidecar.bundle'),
   harness: import.meta.asset('./runtime/harness.bundle'),
-  skill: import.meta.asset('./runtime/skills/weather/SKILL.md'),
-  cliSkill: import.meta.asset('./runtime/cli-skills/qvac-plugins/SKILL.md'),
   release: import.meta.asset('./runtime/release.json')
 }
 

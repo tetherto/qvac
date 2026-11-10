@@ -1,0 +1,112 @@
+name: Stage qvac
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Log the drive diff without writing it
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stage-qvac
+  cancel-in-progress: false
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - { host: linux-x64, runner: ubuntu-24.04, ext: "" }
+          - { host: linux-arm64, runner: ubuntu-24.04-arm, ext: "" }
+          - { host: darwin-arm64, runner: macos-15, ext: "" }
+          - { host: darwin-x64, runner: macos-15-intel, ext: "" }
+          - { host: win32-x64, runner: windows-2025, ext: ".exe" }
+    name: Build ${{ matrix.host }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      # linux-x64's addons make bare-build outgrow the runner's disk and memory; the cleared disk holds the swap
+      - name: Free disk and add swap
+        if: runner.os == 'Linux'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo fallocate -l 16G /stage.swap
+          sudo chmod 600 /stage.swap
+          sudo mkswap /stage.swap
+          sudo swapon /stage.swap
+          df -h /
+          free -h
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: "24.14.1"
+
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # 4.1.0
+
+      - uses: ./.github/actions/sfw-guard
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      # unsigned: signing takes MAC_CODESIGN_IDENTITY and KEYCHAIN_PROFILE, which no runner has yet
+      - name: Make
+        run: pnpm --filter @qvac/cli run pear:build
+
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: qvac-${{ matrix.host }}
+          path: packages/cli/out/make/**/qvac${{ matrix.ext }}
+          if-no-files-found: error
+
+  # pear-ci mirrors the target into the drive, so a host missing here would vanish from it
+  stage:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 720
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      # pear-ci pushes the snapshot with the credentials this checkout keeps
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      # the downloaded builds plus pear-ci's own copy of them overflow the runner's free disk
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Download builds
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: out/artifacts
+          pattern: qvac-*
+
+      # pear-runtime-updater reads /package.json for the version and /by-arch/<host>/app/<bin>
+      - name: Lay out the drive
+        run: |
+          for dir in out/artifacts/qvac-*; do
+            app="out/stage/by-arch/${dir#out/artifacts/qvac-}/app"
+            mkdir -p "$app"
+            find "$dir" -type f -exec mv {} "$app"/ \;
+            chmod +x "$app"/*
+          done
+          cp packages/cli/package.json out/stage/
+          find out/stage -type f | sort
+          du -sh out/stage
+
+      - name: Stage
+        uses: holepunchto/actions/pear-ci@d30b39d5529d26e41c0b8547fbb75b25a65e61c6 # v1
+        with:
+          primary-key: ${{ secrets.PEAR_PRIMARY_KEY }}
+          namespace: qvac
+          target: out/stage
+          dry-run: ${{ inputs.dry-run }}

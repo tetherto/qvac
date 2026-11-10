@@ -132,9 +132,7 @@ export interface LaunchOptions {
   theme?: string | undefined
   launcher?: { runtime: string; script?: string | undefined } | undefined
   logVerbose?: boolean | undefined
-  entries?:
-    | { release?: string; skill: string; cliSkill?: string; harness: string; sidecar: string }
-    | undefined
+  entries?: { release: string; harness: string; sidecar: string } | undefined
 }
 export interface CoreHost {
   engine: Client

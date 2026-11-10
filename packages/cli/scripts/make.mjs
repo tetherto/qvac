@@ -136,7 +136,9 @@ async function build() {
   }
 
   console.log(`[make] bare-build ${host}${flags.length ? ' (signed)' : ''}`)
-  await run('bare-build', [
+  // through node, not a shell: on Windows a shell splits the multi-word --description
+  await run(process.execPath, [
+    path.join(path.dirname(require.resolve('bare-build/package')), 'bin.js'),
     '--standalone',
     '--base',
     root,
@@ -186,10 +188,7 @@ function findBinary() {
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      stdio: 'inherit',
-      shell: host.startsWith('win32')
-    })
+    const child = spawn(command, args, { stdio: 'inherit' })
     child.on('error', reject)
     child.on('exit', (code, signal) => {
       if (code === 0) {

@@ -26,10 +26,11 @@ const skillsRoot = (asset: string | import('bare-url')) =>
 
 function resolvePaths(entries: LaunchOptions['entries']) {
   if (entries) {
+    // make stages both skills trees beside release.json
+    const runtime = path.dirname(fileURLToPath(entries.release))
     return {
-      skillsDir: skillsRoot(entries.skill),
-      // a standalone build ships the CLI's own skills only once its launcher names one
-      cliSkillsDir: entries.cliSkill ? skillsRoot(entries.cliSkill) : null,
+      skillsDir: path.join(runtime, 'skills'),
+      cliSkillsDir: path.join(runtime, 'cli-skills'),
       harnessEntry: fileURLToPath(entries.harness),
       sidecarEntry: fileURLToPath(entries.sidecar)
     }
@@ -41,7 +42,7 @@ function resolvePaths(entries: LaunchOptions['entries']) {
     // asset, not resolve: Bare loads anything import.meta.resolve names as a module
     skillsDir: skillsRoot(import.meta.asset('@qvac/skills/skills/weather/SKILL.md')),
     cliSkillsDir: skillsRoot(import.meta.asset('../../../skills/qvac-plugins/SKILL.md')),
-    harnessEntry: new URL(import.meta.resolve('@qvac/harness/worker/stow-entry.mjs')).pathname,
+    harnessEntry: fileURLToPath(import.meta.resolve('@qvac/harness/worker/stow-entry.mjs')),
     sidecarEntry
   }
 }
