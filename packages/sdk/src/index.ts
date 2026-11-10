@@ -208,6 +208,7 @@ export {
   type VectorIndexAddParams,
   type VectorIndexIdsParams,
   type VectorIndexSearchParams,
+  type VectorIndexSetStagedSearchParams,
   type VectorIndexWriteParams,
   type QvacConfig,
   type ModelInfo,

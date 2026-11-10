@@ -522,6 +522,24 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: {}
   },
 
+  // The full 25-language TranscribePsy-250M-EU: one GGUF with its CAFE language
+  // adapters and gate embedded. ggml on every platform (no Core ML
+  // distribution); without `language` the gate routes each recording itself.
+  'parakeet-transcribepsy-eu': {
+    constant: { $const: 'PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0' },
+    type: 'parakeet-transcription',
+    config: {}
+  },
+
+  // The same GGUF pinned to its English trunk (`language: "en"`), the route
+  // the gate would pick for the English fixtures; `"other"` would select the
+  // non-English adapters instead.
+  'parakeet-transcribepsy-eu-en': {
+    constant: { $const: 'PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0' },
+    type: 'parakeet-transcription',
+    config: { language: 'en' }
+  },
+
   bci: {
     // Defined on every leg: `model-fit-bci` assesses the load without running it. Mobile
     // never loads it, so it must not pay for the weights.

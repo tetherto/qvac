@@ -13647,7 +13647,7 @@
                       ]
                     },
                     "system_prompt": {
-                      "description": "Seeds conversation history on the JS side only; never forwarded to the addon. Default `'You are a helpful assistant.'`",
+                      "description": "Prepended as the system message when a request's history carries none; applied on the JS side and never forwarded to the addon. Unset by default, so the model sees the history as sent.",
                       "type": "string"
                     },
                     "load_mode": {
@@ -28567,6 +28567,28 @@
         {
           "type": "object",
           "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "setStagedSearch"
+            }
+          },
+          "required": ["enabled", "type", "indexId", "operation"],
+          "title": "VectorIndexRequestSetStagedSearch"
+        },
+        {
+          "type": "object",
+          "properties": {
             "type": {
               "type": "string",
               "const": "vectorIndex"
@@ -28594,6 +28616,12 @@
             "type": {
               "type": "string",
               "const": "vectorIndex"
+            },
+            "calibrated": {
+              "type": "boolean"
+            },
+            "stagedSearch": {
+              "type": "boolean"
             },
             "operation": {
               "type": "string",
@@ -28630,6 +28658,12 @@
               "type": "string",
               "const": "vectorIndex"
             },
+            "calibrated": {
+              "type": "boolean"
+            },
+            "stagedSearch": {
+              "type": "boolean"
+            },
             "operation": {
               "type": "string",
               "const": "load"
@@ -28664,6 +28698,12 @@
             "type": {
               "type": "string",
               "const": "vectorIndex"
+            },
+            "calibrated": {
+              "type": "boolean"
+            },
+            "stagedSearch": {
+              "type": "boolean"
             },
             "operation": {
               "type": "string",
@@ -28782,6 +28822,25 @@
           "required": ["type", "operation", "path"],
           "additionalProperties": false,
           "title": "VectorIndexResponseWrite"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "setStagedSearch"
+            },
+            "stagedSearch": {
+              "type": "boolean"
+            }
+          },
+          "required": ["type", "operation", "stagedSearch"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseSetStagedSearch"
         },
         {
           "type": "object",
