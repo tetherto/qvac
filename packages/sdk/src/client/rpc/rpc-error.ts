@@ -9,7 +9,10 @@ import {
   RequestNotFoundError,
   RequestRejectedByPolicyError,
   TranslationFailedError,
-  AudioEncodeFailedError
+  AudioEncodeFailedError,
+  InvalidSeedFromParamsError,
+  KvCacheSeedSourceNotFoundError,
+  KvCacheSeedSharingDisabledError
 } from '@/utils/errors-server'
 
 export class RPCError extends Error {
@@ -130,6 +133,18 @@ type ErrorReconstructor = (response: ErrorResponse) => Error
  * errors support both paths.
  */
 const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
+  INVALID_SEED_FROM_PARAMS: (response) => new InvalidSeedFromParamsError(response.cause),
+  KV_CACHE_SEED_SOURCE_NOT_FOUND: (response) =>
+    new KvCacheSeedSourceNotFoundError(
+      readStringField(response.typedFields, 'seedFrom', ''),
+      readStringField(response.typedFields, 'modelId', ''),
+      response.cause
+    ),
+  KV_CACHE_SEED_SHARING_DISABLED: (response) =>
+    new KvCacheSeedSharingDisabledError(
+      readStringField(response.typedFields, 'modelId', ''),
+      response.cause
+    ),
   INFERENCE_CANCELLED: (response) => {
     const partial = response.typedFields?.['partial']
     return new InferenceCancelledError(

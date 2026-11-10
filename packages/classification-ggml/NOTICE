@@ -28,6 +28,21 @@ Source: https://github.com/gmberton/MegaLoc
 Model weights are not included in this package.
 
 --------------------------------------------------------------------------------
+BridgeDepth: stereo depth model implementation
+Copyright (c) 2025 aeolusguan
+Licensed under the MIT License; see LICENSE-BridgeDepth.
+Source: https://github.com/aeolusguan/BridgeDepth
+The ViT-S variant follows https://github.com/gbionics/BridgeDepth (bench-vits).
+Model weights are not included in this package.
+
+--------------------------------------------------------------------------------
+Depth Anything V2 Small: monocular depth model used by BridgeDepth
+Copyright (c) 2024 Depth Anything authors
+Licensed under the Apache License, Version 2.0.
+Source: https://github.com/DepthAnything/Depth-Anything-V2
+Model weights are not included in this package.
+
+--------------------------------------------------------------------------------
 ggml — a tensor library for machine learning
 Copyright (c) 2022-2025 Georgi Gerganov
 Licensed under the MIT License.
