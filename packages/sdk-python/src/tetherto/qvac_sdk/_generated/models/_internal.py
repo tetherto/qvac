@@ -2509,6 +2509,30 @@ class BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchema(
     ]
 
 
+class BatchCompletionStreamRequestPromptsItemToolSearch(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    default_limit: Annotated[
+        int | None,
+        Field(
+            alias="defaultLimit",
+            description="How many tool definitions one `tool_search` call loads when the model does not ask for a number with its `limit` argument. Defaults to 3, or `maxLimit` when that is lower.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+    max_limit: Annotated[
+        int | None,
+        Field(
+            alias="maxLimit",
+            description="The most tool definitions one `tool_search` call can load. A larger `limit` from the model is lowered to this. Defaults to 8.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+
+
 class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType(
     Enum
 ):
@@ -2653,6 +2677,14 @@ class BatchCompletionStreamRequestPromptsItem(GeneratedBaseModel):
         Field(
             alias="responseFormat",
             description="Optional per-prompt structured-output constraint.",
+        ),
+    ] = None
+    tool_search: Annotated[
+        BatchCompletionStreamRequestPromptsItemToolSearch | None,
+        Field(
+            alias="toolSearch",
+            description="Limits on what the built-in `tool_search` loads per call. Only used when a tool sets `deferLoading`. The limits are stated in the `tool_search` definition at the front of the prompt, so set them once per conversation: changing them re-prefills from there.",
+            title="BatchCompletionStreamRequestPromptsItemToolSearch",
         ),
     ] = None
     tools: Annotated[
@@ -3228,6 +3260,10 @@ class BciTranscribeResponseSegmentTokensItem(GeneratedBaseModel):
     ]
 
 
+class TokenId(RootModel[int]):
+    root: Annotated[int, Field(ge=-9007199254740991, le=9007199254740991)]
+
+
 class BciTranscribeResponseSegment(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -3296,6 +3332,36 @@ class BciTranscribeResponseSegment(GeneratedBaseModel):
         list[BciTranscribeResponseSegmentTokensItem] | None,
         Field(
             description="Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`."
+        ),
+    ] = None
+    token_ids: Annotated[
+        list[TokenId] | None,
+        Field(
+            alias="tokenIds",
+            description="Native token ids of the segment. Parakeet streaming only.",
+        ),
+    ] = None
+    is_final: Annotated[
+        bool | None,
+        Field(
+            alias="isFinal",
+            description="Native finality of the segment, including empty final markers; prefer it over non-empty text to detect a finalized chunk. Parakeet streaming only.",
+        ),
+    ] = None
+    chunk_index: Annotated[
+        int | None,
+        Field(
+            alias="chunkIndex",
+            description="Native streaming chunk index the segment belongs to; `-1` when unknown. Parakeet streaming only.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    eot_confidence: Annotated[
+        float | None,
+        Field(
+            alias="eotConfidence",
+            description="Native end-of-turn confidence of the segment; may be `0` when the model reports none. Parakeet EOU streaming only.",
         ),
     ] = None
 
@@ -3724,6 +3790,36 @@ class BciTranscribeStreamResponseSegment(GeneratedBaseModel):
             description="Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`."
         ),
     ] = None
+    token_ids: Annotated[
+        list[TokenId] | None,
+        Field(
+            alias="tokenIds",
+            description="Native token ids of the segment. Parakeet streaming only.",
+        ),
+    ] = None
+    is_final: Annotated[
+        bool | None,
+        Field(
+            alias="isFinal",
+            description="Native finality of the segment, including empty final markers; prefer it over non-empty text to detect a finalized chunk. Parakeet streaming only.",
+        ),
+    ] = None
+    chunk_index: Annotated[
+        int | None,
+        Field(
+            alias="chunkIndex",
+            description="Native streaming chunk index the segment belongs to; `-1` when unknown. Parakeet streaming only.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    eot_confidence: Annotated[
+        float | None,
+        Field(
+            alias="eotConfidence",
+            description="Native end-of-turn confidence of the segment; may be `0` when the model reports none. Parakeet EOU streaming only.",
+        ),
+    ] = None
     window_start_timestep: Annotated[
         int | None,
         Field(
@@ -4063,6 +4159,30 @@ class CompletionOrchestrateRequestToolsItem(GeneratedBaseModel):
     ]
 
 
+class CompletionOrchestrateRequestToolSearch(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    default_limit: Annotated[
+        int | None,
+        Field(
+            alias="defaultLimit",
+            description="How many tool definitions one `tool_search` call loads when the model does not ask for a number with its `limit` argument. Defaults to 3, or `maxLimit` when that is lower.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+    max_limit: Annotated[
+        int | None,
+        Field(
+            alias="maxLimit",
+            description="The most tool definitions one `tool_search` call can load. A larger `limit` from the model is lowered to this. Defaults to 8.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+
+
 class CompletionOrchestrateRequestGenerationParams(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -4224,6 +4344,14 @@ class CompletionOrchestrateRequest(GeneratedBaseModel):
         list[CompletionOrchestrateRequestToolsItem] | None,
         Field(
             description="Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call."
+        ),
+    ] = None
+    tool_search: Annotated[
+        CompletionOrchestrateRequestToolSearch | None,
+        Field(
+            alias="toolSearch",
+            description="Limits on what the built-in `tool_search` loads per call. Only used when a tool sets `deferLoading`. The limits are stated in the `tool_search` definition at the front of the prompt, so set them once per conversation: changing them re-prefills from there.",
+            title="CompletionOrchestrateRequestToolSearch",
         ),
     ] = None
     stream: Annotated[
@@ -4750,6 +4878,30 @@ class CompletionStreamRequestToolsItem(GeneratedBaseModel):
     ]
 
 
+class CompletionStreamRequestToolSearch(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    default_limit: Annotated[
+        int | None,
+        Field(
+            alias="defaultLimit",
+            description="How many tool definitions one `tool_search` call loads when the model does not ask for a number with its `limit` argument. Defaults to 3, or `maxLimit` when that is lower.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+    max_limit: Annotated[
+        int | None,
+        Field(
+            alias="maxLimit",
+            description="The most tool definitions one `tool_search` call can load. A larger `limit` from the model is lowered to this. Defaults to 8.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+
+
 class CompletionStreamRequestGenerationParams(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -4909,6 +5061,14 @@ class CompletionStreamRequest(GeneratedBaseModel):
         list[CompletionStreamRequestToolsItem] | None,
         Field(
             description="Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call."
+        ),
+    ] = None
+    tool_search: Annotated[
+        CompletionStreamRequestToolSearch | None,
+        Field(
+            alias="toolSearch",
+            description="Limits on what the built-in `tool_search` loads per call. Only used when a tool sets `deferLoading`. The limits are stated in the `tool_search` definition at the front of the prompt, so set them once per conversation: changing them re-prefills from there.",
+            title="CompletionStreamRequestToolSearch",
         ),
     ] = None
     stream: Annotated[
@@ -13407,6 +13567,161 @@ class LoadModelSrcRequestParakeetTranscriptionModelFitPolicy(Enum):
     off = "off"
 
 
+class LoadModelSrcRequestParakeetTranscriptionModelConfigSpeakerAttributionModelSrcAddon(
+    Enum
+):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
+    llamacpp_rerank = "llamacpp-rerank"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestParakeetTranscriptionModelConfigSpeakerAttributionModelSrc(
+    GeneratedBaseModel
+):
+    src: Annotated[
+        str,
+        Field(
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+        ),
+    ]
+    name: Annotated[
+        str | None,
+        Field(
+            description="Display name for this model instance; overrides the name derived from the source."
+        ),
+    ] = None
+    model_id: Annotated[
+        str | None,
+        Field(
+            alias="modelId",
+            description="Unique identifier used to reference the model in QVAC calls.",
+        ),
+    ] = None
+    registry_path: Annotated[
+        str | None,
+        Field(
+            alias="registryPath",
+            description="Registry-relative path to the model (set for registry-backed models).",
+        ),
+    ] = None
+    registry_source: Annotated[
+        str | None,
+        Field(
+            alias="registrySource",
+            description="Registry source identifier, e.g. `huggingface`.",
+        ),
+    ] = None
+    blob_core_key: Annotated[
+        str | None,
+        Field(
+            alias="blobCoreKey",
+            description="Hyperdrive blob core key for the model file.",
+        ),
+    ] = None
+    blob_index: Annotated[
+        float | None,
+        Field(
+            alias="blobIndex",
+            description="Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+        ),
+    ] = None
+    engine: Annotated[
+        str | None,
+        Field(
+            description="Canonical inference engine identifier, e.g. `llamacpp-completion`."
+        ),
+    ] = None
+    expected_size: Annotated[
+        float | None,
+        Field(
+            alias="expectedSize",
+            description="Expected total size of the model file in bytes.",
+        ),
+    ] = None
+    sha256_checksum: Annotated[
+        str | None,
+        Field(
+            alias="sha256Checksum",
+            description="Expected SHA-256 checksum of the model file.",
+        ),
+    ] = None
+    addon: Annotated[
+        LoadModelSrcRequestParakeetTranscriptionModelConfigSpeakerAttributionModelSrcAddon
+        | Literal["vad"]
+        | None,
+        Field(
+            description="Inference addon / capability category this model belongs to."
+        ),
+    ] = None
+
+
+class LoadModelSrcRequestParakeetTranscriptionModelConfigSpeakerAttribution(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    model_src: Annotated[
+        str
+        | LoadModelSrcRequestParakeetTranscriptionModelConfigSpeakerAttributionModelSrc,
+        Field(
+            alias="modelSrc",
+            description="Diarization model (Sortformer or Nemotron 3 Diarization GGUF) loaded beside the ASR model, as `loadModel` takes a `modelSrc`.",
+        ),
+    ]
+    merge_same_speaker: Annotated[
+        bool | None,
+        Field(
+            alias="mergeSameSpeaker",
+            description="Merge adjacent retained turns assigned to the same speaker. Default true.",
+        ),
+    ] = None
+    min_segment_ms: Annotated[
+        int | None,
+        Field(
+            alias="minSegmentMs",
+            description="Minimum padded turn duration, in ms, before it is sent to ASR; `0` keeps short turns. Default 200.",
+            ge=0,
+            le=2147483647,
+        ),
+    ] = None
+    pad_segment_ms: Annotated[
+        int | None,
+        Field(
+            alias="padSegmentMs",
+            description="Extend the ASR audio slice around each turn, in ms; returned timestamps still describe the diarized turn. Default 0.",
+            ge=0,
+            le=2147483647,
+        ),
+    ] = None
+
+
 class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -13424,6 +13739,20 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
         bool | None,
         Field(
             alias="useGPU", description="Enable the ggml GPU backend. Default false."
+        ),
+    ] = None
+    backend: Annotated[
+        str | None,
+        Field(
+            description="Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `opencl`, `metal`, or an exact ggml device name such as `CUDA0` or `MTL0`. An explicit selection overrides `useGPU` and the load fails if it is unavailable instead of falling back. Applies to the speaker-attribution diarization model too, and reaches `assessModelFit`."
+        ),
+    ] = None
+    speaker_attribution: Annotated[
+        LoadModelSrcRequestParakeetTranscriptionModelConfigSpeakerAttribution | None,
+        Field(
+            alias="speakerAttribution",
+            description="Transcribe each speaker turn found by a separate diarization model, reporting `speakerId` per segment. Batch `transcribe()` only; cannot be combined with `streaming`.",
+            title="LoadModelSrcRequestParakeetTranscriptionModelConfigSpeakerAttribution",
         ),
     ] = None
     sample_rate: Annotated[
@@ -13547,8 +13876,8 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
     language: Annotated[
         str | None,
         Field(
-            description="Indic CTC language id or Nemotron locale alias (e.g. `hi`, `ta`, `en-US`, `hi-IN`, or `auto`). Empty selects `auto` for Nemotron and keeps full-vocabulary CTC decoding.",
-            pattern="^(|auto|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$",
+            description="Indic CTC language id, Nemotron locale alias (e.g. `hi`, `ta`, `en-US`, `hi-IN`, or `auto`), or the TranscribePsy EU route: `en` for the English trunk, `other` for the non-English adapters, `auto` to route automatically. Empty selects `auto` for Nemotron and TranscribePsy EU and keeps full-vocabulary CTC decoding.",
+            pattern="^(|auto|other|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$",
         ),
     ] = None
     streaming_speaker_vad: Annotated[
@@ -27118,6 +27447,36 @@ class TranscribeResponseSegment(GeneratedBaseModel):
             description="Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`."
         ),
     ] = None
+    token_ids: Annotated[
+        list[TokenId] | None,
+        Field(
+            alias="tokenIds",
+            description="Native token ids of the segment. Parakeet streaming only.",
+        ),
+    ] = None
+    is_final: Annotated[
+        bool | None,
+        Field(
+            alias="isFinal",
+            description="Native finality of the segment, including empty final markers; prefer it over non-empty text to detect a finalized chunk. Parakeet streaming only.",
+        ),
+    ] = None
+    chunk_index: Annotated[
+        int | None,
+        Field(
+            alias="chunkIndex",
+            description="Native streaming chunk index the segment belongs to; `-1` when unknown. Parakeet streaming only.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    eot_confidence: Annotated[
+        float | None,
+        Field(
+            alias="eotConfidence",
+            description="Native end-of-turn confidence of the segment; may be `0` when the model reports none. Parakeet EOU streaming only.",
+        ),
+    ] = None
 
 
 class TranscribeResponseVadSource(Enum):
@@ -27147,6 +27506,15 @@ class TranscribeResponseVad(GeneratedBaseModel):
             description="Parakeet: event time in seconds from the start of the streaming session."
         ),
     ] = None
+    chunk_index: Annotated[
+        int | None,
+        Field(
+            alias="chunkIndex",
+            description="Parakeet: native streaming chunk index of the event; `-1` when unavailable.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
     source: Annotated[
         TranscribeResponseVadSource | None,
         Field(
@@ -27169,6 +27537,25 @@ class TranscribeResponseEndOfTurnParakeet(GeneratedBaseModel):
         extra="forbid",
     )
     source: Literal["parakeet"] = "parakeet"
+    timestamp: Annotated[
+        float | None,
+        Field(
+            description="Native event time in seconds from the start of the streaming session."
+        ),
+    ] = None
+    chunk_index: Annotated[
+        int | None,
+        Field(
+            alias="chunkIndex",
+            description="Native streaming chunk index of the boundary; `-1` when unknown.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    confidence: Annotated[
+        float | None,
+        Field(description="Native end-of-turn confidence reported by the EOU model."),
+    ] = None
 
 
 class TranscribeResponseDiagnosticsSelectedDevice(Enum):
@@ -27623,6 +28010,36 @@ class TranscribeStreamResponseSegment(GeneratedBaseModel):
             description="Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`."
         ),
     ] = None
+    token_ids: Annotated[
+        list[TokenId] | None,
+        Field(
+            alias="tokenIds",
+            description="Native token ids of the segment. Parakeet streaming only.",
+        ),
+    ] = None
+    is_final: Annotated[
+        bool | None,
+        Field(
+            alias="isFinal",
+            description="Native finality of the segment, including empty final markers; prefer it over non-empty text to detect a finalized chunk. Parakeet streaming only.",
+        ),
+    ] = None
+    chunk_index: Annotated[
+        int | None,
+        Field(
+            alias="chunkIndex",
+            description="Native streaming chunk index the segment belongs to; `-1` when unknown. Parakeet streaming only.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    eot_confidence: Annotated[
+        float | None,
+        Field(
+            alias="eotConfidence",
+            description="Native end-of-turn confidence of the segment; may be `0` when the model reports none. Parakeet EOU streaming only.",
+        ),
+    ] = None
 
 
 class TranscribeStreamResponseVadSource(Enum):
@@ -27652,6 +28069,15 @@ class TranscribeStreamResponseVad(GeneratedBaseModel):
             description="Parakeet: event time in seconds from the start of the streaming session."
         ),
     ] = None
+    chunk_index: Annotated[
+        int | None,
+        Field(
+            alias="chunkIndex",
+            description="Parakeet: native streaming chunk index of the event; `-1` when unavailable.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
     source: Annotated[
         TranscribeStreamResponseVadSource | None,
         Field(
@@ -27674,6 +28100,25 @@ class TranscribeStreamResponseEndOfTurnParakeet(GeneratedBaseModel):
         extra="forbid",
     )
     source: Literal["parakeet"] = "parakeet"
+    timestamp: Annotated[
+        float | None,
+        Field(
+            description="Native event time in seconds from the start of the streaming session."
+        ),
+    ] = None
+    chunk_index: Annotated[
+        int | None,
+        Field(
+            alias="chunkIndex",
+            description="Native streaming chunk index of the boundary; `-1` when unknown.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    confidence: Annotated[
+        float | None,
+        Field(description="Native end-of-turn confidence reported by the EOU model."),
+    ] = None
 
 
 class TranscribeStreamResponseDiagnosticsSelectedDevice(Enum):

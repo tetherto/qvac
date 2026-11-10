@@ -175,7 +175,7 @@ The Python SDK exposes plugin invocation through the same worker contract:
 
 The `plugins` array in `qvac.config.*` is **bundle-time** configuration — it controls which addons get packed into your worker. That is separate from **runtime registration**, which determines the plugins live in the worker process when an SDK call runs.
 
-On Node.js and Expo the SDK spawns a worker that auto-registers the full built-in set, so you never register manually. In-process Bare uses `@qvac/inference` with no spawned worker — register the plugins you use before the first call:
+On Node.js and Expo the SDK starts a worker that registers the plugins in its worker entry: the ones `plugins` lists once a bundle step has run, or every built-in plugin when none has. You never register manually. In-process Bare uses `@qvac/inference` with no spawned worker — register the plugins you use before the first call:
 
 ```js
 import { plugins } from "@qvac/inference";
@@ -198,19 +198,20 @@ In-process Bare uses [`@qvac/inference`](https://github.com/tetherto/qvac/tree/m
 * **Programmatic bundling:** you can also prepare and validate the SDK bundle programmatically via API from a Node script. For example:
 
 ```ts
-import { bundleSdk, verifyBundle } from "@qvac/sdk/commands";
+import { bundleSdk, formatVerifyBundleResult } from "@qvac/sdk/commands";
 
-await bundleSdk({
+const { verification } = await bundleSdk({
   projectRoot: process.cwd(),
   configPath: "./qvac.config.json",
+  target: "bare-sidecar",
   quiet: true,
 });
 
-const result = await verifyBundle({
-  projectRoot: process.cwd(),
-  addonsSource: "./qvac/worker.bundle.js",
-  hosts: ["android-arm64", "ios-arm64"],
-});
+console.log(formatVerifyBundleResult(verification));
 ```
 
-* **Addon platform packages:** QVAC ships part of its Android and iOS binaries in separate packages, for the speech addons (`tts-ggml`, `asr-ggml`, `audiogen-ggml`) and for `@qvac/fabric`, the runtime the other native addons share. They must be installed at an exact version. Pass `installMissingPrebuilds: true` to `bundleSdk` to add the missing ones to `package.json` with the project's package manager (npm 7+, pnpm, bun, or Yarn Berry) before bundling. Without them the bundle cannot be built, and `bundleSdk` fails with `HOST_PREBUILDS_MISSING`, naming each package and version to add. The package manager is read from the project's `packageManager` field, lockfile, or installed `node_modules`; a workspace member uses its workspace root's. If none of those identify it, nothing is installed and the error lists the dependencies to add. It is off by default, so a plain `bundleSdk` call never changes `package.json` or `node_modules`. `ensureHostPrebuilds({ projectRoot, hosts, addons })` runs the install step on its own.
+* **Bundle output:** `bundleSdk` writes the worker entry to `qvac/worker.entry.mjs` and replaces `qvac/worker/` with bare-stow's harness package: the bundle, the small module that starts it (`index.js`) and its `package.json`. `target` picks where the worker runs: `bare-sidecar` (the default, for Node.js and Electron), `react-native` (Expo), or `pear-runtime` (Pear). The `react-native` target also writes Bare Kit and the native addons the worker loads into `android/qvac-bare-kit` and `ios/QvacBareKit` (iOS on macOS only); pass `link: false` to skip that, or a list of hosts to write only theirs. `bundleSdk` runs `verifyBundle` on the new bundle before it replaces anything, returns what it found as `verification`, and fails with `BUNDLE_VERIFICATION_FAILED` on its errors; an addon built for another Bare ABI is an error, and a package that only declares a newer `engines.bare` is a warning. A bundle that fails leaves the previous `qvac/worker/` and native modules in place. The harness `package.json` records the SDK version that bundled it, and a Node.js app warns at startup when the installed SDK differs, so bundle again after upgrading `@qvac/sdk`. A Node.js app that has not bundled runs `qvac/worker.entry.mjs`, or the SDK's own worker with every built-in plugin, without a bundle.
+
+* **Addon platform packages:** QVAC ships part of its binaries in separate packages, one per platform, for the speech addons (`tts-ggml`, `asr-ggml`, `audiogen-ggml`) and for `@qvac/fabric`, the runtime the other native addons share. They must be installed at an exact version. The package for the machine you bundle on installs with the addon; Android, iOS and other desktop hosts need theirs added. Without them the bundle cannot be built, and `bundleSdk` fails with `HOST_PREBUILDS_MISSING`, naming each package and version to add. Pass `installMissingPrebuilds: true` to `bundleSdk` to add the missing Android and iOS ones to `package.json` with the project's package manager (npm 7+, pnpm, bun, or Yarn Berry) before bundling; another desktop host's packages are added by hand. The package manager is read from the project's `packageManager` field, lockfile, or installed `node_modules`; a workspace member uses its workspace root's. If none of those identify it, nothing is installed and the error lists the dependencies to add. It is off by default, so a plain `bundleSdk` call never changes `package.json` or `node_modules`. `ensureHostPrebuilds({ projectRoot, hosts, addons })` runs the install step on its own.
+
+* **Package managers that do not hoist:** the bundle imports `bare-stow-runtime`, and the module that starts it imports `bare-stow-host`, plus `bare-sidecar` for the `bare-sidecar` target or `react-native-bare-kit` for `react-native`, by name from your project. npm and bun's default linker place them in your project's `node_modules` with the SDK. With pnpm or bun's isolated linker, add them to your project's dependencies, for example `pnpm add bare-stow-runtime bare-stow-host bare-sidecar`; otherwise `bundleSdk` fails with `BUNDLE_FAILED`, naming the module it cannot find. Yarn needs `nodeLinker: node-modules` in `.yarnrc.yml`, because the bundler reads packages from `node_modules`. A Node.js app that runs without a bundle needs none of them.

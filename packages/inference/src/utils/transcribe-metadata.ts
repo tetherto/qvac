@@ -5,8 +5,9 @@ import { TranscriptionFailedError } from '@/errors/index'
  * A native transcript segment, as emitted by the engines of
  * `@qvac/asr-ggml` and by `@qvac/bci-whispercpp`. `text` plus the timing
  * fields are shared; `isEndOfTurn` and `startsWord` are parakeet-only,
- * `language`, `noSpeechProb`, `speakerTurnNext` and `tokens` are whisper-only,
- * and `windowStartTimestep` is BCI delta-streaming-only.
+ * `tokenIds`, `isFinal`, `chunkIndex` and `eotConfidence` are parakeet
+ * streaming-only, `language`, `noSpeechProb`, `speakerTurnNext` and `tokens`
+ * are whisper-only, and `windowStartTimestep` is BCI delta-streaming-only.
  */
 export interface AsrAddonToken {
   text: string
@@ -30,6 +31,14 @@ export interface AsrAddonSegment {
   isEndOfTurn?: boolean
   /** Parakeet: the segment begins a new SentencePiece word. */
   startsWord?: boolean
+  /** Parakeet streaming: native token ids of the segment. */
+  tokenIds?: number[]
+  /** Parakeet streaming: explicit native finality, including empty final markers. */
+  isFinal?: boolean
+  /** Parakeet streaming: native chunk index; -1 when unknown. */
+  chunkIndex?: number
+  /** Parakeet EOU streaming: native end-of-turn confidence. */
+  eotConfidence?: number
   /** Whisper: language the window was decoded in (e.g. `"en"`). */
   language?: string
   /** Whisper: probability that the segment's window holds no speech. */
@@ -78,6 +87,10 @@ export function toTranscribeSegment(
     id: chunk.id ?? 0,
     ...(chunk.isEndOfTurn !== undefined && { isEndOfTurn: chunk.isEndOfTurn }),
     ...(chunk.startsWord !== undefined && { startsWord: chunk.startsWord }),
+    ...(chunk.tokenIds !== undefined && { tokenIds: [...chunk.tokenIds] }),
+    ...(chunk.isFinal !== undefined && { isFinal: chunk.isFinal }),
+    ...(chunk.chunkIndex !== undefined && { chunkIndex: chunk.chunkIndex }),
+    ...(chunk.eotConfidence !== undefined && { eotConfidence: chunk.eotConfidence }),
     ...(chunk.language !== undefined && { language: chunk.language }),
     ...(chunk.noSpeechProb !== undefined && { noSpeechProb: chunk.noSpeechProb }),
     ...(chunk.speakerTurnNext !== undefined && { speakerTurnNext: chunk.speakerTurnNext }),
