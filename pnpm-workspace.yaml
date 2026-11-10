@@ -179,6 +179,5 @@ minimumReleaseAgeExclude:
 
 # Runtime compatibility patches, applied by pnpm before linking packages.
 patchedDependencies:
-  "localwatch@1.4.3": patches/localwatch@1.4.3.patch
   "pyodide@314.0.2": patches/pyodide@314.0.2.patch
   "unpdf@1.6.2": patches/unpdf@1.6.2.patch
