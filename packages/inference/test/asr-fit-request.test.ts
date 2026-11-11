@@ -174,3 +174,29 @@ test('MOSS: no workload is unknown, and the default load stays on the CPU', (t) 
   )
   t.is(requestOf(plan)?.['gpuLayers'], 0)
 })
+
+test('parakeet: an explicit backend selector reaches the projection', (t) => {
+  const plan = parakeetFitRequest(
+    load('/models/parakeet.gguf', { backend: 'CUDA0', useGPU: false })
+  )
+
+  t.alike(requestOf(plan), {
+    engine: 'parakeet',
+    modelPath: '/models/parakeet.gguf',
+    gpuLayers: 0,
+    backend: 'CUDA0'
+  })
+})
+
+test('parakeet: a speaker-attributed load is unknown, as the fitter projects one model', (t) => {
+  const plan = parakeetFitRequest(
+    load(
+      '/models/parakeet.gguf',
+      { speakerAttribution: { modelSrc: 'sortformer.gguf' } },
+      { artifacts: { speakerAttributionModelPath: '/models/sortformer.gguf' } }
+    )
+  )
+
+  t.ok('unknown' in plan, 'no one-model request is made for a two-model load')
+  if ('unknown' in plan) t.ok(/diarization model/.test(plan.unknown), plan.unknown)
+})

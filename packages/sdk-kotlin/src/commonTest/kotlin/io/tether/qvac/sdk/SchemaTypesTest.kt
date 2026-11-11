@@ -9,6 +9,32 @@ class SchemaTypesTest {
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
     @Test
+    fun orderedHistoryPartsRoundTripWithoutUnionWrapperFields() {
+        val input = Json.parseToJsonElement("""{"role":"user","content":[{"type":"text","text":"First:"},{"type":"media","path":"/a.jpg"},{"type":"text","text":"Second:"},{"type":"media","path":"/b.jpg"}]}""")
+        val stream = json.decodeFromJsonElement<CompletionStreamRequestHistoryItem>(input)
+        assertIs<CompletionStreamRequestHistoryItemContent.Variant2>(stream.content)
+        assertEquals(input, json.encodeToJsonElement<CompletionStreamRequestHistoryItem>(stream))
+        val batch = json.decodeFromJsonElement<BatchCompletionStreamRequestPromptsItemHistoryItem>(input)
+        assertIs<BatchCompletionStreamRequestPromptsItemHistoryItemContent.Variant2>(batch.content)
+        assertEquals(input, json.encodeToJsonElement<BatchCompletionStreamRequestPromptsItemHistoryItem>(batch))
+    }
+
+    @Test
+    fun legacyHistoryTextRoundTripsAndMalformedPartsReject() {
+        val input = Json.parseToJsonElement("""{"role":"user","content":"Hello"}""")
+        val stream = json.decodeFromJsonElement<CompletionStreamRequestHistoryItem>(input)
+        assertIs<CompletionStreamRequestHistoryItemContent.Variant1>(stream.content)
+        assertEquals(input, json.encodeToJsonElement<CompletionStreamRequestHistoryItem>(stream))
+        val batch = json.decodeFromJsonElement<BatchCompletionStreamRequestPromptsItemHistoryItem>(input)
+        assertEquals(input, json.encodeToJsonElement<BatchCompletionStreamRequestPromptsItemHistoryItem>(batch))
+        for (content in listOf("""[{"type":"media"}]""", """[{"type":"image","path":"/a.jpg"}]""")) {
+            val malformed = Json.parseToJsonElement("""{"role":"user","content":$content}""")
+            assertFailsWith<SerializationException> { json.decodeFromJsonElement<CompletionStreamRequestHistoryItem>(malformed) }
+            assertFailsWith<SerializationException> { json.decodeFromJsonElement<BatchCompletionStreamRequestPromptsItemHistoryItem>(malformed) }
+        }
+    }
+
+    @Test
     fun numericConstantArmsRoundTripAcrossIntegerAndDecimalJsonSpelling() {
         val value = json.decodeFromString<LoadModelSrcRequestLlamacppCompletionModelConfigPredict>("-1")
         val encoded = json.encodeToString(LoadModelSrcRequestLlamacppCompletionModelConfigPredict.serializer(), value)

@@ -604,6 +604,25 @@ export class InvalidAudioInputError extends QvacErrorBase {
   }
 }
 
+export class AudioEncodeFailedError extends QvacErrorBase {
+  readonly format: string
+  readonly details: string | undefined
+  constructor(format: string, details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        ERROR_CODES.AUDIO_ENCODE_FAILED,
+        details ? [format, details] : [format],
+        cause
+      )
+    )
+    this.format = format
+    this.details = details
+  }
+  toErrorResponseFields(): Record<string, unknown> {
+    return { format: this.format, ...(this.details !== undefined && { details: this.details }) }
+  }
+}
+
 // ============== RAG operations ==============
 
 export class RAGSaveFailedError extends QvacErrorBase {
@@ -875,6 +894,42 @@ export class CacheDirNotWritableError extends QvacErrorBase {
         cause
       )
     )
+  }
+}
+
+export class InvalidSeedFromParamsError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.INVALID_SEED_FROM_PARAMS, undefined, cause))
+  }
+}
+
+export class KvCacheSeedSourceNotFoundError extends QvacErrorBase {
+  readonly seedFrom: string
+  readonly modelId: string
+
+  constructor(seedFrom: string, modelId: string, cause?: unknown) {
+    super(
+      createErrorOptions(ERROR_CODES.KV_CACHE_SEED_SOURCE_NOT_FOUND, [seedFrom, modelId], cause)
+    )
+    this.seedFrom = seedFrom
+    this.modelId = modelId
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { seedFrom: this.seedFrom, modelId: this.modelId }
+  }
+}
+
+export class KvCacheSeedSharingDisabledError extends QvacErrorBase {
+  readonly modelId: string
+
+  constructor(modelId: string, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.KV_CACHE_SEED_SHARING_DISABLED, [modelId], cause))
+    this.modelId = modelId
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { modelId: this.modelId }
   }
 }
 

@@ -3,6 +3,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { completion } from '@qvac/sdk'
 import type { Tool } from '@qvac/sdk'
 import { HttpError, errorType } from '@/serve/lib/http-error'
+import { responsesKvCacheRetention } from '@/serve/lib/responses-kv-cache'
 import { endSSE, initSSE, sendSSE } from '@/serve/lib/sse'
 import { sdkErrorAsHttp } from '@/serve/core/plugins/error-handler'
 import { requireModel } from '@/serve/core/plugins/require-model'
@@ -16,6 +17,7 @@ import {
   historyPrefixFromStoredResponse,
   InvalidResponsesBackgroundError,
   InvalidResponsesConversationError,
+  InvalidResponsesKvCacheKeyError,
   InvalidResponsesToolsError,
   toSdkResponsesArgs,
   type ResponsesHistoryItem
@@ -75,6 +77,17 @@ expired \`previous_response_id\` returns \`404 previous_response_not_found\`.
 
 **\`store: false\`** opts out of storage — the response is returned but not
 addressable via GET / DELETE / input_items.
+
+**KV cache (opt-in)**: send \`X-QVAC-KV-Cache-Key: <session-key>\` (once), or
+\`metadata.qvac_kv_cache_key\`, or OpenAI's \`prompt_cache_key\`, in that order of
+precedence. Keys must be nonempty strings of at most 512 UTF-8 bytes and are
+SHA-256 hashed before filesystem use. Reuse the key with the same conversation's
+growing history on every request; \`previous_response_id\` and \`store\` do not
+select a cache session. Without a key, Responses remains uncached. These caches
+follow the automatic cache's retention (24-hour idle TTL, 4 GiB LRU quota) and
+\`DELETE /qvac/v1/kv_cache\` reclaims them. On a keyed request, SDK cache
+occupancy is reported as \`usage.qvac_cache_tokens\` (also in the final SSE
+response); this is not a per-request count of reused tokens.
 
 **Rejections**:
 - \`conversation\` → \`400 conversation_not_supported\` (Conversation persistence not implemented)
@@ -181,10 +194,13 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 
       let sdk
       try {
-        sdk = toSdkResponsesArgs(req.body)
+        sdk = toSdkResponsesArgs(req.body, req.raw.rawHeaders)
       } catch (err) {
         if (err instanceof InvalidResponsesToolsError) {
           throw new HttpError(400, 'invalid_tools', err.message)
+        }
+        if (err instanceof InvalidResponsesKvCacheKeyError) {
+          throw new HttpError(400, 'invalid_kv_cache_key', err.message)
         }
         if (err instanceof InvalidResponsesConversationError) {
           throw new HttpError(400, 'conversation_not_supported', err.message)
@@ -279,7 +295,8 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         topP: params.topP,
         maxOutputTokens: params.maxOutputTokens,
         parallelToolCalls: params.parallelToolCalls,
-        previousResponseId: params.previousResponseId
+        previousResponseId: params.previousResponseId,
+        ...(sdk.kvCache !== undefined ? { kvCached: true } : {})
       }
 
       const completionFn = openaiState(req.server.qvac).completionOverride ?? completion
@@ -293,6 +310,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
             history,
             stream,
             captureThinking: true,
+            ...(sdk.kvCache !== undefined ? { kvCache: sdk.kvCache } : {}),
             ...(params.tools !== undefined ? { tools: params.tools } : {}),
             ...(params.generationParams !== undefined
               ? { generationParams: params.generationParams }
@@ -306,18 +324,30 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         }
       }
 
-      if (streaming) {
-        initSSE(reply, { [VOLATILE_HEADER]: RESPONSES_VOLATILE_STUB })
-        try {
-          await writeStreamingResponse(reply.raw, writerParams, runTurn(true))
-        } catch (err) {
-          if (reply.raw.destroyed || reply.raw.writableEnded) throw err
-          sendResponseFailed(reply, params, err, ctx.logger)
+      const releaseCache =
+        sdk.kvCache !== undefined ? await responsesKvCacheRetention.acquire(sdk.kvCache) : undefined
+      try {
+        // The client may have left while the key waited for a deletion; its
+        // close already fired, so nothing would cancel the run.
+        if (reply.raw.destroyed) return
+        if (streaming) {
+          initSSE(reply, { [VOLATILE_HEADER]: RESPONSES_VOLATILE_STUB })
+          try {
+            await writeStreamingResponse(reply.raw, writerParams, runTurn(true))
+          } catch (err) {
+            if (reply.raw.destroyed || reply.raw.writableEnded) throw err
+            sendResponseFailed(reply, params, err, ctx.logger)
+          }
+        } else {
+          // The writer ends the raw response on success. Keep the reply managed
+          // until then so inference errors before headers can produce HTTP errors.
+          await writeBlockingResponse(reply.raw, writerParams, runTurn(false))
         }
-      } else {
-        // The writer ends the raw response on success. Keep the reply managed
-        // until then so inference errors before headers can produce HTTP errors.
-        await writeBlockingResponse(reply.raw, writerParams, runTurn(false))
+      } finally {
+        if (releaseCache) {
+          releaseCache()
+          responsesKvCacheRetention.maybeSweep(ctx.logger)
+        }
       }
     }
   )

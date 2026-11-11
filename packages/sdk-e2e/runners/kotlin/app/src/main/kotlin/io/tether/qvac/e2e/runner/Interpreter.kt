@@ -23,6 +23,7 @@ class Interpreter(
     /** Extracted fixtures: `<root>/images`, `<root>/audio`, ... */
     private val assetRoot: File,
     private val log: (String) -> Unit,
+    private val restartWorker: suspend () -> Unit,
 ) {
     private class Pending(val task: Deferred<Outcome>)
 
@@ -261,6 +262,11 @@ class Interpreter(
         if (method == "evictResource") {
             resources.evict(callParams(body["params"], scope)["dep"].toString())
             return mapOf("evicted" to true)
+        }
+        if (method == "close") {
+            resources.forgetLoaded()
+            restartWorker()
+            return null
         }
         if (method in SCRATCH) return calls.scratch(method, callParams(body["params"], scope))
         val collect = body["collect"]?.toString()

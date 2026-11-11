@@ -986,6 +986,18 @@ void ParakeetModel::recordTranscriptionResult(const pkt::EngineResult& result) {
     ++jobCoremlEncoderCalls_;
 }
 
+void ParakeetModel::recordDiarizationResult(
+    const pkt::DiarizationResult& result) {
+  // Same per-stage mapping as recordTranscriptionResult.
+  melSpecMs_ += static_cast<int64_t>(result.preprocess_ms);
+  encoderMs_ += static_cast<int64_t>(result.encoder_ms);
+  decoderMs_ += static_cast<int64_t>(result.decode_ms);
+  totalEncodedFrames_ += result.n_frames;
+  ++jobEncoderCalls_;
+  if (result.encoder_used_coreml)
+    ++jobCoremlEncoderCalls_;
+}
+
 std::string ParakeetModel::runSortformerProcess(
     const Input& input, std::vector<SpeakerSegment>& segmentsOut) {
   if (input.empty())
@@ -1002,11 +1014,7 @@ std::string ParakeetModel::runSortformerProcess(
   const pkt::DiarizationOptions dopts = buildDiarizationOptions(cfg_);
   const pkt::DiarizationResult diar = engine->diarize_samples(
       input.data(), static_cast<int>(input.size()), sample_rate_, dopts);
-  // Same per-stage mapping as runAsrProcess.
-  melSpecMs_ += static_cast<int64_t>(diar.preprocess_ms);
-  encoderMs_ += static_cast<int64_t>(diar.encoder_ms);
-  decoderMs_ += static_cast<int64_t>(diar.decode_ms);
-  totalEncodedFrames_ += diar.n_frames;
+  recordDiarizationResult(diar);
 
   if (diar.segments.empty())
     return ERR_NO_SPEAKERS;

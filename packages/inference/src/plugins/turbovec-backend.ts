@@ -40,7 +40,18 @@ function toHitRows(result: ReturnType<TurboVecIndex['search']>): VectorIndexHit[
   return rows
 }
 
-function openIndex(index: TurboVecIndex, storage: VectorIndexStorage | undefined): OpenVectorIndex {
+// The native index exposes these beyond the TurboVecIndex interface, which
+// does not declare them; a provider that predates them leaves them out.
+type IndexWithControls = TurboVecIndex & {
+  readonly calibrated?: boolean
+  readonly stagedSearch?: boolean
+  setStagedSearch?: (enabled: boolean) => void
+}
+
+function openIndex(
+  index: IndexWithControls,
+  storage: VectorIndexStorage | undefined
+): OpenVectorIndex {
   // TurboVec precomputes rotation and codebook state on the first search
   // after a change; running it eagerly keeps that cost out of the first
   // query's latency.
@@ -53,6 +64,21 @@ function openIndex(index: TurboVecIndex, storage: VectorIndexStorage | undefined
       return index.length
     },
     storage,
+    get calibrated() {
+      return index.calibrated
+    },
+    get stagedSearch() {
+      return index.stagedSearch
+    },
+    setStagedSearch(enabled) {
+      // Without the getter the setting could not be confirmed, so a provider
+      // needs both halves of the control.
+      if (!index.setStagedSearch || typeof index.stagedSearch !== 'boolean') {
+        throw new Error('The vector index provider does not support staged search controls')
+      }
+      index.setStagedSearch(enabled)
+      return index.stagedSearch
+    },
     add(vectors, ids) {
       index.addWithIds(vectors, ids)
       needsPrepare = true
@@ -85,7 +111,7 @@ function openIndex(index: TurboVecIndex, storage: VectorIndexStorage | undefined
  * The vector index feature's only backend: the fabric vector index that the
  * embedding plugin exposes through the `turbovecIndexProvider` capability.
  * It serves every `VectorIndexStorage` mode; the two TurboVec modes add the
- * dimension rule (multiple of 8, at most 1024), which the native index
+ * dimension rule (multiple of 8, at most 16384), which the native index
  * enforces itself.
  */
 export function getTurboVecBackend(): VectorIndexBackend | undefined {

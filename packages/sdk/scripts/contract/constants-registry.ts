@@ -8,6 +8,8 @@ import {
   AUDIOGEN_EDIT_OPERATIONS,
   AUDIOGEN_REPAINT_MODES,
   AUDIOGEN_TRACKS,
+  AUDIOGEN_OUTPUT_FORMATS,
+  AUDIOGEN_MINIMAX_COREML_COMPUTE_UNITS,
   TTS_ENGINES,
   TTS_PACES,
   TTS_PARLER_EMOTIONS,
@@ -18,6 +20,9 @@ import {
   TTS_COSYVOICE3_INSTRUCT_DIALECTS,
   TTS_COSYVOICE3_INSTRUCT_VOLUMES,
   TTS_COSYVOICE3_INSTRUCT_STYLES,
+  TTS_PARLER_COREML_COMPUTE_UNITS,
+  TTS_LAVASR_COREML_COMPUTE_UNITS,
+  TTS_SUPERTONIC_PRECISIONS,
   VectorIndexStorage
 } from '@qvac/inference/surface'
 import {
@@ -25,6 +30,7 @@ import {
   PLUGIN_EMBEDDING,
   PLUGIN_DECISION,
   PLUGIN_RERANK,
+  PLUGIN_IMAGE_EMBEDDING,
   PLUGIN_WHISPER,
   PLUGIN_BCI,
   PLUGIN_MOSS_TRANSCRIBE,
@@ -79,6 +85,7 @@ export const constantsRegistry = {
     EMBEDDING: PLUGIN_EMBEDDING,
     DECISION: PLUGIN_DECISION,
     RERANK: PLUGIN_RERANK,
+    IMAGE_EMBEDDING: PLUGIN_IMAGE_EMBEDDING,
     WHISPER: PLUGIN_WHISPER,
     BCI: PLUGIN_BCI,
     MOSS_TRANSCRIBE: PLUGIN_MOSS_TRANSCRIBE,
@@ -112,10 +119,15 @@ export const constantsRegistry = {
   TtsCosyvoice3InstructDialect: enumFromVocabulary(TTS_COSYVOICE3_INSTRUCT_DIALECTS),
   TtsCosyvoice3InstructVolume: enumFromVocabulary(TTS_COSYVOICE3_INSTRUCT_VOLUMES),
   TtsCosyvoice3InstructStyle: enumFromVocabulary(TTS_COSYVOICE3_INSTRUCT_STYLES),
+  TtsParlerCoremlComputeUnits: enumFromVocabulary(TTS_PARLER_COREML_COMPUTE_UNITS),
+  TtsLavasrCoremlComputeUnits: enumFromVocabulary(TTS_LAVASR_COREML_COMPUTE_UNITS),
+  TtsSupertonicPrecision: enumFromVocabulary(TTS_SUPERTONIC_PRECISIONS),
   AudioGenEngine: enumFromVocabulary(AUDIOGEN_ENGINES),
   AudioGenTaskType: enumFromVocabulary(AUDIOGEN_TASK_TYPES),
   AudioGenEditOperation: enumFromVocabulary(AUDIOGEN_EDIT_OPERATIONS),
   AudioGenRepaintMode: enumFromVocabulary(AUDIOGEN_REPAINT_MODES),
   AudioGenTrack: enumFromVocabulary(AUDIOGEN_TRACKS),
+  AudioGenOutputFormat: enumFromVocabulary(AUDIOGEN_OUTPUT_FORMATS),
+  AudioGenMinimaxCoremlComputeUnits: enumFromVocabulary(AUDIOGEN_MINIMAX_COREML_COMPUTE_UNITS),
   VectorIndexStorage: z.enum(VectorIndexStorage)
 } as const

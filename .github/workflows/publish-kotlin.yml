@@ -117,7 +117,7 @@ jobs:
           ./gradlew --no-daemon
           checkVersionAlignment
           checkContract
-          verifyPublishedWorker
+          :jvm-barekit:test
           jvmTest
           :android-example:testDebugUnitTest
           :android-example:checkDebugBuild
