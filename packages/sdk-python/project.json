@@ -101,7 +101,7 @@
           }
         },
         "darwin-arm64-wheel": {
-          "args": "--platform macosx_11_0_arm64",
+          "args": "--platform macosx_13_0_arm64",
           "ci": {
             "runner": "macos_arm64_gpu",
             "labels": {

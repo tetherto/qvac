@@ -79,7 +79,7 @@ if (['generated', 'format', 'lint', 'typecheck', 'unit'].includes(step)) {
     // The bundle under test is the installed wheel's, not the source tree's.
     run(test, [
       '-c',
-      'import sys; sys.path.insert(0, "tests"); import _worker_env as w, tetherto.qvac_sdk as pkg; assert "site-packages" in pkg.__file__, pkg.__file__; assert "_bundle" in w.WORKER_PATH and "_bundle" in w.BARE_BIN, (w.WORKER_PATH, w.BARE_BIN); assert w.WORKER_AVAILABLE; print("OK bundle under test:", w.WORKER_PATH)'
+      'import sys; sys.path.insert(0, "tests"); import _worker_env as w, tetherto.qvac_sdk as pkg; assert "site-packages" in pkg.__file__, pkg.__file__; assert "site-packages" in w.WORKER_PATH and "_worker" in w.WORKER_PATH, w.WORKER_PATH; assert w.WORKER_AVAILABLE; print("OK bundle under test:", w.WORKER_PATH)'
     ])
     run(test, ['-m', 'pytest', 'tests/', '-o', 'pythonpath=tests', '-v'], env)
   } else throw new Error(`CI_SUITE must be fast, full or wheel, got '${suite ?? ''}'`)
