@@ -70,9 +70,14 @@ export interface ClassificationFitResult {
 // Matches the `threads` bound createInstance enforces in the native addon.
 const MAX_THREADS = 1024;
 
-// The native side reads paths as C strings, which stop at the first NUL.
-function checkNoNul(value: string | undefined, name: string): void {
-  if (typeof value === "string" && value.includes("\0")) {
+// An optional string the native side reads as a C string, which stops at the
+// first NUL.
+function checkOptionalString(value: unknown, name: string): void {
+  if (value === undefined || value === null) return;
+  if (typeof value !== "string") {
+    throw new TypeError(`${name} must be a string`);
+  }
+  if (value.includes("\0")) {
     throw new TypeError(`${name} must not contain a NUL character`);
   }
 }
@@ -101,8 +106,12 @@ export async function assessFit(request: ClassificationFitRequest): Promise<Clas
   if (typeof request?.modelPath !== "string" || !path.isAbsolute(request.modelPath)) {
     throw new TypeError("modelPath must be an absolute path");
   }
-  checkNoNul(request.modelPath, "modelPath");
-  checkNoNul(request.backendsDir, "backendsDir");
+  checkOptionalString(request.modelPath, "modelPath");
+  checkOptionalString(request.backend, "backend");
+  checkOptionalString(request.backendsDir, "backendsDir");
+  if (request.workload !== undefined && request.workload !== null && typeof request.workload !== "object") {
+    throw new TypeError("workload must be an object");
+  }
   if (
     request.marginBytes !== undefined &&
     (!Number.isSafeInteger(request.marginBytes) || request.marginBytes < 0)

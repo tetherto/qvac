@@ -41,7 +41,8 @@ uint64_t checkedSum(std::initializer_list<uint64_t> terms) {
 // says it shares host memory, Android's OpenCL GPU, and a device that reports
 // no memory of its own. A unified device that reports none takes the CPU's
 // figures.
-FitDevice fitDevice(ggml_backend_dev_t device, uint64_t usedBytes) {
+FitDevice fitDevice(
+    ggml_backend_dev_t device, ggml_backend_dev_t host, uint64_t usedBytes) {
   ggml_backend_dev_props props{};
   ggml_backend_dev_get_props(device, &props);
   uint64_t freeBytes = static_cast<uint64_t>(props.memory_free);
@@ -60,14 +61,11 @@ FitDevice fitDevice(ggml_backend_dev_t device, uint64_t usedBytes) {
                        props.type == GGML_BACKEND_DEVICE_TYPE_CPU ||
                        androidOpenCl || reportsNoMemory;
   if (unified && reportsNoMemory) {
-    if (ggml_backend_dev_t host =
-            ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU)) {
-      size_t hostFree = 0;
-      size_t hostTotal = 0;
-      ggml_backend_dev_memory(host, &hostFree, &hostTotal);
-      freeBytes = static_cast<uint64_t>(hostFree);
-      totalBytes = static_cast<uint64_t>(hostTotal);
-    }
+    size_t hostFree = 0;
+    size_t hostTotal = 0;
+    ggml_backend_dev_memory(host, &hostFree, &hostTotal);
+    freeBytes = static_cast<uint64_t>(hostFree);
+    totalBytes = static_cast<uint64_t>(hostTotal);
   }
   const std::string name = props.name != nullptr ? props.name : "";
   return {
@@ -101,23 +99,30 @@ FitResult assessModelFit(
   // carries every host term. A verdict always carries the host row, so a
   // registry without a CPU device to name it by leaves the load unsized.
   FitResult result;
-  const std::lock_guard<std::mutex> lock(backendRegistryMutex());
-  ggml_backend_dev_t host =
-      ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+  ggml_backend_dev_t host = nullptr;
+  ggml_backend_dev_t device = nullptr;
+  {
+    // Only the lookups read the registry. The memory queries below ask the
+    // driver, which can be slow on a first call, so they run outside the
+    // lock: the MobileNet load takes this mutex on the JS thread.
+    const std::lock_guard<std::mutex> lock(backendRegistryMutex());
+    host = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+    if (!footprint.deviceIsCpu)
+      device = ggml_backend_dev_by_name(footprint.deviceName.c_str());
+  }
   if (host == nullptr)
     return result;
   std::vector<FitDevice> rows;
   if (!footprint.deviceIsCpu) {
-    ggml_backend_dev_t device =
-        ggml_backend_dev_by_name(footprint.deviceName.c_str());
     if (device == nullptr)
       return result;
     rows.push_back(fitDevice(
         device,
+        host,
         checkedSum(
             {footprint.deviceWeightBytes, footprint.deviceComputeBytes})));
   }
-  rows.push_back(fitDevice(host, hostBytes));
+  rows.push_back(fitDevice(host, host, hostBytes));
   if (!memoryIsReadable(rows))
     return result;
 
