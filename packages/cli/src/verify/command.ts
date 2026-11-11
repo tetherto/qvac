@@ -55,7 +55,7 @@ export function registerVerifyCommand(program: Command): void {
     .option('-q, --quiet', 'Suppress success output')
     .option(
       '--offline',
-      'Skip GitHub and npm registry lookups (Bare version of Bare Kit releases newer than the built-in tables, override suggestions)'
+      'Skip GitHub and npm registry lookups (Bare version of Bare Kit releases missing from the built-in tables, override suggestions)'
     )
     .action(
       async (options: {

@@ -1,4 +1,5 @@
 export { MegaLoc, type MegaLocOptions, type ImageEmbeddingOptions, type MegaLocRuntimeStats } from "./megaloc";
+export { assessFit, type ClassificationFitRequest, type ClassificationFitWorkload, type ClassificationFitStatus, type ClassificationFitDevice, type ClassificationFitStats, type ClassificationFitResult, } from "./fit";
 export { BridgeDepth, type BridgeDepthOptions, type StereoImageOptions, type DisparityResult, type BridgeDepthRuntimeStats, } from "./bridgedepth";
 /**
  * Canonical labels emitted by the default 3-class MobileNetV3-Small model.
