@@ -240,7 +240,6 @@ jobs:
             .github/actions/sdk-e2e-node-prepare
             .github/actions/sdk-e2e-node-results
             .github/actions/sdk-e2e-node-run
-            .github/actions/stop-workspace-processes
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
@@ -401,11 +400,26 @@ jobs:
             console.log(fs.readFileSync('consumer.log', 'utf8'));
           }
 
+      # A cancelled or timed-out run can orphan a worker (bare.exe) that keeps
+      # the workspace busy, so later cleanups fail. Inline, not a local action:
+      # it must also run when a locked workspace skipped the checkout.
       - name: Stop processes left in the workspace
         if: always() && runner.os == 'Windows'
         continue-on-error: true
         timeout-minutes: 2
-        uses: ./.sdk-e2e-workflow/.github/actions/stop-workspace-processes
+        shell: powershell
+        working-directory: .
+        run: |
+          $ws = [IO.Path]::GetFullPath($env:GITHUB_WORKSPACE).TrimEnd('\') + '\'
+          Get-CimInstance Win32_Process | Where-Object {
+            $_.ProcessId -ne $PID -and (
+              ("$($_.ExecutablePath)" -replace '/', '\').StartsWith($ws, [StringComparison]::OrdinalIgnoreCase) -or
+              ("$($_.CommandLine)" -replace '/', '\').IndexOf($ws, [StringComparison]::OrdinalIgnoreCase) -ge 0
+            )
+          } | ForEach-Object {
+            Write-Host "::warning::Stopping leftover $($_.Name) (PID $($_.ProcessId)): $($_.CommandLine)"
+            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+          }
 
   report-finalize:
     name: "[${{ inputs.consumer }}] report-finalize"
