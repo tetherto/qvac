@@ -148,7 +148,8 @@ export const kvCachePrefillTests = [
   reuseCase('named', 'prefill-named', true),
   reuseCase('auto', true, true, { dependency: 'prefill-llm-parallel' }),
   reuseCase('reload', 'prefill-reload', true, { reload: true }),
-  reuseCase('tools-only', true, true, { history: [] }),
   reuseCase('system-only', 'prefill-system-only', false),
+  // Tools only; the system message comes from the model's `system_prompt`.
+  reuseCase('tools-only', true, true, { history: [], dependency: 'prefill-llm-system-prompt' }),
   ...invalidCases
 ]
