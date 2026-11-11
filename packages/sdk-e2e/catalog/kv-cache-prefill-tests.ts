@@ -147,7 +147,14 @@ const invalidCases = [
 // Tools alone, on a model with no `system_prompt`: rejected before the addon.
 const noMessageCase: TestDefinition = {
   testId: 'kv-cache-prefill-no-message',
-  params: { history: [], tools, kvCache: true, prefill: true, stream: false },
+  params: {
+    history: [],
+    tools,
+    kvCache: true,
+    prefill: true,
+    stream: false,
+    dependency: 'prefill-llm'
+  },
   expectation: { validation: 'throws-error', errorContains: 'prefill needs at least one message' },
   steps: [
     { useModel: { deps: ['prefill-llm'], as: 'model' } },
