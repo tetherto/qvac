@@ -51,10 +51,11 @@ run(
 )
 
 mkdirSync(electronDist, { recursive: true })
-cpSync(electronOutput, packagedSnapApp, { recursive: true })
-// The installed Snap is root-owned: a 0700 directory from the packaging (seen on Node 24) is
-// unreadable to the app and rejected by `snap pack`.
-run('chmod', ['-R', 'a+rX', packagedSnapApp], projectDir)
+// verbatimSymlinks keeps node_modules/custom-echo-plugin -> ../fixtures/echo-plugin relative;
+// resolved, it points at this runner's out/ and dangles in the Snap.
+cpSync(electronOutput, packagedSnapApp, { recursive: true, verbatimSymlinks: true })
+// `snap pack` rejects the 0700 directory the copy gets on Node 24.
+chmodSync(packagedSnapApp, 0o755)
 // A mounted Snap is read-only, so the Bare binary has to be executable before packaging.
 chmodSync(packagedBareBinary, 0o755)
 writeFileSync(
