@@ -13,6 +13,17 @@ test('assessFit rejects a missing or relative model path before loading the bind
   await t.exception.all(assessFit(), /modelPath must be an absolute path/)
 })
 
+test('assessFit rejects a path with a NUL character before loading the binding', async (t) => {
+  await t.exception.all(
+    assessFit({ modelPath: '/models/a\0b.gguf' }),
+    /modelPath must not contain a NUL character/
+  )
+  await t.exception.all(
+    assessFit({ modelPath: MODEL, backendsDir: '/backends\0' }),
+    /backendsDir must not contain a NUL character/
+  )
+})
+
 test('assessFit rejects invalid memory margins before loading the binding', async (t) => {
   for (const marginBytes of [-1, 1.5, Infinity, NaN, Number.MAX_SAFE_INTEGER + 1, '1']) {
     await t.exception.all(

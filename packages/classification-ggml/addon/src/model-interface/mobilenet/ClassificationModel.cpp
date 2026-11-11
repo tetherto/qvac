@@ -118,20 +118,25 @@ bool traceEnabled() {
 
 namespace {
 ggml_backend_t initCpuBackend(const std::string& backendsDir) {
-  const std::lock_guard<std::mutex> lock(backendRegistryMutex());
+  ggml_backend_dev_t cpuDev = nullptr;
+  {
+    // Only the registry is guarded; device init runs outside the lock.
+    const std::lock_guard<std::mutex> lock(backendRegistryMutex());
 #if defined(GGML_BACKEND_DL)
-  // Under GGML_BACKEND_DL @qvac/fabric ships CPU variants and GPU backends as
-  // modules, which must be opened before the registry can hand out a device.
-  // Fabric finds the ones it ships itself; config.backendsDir only overrides
-  // that with a directory holding the modules.
-  if (!backendsDir.empty()) {
-    ggml_backend_load_all_from_path(backendsDir.c_str());
-  } else {
-    qvac_fabric_load_backends();
-  }
+    // Under GGML_BACKEND_DL @qvac/fabric ships CPU variants and GPU backends
+    // as modules, which must be opened before the registry can hand out a
+    // device. Fabric finds the ones it ships itself; config.backendsDir only
+    // overrides that with a directory holding the modules.
+    if (!backendsDir.empty()) {
+      ggml_backend_load_all_from_path(backendsDir.c_str());
+    } else {
+      qvac_fabric_load_backends();
+    }
 #else
-  (void)backendsDir;
+    (void)backendsDir;
 #endif
+    cpuDev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+  }
 
   // Acquire the CPU backend through the generic registry API on every platform.
   // We deliberately do NOT call
@@ -140,8 +145,6 @@ ggml_backend_t initCpuBackend(const std::string& backendsDir) {
   // registry API (ggml_backend_dev_by_type / ggml_backend_dev_init), so a
   // direct ggml_backend_cpu_init() call fails to link with lld-link on
   // win32-x64.
-  ggml_backend_dev_t cpuDev =
-      ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
   if (cpuDev == nullptr) {
     throw StatusError(InternalError, "No CPU backend device registered");
   }

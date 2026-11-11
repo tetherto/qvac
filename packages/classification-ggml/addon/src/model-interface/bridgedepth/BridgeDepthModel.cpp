@@ -147,8 +147,10 @@ MeasuredBuffers BridgeDepthModel::measure(
     return result;
   } catch (const StatusError&) {
     throw;
-  } catch (const std::exception& error) {
+  } catch (const ResourceError& error) {
     throw StatusError(InternalError, error.what());
+  } catch (const std::exception& error) {
+    throw StatusError(InvalidArgument, error.what());
   }
 }
 

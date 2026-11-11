@@ -195,7 +195,7 @@ jobs:
       # footprint tests in addon-test skip without the converted weights, so
       # stage those models from the shared manifest.
       - name: Select BridgeDepth and MegaLoc test models
-        id: bridgedepth-model
+        id: fixture-models
         if: hashFiles(format('{0}/test/unit/bridgedepth_test.cpp', env.WORKDIR)) != ''
         shell: bash
         env:
@@ -210,20 +210,20 @@ jobs:
           '
 
       - name: Stage BridgeDepth and MegaLoc test models
-        if: steps.bridgedepth-model.outcome == 'success'
+        if: steps.fixture-models.outcome == 'success'
         uses: tetherto/qvac/.github/actions/stage-integration-models@94eb8ef3e888f8bc1f1717d5e31f55b14d4ac915
         with:
           workdir: ${{ env.WORKDIR }}
           aws-role: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           bucket: ${{ secrets.MODEL_S3_BUCKET }}
-          s3-manifest: ${{ steps.bridgedepth-model.outputs.manifest }}
+          s3-manifest: ${{ steps.fixture-models.outputs.manifest }}
 
       - name: Verify BridgeDepth and MegaLoc test models
-        if: steps.bridgedepth-model.outcome == 'success'
+        if: steps.fixture-models.outcome == 'success'
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         env:
-          MODEL_MANIFEST: ${{ steps.bridgedepth-model.outputs.manifest }}
+          MODEL_MANIFEST: ${{ steps.fixture-models.outputs.manifest }}
         run: |
           node --input-type=module -e '
             import { createHash } from "node:crypto";

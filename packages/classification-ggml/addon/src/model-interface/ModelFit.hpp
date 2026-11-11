@@ -29,10 +29,21 @@ struct FitDevice {
 };
 
 struct FitResult {
-  // "fits", "does-not-fit", or "unknown" when free memory cannot be read.
+  // "fits", "does-not-fit", or "unknown" when device memory cannot be read.
   std::string status{"unknown"};
   std::vector<FitDevice> devices;
 };
+
+// False when a row's memory cannot be read, which leaves the verdict unknown.
+// The backends report a total of 0 for that, and a figure above the safe
+// integer range cannot reach JS. A row with a total and nothing free is
+// readable, and does not fit.
+inline bool memoryIsReadable(const std::vector<FitDevice>& rows) {
+  return std::ranges::all_of(rows, [](const FitDevice& row) {
+    return row.totalBytes != 0 && row.totalBytes <= MAX_JS_SAFE_INTEGER &&
+           row.freeBytes <= MAX_JS_SAFE_INTEGER;
+  });
+}
 
 // Caps every unified row's free memory at the app's memory limit, which iOS
 // enforces on all of them together. A limit of 0 is an exhausted limit.

@@ -5,6 +5,12 @@ exports.assessFit = assessFit;
 const path = require("bare-path");
 // Matches the `threads` bound createInstance enforces in the native addon.
 const MAX_THREADS = 1024;
+// The native side reads paths as C strings, which stop at the first NUL.
+function checkNoNul(value, name) {
+    if (typeof value === "string" && value.includes("\0")) {
+        throw new TypeError(`${name} must not contain a NUL character`);
+    }
+}
 function checkPositiveInteger(value, name) {
     if (value !== undefined && (!Number.isSafeInteger(value) || value < 1)) {
         throw new RangeError(`${name} must be a positive safe integer`);
@@ -13,9 +19,11 @@ function checkPositiveInteger(value, name) {
 /**
  * Assess loading a model and running one inference, from the GGUF metadata.
  * The graphs are built and sized as load and inference build them, without
- * reading weight data or allocating buffers.
+ * reading weight data or allocating buffers. Tensor data is not checked, so
+ * a file whose weights `load()` rejects can still be reported as fitting.
  *
- * Concurrent calls run one at a time. A request that fails the checks here
+ * Each call initializes the selected backend, so it costs about what a
+ * backend init costs. Concurrent calls run one at a time. A request that fails the checks here
  * rejects with a `TypeError` or `RangeError`. A model that cannot be read, an
  * unsupported GGUF, an unavailable backend, a BridgeDepth size inference would
  * reject or an otherwise invalid request rejects with an `InvalidArgument`
@@ -26,6 +34,8 @@ async function assessFit(request) {
     if (typeof request?.modelPath !== "string" || !path.isAbsolute(request.modelPath)) {
         throw new TypeError("modelPath must be an absolute path");
     }
+    checkNoNul(request.modelPath, "modelPath");
+    checkNoNul(request.backendsDir, "backendsDir");
     if (request.marginBytes !== undefined &&
         (!Number.isSafeInteger(request.marginBytes) || request.marginBytes < 0)) {
         throw new RangeError("marginBytes must be a non-negative safe integer");

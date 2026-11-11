@@ -24,6 +24,7 @@
 #endif
 
 #include "model-interface/GgmlBackend.hpp"
+#include "model-interface/ModelFit.hpp"
 #include "model-interface/ModelFootprint.hpp"
 #include "model-interface/bridgedepth/BridgeDepthGraph.hpp"
 #include "model-interface/bridgedepth/BridgeDepthModel.hpp"
@@ -37,12 +38,14 @@ namespace mega = classification_ggml::megaloc;
 namespace {
 
 constexpr int TEST_THREADS = 4;
-// The committed stereo fixture size, and the size the model authors recommend
-// as the largest input.
+// The committed stereo fixture size, and the size assessFit assumes when the
+// request names none.
 constexpr uint32_t FIXTURE_WIDTH = 200;
 constexpr uint32_t FIXTURE_HEIGHT = 100;
-constexpr uint32_t HD_WIDTH = 1280;
-constexpr uint32_t HD_HEIGHT = 720;
+constexpr auto HD_WIDTH =
+    static_cast<uint32_t>(classification_ggml::fit::DEFAULT_FIT_WIDTH);
+constexpr auto HD_HEIGHT =
+    static_cast<uint32_t>(classification_ggml::fit::DEFAULT_FIT_HEIGHT);
 constexpr uint32_t RGB_CHANNELS = 3;
 
 std::string envOr(const char* name, const std::string& fallback) {

@@ -72,7 +72,8 @@ The sizes are measured, so the verdict is direct: `fits` when every memory pool
 holds what the load takes with `marginBytes` left free, `does-not-fit`
 otherwise. Unified rows and the host row are one pool, judged against the
 lowest free figure among them; a GPU with its own memory is a pool alone.
-`unknown` means a device reported no free memory or there is no CPU device. On
+`unknown` means a device's memory could not be read or there is no CPU device.
+`marginBytes` defaults to 0. On
 iOS every unified row is first capped at the app's memory limit,
 `os_proc_available_memory()`.
 
@@ -80,8 +81,13 @@ iOS every unified row is first capped at the app's memory limit,
 input. It defaults to 1280x720, the largest input upstream runs without
 downsampling. `threads` defaults to 8, as `MegaLoc` and `BridgeDepth` do.
 
+Tensor data is not read, so a file whose weights `load()` rejects can still be
+reported as fitting. Each call initializes the selected backend, so it costs
+about what a backend init costs.
+
 `assessFit` returns a Promise and concurrent calls run one at a time. A request
-with a relative `modelPath` or an out-of-range number rejects with a
+with a relative `modelPath`, a path holding a NUL character or an out-of-range
+number rejects with a
 `TypeError` or `RangeError` before the addon is called. A model that cannot be
 read, a GGUF of another model, an unavailable backend, a BridgeDepth size
 inference would reject, or an otherwise invalid request rejects with an

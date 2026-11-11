@@ -1,5 +1,5 @@
-// fitVerdict and capToAppLimit on hand-built rows, plus assessModelFit on each
-// model that is present: MobileNet from weights/ or
+// fitVerdict, memoryIsReadable and capToAppLimit on hand-built rows, plus
+// assessModelFit on each model that is present: MobileNet from weights/ or
 // QVAC_CLASSIFICATION_MODEL_PATH, MegaLoc from QVAC_MEGALOC_F16_MODEL_PATH,
 // BridgeDepth from QVAC_BRIDGEDEPTH_MODEL_PATH. QVAC_FOOTPRINT_BACKEND picks
 // the device for MegaLoc and BridgeDepth (default CPU, as footprint_test).
@@ -19,9 +19,9 @@ namespace fit = classification_ggml::fit;
 
 namespace {
 
-constexpr uint64_t MI_B = 1024ULL * 1024ULL;
-constexpr uint64_t FREE_BYTES = 1000 * MI_B;
-constexpr uint64_t TOTAL_BYTES = 2000 * MI_B;
+constexpr uint64_t MIB = 1024ULL * 1024ULL;
+constexpr uint64_t FREE_BYTES = 1000 * MIB;
+constexpr uint64_t TOTAL_BYTES = 2000 * MIB;
 
 fit::FitDevice
 row(const std::string& id, bool unified, uint64_t usedBytes,
@@ -63,6 +63,33 @@ TEST(FitVerdict, DiscreteDeviceIsItsOwnPool) {
   const std::vector<fit::FitDevice> over{
       row("0000:01:00.0", false, FREE_BYTES + 1), row("CPU", true, 0)};
   EXPECT_EQ(fit::fitVerdict(over, 0), "does-not-fit");
+}
+
+TEST(MemoryIsReadable, RowsWithATotalAreReadable) {
+  EXPECT_TRUE(fit::memoryIsReadable({row("CPU", true, 0)}));
+  EXPECT_TRUE(fit::memoryIsReadable({}));
+}
+
+TEST(MemoryIsReadable, NothingFreeIsReadableAndDoesNotFit) {
+  const std::vector<fit::FitDevice> rows{row("CPU", true, 1, 0)};
+  EXPECT_TRUE(fit::memoryIsReadable(rows));
+  EXPECT_EQ(fit::fitVerdict(rows, 0), "does-not-fit");
+}
+
+TEST(MemoryIsReadable, NoTotalIsUnreadable) {
+  fit::FitDevice unreported = row("0000:01:00.0", false, 0, 0);
+  unreported.totalBytes = 0;
+  EXPECT_FALSE(fit::memoryIsReadable({unreported}));
+  EXPECT_FALSE(fit::memoryIsReadable({row("CPU", true, 0), unreported}));
+}
+
+TEST(MemoryIsReadable, FiguresAboveTheSafeIntegerRangeAreUnreadable) {
+  EXPECT_FALSE(
+      fit::memoryIsReadable(
+          {row("CPU", true, 0, fit::MAX_JS_SAFE_INTEGER + 1)}));
+  fit::FitDevice oversized = row("CPU", true, 0);
+  oversized.totalBytes = fit::MAX_JS_SAFE_INTEGER + 1;
+  EXPECT_FALSE(fit::memoryIsReadable({oversized}));
 }
 
 TEST(CapToAppLimit, CapsOnlyUnifiedRows) {

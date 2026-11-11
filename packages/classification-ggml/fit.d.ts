@@ -23,7 +23,7 @@ export interface ClassificationFitRequest {
     backendsDir?: string;
     /** CPU threads the model will run with, 1 to 1024. Default 8, as MegaLoc and BridgeDepth. */
     threads?: number;
-    /** Bytes to leave free on every memory pool the load uses. */
+    /** Bytes to leave free on every memory pool the load uses. Default 0. */
     marginBytes?: number;
     /**
      * BridgeDepth input size; ignored for the other models. The default
@@ -32,7 +32,7 @@ export interface ClassificationFitRequest {
      */
     workload?: ClassificationFitWorkload;
 }
-/** `unknown` means a device's free memory could not be read, or there is no CPU device. */
+/** `unknown` means a device's memory could not be read, or there is no CPU device. */
 export type ClassificationFitStatus = "fits" | "does-not-fit" | "unknown";
 export interface ClassificationFitDevice {
     /** The PCI bus ID when the backend reports one, the device name otherwise. */
@@ -60,9 +60,11 @@ export interface ClassificationFitResult {
 /**
  * Assess loading a model and running one inference, from the GGUF metadata.
  * The graphs are built and sized as load and inference build them, without
- * reading weight data or allocating buffers.
+ * reading weight data or allocating buffers. Tensor data is not checked, so
+ * a file whose weights `load()` rejects can still be reported as fitting.
  *
- * Concurrent calls run one at a time. A request that fails the checks here
+ * Each call initializes the selected backend, so it costs about what a
+ * backend init costs. Concurrent calls run one at a time. A request that fails the checks here
  * rejects with a `TypeError` or `RangeError`. A model that cannot be read, an
  * unsupported GGUF, an unavailable backend, a BridgeDepth size inference would
  * reject or an otherwise invalid request rejects with an `InvalidArgument`

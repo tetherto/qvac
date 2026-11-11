@@ -208,26 +208,35 @@ bool measureSchedulerBuffers(
 GgmlBackends::GgmlBackends(
     const std::string& backend, const std::string& backendsDir, int threads,
     const std::string& who) {
-  const std::lock_guard<std::mutex> lock(backendRegistryMutex());
+  ggml_backend_dev_t selected = nullptr;
+  ggml_backend_dev_t cpuDevice = nullptr;
+  {
+    // Only the registry is guarded. Device init runs outside the lock: a
+    // first GPU init can take seconds, and the MobileNet load takes this
+    // mutex on the JS thread.
+    const std::lock_guard<std::mutex> lock(backendRegistryMutex());
 #if defined(GGML_BACKEND_DL)
-  if (backendsDir.empty())
-    qvac_fabric_load_backends();
-  else
-    ggml_backend_load_all_from_path(backendsDir.c_str());
+    if (backendsDir.empty())
+      qvac_fabric_load_backends();
+    else
+      ggml_backend_load_all_from_path(backendsDir.c_str());
 #else
-  (void)backendsDir;
+    (void)backendsDir;
 #endif
-  auto* selected = backend.empty()
-                       ? ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU)
-                       : ggml_backend_dev_by_name(backend.c_str());
-  if (!selected && backend.starts_with("Metal")) {
-    const auto name = "MTL" + backend.substr(5);
-    selected = ggml_backend_dev_by_name(name == "MTL" ? "MTL0" : name.c_str());
+    selected = backend.empty()
+                   ? ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU)
+                   : ggml_backend_dev_by_name(backend.c_str());
+    if (!selected && backend.starts_with("Metal")) {
+      const auto name = "MTL" + backend.substr(5);
+      selected =
+          ggml_backend_dev_by_name(name == "MTL" ? "MTL0" : name.c_str());
+    }
+    if (!selected && backend.empty())
+      selected = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_IGPU);
+    if (!selected && backend.empty())
+      selected = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+    cpuDevice = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
   }
-  if (!selected && backend.empty())
-    selected = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_IGPU);
-  if (!selected && backend.empty())
-    selected = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
   if (selected == nullptr)
     throw StatusError(
         InvalidArgument,
@@ -235,9 +244,10 @@ GgmlBackends::GgmlBackends(
   device_ = ggml_backend_dev_init(selected, nullptr);
   if (!device_)
     throw StatusError(InternalError, who + " backend initialization failed");
-  cpu_ = ggml_backend_dev_type(selected) == GGML_BACKEND_DEVICE_TYPE_CPU
-             ? device_
-             : ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, nullptr);
+  if (ggml_backend_dev_type(selected) == GGML_BACKEND_DEVICE_TYPE_CPU)
+    cpu_ = device_;
+  else if (cpuDevice != nullptr)
+    cpu_ = ggml_backend_dev_init(cpuDevice, nullptr);
   if (!cpu_) {
     ggml_backend_free(device_);
     device_ = nullptr;

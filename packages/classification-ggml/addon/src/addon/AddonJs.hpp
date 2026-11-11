@@ -43,6 +43,12 @@ using qvac_errors::general_error::InvalidArgument;
 constexpr double MIN_THREADS = 1;
 constexpr double MAX_THREADS = 1024;
 
+inline std::string threadsRangeMessage() {
+  return "threads must be an integer between " +
+         std::to_string(static_cast<int>(MIN_THREADS)) + " and " +
+         std::to_string(static_cast<int>(MAX_THREADS));
+}
+
 /// `QVAC_CLASSIFICATION_TRACE=1` dumps each marshalled entry to stderr.
 struct JsClassifyOutputHandler
     : addon_cpp::out_handl::JsBaseOutputHandler<ClassifyOutput> {
@@ -149,8 +155,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       const double value = threads->as<double>(env);
       if (!std::isfinite(value) || value < MIN_THREADS || value > MAX_THREADS ||
           std::floor(value) != value)
-        throw StatusError(
-            InvalidArgument, "threads must be an integer between 1 and 1024");
+        throw StatusError(InvalidArgument, threadsRangeMessage());
       megaConfig.threads = static_cast<int>(value);
     }
   }
@@ -400,7 +405,7 @@ struct FitRequest {
 // direct binding callers.
 inline double wholeNumber(
     js_env_t* env, jsu::Number value, double min, double max,
-    const char* message) {
+    const std::string& message) {
   const double number = value.as<double>(env);
   if (!std::isfinite(number) || number < min || number > max ||
       std::trunc(number) != number)
@@ -420,11 +425,7 @@ inline FitRequest parseFitRequest(js_env_t* env, js_callback_info_t* info) {
     parsed.backendsDir = dir->as<std::string>(env);
   if (auto threads = request.getOptionalProperty<jsu::Number>(env, "threads"))
     parsed.threads = static_cast<int>(wholeNumber(
-        env,
-        *threads,
-        MIN_THREADS,
-        MAX_THREADS,
-        "threads must be an integer between 1 and 1024"));
+        env, *threads, MIN_THREADS, MAX_THREADS, threadsRangeMessage()));
   if (auto margin =
           request.getOptionalProperty<jsu::Number>(env, "marginBytes"))
     parsed.marginBytes = static_cast<uint64_t>(wholeNumber(

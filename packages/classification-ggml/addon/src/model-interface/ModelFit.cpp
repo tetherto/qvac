@@ -21,14 +21,14 @@ namespace classification_ggml::fit {
 namespace {
 
 using qvac_errors::StatusError;
-using qvac_errors::general_error::InvalidArgument;
+using qvac_errors::general_error::InternalError;
 
 uint64_t checkedSum(std::initializer_list<uint64_t> terms) {
   uint64_t total = 0;
   for (const uint64_t term : terms) {
     if (term > MAX_JS_SAFE_INTEGER - total)
       throw StatusError(
-          InvalidArgument, "assessFit: the footprint overflows a safe integer");
+          InternalError, "assessFit: the footprint overflows a safe integer");
     total += term;
   }
   return total;
@@ -69,9 +69,10 @@ FitDevice fitDevice(ggml_backend_dev_t device, uint64_t usedBytes) {
       totalBytes = static_cast<uint64_t>(hostTotal);
     }
   }
+  const std::string name = props.name != nullptr ? props.name : "";
   return {
-      props.device_id != nullptr ? props.device_id : props.name,
-      props.name,
+      props.device_id != nullptr ? props.device_id : name,
+      name,
       unified,
       usedBytes,
       freeBytes,
@@ -117,12 +118,8 @@ FitResult assessModelFit(
             {footprint.deviceWeightBytes, footprint.deviceComputeBytes})));
   }
   rows.push_back(fitDevice(host, hostBytes));
-  for (const FitDevice& row : rows) {
-    if (row.freeBytes == 0 || row.freeBytes > MAX_JS_SAFE_INTEGER ||
-        row.totalBytes > MAX_JS_SAFE_INTEGER) {
-      return result;
-    }
-  }
+  if (!memoryIsReadable(rows))
+    return result;
 
 #if defined(__APPLE__) && TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
   capToAppLimit(rows, static_cast<uint64_t>(os_proc_available_memory()));
