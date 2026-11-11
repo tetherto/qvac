@@ -118,6 +118,18 @@ const SIDECAR_FAMILIES: readonly SidecarFamily[] = [
     bundlesByStem: {
       'audio8-codec-decoder': [{ sourceName: 'audio8-codec-decoder', targetSuffix: '' }]
     }
+  },
+  {
+    // The AudioGen addon decodes ACE-Step's latent on this bundle when it sits
+    // beside the VAE GGUF as `vae-decoder.mlmodelc`, and on ggml otherwise.
+    // The bundle was published after the GGUF, in a later registry directory.
+    source: 's3',
+    root: 'qvac_models_compiled/ggml/acestep/2026-10-28/',
+    pathPattern: /\/ggml\/acestep\//,
+    stemPattern: /^(vae)-BF16\.gguf$/,
+    bundlesByStem: {
+      vae: [{ sourceName: 'vae-decoder', targetSuffix: '-decoder' }]
+    }
   }
 ]
 
