@@ -44,12 +44,9 @@ test('LLM and embedding backend names match their addon allow-list', (t) => {
     for (const backend of ['cuda', 'vulkan', 'metal', 'opencl', 'auto']) {
       t.alike(schema.parse({ backend: [backend] }).backend, [backend])
     }
-    for (const backend of ['cpu', 'hip', 'rocm', 'sycl', 'unknown']) {
+    for (const backend of ['cpu', 'hip', 'rocm', 'sycl', 'xdna', 'unknown']) {
       t.is(schema.safeParse({ backend: [backend] }).success, false)
     }
-  }
-  for (const schema of [llmConfigSchema, embedConfigSchema]) {
-    t.is(schema.safeParse({ backend: ['xdna'] }).success, false)
   }
 })
 

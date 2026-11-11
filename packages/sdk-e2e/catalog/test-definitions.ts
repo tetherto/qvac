@@ -117,6 +117,7 @@ export const modelLoadLlmNpuDevice: TestDefinition = {
   params: {},
   expectation: { validation: 'type', expectedType: 'string' },
   steps: loadsWithConfig('llm', { verbosity: 0, ctx_size: 2048, device: 'npu' }),
+  finally: [{ call: { method: 'unloadModel', params: { modelId: '$modelId?' } } }],
   metadata: {
     category: 'model',
     dependency: 'none',
