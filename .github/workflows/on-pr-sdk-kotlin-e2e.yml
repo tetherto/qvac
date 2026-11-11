@@ -62,29 +62,8 @@ jobs:
           # Drops `tools` from the action's default: the obsolete SDK Tools
           # package is gone from Google's repository and fails provisioning.
           packages: platform-tools
-      # Installs this commit's @qvac/sdk and @qvac/inference as
-      # pr-checks-sdk-kotlin.yml does. The @qvac/sdk version package.json pins
-      # is not on npm yet on a release PR, so the Gradle npm install would fail.
       - name: Build and install the in-repo @qvac/sdk and @qvac/inference
-        working-directory: ${{ github.workspace }}
-        run: |
-          set -euo pipefail
-          pushd packages/sdk
-          npm run sdk-source:workspace
-          npx tsc --project tsconfig.json
-          npm run postcompile:aliases
-          git checkout -- package.json
-          sdk_tgz=$(npm pack --ignore-scripts --silent)
-          popd
-
-          pushd packages/inference
-          inf_tgz=$(npm pack --ignore-scripts --silent)
-          popd
-
-          pushd packages/sdk-kotlin
-          npm pkg set "overrides.@qvac/inference=file:../inference/${inf_tgz}"
-          npm install --ignore-scripts --legacy-peer-deps --no-package-lock "../sdk/${sdk_tgz}"
-          popd
+        run: ./scripts/install-workspace-sdk.sh
       # packages/sdk is built above, so Gradle skips its rebuild.
       - name: Run shared cross-client corpus
         run: >-

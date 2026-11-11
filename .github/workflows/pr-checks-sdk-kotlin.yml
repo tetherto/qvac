@@ -177,28 +177,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Build @qvac/sdk against the in-repo @qvac/inference. sdk-source:workspace
-          # installs and builds the sibling engine, rewrites the SDK's
-          # @qvac/inference to file:../inference, and installs the SDK with
-          # --install-links (copying the engine in, as the mobile bundle steps
-          # need), so tsc sees this commit's inference surface. Restore the
-          # published range before packing so the tarball is self-contained.
-          # Skip lint; sdk-pod-checks owns the SDK's lint.
-          pushd packages/sdk
-          npm run sdk-source:workspace
-          npx tsc --project tsconfig.json
-          npm run postcompile:aliases
-          git checkout -- package.json
-          sdk_tgz=$(npm pack --ignore-scripts --silent)
-          popd
-
-          # Pack the in-repo @qvac/inference the workspace link step just built,
-          # to point the Kotlin worker bundle's transitive @qvac/inference at
-          # this commit's engine rather than a published release.
-          pushd packages/inference
-          inf_tgz=$(npm pack --ignore-scripts --silent)
-          popd
-
           pushd packages/sdk-kotlin
           # Validate the ship contract on the committed registry pin first — a
           # pure package.json check with no install — so the Kotlin runtime
@@ -208,19 +186,7 @@ jobs:
           # directly so no separate Gradle JVM starts.
           node scripts/check-version-alignment.mjs
 
-          # @qvac/inference is transitive here (via @qvac/sdk), so an override is
-          # allowed (npm rejects one for a direct dependency), and it points the
-          # worker bundle at this commit's engine rather than a published release.
-          npm pkg set "overrides.@qvac/inference=file:../inference/${inf_tgz}"
-
-          # Swap @qvac/sdk for the packed tarball. A bare file:../sdk dependency
-          # symlinks the package but does not install its own dependencies
-          # (bare-rpc, @qvac/inference, ...) up into sdk-kotlin, and npm rejects
-          # an overrides entry for a direct dependency (EOVERRIDE). A tarball
-          # resolves the full tree the way a registry install would, but from
-          # this commit's SDK — so a release-sdk-* PR whose @qvac/sdk is not yet
-          # on npm still installs.
-          npm install --ignore-scripts --legacy-peer-deps --no-package-lock "../sdk/${sdk_tgz}"
+          ./scripts/install-workspace-sdk.sh
 
           # The configuration cache lets tasks of one project run in parallel.
           # buildWorkspaceSdk is excluded because the steps above already
