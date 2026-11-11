@@ -48,6 +48,8 @@ Pass an embeddings port to `createRag()` and `ingest()` accepts plain text or pr
 
 ```typescript
 const rag = createRag({ corestore, embeddings: port })
+await rag.ready()
+await rag.createNamespace({ name: 'handbook', space: port.space })
 
 const { documents, skipped, cancelled } = await rag.ingest(
   { namespace: 'handbook', documents: [{ id: 'leave-policy', text }] },
@@ -58,7 +60,7 @@ const hits = await rag.search({ scope: { namespace: 'handbook' }, query: 'leave 
 
 ## Indexed Search With TurboVec
 
-When the optional peer `@qvac/turbovec-ggml` is installed, each namespace gets a TurboVec index derived from HyperDB, and candidates are rescored exactly against the stored vectors. Pass `index.dir` to keep snapshots between runs, and pick `q8` (default), `f32`, `turbovec-q4` or `turbovec-q2` storage per namespace. Without the peer, search falls back to an exact scan.
+On Bare, when the optional peer `@qvac/turbovec-ggml` is installed and loads, each namespace gets a TurboVec index derived from HyperDB, and candidates are rescored exactly against the stored vectors. Pass `index.dir` to keep snapshots between runs, and pick `q8` (default), `f32`, `turbovec-q4` or `turbovec-q2` storage per namespace. On Node, or without the peer, search falls back to an exact scan.
 
 ```typescript
 const rag = createRag({ corestore, index: { dir: './rag-index', snapshotEvery: 256 } })

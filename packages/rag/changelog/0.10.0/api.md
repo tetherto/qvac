@@ -22,6 +22,8 @@ PR: [#5671](https://github.com/tetherto/qvac/pull/5671)
 
 ```typescript
 const rag = createRag({ corestore, embeddings: port })
+await rag.ready()
+await rag.createNamespace({ name: 'handbook', space: port.space })
 
 const { documents, skipped, cancelled } = await rag.ingest(
   { namespace: 'handbook', documents: [{ id: 'leave-policy', text }] },
