@@ -154,7 +154,8 @@ export const ERROR_CODES = {
 
   // Model registry query (53,950-54,000)
   QVAC_MODEL_REGISTRY_QUERY_FAILED: 53950,
-  QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND: 53951
+  QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND: 53951,
+  QVAC_MODEL_REGISTRY_BUSY: 53952
 } as const
 
 const errorDefinitions: ErrorCodesMap = {
@@ -749,7 +750,18 @@ const errorDefinitions: ErrorCodesMap = {
     name: 'QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND',
     message: (registrySource: string, registryPath: string) =>
       `QVAC model registry has no model at ${registrySource}/${registryPath}`
+  },
+  [ERROR_CODES.QVAC_MODEL_REGISTRY_BUSY]: {
+    name: 'QVAC_MODEL_REGISTRY_BUSY',
+    message: modelRegistryBusyMessage
   }
+}
+
+function modelRegistryBusyMessage(holder: string, waitedMs: number): string {
+  const waited = `${Math.round(waitedMs / 1000)}s`
+  return holder === 'legacy'
+    ? `Another QVAC process on an older SDK holds the model registry until it exits; gave up after ${waited}. Close or upgrade that process, then retry.`
+    : `Another QVAC process is using the model registry; gave up after ${waited}. Retry once it finishes.`
 }
 
 addCodes(errorDefinitions, { name: 'qvac-inference', version: '1.0.0' })

@@ -18,7 +18,7 @@ import {
   getCoremlSidecarSpec,
   getCoremlSetKey
 } from '@/handlers/load-model/coreml-sidecars'
-import { getRegistryClient } from '@/runtime/registry-client'
+import { acquireRegistryClient } from '@/runtime/registry-client'
 import { getRuntimeContext } from '@/runtime/state'
 
 type CacheStatusResult = {
@@ -133,7 +133,11 @@ async function handleOptionalCoremlModel(model: RegistryItem): Promise<CacheStat
         filename
       )
       await fsPromises.access(primaryPath)
-      const set = await findCoremlCompanionSet(await getRegistryClient(), model, platform)
+      let set: Awaited<ReturnType<typeof findCoremlCompanionSet>>
+      {
+        await using lease = await acquireRegistryClient({ wait: 'query' })
+        set = await findCoremlCompanionSet(lease.client, model, platform)
+      }
       if (set) {
         const status = await handleCompanionSetModel(set, model.registryPath, model.addon)
         if (status.isCached) return status

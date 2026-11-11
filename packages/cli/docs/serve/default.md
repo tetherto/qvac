@@ -672,6 +672,9 @@ Entries are registry models, not `serve.models` aliases. To call one, add an ali
 is `registry://<registrySource>/<registryPath>`.
 
 The first request after start-up connects to the registry over P2P and can take several seconds.
+Only one process on a machine can use the registry at a time. While another QVAC process is using
+it, a request waits up to a minute, then returns `503 registry_busy`. When that process runs the
+same SDK, the response carries `Retry-After`. Disconnecting stops the wait.
 
 ```bash
 curl -sS "http://localhost:11435/qvac/v1/registry/models?addon=llm&search=qwen3&limit=1"
@@ -710,6 +713,7 @@ curl -sS "http://localhost:11435/qvac/v1/registry/models?addon=llm&search=qwen3&
 | 400  | `invalid_limit`         | `limit` is not a positive integer            |
 | 400  | `invalid_offset`        | `offset` is not a non-negative integer       |
 | 502  | `registry_query_failed` | The registry could not be reached or queried |
+| 503  | `registry_busy`         | Another QVAC process kept the registry       |
 
 ## `GET /qvac/v1/registry/models/lookup`
 
@@ -730,6 +734,7 @@ curl -sS -G http://localhost:11435/qvac/v1/registry/models/lookup \
 | 400  | `invalid_registry_path`   | `registryPath` is missing or empty           |
 | 404  | `model_not_found`         | No registry entry has this source and path   |
 | 502  | `registry_query_failed`   | The registry could not be reached or queried |
+| 503  | `registry_busy`           | Another QVAC process kept the registry       |
 
 ## Music: `/qvac/v1/audio/*`
 

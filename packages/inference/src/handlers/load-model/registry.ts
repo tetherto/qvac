@@ -12,7 +12,7 @@ import {
 } from '@/utils/index'
 import { getSingleFileCachePath } from '@/utils/cache/paths'
 import { getModelByPath, type RegistryItem } from '@/models/registry/index'
-import { getRegistryClient } from '@/runtime/registry-client'
+import { acquireRegistryClient, type RegistryWait } from '@/runtime/registry-client'
 import { getRuntimeContext } from '@/runtime/state'
 import {
   createRegistryDownloadKey,
@@ -34,6 +34,7 @@ import {
 import {
   DownloadCancelledError,
   ModelNotFoundError,
+  ModelRegistryBusyError,
   RegistryDownloadFailedError
 } from '@/errors/index'
 import { getEngineLogger } from '@/logging/index'
@@ -48,7 +49,11 @@ const logger = getEngineLogger()
 /**
  * Find all shards for a model using path prefix query.
  */
-export async function findModelShards(registryPath: string): Promise<
+export async function findModelShards(
+  registryPath: string,
+  signal?: AbortSignal,
+  wait: RegistryWait = 'download'
+): Promise<
   {
     path: string
     source: string
@@ -57,8 +62,6 @@ export async function findModelShards(registryPath: string): Promise<
     blobBinding: QVACBlobBinding | undefined
   }[]
 > {
-  const client = await getRegistryClient()
-
   const shardInfo = detectShardedModel(registryPath.split('/').pop() || '')
   if (!shardInfo.isSharded) {
     throw new RegistryDownloadFailedError(`Not a sharded model path: ${registryPath}`)
@@ -69,10 +72,14 @@ export async function findModelShards(registryPath: string): Promise<
 
   logger.info(`🔍 Finding shards with prefix: ${basePath}`)
 
-  const shards: QVACModelEntry[] = await client.findModels({
-    gte: { path: basePath },
-    lte: { path: basePath + '\uffff' }
-  })
+  let shards: QVACModelEntry[]
+  {
+    await using lease = await acquireRegistryClient({ wait, signal })
+    shards = await lease.client.findModels({
+      gte: { path: basePath },
+      lte: { path: basePath + '\uffff' }
+    })
+  }
 
   const sortedShards = shards
     .filter((s) => {
@@ -161,7 +168,7 @@ async function downloadShardedFilesFromRegistry(
       throw new RegistryDownloadFailedError(`Not a sharded model: ${filename}`)
     }
 
-    const remoteShards = await findModelShards(registryPath)
+    const remoteShards = await findModelShards(registryPath, signal)
 
     if (remoteShards.length === 0) {
       throw new ModelNotFoundError(`No shards found for ${registryPath}`)
@@ -415,11 +422,15 @@ export async function downloadModelFromRegistry(
             })
           }
 
-          const coremlSet = await findCoremlCompanionSet(
-            await getRegistryClient(),
-            modelMetadata,
-            platform
-          )
+          let coremlSet: Awaited<ReturnType<typeof findCoremlCompanionSet>>
+          {
+            // Released before the set downloads, which lease the client per file.
+            await using lease = await acquireRegistryClient({
+              wait: 'download',
+              signal: ctx.signal
+            })
+            coremlSet = await findCoremlCompanionSet(lease.client, modelMetadata, platform)
+          }
           if (coremlSet) {
             const modelPath = await downloadCompanionSetFromRegistry({
               companionSet: coremlSet,
@@ -440,6 +451,8 @@ export async function downloadModelFromRegistry(
           if (ctx.signal.aborted || error instanceof DownloadCancelledError) {
             throw new DownloadCancelledError()
           }
+          // The GGUF needs the same registry, so it would wait just as long.
+          if (error instanceof ModelRegistryBusyError) throw error
           logger.warn('Core ML sidecar unavailable; loading the GGUF without it', {
             registryPath,
             error

@@ -4,7 +4,7 @@ import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import type { AbortSignal } from 'bare-abort-controller'
 import { measureChecksum, calculatePercentage } from '@/utils/index'
-import { getRegistryClient } from '@/runtime/registry-client'
+import { acquireRegistryClient } from '@/runtime/registry-client'
 import { getConfig } from '@/runtime/state'
 import { buildRegistryClientOptions } from '@/handlers/load-model/registry-client-options'
 import { ChecksumValidationFailedError, DownloadCancelledError } from '@/errors/index'
@@ -105,8 +105,6 @@ export async function downloadSingleFileFromRegistry(
     throw new DownloadCancelledError()
   }
 
-  const client = await getRegistryClient()
-
   const dir = path.dirname(modelPath)
   await fsPromises.mkdir(dir, { recursive: true })
 
@@ -131,12 +129,16 @@ export async function downloadSingleFileFromRegistry(
     shouldClearCache
   })
 
-  if (blobBinding) {
-    logger.info(`📥 Downloading blob directly: ${modelFileName}`)
-    await client.downloadBlob(blobBinding, clientOptions)
-  } else {
-    logger.info(`📥 Downloading from registry: ${registryPath}`)
-    await client.downloadModel(registryPath, registrySource, clientOptions)
+  {
+    // Held only for the transfer: the checks below need no registry.
+    await using lease = await acquireRegistryClient({ wait: 'download', signal })
+    if (blobBinding) {
+      logger.info(`📥 Downloading blob directly: ${modelFileName}`)
+      await lease.client.downloadBlob(blobBinding, clientOptions)
+    } else {
+      logger.info(`📥 Downloading from registry: ${registryPath}`)
+      await lease.client.downloadModel(registryPath, registrySource, clientOptions)
+    }
   }
 
   logger.info(`✅ Downloaded to ${modelPath}`)

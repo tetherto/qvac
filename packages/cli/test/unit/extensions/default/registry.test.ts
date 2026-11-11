@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { tmpdir } from 'node:os'
 import type { FastifyInstance } from 'fastify'
 import {
+  ModelRegistryBusyError,
   ModelRegistryModelNotFoundError,
   type ModelRegistryEntry,
   type ModelRegistrySearchParams
@@ -76,6 +77,8 @@ describe('registry routes', () => {
   let app: FastifyInstance
   let calls: ModelRegistrySearchParams[]
   let fail: boolean
+  let busy: 'current' | 'legacy' | null = null
+  let bound: string[] = []
 
   before(async () => {
     app = await buildServer({
@@ -85,23 +88,42 @@ describe('registry routes', () => {
       quiet: true,
       extensions: []
     })
+    // Records the ids the routes bind for disconnect cancellation.
+    app.addHook('onRequest', (req, _reply, done) => {
+      const bindCancel = req.bindCancel
+      req.bindCancel = (requestId) => {
+        bound.push(requestId)
+        bindCancel(requestId)
+      }
+      done()
+    })
+    const withId = <T>(promise: Promise<T>, requestId: string) =>
+      Object.assign(promise, { requestId })
     await app.register(
       registryRoutes({
-        // lunte-disable-next-line require-await
-        search: async (params) => {
-          calls.push(params)
-          if (fail) throw new Error('registry offline')
-          return ENTRIES
-        },
-        // lunte-disable-next-line require-await
-        getModel: async (registryPath, registrySource) => {
-          if (fail) throw new Error('registry offline')
-          const entry = ENTRIES.find(
-            (m) => m.registrySource === registrySource && m.registryPath === registryPath
+        search: (params) =>
+          withId(
+            Promise.resolve().then(() => {
+              calls.push(params)
+              if (busy) throw new ModelRegistryBusyError(busy, 60_000)
+              if (fail) throw new Error('registry offline')
+              return ENTRIES
+            }),
+            'search-1'
+          ),
+        getModel: (registryPath, registrySource) =>
+          withId(
+            Promise.resolve().then(() => {
+              if (busy) throw new ModelRegistryBusyError(busy, 60_000)
+              if (fail) throw new Error('registry offline')
+              const entry = ENTRIES.find(
+                (m) => m.registrySource === registrySource && m.registryPath === registryPath
+              )
+              if (!entry) throw new ModelRegistryModelNotFoundError(registrySource, registryPath)
+              return entry
+            }),
+            'lookup-1'
           )
-          if (!entry) throw new ModelRegistryModelNotFoundError(registrySource, registryPath)
-          return entry
-        }
       })
     )
     await app.ready()
@@ -113,6 +135,8 @@ describe('registry routes', () => {
   function get(url: string) {
     calls = []
     fail = false
+    busy = null
+    bound = []
     return app.inject({ method: 'GET', url })
   }
 
@@ -163,6 +187,36 @@ describe('registry routes', () => {
       const res = await get(`/qvac/v1/registry/models/lookup?${query}`)
       assert.equal(res.statusCode, 404, query)
       assert.equal((res.json() as { error: { code: string } }).error.code, 'model_not_found')
+    }
+  })
+
+  it('binds each query so a client disconnect cancels its wait', async () => {
+    await get('/qvac/v1/registry/models')
+    assert.deepEqual(bound, ['search-1'])
+    await get(
+      `/qvac/v1/registry/models/lookup?registrySource=hf&registryPath=${encodeURIComponent('org/b/blob/1/b.gguf')}`
+    )
+    assert.deepEqual(bound, ['lookup-1'])
+  })
+
+  it('maps a busy registry to 503 registry_busy on both routes', async () => {
+    for (const holder of ['current', 'legacy'] as const) {
+      for (const url of [
+        '/qvac/v1/registry/models',
+        '/qvac/v1/registry/models/lookup?registrySource=hf&registryPath=x'
+      ]) {
+        calls = []
+        fail = false
+        busy = holder
+        const res = await app.inject({ method: 'GET', url })
+        busy = null
+        assert.equal(res.statusCode, 503, url)
+        const body = res.json() as { error: { code: string; message: string } }
+        assert.equal(body.error.code, 'registry_busy')
+        assert.match(body.error.message, /Another QVAC process/)
+        // Only a holder on this SDK hands the registry over, so only then is a retry soon useful.
+        assert.equal(res.headers['retry-after'], holder === 'current' ? '5' : undefined, holder)
+      }
     }
   })
 

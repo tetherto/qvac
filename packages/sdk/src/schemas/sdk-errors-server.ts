@@ -137,7 +137,8 @@ export const SDK_SERVER_ERROR_CODES = {
   // QVAC Model Registry Operations (53,950-54,000)
   // Note: Registry client errors (19,001-20,000) are re-thrown directly
   QVAC_MODEL_REGISTRY_QUERY_FAILED: 53950,
-  QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND: 53951
+  QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND: 53951,
+  QVAC_MODEL_REGISTRY_BUSY: 53952
 } as const
 
 const serverErrorDefinitions: ErrorCodesMap = {
@@ -670,6 +671,14 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: 'QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND',
     message: (registrySource: string, registryPath: string) =>
       `QVAC model registry has no model at ${registrySource}/${registryPath}`
+  },
+  // Owned by @qvac/inference, which registers it first; kept here for the contract export.
+  [SDK_SERVER_ERROR_CODES.QVAC_MODEL_REGISTRY_BUSY]: {
+    name: 'QVAC_MODEL_REGISTRY_BUSY',
+    message: (holder: string, waitedMs: number) =>
+      holder === 'legacy'
+        ? `Another QVAC process on an older SDK holds the model registry until it exits; gave up after ${Math.round(waitedMs / 1000)}s. Close or upgrade that process, then retry.`
+        : `Another QVAC process is using the model registry; gave up after ${Math.round(waitedMs / 1000)}s. Retry once it finishes.`
   }
 }
 
