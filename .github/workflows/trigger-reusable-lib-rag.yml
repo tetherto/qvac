@@ -120,7 +120,6 @@ jobs:
         uses: ./.github/actions/setup-bare-tooling
         with:
           node-version: lts/*
-          check-latest: true
 
       # --ignore-scripts also skips the package's own `prepare`; the build
       # step below replaces it.
