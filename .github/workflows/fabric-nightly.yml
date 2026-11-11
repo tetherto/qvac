@@ -5,6 +5,8 @@ name: Fabric Nightly
 # only. The branch comes from .github/fabric-nightly.json, updated per rebase.
 # Results are in this run's summary; there is no notification.
 on:
+  push:
+    branches: [infra/fabric-nightly]
   schedule:
     - cron: "0 0 * * *"
   workflow_dispatch:
