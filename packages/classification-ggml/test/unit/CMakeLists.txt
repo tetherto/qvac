@@ -16,10 +16,15 @@ set(TEST_SOURCES
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/megaloc/MegaLocModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/megaloc/MegaLocPreprocessor.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/GgmlBackend.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelFootprint.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelFit.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/bridgedepth/BridgeDepthGraph.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/bridgedepth/BridgeDepthModel.cpp
   megaloc_test.cpp
   bridgedepth_test.cpp
+  footprint_test.cpp
+  fit_test.cpp
+  mobilenet_gguf_test.cpp
 )
 
 add_executable(addon-test ${TEST_SOURCES})

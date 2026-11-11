@@ -168,7 +168,10 @@ async function ensureRPC(): Promise<RPC> {
     if (startGeneration !== generation) throw new WorkerShutdownError()
     const timeout = preloaded?.config?.rpcInitTimeoutMs ?? DEFAULT_WORKER_START_TIMEOUT_MS
     const launchedAt = Date.now()
-    const ipc = await startWorker(timeout)
+    const ipc = await startWorker(timeout).catch((error: unknown) => {
+      if (startGeneration !== generation) throw new WorkerShutdownError(error)
+      throw error
+    })
     let workerError: unknown
     let exitCode: number | undefined
     ipc.on('error', (error: unknown) => {

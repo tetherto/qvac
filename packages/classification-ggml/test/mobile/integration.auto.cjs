@@ -15,6 +15,10 @@ async function runErrorCases (options = {}) { // eslint-disable-line no-unused-v
   return runIntegrationModule('../integration/error-cases.test.js', options)
 }
 
+async function runFit (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/fit.test.js', options)
+}
+
 async function runMegaloc (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/megaloc.test.js', options)
 }
