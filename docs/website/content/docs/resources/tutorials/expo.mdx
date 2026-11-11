@@ -43,11 +43,11 @@ Let's use the official Expo scaffold to create a minimal app structure.
 Create a new project:
 
 ```bash
-npx create-expo-app@latest qvac-expo-chat --template blank-typescript@sdk-58
+npx create-expo-app@latest qvac-expo-chat --template blank-typescript@sdk-54
 cd qvac-expo-chat
 ```
 
-This creates a minimal TypeScript Expo project with a single `App.tsx` entry point. QVAC needs Expo SDK 58 or newer.
+This creates a minimal TypeScript Expo project with a single `App.tsx` entry point. This tutorial uses QVAC SDK 0.23, which supports Expo SDK 54.
 </Step>
 
 <Step>
@@ -68,74 +68,25 @@ At this point, you should see the default Expo screen rendered on your phone. Th
 
 ## Step 3: install QVAC
 
-In this step we'll add the QVAC SDK dependency and complete the Expo-specific installation steps required for running local inference on a physical mobile device.
+In this step we'll add QVAC SDK 0.23 to the project and complete the Expo-specific setup for running local inference on a physical device.
+
+<Callout type="info">
+This tutorial is pinned to `@qvac/sdk` 0.23. For the Expo SDK and `react-native-bare-kit` versions other QVAC releases need, see the [Expo compatibility table](/sdk/js-ts-sdk#expo).
+</Callout>
 
 <Steps>
 <Step>
-Install the SDK:
+Install the SDK at the version this tutorial uses:
 
 ```bash
-npm i @qvac/sdk
+npm i @qvac/sdk@0.23.0 'bare-rpc@^1.3.2'
 ```
 </Step>
 
 <Step>
-Add the following peer dependencies to your `package.json`:
-
-```json title="package.json"
-{
-  "dependencies": {
-    "@qvac/sdk": "^0.7.0",
-    "bare-rpc": "^1.0.0", // [!code ++]
-    "expo": "~58.0.23",
-    "expo-status-bar": "~58.0.4",
-    "react": "19.3.0",
-    "react-native": "0.88.1",
-    "react-native-bare-kit": "^0.17.1" // [!code ++]
-  },
-  "devDependencies": {
-    "@types/react": "~19.2.10",
-    "typescript": "~5.9.2"
-  }
-}
-```
-
-With pnpm or bun's isolated linker, also add `bare-stow-runtime` and `bare-stow-host`, which the generated worker files import. Yarn needs `nodeLinker: node-modules` in `.yarnrc.yml`, because the bundler reads packages from `node_modules`.
-</Step>
-
-<Step>
-Install the dependencies:
-
-```bash
-npm install
-npx expo install expo-file-system expo-build-properties expo-device
-```
-
-<Callout type="success">
-**Tip:** use `npx expo install` for all `expo-*` packages to ensure compatibility with your project's Expo SDK version.
-</Callout>
-</Step>
-
-<Step>
-Configure `expo-build-properties` and add `@qvac/sdk/expo-plugin` to the `plugins` array in your `app.json`:
-
-```json title="app.json"
-{
-  "expo": {
-    "plugins": [
-      ["expo-build-properties", { // [!code ++]
-        "android": { "minSdkVersion": 29 } // [!code ++]
-      }], // [!code ++]
-      ["@qvac/sdk/expo-plugin", { "installMissingPrebuilds": true }] // [!code ++]
-    ]
-  }
-}
-```
-
-</Step>
-
-<Step>
-Create `qvac.config.json` in the project root and enable only the LLM plugin used by this tutorial:
+Follow the [JS/TS SDK — Expo](/sdk/js-ts-sdk#expo) setup up to and including `npx expo prebuild`, with two changes for this tutorial:
+- In `app.json`, register the plugin as `["@qvac/sdk/expo-plugin", { "installMissingPrebuilds": true }]`, so prebuild adds the native packages QVAC needs.
+- Before you prebuild, create `qvac.config.json` in the project root to enable only the LLM plugin this tutorial uses:
 
 ```json title="qvac.config.json"
 {
@@ -143,9 +94,9 @@ Create `qvac.config.json` in the project root and enable only the LLM plugin use
 }
 ```
 
-Without a `plugins` selection, QVAC bundles every built-in AI capability. Keeping this tutorial to the LLM plugin avoids linking native engines the app does not use.
+Without a `plugins` selection, QVAC bundles every built-in AI capability. Selecting only the LLM plugin avoids linking native engines the app does not use.
 
-QVAC ships part of its Android and iOS binaries as separate packages, and every app needs at least one of them. The `installMissingPrebuilds` option in the `app.json` step above lets `npx expo prebuild` add them to `package.json`, at the right version, with your project's package manager (npm 7+, pnpm, bun, or Yarn Berry). The option is off by default because it changes `package.json` and needs network access during `expo prebuild`.
+QVAC ships part of its Android and iOS binaries as separate packages, and every app needs at least one of them. The `installMissingPrebuilds` option lets `npx expo prebuild` add them to `package.json`, at the right version, with your project's package manager (npm 7+, pnpm, bun, or Yarn Berry). The option is off by default because it changes `package.json` and needs network access during `expo prebuild`.
 
 To add the packages yourself instead, use `"@qvac/sdk/expo-plugin"` without the option, add them as dependencies, then run `npm install`. This app needs:
 
@@ -162,15 +113,20 @@ Both are needed even when you prebuild only one platform, because the worker bun
 </Step>
 
 <Step>
-Prebuild your project to generate the native files:
+Check that `package.json` now lists these versions:
 
-```bash
-npx expo prebuild
+```json title="package.json"
+{
+  "dependencies": {
+    "@qvac/sdk": "^0.23.0",
+    "bare-rpc": "^1.3.2",
+    "expo": "~54.0.33",
+    "react-native-bare-kit": "^0.16.0"
+  }
+}
 ```
 
-Prebuild also writes Bare Kit and QVAC's native addons into `android/qvac-bare-kit` and `ios/QvacBareKit`, and adds them to the app. Builds download Bare Kit from JitPack on Android and from GitHub on iOS.
-
-Prebuild writes the QVAC worker into `node_modules/@qvac/sdk/dist/worker-mobile`. Reinstalling packages clears it, so run `npx expo prebuild` again after an install before building.
+If `expo` shows another major version, your project uses a different Expo SDK than QVAC 0.23 supports. Create the project again from Step 2.
 </Step>
 </Steps>
 
