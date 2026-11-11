@@ -1,0 +1,166 @@
+---
+title: "@qvac/asr-ggml — Parakeet"
+titleStyle: code
+description: Automatic speech recognition (ASR) for speech-to-text with speaker diarization, using NVIDIA Parakeet models.
+schemaType: APIReference
+---
+
+## Overview
+
+[Bare module](https://bare.pears.com) that adds support for transcription in QVAC using [NVIDIA Parakeet](https://huggingface.co/collections/nvidia/parakeet-asr-models-66b50d5a37b9580ee4ba93c2) ASR models via the GGML-based [`parakeet-cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp/tree/master/engines/parakeet) inference engine.
+
+Parakeet ships in `@qvac/asr-ggml`, which serves the Whisper, Parakeet, and MOSS-Transcribe-Diarize engines behind a single class, `ASRGgml`. Select Parakeet with `engine: 'parakeet'`. `@qvac/asr-ggml` replaces `@qvac/transcription-parakeet`, which used ONNX Runtime and multi-file `.onnx` models.
+
+## Models
+
+Each Parakeet variant is a single `.gguf` file. The addon detects the variant from the GGUF metadata, so there is no `modelType` to pass.
+
+| Variant | Languages | Use |
+| --- | --- | --- |
+| **TDT** (`parakeet-tdt-0.6b-v3`) | ~25 | Recommended default: punctuation, capitalization, and automatic language detection. |
+| **CTC** (`parakeet-ctc-0.6b`) | English | Fast transcription without punctuation or capitalization. |
+| **Unified** (`parakeet-unified-en-0.6b`) | English | One checkpoint for batch and cache-aware streaming. |
+| **TranscribePsy EU** (`transcribepsy-250m-eu`) | 25 European | Set `parakeetConfig.language` to `en`, `other`, or `auto`. |
+| **TranscribePsy EU-sub** (`transcribepsy-250m-eu-sub`) | 8 European | Distilled from TDT v3. |
+| **EOU** (`parakeet-eou-120m-v1`) | English | Streaming with native end-of-turn detection. |
+| **Indic Conformer CTC** (`indic-conformer-ctc`) | Indic | Set `parakeetConfig.language` (for example, `"hi"`). |
+| **Sortformer v1** (`sortformer-4spk-v1`) | n/a | Offline speaker diarization (up to 4 speakers). |
+| **Sortformer v2.1** (`diar_streaming_sortformer_4spk-v2.1`) | n/a | Streaming speaker diarization (up to 4 speakers). |
+| **Nemotron 3 Diarization** (`Nemotron-3-Diarization`) | n/a | Offline and streaming speaker diarization (up to 8 speakers). |
+
+The addon loads weights from local paths only and never downloads them. Get the GGUF files from the [QVAC model registry](https://github.com/tetherto/qvac/tree/main/packages/registry-server) or by converting NeMo checkpoints. For the staging scripts, see the [package README](https://github.com/tetherto/qvac/tree/main/packages/asr-ggml#staging-models).
+
+## Requirement
+
+Bare `>= v1.20`
+
+## Installation
+
+```bash
+npm i @qvac/asr-ggml
+```
+
+## Quickstart
+
+<Steps>
+
+<Step>
+If you don't have Bare runtime, install it:
+
+```bash
+npm i -g bare
+```
+</Step>
+
+<Step>
+Create a new project:
+
+```bash
+mkdir qvac-parakeet-quickstart
+cd qvac-parakeet-quickstart
+npm init -y
+```
+</Step>
+
+<Step>
+Install dependencies:
+
+```bash
+npm i @qvac/asr-ggml bare-fs bare-process
+```
+</Step>
+
+<Step>
+Place the TDT GGUF at `models/parakeet-tdt-0.6b-v3.q8_0.gguf`, and a 16 kHz mono 16-bit WAV file at `my-audio.wav`.
+</Step>
+
+<Step>
+Create `index.js`:
+</Step>
+
+<WrapCode>
+
+```js title="index.js" lineNumbers
+'use strict'
+
+const fs = require('bare-fs')
+const process = require('bare-process')
+const ASRGgml = require('@qvac/asr-ggml')
+
+async function main () {
+  const model = new ASRGgml({
+    files: { model: './models/parakeet-tdt-0.6b-v3.q8_0.gguf' },
+    config: {
+      engine: 'parakeet',
+      parakeetConfig: { useGPU: true, maxThreads: 4 }
+    }
+  })
+
+  await model.load()
+
+  // Skip the 44-byte WAV header: raw bytes are read as 16 kHz mono s16le
+  const audio = fs.readFileSync('./my-audio.wav').subarray(44)
+
+  const segments = []
+  const response = await model.run(new Uint8Array(audio))
+  await response
+    .onUpdate((out) => {
+      for (const s of Array.isArray(out) ? out : [out]) {
+        if (s.text && s.toAppend) segments.push(s)
+      }
+    })
+    .await()
+
+  console.log(segments.map((s) => s.text).join(''))
+
+  await model.unload()
+}
+
+main().catch(err => {
+  console.error(err)
+  process.exit(1)
+})
+```
+</WrapCode>
+
+<Step>
+Run `index.js`:
+
+```bash
+bare index.js
+```
+</Step>
+</Steps>
+
+## Usage
+
+### Configuration
+
+Pass Parakeet settings in `config.parakeetConfig`. Any key outside the documented set throws `INVALID_CONFIG` from the constructor.
+
+| Group | Keys |
+| --- | --- |
+| Compute | `maxThreads`, `useGPU`, `backend`, `seed` |
+| Audio | `sampleRate` (16000), `channels` (1) |
+| Output | `captionEnabled`, `timestampsEnabled` |
+| Language | `language` (Indic Conformer CTC and TranscribePsy EU) |
+| Streaming | `streaming`, `streamingChunkMs`, `streamingEmitPartials`, and the `streamingEnergyVad*` and context keys |
+| Diarization | `diarizationThreshold`, `diarizationMinSegmentMs` |
+| Speaker-attributed ASR | `speakerAttribution: { modelPath, mergeSameSpeaker?, minSegmentMs?, padSegmentMs? }` |
+
+### Audio input
+
+Parakeet takes 16 kHz mono audio. `run()` and `runStreaming()` accept a stream, an iterable, a single chunk, or an array of chunks:
+- `Float32Array`: f32 samples in `[-1, 1]`.
+- `Int16Array`: s16 samples.
+- `Uint8Array`: raw bytes, read as `s16le`.
+
+### Streaming
+
+Use `runStreaming()` for live audio, end-of-turn detection with the EOU model, and streaming diarization with Sortformer v2.1 or Nemotron 3 Diarization. Its options override the `streaming*` load-time keys per call, without the `streaming` prefix (for example, `chunkMs`).
+
+For the full API, configuration reference, Core ML encoder sidecars, and error codes, see the [package README](https://github.com/tetherto/qvac/tree/main/packages/asr-ggml).
+
+## More resources
+
+[Package at npm](https://www.npmjs.com/package/@qvac/asr-ggml)
