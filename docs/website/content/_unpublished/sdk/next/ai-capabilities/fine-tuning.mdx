@@ -29,18 +29,29 @@ For how to use each function, see [SDK — API reference](/sdk/reference/api/).
 
 You can load any `llama.cpp`-compatible [text-generation/chat](/sdk/ai-capabilities/text-generation) model that meets the following criteria:
 - **File format:** `*.gguf` (or use constants)
-- **Architecture:** `qwen3`, `gemma3`, or `bitnet`
+- **Architecture:** `qwen3`, `qwen35` (Qwen3.5, Qwen3.6, and Qwen3.8 dense), `qwen35moe` (Qwen3.6-35B-A3B), `gemma3`, `gemma4`, or `bitnet`
 - **Quantization:** `F32`, `F16`, `Q4_0`, `Q8_0`, `TQ1_0`, or `TQ2_0`
 
 <Callout type="info">
 
-In QVAC, not every model compatible with text generation/chat is also compatible with fine-tuning. Only those that meet all the criteria above are.
+In QVAC, not every model compatible with text generation/chat is also compatible with fine-tuning. Only those that meet all the criteria above are. `finetune()` checks the quantization first and the architecture second, and reports only the first failure: a model that fails both shows the architecture error only after you fix the quantization.
 
 </Callout>
 
-For models available as constants, see [SDK — Models](/sdk#models). Note that not every model constant is fine-tunable: for example, many Qwen3-4B/8B constants are `Q4_K_M`. Check a model's quantization with [`getModelInfo()`](/sdk/reference/api#getmodelinfo) before training.
+For models available as constants, see [SDK — Models](/sdk#models). Most LLM constants are `Q4_K_M`, `Q6_K`, or `UD` (`*_K_XL`) quantizations and can't be fine-tuned as shipped. The fine-tunable constants are:
+- `QWEN3_600M_INST_Q4`, `QWEN3_1_7B_INST_Q4`, `QWEN3_1_7B_INST_Q4_SHARD`, and `QWEN3_4B_INST_Q4_SHARD` (`Q4_0`)
+- `QWEN3_5_0_8B_MULTIMODAL_Q8_0`, `QWEN3_5_2B_MULTIMODAL_Q8_0`, and `GEMMA4_2B_MULTIMODAL_Q8_0` (`Q8_0`)
+- `BITNET_0_7B_BASE_TQ2_0`, `BITNET_1B_BASE_TQ2_0`, and `BITNET_B1_58_3B_BASE_TQ2_0` (`TQ2_0`)
+
+To fine-tune another model, pass a local `Q4_0` or `Q8_0` GGUF of a supported architecture as `modelSrc` (for example, the `Q4_0` file from `unsloth/Qwen3.5-9B-GGUF`). The quantization check reads `general.file_type` from the GGUF header, not the file name: for example, `QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL` is rejected despite `Q8` in its name. Check a model's quantization with [`getModelInfo()`](/sdk/reference/api#getmodelinfo) before training.
 
 ## Training
+
+### Context length
+
+`finetune()` trains at `options.contextLength` tokens per sequence (default: `128`), not at the `ctx_size` you set in `loadModel()`. The value is capped at the loaded context size. Set it to fit your longest training row:
+- **SFT:** rows longer than `contextLength` are skipped without a warning. If every row is skipped, training can't start.
+- **Causal:** the dataset must contain more than `contextLength + 1` tokens.
 
 ### SFT
 
