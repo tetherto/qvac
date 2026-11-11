@@ -1,9 +1,10 @@
 /**
  * @qvac/sdk/electron-forge
  *
- * Electron Forge plugin: bundles the QVAC worker, verifies its native addons,
- * then configures Electron Packager to tree-shake unused @qvac/* addons
- * (per-platform packages of split addons included) and non-target prebuilds.
+ * Electron Forge plugin: bundles the QVAC worker into `qvac/worker/` with
+ * bare-stow's `bare-sidecar` target, verifies its native addons, then
+ * configures Electron Packager to leave out the @qvac/* addon packages (the
+ * bundled worker carries their binaries) and other hosts' prebuilds.
  *
  * macOS universal (`arch: "universal"`) is not supported — native addon
  * prebuilds are arch-specific. Build darwin-arm64 and darwin-x64 separately.
@@ -194,41 +195,14 @@ function discoverQvacAddonPackages(projectDir) {
 }
 
 /**
- * Pure diff: addons that are installed but not in the required set.
- * Exposed for unit testing.
+ * Every installed @qvac addon, split addons' platform packages included. The
+ * bundled worker carries the binaries it loads in `qvac/worker/`, and nothing
+ * else in the app loads them.
  */
-function diffAddons(installed, required) {
-  const requiredSet = new Set(required)
-  const exclusions = []
-  for (const pkg of installed) {
-    if (!requiredSet.has(pkg)) exclusions.push(pkg)
-  }
-  return exclusions
-}
-
-/**
- * Computes the list of installed @qvac addons that aren't in `required`.
- * Logs include/exclude decisions for each discovered package.
- */
-function computeExclusions(required, projectDir) {
+function computeExclusions(projectDir) {
   const { addons } = discoverQvacAddonPackages(projectDir)
-
-  if (addons.length === 0) {
-    logger.warn('No @qvac addon packages discovered. Skipping addon exclusions.')
-    return []
-  }
-
-  const requiredSet = new Set(required)
-  const exclusions = []
-  for (const pkg of addons) {
-    if (requiredSet.has(pkg)) {
-      logger.info(`Including required addon: ${pkg}`)
-    } else {
-      logger.info(`Excluding unused addon: ${pkg}`)
-      exclusions.push(pkg)
-    }
-  }
-  return exclusions
+  for (const name of addons) logger.info(`Excluding ${name}`)
+  return addons
 }
 
 // ============================================
@@ -241,6 +215,10 @@ const MOBILE_PREBUILD_PATTERNS = [/[\\/]prebuilds[\\/]android-/, /[\\/]prebuilds
 /** Forge's default output dir — always exclude to avoid recursive packaging. */
 const OUT_DIR_PATTERN = /^\/out\//
 
+/** bundleSdk's scratch folders in `qvac/` (`.worker-<uuid>/`), which a killed run leaves behind. */
+const QVAC_SCRATCH_PATTERN =
+  /^[\\/]qvac[\\/]\.[^\\/]+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}([\\/]|$)/
+
 function toArray(value) {
   if (value === undefined) return []
   return Array.isArray(value) ? value : [value]
@@ -250,11 +228,18 @@ function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+/** The bundled worker's own addon binaries live under `qvac/worker/index.bundle.d/`. */
+const WORKER_DIR_PREFIX = '(?![\\\\/]qvac[\\\\/]worker[\\\\/])'
+
 function createAddonIgnorePatterns(exclusions) {
   const patterns = []
   for (const addon of exclusions) {
     const parts = addon.split('/').map(escapeRegExp)
-    patterns.push(new RegExp(`[\\\\/]node_modules[\\\\/]${parts.join('[\\\\/]')}([\\\\/]|$)`))
+    patterns.push(
+      new RegExp(
+        `^${WORKER_DIR_PREFIX}.*[\\\\/]node_modules[\\\\/]${parts.join('[\\\\/]')}([\\\\/]|$)`
+      )
+    )
   }
   return patterns
 }
@@ -271,6 +256,7 @@ function createIgnore(exclusions, existingIgnore) {
     return (filePath) => {
       if (existingIgnore(filePath)) return true
       if (OUT_DIR_PATTERN.test(filePath)) return true
+      if (QVAC_SCRATCH_PATTERN.test(filePath)) return true
       for (const pattern of addonIgnorePatterns) {
         if (pattern.test(filePath)) return true
       }
@@ -284,6 +270,7 @@ function createIgnore(exclusions, existingIgnore) {
   return [
     ...toArray(existingIgnore),
     OUT_DIR_PATTERN,
+    QVAC_SCRATCH_PATTERN,
     ...MOBILE_PREBUILD_PATTERNS,
     ...addonIgnorePatterns
   ]
@@ -360,6 +347,10 @@ function getDirSize(dirPath) {
   return size
 }
 
+function bareHostPlatform(platform) {
+  return platform === 'mas' ? 'darwin' : platform
+}
+
 /** Prunes prebuilds for a given path, keeping only target platform-arch. */
 function prunePrebuildsForPath(buildPath, platform, arch) {
   const nodeModulesPath = path.join(buildPath, 'node_modules')
@@ -369,7 +360,7 @@ function prunePrebuildsForPath(buildPath, platform, arch) {
     return { deleted: 0, bytes: 0 }
   }
 
-  const keepPrefix = `${platform}-${arch}`
+  const keepPrefix = `${bareHostPlatform(platform)}-${arch}`
   logger.debug(`Keeping prefix: ${keepPrefix}`)
 
   const prebuildsDirs = findPrebuildsDirs(nodeModulesPath)
@@ -413,8 +404,8 @@ function prunePrebuildsForPath(buildPath, platform, arch) {
  * Removes excluded addon directories from the packaged node_modules.
  *
  * Electron Packager's `ignore` filter excludes file contents but leaves the
- * empty parent directory in the output. This sweep removes those shells so
- * the packaged tree matches the manifest exactly. Idempotent.
+ * empty parent directory in the output. This sweep removes those shells.
+ * Idempotent.
  */
 function removeExcludedAddonDirs(buildPath, exclusions) {
   const nodeModulesPath = path.join(buildPath, 'node_modules')
@@ -455,8 +446,6 @@ function removeExcludedAddonDirs(buildPath, exclusions) {
  *
  * @returns {Promise<{
  *   bundleSdk: Function,
- *   verifyBundle: Function,
- *   hasErrors: Function,
  *   formatVerifyBundleResult: Function,
  * }>}
  */
@@ -478,11 +467,8 @@ function defaultHosts() {
 }
 
 /**
- * Single source of truth for the hosts list used by both bundleSdk and
- * verifyBundle. Keeping these in sync matters: bundleSdk's `hosts` drives
- * the bare-pack content (which prebuilds end up in the bundle), and
- * verifyBundle checks the same set. Passing different lists silently
- * produces inconsistent builds — bundle for one set, verify for another.
+ * The hosts bundleSdk bundles and verifies for: which addon binaries the
+ * bundled worker carries.
  *
  * @param {string[]|null|undefined} explicitHosts
  * @returns {string[]}
@@ -531,7 +517,7 @@ function detectTargetHosts(forgeConfig, argv = process.argv.slice(2)) {
 
   if (!platform && !archSpec) return null
 
-  const p = platform || process.platform
+  const p = bareHostPlatform(platform || process.platform)
   const archs = (archSpec || process.arch)
     .split(',')
     .map((s) => s.trim())
@@ -541,26 +527,27 @@ function detectTargetHosts(forgeConfig, argv = process.argv.slice(2)) {
 }
 
 /**
- * Runs `bundleSdk` then `verifyBundle` with the same resolved `hosts` list.
- * Throws QvacForgePluginError on bundle failure or verify errors.
+ * Runs `bundleSdk` for the resolved `hosts`, which verifies the bundle before
+ * it replaces `qvac/worker/`. Throws QvacForgePluginError on a bundle or
+ * verification failure, leaving the previous `qvac/worker/` in place.
  *
  * Commands are injected (rather than dynamically imported here) so tests
  * can assert the host-list wiring without touching the SDK runtime.
  *
- * @param {{ bundleSdk: Function, verifyBundle: Function, hasErrors: Function, formatVerifyBundleResult: Function }} commands
+ * @param {{ bundleSdk: Function, formatVerifyBundleResult: Function }} commands
  * @param {string} projectDir
  * @param {{ configPath?: string|null, hosts?: string[]|null }} options
- * @returns {Promise<{ addons: string[], bundlePath: string, manifestPath: string }>}
+ * @returns {Promise<{ addons: string[], bundlePath: string }>}
  */
 async function runBundleAndVerify(commands, projectDir, options) {
-  const { bundleSdk, verifyBundle, hasErrors, formatVerifyBundleResult } = commands
+  const { bundleSdk, formatVerifyBundleResult } = commands
 
   const hosts = resolveHosts(options.hosts)
 
   logger.info(`Running bundleSdk (hosts: ${hosts.join(', ')})...`)
   let bundleResult
   try {
-    const bundleOpts = { projectRoot: projectDir, hosts }
+    const bundleOpts = { projectRoot: projectDir, target: 'bare-sidecar', hosts }
     if (options.configPath) bundleOpts.configPath = options.configPath
     bundleResult = await bundleSdk(bundleOpts)
   } catch (err) {
@@ -570,26 +557,7 @@ async function runBundleAndVerify(commands, projectDir, options) {
   const addonCount = bundleResult.addons.length
   logger.info(`bundleSdk: ${addonCount} native addon${addonCount === 1 ? '' : 's'} in bundle`)
 
-  logger.info(`Running verifyBundle (hosts: ${hosts.join(', ')})...`)
-  let verifyResult
-  try {
-    const verifyOpts = {
-      projectRoot: projectDir,
-      addonsSource: bundleResult.bundlePath,
-      hosts
-    }
-    if (options.configPath) verifyOpts.configPath = options.configPath
-    verifyResult = await verifyBundle(verifyOpts)
-  } catch (err) {
-    throw new QvacForgePluginError(`verifyBundle threw: ${err?.message || err}`)
-  }
-
-  if (hasErrors(verifyResult)) {
-    throw new QvacForgePluginError(
-      `verifyBundle reported errors:\n${formatVerifyBundleResult(verifyResult)}`
-    )
-  }
-
+  const verifyResult = bundleResult.verification
   if (verifyResult.issues.length > 0) {
     logger.warn(`verifyBundle produced warnings:\n${formatVerifyBundleResult(verifyResult)}`)
   } else {
@@ -620,8 +588,8 @@ class QvacForgePlugin extends PluginBase {
   /**
    * @param {object} [config]
    * @param {string} [config.projectDir]   Project root (default: process.cwd()).
-   * @param {string} [config.configPath]   Path to a qvac config file (`.ts`, `.mjs`, `.js`, or `.json`). Forwarded to bundleSdk + verifyBundle. Default: auto-discover in `projectDir`.
-   * @param {string[]} [config.hosts]      Hosts to verify against (default: `${process.platform}-${process.arch}`).
+   * @param {string} [config.configPath]   Path to a qvac config file (`.ts`, `.mjs`, `.js`, or `.json`). Forwarded to bundleSdk. Default: auto-discover in `projectDir`.
+   * @param {string[]} [config.hosts]      Hosts to bundle and verify for (default: `${process.platform}-${process.arch}`).
    * @param {"off"|"error"|"warn"|"info"|"debug"} [config.logLevel]
    */
   constructor(config = {}) {
@@ -656,8 +624,9 @@ class QvacForgePlugin extends PluginBase {
     // 1. Block macOS universal builds early.
     this.checkForUniversalArch(forgeConfig)
 
-    // 2. Force asar: false (Bare worker can't load from asar). Truthy check
-    //    catches both `asar: true` and `asar: { unpack: ... }` object configs.
+    // 2. Force asar: false (bare-sidecar runs `bare` and the worker bundle from
+    //    real files). Truthy check catches both `asar: true` and
+    //    `asar: { unpack: ... }` object configs.
     if (forgeConfig.packagerConfig.asar) {
       logger.warn('asar is enabled — Bare worker may fail to load. Overriding to false.')
     }
@@ -665,10 +634,7 @@ class QvacForgePlugin extends PluginBase {
 
     // 3. Bundle + verify (cached across resolveForgeConfig invocations).
     //    `hosts` resolution: explicit config wins, then CLI/config-derived
-    //    target, then host fallback inside runBundleAndVerify. Hosts are
-    //    threaded into BOTH bundleSdk (drives bare-pack content) and
-    //    verifyBundle (asserts prebuild availability) — passing different
-    //    sets silently produces inconsistent builds.
+    //    target, then host fallback inside runBundleAndVerify.
     if (this._cache === null) {
       const detected = this.hosts ? null : detectTargetHosts(forgeConfig)
       if (detected && !this.hosts) {
@@ -679,14 +645,14 @@ class QvacForgePlugin extends PluginBase {
         configPath: this.configPath,
         hosts: this.hosts || detected
       })
-      const exclusions = computeExclusions(bundleResult.addons, this.projectDir)
+      const exclusions = computeExclusions(this.projectDir)
       this._cache = { bundleResult, exclusions }
     } else {
       logger.debug('Reusing cached bundleSdk result.')
     }
     const { exclusions } = this._cache
 
-    // 4. Merge ignore patterns to exclude unused addons + mobile prebuilds.
+    // 4. Merge ignore patterns to exclude the @qvac addons + mobile prebuilds.
     const existingIgnore = forgeConfig.packagerConfig.ignore
     forgeConfig.packagerConfig.ignore = createIgnore(exclusions, existingIgnore)
 
@@ -793,7 +759,6 @@ module.exports.QvacForgePluginError = QvacForgePluginError
 
 // Internal helpers exposed for unit tests. Not part of the stable API.
 module.exports.createIgnore = createIgnore
-module.exports.diffAddons = diffAddons
 module.exports.detectTargetHosts = detectTargetHosts
 module.exports.resolveHosts = resolveHosts
 module.exports.runBundleAndVerify = runBundleAndVerify

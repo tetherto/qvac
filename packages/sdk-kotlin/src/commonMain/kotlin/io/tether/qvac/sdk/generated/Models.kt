@@ -5150,6 +5150,24 @@ object Models {
         params = "250M",
     )
 
+    val PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0 = ModelConstant(
+        name = "PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0",
+        src = "registry://s3/qvac_models_compiled/ggml/transcribepsy/2026-11-09/transcribepsy-250m-eu.gguf",
+        registryPath = "qvac_models_compiled/ggml/transcribepsy/2026-11-09/transcribepsy-250m-eu.gguf",
+        registrySource = "s3",
+        blobCoreKey = "e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+        blobBlockOffset = 92309,
+        blobBlockLength = 4691,
+        blobByteOffset = 6047386368,
+        modelId = "transcribepsy-250m-eu.gguf",
+        expectedSize = 307402624,
+        sha256Checksum = "1b81d33c96d687b00b4d98068b58e038d5dee909e11f74bada343bb6bedce3b2",
+        addon = "parakeet",
+        engine = "parakeet-transcription",
+        quantization = "q8_0",
+        params = "250M",
+    )
+
     val PARAKEET_TRANSCRIBEPSY_250M_Q8_0 = ModelConstant(
         name = "PARAKEET_TRANSCRIBEPSY_250M_Q8_0",
         src = "registry://hf/qvac/TranscribePsy-250M-EU-sub-gguf/resolve/92460e0a8e7dc20f2fb126198bdd9eebb9ba2dc7/transcribepsy-250m-eu-sub.gguf",
@@ -8892,6 +8910,7 @@ object Models {
         PARAKEET_TDT_1_1B_F16,
         PARAKEET_TDT_1_1B_Q8_0,
         PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0,
+        PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0,
         PARAKEET_TRANSCRIBEPSY_250M_Q8_0,
         PARAKEET_UNIFIED_0_6B_F16,
         PARAKEET_UNIFIED_0_6B_Q4_0,

@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   kept the input PCM, the encoded output and the native FFmpeg state in memory
   for the life of the process
   ([#5610](https://github.com/tetherto/qvac/pull/5610)).
+## [0.10.1] - 2026-11-10
+
 ### Added
 
 - ACE-Step `backend`, `lmBackend`, and `dumpStagesDir` controls, with matching

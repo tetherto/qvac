@@ -16,7 +16,10 @@ import {
   RequestNotFoundError as InferenceRequestNotFoundError,
   RequestRejectedByPolicyError as InferenceRequestRejectedByPolicyError,
   TranslationFailedError as InferenceTranslationFailedError,
-  AudioEncodeFailedError as InferenceAudioEncodeFailedError
+  AudioEncodeFailedError as InferenceAudioEncodeFailedError,
+  InvalidSeedFromParamsError as InferenceInvalidSeedFromParamsError,
+  KvCacheSeedSourceNotFoundError as InferenceKvCacheSeedSourceNotFoundError,
+  KvCacheSeedSharingDisabledError as InferenceKvCacheSeedSharingDisabledError
 } from '@qvac/inference/surface'
 import {
   ContextOverflowError,
@@ -26,7 +29,10 @@ import {
   RequestNotFoundError,
   RequestRejectedByPolicyError,
   TranslationFailedError,
-  AudioEncodeFailedError
+  AudioEncodeFailedError,
+  InvalidSeedFromParamsError,
+  KvCacheSeedSourceNotFoundError,
+  KvCacheSeedSharingDisabledError
 } from '@/utils/errors-server'
 
 test('reconstructError: cancellation preserves its public request ID and partial output', (t) => {
@@ -84,6 +90,38 @@ test('reconstructError: RequestNotFoundError round-trips', (t) => {
   t.ok(reconstructed instanceof RequestNotFoundError)
   t.is((reconstructed as RequestNotFoundError).requestId, 'rid-3')
   t.is((reconstructed as RequestNotFoundError).code, 52418)
+})
+
+test('reconstructError: InvalidSeedFromParamsError round-trips', (t) => {
+  const envelope = createErrorResponse(new InferenceInvalidSeedFromParamsError())
+
+  const reconstructed = reconstructError(envelope)
+
+  t.ok(reconstructed instanceof InvalidSeedFromParamsError)
+  t.is((reconstructed as InvalidSeedFromParamsError).code, 53204)
+})
+
+test('reconstructError: KvCacheSeedSourceNotFoundError round-trips', (t) => {
+  const original = new InferenceKvCacheSeedSourceNotFoundError('base', 'llm-1')
+  const envelope = createErrorResponse(original)
+
+  const reconstructed = reconstructError(envelope)
+
+  t.ok(reconstructed instanceof KvCacheSeedSourceNotFoundError)
+  t.is((reconstructed as KvCacheSeedSourceNotFoundError).seedFrom, 'base')
+  t.is((reconstructed as KvCacheSeedSourceNotFoundError).modelId, 'llm-1')
+  t.is((reconstructed as KvCacheSeedSourceNotFoundError).code, 53205)
+})
+
+test('reconstructError: KvCacheSeedSharingDisabledError round-trips', (t) => {
+  const original = new InferenceKvCacheSeedSharingDisabledError('llm-1')
+  const envelope = createErrorResponse(original)
+
+  const reconstructed = reconstructError(envelope)
+
+  t.ok(reconstructed instanceof KvCacheSeedSharingDisabledError)
+  t.is((reconstructed as KvCacheSeedSharingDisabledError).modelId, 'llm-1')
+  t.is((reconstructed as KvCacheSeedSharingDisabledError).code, 53206)
 })
 
 test('reconstructError: ModelRegistryModelNotFoundError round-trips', (t) => {

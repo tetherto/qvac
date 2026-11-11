@@ -8,6 +8,7 @@
 #include <inference-addon-cpp/ModelInterfaces.hpp>
 #include <inference-addon-cpp/RuntimeStats.hpp>
 
+#include "model-interface/GgmlBackend.hpp"
 #include "model-interface/ImageInput.hpp"
 
 namespace classification_ggml::megaloc {
@@ -47,6 +48,6 @@ private:
 };
 
 std::vector<float> preprocess(const ImageInput& input);
-int backendId(const char* name);
+using classification_ggml::backendId;
 
 } // namespace classification_ggml::megaloc

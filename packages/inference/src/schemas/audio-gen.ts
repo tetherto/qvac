@@ -133,7 +133,7 @@ const commonAudioGenRuntimeConfigShape = {
     .boolean()
     .optional()
     .describe(
-      'Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the backend actually used.'
+      'Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the primary backend a run used.'
     ),
   threads: z
     .number()
@@ -166,6 +166,16 @@ const acestepShiftSchema = z
     message: 'shift must be 0 or a positive float32 value'
   })
 
+/** A name or path the addon reads as a C string: non-empty, no NUL. */
+function hostStringSchema(name: string) {
+  return z
+    .string()
+    .min(1)
+    .refine((value) => !value.includes('\0'), {
+      message: `${name} must not contain NUL characters`
+    })
+}
+
 const acestepRuntimeConfigShape = {
   ...commonAudioGenRuntimeConfigShape,
   inferenceSteps: inferenceStepsSchema
@@ -183,7 +193,22 @@ const acestepRuntimeConfigShape = {
     .int()
     .nonnegative()
     .optional()
-    .describe('ACE-Step GPU layers to offload when `useGPU` is set (99 = all). Ignored on CPU.')
+    .describe('ACE-Step GPU layers to offload when `useGPU` is set (99 = all). Ignored on CPU.'),
+  backend: hostStringSchema('backend')
+    .optional()
+    .describe(
+      "Advanced: ACE-Step's primary backend, by backend or device name (`cpu`, `MTL0`, `CUDA0`, …). Unset or `auto` keeps the placement `useGPU` and `nGpuLayers` select; any other value overrides both, so `useGPU: false` with `backend: 'CUDA0'` runs on CUDA0. A named backend the host cannot provide fails the load instead of falling back."
+    ),
+  lmBackend: hostStringSchema('lmBackend')
+    .optional()
+    .describe(
+      "Advanced: the backend ACE-Step's language model runs on, chosen independently of `backend` and named the same way. Unset or `auto` keeps the engine's own placement for the LM; any other value overrides it. A named backend the host cannot provide fails the load instead of falling back."
+    ),
+  dumpStagesDir: hostStringSchema('dumpStagesDir')
+    .optional()
+    .describe(
+      'Diagnostics: an existing directory on the inference host that receives the intermediate tensors of each ACE-Step stage. The engine does not create it. Unset writes nothing.'
+    )
 }
 
 const minimaxCfgScaleSchema = z
@@ -203,12 +228,7 @@ const minimaxRuntimeConfigShape = {
     .describe(
       "Where MiniMax runs, instead of `useGPU`: `'gpu'` requires a usable GPU and fails the load otherwise, `'auto'` (what `useGPU: true` means) falls back to the CPU, `'cpu'` never touches a GPU. Cannot be combined with `useGPU`."
     ),
-  coremlProfileDir: z
-    .string()
-    .min(1)
-    .refine((value) => !value.includes('\0'), {
-      message: 'coremlProfileDir must not contain NUL characters'
-    })
+  coremlProfileDir: hostStringSchema('coremlProfileDir')
     .optional()
     .describe(
       'Advanced, macOS 15+: directory on the inference host holding the compiled full Core ML profile for this GGUF pair (`manifest.json` plus the LM, depth, conditioner, DiT and vocoder programs). Runs MiniMax through Core ML instead of the native backend and takes precedence over `device` and `useGPU`; the load fails when the build, OS or profile cannot support it rather than switching backends. Requires `coremlComputeUnits`.'
@@ -217,6 +237,11 @@ const minimaxRuntimeConfigShape = {
     .optional()
     .describe(
       'Apple compute units the Core ML profile may use: `CPU_ONLY`, `CPU_AND_GPU`, `CPU_AND_NE` or `ALL`. A policy, not a guarantee of where each operation runs. Requires `coremlProfileDir`.'
+    ),
+  coremlConditionerPath: hostStringSchema('coremlConditionerPath')
+    .optional()
+    .describe(
+      'Advanced, macOS: absolute path on the inference host to a compiled conditioner `.mlmodelc`. Runs the conditioner convolution alone through Core ML (CPU and Neural Engine); every other stage stays on the backend `device` or `useGPU` selects. Does not enable the full Core ML profile. The load fails when the bundle is invalid or the build cannot use it.'
     ),
   inferenceSteps: inferenceStepsSchema
     .optional()
@@ -956,8 +981,18 @@ export const audioGenStatsSchema = z.object({
   audioDurationMs: z.number().optional(),
   totalTimeMs: z.number().optional(),
   realTimeFactor: z.number().optional(),
-  backendDevice: z.number().optional(),
-  backendId: z.number().optional(),
+  backendDevice: z
+    .number()
+    .optional()
+    .describe(
+      'The primary backend the run used: 0 CPU, 1 GPU. The device an ACE-Step `lmBackend` names is not reported here.'
+    ),
+  backendId: z
+    .number()
+    .optional()
+    .describe(
+      'The primary backend the run used, as the engine codes it: 0 CPU, 1 Metal, 2 CUDA, 3 Vulkan, 4 OpenCL, 99 other.'
+    ),
   gpuFallbackReason: z
     .number()
     .optional()

@@ -24,6 +24,8 @@ fun QvacClient.`bciTranscribe`(request: io.tether.qvac.sdk.generated.schema.BciT
 
 fun QvacClient.`bciTranscribeStream`(request: io.tether.qvac.sdk.generated.schema.BciTranscribeStreamRequest, input: Flow<ByteArray>): Flow<io.tether.qvac.sdk.generated.schema.BciTranscribeStreamResponse> = duplexTyped(request, input)
 
+suspend fun QvacClient.`calcTokens`(request: io.tether.qvac.sdk.generated.schema.CalcTokensRequest): io.tether.qvac.sdk.generated.schema.CalcTokensResponse = callTyped(request)
+
 suspend fun QvacClient.`cancel`(request: io.tether.qvac.sdk.generated.schema.CancelRequest): io.tether.qvac.sdk.generated.schema.CancelResponse = callTyped(request)
 
 fun QvacClient.`classify`(request: io.tether.qvac.sdk.generated.schema.ClassifyRequest): Flow<io.tether.qvac.sdk.generated.schema.ClassifyResponse> = streamTyped(request)

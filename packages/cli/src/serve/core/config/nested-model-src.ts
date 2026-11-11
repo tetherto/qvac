@@ -6,9 +6,13 @@ import { loadModelConstants } from '@/serve/core/config/constants'
  * constant name into the full `ModelConstant` object (same treatment as
  * top-level `serve.models[*].model` / `.src`).
  *
- * Matches keys ending in `ModelSrc` (e.g. `s3genModelSrc`, `llmModelSrc`,
- * `vaeModelSrc`) and the ESRGAN `upscaler.model_src` snake_case field.
- * Recurses into plain nested objects so whisper/nmt nested configs are covered.
+ * Matches every source key: keys ending in `Src` (e.g. `llmModelSrc`,
+ * `tokenizerSrc`, `sceneSrc`, `srcVocabSrc`, `referenceAudioSrc`, and a nested
+ * object's own `modelSrc` such as the parakeet `speakerAttribution` diarizer or
+ * the nmt `pivot` model), source lists ending in `Srcs` (e.g.
+ * `dialogueReferenceSrcs`, resolved per element), and the ESRGAN
+ * `upscaler.model_src` snake_case field. Recurses into plain nested objects so
+ * whisper/nmt nested configs are covered.
  *
  * Bare identifiers are looked up as constants; values with `/` or a leading
  * `.` are left as filesystem / registry paths. Unknown CONSTANT_CASE names
@@ -36,6 +40,14 @@ function walk(
       out[key] = resolveModelSrcString(value, constants, childPath)
       continue
     }
+    if (isModelSrcKey(key) && Array.isArray(value)) {
+      out[key] = value.map((item: unknown, i) =>
+        typeof item === 'string'
+          ? resolveModelSrcString(item, constants, `${childPath}[${i}]`)
+          : item
+      )
+      continue
+    }
     if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
       if (isModelConstantLike(value)) continue
       out[key] = walk(value as Record<string, unknown>, constants, childPath)
@@ -45,7 +57,7 @@ function walk(
 }
 
 export function isModelSrcKey(key: string): boolean {
-  return key.endsWith('ModelSrc') || key === 'model_src'
+  return /Srcs?$/.test(key) || key === 'model_src'
 }
 
 function resolveModelSrcString(
