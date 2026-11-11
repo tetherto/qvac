@@ -46,6 +46,9 @@ constexpr auto HD_WIDTH =
     static_cast<uint32_t>(classification_ggml::fit::DEFAULT_FIT_WIDTH);
 constexpr auto HD_HEIGHT =
     static_cast<uint32_t>(classification_ggml::fit::DEFAULT_FIT_HEIGHT);
+// A 16:9 size above the box, downsampled to exactly HD_WIDTH x HD_HEIGHT.
+constexpr uint32_t FULL_HD_WIDTH = 1920;
+constexpr uint32_t FULL_HD_HEIGHT = 1080;
 constexpr uint32_t RGB_CHANNELS = 3;
 
 std::string envOr(const char* name, const std::string& fallback) {
@@ -157,11 +160,13 @@ void checkBridgeDepth(uint32_t width, uint32_t height) {
   bd::BridgeDepthModel model({path, "", backendName(), TEST_THREADS});
   model.load();
   constexpr uint32_t rightViewShift = 5;
-  model.process(
+  const auto output = std::any_cast<bd::DisparityOutput>(model.process(
       std::any(
           bd::StereoInput{
               syntheticRgb(width, height, 0),
-              syntheticRgb(width, height, rightViewShift)}));
+              syntheticRgb(width, height, rightViewShift)})));
+  EXPECT_EQ(output.width, width);
+  EXPECT_EQ(output.height, height);
   expectEqual(
       "bridgedepth " + std::to_string(width) + "x" + std::to_string(height),
       measured,
@@ -201,6 +206,40 @@ TEST(ModelFootprint, BridgeDepthFixtureSizeEqualsLoadedBuffers) {
 
 TEST(ModelFootprint, BridgeDepthHdEqualsLoadedBuffers) {
   checkBridgeDepth(HD_WIDTH, HD_HEIGHT);
+}
+
+// Above 1280x720 the pair is downsampled, so the loaded buffers equal the
+// measure at this size and at 1280x720 alike.
+TEST(ModelFootprint, BridgeDepthFullHdEqualsLoadedBuffers) {
+  checkBridgeDepth(FULL_HD_WIDTH, FULL_HD_HEIGHT);
+}
+
+// The full HD measure is the 1280x720 one plus the disparity resized back to
+// the input, which the inference phase holds on the host.
+TEST(ModelFootprint, BridgeDepthAboveTheBoxIsSizedAtTheModelSize) {
+  const std::string path = envOr("QVAC_BRIDGEDEPTH_MODEL_PATH", "");
+  if (path.empty())
+    GTEST_SKIP() << "QVAC_BRIDGEDEPTH_MODEL_PATH is not set";
+  auto measure = [&](uint32_t width, uint32_t height) {
+    return qcc::measureFootprint(
+        path,
+        backendName(),
+        "",
+        static_cast<int>(width),
+        static_cast<int>(height),
+        TEST_THREADS);
+  };
+  const auto hd = measure(HD_WIDTH, HD_HEIGHT);
+  const auto fullHd = measure(FULL_HD_WIDTH, FULL_HD_HEIGHT);
+  EXPECT_EQ(fullHd.deviceWeightBytes, hd.deviceWeightBytes);
+  EXPECT_EQ(fullHd.deviceComputeBytes, hd.deviceComputeBytes);
+  EXPECT_EQ(fullHd.hostWeightBytes, hd.hostWeightBytes);
+  EXPECT_EQ(fullHd.hostComputeBytes, hd.hostComputeBytes);
+  EXPECT_EQ(fullHd.hostWorkBytes, hd.hostWorkBytes);
+  const uint64_t resizedDisparityBytes =
+      static_cast<uint64_t>(FULL_HD_WIDTH) * FULL_HD_HEIGHT * sizeof(float);
+  EXPECT_EQ(
+      fullHd.hostStagingBytes, hd.hostStagingBytes + resizedDisparityBytes);
 }
 
 TEST(ModelFootprint, BridgeDepthRejectsSizesInferenceRejects) {

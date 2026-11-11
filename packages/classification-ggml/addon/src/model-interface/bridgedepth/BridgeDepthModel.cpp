@@ -1,5 +1,6 @@
 #include "BridgeDepthModel.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <exception>
@@ -51,14 +52,17 @@ int64_t gridCells(uint32_t width, uint32_t height) {
          ((static_cast<int64_t>(width) + pad.right) / gridStride);
 }
 
-std::vector<float>
-toPlanarRgb(const ImageInput& input, uint32_t& width, uint32_t& height) {
+namespace {
+
+// Decodes or validates one view. Returns its packed RGB, held in `storage`
+// when it had to be decoded.
+std::span<const uint8_t> decodeView(
+    const ImageInput& input, std::vector<uint8_t>& storage, ImageSize& size) {
   std::span<const uint8_t> rgb(input.data);
-  std::vector<uint8_t> decoded;
   if (input.rawRgb) {
-    width = input.rawRgb->width;
-    height = input.rawRgb->height;
-    preprocess::validateRawRgb(rgb, width, height, input.rawRgb->channels);
+    size = {input.rawRgb->width, input.rawRgb->height};
+    preprocess::validateRawRgb(
+        rgb, size.width, size.height, input.rawRgb->channels);
   } else {
     check(
         preprocess::isEncodedImage(rgb),
@@ -79,17 +83,141 @@ toPlanarRgb(const ImageInput& input, uint32_t& width, uint32_t& height) {
           static_cast<uint32_t>(headerWidth),
           static_cast<uint32_t>(headerHeight));
     }
-    decoded = preprocess::decodeToRgb(rgb, width, height);
-    rgb = decoded;
+    storage = preprocess::decodeToRgb(rgb, size.width, size.height);
+    rgb = storage;
   }
-  checkSize(width, height);
-  const size_t plane = static_cast<size_t>(width) * height;
-  std::vector<float> chw(plane * 3);
-  for (size_t i = 0; i < plane; ++i) {
-    for (size_t c = 0; c < 3; ++c)
-      chw[c * plane + i] = static_cast<float>(rgb[i * 3 + c]);
+  checkSize(size.width, size.height);
+  return rgb;
+}
+
+// Source taps of one output axis for a bilinear resize with pixel centres
+// aligned: out x samples src (x + 0.5) * srcLen / dstLen - 0.5, clamped to the
+// edge pixels.
+struct Taps {
+  std::vector<uint32_t> low;
+  std::vector<uint32_t> high;
+  std::vector<float> weight;
+};
+
+Taps bilinearTaps(uint32_t srcLen, uint32_t dstLen) {
+  Taps taps;
+  taps.low.resize(dstLen);
+  taps.high.resize(dstLen);
+  taps.weight.resize(dstLen);
+  const double scale = static_cast<double>(srcLen) / dstLen;
+  constexpr double pixelCentre = 0.5;
+  for (uint32_t i = 0; i < dstLen; ++i) {
+    const double pos = std::clamp(
+        (i + pixelCentre) * scale - pixelCentre,
+        0.0,
+        static_cast<double>(srcLen - 1));
+    const auto low = static_cast<uint32_t>(pos);
+    taps.low[i] = low;
+    taps.high[i] = std::min(low + 1, srcLen - 1);
+    taps.weight[i] = static_cast<float>(pos - low);
   }
+  return taps;
+}
+
+// Bilinear resize of `planes` planes of `from`, each read by `at(plane,
+// index)`, to `to`; `store(plane, index, value)` writes each output value.
+template <typename Load, typename Store>
+void resizeBilinear(
+    ImageSize from, ImageSize to, size_t planes, const Load& at,
+    const Store& store) {
+  const Taps xs = bilinearTaps(from.width, to.width);
+  const Taps ys = bilinearTaps(from.height, to.height);
+  for (size_t c = 0; c < planes; ++c) {
+    for (uint32_t y = 0; y < to.height; ++y) {
+      const size_t rowLow = static_cast<size_t>(ys.low[y]) * from.width;
+      const size_t rowHigh = static_cast<size_t>(ys.high[y]) * from.width;
+      const float wy = ys.weight[y];
+      for (uint32_t x = 0; x < to.width; ++x) {
+        const float wx = xs.weight[x];
+        const float top = at(c, rowLow + xs.low[x]) * (1 - wx) +
+                          at(c, rowLow + xs.high[x]) * wx;
+        const float bottom = at(c, rowHigh + xs.low[x]) * (1 - wx) +
+                             at(c, rowHigh + xs.high[x]) * wx;
+        store(
+            c,
+            static_cast<size_t>(y) * to.width + x,
+            top * (1 - wy) + bottom * wy);
+      }
+    }
+  }
+}
+
+constexpr size_t RGB_CHANNELS = 3;
+
+} // namespace
+
+ImageSize modelInputSize(uint32_t width, uint32_t height) {
+  if (width <= MAX_MODEL_WIDTH && height <= MAX_MODEL_HEIGHT)
+    return {width, height};
+  // Integer arithmetic so the limited side lands exactly on the box edge and
+  // the other is rounded to the nearest pixel.
+  const uint64_t w = width;
+  const uint64_t h = height;
+  ImageSize size;
+  if (w * MAX_MODEL_HEIGHT >= h * MAX_MODEL_WIDTH) {
+    size.width = MAX_MODEL_WIDTH;
+    size.height = static_cast<uint32_t>((h * MAX_MODEL_WIDTH + w / 2) / w);
+  } else {
+    size.height = MAX_MODEL_HEIGHT;
+    size.width = static_cast<uint32_t>((w * MAX_MODEL_HEIGHT + h / 2) / h);
+  }
+  const auto minSide = static_cast<uint32_t>(MIN_SIDE);
+  size.width = std::max(size.width, minSide);
+  size.height = std::max(size.height, minSide);
+  return size;
+}
+
+std::vector<float>
+resizeToPlanar(std::span<const uint8_t> rgb, ImageSize from, ImageSize to) {
+  const size_t plane = static_cast<size_t>(to.width) * to.height;
+  std::vector<float> chw(plane * RGB_CHANNELS);
+  if (from == to) {
+    for (size_t i = 0; i < plane; ++i) {
+      for (size_t c = 0; c < RGB_CHANNELS; ++c)
+        chw[c * plane + i] = static_cast<float>(rgb[i * RGB_CHANNELS + c]);
+    }
+    return chw;
+  }
+  resizeBilinear(
+      from,
+      to,
+      RGB_CHANNELS,
+      [&](size_t c, size_t i) {
+        return static_cast<float>(rgb[i * RGB_CHANNELS + c]);
+      },
+      [&](size_t c, size_t i, float value) {
+        chw[c * plane + i] = std::round(value);
+      });
   return chw;
+}
+
+std::vector<float> resizeDisparity(
+    const std::vector<float>& disparity, ImageSize from, ImageSize to) {
+  // Disparity is a horizontal offset, so it scales with the width alone.
+  const float scale = static_cast<float>(to.width) / from.width;
+  std::vector<float> out(static_cast<size_t>(to.width) * to.height);
+  resizeBilinear(
+      from,
+      to,
+      1,
+      [&](size_t, size_t i) { return disparity[i]; },
+      [&](size_t, size_t i, float value) { out[i] = value * scale; });
+  return out;
+}
+
+std::vector<float>
+toPlanarRgb(const ImageInput& input, uint32_t& width, uint32_t& height) {
+  std::vector<uint8_t> storage;
+  ImageSize size;
+  const auto rgb = decodeView(input, storage, size);
+  width = size.width;
+  height = size.height;
+  return resizeToPlanar(rgb, size, size);
 }
 
 struct BridgeDepthModel::Impl {
@@ -138,10 +266,18 @@ void BridgeDepthModel::load() {
 MeasuredBuffers BridgeDepthModel::measure(
     const Config& config, uint32_t width, uint32_t height) {
   checkSize(width, height);
+  const ImageSize input{width, height};
+  const ImageSize model = modelInputSize(width, height);
+  // A downsampled run also holds the disparity resized back to the input.
+  const uint64_t resizedOutputBytes =
+      model == input ? 0
+                     : static_cast<uint64_t>(width) * height * sizeof(float);
   const auto state = open(config, true);
   try {
     MeasuredBuffers result = state->graph->measure(
-        static_cast<int>(height), static_cast<int>(width));
+        static_cast<int>(model.height),
+        static_cast<int>(model.width),
+        resizedOutputBytes);
     result.deviceName = deviceName(state->backends->device());
     result.deviceIsCpu = state->backends->device() == state->backends->cpu();
     return result;
@@ -169,29 +305,37 @@ std::any BridgeDepthModel::process(const std::any& input) {
   check(pair != nullptr, "invalid stereo input type");
   if (!impl_)
     throw StatusError(InternalError, "BridgeDepth is not loaded");
-  uint32_t width = 0;
-  uint32_t height = 0;
-  uint32_t rightWidth = 0;
-  uint32_t rightHeight = 0;
-  // Decoding counts, as MegaLoc's total_time_ms includes its preprocess().
+  // Decoding and resizing count, as MegaLoc's total_time_ms includes its
+  // preprocess().
   const auto start = std::chrono::steady_clock::now();
-  const auto left = toPlanarRgb(pair->left, width, height);
-  const auto right = toPlanarRgb(pair->right, rightWidth, rightHeight);
+  std::vector<uint8_t> leftStorage;
+  std::vector<uint8_t> rightStorage;
+  ImageSize inputSize;
+  ImageSize rightSize;
+  const auto leftRgb = decodeView(pair->left, leftStorage, inputSize);
+  const auto rightRgb = decodeView(pair->right, rightStorage, rightSize);
   check(
-      width == rightWidth && height == rightHeight,
-      "left and right images must have the same size");
-  DisparityOutput output{width, height, {}};
+      inputSize == rightSize, "left and right images must have the same size");
+  const ImageSize model = modelInputSize(inputSize.width, inputSize.height);
+  DisparityOutput output{inputSize.width, inputSize.height, {}};
   try {
+    const auto left = resizeToPlanar(leftRgb, inputSize, model);
+    const auto right = resizeToPlanar(rightRgb, inputSize, model);
+    // The decoded views are no longer read.
+    leftStorage = {};
+    rightStorage = {};
     output.disparity = impl_->graph->infer(
         left.data(),
         right.data(),
-        static_cast<int>(height),
-        static_cast<int>(width));
+        static_cast<int>(model.height),
+        static_cast<int>(model.width));
   } catch (const StatusError&) {
     throw;
   } catch (const std::exception& error) {
     throw StatusError(InternalError, error.what());
   }
+  if (model != inputSize)
+    output.disparity = resizeDisparity(output.disparity, model, inputSize);
   for (const float value : output.disparity) {
     if (!std::isfinite(value))
       throw StatusError(

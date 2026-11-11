@@ -72,7 +72,9 @@ struct ModelFootprint {
   //     indices, plus the larger of the read buffer (the largest tensor) and
   //     one inference: both views as planar floats, every graph input built on
   //     the host (padded images, masks, expanded indices, resized pos_embed),
-  //     the padded output and the returned disparity.
+  //     the padded output and the returned disparity, all at the size the
+  //     model runs at, plus the disparity resized back to an input above
+  //     1280x720.
   uint64_t hostStagingBytes = 0;
   // ggml device name that a load with the same arguments selects.
   std::string deviceName;
@@ -86,7 +88,8 @@ struct ModelFootprint {
 // `backend` and `backendsDir` follow GgmlBackends. MobileNet always loads on
 // the CPU, so `backend` is ignored for it. `width` and `height` are the
 // BridgeDepth input size, checked against the limits inference enforces, and
-// are ignored for the other models. `threads` is the CPU thread count the
+// are ignored for the other models. An input above 1280x720 is sized at the
+// downsampled size inference runs it at. `threads` is the CPU thread count the
 // model will be configured with; MobileNet does not take one.
 ModelFootprint measureFootprint(
     const std::string& path, const std::string& backend,

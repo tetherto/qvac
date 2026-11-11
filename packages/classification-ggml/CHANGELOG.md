@@ -23,6 +23,13 @@ and this project adheres to
   `InvalidArgument` error
   ([#5705](https://github.com/tetherto/qvac/pull/5705)).
 
+### Changed
+
+- BridgeDepth downsamples a pair wider than 1280 or taller than 720 to fit
+  inside 1280x720, as the model authors recommend, and returns the disparity
+  at the input size in input pixels. `assessFit` sizes such a workload as the
+  downsampled run plus the disparity at the input size.
+
 ### Pull Requests
 
 - [#5705](https://github.com/tetherto/qvac/pull/5705) - `assessFit` for MobileNet, MegaLoc and BridgeDepth.

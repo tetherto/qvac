@@ -2116,7 +2116,8 @@ std::vector<float> BridgeDepthGraph::infer(
   return impl_->forward(left, right, h, w, seedsOverride);
 }
 
-MeasuredBuffers BridgeDepthGraph::measure(int h, int w) {
+MeasuredBuffers
+BridgeDepthGraph::measure(int h, int w, uint64_t extraRunHostBytes) {
   Impl& m = *impl_;
   if (!m.measureOnly)
     throw std::runtime_error("BridgeDepth: graph was not opened to measure");
@@ -2132,8 +2133,9 @@ MeasuredBuffers BridgeDepthGraph::measure(int h, int w) {
   // run, and forward() returns the unpadded disparity.
   const uint64_t pixels = static_cast<uint64_t>(h) * w;
   const uint64_t planarViewFloats = 2ULL * 3 * pixels;
-  const uint64_t inferenceBytes =
-      m.measuredRunHostBytes + (planarViewFloats + pixels) * sizeof(float);
+  const uint64_t inferenceBytes = m.measuredRunHostBytes +
+                                  (planarViewFloats + pixels) * sizeof(float) +
+                                  extraRunHostBytes;
   result.hostStagingBytes =
       persistentBytes + std::max(m.readBufferBytes, inferenceBytes);
   return result;
