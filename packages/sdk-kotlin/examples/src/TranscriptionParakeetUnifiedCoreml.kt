@@ -18,6 +18,7 @@ import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.speech
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.system.exitProcess
@@ -114,7 +115,12 @@ private suspend fun QvacClient.stageModel(path: Path): Pair<String, File> {
 
             val targetPath = bundleDir.resolve(relativePath)
             Files.createDirectories(targetPath.parent)
-            Files.createLink(targetPath, Path.of(sourcePath))
+            try {
+                Files.createLink(targetPath, Path.of(sourcePath))
+            } catch (error: IOException) {
+                // A hard link cannot cross filesystems, e.g. a QVAC_HOME_DIR on another drive.
+                Files.copy(Path.of(sourcePath), targetPath)
+            }
         }
 
         return modelSrc.toString() to stagingDir.toFile()
