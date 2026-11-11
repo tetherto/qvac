@@ -3,9 +3,8 @@ import type { Check } from '@/doctor/check'
 
 // Deploy targets — the full matrix of platforms the SDK can deploy to,
 // which is a superset of CLI hosts (adds Android + iOS via BareKit).
-// Informational by default: bare-pack ships prebuilts for every target,
-// so bundling is always available. What's checked here is the host
-// toolchain needed to *deploy* to each target class.
+// Informational by default. What's checked here is the host toolchain
+// needed to *deploy* to each target class.
 
 function desktopTargetsLine(hostPlatform: NodeJS.Platform, hostArch: string): string {
   const nativeHost = `${hostPlatform}-${hostArch}`
@@ -20,7 +19,7 @@ export const checkDesktopTargets: Check = (ctx) => {
     status: 'pass',
     severity: 'informational',
     value: desktopTargetsLine(ctx.platform, ctx.arch),
-    hint: 'bare-pack ships prebuilts for every desktop target; cross-bundling is always available.'
+    hint: "Bundling for a desktop host other than the native one needs that host's addon platform packages installed."
   }
 }
 

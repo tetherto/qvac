@@ -5,83 +5,139 @@
 
 Asyncio-native, matching the rest of this package.
 
-`Client()` locates a worker by trying these tiers in order (`worker_path`
-and `bare_path` resolve independently, so an explicit `worker_path` with no
-`bare_path` still derives the Bare binary from a later tier):
-  1. `worker_path` / `bare_path` constructor arguments.
-  2. `QVAC_WORKER_PATH` / `QVAC_BARE_PATH` env vars -- same names the JS
-     SDK uses for its worker override (see `client/rpc/node-rpc-client.ts`).
-  3. A self-contained bundled wheel: the Bare runtime + built worker staged
-     under `qvac/_bundle/` by scripts/build_wheel.py -- zero configuration.
-  4. `sdk_dir` argument or `QVAC_SDK_DIR` env var, an installed `@qvac/sdk`
-     package directory (`<sdk_dir>/dist/src/worker/index.js` +
-     `<sdk_dir>/node_modules/bare-runtime-<platform>-<arch>/bin/bare`).
-  5. A thin wheel's fetched worker: `python -m tetherto.qvac_sdk install-worker` puts the
-     version-matched `@qvac/sdk` under a per-user cache dir, else a global
-     `npm install -g @qvac/sdk` (version-checked; warns on mismatch).
+`Client()` starts the worker with the Bare runtime that the `bare-sidecar`
+wheel ships, and talks to it over bare-stow's IPC. The worker is the first of:
+  1. `worker_path` argument or `QVAC_WORKER_PATH` env var (the name the JS SDK
+     uses): a folder written by `qvac bundle sdk --language python`, which is
+     started through the bare-stow harness in it, or a worker entry file, such
+     as `qvac/worker.entry.mjs`, which is run without a bundle.
+  2. A self-contained bundled wheel: the worker with every built-in plugin,
+     bundled by bare-stow under `_worker/` by scripts/build_wheel.py.
+  3. The default worker of an installed `@qvac/sdk`, run without a bundle.
+
+A worker entry, or the default worker, runs on the SDK's
+`dist/src/worker/unbundled-shim.js`. For an entry, that SDK is `sdk_dir` (or
+`QVAC_SDK_DIR`), else the `@qvac/sdk` the entry belongs to (the package it sits
+in, or the one its project installed). For the default worker, it is the first
+of: `sdk_dir` (or `QVAC_SDK_DIR`); the version-matched `@qvac/sdk` that
+`python -m tetherto.qvac_sdk install-worker` puts under a per-user cache dir; a
+global `npm install -g @qvac/sdk` (version-checked; warns on mismatch).
+
+`bare_path` (or `QVAC_BARE_PATH`) replaces the Bare runtime with another build
+of `bare-sidecar`'s Bare, which passes the worker its IPC channel.
 """
 
 from __future__ import annotations
 
+import asyncio
+import importlib.util
 import json
 import os
-import platform
 import subprocess
 import warnings
+from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 from typing import Any
+
+from bare_sidecar import Sidecar, spawn
+from bare_stow_host import IPC, wrap
 
 from ._generated.sdk_version import SDK_VERSION
 from .bare_rpc_transport import BareRpcTransport
 
-_PLATFORM_MAP = {"Darwin": "darwin", "Linux": "linux", "Windows": "win32"}
-_ARCH_MAP = {"x86_64": "x64", "AMD64": "x64", "arm64": "arm64", "aarch64": "arm64"}
+SHUTDOWN_GRACE = 10.0
+"""Seconds a stopping worker gets to unload its engines before it is killed."""
 
 
 class WorkerNotFoundError(Exception):
-    """Raised when no worker entry point / Bare binary can be resolved.
+    """Raised when no worker can be resolved.
 
-    Fixable by either passing `worker_path`/`bare_path` (or `sdk_dir`)
-    directly to `Client()`, or setting `QVAC_WORKER_PATH`/`QVAC_BARE_PATH`
-    (or `QVAC_SDK_DIR`) in the environment.
+    Fixable by either passing `worker_path` (or `sdk_dir`) directly to
+    `Client()`, or setting `QVAC_WORKER_PATH` (or `QVAC_SDK_DIR`) in the
+    environment.
     """
 
 
-def _bare_runtime_package_suffix() -> str:
-    system = platform.system()
-    machine = platform.machine()
-    if system not in _PLATFORM_MAP:
-        raise WorkerNotFoundError(
-            f"unsupported platform {system!r} -- no bare-runtime-* package exists for it"
+@dataclass(frozen=True)
+class BundledWorker:
+    """A bundled worker, started by the bare-stow harness at `harness`."""
+
+    harness: Path
+    bare: str | None = None
+
+    async def start(self, timeout: float) -> IPC:
+        started = await _load_harness(self.harness).start(
+            timeout=timeout, grace=SHUTDOWN_GRACE, bare=self.bare
         )
-    if machine not in _ARCH_MAP:
-        raise WorkerNotFoundError(
-            f"unsupported architecture {machine!r} -- no bare-runtime-* package exists for it"
-        )
-    return f"{_PLATFORM_MAP[system]}-{_ARCH_MAP[machine]}"
+        return started.ipc
 
 
-def _bare_executable_name() -> str:
-    return "bare.exe" if os.name == "nt" else "bare"
+_watching: set[asyncio.Future[None]] = set()
 
 
-def _derive_from_sdk_root(
-    sdk_root: Path, worker_path: str | None, bare_path: str | None
-) -> tuple[str, str]:
-    """(bare, worker) paths for an installed `@qvac/sdk` package directory:
-    `<root>/dist/src/worker/index.js` and the platform Bare binary under its
-    node_modules -- the same layout the JS SDK locates its own worker in."""
-    resolved_worker = worker_path or str(
-        sdk_root / "dist" / "src" / "worker" / "index.js"
+@dataclass(frozen=True)
+class UnbundledWorker:
+    """A worker entry run without a bundle on the SDK's unbundled shim, through
+    `bare-sidecar` and `bare-stow-host`."""
+
+    shim: Path
+    entry: Path
+    bare: str | None = None
+
+    async def start(self, timeout: float) -> IPC:
+        sidecar = await spawn(self.shim, self.entry, bare=self.bare)
+        ipc = wrap(sidecar, kill=sidecar.kill, timeout=timeout, grace=SHUTDOWN_GRACE)
+        watching = asyncio.ensure_future(_watch(sidecar, ipc))
+        _watching.add(watching)
+        watching.add_done_callback(_watching.discard)
+        await ipc.ready
+        return ipc
+
+
+async def _watch(sidecar: Sidecar, ipc: IPC) -> None:
+    await sidecar.wait()
+    ipc.exited(sidecar.exit_code, sidecar.signal_code)
+    await sidecar.close()
+
+
+def _load_harness(harness: Path) -> ModuleType:
+    spec = importlib.util.spec_from_file_location(
+        f"_qvac_worker_{abs(hash(str(harness)))}", harness
     )
-    resolved_bare = bare_path or str(
-        sdk_root
-        / "node_modules"
-        / f"bare-runtime-{_bare_runtime_package_suffix()}"
-        / "bin"
-        / _bare_executable_name()
-    )
-    return resolved_bare, resolved_worker
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _harness_in(folder: Path) -> Path | None:
+    """The `__init__.py` of the bare-stow Python package in `folder`: the folder
+    itself, or the package bare-stow writes inside its output folder."""
+    for package in (folder, folder / folder.name.replace("-", "_")):
+        if (package / "__init__.py").is_file():
+            return package / "__init__.py"
+    return None
+
+
+def _is_sdk_root(directory: Path) -> bool:
+    try:
+        manifest = json.loads((directory / "package.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(manifest, dict) and manifest.get("name") == "@qvac/sdk"
+
+
+def _sdk_root_near(path: Path) -> Path | None:
+    """The `@qvac/sdk` a worker entry belongs to: the package it sits in, or
+    the one its project installed."""
+    for directory in [path, *path.parents]:
+        if _is_sdk_root(directory):
+            return directory
+        installed = directory / "node_modules" / "@qvac" / "sdk"
+        if _is_sdk_root(installed):
+            return installed
+    return None
 
 
 def managed_worker_prefix() -> Path:
@@ -128,50 +184,66 @@ def _warn_on_version_mismatch(sdk_root: Path) -> None:
         )
 
 
-def _resolve_command(
+def _default_worker(sdk_root: Path) -> Path:
+    return sdk_root / "dist" / "src" / "worker" / "index.js"
+
+
+def _shim(sdk_root: Path) -> Path:
+    return sdk_root / "dist" / "src" / "worker" / "unbundled-shim.js"
+
+
+def _resolve_worker(
     worker_path: str | None, bare_path: str | None, sdk_dir: str | None
-) -> tuple[str, str]:
+) -> BundledWorker | UnbundledWorker:
     worker_path = worker_path or os.environ.get("QVAC_WORKER_PATH")
-    bare_path = bare_path or os.environ.get("QVAC_BARE_PATH")
-    if worker_path and bare_path:
-        return bare_path, worker_path
-
-    # Self-contained wheel: scripts/build_wheel.py stages the Bare runtime
-    # and the built worker under qvac/_bundle/, so an installed bundled
-    # wheel needs no explicit paths, env, or sdk checkout at all.
-    bundle = Path(__file__).parent / "_bundle"
-    bundled_worker = bundle / "worker" / "dist" / "src" / "worker" / "index.js"
-    bundled_bare = bundle / "runtime" / _bare_executable_name()
-    if bundled_worker.exists() and bundled_bare.exists():
-        return (
-            bare_path or str(bundled_bare),
-            worker_path or str(bundled_worker),
-        )
-
+    bare = bare_path or os.environ.get("QVAC_BARE_PATH")
     sdk_dir = sdk_dir or os.environ.get("QVAC_SDK_DIR")
+
+    if worker_path:
+        worker = Path(worker_path).resolve()
+        if worker.is_dir():
+            harness = _harness_in(worker)
+            if harness is None:
+                raise WorkerNotFoundError(
+                    f"{worker_path!r} is a folder with no bare-stow Python harness; "
+                    "write one with `qvac bundle sdk --language python`"
+                )
+            return BundledWorker(harness, bare)
+        sdk_root = Path(sdk_dir).resolve() if sdk_dir else _sdk_root_near(worker.parent)
+        if sdk_root is None:
+            raise WorkerNotFoundError(
+                f"no @qvac/sdk found for the worker entry {worker_path!r}; set "
+                "sdk_dir or QVAC_SDK_DIR to the @qvac/sdk that runs it"
+            )
+        return UnbundledWorker(_shim(sdk_root), worker, bare)
+
+    # Self-contained wheel: scripts/build_wheel.py bundles the worker with
+    # bare-stow under _worker/, so an installed bundled wheel needs no
+    # configuration.
+    bundled = _harness_in(Path(__file__).parent / "_worker")
+    if bundled is not None:
+        return BundledWorker(bundled, bare)
+
     if sdk_dir:
-        return _derive_from_sdk_root(Path(sdk_dir), worker_path, bare_path)
+        sdk_root = Path(sdk_dir).resolve()
+        return UnbundledWorker(_shim(sdk_root), _default_worker(sdk_root), bare)
 
     # Thin wheel: resolve a worker fetched by `python -m tetherto.qvac_sdk install-worker`
     # (version-scoped, so it always matches this client), then a global
     # `npm install -g @qvac/sdk` (version-checked, warns on mismatch).
     managed = _managed_sdk_root()
-    if (managed / "dist" / "src" / "worker" / "index.js").exists():
-        return _derive_from_sdk_root(managed, worker_path, bare_path)
+    if _default_worker(managed).exists():
+        return UnbundledWorker(_shim(managed), _default_worker(managed), bare)
 
     global_root = _npm_global_sdk_root()
-    if (
-        global_root is not None
-        and (global_root / "dist" / "src" / "worker" / "index.js").exists()
-    ):
+    if global_root is not None and _default_worker(global_root).exists():
         _warn_on_version_mismatch(global_root)
-        return _derive_from_sdk_root(global_root, worker_path, bare_path)
+        return UnbundledWorker(_shim(global_root), _default_worker(global_root), bare)
 
     raise WorkerNotFoundError(
         f"no worker found -- run `python -m tetherto.qvac_sdk install-worker` to fetch "
-        f"@qvac/sdk@{SDK_VERSION} via npm, or pass worker_path/bare_path (or "
-        f"sdk_dir) to Client(), or set QVAC_WORKER_PATH/QVAC_BARE_PATH (or "
-        f"QVAC_SDK_DIR) in the environment"
+        f"@qvac/sdk@{SDK_VERSION} via npm, or pass worker_path (or sdk_dir) to "
+        f"Client(), or set QVAC_WORKER_PATH (or QVAC_SDK_DIR) in the environment"
     )
 
 
@@ -192,13 +264,21 @@ class Client:
         home_dir: str | None = None,
         config: dict[str, Any] | None = None,
     ) -> None:
-        bare, worker = _resolve_command(worker_path, bare_path, sdk_dir)
-        if not os.path.exists(bare):
-            raise WorkerNotFoundError(f"no Bare binary found at {bare!r}")
-        if not os.path.exists(worker):
-            raise WorkerNotFoundError(f"no worker entry found at {worker!r}")
+        worker = _resolve_worker(worker_path, bare_path, sdk_dir)
+        if worker.bare is not None and not os.path.exists(worker.bare):
+            raise WorkerNotFoundError(f"no Bare binary found at {worker.bare!r}")
+        if isinstance(worker, UnbundledWorker):
+            if not worker.shim.exists():
+                raise WorkerNotFoundError(
+                    f"no worker shim found at {str(worker.shim)!r}"
+                )
+            if not worker.entry.exists():
+                raise WorkerNotFoundError(
+                    f"no worker entry found at {str(worker.entry)!r}"
+                )
+        self.worker = worker
         self._transport = BareRpcTransport(
-            [bare, worker], home_dir=home_dir, config=config
+            worker.start, home_dir=home_dir, config=config
         )
         self._connected = False
 
@@ -210,7 +290,7 @@ class Client:
             )
         return self._transport
 
-    async def connect(self, *, timeout: float = 30) -> Client:
+    async def connect(self, *, timeout: float | None = None) -> Client:
         if not self._connected:
             await self._transport.connect(timeout=timeout)
             self._connected = True

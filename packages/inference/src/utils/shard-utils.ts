@@ -2,7 +2,6 @@ import { ModelLoadFailedError, InvalidShardUrlPatternError } from '@/errors/inde
 import { generateShortHash } from '@/utils/formatting'
 import { validateAndJoinPath } from '@/utils/path-security'
 import type { ShardPatternInfo, ShardUrl } from '@/schemas/index'
-import { extractAndWriteTensorsFile } from '@/utils/gguf-tensor-extractor'
 import { promises as fsPromises } from 'bare-fs'
 
 /**
@@ -103,29 +102,6 @@ export function parsePatternBasedShardUrl(shardUrl: string): {
 }
 
 /**
- * Extract tensor information from all shards and write to baseFilename.tensors.txt
- * Required for sharded models to enable incremental/async loading
- * @param shardDir - Directory containing the shard files
- * @param shardFilename - Filename of any shard (e.g., "model-00001-of-00002.gguf")
- * @returns Path to the created tensors.txt file
- * @throws If not a sharded model or extraction fails
- */
-export async function extractTensorsFromShards(
-  shardDir: string,
-  shardFilename: string
-): Promise<string> {
-  const shardInfo = detectShardedModel(shardFilename)
-
-  if (!shardInfo.isSharded || !shardInfo.baseFilename || !shardInfo.totalShards) {
-    throw new ModelLoadFailedError(`Not a sharded model filename: ${shardFilename}`)
-  }
-
-  const allShardFilenames = generateShardFilenames(shardFilename)
-
-  return extractAndWriteTensorsFile(shardDir, allShardFilenames, shardInfo.baseFilename)
-}
-
-/**
  * Check if all numbered shard files exist
  * @param shardDir - Directory containing the shard files
  * @param shardFilename - Filename of any shard (e.g., "model-00001-of-00002.gguf")
@@ -138,44 +114,15 @@ export async function checkAllShardsExist(shardDir: string, shardFilename: strin
     return false
   }
 
-  const shardFilenames = generateShardFilenames(shardFilename)
-
-  const allShardsExist = await Promise.all(
-    shardFilenames.map((f) =>
-      fsPromises
-        .access(validateAndJoinPath(shardDir, f))
-        .then(() => true)
-        .catch(() => false)
-    )
-  ).then((results) => results.every((exists) => exists))
-
-  return allShardsExist
-}
-
-/**
- * Validate that all shards and tensors.txt exist for a sharded model
- * @param shardDir - Directory containing the shard files
- * @param shardFilename - Filename of any shard (e.g., "model-00001-of-00002.gguf")
- * @returns true if all shards and tensors.txt exist, false otherwise
- */
-export async function validateShardedModelCache(shardDir: string, shardFilename: string) {
-  const shardInfo = detectShardedModel(shardFilename)
-
-  if (!shardInfo.isSharded || !shardInfo.baseFilename) {
-    return false
+  // Sequential with an early exit: the shard count comes from the filename, so a
+  // crafted name must not fan out one filesystem call per claimed shard.
+  for (const f of generateShardFilenames(shardFilename)) {
+    try {
+      await fsPromises.access(validateAndJoinPath(shardDir, f))
+    } catch {
+      return false
+    }
   }
 
-  const allShardsExist = await checkAllShardsExist(shardDir, shardFilename)
-
-  if (!allShardsExist) {
-    return false
-  }
-
-  const tensorsFile = `${shardInfo.baseFilename}.tensors.txt`
-  const tensorsExist = await fsPromises
-    .access(validateAndJoinPath(shardDir, tensorsFile))
-    .then(() => true)
-    .catch(() => false)
-
-  return tensorsExist
+  return true
 }

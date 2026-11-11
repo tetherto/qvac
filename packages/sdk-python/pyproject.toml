@@ -14,8 +14,9 @@ requires-python = ">=3.10"
 license = "Apache-2.0"
 dependencies = [
   "pydantic>=2.6,<3",
-  "bare-rpc>=0.0.1,<0.1",
-  "compact-encoding>=0.0.1",
+  "bare-rpc~=0.2.0",
+  "bare-sidecar~=0.1.3",
+  "bare-stow-host~=0.2.1",
 ]
 
 [tool.hatch.version]
@@ -51,10 +52,10 @@ release = ["build>=1.2"]
 # PEP 420 namespace package: ship the whole `tetherto/` tree (no
 # tetherto/__init__.py) so `tetherto.qvac_sdk` installs under the shared root.
 packages = ["src/tetherto"]
-# The staged runtime+worker bundle is gitignored (build_wheel.py creates it
+# The staged worker bundle is gitignored (build_wheel.py creates it
 # transiently); artifacts overrides hatchling's VCS-ignore exclusion so the
 # self-contained wheel actually carries it. Harmless when absent (thin wheel).
-artifacts = ["src/tetherto/qvac_sdk/_bundle/**"]
+artifacts = ["src/tetherto/qvac_sdk/_worker/**"]
 
 # hatch_build.py stamps a `py3-none-<plat>` tag on the fat (bundled) wheel when
 # QVAC_WHEEL_PLAT is set by scripts/build_wheel.py. Inert for the default thin
@@ -105,8 +106,3 @@ module = "tetherto.qvac_sdk._generated.models._internal"
 # enum member on construction (verified: `Model().field == SomeEnum.x`
 # is True). Scoped to this one generated module, not project-wide.
 disable_error_code = ["assignment"]
-
-[[tool.mypy.overrides]]
-module = ["bare_rpc", "compact_encoding"]
-# Upstream wheels ship without py.typed.
-ignore_missing_imports = true

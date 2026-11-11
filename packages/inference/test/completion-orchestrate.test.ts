@@ -224,6 +224,127 @@ test('ToolResultReader: times out when no result arrives', async (t) => {
   await t.exception(reader.waitFor('never', 20), /timed out/)
 })
 
+for (const text of ['café', '東京', '🦆']) {
+  test(`ToolResultReader: preserves ${text} at every byte boundary`, async (t) => {
+    const line = Buffer.from(JSON.stringify({ callId: 'unicode', result: text }) + '\n')
+    for (let split = 1; split < line.length; split++) {
+      async function* input() {
+        yield Buffer.from(line.subarray(0, split))
+        yield Buffer.from(line.subarray(split))
+      }
+      const reader = new ToolResultReader(input())
+      try {
+        t.is((await reader.waitFor('unicode', 1000)).result, text, `split at byte ${split}`)
+      } finally {
+        reader.close()
+      }
+    }
+  })
+}
+
+test('ToolResultReader: preserves a final Unicode result without a newline', async (t) => {
+  const expected = { city: 'काठमाडौं', symbol: '🦆' }
+  const line = Buffer.from(JSON.stringify({ callId: 'final', result: expected }))
+  async function* input() {
+    for (let i = 0; i < line.length; i++) yield Buffer.from(line.subarray(i, i + 1))
+  }
+  const reader = new ToolResultReader(input())
+  try {
+    t.alike((await reader.waitFor('final', 1000)).result, expected)
+  } finally {
+    reader.close()
+  }
+})
+
+test('ToolResultReader: keeps a split Unicode tail between complete frames', async (t) => {
+  const first = JSON.stringify({ callId: 'first', result: 'ok' }) + '\n'
+  const second = Buffer.from(JSON.stringify({ callId: 'second', result: '東京' }) + '\n')
+  const last = JSON.stringify({ callId: 'last', result: 'done' }) + '\n'
+  const split = second.indexOf(Buffer.from('東')) + 1
+  async function* input() {
+    yield Buffer.concat([Buffer.from(first), Buffer.from(second.subarray(0, split))])
+    yield Buffer.concat([Buffer.from(second.subarray(split)), Buffer.from(last)])
+  }
+  const reader = new ToolResultReader(input())
+  try {
+    t.is((await reader.waitFor('first', 1000)).result, 'ok')
+    t.is((await reader.waitFor('second', 1000)).result, '東京')
+    t.is((await reader.waitFor('last', 1000)).result, 'done')
+  } finally {
+    reader.close()
+  }
+})
+
+test('ToolResultReader: enforces the byte limit for a non-ASCII line', async (t) => {
+  const prefix = '{"callId":"large","result":"'
+  const suffix = '"}'
+  const limit = 16 * 1024 * 1024
+  const room = limit - Buffer.byteLength(prefix + suffix)
+  const atLimit = Buffer.from(
+    prefix + 'é'.repeat(Math.floor(room / 2)) + 'a'.repeat(room % 2) + suffix
+  )
+  t.is(atLimit.length, limit, 'fixture is exactly at the byte limit')
+
+  async function* valid() {
+    yield atLimit
+    yield Buffer.from('\n')
+  }
+  const accepted = new ToolResultReader(valid())
+  try {
+    t.is(String((await accepted.waitFor('large', 10000)).result).length, Math.ceil(room / 2))
+  } finally {
+    accepted.close()
+  }
+
+  for (const newline of [false, true]) {
+    async function* invalid() {
+      yield Buffer.from(
+        prefix + 'é'.repeat(Math.floor(room / 2) + 1) + suffix + (newline ? '\n' : '')
+      )
+    }
+    const rejected = new ToolResultReader(invalid())
+    try {
+      t.ok((await rejected.waitFor('large', 1000)).error?.includes('exceeds the maximum size'))
+      await t.exception(rejected.waitFor('large', 1000), /exceeds the maximum size/)
+    } finally {
+      rejected.close()
+    }
+  }
+})
+
+test('orchestrateCompletion: the next turn receives the original Unicode tool result', async (t) => {
+  const expected = { city: '東京', note: 'café 🦆' }
+  const line = Buffer.from(JSON.stringify({ callId: 'lookup', result: expected }) + '\n')
+  let sendResult!: () => void
+  const ready = new Promise<void>((resolve) => {
+    sendResult = resolve
+  })
+  async function* input() {
+    await ready
+    for (let i = 0; i < line.length; i++) yield Buffer.from(line.subarray(i, i + 1))
+  }
+  let turn = 0
+  const histories: CompletionStreamRequest['history'][] = []
+  async function* runTurn(request: CompletionStreamRequest) {
+    histories.push(request.history)
+    yield ++turn === 1 ? toolTurn('lookup', 'get_city', {}) : contentTurn('done')
+  }
+  const reader = new ToolResultReader(input())
+  try {
+    for await (const frame of orchestrateCompletion(baseRequest(), runTurn, reader)) {
+      if (frame.toolCallback) sendResult()
+    }
+    t.is(turn, 2, 'the loop continued after the callback')
+    t.is(
+      histories[1]?.at(-1)?.content,
+      JSON.stringify(expected),
+      'tool output reached model history intact'
+    )
+  } finally {
+    reader.close()
+  }
+})
+
 test('ToolResultReader: close() returns the upstream and fails a pending waiter', async (t) => {
   let returned = false
   let unblock: () => void = () => {}
@@ -293,7 +414,8 @@ test('orchestrateCompletion: runs tool_search itself and never asks the client',
   const searchResult = seenHistories[1]?.at(-1)
   t.is(searchResult?.role, 'tool', 'the search result was appended as a tool message')
   t.ok(
-    searchResult?.content.includes('"loaded":["create_issue"]'),
+    typeof searchResult?.content === 'string' &&
+      searchResult.content.includes('"loaded":["create_issue"]'),
     'the next turn reads the loaded tool back from the history'
   )
   t.ok(
@@ -330,4 +452,50 @@ test('orchestrateCompletion: a caller-declared tool_search goes to the client wh
   const callbacks = frames.filter((frame) => frame.toolCallback)
   t.is(callbacks.length, 1, 'the call is delegated to the caller')
   t.is(callbacks[0]?.toolCallback?.name, 'tool_search')
+})
+
+test('orchestrateCompletion: tool_search applies the request toolSearch limits', async (t) => {
+  const tools = Array.from({ length: 6 }, (_, index) => ({
+    type: 'function' as const,
+    name: `repo_tool_${index}`,
+    description: 'Act on a repository',
+    deferLoading: true,
+    parameters: { type: 'object' as const, properties: {} }
+  }))
+
+  let turn = 0
+  const seenHistories: CompletionStreamRequest['history'][] = []
+  const seenToolSearch: CompletionStreamRequest['toolSearch'][] = []
+  async function* runTurn(request: CompletionStreamRequest) {
+    seenHistories.push(request.history)
+    seenToolSearch.push(request.toolSearch)
+    turn++
+    if (turn === 1) yield toolTurn('call-1', 'tool_search', { query: 'repository' })
+    else if (turn === 2) yield toolTurn('call-2', 'tool_search', { query: 'repository', limit: 9 })
+    else yield contentTurn('Done.')
+  }
+
+  await collect(
+    orchestrateCompletion(
+      baseRequest({ tools, toolSearch: { defaultLimit: 1, maxLimit: 2 } }),
+      runTurn,
+      stubReader({})
+    )
+  )
+
+  const result = (content: unknown) =>
+    (
+      JSON.parse(typeof content === 'string' ? content : '{}') as {
+        tool_search: { loaded: string[]; already_loaded: string[] }
+      }
+    ).tool_search
+  t.alike(result(seenHistories[1]?.at(-1)?.content).loaded, ['repo_tool_0'], 'defaultLimit applies')
+  t.alike(
+    result(seenHistories[2]?.at(-1)?.content),
+    { query: 'repository', loaded: ['repo_tool_1'], already_loaded: ['repo_tool_0'] },
+    'a larger limit is capped at maxLimit'
+  )
+  for (const toolSearch of seenToolSearch) {
+    t.alike(toolSearch, { defaultLimit: 1, maxLimit: 2 }, 'every turn renders the same limits')
+  }
 })

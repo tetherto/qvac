@@ -12,5 +12,6 @@ export {
   loadedToolNames,
   partitionTools,
   resolveDeferredTools,
+  resolveToolSearchSource,
   searchDeferredTools
 } from '@/utils/tools/defer'

@@ -43,6 +43,12 @@
       "responseSchema": "schema.json#/$defs/bciTranscribeStream.response"
     },
     {
+      "name": "calcTokens",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/calcTokens.request",
+      "responseSchema": "schema.json#/$defs/calcTokens.response"
+    },
+    {
       "name": "cancel",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/cancel.request",
@@ -105,6 +111,12 @@
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/embed.request",
       "responseSchema": "schema.json#/$defs/embed.response"
+    },
+    {
+      "name": "embedBatch",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/embedBatch.request",
+      "responseSchema": "schema.json#/$defs/embedBatch.response"
     },
     {
       "name": "finetune",

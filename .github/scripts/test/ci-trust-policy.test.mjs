@@ -3448,7 +3448,7 @@ for (const [workflow, nextStep] of [
     const path = `.github/workflows/${workflow}`;
     const source = read(path);
     const steps = source.split(/\n {6}- /);
-    const verification = steps.findIndex((step) => step.startsWith("name: Verify MegaLoc test models"));
+    const verification = steps.findIndex((step) => step.startsWith("name: Verify classification test models"));
     const cleanup = steps.findIndex((step) => step.startsWith("name: Drop staging AWS credentials"));
     const consumer = steps.findIndex((step) => step.startsWith(`name: ${nextStep}`));
     assert.ok(verification >= 0 && verification < cleanup && cleanup < consumer);
@@ -3470,3 +3470,35 @@ for (const [workflow, nextStep] of [
     }
   });
 }
+
+// The CLI is typechecked against the in-repo SDK, whose public types come from
+// @qvac/inference. SDK Pod Checks selects packages by changed path, so without
+// this dependency an SDK type change never ran the CLI checks and broke main
+// for the next PR that touched the CLI.
+test("SDK and inference changes select the CLI pod checks", () => {
+  const packages = JSON.parse(read(".github/sdk-pod-checks.json"));
+  const cli = packages.find((entry) => entry.package === "cli");
+  assert.ok(cli, "the cli entry exists");
+  assert.deepEqual(cli.depends_on, ["packages/sdk", "packages/inference"]);
+
+  // The workflow selects a package when a changed file sits under its own path
+  // or one of its depends_on paths; this is that rule, pinned next to it.
+  const workflow = read(".github/workflows/pr-checks-sdk-pod.yml");
+  assert.ok(workflow.includes("([.path] + (.depends_on // [])) as $paths"));
+  assert.ok(workflow.includes('startswith($p + "/")'));
+  const selected = (changedFile) =>
+    packages
+      .filter((entry) =>
+        [entry.path, ...(entry.depends_on ?? [])].some((path) =>
+          changedFile.startsWith(`${path}/`),
+        ),
+      )
+      .map((entry) => entry.package);
+
+  assert.ok(selected("packages/inference/src/schemas/audio-gen.ts").includes("cli"));
+  assert.ok(selected("packages/sdk/src/client/api/audio-gen.ts").includes("cli"));
+  assert.ok(selected("packages/cli/src/serve/index.ts").includes("cli"));
+  assert.ok(!selected("packages/rag/index.js").includes("cli"));
+  // A sibling whose name merely starts with a dependency path is not a match.
+  assert.ok(!selected("packages/sdk-e2e/tests/tts.ts").includes("cli"));
+});

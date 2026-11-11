@@ -10,8 +10,8 @@ packages:
   # fails. Its dependents install the published package, which ships only the
   # .d.ts files. infer-base installs and tests with npm in its own directory.
   - "!packages/infer-base"
-  # sdk-kotlin is a Gradle package; its package.json only declares the Android
-  # BareKit npm deps, installed locally by Gradle. Keeping it out of the pnpm
+  # sdk-kotlin is a Gradle package; its package.json only declares the
+  # @qvac/sdk it bundles, installed locally by Gradle. Keeping it out of the pnpm
   # workspace avoids an importer the root lockfile has no entry for, which would
   # fail every --frozen-lockfile install.
   - "!packages/sdk-kotlin"
@@ -82,33 +82,56 @@ overrides:
 
 # A clang binary run directly (nvcc's -ccbin) finds its builtin headers and linker through etc/clang/*.cfg, as siblings
 # of the clang package. npm lays them out that way; pnpm links them as siblings only when the clang package depends on
-# them. Keep these at the lockfile's llvm-runtime version (the llvm-runtime-siblings policy test checks it).
+# them. One entry per clang version in the lockfile, at that version (the llvm-runtime-siblings policy test checks it).
 packageExtensions:
-  llvm-runtime-clang-linux-x64@23:
+  llvm-runtime-clang-linux-x64@23.1.5:
     dependencies:
-      llvm-runtime-resources-linux: "23.1.3"
-      llvm-runtime-lld-linux-x64: "23.1.3"
-  llvm-runtime-clang-linux-arm64@23:
+      llvm-runtime-resources-linux: "23.1.5"
+      llvm-runtime-lld-linux-x64: "23.1.5"
+  llvm-runtime-clang-linux-arm64@23.1.5:
     dependencies:
-      llvm-runtime-resources-linux: "23.1.3"
-      llvm-runtime-lld-linux-arm64: "23.1.3"
-  llvm-runtime-clang-darwin-x64@23:
+      llvm-runtime-resources-linux: "23.1.5"
+      llvm-runtime-lld-linux-arm64: "23.1.5"
+  llvm-runtime-clang-darwin-x64@23.1.5:
     dependencies:
-      llvm-runtime-resources-darwin: "23.1.3"
-      llvm-runtime-lld-darwin-x64: "23.1.3"
-  llvm-runtime-clang-darwin-arm64@23:
+      llvm-runtime-resources-darwin: "23.1.5"
+      llvm-runtime-lld-darwin-x64: "23.1.5"
+  llvm-runtime-clang-darwin-arm64@23.1.5:
     dependencies:
-      llvm-runtime-resources-darwin: "23.1.3"
-      llvm-runtime-lld-darwin-arm64: "23.1.3"
-  llvm-runtime-clang-win32-x64@23:
+      llvm-runtime-resources-darwin: "23.1.5"
+      llvm-runtime-lld-darwin-arm64: "23.1.5"
+  llvm-runtime-clang-win32-x64@23.1.5:
     dependencies:
-      llvm-runtime-resources-win32: "23.1.3"
-      llvm-runtime-lld-win32-x64: "23.1.3"
-  llvm-runtime-clang-win32-arm64@23:
+      llvm-runtime-resources-win32: "23.1.5"
+      llvm-runtime-lld-win32-x64: "23.1.5"
+  llvm-runtime-clang-win32-arm64@23.1.5:
     dependencies:
-      llvm-runtime-resources-win32: "23.1.3"
-      llvm-runtime-lld-win32-arm64: "23.1.3"
-
+      llvm-runtime-resources-win32: "23.1.5"
+      llvm-runtime-lld-win32-arm64: "23.1.5"
+  llvm-runtime-clang-linux-x64@23.1.6-1:
+    dependencies:
+      llvm-runtime-resources-linux: "23.1.6-1"
+      llvm-runtime-lld-linux-x64: "23.1.6-1"
+  llvm-runtime-clang-linux-arm64@23.1.6-1:
+    dependencies:
+      llvm-runtime-resources-linux: "23.1.6-1"
+      llvm-runtime-lld-linux-arm64: "23.1.6-1"
+  llvm-runtime-clang-darwin-x64@23.1.6-1:
+    dependencies:
+      llvm-runtime-resources-darwin: "23.1.6-1"
+      llvm-runtime-lld-darwin-x64: "23.1.6-1"
+  llvm-runtime-clang-darwin-arm64@23.1.6-1:
+    dependencies:
+      llvm-runtime-resources-darwin: "23.1.6-1"
+      llvm-runtime-lld-darwin-arm64: "23.1.6-1"
+  llvm-runtime-clang-win32-x64@23.1.6-1:
+    dependencies:
+      llvm-runtime-resources-win32: "23.1.6-1"
+      llvm-runtime-lld-win32-x64: "23.1.6-1"
+  llvm-runtime-clang-win32-arm64@23.1.6-1:
+    dependencies:
+      llvm-runtime-resources-win32: "23.1.6-1"
+      llvm-runtime-lld-win32-arm64: "23.1.6-1"
 blockExoticSubdeps: true
 
 allowBuilds:
@@ -193,8 +216,15 @@ minimumReleaseAgeExclude:
   - bare-runtime-win32-arm64
   - bare-runtime-win32-x64
   - bare-semver
+  - bare-sidecar
   - bare-signals
   - bare-stdio
+  - bare-stow
+  - bare-stow-host
+  - bare-stow-protocol
+  - bare-stow-runtime
+  - bare-stow-target-pear-runtime
+  - bare-stow-target-react-native
   - bare-stream
   - bare-structured-clone
   - bare-stylize
@@ -206,6 +236,7 @@ minimumReleaseAgeExclude:
   - bare-tty
   - bare-type
   - bare-type-stripper
+  - bare-unpack
   - bare-url
   - bare-utils
   - bare-v8

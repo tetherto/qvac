@@ -4,8 +4,6 @@ import { createServer } from '../helpers/server.js'
 import { assertStatusAndError, JSON_HEADERS } from '../helpers/http.js'
 import { WorkerStartupError } from '@qvac/sdk'
 
-import { rpcTimeout } from '../../helpers/worker-startup.js'
-
 const CHAT_BODY = { model: '', messages: [{ role: 'user', content: 'hi' }] }
 
 function chat(model: string) {
@@ -14,10 +12,11 @@ function chat(model: string) {
 
 describe('serve: load config', () => {
   it('a worker exit returns a safe startup summary in the HTTP 503 body', async (t) => {
-    const cause = new WorkerStartupError(
-      '/private/worker',
-      { code: null, signal: 'SIGABRT' },
-      'private diagnostic marker'
+    const cause = new Error('/private/worker: private diagnostic marker')
+    const startup = new WorkerStartupError(
+      'Worker failed before signalling ready',
+      { exitCode: null, exitSignal: 'SIGABRT', timedOut: false },
+      cause
     )
     const app = await createServer(t, {
       config: {
@@ -31,7 +30,7 @@ describe('serve: load config', () => {
           }
         }
       },
-      loadModelOverride: () => Promise.reject(rpcTimeout(cause))
+      loadModelOverride: () => Promise.reject(startup)
     })
     const errors: string[] = []
     app.qvac.logger.error = (message) => errors.push(message)
@@ -46,11 +45,11 @@ describe('serve: load config', () => {
     assertStatusAndError(res, 503, 'model_load_failed')
     assert.equal(
       res.json().error.message,
-      'Model "failed" failed to load: Worker process exited (signal SIGABRT) before IPC was established'
+      'Model "failed" failed to load: Worker process exited (signal SIGABRT) before it was ready'
     )
-    assert.doesNotMatch(res.body, /timed out|30000|private|diagnostic marker/)
+    assert.doesNotMatch(res.body, /timeout|private|diagnostic marker/)
     assert.equal(errors.length, 1)
-    assert.match(errors[0]!, /RPC initialization timed out/)
+    assert.match(errors[0]!, /Worker failed before signalling ready/)
     assert.ok(errors[0]!.includes(cause.message))
   })
 

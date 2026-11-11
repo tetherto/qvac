@@ -14,6 +14,7 @@ import type {
   QvacOptions,
   QvacProvider
 } from './types.js'
+import { trimTrailingSlashes } from './url.js'
 
 // External mode synchronously composes the OpenAI-compatible language-model
 // surface with QVAC's native files, transcription, and speech capabilities.
@@ -25,7 +26,9 @@ export function createExternalQvac(options: QvacExternalOptions = {}): QvacProvi
   if (apiKey && headers['authorization'] === undefined) {
     headers['authorization'] = `Bearer ${apiKey}`
   }
-  const baseURL = options.baseURL ?? DEFAULT_BASE_URL
+  // One normalized base for the OpenAI-compatible client and the native
+  // endpoints, which append paths to it directly.
+  const baseURL = trimTrailingSlashes(options.baseURL ?? DEFAULT_BASE_URL)
   const init: Parameters<typeof createOpenAICompatible>[0] = {
     name: 'qvac',
     baseURL,
