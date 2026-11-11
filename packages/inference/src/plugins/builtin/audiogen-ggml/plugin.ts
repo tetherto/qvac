@@ -24,6 +24,7 @@ import {
 } from '@/schemas/index'
 import { createStreamLogger, registerAddonLogger } from '@/logging/index'
 import { resolveAudioGenConfig } from '@/plugins/builtin/audiogen-ggml/config'
+import { audiogenFitRequest } from '@/plugins/builtin/audiogen-ggml/fit'
 import { audioEditStream } from '@/plugins/builtin/audiogen-ggml/ops/audio-edit-stream'
 import { audioGenStream } from '@/plugins/builtin/audiogen-ggml/ops/audio-gen-stream'
 import { audioUnderstand } from '@/plugins/builtin/audiogen-ggml/ops/audio-understand'
@@ -34,6 +35,7 @@ export const audioGenPlugin = definePlugin({
   displayName: 'Audio Generation (GGML / ACE-Step and MiniMax)',
   addonPackage: ADDON_AUDIOGEN,
   loadConfigSchema: audioGenConfigSchema,
+  fitRequest: audiogenFitRequest,
   assessFit: audiogenAssessFit,
   // AudioGen's primary `modelSrc` is intentionally empty: all required
   // weights are config-owned artifacts (ACE-Step: four sources; MiniMax: LM + synth).
@@ -120,6 +122,13 @@ function getAudioGenAddonConfig(config: AudioGenRuntimeConfig) {
     return {
       ...commonConfig,
       ...(config.device !== undefined && { device: config.device }),
+      ...(config.coremlConditionerPath !== undefined && {
+        coremlConditionerPath: config.coremlConditionerPath
+      }),
+      ...(config.coremlProfileDir !== undefined && { coremlProfileDir: config.coremlProfileDir }),
+      ...(config.coremlComputeUnits !== undefined && {
+        coremlComputeUnits: config.coremlComputeUnits
+      }),
       ...(config.inferenceSteps !== undefined && { inferenceSteps: config.inferenceSteps }),
       ...(config.cfgScale !== undefined && { cfgScale: config.cfgScale })
     }
@@ -128,6 +137,9 @@ function getAudioGenAddonConfig(config: AudioGenRuntimeConfig) {
     ...commonConfig,
     ...(config.inferenceSteps !== undefined && { inferenceSteps: config.inferenceSteps }),
     ...(config.shift !== undefined && { shift: config.shift }),
-    ...(config.nGpuLayers !== undefined && { nGpuLayers: config.nGpuLayers })
+    ...(config.nGpuLayers !== undefined && { nGpuLayers: config.nGpuLayers }),
+    ...(config.backend !== undefined && { backend: config.backend }),
+    ...(config.lmBackend !== undefined && { lmBackend: config.lmBackend }),
+    ...(config.dumpStagesDir !== undefined && { dumpStagesDir: config.dumpStagesDir })
   }
 }

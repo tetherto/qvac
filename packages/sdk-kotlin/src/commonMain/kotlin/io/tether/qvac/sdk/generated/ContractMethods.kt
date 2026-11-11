@@ -73,6 +73,14 @@ object QvacMethods {
         progressResponseType = null,
         progressCondition = null,
     )
+    val calcTokens = QvacMethodDescriptor(
+        name = "calcTokens",
+        callShape = QvacCallShape.REQUEST_REPLY,
+        requestType = "CalcTokensRequest",
+        responseType = "CalcTokensResponse",
+        progressResponseType = null,
+        progressCondition = null,
+    )
     val cancel = QvacMethodDescriptor(
         name = "cancel",
         callShape = QvacCallShape.REQUEST_REPLY,
@@ -150,6 +158,14 @@ object QvacMethods {
         callShape = QvacCallShape.REQUEST_REPLY,
         requestType = "EmbedRequest",
         responseType = "EmbedResponse",
+        progressResponseType = null,
+        progressCondition = null,
+    )
+    val embedBatch = QvacMethodDescriptor(
+        name = "embedBatch",
+        callShape = QvacCallShape.REQUEST_REPLY,
+        requestType = "EmbedBatchRequest",
+        responseType = "EmbedBatchResponse",
         progressResponseType = null,
         progressCondition = null,
     )
@@ -410,6 +426,7 @@ object QvacMethods {
         batchCompletionStream,
         bciTranscribe,
         bciTranscribeStream,
+        calcTokens,
         cancel,
         classify,
         completionOrchestrate,
@@ -420,6 +437,7 @@ object QvacMethods {
         discoverRpcServers,
         downloadAsset,
         embed,
+        embedBatch,
         finetune,
         getLoadedModelInfo,
         getModelInfo,

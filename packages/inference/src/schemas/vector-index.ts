@@ -5,7 +5,7 @@ import { z } from 'zod'
 /**
  * Storage modes of the native vector index. The `TURBOVEC_*` modes are the
  * quantised TurboVec formats and require a dimension divisible by 8 and no
- * greater than 1024. `F32`, `Q8` and `Q4` are the generic stores of the same
+ * greater than 16384. `F32`, `Q8` and `Q4` are the generic stores of the same
  * addon and accept any dimension. Declared as a name-to-value map, like
  * `ModelType`, so the contract carries the names for generated clients.
  */
@@ -91,6 +91,10 @@ export const vectorIndexWriteParamsSchema = z.object({
   path: snapshotPathSchema
 })
 
+export const vectorIndexSetStagedSearchParamsSchema = z.object({
+  enabled: z.boolean()
+})
+
 // ============== Requests ==============
 
 const vectorIndexTypeField = { type: z.literal('vectorIndex') }
@@ -142,6 +146,12 @@ const vectorIndexDisposeRequestSchema = z.object({
   operation: z.literal('dispose')
 })
 
+const vectorIndexSetStagedSearchRequestSchema = vectorIndexSetStagedSearchParamsSchema.extend({
+  ...vectorIndexTypeField,
+  ...handleField,
+  operation: z.literal('setStagedSearch')
+})
+
 export const vectorIndexRequestSchema = z.discriminatedUnion('operation', [
   vectorIndexCreateRequestSchema,
   vectorIndexLoadRequestSchema,
@@ -150,6 +160,7 @@ export const vectorIndexRequestSchema = z.discriminatedUnion('operation', [
   vectorIndexRemoveRequestSchema,
   vectorIndexContainsRequestSchema,
   vectorIndexWriteRequestSchema,
+  vectorIndexSetStagedSearchRequestSchema,
   vectorIndexDisposeRequestSchema
 ])
 
@@ -162,7 +173,14 @@ export const vectorIndexHitSchema = z.object({
 
 const vectorIndexResponseBaseSchema = z.object(vectorIndexTypeField)
 
+// External providers may omit controls introduced after the original contract.
+const vectorIndexStateFields = {
+  calibrated: z.boolean().optional(),
+  stagedSearch: z.boolean().optional()
+}
+
 const vectorIndexCreateResponseSchema = vectorIndexResponseBaseSchema.extend({
+  ...vectorIndexStateFields,
   operation: z.literal('create'),
   indexId: indexIdSchema,
   dim: z.number().int().positive(),
@@ -173,6 +191,7 @@ const vectorIndexCreateResponseSchema = vectorIndexResponseBaseSchema.extend({
 // A loaded snapshot reports its storage only when the backend can derive it;
 // the native index exposes a bit width, and 4 bits is ambiguous.
 const vectorIndexLoadResponseSchema = vectorIndexResponseBaseSchema.extend({
+  ...vectorIndexStateFields,
   operation: z.literal('load'),
   indexId: indexIdSchema,
   dim: z.number().int().positive(),
@@ -181,6 +200,7 @@ const vectorIndexLoadResponseSchema = vectorIndexResponseBaseSchema.extend({
 })
 
 const vectorIndexAddResponseSchema = vectorIndexResponseBaseSchema.extend({
+  ...vectorIndexStateFields,
   operation: z.literal('add'),
   length: lengthSchema
 })
@@ -211,6 +231,11 @@ const vectorIndexDisposeResponseSchema = vectorIndexResponseBaseSchema.extend({
   disposed: z.boolean()
 })
 
+const vectorIndexSetStagedSearchResponseSchema = vectorIndexResponseBaseSchema.extend({
+  operation: z.literal('setStagedSearch'),
+  stagedSearch: z.boolean()
+})
+
 export const vectorIndexResponseSchema = z.discriminatedUnion('operation', [
   vectorIndexCreateResponseSchema,
   vectorIndexLoadResponseSchema,
@@ -219,6 +244,7 @@ export const vectorIndexResponseSchema = z.discriminatedUnion('operation', [
   vectorIndexRemoveResponseSchema,
   vectorIndexContainsResponseSchema,
   vectorIndexWriteResponseSchema,
+  vectorIndexSetStagedSearchResponseSchema,
   vectorIndexDisposeResponseSchema
 ])
 
@@ -240,6 +266,9 @@ export interface VectorIndexIdsParams {
 export type VectorIndexSearchParams =
   { query: number[]; k: number } | { queries: number[][]; k: number }
 export type VectorIndexWriteParams = z.infer<typeof vectorIndexWriteParamsSchema>
+export type VectorIndexSetStagedSearchParams = z.infer<
+  typeof vectorIndexSetStagedSearchParamsSchema
+>
 
 // ============== Helpers shared by the in-process and RPC clients ==============
 

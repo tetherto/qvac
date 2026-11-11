@@ -11,11 +11,7 @@ import { nowMs } from '@/profiling/clock'
 import { forwardBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import { isModelLoaded, registerModel, type AnyModel } from '@/runtime/model-registry'
 import { startLogBuffering, stopLogBufferingWithTimeout } from '@/runtime/logging-stream-registry'
-import {
-  detectShardedModel,
-  generateShardFilenames,
-  validateShardedModelCache
-} from '@/utils/index'
+import { detectShardedModel, checkAllShardsExist } from '@/utils/index'
 import {
   PluginNotFoundError,
   ModelFileNotFoundError,
@@ -25,7 +21,7 @@ import {
   InferenceCancelledError
 } from '@/errors/index'
 import { ensureAddonLoggerReady, getPlugin } from '@/plugins/index'
-import { runAdvisoryFitCheck } from '@/model-fit/load-check'
+import { runLoadFitCheck } from '@/model-fit/load-check'
 import { refusesLoad, resolveModelFitPolicy, runsProbe } from '@/schemas/model-fit-policy'
 import { getConfig } from '@/runtime/state'
 import { resolveToolDialect } from '@/utils/tools/dialect'
@@ -76,14 +72,10 @@ export async function loadModel(
     throw new PluginNotFoundError(modelType)
   }
   if (isShardedModel) {
-    // For sharded models, validate all shards and tensors.txt exist
     const shardDir = path.dirname(modelPath)
-    const isValid = await validateShardedModelCache(shardDir, modelFileName)
-
-    if (!isValid) {
-      const numberedShards = generateShardFilenames(modelFileName)
+    if (!(await checkAllShardsExist(shardDir, modelFileName))) {
       throw new ModelFileNotFoundError(
-        `Missing shards or ${shardInfo.baseFilename}.tensors.txt. Expected ${numberedShards.length} shard files + tensors.txt in ${shardDir}`
+        `Missing shards. Expected ${shardInfo.totalShards} shard files in ${shardDir}`
       )
     }
   } else if (!plugin.skipPrimaryModelPathValidation) {
@@ -111,8 +103,8 @@ export async function loadModel(
   // the native load for device memory.
   const fitPolicy = resolveModelFitPolicy(modelFitPolicy, getConfig().modelFitPolicy)
   const request = options?.request
-  const fitProbe = runsProbe(fitPolicy)
-    ? await runAdvisoryFitCheck(
+  const fitCheck = runsProbe(fitPolicy)
+    ? await runLoadFitCheck(
         {
           modelId,
           modelType: modelType as CanonicalModelType,
@@ -124,13 +116,14 @@ export async function loadModel(
         request !== undefined ? { signal: request.signal } : {}
       )
     : undefined
+  const fitProbe = fitCheck?.probe
 
   if (request?.signal.aborted === true) {
     throw new InferenceCancelledError(request.requestId)
   }
 
   if (refusesLoad(fitPolicy, fitProbe?.verdict)) {
-    throw new ModelFitRefusedError(modelType, fitProbe!.reason, fitProbe!.message)
+    throw new ModelFitRefusedError(modelType, 'does-not-fit', fitCheck?.detail)
   }
 
   // Load the addon's logger before the addon itself runs. Plugins that defer

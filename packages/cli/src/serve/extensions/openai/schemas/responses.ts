@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import { z } from 'zod'
 import type { Tool } from '@qvac/sdk'
+import { RESPONSES_KV_CACHE_PREFIX } from '@/serve/lib/responses-kv-cache'
 import {
   responseFormat,
   toolDef,
@@ -11,6 +12,7 @@ import {
   extractToolChoice,
   withToolChoice,
   parseToolCallArguments,
+  hoistInstructions,
   nameToolResults,
   withParallelToolCalls,
   type GenerationParams,
@@ -63,16 +65,6 @@ export const RESPONSES_UNSUPPORTED_PARAMS = [
   'remove_thinking_from_context'
 ] as const
 
-export class UnsupportedToolTypeError extends Error {
-  readonly toolType: string
-
-  constructor(toolType: string) {
-    super(`Unsupported tool type "${toolType}" for Responses API.`)
-    this.name = 'UnsupportedToolTypeError'
-    this.toolType = toolType
-  }
-}
-
 export class InvalidResponsesConversationError extends Error {
   constructor() {
     super('"conversation" is not supported by this server (no Conversation persistence).')
@@ -85,6 +77,49 @@ export class InvalidResponsesBackgroundError extends Error {
     super('"background": true is not supported; only synchronous responses are available.')
     this.name = 'InvalidResponsesBackgroundError'
   }
+}
+
+export class InvalidResponsesKvCacheKeyError extends Error {
+  constructor(message = 'KV cache key must be a nonempty string of at most 512 UTF-8 bytes.') {
+    super(message)
+    this.name = 'InvalidResponsesKvCacheKeyError'
+  }
+}
+
+function headerValues(rawHeaders: readonly string[], name: string): string[] {
+  const values: string[] = []
+  for (let i = 0; i + 1 < rawHeaders.length; i += 2) {
+    if (rawHeaders[i]!.toLowerCase() === name) values.push(rawHeaders[i + 1]!)
+  }
+  return values
+}
+
+function responsesKvCacheKey(
+  rawHeaders: readonly string[],
+  body: ResponsesBody
+): string | undefined {
+  // Node joins a repeated header into "a, b", which would hash to an unrelated session.
+  const fromHeader = headerValues(rawHeaders, 'x-qvac-kv-cache-key')
+  if (fromHeader.length > 1) {
+    throw new InvalidResponsesKvCacheKeyError('Send the X-QVAC-KV-Cache-Key header only once.')
+  }
+  // Header first, then metadata, then OpenAI's `prompt_cache_key` (Codex sends
+  // one per conversation). A source that is present but invalid is rejected,
+  // not skipped. Validate before trimming/hashing so padding and multibyte
+  // strings cannot bypass the limit.
+  const fromMetadata = body.metadata?.['qvac_kv_cache_key']
+  const key: unknown =
+    fromHeader.length > 0
+      ? fromHeader[0]
+      : fromMetadata !== undefined
+        ? fromMetadata
+        : (body as Record<string, unknown>)['prompt_cache_key']
+  if (key === undefined) return undefined
+  if (typeof key !== 'string' || Buffer.byteLength(key, 'utf8') > 512 || key.trim().length === 0) {
+    throw new InvalidResponsesKvCacheKeyError()
+  }
+  // Never give an opaque caller key to the SDK's filesystem cache layout.
+  return `${RESPONSES_KV_CACHE_PREFIX}${crypto.createHash('sha256').update(key).digest('hex')}`
 }
 
 export function validateResponsesStatefulOptions(body: Record<string, unknown>): {
@@ -120,35 +155,126 @@ export function extractResponsesResponseFormat(
   return undefined
 }
 
-interface ResponsesFunctionTool {
+interface ResponsesTool {
   type: string
   name?: string
   description?: string
   parameters?: Record<string, unknown>
+  defer_loading?: boolean
+  tools?: ResponsesTool[]
 }
 
-export function openaiResponsesToolsToSdk(
-  tools: ResponsesFunctionTool[] | undefined
-): Tool[] | undefined {
-  if (!tools || tools.length === 0) return undefined
+/** The tool a client declared inside a `namespace`, keyed by the name the model sees. */
+export type ToolNamespaces = ReadonlyMap<string, { namespace: string; name: string }>
 
-  return tools
-    .map((t): Tool | null => {
-      if (t.type === 'function') {
-        const name = typeof t.name === 'string' ? t.name : ''
-        if (!name) return null
-        return {
-          type: 'function',
-          name,
-          description: typeof t.description === 'string' ? t.description : '',
-          parameters: normalizeToolParameters(
-            t.parameters ?? { type: 'object', properties: {} }
-          ) as Tool['parameters']
-        }
+export interface ResponsesTools {
+  tools: Tool[] | undefined
+  namespaces: ToolNamespaces
+  /** Built-in tool types (`web_search`, …) this server cannot run; left out of the request. */
+  skippedTypes: string[]
+}
+
+export class InvalidResponsesToolsError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'InvalidResponsesToolsError'
+  }
+}
+
+// The model sees one flat list, and names repeat across namespaces (Codex
+// declares `js` in two MCP servers), so a namespaced tool gets a qualified name.
+// It keeps the inner name as is, so distinct tools never share one.
+export function qualifiedToolName(namespace: string, name: string): string {
+  return `${namespace}__${name}`
+}
+
+function functionTool(t: ResponsesTool, name: string, deferLoading = t.defer_loading): Tool {
+  return {
+    type: 'function',
+    name,
+    description: typeof t.description === 'string' ? t.description : '',
+    ...(typeof deferLoading === 'boolean' && { deferLoading }),
+    parameters: normalizeToolParameters(
+      t.parameters ?? { type: 'object', properties: {} }
+    ) as Tool['parameters']
+  }
+}
+
+export function openaiResponsesToolsToSdk(tools: ResponsesTool[] | undefined): ResponsesTools {
+  const out: Tool[] = []
+  const namespaces = new Map<string, { namespace: string; name: string }>()
+  const skippedTypes = new Set<string>()
+  const topLevel = new Set<string>()
+
+  for (const t of tools ?? []) {
+    if (t.type === 'function') {
+      if (typeof t.name === 'string' && t.name) {
+        out.push(functionTool(t, t.name))
+        topLevel.add(t.name)
       }
-      throw new UnsupportedToolTypeError(t.type)
-    })
-    .filter((t): t is Tool => t !== null)
+    } else if (t.type === 'namespace') {
+      if (typeof t.name !== 'string' || !t.name || !Array.isArray(t.tools)) {
+        throw new InvalidResponsesToolsError(
+          'A "namespace" tool needs a non-empty "name" and a "tools" array.'
+        )
+      }
+      for (const inner of t.tools as unknown[]) {
+        if (inner === null || typeof inner !== 'object' || Array.isArray(inner)) {
+          throw new InvalidResponsesToolsError(
+            `Namespace "${t.name}" lists a tool that is not an object.`
+          )
+        }
+        const fn = inner as ResponsesTool
+        if (fn.type !== 'function' || typeof fn.name !== 'string' || !fn.name) continue
+        const qualified = qualifiedToolName(t.name, fn.name)
+        const existing = namespaces.get(qualified)
+        if (existing) {
+          if (existing.namespace === t.name && existing.name === fn.name) continue
+          throw new InvalidResponsesToolsError(
+            `Tool "${fn.name}" in namespace "${t.name}" and tool "${existing.name}" in namespace ` +
+              `"${existing.namespace}" both become "${qualified}".`
+          )
+        }
+        namespaces.set(qualified, { namespace: t.name, name: fn.name })
+        out.push(functionTool(fn, qualified, fn.defer_loading ?? t.defer_loading))
+      }
+    } else {
+      skippedTypes.add(t.type)
+    }
+  }
+
+  // A top-level tool spelled like a qualified name would make its calls ambiguous.
+  for (const qualified of namespaces.keys()) {
+    if (topLevel.has(qualified)) {
+      throw new InvalidResponsesToolsError(
+        `Tool "${qualified}" is declared both at the top level and inside namespace ` +
+          `"${namespaces.get(qualified)!.namespace}".`
+      )
+    }
+  }
+
+  return {
+    tools: out.length > 0 ? out : undefined,
+    namespaces,
+    skippedTypes: [...skippedTypes]
+  }
+}
+
+// The Responses API accepts `{ role, content }` without `type: "message"`.
+function isMessageItem(item: Record<string, unknown>): boolean {
+  return (
+    item['type'] === 'message' || (item['type'] === undefined && typeof item['role'] === 'string')
+  )
+}
+
+// A namespaced tool is named `<namespace>__<name>` for the model, so a forced
+// choice that names it by namespace has to use that name too.
+function qualifyToolChoice(body: Record<string, unknown>): Record<string, unknown> {
+  const choice = body['tool_choice']
+  if (choice === null || typeof choice !== 'object' || Array.isArray(choice)) return body
+  const { namespace, name, ...rest } = choice as Record<string, unknown>
+  if (typeof namespace !== 'string' || !namespace || typeof name !== 'string') return body
+  return { ...body, tool_choice: { ...rest, name: qualifiedToolName(namespace, name) } }
 }
 
 function inputTextPart(text: string): Record<string, unknown> {
@@ -171,9 +297,11 @@ export interface ResponsesHistoryItem extends ToolTurnFields {
 // A `function_call` item joins the assistant turn right before it (its text, or
 // the calls made alongside it); otherwise it starts a new one.
 function pushFunctionCall(history: ResponsesHistoryItem[], item: Record<string, unknown>): void {
+  const name = typeof item['name'] === 'string' ? item['name'] : ''
+  const namespace = item['namespace']
   const call = {
     ...(typeof item['call_id'] === 'string' && { id: item['call_id'] }),
-    name: typeof item['name'] === 'string' ? item['name'] : '',
+    name: typeof namespace === 'string' && namespace ? qualifiedToolName(namespace, name) : name,
     arguments: parseToolCallArguments(item['arguments'] ?? {})
   }
   const last = history[history.length - 1]
@@ -268,7 +396,7 @@ export function openaiResponsesInputToHistory(
     if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) continue
     const item = raw as Record<string, unknown>
     const t = item['type']
-    if (t === 'message') {
+    if (isMessageItem(item)) {
       const role = typeof item['role'] === 'string' ? item['role'] : 'user'
       const content = item['content']
       history.push({ role, content: flattenResponsesContent(content) })
@@ -288,7 +416,7 @@ export function openaiResponsesInputToHistory(
     }
   }
 
-  return nameToolResults(history)
+  return nameToolResults(hoistInstructions(history))
 }
 
 function flattenResponsesContent(content: unknown): string {
@@ -334,7 +462,7 @@ export function historyPrefixFromStoredResponse(
   for (const raw of stored.inputItems) {
     if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) continue
     const item = raw as Record<string, unknown>
-    if (item['type'] === 'message') {
+    if (isMessageItem(item)) {
       const role = typeof item['role'] === 'string' ? item['role'] : 'user'
       prefix.push({ role, content: flattenResponsesContent(item['content']) })
     } else if (item['type'] === 'input_text') {
@@ -387,8 +515,11 @@ function extractOutputTextFromMessage(msg: Record<string, unknown>): string {
 export type ResponsesBody = z.infer<typeof responsesBody>
 
 export interface SdkResponsesArgs {
+  kvCache: string | undefined
   history: ResponsesHistoryItem[]
   tools: Tool[] | undefined
+  toolNamespaces: ToolNamespaces
+  skippedToolTypes: string[]
   generationParams: GenerationParams | undefined
   responseFormat: ResponseFormat | undefined
   storeEnabled: boolean
@@ -402,13 +533,18 @@ export interface SdkResponsesArgs {
   stream: boolean
 }
 
-export function toSdkResponsesArgs(body: ResponsesBody): SdkResponsesArgs {
+export function toSdkResponsesArgs(
+  body: ResponsesBody,
+  rawHeaders: readonly string[] = []
+): SdkResponsesArgs {
   const { previousResponseId, storeEnabled } = validateResponsesStatefulOptions(
     body as Record<string, unknown>
   )
-  const tools = openaiResponsesToolsToSdk(
-    body.tools as Parameters<typeof openaiResponsesToolsToSdk>[0]
-  )
+  const {
+    tools,
+    namespaces: toolNamespaces,
+    skippedTypes: skippedToolTypes
+  } = openaiResponsesToolsToSdk(body.tools as Parameters<typeof openaiResponsesToolsToSdk>[0])
   const responseFmt = extractResponsesResponseFormat(body as Record<string, unknown>)
   const instructions = typeof body.instructions === 'string' ? body.instructions : undefined
   const inputItems = normalizeResponsesInputItemsForStorage(body.input)
@@ -424,12 +560,15 @@ export function toSdkResponsesArgs(body: ResponsesBody): SdkResponsesArgs {
     typeof body.parallel_tool_calls === 'boolean' ? body.parallel_tool_calls : undefined
 
   return {
+    kvCache: responsesKvCacheKey(rawHeaders, body),
     history,
     tools,
+    toolNamespaces,
+    skippedToolTypes,
     generationParams: withParallelToolCalls(
       withToolChoice(
         extractGenerationParams(body as Record<string, unknown>, 'max_output_tokens'),
-        extractToolChoice(body as Record<string, unknown>, tools)
+        extractToolChoice(qualifyToolChoice(body as Record<string, unknown>), tools)
       ),
       parallel
     ),

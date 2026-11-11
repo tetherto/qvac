@@ -558,6 +558,9 @@ private:
   // tags.
   bool thinkingForcedOpen_ = false;
   std::string thinkingForcedOpenText_;
+  // The batch path owes the opener to this request's stream: set by
+  // `onPrefillComplete`, cleared once the first `onLogitsReady` emits it.
+  bool thinkingOpenerPending_ = false;
 
   // Reasoning channel detection state (Qwen3 / Gemma 4 / ...). Empty
   // tags when the active model has no recognised channel.
@@ -619,6 +622,7 @@ private:
   std::optional<CacheCheckpoint> pendingHistoryCheckpoint_;
   size_t generationPromptTokens_ = 0;
   size_t historyCheckpointEntries_ = 0;
+  bool historyEndsAtUserTurn_ = false;
   qvac_lib_inference_addon_llama::cache::CheckpointPolicy
       cacheCheckpointPolicy_;
   size_t pendingReuseEntries_ = 0;

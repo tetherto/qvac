@@ -7,7 +7,7 @@ import {
   detectShardedModel,
   getShardedModelCacheDir,
   getShardPath,
-  extractTensorsFromShards,
+  generateShardFilenames,
   calculatePercentage
 } from '@/utils/index'
 import { getSingleFileCachePath } from '@/utils/cache/paths'
@@ -48,9 +48,15 @@ const logger = getEngineLogger()
 /**
  * Find all shards for a model using path prefix query.
  */
-async function findModelShards(
-  registryPath: string
-): Promise<{ path: string; source: string; size: number; checksum: string }[]> {
+export async function findModelShards(registryPath: string): Promise<
+  {
+    path: string
+    source: string
+    size: number
+    checksum: string
+    blobBinding: QVACBlobBinding | undefined
+  }[]
+> {
   const client = await getRegistryClient()
 
   const shardInfo = detectShardedModel(registryPath.split('/').pop() || '')
@@ -82,11 +88,32 @@ async function findModelShards(
       path: s.path,
       source: s.source,
       size: s.blobBinding?.byteLength || 0,
-      checksum: (s.blobBinding as unknown as Record<string, string>)?.['sha256'] || s.sha256 || ''
+      checksum: (s.blobBinding as unknown as Record<string, string>)?.['sha256'] || s.sha256 || '',
+      blobBinding: s.blobBinding
     }))
 
   logger.info(`📦 Found ${sortedShards.length} shards`)
   return sortedShards
+}
+
+/**
+ * The shards a registry listing holds for the filename's declared shard group.
+ * Fails here, rather than at load time, when the registry is missing one.
+ */
+export function selectDeclaredShards<T extends { path: string }>(
+  registryPath: string,
+  remoteShards: T[]
+) {
+  const dir = registryPath.slice(0, registryPath.lastIndexOf('/') + 1)
+  const byPath = new Map(remoteShards.map((s) => [s.path, s]))
+  const expected = generateShardFilenames(registryPath.slice(dir.length))
+  const declared = expected.flatMap((name) => byPath.get(dir + name) ?? [])
+  if (declared.length !== expected.length) {
+    throw new RegistryDownloadFailedError(
+      `Expected ${expected.length} shards for ${registryPath} but the registry has ${declared.length}`
+    )
+  }
+  return declared
 }
 
 /**
@@ -101,7 +128,8 @@ async function downloadShardedFilesFromRegistry(
   progressCallback?: (progress: ModelProgressUpdate) => void,
   signal?: AbortSignal,
   localShardMetadata?: RegistryItem['shardMetadata'],
-  hooks?: DownloadHooks
+  hooks?: DownloadHooks,
+  shouldClearCache?: () => boolean
 ): Promise<string> {
   if (signal?.aborted) {
     throw new DownloadCancelledError()
@@ -139,11 +167,9 @@ async function downloadShardedFilesFromRegistry(
       throw new ModelNotFoundError(`No shards found for ${registryPath}`)
     }
 
-    if (remoteShards.length !== shardInfo.totalShards) {
-      logger.warn(`⚠️ Expected ${shardInfo.totalShards} shards but found ${remoteShards.length}`)
-    }
+    const declared = selectDeclaredShards(registryPath, remoteShards)
 
-    shards = remoteShards.map((s) => ({
+    shards = declared.map((s) => ({
       filename: s.path.split('/').pop() || '',
       size: s.size,
       checksum: s.checksum,
@@ -231,15 +257,13 @@ async function downloadShardedFilesFromRegistry(
       shardProgressCallback,
       signal,
       shard.blobBinding,
-      hooks
+      hooks,
+      shouldClearCache
     )
 
     overallDownloaded += shard.size
     logger.info(`✅ Shard ${i + 1}/${shards.length} downloaded`)
   }
-
-  const firstShardFilename = shards[0]!.filename
-  await extractTensorsFromShards(shardDir, firstShardFilename)
 
   if (progressCallback) {
     const lastShard = shards[shards.length - 1]!
@@ -260,7 +284,7 @@ async function downloadShardedFilesFromRegistry(
     })
   }
 
-  return getShardPath(cacheKey, firstShardFilename)
+  return getShardPath(cacheKey, shards[0]!.filename)
 }
 
 export async function downloadModelFromRegistry(
@@ -341,7 +365,8 @@ export async function downloadModelFromRegistry(
             ctx.broadcastProgress,
             ctx.signal,
             localShardMeta,
-            hooks
+            hooks,
+            ctx.shouldClearCache
           )
         } catch (error) {
           if (error instanceof DownloadCancelledError && ctx.shouldClearCache()) {
@@ -495,7 +520,8 @@ export async function downloadModelFromRegistry(
           ctx.broadcastProgress,
           ctx.signal,
           blobBinding,
-          hooks
+          hooks,
+          ctx.shouldClearCache
         )
       } catch (error) {
         if (error instanceof DownloadCancelledError && ctx.shouldClearCache()) {

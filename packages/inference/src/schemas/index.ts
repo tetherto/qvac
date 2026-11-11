@@ -3,12 +3,15 @@ export * from '@/schemas/model-file'
 export * from '@/schemas/cancel'
 export * from '@/schemas/batch-completion-stream'
 export * from '@/schemas/completion-stream'
+export * from '@/schemas/calc-tokens'
 export * from '@/schemas/completion-event'
 export {
   toolSchema,
   toolCallSchema,
   toolCallErrorSchema,
+  toolSearchOptionsSchema,
   type Tool,
+  type ToolSearchOptions,
   type ToolCall,
   type ToolCallError,
   type ToolCallWithCall
@@ -19,6 +22,7 @@ export * from '@/schemas/download-asset'
 export * from '@/schemas/embed'
 export * from '@/schemas/decision'
 export * from '@/schemas/rerank'
+export * from '@/schemas/image-embedding'
 export * from '@/schemas/finetune'
 export * from '@/schemas/load-model'
 export * from '@/schemas/reload-config'
@@ -32,6 +36,7 @@ export * from '@/schemas/translation-config'
 export * from '@/schemas/llamacpp-config'
 export * from '@/schemas/transcription-config'
 export * from '@/schemas/text-to-speech'
+export * from '@/schemas/tts-pcm'
 export * from '@/schemas/error'
 export * from '@/schemas/rag'
 export * from '@/schemas/vector-index'
@@ -99,6 +104,5 @@ export {
 } from '@/schemas/model-types'
 export * from '@/schemas/plugin'
 export * from '@/schemas/registry'
-export * from '@/schemas/model-resource-profile'
 export * from '@/schemas/assess-model-fit'
 export * from '@/schemas/rpc-server'

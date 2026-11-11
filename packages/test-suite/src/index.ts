@@ -56,6 +56,14 @@ export { BaseExecutor, SkipExecutor } from './core/base-executor.js'
 // Utility exports
 export { findConfig, loadConfig } from './utils/config-loader.js'
 export { loadTests } from './utils/test-loader.js'
+export { selectTests, selectRunTests } from './utils/test-selection.js'
+export type {
+  SelectionOptions,
+  Selection,
+  RunSelectionOptions,
+  RunSelection
+} from './utils/test-selection.js'
+export { matchesPlatform, getPlatformSkipReason } from './utils/platform-match.js'
 export { ValidationHelpers, chainExpectation } from './utils/validation-helpers.js'
 export {
   createMqttClient,

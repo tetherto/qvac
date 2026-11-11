@@ -11,7 +11,7 @@
     {
       "name": "qvac-fabric",
       "default-features": false,
-      "version>=": "11259.2.0#1"
+      "version>=": "11739.2.0"
     },
     {
       "name": "speech-cpp",
@@ -70,8 +70,8 @@
   "overrides": [
     {
       "name": "speech-cpp",
-      "version": "2026-10-29",
-      "port-version": 2
+      "version": "2026-11-11",
+      "port-version": 0
     }
   ]
 }
