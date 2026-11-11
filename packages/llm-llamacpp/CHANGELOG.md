@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.70.1] - 2026-11-11
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.28.0` -> `^0.29.0`, which carries
+  `qvac-fabric` `11739.1.1` -> `11739.2.0`
+  ([#5706](https://github.com/tetherto/qvac/pull/5706)): FP8 E4M3 weights and
+  KV cache with CUDA FP8 matmuls, the ConvRot ops, ragged ubatches for
+  qwen35 recurrent layers, a fix for speculative-draft sampling chains that
+  shared buffers, and XDNA and Metal decode work. A caret on a `0.x` version
+  locks the minor, so `^0.28.0` would not have resolved `0.29.0` on its own.
+  The mobile dev and peer dependencies `@qvac/fabric-android-arm64` /
+  `@qvac/fabric-ios` move to `^0.29.0` with it.
+- `@qvac/fabric` 0.29.0 renumbers the TurboQuant and PolarQuant KV-cache types
+  (43-50 -> 52-59) and moves the RPC protocol from 113 to 116, so it is not
+  ABI-compatible with 0.28.x. Every addon loaded in one process must resolve
+  the same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.29.0` together.
+- The `tbq*` / `pq*` `cache-type-k` / `cache-type-v` values keep their names;
+  the addon is rebuilt against the 0.29.0 headers for the new type numbers.
+- Under `tool_choice: 'required'`, the chat grammar accepts only a reasoning
+  block before the tool call, so a model can no longer write prose until the
+  context fills without calling a tool.
+- RPC peers must match the new protocol: use `@qvac/ggml-rpc-server` 0.9.1 or
+  newer. With `rpc-servers`, a Qwen3.5 model whose recurrent layers run on a
+  Metal, Vulkan or OpenCL server can abort that server on the new ragged ops;
+  set `LLAMA_RS_RAGGED=0` until
+  [qvac-fabric-llm.cpp#519](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/519)
+  ships.
+
 ## [0.70.0] - 2026-11-10
 
 ### Added
