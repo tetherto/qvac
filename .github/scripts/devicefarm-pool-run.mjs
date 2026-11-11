@@ -10,7 +10,7 @@ import { pathToFileURL } from 'node:url'
 
 const DONE = ['COMPLETED', 'STOPPED', 'ERRORED']
 // Statuses of a run still waiting for a Device Farm slot.
-const QUEUED = ['PENDING', 'PENDING_CONCURRENCY']
+const QUEUED = ['PENDING', 'PENDING_CONCURRENCY', 'SCHEDULING']
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const summary = (lines) =>
   process.env.GITHUB_STEP_SUMMARY &&
