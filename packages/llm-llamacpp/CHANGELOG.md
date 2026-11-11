@@ -28,6 +28,17 @@
   fabric's reader. A Gemma 4 assistant is not detected, as in llama-server;
   give it `draft-mtp`.
 
+### Fixed
+
+- A DFlash or DSpark model trained for another model no longer aborts the
+  process. The load fails with `UnableToLoadModel`, and `assessFit` rejects
+  it, when the drafter's vocabulary or hidden width differs from the model's
+  or it reads a layer past the model's last; fabric checked none of these and
+  hit a ggml assert.
+- `assessFit` with `spec-type: 'auto'` no longer blocks on a draft model path
+  that is not a regular file (a FIFO): it is rejected before the drafter's
+  header is read, as the load does.
+
 ## [0.69.0] - 2026-11-09
 
 ### Added

@@ -323,6 +323,19 @@ void LlamaModel::init(bool acquireLock) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument, e.what());
   }
+  // A DFlash or DSpark model for another model aborts the process in fabric
+  // (a ggml shape assert) once it is fitted next to this one, so it is
+  // refused before `common_init_from_params`.
+  if (const std::string mismatch = qvac_lib_inference_addon_llama::speculative::
+          draftTargetMismatchForFile(params.speculative, modelPath);
+      !mismatch.empty()) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(qvac_lib_inference_addon_llama::errors::UnableToLoadModel),
+        "[Speculative] the draft model '" +
+            params.speculative.draft.mparams.path +
+            "' does not match the model: " + mismatch);
+  }
 
   snap.demoteToRead();
   common_init_result_ptr llamaInit = common_init_from_params(params);

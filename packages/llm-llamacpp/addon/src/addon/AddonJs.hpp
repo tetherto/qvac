@@ -717,6 +717,10 @@ inline FitResult runFit(FitRequest request) {
     const auto speculativeConfig =
         qvac_lib_inference_addon_llama::speculative::parseSpeculativeConfig(
             configFilemap);
+    // Before `spec-type: "auto"` opens the draft model to read its type: a
+    // FIFO would block that open. The load checks it at the same point.
+    qvac_lib_inference_addon_llama::speculative::requireDraftModelFile(
+        speculativeConfig);
     ModelMetaData metadata;
     metadata.parse(modelPath, ADDON_ID);
     auto normalized = load_fit_normalization::normalizeLoadForFit(
@@ -841,6 +845,15 @@ inline FitResult runFit(FitRequest request) {
               loadParams.speculative);
       !mismatch.empty()) {
     throwFitError(qvac_errors::general_error::InvalidArgument, mismatch);
+  }
+  // And a DFlash or DSpark model for another model, which aborts fabric's
+  // fit as it does the load.
+  if (const std::string mismatch = qvac_lib_inference_addon_llama::speculative::
+          draftTargetMismatchForFile(loadParams.speculative, modelPath);
+      !mismatch.empty()) {
+    throwFitError(
+        qvac_errors::general_error::InvalidArgument,
+        "the draft model does not match the model: " + mismatch);
   }
 
   common_params_fit_status status{};

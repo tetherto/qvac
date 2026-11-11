@@ -96,6 +96,56 @@ int64_t readGgufU32(const gguf_context* ctx, const std::string& key) {
   return gguf_get_val_u32(ctx, id);
 }
 
+// The integer array at `key`, of any GGUF integer type, or empty.
+std::vector<int64_t>
+readGgufIntArray(const gguf_context* ctx, const std::string& key) {
+  std::vector<int64_t> values;
+  const int64_t id = gguf_find_key(ctx, key.c_str());
+  if (id < 0 || gguf_get_kv_type(ctx, id) != GGUF_TYPE_ARRAY) {
+    return values;
+  }
+  const size_t n = gguf_get_arr_n(ctx, id);
+  const void* data = gguf_get_arr_data(ctx, id);
+  const auto read = [&](auto typed) {
+    using T = decltype(typed);
+    const T* items = static_cast<const T*>(data);
+    values.reserve(n);
+    for (size_t i = 0; i < n; ++i) {
+      values.push_back(static_cast<int64_t>(items[i]));
+    }
+  };
+  switch (gguf_get_arr_type(ctx, id)) {
+  case GGUF_TYPE_INT8:
+    read(int8_t{});
+    break;
+  case GGUF_TYPE_UINT8:
+    read(uint8_t{});
+    break;
+  case GGUF_TYPE_INT16:
+    read(int16_t{});
+    break;
+  case GGUF_TYPE_UINT16:
+    read(uint16_t{});
+    break;
+  case GGUF_TYPE_INT32:
+    read(int32_t{});
+    break;
+  case GGUF_TYPE_UINT32:
+    read(uint32_t{});
+    break;
+  case GGUF_TYPE_INT64:
+    read(int64_t{});
+    break;
+  case GGUF_TYPE_UINT64:
+    // A value past INT64_MAX reads as negative, which is no layer either.
+    read(uint64_t{});
+    break;
+  default:
+    break;
+  }
+  return values;
+}
+
 // The speculative types the addon creates a draft context for: MTP, on the
 // target's layers or an external head, or a DFlash or DSpark model.
 bool hasDraftContext(const common_params_speculative& params) {
@@ -196,11 +246,14 @@ GgufShape readGgufShape(const std::string& path) {
     shape.arch = prefix;
     // As fabric's `n_embd_out()`: a Gemma 4 assistant carries the target's
     // width in `embedding_length_out` and its own in `embedding_length`.
+    shape.embd = readGgufU32(ctx, prefix + ".embedding_length");
     shape.width = readGgufU32(ctx, prefix + ".embedding_length_out");
     if (shape.width == 0) {
-      shape.width = readGgufU32(ctx, prefix + ".embedding_length");
+      shape.width = shape.embd;
     }
+    shape.layers = readGgufU32(ctx, prefix + ".block_count");
     shape.mtpLayers = readGgufU32(ctx, prefix + ".nextn_predict_layers");
+    shape.targetLayers = readGgufIntArray(ctx, prefix + ".target_layers");
     // As fabric's `llama_model_meta_val_str` check: absent, or "true".
     const int64_t confidence =
         gguf_find_key(ctx, (prefix + ".has_confidence_head").c_str());
@@ -213,6 +266,7 @@ GgufShape readGgufShape(const std::string& path) {
     }
   }
   shape.markovHead = gguf_find_tensor(ctx, "markov_w1.weight") >= 0;
+  shape.draftVocabMap = gguf_find_tensor(ctx, "d2t") >= 0;
   const int64_t tokens = gguf_find_key(ctx, "tokenizer.ggml.tokens");
   if (tokens >= 0 && gguf_get_kv_type(ctx, tokens) == GGUF_TYPE_ARRAY) {
     shape.vocab = static_cast<int64_t>(gguf_get_arr_n(ctx, tokens));
@@ -362,6 +416,73 @@ std::string dsparkDrafterMismatch(const GgufShape& drafter, float pMin) {
            "spec-draft-p-min to 0";
   }
   return "";
+}
+
+std::string dflashTargetMismatch(
+    const GgufShape& drafter, int64_t targetWidth, int64_t targetLayers,
+    int64_t targetVocab) {
+  if (drafter.arch != "dflash") {
+    return "";
+  }
+  std::string reason;
+  const auto add = [&reason](const std::string& part) {
+    reason += reason.empty() ? "" : "; ";
+    reason += part;
+  };
+  // Its Markov head and draft logits are sized to its own vocabulary, unless
+  // a `d2t` map points a reduced one at the model's tokens.
+  if (!drafter.draftVocabMap && drafter.vocab > 0 && targetVocab > 0 &&
+      drafter.vocab != targetVocab) {
+    add(std::to_string(drafter.vocab) + " tokens, the model's " +
+        std::to_string(targetVocab));
+  }
+  // Its input projection takes each target layer's hidden state at its own
+  // width.
+  if (drafter.embd > 0 && targetWidth > 0 && drafter.embd != targetWidth) {
+    add("hidden width " + std::to_string(drafter.embd) + ", the model's " +
+        std::to_string(targetWidth));
+  }
+  // Fabric reads layer inputs 0 through the layer count, the last being the
+  // final hidden state.
+  if (targetLayers > 0) {
+    for (const int64_t layer : drafter.targetLayers) {
+      if (layer < 0 || layer > targetLayers) {
+        add("it reads target layer " + std::to_string(layer) +
+            ", the model has " + std::to_string(targetLayers) + " layers");
+        break;
+      }
+    }
+  }
+  return reason;
+}
+
+std::string draftTargetMismatch(
+    const common_params_speculative& params, int64_t targetWidth,
+    int64_t targetLayers, int64_t targetVocab) {
+  if (!params.has_dft() ||
+      (!hasType(params, COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH) &&
+       !hasType(params, COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK))) {
+    return "";
+  }
+  return dflashTargetMismatch(
+      readGgufShape(params.draft.mparams.path),
+      targetWidth,
+      targetLayers,
+      targetVocab);
+}
+
+std::string draftTargetMismatchForFile(
+    const common_params_speculative& params, const std::string& targetPath) {
+  if (!params.has_dft() ||
+      (!hasType(params, COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH) &&
+       !hasType(params, COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK))) {
+    return "";
+  }
+  const GgufShape target = readGgufShape(targetPath);
+  // Fabric's layer count leaves the MTP layers out.
+  const int64_t layers =
+      target.layers > target.mtpLayers ? target.layers - target.mtpLayers : 0;
+  return draftTargetMismatch(params, target.embd, layers, target.vocab);
 }
 
 std::string draftModelMismatch(const common_params_speculative& params) {

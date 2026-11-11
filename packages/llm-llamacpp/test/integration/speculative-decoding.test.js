@@ -795,3 +795,46 @@ safeTest(
     await model.unload().catch(() => {})
   }
 )
+
+// A DSpark drafter for another model of the family (LFM2.5-1.2B's and
+// LFM2.5-VL-3B's differ in vocabulary and target layers) aborts the process
+// in fabric, at the load and in the fit, so both refuse it first. Kept here
+// rather than in fit.test.js because the models are opt-in.
+const DSPARK_WRONG_TARGETS = [
+  {
+    target: DSPARK_TARGET,
+    draft: 'LFM2.5-VL-3B-DSpark-F16.gguf',
+    reason: /128000 tokens, the model's 65536; it reads target layer 18, the model has 16 layers/
+  },
+  {
+    target: 'LFM2.5-VL-3B-Q4_K_M.gguf',
+    draft: DSPARK_DRAFT,
+    reason: /65536 tokens, the model's 128000/
+  }
+]
+for (const { target, draft, reason } of DSPARK_WRONG_TARGETS) {
+  safeTest(
+    `a DSpark drafter for another model is refused: ${draft} on ${target}`,
+    { timeout: 600_000, skip: skipDspark || skipDsparkVl },
+    async (t) => {
+      const config = baseConfig({
+        'spec-type': 'draft-dspark',
+        'spec-draft-model': await modelPath(draft)
+      })
+      const model = new LlmLlamacpp({
+        files: { model: [await modelPath(target)] },
+        config,
+        logger: null
+      })
+      await t.exception(model.load(), /the draft model '.*' does not match the model/)
+      await model.unload().catch(() => {})
+      // A cpu load has no fit verdict, so the fit stops before the draft.
+      if (useCpu) return
+      await t.exception(
+        LlmLlamacpp.assessFit({ modelPath: await modelPath(target), config }),
+        reason,
+        'the fit refuses it the same way'
+      )
+    }
+  )
+}

@@ -310,6 +310,25 @@ test('a draft model that is not a file rejects', { timeout: 600_000 }, async (t)
   )
 })
 
+// Auto-detection opens the draft model to read its type, and opening a FIFO
+// with no writer never returns, so the file check must come first.
+test(
+  'spec-type auto with a draft model that is a FIFO rejects',
+  { timeout: 600_000, skip: isMobile || platform === 'win32' },
+  async (t) => {
+    const { spawnSync } = require('bare-subprocess')
+    const fs = require('bare-fs')
+    const fifo = path.join(os.tmpdir(), `qvac-fit-draft-${Date.now()}.gguf`)
+    t.is(spawnSync('mkfifo', [fifo]).status, 0, 'made the FIFO')
+    t.teardown(() => fs.rmSync(fifo, { force: true }))
+    await t.exception(
+      assess(await modelPath(), { 'spec-type': 'auto', 'spec-draft-model': fifo }),
+      /not a regular file/,
+      'rejected before auto-detection opens it'
+    )
+  }
+)
+
 // A margin is free memory the projection may not place into, so one as large
 // as the device leaves no room to offload, and the placement matches a load
 // that pins no layers. Each projection reads free memory again, and another

@@ -78,8 +78,17 @@ void requireDraftModelFile(const SpeculativeConfig& config);
 struct GgufShape {
   std::string arch;
   int64_t width = 0;
+  /// `embedding_length`: the model's own hidden width (fabric's `n_embd`).
+  int64_t embd = 0;
   int64_t vocab = 0;
+  /// `block_count`, MTP layers included.
+  int64_t layers = 0;
   int64_t mtpLayers = 0;
+  /// A DFlash or DSpark model's `target_layers`: the target layers whose
+  /// inputs it drafts from.
+  std::vector<int64_t> targetLayers;
+  /// A `d2t` tensor, which maps a reduced draft vocabulary to the target's.
+  bool draftVocabMap = false;
   /// A DSpark Markov head (`markov_w1.weight`), which tells a DSpark model
   /// from a plain DFlash one, as fabric's type detection does. Looked for in
   /// every shard of a split model, as fabric's loader assembles them.
@@ -119,6 +128,31 @@ std::string dsparkDrafterMismatch(const GgufShape& drafter, float pMin);
 /// `dsparkDrafterMismatch` for the draft model `params` loads, read from its
 /// header; empty unless `params` asks for `draft-dspark` with a draft model.
 std::string draftModelMismatch(const common_params_speculative& params);
+
+/// Why the DFlash or DSpark model `drafter` cannot draft for a target of
+/// `targetWidth` hidden width, `targetLayers` layers (MTP layers excluded)
+/// and `targetVocab` tokens, or empty: another vocabulary (unless a `d2t`
+/// map translates it), another hidden width, or a target layer past the
+/// model's last. Fabric checks none of these and aborts the process on each.
+/// Empty for a model that is not `dflash`; a value of 0 is unknown and not
+/// compared.
+std::string dflashTargetMismatch(
+    const GgufShape& drafter, int64_t targetWidth, int64_t targetLayers,
+    int64_t targetVocab);
+
+/// `dflashTargetMismatch` for the draft model `params` loads, read from its
+/// header; empty unless `params` asks for `draft-dflash` or `draft-dspark`
+/// with a draft model.
+std::string draftTargetMismatch(
+    const common_params_speculative& params, int64_t targetWidth,
+    int64_t targetLayers, int64_t targetVocab);
+
+/// `draftTargetMismatch` against the model at `targetPath`, read from its
+/// header (its width, its layers without the MTP layers, its vocabulary).
+/// The load and the fit run it before fabric fits the draft model next to
+/// the target, which is where a mismatch aborts.
+std::string draftTargetMismatchForFile(
+    const common_params_speculative& params, const std::string& targetPath);
 
 /// The speculative type the draft model at `path` drafts with, read by
 /// fabric's `common_speculative_types_from_gguf` so it matches llama-server:

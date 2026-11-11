@@ -614,6 +614,106 @@ TEST(SpeculativeConfigTest, AnMtpHeadIsReadAtTheWidthItDraftsFrom) {
   std::filesystem::remove(gemma);
 }
 
+TEST(SpeculativeConfigTest, ADflashDrafterMustMatchTheModel) {
+  // LFM2.5-1.2B's DSpark drafter: 5 of its 16 layers, at its width.
+  const GgufShape drafter{
+      .arch = "dflash",
+      .embd = 2048,
+      .vocab = 65536,
+      .targetLayers = {3, 6, 9, 12, 15},
+      .markovHead = true};
+  EXPECT_EQ(dflashTargetMismatch(drafter, 2048, 16, 65536), "");
+  // The last layer's input is the final hidden state, which fabric reads.
+  EXPECT_EQ(dflashTargetMismatch(drafter, 2048, 15, 65536), "");
+
+  // LFM2.5-VL-3B's drafter on LFM2.5-1.2B: fabric aborts on each of these.
+  EXPECT_EQ(
+      dflashTargetMismatch(drafter, 2048, 16, 128000),
+      "65536 tokens, the model's 128000");
+  EXPECT_EQ(
+      dflashTargetMismatch(drafter, 1024, 16, 65536),
+      "hidden width 2048, the model's 1024");
+  EXPECT_EQ(
+      dflashTargetMismatch(drafter, 2048, 12, 65536),
+      "it reads target layer 15, the model has 12 layers");
+  EXPECT_EQ(
+      dflashTargetMismatch(drafter, 1024, 12, 128000),
+      "65536 tokens, the model's 128000; hidden width 2048, the model's "
+      "1024; it reads target layer 15, the model has 12 layers");
+  GgufShape negative = drafter;
+  negative.targetLayers = {-1, 3};
+  EXPECT_EQ(
+      dflashTargetMismatch(negative, 2048, 16, 65536),
+      "it reads target layer -1, the model has 16 layers");
+
+  // A `d2t` map translates a reduced vocabulary to the model's.
+  GgufShape mapped = drafter;
+  mapped.draftVocabMap = true;
+  EXPECT_EQ(dflashTargetMismatch(mapped, 2048, 16, 128000), "");
+
+  // Unknown values are not compared, and only DFlash models are judged.
+  EXPECT_EQ(dflashTargetMismatch(drafter, 0, 0, 0), "");
+  EXPECT_EQ(dflashTargetMismatch(GgufShape{.arch = "dflash"}, 1, 1, 1), "");
+  EXPECT_EQ(
+      dflashTargetMismatch(
+          GgufShape{.arch = "qwen3", .embd = 2048, .vocab = 8}, 1024, 16, 16),
+      "");
+}
+
+TEST(SpeculativeConfigTest, ADflashDrafterIsComparedFromItsHeader) {
+  const auto write = [](const char* name, bool d2t) {
+    return writeGguf(name, [d2t](gguf_context* ctx, ggml_context* m) {
+      gguf_set_val_str(ctx, "general.architecture", "dflash");
+      gguf_set_val_u32(ctx, "dflash.embedding_length", 2048);
+      gguf_set_val_u32(ctx, "dflash.block_count", 5);
+      const std::array<int32_t, 3> layers{3, 10, 28};
+      gguf_set_arr_data(
+          ctx,
+          "dflash.target_layers",
+          GGUF_TYPE_INT32,
+          layers.data(),
+          layers.size());
+      std::array<const char*, 4> tokens{"a", "b", "c", "d"};
+      gguf_set_arr_str(
+          ctx, "tokenizer.ggml.tokens", tokens.data(), tokens.size());
+      addTensor(ctx, m, "markov_w1.weight");
+      if (d2t) {
+        addTensor(ctx, m, "d2t");
+      }
+    });
+  };
+  const std::string path = write("dflash-target.gguf", false);
+  const GgufShape shape = readGgufShape(path);
+  EXPECT_EQ(shape.embd, 2048);
+  EXPECT_EQ(shape.layers, 5);
+  EXPECT_EQ(shape.vocab, 4);
+  EXPECT_EQ(shape.targetLayers, (std::vector<int64_t>{3, 10, 28}));
+  EXPECT_FALSE(shape.draftVocabMap);
+  const std::string mapped = write("dflash-target-d2t.gguf", true);
+  EXPECT_TRUE(readGgufShape(mapped).draftVocabMap);
+
+  // The load and the fit read the drafter the params load, for both types.
+  common_params params;
+  applySpeculativeConfig(
+      SpeculativeConfig{
+          .type = COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK, .draftModelPath = path},
+      params);
+  EXPECT_EQ(draftTargetMismatch(params.speculative, 2048, 30, 4), "");
+  EXPECT_EQ(
+      draftTargetMismatch(params.speculative, 2048, 16, 4),
+      "it reads target layer 28, the model has 16 layers");
+  params.speculative.types = {COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH};
+  EXPECT_EQ(
+      draftTargetMismatch(params.speculative, 2048, 30, 8),
+      "4 tokens, the model's 8");
+  // MTP drafts from the model's own hidden state.
+  params.speculative.types = {COMMON_SPECULATIVE_TYPE_DRAFT_MTP};
+  EXPECT_EQ(draftTargetMismatch(params.speculative, 1024, 16, 8), "");
+
+  std::filesystem::remove(path);
+  std::filesystem::remove(mapped);
+}
+
 TEST(SpeculativeConfigTest, DflashNeedsAnAbsoluteDraftModel) {
   EXPECT_THROW(parse({{"spec-type", "draft-dflash"}}), std::invalid_argument);
   EXPECT_THROW(
