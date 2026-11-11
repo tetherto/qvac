@@ -4,14 +4,17 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <type_traits>
 #include <unordered_set>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -1808,9 +1811,15 @@ size_t countStatKey(const RuntimeStats& stats, const std::string& key) {
 double statValue(const RuntimeStats& stats, const std::string& key) {
   for (const auto& [name, value] : stats) {
     if (name == key) {
-      return std::holds_alternative<double>(value)
-                 ? std::get<double>(value)
-                 : static_cast<double>(std::get<int64_t>(value));
+      return std::visit(
+          [](const auto& v) -> double {
+            if constexpr (std::is_arithmetic_v<std::decay_t<decltype(v)>>) {
+              return static_cast<double>(v);
+            } else {
+              return std::numeric_limits<double>::quiet_NaN();
+            }
+          },
+          value);
     }
   }
   return -1.0;
