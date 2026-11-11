@@ -132,7 +132,6 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   // quoted if the block closes, and made if the turn ends with it still open.
   let undecidedCalls: ToolCall[] = []
   let undecidedAnswerStart = 0
-  const quotedToolCallKeys = new Set<string>()
 
   // Content frame: inner streamed as it arrives; partial close tail buffered.
   let activeContentFrame: FrameSpec | null = null
@@ -252,7 +251,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
 
   function emitFinalToolCall(events: CompletionEvent[], call: ToolCall) {
     const key = getToolCallKey(call)
-    if (streamedToolCallKeys.has(key) || quotedToolCallKeys.has(key)) return
+    if (streamedToolCallKeys.has(key)) return
     events.push({ type: 'toolCall', seq: nextSeq(), call })
   }
 
@@ -436,7 +435,6 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   }
 
   function closeThinkingBlock() {
-    for (const call of undecidedCalls) quotedToolCallKeys.add(getToolCallKey(call))
     undecidedCalls = []
     activeThinkingFrame = null
     trimAfterThinking = contentParts.length === 0

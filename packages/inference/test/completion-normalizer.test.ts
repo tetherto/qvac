@@ -1321,17 +1321,16 @@ test('open <think>: text after a call in a block that never closes is the reply'
   }
 })
 
-test('a call quoted in closed reasoning is not made by the end-of-turn parse', (t) => {
-  const n = createCompletionNormalizer(qwenThinkingConfig())
-  const raw = `<think>\nI'd use ${QWEN_CALL} once I know the city.\n</think>\n\nWhich city?`
+test('open <think>: a call quoted in closed reasoning does not block the same call made later', (t) => {
+  const n = createCompletionNormalizer(qwenThinkingConfig({ toolDialect: 'pythonic' }))
+  const raw = `<think>\nI'd use <|tool_call_start|>[get_weather(city="Paris")]<|tool_call_end|> once I know the city.\n</think>\n\n[get_weather(city="Paris")]`
   const call = { id: 'call_0', name: 'get_weather', arguments: { city: 'Paris' } }
   const events = [
     ...pushAll(n, chunksOf(raw, 3)),
     ...n.finish({ toolCalls: [call], stopReason: 'eos' })
   ]
 
-  t.is(events.filter((e) => e.type === 'toolCall').length, 0)
-  t.is(joined(events, 'contentDelta'), 'Which city?')
+  t.is(events.filter((e) => e.type === 'toolCall').length, 1)
 })
 
 test('open <think>: a held call is returned to reasoning when the turn errors', (t) => {
