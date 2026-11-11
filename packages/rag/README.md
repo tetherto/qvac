@@ -171,15 +171,19 @@ await reader.search({ vector: queryVector, spaceId, k: 5, scope: { documentIds: 
 
 ## Memory
 
-Process RSS for one namespace of 100,000 chunks × 768 dimensions with `q8` storage, measured with `scripts/bench-index.ts` on an M-series Mac:
+Process RSS and search latency for one namespace of 100,000 chunks × 768 dimensions with `q8` storage, measured with `scripts/bench-index.ts` on an M-series Mac (k = 10, 50 searches):
 
-| Open path                           | RSS after 50 searches | Peak RSS    |
-| ----------------------------------- | --------------------- | ----------- |
-| Cold open from a snapshot           | ~290 MiB              | ~320 MiB    |
-| Rebuild from HyperDB (no snapshot)  | 815–834 MiB           | 815–979 MiB |
-| Scan, without `@qvac/turbovec-ggml` | ~770 MiB              | ~770 MiB    |
+| Open path                           | RSS after searches | Peak RSS     | Open + first search | Search p50 / p95 |
+| ----------------------------------- | ------------------ | ------------ | ------------------- | ---------------- |
+| Cold open from a snapshot           | ~290 MiB           | ~320 MiB     | 150–170 ms          | 21 / 26–29 ms    |
+| Rebuild from HyperDB (no snapshot)  | 610–775 MiB        | 985–1020 MiB | 2.4–2.6 s           | 21–23 / 24–31 ms |
+| Scan, without `@qvac/turbovec-ggml` | 725–770 MiB        | 775–785 MiB  | ~2.1 s              | 1.3 / 1.4–1.5 s  |
 
-Budget about 1 GiB for the first open of a namespace without a snapshot and about 320 MiB once a snapshot exists. Pass `index.dir` so later opens load the snapshot. To reproduce:
+Budget about 1 GiB for the first open of a namespace without a snapshot and about 320 MiB once a snapshot exists. Pass `index.dir` so later opens load the snapshot.
+
+Replacing a document leaves its old rows in the index until it is compacted, which happens once removed rows reach a quarter of the live ones. Re-ingesting all of 20,000 × 768 `q8` chunks with new vectors 20 times in one process ends at about 630 MiB RSS (710 MiB peak), against 1.3 GiB without compaction.
+
+To reproduce:
 
 ```bash
 npm run build
@@ -187,6 +191,8 @@ bare scripts/bench-index.ts ingest  /tmp/rag-bench --chunks 100000 --dims 768 --
 bare scripts/bench-index.ts rebuild /tmp/rag-bench
 bare scripts/bench-index.ts cold    /tmp/rag-bench
 bare scripts/bench-index.ts scan    /tmp/rag-bench
+bare scripts/bench-index.ts ingest  /tmp/rag-replace --chunks 20000 --dims 768 --storage q8
+bare scripts/bench-index.ts replace /tmp/rag-replace --rounds 20
 ```
 
 Each phase runs in its own process and prints its RSS, peak RSS and search latency as JSON.
