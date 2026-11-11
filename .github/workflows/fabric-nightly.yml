@@ -5,8 +5,6 @@ name: Fabric Nightly
 # only. The branch comes from .github/fabric-nightly.json, updated per rebase.
 # Results are in this run's summary; there is no notification.
 on:
-  push:
-    branches: [infra/fabric-nightly]
   schedule:
     - cron: "0 0 * * *"
   workflow_dispatch:
@@ -55,7 +53,13 @@ jobs:
             exit 1
           fi
           read -r sha committed < <(gh api "repos/$FABRIC_REPO/commits/$branch" --jq '"\(.sha) \(.commit.committer.date)"')
-          tag=$(git ls-remote --tags --refs --sort=-version:refname "https://github.com/$FABRIC_REPO.git" 'v*' \
+          # Tags follow the branch's build line (temp-11739 -> v11739.x.y), so a
+          # newly rotated branch has no tag yet rather than the previous line's.
+          pattern='v*'
+          if [[ "$branch" =~ ^temp-([0-9]+)$ ]]; then
+            pattern="v${BASH_REMATCH[1]}.*"
+          fi
+          tag=$(git ls-remote --tags --refs --sort=-version:refname "https://github.com/$FABRIC_REPO.git" "$pattern" \
             | sed -n '1s#.*refs/tags/##p')
 
           run=true
@@ -67,9 +71,11 @@ jobs:
               reason="head ${sha:0:9} is already in $tag"
             fi
           fi
-          if [ "$run" = "true" ] && [ $(( $(date +%s) - $(date -d "$committed" +%s) )) -gt 86400 ]; then
+          # 26h, not 24h: scheduled runs often start late, and a commit landing
+          # just after one run must not age out before the next.
+          if [ "$run" = "true" ] && [ $(( $(date +%s) - $(date -d "$committed" +%s) )) -gt 93600 ]; then
             run=false
-            reason="no commits in the last 24 hours (head committed $committed)"
+            reason="no commits in the last 26 hours (head committed $committed)"
           fi
           if [ "$FORCE" = "true" ] && [ "$run" = "false" ]; then
             run=true
@@ -101,6 +107,7 @@ jobs:
       actions: write
     outputs:
       branch: ${{ steps.push.outputs.branch }}
+      head: ${{ steps.push.outputs.head }}
       fabric_run_id: ${{ steps.dispatch.outputs.fabric_run_id }}
     env:
       GH_TOKEN: ${{ github.token }}
@@ -134,7 +141,7 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          branch="ci/fabric-nightly-${GITHUB_RUN_ID}"
+          branch="ci/fabric-nightly-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
@@ -142,13 +149,15 @@ jobs:
           git commit -m "ci: fabric nightly overlay at $FABRIC_REPO@$SHA"
           git push "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "HEAD:refs/heads/$branch"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Dispatch on-pr-fabric
         id: dispatch
         env:
           BRANCH: ${{ steps.push.outputs.branch }}
+          HEAD_SHA: ${{ steps.push.outputs.head }}
         run: |
           set -euo pipefail
-          id=$(bash .github/scripts/fabric-nightly.sh dispatch on-pr-fabric.yml "$BRANCH")
+          id=$(bash .github/scripts/fabric-nightly.sh dispatch on-pr-fabric.yml "$BRANCH" "$HEAD_SHA")
           echo "fabric_run_id=$id" >> "$GITHUB_OUTPUT"
           echo "on-pr-fabric: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$id"
 
@@ -194,6 +203,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       BRANCH: ${{ needs.prepare.outputs.branch }}
+      HEAD_SHA: ${{ needs.prepare.outputs.head }}
       FABRIC_RUN_ID: ${{ needs.prepare.outputs.fabric_run_id }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -221,11 +231,13 @@ jobs:
               vla-ggml) wf=on-pr-vla.yml ;;
               *) echo "::error::$pkg is an on-pr carve-out with no orchestrator mapped here"; exit 1 ;;
             esac
-            id=$(bash .github/scripts/fabric-nightly.sh dispatch "$wf" "$BRANCH" -f fabric_run_id="$FABRIC_RUN_ID")
+            id=$(bash .github/scripts/fabric-nightly.sh dispatch "$wf" "$BRANCH" "$HEAD_SHA" -f fabric_run_id="$FABRIC_RUN_ID")
             runs=$(jq -c --arg w "$wf" --argjson i "$id" '. + [{workflow: $w, id: $i}]' <<<"$runs")
+            # Written after every dispatch so a later failure keeps the runs already started.
+            echo "runs=$runs" >> "$GITHUB_OUTPUT"
           done
           echo "on-pr-nx packages: $nx"
-          id=$(bash .github/scripts/fabric-nightly.sh dispatch on-pr-nx.yml "$BRANCH" -f packages="$nx" -f fabric_run_id="$FABRIC_RUN_ID")
+          id=$(bash .github/scripts/fabric-nightly.sh dispatch on-pr-nx.yml "$BRANCH" "$HEAD_SHA" -f packages="$nx" -f fabric_run_id="$FABRIC_RUN_ID")
           runs=$(jq -c --argjson i "$id" '. + [{workflow: "on-pr-nx.yml", id: $i}]' <<<"$runs")
           echo "runs=$runs" >> "$GITHUB_OUTPUT"
       - name: Wait for consumer tests
@@ -257,19 +269,34 @@ jobs:
           FABRIC_SHA: ${{ needs.gate.outputs.sha }}
           FABRIC_TAG: ${{ needs.gate.outputs.tag }}
           FABRIC_RUN_ID: ${{ needs.prepare.outputs.fabric_run_id }}
+          BUILD_RESULT: ${{ needs.build-fabric.result }}
+          TEST_RESULT: ${{ needs.test.result }}
           TEST_RUNS: ${{ needs.test.outputs.runs || '[]' }}
         run: bash .github/scripts/fabric-nightly.sh report
 
+  # A timed-out or cancelled nightly can leave dispatched runs going, so stop
+  # them before their branch disappears.
   cleanup:
-    needs: [prepare, report]
+    needs: [prepare, test, report]
     if: always() && needs.prepare.outputs.branch != ''
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       contents: write
+      actions: write
     steps:
-      - name: Delete the nightly branch
+      - name: Cancel unfinished runs and delete the nightly branch
         env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ needs.prepare.outputs.branch }}
-        run: gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$BRANCH"
+          FABRIC_RUN_ID: ${{ needs.prepare.outputs.fabric_run_id }}
+          TEST_RUNS: ${{ needs.test.outputs.runs || '[]' }}
+        run: |
+          set -uo pipefail
+          for id in $FABRIC_RUN_ID $(jq -r '.[].id' <<<"$TEST_RUNS"); do
+            if [ "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id" --jq '.status')" != "completed" ]; then
+              echo "Cancelling unfinished run $id"
+              gh run cancel "$id" --repo "$GITHUB_REPOSITORY" || true
+            fi
+          done
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$BRANCH"

@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 # Helpers for fabric-nightly.yml. Needs GH_TOKEN and GITHUB_REPOSITORY.
 #
-#   fabric-nightly.sh dispatch <workflow-file> <ref> [-f key=value ...]   prints the run ID
+#   fabric-nightly.sh dispatch <workflow-file> <ref> <sha> [-f key=value ...]   prints the run ID
 #   fabric-nightly.sh wait <run-id> ...                                    blocks until all complete
 #   fabric-nightly.sh report                                               writes the step summary
 set -euo pipefail
 
 REPO="${GITHUB_REPOSITORY:?}"
 
-# The dispatch API returns no run ID, so find the run by workflow, branch and
-# event. The nightly branch is unique per nightly, so the first match is ours.
+# The dispatch API returns no run ID, so find the run by workflow, branch,
+# event and the branch's head commit, which is unique per nightly attempt.
 dispatch() {
-  local workflow=$1 ref=$2
-  shift 2
+  local workflow=$1 ref=$2 sha=$3
+  shift 3
   gh workflow run "$workflow" --repo "$REPO" --ref "$ref" "$@" >&2
   local id=""
   for _ in $(seq 1 40); do
-    id=$(gh api "repos/$REPO/actions/workflows/$workflow/runs?branch=$ref&event=workflow_dispatch&per_page=1" \
-      --jq '.workflow_runs[0].id // empty')
+    id=$(gh api "repos/$REPO/actions/workflows/$workflow/runs?branch=$ref&event=workflow_dispatch&head_sha=$sha&per_page=1" \
+      --jq '.workflow_runs[0].id // empty') || id=""
     [ -n "$id" ] && break
     sleep 15
   done
@@ -33,7 +33,7 @@ wait_runs() {
   while [ "${#pending[@]}" -gt 0 ]; do
     next=()
     for id in "${pending[@]}"; do
-      status=$(gh api "repos/$REPO/actions/runs/$id" --jq '.status')
+      status=$(gh api "repos/$REPO/actions/runs/$id" --jq '.status') || status=""
       [ "$status" = "completed" ] || next+=("$id")
     done
     pending=("${next[@]+"${next[@]}"}")
@@ -41,8 +41,8 @@ wait_runs() {
   done
 }
 
-# Reads FABRIC_REPO, FABRIC_BRANCH, FABRIC_SHA, FABRIC_TAG, FABRIC_RUN_ID and
-# TEST_RUNS (JSON array of {workflow, id}) from the environment.
+# Reads FABRIC_REPO, FABRIC_BRANCH, FABRIC_SHA, FABRIC_TAG, FABRIC_RUN_ID,
+# BUILD_RESULT, TEST_RESULT and TEST_RUNS (JSON array of {workflow, id}).
 report() {
   local out=${GITHUB_STEP_SUMMARY:-/dev/stdout} failed=0 runs id workflow conclusion url
   local cov_dir
@@ -84,9 +84,12 @@ report() {
     echo "| $workflow | $conclusion | [$id]($url) |" >>"$out"
   done
 
-  if [ "$(jq length <<<"${TEST_RUNS:-[]}")" -eq 0 ]; then
-    echo >>"$out"
-    echo "No consumer tests ran: the fabric build did not succeed." >>"$out"
+  if [ "${BUILD_RESULT:-}" != "success" ]; then
+    printf '\nNo consumer tests ran: the fabric build did not succeed (%s).\n' "${BUILD_RESULT:-not started}" >>"$out"
+    failed=1
+  elif [ "${TEST_RESULT:-}" != "success" ]; then
+    printf '\nThe test job ended with %s, so some consumer runs may be missing above. See its log.\n' "${TEST_RESULT:-unknown}" >>"$out"
+    failed=1
   fi
 
   {
