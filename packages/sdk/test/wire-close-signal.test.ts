@@ -4,9 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import RPC from 'bare-rpc'
 import type { AbortSignal } from 'bare-abort-controller'
-import { signalOnWireClose } from '@/server/rpc/rpc-utils'
-
-type Wire = ReturnType<RPC.IncomingRequest['createResponseStream']>
+import { openWire, signalOnWireClose, type Wire } from '@/server/rpc/rpc-utils'
 
 // Real bare-rpc pair over a socket; the server hands each response stream to `onWire`.
 async function rpcPair(onWire: (wire: Wire) => void) {
@@ -15,7 +13,7 @@ async function rpcPair(onWire: (wire: Wire) => void) {
   const server = net.createServer((socket) => {
     sockets.push(socket)
     new RPC(socket as never, (req: RPC.IncomingRequest) => {
-      onWire(req.createResponseStream())
+      onWire(openWire(req))
     })
   })
   await new Promise<void>((resolve) => server.listen(socketPath, resolve))
@@ -24,6 +22,9 @@ async function rpcPair(onWire: (wire: Wire) => void) {
   const client = new RPC(clientSocket as never, () => {})
   return {
     client,
+    disconnectClient() {
+      clientSocket.destroy()
+    },
     async close() {
       clientSocket.destroy()
       for (const socket of sockets) socket.destroy()
@@ -79,4 +80,24 @@ test('the wire signal stays live while the stream is open', async function (t) {
   t.ok(await waitFor(() => signal !== undefined), 'the worker opened the stream')
   await new Promise((resolve) => setTimeout(resolve, 100))
   t.absent(signal!.aborted, 'nothing aborts it while the client keeps its end')
+})
+
+test('a client that disconnects mid-stream closes the wire without throwing', async function (t) {
+  let wire: Wire | undefined
+  let signal: AbortSignal | undefined
+  const pair = await rpcPair((opened) => {
+    wire = opened
+    signal = signalOnWireClose(opened)
+  })
+  t.teardown(() => pair.close())
+
+  const req = pair.client.request(1)
+  req.send('{}', 'utf-8')
+  req.createResponseStream({ encoding: 'utf-8' })
+  t.ok(await waitFor(() => wire !== undefined), 'the worker opened the stream')
+
+  pair.disconnectClient()
+
+  t.ok(await waitFor(() => signal!.aborted), 'the signal aborts once the client is gone')
+  t.ok(wire!.destroyed, 'the wire is destroyed')
 })

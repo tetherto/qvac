@@ -11,7 +11,7 @@ import { sendErrorResponse, sendStreamErrorResponse } from '@/server/error-handl
 import { PluginHandlerTypeMismatchError } from '@/utils/errors-server'
 import { handleInitConfig, isInitConfigMessage } from './handler-utils'
 import { createServerProfiler, type ServerProfiler } from '@/server/rpc/profiling'
-import { isTerminalChunk, signalOnWireClose } from '@/server/rpc/rpc-utils'
+import { isTerminalChunk, openWire, signalOnWireClose } from '@/server/rpc/rpc-utils'
 import { createProgressThrottle } from '@/server/rpc/progress-throttle'
 
 type Transport = 'reply' | 'stream' | 'progress' | 'duplex' | undefined
@@ -64,7 +64,7 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
     }
   } catch (error) {
     if (transport === 'stream' || transport === 'progress') {
-      sendStreamErrorResponse(req.createResponseStream(), error, profiler)
+      sendStreamErrorResponse(openWire(req), error, profiler)
     } else {
       sendErrorResponse(req, error, profiler)
     }
@@ -77,7 +77,7 @@ async function streamToWire(
   profiler: ServerProfiler,
   throttleProgress: boolean
 ): Promise<void> {
-  const wire = req.createResponseStream()
+  const wire = openWire(req)
   profiler.startHandler()
   let sentFinalChunk = false
 
@@ -127,7 +127,7 @@ async function streamToWire(
 
 async function handleDuplexRequest(req: RPC.IncomingRequest): Promise<void> {
   const rpcInput = req.createRequestStream()
-  const rpcOutput = req.createResponseStream()
+  const rpcOutput = openWire(req)
   let profiler: ServerProfiler | undefined
 
   try {
