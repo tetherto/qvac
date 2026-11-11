@@ -28,7 +28,7 @@ not published) from the parent directory of this checkout. From
 ```
 
 The first run builds the SDK and bundles its worker, which needs JDK 17,
-Node.js 22 and an Android SDK; see the [package README](../README.md). Models
+Node.js 22, Python 3 and an Android SDK; see the [package README](../README.md). Models
 download over P2P from the registry and are cached locally. Each file's header
 comment names its arguments and any environment variable it reads.
 
