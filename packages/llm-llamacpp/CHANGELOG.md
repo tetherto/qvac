@@ -24,11 +24,17 @@
   block before the tool call, so a model can no longer write prose until the
   context fills without calling a tool.
 - RPC peers must match the new protocol: use `@qvac/ggml-rpc-server` 0.9.1 or
-  newer. With `rpc-servers`, a Qwen3.5 model whose recurrent layers run on a
-  Metal, Vulkan or OpenCL server can abort that server on the new ragged ops;
-  set `LLAMA_RS_RAGGED=0` until
-  [qvac-fabric-llm.cpp#519](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/519)
-  ships.
+  newer.
+
+### Fixed
+
+- The addon sets `LLAMA_RS_RAGGED=0` unless the process already set it, so
+  qwen35 models keep the equal ubatch split. With `rpc-servers`, fabric's RPC
+  device reports the new ragged ops as supported, and a Metal, Vulkan or OpenCL
+  server without them aborts
+  ([qvac-fabric-llm.cpp#519](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/519)).
+  The addon does not enable a unified KV cache, so ragged ubatches would not
+  speed it up.
 
 ## [0.70.0] - 2026-11-10
 
