@@ -1,5 +1,6 @@
 import { ModelLoadFailedError, InvalidShardUrlPatternError } from '@/errors/index'
 import { generateShortHash } from '@/utils/formatting'
+import { SHARD_FILENAME_PATTERN } from '@/utils/cache/layout'
 import { validateAndJoinPath } from '@/utils/path-security'
 import type { ShardPatternInfo, ShardUrl } from '@/schemas/index'
 import { promises as fsPromises } from 'bare-fs'
@@ -8,8 +9,7 @@ import { promises as fsPromises } from 'bare-fs'
  * Detect if model filename follows shard pattern (00001-of-0000x)
  */
 export function detectShardedModel(filename: string): ShardPatternInfo {
-  const shardPattern = /^(.+)-(\d{5})-of-(\d{5})(\.\w+)$/
-  const match = filename.match(shardPattern)
+  const match = filename.match(SHARD_FILENAME_PATTERN)
 
   if (match && match[1] && match[2] && match[3] && match[4]) {
     return {

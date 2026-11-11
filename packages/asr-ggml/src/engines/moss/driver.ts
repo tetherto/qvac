@@ -16,6 +16,7 @@ import type {
   ASRRunOutput,
   AudioInput,
   BackendInfo,
+  MossTranscribeProgress,
 } from "../../lib/types";
 import type {
   ASRGgmlFiles,
@@ -67,10 +68,21 @@ export interface MossTranscribeRunOptions {
   prompt?: string;
   /** Bound on generated tokens (0 or unset = model default). */
   maxNewTokens?: number;
+  onProgress?: (progress: MossTranscribeProgress) => void;
 }
 
-const MOSS_CONFIG_KEYS: readonly string[] = ["maxThreads", "useGPU", "backend", "backendsDir"];
-const MOSS_RUN_OPTION_KEYS: readonly string[] = ["hotwords", "prompt", "maxNewTokens"];
+const MOSS_CONFIG_KEYS: readonly string[] = [
+  "maxThreads",
+  "useGPU",
+  "backend",
+  "backendsDir",
+];
+const MOSS_RUN_OPTION_KEYS: readonly string[] = [
+  "hotwords",
+  "prompt",
+  "maxNewTokens",
+  "onProgress",
+];
 const MAX_HOTWORDS = 64;
 const MAX_HOTWORD_BYTES = 64;
 const ONE_BYTE_LIMIT = 0x80;
@@ -84,7 +96,10 @@ function asError(error: unknown): Error {
 }
 
 function invalidRunOption(adds: string): QvacErrorAddonASRGgml {
-  return new QvacErrorAddonASRGgml({ code: ERR_CODES_PARAKEET.INVALID_CONFIG, adds });
+  return new QvacErrorAddonASRGgml({
+    code: ERR_CODES_PARAKEET.INVALID_CONFIG,
+    adds,
+  });
 }
 
 /** Preserve native selector names; availability is checked by the engine. */
@@ -111,12 +126,20 @@ function utf8Length(text: string): number {
 }
 
 function isHotword(value: unknown): boolean {
-  return typeof value === "string" && value.length > 0 && utf8Length(value) <= MAX_HOTWORD_BYTES;
+  return (
+    typeof value === "string" &&
+    value.length > 0 &&
+    utf8Length(value) <= MAX_HOTWORD_BYTES
+  );
 }
 
 function assertHotwords(hotwords: unknown): void {
   if (hotwords === undefined) return;
-  if (!Array.isArray(hotwords) || hotwords.length > MAX_HOTWORDS || !hotwords.every(isHotword)) {
+  if (
+    !Array.isArray(hotwords) ||
+    hotwords.length > MAX_HOTWORDS ||
+    !hotwords.every(isHotword)
+  ) {
     throw invalidRunOption(
       `hotwords must be an array of up to ${MAX_HOTWORDS} non-empty strings of at most ` +
         `${MAX_HOTWORD_BYTES} UTF-8 bytes`,
@@ -127,37 +150,62 @@ function assertHotwords(hotwords: unknown): void {
 function assertPrompt(prompt: unknown, hotwords: unknown): void {
   if (prompt === undefined) return;
   if (typeof prompt !== "string" || utf8Length(prompt) > MAX_PROMPT_BYTES) {
-    throw invalidRunOption(`prompt must be a string of at most ${MAX_PROMPT_BYTES} UTF-8 bytes`);
+    throw invalidRunOption(
+      `prompt must be a string of at most ${MAX_PROMPT_BYTES} UTF-8 bytes`,
+    );
   }
   if (hotwords !== undefined) {
-    throw invalidRunOption("prompt replaces the default instruction and cannot be combined with hotwords");
+    throw invalidRunOption(
+      "prompt replaces the default instruction and cannot be combined with hotwords",
+    );
   }
 }
 
 function assertMaxNewTokens(value: unknown): void {
   if (value === undefined) return;
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > MAX_NATIVE_INT) {
-    throw invalidRunOption(`maxNewTokens must be an integer in [0, ${MAX_NATIVE_INT}]`);
+  if (
+    typeof value !== "number" ||
+    !Number.isInteger(value) ||
+    value < 0 ||
+    value > MAX_NATIVE_INT
+  ) {
+    throw invalidRunOption(
+      `maxNewTokens must be an integer in [0, ${MAX_NATIVE_INT}]`,
+    );
   }
 }
 
 function assertKnownRunOptions(options: Record<string, unknown>): void {
   for (const key of Object.keys(options)) {
     if (!MOSS_RUN_OPTION_KEYS.includes(key)) {
-      throw invalidRunOption(`${key} is not a valid moss-transcribe run option`);
+      throw invalidRunOption(
+        `${key} is not a valid moss-transcribe run option`,
+      );
     }
   }
 }
 
 /** Validates the per-call options and returns the fields the native job reads. */
-export function mossTranscribeJobFields(options: ASRRunOptions | null = {}): Record<string, unknown> {
+export function mossTranscribeJobFields(
+  options: ASRRunOptions | null = {},
+): Record<string, unknown> {
   const fields = (options ?? {}) as Record<string, unknown>;
   assertKnownRunOptions(fields);
   assertHotwords(fields.hotwords);
   assertPrompt(fields.prompt, fields.hotwords);
   assertMaxNewTokens(fields.maxNewTokens);
-  const present = MOSS_RUN_OPTION_KEYS.filter((key) => fields[key] !== undefined);
-  return Object.fromEntries(present.map((key) => [key, fields[key]]));
+  if (
+    fields.onProgress !== undefined &&
+    typeof fields.onProgress !== "function"
+  ) {
+    throw invalidRunOption("onProgress must be a function");
+  }
+  const present = MOSS_RUN_OPTION_KEYS.filter(
+    (key) => key !== "onProgress" && fields[key] !== undefined,
+  );
+  const job = Object.fromEntries(present.map((key) => [key, fields[key]]));
+  if (fields.onProgress !== undefined) job.emitProgress = true;
+  return job;
 }
 
 /**
@@ -168,7 +216,10 @@ function chunkBuffer(chunk: Float32Array): ArrayBuffer {
   if (chunk.byteOffset === 0 && chunk.byteLength === chunk.buffer.byteLength) {
     return chunk.buffer as ArrayBuffer;
   }
-  return chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength) as ArrayBuffer;
+  return chunk.buffer.slice(
+    chunk.byteOffset,
+    chunk.byteOffset + chunk.byteLength,
+  ) as ArrayBuffer;
 }
 
 /**
@@ -184,10 +235,16 @@ export class MossTranscribeDriver implements AsrDriver {
   addon?: ParakeetInterface;
   params: MossTranscribeConfig;
 
+  private progressFailed = false;
+  private onProgress?: (progress: MossTranscribeProgress) => void;
   private readonly ctx: DriverContext;
   private readonly _files: { model: string };
 
-  constructor(ctx: DriverContext, files: ASRGgmlFiles, config: MossTranscribeEngineConfig) {
+  constructor(
+    ctx: DriverContext,
+    files: ASRGgmlFiles,
+    config: MossTranscribeEngineConfig,
+  ) {
     this.ctx = ctx;
     this._files = { model: files.model };
     this.params = config.mossTranscribeConfig || {};
@@ -211,7 +268,10 @@ export class MossTranscribeDriver implements AsrDriver {
 
   async load(): Promise<void> {
     const configurationParams = this._buildConfigurationParams();
-    this.ctx.logger.info("Creating MOSS-Transcribe addon with configuration:", configurationParams);
+    this.ctx.logger.info(
+      "Creating MOSS-Transcribe addon with configuration:",
+      configurationParams,
+    );
     this.addon = this._createAddon(configurationParams);
     await this.addon.activate();
   }
@@ -222,14 +282,20 @@ export class MossTranscribeDriver implements AsrDriver {
 
   reload(): Promise<void> {
     return Promise.reject(
-      new QvacErrorAddonASRGgml({ code: ERR_CODES.NOT_SUPPORTED, adds: "reload (moss-transcribe)" }),
+      new QvacErrorAddonASRGgml({
+        code: ERR_CODES.NOT_SUPPORTED,
+        adds: "reload (moss-transcribe)",
+      }),
     );
   }
 
   async cancelActive(jobId?: number): Promise<void> {
+    this.onProgress = undefined;
     if (this.addon?.cancel) await this.addon.cancel(jobId);
     if (this.ctx.job.active) {
-      this.ctx.job.fail(new QvacErrorAddonASRGgml(ERR_CODES_PARAKEET.JOB_CANCELLED));
+      this.ctx.job.fail(
+        new QvacErrorAddonASRGgml(ERR_CODES_PARAKEET.JOB_CANCELLED),
+      );
     }
   }
 
@@ -247,9 +313,14 @@ export class MossTranscribeDriver implements AsrDriver {
     return this.addon?.getBackendInfo?.() ?? null;
   }
 
-  run(audio: NormalizedAudioStream, options: ASRRunOptions = {}): Promise<QvacResponse<ASRRunOutput>> {
+  run(
+    audio: NormalizedAudioStream,
+    options: ASRRunOptions = {},
+  ): Promise<QvacResponse<ASRRunOutput>> {
     const job = mossTranscribeJobFields(options);
     const response = this.ctx.job.start() as QvacResponse<ASRRunOutput>;
+    this.onProgress = options?.onProgress;
+    this.progressFailed = false;
     void this._pumpBatchAudio(audio, job).catch((error: unknown) => {
       this.ctx.job.fail(asError(error));
     });
@@ -265,7 +336,10 @@ export class MossTranscribeDriver implements AsrDriver {
     );
   }
 
-  async _pumpBatchAudio(audio: NormalizedAudioStream, job: Record<string, unknown>): Promise<void> {
+  async _pumpBatchAudio(
+    audio: NormalizedAudioStream,
+    job: Record<string, unknown>,
+  ): Promise<void> {
     const addon = this._requireAddon();
     for await (const chunk of audio) {
       if (!this.ctx.job.active) return;
@@ -286,7 +360,9 @@ export class MossTranscribeDriver implements AsrDriver {
     };
   }
 
-  _createAddon(configurationParams: ParakeetConfigurationParams): ParakeetInterface {
+  _createAddon(
+    configurationParams: ParakeetConfigurationParams,
+  ): ParakeetInterface {
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
     const binding = require("../../binding.js") as ParakeetBinding;
     return new ParakeetInterface(
@@ -297,18 +373,48 @@ export class MossTranscribeDriver implements AsrDriver {
     );
   }
 
-  private _outputCallback(_addon: unknown, event: unknown, _jobId: number, data: unknown, error: unknown): void {
+  private _outputCallback(
+    _addon: unknown,
+    event: unknown,
+    _jobId: number,
+    data: unknown,
+    error: unknown,
+  ): void {
+    if (event === "Progress") {
+      if (!this.ctx.job.active || !this.onProgress) return;
+      try {
+        this.onProgress(data as MossTranscribeProgress);
+      } catch (callbackError) {
+        this.progressFailed = true;
+        this.onProgress = undefined;
+        void this._failProgress(callbackError);
+      }
+      return;
+    }
     if (event === "Error") {
+      this.onProgress = undefined;
       this.ctx.job.fail(asError(error));
       return;
     }
     if (event === "Output") {
+      if (this.progressFailed) return;
       this.ctx.job.output(data);
       return;
     }
     if (event === "JobEnded") {
+      this.onProgress = undefined;
       if (this.ctx.enableStats) this.ctx.job.end(data);
       else this.ctx.job.end();
+    }
+  }
+
+  private async _failProgress(error: unknown): Promise<void> {
+    try {
+      await this.addon?.cancel();
+    } catch {
+      // Preserve the consumer's callback error if cancellation also fails.
+    } finally {
+      this.ctx.job.fail(asError(error));
     }
   }
 

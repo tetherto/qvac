@@ -82,6 +82,10 @@
       "types": "./dist/models/registry/index.d.ts",
       "import": "./dist/models/registry/index.js"
     },
+    "./model-cache-layout": {
+      "types": "./dist/model-cache-layout.d.ts",
+      "import": "./dist/model-cache-layout.js"
+    },
     "./llamacpp-completion/plugin": {
       "types": "./dist/plugins/builtin/llamacpp-completion/plugin.d.ts",
       "import": "./dist/plugins/builtin/llamacpp-completion/plugin.js"
@@ -213,7 +217,7 @@
   },
   "peerDependencies": {
     "@qvac/asr-ggml": "^0.12.0",
-    "@qvac/audiogen-ggml": "^0.10.0",
+    "@qvac/audiogen-ggml": "^0.10.1",
     "@qvac/bci-whispercpp": "^0.15.0",
     "@qvac/classification-ggml": "^0.36.0",
     "@qvac/decoder-audio": "^0.9.0",
@@ -277,7 +281,7 @@
   },
   "devDependencies": {
     "@qvac/asr-ggml": "^0.12.0",
-    "@qvac/audiogen-ggml": "^0.10.0",
+    "@qvac/audiogen-ggml": "^0.10.1",
     "@qvac/bci-whispercpp": "^0.15.0",
     "@qvac/classification-ggml": "^0.36.0",
     "@qvac/decoder-audio": "^0.9.0",
