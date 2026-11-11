@@ -35,6 +35,7 @@ class QVACRegistryClient extends ReadyResource {
     this.hyperswarm = null
     this._connectionHandler = null
     this._metadataReady = null
+    this._pendingReleases = new Map()
 
     this.storage = this.registryConfig.getRegistryStorage(opts.storage)
     this._tempStorage = this.registryConfig.tempStoragePath || null
@@ -201,15 +202,32 @@ class QVACRegistryClient extends ReadyResource {
     return { cachedBlocks, totalBlocks, totalBytes }
   }
 
-  async _getBlobsCore(blobsCoreKey) {
-    let keyBuffer
-    if (Buffer.isBuffer(blobsCoreKey)) {
-      keyBuffer = blobsCoreKey
-    } else if (typeof blobsCoreKey === 'object' && blobsCoreKey.data) {
-      keyBuffer = Buffer.from(blobsCoreKey.data)
-    } else {
-      keyBuffer = IdEnc.decode(blobsCoreKey)
+  _decodeCoreKey(blobsCoreKey) {
+    if (Buffer.isBuffer(blobsCoreKey)) return blobsCoreKey
+    if (typeof blobsCoreKey === 'object' && blobsCoreKey.data) {
+      return Buffer.from(blobsCoreKey.data)
     }
+    return IdEnc.decode(blobsCoreKey)
+  }
+
+  _releaseId(coreKey, blockStart) {
+    return `${IdEnc.normalize(coreKey)}:${blockStart}`
+  }
+
+  // A caller may start the next download of a blob before the previous one's
+  // teardown finishes; clearing then would delete blocks the new one counted.
+  // Loops because a clearBlob can register while we wait. Its error is its caller's.
+  async _awaitPendingRelease(blobsCoreKey, blockStart) {
+    const id = this._releaseId(this._decodeCoreKey(blobsCoreKey), blockStart)
+    let pending = this._pendingReleases?.get(id)
+    while (pending) {
+      await pending.catch(() => {})
+      pending = this._pendingReleases.get(id)
+    }
+  }
+
+  async _getBlobsCore(blobsCoreKey) {
+    const keyBuffer = this._decodeCoreKey(blobsCoreKey)
 
     this.logger.debug('Creating hyperblobs core', {
       blobCore: IdEnc.normalize(keyBuffer)
@@ -330,6 +348,7 @@ class QVACRegistryClient extends ReadyResource {
 
       this.logger.debug('Model metadata retrieved', { model })
 
+      await this._awaitPendingRelease(model.blobBinding.coreKey, model.blobBinding.blockOffset)
       const blobsCore = await this._getBlobsCore(model.blobBinding.coreKey)
       core = blobsCore.core
       blobs = blobsCore.blobs
@@ -392,7 +411,9 @@ class QVACRegistryClient extends ReadyResource {
     } catch (error) {
       this.logger.error('Error downloading model', error)
 
-      await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd)
+      await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd, {
+        clearBlocks: this._shouldClearBlocksAfterError(options)
+      })
 
       throw error
     }
@@ -431,6 +452,7 @@ class QVACRegistryClient extends ReadyResource {
 
       await this.ready()
 
+      await this._awaitPendingRelease(blobBinding.coreKey, blobBinding.blockOffset)
       const blobsCore = await this._getBlobsCore(blobBinding.coreKey)
       core = blobsCore.core
       blobs = blobsCore.blobs
@@ -494,7 +516,9 @@ class QVACRegistryClient extends ReadyResource {
     } catch (error) {
       this.logger.error('Error downloading blob directly', error)
 
-      await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd)
+      await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd, {
+        clearBlocks: this._shouldClearBlocksAfterError(options)
+      })
 
       throw error
     }
@@ -517,13 +541,56 @@ class QVACRegistryClient extends ReadyResource {
     stream.once('close', release)
   }
 
-  async _releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd) {
+  // A failed download keeps its blocks so the next attempt resumes from them;
+  // `clearBlob` reclaims them. A cancel clears unless `clearBlocksOnCancel`
+  // (read at cancel time) says otherwise.
+  _shouldClearBlocksAfterError(options) {
+    if (!options.signal || !options.signal.aborted) return false
+
+    const clear = options.clearBlocksOnCancel
+    if (clear === undefined) return true
+    if (typeof clear !== 'function') return Boolean(clear)
+    // A throwing policy must not skip the release or mask the download error.
+    try {
+      return Boolean(clear())
+    } catch (err) {
+      this.logger.warn('clearBlocksOnCancel threw; clearing blocks', { error: err?.message })
+      return true
+    }
+  }
+
+  _releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd, opts = {}) {
+    const release = this._doReleaseDownload(core, blobs, rangeDownload, blockStart, blockEnd, opts)
+    if (!core || !core.key || blockStart === undefined) return release
+
+    return this._trackRelease(this._releaseId(core.key, blockStart), release)
+  }
+
+  _trackRelease(id, release) {
+    this._pendingReleases ??= new Map()
+    const tracked = release.finally(() => {
+      if (this._pendingReleases.get(id) === tracked) this._pendingReleases.delete(id)
+    })
+    this._pendingReleases.set(id, tracked)
+    return tracked
+  }
+
+  async _doReleaseDownload(core, blobs, rangeDownload, blockStart, blockEnd, opts) {
+    const { clearBlocks = true, strict = false } = opts
+    let clearError = null
+
     // Hypercore can commit in-flight responses after a range is destroyed.
     if (rangeDownload) rangeDownload.destroy()
 
-    if (core && blockStart !== undefined) {
+    if (!clearBlocks && blockStart !== undefined) {
+      this.logger.info('Keeping blob blocks for resume', { start: blockStart, end: blockEnd })
+    } else if (core && blockStart !== undefined) {
       if (rangeDownload) await this._waitForInflightBlocks(core)
-      await this._clearBlobBlocks(core, blockStart, blockEnd)
+      try {
+        await this._clearBlobBlocks(core, blockStart, blockEnd, { strict })
+      } catch (err) {
+        clearError = err
+      }
     }
     if (blobs) {
       try {
@@ -541,6 +608,7 @@ class QVACRegistryClient extends ReadyResource {
     }
 
     this.logger.debug('Blob resources released')
+    if (clearError) throw clearError
   }
 
   async _waitForInflightBlocks(core) {
@@ -565,7 +633,41 @@ class QVACRegistryClient extends ReadyResource {
     }
   }
 
-  async _clearBlobBlocks(core, start, end) {
+  /**
+   * Deletes a blob's cached blocks, e.g. those an abandoned download kept for
+   * resume. No-op for blocks that were never downloaded.
+   */
+  async clearBlob(blobBinding) {
+    if (!blobBinding || !blobBinding.coreKey) {
+      throw new Error('Invalid blobBinding: coreKey is required')
+    }
+    if (
+      typeof blobBinding.blockOffset !== 'number' ||
+      typeof blobBinding.blockLength !== 'number'
+    ) {
+      throw new Error('Invalid blobBinding: blockOffset and blockLength are required numbers')
+    }
+
+    // Registered before the first await so a download called right after waits for it.
+    const id = this._releaseId(this._decodeCoreKey(blobBinding.coreKey), blobBinding.blockOffset)
+    const previous = this._pendingReleases?.get(id)
+    await this._trackRelease(id, this._clearBlobNow(blobBinding, previous))
+  }
+
+  async _clearBlobNow(blobBinding, previous) {
+    if (previous) await previous.catch(() => {})
+    await this.ready()
+    const { core, blobs } = await this._getBlobsCore(blobBinding.coreKey)
+    // A cancel that kept its blocks skipped the drain; its in-flight blocks can still land.
+    await this._waitForInflightBlocks(core)
+    const start = blobBinding.blockOffset
+    await this._doReleaseDownload(core, blobs, null, start, start + blobBinding.blockLength, {
+      strict: true
+    })
+  }
+
+  // Download cleanup is best-effort; `strict` lets an explicit clearBlob report failure.
+  async _clearBlobBlocks(core, start, end, { strict = false } = {}) {
     try {
       const cleared = await core.clear(start, end, { diff: true })
       await core.compact()
@@ -576,6 +678,7 @@ class QVACRegistryClient extends ReadyResource {
       })
     } catch (err) {
       this.logger.warn('Failed to clear blob blocks from corestore', { error: err.message })
+      if (strict) throw err
     }
   }
 

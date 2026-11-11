@@ -16,7 +16,6 @@ interface ChatCompletionResponseParams {
   toolCalls: ToolCall[]
   completionTokens: number
   promptTokens?: number
-  cachedTokens?: number
   finishReason: OpenAiFinishReason
 }
 
@@ -60,27 +59,23 @@ export interface ChatCompletionUsage {
   prompt_tokens: number
   completion_tokens: number
   total_tokens: number
-  prompt_tokens_details?: { cached_tokens: number }
 }
 
 /**
- * Builds an OpenAI `usage` object from SDK token stats. `prompt_tokens` and
- * `cached_tokens` are only reported when the SDK provided them; `total_tokens`
- * is the sum of prompt and completion tokens.
+ * Builds an OpenAI `usage` object from SDK token stats. `prompt_tokens` is only
+ * reported when the SDK provided it; `total_tokens` is the sum of prompt and
+ * completion tokens. SDK `cacheTokens` is KV-cache occupancy, not this request's
+ * reuse, so it is not reported as `cached_tokens`.
  */
 export function buildUsage(params: {
   completionTokens: number
   promptTokens?: number
-  cachedTokens?: number
 }): ChatCompletionUsage {
   const promptTokens = params.promptTokens ?? 0
   return {
     prompt_tokens: promptTokens,
     completion_tokens: params.completionTokens,
-    total_tokens: promptTokens + params.completionTokens,
-    ...(typeof params.cachedTokens === 'number'
-      ? { prompt_tokens_details: { cached_tokens: params.cachedTokens } }
-      : {})
+    total_tokens: promptTokens + params.completionTokens
   }
 }
 
@@ -122,8 +117,7 @@ export function chatCompletionResponse(
     choices: [{ index: 0, message, finish_reason: params.finishReason }],
     usage: buildUsage({
       completionTokens: params.completionTokens,
-      ...(params.promptTokens !== undefined ? { promptTokens: params.promptTokens } : {}),
-      ...(params.cachedTokens !== undefined ? { cachedTokens: params.cachedTokens } : {})
+      ...(params.promptTokens !== undefined ? { promptTokens: params.promptTokens } : {})
     })
   }
 }

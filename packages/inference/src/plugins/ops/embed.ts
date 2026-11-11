@@ -1,3 +1,8 @@
+import fs from 'bare-fs'
+import type { AbortSignal } from 'bare-abort-controller'
+import Buffer from 'bare-buffer'
+import type { EmbedRunInput, EmbedMultimodalInput } from '@qvac/embed-llamacpp'
+import type { EmbedInputPart } from '@/schemas/embed'
 import { getModel } from '@/runtime/model-registry'
 import { type EmbedParams, type EmbedStats, embedParamsSchema } from '@/schemas/index'
 import { buildUnaryResult } from '@/profiling/model-execution'
@@ -13,6 +18,12 @@ export interface EmbedResult {
   stats?: EmbedStats
 }
 
+const modelsWithProjector = new WeakSet<object>()
+
+export function markEmbeddingProjector(model: object) {
+  modelsWithProjector.add(model)
+}
+
 // Overloaded functions for embedding
 export async function embed(
   params: { modelId: string; text: string },
@@ -25,7 +36,17 @@ export async function embed(
 export async function embed(params: EmbedParams, requestId?: string): Promise<EmbedResult>
 
 export async function embed(params: EmbedParams, requestId?: string): Promise<EmbedResult> {
-  const { modelId, text } = embedParamsSchema.parse(params)
+  const parsed = embedParamsSchema.parse(params)
+  const inputs = parsed.input !== undefined ? [parsed.input] : parsed.inputs
+  const mediaInputs = inputs?.map((input) => {
+    if (typeof input === 'object' && !Array.isArray(input)) {
+      throw new EmbedFailedError(
+        'This model accepts text and ordered media parts, not raw RGB image inputs'
+      )
+    }
+    return input
+  })
+  const { modelId } = parsed
 
   // Open a request-scoped lifecycle. The registry routes
   // `cancel({ requestId })` and broad `cancel({ modelId, kind: "embeddings" })`
@@ -36,6 +57,8 @@ export async function embed(params: EmbedParams, requestId?: string): Promise<Em
     kind: 'embeddings',
     modelId
   })
+  if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
+
   // `requestLogger` is intentionally referenced once so the
   // request-scoped logger is built at handler entry per the canonical
   // shape, even when this op has no per-step emits beyond the
@@ -45,19 +68,28 @@ export async function embed(params: EmbedParams, requestId?: string): Promise<Em
 
   const model = getModel(modelId)
 
-  // Hard-cancel wiring: llamacpp-embedding declares
-  // `cancel: { scope: "model", hard: true }`. The signal listener
-  // forwards an abort to the addon so C++ work stops as soon as the
-  // user cancels — mirrors the canonical handler shape documented in
-  // `request-lifecycle-primitives.mdc`. The post-await
-  // `signal.aborted` checks below are the soft-cancel safety net for
-  // the case where the abort fires between `model.run(...)` returning
-  // and `response.await()` resolving (both can take seconds on large
-  // batches).
+  const hasMedia = mediaInputs?.some(
+    (input) => Array.isArray(input) && input.some((part) => typeof part !== 'string')
+  )
+  if (hasMedia && !modelsWithProjector.has(model)) {
+    throw new EmbedFailedError(
+      'Media inputs require modelConfig.projectionModelSrc when loading the embedding model'
+    )
+  }
+
+  const input =
+    mediaInputs !== undefined
+      ? await prepareEmbedInputs(mediaInputs, ctx.signal, ctx.requestId)
+      : parsed.text
+  if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
+
+  // Admission keeps model-wide cancellation scoped to this request. Media
+  // preparation has no native job to cancel, so wire the addon only afterward.
+  let cancelPromise: Promise<void> | undefined
   const onAbort = () => {
     const addon = model.addon
     if (addon?.cancel) {
-      addon.cancel.call(addon).catch((err: unknown) => {
+      cancelPromise ??= addon.cancel.call(addon).catch((err: unknown) => {
         requestLogger.warn(
           `[cancel] addon.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`
         )
@@ -65,24 +97,23 @@ export async function embed(params: EmbedParams, requestId?: string): Promise<Em
     }
   }
   ctx.signal.addEventListener('abort', onAbort, { once: true })
-  // `{ once: true }` does not fire if the signal is already aborted at
-  // register time. The registry may abort synchronously when a
-  // cancel-before-begin race resolves or the parent signal was pre-
-  // aborted — re-use `onAbort` so the listener body is the single
-  // source of truth for "what cancel does."
-  if (ctx.signal.aborted) onAbort()
-  ctx.scope.defer(() => {
+  ctx.scope.defer(async () => {
     ctx.signal.removeEventListener('abort', onAbort)
+    // A delayed native cancel must finish before the next job owns this model slot.
+    await cancelPromise
   })
 
   const modelStart = nowMs()
-  const response = (await model.run(text)) as unknown as EmbedResponse
-  if (ctx.signal.aborted) {
-    throw new InferenceCancelledError(ctx.requestId)
-  }
-  const rawEmbeddings = await response.await()
-  if (ctx.signal.aborted) {
-    throw new InferenceCancelledError(ctx.requestId)
+  let response: EmbedResponse
+  let rawEmbeddings: Awaited<ReturnType<EmbedResponse['await']>>
+  try {
+    response = (await model.run(input)) as unknown as EmbedResponse
+    if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
+    rawEmbeddings = await response.await()
+    if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
+  } catch (cause) {
+    if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId, {}, cause)
+    throw cause
   }
   const modelExecutionMs = nowMs() - modelStart
 
@@ -100,7 +131,7 @@ export async function embed(params: EmbedParams, requestId?: string): Promise<Em
 
   const embeddingsArray = rawEmbeddings[0]
 
-  if (Array.isArray(text)) {
+  if (parsed.input === undefined && (parsed.inputs !== undefined || Array.isArray(parsed.text))) {
     if (!embeddingsArray || embeddingsArray.length === 0) {
       throw new EmbedNoEmbeddingsError()
     }
@@ -156,4 +187,41 @@ export function normalizeVector(vector: Float32Array) {
     normalizedVector[i] = vector[i]! * inverseMagnitude
   }
   return normalizedVector as number[]
+}
+
+async function prepareEmbedInputs(
+  inputs: Array<string | EmbedInputPart[]>,
+  signal: AbortSignal,
+  requestId: string
+): Promise<EmbedRunInput> {
+  const result: Array<string | EmbedMultimodalInput> = []
+  for (const input of inputs) {
+    if (signal.aborted) throw new InferenceCancelledError(requestId)
+    if (typeof input === 'string') {
+      result.push(input)
+      continue
+    }
+    const parts: EmbedMultimodalInput = []
+    for (const part of input) {
+      if (signal.aborted) throw new InferenceCancelledError(requestId)
+      if (typeof part === 'string') {
+        parts.push(part)
+      } else {
+        const { type, value } = part.media
+        try {
+          const media =
+            type === 'base64'
+              ? Buffer.from(value, 'base64')
+              : await fs.promises.readFile(value, 'buffer')
+          parts.push({ media })
+        } catch (cause) {
+          if (signal.aborted) throw new InferenceCancelledError(requestId, {}, cause)
+          throw new EmbedFailedError('Unable to read embedding media', cause)
+        }
+      }
+    }
+    result.push(parts)
+  }
+  if (signal.aborted) throw new InferenceCancelledError(requestId)
+  return { inputs: result }
 }

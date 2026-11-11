@@ -9,7 +9,7 @@ schemaType: HowTo
 
 Text-to-Speech uses [`@qvac/tts-ggml`](https://github.com/tetherto/qvac/tree/main/packages/tts-ggml) (GGML) as the inference engine. Load any supported model using `modelType: "tts"`. Then, provide `text` as input (with `inputType: "text"`) to generate speech audio. MOSS-SoundEffect also generates sound effects from descriptions, and MOSS-Speech accepts text or audio questions to generate a reply.
 
-`textToSpeech()` returns synchronously with `buffer`, `bufferStream`, `done`, `requestId`, `text`, `sampleRate`, `stats` and `stopReason`; see [Audio output](#audio-output), [Cancelling a run](#cancelling-a-run) and [Runtime statistics](#runtime-statistics) below.
+`textToSpeech()` returns synchronously with `buffer`, `bufferStream`, `chunkStream`, `done`, `requestId`, `text`, `sampleRate`, `stats`, `stopReason` and `speechTokenIds`; see [Audio output](#audio-output), [Cancelling a run](#cancelling-a-run) and [Runtime statistics](#runtime-statistics) below.
 
 ## Functions
 
@@ -24,6 +24,19 @@ For how to use each function, see [SDK — API reference](/sdk/reference/api/).
 ## Audio output
 
 The SDK returns raw, mono, signed 16-bit PCM samples as a plain `number[]`. With `stream: false`, the `buffer` promise resolves to the complete sample array and `bufferStream` is empty. With `stream: true`, `buffer` resolves to `[]` and `bufferStream` yields individual samples as they become available. The data has no WAV header or other container metadata; use the [example utility](#utils) to write it as a WAV file.
+
+`chunkStream` is the same audio one frame at a time: an `AsyncGenerator<Int16Array>` that yields one typed array of signed 16-bit samples per response frame (per sentence with `sentenceStream: true`), so a player can hand each chunk to an audio device without rebuilding it from single samples. The samples are integers in the int16 range, not floats; scale by `1 / 32768` for an API that expects `[-1, 1]`. `bufferStream` and `chunkStream` share one run in plain streaming mode, so iterate one of the two; with `stream: false` both are empty and `buffer` holds the audio.
+
+```ts
+const result = textToSpeech({ modelId, text: 'Hello.' })
+for await (const chunk of result.chunkStream) {
+  // The run starts when chunkStream is first iterated, so sampleRate
+  // resolves once the first chunk is in; await it inside the loop.
+  const sampleRate = await result.sampleRate
+  // chunk: Int16Array, one per engine frame
+  player.write(chunk, sampleRate)
+}
+```
 
 `textToSpeech()` also returns a `sampleRate` promise, resolved from the first
 audio frame the engine emits. Prefer it over inferring the rate from the load
@@ -84,14 +97,14 @@ A cancelled run ends cleanly rather than as an error: `done` resolves `true`,
 statistics from the final frame (`undefined` if the run reported none).
 
 <Callout type="info">
-  The five backend fields (`backendDevice`, `backendId`, `gpuUnsupported`,
-  `enhancerBackendDevice`, `enhancerBackendId`) are reported by batch
-  synthesis (`stream: false`) only. The chunked paths — `stream: true` (the
-  default), `sentenceStream: true`, and `textToSpeechStream()` — run one
-  native job per sentence and aggregate only the timing and sample counts,
-  plus Audio8's two Core ML fields, which keep the last sentence's value.
-  MOSS is the exception for `stream: true`: it runs the whole text as one
-  native job, so it reports them there too.
+  The chunked paths — `stream: true` (the default), `sentenceStream: true`,
+  and `textToSpeechStream()` — run one native job per sentence. Their
+  aggregate sums the timing and sample counts, keeps `firstAudioMs` from the
+  first sentence and the backend and Core ML fields from the last sentence
+  that reported them, and carries no per-stage timings or counters: those
+  describe one native synthesis, so they are reported by batch synthesis
+  (`stream: false`) only. MOSS is the exception for `stream: true`: it runs
+  the whole text as one native job, so it reports everything there too.
 </Callout>
 
 | Field | Meaning |
@@ -103,17 +116,51 @@ statistics from the final frame (`undefined` if the run reported none).
 | `totalSamples` | PCM sample count. |
 | `generatedFrames` | Audio8 and MOSS only: codec frames generated (Audio8 on a fixed 46 ms grid, MOSS at 12.5 per second). |
 | `backendDevice` | Compute device chosen at load: `0` CPU, `1` GPU. |
-| `backendId` | Backend family: `0` CPU, `1` Metal, `2` CUDA, `3` Vulkan, `4` OpenCL, `99` other GPU. |
+| `backendId` | Backend family: `0` CPU, `1` Metal, `2` CUDA, `3` Vulkan, `4` OpenCL, `5` WebGPU, `99` other GPU. |
 | `gpuUnsupported` | `1` when a GPU is present but unusable by engine policy, so the run fell back to CPU. |
-| `enhancerBackendDevice` | LavaSR enhancer device: `-1` not loaded, `0` CPU, `1` GPU. |
-| `enhancerBackendId` | LavaSR enhancer backend family, same codes as `backendId`. |
+| `enhancerBackendDevice` | LavaSR enhancer device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed. |
+| `enhancerBackendId` | LavaSR enhancer backend family, same codes as `backendId` (`99` for a Core ML-managed stage). |
+| `denoiserBackendDevice` | LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed. |
+| `denoiserBackendId` | LavaSR denoiser backend family, same codes as `backendId` (`99` for a Core ML-managed stage). |
 | `codecSidecarLoaded` | Audio8 on macOS/iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired. |
 | `codecOnCoreml` | Audio8: `1` when the synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` names. |
+| `decoderSidecarLoaded`, `dacSidecarLoaded` | Parler on macOS/iOS: `1` while the Core ML decoder / DAC sidecar is attached, `0` once a fallback retired it. |
+| `decoderOnCoreml`, `dacOnCoreml` | Parler: `1` when the synthesis ran that stage on Core ML, `0` for ggml or a mixed run; a sentence stream reports `1` only when every sentence did. None of the four says which hardware Core ML scheduled the work on. |
+| `firstAudioMs` | Milliseconds from the start of the run to the first audio, where the engine reports it. |
+| `t3Ms`, `s3genMs`, `t3Tokens` | Chatterbox: T3 decode and S3Gen + HiFT wall times in milliseconds, and the speech tokens T3 emitted. |
+| `stageTotalMs` | CosyVoice3 and Audio8: the engine's own wall time in milliseconds, the sum of its stages, excluding the addon's post-processing. |
+| `lmPrefillMs`, `lmDecodeMs`, `flowFrontendMs`, `ditEulerMs`, `hiftF0Ms`, `hiftSourceMs`, `hiftStftMs`, `hiftDecodeMs` | CosyVoice3 stage wall times, in milliseconds. |
+| `decodeSteps`, `speechTokens`, `flowFrames`, `melFrames`, `textIds`, `promptSpeechTokens` | CosyVoice3 work counters: LM decode steps, speech tokens generated, flow frames in (prompt + generated), mel frames out, text ids in the LM prefill, and the prompt speech tokens the LM continued from. |
+| `voiceEncodeMs`, `promptMs`, `prefillMs`, `sampleMs`, `fastDecodeMs`, `slowDecodeMs`, `codecLatentMs`, `codecSynthMs`, `resampleMs` | Audio8 stage wall times, in milliseconds. |
 
 ```ts
 const stats = await result.stats;
 console.log(stats?.realTimeFactor, stats?.backendId, stats?.gpuUnsupported);
 ```
+
+## Backend selection
+
+Every engine takes `useGPU` (and `nGpuLayers`) to ask for the host's GPU
+backend by policy. `modelConfig.backend` names the backend explicitly instead:
+`auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as
+`MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An explicit
+backend that is not available fails the load rather than falling back, and
+unset keeps the `useGPU` policy. `assessModelFit()` projects the load on the
+same device.
+
+```ts
+await loadModel({
+  modelSrc: TTS_MULTILINGUAL_SUPERTONIC3_Q8_0,
+  modelType: "tts",
+  modelConfig: { ttsEngine: "supertonic", language: "en", backend: "CUDA0" },
+});
+```
+
+<Callout type="warn">
+  WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only;
+  Chatterbox and the MOSS engines reject a `webgpu` selector at load. The
+  engine reports where it ran in `stats.backendId` (`5` is WebGPU).
+</Callout>
 
 ## Models
 
@@ -150,6 +197,31 @@ as on the other engines; `openclCacheDir` (the Android OpenCL program cache)
 is accepted by Chatterbox, Supertonic and CosyVoice3 only. Chatterbox supports
 [LavaSR](#lavasr) post-processing.
 
+Instead of (or alongside) `referenceAudioSrc`, `voiceDir` points at a
+directory of pre-baked voice-conditioning tensors — the upstream CLI's
+`--save-voice` output — which skips the reference preprocessing; when both are
+set, tensors missing from the directory are backfilled from the recording.
+
+T3 sampling is tunable: `temperature` (engine default `0.8`; `0` decodes
+greedily), `topK` (`1000`; `0` disables the cutoff), `topP` (`0.95`) and
+`repeatPenalty` (`1.2`; `1` turns it off). The multilingual GGUFs also take
+`exaggeration` (prosody intensity, default `0.5`; above `0` more expressive,
+below `0` flatter), `cfgWeight` (T3 classifier-free-guidance scale, default
+`0.5`; `0` disables it, and it is separate from `cfgRate`, which steers S3Gen)
+and `minP` (min-p threshold, `0` = off); the Turbo variant ignores the three.
+
+Length and streaming cost: `nPredict` caps the speech tokens T3 decodes per
+synthesis (default `1000`, about 40 s); longer single calls also need `nCtx`
+to cover the prompt plus the generated tokens, or set `maxSentenceChars` so
+T3 + S3Gen run per segment of at most that many bytes (the reference CLI uses
+`180`), with `crossfadeMs` (default `30`) blending the segments in batch
+synthesis. `batchCfmSteps` sets the CFM Euler steps for batch synthesis (`0`
+= the library default: 2-step meanflow on Turbo, the model's full schedule on
+multilingual) while `cfmSteps` keeps driving native streaming, and
+`streamLeftContextTokens` bounds the per-chunk cost of long native streams by
+keeping only that many already-emitted speech tokens as S3Gen left context
+(typically 25–50; `0` = the whole emitted prefix).
+
 ### Supertonic
 
 Supertonic uses a **single GGUF** via top-level `modelSrc`. Set `voice`, `ttsSpeed`, and `ttsNumInferenceSteps` in `modelConfig` as needed. Multilingual output is selected by the GGUF (e.g. `TTS_MULTILINGUAL_SUPERTONIC2_Q8_0`) plus `language`.
@@ -176,7 +248,45 @@ per request — set it in `modelConfig`.
 `seed`, `threads`, `nGpuLayers`, `outputSampleRate` and `backendsDir` work
 as on the other engines; `openclCacheDir` is accepted by Chatterbox,
 Supertonic and CosyVoice3 only, and `vulkanCacheDir` additionally persists
-the compiled Vulkan pipeline cache when `useGPU` is set.
+the compiled Vulkan pipeline cache when `useGPU` is set. `vulkanDevice` picks
+the Vulkan adapter (`0` = the first, `N` = the Nth, `-1` = auto-pick by free
+VRAM preferring a discrete GPU) and is also used by the LavaSR enhancer;
+`prewarmText` is synthesized once at load so GPU pipelines (and a Core ML
+vocoder sidecar) are ready before the first request.
+
+Voices: `voice` selects a preset baked into the GGUF (`F1`, `M1`, …), and
+`voiceJsonSrc` loads an external voice JSON (`{ style_ttl, style_dp }`, e.g.
+a cloned voice) that overrides it; the engine checks the tensor sizes against
+the loaded model. A voice can also be passed in memory: `voiceStyleTtl` and
+`voiceStyleDp` take the two flattened tensors as number arrays (both or
+neither), and win over `voiceJsonSrc` and the baked preset. `noiseNpySrc`
+supplies a fixed CFM initial-noise `.npy` tensor for reproducible output.
+
+Precision and environment: `precision` picks the weight precision the engine
+loads at (`auto` keeps the GGUF's own; `f32`, `f16` or `q8_0` convert on
+load and change the memory footprint, which `assessModelFit()` accounts for).
+`f16Attn` and `f16Weights` override the attention and weight precision (`-1`
+automatic, `0` off, `1` f16), `kvAttnType` the native KV attention type code,
+and `f16WeightsDenyList` lists tensor-name patterns kept at their original
+precision. `vulkanEnvOverrides` is a map of string-valued Vulkan environment
+overrides handed to the engine; an explicit entry wins over the
+`vulkanCacheDir` convenience setting. The addon's `warmUp()` method has no SDK
+counterpart: `prewarmText` warms the engine up at load instead.
+
+Supertonic also streams natively: set `streamChunkTokens` above zero to emit
+audio per chunk of that many text tokens (Unicode code points — about 50 for
+English, 25–30 for CJK). `streamFirstChunkTokens` shrinks the first chunk for
+lower first-audio latency, `streamChunkTolerancePct` (default `20`) is the
+window, as a percentage of the chunk target, within which a boundary snaps to
+a sentence end, clause or space, and `streamMinChunkTokens` (default `30`)
+merges a shorter trailing chunk into the previous one.
+
+<Callout type="warn">
+  Supertonic native chunk streaming cannot be combined with the LavaSR
+  enhancer or denoiser; the pair is rejected at load. Sentence streaming
+  (`stream: true` without `streamChunkTokens`, `sentenceStream: true`, or
+  `textToSpeechStream()`) works with either stage loaded.
+</Callout>
 
 ### Parler-TTS
 
@@ -276,6 +386,17 @@ async for response in text_to_speech(transport, request):
     samples.extend(response.buffer)
 ```
 
+On macOS and iOS, Parler runs its DAC on a compiled Core ML sidecar
+(`<model>-dac.mlmodelc`) found beside the GGUF, and optionally its decoder
+steps on `<model>-decoder.mlmodelc` when `coremlDecoder: true`; the sidecars
+are not part of the published model set yet, so supply your own beside a local
+GGUF. `coremlComputeUnits` (`all`, `cpu_and_ane`, `cpu_and_gpu`, `cpu_only`)
+sets the compute policy and `coremlStrict` decides whether an unusable sidecar
+fails the load (`true`) or falls back to ggml (`false`); leaving either unset
+inherits the engine's environment policy. The `decoderSidecarLoaded`,
+`dacSidecarLoaded`, `decoderOnCoreml` and `dacOnCoreml` stats report which
+path ran.
+
 ### CosyVoice3
 
 CosyVoice3 uses the **LLM GGUF** as the top-level `modelSrc`; its registry
@@ -321,19 +442,62 @@ Conditioning uses one of three controls:
 <Callout type="warn">
   CosyVoice3 accepts **one conditioning control per synthesis** — an
   `emotion`, a non-`moderate` `pace`, or an `instruct`. Combining them is
-  rejected at load and request validation. `emotion` and `pace` can also be
-  set per request on `textToSpeech()`; `instruct` is load-time only.
+  rejected at load and request validation. All three can also be set per
+  request on `textToSpeech()` and `textToSpeechStream()`, where the request's
+  control replaces the loaded one for that synthesis.
 </Callout>
+
+```ts
+const result = textToSpeech({
+  modelId,
+  text: "今天天气真好。",
+  stream: false,
+  // Per-request control; a raw string is passed to the engine verbatim.
+  instruct: { dialect: "cantonese" },
+});
+```
 
 Set `streamChunkTokens` above zero for native chunk streaming
 (`streamFirstChunkTokens` tunes the first chunk only). Native streaming emits
 at 24 kHz, so omit `outputSampleRate` or set it to `24000` unless the LavaSR
 enhancer is loaded. `useGPU` offloads to Metal on macOS/iOS, Vulkan on
-desktop Linux/Windows, and OpenCL on Adreno Android devices; `threads`,
-`nGpuLayers`, `seed`, and `outputSampleRate` (8,000–192,000 Hz) work as on
-the other engines. CosyVoice3 also supports [LavaSR](#lavasr)
-post-processing via `lavasrEnhancerModelSrc` (48 kHz bandwidth extension) and
+desktop Linux/Windows, and OpenCL on Adreno Android devices; `vulkanDevice`
+picks the Vulkan adapter (`0` = the first, `N` = the Nth, `-1` = auto-pick by
+free VRAM preferring a discrete GPU) and is also used by the LavaSR enhancer.
+`flowCutPrompt` treats the baked-voice prompt frames as attention-only
+conditioning in the flow — a faster flow whose output deviates slightly from
+the reference (off by default). `threads`, `nGpuLayers`, `seed`, and
+`outputSampleRate` (8,000–192,000 Hz) work as on the other engines.
+CosyVoice3 also supports [LavaSR](#lavasr) post-processing via
+`lavasrEnhancerModelSrc` (48 kHz bandwidth extension) and
 `lavasrDenoiserModelSrc` (batch-only; runs before the enhancer).
+
+Reproducible generation: `seed` fixes the sampler, `greedy: true` takes the
+argmax speech token instead of sampling, and the run hands its speech-token
+trajectory back as `speechTokenIds` (on the result, and on each frame that
+carried it: with the PCM in batch synthesis, on a final `isLast` frame with no
+audio under native chunk streaming, once per sentence on `chunkUpdates`).
+Pass the array of **one native synthesis** back as `forceSpeechTokens` in
+`modelConfig` to replay it through the flow and vocoder: a batch run, a native
+chunk stream, or a single sentence's array from `chunkUpdates`. An empty array
+restores generation. `forceSpeechTokens` is fixed at load and every synthesis
+the model runs replays that same array, so a sentence stream's result
+(`speechTokenIds` concatenated across its sentences) cannot be replayed as one:
+each sentence would start its own synthesis from the whole joined array and the
+original segmentation is lost. Replay a sentence stream sentence by sentence
+instead, loading the model once per array.
+
+```ts
+const take = textToSpeech({ modelId, text: "Hello.", stream: false });
+await take.buffer;
+const tokens = await take.speechTokenIds; // number[] | undefined
+
+const replay = await loadModel({
+  modelSrc: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
+  modelType: "tts",
+  modelConfig: { ttsEngine: "cosyvoice3", forceSpeechTokens: tokens },
+});
+```
 
 #### CosyVoice3 voice cloning
 
@@ -415,6 +579,35 @@ supply `referenceAudioSrc` (a reference recording) together with
 together — a reference without its transcript or without the encoder is
 rejected at load.
 
+With the encoder loaded, the voice can also change per request:
+`textToSpeech()` and `textToSpeechStream()` take `referenceAudioSrc` and
+`referenceText` too. A request-level recording replaces the loaded voice for
+that synthesis and must bring its own `referenceText` (the loaded transcript
+describes a different recording, so it is not inherited); a request-level
+`referenceText` on its own corrects the transcript of the loaded recording.
+The engine caches the codes of the most recent reference, so repeating one
+across requests skips the encoder.
+
+```ts
+const result = textToSpeech({
+  modelId,
+  text: "Spoken in another voice.",
+  stream: false,
+  referenceAudioSrc: "/path/to/someone-else.wav",
+  referenceText: "Exactly what that recording says.",
+});
+```
+
+<Callout type="warn">
+  A request-level `referenceAudioSrc` is resolved inside the request. A local
+  path or an already cached source costs nothing, but a remote source that is
+  not cached yet downloads first, with no progress events, while the request
+  holds the model: every other speech request for that model waits behind it.
+  Pre-fetch remote recordings with `downloadAsset({ assetSrc })`, which fills
+  the same cache, and pass the same source to the request afterwards.
+  `cancel()` stops a download that is already in flight.
+</Callout>
+
 Generation is sampled by default: `temperature` (default `0.7`), `topK`
 (`50`), and `topP` (`0.9`) tune it, `greedy: true` takes the argmax instead
 and ignores all three, and `maxFrames` caps generation in codec frames
@@ -438,7 +631,9 @@ synthesis fails on it, Audio8 runs the codec on ggml instead; the
   Audio8 has no `emotion`, `pace`, or description fields (at load or per
   request), no LavaSR post-processing, and no native chunk streaming.
   Sentence streaming (`sentenceStream: true`) and duplex
-  `textToSpeechStream()` work as with every engine.
+  `textToSpeechStream()` work as with every engine. The request-level
+  `referenceAudioSrc` / `referenceText` pair is Audio8-only; other engines
+  reject it.
 </Callout>
 
 For model constants, see [SDK — Models](/sdk#models).
@@ -480,8 +675,17 @@ The speech is directable from the text itself: `[pause 2.0s]` markers insert
 a silence of roughly that length, and inline Pinyin (`ni3 hao3`) or IPA
 (`/həloʊ/`) steers pronunciation. `durationTokens` asks for a target length in
 codec frames (12.5 per second, so `38` is about 3 s; `0` or unset keeps the
-length free; at most `2015`). `language` is written into the model prompt as a
-hint (default `en`).
+length free). `language` is written into the model prompt as a hint (default
+`en`).
+
+Budgets and sampling: `maxNewTokens` is the generation budget in rows (engine
+default `2048`), of which 33 are delay and end-of-sequence rows, so
+`durationTokens` can be at most `maxNewTokens − 33` (`2015` by default; the
+pair is checked at load). `nCtx` sets the backbone's context capacity. The
+text and audio channels sample independently: `textTemperature`, `textTopP`
+and `textTopK` steer the text channel, `audioTemperature`, `audioTopP`,
+`audioTopK` and `audioRepetitionPenalty` the audio channel; each unset knob
+keeps the engine default. The same controls apply to MOSS-TTSD.
 
 MOSS streams natively. With `streamChunkTokens` set, `stream: true` (the
 default) delivers audio every that-many codec frames while generation
@@ -622,7 +826,9 @@ With Chatterbox, Supertonic, Parler, or CosyVoice3, you can choose to perform po
   The denoiser needs the whole utterance, so it cannot be combined with native
   chunk streaming (`streamChunkTokens > 0`) on Chatterbox, Parler, or
   CosyVoice3. The combination is rejected at load. The enhancer has no such
-  restriction — it resamples seam-free across chunk boundaries.
+  restriction there — it resamples seam-free across chunk boundaries.
+  Supertonic native chunk streaming rejects both stages; use sentence
+  streaming for enhanced or denoised Supertonic output.
 </Callout>
 
 ```ts
@@ -637,6 +843,31 @@ await loadModel({
     lavasrDenoiserModelSrc: TTS_DENOISER_LAVASR_FP16.src,
     // …then the enhancer bandwidth-extends to 48 kHz.
     lavasrEnhancerModelSrc: TTS_ENHANCER_LAVASR_FP16.src,
+  },
+});
+```
+
+On macOS and iOS either stage can run its neural core on Core ML. Give the
+stage a compiled model directory on the inference host and a compute policy
+together: `lavasrEnhancerCoremlModelPath` with
+`lavasrEnhancerCoremlComputeUnits`, or `lavasrDenoiserCoremlModelPath` with
+`lavasrDenoiserCoremlComputeUnits` (`CPU_ONLY`, `CPU_AND_GPU`, `CPU_AND_NE`,
+`ALL`), beside that stage's GGUF source. A Core ML model that cannot load fails
+the load instead of falling back to ggml, and the stage then reports device `2`
+(Core ML-managed) and backend `99` in its stats. The models are exported with
+the native `export-lavasr-coreml.py` script; they are not published in the
+registry.
+
+```ts
+await loadModel({
+  modelSrc: TTS_MULTILINGUAL_SUPERTONIC3_Q8_0,
+  modelType: "tts",
+  modelConfig: {
+    ttsEngine: "supertonic",
+    language: "en",
+    lavasrEnhancerModelSrc: TTS_ENHANCER_LAVASR_FP16.src,
+    lavasrEnhancerCoremlModelPath: "/models/lavasr-enhancer.mlmodelc",
+    lavasrEnhancerCoremlComputeUnits: "CPU_AND_NE",
   },
 });
 ```

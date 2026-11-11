@@ -19,6 +19,7 @@ import { ocr } from '@/plugins/builtin/ggml-ocr/ops/ocr-stream'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
 import { ocrParamsFor } from '@/plugins/builtin/ggml-ocr/params'
 import { resolveOcrConfig } from '@/plugins/builtin/ggml-ocr/resolve-config'
+import { ocrFitRequest } from '@/plugins/builtin/ggml-ocr/fit'
 import { isMobile } from '@/runtime/state'
 import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
 
@@ -58,6 +59,7 @@ export const ocrPlugin = definePlugin({
   displayName: 'OCR (GGML)',
   addonPackage: ADDON_OCR,
   loadConfigSchema: ocrLoadConfigSchema,
+  fitRequest: ocrFitRequest,
   assessFit: ocrAssessFit,
 
   async resolveConfig(

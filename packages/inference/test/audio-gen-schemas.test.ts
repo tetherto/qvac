@@ -3,12 +3,15 @@ import {
   AudioEditOperationType,
   ENGINE_ACESTEP,
   ENGINE_MINIMAX,
+  OUTPUT_FORMATS,
   RepaintMode
 } from '@qvac/audiogen-ggml'
 import {
   AUDIOGEN_EDIT_OPERATIONS,
   AUDIOGEN_ENGINES,
   AUDIOGEN_MAX_AUDIO_CODES,
+  AUDIOGEN_MINIMAX_COREML_COMPUTE_UNITS,
+  AUDIOGEN_OUTPUT_FORMATS,
   AUDIOGEN_REPAINT_MODES,
   AUDIOGEN_TASK_TYPES,
   AUDIOGEN_TRACKS,
@@ -403,7 +406,7 @@ test('audioGen shared ACE-Step controls follow the addon ranges', (t) => {
   t.absent(accepts({ dcwHighScaler: 1e39 }), 'DCW scalers are within the float32 range')
 })
 
-test('audioGenStatsSchema carries ACE-Step metadata and the MiniMax stage timings', (t) => {
+test('audioGenStatsSchema carries ACE-Step metadata, the GPU fallback code and the MiniMax stage timings', (t) => {
   const metadata = {
     caption: 'a hopeful indie track with jangly guitars',
     lyrics: '[verse]\nopen roads',
@@ -439,7 +442,8 @@ test('audioGenStatsSchema carries ACE-Step metadata and the MiniMax stage timing
     arMs: 41_000,
     conditionMs: 120,
     flowMs: 28_000,
-    vocoderMs: 4_000
+    vocoderMs: 4_000,
+    gpuFallbackReason: 0
   })
 })
 
@@ -1092,5 +1096,132 @@ test('audioUnderstandResponseSchema streams the description and repeats it on st
       data: 'AAECAw=='
     }).success,
     'the reverse pipeline never carries PCM'
+  )
+})
+
+test('AudioGen MiniMax load config takes the Core ML profile and its compute units as a pair', (t) => {
+  const minimax = {
+    engine: 'minimax',
+    lmModelSrc: 'minimax-lm.gguf',
+    synthModelSrc: 'minimax-synth.gguf'
+  }
+  t.alike(
+    [...AUDIOGEN_MINIMAX_COREML_COMPUTE_UNITS],
+    ['CPU_ONLY', 'CPU_AND_GPU', 'CPU_AND_NE', 'ALL']
+  )
+  for (const coremlComputeUnits of AUDIOGEN_MINIMAX_COREML_COMPUTE_UNITS) {
+    const config = { ...minimax, coremlProfileDir: '/models/minimax-coreml', coremlComputeUnits }
+    t.ok(audioGenConfigSchema.safeParse(config).success, coremlComputeUnits)
+    t.ok(
+      audioGenRuntimeConfigSchema.safeParse({
+        engine: 'minimax',
+        coremlProfileDir: '/models/minimax-coreml',
+        coremlComputeUnits
+      }).success,
+      coremlComputeUnits
+    )
+  }
+
+  const profileOnly = audioGenConfigSchema.safeParse({
+    ...minimax,
+    coremlProfileDir: '/models/minimax-coreml'
+  })
+  t.absent(profileOnly.success)
+  t.alike(
+    profileOnly.error?.issues.map((issue) => issue.path),
+    [['coremlComputeUnits']]
+  )
+  const unitsOnly = audioGenConfigSchema.safeParse({ ...minimax, coremlComputeUnits: 'ALL' })
+  t.absent(unitsOnly.success)
+  t.alike(
+    unitsOnly.error?.issues.map((issue) => issue.path),
+    [['coremlProfileDir']]
+  )
+
+  const pair = { coremlProfileDir: '/models/minimax-coreml', coremlComputeUnits: 'CPU_AND_NE' }
+  t.absent(
+    audioGenConfigSchema.safeParse({ ...minimax, ...pair, coremlComputeUnits: 'NPU' }).success
+  )
+  t.absent(audioGenConfigSchema.safeParse({ ...minimax, ...pair, coremlProfileDir: '' }).success)
+  t.absent(
+    audioGenConfigSchema.safeParse({ ...minimax, ...pair, coremlProfileDir: '/models/a\0b' })
+      .success,
+    'the addon refuses a NUL in the path'
+  )
+  t.ok(
+    audioGenConfigSchema.safeParse({ ...minimax, ...pair, device: 'gpu' }).success,
+    'the Core ML route takes precedence over device rather than conflicting with it'
+  )
+  t.absent(
+    audioGenConfigSchema.safeParse({ ...modelConfig, ...pair }).success,
+    'Core ML is a MiniMax route'
+  )
+})
+
+test('audioGen and audioEdit take an outputFormat from the addon encoder list', (t) => {
+  t.alike(
+    [...AUDIOGEN_OUTPUT_FORMATS],
+    ['wav', 'flac', 'alac', 'aiff', 'caf', 'm4a', 'aac', 'opus', 'ogg', 'ac3', 'wma', 'mp2']
+  )
+  // The SDK list is the addon's, minus the raw `pcm` every run already returns.
+  t.alike(
+    [...AUDIOGEN_OUTPUT_FORMATS],
+    OUTPUT_FORMATS.filter((format) => format !== 'pcm')
+  )
+
+  const generation = { modelId: 'audio-model', caption: 'ambient electronic music' }
+  const edit = {
+    modelId: 'audio-model',
+    sourceAudio: '/path/to/song.wav',
+    operations: [{ type: 'repaint', caption: 'drum fill', start: 0 }]
+  }
+  for (const outputFormat of AUDIOGEN_OUTPUT_FORMATS) {
+    t.is(
+      audioGenClientParamsSchema.parse({ ...generation, outputFormat }).outputFormat,
+      outputFormat
+    )
+    t.ok(
+      audioGenStreamRequestSchema.safeParse({ ...generation, type: 'audioGenStream', outputFormat })
+        .success,
+      outputFormat
+    )
+    // The wire form of the source differs from the client one, so the wire
+    // request is built from what the client schema produced.
+    const parsedEdit = audioEditClientParamsSchema.parse({ ...edit, outputFormat })
+    t.is(parsedEdit.outputFormat, outputFormat)
+    t.ok(
+      audioEditStreamRequestSchema.safeParse({ ...parsedEdit, type: 'audioEditStream' }).success,
+      outputFormat
+    )
+  }
+  t.is(audioGenClientParamsSchema.parse(generation).outputFormat, undefined)
+  for (const outputFormat of ['mp3', 'pcm', 'WAV', '']) {
+    t.absent(
+      audioGenClientParamsSchema.safeParse({ ...generation, outputFormat }).success,
+      outputFormat
+    )
+    t.absent(audioEditClientParamsSchema.safeParse({ ...edit, outputFormat }).success, outputFormat)
+  }
+})
+
+test('audioGen and audioEdit frames carry the encoded file', (t) => {
+  const encoded = { data: 'UklGRg==', format: 'wav', mimeType: 'audio/wav', extension: 'wav' }
+  t.alike(audioGenStreamResponseSchema.parse({ type: 'audioGenStream', encoded }).encoded, encoded)
+  t.alike(
+    audioEditStreamResponseSchema.parse({ type: 'audioEditStream', encoded }).encoded,
+    encoded
+  )
+  t.absent(
+    audioGenStreamResponseSchema.safeParse({
+      type: 'audioGenStream',
+      encoded: { ...encoded, format: 'mp3' }
+    }).success
+  )
+  t.absent(
+    audioGenStreamResponseSchema.safeParse({
+      type: 'audioGenStream',
+      encoded: { data: 'UklGRg==', format: 'wav' }
+    }).success,
+    'the MIME type and extension travel with the bytes'
   )
 })

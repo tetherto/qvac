@@ -73,6 +73,13 @@ const cases = [
     quantization: 'q8_0',
     expected: 'PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0'
   },
+  // The full 25-language TranscribePsy-250M-EU GGUF: the EU-sub names above
+  // predate it and stay, so the region goes on the full model only.
+  {
+    path: 'ggml/transcribepsy/2026-11-09/transcribepsy-250m-eu.gguf',
+    quantization: 'q8_0',
+    expected: 'PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0'
+  },
   {
     path: 'ggml/parakeet/parakeet-unified-en-0.6b.q8_0.gguf',
     quantization: 'q8_0',

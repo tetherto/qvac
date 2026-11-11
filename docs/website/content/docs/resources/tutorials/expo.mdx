@@ -43,15 +43,11 @@ Let's use the official Expo scaffold to create a minimal app structure.
 Create a new project:
 
 ```bash
-npx create-expo-app@latest qvac-expo-chat --template blank-typescript@sdk-54
+npx create-expo-app@latest qvac-expo-chat --template blank-typescript@sdk-58
 cd qvac-expo-chat
 ```
 
-This creates a minimal TypeScript Expo project with a single `App.tsx` entry point.
-
-<Callout type="info">
-During the SDK 55 transition period, Expo Go on a physical device requires an SDK 54 project. We pin `blank-typescript@sdk-54` to ensure compatibility with Expo Go. See [Expo docs — create a project](https://docs.expo.dev/get-started/create-a-project/) for details.
-</Callout>
+This creates a minimal TypeScript Expo project with a single `App.tsx` entry point. QVAC needs Expo SDK 58 or newer.
 </Step>
 
 <Step>
@@ -91,18 +87,20 @@ Add the following peer dependencies to your `package.json`:
   "dependencies": {
     "@qvac/sdk": "^0.7.0",
     "bare-rpc": "^1.0.0", // [!code ++]
-    "expo": "~54.0.33",
-    "expo-status-bar": "~3.0.9",
-    "react": "19.1.0",
-    "react-native": "0.81.5",
-    "react-native-bare-kit": "^0.16.0" // [!code ++]
+    "expo": "~58.0.23",
+    "expo-status-bar": "~58.0.4",
+    "react": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-bare-kit": "^0.17.1" // [!code ++]
   },
   "devDependencies": {
-    "@types/react": "~19.1.0",
+    "@types/react": "~19.2.10",
     "typescript": "~5.9.2"
   }
 }
 ```
+
+With pnpm or bun's isolated linker, also add `bare-stow-runtime` and `bare-stow-host`, which the generated worker files import. Yarn needs `nodeLinker: node-modules` in `.yarnrc.yml`, because the bundler reads packages from `node_modules`.
 </Step>
 
 <Step>
@@ -170,7 +168,9 @@ Prebuild your project to generate the native files:
 npx expo prebuild
 ```
 
-Prebuild also links QVAC's native addons into `react-native-bare-kit`. Reinstalling packages clears them, so run `npx expo prebuild` again after an install before building.
+Prebuild also writes Bare Kit and QVAC's native addons into `android/qvac-bare-kit` and `ios/QvacBareKit`, and adds them to the app. Builds download Bare Kit from JitPack on Android and from GitHub on iOS.
+
+Prebuild writes the QVAC worker into `node_modules/@qvac/sdk/dist/worker-mobile`. Reinstalling packages clears it, so run `npx expo prebuild` again after an install before building.
 </Step>
 </Steps>
 

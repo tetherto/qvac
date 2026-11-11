@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-11-10
+
+## [0.15.0] - 2026-11-05
+
 ### Breaking
 
 - `assessFit` returns `{ status, devices, stats }`: the device the load
@@ -20,14 +24,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Pocket GPU selection and metadata-only memory preflight with an optional byte budget.
+- Explicit native backend/device selection, opt-in WebGPU builds and stable accelerator stats.
+- Independent MOSS text/audio sampling and configurable context/generation budgets.
+- Parler decoder Core ML, compute-policy and strict/fallback controls.
+- Supertonic precision, environment, in-memory voice tensors and callable warm-up.
+- CosyVoice3 greedy decoding, forced token trajectories and owned speech-token output.
+
 - Explicit LavaSR Core ML models and compute policies in the enhancer and
   denoiser options.
+- Optional Chatterbox Turbo and Multilingual Core ML sidecars on Apple
+  platforms for the S3Gen encoder, CFM estimator and HiFT vocoder, picked up
+  next to the S3Gen GGUF. With `maxSentenceChars` set, S3Gen vocodes each
+  sentence on the Neural Engine while T3 decodes the next on the GPU.
 
 ### Changed
 
 - Update the shared `speech-cpp` native dependency to `2026-10-29`
   ([#5420](https://github.com/tetherto/qvac/pull/5420),
   [#5447](https://github.com/tetherto/qvac/pull/5447)).
+- Update the shared `speech-cpp` native dependency to `2026-11-03`
+  ([registry #474](https://github.com/tetherto/qvac-registry-vcpkg/pull/474)).
 - `assessFit` names the device by its ggml device name (`CPU`, `CUDA0`,
   `MTL0`, `GPUOpenCL`), counts Android's OpenCL GPU as sharing host memory,
   and gives a device that reports no memory of its own the host's free and
@@ -36,6 +53,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Preserve the active TTS instance when an older overlapping reload fails.
+- `runStream()` and `runStreaming()` stats keep `backendDevice`, `backendId`,
+  `gpuUnsupported` and the LavaSR enhancer / denoiser backend fields from the
+  last chunk that reported them, as they already did for `codecSidecarLoaded`
+  and `codecOnCoreml`, so a chunked Audio8 run reports where it ran.
 
 ## [0.14.1] - 2026-10-28
 

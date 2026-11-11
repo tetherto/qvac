@@ -15,6 +15,7 @@ import io.tether.qvac.sdk.generated.SDK_VERSION
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequest
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestGenerationParams
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItem
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContent
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemAttachmentsItem
 import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItem
 import io.tether.qvac.sdk.generated.schema.TranscribeRequest
@@ -74,7 +75,7 @@ class AndroidContractInstrumentationTest {
     @Test
     fun packagedWorkerBundleIsReadable() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        context.assets.open("qvac/worker.bundle").use { bundle ->
+        context.assets.open(WORKER_BUNDLE_ASSET).use { bundle ->
             assertTrue(bundle.read() >= 0)
         }
     }
@@ -92,7 +93,7 @@ class AndroidContractInstrumentationTest {
             kotlinx.serialization.json.Json.parseToJsonElement(input.bufferedReader().readText())
                 .jsonObject
         }
-        val workerDigest = context.assets.open("qvac/worker.bundle").use { input ->
+        val workerDigest = context.assets.open(WORKER_BUNDLE_ASSET).use { input ->
             MessageDigest.getInstance("SHA-256")
                 .digest(input.readBytes())
                 .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
@@ -109,27 +110,6 @@ class AndroidContractInstrumentationTest {
         )
         assertEquals(workerDigest, profile["workerSha256"]?.jsonPrimitive?.content)
         assertTrue(profile["addons"]?.let { it is kotlinx.serialization.json.JsonArray && it.isNotEmpty() } == true)
-
-        if (QvacCapability.CLASSIFICATION in expectedCapabilities) {
-            val classificationResource = profile["resources"]
-                ?.let { it as? kotlinx.serialization.json.JsonArray }
-                ?.map { it.jsonObject }
-                ?.firstOrNull {
-                    it["name"]?.jsonPrimitive?.content ==
-                        "classification/mobilenetv3_3class_v3_fp16.gguf"
-                }
-            val classificationDigest = context.assets.open(
-                "qvac/classification/mobilenetv3_3class_v3_fp16.gguf",
-            ).use { input ->
-                MessageDigest.getInstance("SHA-256")
-                    .digest(input.readBytes())
-                    .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
-            }
-            assertEquals(
-                classificationDigest,
-                classificationResource?.get("sha256")?.jsonPrimitive?.content,
-            )
-        }
     }
 
     @Test
@@ -184,7 +164,7 @@ class AndroidContractInstrumentationTest {
                         reasoning_budget = 0,
                         temp = 0.0,
                     ),
-                    history = listOf(CompletionStreamRequestHistoryItem(role = "user", content = "Reply with exactly CPU_OK")),
+                    history = listOf(CompletionStreamRequestHistoryItem(role = "user", content = CompletionStreamRequestHistoryItemContent.Variant1("Reply with exactly CPU_OK"))),
                     modelId = requireNotNull(modelId),
                     stream = true,
                 ),
@@ -280,7 +260,7 @@ class AndroidContractInstrumentationTest {
                     history = listOf(
                         CompletionStreamRequestHistoryItem(
                             role = "user",
-                            content = "Name the dominant color in one word.",
+                            content = CompletionStreamRequestHistoryItemContent.Variant1("Name the dominant color in one word."),
                             attachments = listOf(CompletionStreamRequestHistoryItemAttachmentsItem(path = imageFile.absolutePath)),
                         ),
                     ),
@@ -335,5 +315,8 @@ class AndroidContractInstrumentationTest {
 
     private companion object {
         const val MODEL_TEST_TIMEOUT_MS = 15 * 60 * 1_000L
+
+        /** Where bare-stow's `bare-kit` harness module puts the worker bundle. */
+        const val WORKER_BUNDLE_ASSET = "io/tether/qvac/sdk/barekit/worker/index.bundle"
     }
 }

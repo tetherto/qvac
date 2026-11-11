@@ -20,9 +20,8 @@ type ModelConfigResolver = () => Promise<ModelConfig>
 
 interface ModelDefinition {
   /**
-   * Registry constant for the model. Omit for addons that ship bundled
-   * weights inside the package (`@qvac/classification-ggml`) — `loadModel`
-   * is then invoked without `modelSrc` and `skipPreDownload` is implied.
+   * Registry constant for the model. Without it, `loadModel` is invoked
+   * without `modelSrc` and `skipPreDownload` is implied.
    */
   constant?: ModelConstant
   constantSourceOnly?: boolean
@@ -101,7 +100,7 @@ export interface ResourceManagerOptions {
    * load can crash with EXC_CRASH/SIGABRT inside the GGML allocator if it
    * arrives at the still-resident-residue moment.
    *
-   * Desktop doesn't need it — `unloadModel` over the IPC socket completes
+   * Desktop doesn't need it — `unloadModel` to the worker process completes
    * with the worker process already having freed the memory, and the
    * kernel reclaims fast.
    *
@@ -403,6 +402,11 @@ export class ResourceManager {
     for (const dep of this.models.keys()) {
       await this.evict(dep)
     }
+    this.models.clear()
+  }
+
+  /** Drops every tracked model without unloading it, once the worker that held them is gone. */
+  forgetAll(): void {
     this.models.clear()
   }
 }

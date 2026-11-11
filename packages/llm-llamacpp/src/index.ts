@@ -403,13 +403,26 @@ function normalizeFinetuneParams(opts: FinetuneOptions): FinetuneParamsPayload {
 }
 
 /**
- * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
- * entry for single-file models. Matches the C++ shard-expansion contract
- * in `GGUFShards::expandGGUFIntoShards`.
+ * Validates the single disk path. For a sharded GGUF, pass only the first
+ * shard; Fabric discovers the remaining shards. Weight streaming is unsupported.
  */
-function pickPrimaryGgufPath(files: string[]): string {
-  const SHARD_REGEX = /-\d+-of-\d+\.gguf$/;
-  return files.find((p) => SHARD_REGEX.test(p)) || files[0];
+function validateModelPath(files: string[]): string {
+  if (!Array.isArray(files) || files.length === 0) {
+    throw new TypeError("files.model must contain one absolute disk path");
+  }
+  if (files.length !== 1) {
+    throw new TypeError(
+      "Weight streaming is no longer supported. Pass only one disk path in files.model; " +
+        "for a sharded model, pass only the first shard path. Do not pass a tensor-name file.",
+    );
+  }
+  if (typeof files[0] !== "string" || files[0].length === 0 || !path.isAbsolute(files[0])) {
+    throw new TypeError("files.model[0] must be an absolute disk path string; weight buffers are not supported");
+  }
+  if (files[0].endsWith(".tensors.txt")) {
+    throw new TypeError("Weight streaming is no longer supported. Pass the first GGUF shard path, not a tensor-name file.");
+  }
+  return files[0];
 }
 
 // Replace media Uint8Array contents with a small summary so the logger never
@@ -506,14 +519,14 @@ interface LlmLlamacpp {
 interface LlmLlamacppConstructor {
   new (args: LlmLlamacppArgs): LlmLlamacpp;
   readonly prototype: LlmLlamacpp;
-  /** Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole entry for single-file models. */
-  readonly pickPrimaryGgufPath: typeof pickPrimaryGgufPath;
+  /** Validates and returns the single absolute disk path; split models require the first shard. */
+  readonly validateModelPath: typeof validateModelPath;
   readonly assessFit: typeof assessFitImpl;
 }
 
 /** LLM client wrapping the native LlamaInterface for inference, finetuning, and pause/resume. */
 const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
-  static readonly pickPrimaryGgufPath = pickPrimaryGgufPath;
+  static readonly validateModelPath = validateModelPath;
   static readonly assessFit = assessFitImpl;
   // Attached for tests; untyped because `typeof QvacResponse` is not nameable by consumers.
   static readonly QvacResponse = QvacResponse;
@@ -523,7 +536,7 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
   logger: QvacLogger;
   state: { configLoaded: boolean };
 
-  private readonly _files: string[];
+  private readonly _modelPath: string;
   private readonly _projectionModelPath: string;
   private readonly _config: LlamaConfig | undefined;
   private readonly _finetuneJob: JobHandler;
@@ -535,17 +548,7 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
   private _checkpointSaveDir: string | null;
 
   constructor({ files, config, logger = null, opts = {} }: LlmLlamacppArgs) {
-    if (!files || !Array.isArray(files.model) || files.model.length === 0) {
-      throw new TypeError("files.model must be a non-empty array of absolute paths");
-    }
-    for (const [i, entry] of files.model.entries()) {
-      if (typeof entry !== "string" || entry.length === 0) {
-        throw new TypeError(`files.model[${i}] must be an absolute path string`);
-      }
-      if (!path.isAbsolute(entry)) {
-        throw new TypeError(`files.model[${i}] must be an absolute path (got: ${entry})`);
-      }
-    }
+    this._modelPath = validateModelPath(files?.model);
     if (files.projectionModel !== undefined) {
       if (typeof files.projectionModel !== "string" || files.projectionModel.length === 0) {
         throw new TypeError("files.projectionModel must be an absolute path string");
@@ -556,7 +559,6 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
         );
       }
     }
-    this._files = files.model;
     this._projectionModelPath = files.projectionModel || "";
     this._config = config;
     this.logger = new QvacLogger(logger as QvacLogger.LoggerInterface);
@@ -619,9 +621,8 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
 
   private async _load(): Promise<void> {
     this.logger.info("Starting model load");
-    const primaryGgufPath = pickPrimaryGgufPath(this._files);
     const configurationParams = {
-      path: primaryGgufPath,
+      path: this._modelPath,
       projectionPath: this._projectionModelPath,
       config: { ...this._config } as Record<string, unknown>,
     };
@@ -630,9 +631,6 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
 
     try {
       this.addon = this._createAddon(configurationParams);
-      if (this._files.length > 1) {
-        await this._streamShards();
-      }
       this.logger.info("Activating addon");
       await this.addon.activate();
     } catch (loadError) {
@@ -646,18 +644,6 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
       throw loadError;
     }
     this.logger.info("Model load completed successfully");
-  }
-
-  private async _streamShards(): Promise<void> {
-    for (const filePath of this._files) {
-      const filename = path.basename(filePath);
-      const stream = fs.createReadStream(filePath) as AsyncIterable<Uint8Array>;
-      for await (const chunk of stream) {
-        await (this.addon as LlamaInterface).loadWeights({ filename, chunk, completed: false });
-      }
-      await (this.addon as LlamaInterface).loadWeights({ filename, chunk: null, completed: true });
-      this.logger.info(`Streamed weights for ${filename}`);
-    }
   }
 
   run(prompt: Message[], runOptions?: RunOptions): Promise<QvacResponse>;
@@ -1211,10 +1197,6 @@ namespace LlmLlamacpp {
   export type AddonBatchRunResult = AddonModule.AddonBatchRunResult;
 
   export interface Addon {
-    loadWeights(
-      data: { filename: string; chunk: Uint8Array | null; completed: boolean },
-      logger?: QvacLogger,
-    ): Promise<void>;
     activate(): Promise<void>;
     /** Single-request admission: resolves the accepted flag plus the native-assigned job id. */
     runJob(data: AddonRunJobMessage[]): Promise<AddonRunJobResult>;
@@ -1239,12 +1221,22 @@ namespace LlmLlamacpp {
   }
 
   export interface LlamaConfig {
+    /**
+     * Device class to run on: `'gpu'`, `'cpu'` or `'npu'`. `'npu'` selects the
+     * first NPU fabric lists, the AMD XDNA NPU on Linux x64, falls back to the
+     * GPU order and then the CPU when there is none, and
+     * cannot be combined with `backend`, `devices`, `split-mode`, `main-gpu`,
+     * `rpc-servers` or finetuning. Only the defaults `backend: 'auto'`,
+     * `devices: ''` and `split-mode: 'none'` are accepted with it. GPU
+     * selection never picks the NPU.
+     */
     device?: string;
     /**
      * Comma-separated GPU backend priority list, e.g. `'cuda,vulkan'`.
      * Accepted names: cuda, vulkan, metal, opencl, plus
      * `auto` for no preference. An unrecognised name is rejected; a recognised
      * one with no device present is skipped. Use `device: 'cpu'` to run on CPU.
+     * Use `device: 'npu'` for the AMD XDNA NPU.
      */
     backend?: string;
     gpu_layers?: NumericLike;
@@ -1374,7 +1366,9 @@ namespace LlmLlamacpp {
      * per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on all other
      * Android GPUs (Arm Mali, Adreno <800, and GPUs whose Adreno tier can't be
      * detected) — the LLM layers still run on the GPU while the projector stays on
-     * CPU. Only honoured when a GPU backend is selected (ignored with a warning on CPU).
+     * CPU. On an NPU load it defaults to a GPU beside the NPU, else the CPU; `true`
+     * with no GPU runs it on the NPU. Only honoured when a GPU or NPU backend is
+     * selected (ignored with a warning on CPU).
      */
     "mmproj-use-gpu"?: string;
     /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
@@ -1527,7 +1521,8 @@ namespace LlmLlamacpp {
   }
 
   export interface LlmLlamacppArgs {
-    files: { model: string[]; projectionModel?: string };
+    /** One absolute disk path, or only the first shard path. Weight buffers, multiple paths and tensor-name files are unsupported. */
+    files: { model: [string]; projectionModel?: string };
     config: LlamaConfig;
     logger?: QvacLogger | Console | null;
     /**
@@ -1817,7 +1812,7 @@ namespace LlmLlamacpp {
      * model-level — never per-job.
      */
     avgConcurrentSeq: number;
-    backendDevice: "cpu" | "gpu";
+    backendDevice: "cpu" | "gpu" | "npu";
     /**
      * Draft tokens proposed by speculative decoding, and how many of them
      * the model accepted (llama-server's `draft_n` / `draft_n_accepted`).
@@ -1973,7 +1968,7 @@ export = LlmLlamacpp;
 
 // Runtime-redundant: ESM named imports need the top-level `module.exports.X =` form.
 /* eslint-disable @typescript-eslint/no-unsafe-member-access -- `module.exports` is untyped CommonJS surface. */
-module.exports.pickPrimaryGgufPath = pickPrimaryGgufPath;
+module.exports.validateModelPath = validateModelPath;
 module.exports.assessFit = assessFitImpl;
 module.exports.QvacResponse = QvacResponse;
 /* eslint-enable @typescript-eslint/no-unsafe-member-access */

@@ -7,7 +7,8 @@ import { TOOL_SEARCH_NAME, executeToolSearch, type Tool, type ToolCall } from '@
  */
 export const MAX_TOOL_SEARCH_ROUNDS = 4
 
-type HistoryMessage = { role: string; content: string }
+type HistoryMessage = Parameters<typeof executeToolSearch>[2][number]
+type TextMessage = { role: string; content: string }
 
 /**
  * `tool_search` is ours only when something defers; otherwise a tool of that
@@ -28,6 +29,11 @@ type DrainedTurn = {
  * client has no handler for the SDK's own tool, so surfacing it would strand
  * the conversation.
  */
+/** A `tool_search` call serve answers itself; it never reaches the client. */
+export function isInternalToolSearch(tools: Tool[] | undefined, call: ToolCall): boolean {
+  return defersAny(tools) && call.name === TOOL_SEARCH_NAME
+}
+
 export function stripToolSearchCalls<T extends DrainedTurn>(
   tools: Tool[] | undefined,
   drained: T
@@ -56,12 +62,12 @@ export function stripToolSearchCalls<T extends DrainedTurn>(
  * search dropped by `stripToolSearchCalls`; the model searches again on the
  * next request, which is what a fresh request does anyway.
  */
-export function foldToolSearch(
+export function foldToolSearch<T extends HistoryMessage>(
   tools: Tool[] | undefined,
-  history: HistoryMessage[],
+  history: readonly T[],
   toolCalls: ToolCall[],
   assistantText: string
-): HistoryMessage[] | null {
+): Array<T | TextMessage> | null {
   if (!defersAny(tools)) return null
   const searches = toolCalls.filter((call) => call.name === TOOL_SEARCH_NAME)
   if (searches.length === 0) return null
@@ -69,7 +75,7 @@ export function foldToolSearch(
 
   // The assistant turn goes back verbatim so the model sees its own call
   // syntax on the replay.
-  let extended: HistoryMessage[] = [...history, { role: 'assistant', content: assistantText }]
+  let extended: Array<T | TextMessage> = [...history, { role: 'assistant', content: assistantText }]
   for (const call of searches) {
     extended = [
       ...extended,

@@ -4,7 +4,7 @@ import addon from './addon.js'
 const { BertInterface, mapAddonEvent } = addon
 const {
   assessFit,
-  pickPrimaryGgufPath,
+  validateModelPath,
   LayaDecisions,
   LayaInterface,
   mapLayaEvent,
@@ -23,7 +23,7 @@ export {
   mapAddonEvent,
   mapLayaEvent,
   mapRerankEvent,
-  pickPrimaryGgufPath,
+  validateModelPath,
   RerankInterface,
   Reranker
 }

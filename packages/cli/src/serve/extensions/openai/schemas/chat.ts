@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto'
 import { writeFile, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Tool } from '@qvac/sdk'
+import type { HistoryContent, HistoryContentPart, Tool } from '@qvac/sdk'
 import {
   chatMessage,
   responseFormat,
@@ -15,6 +15,7 @@ import {
   extractToolChoice,
   withToolChoice,
   parseToolCallArguments,
+  hoistInstructions,
   nameToolResults,
   withParallelToolCalls,
   UnsupportedImageContentError,
@@ -69,23 +70,27 @@ interface ImageAttachment {
   bytes: Buffer
 }
 
-interface ChatHistoryItem extends ToolTurnFields {
+type DecodedContentPart = { type: 'text'; text: string } | { type: 'media'; image: ImageAttachment }
+
+interface TextHistoryItem extends ToolTurnFields {
   role: string
   content: string
   attachments?: ImageAttachment[]
 }
 
-interface DecodedMessage {
-  role: string
-  content: string
-  images: ImageAttachment[]
+interface PartsHistoryItem extends ToolTurnFields {
+  role: 'user'
+  content: DecodedContentPart[]
+  attachments?: never
 }
 
-// The SDK `completion` history reads image attachments from disk by path; writeChatImages turns the
+type ChatHistoryItem = TextHistoryItem | PartsHistoryItem
+
+// The SDK `completion` history reads images from disk by path; writeChatImages turns the
 // decoded bytes into these just-in-time at the inference call (mirrors routes/audio.ts).
 interface SdkHistoryItem extends ToolTurnFields {
   role: string
-  content: string
+  content: HistoryContent
   attachments?: Array<{ path: string }>
 }
 
@@ -95,51 +100,63 @@ export function openaiMessagesToHistory(messages: OpenAIMessage[]): ChatHistoryI
   // Pure: decode + validate image parts to bytes (an unsupported image throws → 400). No file I/O —
   // writeChatImages materializes the bytes at the inference call, like routes/audio.ts.
   return nameToolResults(
-    messages.map((msg) => {
-      const decoded = decodeMessage(msg)
-      const item: ChatHistoryItem = { role: decoded.role, content: decoded.content }
-      if (decoded.images.length > 0) item.attachments = decoded.images
-      if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
-        item.toolCalls = msg.tool_calls.map((call) => ({
-          id: call.id,
-          name: call.function.name,
-          arguments: parseToolCallArguments(call.function.arguments)
-        }))
-      }
-      if (msg.role === 'tool' && msg.tool_call_id !== undefined) {
-        item.toolCallId = msg.tool_call_id
-      }
-      return item
-    })
+    hoistInstructions(
+      messages.map((msg) => {
+        const item = decodeMessage(msg)
+        if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
+          item.toolCalls = msg.tool_calls.map((call) => ({
+            id: call.id,
+            name: call.function.name,
+            arguments: parseToolCallArguments(call.function.arguments)
+          }))
+        }
+        if (msg.role === 'tool' && msg.tool_call_id !== undefined) {
+          item.toolCallId = msg.tool_call_id
+        }
+        return item
+      })
+    )
   )
 }
 
-function decodeMessage(msg: OpenAIMessage): DecodedMessage {
+function decodeMessage(msg: OpenAIMessage): ChatHistoryItem {
   if (Array.isArray(msg.content)) {
     return decodeMultimodalContent(msg.role, msg.content)
   }
   return {
     role: msg.role,
-    content: typeof msg.content === 'string' ? msg.content : (msg.content ?? '').toString(),
-    images: []
+    content: typeof msg.content === 'string' ? msg.content : (msg.content ?? '').toString()
   }
 }
 
-// OpenAI multimodal content is an array of parts: concatenate the text and decode each `image_url`
-// (base64 data URL) to its bytes. An image we cannot honor throws (→ 400) rather than being dropped,
-// so a "describe this image" turn never silently degrades to a text-only answer.
-function decodeMultimodalContent(role: string, parts: MessageContentPart[]): DecodedMessage {
-  let content = ''
-  const images: ImageAttachment[] = []
-  for (const part of parts) {
-    if (part.type === 'text') {
-      content += part.text
-    } else if (part.type === 'image_url') {
-      const url = typeof part.image_url === 'string' ? part.image_url : part.image_url.url
-      images.push(decodeImageUrl(url))
-    }
-  }
-  return { role, content, images }
+// OpenAI multimodal content is an array of parts; each `image_url` (base64 data URL) is decoded to
+// its bytes. An image we cannot honor throws (→ 400) rather than being dropped, so a "describe this
+// image" turn never silently degrades to a text-only answer.
+//
+// A user turn with images stays as ordered parts, so the model sees each image where the client put
+// it. Attachments would place all images before the text. The SDK accepts parts on user turns
+// only; every other turn, and a user turn without images, becomes one text string.
+function decodeMultimodalContent(role: string, parts: MessageContentPart[]): ChatHistoryItem {
+  const decoded = parts.map((part): DecodedContentPart =>
+    part.type === 'text'
+      ? { type: 'text', text: part.text }
+      : { type: 'media', image: decodeImageUrl(imageUrlOf(part)) }
+  )
+  if (!decoded.some((part) => part.type === 'media')) return { role, content: joinText(decoded) }
+  if (role === 'user') return { role, content: decoded }
+  return { role, content: joinText(decoded), attachments: decoded.flatMap(imageOf) }
+}
+
+function imageOf(part: DecodedContentPart): ImageAttachment[] {
+  return part.type === 'media' ? [part.image] : []
+}
+
+function imageUrlOf(part: Extract<MessageContentPart, { type: 'image_url' }>): string {
+  return typeof part.image_url === 'string' ? part.image_url : part.image_url.url
+}
+
+function joinText(parts: DecodedContentPart[]): string {
+  return parts.map((part) => (part.type === 'text' ? part.text : '')).join('')
 }
 
 // The inference image loader (stb_image, via llama.cpp) decodes PNG and JPEG. Other formats
@@ -182,34 +199,52 @@ function decodeImageUrl(url: string): ImageAttachment {
   return { ext, bytes }
 }
 
-// Materialize each image attachment's bytes to a flat temp file (mirrors routes/audio.ts's
-// writeTempAudio) and return the SDK history plus the temp paths the caller must unlink in a
-// `finally`. Atomic: if a write fails partway, the files already written this call are removed.
+// Materialize each image (a media part or an attachment) to a flat temp file (mirrors
+// routes/audio.ts's writeTempAudio) and return the SDK history plus the temp paths the caller must
+// unlink in a `finally`. Atomic: if a write fails partway, the files already written this call are
+// removed.
 export async function writeChatImages(
   history: ChatHistoryItem[]
 ): Promise<{ history: SdkHistoryItem[]; tmpPaths: string[] }> {
   const tmpPaths: string[] = []
+  const writeImage = async (image: ImageAttachment): Promise<string> => {
+    const path = join(tmpdir(), `qvac-image-${randomBytes(8).toString('hex')}.${image.ext}`)
+    await writeFile(path, image.bytes)
+    tmpPaths.push(path)
+    return path
+  }
   const sdkHistory: SdkHistoryItem[] = []
   try {
-    for (const { attachments: images, ...item } of history) {
-      if (images === undefined || images.length === 0) {
-        sdkHistory.push(item)
-        continue
+    for (const { content, attachments: images, ...item } of history) {
+      const sdkItem: SdkHistoryItem = {
+        ...item,
+        content: typeof content === 'string' ? content : await writeMediaParts(content, writeImage)
       }
-      const attachments: Array<{ path: string }> = []
-      for (const image of images) {
-        const path = join(tmpdir(), `qvac-image-${randomBytes(8).toString('hex')}.${image.ext}`)
-        await writeFile(path, image.bytes)
-        tmpPaths.push(path)
-        attachments.push({ path })
+      if (images !== undefined && images.length > 0) {
+        const attachments: Array<{ path: string }> = []
+        for (const image of images) attachments.push({ path: await writeImage(image) })
+        sdkItem.attachments = attachments
       }
-      sdkHistory.push({ ...item, attachments })
+      sdkHistory.push(sdkItem)
     }
     return { history: sdkHistory, tmpPaths }
   } catch (err) {
     await Promise.all(tmpPaths.map((path) => unlink(path).catch(() => undefined)))
     throw err
   }
+}
+
+async function writeMediaParts(
+  parts: DecodedContentPart[],
+  writeImage: (image: ImageAttachment) => Promise<string>
+): Promise<HistoryContentPart[]> {
+  const written: HistoryContentPart[] = []
+  for (const part of parts) {
+    written.push(
+      part.type === 'text' ? part : { type: 'media', path: await writeImage(part.image) }
+    )
+  }
+  return written
 }
 
 export type ChatCompletionsBody = z.infer<typeof chatCompletionsBody>
