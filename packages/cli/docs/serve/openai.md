@@ -119,9 +119,9 @@ Response: `{ "object": "list", "data": [ … ], "has_more": <bool> }`.
 
 ```bash
 # All chat-capable models the SDK provides
-curl 'http://localhost:11434/v1/models/catalog?role=chat&limit=20'
+curl 'http://localhost:11435/v1/models/catalog?role=chat&limit=20'
 # Search by name
-curl 'http://localhost:11434/v1/models/catalog?search=qwen'
+curl 'http://localhost:11435/v1/models/catalog?search=qwen'
 ```
 
 The catalog does not include on-disk download state. To browse the live remote model registry,
@@ -136,7 +136,7 @@ description in a catalog carried by a built-in `tool_search` tool, and the
 schema is loaded when the model searches for it.
 
 ```bash
-curl -sS http://127.0.0.1:11434/v1/chat/completions \
+curl -sS http://127.0.0.1:11435/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "<alias>",
@@ -212,17 +212,17 @@ Backed by the same chat-category models and SDK `completion` capability as
 
 ```bash
 # Blocking, single prompt
-curl -sS http://127.0.0.1:11434/v1/completions \
+curl -sS http://127.0.0.1:11435/v1/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"my-llm","prompt":"Say hello in one word.","max_tokens":16}'
 
 # Streaming (single prompt only)
-curl -sN http://127.0.0.1:11434/v1/completions \
+curl -sN http://127.0.0.1:11435/v1/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"my-llm","prompt":"Say hello in one word.","stream":true}'
 
 # Multi-prompt fan-out (blocking only; stream:true returns 400)
-curl -sS http://127.0.0.1:11434/v1/completions \
+curl -sS http://127.0.0.1:11435/v1/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"my-llm","prompt":["Reply with alpha.","Reply with beta."],"max_tokens":8}'
 ```
@@ -286,25 +286,44 @@ under `serve.models` (any alias whose endpoint category is `chat`).
 > not durable. Pass `store: false` in the request body to skip persistence
 > entirely.
 
-Intentionally rejected with `400`: `conversation`, `background: true`, and
-built-in tools (`web_search`, `file_search`, `code_interpreter`).
-`function`-typed tools work normally.
+Intentionally rejected with `400`: `conversation` and `background: true`.
+
+`function` tools work normally, and so do the functions inside a `namespace`
+tool: the model sees each as `<namespace>__<name>`, and its calls come back
+with `name` and `namespace` split again (a malformed `namespace`, or two tools that end
+up with the same name, returns `400 invalid_tools`). Built-in tools (`web_search`,
+`file_search`, `code_interpreter`, …) are left out of the request and logged.
+A streamed response that fails after it starts ends with `response.failed`,
+whose `response.error` carries the code (e.g. `context_length_exceeded`).
+
+`instructions` and every `system` or `developer` input item are merged, in
+order, into one leading system message, so chat templates that reject a
+`developer` role or a late system turn still render the tools. Chat
+completions does the same with `system` and `developer` messages.
+
+`usage.input_tokens` is the prompt size reported by the SDK, and
+`total_tokens` is input plus output. Reasoning from `<think>` models is
+returned in `reasoning` output items (`reasoning_text` content), never in
+`output_text`. Items, function calls included, follow the order the model
+produced them, buffered and streamed alike, so answer text after a later
+reasoning block or call starts a new `message` item; streaming finishes each item before adding the next and sends
+reasoning as `response.reasoning_text.delta` events.
 
 ### Examples
 
 ```bash
 # Blocking
-curl -sS http://127.0.0.1:11434/v1/responses \
+curl -sS http://127.0.0.1:11435/v1/responses \
   -H "Content-Type: application/json" \
   -d '{"model":"<alias>","input":"ping","store":true}'
 
 # Streaming (SSE)
-curl -sN http://127.0.0.1:11434/v1/responses \
+curl -sN http://127.0.0.1:11435/v1/responses \
   -H "Content-Type: application/json" \
   -d '{"model":"<alias>","input":"ping","stream":true}'
 
 # Multi-turn via previous_response_id
-curl -sS http://127.0.0.1:11434/v1/responses \
+curl -sS http://127.0.0.1:11435/v1/responses \
   -H "Content-Type: application/json" \
   -d '{"model":"<alias>","input":"and now?","previous_response_id":"resp_..."}'
 ```
@@ -419,7 +438,7 @@ requests receive HTTP 429 with error type `rate_limit_error` and code
 ### Example
 
 ```bash
-curl -sS http://127.0.0.1:11434/v1/decisions \
+curl -sS http://127.0.0.1:11435/v1/decisions \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "laya-multilingual-322m-q8-0",
@@ -444,7 +463,7 @@ curl -sS http://127.0.0.1:11434/v1/decisions \
 ```
 
 Use an OpenAI client that supports Decisions, or send the request directly over
-HTTP with base URL `http://127.0.0.1:11434/v1` and your configured model alias.
+HTTP with base URL `http://127.0.0.1:11435/v1` and your configured model alias.
 
 ## `POST /v1/images/generations` and `POST /v1/images/edits`
 
@@ -515,7 +534,7 @@ Generated images live in process memory only — no disk, no P2P. Defaults: **1 
 **`b64_json` (default), text-to-image:**
 
 ```bash
-curl -sS http://127.0.0.1:11434/v1/images/generations \
+curl -sS http://127.0.0.1:11435/v1/images/generations \
   -H "Content-Type: application/json" \
   -d '{
     "model": "my-diffusion",
@@ -566,7 +585,7 @@ curl -sS https://api.example.com/v1/images/generations \
 **`/v1/images/edits` (img2img, multipart):**
 
 ```bash
-curl -sS http://127.0.0.1:11434/v1/images/edits \
+curl -sS http://127.0.0.1:11435/v1/images/edits \
   -F "image=@input.png" \
   -F "model=my-diffusion" \
   -F "prompt=oil painting style, warm lighting" \
@@ -578,7 +597,7 @@ Response shape matches `/v1/images/generations`.
 For models with multi-reference support, including FLUX.2 and Qwen-Image-2.1, send repeated `image[]` files. The server forwards every image in upload order as SDK `init_images`; a single file still uses `init_image`. Configure the model with its required companion files and prediction settings before sending edits.
 
 ```bash
-curl -sS http://127.0.0.1:11434/v1/images/edits \
+curl -sS http://127.0.0.1:11435/v1/images/edits \
   -F "image[]=@reference-a.png" \
   -F "image[]=@reference-b.png" \
   -F "model=my-diffusion" \
@@ -617,7 +636,7 @@ Transcribes audio in its source language using a transcription model.
 - `language` is configured when the model loads; a per-request override is ignored with a warning. `temperature` is also ignored with a warning. These warnings report parameter names without values.
 
 ```bash
-curl -sS http://127.0.0.1:11434/v1/audio/transcriptions \
+curl -sS http://127.0.0.1:11435/v1/audio/transcriptions \
   -F model=whisper-transcribe \
   -F file=@./sample.wav \
   -F response_format=srt
@@ -700,7 +719,7 @@ If you need to point at non-registry weights (a local path, `https://…`, `regi
 ### Example (`curl`)
 
 ```bash
-curl -s http://127.0.0.1:11434/v1/audio/translations \
+curl -s http://127.0.0.1:11435/v1/audio/translations \
   -F model=whisper-translate \
   -F file=@./sample.wav \
   -F response_format=json
@@ -890,7 +909,8 @@ When `voice` is omitted, the configured **`serve.openai.audio.speech.defaultVoic
   - `voice` (optional, defaults to `defaultVoice`) — an OpenAI built-in voice name (`alloy`, `ash`, `ballad`, `coral`, `echo`, `fable`, `onyx`, `nova`, `sage`, `shimmer`, `verse`, `marin`, `cedar`), any other string, or a custom voice reference `{ "id": "voice_1234" }`. The object form routes the same way as its `id` string.
   - `response_format` (optional) — `wav` (default), `pcm` (raw 16-bit signed little-endian PCM, mono), or `mp3` / `opus` / `aac` / `flac`. The encoded formats are produced by transcoding the synthesized audio through **`ffmpeg`**, which must be on the server's `PATH`; when ffmpeg is absent they return `503 transcode_unavailable` (use `wav`/`pcm` or install ffmpeg — see `qvac doctor`). The default stays `wav` so synthesis works on hosts without ffmpeg.
   - `stream_format` (optional) — `audio` (default, one audio body) or `sse` (see [Streaming](#streaming-stream_format-sse)). Other values return `400 invalid_stream_format`.
-- **Accepted but ignored:** `speed`, `instructions` (a warning is logged; ignored keys are echoed in the success response via the `X-QVAC-Ignored-Params` header).
+  - `instructions` (optional) — forwarded to a CosyVoice3 alias (`ttsEngine: "cosyvoice3"`) as the engine's per-request `instruct` control: a raw natural-language instruction such as a Chinese dialect, emotion or speaking style, applied to this synthesis only. It is forwarded only when the alias configures no conditioning of its own: an alias whose `config` sets `instruct`, `emotion` or a non-moderate `pace` keeps that choice, since a per-request instruction would replace it. Other engines have no free-text voice control. In both of those cases it is an ignored param.
+- **Accepted but ignored:** `speed`, and `instructions` unless the alias is a CosyVoice3 one without configured conditioning (a warning is logged; ignored keys are echoed in the success response via the `X-QVAC-Ignored-Params` header).
 
 ### Response
 
@@ -926,7 +946,7 @@ data: {"type":"speech.audio.done","usage":{"input_tokens":0,"output_tokens":0,"t
 - The stream has no `[DONE]` sentinel. `speech.audio.done` is the last event.
 
 ```bash
-curl -N http://localhost:11434/v1/audio/speech \
+curl -N http://localhost:11435/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{"model":"my-tts","voice":"alloy","input":"Hello from QVAC.","response_format":"pcm","stream_format":"sse"}'
 ```
@@ -936,7 +956,7 @@ curl -N http://localhost:11434/v1/audio/speech \
 **WAV (default), drop-in alias for OpenAI `tts-1`:**
 
 ```bash
-curl -sS http://127.0.0.1:11434/v1/audio/speech \
+curl -sS http://127.0.0.1:11435/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{"model":"tts-1","voice":"alloy","input":"Hello from QVAC."}' \
   --output speech.wav
@@ -945,7 +965,7 @@ curl -sS http://127.0.0.1:11434/v1/audio/speech \
 **Raw PCM (RFC 2586 `audio/L16`) — easier for in-process playback:**
 
 ```bash
-curl -sS http://127.0.0.1:11434/v1/audio/speech \
+curl -sS http://127.0.0.1:11435/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{"model":"my-tts","voice":"echo","input":"PCM body.","response_format":"pcm"}' \
   --output speech.pcm

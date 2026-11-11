@@ -24,6 +24,7 @@
 #include "addon/LlmErrors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 #include "utils/ChatTemplateUtils.hpp"
+#include "utils/LlamaBatch.hpp"
 #include "utils/LogSafeString.hpp"
 #include "utils/LoggingMacros.hpp"
 #include "utils/ModelMemoryPolicy.hpp"
@@ -393,6 +394,7 @@ void MtmdLlmContext::tokenizeChat(
   if (cacheReconciliationEnabled_) {
     const auto& lastRole = chatMsgs.back().role;
     isLastMessageFromUser = lastRole == "user" || lastRole == "tool";
+    historyEndsAtUserTurn_ = lastRole == "user";
     addSpecial = true;
   } else if (current_.pos == 0 && !isCacheLoaded) {
     const auto& lastRole = chatMsgs.back().role;
@@ -1159,7 +1161,7 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
       break;
     }
 
-    common_batch_clear(*batch);
+    llamaBatchClear(*batch);
     if (stopGeneration_.load()) {
       // Route through the post-loop `cancelGenerationCleanup` instead
       // of injecting EOT — EOT would advance the cursor past rollback.
@@ -1168,7 +1170,7 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
       ++lastGeneratedTokenCount_;
       break;
     }
-    common_batch_add(*batch, tokenId, current_.pos, {seqId_}, true);
+    llamaBatchAdd(*batch, tokenId, current_.pos, {seqId_}, true);
 
     // eval the token
     if (llama_decode(modelCtx_.lctx, *batch) != 0) {
@@ -1412,6 +1414,7 @@ void MtmdLlmContext::resetStateKeepingMemory(bool resetStats) {
   utf8Buffer_.clear();
   thinkingForcedOpen_ = false;
   thinkingForcedOpenText_.clear();
+  thinkingOpenerPending_ = false;
   llama_synchronize(modelCtx_.lctx);
   if (resetStats) {
     llama_perf_context_reset(modelCtx_.lctx);
@@ -1851,7 +1854,8 @@ void MtmdLlmContext::commitCacheRequest() {
         cacheCheckpoints_,
         std::move(*pendingHistoryCheckpoint_),
         cacheCheckpointPolicy_,
-        [](const CacheCheckpoint& entry) { return entry.state.bytes(); });
+        [](const CacheCheckpoint& entry) { return entry.state.bytes(); },
+        [](const CacheCheckpoint& entry) { return entry.endsAtUserTurn; });
     pendingHistoryCheckpoint_.reset();
   }
   cacheRequestActive_ = false;
@@ -1879,7 +1883,8 @@ void MtmdLlmContext::captureHistoryCheckpoint(llama_pos pos) {
   CacheCheckpoint checkpoint{
       .ledger = std::move(ledger),
       .cacheTokens =
-          pendingPromptLedger_.cacheTokens(historyCheckpointEntries_)};
+          pendingPromptLedger_.cacheTokens(historyCheckpointEntries_),
+      .endsAtUserTurn = historyEndsAtUserTurn_};
   if (!snapshotSequenceState(
           modelCtx_.lctx,
           seqId_,
@@ -2181,6 +2186,7 @@ void MtmdLlmContext::onPrefillComplete(
   if (thinkingForcedOpen_ && reasoningEnabled_) {
     reasoningState_.inside_reasoning = true;
   }
+  thinkingOpenerPending_ = thinkingForcedOpen_;
 }
 
 int32_t MtmdLlmContext::evalAudioChunkSpeculative(
@@ -2279,8 +2285,8 @@ void MtmdLlmContext::generateSpeculative(
     }
     if (nRemain == 0) {
       // The plain loop decodes the token it stops on for the budget.
-      common_batch_clear(*batch);
-      common_batch_add(*batch, sampled, current_.pos, {seqId_}, false);
+      llamaBatchClear(*batch);
+      llamaBatchAdd(*batch, sampled, current_.pos, {seqId_}, false);
       decodeOrThrow();
       advanceDecodedTextToken(sampled);
       return;
@@ -2294,12 +2300,12 @@ void MtmdLlmContext::generateSpeculative(
       spec_.afterDraft();
     }
 
-    common_batch_clear(*batch);
+    llamaBatchClear(*batch);
     const bool verifying = spec_.hasDraft();
     if (verifying) {
       spec_.addToBatch(*batch, sampled, current_.pos);
     } else {
-      common_batch_add(*batch, sampled, current_.pos, {seqId_}, true);
+      llamaBatchAdd(*batch, sampled, current_.pos, {seqId_}, true);
     }
     decodeOrThrow();
 
@@ -2439,6 +2445,13 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
     int logitIdx, unsigned generatedAfterAccept,
     const std::function<void(const std::string&)>& outputCallback,
     LlamaBatch* inlineDecodeBatch) {
+  // See TextLlmContext::onLogitsReady.
+  if (thinkingOpenerPending_) {
+    thinkingOpenerPending_ = false;
+    if (outputCallback && !thinkingForcedOpenText_.empty()) {
+      outputCallback(thinkingForcedOpenText_);
+    }
+  }
   const SequenceStepResult result = sampleFromLogits(
       logitIdx, generatedAfterAccept, outputCallback, inlineDecodeBatch);
   // See TextLlmContext::onLogitsReady: the scheduler decodes the sample later.

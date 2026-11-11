@@ -2,6 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   FLUX_2_KLEIN_4B_VAE,
+  PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
   TTS_S3GEN_EN_CHATTERBOX,
   WHISPER_EN_TINY_Q8_0,
   LAYA_MULTILINGUAL_322M_Q8_0
@@ -231,6 +232,17 @@ describe('resolveNestedModelSrcConstants', () => {
     assert.equal(upscaler['model_src'], TTS_S3GEN_EN_CHATTERBOX)
   })
 
+  it("rewrites a nested object's own modelSrc, as the parakeet speaker-attribution diarizer", () => {
+    const out = resolveNestedModelSrcConstants({
+      backend: 'cpu',
+      speakerAttribution: { modelSrc: 'PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0', padSegmentMs: 250 }
+    })
+    const attribution = out['speakerAttribution'] as Record<string, unknown>
+    assert.equal(attribution['modelSrc'], PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0)
+    assert.equal(attribution['padSegmentMs'], 250)
+    assert.equal(out['backend'], 'cpu')
+  })
+
   it('throws on unknown CONSTANT_CASE companion names with accepted forms', () => {
     assert.throws(
       () =>
@@ -248,21 +260,28 @@ describe('resolveNestedModelSrcConstants', () => {
   })
 })
 
-describe('parseServeConfig bundled weights', () => {
-  it('loads the bundled classifier when a classification alias has no src', () => {
-    const cfg = parseServeConfig(
-      { serve: { models: { cls: { type: 'ggml-classification' } } } },
-      {}
+describe('parseServeConfig src', () => {
+  it('requires src for an alias without a model constant', () => {
+    assert.throws(
+      () => parseServeConfig({ serve: { models: { cls: { type: 'ggml-classification' } } } }, {}),
+      /serve\.models\.cls: "src" is required/
     )
-    const cls = cfg.models.get('cls')!
-    assert.equal(cls.modelSrc, '')
-    assert.equal(cls.endpointCategory, 'classification')
-  })
-
-  it('still requires src for other model types', () => {
     assert.throws(
       () => parseServeConfig({ serve: { models: { ocr: { type: 'ggml-ocr' } } } }, {}),
       /serve\.models\.ocr: "src" is required/
+    )
+  })
+
+  it('loads the classifier from its model constant', () => {
+    const cfg = parseServeConfig(
+      { serve: { models: { cls: { model: 'MOBILENETV3_3CLASS_V3_FP16' } } } },
+      {}
+    )
+    const cls = cfg.models.get('cls')!
+    assert.equal(cls.endpointCategory, 'classification')
+    assert.equal(
+      typeof cls.modelSrc === 'object' && cls.modelSrc.name,
+      'MOBILENETV3_3CLASS_V3_FP16'
     )
   })
 })

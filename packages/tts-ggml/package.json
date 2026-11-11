@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-ggml",
-  "version": "0.14.1",
+  "version": "0.15.1",
   "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic + parler + cosyvoice3 + audio8 + moss + moss-sfx + moss-speech + Pocket engines from tts-cpp)",
   "engines": {
     "bare": ">=1.24.0"
@@ -199,12 +199,12 @@
     "bare-stream": "^2.7.0",
     "bare-subprocess": "^6.2.1",
     "brittle": "^3.17.0",
-    "@qvac/fabric-android-arm64": "^0.25.0",
-    "@qvac/fabric-ios": "^0.25.0"
+    "@qvac/fabric-android-arm64": "^0.29.0",
+    "@qvac/fabric-ios": "^0.29.0"
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@qvac/fabric": "^0.25.0",
+    "@qvac/fabric": "^0.29.0",
     "@qvac/infer-base": "^0.8.0",
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/logging": "^0.1.0",
@@ -222,15 +222,15 @@
     "@qvac/tts-ggml-darwin-arm64": "0.11.0",
     "@qvac/tts-ggml-darwin-x64": "0.11.0",
     "@qvac/tts-ggml-win32-x64": "0.11.0",
-    "@qvac/fabric-linux-x64": "^0.25.0",
-    "@qvac/fabric-linux-arm64": "^0.25.0",
-    "@qvac/fabric-darwin-arm64": "^0.25.0",
-    "@qvac/fabric-darwin-x64": "^0.25.0",
-    "@qvac/fabric-win32-x64": "^0.25.0"
+    "@qvac/fabric-linux-x64": "^0.29.0",
+    "@qvac/fabric-linux-arm64": "^0.29.0",
+    "@qvac/fabric-darwin-arm64": "^0.29.0",
+    "@qvac/fabric-darwin-x64": "^0.29.0",
+    "@qvac/fabric-win32-x64": "^0.29.0"
   },
   "peerDependencies": {
-    "@qvac/fabric-android-arm64": "^0.25.0",
-    "@qvac/fabric-ios": "^0.25.0"
+    "@qvac/fabric-android-arm64": "^0.29.0",
+    "@qvac/fabric-ios": "^0.29.0"
   },
   "peerDependenciesMeta": {
     "@qvac/fabric-android-arm64": {

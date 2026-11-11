@@ -20,7 +20,8 @@
         "ci": {
           "artifactNamePrefix": "audiogen-ggml-",
           "linuxExtraPackages": "pkg-config libx11-dev libxcb1-dev libxkbcommon-dev",
-          "setupPythonOnWindows": true
+          "setupPythonOnWindows": true,
+          "verifyLinuxModuleCxxRuntime": true
         }
       },
       "inputs": [

@@ -179,7 +179,13 @@ runs:
           }
 
           const filterArgs = filter ? ['--filter=' + filter] : [];
-          const includeArgs = includeTests ? ['--include=' + includeTests] : [];
+          // Passed through a file: an impacted-test list can exceed the 8191
+          // characters cmd.exe takes on one command line.
+          let includeArgs = [];
+          if (includeTests) {
+            fs.writeFileSync('include-tests.txt', includeTests.split(',').join('\n') + '\n', 'utf8');
+            includeArgs = ['--include-file=include-tests.txt'];
+          }
           const suiteArgs = suite ? ['--suite=' + suite] : [];
           const excludeSuiteArgs = excludeSuite ? ['--exclude-suite=' + excludeSuite] : [];
 

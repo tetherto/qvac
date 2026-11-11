@@ -29,6 +29,9 @@ function mapAddonEvent(rawEvent, rawData, rawError) {
         else if (stats.backendDevice === 1) {
             stats.backendDevice = "gpu";
         }
+        else if (stats.backendDevice === 2) {
+            stats.backendDevice = "npu";
+        }
         if (typeof stats.stopReason === "number") {
             stats.stopReason = STOP_REASONS[stats.stopReason] || "none";
         }
@@ -79,9 +82,6 @@ class LlamaInterface {
             configurationParams.config = {};
         }
         this._handle = this._binding.createInstance(this, configurationParams, outputCb, null);
-    }
-    loadWeights(weightsData) {
-        return Promise.resolve(this._binding.loadWeights(this._handle, weightsData));
     }
     /**
      * Moves addon to the LISTENING state after all the initialization is done

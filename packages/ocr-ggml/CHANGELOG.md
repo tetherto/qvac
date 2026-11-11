@@ -4,7 +4,33 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.33.0] - 2026-11-09
+
+### Fixed
+
+- Reject encoded images whose byte length would truncate when cast to `int`,
+  and raw bitmaps whose width × height × bpp overflows `size_t`, instead of
+  wrapping into an undersized `cv::Mat`. Empty encoded buffers are rejected
+  before OpenCV `imdecode` ([#4597](https://github.com/tetherto/qvac/pull/4597)).
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.26.0` -> `^0.28.0`, which carries
+  `qvac-fabric` `11739.0.0` -> `11739.1.1`
+  ([#5574](https://github.com/tetherto/qvac/pull/5574),
+  [#5658](https://github.com/tetherto/qvac/pull/5658)): the Linux x64 package
+  ships the AMD XDNA backend (system XRT 2.25 or newer to load it), which falls
+  back to the CPU on any setup error, plus OpenCL, TurboQuant and mtmd fixes.
+  A caret on a `0.x` version locks the minor, so `^0.26.0` would not have
+  resolved `0.28.0` on its own. The mobile dev and peer dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.28.0` with it.
+- `@qvac/fabric` 0.28.0 adds four fields to `common_params` and is not
+  ABI-compatible with 0.26.x, so every addon loaded in one process must resolve
+  the same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.28.0` together.
+- This package needed no code change for the new fabric.
+
+## [0.32.0] - 2026-11-04
 
 ### Breaking
 
@@ -14,6 +40,23 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ([#5475](https://github.com/tetherto/qvac/pull/5475)).
 - On an iOS device, `assessFit` checks the load and its margin against the
   app's memory limit ([#5475](https://github.com/tetherto/qvac/pull/5475)).
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.25.0` -> `^0.26.0`, which carries
+  `qvac-fabric` `11259.2.0` -> `11739.0.0`
+  ([#5331](https://github.com/tetherto/qvac/pull/5331)):
+  a rebase onto upstream llama.cpp b11739, TurboVec 1.1.2, an mtmd
+  image-resize fix, and Linux CUDA, Jetson and HIP backend modules that load
+  in hosts without libstdc++ (such as `bare-sidecar`) instead of falling back
+  to the CPU. A caret on a `0.x` version locks the minor, so `^0.25.0`
+  would not have resolved `0.26.0` on its own. The mobile dev dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.26.0` with it.
+- `@qvac/fabric` 0.26.0 changes the `common` library's API and is not
+  ABI-compatible with 0.25.x, so every addon loaded in one process must resolve
+  the same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.26.0` together.
+- This package needed no code change for the new fabric.
 
 ## [0.31.1] - 2026-10-29
 

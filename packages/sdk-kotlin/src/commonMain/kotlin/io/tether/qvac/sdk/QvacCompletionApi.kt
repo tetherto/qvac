@@ -7,6 +7,10 @@ import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateResponseToolCall
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequest
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestGenerationParams
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItem
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContent
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContentItemMedia
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContentItemText
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContentVariant2Item
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemAttachmentsItem
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemToolCallsItem
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestKvCache
@@ -16,6 +20,7 @@ import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestResponseFormat
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestResponseFormatJsonSchemaJsonSchema
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestResponseFormatText
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestToolDialect
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestToolSearch
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestToolsItem
 import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItem
 import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItemCompletionStatsStats
@@ -47,9 +52,19 @@ import kotlin.random.Random
 data class QvacAttachment(val path: String)
 
 /**
+ * One ordered piece of a user turn. A [Media] part keeps its place next to the
+ * text that refers to it; [QvacMessage.attachments] are always sent before the text.
+ */
+sealed class QvacContentPart {
+    data class Text(val text: String) : QvacContentPart()
+    data class Media(val path: String) : QvacContentPart()
+}
+
+/**
  * A history entry. An assistant turn can carry the [toolCalls] it made, and a tool
  * turn the [toolCallId] / [toolName] it answers; the model's chat template renders
- * them in its own tool-call format.
+ * them in its own tool-call format. A user turn may send ordered [parts] in place
+ * of [content] and [attachments].
  */
 data class QvacMessage(
     val role: String,
@@ -58,8 +73,13 @@ data class QvacMessage(
     val toolCalls: List<QvacToolCall> = emptyList(),
     val toolCallId: String? = null,
     val toolName: String? = null,
+    val parts: List<QvacContentPart> = emptyList(),
 ) {
     init {
+        require(parts.isEmpty() || role == "user") { "parts are only valid on a user message" }
+        require(parts.isEmpty() || (content.isEmpty() && attachments.isEmpty())) {
+            "pass either parts or content/attachments, not both"
+        }
         require(toolCalls.isEmpty() || role == "assistant") {
             "toolCalls is only valid on an assistant message"
         }
@@ -72,6 +92,7 @@ data class QvacMessage(
         fun system(content: String) = QvacMessage("system", content)
         fun user(content: String, attachments: List<QvacAttachment> = emptyList()) =
             QvacMessage("user", content, attachments)
+        fun user(parts: List<QvacContentPart>) = QvacMessage("user", "", parts = parts)
         fun assistant(content: String, toolCalls: List<QvacToolCall> = emptyList()) =
             QvacMessage("assistant", content, toolCalls = toolCalls)
         fun tool(content: String, toolCallId: String? = null, toolName: String? = null) =
@@ -134,6 +155,12 @@ typealias QvacToolHandler = suspend (JsonObject) -> JsonElement
  * A tool the model may call. Describe flat parameters with [parameters] and
  * [required], or pass a full JSON Schema object as [parametersSchema] for nested
  * `properties`, `items`, `anyOf` or `$defs`; it is sent as written.
+ *
+ * With [deferLoading] only the name and description reach the prompt, listed
+ * under [group] in the catalog of the built-in `tool_search`; the schema is
+ * declared once the model has searched for it. Use deferred tools with
+ * [orchestrate], where the worker runs the search: [run] has no `tool_search`
+ * handler, so a search there ends the run as an unanswerable tool call.
  */
 data class QvacTool(
     val name: String,
@@ -141,11 +168,44 @@ data class QvacTool(
     val parameters: Map<String, QvacToolParameter> = emptyMap(),
     val required: Set<String> = emptySet(),
     val parametersSchema: JsonObject? = null,
+    val deferLoading: Boolean = false,
+    val group: String? = null,
     val handler: QvacToolHandler? = null,
 ) {
     init {
         require(parametersSchema == null || (parameters.isEmpty() && required.isEmpty())) {
             "QvacTool \"$name\": set either parametersSchema or parameters/required, not both"
+        }
+    }
+
+    /** The positional form from before [deferLoading] and [group] existed. */
+    constructor(
+        name: String,
+        description: String,
+        parameters: Map<String, QvacToolParameter>,
+        required: Set<String>,
+        parametersSchema: JsonObject?,
+        handler: QvacToolHandler?,
+    ) : this(name, description, parameters, required, parametersSchema, false, null, handler)
+}
+
+/**
+ * How many tool definitions one `tool_search` call loads. The model can ask for
+ * a number with the call's `limit` argument. [defaultLimit] is used when it does
+ * not (3, or [maxLimit] when lower); [maxLimit] is the most one call can load,
+ * and a larger request is lowered to it (8). The model is told these at the
+ * front of the prompt, so keep them the same for a whole conversation.
+ */
+data class QvacToolSearchLimits(
+    val defaultLimit: Int? = null,
+    val maxLimit: Int? = null,
+) {
+    init {
+        require(defaultLimit == null || defaultLimit >= 1) { "toolSearch.defaultLimit must be at least 1" }
+        require(maxLimit == null || maxLimit >= 1) { "toolSearch.maxLimit must be at least 1" }
+        val max = maxLimit ?: 8
+        require(defaultLimit == null || defaultLimit <= max) {
+            "toolSearch.defaultLimit ($defaultLimit) cannot exceed maxLimit ($max)"
         }
     }
 }
@@ -162,6 +222,10 @@ data class QvacCompletionOptions(
     val requestId: String = qvacRequestId(),
     /** Evaluate the prompt without generating an answer; requires an enabled KV cache. */
     val prefill: Boolean? = null,
+    /** Name of another caller-managed cache to start this chat from; the model reuses the prefix it shares with the prompt. */
+    val seedFrom: String? = null,
+    /** Limits for the built-in `tool_search`; only used when a tool sets [QvacTool.deferLoading]. */
+    val toolSearch: QvacToolSearchLimits? = null,
 )
 
 sealed interface QvacCompletionEvent {
@@ -258,6 +322,10 @@ class QvacCompletionRun internal constructor(
     }
 }
 
+/**
+ * Runs one completion turn. Deferred tools need [orchestrate] instead: a
+ * `tool_search` call returned here has no handler.
+ */
 fun QvacCompletion.run(
     modelId: String,
     history: List<QvacMessage>,
@@ -275,12 +343,14 @@ fun QvacCompletion.run(
         history = history.map { it.toStreamItem() },
         kvCache = options.kvCache?.toWire(),
         prefill = options.prefill,
+        seedFrom = options.seedFrom,
         modelId = modelId,
         requestId = options.requestId,
         responseFormat = options.responseFormat?.toStreamFormat(),
         stream = options.stream,
         toolDialect = options.toolDialect?.let { wireEnum<CompletionStreamRequestToolDialect>("toolDialect", it) },
         tools = tools.takeIf { it.isNotEmpty() }?.map { it.toStreamTool() },
+        toolSearch = options.toolSearch?.toWire(),
     )
     return startRun(options.requestId, handlers) { emit ->
         val events = mutableListOf<QvacCompletionEvent>()
@@ -323,12 +393,14 @@ fun QvacCompletion.orchestrate(
         kvCache = options.kvCache?.toWire(),
         maxToolTurns = maxToolTurns.toLong(),
         prefill = options.prefill,
+        seedFrom = options.seedFrom,
         modelId = modelId,
         requestId = options.requestId,
         responseFormat = options.responseFormat?.toStreamFormat(),
         stream = options.stream,
         toolDialect = options.toolDialect?.let { wireEnum<CompletionStreamRequestToolDialect>("toolDialect", it) },
         tools = tools.map { it.toStreamTool() },
+        toolSearch = options.toolSearch?.toWire(),
     )
     val upstream = Channel<ByteArray>(Channel.UNLIMITED)
     return startRun(options.requestId, handlers) { emit ->
@@ -531,7 +603,11 @@ private fun CompletionStreamResponseEventsItemCompletionStatsStats.toCompletionS
 
 private fun QvacMessage.toStreamItem() = CompletionStreamRequestHistoryItem(
     role = role,
-    content = content,
+    content = if (parts.isEmpty()) {
+        CompletionStreamRequestHistoryItemContent.Variant1(content)
+    } else {
+        CompletionStreamRequestHistoryItemContent.Variant2(parts.map { it.toWire() })
+    },
     attachments = attachments.takeIf { it.isNotEmpty() }
         ?.map { CompletionStreamRequestHistoryItemAttachmentsItem(path = it.path) },
     toolCalls = toolCalls.takeIf { it.isNotEmpty() }?.map { call ->
@@ -540,6 +616,15 @@ private fun QvacMessage.toStreamItem() = CompletionStreamRequestHistoryItem(
     toolCallId = toolCallId,
     toolName = toolName,
 )
+
+private fun QvacContentPart.toWire(): CompletionStreamRequestHistoryItemContentVariant2Item = when (this) {
+    is QvacContentPart.Text -> CompletionStreamRequestHistoryItemContentVariant2Item.CompletionStreamRequestHistoryItemContentItemText(
+        CompletionStreamRequestHistoryItemContentItemText(text = text),
+    )
+    is QvacContentPart.Media -> CompletionStreamRequestHistoryItemContentVariant2Item.CompletionStreamRequestHistoryItemContentItemMedia(
+        CompletionStreamRequestHistoryItemContentItemMedia(path = path),
+    )
+}
 
 private fun QvacGenerationOptions.toStreamParams() = CompletionStreamRequestGenerationParams(
     temp = temperature,
@@ -574,9 +659,16 @@ private fun QvacResponseFormat.toStreamFormat(): CompletionStreamRequestResponse
     )
 }
 
+private fun QvacToolSearchLimits.toWire() = CompletionStreamRequestToolSearch(
+    defaultLimit = defaultLimit?.toLong(),
+    maxLimit = maxLimit?.toLong(),
+)
+
 private fun QvacTool.toStreamTool() = CompletionStreamRequestToolsItem(
     name = name,
     description = description,
+    deferLoading = deferLoading.takeIf { it },
+    group = group,
     parameters = parametersSchema ?: buildJsonObject {
         put("type", "object")
         putJsonObject("properties") {

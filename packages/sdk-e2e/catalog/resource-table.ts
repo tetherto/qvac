@@ -8,6 +8,12 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: { verbosity: 0, ctx_size: 2048 }
   },
 
+  'llm-shared-cache': {
+    constant: { $const: 'LLAMA_3_2_1B_INST_Q4_0' },
+    type: 'llamacpp-completion',
+    config: { verbosity: 0, ctx_size: 2048, cache_share_across_keys: true }
+  },
+
   'llm-small-ctx': {
     constant: { $const: 'LLAMA_3_2_1B_INST_Q4_0' },
     type: 'llamacpp-completion',
@@ -71,6 +77,24 @@ export const RESOURCE_TABLE: ResourceTable = {
     type: 'llamacpp-embedding'
   },
 
+  embeddinggemma2: {
+    constant: { $const: 'EMBEDDINGGEMMA_2_Q8_0' },
+    type: 'llamacpp-embedding',
+    config: {
+      projectionModelSrc: { $const: 'MMPROJ_EMBEDDINGGEMMA_2_Q8_0' },
+      ctxSize: 2048,
+      batchSize: 2048
+    },
+    configOn: { 'mobile-android': { flashAttention: 'off' } }
+  },
+
+  'image-embedding': {
+    on: ['desktop-macos', 'desktop-linux', 'desktop-windows', 'mobile', 'electron', 'snap'],
+    constant: { $const: 'MEGALOC_MIXED' },
+    type: 'ggml-image-embedding',
+    config: { backend: 'CPU', threads: 4 }
+  },
+
   // The reranker the addon's own tests use, pinned until a reranker is in the registry.
   rerank: {
     modelSrc:
@@ -79,7 +103,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   whisper: {
-    constant: { $const: 'WHISPER_TINY' },
+    constant: { $const: 'WHISPER_TINY_Q8_0' },
     type: 'whispercpp-transcription',
     config: {
       vadModelSrc: { $const: 'VAD_SILERO_5_1_2' },
@@ -129,7 +153,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   'tools-gemma4': {
-    on: ['desktop'],
+    on: ['desktop-linux', 'desktop-python'],
     constant: { $const: 'GEMMA4_2B_MULTIMODAL_Q4_K_M' },
     type: 'llamacpp-completion',
     config: { ctx_size: 4096, tools: true }
@@ -182,7 +206,7 @@ export const RESOURCE_TABLE: ResourceTable = {
 
   'vla-groot': {
     on: ['desktop'],
-    constant: { $const: 'GROOT_Q5_VF16' },
+    constant: { $const: 'GROOT_MULTI_Q5_VF16' },
     type: 'ggml-vla',
     config: { backend: ['cpu'] }
   },
@@ -195,19 +219,8 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   classification: {
-    type: 'ggml-classification',
-    // Bundled weights: the worker finds them itself on desktop, and cannot on mobile, where the
-    // Bare bundle does not expose package data files at `__dirname`.
-    configOn: {
-      mobile: {
-        modelPath: {
-          $packageAsset: {
-            package: '@qvac/classification-ggml',
-            file: 'weights/mobilenetv3_3class_v3_fp16.gguf'
-          }
-        }
-      }
-    }
+    constant: { $const: 'MOBILENETV3_3CLASS_V3_FP16' },
+    type: 'ggml-classification'
   },
 
   echo: {
@@ -308,6 +321,8 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   'tts-parler': {
+    // Every leg defines it for `model-fit-tts-parler`; mobile never loads it.
+    skipPreDownloadOn: ['mobile'],
     constant: { $const: 'TTS_MINI_V1_EN_PARLER_TTS_Q8_0' },
     type: 'tts-ggml',
     config: {
@@ -335,7 +350,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   'tts-cosyvoice3': {
-    constant: { $const: 'TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0' },
+    constant: { $const: 'TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0' },
     type: 'tts-ggml',
     config: {
       ttsEngine: 'cosyvoice3',
@@ -345,7 +360,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   'tts-cosyvoice3-native-stream': {
-    constant: { $const: 'TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0' },
+    constant: { $const: 'TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0' },
     type: 'tts-ggml',
     config: {
       ttsEngine: 'cosyvoice3',
@@ -357,7 +372,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   'tts-moss-sfx': {
-    on: ['desktop'],
+    on: ['desktop-linux'],
     constant: { $const: 'AUDIOGEN_MOSS_SFX_V2_Q8_0' },
     constantSourceOnly: true,
     type: 'tts-ggml',
@@ -388,7 +403,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   'tts-supertonic': {
-    constant: { $const: 'TTS_EN_SUPERTONIC_Q8_0' },
+    constant: { $const: 'TTS_EN_SUPERTONIC_Q4_0' },
     type: 'tts-ggml',
     config: {
       ttsEngine: 'supertonic',
@@ -409,8 +424,9 @@ export const RESOURCE_TABLE: ResourceTable = {
     }
   },
 
+  // Same model with 8 kHz output, for the sample-rate ratio test.
   'tts-supertonic-8k': {
-    constant: { $const: 'TTS_EN_SUPERTONIC_Q8_0' },
+    constant: { $const: 'TTS_EN_SUPERTONIC_Q4_0' },
     type: 'tts-ggml',
     config: {
       ttsEngine: 'supertonic',
@@ -422,7 +438,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   'tts-supertonic-enhanced': {
-    constant: { $const: 'TTS_EN_SUPERTONIC_Q8_0' },
+    constant: { $const: 'TTS_EN_SUPERTONIC_Q4_0' },
     type: 'tts-ggml',
     config: {
       ttsEngine: 'supertonic',
@@ -506,6 +522,24 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: {}
   },
 
+  // The full 25-language TranscribePsy-250M-EU: one GGUF with its CAFE language
+  // adapters and gate embedded. ggml on every platform (no Core ML
+  // distribution); without `language` the gate routes each recording itself.
+  'parakeet-transcribepsy-eu': {
+    constant: { $const: 'PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0' },
+    type: 'parakeet-transcription',
+    config: {}
+  },
+
+  // The same GGUF pinned to its English trunk (`language: "en"`), the route
+  // the gate would pick for the English fixtures; `"other"` would select the
+  // non-English adapters instead.
+  'parakeet-transcribepsy-eu-en': {
+    constant: { $const: 'PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0' },
+    type: 'parakeet-transcription',
+    config: { language: 'en' }
+  },
+
   bci: {
     // Defined on every leg: `model-fit-bci` assesses the load without running it. Mobile
     // never loads it, so it must not pay for the weights.
@@ -566,7 +600,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   world: {
-    on: ['desktop'],
+    on: ['desktop-linux', 'desktop-python'],
     constant: { $const: 'ABOT_WORLD_0_5B_Q8_0' },
     type: 'sdcpp-generation',
     config: {
@@ -622,13 +656,14 @@ export const RESOURCE_TABLE: ResourceTable = {
 
   'diffusion-esrgan': {
     on: ['desktop'],
-    constant: { $const: 'SD_V2_1_1B_Q8_0' },
+    constant: { $const: 'FLUX_2_KLEIN_4B_Q4_0' },
     type: 'sdcpp-generation',
     config: {
       device: 'gpu',
       threads: 4,
-      prediction: 'v',
-      params_backend: 'vae=cpu',
+      prediction: 'flux2_flow',
+      llmModelSrc: { $const: 'QWEN3_4B_Q4_K_M' },
+      vaeModelSrc: { $const: 'FLUX_2_KLEIN_4B_VAE' },
       upscaler: {
         type: 'esrgan',
         model_src: { $const: 'REALESRGAN_X4PLUS_ANIME_6B' },
@@ -639,12 +674,14 @@ export const RESOURCE_TABLE: ResourceTable = {
 
   'diffusion-esrgan-fit-probe': {
     on: ['desktop'],
-    constant: { $const: 'SD_V2_1_1B_Q8_0' },
+    constant: { $const: 'FLUX_2_KLEIN_4B_Q4_0' },
     type: 'sdcpp-generation',
     config: {
       device: 'gpu',
       threads: 4,
-      prediction: 'v',
+      prediction: 'flux2_flow',
+      llmModelSrc: { $const: 'QWEN3_4B_Q4_K_M' },
+      vaeModelSrc: { $const: 'FLUX_2_KLEIN_4B_VAE' },
       upscaler: {
         type: 'esrgan',
         model_src: { $const: 'REALESRGAN_X4PLUS_ANIME_6B' },

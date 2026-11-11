@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Run on the shared `@qvac/fabric` runtime: the module links the ggml that
+  `@qvac/fabric` ships instead of bundling its own, loads GPU backends from
+  the fabric platform package, and the native build takes ggml from the
+  `qvac-fabric` vcpkg port through `speech-cpp` `2026-11-11`
+  ([#5482](https://github.com/tetherto/qvac/pull/5482)).
+
+### Removed
+
+- The opt-in WebGPU source build (`AUDIOGEN_WEBGPU`): WebGPU returns once the
+  `@qvac/fabric` runtime provides it
+  ([#5482](https://github.com/tetherto/qvac/pull/5482)).
+
+## [0.10.1] - 2026-11-10
+
+### Added
+
+- ACE-Step `backend`, `lmBackend`, and `dumpStagesDir` controls, with matching
+  backend selection in `assessFit()` and opt-in WebGPU source builds.
+- Apple Core ML VAE/conditioner support and MiniMax `coremlConditionerPath`
+  for generation and preflight; MiniMax Core ML memory projections remain `unknown`.
+
+### Fixed
+
+- ACE-Step `normalizeLoudness: false` returns the engine's raw output. The
+  addon rescaled every non-edit result to a 0.9 peak whatever the option said,
+  so the flag only switched off the engine's percentile pass. Samples the VAE
+  leaves outside `[-1, 1]` now saturate at int16 full scale on that path.
+- ACE-Step lego stems keep their mix gain relative to the source; the same
+  rescale raised or lowered each stem to a 0.9 peak.
+- Include independent LM device pools in `assessFit()` when the primary
+  pipeline runs on CPU, counting the host peak once.
+
+## [0.10.0] - 2026-11-05
+
 ### Breaking
 
 - `assessFit` returns `{ status, devices, stats }`: each device the pipeline
@@ -18,13 +54,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Run on the shared `@qvac/fabric` runtime: the module links the ggml that
-  `@qvac/fabric` ships instead of bundling its own, loads GPU backends from
-  the fabric platform package, and the native build takes ggml from the
-  `qvac-fabric` vcpkg port through `speech-cpp` `2026-10-29#2`.
+- Update the native ACE-Step dependency and reject unusable automatic GPU backends.
+
 - Update the shared `speech-cpp` native dependency to `2026-10-29`
   ([#5420](https://github.com/tetherto/qvac/pull/5420),
   [#5447](https://github.com/tetherto/qvac/pull/5447)).
+- Update the shared `speech-cpp` native dependency to `2026-11-03`
+  ([registry #474](https://github.com/tetherto/qvac-registry-vcpkg/pull/474)).
 - `assessFit` names the device and each stage's device by its ggml device name
   (`CPU`, `CUDA0`, `MTL0`, `GPUOpenCL`), counts Android's OpenCL GPU as sharing
   host memory, and gives a device that reports no memory of its own the

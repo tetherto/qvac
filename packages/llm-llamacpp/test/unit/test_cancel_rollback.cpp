@@ -27,6 +27,7 @@
 #include "model-interface/TextLlmContext.hpp"
 #include "test_common.hpp"
 #include "test_internal_peers.hpp"
+#include "utils/LlamaBatch.hpp"
 #include "utils/SequenceStateSnapshot.hpp"
 
 // Tests for the transactional cancel-rollback paths for hybrid SSM models.
@@ -271,7 +272,7 @@ bool decodeRange(
     size_t end, bool wantLogits) {
   llama_batch batch = llama_batch_init(static_cast<int32_t>(end - begin), 0, 1);
   for (size_t i = begin; i < end; ++i) {
-    common_batch_add(
+    llamaBatchAdd(
         batch,
         tokens[i],
         static_cast<llama_pos>(i),
@@ -298,7 +299,7 @@ std::vector<llama_token> greedyTail(
     }
     out.push_back(best);
     llama_batch batch = llama_batch_init(1, 0, 1);
-    common_batch_add(batch, best, pos + i, {0}, true);
+    llamaBatchAdd(batch, best, pos + i, {0}, true);
     const bool ok = llama_decode(ctx, batch) == 0;
     llama_batch_free(batch);
     if (!ok) {
@@ -901,7 +902,7 @@ TEST_F(
 
   llama_batch batch = llama_batch_init(promptSize, 0, 1);
   for (llama_pos i = 0; i < promptSize; ++i) {
-    common_batch_add(batch, plan.tokens[i], i, {0}, i == promptSize - 1);
+    llamaBatchAdd(batch, plan.tokens[i], i, {0}, i == promptSize - 1);
   }
   ASSERT_EQ(llama_decode(shared.lctx, batch), 0);
   driver.onPrefillComplete(promptSize, plan.tokens.size());
@@ -911,8 +912,8 @@ TEST_F(
   const SequenceStepResult first =
       driver.onLogitsReady(promptSize - 1, 1, [](const std::string&) {});
   ASSERT_FALSE(first.finished);
-  common_batch_clear(batch);
-  common_batch_add(batch, first.token, promptSize, {0}, true);
+  llamaBatchClear(batch);
+  llamaBatchAdd(batch, first.token, promptSize, {0}, true);
   ASSERT_EQ(llama_decode(shared.lctx, batch), 0);
   driver.syncPosition(promptSize + 1);
 

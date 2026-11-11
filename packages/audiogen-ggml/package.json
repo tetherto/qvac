@@ -1,6 +1,6 @@
 {
   "name": "@qvac/audiogen-ggml",
-  "version": "0.9.1",
+  "version": "0.10.1",
   "description": "Audio generation (music) addon for qvac",
   "engines": {
     "bare": ">=1.24.0"
@@ -108,7 +108,8 @@
     "README.md",
     "CHANGELOG.md",
     "NOTICE",
-    "LICENSE"
+    "LICENSE",
+    "examples/generate-with-backends.js"
   ],
   "license": "Apache-2.0",
   "repository": {
@@ -141,12 +142,12 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.63.0",
     "cmake-npm": "^1.1.0",
-    "@qvac/fabric-android-arm64": "^0.25.0",
-    "@qvac/fabric-ios": "^0.25.0"
+    "@qvac/fabric-android-arm64": "^0.29.0",
+    "@qvac/fabric-ios": "^0.29.0"
   },
   "dependencies": {
     "@qvac/error": "^0.1.1",
-    "@qvac/fabric": "^0.25.0",
+    "@qvac/fabric": "^0.29.0",
     "@qvac/infer-base": "^0.8.0",
     "@qvac/logging": "^0.1.0",
     "bare-ffmpeg": "^1.4.0",
@@ -161,19 +162,19 @@
     "@qvac/audiogen-ggml-darwin-arm64": "0.6.0",
     "@qvac/audiogen-ggml-darwin-x64": "0.6.0",
     "@qvac/audiogen-ggml-win32-x64": "0.6.0",
-    "@qvac/fabric-linux-x64": "^0.25.0",
-    "@qvac/fabric-linux-arm64": "^0.25.0",
-    "@qvac/fabric-darwin-arm64": "^0.25.0",
-    "@qvac/fabric-darwin-x64": "^0.25.0",
-    "@qvac/fabric-win32-x64": "^0.25.0"
+    "@qvac/fabric-linux-x64": "^0.29.0",
+    "@qvac/fabric-linux-arm64": "^0.29.0",
+    "@qvac/fabric-darwin-arm64": "^0.29.0",
+    "@qvac/fabric-darwin-x64": "^0.29.0",
+    "@qvac/fabric-win32-x64": "^0.29.0"
   },
   "overrides": {
     "bare-module-lexer": "1.6.3"
   },
   "types": "index.d.ts",
   "peerDependencies": {
-    "@qvac/fabric-android-arm64": "^0.25.0",
-    "@qvac/fabric-ios": "^0.25.0"
+    "@qvac/fabric-android-arm64": "^0.29.0",
+    "@qvac/fabric-ios": "^0.29.0"
   },
   "peerDependenciesMeta": {
     "@qvac/fabric-android-arm64": {

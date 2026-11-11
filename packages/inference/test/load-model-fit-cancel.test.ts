@@ -28,6 +28,7 @@ test('loadModel: a cancel during the fit check stops the load before the addon r
       created += 1
       return { model: { load: async () => {}, unload: async () => {} } }
     },
+    fitRequest: (load: { modelPath: string }) => ({ request: { modelPath: load.modelPath } }),
     assessFit: () => {
       fitted += 1
       controller.abort(undefined)

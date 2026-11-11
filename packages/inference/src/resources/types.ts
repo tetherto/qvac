@@ -55,6 +55,7 @@ export interface NativeGPUCapabilities {
   revision: number
   unifiedMemory: boolean
   memory: number | undefined
+  dedicatedMemory: number | undefined
 }
 
 export interface NativeGPUUsage {
@@ -63,6 +64,7 @@ export interface NativeGPUUsage {
   decode: number | undefined
   memoryUsed: number | undefined
   memoryTotal: number | undefined
+  dedicatedMemoryUsed: number | undefined
   power: number | undefined
   temperature: number | undefined
 }

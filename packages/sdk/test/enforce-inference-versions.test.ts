@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
 import {
   checkAddonRanges,
+  checkDesktopBare,
   checkSharedMajorMinor,
   collectVersionFailures,
   type Manifest
@@ -159,6 +159,29 @@ describe('checkAddonRanges', () => {
   })
 })
 
+describe('checkDesktopBare', () => {
+  it('passes a Bare version inside engines.bare', () => {
+    assert.deepEqual(checkDesktopBare({ engines: { bare: '>=1.32.0' } }, '1.34.1'), [])
+  })
+
+  it('reports a Bare version outside engines.bare', () => {
+    const [failure] = checkDesktopBare({ engines: { bare: '>=1.35.0' } }, '1.34.1')
+    assert.match(
+      failure,
+      /bare-sidecar ships Bare 1\.34\.1, outside @qvac\/inference engines\.bare/
+    )
+  })
+
+  it('reports a Bare version it could not read', () => {
+    const [failure] = checkDesktopBare({ engines: { bare: '>=1.32.0' } }, null)
+    assert.match(failure, /Could not read the Bare version/)
+  })
+
+  it('passes when inference declares no engines.bare', () => {
+    assert.deepEqual(checkDesktopBare({}, null), [])
+  })
+})
+
 describe('collectVersionFailures', () => {
   it('passes a manifest pair that satisfies both rules', () => {
     assert.deepEqual(
@@ -178,50 +201,5 @@ describe('collectVersionFailures', () => {
     assert.equal(failures.length, 2)
     assert.match(failures[0], /SDK has \^1\.2\.4/)
     assert.match(failures[1], /must share a major\.minor/)
-  })
-})
-
-describe('Bare runtime compatibility', () => {
-  const inference = { ...inferenceManifest(), engines: { bare: '>=1.30.3' } }
-  const sdkWithRuntime = (range: string) =>
-    sdkManifest('0.19.1', '^0.19.1', { 'bare-runtime': range })
-
-  for (const range of ['^1.30.3', '~1.30.3', '1.30.3', '^1.31.0', '>=1.30.3', '^2.0.0']) {
-    it(`accepts a compatible SDK runtime range: ${range}`, () => {
-      assert.deepEqual(collectVersionFailures(inference, sdkWithRuntime(range)), [])
-    })
-  }
-
-  for (const range of ['^1.24.2', '1.28.6', '*', '^1.30.3 || 1.28.6']) {
-    it(`rejects an SDK runtime range that admits unsupported engines: ${range}`, () => {
-      const [failure] = collectVersionFailures(inference, sdkWithRuntime(range))
-      assert.match(failure, /bare-runtime.*inference/)
-    })
-  }
-
-  it('reports a missing SDK runtime dependency', () => {
-    const [failure] = collectVersionFailures(inference, sdkManifest('0.19.1', '^0.19.1'))
-    assert.match(failure, /bare-runtime/)
-  })
-
-  it('reports malformed ranges instead of throwing', () => {
-    assert.match(
-      collectVersionFailures(inference, sdkWithRuntime('not-a-range'))[0],
-      /bare-runtime/
-    )
-    const invalid = { ...inference, engines: { bare: 'not-a-range' } }
-    assert.match(collectVersionFailures(invalid, sdkWithRuntime('^1.30.3'))[0], /engines.bare/)
-  })
-
-  it('keeps the actual SDK runtime range compatible with inference', () => {
-    const inferencePkg = JSON.parse(
-      readFileSync(new URL('../../inference/package.json', import.meta.url), 'utf8')
-    ) as Manifest
-    const sdkPkg = JSON.parse(
-      readFileSync(new URL('../package.json', import.meta.url), 'utf8')
-    ) as Manifest
-    assert.equal(inferencePkg.engines?.['bare'], '>=1.32.0')
-    assert.equal(sdkPkg.dependencies?.['bare-runtime'], '^1.34.1')
-    assert.deepEqual(collectVersionFailures(inferencePkg, sdkPkg), [])
   })
 })

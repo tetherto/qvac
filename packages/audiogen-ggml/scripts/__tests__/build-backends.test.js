@@ -15,6 +15,8 @@ const vcpkgJson = JSON.parse(fs.readFileSync(path.join(packageRoot, 'vcpkg.json'
 const FABRIC = '@qvac/fabric'
 const SPEECH_PORT = 'speech-cpp'
 const ENGINE_FEATURE = 'audiogen'
+const COREML_FEATURE = 'coreml'
+const APPLE_PLATFORM = 'osx | ios'
 const BACKEND_FEATURES = ['metal', 'vulkan', 'opencl', 'cuda', 'webgpu']
 const DESKTOP_HOSTS = ['linux-x64', 'linux-arm64', 'darwin-arm64', 'darwin-x64', 'win32-x64']
 const MOBILE_HOSTS = ['android-arm64', 'ios']
@@ -100,11 +102,21 @@ test('vcpkg.json builds the engine without ggml backend features', () => {
   assert.equal(vcpkgJson.overrides.filter((entry) => entry.name === SPEECH_PORT).length, 1)
 })
 
-test('one speech-cpp dependency builds the audiogen engine on every platform', () => {
+test('speech-cpp builds the audiogen engine everywhere and its Core ML support on Apple', () => {
   const speech = speechDependencies()
-  assert.equal(speech.length, 1)
-  assert.equal(speech[0].platform, undefined)
-  assert.deepEqual(speech[0].features, [ENGINE_FEATURE])
+  const apple = speech.find((dependency) => dependency.platform === APPLE_PLATFORM)
+  const other = speech.find((dependency) => dependency.platform === `!(${APPLE_PLATFORM})`)
+  assert.equal(speech.length, 2)
+  assert.deepEqual(apple.features, [ENGINE_FEATURE, COREML_FEATURE])
+  assert.deepEqual(other.features, [ENGINE_FEATURE])
+})
+
+test('WebGPU waits for the fabric runtime and no Hexagon build is wired', () => {
+  assert.equal(/AUDIOGEN_WEBGPU/.test(cmakeSource), false)
+  assert.equal(vcpkgJson.features.webgpu, undefined)
+  assert.equal(vcpkgJson.overrides.some((entry) => entry.name === 'dawn'), false)
+  assert.equal(/HEXAGON|hexagon/.test(cmakeSource), false)
+  assert.equal(vcpkgJson.features.hexagon, undefined)
 })
 
 test('the published prebuilds need no CUDA toolkit or Vulkan SDK', () => {

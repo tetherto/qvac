@@ -9,6 +9,17 @@
       "ctx_size": 2048
     }
   },
+  "llm-shared-cache": {
+    "constant": {
+      "$const": "LLAMA_3_2_1B_INST_Q4_0"
+    },
+    "type": "llamacpp-completion",
+    "config": {
+      "verbosity": 0,
+      "ctx_size": 2048,
+      "cache_share_across_keys": true
+    }
+  },
   "llm-small-ctx": {
     "constant": {
       "$const": "LLAMA_3_2_1B_INST_Q4_0"
@@ -110,13 +121,49 @@
     },
     "type": "llamacpp-embedding"
   },
+  "embeddinggemma2": {
+    "constant": {
+      "$const": "EMBEDDINGGEMMA_2_Q8_0"
+    },
+    "type": "llamacpp-embedding",
+    "config": {
+      "projectionModelSrc": {
+        "$const": "MMPROJ_EMBEDDINGGEMMA_2_Q8_0"
+      },
+      "ctxSize": 2048,
+      "batchSize": 2048
+    },
+    "configOn": {
+      "mobile-android": {
+        "flashAttention": "off"
+      }
+    }
+  },
+  "image-embedding": {
+    "on": [
+      "desktop-macos",
+      "desktop-linux",
+      "desktop-windows",
+      "mobile",
+      "electron",
+      "snap"
+    ],
+    "constant": {
+      "$const": "MEGALOC_MIXED"
+    },
+    "type": "ggml-image-embedding",
+    "config": {
+      "backend": "CPU",
+      "threads": 4
+    }
+  },
   "rerank": {
     "modelSrc": "https://huggingface.co/ggml-org/models/resolve/499bc8821c6b12b4e53c5bffcb21ec206f212d81/jina-reranker-v1-tiny-en/ggml-model-f16.gguf",
     "type": "llamacpp-rerank"
   },
   "whisper": {
     "constant": {
-      "$const": "WHISPER_TINY"
+      "$const": "WHISPER_TINY_Q8_0"
     },
     "type": "whispercpp-transcription",
     "config": {
@@ -191,7 +238,8 @@
   },
   "tools-gemma4": {
     "on": [
-      "desktop"
+      "desktop-linux",
+      "desktop-python"
     ],
     "constant": {
       "$const": "GEMMA4_2B_MULTIMODAL_Q4_K_M"
@@ -290,7 +338,7 @@
       "desktop"
     ],
     "constant": {
-      "$const": "GROOT_Q5_VF16"
+      "$const": "GROOT_MULTI_Q5_VF16"
     },
     "type": "ggml-vla",
     "config": {
@@ -314,17 +362,10 @@
     }
   },
   "classification": {
-    "type": "ggml-classification",
-    "configOn": {
-      "mobile": {
-        "modelPath": {
-          "$packageAsset": {
-            "package": "@qvac/classification-ggml",
-            "file": "weights/mobilenetv3_3class_v3_fp16.gguf"
-          }
-        }
-      }
-    }
+    "constant": {
+      "$const": "MOBILENETV3_3CLASS_V3_FP16"
+    },
+    "type": "ggml-classification"
   },
   "echo": {
     "type": "echo",
@@ -447,6 +488,9 @@
     }
   },
   "tts-parler": {
+    "skipPreDownloadOn": [
+      "mobile"
+    ],
     "constant": {
       "$const": "TTS_MINI_V1_EN_PARLER_TTS_Q8_0"
     },
@@ -477,7 +521,7 @@
   },
   "tts-cosyvoice3": {
     "constant": {
-      "$const": "TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0"
+      "$const": "TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0"
     },
     "type": "tts-ggml",
     "config": {
@@ -488,7 +532,7 @@
   },
   "tts-cosyvoice3-native-stream": {
     "constant": {
-      "$const": "TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0"
+      "$const": "TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0"
     },
     "type": "tts-ggml",
     "config": {
@@ -501,7 +545,7 @@
   },
   "tts-moss-sfx": {
     "on": [
-      "desktop"
+      "desktop-linux"
     ],
     "constant": {
       "$const": "AUDIOGEN_MOSS_SFX_V2_Q8_0"
@@ -547,7 +591,7 @@
   },
   "tts-supertonic": {
     "constant": {
-      "$const": "TTS_EN_SUPERTONIC_Q8_0"
+      "$const": "TTS_EN_SUPERTONIC_Q4_0"
     },
     "type": "tts-ggml",
     "config": {
@@ -571,7 +615,7 @@
   },
   "tts-supertonic-8k": {
     "constant": {
-      "$const": "TTS_EN_SUPERTONIC_Q8_0"
+      "$const": "TTS_EN_SUPERTONIC_Q4_0"
     },
     "type": "tts-ggml",
     "config": {
@@ -584,7 +628,7 @@
   },
   "tts-supertonic-enhanced": {
     "constant": {
-      "$const": "TTS_EN_SUPERTONIC_Q8_0"
+      "$const": "TTS_EN_SUPERTONIC_Q4_0"
     },
     "type": "tts-ggml",
     "config": {
@@ -698,6 +742,22 @@
     "type": "parakeet-transcription",
     "config": {}
   },
+  "parakeet-transcribepsy-eu": {
+    "constant": {
+      "$const": "PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0"
+    },
+    "type": "parakeet-transcription",
+    "config": {}
+  },
+  "parakeet-transcribepsy-eu-en": {
+    "constant": {
+      "$const": "PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0"
+    },
+    "type": "parakeet-transcription",
+    "config": {
+      "language": "en"
+    }
+  },
   "bci": {
     "skipPreDownloadOn": [
       "mobile"
@@ -782,7 +842,8 @@
   },
   "world": {
     "on": [
-      "desktop"
+      "desktop-linux",
+      "desktop-python"
     ],
     "constant": {
       "$const": "ABOT_WORLD_0_5B_Q8_0"
@@ -876,14 +937,19 @@
       "desktop"
     ],
     "constant": {
-      "$const": "SD_V2_1_1B_Q8_0"
+      "$const": "FLUX_2_KLEIN_4B_Q4_0"
     },
     "type": "sdcpp-generation",
     "config": {
       "device": "gpu",
       "threads": 4,
-      "prediction": "v",
-      "params_backend": "vae=cpu",
+      "prediction": "flux2_flow",
+      "llmModelSrc": {
+        "$const": "QWEN3_4B_Q4_K_M"
+      },
+      "vaeModelSrc": {
+        "$const": "FLUX_2_KLEIN_4B_VAE"
+      },
       "upscaler": {
         "type": "esrgan",
         "model_src": {
@@ -898,13 +964,19 @@
       "desktop"
     ],
     "constant": {
-      "$const": "SD_V2_1_1B_Q8_0"
+      "$const": "FLUX_2_KLEIN_4B_Q4_0"
     },
     "type": "sdcpp-generation",
     "config": {
       "device": "gpu",
       "threads": 4,
-      "prediction": "v",
+      "prediction": "flux2_flow",
+      "llmModelSrc": {
+        "$const": "QWEN3_4B_Q4_K_M"
+      },
+      "vaeModelSrc": {
+        "$const": "FLUX_2_KLEIN_4B_VAE"
+      },
       "upscaler": {
         "type": "esrgan",
         "model_src": {

@@ -236,9 +236,9 @@ public:
   /// Writes `entry` to `path` in the format `llama_state_seq_save_file`
   /// produces and every cache load reads: magic, version, ledger token
   /// count, ledger tokens, then the sequence state, followed by the entry's
-  /// newest checkpoint (`cache::appendCheckpointSection`). Through a temp file,
-  /// like every other cache write. Returns false (and leaves `path` untouched)
-  /// on failure.
+  /// checkpoint for the next turn (`cache::appendCheckpointSection`). Through a
+  /// temp file, like every other cache write. Returns false (and leaves `path`
+  /// untouched) on failure.
   static bool writeStateFile(
       const std::string& path, const SlotStateCacheEntry& entry) noexcept {
     const std::string tmp = path + ".tmp";
