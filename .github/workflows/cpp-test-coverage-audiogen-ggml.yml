@@ -1,7 +1,7 @@
 name: CPP Tests (AudioGen GGML)
 
-# Cache the native build. Addon-level C++ unit tests are still a stub.
-# After those caches are saved, this lane runs the bounded config-parse fuzz target.
+# Cache the native build. After those caches are saved, this lane runs the
+# addon-level C++ unit tests and then the bounded config-parse fuzz target.
 on:
   push:
     branches: [main]
@@ -221,16 +221,18 @@ jobs:
           key: ${{ steps.ccache-cache.outputs.cache-primary-key }}
           path: ${{ env.CCACHE_DIR }}
 
-      - name: No addon-level C++ tests yet
-        run: |
-          echo 'AudioGen native build completed; no addon-level C++ unit tests yet.' >> "$GITHUB_STEP_SUMMARY"
-          echo 'ACE-Step engine unit tests run in qvac-fabric-speech.cpp audiogen CI.' >> "$GITHUB_STEP_SUMMARY"
-
       - name: Show ccache statistics
         if: always() && !cancelled() && steps.cpp-build.outcome == 'success'
         run: ccache -s
 
-      # fuzz:build reconfigures the same tree, so it runs after the native
+      # test:cpp reconfigures the tree with BUILD_TESTING=ON, so it runs after
+      # the native build's caches are saved. These are the addon's own unit
+      # tests; the ACE-Step engine's run in qvac-fabric-speech.cpp audiogen CI.
+      - name: Run addon C++ unit tests
+        working-directory: ${{ matrix.workdir }}
+        run: npm run test:cpp
+
+      # fuzz:build reconfigures the same tree again, so it runs after the native
       # build's caches are saved. Bounded unit-test mode. A failure fails the
       # job that publishes qvac/cpp-tests-audiogen-ggml.
       - name: Build fuzz targets

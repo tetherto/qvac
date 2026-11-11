@@ -1,5 +1,121 @@
 # Changelog
 
+## [0.70.0] - 2026-11-10
+
+### Added
+
+- `device: "npu"` selects the AMD XDNA NPU as its own device class, beside
+  `gpu` and `cpu`. It takes the first NPU fabric lists, falls back to the GPU
+  order and then the CPU with a warning when none is listed, and is rejected
+  with `InvalidArgument` together with `backend`, `devices`, `split-mode`,
+  `main-gpu` or `rpc-servers`, except the defaults `backend: "auto"`,
+  `devices: ""` and `split-mode: "none"`. Runtime stats report
+  `backendDevice: "npu"`
+  (native code `2`) for an NPU load, including `devices: "XDNA0"`
+  ([#5701](https://github.com/tetherto/qvac/pull/5701)).
+
+### Changed
+
+- `backend` takes GPU families only: `device: "npu"` replaces
+  `backend: "xdna"` from 0.69.0
+  ([#5701](https://github.com/tetherto/qvac/pull/5701)).
+- Finetuning is refused with `InvalidArgument` for a model loaded with
+  `device: "npu"` and for any load with `XDNA0` in `devices`, alone or in a
+  mixed split such as `XDNA0,Vulkan0`, which 0.69.0 allowed
+  ([#5701](https://github.com/tetherto/qvac/pull/5701)).
+- When the NPU leads a load, a vision model's projector now defaults to a GPU
+  beside it (a GPU in `devices`, else the first local GPU) instead of the CPU,
+  and to the CPU only when there is no GPU. `mmproj-use-gpu` still overrides
+  it ([#5701](https://github.com/tetherto/qvac/pull/5701)).
+
+## [0.69.0] - 2026-11-09
+
+### Added
+
+- The AMD XDNA NPU can be selected with `backend: "xdna"` or
+  `devices: "XDNA0"`, on Linux x64 with an `@qvac/fabric` that ships the XDNA
+  backend. It is never chosen automatically and never joins an automatic
+  split. The KV cache stays at `f16` on the NPU, whose attention kernels take
+  only `f16` K/V, and a vision model's projector defaults to the CPU
+  (`mmproj-use-gpu: true` moves it to the NPU). `split-mode: "tensor"` with
+  `XDNA0` is rejected with `InvalidArgument`
+  ([#5588](https://github.com/tetherto/qvac/pull/5588)).
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.26.0` -> `^0.28.0`, whose Linux x64
+  package ships the XDNA backend and its NPU kernels (system XRT 2.25 or newer
+  required to load it). A caret on a `0.x` version locks the minor, so
+  `^0.26.0` would not have resolved `0.28.0`. The mobile dev and peer
+  dependencies `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to
+  `^0.28.0` with it ([#5574](https://github.com/tetherto/qvac/pull/5574),
+  [#5588](https://github.com/tetherto/qvac/pull/5588)).
+- `@qvac/fabric` 0.28.0 (`qvac-fabric` `11739.1.1`,
+  [#5658](https://github.com/tetherto/qvac/pull/5658)) adds four fields to
+  `common_params`, which this addon uses, so it is rebuilt against the 0.28.0
+  headers and is not ABI-compatible with 0.26.x. Every addon loaded in one
+  process must resolve the same `@qvac/fabric` minor. Mobile apps must move
+  `@qvac/fabric` and `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to
+  `0.28.0` together.
+
+### Fixed
+
+- With `parallel >= 2`, a request whose chat template force-opens the
+  reasoning block (such as Qwen3.5's `<think>\n`) now streams the opener
+  first, as `parallel: 1` does. Without it, consumers that split reasoning on
+  the tags returned the reasoning as content
+  ([#5562](https://github.com/tetherto/qvac/pull/5562)).
+- On hybrid and recurrent models (such as Qwen3.5), the next user turn after
+  a tool loop now restores the checkpoint taken at the previous user message
+  instead of reprocessing the whole conversation. The tool rounds' checkpoints
+  no longer evict it, and the `cacheKey` file keeps it beside the newest one
+  (checkpoint section version 2; older files still load)
+  ([#5637](https://github.com/tetherto/qvac/pull/5637)).
+
+## [0.68.0] - 2026-11-04
+
+### Breaking
+
+- Removed model-weight streaming. `files.model` now accepts exactly one absolute
+  disk path: a single GGUF or only its first shard. All shards must already be
+  in the same directory. Multiple paths and weight buffers are rejected;
+  the `loadWeights()` API has been removed
+  ([#5398](https://github.com/tetherto/qvac/pull/5398)).
+- Renamed `pickPrimaryGgufPath` to `validateModelPath`. `files.model` is typed
+  as a one-element tuple so TypeScript also rejects multi-path model inputs
+  ([#5398](https://github.com/tetherto/qvac/pull/5398)).
+- Removed addon-side shard-name expansion. Fabric discovers and reads disk
+  shards from the first GGUF, preventing excessive allocation from a shard
+  count embedded in a filename. Tensor-name companion files are not needed
+  ([#5398](https://github.com/tetherto/qvac/pull/5398)).
+- Generated-token streaming, multimodal input, caching and finetuning remain
+  supported.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.25.0` -> `^0.26.0`, which carries
+  `qvac-fabric` `11259.2.0` -> `11739.0.0`
+  ([#5331](https://github.com/tetherto/qvac/pull/5331)):
+  a rebase onto upstream llama.cpp b11739, TurboVec 1.1.2, an mtmd
+  image-resize fix, and Linux CUDA, Jetson and HIP backend modules that load
+  in hosts without libstdc++ (such as `bare-sidecar`) instead of falling back
+  to the CPU. A caret on a `0.x` version locks the minor, so `^0.25.0`
+  would not have resolved `0.26.0` on its own. The mobile dev dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.26.0` with it.
+- `@qvac/fabric` 0.26.0 changes the `common` library's API and is not
+  ABI-compatible with 0.25.x, so every addon loaded in one process must resolve
+  the same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.26.0` together.
+- The addon is ported to fabric's `common_batch`, `common_speculative_process()`
+  and `common_chat_prompt` APIs
+  ([#5331](https://github.com/tetherto/qvac/pull/5331)).
+
+### Fixed
+
+- Dynamic image resizing rounds half-way dimensions to even, as the reference
+  implementation does, so image prompt token counts can differ from 0.67.0
+  ([#5331](https://github.com/tetherto/qvac/pull/5331)).
+
 ## [0.67.0] - 2026-11-02
 
 ### Added

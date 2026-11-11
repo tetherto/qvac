@@ -1,5 +1,7 @@
+import { embeddingGemma2Tests } from './embeddinggemma2-tests.js'
 import { speakerAwareTests } from './speaker-aware-tests.js'
 import { decisionTests } from './decision-tests.js'
+import { imageEmbeddingTests } from './image-embedding-tests.js'
 import { rerankTests } from './rerank-tests.js'
 import { rpcServerTests } from './rpc-server-tests.js'
 // Real SDK tests
@@ -7,6 +9,7 @@ import type { Step, TestDefinition } from '@qvac/test-suite'
 import { applyPlatformSkips } from './platform-skips.js'
 import { batchCompletionTests } from './batch-completion-tests.js'
 import { completionTests } from './completion-tests.js'
+import { calcTokensTests } from './calc-tokens-tests.js'
 import { transcriptionTests } from './transcription-tests.js'
 import { transcribeStreamEventsTests } from './transcribe-stream-events-tests.js'
 import { embeddingTests } from './embedding-tests.js'
@@ -150,7 +153,8 @@ export const modelLoadLlmPromptCacheKeys: TestDefinition = {
     cacheCheckpoints: 2,
     cacheCheckpointsMaxBytes: 1073741824,
     cacheCheckpointStorage: 'memory',
-    cacheRamMib: 256
+    cacheRamMib: 256,
+    cacheShareAcrossKeys: false
   },
   expectation: { validation: 'type', expectedType: 'string' },
   steps: loadsWithConfig('llm', {
@@ -159,7 +163,8 @@ export const modelLoadLlmPromptCacheKeys: TestDefinition = {
     cache_checkpoints: '$params.cacheCheckpoints',
     cache_checkpoints_max_bytes: '$params.cacheCheckpointsMaxBytes',
     cache_checkpoint_storage: '$params.cacheCheckpointStorage',
-    cache_ram_mib: '$params.cacheRamMib'
+    cache_ram_mib: '$params.cacheRamMib',
+    cache_share_across_keys: '$params.cacheShareAcrossKeys'
   }),
   metadata: {
     category: 'model',
@@ -557,6 +562,7 @@ const catalog: TestDefinition[] = [
 
   // Completion tests
   ...completionTests,
+  ...calcTokensTests,
   ...batchCompletionTests,
 
   // Transcription tests
@@ -570,6 +576,7 @@ const catalog: TestDefinition[] = [
 
   // Embedding tests
   ...embeddingTests,
+  ...embeddingGemma2Tests,
 
   // RAG tests
   ...ragTests,
@@ -620,6 +627,7 @@ const catalog: TestDefinition[] = [
   ...classificationTests,
   ...decisionTests,
   ...rerankTests,
+  ...imageEmbeddingTests,
 
   // TTS tests
   ...ttsTests,

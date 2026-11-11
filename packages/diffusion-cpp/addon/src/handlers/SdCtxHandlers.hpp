@@ -66,6 +66,7 @@ struct SdCtxConfig {
   std::string
       vaePath; // vae_path              -- standalone VAE decoder weights
   std::string llmVisionPath;  // llm_vision_path -- LLM vision projector
+  std::string tokenizerPath;  // external tokenizer.json (e.g. MOSS-Image)
   std::string clipVisionPath; // clip_vision_path     -- CLIP vision encoder
                               // (OpenCLIP ViT-H/14) for Wan 2.1 I2V
   std::string esrganPath; // ESRGAN upscaler model for post-generation upscale
@@ -175,7 +176,7 @@ struct SdCtxConfig {
   int upscalerThreads = -1;
 
   // -- Backend loading --------------------------------------------------------
-  std::string backendsDir; // directory containing DL backend .so modules
+  std::string backendsDir; // directory containing DL backend .so/.dll modules
 
   // -- Internal --------------------------------------------------------------
   // Historical knob from engines whose sd_ctx_params_t had

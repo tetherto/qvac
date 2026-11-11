@@ -22,14 +22,13 @@ For AI/LLM tools, use [https://docs.qvac.tether.io/llms-full.txt](https://docs.q
 
 See https://docs.qvac.tether.io/sdk/getting-started/installation
 
-On Node.js, the SDK installs and launches its own Bare worker through `bare-runtime`.
-Its dependency range must satisfy `@qvac/inference`'s `engines.bare` requirement.
+On Node.js, the SDK starts its own Bare worker with the Bare that `bare-sidecar` installs.
 When upgrading the SDK, reinstall dependencies with the existing lockfile so the
-package manager can replace an older, incompatible runtime. Remove any override
-or resolution that forces the worker below that requirement; installing a newer
-global `bare` executable does not change the SDK's worker dependency.
+package manager can replace an older, incompatible `bare-sidecar`. Remove any override
+or resolution that forces it below the SDK's range; installing a newer global `bare`
+executable does not change the SDK's worker.
 
-For mobile apps that use only raw PCM streaming transcription, list the required audio plugins and set `"includeAudioDecoder": false` in `qvac.config.*` before bundling or running Expo prebuild. You can also use `qvac bundle sdk --defer bare-ffmpeg`. Both options leave `bare-ffmpeg` out of the native addon manifest. Bundle FFmpeg when the app decodes compressed audio files or asks `audiogen-ggml` for a compressed output format; PCM and WAV output need no FFmpeg.
+For mobile apps that use only raw PCM streaming transcription, list the required audio plugins and set `"includeAudioDecoder": false` in `qvac.config.*` before bundling or running Expo prebuild. You can also use `qvac bundle sdk --defer bare-ffmpeg`. Both options leave `bare-ffmpeg` out of the worker bundle. Bundle FFmpeg when the app decodes compressed audio files or asks `audiogen-ggml` for a compressed output format; PCM and WAV output need no FFmpeg.
 
 ## Quickstart
 
@@ -84,12 +83,6 @@ try {
 node quickstart.js
 ```
 
-A first `loadModel()` call also starts the SDK's worker. If that startup ever
-exceeds its budget (cold disk cache, antivirus scanning the native addon), the
-call fails with `RPC_INIT_TIMEOUT`. Re-running usually succeeds; to give every
-start more room, raise `rpcInitTimeoutMs` in `qvac.config.*` or set the
-`QVAC_RPC_INIT_TIMEOUT_MS` environment variable.
-
 ## Documentation
 
 The [QVAC SDK documentation](https://docs.qvac.tether.io/sdk/) covers each
@@ -98,7 +91,7 @@ capability with its configuration and examples. See the
 and the [release notes](https://docs.qvac.tether.io/sdk/reference/release-notes/)
 for what changed in each release.
 
-TranscribePsy (`PARAKEET_TRANSCRIBEPSY_250M_Q8_0`, eight European
+TranscribePsy EU-sub (`PARAKEET_TRANSCRIBEPSY_250M_Q8_0`, eight European
 languages) has a separate Core ML distribution instead of a sidecar:
 `PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0` is an encoder-less GGUF whose
 encoder and decoder bundles the SDK stages beside it, so both stages run on
@@ -107,6 +100,10 @@ refused up front with the ggml constant to use instead. See
 [`examples/asr/parakeet-transcribepsy-filesystem.ts`](examples/asr/parakeet-transcribepsy-filesystem.ts),
 which also shows the `longFormWindowFrames` / `longFormContextFrames` knobs
 that bound the offline encoder window on long recordings.
+
+See the [transcription documentation](https://docs.qvac.tether.io/sdk/ai-capabilities/transcription)
+for the full TranscribePsy-250M-EU model (`PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0`)
+and its `language` routes.
 
 ## Examples
 

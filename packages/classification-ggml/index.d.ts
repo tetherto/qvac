@@ -1,4 +1,5 @@
 export { MegaLoc, type MegaLocOptions, type ImageEmbeddingOptions, type MegaLocRuntimeStats } from "./megaloc";
+export { BridgeDepth, type BridgeDepthOptions, type StereoImageOptions, type DisparityResult, type BridgeDepthRuntimeStats, } from "./bridgedepth";
 /**
  * Canonical labels emitted by the default 3-class MobileNetV3-Small model.
  * Kept permissive for future fine-tunes that ship different class names

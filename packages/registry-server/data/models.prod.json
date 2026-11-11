@@ -785,8 +785,9 @@
     "link": "https://huggingface.co/ggml-org/embeddinggemma-2-GGUF"
   },
   {
-    "source": "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300m-Q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/embeddinggemma-300m/2026-11-05/embeddinggemma-300M-Q4_0.gguf",
     "engine": "@qvac/embed-llamacpp",
+    "link": "https://huggingface.co/google/embeddinggemma-300m",
     "description": "Google multilingual embedding model, 768-dim output, 2048 token context",
     "quantization": "q4_0",
     "params": "300M",
@@ -795,8 +796,9 @@
     "notes": ""
   },
   {
-    "source": "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300M-Q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/embeddinggemma-300m/2026-11-05/embeddinggemma-300M-Q8_0.gguf",
     "engine": "@qvac/embed-llamacpp",
+    "link": "https://huggingface.co/google/embeddinggemma-300m",
     "description": "Google multilingual embedding model, 768-dim output, 2048 token context",
     "quantization": "q8_0",
     "params": "300M",
@@ -805,20 +807,11 @@
     "notes": ""
   },
   {
-    "source": "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300M-BF16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/embeddinggemma-300m/2026-11-05/embeddinggemma-300M-BF16.gguf",
     "engine": "@qvac/embed-llamacpp",
-    "description": "",
+    "link": "https://huggingface.co/google/embeddinggemma-300m",
+    "description": "Google multilingual embedding model, 768-dim output, 2048 token context",
     "quantization": "BF16",
-    "params": "300M",
-    "licenseId": "gemma",
-    "tags": ["embedding", "embed", "embeddinggemma"],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300M-F32.gguf",
-    "engine": "@qvac/embed-llamacpp",
-    "description": "",
-    "quantization": "F32",
     "params": "300M",
     "licenseId": "gemma",
     "tags": ["embedding", "embed", "embeddinggemma"],
@@ -10090,6 +10083,17 @@
     "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-gguf"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/transcribepsy/2026-11-09/transcribepsy-250m-eu.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "TranscribePsy 250M EU GGUF for 25 European languages",
+    "quantization": "q8_0",
+    "params": "250M",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "parakeet", "transcribepsy", "ggml", "multilingual"],
+    "notes": "Q8_0 GGUF build of qvac/TranscribePsy-250M-EU with six CAFE adapters and the language gate embedded. Use language en for English or auto for automatic routing, including non-English audio. Core ML is not supported for this model.",
+    "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU"
+  },
+  {
     "source": "https://huggingface.co/unsloth/Qwen3.5-0.8B-MTP-GGUF/resolve/cf8a611f6ed2c2060046219a19f12cd3d5ecd67c/Qwen3.5-0.8B-Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "Qwen 3.5 0.8B multimodal model with MTP layers",
@@ -10253,5 +10257,148 @@
     "tags": ["classification", "mobilenetv3"],
     "notes": "",
     "link": "https://github.com/tetherto/qvac/tree/main/packages/classification-ggml"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00001-of-00009.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B UD-Q4_K_XL model",
+    "quantization": "UD-Q4_K_XL",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 1/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00002-of-00009.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B UD-Q4_K_XL model",
+    "quantization": "UD-Q4_K_XL",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 2/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00003-of-00009.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B UD-Q4_K_XL model",
+    "quantization": "UD-Q4_K_XL",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 3/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00004-of-00009.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B UD-Q4_K_XL model",
+    "quantization": "UD-Q4_K_XL",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 4/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00005-of-00009.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B UD-Q4_K_XL model",
+    "quantization": "UD-Q4_K_XL",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 5/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00006-of-00009.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B UD-Q4_K_XL model",
+    "quantization": "UD-Q4_K_XL",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 6/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00007-of-00009.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B UD-Q4_K_XL model",
+    "quantization": "UD-Q4_K_XL",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 7/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00008-of-00009.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B UD-Q4_K_XL model",
+    "quantization": "UD-Q4_K_XL",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 8/9; contains the stock MXFP8 Engram, which requires compatible Fabric tensor support; pair with the F16 mmproj entry for image input.",
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00009-of-00009.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B UD-Q4_K_XL model",
+    "quantization": "UD-Q4_K_XL",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 9/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/dspark-DeepSeek-V4.1-Flash-1017-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DSpark Q8_0 draft model for DeepSeek V4.1 Flash 1017",
+    "quantization": "q8_0",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "dspark", "deepseek-v4.1", "draft"],
+    "notes": "DSpark speculative-decoding drafter, not a standalone model; params is the target model size. Runtime integration will follow separately.",
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/mmproj-F16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for DeepSeek V4.1 Flash 1017 552B-A16B",
+    "quantization": "f16",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct"],
+    "notes": "Required for image input with every DeepSeek V4.1 Flash 1017 quantization.",
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-f16.gguf",
+    "engine": "ggml-image-embedding",
+    "description": "MegaLoc image embeddings, F16 weights, 8448-dimensional L2-normalized visual place descriptors",
+    "quantization": "f16",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["image-embedding", "visual-place-recognition", "megaloc"],
+    "notes": "Converted from the supported MegaLoc checkpoint. JPEG/PNG and packed RGB input. Requires the ggml-image-embedding plugin.",
+    "link": "https://huggingface.co/gberton/MegaLoc"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-mixed.gguf",
+    "engine": "ggml-image-embedding",
+    "description": "MegaLoc image embeddings, F16 body with a Q6_K final projection, 8448-dimensional L2-normalized visual place descriptors",
+    "quantization": "f16-q6_k",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["image-embedding", "visual-place-recognition", "megaloc"],
+    "notes": "Converted from the supported MegaLoc checkpoint. JPEG/PNG and packed RGB input. Requires the ggml-image-embedding plugin.",
+    "link": "https://huggingface.co/gberton/MegaLoc"
   }
 ]

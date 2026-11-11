@@ -2,7 +2,7 @@ import test from 'brittle'
 import { unregisterAddonLogger } from '@/logging/index'
 
 interface LlamacppDebugModel {
-  _files: string[]
+  _modelPath: string
 }
 
 test('llamacpp completion plugin passes only the first shard path to the addon', async (t) => {
@@ -20,7 +20,7 @@ test('llamacpp completion plugin passes only the first shard path to the addon',
   })
   const model = result.model as unknown as LlamacppDebugModel
 
-  t.alike(model._files, [firstShardPath])
+  t.is(model._modelPath, firstShardPath)
 })
 
 test('llamacpp embedding plugin passes only the first shard path to the addon', async (t) => {
@@ -42,5 +42,5 @@ test('llamacpp embedding plugin passes only the first shard path to the addon', 
   })
   const model = result.model as unknown as LlamacppDebugModel
 
-  t.alike(model._files, [firstShardPath])
+  t.is(model._modelPath, firstShardPath)
 })

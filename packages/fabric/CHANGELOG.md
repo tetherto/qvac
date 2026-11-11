@@ -1,15 +1,102 @@
 # Changelog
 
-## [unreleased]
+## [0.28.0] - 2026-11-08
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11739.0.0#1` -> `11739.1.1`. `common_params`
+  gains four `coreml_ffn*` fields mid-struct, so native consumers that use the
+  `common` library must rebuild against these headers. Core ML FFN itself is
+  not built into this package.
 
 ### Fixed
 
+- XDNA opens the NPU on first use instead of when devices are listed, contains
+  every exception during setup and falls back to the CPU, no longer loads
+  kernels from the working directory, and reports `MemAvailable` as free
+  memory.
+- OpenCL initializes before buffer-type queries, fixing a crash when a buffer
+  type is queried before the backend, and keeps non-contiguous ADD inputs off
+  the broadcast fast path.
+- TurboQuant sign tables and `GGML_TQ_NORM_CORRECTION` initialize once,
+  thread-safely, instead of racing on first use.
+- mtmd keeps DeepSeek OCR SAM position tables in F32 when quantizing and
+  reports projector memory under the device that holds it.
+- Metal supports `DIAG_MASK_INF`.
+
+### Added
+
+- `ggml_backend_buft_get_buffer_alloc_size` returns the physical size of a
+  buffer for a payload without allocating.
+- `ggml_vec_index_load_with_flags` and `ggml_vec_index_from_bytes_with_flags`
+  accept `GGML_VEC_INDEX_LOAD_TURBOVEC_STAGED_OFF`, which skips building the
+  staged-search caches on load. Turning staged search off now frees the sign
+  planes.
+
+### Changed
+
+- Metal few-row MMA mat-mul covers up to 64 rows for F32, Q4_0, Q8_0 and Q4_K
+  (48 for F16 and Q5_K), speeding up concurrent speculative decoding.
+
+## [0.27.0] - 2026-11-05
+
+### Fixed
+
+- Native builds use `qvac-fabric 11739.0.0#1` from the registry instead of a
+  package-local overlay, so source and CI builds use the same port definition.
+- CUDA and XDNA share a private ggml core compiled against libstdc++. CUDA
+  retains static runtime linkage, while XDNA links the system runtime to match
+  XRT.
+
+### Added
+
+- Linux x64 packages ship the AMD XDNA backend with its compiled NPU kernels
+  and instruction stream beside the module. It requires system XRT 2.25 or
+  newer; hosts without XRT can continue using the other backends. Building the
+  kernels requires the pinned IRON toolchain but does not require NPU hardware.
+- Build validation checks the XDNA kernel files, instruction stream and runtime
+  dependencies alongside the existing checks for other backend modules.
+
+## [0.26.0] - 2026-11-04
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11259.2.0#2` -> `11739.0.0`, a rebase onto
+  upstream llama.cpp b11739. Native consumers must rebuild, and code using the
+  `common` library needs source changes:
+  - `common_batch_clear` and `common_batch_add` are removed.
+  - `common_speculative_process()` takes a `common_batch`.
+  - `common_chat_params::prompt` is a `common_chat_prompt`; call `.str()` for
+    the string.
+  - The RPC protocol major goes 112 -> 113, so RPC peers on 0.25.0 are not
+    compatible.
+- TurboVec moves to upstream turbovec 1.1.2: snapshots use its v8 container,
+  dims up to 16384 are accepted, fresh indexes are not calibrated, and staged
+  search is on by default. `ggml_vec_index_turbovec_calibrate`,
+  `ggml_vec_index_turbovec_set_staged` and
+  `ggml_vec_index_turbovec_is_calibrated` are new.
+
+### Fixed
+
+- mtmd keeps tiled image chunk geometry and rounds resizes like the reference
+  implementation.
 - Linux CUDA, Jetson and HIP backend modules no longer leave libstdc++ symbols
   undefined, so they load under hosts without libstdc++ in the global
   namespace (such as `bare-sidecar`) instead of silently falling back to the
   CPU. The CUDA modules link libstdc++ statically behind a version script, and
   HIP host code builds against the libc++ fabric ships (`qvac-fabric`
   `11259.2.0#2`).
+
+### Added
+
+- AMD XDNA NPU backend.
+- Faster Metal flash-attention prefill for head size 256 with F16 K/V
+  (Qwen3.5/3.8 full-attention layers).
+- `flash_attn_ext_rows` for the unified KV cache, which makes multi-sequence
+  decoding cheaper.
+- The speech memory APIs and CPU graph planning are restored: memory accessors
+  for contexts, allocators and schedulers, backend workspace queries and the CPU
+  `ggml_graph_plan` registry procedure.
 
 ## [0.25.0] - 2026-10-28
 

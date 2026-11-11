@@ -40,6 +40,33 @@ const scheduleTypeSchema = z.enum([
 
 const videoScheduleTypeSchema = z.enum([...scheduleTypeSchema.options, 'ltx2'])
 
+const customSigmasSchema = z
+  .array(
+    z
+      .number()
+      .min(0)
+      .max(3.4028234663852886e38)
+      .refine((value) => value === 0 || Math.fround(value) > 0, {
+        message: 'custom_sigmas entries must not underflow to zero in float precision'
+      })
+  )
+  .min(2)
+  .max(2147483647)
+  .superRefine((values, ctx) => {
+    for (let i = 1; i < values.length; i++) {
+      if (Math.fround(values[i]!) >= Math.fround(values[i - 1]!)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [i],
+          message: 'custom_sigmas must be strictly decreasing in float precision'
+        })
+      }
+    }
+    if (values.at(-1) !== 0) {
+      ctx.addIssue({ code: 'custom', message: 'custom_sigmas must end with zero' })
+    }
+  })
+
 const cacheModeSchema = z.enum([
   'disabled',
   'easycache',
@@ -264,7 +291,7 @@ export const sdcppConfigSchema = z.object({
     .optional()
     .describe(
       'LLM text encoder model — required for FLUX.2 [klein] (Qwen3), ' +
-        'Qwen-Image-2.1 and Ideogram 4 (Qwen3-VL), LTX-2 video (Gemma), ' +
+        'FLUX.3 Image Klein, Qwen-Image-2.1 and Ideogram 4 (Qwen3-VL), LTX-2 video (Gemma), ' +
         'and MiniMax-H3 (H3-specific Qwen3-VL).'
     ),
   projectionModelSrc: modelSrcInputSchema
@@ -277,7 +304,7 @@ export const sdcppConfigSchema = z.object({
   vaeModelSrc: modelSrcInputSchema
     .optional()
     .describe(
-      'VAE decoder model, required for Qwen-Image-2.1, FLUX.2 [klein], Ideogram 4, ' +
+      'VAE decoder model, required for Qwen-Image-2.1, FLUX.2 [klein], FLUX.3 Image Klein, Ideogram 4, ' +
         'LTX-2 video, and MiniMax-H3 video; optional for SDXL.'
     ),
   highNoiseDiffusionModelSrc: modelSrcInputSchema
@@ -673,7 +700,12 @@ export const diffusionRequestSchema = z
       .multipleOf(8)
       .optional()
       .describe('Image height in pixels. Multiple of 8; Qwen-Image-2.1 requires a multiple of 32.'),
-    steps: z.number().int().positive().optional().describe('Number of sampling steps to run.'),
+    steps: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('Number of sampling steps. Overridden by custom_sigmas.length - 1 when supplied.'),
     cfg_scale: z
       .number()
       .optional()
@@ -693,7 +725,19 @@ export const diffusionRequestSchema = z
     sampling_method: samplingMethodSchema
       .optional()
       .describe('Sampling algorithm used by the diffusion scheduler.'),
-    scheduler: scheduleTypeSchema.optional().describe('Noise schedule to apply when sampling.'),
+    scheduler: scheduleTypeSchema
+      .optional()
+      .describe(
+        'Noise schedule to apply when sampling. Overridden by custom_sigmas when supplied.'
+      ),
+    custom_sigmas: customSigmasSchema
+      .optional()
+      .describe(
+        'Explicit noise schedule, including terminal zero. At least two finite, non-negative ' +
+          'float values, strictly decreasing after conversion to float precision. Overrides ' +
+          'scheduler and steps; the effective step count is length minus one. ' +
+          'Qwen-Image-2.1-Turbo uses its fixed eight-step schedule with Euler and cfg_scale: 1.'
+      ),
     seed: z
       .number()
       .int()
@@ -708,7 +752,30 @@ export const diffusionRequestSchema = z
     vae_tiling: z
       .boolean()
       .optional()
-      .describe('Enable VAE tiling for large images on constrained VRAM (overrides model config).'),
+      .describe('Enable VAE tiling for large images on constrained VRAM, overriding model config.'),
+    vae_tile_size: z
+      .union([
+        z.number().int().positive().max(2147483647).meta({ title: 'DiffusionVaeTileSize' }),
+        z
+          .string()
+          .regex(/^[0-9]+x[0-9]+$/, { message: 'vae_tile_size must be a WxH string' })
+          .refine(
+            (value) =>
+              value.split('x').every((dimension) => {
+                const size = Number(dimension)
+                return size > 0 && size <= 2147483647
+              }),
+            { message: 'vae_tile_size dimensions must be integers between 1 and 2147483647' }
+          )
+          .meta({ title: 'DiffusionVaeTileSizeSpec' })
+      ])
+      .optional()
+      .describe(
+        'VAE tile size in latent units, as a positive integer or a WxH string such as 64x32. ' +
+          'Each dimension must be between 1 and 2147483647. ' +
+          'For Qwen-Image-2.1 outputs at 2048x2048 or larger, ' +
+          'use vae_tiling: true with vae_tile_size: 64 to bound decode memory.'
+      ),
     cache_preset: z
       .string()
       .optional()
@@ -726,9 +793,10 @@ export const diffusionRequestSchema = z
       .optional()
       .describe(
         'Ordered base64-encoded PNG/JPEG references for models with reference editing, ' +
-          'including FLUX.2 and Qwen-Image-2.1. Native model detection validates support. ' +
-          'Qwen-Image-2.1 requires projectionModelSrc, preserves alpha, and does not need ' +
-          'FLUX @imageN tags or a prediction override. Mutually exclusive with init_image.'
+          'including FLUX.2, FLUX.3 and Qwen-Image-2.1. Native model detection validates support. ' +
+          'FLUX.3 and Qwen-Image-2.1 do not need FLUX.2 @imageN tags or a prediction override; ' +
+          'Qwen-Image-2.1 requires projectionModelSrc and preserves alpha. ' +
+          'Mutually exclusive with init_image.'
       ),
     increase_ref_index: z
       .boolean()
@@ -767,7 +835,7 @@ export const diffusionRequestSchema = z
       .optional()
       .describe(
         'img2img denoising strength for SD/SDXL SDEdit. ' +
-          'Does not control reference-editing strength for FLUX.2 or Qwen-Image-2.1; ' +
+          'Does not control reference-editing strength for FLUX.2, FLUX.3 or Qwen-Image-2.1; ' +
           'these models start the target from noise.'
       ),
     upscale: z

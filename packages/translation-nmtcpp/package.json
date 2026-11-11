@@ -1,6 +1,6 @@
 {
   "name": "@qvac/translation-nmtcpp",
-  "version": "0.23.1",
+  "version": "0.25.0",
   "description": "translation addon for qvac",
   "addon": true,
   "engines": {
@@ -35,12 +35,17 @@
     "test:dts": "npm run test:types",
     "test:types": "npm run typecheck && npm run check:generated && npm run test:types:consumer",
     "test:types:consumer": "tsc --noEmit -p test/types/tsconfig.cjs.json && tsc --noEmit -p test/types/tsconfig.esm.json",
-    "test:scripts": "node --test scripts/__tests__/run-cpp-tests.test.js",
-    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D USE_BERGAMOT=ON && bare-make build --target addon-test",
+    "test:scripts": "node --test scripts/__tests__/run-cpp-tests.test.js scripts/__tests__/run-cpp-fuzz.test.js",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D BUILD_FUZZING=OFF -D USE_BERGAMOT=ON && bare-make build --target addon-test",
     "test:cpp:run": "npm run test:scripts && node scripts/run-cpp-tests.js",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
-    "coverage:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON && bare-make build --target addon-test",
-    "coverage:cpp:run": "npm run test:scripts && LLVM_PROFILE_FILE=default.profraw node scripts/run-cpp-tests.js",
+    "fuzz:build": "bare-make generate -b build-fuzz -D BUILD_FUZZING=ON -D BUILD_TESTING=OFF -D FUZZTEST_FUZZING_MODE=OFF && bare-make build -b build-fuzz --target nmt-weight-header-fuzz",
+    "fuzz:build:continuous": "bare-make generate -b build-fuzz -D BUILD_FUZZING=ON -D BUILD_TESTING=OFF -D FUZZTEST_FUZZING_MODE=ON && bare-make build -b build-fuzz --target nmt-weight-header-fuzz",
+    "fuzz:run": "node scripts/run-cpp-fuzz.js --build-dir build-fuzz",
+    "fuzz": "npm run fuzz:build && npm run fuzz:run",
+    "fuzz:continuous": "npm run fuzz:build:continuous && node scripts/run-cpp-fuzz.js --build-dir build-fuzz --continuous",
+    "coverage:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D BUILD_FUZZING=OFF -D ENABLE_COVERAGE=ON && bare-make build --target addon-test && npm run fuzz:build",
+    "coverage:cpp:run": "npm run test:scripts && npm run fuzz:run && LLVM_PROFILE_FILE=default.profraw node scripts/run-cpp-tests.js",
     "coverage:cpp:summary": "cd build/addon/tests && llvm-cov report ./addon-test  --instr-profile=coverage.profdata -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
     "coverage:cpp:report": "cd build/addon/tests/ && ls -lha && llvm-profdata merge -sparse default.profraw -o coverage.profdata && llvm-cov show ./addon-test -instr-profile=coverage.profdata -format=html -output-dir=coverage-html -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' && llvm-cov export ./addon-test -instr-profile=coverage.profdata -format=lcov -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > lcov.info && npm run coverage:cpp:summary",
     "coverage:cpp": "npm run coverage:cpp:build && npm run coverage:cpp:run && npm run coverage:cpp:report",
@@ -78,14 +83,15 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "^0.25.0",
-    "@qvac/fabric-ios": "^0.25.0",
+    "@qvac/fabric-android-arm64": "^0.28.0",
+    "@qvac/fabric-ios": "^0.28.0",
     "@qvac/registry-client": "^0.6.1",
     "@types/node": "^24.2.1",
     "bare-fetch": "^3.0.1",
     "bare-stream": "^2.7.0",
     "brittle": "^3.4.0",
     "cmake-bare": "^1.9.0",
+    "cmake-npm": "^1.1.2",
     "cmake-vcpkg": "^1.1.0",
     "eslint": "^9.39.4",
     "eslint-import-resolver-typescript": "^4.4.5",
@@ -98,7 +104,7 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@qvac/fabric": "^0.25.0",
+    "@qvac/fabric": "^0.28.0",
     "@qvac/infer-base": "^0.8.0",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.1",
@@ -108,16 +114,16 @@
     "bare-url": "^2.1.6"
   },
   "optionalDependencies": {
-    "@qvac/fabric-linux-x64": "^0.25.0",
-    "@qvac/fabric-linux-arm64": "^0.25.0",
-    "@qvac/fabric-darwin-arm64": "^0.25.0",
-    "@qvac/fabric-darwin-x64": "^0.25.0",
-    "@qvac/fabric-win32-x64": "^0.25.0"
+    "@qvac/fabric-linux-x64": "^0.28.0",
+    "@qvac/fabric-linux-arm64": "^0.28.0",
+    "@qvac/fabric-darwin-arm64": "^0.28.0",
+    "@qvac/fabric-darwin-x64": "^0.28.0",
+    "@qvac/fabric-win32-x64": "^0.28.0"
   },
   "peerDependencies": {
     "bare-fetch": "^3.0.1",
-    "@qvac/fabric-android-arm64": "^0.25.0",
-    "@qvac/fabric-ios": "^0.25.0"
+    "@qvac/fabric-android-arm64": "^0.28.0",
+    "@qvac/fabric-ios": "^0.28.0"
   },
   "peerDependenciesMeta": {
     "bare-fetch": {

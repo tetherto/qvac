@@ -37,7 +37,11 @@ import { createAudioGenResult } from '@/client/api/audio-gen-result'
  * @param params.taskType - `"text2music"` (default), `"cover-nofsq"`, or `"lego"`.
  * @param params.audioCoverStrength - Source-context strength for cover tasks (0..1).
  * @param params.coverNoiseStrength - Initial source/noise blend for cover tasks (0..1).
- * @returns A run with a synchronous request ID, generation progress stream, PCM audio promise, stats promise, and diagnostics promise describing the backend the run resolved to. An ACE-Step run's stats carry `metadata`: the caption, lyrics and musical metadata it rendered and the seed it used. A MiniMax run's stats carry its stage timings and `emittedFrames`.
+ * @param params.outputFormat - Also deliver the finished audio as a file in this container
+ *   (`AUDIOGEN_OUTPUT_FORMATS`), through `run.encoded`. `"wav"` is always available; the
+ *   compressed formats need the matching FFmpeg encoder on the inference host, and the request
+ *   fails with `AUDIO_ENCODE_FAILED` before generation starts when it is missing.
+ * @returns A run with a synchronous request ID, generation progress stream, PCM audio promise, `chunkStream` (the same PCM as one `Int16Array` per engine chunk), `encoded` (the file for `outputFormat`, or `undefined`), stats promise, and diagnostics promise describing the backend the run resolved to. The engines emit the whole track as one chunk when generation finishes, so `chunkStream` is not incremental synthesis. The stats carry the backend the engine used (`backendDevice`, `backendId`) and `gpuFallbackReason`, the engine's code for a GPU request that landed on the CPU, which `diagnostics.fallback.reason` names. An ACE-Step run's stats carry `metadata`: the caption, lyrics and musical metadata it rendered and the seed it used. A MiniMax run's stats carry its stage timings and `emittedFrames`.
  *
  * @example
  * ```typescript
@@ -58,6 +62,14 @@ import { createAudioGenResult } from '@/client/api/audio-gen-result'
  * const { pcm, sampleRate, channels, bitsPerSample } = await run.audio;
  * const stats = await run.stats;
  *
+ * // Ask for a file next to the PCM, and read the samples as Int16Array chunks:
+ * const flacRun = audioGen({ modelId, caption: "ambient electronic music", outputFormat: "flac" });
+ * for await (const samples of flacRun.chunkStream) {
+ *   console.log(samples.length, "interleaved int16 samples");
+ * }
+ * const file = await flacRun.encoded;
+ * if (file) await fs.writeFile(`track.${file.extension}`, file.data);
+ *
  * // MiniMax-Music3 uses a local LM and synthesis GGUF pair:
  * const minimaxId = await loadModel({
  *   modelType: "audiogen",
@@ -66,6 +78,18 @@ import { createAudioGenResult } from '@/client/api/audio-gen-result'
  *     lmModelSrc: "/models/mm3-lm-q8.gguf",
  *     synthModelSrc: "/models/mm3-synth-q8.gguf",
  *     device: "gpu", // fail the load instead of falling back to the CPU
+ *   },
+ * });
+ *
+ * // On macOS 15+, run MiniMax through a compiled full Core ML profile instead:
+ * const coremlId = await loadModel({
+ *   modelType: "audiogen",
+ *   modelConfig: {
+ *     engine: "minimax",
+ *     lmModelSrc: "/models/mm3-lm-f16.gguf",
+ *     synthModelSrc: "/models/mm3-synth-f16.gguf",
+ *     coremlProfileDir: "/models/minimax-coreml",
+ *     coremlComputeUnits: "CPU_AND_NE",
  *   },
  * });
  * const minimaxRun = audioGen({

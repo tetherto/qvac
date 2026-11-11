@@ -23,6 +23,7 @@ from contract_types import TypeGraph, render_schema_methods
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 CONTRACT_ROOT = PACKAGE_ROOT.parent / "sdk" / "contract"
 OUTPUT_ROOT = PACKAGE_ROOT / "src/commonMain/kotlin/io/tether/qvac/sdk/generated"
+TYPE_NAMES = PACKAGE_ROOT / "scripts/schema-type-names.json"
 
 
 def read_json(name: str):
@@ -248,7 +249,7 @@ def render_exception_types(codes: dict) -> str:
 
 
 def generated_files() -> dict[str, str]:
-    graph = TypeGraph(read_json("schema.json"))
+    graph = TypeGraph(read_json("schema.json"), json.loads(TYPE_NAMES.read_text(encoding="utf-8")))
     return {
         "schema/SchemaTypes.kt": graph.render(),
         "schema/SchemaMethods.kt": render_schema_methods(graph, read_json("manifest.json")),

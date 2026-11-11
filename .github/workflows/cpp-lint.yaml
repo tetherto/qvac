@@ -57,6 +57,13 @@ on:
         type: boolean
         required: false
         default: false
+      include-xdna-sdk:
+        description: >-
+          Validate provisioned XRT and install IRON before configuring a
+          package whose qvac-fabric dependency requests xdna-backend.
+        type: boolean
+        required: false
+        default: false
       fabric-overlay-artifact:
         description: >-
           Workflow-run artifact name for PR-built @qvac/fabric prebuilds. Empty
@@ -149,6 +156,10 @@ jobs:
       - if: ${{ inputs.include-cuda-sdk }}
         name: Setup CUDA toolkit for the ggml CUDA backend
         uses: ./.github/actions/setup-cuda
+
+      - if: ${{ inputs.include-xdna-sdk }}
+        name: Setup XRT and IRON for XDNA configure
+        uses: tetherto/qvac/.github/actions/setup-xdna@80457aa3e81ff236d95e665748e3d8c4a9879d9f # merged XDNA provisioning
 
       - name: Setup vcpkg
         uses: tetherto/qvac/.github/actions/setup-vcpkg@10ae9f571c61ad94348ebbe8daaef67641ae8855

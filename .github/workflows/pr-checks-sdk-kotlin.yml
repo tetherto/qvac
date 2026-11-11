@@ -82,6 +82,7 @@ jobs:
               "packages/inference/package.json",
               "packages/inference/src/schemas/",
               "packages/sdk/src/worker/",
+              "packages/sdk/src/commands/",
               "packages/sdk-e2e/catalog/conformance/",
               "packages/sdk-e2e/runners/kotlin/",
               "packages/sdk/contract/",
@@ -214,6 +215,7 @@ jobs:
             -PqvacProfile="$QVAC_PROFILE" \
             checkContract \
             jvmTest \
+            :jvm-barekit:test \
             :android-example:testDebugUnitTest \
             :android-example:checkDebugBuild \
             :android-example:compileDebugAndroidTestKotlin \

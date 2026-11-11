@@ -1,6 +1,8 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.gradle.api.tasks.Exec
 import org.gradle.api.publish.maven.MavenPublication
+import org.gradle.api.services.BuildService
+import org.gradle.api.services.BuildServiceParameters
 import java.net.URI
 import java.util.zip.ZipFile
 import java.security.MessageDigest
@@ -88,6 +90,7 @@ signing {
 
 val generateContract = tasks.register<Exec>("generateContract") {
     inputs.files(fileTree("scripts") { include("*.py") })
+    inputs.file("scripts/schema-type-names.json")
     commandLine("python3", "$projectDir/scripts/generate-contract.py")
     inputs.dir(projectDir.parentFile.resolve("sdk/contract"))
     inputs.file(projectDir.parentFile.resolve("sdk/package.json"))
@@ -96,6 +99,7 @@ val generateContract = tasks.register<Exec>("generateContract") {
 
 val checkContract = tasks.register<Exec>("checkContract") {
     inputs.files(fileTree("scripts") { include("*.py") })
+    inputs.file("scripts/schema-type-names.json")
     commandLine("python3", "$projectDir/scripts/generate-contract.py", "--check")
     inputs.dir(projectDir.parentFile.resolve("sdk/contract"))
     inputs.file(projectDir.parentFile.resolve("sdk/package.json"))
@@ -109,15 +113,17 @@ val checkWireLiterals = tasks.register<Exec>("checkWireLiterals") {
     commandLine("python3", "$projectDir/scripts/check-wire-literals.py")
 }
 checkContract.configure { dependsOn(testContractGenerator, checkWireLiterals) }
-// UpstreamRpcProcessTest runs the JavaScript bare-rpc peer from node_modules.
-tasks.matching { it.name == "jvmTest" }.configureEach { dependsOn(":android-barekit:npmCi") }
 val testReleaseGate = tasks.register<Exec>("testReleaseGate") {
-    commandLine("node", "--test", "$projectDir/scripts/verify-published-worker.test.mjs", "$projectDir/scripts/platform-package.test.mjs")
-}
-val verifyPublishedWorker = tasks.register<Exec>("verifyPublishedWorker") {
-    commandLine("node", "$projectDir/scripts/verify-published-worker.mjs")
+    commandLine("node", "--test", "$projectDir/scripts/platform-package.test.mjs")
 }
 checkContract.configure { dependsOn(testReleaseGate) }
+
+// The Android and JVM runtimes bundle from the same packages/sdk worker entry,
+// so their prepare tasks must not run concurrently.
+abstract class QvacRuntimeBundleLock : BuildService<BuildServiceParameters.None>
+gradle.sharedServices.registerIfAbsent("qvacRuntimeBundleLock", QvacRuntimeBundleLock::class) {
+    maxParallelUsages.set(1)
+}
 
 // Local repositories and PR builds need no credentials. A public Central
 // publication must never silently degrade to unsigned artifacts.
@@ -127,7 +133,6 @@ allprojects {
     val publishSigningKey = signingKey
     val requireSigning = providers.environmentVariable("MAVEN_REQUIRE_SIGNING")
     tasks.matching { it.name == "prepareMavenCentralPublishing" }.configureEach {
-        dependsOn(verifyPublishedWorker)
         doFirst {
             check(publishSigningKey.isPresent && publishSigningKey.get().isNotBlank()) {
                 "Central deployment requires MAVEN_SIGNING_KEY"
@@ -135,12 +140,6 @@ allprojects {
         }
     }
     tasks.withType<org.gradle.api.publish.maven.tasks.PublishToMavenRepository>().configureEach {
-        // Publishing assigns the repository after creating the task. Resolve
-        // this dependency lazily, once the task is fully configured.
-        dependsOn(providers.provider {
-            if (repository.name == "mavenCentral" || repository.url.scheme != "file")
-                listOf(verifyPublishedWorker) else emptyList()
-        })
         // The configuration cache does not keep the task's repository, so read
         // what the check needs before the task graph is stored.
         val repositoryName = providers.provider { repository.name }
@@ -302,9 +301,11 @@ kotlin {
             api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
             api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
             // Its RemoteException reaches callers, so it is part of the API.
-            api("com.github.holepunchto.bare-rpc-kotlin:bare-rpc-kotlin:v0.3.0")
+            api("com.github.holepunchto.bare-rpc-kotlin:bare-rpc-kotlin:v0.4.0")
+            // Its WorkerError reaches callers, so it is part of the API.
+            api("com.github.holepunchto.bare-stow-host-kotlin:bare-stow-host-kotlin:v0.2.2")
             // bare-rpc-kotlin's own codec dependency, used to read frame headers.
-            implementation("com.github.holepunchto.compact-encoding-kotlin:compact-encoding-kotlin:v0.2.0")
+            implementation("com.github.holepunchto.compact-encoding-kotlin:compact-encoding-kotlin:v0.3.0")
         }
 
         commonTest.dependencies {

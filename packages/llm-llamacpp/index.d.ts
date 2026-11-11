@@ -16,11 +16,10 @@ type LlmLlamacppArgs = LlmLlamacpp.LlmLlamacppArgs;
 type Message = LlmLlamacpp.Message;
 type RunOptions = LlmLlamacpp.RunOptions;
 /**
- * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
- * entry for single-file models. Matches the C++ shard-expansion contract
- * in `GGUFShards::expandGGUFIntoShards`.
+ * Validates the single disk path. For a sharded GGUF, pass only the first
+ * shard; Fabric discovers the remaining shards. Weight streaming is unsupported.
  */
-declare function pickPrimaryGgufPath(files: string[]): string;
+declare function validateModelPath(files: string[]): string;
 interface LlmLlamacpp {
     /** The native addon, or `null` before `load()` and after `unload()`. Advanced/test access only. */
     addon: LlmLlamacpp.Addon | null;
@@ -93,8 +92,8 @@ interface LlmLlamacpp {
 interface LlmLlamacppConstructor {
     new (args: LlmLlamacppArgs): LlmLlamacpp;
     readonly prototype: LlmLlamacpp;
-    /** Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole entry for single-file models. */
-    readonly pickPrimaryGgufPath: typeof pickPrimaryGgufPath;
+    /** Validates and returns the single absolute disk path; split models require the first shard. */
+    readonly validateModelPath: typeof validateModelPath;
     readonly assessFit: typeof assessFitImpl;
 }
 /** LLM client wrapping the native LlamaInterface for inference, finetuning, and pause/resume. */
@@ -119,11 +118,6 @@ declare namespace LlmLlamacpp {
      */
     type AddonBatchRunResult = AddonModule.AddonBatchRunResult;
     interface Addon {
-        loadWeights(data: {
-            filename: string;
-            chunk: Uint8Array | null;
-            completed: boolean;
-        }, logger?: QvacLogger): Promise<void>;
         activate(): Promise<void>;
         /** Single-request admission: resolves the accepted flag plus the native-assigned job id. */
         runJob(data: AddonRunJobMessage[]): Promise<AddonRunJobResult>;
@@ -147,12 +141,22 @@ declare namespace LlmLlamacpp {
         unload(): Promise<void>;
     }
     interface LlamaConfig {
+        /**
+         * Device class to run on: `'gpu'`, `'cpu'` or `'npu'`. `'npu'` selects the
+         * first NPU fabric lists, the AMD XDNA NPU on Linux x64, falls back to the
+         * GPU order and then the CPU when there is none, and
+         * cannot be combined with `backend`, `devices`, `split-mode`, `main-gpu`,
+         * `rpc-servers` or finetuning. Only the defaults `backend: 'auto'`,
+         * `devices: ''` and `split-mode: 'none'` are accepted with it. GPU
+         * selection never picks the NPU.
+         */
         device?: string;
         /**
          * Comma-separated GPU backend priority list, e.g. `'cuda,vulkan'`.
          * Accepted names: cuda, vulkan, metal, opencl, plus
          * `auto` for no preference. An unrecognised name is rejected; a recognised
          * one with no device present is skipped. Use `device: 'cpu'` to run on CPU.
+         * Use `device: 'npu'` for the AMD XDNA NPU.
          */
         backend?: string;
         gpu_layers?: NumericLike;
@@ -281,7 +285,9 @@ declare namespace LlmLlamacpp {
          * per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on all other
          * Android GPUs (Arm Mali, Adreno <800, and GPUs whose Adreno tier can't be
          * detected) — the LLM layers still run on the GPU while the projector stays on
-         * CPU. Only honoured when a GPU backend is selected (ignored with a warning on CPU).
+         * CPU. On an NPU load it defaults to a GPU beside the NPU, else the CPU; `true`
+         * with no GPU runs it on the NPU. Only honoured when a GPU or NPU backend is
+         * selected (ignored with a warning on CPU).
          */
         "mmproj-use-gpu"?: string;
         /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
@@ -433,8 +439,9 @@ declare namespace LlmLlamacpp {
         [key: string]: string | number | boolean | string[] | undefined;
     }
     interface LlmLlamacppArgs {
+        /** One absolute disk path, or only the first shard path. Weight buffers, multiple paths and tensor-name files are unsupported. */
         files: {
-            model: string[];
+            model: [string];
             projectionModel?: string;
         };
         config: LlamaConfig;
@@ -708,7 +715,7 @@ declare namespace LlmLlamacpp {
          * model-level — never per-job.
          */
         avgConcurrentSeq: number;
-        backendDevice: "cpu" | "gpu";
+        backendDevice: "cpu" | "gpu" | "npu";
         /**
          * Draft tokens proposed by speculative decoding, and how many of them
          * the model accepted (llama-server's `draft_n` / `draft_n_accepted`).
