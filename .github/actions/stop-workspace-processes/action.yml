@@ -1,0 +1,22 @@
+name: Stop processes left in the workspace
+description: >
+  Windows only. Stops processes whose executable path or command line is inside
+  this runner's workspace. A cancelled or timed-out job can orphan a worker
+  (bare.exe) that keeps the workspace busy, so the next job's cleanup fails.
+
+runs:
+  using: composite
+  steps:
+    - name: Stop processes left in the workspace
+      shell: powershell
+      run: |
+        $ws = [IO.Path]::GetFullPath($env:GITHUB_WORKSPACE).TrimEnd('\') + '\'
+        Get-CimInstance Win32_Process | Where-Object {
+          $_.ProcessId -ne $PID -and (
+            ("$($_.ExecutablePath)" -replace '/', '\').StartsWith($ws, [StringComparison]::OrdinalIgnoreCase) -or
+            ("$($_.CommandLine)" -replace '/', '\').IndexOf($ws, [StringComparison]::OrdinalIgnoreCase) -ge 0
+          )
+        } | ForEach-Object {
+          Write-Host "::warning::Stopping leftover $($_.Name) (PID $($_.ProcessId)): $($_.CommandLine)"
+          Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+        }
