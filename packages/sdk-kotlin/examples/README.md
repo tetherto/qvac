@@ -80,6 +80,7 @@ database drivers to those two examples only. `Finetune` trains on
 | `DiffusionImg2vid.kt` | `packages/sdk/examples/diffusion-img2vid.ts` |
 | `DiffusionImg2vidLtx.kt` | `packages/sdk/examples/diffusion-img2vid-ltx.ts` |
 | `DiffusionImg2vidMinimaxH3.kt` | `packages/sdk/examples/diffusion-img2vid-minimax-h3.ts` |
+| `DiffusionMossImage.kt` | `packages/sdk/examples/diffusion-moss-image.ts` |
 | `DiffusionQwenImage21.kt` | `packages/sdk/examples/diffusion-qwen-image-21.ts` |
 | `DiffusionSimple.kt` | `packages/sdk/examples/diffusion-simple.ts` |
 | `DiffusionTxt2vid.kt` | `packages/sdk/examples/diffusion-txt2vid.ts` |

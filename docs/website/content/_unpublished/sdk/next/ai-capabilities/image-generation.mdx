@@ -30,6 +30,7 @@ Supported model families and their file layouts:
 - **FLUX.3 Image Klein**: split layout — diffusion model `*.gguf` + Qwen3-VL 4B text encoder `*.gguf` (via `llmModelSrc`) + FLUX.2 VAE `*.safetensors` (via `vaeModelSrc`). Leave `prediction` unset; the engine detects FLUX.3 from the weights. QVAC provides no registry entry or model constant for these weights.
 - **Qwen-Image-2.1 and Qwen-Image-2.1-Turbo** use local diffusion weights as `modelSrc`, the matching Qwen3-VL encoder as `llmModelSrc`, and the 2.1 VAE as `vaeModelSrc`. Reference editing with the GGUF encoder also needs its vision projector as `projectionModelSrc`. QVAC provides no registry entry or model constant for these weights.
 - **Ideogram 4**: split layout — diffusion model `*.gguf` + unconditional diffusion model `*.gguf` (via `uncondModelSrc`) + LLM text encoder `*.gguf` (via `llmModelSrc`) + VAE `*.safetensors` (via `vaeModelSrc`).
+- **MOSS-Image**: split layout — diffusion model `*.safetensors` + Qwen3.5 LLM text encoder `*.gguf` (via `llmModelSrc`) + VAE `*.safetensors` (via `vaeModelSrc`) + the encoder's external `tokenizer.json` (via `tokenizerSrc`). QVAC provides no registry entry or model constant for these weights.
 - **SD1.x, SD2.x**: single all-in-one `*.gguf` file. No companion files needed.
 - **SDXL, SD3**: may require separate CLIP/T5 text encoder files (`clipLModelSrc`, `clipGModelSrc`, `t5XxlModelSrc`) in `modelConfig` depending on the model variant.
 - **ESRGAN**: post-generation upscaler, `*.pth` format. Two ways to load:
@@ -240,6 +241,50 @@ The following script loads Ideogram 4 in split-layout (diffusion model + uncondi
 </Tabs>
 
 The Kotlin example serializes the caption with `buildJsonObject { ... }.toString()`, which already produces the compact form.
+
+### MOSS-Image
+
+MOSS-Image uses a split layout with a Qwen3.5 LLM text encoder (`llmModelSrc`), a VAE (`vaeModelSrc`), and the encoder's external tokenizer (`tokenizerSrc`), which is only valid in diffusion mode. It accepts plain-text prompts, and for layout control a **JSON-serialized layout**: a `summary` with an overall `caption`, and `items` that each set a `label` (`"text"` or `"object"`), a `caption`, a bounding box (`bbox`) and, for text, the literal `text` to render. Start from Euler sampling, the `discrete` scheduler, `cfg_scale: 3` and 50 steps.
+
+<Callout type="warn">
+Pass the layout serialized, not as an object: `JSON.stringify(...)` in JavaScript and TypeScript, or `json.dumps(..., ensure_ascii=False)` in Python so non-ASCII text reaches the model as characters rather than `\uXXXX` escapes. Set `bbox_coord_space: "abs_centralized"` and `bbox_format: "yxyx"`: boxes are `[y_min, x_min, y_max, x_max]` in pixels with the canvas centre as the origin, so keep them consistent with the requested `width`/`height`.
+</Callout>
+
+The following script loads MOSS-Image in split layout (diffusion model + LLM text encoder + VAE + tokenizer) and generates a poster from a JSON layout:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-moss-image.js title="diffusion-moss-image.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-moss-image.ts title="diffusion-moss-image.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_moss_image.py title="diffusion_moss_image.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionMossImage.kt title="DiffusionMossImage.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
 
 ### Stable Diffusion
 
