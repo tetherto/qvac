@@ -178,8 +178,7 @@ For any SDK e2e command, run setup from `packages/sdk-e2e` first, using the exac
 `touchedPackages[].sdkE2eSetup.command` in the discovery manifest — do not re-derive it from which files
 changed. It resolves to `install:build:full` whenever the PR touches `packages/sdk` or
 `packages/inference` at all, even if `packages/inference` itself has no diff lines: CI always builds
-`packages/inference` from the branch for SDK e2e (`inference-source: branch` is unconditional in
-`on-pr-test-sdk.yml`), because the checked-out `packages/inference` can already be ahead of the last npm
+`packages/inference` from the branch for SDK e2e (`packages/sdk/ci/e2e.mjs` always packs it), because the checked-out `packages/inference` can already be ahead of the last npm
 publish from unrelated merged PRs — testing the branch's SDK against the *published* range (what
 `install:build` alone would do) can silently diverge from what CI tests. Only a PR limited to
 `packages/sdk-e2e/` resolves to the lighter `install:build`.

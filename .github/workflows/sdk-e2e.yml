@@ -1,0 +1,445 @@
+name: SDK e2e
+
+# The SDK pod's end-to-end suites (packages tagged ci:sdk). plan routes a run as main's on-pr-test-sdk.yml did: a label
+# or base branch picks the desktop rows (_desktop.yml) and the SDK's Device Farm app; report posts the results.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
+    branches: [main, release-*, feature-*, tmp-*]
+    # main's paths: nx affected would also pick every addon and registry change through the SDK's dependencies.
+    paths:
+      - packages/sdk/**
+      - packages/sdk-e2e/**
+      - packages/inference/**
+      - packages/test-suite/**
+      - packages/sdk-python/**
+      - packages/sdk-kotlin/**
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: Comma-separated SDK pod packages or directories; empty runs @qvac/sdk only, name sdk-python or sdk-kotlin to add them
+        type: string
+        default: ""
+      labels:
+        description: Labels whose desktop configurations to run, e.g. electron; empty runs test-e2e-full's desktop ones
+        type: string
+        default: ""
+      platform:
+        description: Device Farm platform; none runs the desktop configurations only
+        type: choice
+        options: [none, Android, iOS, both]
+        default: none
+      suite:
+        description: Test suite for every leg
+        type: choice
+        options: [full, smoke]
+        default: full
+      exclude-suite:
+        description: Suites to exclude, comma-separated, e.g. slow,flaky
+        type: string
+        default: ""
+      include:
+        description: Extra testIds to run on top of the suite and filter, exact ids, comma-separated
+        type: string
+        default: ""
+      inference-version:
+        description: Published @qvac/inference version or dist-tag; empty uses this branch's packages/inference
+        type: string
+        default: ""
+      pool:
+        description: Device pool name; empty picks a ready private pool, else a public one
+        type: string
+        default: ""
+      billing:
+        description: "Device Farm billing: UNMETERED (shared slots, METERED after 15 min in queue) or METERED"
+        type: choice
+        options: [UNMETERED, METERED]
+        default: UNMETERED
+      filter:
+        description: Test filters for every leg, comma-separated categories or prefixes; empty runs all
+        type: string
+        default: ""
+
+permissions: {}
+
+# One group per kind of run, as main's on-pr-test-sdk.yml: a label this workflow ignores cancels nothing, and the Python
+# probe runs beside the smoke or full run instead of replacing it. Dispatches never cancel each other.
+concurrency:
+  group: >-
+    sdk-e2e-${{ github.event.pull_request.number || github.run_id }}-${{ inputs.platform || 'none' }}-${{
+      github.event.action != 'labeled' && 'base'
+      || (github.event.label.name == 'test-e2e-rerun-failed' && 'rerun')
+      || (github.event.label.name == 'test-e2e-smoke' && 'base')
+      || (github.event.label.name == 'test-e2e-full' && 'base')
+      || (github.event.label.name == 'test-e2e-python' && 'probe')
+      || format('ignored-{0}', github.event.label.name) }}
+  cancel-in-progress: true
+
+jobs:
+  select:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_select-projects.yml
+    with:
+      targets: test:integration,test:mobile
+      packages: ${{ inputs.packages }}
+      labels: ${{ github.event_name == 'workflow_dispatch' && (inputs.labels || 'test-e2e-full') || '' }}
+      tags: ci:sdk
+
+  fork-approval:
+    needs: select
+    if: needs.select.outputs.any == 'true'
+    permissions:
+      statuses: write
+    uses: ./.github/workflows/reusable-fork-approval.yml
+
+  route:
+    needs: select
+    if: needs.select.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      run_verified_checks: ${{ steps.route.outputs.run_verified_checks }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - id: route
+        uses: ./.github/actions/ci-route-stages
+
+  trust:
+    needs: [select, fork-approval]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: read
+    outputs:
+      allowed: ${{ steps.trust.outputs.allowed }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - id: trust
+        uses: ./.github/actions/pr-check-trust
+        with:
+          github-token: ${{ github.token }}
+
+  # main's resolve-impacted: the testIds a smoke run's PR touched. PR code runs here, so read-only; plan validates the ids.
+  impacted:
+    needs: [route, trust]
+    if: >-
+      needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_verified_checks == 'true'
+      && contains(fromJSON('["test-e2e-smoke","test-e2e-python"]'), github.event.label.name)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      include: ${{ steps.impacted.outputs.include }}
+      json: ${{ steps.impacted.outputs.impacted-json }}
+    steps:
+      - uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          sparse-checkout: |
+            packages/sdk-e2e
+            packages/sdk/contract
+            packages/sdk/src/client/api
+            packages/inference/src/registry.ts
+          sparse-checkout-cone-mode: "false"
+          persist-credentials: "false"
+      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          node-version: "22"
+      - id: impacted
+        working-directory: packages/sdk-e2e
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          ESBUILD_MODULE: ${{ runner.temp }}/mapper/node_modules/esbuild/lib/main.js
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[] | {filename, patch}' | jq -s . > "$RUNNER_TEMP/pr-files.json"
+          npm install --ignore-scripts --no-save --no-fund --no-audit --prefix "$RUNNER_TEMP/mapper" esbuild@0.27.0
+          node scripts/impacted-tests.mjs --repo-root "$GITHUB_WORKSPACE" --pr-files "$RUNNER_TEMP/pr-files.json" --github-output "$GITHUB_OUTPUT"
+
+  # The SDK router: the run's mode, each leg's rows and the running comments. Only base-branch code runs here, since
+  # it holds pull-requests: write.
+  plan:
+    needs: [select, route, trust, impacted]
+    if: >-
+      always() && !cancelled() && needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_verified_checks == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+    outputs:
+      mode: ${{ steps.plan.outputs.mode }}
+      suite: ${{ steps.plan.outputs.suite }}
+      desktop: ${{ steps.plan.outputs.desktop }}
+      mobile: ${{ steps.plan.outputs.mobile }}
+      report: ${{ steps.plan.outputs.report }}
+      comments: ${{ steps.plan.outputs.comments }}
+    steps:
+      - name: Checkout actions and the report script
+        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          sparse-checkout: |
+            .github/actions
+            packages/sdk/ci
+          persist-credentials: false
+      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          node-version: lts/*
+      - id: plan
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          MATRICES: ${{ needs.select.outputs.matrices }}
+          PACKAGES: ${{ inputs.packages }}
+          PLATFORM: ${{ inputs.platform }}
+          SUITE: ${{ inputs.suite }}
+          FILTER: ${{ inputs.filter }}
+          EXCLUDE_SUITE: ${{ inputs.exclude-suite }}
+          INCLUDE: ${{ inputs.include }}
+          INFERENCE_VERSION: ${{ inputs.inference-version }}
+          IMPACTED: ${{ needs.impacted.result }}
+          IMPACTED_INCLUDE: ${{ needs.impacted.outputs.include }}
+          IMPACTED_JSON: ${{ needs.impacted.outputs.json }}
+        run: node packages/sdk/ci/e2e-report.mjs plan
+
+  desktop:
+    needs: plan
+    # always(): impacted runs only on smoke labels, and its skip would otherwise skip every job after plan.
+    if: always() && !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.desktop != '' && needs.plan.outputs.desktop != '[]'
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/_desktop.yml
+    secrets: inherit
+    with:
+      rows: ${{ needs.plan.outputs.desktop }}
+      toolchain: false
+
+  # The package's test:mobile builds the app and a stub test package; the runner then schedules one run on a pool and
+  # drives it over MQTT, as main's SDK Device Farm workflows did.
+  mobile:
+    needs: plan
+    # always(): impacted runs only on smoke labels, and its skip would otherwise skip every job after plan.
+    if: always() && !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.mobile != '' && needs.plan.outputs.mobile != '[]'
+    name: mobile / ${{ matrix.row.slug }} ${{ matrix.row.config }}
+    runs-on: ${{ matrix.row.runner }}
+    environment: release
+    timeout-minutes: ${{ matrix.row.timeout || 280 }}
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        row: ${{ fromJSON(needs.plan.outputs.mobile) }}
+    env:
+      WORKDIR: src/${{ matrix.row.dir }}
+      PROJECT: ${{ matrix.row.project }}
+      CONFIG: ${{ matrix.row.config }}
+      PLATFORM: ${{ matrix.row.config == 'ios-arm64' && 'iOS' || 'Android' }}
+      # The plan's suite and options, and the filter: a rerun's failed tests or a dispatch's filter.
+      CI_SUITE: ${{ matrix.row.suite }}
+      TESTS: ${{ matrix.row.tests }}
+      PROJECT_ARN: ${{ vars[matrix.row.meta.mobile.projectArnVar] }}
+      NX_DAEMON: "false"
+      NX_NO_CLOUD: "true"
+      MQTT_HOST: ${{ secrets.MQTT_HOST }}
+      MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
+      MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
+      # The broker's CA, which mqttCerts writes to MQTT_CA_PATH for the app build and the producer.
+      MQTT_CA_CERT: ${{ secrets.MQTT_CA_CERT }}
+      # Variables, not secrets: GitHub masks a short secret such as a port inside other values.
+      MQTT_PROTOCOL: ${{ vars.MQTT_PROTOCOL }}
+      MQTT_PORT: ${{ vars.MQTT_PORT }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          sparse-checkout: |
+            .github/actions
+            .github/scripts
+          persist-credentials: false
+      - name: Checkout source
+        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: src
+          persist-credentials: "false"
+      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          node-version: "22"
+      - uses: tetherto/qvac-actions/setup-pnpm@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          package-json-file: src/package.json
+      - name: Install
+        working-directory: src
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter .
+      - uses: tetherto/qvac-actions/configure-aws-credentials@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+          role-duration-seconds: "7200"
+      - if: env.PLATFORM == 'Android'
+        uses: tetherto/qvac-actions/setup-java@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          java-version: "17"
+      - if: env.PLATFORM == 'Android'
+        uses: tetherto/qvac-actions/setup-android@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - if: env.PLATFORM == 'iOS'
+        uses: tetherto/qvac-actions/setup-xcode@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          xcode-versions: "26.3"
+          brew-packages: ninja
+          gems: cocoapods
+          require-tools: xcodebuild pod ninja
+          sdk: iphoneos
+      - id: signing
+        if: env.PLATFORM == 'iOS'
+        uses: tetherto/qvac-actions/ios-import-signing@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          certificate-base64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
+          certificate-password: ${{ secrets.APPLE_P12_PASSWORD }}
+          profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
+          bundle-id: io.tether.test.qvac
+      # The package's build phase writes the app, the stub test package and the spec to its outputs. Its install
+      # rewrites the SDK's manifest, so pnpm must not reinstall before nx.
+      - id: prepare
+        name: test:mobile build
+        working-directory: src
+        env:
+          AWS_REGION: us-west-2
+          IOS_SIGNING: ${{ env.PLATFORM == 'iOS' && format('{0},{1},{2}', steps.signing.outputs.profile-uuid, steps.signing.outputs.export-method, secrets.APPLE_TEAM_ID) || '' }}
+        run: pnpm --config.verify-deps-before-run=false exec nx run-many -t test:mobile -p "$PROJECT" -c "$CONFIG" --outputStyle=stream
+      - id: app
+        uses: tetherto/qvac-actions/devicefarm-upload@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          project-arn: ${{ env.PROJECT_ARN }}
+          type: ${{ steps.prepare.outputs.app-type }}
+          files: ${{ steps.prepare.outputs.app-path }}
+          name: ${{ steps.prepare.outputs.app-name }}
+          max-wait-seconds: "600"
+      - id: package
+        uses: tetherto/qvac-actions/devicefarm-upload@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          project-arn: ${{ env.PROJECT_ARN }}
+          type: APPIUM_NODE_TEST_PACKAGE
+          files: ${{ steps.prepare.outputs.test-package }}
+      - id: spec
+        uses: tetherto/qvac-actions/devicefarm-upload@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          project-arn: ${{ env.PROJECT_ARN }}
+          type: APPIUM_NODE_TEST_SPEC
+          files: ${{ steps.prepare.outputs.specs }}
+      # One run on a pool, then the package's produce phase waits for RUNNING, drives the tests and fails on any failure.
+      - id: pool
+        name: test:mobile produce
+        working-directory: src
+        env:
+          POOLS: ${{ toJSON(fromJSON(vars[matrix.row.meta.mobile.devicePoolsVar[env.PLATFORM]])) }}
+          DEVICES: ${{ inputs.pool }}
+          BILLING_METHOD: ${{ inputs.billing }}
+          APP_ARN: ${{ steps.app.outputs.arn }}
+          PACKAGE_ARN: ${{ steps.package.outputs.arn }}
+          SPECS: ${{ steps.spec.outputs.uploads }}
+          TIMEOUT: ${{ matrix.row.meta.mobile.jobTimeoutMinutes || '120' }}
+        run: >-
+          node ../.github/scripts/devicefarm-pool-run.mjs schedule --
+          pnpm --config.verify-deps-before-run=false exec nx run-many -t test:mobile -p "$PROJECT" -c "$CONFIG" --outputStyle=stream
+      # Fresh credentials before the cancel: an expired session fails the run step and would leave the run billing.
+      - if: always() && steps.pool.outputs.run-count == '1'
+        uses: tetherto/qvac-actions/configure-aws-credentials@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+      - if: (failure() || cancelled()) && steps.pool.outputs.run-count == '1'
+        uses: tetherto/qvac-actions/devicefarm-cancel-runs@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          run-arns: ${{ steps.pool.outputs.run-arns }}
+      - if: always() && steps.pool.outputs.run-count == '1'
+        env:
+          RUN_ARNS: ${{ steps.pool.outputs.run-arns }}
+        run: node .github/scripts/devicefarm-pool-run.mjs stop
+      - id: logs
+        if: always() && steps.pool.outputs.run-count == '1'
+        uses: tetherto/qvac-actions/devicefarm-download-logs@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          platform: ${{ env.PLATFORM }}
+          run-arns: ${{ steps.pool.outputs.run-arns }}
+          files: |
+            testconsumer.log
+            react-native-logs.log
+            test-results.txt
+            testconsumer-logarchive.log
+            appium.log
+          skip-extensions: ${{ env.PLATFORM == 'Android' && 'mp4' || '' }}
+      - if: always() && steps.logs.outcome == 'success'
+        uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          name: console-logs-${{ matrix.row.slug }}-${{ env.PLATFORM }}
+          path: ${{ steps.logs.outputs.console-dir }}
+          retention-days: "30"
+          if-no-files-found: ignore
+      - if: always()
+        uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          name: ${{ matrix.row.slug }}-results-${{ matrix.row.config }}
+          path: ${{ env.WORKDIR }}/test/results/e2e/
+          if-no-files-found: ignore
+
+  # main's report jobs: each leg's comment from its results, a base run's failures recorded and e2e-tested on green,
+  # a rerun checked to have run what it planned. Base-branch code only, as plan.
+  report:
+    needs: [plan, desktop, mobile]
+    if: always() && !cancelled() && contains(fromJSON('["base","probe","rerun"]'), needs.plan.outputs.mode)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+    steps:
+      - name: Checkout actions and the report script
+        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          sparse-checkout: |
+            .github/actions
+            packages/sdk/ci
+          persist-credentials: false
+      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          node-version: lts/*
+      - uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          pattern: "*-results-*"
+          path: results
+      - env:
+          GITHUB_TOKEN: ${{ github.token }}
+          MODE: ${{ needs.plan.outputs.mode }}
+          SUITE: ${{ needs.plan.outputs.suite }}
+          REPORT: ${{ needs.plan.outputs.report }}
+          COMMENTS: ${{ needs.plan.outputs.comments }}
+          RESULTS_DIR: results
+          LEGS_OK: ${{ !contains(fromJSON('["failure","cancelled"]'), needs.desktop.result) && !contains(fromJSON('["failure","cancelled"]'), needs.mobile.result) }}
+        run: node packages/sdk/ci/e2e-report.mjs report

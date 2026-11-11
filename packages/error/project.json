@@ -1,26 +1,50 @@
 {
   "name": "@qvac/error",
   "root": "packages/error",
+  "tags": ["ci:sdk"],
   "targets": {
-    "test:unit": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "pnpm run test:unit",
-        "cwd": "packages/error"
-      }
-    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run lint",
-        "cwd": "packages/error"
+        "cwd": "packages/error",
+        "parallel": false,
+        "commands": ["pnpm run format", "pnpm run lint"]
       }
     },
-    "test:dts": {
+    "typecheck": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run test:dts",
-        "cwd": "packages/error"
+        "cwd": "packages/error",
+        "command": "pnpm run typecheck"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/error",
+        "command": "pnpm run build"
+      },
+      "dependsOn": []
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/error",
+        "command": "pnpm run test:unit"
+      },
+      "dependsOn": ["build"],
+      "metadata": {
+        "sources": ["npm"],
+        "setup": ["bare"]
+      }
+    },
+    "publish": {
+      "executor": "nx:noop",
+      "metadata": {
+        "publish": {
+          "tagPrefix": "error",
+          "releaseGuard": true
+        }
       }
     }
   }

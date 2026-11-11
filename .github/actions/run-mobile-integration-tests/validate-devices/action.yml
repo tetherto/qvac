@@ -21,7 +21,7 @@ description: |
     * EQUALS: the requested value equals a fleet device's model exactly.
 
   Requires an OIDC role granted devicefarm:ListDevices (the same role the
-  scheduler and sdk-device-farm-select-pool already use).
+  scheduler and .github/scripts/devicefarm-pool-run.mjs already use).
 
 inputs:
   platform:

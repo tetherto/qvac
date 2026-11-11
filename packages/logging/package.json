@@ -58,5 +58,14 @@
   },
   "dependencies": {
     "bare-env": "^3.0.0"
+  },
+  "nx": {
+    "includedScripts": [
+      "format",
+      "format:fix",
+      "lint:fix",
+      "prepare",
+      "build:test"
+    ]
   }
 }

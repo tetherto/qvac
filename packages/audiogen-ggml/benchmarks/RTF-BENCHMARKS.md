@@ -176,7 +176,7 @@ The `benchmark` target's `report` configuration then runs
 `ci/benchmark-report.sh` over every result of the run and renders the findings
 table onto the run summary.
 
-`.github/workflows/perf-report.yml` is the weekly cross-addon report. It measures
+`benchmarks.yml`'s `perf-report` job is the weekly cross-addon report. It measures
 nothing itself: it re-aggregates the artifacts of the last six `Benchmarks` runs
 into `reports/audiogen-ggml-performance.md`, which lands in that run's summary
 alongside the other addons. ACE-Step is therefore only as fresh as the last

@@ -204,8 +204,8 @@ Read `baseRefName`, `headRefName`, `isCrossRepository`, `headRepositoryOwner` fr
 
 **Release-train extra checks (base is `release-train-<train>-<x.y.z>`):**
 
-One PR moves every package of the train. `pr-release-guard.yml` and
-`pr-checks-sdk-pod.yml` check versions, ranges, changelog sections and each
+One PR moves every package of the train. `pr-checks.yml` (its release-guard job,
+and `release-train.yml`'s call for the train) checks versions, ranges, changelog sections and each
 package's checks (see `docs/ci/RELEASE-TRAIN.md`). Review what they cannot:
 
 - `pnpm-lock.yaml` changes only the `specifier:` lines of the ranges between

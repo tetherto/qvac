@@ -35,31 +35,17 @@ flowchart LR
     SC --> QMG
     VP --> QMG
     VC --> QMG
-    SDK[sdk-pod-checks<br/>self-detecting] --> QMG
-    SKC[sdk-kotlin-checks<br/>self-detecting] --> QMG
     QMG -->|uses| PP[public-pr.yml<br/>job: validate-pr]
     PP -->|check name| CHK["qvac-merge-guard / validate-pr"]
 ```
 
-The Kotlin SDK gate follows the `sdk-pod-checks` shape. `sdk-kotlin-checks` runs
-`pr-checks-sdk-kotlin.yml` via its `workflow_call` trigger, the same way
-`sdk-pod-checks` runs `pr-checks-sdk-pod.yml`. The called workflow detects
-Kotlin-relevant changes from the base commit (not the PR head, so a PR cannot
-edit the path list to exclude itself) and is a fast no-op when none changed. The
-gate passes no secrets to it, so checking out and building PR code is safe. The
-build runs against the in-repo `@qvac/sdk`: the job builds `packages/sdk` and
-sets an `overrides.@qvac/sdk=file:../sdk` entry so the Kotlin worker bundle and
-contract check use this commit's SDK rather than a published release — a
-release-sdk-* PR, whose `@qvac/sdk` is not yet on npm, would otherwise fail to
-install. A fork touching the worker or contract runs the same check on its own
-`pull_request` leg, so it is never blocked waiting for a status it cannot
-produce.
+The SDK pod's checks are not in Merge Guard. They run in `sdk-checks.yml`, from each package's `project.json` targets; no ruleset requires `PR checks` yet, so a pod PR with failing checks is not blocked from merging until the `main` ruleset requires it.
 
 The final job in `pr-gate-merge.yml`:
 
 ```yaml
 qvac-merge-guard:
-  needs: [authorize, fork-approval, changes, sanity-checks, verify-prebuilds, verify-cpp-tests, sdk-pod-checks, sdk-kotlin-checks]
+  needs: [authorize, fork-approval, changes, sanity-checks, verify-prebuilds, verify-cpp-tests]
   if: |
     always() && !cancelled() &&
     (needs.changes.result == 'success' || needs.changes.result == 'skipped')
@@ -70,14 +56,13 @@ qvac-merge-guard:
   with:
     sanity-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') }}
     build-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.verify-prebuilds.result == 'success' || needs.verify-prebuilds.result == 'skipped') }}
-    general-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped') && (needs.sdk-kotlin-checks.result == 'success' || needs.sdk-kotlin-checks.result == 'skipped') }}
+    general-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' }}
     cpp-tests-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.verify-cpp-tests.result == 'success' || needs.verify-cpp-tests.result == 'skipped') }}
 ```
 
-`sdk-kotlin-checks` folds into `general-checks-status` alongside `sdk-pod-checks`,
-the same `workflow_call` shape.
+`general-checks-status` gates on the authorization chain alone; a job folded into it adds its own result, as below.
 
-A skipped gated job (`sanity-checks`, `verify-prebuilds`, `verify-cpp-tests`, `sdk-pod-checks`, `sdk-kotlin-checks`) counts as success **only when the PR was actually authorized**. Those jobs `if`-gate on `authorize.outputs.allowed == 'true'`, so an unapproved external fork (fork-approval failed, authorize skipped, or `allowed=false`) skips all of them — and a bare `skipped → success` mapping would green the required check. Each status input therefore requires the full chain (`fork-approval` success **and** `authorize` success **and** `allowed == 'true'`) before trusting a skip, so unauthorized PRs fail closed (`validate-pr` returns a failing required check).
+A skipped gated job (`sanity-checks`, `verify-prebuilds`, `verify-cpp-tests`) counts as success **only when the PR was actually authorized**. Those jobs `if`-gate on `authorize.outputs.allowed == 'true'`, so an unapproved external fork (fork-approval failed, authorize skipped, or `allowed=false`) skips all of them, and a bare `skipped → success` mapping would green the required check. Each status input therefore requires the full chain (`fork-approval` success **and** `authorize` success **and** `allowed == 'true'`) before trusting a skip, so unauthorized PRs fail closed (`validate-pr` returns a failing required check).
 
 ### `verify-prebuilds`: Merge Guard checks prebuilds, it does not trigger them
 
@@ -109,10 +94,6 @@ A PR that changes only shared contract CI (`pr-build-test.yml`, the `_*.yml` tem
 
 `public-pr.yml`'s single job (`validate-pr`) fails the check if any of the boolean inputs it receives is `false` (sanity checks, builds, C++ tests, integration tests, etc.). External fork secret-bearing jobs are gated upstream by the `fork-ci` environment (`fork-approval` job); see [`LABELS.md`](LABELS.md). Its check name — `qvac-merge-guard / validate-pr` — is the *only* thing the ruleset requires. It still has two unused boolean inputs `pr-gate-merge.yml` doesn't pass yet: `integration-tests-status` and `build-with-model-status` — see the caller-workflow pattern below for how to use the spare `integration-tests-status` slot instead of inventing a new one. `cpp-tests-status` is already wired.
 
-### Gotcha: `sdk-pod-checks` reports under two check names
-
-`pr-checks-sdk-pod.yml` has a `workflow_call` trigger (how `pr-gate-merge.yml` pulls it in for PRs into `main`) and a `pull_request` trigger limited to `release-*`/`feature-*`/`tmp-*`, which Merge Guard does not cover. A PR into `main` reports it as `sdk-pod-checks / SDK Pod Checks`; a PR into the other branches reports it as `SDK Pod Checks`. Match both strings if you're regex-matching this check by name.
-
 ---
 
 ## Adding a new job — pick the right pattern
@@ -121,14 +102,14 @@ However you're extending Merge Guard, you're always in one of three situations. 
 
 ### 1. Folds into an existing category
 
-Use this when the new job is just another instance of a check `qvac-merge-guard` already gates on (another sanity check, another build, another SDK-pod-style check) — no matter what triggers it or what it validates.
+Use this when the new job is just another instance of a check `qvac-merge-guard` already gates on (another sanity check, another build, another general check), no matter what triggers it or what it validates.
 
 If it's matrix-driven off `changes`, add an entry to the `changes` job's `dorny/paths-filter` map (one entry: `<key>: ["<path-glob-that-should-trigger-it>", ...]`) and it flows through the existing matrix/caller automatically — `qvac-merge-guard` and `public-pr.yml` need no changes. The addon-package example: `<pkg>: ["packages/<pkg>/**", ".github/workflows/prebuilds-<pkg>.yml"]`.
 
 If it's a single job that's close to an existing category but isn't matrix-driven, add it to that category's `needs:` and fold its result into the existing boolean's expression, e.g.:
 
 ```yaml
-general-checks-status: ${{ (needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped') && (needs.my-new-job.result == 'success' || needs.my-new-job.result == 'skipped') }}
+general-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.my-new-job.result == 'success' || needs.my-new-job.result == 'skipped') }}
 ```
 
 ### 2. A repeated, growing family of similarly-shaped jobs — build a caller workflow

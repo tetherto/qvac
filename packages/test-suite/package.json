@@ -84,5 +84,14 @@
     "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
     "typescript": "^5.3.3"
+  },
+  "nx": {
+    "includedScripts": [
+      "dev",
+      "lint:fix",
+      "format",
+      "format:fix",
+      "check"
+    ]
   }
 }

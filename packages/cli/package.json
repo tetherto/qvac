@@ -80,5 +80,22 @@
     "prettier-config-holepunch": "^2.0.0",
     "tsc-alias": "^1.8.17",
     "typescript": "^5.9.3"
+  },
+  "nx": {
+    "includedScripts": [
+      "prepublishOnly",
+      "format",
+      "format:fix",
+      "lint:fix",
+      "typecheck:bench-serve-openai-providers",
+      "test",
+      "test:bench-serve-openai-providers",
+      "test:e2e",
+      "test:e2e:js",
+      "test:e2e:js:coverage",
+      "dev:link",
+      "dev:unlink",
+      "sdk-source:workspace"
+    ]
   }
 }
