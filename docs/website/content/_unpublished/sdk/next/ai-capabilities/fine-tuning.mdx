@@ -49,7 +49,7 @@ To fine-tune another model, pass a local `Q4_0` or `Q8_0` GGUF of a supported ar
 
 ### Context length
 
-`finetune()` trains at `options.contextLength` tokens per sequence (default: `128`), not at the `ctx_size` you set in `loadModel()`. The value is capped at the loaded context size. Set it to fit your longest training row:
+`finetune()` trains at `options.contextLength` tokens per sequence (default: `128`), not at the `ctx_size` you set in `loadModel()`. Training reloads the model with this context length; the original `loadModel()` context size does not cap it. Set it to fit your longest training row:
 - **SFT:** rows longer than `contextLength` are skipped without a warning. If every row is skipped, training can't start.
 - **Causal:** the dataset must contain at least `contextLength + 1 + max(contextLength / 2, 1)` tokens, using integer division. With the default `contextLength` of `128`, the minimum is `193` tokens.
 
