@@ -27,6 +27,15 @@ packages:
 # version doesn't satisfy the range.
 linkWorkspacePackages: true
 
+# Fabric resolves #host-addon from its own directory, so a linked workspace fabric finds the consumers'
+# @qvac/fabric-<host> optional dependencies only at the root, as npm's flat install placed them beside it.
+publicHoistPattern:
+  - "@qvac/fabric-*"
+
+# pnpm's shims and exec/run otherwise export NODE_PATH into its store to every child process, so a package a test
+# removes still resolves; npm never sets it.
+extendNodePath: false
+
 # Keep root-only repository tooling from supplying peers to product packages.
 resolvePeersFromWorkspaceRoot: false
 

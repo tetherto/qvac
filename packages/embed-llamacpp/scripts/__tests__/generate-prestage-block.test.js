@@ -14,7 +14,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 
-const { modelsFromManifest, buildScript } = require('../generate-prestage-block')
+const { mobileModelNames, modelsFromManifest, buildScript } = require('../generate-prestage-block')
 const realManifest = require('../../test/integration/models.manifest.json')
 
 const SAMPLE = {
@@ -123,6 +123,10 @@ test('buildScript wires a fallback URL into the stage call and curl fall-through
 
 test('real integration manifest drives the complete pre-stage set', () => {
   const models = modelsFromManifest(realManifest)
-  assert.equal(models.length, Object.keys(realManifest.models).length)
+  assert.deepEqual(
+    models.map((model) => model.name),
+    mobileModelNames(realManifest)
+  )
+  assert.ok(!models.some((model) => model.name.startsWith('unit-test-')))
   assert.ok(models.some((model) => model.name.includes('embeddinggemma')))
 })

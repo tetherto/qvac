@@ -2,7 +2,7 @@
 // SOURCES — the builds-under-comparison axis.
 // A "source" is one thing being measured: the addon at some version, or one of the
 // native CLIs (fabric = the company llama.cpp fork, upstream = original llama.cpp).
-// Selected per run via the `matrix_sources` workflow input
+// Selected per run via the `sources=` benchmark word
 // (tokens: addon | addon@candidate | addon@baseline | fabric@<ref> | upstream@<ref>).
 // The report side never imports this — it sees sources only as the
 // `source_id`/`source_ref` marker fields. Source types:
@@ -12,7 +12,7 @@
 //   fabric/upstream  — native CLIs over the several-sources path; ref = tag, branch,
 //                      or full commit SHA (SHA-keyed build cache)
 
-// Parse one matrix_sources token into { id, type, ref }.
+// Parse one sources= token into { id, type, ref }.
 function parseSourceToken (token) {
   const t = String(token || '').trim()
   if (!t) return null

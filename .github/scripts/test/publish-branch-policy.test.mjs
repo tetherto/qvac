@@ -58,10 +58,9 @@ const LIBRARY_PUBLISHERS = new Set([
 ])
 
 // Guards against discovery returning an empty set and passing vacuously.
-// Native addons, including model-fit, publish through on-merge-nx.
+// Native addons still on on-merge-nx publish through it; the CI contract's publish-npm.yml publishes the rest.
 // Add a pipeline here when one appears.
 const KNOWN = [
-  'on-merge-ggml-rpc-server.yml',
   'on-merge-nx.yml',
 ]
 
@@ -175,11 +174,11 @@ test('every exemption names a file that exists', () => {
   }
 })
 
-test('model-fit publishing is covered by the consolidated workflow', () => {
-  const source = read('on-merge-nx.yml')
-  assert.match(pushBody(source).join('\n'), /^ {6}- "packages\/model-fit\/\*\*"$/m)
-  assert.match(source, /^ {10}- model-fit$/m)
-  assert.match(source, /^ {12}model-fit: packages\/model-fit\/\*\*$/m)
+test('model-fit publishing is covered by the CI contract', () => {
+  const project = JSON.parse(readFileSync(join(WORKFLOW_DIR, '../../packages/model-fit/project.json'), 'utf8'))
+  assert.ok(project.tags.includes('ci:addons'))
+  assert.ok(project.targets.publish, 'publish-npm.yml publishes packages with a publish target')
+  assert.doesNotMatch(read('on-merge-nx.yml'), /packages\/model-fit\//)
   assert.equal(existsSync(join(WORKFLOW_DIR, 'on-merge-model-fit.yml')), false)
 })
 

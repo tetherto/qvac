@@ -20,7 +20,7 @@ function platformFamily(key) {
   return key.replace(/Weekly$/, '')
 }
 
-// Benchmark shards run only through benchmark-perf-llm-llamacpp.yml's
+// Benchmark shards run only through the benchmarks.yml sweep, whose
 // test_groups override. The MoE finetune test is desktop opt-in only (see
 // test/integration/finetuning-moe.test.js), and the XDNA NPU exists only on
 // Linux x64 (see test/integration/xdna.test.js), so none belongs in this file.

@@ -1,0 +1,30 @@
+{
+  "models": {
+    "easyocr": {
+      "s3Prefix": "qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/",
+      "dest": "models/",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ]
+    },
+    "doctr": {
+      "s3Prefix": "qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/",
+      "dest": "models/",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ]
+    },
+    "OCRBench_v2": {
+      "s3Prefix": "qvac_datasets/ocr/OCRBench_v2/",
+      "dest": "benchmarks/quality_eval/data/OCRBench_v2",
+      "exclude": [
+        "*.zip"
+      ],
+      "targets": [
+        "benchmark"
+      ]
+    }
+  }
+}

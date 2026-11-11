@@ -285,12 +285,27 @@ importers:
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
+      bare:
+        specifier: ^1.36.0
+        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+      bare-make:
+        specifier: ^2.1.0
+        version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+      bare-runtime:
+        specifier: ^1.36.0
+        version: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       cmake-bare:
         specifier: ^1.9.0
         version: 1.10.1
       cmake-npm:
         specifier: ^1.1.0
         version: 1.1.2
+      cmake-runtime:
+        specifier: ^4.1.1
+        version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      cmake-toolchains:
+        specifier: ^2.1.0
+        version: 2.2.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -303,9 +318,18 @@ importers:
       eslint-plugin-import:
         specifier: ^2.32.0
         version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      llvm-runtime:
+        specifier: ^23.1.0
+        version: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       lunte:
         specifier: ^1.8.0
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      nasm-runtime:
+        specifier: ^3.2.0
+        version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      ninja-runtime:
+        specifier: ^1.13.1
+        version: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       prettier:
         specifier: ^3.6.2
         version: 3.9.6
@@ -584,6 +608,9 @@ importers:
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
+      bare:
+        specifier: ^1.36.0
+        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-crypto:
         specifier: ^1.15.3
         version: 1.15.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -593,12 +620,18 @@ importers:
       bare-https:
         specifier: ^3.0.0
         version: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+      bare-make:
+        specifier: ^2.1.0
+        version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       bare-os:
         specifier: ^3.6.2
         version: 3.9.3
       bare-process:
         specifier: ^4.2.2
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-runtime:
+        specifier: ^1.36.0
+        version: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare-url:
         specifier: ^2.1.6
         version: 2.4.6
@@ -611,6 +644,12 @@ importers:
       cmake-npm:
         specifier: ^1.1.0
         version: 1.1.2
+      cmake-runtime:
+        specifier: ^4.1.1
+        version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      cmake-toolchains:
+        specifier: ^2.1.0
+        version: 2.2.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -623,9 +662,18 @@ importers:
       eslint-plugin-import:
         specifier: ^2.32.0
         version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      llvm-runtime:
+        specifier: ^23.1.0
+        version: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       lunte:
         specifier: ^1.8.4
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      nasm-runtime:
+        specifier: ^3.2.0
+        version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      ninja-runtime:
+        specifier: ^1.13.1
+        version: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       prettier:
         specifier: ^3.9.4
         version: 3.9.6
@@ -736,6 +784,15 @@ importers:
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
+      bare:
+        specifier: ^1.36.0
+        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+      bare-make:
+        specifier: ^2.1.0
+        version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
+      bare-runtime:
+        specifier: ^1.36.0
+        version: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       brittle:
         specifier: ^3.17.0
         version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
@@ -745,6 +802,12 @@ importers:
       cmake-npm:
         specifier: ^1.1.0
         version: 1.1.2
+      cmake-runtime:
+        specifier: ^4.1.1
+        version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      cmake-toolchains:
+        specifier: ^2.1.0
+        version: 2.2.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -757,9 +820,18 @@ importers:
       eslint-plugin-import:
         specifier: ^2.32.0
         version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      llvm-runtime:
+        specifier: ^23.1.0
+        version: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       lunte:
         specifier: ^1.8.4
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      nasm-runtime:
+        specifier: ^3.2.0
+        version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      ninja-runtime:
+        specifier: ^1.13.1
+        version: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       prettier:
         specifier: ^3.9.6
         version: 3.9.6
@@ -929,7 +1001,7 @@ importers:
         version: 3.5.0
       bare:
         specifier: 1.34.1 || >=1.35.1
-        version: 1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.34.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+        version: 1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-console:
         specifier: '*'
         version: 6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -1022,18 +1094,27 @@ importers:
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
+      bare:
+        specifier: ^1.36.0
+        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-crypto:
         specifier: ^1.15.3
         version: 1.15.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
       bare-https:
         specifier: ^3.0.0
         version: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+      bare-make:
+        specifier: ^2.1.0
+        version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       bare-os:
         specifier: ^3.6.2
         version: 3.9.3
       bare-process:
         specifier: ^4.2.2
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-runtime:
+        specifier: ^1.36.0
+        version: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare-subprocess:
         specifier: ^6.1.0
         version: 6.2.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1049,6 +1130,12 @@ importers:
       cmake-npm:
         specifier: ^1.1.0
         version: 1.1.2
+      cmake-runtime:
+        specifier: ^4.1.1
+        version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      cmake-toolchains:
+        specifier: ^2.1.0
+        version: 2.2.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -1061,9 +1148,18 @@ importers:
       eslint-plugin-import:
         specifier: ^2.32.0
         version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      llvm-runtime:
+        specifier: ^23.1.0
+        version: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       lunte:
         specifier: ^1.8.4
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      nasm-runtime:
+        specifier: ^3.2.0
+        version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      ninja-runtime:
+        specifier: ^1.13.1
+        version: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       prettier:
         specifier: ^3.9.4
         version: 3.9.6
@@ -1148,6 +1244,15 @@ importers:
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
+      bare:
+        specifier: ^1.36.0
+        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+      bare-make:
+        specifier: ^2.1.0
+        version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+      bare-runtime:
+        specifier: ^1.36.0
+        version: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare-subprocess:
         specifier: ^6.1.0
         version: 6.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1160,6 +1265,15 @@ importers:
       cmake-bare:
         specifier: ^1.9.0
         version: 1.10.1
+      cmake-npm:
+        specifier: ^1.1.0
+        version: 1.1.2
+      cmake-runtime:
+        specifier: ^4.1.1
+        version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      cmake-toolchains:
+        specifier: ^2.1.0
+        version: 2.2.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -1172,9 +1286,18 @@ importers:
       eslint-plugin-import:
         specifier: ^2.32.0
         version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      llvm-runtime:
+        specifier: ^23.1.0
+        version: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       lunte:
         specifier: ^1.8.4
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      nasm-runtime:
+        specifier: ^3.2.0
+        version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      ninja-runtime:
+        specifier: ^1.13.1
+        version: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       prettier:
         specifier: ^3.9.6
         version: 3.9.6
@@ -1252,6 +1375,15 @@ importers:
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
+      bare:
+        specifier: ^1.36.0
+        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+      bare-make:
+        specifier: ^2.1.0
+        version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+      bare-runtime:
+        specifier: ^1.36.0
+        version: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare-stream:
         specifier: ^2.7.0
         version: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -1264,6 +1396,12 @@ importers:
       cmake-npm:
         specifier: ^1.1.0
         version: 1.1.2
+      cmake-runtime:
+        specifier: ^4.1.1
+        version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      cmake-toolchains:
+        specifier: ^2.1.0
+        version: 2.2.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -1276,9 +1414,18 @@ importers:
       eslint-plugin-import:
         specifier: ^2.32.0
         version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      llvm-runtime:
+        specifier: ^23.1.0
+        version: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       lunte:
         specifier: ^1.8.0
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      nasm-runtime:
+        specifier: ^3.2.0
+        version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      ninja-runtime:
+        specifier: ^1.13.1
+        version: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       prettier:
         specifier: ^3.6.2
         version: 3.9.6
@@ -1362,7 +1509,7 @@ importers:
         version: 3.5.0
       bare:
         specifier: 1.34.1 || >=1.35.1
-        version: 1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.34.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+        version: 1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
       bare-abort-controller:
         specifier: ^1.1.2
         version: 1.1.2
@@ -1938,9 +2085,18 @@ importers:
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
+      bare:
+        specifier: ^1.36.0
+        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-fetch:
         specifier: ^3.0.1
         version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
+      bare-make:
+        specifier: ^2.1.0
+        version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+      bare-runtime:
+        specifier: ^1.36.0
+        version: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare-stream:
         specifier: ^2.7.0
         version: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -1953,6 +2109,12 @@ importers:
       cmake-npm:
         specifier: ^1.1.2
         version: 1.1.2
+      cmake-runtime:
+        specifier: ^4.1.1
+        version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      cmake-toolchains:
+        specifier: ^2.1.0
+        version: 2.2.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -1965,9 +2127,18 @@ importers:
       eslint-plugin-import:
         specifier: ^2.32.0
         version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      llvm-runtime:
+        specifier: ^23.1.0
+        version: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       lunte:
         specifier: ^1.8.0
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      nasm-runtime:
+        specifier: ^3.2.0
+        version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      ninja-runtime:
+        specifier: ^1.13.1
+        version: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       prettier:
         specifier: ^3.6.2
         version: 3.9.6
@@ -2100,9 +2271,15 @@ importers:
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
+      bare:
+        specifier: ^1.36.0
+        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
       bare-fs:
         specifier: ^4.5.1
         version: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-make:
+        specifier: ^2.1.0
+        version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
       bare-os:
         specifier: ^3.6.2
         version: 3.9.3
@@ -2112,6 +2289,9 @@ importers:
       bare-process:
         specifier: ^4.2.2
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-runtime:
+        specifier: ^1.36.0
+        version: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       bare-url:
         specifier: ^2.1.6
         version: 2.5.4
@@ -2124,6 +2304,12 @@ importers:
       cmake-npm:
         specifier: ^1.1.0
         version: 1.1.2
+      cmake-runtime:
+        specifier: ^4.1.1
+        version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      cmake-toolchains:
+        specifier: ^2.1.0
+        version: 2.2.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -2136,9 +2322,18 @@ importers:
       eslint-plugin-import:
         specifier: ^2.32.0
         version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      llvm-runtime:
+        specifier: ^23.1.0
+        version: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       lunte:
         specifier: ^1.8.4
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      nasm-runtime:
+        specifier: ^3.2.0
+        version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      ninja-runtime:
+        specifier: ^1.13.1
+        version: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       prettier:
         specifier: ^3.9.4
         version: 3.9.6
@@ -2200,7 +2395,7 @@ importers:
         version: 24.13.3
       bare:
         specifier: ^1.36.0
-        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.34.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-crypto:
         specifier: ^1.15.3
         version: 1.15.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -6051,86 +6246,86 @@ packages:
       bare-buffer:
         optional: true
 
-  bare-runtime-android-arm64@1.34.1:
-    resolution: {integrity: sha512-obrIct/Hr9kVhOjg4A6rA5cjDspkNBCcSjq4EOI3A/GoM4oR7OCBKB+3qL+p9RoTmy0WfE4exK4HlOSntDfyAQ==}
+  bare-runtime-android-arm64@1.37.0:
+    resolution: {integrity: sha512-0uPxgE/4r96zd2mZjHw5H6hAoMPtzcCd/IqubeGAzMmUubx5vz5k5wkCA8vpTl3J2gtFneB/MrtInyC8SsD0mA==}
     cpu: [arm64]
     os: [android]
     hasBin: true
 
-  bare-runtime-android-arm@1.34.1:
-    resolution: {integrity: sha512-gvX4EArLgLN6cchG6ju3EiPddGHnUfLLv6XEvjYZ4S91XKY73gTvC5oQsOokJoYIas5IZtL4DfVzfMUWkANOlw==}
+  bare-runtime-android-arm@1.37.0:
+    resolution: {integrity: sha512-T/iIlGl3DWRKVgpWHbiEZfDPQ9TkuqG20+j1V0bzOxEVAtiSYB7lEugDZyYCW3h0/pLjYaGBO18EFDmleo1IEw==}
     cpu: [arm]
     os: [android]
     hasBin: true
 
-  bare-runtime-android-ia32@1.34.1:
-    resolution: {integrity: sha512-3+hkyhv12yk1XzTgWw1BYbgzMI1U8o9pmQr65bcoLLzOj41dRvGvR8B6mQC5U2yKiSqqNBFiEtZY0qqf2WB4iw==}
+  bare-runtime-android-ia32@1.37.0:
+    resolution: {integrity: sha512-VDPHJi1FYS9DGShjhBICIEpZXJJT2KzCT/cwB7PKJjwRXkkSA5eW/OKsH+Z8T7e98vQGsKe8mdj1J8uh0ifoSA==}
     cpu: [ia32]
     os: [android]
     hasBin: true
 
-  bare-runtime-android-x64@1.34.1:
-    resolution: {integrity: sha512-gxOPReRynj+P6JcOE/W4g+h3G1BY5npfbvlf2C64mD6vqZDTht21CBUvxKxa2/KyL/fQJgI9HrenZjQ5EyS6Nw==}
+  bare-runtime-android-x64@1.37.0:
+    resolution: {integrity: sha512-McJEd1ssRBMbpqz+xncM9U9EBfYJlwVxl3mXKgIgg223eTnnv5l/v0cpVOwKwKjPGwevQwGN+dD6/+93E4hKvA==}
     cpu: [x64]
     os: [android]
     hasBin: true
 
-  bare-runtime-darwin-arm64@1.34.1:
-    resolution: {integrity: sha512-XNkjZLPX/HLCJJFRyvXaCYTXjfN/J9hF7dyCLs+hSdOFcm834ovl07edWfqavbpv7QsaX7aIz8hz3kxhmv/DTw==}
+  bare-runtime-darwin-arm64@1.37.0:
+    resolution: {integrity: sha512-Duf7EkPq6WdcaRRGhJYNARqALtqvg9QoRK6EjXI3LHSgZc72RjkRarus+XOY7bKbEB3EcKxmfJEQ4136OZJllg==}
     cpu: [arm64]
     os: [darwin]
     hasBin: true
 
-  bare-runtime-darwin-x64@1.34.1:
-    resolution: {integrity: sha512-ShX4GkAYIleGEMc9DzW/UWsRDVCTRhkZozfRcx/dpmlNO47I2SfEbQE4udNzWMcFo9qB6HZPo6uTdAhTWwCXfQ==}
+  bare-runtime-darwin-x64@1.37.0:
+    resolution: {integrity: sha512-YmtrKpQb19osKs6O6PQjxIUzhj9VcoxHpUwXF/praE78l1azXDsrnAk3kJtv2C4ihCt5HDgVVlpRYMiuiwUwOQ==}
     cpu: [x64]
     os: [darwin]
     hasBin: true
 
-  bare-runtime-ios-arm64-simulator@1.34.1:
-    resolution: {integrity: sha512-8o3D6YVaLYu+UmcT3jx+Ffo10Zlwl0uRRraYgIjTbJePd+/SQvsa/9T871Ice0iiXaRuR6Wnm6klAbzLQ+qBGQ==}
+  bare-runtime-ios-arm64-simulator@1.37.0:
+    resolution: {integrity: sha512-fz6F5s7Egkb7CpHFT7tvP5RqIHUeCitfZZc3Xq4wgJ+E7qRbns1667sGuwYuO+hLZyYo/C1LwcQsI/vrVGLXcg==}
     cpu: [arm64]
     os: [ios]
     hasBin: true
 
-  bare-runtime-ios-arm64@1.34.1:
-    resolution: {integrity: sha512-XgI9gXjeKaaVF67PkLjQRju1+yi4vU1OjSw/ytidwNZVWSIK+acHtJeOqxM0MAyNAB3nmVvOnjhj5o8PZ6Qtyg==}
+  bare-runtime-ios-arm64@1.37.0:
+    resolution: {integrity: sha512-p8Viv8WKZCzby9ykg9SWlObyKn9mmDrznxE5dkKWww6FVGrVDEr+nX0W3mzHRdZoZ+2sEbdE7o+NmAk9T+Z8ww==}
     cpu: [arm64]
     os: [ios]
     hasBin: true
 
-  bare-runtime-ios-x64-simulator@1.34.1:
-    resolution: {integrity: sha512-lgThu78iSa8avSOMmge8QijxKKSZfVBHF7l7+SGyOeQjLShNjMbgQzR2JKoemqjBlZlZHTNGzKMIAPaPO+0/3A==}
+  bare-runtime-ios-x64-simulator@1.37.0:
+    resolution: {integrity: sha512-XZUSm0qmvA8xBP5rC9ub7mY4dryY/3MC1IMmwVHhLjB0yPw80EPdZEffhvMzafXAeqcNKiNpj5CBTS74yB6p9Q==}
     cpu: [x64]
     os: [ios]
     hasBin: true
 
-  bare-runtime-linux-arm64@1.34.1:
-    resolution: {integrity: sha512-0CAmcl6ffyw+dwLL4Ca5aPMuH2eEc8h7CWkHVaE/GZOb3Zr3Ranrx0md9ZKRB2G3FBQjirLfXsnB1PXqDB/Lpw==}
+  bare-runtime-linux-arm64@1.37.0:
+    resolution: {integrity: sha512-RUrXLjc4b+2hLqdPGAdmAUkqmLc8KKHbPtMFiyqDWtdm00CO9+ayevkh6uiLb7As9Rj31e5WCMEa9JsT3bY9UQ==}
     cpu: [arm64]
     os: [linux]
     hasBin: true
 
-  bare-runtime-linux-x64@1.34.1:
-    resolution: {integrity: sha512-Rk3lD48xBUW7IZKKE82IanYcc06r++Gaa29uh2pWU+3hQUBA/S+fIjl/5h6qly0H7oLRTbZ8y3Je0R6iprtx/w==}
+  bare-runtime-linux-x64@1.37.0:
+    resolution: {integrity: sha512-ZeatW/Ar1820+2N/ACDtjcoK5fUmYH3iIdiUQRyveiNXIrtYlqyrAKqBDihLdp7BiuVi1l8m5woSMLHurm2hcw==}
     cpu: [x64]
     os: [linux]
     hasBin: true
 
-  bare-runtime-win32-arm64@1.34.1:
-    resolution: {integrity: sha512-G7aMaFsw8RqJOmPjzY4z9f5rAw9DjCURLmpwa3Qdxgkxh3SLnf0Js8YWaNCXz+ZifDN/dfJ+Tk724fazCNgm8w==}
+  bare-runtime-win32-arm64@1.37.0:
+    resolution: {integrity: sha512-c8gnsORvkWnTVHNhFci2qLRXnlwsRq0kfzZr1sWwbUsnTbrWFuA/P/Fc/TEim5cdlF2Ud9jvKYW8zExClSCh0A==}
     cpu: [arm64]
     os: [win32]
     hasBin: true
 
-  bare-runtime-win32-x64@1.34.1:
-    resolution: {integrity: sha512-xlbdQyi7FIxF7SHJhlH2QvvG5ylh4lKTtBMaG6UwnQ7cP7tIq31Ra29TLFWHAne7+z4KPw22joeTFLXq2lXHyA==}
+  bare-runtime-win32-x64@1.37.0:
+    resolution: {integrity: sha512-DrT5nW9mNrcaP9m7kEi1MzcohwJ3WWK1GKn6xncsZ991xq5+mIpFSQ+IiuitcreJ8kcspI8ZLVpPq6TnHoIMKg==}
     cpu: [x64]
     os: [win32]
     hasBin: true
 
-  bare-runtime@1.34.1:
-    resolution: {integrity: sha512-PGtdtGvp27guPSUNk5axdgnCsSCNUv/PBf5ST5rwV5k1RS+yCP0aQt25xdaTUA1ym29IPf2SYj7tX/ax8hMkiw==}
+  bare-runtime@1.37.0:
+    resolution: {integrity: sha512-WLZMrYj5sxJVWzjYBwPpEYBYgIlodIeS260yfv1SJ9nJ3Agz5rcatZZJwFpxL0CsRQfsKn8fhapgzs87NMwNiA==}
     hasBin: true
 
   bare-semver@1.1.0:
@@ -16488,236 +16683,236 @@ snapshots:
       - bare-events
       - react-native-b4a
 
-  bare-runtime-android-arm64@1.34.1(bare-url@2.4.6):
+  bare-runtime-android-arm64@1.37.0(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-android-arm64@1.34.1(bare-url@2.5.4):
+  bare-runtime-android-arm64@1.37.0(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-android-arm@1.34.1(bare-url@2.4.6):
+  bare-runtime-android-arm@1.37.0(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-android-arm@1.34.1(bare-url@2.5.4):
+  bare-runtime-android-arm@1.37.0(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-android-ia32@1.34.1(bare-url@2.4.6):
+  bare-runtime-android-ia32@1.37.0(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-android-ia32@1.34.1(bare-url@2.5.4):
+  bare-runtime-android-ia32@1.37.0(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-android-x64@1.34.1(bare-url@2.4.6):
+  bare-runtime-android-x64@1.37.0(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-android-x64@1.34.1(bare-url@2.5.4):
+  bare-runtime-android-x64@1.37.0(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-darwin-arm64@1.34.1(bare-url@2.4.6):
+  bare-runtime-darwin-arm64@1.37.0(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-darwin-arm64@1.34.1(bare-url@2.5.4):
+  bare-runtime-darwin-arm64@1.37.0(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-darwin-x64@1.34.1(bare-url@2.4.6):
+  bare-runtime-darwin-x64@1.37.0(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-darwin-x64@1.34.1(bare-url@2.5.4):
+  bare-runtime-darwin-x64@1.37.0(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-ios-arm64-simulator@1.34.1(bare-url@2.4.6):
+  bare-runtime-ios-arm64-simulator@1.37.0(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-ios-arm64-simulator@1.34.1(bare-url@2.5.4):
+  bare-runtime-ios-arm64-simulator@1.37.0(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-ios-arm64@1.34.1(bare-url@2.4.6):
+  bare-runtime-ios-arm64@1.37.0(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-ios-arm64@1.34.1(bare-url@2.5.4):
+  bare-runtime-ios-arm64@1.37.0(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-ios-x64-simulator@1.34.1(bare-url@2.4.6):
+  bare-runtime-ios-x64-simulator@1.37.0(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-ios-x64-simulator@1.34.1(bare-url@2.5.4):
+  bare-runtime-ios-x64-simulator@1.37.0(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-linux-arm64@1.34.1(bare-url@2.4.6):
+  bare-runtime-linux-arm64@1.37.0(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-linux-arm64@1.34.1(bare-url@2.5.4):
+  bare-runtime-linux-arm64@1.37.0(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-linux-x64@1.34.1(bare-url@2.4.6):
+  bare-runtime-linux-x64@1.37.0(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-linux-x64@1.34.1(bare-url@2.5.4):
+  bare-runtime-linux-x64@1.37.0(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-win32-arm64@1.34.1(bare-url@2.4.6):
+  bare-runtime-win32-arm64@1.37.0(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-win32-arm64@1.34.1(bare-url@2.5.4):
+  bare-runtime-win32-arm64@1.37.0(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-win32-x64@1.34.1(bare-url@2.4.6):
+  bare-runtime-win32-x64@1.37.0(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-win32-x64@1.34.1(bare-url@2.5.4):
+  bare-runtime-win32-x64@1.37.0(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.2(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime@1.34.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6):
+  bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6):
     dependencies:
       bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-os: 3.9.3
       bare-path: 3.1.1
       bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-subprocess: 6.2.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-subprocess: 6.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     optionalDependencies:
-      bare-runtime-android-arm: 1.34.1(bare-url@2.4.6)
-      bare-runtime-android-arm64: 1.34.1(bare-url@2.4.6)
-      bare-runtime-android-ia32: 1.34.1(bare-url@2.4.6)
-      bare-runtime-android-x64: 1.34.1(bare-url@2.4.6)
-      bare-runtime-darwin-arm64: 1.34.1(bare-url@2.4.6)
-      bare-runtime-darwin-x64: 1.34.1(bare-url@2.4.6)
-      bare-runtime-ios-arm64: 1.34.1(bare-url@2.4.6)
-      bare-runtime-ios-arm64-simulator: 1.34.1(bare-url@2.4.6)
-      bare-runtime-ios-x64-simulator: 1.34.1(bare-url@2.4.6)
-      bare-runtime-linux-arm64: 1.34.1(bare-url@2.4.6)
-      bare-runtime-linux-x64: 1.34.1(bare-url@2.4.6)
-      bare-runtime-win32-arm64: 1.34.1(bare-url@2.4.6)
-      bare-runtime-win32-x64: 1.34.1(bare-url@2.4.6)
+      bare-runtime-android-arm: 1.37.0(bare-url@2.4.6)
+      bare-runtime-android-arm64: 1.37.0(bare-url@2.4.6)
+      bare-runtime-android-ia32: 1.37.0(bare-url@2.4.6)
+      bare-runtime-android-x64: 1.37.0(bare-url@2.4.6)
+      bare-runtime-darwin-arm64: 1.37.0(bare-url@2.4.6)
+      bare-runtime-darwin-x64: 1.37.0(bare-url@2.4.6)
+      bare-runtime-ios-arm64: 1.37.0(bare-url@2.4.6)
+      bare-runtime-ios-arm64-simulator: 1.37.0(bare-url@2.4.6)
+      bare-runtime-ios-x64-simulator: 1.37.0(bare-url@2.4.6)
+      bare-runtime-linux-arm64: 1.37.0(bare-url@2.4.6)
+      bare-runtime-linux-x64: 1.37.0(bare-url@2.4.6)
+      bare-runtime-win32-arm64: 1.37.0(bare-url@2.4.6)
+      bare-runtime-win32-x64: 1.37.0(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
       - bare-url
       - react-native-b4a
 
-  bare-runtime@1.34.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4):
+  bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4):
     dependencies:
       bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-os: 3.9.3
       bare-path: 3.1.1
       bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-subprocess: 6.2.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-subprocess: 6.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     optionalDependencies:
-      bare-runtime-android-arm: 1.34.1(bare-url@2.5.4)
-      bare-runtime-android-arm64: 1.34.1(bare-url@2.5.4)
-      bare-runtime-android-ia32: 1.34.1(bare-url@2.5.4)
-      bare-runtime-android-x64: 1.34.1(bare-url@2.5.4)
-      bare-runtime-darwin-arm64: 1.34.1(bare-url@2.5.4)
-      bare-runtime-darwin-x64: 1.34.1(bare-url@2.5.4)
-      bare-runtime-ios-arm64: 1.34.1(bare-url@2.5.4)
-      bare-runtime-ios-arm64-simulator: 1.34.1(bare-url@2.5.4)
-      bare-runtime-ios-x64-simulator: 1.34.1(bare-url@2.5.4)
-      bare-runtime-linux-arm64: 1.34.1(bare-url@2.5.4)
-      bare-runtime-linux-x64: 1.34.1(bare-url@2.5.4)
-      bare-runtime-win32-arm64: 1.34.1(bare-url@2.5.4)
-      bare-runtime-win32-x64: 1.34.1(bare-url@2.5.4)
+      bare-runtime-android-arm: 1.37.0(bare-url@2.5.4)
+      bare-runtime-android-arm64: 1.37.0(bare-url@2.5.4)
+      bare-runtime-android-ia32: 1.37.0(bare-url@2.5.4)
+      bare-runtime-android-x64: 1.37.0(bare-url@2.5.4)
+      bare-runtime-darwin-arm64: 1.37.0(bare-url@2.5.4)
+      bare-runtime-darwin-x64: 1.37.0(bare-url@2.5.4)
+      bare-runtime-ios-arm64: 1.37.0(bare-url@2.5.4)
+      bare-runtime-ios-arm64-simulator: 1.37.0(bare-url@2.5.4)
+      bare-runtime-ios-x64-simulator: 1.37.0(bare-url@2.5.4)
+      bare-runtime-linux-arm64: 1.37.0(bare-url@2.5.4)
+      bare-runtime-linux-x64: 1.37.0(bare-url@2.5.4)
+      bare-runtime-win32-arm64: 1.37.0(bare-url@2.5.4)
+      bare-runtime-win32-x64: 1.37.0(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
@@ -17101,9 +17296,9 @@ snapshots:
       - bare-events
       - react-native-b4a
 
-  bare@1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.34.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6):
+  bare@1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6):
     dependencies:
-      bare-runtime: 1.34.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      bare-runtime: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
     optionalDependencies:
       bare-buffer: 3.6.2
       bare-console: 6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -17112,9 +17307,9 @@ snapshots:
       bare-timers: 3.2.1(bare-abort-controller@1.1.2)
       bare-url: 2.4.6
 
-  bare@1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.34.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4):
+  bare@1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4):
     dependencies:
-      bare-runtime: 1.34.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      bare-runtime: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
     optionalDependencies:
       bare-buffer: 3.6.2
       bare-console: 6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -17123,9 +17318,9 @@ snapshots:
       bare-timers: 3.2.1(bare-abort-controller@1.1.2)
       bare-url: 2.5.4
 
-  bare@1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.34.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6):
+  bare@1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6):
     dependencies:
-      bare-runtime: 1.34.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      bare-runtime: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
     optionalDependencies:
       bare-buffer: 3.6.2
       bare-console: 6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -17134,6 +17329,18 @@ snapshots:
       bare-structured-clone: 2.0.1
       bare-timers: 3.2.1(bare-abort-controller@1.1.2)
       bare-url: 2.4.6
+
+  bare@1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4):
+    dependencies:
+      bare-runtime: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+    optionalDependencies:
+      bare-buffer: 3.6.2
+      bare-console: 6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+      bare-events: 2.9.1(bare-abort-controller@1.1.2)
+      bare-stream: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+      bare-structured-clone: 2.0.1
+      bare-timers: 3.2.1(bare-abort-controller@1.1.2)
+      bare-url: 2.5.4
 
   base64-js@1.5.1: {}
 

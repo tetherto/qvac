@@ -9,7 +9,6 @@ const CPP_TESTS_TARGET = 'test:cpp'
 
 export const WARMED_ELSEWHERE = new Map([
   ['diffusion-cpp', 'on-merge-vcpkg-cache-diffusion.yml'],
-  ['embed-llamacpp', 'on-merge-vcpkg-cache-embed.yml'],
 ])
 
 export const SHARED_CACHE_INPUTS = [

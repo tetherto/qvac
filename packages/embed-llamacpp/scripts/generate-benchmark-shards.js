@@ -28,15 +28,6 @@ const {
 
 const integrationDir = path.resolve(__dirname, '..', 'test', 'integration')
 const mobileAutoFile = path.resolve(__dirname, '..', 'test', 'mobile', 'integration.auto.cjs')
-const workflowFile = path.resolve(
-  __dirname,
-  '..',
-  '..',
-  '..',
-  '.github',
-  'workflows',
-  'benchmark-perf-embed-llamacpp.yml'
-)
 const manifestFile = path.resolve(
   __dirname,
   '..',
@@ -54,39 +45,6 @@ const mode = process.argv.includes('--check')
       : 'write'
 
 const SHARD_PREFIX = 'benchmark-perf-'
-
-// Verify the committed workflow test_groups match the matrix-derived batches.
-function checkGroups() {
-  if (!fs.existsSync(workflowFile)) {
-    console.error(`MISMATCH: benchmark workflow not found at ${workflowFile}`)
-    return 1
-  }
-  const yaml = fs.readFileSync(workflowFile, 'utf8')
-  // Parse each committed groups value and compare canonically, so reformatting
-  // the inline JSON (extra whitespace etc.) doesn't trip a false mismatch.
-  const committed = [...yaml.matchAll(/groups:\s*'(.+)'/g)].map((m) => {
-    try {
-      return JSON.stringify(JSON.parse(m[1]))
-    } catch {
-      return m[1]
-    }
-  })
-  const expected = workflowBatches().map((b) => JSON.stringify(b.groups))
-  let bad = 0
-  if (committed.length !== expected.length) {
-    console.error(
-      `MISMATCH: workflow has ${committed.length} group batches, matrix yields ${expected.length}`
-    )
-    bad++
-  }
-  for (let i = 0; i < expected.length; i++) {
-    if (committed[i] !== expected[i]) {
-      bad++
-      console.error(`MISMATCH: workflow group batch ${i} differs from matrix`)
-    }
-  }
-  return bad
-}
 
 // Drift guard: the matrix cells in _benchmark-matrix.js are hardcoded (so the
 // mobile bundler need not reach into benchmarks/performance), so assert they
@@ -221,17 +179,15 @@ if (mode === 'groups') {
     console.log(JSON.stringify(batch.groups))
   }
 } else if (mode === 'check') {
-  const bad = checkManifest() + checkGroups() + checkMobileAuto()
+  const bad = checkManifest() + checkMobileAuto()
   if (bad) {
     console.error('\nCommitted benchmark artifacts are out of sync with _benchmark-matrix.js.')
     console.error(
-      'Run: npm run generate:benchmark-shards && npm run test:mobile:generate, then commit integration.auto.cjs + the workflow groups.'
+      'Run: npm run generate:benchmark-shards && npm run test:mobile:generate, then commit integration.auto.cjs.'
     )
     process.exit(1)
   }
-  console.log(
-    `OK: workflow test_groups and integration.auto.cjs both match the matrix (${matrix().length} shards).`
-  )
+  console.log(`OK: integration.auto.cjs matches the matrix (${matrix().length} shards).`)
 } else if (mode === 'assert') {
   const missing = assertShards()
   if (missing) {

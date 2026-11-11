@@ -135,19 +135,20 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
+      - uses: tetherto/qvac-actions/setup-aws-cli@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
       - id: models
         uses: ./.github/actions/models-cache-key
         with:
           workdir: ${{ env.WORKDIR }}
           target: cpp:tests
-      - if: runner.environment != 'github-hosted' && env.TRUSTED == 'true'
+      - if: steps.models.outputs.paths != '' && runner.environment != 'github-hosted' && env.TRUSTED == 'true'
         id: models-cache
         uses: tetherto/qvac-actions/cache@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           key: ${{ steps.models.outputs.key }}
           path: ${{ steps.models.outputs.paths }}
           enable-cross-os-archive: "true"
-      - if: runner.environment != 'github-hosted' && env.TRUSTED != 'true'
+      - if: steps.models.outputs.paths != '' && runner.environment != 'github-hosted' && env.TRUSTED != 'true'
         id: models-restore
         uses: tetherto/qvac-actions/cache-restore@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
@@ -172,7 +173,11 @@ jobs:
         env:
           PROJECT: ${{ matrix.row.project }}
           CONFIG: ${{ matrix.row.config }}
-        run: pnpm exec nx run-many -t cpp:tests -p "$PROJECT" -c "$CONFIG" --exclude-task-dependencies --outputStyle=stream
+          BUCKET: ${{ contains(matrix.row.meta.secrets, 'MODEL_S3_BUCKET') && secrets.MODEL_S3_BUCKET || '' }}
+        # Exported only when set, so an empty value never overrides a package default.
+        run: |
+          if [ -n "$BUCKET" ]; then export MODEL_S3_BUCKET="$BUCKET"; fi
+          pnpm exec nx run-many -t cpp:tests -p "$PROJECT" -c "$CONFIG" --exclude-task-dependencies --outputStyle=stream
       - if: always()
         uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
@@ -180,3 +185,14 @@ jobs:
           path: ${{ env.WORKDIR }}/build/**/cpp-test-results.xml
           retention-days: "30"
           if-no-files-found: warn
+      # A configuration whose commands measure coverage leaves its report here.
+      - if: always()
+        uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          name: cpp-coverage-${{ matrix.row.slug }}-${{ matrix.row.config }}
+          path: |
+            ${{ env.WORKDIR }}/build/**/coverage-html/
+            ${{ env.WORKDIR }}/build/**/lcov.info
+            ${{ env.WORKDIR }}/build/**/coverage-summary.txt
+          retention-days: "30"
+          if-no-files-found: ignore

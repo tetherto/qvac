@@ -343,7 +343,7 @@ async function downloadShardedRepo(baseUrl, files, sha256Map = {}) {
 }
 
 // Single-file models. Each entry's `scope` controls when it is downloaded:
-//   'ci'       -> always downloaded (mirrors .github/workflows/cpp-tests-llm.yml)
+//   'ci'       -> always downloaded (the models CI's cpp:tests uses)
 //   'optional' -> only downloaded for full local runs; the matching unit tests
 //                 use OnMissing::Skip, so CI deliberately skips them.
 // SHA256 digests are computed from known-good local fixtures; downloads that
@@ -507,7 +507,7 @@ async function ensureUnitTestModels(options = {}) {
   log(`target directory: ${MODEL_DIR}`)
   log(
     opts.ciOnly
-      ? 'mode: --ci (matches .github/workflows/cpp-tests-llm.yml)'
+      ? 'mode: --ci (the models the CI cpp:tests target uses)'
       : 'mode: full (includes optional fixtures CI skips)'
   )
 

@@ -55,6 +55,8 @@ function parseArgs (argv) {
     // (cross-platform) report omit desktop-only rows that can never have
     // mobile data, without touching the per-device reports.
     exclude: null,
+    // The CI contract names its perf artifacts <slug>-perf-*, not perf-report-*.
+    artifactPattern: null,
     help: false
   }
 
@@ -72,6 +74,7 @@ function parseArgs (argv) {
       case '--repo': args.repo = argv[++i]; break
       case '--filter': args.filter = argv[++i]; break
       case '--exclude': args.exclude = argv[++i]; break
+      case '--artifact-pattern': args.artifactPattern = argv[++i]; break
       case '--device-details':
         args.mdDeviceDetails = true
         args.htmlDeviceDetails = true
@@ -117,6 +120,9 @@ OPTIONS:
                         desktop-only rows from the combined cross-platform
                         report (e.g. "full-suite|canvasSize lab_results").
                         Applied after --filter.
+  --artifact-pattern <glob>
+                        Artifacts to download instead of perf-report-* (or *perf*
+                        without --addon), e.g. "diffusion-cpp-perf-*"
   -h, --help            Show this help
 
 EXAMPLES:
@@ -139,7 +145,7 @@ EXAMPLES:
 // Report collection (gh + filesystem helpers live in ./gh-artifacts.js)
 // ---------------------------------------------------------------------------
 
-function downloadAndCollect (workflow, runs, addon, repo) {
+function downloadAndCollect (workflow, runs, addon, repo, pattern) {
   console.log(`Querying last ${runs} completed runs of "${workflow}"...`)
   const runsList = listWorkflowRuns(workflow, runs, repo)
 
@@ -156,7 +162,7 @@ function downloadAndCollect (workflow, runs, addon, repo) {
   const tmpDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'perf-agg-'))
   console.log(`Downloading artifacts to ${tmpDir}...`)
 
-  const artifactPattern = addon ? `perf-report-*` : '*perf*'
+  const artifactPattern = pattern || (addon ? `perf-report-*` : '*perf*')
 
   for (const run of runsList) {
     console.log(`  Downloading run #${run.number} (${run.databaseId})...`)
@@ -252,7 +258,7 @@ function main () {
     console.log(`Loading reports from ${args.dir}...`)
     reports = collectReportsFromDir(args.dir)
   } else if (args.workflow) {
-    reports = downloadAndCollect(args.workflow, args.runs, args.addon, args.repo)
+    reports = downloadAndCollect(args.workflow, args.runs, args.addon, args.repo, args.artifactPattern)
   } else {
     console.error('Error: specify either --dir or --workflow')
     printHelp()
