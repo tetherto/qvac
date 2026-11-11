@@ -23,7 +23,7 @@ Install the self-contained package for your platform:
 
 ```bash
 pip install tetherto-qvac-sdk \
-  -f https://github.com/tetherto/qvac/releases/expanded_assets/sdk-v0.22.0
+  -f https://github.com/tetherto/qvac/releases/expanded_assets/sdk-v0.24.0
 ```
 
 pip selects the wheel for your platform and resolves the remaining dependencies from PyPI. `Client()` then finds the bundled worker automatically, with no further setup.
@@ -52,7 +52,7 @@ source .venv/bin/activate
 Install the package:
 ```bash
 pip install tetherto-qvac-sdk \
-  -f https://github.com/tetherto/qvac/releases/expanded_assets/sdk-v0.22.0
+  -f https://github.com/tetherto/qvac/releases/expanded_assets/sdk-v0.24.0
 ```
 </Step>
 
@@ -97,7 +97,7 @@ One such example queries the model registry:
 Serving requires `@qvac/ggml-rpc-server` and a custom worker. In your examples workspace, install the JavaScript SDK and native server package, pinned to the same version as the Python client so both speak the same contract:
 
 ```bash
-npm install "@qvac/sdk@0.22.0" @qvac/ggml-rpc-server
+npm install "@qvac/sdk@0.24.0" @qvac/ggml-rpc-server
 ```
 
 Create `qvac.config.json` with the server provider:
