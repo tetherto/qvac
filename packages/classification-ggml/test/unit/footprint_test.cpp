@@ -19,7 +19,9 @@
 #include <ggml-alloc.h>
 #include <ggml.h>
 #include <gtest/gtest.h>
+#if !defined(_WIN32)
 #include <sys/resource.h>
+#endif
 
 #include "model-interface/GgmlBackend.hpp"
 #include "model-interface/ModelFootprint.hpp"
@@ -308,7 +310,9 @@ TEST(ModelFootprint, RejectsUnknownFiles) {
 
 // Report only, run alone with --gtest_also_run_disabled_tests so the process
 // peak is this test's: how much resident memory a real BridgeDepth load and
-// 1280x720 inference add, next to the sum of the measured terms.
+// 1280x720 inference add, next to the sum of the measured terms. getrusage is
+// POSIX only, so Windows does not build it.
+#if !defined(_WIN32)
 TEST(ModelFootprint, DISABLED_ReportBridgeDepthResidentGrowth) {
   const std::string path = envOr("QVAC_BRIDGEDEPTH_MODEL_PATH", "");
   if (path.empty())
@@ -361,3 +365,4 @@ TEST(ModelFootprint, DISABLED_ReportBridgeDepthResidentGrowth) {
       static_cast<unsigned long long>(measured.hostWorkBytes),
       static_cast<unsigned long long>(measured.hostStagingBytes));
 }
+#endif
