@@ -272,17 +272,32 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     return best
   }
 
-  function flushToolBuffer(events: CompletionEvent[], closed: boolean) {
-    const raw = toolCallBuffer
-    const frame = activeToolFrame
+  function openToolFrame(marker: string, spec: FrameSpec, fromThinking: boolean) {
+    toolCallBuffer = marker
+    activeToolFrame = spec
+    toolFrameOpenedInThinking = fromThinking
+    state = 'toolFraming'
+  }
+
+  // Every exit from a tool frame goes through here, so no frame state outlives it.
+  function takeToolFrame() {
+    const taken = {
+      raw: toolCallBuffer + toolFramingTail,
+      frame: activeToolFrame,
+      openedInThinking: toolFrameOpenedInThinking
+    }
     toolCallBuffer = ''
-    activeToolFrame = null
     toolFramingTail = ''
+    activeToolFrame = null
+    toolFrameOpenedInThinking = false
+    return taken
+  }
+
+  function flushToolBuffer(events: CompletionEvent[], closed: boolean) {
+    const { raw, frame, openedInThinking } = takeToolFrame()
 
     if (!frame) return
 
-    const openedInThinking = toolFrameOpenedInThinking
-    toolFrameOpenedInThinking = false
     // The reasoning only mentioned the marker: still inside `<think>`.
     function returnToThinking() {
       dropLateThinkClose = false
@@ -340,10 +355,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   }
 
   function abandonToolFrame(events: CompletionEvent[]) {
-    const raw = toolCallBuffer + toolFramingTail
-    toolCallBuffer = ''
-    toolFramingTail = ''
-    activeToolFrame = null
+    const { raw } = takeToolFrame()
     state = 'content'
 
     events.push({
@@ -370,6 +382,77 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     }
   }
 
+  // Each step consumes what it can of `buf` in the current state and returns the rest.
+  function stepToolFraming(events: CompletionEvent[], buf: string) {
+    if (!activeToolFrame) {
+      state = 'content'
+      return buf
+    }
+    const close = activeToolFrame.close
+    const hit = buf.indexOf(close)
+
+    // `</think>` before the frame closes: the reasoning only mentioned the
+    // opener, so the buffered text goes back to reasoning.
+    const thinkClose = toolFrameOpenedInThinking ? buf.indexOf(BUILTIN_THINKING.close) : -1
+    if (thinkClose >= 0 && (hit < 0 || thinkClose < hit)) {
+      const { raw } = takeToolFrame()
+      trimThinkingStart = false
+      emitThinking(events, raw + buf.slice(0, thinkClose))
+      trimAfterThinking = contentParts.length === 0
+      state = 'content'
+      return buf.slice(thinkClose + BUILTIN_THINKING.close.length)
+    }
+
+    if (hit >= 0) {
+      toolCallBuffer += buf.slice(0, hit + close.length)
+      state = 'content'
+      flushToolBuffer(events, true)
+      return buf.slice(hit + close.length)
+    }
+
+    const tailLen = trailingPartialMarkerLen(
+      buf,
+      toolFrameOpenedInThinking ? [close, BUILTIN_THINKING.close] : [close]
+    )
+    const safeLen = buf.length - tailLen
+    toolCallBuffer += buf.slice(0, safeLen)
+    toolFramingTail = buf.slice(safeLen)
+    if (toolCallBuffer.length > MAX_TOOL_FRAME_CHARS) abandonToolFrame(events)
+    return ''
+  }
+
+  function stepThinkingFraming(events: CompletionEvent[], buf: string) {
+    if (!activeThinkingFrame) {
+      state = 'content'
+      return buf
+    }
+    const builtin = activeThinkingFrame === BUILTIN_THINKING
+    const closeMarker = activeThinkingFrame.close
+    const closeIdx = buf.indexOf(closeMarker)
+    const toolOpen = builtin ? findEarliestMarker(buf, toolOpeners) : null
+    if (toolOpen && (closeIdx < 0 || toolOpen.idx < closeIdx)) {
+      emitThinking(events, buf.slice(0, toolOpen.idx))
+      activeThinkingFrame = null
+      openToolFrame(toolOpen.marker, markerToEntry.get(toolOpen.marker)!.spec, true)
+      return buf.slice(toolOpen.idx + toolOpen.marker.length)
+    }
+    if (closeIdx >= 0) {
+      emitThinking(events, buf.slice(0, closeIdx))
+      activeThinkingFrame = null
+      trimAfterThinking = contentParts.length === 0
+      state = 'content'
+      return buf.slice(closeIdx + closeMarker.length)
+    }
+    const tailLen = trailingPartialMarkerLen(
+      buf,
+      builtin ? [closeMarker, ...toolOpeners] : [closeMarker]
+    )
+    const safeLen = buf.length - tailLen
+    emitThinking(events, buf.slice(0, safeLen))
+    thinkingFramingTail = buf.slice(safeLen)
+    return ''
+  }
+
   function processSegment(events: CompletionEvent[], text: string) {
     let buf = getStateTail() + text
 
@@ -380,85 +463,12 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
 
     while (buf.length > 0) {
       if (state === 'toolFraming') {
-        if (!activeToolFrame) {
-          state = 'content'
-          continue
-        }
-
-        const hit = buf.indexOf(activeToolFrame.close)
-
-        // `</think>` before the frame closes: the reasoning only mentioned the
-        // opener, so the buffered text goes back to reasoning.
-        const thinkClose = toolFrameOpenedInThinking ? buf.indexOf(BUILTIN_THINKING.close) : -1
-        if (thinkClose >= 0 && (hit < 0 || thinkClose < hit)) {
-          trimThinkingStart = false
-          emitThinking(events, toolCallBuffer + buf.slice(0, thinkClose))
-          buf = buf.slice(thinkClose + BUILTIN_THINKING.close.length)
-          toolCallBuffer = ''
-          activeToolFrame = null
-          toolFrameOpenedInThinking = false
-          trimAfterThinking = contentParts.length === 0
-          state = 'content'
-          continue
-        }
-
-        if (hit >= 0) {
-          toolCallBuffer += buf.slice(0, hit + activeToolFrame.close.length)
-          buf = buf.slice(hit + activeToolFrame.close.length)
-          state = 'content'
-          flushToolBuffer(events, true)
-          continue
-        }
-
-        const tailLen = trailingPartialMarkerLen(
-          buf,
-          toolFrameOpenedInThinking
-            ? [activeToolFrame.close, BUILTIN_THINKING.close]
-            : [activeToolFrame.close]
-        )
-        const safeLen = buf.length - tailLen
-        toolCallBuffer += buf.slice(0, safeLen)
-        toolFramingTail = buf.slice(safeLen)
-        buf = ''
-        if (toolCallBuffer.length > MAX_TOOL_FRAME_CHARS) abandonToolFrame(events)
+        buf = stepToolFraming(events, buf)
         continue
       }
 
       if (state === 'thinkingFraming') {
-        if (!activeThinkingFrame) {
-          state = 'content'
-          continue
-        }
-        const closeMarker = activeThinkingFrame.close
-        const closeIdx = buf.indexOf(closeMarker)
-        const toolOpen =
-          activeThinkingFrame === BUILTIN_THINKING ? findEarliestMarker(buf, toolOpeners) : null
-        if (toolOpen && (closeIdx < 0 || toolOpen.idx < closeIdx)) {
-          emitThinking(events, buf.slice(0, toolOpen.idx))
-          buf = buf.slice(toolOpen.idx + toolOpen.marker.length)
-          activeThinkingFrame = null
-          toolCallBuffer = toolOpen.marker
-          activeToolFrame = markerToEntry.get(toolOpen.marker)!.spec
-          toolFrameOpenedInThinking = true
-          state = 'toolFraming'
-          continue
-        }
-        if (closeIdx >= 0) {
-          emitThinking(events, buf.slice(0, closeIdx))
-          buf = buf.slice(closeIdx + closeMarker.length)
-          activeThinkingFrame = null
-          trimAfterThinking = contentParts.length === 0
-          state = 'content'
-          continue
-        }
-        const tailLen = trailingPartialMarkerLen(
-          buf,
-          activeThinkingFrame === BUILTIN_THINKING ? [closeMarker, ...toolOpeners] : [closeMarker]
-        )
-        const safeLen = buf.length - tailLen
-        emitThinking(events, buf.slice(0, safeLen))
-        thinkingFramingTail = buf.slice(safeLen)
-        buf = ''
+        buf = stepThinkingFraming(events, buf)
         continue
       }
 
@@ -509,9 +519,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
         // so the trim carries into it; any other frame ends it.
         if (entry.kind !== 'content') trimAfterThinking = false
         if (entry.kind === 'tool') {
-          toolCallBuffer = hit.marker
-          activeToolFrame = entry.spec
-          state = 'toolFraming'
+          openToolFrame(hit.marker, entry.spec, false)
         } else if (entry.kind === 'thinking') {
           activeThinkingFrame = entry.spec
           thinkingBlockStart = thinkingParts.length
@@ -572,11 +580,9 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
 
     if (state === 'toolFraming' && activeToolFrame) {
       if (opts?.error) {
-        if (toolFrameOpenedInThinking) emitThinking(events, toolCallBuffer)
-        else emitContent(events, toolCallBuffer)
-        toolCallBuffer = ''
-        activeToolFrame = null
-        toolFrameOpenedInThinking = false
+        const { raw, openedInThinking } = takeToolFrame()
+        if (openedInThinking) emitThinking(events, raw)
+        else emitContent(events, raw)
       } else {
         flushToolBuffer(events, false)
       }

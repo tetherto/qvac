@@ -1351,6 +1351,19 @@ test('open <think>: only the unclosed block is promoted', (t) => {
   t.is(joined(events, 'contentDelta'), 'Final answer')
 })
 
+test('open <think>: an abandoned tool frame does not mark later frames as reasoning', (t) => {
+  const n = createCompletionNormalizer(qwenThinkingConfig())
+  const events = [
+    ...pushAll(n, ['<think>\nplan\n<tool_call>', 'x'.repeat(MAX_TOOL_FRAME_CHARS + 1)]),
+    ...pushAll(n, ['<tool_call>not a call</tool_call>']),
+    ...n.finish({ stopReason: 'eos' })
+  ]
+
+  t.is(joined(events, 'thinkingDelta'), 'plan')
+  t.is(events.filter((e) => e.type === 'toolError').length, 2, 'both frames report an error')
+  t.ok(joined(events, 'contentDelta').endsWith('<tool_call>not a call</tool_call>'))
+})
+
 test('open <think>: reasoning is not promoted when the turn did not end on its own', (t) => {
   const raw = '<think>\nDone. Created NOTES.md.'
   const finishes = [
