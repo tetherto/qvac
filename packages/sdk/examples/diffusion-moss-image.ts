@@ -64,6 +64,9 @@ function modelSource(source: string) {
 }
 
 let modelId: string | undefined
+// Progress fires many times per percent on a multi-GB download; write once per whole percent
+// of each file.
+const lastPercent = new Map<string, number>()
 
 try {
   console.log('▸ Loading MOSS-Image...')
@@ -77,6 +80,9 @@ try {
       flash_attn: true
     },
     onProgress: (progress) => {
+      const percent = Math.floor(progress.percentage)
+      if (lastPercent.get(progress.downloadKey) === percent) return
+      lastPercent.set(progress.downloadKey, percent)
       const mb = (bytes: number) => (bytes / 1e6).toFixed(1)
       const line = `▸ Downloading ${progress.percentage.toFixed(0)}% (${mb(progress.downloaded)}/${mb(progress.total)} MB)`
       process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`)

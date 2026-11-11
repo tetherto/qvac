@@ -79,8 +79,19 @@ def model_source(source: str) -> str:
     return str(Path(source).resolve())
 
 
+_last_percent: dict[str, int] = {}
+
+
 def print_progress(p) -> None:
-    """Print model download progress; pass as `on_progress=` to `load_model`."""
+    """Print model download progress; pass as `on_progress=` to `load_model`.
+
+    Progress fires many times per percent on a multi-GB download, so it prints
+    once per whole percent of each file.
+    """
+    percent = int(p.percentage)
+    if _last_percent.get(p.download_key) == percent:
+        return
+    _last_percent[p.download_key] = percent
     line = (
         f"▸ Downloading {p.percentage:.0f}% "
         f"({p.downloaded / 1e6:.1f}/{p.total / 1e6:.1f} MB)"
