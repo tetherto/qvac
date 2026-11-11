@@ -103,10 +103,24 @@ function track(index: OpenVectorIndex) {
   return indexId
 }
 
+// A provider without the controls reports neither field.
+function indexState(index: OpenVectorIndex) {
+  return {
+    ...(index.calibrated !== undefined && { calibrated: index.calibrated }),
+    ...(index.stagedSearch !== undefined && { stagedSearch: index.stagedSearch })
+  }
+}
+
 export async function createVectorIndex(params: { dim: number; storage: VectorIndexStorage }) {
   const backend = requireBackend()
   const { index, indexId } = await openVectorIndex(() => backend.create(params.dim, params.storage))
-  return { indexId, dim: index.dim, storage: params.storage, length: index.length }
+  return {
+    indexId,
+    dim: index.dim,
+    storage: params.storage,
+    length: index.length,
+    ...indexState(index)
+  }
 }
 
 export async function loadVectorIndex(params: { path: string }) {
@@ -118,6 +132,7 @@ export async function loadVectorIndex(params: { path: string }) {
     indexId,
     dim: index.dim,
     length: index.length,
+    ...indexState(index),
     ...(index.storage !== undefined && { storage: index.storage })
   }
 }
@@ -132,7 +147,12 @@ export function addVectors(params: { indexId: string; ids: VectorIdWire[]; vecto
   const vectors = flattenRows(params.vectors, index.dim, 'vectors')
   const ids = toNativeIds(params.ids)
   runBackend(() => index.add(vectors, ids))
-  return { length: index.length }
+  return { length: index.length, ...indexState(index) }
+}
+
+export function setVectorIndexStagedSearch(params: { indexId: string; enabled: boolean }) {
+  const index = getIndex(params.indexId)
+  return runBackend(() => ({ stagedSearch: index.setStagedSearch(params.enabled) }))
 }
 
 export function searchVectors(params: { indexId: string; queries: number[][]; k: number }) {

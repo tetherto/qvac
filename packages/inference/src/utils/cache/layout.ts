@@ -89,10 +89,13 @@ const SIDECAR_FAMILIES: readonly SidecarFamily[] = [
     }
   },
   {
-    // TranscribePsy's Core ML distribution is published on Hugging Face as an
-    // encoder-less GGUF with its encoder and decoder bundles beside it; the ASR
-    // addon runs both stages on the Neural Engine. The full GGUF
-    // (`transcribepsy-250m-eu-sub.gguf`) has no sidecar and runs on ggml.
+    // TranscribePsy EU-sub's Core ML distribution is published on Hugging Face
+    // as an encoder-less GGUF with its encoder and decoder bundles beside it;
+    // the ASR addon runs both stages on the Neural Engine. The full EU-sub GGUF
+    // (`transcribepsy-250m-eu-sub.gguf`) has no sidecar and runs on ggml, and
+    // so does the 25-language TranscribePsy-250M-EU GGUF
+    // (`transcribepsy-250m-eu.gguf`, published from S3): its CAFE adapters and
+    // language gate are not in these bundles, so it has no Core ML family.
     source: 'hf',
     pathPattern: /^qvac\/TranscribePsy-250M-EU-sub-coreml\/resolve\//,
     stemPattern: /^(transcribepsy-250m-eu-sub-coreml)\.gguf$/,

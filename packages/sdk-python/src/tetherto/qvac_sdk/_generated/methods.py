@@ -29,6 +29,8 @@ from . import (
     BciTranscribeResponse,
     BciTranscribeStreamRequest,
     BciTranscribeStreamResponse,
+    CalcTokensRequest,
+    CalcTokensResponse,
     CancelRequest,
     CancelResponse,
     ClassifyRequest,
@@ -172,6 +174,13 @@ async def bci_transcribe_stream(
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     async for chunk in transport.call_duplex(payload, up):
         yield BciTranscribeStreamResponse.model_validate(chunk)
+
+
+async def calc_tokens(
+    transport: Transport, params: CalcTokensRequest
+) -> CalcTokensResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return CalcTokensResponse.model_validate(await transport.call(payload))
 
 
 async def cancel(transport: Transport, params: CancelRequest) -> CancelResponse:
@@ -542,6 +551,7 @@ __all__ = [
     "batch_completion_stream",
     "bci_transcribe",
     "bci_transcribe_stream",
+    "calc_tokens",
     "cancel",
     "classify",
     "completion_orchestrate",

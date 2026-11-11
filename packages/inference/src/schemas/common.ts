@@ -118,6 +118,7 @@ import {
 import { decideRequestSchema, decideResponseSchema } from '@/schemas/decision'
 import { rerankRequestSchema, rerankResponseSchema } from '@/schemas/rerank'
 import { classifyRequestSchema, classifyResponseSchema } from '@/schemas/classification'
+import { calcTokensRequestSchema, calcTokensResponseSchema } from '@/schemas/calc-tokens'
 import {
   audioEditStreamRequestSchema,
   audioEditStreamResponseSchema,
@@ -135,6 +136,7 @@ export const requestSchema = z.union([
   stopRpcServerRequestSchema,
   discoverRpcServersRequestSchema,
   heartbeatRequestSchema,
+  calcTokensRequestSchema,
   loadModelRequestSchema,
   downloadAssetRequestSchema,
   completionStreamRequestSchema,
@@ -187,6 +189,7 @@ export const responseSchema = z.discriminatedUnion('type', [
   stopRpcServerResponseSchema,
   discoverRpcServersResponseSchema,
   heartbeatResponseSchema,
+  calcTokensResponseSchema,
   loadModelResponseSchema,
   downloadAssetResponseSchema,
   completionStreamResponseSchema,
