@@ -11,9 +11,10 @@
 
 namespace classification_ggml::fit {
 
-// BridgeDepth input size assumed when the request names none. Upstream
-// downsamples inputs above 720p, so 1280x720 is the largest input it runs at
-// full size.
+// BridgeDepth input size assumed when the request names none. The model
+// authors recommend downsampling inputs above 720p before inference, so
+// 1280x720 is the largest input they recommend. The addon itself does not
+// downsample.
 inline constexpr int DEFAULT_FIT_WIDTH = 1280;
 inline constexpr int DEFAULT_FIT_HEIGHT = 720;
 
