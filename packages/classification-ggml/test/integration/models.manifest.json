@@ -11,6 +11,12 @@
       "dest": "test/fixtures/megaloc-mixed.gguf",
       "sha256": "c1215bca09ed783f34e66ab372b0b02e75213733bea8105764557b58f2082575",
       "targets": ["test:integration", "test:mobile"]
+    },
+    "bridgedepth-vits-f32.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/bridgedepth/2026-11-03/bridgedepth-vits-f32.gguf",
+      "dest": "test/fixtures/bridgedepth-vits-f32.gguf",
+      "sha256": "8a8e0774d0ccff8a787f01636b1ebfea41d4f9421494d1388765d04d1c32877d",
+      "targets": ["test:integration", "test:mobile", "cpp:tests"]
     }
   }
 }

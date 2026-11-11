@@ -1,6 +1,6 @@
 # @qvac/classification-ggml
 
-GGML-powered vision addon for QVAC. `ImageClassifier` runs a MobileNetV3-Small triage model on CPU from a weights path you pass in. `MegaLoc` produces visual place descriptors using a local GGUF on CPU or a Fabric GPU backend. `@qvac/inference` downloads the default classifier from the registry when `modelSrc` is omitted.
+GGML-powered vision addon for QVAC. `ImageClassifier` runs a MobileNetV3-Small triage model on CPU from a weights path you pass in. `MegaLoc` produces visual place descriptors using a local GGUF on CPU or a Fabric GPU backend. `BridgeDepth` estimates stereo disparity from a rectified image pair, also from a local GGUF. `@qvac/inference` downloads the default classifier from the registry when `modelSrc` is omitted.
 
 ## MegaLoc image embeddings
 
@@ -18,6 +18,22 @@ await model.destroy()
 **F16 is the default conversion format.** F16 body + Q6_K projection is the other
 supported format. MegaLoc weights are supplied separately; the package includes
 a local conversion script and does not download or redistribute these GGUFs.
+
+## BridgeDepth stereo disparity
+
+**Detailed BridgeDepth guide: [API, accuracy, GGUF conversion and tests](docs/bridgedepth.md).**
+
+```js
+const { BridgeDepth } = require('@qvac/classification-ggml')
+
+const model = new BridgeDepth({ modelPath: './bridgedepth-vits-f32.gguf' })
+await model.load()
+const { width, height, disparity } = await model.infer(leftPng, rightPng) // left-view disparity in pixels
+await model.destroy()
+```
+
+BridgeDepth weights are supplied separately; the package includes a local
+conversion script and does not download or redistribute the GGUF.
 
 ## MobileNet classification
 
@@ -161,6 +177,10 @@ suite, manually convert both MegaLoc formats as described in
 `test/fixtures/` or set `QVAC_MEGALOC_F16_MODEL_PATH` and
 `QVAC_MEGALOC_MIXED_MODEL_PATH` to your converted files. These weights are not
 bundled with the addon.
+
+BridgeDepth tests need `QVAC_BRIDGEDEPTH_MODEL_PATH`, see
+[docs/bridgedepth.md](docs/bridgedepth.md#tests); without it, the tests that
+need weights are skipped.
 
 ### Mobile tests
 

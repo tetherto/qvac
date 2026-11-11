@@ -256,6 +256,7 @@
         "parallel": false,
         "commands": [
           "node --test scripts/__tests__/run-cpp-fuzz.test.js",
+          "pnpm run test:cpp",
           "pnpm run fuzz:build",
           "pnpm run fuzz:run"
         ]
