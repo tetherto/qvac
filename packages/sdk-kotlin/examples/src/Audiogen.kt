@@ -13,7 +13,7 @@
 // The engine ships its own weights, so the load passes an empty source and the
 // four component models as `*ModelSrc` fields of `modelConfig`.
 //
-// RUN: ./gradlew run -Pexample=Audiogen--args="'lo-fi hip hop, mellow piano' audiogen-output.wav"
+// RUN: ./gradlew run -Pexample=Audiogen --args="'lo-fi hip hop, mellow piano' audiogen-output.wav"
 
 import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
