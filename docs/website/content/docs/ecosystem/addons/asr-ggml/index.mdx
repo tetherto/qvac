@@ -229,7 +229,7 @@ try {
 }
 ```
 
-`run()` returns a `QvacResponse`; drain it with `onUpdate(cb)` (push) or `iterate()` (pull). For live audio, use `runStreaming(audio, opts)`: its options override the `streaming*` load-time keys per call, without the `streaming` prefix (for example, `chunkMs`).
+`run()` returns a `QvacResponse`; drain it with `onUpdate(cb)` (push) or `iterate()` (pull). For live audio, use `runStreaming(audio, opts)`. Its options override the `streaming*` load-time keys per call: `chunkMs`, `historyMs`, `leftContextMs`, `rightLookaheadMs`, `emitPartials`, `emitEnergyVad`, `energyVadThresholdDb`, `energyVadWindowMs`, `energyVadHangoverMs`, `emitSpeakerVad`, `diarizationThreshold`, `diarizationMinSegmentMs`, `spkCacheEnable`, `spkCacheLen`, `fifoLen`, `chunkLeftContextMs`, `chunkRightContextMs`, and `spkCacheUpdatePeriod`. Most drop the `streaming` prefix, but `streamingEnergyVad` and `streamingSpeakerVad` become `emitEnergyVad` and `emitSpeakerVad`.
 
 **Output payloads:**
 - **Segments** — bare `TranscriptionSegment[]` (or a single segment): `text`, `start`, `end`, plus the Parakeet fields `toAppend`, `isEndOfTurn`, and `startsWord`. Sortformer adds `speakerId` (streaming) or `speakerSegments` (offline); `speakerAttribution` adds `speakerId`, `start`, `end`, and `isFinal` per turn.
