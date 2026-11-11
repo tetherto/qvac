@@ -416,10 +416,14 @@ const STREAMS: Record<string, Fold> = {
       // completion is the expensive part, and "how did it stop" and "what did it cost" are
       // questions about the run that just happened, not reasons to run it again.
       // A streaming run's text is read off the token stream, so a stream that yields nothing fails.
-      const streamed = p.stream ? joinStream(run.tokenStream) : undefined
-      const final = await run.final
+      // Awaited together: when the run fails, `final` and the token stream both reject, and a
+      // stream promise left without a handler is an unhandled rejection that kills a Node consumer.
+      const [streamed, final] = await Promise.all([
+        p.stream ? joinStream(run.tokenStream) : undefined,
+        run.final
+      ])
       return {
-        text: streamed ? await streamed : await run.text,
+        text: streamed ?? (await run.text),
         toolCalls: (await run.toolCalls) ?? [],
         stats: final.stats,
         stopReason: final.stopReason,
