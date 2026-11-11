@@ -648,6 +648,11 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
       } else {
         releaseHeldCalls(events)
       }
+      // A partial marker was still buffered after the call.
+      if (opts?.error || afterThinkingToolTail.trim()) {
+        emitThinking(events, afterThinkingToolTail)
+      }
+      afterThinkingToolTail = ''
     }
     // The model stopped on its own inside the prompt-opened `<think>`: calls it
     // left there were made, and the reasoning after them, or the whole block

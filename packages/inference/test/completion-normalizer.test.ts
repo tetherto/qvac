@@ -1344,6 +1344,18 @@ test('open <think>: a held call is returned to reasoning when the turn errors', 
   t.ok(joined(events, 'thinkingDelta').endsWith('</tool_call>'))
 })
 
+test('open <think>: a partial marker buffered after a held call is kept on cutoff', (t) => {
+  const raw = `<think>\nLet me check.\n${QWEN_CALL}\n</thi`
+  for (const size of [raw.length, 3, 1]) {
+    const n = createCompletionNormalizer(qwenThinkingConfig())
+    const events = [...pushAll(n, chunksOf(raw, size)), ...n.finish({ stopReason: 'length' })]
+
+    t.is(events.filter((e) => e.type === 'toolCall').length, 1, `chunk ${size}: one call`)
+    t.ok(joined(events, 'thinkingDelta').endsWith('</thi'), `chunk ${size}: tail kept`)
+    t.is(joined(events, 'contentDelta'), '', `chunk ${size}: no content`)
+  }
+})
+
 test('open <think>: a mentioned <tool_call> stays reasoning', (t) => {
   const closed = '<think>\nI could emit a <tool_call> here, but no.\n</think>\n\nHello.'
   const unparsed = '<think>\nSyntax is <tool_call>name</tool_call>, noted.\n</think>\n\nHello.'
