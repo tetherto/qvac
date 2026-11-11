@@ -9,6 +9,16 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.28.0` -> `^0.29.0`, which carries
+  `qvac-fabric` `11739.1.1` -> `11739.2.0`
+  ([#5706](https://github.com/tetherto/qvac/pull/5706)). The mobile dev and
+  peer dependencies `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to
+  `^0.29.0` with it. `@qvac/fabric` 0.29.0 is not ABI-compatible with 0.28.x,
+  so every addon loaded in one process must resolve the same `@qvac/fabric`
+  minor. This package needed no code change for the new fabric.
+
 ## [0.37.0] - 2026-11-10
 
 ### Added
@@ -23,6 +33,14 @@ and this project adheres to
 ### Pull Requests
 
 - [#5531](https://github.com/tetherto/qvac/pull/5531) - BridgeDepth stereo disparity.
+
+## [0.36.1] - 2026-11-11
+
+### Changed
+
+- Released from the 0.36 line (`classification-ggml-v0.36.0`) on
+  `@qvac/fabric` `^0.29.0`, without BridgeDepth, under the `release-0.36`
+  dist-tag ([#5711](https://github.com/tetherto/qvac/pull/5711)).
 
 ## [0.36.0] - 2026-11-09
 
