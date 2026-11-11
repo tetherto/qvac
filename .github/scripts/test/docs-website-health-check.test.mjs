@@ -155,6 +155,47 @@ test('probeUrl reports a timeout when the request aborts', async () => {
   assert.match(res.error, /timeout after 10ms/)
 })
 
+test('probeUrl retries a transient network error and succeeds', async () => {
+  let calls = 0
+  const fetchImpl = async () => {
+    calls++
+    if (calls < 3) throw new Error('fetch failed')
+    return new Response('', { status: 200 })
+  }
+  const res = await probeUrl(`${ORIGIN}/`, { fetchImpl, retryDelayMs: 0 })
+  assert.equal(res.ok, true)
+  assert.equal(calls, 3)
+})
+
+test('probeUrl retries 5xx and 429 but gives up after the retry budget', async () => {
+  let calls = 0
+  const fetchImpl = async () => { calls++; return new Response('', { status: 503 }) }
+  const res = await probeUrl(`${ORIGIN}/`, { fetchImpl, retries: 2, retryDelayMs: 0 })
+  assert.equal(res.ok, false)
+  assert.equal(res.status, 503)
+  assert.equal(calls, 3)
+})
+
+test('probeUrl never retries a 404', async () => {
+  let calls = 0
+  const fetchImpl = async () => { calls++; return new Response('', { status: 404 }) }
+  const res = await probeUrl(`${ORIGIN}/missing/`, { fetchImpl, retryDelayMs: 0 })
+  assert.equal(res.ok, false)
+  assert.equal(res.status, 404)
+  assert.equal(calls, 1)
+})
+
+test('probeUrl surfaces the underlying error cause', async () => {
+  const fetchImpl = async () => {
+    const err = new TypeError('fetch failed')
+    err.cause = { code: 'ECONNRESET' }
+    throw err
+  }
+  const res = await probeUrl(`${ORIGIN}/`, { fetchImpl, retries: 0 })
+  assert.equal(res.ok, false)
+  assert.match(res.error, /fetch failed \(ECONNRESET\)/)
+})
+
 test('runProbes preserves order and attaches category', async () => {
   const entries = [
     { url: `${ORIGIN}/`, category: 'sitemap' },

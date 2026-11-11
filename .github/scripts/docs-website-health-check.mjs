@@ -3,7 +3,8 @@
  * Daily production health-check for the QVAC docs site
  * (https://docs.qvac.tether.io). Collects the set of URLs a reader or crawler
  * is expected to reach and probes each one, failing the process if any returns
- * a 404 (or other >= 400 status / network error).
+ * a 404 (or other >= 400 status / network error). Transient failures
+ * (network error, timeout, 429, 5xx) are retried before a URL is reported broken.
  *
  * URL set (per QVAC-20429):
  *   1. Every `<loc>` in the live `/sitemap.xml`.
@@ -43,6 +44,8 @@ export const DEFAULT_REDIRECTS_URL =
   'https://raw.githubusercontent.com/tetherto/qvac/docs-production/docs/website/public/_redirects'
 const DEFAULT_TIMEOUT_MS = 15000
 const DEFAULT_CONCURRENCY = 10
+const DEFAULT_RETRIES = 2
+const DEFAULT_RETRY_DELAY_MS = 1000
 const USER_AGENT = 'qvac-docs-health-check (+https://github.com/tetherto/qvac)'
 
 /** Extract every `<loc>` value from a sitemap XML string. */
@@ -138,8 +141,21 @@ export function buildUrlSet ({ origin, sitemapXml, redirectsText }) {
   return [...seen.entries()].map(([url, category]) => ({ url, category }))
 }
 
-/** Probe a single URL. Never throws — failures are returned as data. */
-export async function probeUrl (url, { timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl = fetch } = {}) {
+/** Describe a thrown fetch error, including the underlying `cause` (undici hides it behind "fetch failed"). */
+function describeError (err, timeoutMs) {
+  if (err?.name === 'AbortError') return `timeout after ${timeoutMs}ms`
+  const message = err?.message || String(err)
+  const cause = err?.cause?.code || err?.cause?.message
+  return cause && !message.includes(cause) ? `${message} (${cause})` : message
+}
+
+/** Transient outcomes worth retrying: network errors, timeouts, 429 and 5xx. 404 and other 4xx are real. */
+function isTransient (result) {
+  if (result.status === null) return true
+  return result.status === 429 || result.status >= 500
+}
+
+async function probeOnce (url, { timeoutMs, fetchImpl }) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
@@ -153,11 +169,25 @@ export async function probeUrl (url, { timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl
     try { await res.body?.cancel() } catch {}
     return { url, status: res.status, ok: res.status < 400, error: null }
   } catch (err) {
-    const error = err?.name === 'AbortError' ? `timeout after ${timeoutMs}ms` : (err?.message || String(err))
-    return { url, status: null, ok: false, error }
+    return { url, status: null, ok: false, error: describeError(err, timeoutMs) }
   } finally {
     clearTimeout(timer)
   }
+}
+
+/**
+ * Probe a single URL. Never throws — failures are returned as data. Transient
+ * failures (network error, timeout, 429, 5xx) are retried with linear backoff
+ * so a one-off connection reset does not raise a false alarm; a 404 is never
+ * retried.
+ */
+export async function probeUrl (url, { timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl = fetch, retries = DEFAULT_RETRIES, retryDelayMs = DEFAULT_RETRY_DELAY_MS } = {}) {
+  let result = await probeOnce(url, { timeoutMs, fetchImpl })
+  for (let attempt = 1; attempt <= retries && !result.ok && isTransient(result); attempt++) {
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, retryDelayMs * attempt))
+    result = await probeOnce(url, { timeoutMs, fetchImpl })
+  }
+  return result
 }
 
 /** Probe every entry with a bounded worker pool, preserving input order. */
