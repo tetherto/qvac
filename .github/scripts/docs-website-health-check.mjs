@@ -190,8 +190,12 @@ export async function probeUrl (url, { timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl
   return result
 }
 
-/** Probe every entry with a bounded worker pool, preserving input order. */
-export async function runProbes (entries, { concurrency = DEFAULT_CONCURRENCY, timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl = fetch } = {}) {
+/**
+ * Probe every entry with a bounded worker pool, preserving input order.
+ * `onResult` fires as each probe settles, so callers can report failures
+ * before the whole run finishes (a job killed by its timeout keeps its log).
+ */
+export async function runProbes (entries, { concurrency = DEFAULT_CONCURRENCY, timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl = fetch, onResult } = {}) {
   const results = new Array(entries.length)
   let next = 0
   async function worker () {
@@ -200,6 +204,7 @@ export async function runProbes (entries, { concurrency = DEFAULT_CONCURRENCY, t
       const { url, category } = entries[index]
       const result = await probeUrl(url, { timeoutMs, fetchImpl })
       results[index] = { ...result, category }
+      onResult?.(results[index])
     }
   }
   const size = Math.max(1, Math.min(concurrency, entries.length))
@@ -340,7 +345,10 @@ async function main () {
   console.log(`Probing ${entries.length} URL(s) with concurrency ${args.concurrency}…`)
   const results = await runProbes(entries, {
     concurrency: args.concurrency,
-    timeoutMs: args.timeoutMs
+    timeoutMs: args.timeoutMs,
+    onResult: (r) => {
+      if (!r.ok) console.error(`  broken: [${r.category}] ${r.url} -> ${r.status ?? r.error}`)
+    }
   })
 
   const failures = results.filter((r) => !r.ok)

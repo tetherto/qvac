@@ -167,13 +167,26 @@ test('probeUrl retries a transient network error and succeeds', async () => {
   assert.equal(calls, 3)
 })
 
-test('probeUrl retries 5xx and 429 but gives up after the retry budget', async () => {
-  let calls = 0
-  const fetchImpl = async () => { calls++; return new Response('', { status: 503 }) }
-  const res = await probeUrl(`${ORIGIN}/`, { fetchImpl, retries: 2, retryDelayMs: 0 })
-  assert.equal(res.ok, false)
-  assert.equal(res.status, 503)
-  assert.equal(calls, 3)
+for (const status of [503, 429]) {
+  test(`probeUrl retries ${status} but gives up after the retry budget`, async () => {
+    let calls = 0
+    const fetchImpl = async () => { calls++; return new Response('', { status }) }
+    const res = await probeUrl(`${ORIGIN}/`, { fetchImpl, retries: 2, retryDelayMs: 0 })
+    assert.equal(res.ok, false)
+    assert.equal(res.status, status)
+    assert.equal(calls, 3)
+  })
+}
+
+test('runProbes reports each result as it settles', async () => {
+  const entries = [
+    { url: `${ORIGIN}/a/`, category: 'sitemap' },
+    { url: `${ORIGIN}/b/`, category: 'redirect' }
+  ]
+  const fetchImpl = async (url) => new Response('', { status: url.endsWith('/b/') ? 404 : 200 })
+  const seen = []
+  await runProbes(entries, { fetchImpl, concurrency: 1, onResult: (r) => seen.push([r.url, r.ok, r.category]) })
+  assert.deepEqual(seen, [[`${ORIGIN}/a/`, true, 'sitemap'], [`${ORIGIN}/b/`, false, 'redirect']])
 })
 
 test('probeUrl never retries a 404', async () => {
