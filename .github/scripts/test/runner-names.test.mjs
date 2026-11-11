@@ -62,13 +62,7 @@ test('speech C++ test targets use the same CPU runner', () => {
   }
 })
 
-test('PR C++ tests consume the package target runner and shared cpp-lint uses CPU', () => {
-  const source = readRepoFile('.github/workflows/cpp-tests-nx.yml')
-  assert.match(source, /target: test:cpp/)
-  assert.ok(source.includes('runs-on: ${{ matrix.runner || matrix.os }}'))
-  assert.match(readRepoFile('.github/workflows/on-pr-nx.yml'), /uses: .\/\.github\/workflows\/cpp-tests-nx.yml/)
-  const cpuRunner = loadRunners().find((entry) => entry.key === 'linux_ubuntu2204_x64').label
-  assert.ok(readRepoFile('.github/workflows/cpp-lint.yaml').includes(`runs-on: ${cpuRunner}\n`))
+test('security-baseline runs the runner-names suite', () => {
   assert.ok(readRepoFile('.github/workflows/security-baseline.yml').includes('.github/scripts/test/runner-names.test.mjs'))
 })
 

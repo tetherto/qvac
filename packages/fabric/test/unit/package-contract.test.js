@@ -177,10 +177,18 @@ test('Linux prebuilds enable RDMA and install its build dependency', () => {
   assert.ok(
     fabric.features.some((feature) => feature.name === 'rpc-rdma' && feature.platform === 'linux')
   )
-  assert.match(
-    projectJson.targets.build.options.ci.linuxExtraPackages,
-    /(?:^|\s)libibverbs-dev(?:\s|$)/
+  // Every Linux build configuration installs it through ci:system.
+  const linux = Object.keys(projectJson.targets.build.configurations).filter((c) =>
+    c.startsWith('linux-')
   )
+  assert.ok(linux.length > 0)
+  for (const config of linux) {
+    const commands = projectJson.targets['ci:system'].configurations[config]?.commands ?? []
+    assert.ok(
+      commands.some((c) => /(?:^|\s)libibverbs-dev(?:\s|\)|$)/.test(c)),
+      config
+    )
+  }
 })
 
 test('the meta package publishes the loader and the C++ SDK', () => {

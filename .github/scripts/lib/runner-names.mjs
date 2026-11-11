@@ -21,12 +21,9 @@ const ADDON_PREFIXES = [
   'integration-mobile-test-',
   'cpp-tests-',
   'cpp-test-coverage-',
-  'pr-test-inference-addon',
 ]
 
-const ADDON_EXACT = new Set([
-  'reusable-prebuilds.yml',
-])
+const ADDON_EXACT = new Set([])
 
 const ENTRY_RE = /^([a-z][a-z0-9_]*):\s+(\S+)\s*(?:#\s*(.*\S))?\s*$/
 

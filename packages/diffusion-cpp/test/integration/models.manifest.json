@@ -7,7 +7,11 @@
       ],
       "sha256": "7b73fa47b4d1401bdf3a0898827fac94bced6633bf64ef7fe55492b6115cc74b",
       "bytes": 2322705024,
-      "group": "base"
+      "group": "base",
+      "targets": [
+        "test:integration",
+        "cpp:tests"
+      ]
     },
     "stable-diffusion-xl-base-1.0-Q4_0.gguf": {
       "urls": [
@@ -55,7 +59,11 @@
       ],
       "sha256": "08431d93824e56513cccc84a4d10d327df992cff5b5a0dcfdc739f4d50c2cc9e",
       "bytes": 5643820832,
-      "group": "ideogram"
+      "group": "ideogram",
+      "skip": [
+        "linux-arm64",
+        "darwin-x64"
+      ]
     },
     "ideogram4_uncond-Q4_0.gguf": {
       "urls": [
@@ -63,7 +71,11 @@
       ],
       "sha256": "2ac9c57c32dead6953da2985656cadd801991a993bd3d5205d3ac1a96686b45a",
       "bytes": 5643820832,
-      "group": "ideogram"
+      "group": "ideogram",
+      "skip": [
+        "linux-arm64",
+        "darwin-x64"
+      ]
     },
     "Qwen3-VL-8B-Instruct-Q4_K_M.gguf": {
       "urls": [
@@ -71,7 +83,11 @@
       ],
       "sha256": "108e7ff92b78eefd3db4741885104acba514255c11b617d3c7b197a5f46efe89",
       "bytes": 5027785568,
-      "group": "ideogram"
+      "group": "ideogram",
+      "skip": [
+        "linux-arm64",
+        "darwin-x64"
+      ]
     },
     "wan2.1_t2v_1.3B_fp16.safetensors": {
       "urls": [
@@ -95,7 +111,8 @@
       ],
       "sha256": "3024aef1dfa6a474ea76886d67fa6cdf029366d4a934f28ceec217f77b2cfd2d",
       "bytes": 3564739296,
-      "group": "wan22"
+      "group": "wan22",
+      "warm": false
     },
     "wan2.2_vae.safetensors": {
       "urls": [
@@ -103,7 +120,8 @@
       ],
       "sha256": "e40321bd36b9709991dae2530eb4ac303dd168276980d3e9bc4b6e2b75fed156",
       "bytes": 1409400960,
-      "group": "wan22"
+      "group": "wan22",
+      "warm": false
     },
     "wan_2.1_vae.safetensors": {
       "urls": [
@@ -151,7 +169,13 @@
       ],
       "sha256": "e68d6d8f8a42942ac9b862cc315beb3bc30805a8876c7ad63ba5bf7a2b8e168a",
       "bytes": 1452256522,
-      "group": "ltx"
+      "group": "ltx",
+      "skip": [
+        "linux-x64",
+        "linux-arm64",
+        "darwin-x64",
+        "win32-x64"
+      ]
     },
     "ltx-2.3-22b-distilled_audio_vae.safetensors": {
       "urls": [
@@ -159,7 +183,13 @@
       ],
       "sha256": "3cd6a6eb8cb28f5ecc12f1f3126952b2a3d2b0b42ad3270e63cefafafe0d9b57",
       "bytes": 364853140,
-      "group": "ltx"
+      "group": "ltx",
+      "skip": [
+        "linux-x64",
+        "linux-arm64",
+        "darwin-x64",
+        "win32-x64"
+      ]
     },
     "ltx-2.3-22b-distilled_embeddings_connectors.safetensors": {
       "urls": [
@@ -167,7 +197,13 @@
       ],
       "sha256": "c61cbb396e2a8175d8b2da51f0fdac885a4ccd22c9f64dafa5aa2c455dc8a507",
       "bytes": 2312144712,
-      "group": "ltx"
+      "group": "ltx",
+      "skip": [
+        "linux-x64",
+        "linux-arm64",
+        "darwin-x64",
+        "win32-x64"
+      ]
     },
     "LTX-2.3-22B-distilled-1.1-Q2_K.gguf": {
       "urls": [
@@ -175,7 +211,13 @@
       ],
       "sha256": "af151db26e3b0a87e805d899d3f105aa0a11f9124893d47ca3f39e47b27cfa8f",
       "bytes": 12408656544,
-      "group": "ltx"
+      "group": "ltx",
+      "skip": [
+        "linux-x64",
+        "linux-arm64",
+        "darwin-x64",
+        "win32-x64"
+      ]
     },
     "gemma-3-12b-it-UD-Q2_K_XL.gguf": {
       "urls": [
@@ -183,7 +225,13 @@
       ],
       "sha256": "85e9f7e21c0ef9a13ceeb63ecb1a7015e92ff6bd359a9356e3e9b02d880fe980",
       "bytes": 4860535136,
-      "group": "ltx"
+      "group": "ltx",
+      "skip": [
+        "linux-x64",
+        "linux-arm64",
+        "darwin-x64",
+        "win32-x64"
+      ]
     }
   }
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Publishes the platform packages slice-platform-packages.mjs staged, before the meta, as on-merge-nx.yml did. npm has
+// Publishes the platform packages slice-platform-packages.mjs staged, before the meta, as main's release pipeline did. npm has
 // no transactions, so every slice is checked before any publishes, and the meta publishes only after this succeeds.
 
 import { execFileSync, spawnSync } from 'node:child_process'

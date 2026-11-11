@@ -67,9 +67,10 @@ test('every mobile app build checks out the lock beside its composite action', (
   for (const file of readdirSync(workflows).filter((file) => file.endsWith('.yml'))) {
     const source = readFileSync(new URL(file, workflows), 'utf8')
     for (const job of source.split(/(?=^  [\w-]+:\n)/m)) {
-      if (!/uses: \.\/(?:trusted-actions\/)?\.github\/actions\/run-mobile-integration-tests\/build-mobile-app/.test(job)) continue
+      // The contract's mobile-build-test-app runs the same linker from the same lock.
+      if (!/uses: \.\/(?:trusted-actions\/)?\.github\/actions\/(?:run-mobile-integration-tests\/build-mobile-app|mobile-build-test-app)/.test(job)) continue
       callers++
-      assert.match(job, /sparse-checkout: \|\n\s+\.github\/actions\/run-mobile-integration-tests\n\s+\.github\/bare-toolchain\n/, file)
+      assert.match(job, /sparse-checkout: \|\n\s+\.github\/actions(?:\/run-mobile-integration-tests)?\n\s+\.github\/bare-toolchain\n/, file)
     }
   }
   assert.ok(callers > 0, 'mobile app build callers were discovered')

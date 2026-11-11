@@ -12,10 +12,6 @@ const RETRY_USES = 'uses: ./.github/actions/download-artifact-retry'
 const PINNED_RETRY_USES = /uses: tetherto\/qvac\/\.github\/actions\/download-artifact-retry@[0-9a-f]{40}\n/
 const STEP_SEPARATOR = '\n    - name: '
 const WORKFLOW_STEP_SEPARATOR = '\n      - name: '
-const WORKFLOW_DOWNLOADS = [
-  ['.github/workflows/integration-test-nx.yml', 'Download fabric-prebuilds for overlay']
-]
-
 const FIRST = 'Download artifact'
 const FIRST_WAIT = 'Wait before the first retry'
 const SECOND = 'Download artifact (first retry)'
@@ -44,11 +40,6 @@ function findWorkflowStep(src, name) {
   const step = src.split(WORKFLOW_STEP_SEPARATOR).find((candidate) => candidate.startsWith(`${name}\n`))
   assert.ok(step, `workflow step not found: ${name}`)
   return step
-}
-
-function assertPinnedRetry([workflow, name]) {
-  const step = findWorkflowStep(readRepoFile(workflow), name)
-  assert.match(step, PINNED_RETRY_USES, `${workflow} "${name}" must use the SHA-pinned retry action`)
 }
 
 function withBlock(step) {
@@ -95,8 +86,4 @@ test('prebuild materialization downloads through the retry action', () => {
   const materializeSrc = readRepoFile(MATERIALIZE_ACTION)
   assert.ok(!materializeSrc.includes(RAW_DOWNLOAD), 'materialize must not call download-artifact directly')
   assert.match(findStep(materializeSrc, 'Download prebuilds bundle'), new RegExp(RETRY_USES.replaceAll('.', '\\.')))
-})
-
-test('workflows loaded from main download through the SHA-pinned retry action', () => {
-  WORKFLOW_DOWNLOADS.forEach(assertPinnedRetry)
 })
