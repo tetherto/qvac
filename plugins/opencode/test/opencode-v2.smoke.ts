@@ -58,9 +58,11 @@ test(
         join(project, 'opencode.json'),
         JSON.stringify({ plugins: [{ package: pluginDir, options: { model } }] })
       )
-      // Isolate OpenCode's own config, state and caches from the developer's.
+      // Isolate OpenCode's config, state and caches from the developer's, and drop
+      // inherited QVAC_* settings, which would override the options asserted here.
+      const inherited = Object.entries(process.env).filter(([key]) => !key.startsWith('QVAC_'))
       const env = {
-        ...process.env,
+        ...Object.fromEntries(inherited),
         XDG_CONFIG_HOME: join(project, '.config'),
         XDG_DATA_HOME: join(project, '.data'),
         XDG_STATE_HOME: join(project, '.state'),
