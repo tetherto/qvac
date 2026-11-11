@@ -4,6 +4,13 @@ name: Fabric Nightly
 # npm-runtime fabric consumer (fabric-consumers.json minus model-fit), desktop
 # only. The branch comes from .github/fabric-nightly.json, updated per rebase.
 # Results are in this run's summary; there is no notification.
+#
+# Only a head that landed through a merged PR approved by someone other than
+# its author is built: temp-* in the fabric repo has no branch protection, and
+# the build runs with this repo's release secrets.
+#
+# To retry a red night, dispatch this workflow with force: true. Re-running
+# failed jobs only re-reports the same child runs.
 on:
   schedule:
     - cron: "0 0 * * *"
@@ -53,6 +60,21 @@ jobs:
             exit 1
           fi
           read -r sha committed < <(gh api "repos/$FABRIC_REPO/commits/$branch" --jq '"\(.sha) \(.commit.committer.date)"')
+
+          pr=$(gh api "repos/$FABRIC_REPO/commits/$sha/pulls" \
+            --jq "[.[] | select(.merged_at != null and .base.ref == \"$branch\" and .merge_commit_sha == \"$sha\")][0] | if . == null then empty else \"\(.number) \(.user.login)\" end")
+          if [ -z "$pr" ]; then
+            echo "::error::$branch head ${sha:0:9} is not the merge commit of a merged PR into $branch; not building it"
+            exit 1
+          fi
+          read -r pr_number pr_author <<<"$pr"
+          approver=$(gh api --paginate "repos/$FABRIC_REPO/pulls/$pr_number/reviews" \
+            --jq ".[] | select(.state == \"APPROVED\" and .user.login != \"$pr_author\") | .user.login" | sed -n 1p)
+          if [ -z "$approver" ]; then
+            echo "::error::$FABRIC_REPO#$pr_number has no approval from someone other than its author; not building ${sha:0:9}"
+            exit 1
+          fi
+          echo "${sha:0:9} is $FABRIC_REPO#$pr_number by $pr_author, approved by $approver"
           # Tags follow the branch's build line (temp-11739 -> v11739.x.y), so a
           # newly rotated branch has no tag yet rather than the previous line's.
           pattern='v*'
@@ -168,25 +190,32 @@ jobs:
     permissions:
       contents: read
       actions: read
-    outputs:
-      conclusion: ${{ steps.wait.outputs.conclusion }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           sparse-checkout: .github/scripts/fabric-nightly.sh
           sparse-checkout-cone-mode: false
           persist-credentials: false
-      - name: Wait for on-pr-fabric
-        id: wait
+      # Waits for the artifact, not the whole run: a cpp-lint finding or the
+      # model-fit smoke must not hide every consumer result. The report still
+      # turns red when on-pr-fabric does not conclude success.
+      - name: Wait for fabric-prebuilds
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ needs.prepare.outputs.fabric_run_id }}
         run: |
-          set -euo pipefail
-          bash .github/scripts/fabric-nightly.sh wait "$RUN_ID"
-          conclusion=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" --jq '.conclusion')
-          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
-          [ "$conclusion" = "success" ] || { echo "::error::on-pr-fabric run $RUN_ID: $conclusion"; exit 1; }
+          set -uo pipefail
+          while :; do
+            count=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts?name=fabric-prebuilds" --jq '.total_count') || count=0
+            if [ "${count:-0}" -gt 0 ]; then
+              exit 0
+            fi
+            if [ "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" --jq '.status')" = "completed" ]; then
+              echo "::error::on-pr-fabric run $RUN_ID completed without a fabric-prebuilds artifact"
+              exit 1
+            fi
+            sleep 60
+          done
 
   # on-pr carve-outs (classification-ggml, vla-ggml) are not built by on-pr-nx,
   # so they get their own orchestrator. Desktop only: none of these
@@ -246,7 +275,7 @@ jobs:
         run: |
           set -euo pipefail
           # shellcheck disable=SC2046
-          bash .github/scripts/fabric-nightly.sh wait $(jq -r '.[].id' <<<"$RUNS")
+          bash .github/scripts/fabric-nightly.sh wait "$FABRIC_RUN_ID" $(jq -r '.[].id' <<<"$RUNS")
 
   report:
     needs: [gate, prepare, build-fabric, test]
@@ -274,10 +303,11 @@ jobs:
           TEST_RUNS: ${{ needs.test.outputs.runs || '[]' }}
         run: bash .github/scripts/fabric-nightly.sh report
 
-  # A timed-out or cancelled nightly can leave dispatched runs going, so stop
-  # them before their branch disappears.
+  # A timed-out or cancelled nightly can leave dispatched runs going, including
+  # one whose ID was never recorded, so stop every unfinished run on the branch
+  # before it disappears.
   cleanup:
-    needs: [prepare, test, report]
+    needs: [prepare, report]
     if: always() && needs.prepare.outputs.branch != ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -289,14 +319,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ needs.prepare.outputs.branch }}
-          FABRIC_RUN_ID: ${{ needs.prepare.outputs.fabric_run_id }}
-          TEST_RUNS: ${{ needs.test.outputs.runs || '[]' }}
         run: |
           set -uo pipefail
-          for id in $FABRIC_RUN_ID $(jq -r '.[].id' <<<"$TEST_RUNS"); do
-            if [ "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id" --jq '.status')" != "completed" ]; then
-              echo "Cancelling unfinished run $id"
-              gh run cancel "$id" --repo "$GITHUB_REPOSITORY" || true
-            fi
+          for id in $(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs?branch=$BRANCH&per_page=100" \
+            --jq '.workflow_runs[] | select(.status != "completed") | .id'); do
+            echo "Cancelling unfinished run $id"
+            gh run cancel "$id" --repo "$GITHUB_REPOSITORY" || true
           done
-          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$BRANCH"
+          # A re-run of failed jobs reaches here after the branch is gone.
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$BRANCH" --silent; then
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$BRANCH"
+          fi

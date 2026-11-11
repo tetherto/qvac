@@ -62,9 +62,11 @@ report() {
     {
       echo "### Commits since ${FABRIC_TAG}"
       echo
-      gh api "repos/$FABRIC_REPO/compare/$FABRIC_TAG...$FABRIC_SHA" \
+      commits=$(gh api "repos/$FABRIC_REPO/compare/$FABRIC_TAG...$FABRIC_SHA" \
         --jq '"\(.ahead_by) commits ahead\(if .ahead_by > 30 then ", latest 30 shown" else "" end):\n",
-          (.commits | reverse | .[:30][] | "- [`\(.sha[:9])`](\(.html_url)) \(.commit.message | split("\n")[0])")'
+          (.commits | reverse | .[:30][] | "- [`\(.sha[:9])`](\(.html_url)) \(.commit.message | split("\n")[0])")') \
+        || commits="_Unavailable (API error)_"
+      echo "$commits"
       echo
     } >>"$out"
   fi
@@ -79,13 +81,17 @@ report() {
   for row in $(jq -c '.[]' <<<"$runs"); do
     workflow=$(jq -r .workflow <<<"$row")
     id=$(jq -r .id <<<"$row")
-    read -r conclusion url < <(gh api "repos/$REPO/actions/runs/$id" --jq '"\(.conclusion // .status) \(.html_url)"')
+    if ! read -r conclusion url < <(gh api "repos/$REPO/actions/runs/$id" --jq '"\(.conclusion // .status) \(.html_url)"'); then
+      echo "| $workflow | api-error | $id |" >>"$out"
+      failed=1
+      continue
+    fi
     [ "$conclusion" = "success" ] || failed=1
     echo "| $workflow | $conclusion | [$id]($url) |" >>"$out"
   done
 
   if [ "${BUILD_RESULT:-}" != "success" ]; then
-    printf '\nNo consumer tests ran: the fabric build did not succeed (%s).\n' "${BUILD_RESULT:-not started}" >>"$out"
+    printf '\nNo consumer tests ran: on-pr-fabric did not publish fabric-prebuilds (%s).\n' "${BUILD_RESULT:-not started}" >>"$out"
     failed=1
   elif [ "${TEST_RESULT:-}" != "success" ]; then
     printf '\nThe test job ended with %s, so some consumer runs may be missing above. See its log.\n' "${TEST_RESULT:-unknown}" >>"$out"
@@ -102,12 +108,16 @@ report() {
   for row in $(jq -c '.[]' <<<"${TEST_RUNS:-[]}"); do
     workflow=$(jq -r .workflow <<<"$row")
     id=$(jq -r .id <<<"$row")
-    gh api --paginate "repos/$REPO/actions/runs/$id/jobs?per_page=100" \
+    if jobs=$(gh api --paginate "repos/$REPO/actions/runs/$id/jobs?per_page=100" \
       --jq '.jobs[]
         | select(.conclusion != "skipped")
         | select(.name | test("^(prebuild|cpp-tests|run-integration-tests|integration-tests) /"))
         | select(.name | test("Determine affected|runner_names|detect-reuse|/ merge$") | not)
-        | "| '"$workflow"' | [\(.name)](\(.html_url)) | \(.conclusion // .status) |"' >>"$out"
+        | "| '"$workflow"' | [\(.name)](\(.html_url)) | \(.conclusion // .status) |"'); then
+      [ -z "$jobs" ] || echo "$jobs" >>"$out"
+    else
+      echo "| $workflow | _API error_ | |" >>"$out"
+    fi
   done
 
   {
