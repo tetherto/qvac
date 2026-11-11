@@ -49,7 +49,7 @@ const fit = await assessFit({
   modelPath: '/abs/path/bridgedepth-vits-f32.gguf',
   backend: 'MTL0', // optional, as MegaLoc and BridgeDepth take it
   threads: 8, // optional, the CPU threads the model will use
-  marginBytes: 512 * 1024 * 1024, // optional
+  marginBytes: 512 * 1024 * 1024, // optional, 256 MiB when omitted
   workload: { width: 1280, height: 720 } // BridgeDepth input size, optional
 })
 
@@ -73,7 +73,7 @@ holds what the load takes with `marginBytes` left free, `does-not-fit`
 otherwise. Unified rows and the host row are one pool, judged against the
 lowest free figure among them; a GPU with its own memory is a pool alone.
 `unknown` means a device's memory could not be read or there is no CPU device.
-`marginBytes` defaults to 0. On
+`marginBytes` defaults to 256 MiB. On
 iOS every unified row is first capped at the app's memory limit,
 `os_proc_available_memory()`.
 

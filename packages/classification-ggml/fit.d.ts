@@ -23,12 +23,11 @@ export interface ClassificationFitRequest {
     backendsDir?: string;
     /** CPU threads the model will run with, 1 to 1024. Default 8, as MegaLoc and BridgeDepth. */
     threads?: number;
-    /** Bytes to leave free on every memory pool the load uses. Default 0. */
+    /** Bytes to leave free on every memory pool the load uses. Default 256 MiB. */
     marginBytes?: number;
     /**
      * BridgeDepth input size; ignored for the other models. The default
-     * 1280x720 is the largest input upstream runs without downsampling, and is
-     * pending a product decision.
+     * 1280x720 is the largest input upstream runs without downsampling.
      */
     workload?: ClassificationFitWorkload;
 }

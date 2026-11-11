@@ -398,7 +398,7 @@ struct FitRequest {
   int threads = DEFAULT_THREADS;
   int width = fit::DEFAULT_FIT_WIDTH;
   int height = fit::DEFAULT_FIT_HEIGHT;
-  uint64_t marginBytes = 0;
+  uint64_t marginBytes = fit::DEFAULT_MARGIN_BYTES;
 };
 
 // A whole number in [min, max]; the JS layer validates first, this guards

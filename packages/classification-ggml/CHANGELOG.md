@@ -15,7 +15,8 @@ and this project adheres to
   fits in the memory free now, from the GGUF metadata alone. It returns
   `{ status, devices, stats }`: `fits`, `does-not-fit` or `unknown`, and the
   selected device, then the host CPU, each with the measured bytes the load
-  and one inference take. BridgeDepth is sized for `workload`, 1280x720 by
+  and one inference take. `marginBytes` is the memory to leave free, 256 MiB
+  by default. BridgeDepth is sized for `workload`, 1280x720 by
   default. On an iOS device, unified memory is capped at the app's memory
   limit. A request that fails the JS checks rejects with a `TypeError` or
   `RangeError`, an unreadable model or an otherwise invalid request with an

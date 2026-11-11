@@ -13,9 +13,13 @@ namespace classification_ggml::fit {
 
 // BridgeDepth input size assumed when the request names none. Upstream
 // downsamples inputs above 720p, so 1280x720 is the largest input it runs at
-// full size. Pending a product decision.
+// full size.
 inline constexpr int DEFAULT_FIT_WIDTH = 1280;
 inline constexpr int DEFAULT_FIT_HEIGHT = 720;
+
+// Free memory a verdict leaves on every pool when the request names no
+// margin. The same 256 MiB default @qvac/tts-ggml uses.
+inline constexpr uint64_t DEFAULT_MARGIN_BYTES = 256ULL * 1024 * 1024;
 
 inline constexpr uint64_t MAX_JS_SAFE_INTEGER = 9007199254740991ULL;
 
