@@ -446,7 +446,7 @@ const answer = await completion({
 }).final;
 ```
 
-Load the model with `modelConfig: { tools: true }` when passing tools. Resend the same system prompt and tools on the question so their cached prefix can be reused. A prefill rejects forced `generationParams.tool_choice` values (`"required"` or a named tool, including `"tool_search"`); use the default `"auto"` or `"none"` instead. Auto-cache priming saves the complete prompt history without appending an empty assistant message.
+Load the model with `modelConfig: { tools: true }` when passing tools. Resend the same system prompt and tools on the question so their cached prefix can be reused. A prefill rejects forced `generationParams.tool_choice` values (`"required"` or a named tool, including `"tool_search"`); use the default `"auto"` or `"none"` instead. A prefill also needs at least one message: a system message in the history, or `modelConfig.system_prompt` set at load. Tools alone are rejected. Auto-cache priming saves the complete prompt history without appending an empty assistant message.
 
 With `kvCache: true`, the first question moves the cache to the conversation's new history, so the prime serves one conversation. Use a named key for reuse across conversations, or prime each conversation separately.
 
