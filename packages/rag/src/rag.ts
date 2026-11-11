@@ -320,12 +320,15 @@ export function createRag(options: CreateRagOptions): Rag {
     let start = 0
     // Inserts at `start`: a requeued job blocks every later commit, so it is embedded next.
     function enqueue(job: IngestJob, at: number): void {
-      const missing: Array<{ job: IngestJob; ordinal: number }> = []
+      // No spread: a document's chunk count can exceed the argument limit.
+      const after = queue.splice(at)
+      job.missing = 0
       job.vectors.forEach((vector, ordinal) => {
-        if (!vector) missing.push({ job, ordinal })
+        if (vector) return
+        queue.push({ job, ordinal })
+        job.missing++
       })
-      job.missing = missing.length
-      queue.splice(at, 0, ...missing)
+      for (const entry of after) queue.push(entry)
     }
     for (const job of jobs) {
       if (job.missing > 0) enqueue(job, queue.length)
