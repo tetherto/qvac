@@ -93,7 +93,9 @@ for (const project of contract) {
   })
 
   test(`${project.name}: every configuration that restores the build has a build configuration to restore`, () => {
-    const built = new Set(Object.keys(project.targets.build?.configurations ?? {}))
+    // A package without a build target restores no prebuilds; its tests run against the installed workspace.
+    if (!project.targets.build) return
+    const built = new Set(Object.keys(project.targets.build.configurations ?? {}))
     for (const target of RESTORE_BUILD.filter((t) => targets.includes(t)))
       for (const cfg of configurations(project, target))
         assert.ok(

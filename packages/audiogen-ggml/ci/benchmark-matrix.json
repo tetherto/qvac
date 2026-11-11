@@ -1,0 +1,91 @@
+{
+  "cpu": [
+    {
+      "ditVariant": "turbo-q4",
+      "useGPU": false,
+      "backendHint": "cpu"
+    },
+    {
+      "ditVariant": "turbo-q8",
+      "useGPU": false,
+      "backendHint": "cpu"
+    },
+    {
+      "ditVariant": "sft",
+      "useGPU": false,
+      "backendHint": "cpu",
+      "numWarmup": 0,
+      "numRuns": 1
+    }
+  ],
+  "cpu-metal": [
+    {
+      "ditVariant": "turbo-q4",
+      "useGPU": false,
+      "backendHint": "cpu"
+    },
+    {
+      "ditVariant": "turbo-q8",
+      "useGPU": false,
+      "backendHint": "cpu"
+    },
+    {
+      "ditVariant": "sft",
+      "useGPU": false,
+      "backendHint": "cpu",
+      "numWarmup": 0,
+      "numRuns": 1
+    },
+    {
+      "ditVariant": "turbo-q4",
+      "useGPU": true,
+      "backendHint": "metal"
+    },
+    {
+      "ditVariant": "turbo-q8",
+      "useGPU": true,
+      "backendHint": "metal"
+    },
+    {
+      "ditVariant": "sft",
+      "useGPU": true,
+      "backendHint": "metal",
+      "numRuns": 2
+    }
+  ],
+  "cpu-vulkan": [
+    {
+      "ditVariant": "turbo-q4",
+      "useGPU": false,
+      "backendHint": "cpu"
+    },
+    {
+      "ditVariant": "turbo-q8",
+      "useGPU": false,
+      "backendHint": "cpu"
+    },
+    {
+      "ditVariant": "sft",
+      "useGPU": false,
+      "backendHint": "cpu",
+      "numWarmup": 0,
+      "numRuns": 1
+    },
+    {
+      "ditVariant": "turbo-q4",
+      "useGPU": true,
+      "backendHint": "vulkan"
+    },
+    {
+      "ditVariant": "turbo-q8",
+      "useGPU": true,
+      "backendHint": "vulkan"
+    },
+    {
+      "ditVariant": "sft",
+      "useGPU": true,
+      "backendHint": "vulkan",
+      "numRuns": 2
+    }
+  ]
+}

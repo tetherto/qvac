@@ -2,6 +2,7 @@
 // Installs a published build's prebuilds: @qvac from npmjs, @tetherto -mono dev builds from GitHub Packages.
 
 import {
+  appendFileSync,
   chmodSync,
   existsSync,
   mkdirSync,
@@ -72,7 +73,7 @@ function packOne(spec, dest, { packDir, run }) {
   return JSON.parse(readFileSync(join(dest, 'package/package.json'), 'utf8'))
 }
 
-export function packPrebuilds({ workdir, pkg, addon, platform, pinned, token, tmp, run }) {
+export function packPrebuilds({ workdir, pkg, addon, platform, pinned, token, tmp, run, summary }) {
   const out = join(workdir, 'prebuilds')
   if (existsSync(out) && readdirSync(out).length) {
     if (!pinned) return console.log('prebuilds/ already present, nothing to pack')
@@ -143,6 +144,10 @@ export function packPrebuilds({ workdir, pkg, addon, platform, pinned, token, tm
     console.log(
       `Prebuilds from ${meta.name}@${meta.version} (${gpr ? 'GitHub Packages' : 'npmjs'})`
     )
+    // Without prebuild_run_id the branch's tests run on a published build, so a native change is not under test.
+    const note = `${addon} is tested against the published ${meta.name}@${meta.version}${pkg ? '' : ' (@latest)'}, not this branch's native code; pass prebuild_run_id from a pr-build-test run to test a native change.`
+    console.log(`::warning::${note}`)
+    if (summary) appendFileSync(summary, `> [!WARNING]\n> ${note}\n\n`)
   } finally {
     rmSync(packDir, { recursive: true, force: true })
   }
@@ -158,6 +163,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     pinned: env.PINNED === 'true',
     token: env.GPR_TOKEN,
     tmp: env.RUNNER_TEMP,
+    summary: env.GITHUB_STEP_SUMMARY,
     run: (cmd, args, opts) => execFileSync(cmd, args, { stdio: 'inherit', ...opts })
   })
 }

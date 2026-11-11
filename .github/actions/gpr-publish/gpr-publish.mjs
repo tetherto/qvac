@@ -6,6 +6,7 @@ import {
   existsSync,
   readFileSync,
   readdirSync,
+  renameSync,
   symlinkSync,
   rmSync,
   writeFileSync
@@ -56,6 +57,26 @@ export function linkBareAliases(dir, from, to) {
   return n
 }
 
+// rename-prefix, as on-merge-nx.yml ran it before the alias links: every qvac_* name under prebuilds, deepest first,
+// and binding.js's references become tetherto_.
+export function renamePrefix(dir) {
+  const walk = (d) =>
+    readdirSync(d, { withFileTypes: true }).flatMap((e) => [
+      ...(e.isDirectory() ? walk(join(d, e.name)) : []),
+      { dir: d, name: e.name }
+    ])
+  const prebuilds = join(dir, 'prebuilds')
+  const renamed = existsSync(prebuilds)
+    ? walk(prebuilds).filter((e) => e.name.startsWith('qvac_'))
+    : []
+  for (const e of renamed)
+    renameSync(join(e.dir, e.name), join(e.dir, e.name.replace(/^qvac_/, 'tetherto_')))
+  const binding = join(dir, 'binding.js')
+  if (existsSync(binding))
+    writeFileSync(binding, readFileSync(binding, 'utf8').replaceAll('qvac_', 'tetherto_'))
+  return renamed.length
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const env = process.env
   const dir = env.WORKDIR.replace(/\/$/, '') || '.'
@@ -76,6 +97,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     runId: env.GITHUB_RUN_ID
   })
   const name = gprName(pkg.name, env.NAME_SUFFIX)
+  if (env.NAME_TRANSFORM === 'rename-prefix')
+    console.log(`Renamed ${renamePrefix(dir)} qvac_ files`)
+  else if (env.NAME_TRANSFORM) throw new Error(`unknown name transform '${env.NAME_TRANSFORM}'`)
   linkBareAliases(dir, pkg.name, name)
   writeFileSync(manifestPath, `${JSON.stringify({ ...pkg, name, version }, null, 2)}\n`)
   // npm expands ${NODE_AUTH_TOKEN} itself, so the token is never written to disk.

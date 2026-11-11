@@ -906,9 +906,9 @@ function mobileAddons() {
 
 const MOBILE_ADDONS = mobileAddons()
 
-// 7 since the fabric consumers moved to the CI contract's mobile-tests.yml.
+// 2 since the fabric consumers and the speech packages moved to the CI contract's mobile-tests.yml.
 test('every mobile addon was discovered', () => {
-  assert.ok(MOBILE_ADDONS.length >= 7, `found ${MOBILE_ADDONS.length}`)
+  assert.ok(MOBILE_ADDONS.length >= 2, `found ${MOBILE_ADDONS.length}`)
 })
 
 for (const addon of MOBILE_ADDONS) {
@@ -992,7 +992,7 @@ test('every mobile dispatch input advertises the -mono GPR name', () => {
     .split('\n')
     .filter(Boolean)
 
-  assert.ok(workflows.length >= 7, `found ${workflows.length} mobile workflows`)
+  assert.ok(workflows.length >= 2, `found ${workflows.length} mobile workflows`)
 
   const offenders = []
   for (const relativePath of workflows) {
@@ -1105,12 +1105,9 @@ test('the resolver is reachable from the callers own sparse checkout', () => {
   }
 })
 
-// Two addons deliberately have no run-id route. Pinning them means a third
+// One addon deliberately has no run-id route. Pinning it means another
 // exclusion has to be a decision, not a silent omission.
 const RUN_ID_EXEMPT = {
-  // Native code comes transitively from bare-ffmpeg, so setup skips every
-  // prebuild step (skip-prebuilds: 'true') and has nothing to install.
-  'decoder-audio': /skip-prebuilds:\s*'true'/,
   // Compiles its own prebuilds in prebuild-android / prebuild-ios jobs in the
   // SAME run from the dispatched ref, so a dispatch already tests the branch's
   // native code and the gap this route closes does not exist.
@@ -1124,7 +1121,7 @@ test('every mobile dispatch offers the run-id route, or is a pinned exemption', 
     { cwd: root, encoding: 'utf8' },
   ).stdout.trim().split('\n').filter(Boolean)
 
-  assert.ok(workflows.length >= 7, `found ${workflows.length} mobile workflows`)
+  assert.ok(workflows.length >= 2, `found ${workflows.length} mobile workflows`)
 
   const missing = []
   for (const relativePath of workflows) {

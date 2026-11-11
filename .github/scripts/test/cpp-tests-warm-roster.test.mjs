@@ -115,10 +115,14 @@ test('a push warms what it touched, and everything after a shared cache input ch
   sharedChanges.forEach((path) => assert.deepEqual(selectPushedPackages(roster, [path]), roster, path))
 })
 
-test('repository roster covers the speech packages and skips packages warmed elsewhere', () => {
+test('repository roster leaves the speech packages to cache-warm and skips packages warmed elsewhere', () => {
   const projects = readProjects(ROOT)
   const roster = selectRoster(projects)
-  SPEECH_PACKAGES.forEach((name) => assert.ok(roster.includes(name), name))
+  // On the CI contract, cache-warm.yml runs their cpp:tests on its schedule and on pushes to main.
+  SPEECH_PACKAGES.forEach((name) => {
+    assert.ok(!roster.includes(name), name)
+    assert.ok(projects.get(name).targets['cpp:tests'] && projects.get(name).targets['cache:models'], name)
+  })
   roster.forEach((name) => assert.ok((projects.get(name).targets['test:cpp'].options.ci.platforms ?? []).length > 0, `${name} declares no test:cpp platforms`))
   WARMED_ELSEWHERE.forEach((_, name) => {
     assert.ok(!roster.includes(name), name)
@@ -144,7 +148,6 @@ test('warm schedules run every 2 days, staggered from every other warmer', () =>
 
 test('every carve-out cpp-tests-nx calls is warmed on a schedule, by itself or by a legacy warmer', () => {
   const carveOuts = carveOutWorkflows()
-  assert.ok(carveOuts.length > 0)
   carveOuts.forEach((workflow) => assert.ok(
     crons(readWorkflow(workflow)).length > 0 || legacyWarmers().some((warmer) => dispatchesWorkflow(warmer, workflow)),
     `${workflow} has no warm path, so its PR legs go cold once the cache server prunes its entry`,
@@ -161,5 +164,6 @@ test('the warm step selects pushed packages and falls back to the whole roster',
   const roster = selectRoster(readProjects(ROOT))
   assert.deepEqual(runWarmStep('schedule', GIT_FORBIDDEN), roster)
   assert.deepEqual(runWarmStep('push', FETCH_FAILS), roster)
-  assert.deepEqual(runWarmStep('push', PUSHED_TTS_VCPKG), ['tts-ggml'])
+  // tts-ggml left the roster for the CI contract, so a push touching it selects only roster packages it names.
+  assert.deepEqual(runWarmStep('push', PUSHED_TTS_VCPKG), roster.filter((name) => name === 'tts-ggml'))
 })

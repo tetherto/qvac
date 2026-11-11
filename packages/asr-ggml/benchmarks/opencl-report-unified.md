@@ -57,7 +57,7 @@ RNN-T checkpoint end-to-end on Adreno 700+.
 |---|---|
 | Workflow run (OpenCL, S25 Ultra / Adreno 830) | [`32981557097`](https://github.com/tetherto/qvac/actions/runs/32981557097) |
 | Companion run (Vulkan, Pixel 9 / Mali-G715) | [`32978407671`](https://github.com/tetherto/qvac/actions/runs/32978407671) |
-| Trigger | Manual `workflow_dispatch` on `integration-mobile-test-asr-ggml.yml`, `tests=runParakeetGpuSmokeTest` |
+| Trigger | Manual `workflow_dispatch` of asr's mobile tests, `tests=runParakeetGpuSmokeTest` |
 | Resolved `speech-cpp` | pinned via `packages/asr-ggml/vcpkg.json`, `opencl` feature enabled on `android` (unchanged) |
 | Prebuild package identifier | Freshly built in the workflow run; native binaries include `libqvac-speech-ggml-opencl.so` alongside `libqvac-speech-ggml-vulkan.so` for every Android ABI |
 | Device manufacturer / model | Samsung Galaxy S25 Ultra |
@@ -145,8 +145,9 @@ same audio clip and no explicit segmentation hint.
 ## Reproducing this run
 
 ```bash
-gh workflow run integration-mobile-test-asr-ggml.yml \
+gh workflow run mobile-tests.yml \
   --ref <ref-under-test> \
+  -f packages=asr-ggml \
   -f platform=Android \
   -f device="Samsung Galaxy S25 Ultra" \
   -f device_model_operator=EQUALS \

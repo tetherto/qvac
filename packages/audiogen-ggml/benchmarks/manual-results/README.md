@@ -8,7 +8,7 @@ that is not in the AWS Device Farm pool.
 The aggregator reads this directory through its `--manual-dir` argument:
 
 - `scripts/perf-report/aggregate-audiogen-ggml-rtf.js`
-- the `summarize` job in `.github/workflows/benchmark-performance-audiogen-ggml.yml`
+- the `benchmark` target's `report` configuration, through `ci/benchmark-report.sh`
 
 Any `.json` file here is picked up. Files ending in `.json.example` are skipped —
 copy one to `.json` to activate it. Records the aggregator does not recognise are

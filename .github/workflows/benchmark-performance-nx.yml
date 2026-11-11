@@ -134,56 +134,6 @@ jobs:
 
   # Mobile RTF benchmarks: one static reusable call per package (GitHub can't
   # matrix-template `uses:`), each gated on its package being nx-affected.
-
-  mobile-asr-ggml:
-    needs: [matrix, context, prebuild]
-    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"asr-ggml"') }}
-    permissions:
-      actions: read
-      contents: read
-      packages: read
-      pull-requests: write
-      id-token: write
-    uses: ./.github/workflows/integration-mobile-test-asr-ggml.yml
-    secrets: inherit
-    with:
-      repository: ${{ needs.context.outputs.repository }}
-      ref: ${{ needs.context.outputs.ref }}
-      prebuild_package: ${{ inputs.prebuild_package }}
-      run_rtf_benchmarks: true
-
-  mobile-audiogen-ggml:
-    needs: [matrix, context, prebuild]
-    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"audiogen-ggml"') }}
-    permissions:
-      actions: read
-      contents: read
-      packages: read
-      pull-requests: write
-      id-token: write
-    uses: ./.github/workflows/integration-mobile-test-audiogen-ggml.yml
-    secrets: inherit
-    with:
-      repository: ${{ needs.context.outputs.repository }}
-      ref: ${{ needs.context.outputs.ref }}
-      prebuild_package: ${{ inputs.prebuild_package }}
-
-  mobile-bci-whispercpp:
-    needs: [matrix, context, prebuild]
-    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"bci-whispercpp"') }}
-    permissions:
-      actions: read
-      contents: read
-      packages: read
-      pull-requests: write
-      id-token: write
-    uses: ./.github/workflows/integration-mobile-test-bci-whispercpp.yml
-    secrets: inherit
-    with:
-      repository: ${{ needs.context.outputs.repository }}
-      ref: ${{ needs.context.outputs.ref }}
-      prebuild_package: ${{ inputs.prebuild_package }}
-
   mobile-diffusion-cpp:
     needs: [matrix, context, prebuild]
     if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"diffusion-cpp"') }}
@@ -200,35 +150,12 @@ jobs:
       ref: ${{ needs.context.outputs.ref }}
       prebuild_package: ${{ inputs.prebuild_package }}
 
-  mobile-tts-ggml:
-    needs: [matrix, context, prebuild]
-    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"tts-ggml"') }}
-    permissions:
-      actions: read
-      contents: read
-      packages: read
-      pull-requests: write
-      id-token: write
-    uses: ./.github/workflows/integration-mobile-test-tts-ggml.yml
-    secrets: inherit
-    with:
-      repository: ${{ needs.context.outputs.repository }}
-      ref: ${{ needs.context.outputs.ref }}
-      prebuild_package: ${{ inputs.prebuild_package }}
-      # Legacy tts source passed inputs.mobile_run_rtf_benchmarks (default true);
-      # benchmark-nx does not define that input, so pin to its default.
-      run_rtf_benchmarks: true
-
   summarize:
     needs:
       - matrix
       - context
       - desktop-benchmarks
-      - mobile-asr-ggml
-      - mobile-audiogen-ggml
-      - mobile-bci-whispercpp
       - mobile-diffusion-cpp
-      - mobile-tts-ggml
     if: always() && needs.matrix.outputs.any == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20

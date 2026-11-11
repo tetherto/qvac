@@ -13,13 +13,8 @@ on:
       # release-train-* branches publish from release-train.yml.
       - "!release-train-*"
     paths:
-      - "packages/asr-ggml/**"
-      - "packages/audiogen-ggml/**"
-      - "packages/bci-whispercpp/**"
-      - "packages/decoder-audio/**"
       - "packages/diffusion-cpp/**"
       - "packages/fabric/**"
-      - "packages/tts-ggml/**"
   workflow_dispatch:
     inputs:
       package:
@@ -27,13 +22,8 @@ on:
         required: true
         type: choice
         options:
-          - asr-ggml
-          - audiogen-ggml
-          - bci-whispercpp
-          - decoder-audio
           - diffusion-cpp
           - fabric
-          - tts-ggml
       npm_tag:
         description: "NPM dist-tag override (release publish only, default: latest)"
         required: false
@@ -84,13 +74,8 @@ jobs:
           # (where these project.json don't exist yet, so all 14 would match).
           base: ${{ github.ref_name }}
           filters: |
-            asr-ggml: packages/asr-ggml/**
-            audiogen-ggml: packages/audiogen-ggml/**
-            bci-whispercpp: packages/bci-whispercpp/**
-            decoder-audio: packages/decoder-audio/**
             diffusion-cpp: packages/diffusion-cpp/**
             fabric: packages/fabric/**
-            tts-ggml: packages/tts-ggml/**
 
       - name: Compute per-package config rows
         id: rows
@@ -496,7 +481,7 @@ jobs:
           # leave the dist-tag to be derived.
           tag: ${{ matrix.npmTagOverride || inputs.npm_tag || 'latest' }}
 
-      # asr/audiogen/tts/diffusion-cpp/fabric ship one npm package per platform plus a meta
+      # diffusion-cpp and fabric ship one npm package per platform plus a meta
       # with version-locked optionalDependencies. npm only; GPR stays unsliced.
       # prebuildExtraDirs (fabric's C++ SDK) stay in the meta.
       - name: Slice platform packages
