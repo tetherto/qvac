@@ -1310,6 +1310,47 @@ test('open <think>: an answer left in reasoning becomes content on a natural sto
   }
 })
 
+test('open <think>: an empty tool frame stays reasoning', (t) => {
+  const raw = '<think>\nplan <tool_call></tool_call> still reasoning\n</think>\n\nAnswer'
+  for (const size of [raw.length, 3, 1]) {
+    const n = createCompletionNormalizer(qwenThinkingConfig())
+    const events = [...pushAll(n, chunksOf(raw, size)), ...n.finish({ stopReason: 'eos' })]
+
+    t.is(
+      joined(events, 'thinkingDelta'),
+      'plan <tool_call></tool_call> still reasoning',
+      `chunk ${size}: thinking`
+    )
+    t.is(joined(events, 'contentDelta'), 'Answer', `chunk ${size}: content`)
+    t.is(events.filter((e) => e.type === 'toolError').length, 0, `chunk ${size}: no error`)
+  }
+})
+
+test('open <think>: an answer that mentions <tool_call> is still promoted', (t) => {
+  const answer = 'The syntax starts with <tool_call> followed by the function name.'
+  for (const size of [answer.length + 8, 3, 1]) {
+    const n = createCompletionNormalizer(qwenThinkingConfig())
+    const events = [
+      ...pushAll(n, chunksOf(`<think>\n${answer}`, size)),
+      ...n.finish({ stopReason: 'eos' })
+    ]
+
+    t.is(joined(events, 'thinkingDelta'), answer, `chunk ${size}: thinking`)
+    t.is(joined(events, 'contentDelta'), answer, `chunk ${size}: content`)
+    t.is(events.filter((e) => e.type === 'toolError').length, 0, `chunk ${size}: no error`)
+  }
+})
+
+test('open <think>: only the unclosed block is promoted', (t) => {
+  const n = createCompletionNormalizer(qwenThinkingConfig())
+  const events = [
+    ...pushAll(n, ['<think>discarded plan</think><think>Final answer']),
+    ...n.finish({ stopReason: 'eos' })
+  ]
+
+  t.is(joined(events, 'contentDelta'), 'Final answer')
+})
+
 test('open <think>: reasoning is not promoted when the turn did not end on its own', (t) => {
   const raw = '<think>\nDone. Created NOTES.md.'
   const finishes = [

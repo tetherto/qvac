@@ -125,6 +125,8 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   // close marker arriving after it is dropped.
   let toolFrameOpenedInThinking = false
   let dropLateThinkClose = false
+  // Index into `thinkingParts` where the current built-in block starts.
+  let thinkingBlockStart = 0
 
   // Content frame: inner streamed as it arrives; partial close tail buffered.
   let activeContentFrame: FrameSpec | null = null
@@ -279,6 +281,17 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
 
     if (!frame) return
 
+    const openedInThinking = toolFrameOpenedInThinking
+    toolFrameOpenedInThinking = false
+    // The reasoning only mentioned the marker: still inside `<think>`.
+    function returnToThinking() {
+      dropLateThinkClose = false
+      trimThinkingStart = false
+      emitThinking(events, raw)
+      activeThinkingFrame = BUILTIN_THINKING
+      if (closed) state = 'thinkingFraming'
+    }
+
     // Empty-payload guard. Strip frame markers and check the inner is
     // non-empty; surface a toolError on empty payloads so the literal
     // markers don't leak into contentDelta.
@@ -288,6 +301,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
       inner = inner.slice(0, inner.length - frame.close.length)
     }
     if (inner.trim().length === 0) {
+      if (openedInThinking) return returnToThinking()
       events.push({
         type: 'toolError',
         seq: nextSeq(),
@@ -300,19 +314,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
 
     for (const call of toolCalls) emitStreamedToolCall(events, call)
 
-    const openedInThinking = toolFrameOpenedInThinking
-    toolFrameOpenedInThinking = false
-    if (toolCalls.length === 0 && openedInThinking) {
-      // The reasoning only mentioned the marker: still inside `<think>`.
-      dropLateThinkClose = false
-      trimThinkingStart = false
-      emitThinking(events, raw)
-      if (closed) {
-        activeThinkingFrame = BUILTIN_THINKING
-        state = 'thinkingFraming'
-      }
-      return
-    }
+    if (toolCalls.length === 0 && openedInThinking) return returnToThinking()
     if (openedInThinking) dropLateThinkClose = true
 
     if (toolCalls.length === 0) {
@@ -512,6 +514,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
           state = 'toolFraming'
         } else if (entry.kind === 'thinking') {
           activeThinkingFrame = entry.spec
+          thinkingBlockStart = thinkingParts.length
           trimThinkingStart = true
           pendingThinkingWhitespace = ''
           state = 'thinkingFraming'
@@ -569,9 +572,11 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
 
     if (state === 'toolFraming' && activeToolFrame) {
       if (opts?.error) {
-        emitContent(events, toolCallBuffer)
+        if (toolFrameOpenedInThinking) emitThinking(events, toolCallBuffer)
+        else emitContent(events, toolCallBuffer)
         toolCallBuffer = ''
         activeToolFrame = null
+        toolFrameOpenedInThinking = false
       } else {
         flushToolBuffer(events, false)
       }
@@ -587,10 +592,9 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
       naturalStop &&
       contentParts.length === 0 &&
       streamedToolCallKeys.size === 0 &&
-      !opts?.toolCalls?.length &&
-      thinkingParts.length > 0
+      !opts?.toolCalls?.length
     ) {
-      emitContent(events, thinkingParts.join(''))
+      emitContent(events, thinkingParts.slice(thinkingBlockStart).join('').trimStart())
     }
     activeThinkingFrame = null
     state = 'content'
