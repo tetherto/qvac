@@ -179,6 +179,28 @@
         },
         "win32-x64": {
           "args": "--platform=win32 --arch=x64",
+          "commands": [
+            {
+              "command": "pnpm run build:ts",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "node ../../scripts/ci/msvc-env.mjs pnpm exec bare-make generate -D BUILD_TESTING=OFF -D SD_CUDA=ON",
+              "forwardAllArgs": true
+            },
+            {
+              "command": "node ../../scripts/ci/msvc-env.mjs pnpm exec bare-make build",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "node ../../scripts/ci/msvc-env.mjs pnpm exec bare-make install",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "node scripts/verify-prebuild-linking.mjs prebuilds",
+              "forwardAllArgs": false
+            }
+          ],
           "ci": {
             "runner": "win_2025_x64"
           }
