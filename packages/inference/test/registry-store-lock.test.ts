@@ -4,12 +4,14 @@ import os from 'bare-os'
 import path from 'bare-path'
 import { spawn, type Subprocess } from 'bare-subprocess'
 import { AbortController } from 'bare-abort-controller'
+import { QVACRegistryClient } from '@qvac/registry-client'
 import {
   acquireRegistryClient,
   closeRegistryClient,
   hasActiveRegistryClient
 } from '@/runtime/registry-client'
 import { handleModelRegistrySearch } from '@/handlers/registry'
+import { fetchFitStub } from '@/model-fit/description/fetch'
 import { resolveRegistryModel } from '@/handlers/load-model/resolve'
 import type { ResolveResult } from '@/handlers/load-model/types'
 import { getRequestRegistry } from '@/runtime/index'
@@ -61,6 +63,42 @@ function settledFlag(promise: Promise<unknown>): () => boolean {
     () => (settled = true)
   )
   return () => settled
+}
+
+// A client call that stays pending until the test opens it.
+interface Gate {
+  call: () => Promise<unknown>
+  started: () => boolean
+  open: () => void
+}
+
+function gate(value: unknown): Gate {
+  let open = () => {}
+  let started = false
+  const promise = new Promise<unknown>((resolve) => {
+    open = () => resolve(value)
+  })
+  return {
+    call: () => {
+      started = true
+      return promise
+    },
+    started: () => started,
+    open
+  }
+}
+
+function stubClientMethod(
+  t: { teardown(fn: () => void): void },
+  name: string,
+  impl: () => Promise<unknown>
+): void {
+  const proto = QVACRegistryClient.prototype as unknown as Record<string, unknown>
+  const original = proto[name]
+  proto[name] = impl
+  t.teardown(() => {
+    proto[name] = original
+  })
 }
 
 function setup(
@@ -240,6 +278,73 @@ test('hands the store over between leases while another process waits', async (t
   const lease = await next
   t.not(lease.client, first.client, 'the waiting lease reopens the store')
   await lease[Symbol.asyncDispose]()
+})
+
+test('a lease lasts until the registry work it covers finishes', async (t) => {
+  // Another process waits throughout, so the store closes as soon as no lease is
+  // held; the long grace period rules out any other reason to close.
+  const home = setup(t, 'lease-scope', { ...TEST_TIMINGS, graceMs: 30_000 })
+  const waiting = holdMarker('waiting', true)
+  t.teardown(() => waiting.release())
+
+  async function heldUntilDone(label: string, call: Gate, run: Promise<unknown>): Promise<void> {
+    await waitUntil(call.started)
+    await sleep(TEST_TIMINGS.pollMs * 4)
+    t.ok(hasActiveRegistryClient(), `${label}: the store stays open while the call runs`)
+    call.open()
+    await run
+    await waitUntil(() => !hasActiveRegistryClient(), 1000)
+  }
+
+  const search = gate([])
+  stubClientMethod(t, 'findBy', search.call)
+  await heldUntilDone('search', search, handleModelRegistrySearch({ type: 'modelRegistrySearch' }))
+
+  const lookup = gate(null)
+  const blob = gate(undefined)
+  const entry = { fitBlobBinding: { sha256: 'a'.repeat(64), byteLength: 1 } }
+  let lookups = 0
+  stubClientMethod(t, 'getModel', () => (lookups++ === 0 ? lookup.call() : Promise.resolve(entry)))
+  stubClientMethod(t, 'downloadBlob', blob.call)
+  const ref = {
+    name: 'model.gguf',
+    sha256Checksum: 'b'.repeat(64),
+    registryPath: 'm/model.gguf',
+    registrySource: 's3'
+  }
+  const options = { cacheDir: path.join(home, 'fit-stubs') }
+  await heldUntilDone('fit stub lookup', lookup, fetchFitStub(ref, options))
+  await heldUntilDone('fit stub download', blob, fetchFitStub(ref, options))
+})
+
+test('a lease queued behind a handover keeps its deadline, and goes ahead once nobody waits', async (t) => {
+  setup(t, 'queued', { ...TEST_TIMINGS, graceMs: 30_000 })
+  const download = await acquireRegistryClient({ wait: 'download' })
+  const waiting = holdMarker('waiting', true)
+  await sleep(TEST_TIMINGS.pollMs * 4)
+
+  const busy = await rejection(acquireRegistryClient({ wait: 'query' }))
+  t.ok(busy instanceof ModelRegistryBusyError, 'a query queued behind the handover gives up')
+  const typed = busy as ModelRegistryBusyError
+  t.is(typed.holder, 'current')
+  t.ok(typed.waitedMs >= TEST_TIMINGS.queryWaitMs, 'after the query wait')
+  t.ok(typed.waitedMs < TEST_TIMINGS.queryWaitMs + 500, 'not after the download ends')
+  t.ok(hasActiveRegistryClient(), 'while the download keeps the store')
+
+  const next = acquireRegistryClient({ wait: 'download' })
+  const settled = settledFlag(next)
+  await sleep(TEST_TIMINGS.pollMs * 4)
+  t.absent(settled(), 'a queued download keeps waiting for the handover')
+
+  await waiting.release()
+  const lease = await next
+  t.is(
+    lease.client,
+    download.client,
+    'and shares the open store once the other process stops waiting'
+  )
+  await lease[Symbol.asyncDispose]()
+  await download[Symbol.asyncDispose]()
 })
 
 test('registry search passes the busy error through and stops on cancel', async (t) => {

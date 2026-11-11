@@ -102,7 +102,8 @@ async function defaultGetEntry(
 ): Promise<FitStubEntry | null> {
   const { acquireRegistryClient } = await import('@/runtime/registry-client')
   await using lease = await acquireRegistryClient({ wait: 'query', signal })
-  return lease.client.getModel(registryPath, registrySource)
+  // Awaited here: returning the promise would release the lease before the lookup ends.
+  return await lease.client.getModel(registryPath, registrySource)
 }
 
 async function defaultDownloadBlob(
@@ -112,7 +113,7 @@ async function defaultDownloadBlob(
 ): Promise<unknown> {
   const { acquireRegistryClient } = await import('@/runtime/registry-client')
   await using lease = await acquireRegistryClient({ wait: 'query', signal })
-  return lease.client.downloadBlob(binding, {
+  return await lease.client.downloadBlob(binding, {
     outputFile,
     maxRetries: 1,
     ...(signal !== undefined && { signal })

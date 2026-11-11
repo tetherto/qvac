@@ -299,7 +299,13 @@ function check(): void {
     if (othersWaiting && !yielding) {
       yielding = true
       logger.info('Another QVAC process is waiting for the model registry; handing it over')
+    } else if (!othersWaiting && yielding) {
+      // The other process stopped waiting: leases queued for the handover go ahead.
+      yielding = false
+      admitPending()
     }
+    // Leases queued behind the handover keep their deadlines.
+    expireWaiters('current', null)
     return
   }
   if (othersWaiting) {

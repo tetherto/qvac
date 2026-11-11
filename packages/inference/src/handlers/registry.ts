@@ -57,7 +57,8 @@ async function withRegistryClient<T>(
     signal: ctx.signal,
     cancelled: () => new InferenceCancelledError(id)
   })
-  return query(lease.client)
+  // Awaited here: returning the promise would release the lease before the query ends.
+  return await query(lease.client)
 }
 
 // Errors a caller can act on pass through unwrapped.
