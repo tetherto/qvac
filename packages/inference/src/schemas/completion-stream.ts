@@ -225,79 +225,111 @@ const historyToolCallSchema = z.object({
   arguments: z.record(z.string(), z.unknown()).describe('Arguments the tool was called with.')
 })
 
-export const historyMessageSchema = z
-  .object({
-    role: z
-      .string()
-      .describe('Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'),
+const historyMessageObjectSchema = z.object({
+  role: z.string().describe('Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'),
+  content: z
+    .union([z.string(), z.array(historyContentPartSchema)])
+    .nullish()
+    .describe(
+      'Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string. A user turn may instead pass an ordered array of text/media parts, so each image keeps its position in the turn.'
+    ),
+  attachments: z
+    .array(attachmentSchema)
+    .optional()
+    .describe('Optional file attachments for multimodal models.'),
+  toolCalls: z
+    .array(historyToolCallSchema)
+    .optional()
+    .describe(
+      "Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty."
+    ),
+  toolCallId: z
+    .string()
+    .optional()
+    .describe('On a `tool` turn: the id of the call this result answers.'),
+  toolName: z
+    .string()
+    .optional()
+    .describe('On a `tool` turn: the name of the tool that produced the result.')
+})
+
+function refineHistoryMessage(
+  message: z.infer<typeof historyMessageObjectSchema>,
+  ctx: z.RefinementCtx
+) {
+  const callsOnly = message.role === 'assistant' && (message.toolCalls?.length ?? 0) > 0
+  if ((message.content === null || message.content === undefined) && !callsOnly) {
+    ctx.addIssue({
+      code: 'custom',
+      message: '`content` is required unless an assistant message carries `toolCalls`.',
+      path: ['content']
+    })
+  }
+  if (Array.isArray(message.content)) {
+    if (message.role !== 'user') {
+      ctx.addIssue({
+        code: 'custom',
+        message: '`content` parts are only valid on a user message.',
+        path: ['content']
+      })
+    }
+    if (message.attachments !== undefined && message.attachments.length > 0) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Pass media either as `attachments` or as `content` parts, not both.',
+        path: ['attachments']
+      })
+    }
+  }
+  if (message.toolCalls !== undefined && message.role !== 'assistant') {
+    ctx.addIssue({
+      code: 'custom',
+      message: '`toolCalls` is only valid on an assistant message.',
+      path: ['toolCalls']
+    })
+  }
+  for (const key of ['toolCallId', 'toolName'] as const) {
+    if (message[key] !== undefined && message.role !== 'tool') {
+      ctx.addIssue({
+        code: 'custom',
+        message: `\`${key}\` is only valid on a tool message.`,
+        path: [key]
+      })
+    }
+  }
+}
+
+function normalizeHistoryMessage(message: z.infer<typeof historyMessageObjectSchema>) {
+  return { ...message, content: message.content ?? '' }
+}
+
+export const historyMessageSchema = historyMessageObjectSchema
+  .superRefine(refineHistoryMessage)
+  .transform(normalizeHistoryMessage)
+
+export const historyMessageWithoutAttachmentsSchema = historyMessageObjectSchema
+  .extend({
     content: z
       .union([z.string(), z.array(historyContentPartSchema)])
       .nullish()
       .describe(
-        'Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string. A user turn may instead pass an ordered array of text/media parts, so each image keeps its position in the turn.'
+        'Message content to count; media parts are rejected with guidance to use completion().'
       ),
     attachments: z
       .array(attachmentSchema)
+      .max(0, 'calcTokens does not support attachments; use completion() for attachments.')
       .optional()
-      .describe('Optional file attachments for multimodal models.'),
-    toolCalls: z
-      .array(historyToolCallSchema)
-      .optional()
-      .describe(
-        "Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty."
-      ),
-    toolCallId: z
-      .string()
-      .optional()
-      .describe('On a `tool` turn: the id of the call this result answers.'),
-    toolName: z
-      .string()
-      .optional()
-      .describe('On a `tool` turn: the name of the tool that produced the result.')
   })
   .superRefine((message, ctx) => {
-    const callsOnly = message.role === 'assistant' && (message.toolCalls?.length ?? 0) > 0
-    if ((message.content === null || message.content === undefined) && !callsOnly) {
+    refineHistoryMessage(message, ctx)
+    if (Array.isArray(message.content) && message.content.some((part) => part.type === 'media')) {
       ctx.addIssue({
         code: 'custom',
-        message: '`content` is required unless an assistant message carries `toolCalls`.',
+        message: 'calcTokens does not support media content; use completion() for media.',
         path: ['content']
       })
     }
-    if (Array.isArray(message.content)) {
-      if (message.role !== 'user') {
-        ctx.addIssue({
-          code: 'custom',
-          message: '`content` parts are only valid on a user message.',
-          path: ['content']
-        })
-      }
-      if (message.attachments !== undefined && message.attachments.length > 0) {
-        ctx.addIssue({
-          code: 'custom',
-          message: 'Pass media either as `attachments` or as `content` parts, not both.',
-          path: ['attachments']
-        })
-      }
-    }
-    if (message.toolCalls !== undefined && message.role !== 'assistant') {
-      ctx.addIssue({
-        code: 'custom',
-        message: '`toolCalls` is only valid on an assistant message.',
-        path: ['toolCalls']
-      })
-    }
-    for (const key of ['toolCallId', 'toolName'] as const) {
-      if (message[key] !== undefined && message.role !== 'tool') {
-        ctx.addIssue({
-          code: 'custom',
-          message: `\`${key}\` is only valid on a tool message.`,
-          path: [key]
-        })
-      }
-    }
   })
-  .transform((message) => ({ ...message, content: message.content ?? '' }))
 
 export type HistoryMessage = z.infer<typeof historyMessageSchema>
 

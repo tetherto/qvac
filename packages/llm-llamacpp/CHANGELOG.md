@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.70.0] - 2026-11-10
+
+### Added
+
+- `device: "npu"` selects the AMD XDNA NPU as its own device class, beside
+  `gpu` and `cpu`. It takes the first NPU fabric lists, falls back to the GPU
+  order and then the CPU with a warning when none is listed, and is rejected
+  with `InvalidArgument` together with `backend`, `devices`, `split-mode`,
+  `main-gpu` or `rpc-servers`, except the defaults `backend: "auto"`,
+  `devices: ""` and `split-mode: "none"`. Runtime stats report
+  `backendDevice: "npu"`
+  (native code `2`) for an NPU load, including `devices: "XDNA0"`
+  ([#5701](https://github.com/tetherto/qvac/pull/5701)).
+
+### Changed
+
+- `backend` takes GPU families only: `device: "npu"` replaces
+  `backend: "xdna"` from 0.69.0
+  ([#5701](https://github.com/tetherto/qvac/pull/5701)).
+- Finetuning is refused with `InvalidArgument` for a model loaded with
+  `device: "npu"` and for any load with `XDNA0` in `devices`, alone or in a
+  mixed split such as `XDNA0,Vulkan0`, which 0.69.0 allowed
+  ([#5701](https://github.com/tetherto/qvac/pull/5701)).
+- When the NPU leads a load, a vision model's projector now defaults to a GPU
+  beside it (a GPU in `devices`, else the first local GPU) instead of the CPU,
+  and to the CPU only when there is no GPU. `mmproj-use-gpu` still overrides
+  it ([#5701](https://github.com/tetherto/qvac/pull/5701)).
+
 ## [0.69.0] - 2026-11-09
 
 ### Added
