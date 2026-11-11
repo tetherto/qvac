@@ -19,7 +19,9 @@ namespace backend_selection {
 std::optional<std::string>
 getUnknownFinetuneArchitecture(const ModelMetaData* metadata);
 
-enum BackendType : std::uint8_t { CPU, GPU };
+/// The device class a load runs on. NPU is the AMD XDNA NPU: ggml registers it
+/// as an integrated GPU, but GPU selection never picks it.
+enum BackendType : std::uint8_t { CPU, GPU, NPU };
 
 enum class MainGpuType : std::uint8_t { Integrated, Dedicated };
 
@@ -87,8 +89,12 @@ std::pair<BackendType, std::string> chooseBackend(
 /// families in priority order (e.g. {"cuda", "vulkan"}). Entries with no device
 /// present are skipped; if none match, selection falls through to the normal
 /// cascade rather than failing, because an absent device is not a config error.
-/// The AMD XDNA NPU is reachable only through the override; the cascade never
-/// picks it.
+/// Neither the override nor the cascade ever picks the AMD XDNA NPU.
+///
+/// A @p preferredBackendType of NPU picks the first NPU device in ggml's
+/// registration order. With none listed it warns and continues as a GPU
+/// request: the GPU order, then the CPU. Finetuning never reaches this with an
+/// NPU request: LlamaFinetuner rejects it before reloading the model.
 ///
 /// For BitNet models with TQ1_0/TQ2_0 quantization on Adreno GPUs:
 ///   - Adreno 800+: prefer Vulkan over OpenCL

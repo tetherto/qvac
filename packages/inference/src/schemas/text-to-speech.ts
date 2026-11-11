@@ -134,6 +134,27 @@ export const TTS_COSYVOICE3_INSTRUCT_VOLUMES = ['loud', 'soft'] as const
 
 export const TTS_COSYVOICE3_INSTRUCT_STYLES = ['peppa', 'robot'] as const
 
+// Parler's Core ML compute policy (@qvac/tts-ggml `PARLER_COREML_COMPUTE_UNITS`).
+export const TTS_PARLER_COREML_COMPUTE_UNITS = [
+  'all',
+  'cpu_and_ane',
+  'cpu_and_gpu',
+  'cpu_only'
+] as const
+
+// The LavaSR stages' Core ML compute policy (@qvac/tts-ggml
+// `LavaSRCoreMLComputeUnits`); a different spelling from Parler's because each
+// mirrors its own native enum.
+export const TTS_LAVASR_COREML_COMPUTE_UNITS = [
+  'CPU_ONLY',
+  'CPU_AND_GPU',
+  'CPU_AND_NE',
+  'ALL'
+] as const
+
+// Supertonic weight precision (@qvac/tts-ggml `precision`).
+export const TTS_SUPERTONIC_PRECISIONS = ['auto', 'f32', 'f16', 'q8_0'] as const
+
 // Supertonic languages not already present in the Chatterbox set, used to keep
 // TTS_LANGUAGES a true union across engines without duplicates.
 const TTS_SUPERTONIC_ONLY_LANGUAGES = [
@@ -170,6 +191,11 @@ const ttsIntegerSchema = z.number().int()
 const ttsInt32Schema = ttsIntegerSchema.min(-2147483648).max(2147483647)
 const ttsNonNegativeInt32Schema = ttsInt32Schema.nonnegative()
 const ttsPositiveInt32Schema = ttsInt32Schema.positive()
+// A CosyVoice3 speech token travels both ways: the response hands them out as
+// `speechTokenIds`, the load config takes them back as `forceSpeechTokens`.
+// One titled scalar keeps the two interchangeable in every generated client
+// (one shared Python class instead of a differently named wrapper per field).
+const ttsSpeechTokenIdSchema = ttsInt32Schema.meta({ title: 'TtsSpeechTokenId' })
 
 // Describe text shared by fields repeated across engine arms.
 const TTS_USE_GPU_DESC =
@@ -198,12 +224,31 @@ const TTS_BACKENDS_DIR_DESC =
   'Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.'
 const TTS_OPENCL_CACHE_DIR_DESC =
   "Persistent directory for ggml-opencl's compiled-program cache (Android only)."
+const TTS_BACKEND_DESC =
+  'Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.'
 
 // The ggml backend knobs every engine honours. `openclCacheDir` is added only
 // on the three engines whose native config reads it (Parler and Audio8 build
 // their params through the addon's _assignBackendParams, which does not).
 const ttsBackendDirFieldsShape = {
+  backend: z.string().trim().min(1).optional().describe(TTS_BACKEND_DESC),
   backendsDir: z.string().min(1).optional().describe(TTS_BACKENDS_DIR_DESC)
+}
+
+// Mirrors the addon's validateBackendOption: a WebGPU selector is accepted only
+// on the engines whose native library has established WebGPU support
+// (Supertonic 3, Parler, CosyVoice3, Audio8); the others reject it before any
+// weight is loaded, and so does this schema, naming the field.
+function refineNoWebgpuBackend(
+  config: { ttsEngine: string; backend?: string | undefined },
+  ctx: z.RefinementCtx
+) {
+  if (config.backend === undefined || !/^webgpu/i.test(config.backend)) return
+  ctx.addIssue({
+    code: 'custom',
+    path: ['backend'],
+    message: `WebGPU has no established support for ${config.ttsEngine}; it is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.`
+  })
 }
 
 const ttsOpenclCacheFieldShape = {
@@ -498,7 +543,37 @@ export const ttsChatterboxRuntimeConfigSchema = z
     ...ttsBackendDirFieldsShape,
     ...ttsOpenclCacheFieldShape
   })
-  .superRefine(refineGpuIntent)
+  .superRefine(refineChatterboxRuntimeConfig)
+
+function refineChatterboxRuntimeConfig(
+  config: {
+    ttsEngine: 'chatterbox'
+    backend?: string | undefined
+    useGPU?: boolean | undefined
+    nGpuLayers?: number | undefined
+  },
+  ctx: z.RefinementCtx
+) {
+  refineGpuIntent(config, ctx)
+  refineNoWebgpuBackend(config, ctx)
+}
+
+// Supertonic's in-memory voice tensors come as a pair: the addon rejects one
+// without the other, so the schema does too, naming the missing half.
+function refineSupertonicVoiceStyle(
+  config: {
+    voiceStyleTtl?: number[] | undefined
+    voiceStyleDp?: number[] | undefined
+  },
+  ctx: z.RefinementCtx
+) {
+  if ((config.voiceStyleTtl === undefined) === (config.voiceStyleDp === undefined)) return
+  ctx.addIssue({
+    code: 'custom',
+    path: [config.voiceStyleTtl === undefined ? 'voiceStyleTtl' : 'voiceStyleDp'],
+    message: 'voiceStyleTtl and voiceStyleDp must be supplied together.'
+  })
+}
 
 // Supertonic drives its duration predictor from either an exact multiplier
 // (`ttsSpeed`) or the canonical pace vocabulary, never both — the engine
@@ -509,10 +584,13 @@ function refineSupertonicRateControls(
     pace?: string | undefined
     useGPU?: boolean | undefined
     nGpuLayers?: number | undefined
+    voiceStyleTtl?: number[] | undefined
+    voiceStyleDp?: number[] | undefined
   },
   ctx: z.RefinementCtx
 ) {
   refineGpuIntent(config, ctx)
+  refineSupertonicVoiceStyle(config, ctx)
   if (config.ttsSpeed !== undefined && config.pace !== undefined) {
     ctx.addIssue({
       code: 'custom',
@@ -588,6 +666,45 @@ const ttsSupertonicRuntimeConfigShape = {
     .describe(
       'Floor on every streamed chunk’s size in text tokens (engine default 30); shorter trailing chunks merge into the previous one.'
     ),
+  // Native precision and environment controls, forwarded to the engine as
+  // given; -1 on the integer overrides leaves the engine's automatic choice.
+  precision: z
+    .enum(TTS_SUPERTONIC_PRECISIONS)
+    .optional()
+    .describe(
+      'Weight precision the engine loads at: `auto` keeps the GGUF’s own, `f32` / `f16` / `q8_0` convert on load and change the weight footprint.'
+    ),
+  f16Attn: ttsInt32Schema
+    .optional()
+    .describe('Attention precision override: `-1` automatic (default), `0` f32, `1` f16.'),
+  f16Weights: ttsInt32Schema
+    .optional()
+    .describe('Weight precision override: `-1` automatic (default), `0` off, `1` f16.'),
+  kvAttnType: ttsInt32Schema
+    .optional()
+    .describe('Native KV attention type code; `-1` leaves the automatic selection.'),
+  f16WeightsDenyList: z
+    .array(z.string().min(1))
+    .optional()
+    .describe('Tensor-name patterns kept at their original precision when `f16Weights` is on.'),
+  vulkanEnvOverrides: z
+    .record(z.string(), z.string())
+    .optional()
+    .describe(
+      'Vulkan environment overrides (string values) passed to the engine; explicit entries win over the `vulkanCacheDir` convenience setting.'
+    ),
+  voiceStyleTtl: z
+    .array(z.number())
+    .min(1)
+    .optional()
+    .describe(
+      'In-memory voice: the flattened `style_ttl` tensor of a cloned voice. Paired with `voiceStyleDp`; the engine checks the sizes against the model, and the pair wins over `voiceJsonSrc` and the baked `voice`.'
+    ),
+  voiceStyleDp: z
+    .array(z.number())
+    .min(1)
+    .optional()
+    .describe('In-memory voice: the flattened `style_dp` tensor, paired with `voiceStyleTtl`.'),
   ...ttsBackendDirFieldsShape,
   ...ttsOpenclCacheFieldShape
 }
@@ -626,6 +743,26 @@ const ttsParlerRuntimeConfigShape = {
     .boolean()
     .optional()
     .describe('Parler prompt digit expansion (engine default: enabled).'),
+  // Apple Core ML sidecars (macOS / iOS). The DAC sidecar is presence-driven;
+  // these three steer the optional decoder sidecar and the compute policy.
+  coremlDecoder: z
+    .boolean()
+    .optional()
+    .describe(
+      'macOS / iOS: run the decoder steps on the `<model>-decoder.mlmodelc` sidecar beside the GGUF (the DAC sidecar is picked up by presence); unset keeps the engine default.'
+    ),
+  coremlComputeUnits: z
+    .enum(TTS_PARLER_COREML_COMPUTE_UNITS)
+    .optional()
+    .describe(
+      'macOS / iOS: Core ML compute policy for the Parler sidecars; unset inherits the engine’s environment default.'
+    ),
+  coremlStrict: z
+    .boolean()
+    .optional()
+    .describe(
+      'macOS / iOS: `true` fails the load when a sidecar is unusable instead of falling back to ggml, `false` permits the fallback; unset inherits the engine’s strict mode.'
+    ),
   ...ttsBackendDirFieldsShape
 }
 
@@ -756,6 +893,18 @@ const ttsCosyvoice3RuntimeConfigShape = {
       'Treat the baked-voice prompt frames as attention-only conditioning in the flow: a faster flow whose output deviates slightly from the reference (engine default off).'
     ),
   vulkanDevice: ttsInt32Schema.min(-1).optional().describe(TTS_VULKAN_DEVICE_DESC),
+  greedy: z
+    .boolean()
+    .optional()
+    .describe(
+      'Greedy LM decoding: take the argmax speech token instead of sampling (engine default off).'
+    ),
+  forceSpeechTokens: z
+    .array(ttsSpeechTokenIdSchema)
+    .optional()
+    .describe(
+      'Speech-token trajectory of ONE native synthesis to replay instead of generating, as a previous batch run, native chunk stream or single sentence returned it in `speechTokenIds`. Fixed at load: every synthesis of the model replays this same array, so a joined sentence stream cannot be replayed sentence by sentence. An empty array restores generation.'
+    ),
   useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
   outputSampleRate: ttsOutputSampleRateSchema.optional(),
   streamChunkTokens: ttsNonNegativeInt32Schema.optional().describe(TTS_STREAM_CHUNK_TOKENS_DESC),
@@ -803,11 +952,85 @@ export const ttsAudio8RuntimeConfigSchema = z
   .object(ttsAudio8RuntimeConfigShape)
   .superRefine(refineGpuIntent)
 
-// @qvac/tts-ggml's MOSS_MAX_DURATION_TOKENS: the 2048-row generation budget
-// less the 31 delay-pattern drain rows and the two termination rows.
-const TTS_MOSS_MAX_DURATION_TOKENS = 2015
+// @qvac/tts-ggml's MOSS generation budget: 2048 rows when `maxNewTokens` is
+// unset, of which 31 delay-pattern drain rows and two termination rows are
+// never audio, so `durationTokens` fits at most `maxNewTokens - 33` (2015 by
+// default).
+const TTS_MOSS_DEFAULT_MAX_NEW_TOKENS = 2048
+const TTS_MOSS_RESERVED_ROWS = 33
 
 const TTS_MOSS_MAX_DIALOGUE_SPEAKERS = 5
+
+// Mirrors the addon's assertMossDurationTokens with the configured budget: a
+// target that does not fit the generation budget is refused at load rather
+// than by the engine.
+function refineMossDurationBudget(
+  config: { durationTokens?: number | undefined; maxNewTokens?: number | undefined },
+  ctx: z.RefinementCtx
+) {
+  if (config.durationTokens === undefined || config.durationTokens === 0) return
+  const budget = (config.maxNewTokens ?? TTS_MOSS_DEFAULT_MAX_NEW_TOKENS) - TTS_MOSS_RESERVED_ROWS
+  if (config.durationTokens <= budget) return
+  ctx.addIssue({
+    code: 'custom',
+    path: ['durationTokens'],
+    message: `durationTokens must be an integer from 0 to ${Math.max(0, budget)} (maxNewTokens less the 33 delay/EOS rows; 0 = free length).`
+  })
+}
+
+function refineMossRuntimeConfig(
+  config: {
+    ttsEngine: 'moss'
+    backend?: string | undefined
+    useGPU?: boolean | undefined
+    nGpuLayers?: number | undefined
+    durationTokens?: number | undefined
+    maxNewTokens?: number | undefined
+  },
+  ctx: z.RefinementCtx
+) {
+  refineGpuIntent(config, ctx)
+  refineNoWebgpuBackend(config, ctx)
+  refineMossDurationBudget(config, ctx)
+}
+
+// MOSS samples its text and audio channels separately; the defaults are the
+// engine's, so these do not share the Parler / Audio8 sampling descriptions.
+const ttsMossSamplingFieldsShape = {
+  textTemperature: z
+    .number()
+    .nonnegative()
+    .optional()
+    .describe('Text-channel sampling temperature; unset keeps the engine default.'),
+  textTopP: z
+    .number()
+    .positive()
+    .max(1)
+    .optional()
+    .describe('Text-channel top-p (nucleus) cutoff, 0 < p ≤ 1; unset keeps the engine default.'),
+  textTopK: ttsNonNegativeInt32Schema
+    .optional()
+    .describe('Text-channel top-k cutoff; unset keeps the engine default.'),
+  audioTemperature: z
+    .number()
+    .nonnegative()
+    .optional()
+    .describe('Audio-channel sampling temperature; unset keeps the engine default.'),
+  audioTopP: z
+    .number()
+    .positive()
+    .max(1)
+    .optional()
+    .describe('Audio-channel top-p (nucleus) cutoff, 0 < p ≤ 1; unset keeps the engine default.'),
+  audioTopK: ttsNonNegativeInt32Schema
+    .optional()
+    .describe('Audio-channel top-k cutoff; unset keeps the engine default.'),
+  audioRepetitionPenalty: z
+    .number()
+    .positive()
+    .optional()
+    .describe('Audio-channel repetition penalty; 1 = off, unset keeps the engine default.')
+}
 
 // MOSS emits its native 24 kHz only (the addon rejects any other
 // `outputSampleRate`) and supports neither the LavaSR stages nor a smaller
@@ -826,18 +1049,26 @@ const ttsMossRuntimeConfigShape = {
     .min(1)
     .optional()
     .describe('Language hint written into the model prompt, e.g. `en` or `zh`. Default `en`.'),
-  durationTokens: ttsIntegerSchema
+  durationTokens: ttsInt32Schema
     .min(0)
-    .max(TTS_MOSS_MAX_DURATION_TOKENS)
     .optional()
     .describe(
-      'Target length of each synthesis in codec frames (12.5 per second, so 38 ≈ 3 s), 0–2015; 0 or unset keeps the length free.'
+      'Target length of each synthesis in codec frames (12.5 per second, so 38 ≈ 3 s), at most `maxNewTokens` − 33 (2015 by default); 0 or unset keeps the length free.'
     ),
   streamChunkTokens: ttsNonNegativeInt32Schema
     .optional()
     .describe(
       'Codec frames per native streaming chunk (12.5 per second, so 25 ≈ 2 s); 0 or unset synthesizes the whole text before emitting.'
     ),
+  nCtx: ttsPositiveInt32Schema
+    .optional()
+    .describe('Context capacity of the backbone in rows; unset keeps the native value.'),
+  maxNewTokens: ttsPositiveInt32Schema
+    .optional()
+    .describe(
+      'Generation budget in rows (engine default 2048), of which 33 are delay/EOS rows; bounds `durationTokens`.'
+    ),
+  ...ttsMossSamplingFieldsShape,
   useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
   threads: ttsPositiveInt32Schema.optional().describe(TTS_THREADS_DESC),
   // Not TTS_NGPU_LAYERS_DESC: MOSS does not offload per layer, so a layer
@@ -853,7 +1084,7 @@ const ttsMossRuntimeConfigShape = {
 
 export const ttsMossRuntimeConfigSchema = z
   .object(ttsMossRuntimeConfigShape)
-  .superRefine(refineGpuIntent)
+  .superRefine(refineMossRuntimeConfig)
 
 // JSON PCM keeps the client and wire portable; converted to Float32Array at the addon boundary.
 const ttsSpeechPcmSchema = z.array(z.number().min(-1).max(1)).min(1)
@@ -950,20 +1181,33 @@ const ttsBatchBackendShape = {
   ...ttsBackendDirFieldsShape
 }
 
+function refineMossBatchRuntimeConfig(
+  config: {
+    ttsEngine: 'moss-sfx' | 'moss-speech'
+    backend?: string | undefined
+    useGPU?: boolean | undefined
+    nGpuLayers?: number | undefined
+  },
+  ctx: z.RefinementCtx
+) {
+  refineGpuIntent(config, ctx)
+  refineNoWebgpuBackend(config, ctx)
+}
+
 export const ttsMossSoundEffectRuntimeConfigSchema = z
   .object({
     ttsEngine: z.literal('moss-sfx').describe('TTS engine: MOSS-SoundEffect-v2.'),
     ...ttsBatchBackendShape,
     ...ttsSoundEffectFieldsShape
   })
-  .superRefine(refineGpuIntent)
+  .superRefine(refineMossBatchRuntimeConfig)
 
 export const ttsMossSpeechRuntimeConfigSchema = z
   .object({
     ttsEngine: z.literal('moss-speech').describe('TTS engine: MOSS-Speech.'),
     ...ttsBatchBackendShape
   })
-  .superRefine(refineGpuIntent)
+  .superRefine(refineMossBatchRuntimeConfig)
 
 export const ttsMossSoundEffectLoadConfigSchema = ttsMossSoundEffectRuntimeConfigSchema
 export const ttsMossSpeechLoadConfigSchema = ttsMossSpeechRuntimeConfigSchema.extend({
@@ -995,7 +1239,72 @@ const ttsLavasrLoadFieldsShape = {
     .optional()
     .describe(
       'LavaSR denoiser model source; runs before the enhancer, rate-preserving (batch synthesis only).'
+    ),
+  // The Core ML models are compiled `.mlmodelc` directories, not single files,
+  // so they are host paths rather than model sources. Each stage takes its
+  // path and compute policy together, beside its GGUF source.
+  lavasrEnhancerCoremlModelPath: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR enhancer’s neural core; requires `lavasrEnhancerModelSrc` and `lavasrEnhancerCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.'
+    ),
+  lavasrEnhancerCoremlComputeUnits: z
+    .enum(TTS_LAVASR_COREML_COMPUTE_UNITS)
+    .optional()
+    .describe(
+      'macOS / iOS: Core ML compute policy for the LavaSR enhancer; required with `lavasrEnhancerCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.'
+    ),
+  lavasrDenoiserCoremlModelPath: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR denoiser’s neural core; requires `lavasrDenoiserModelSrc` and `lavasrDenoiserCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.'
+    ),
+  lavasrDenoiserCoremlComputeUnits: z
+    .enum(TTS_LAVASR_COREML_COMPUTE_UNITS)
+    .optional()
+    .describe(
+      'macOS / iOS: Core ML compute policy for the LavaSR denoiser; required with `lavasrDenoiserCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.'
     )
+}
+
+type TtsLavasrCoremlRefinementInput = {
+  lavasrEnhancerModelSrc?: ModelSrcInput | undefined
+  lavasrDenoiserModelSrc?: ModelSrcInput | undefined
+  lavasrEnhancerCoremlModelPath?: string | undefined
+  lavasrEnhancerCoremlComputeUnits?: string | undefined
+  lavasrDenoiserCoremlModelPath?: string | undefined
+  lavasrDenoiserCoremlComputeUnits?: string | undefined
+}
+
+// Mirrors the addon's validateLavaSRCoreML: the path and the policy come as a
+// pair, and a pair without the stage's GGUF has no stage to attach to.
+function refineLavasrCoreml(config: TtsLavasrCoremlRefinementInput, ctx: z.RefinementCtx) {
+  for (const stage of ['Enhancer', 'Denoiser'] as const) {
+    const pathField = `lavasr${stage}CoremlModelPath` as const
+    const unitsField = `lavasr${stage}CoremlComputeUnits` as const
+    const srcField = `lavasr${stage}ModelSrc` as const
+    const path = config[pathField]
+    const units = config[unitsField]
+    if (path === undefined && units === undefined) continue
+    if (path === undefined || units === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [path === undefined ? pathField : unitsField],
+        message: `${pathField} and ${unitsField} must be supplied together.`
+      })
+    }
+    if (config[srcField] === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [srcField],
+        message: `${srcField} is required when the LavaSR ${stage.toLowerCase()} runs on Core ML (${pathField}).`
+      })
+    }
+  }
 }
 
 // The denoiser needs the whole utterance, so every engine with native chunk
@@ -1040,16 +1349,24 @@ export const ttsChatterboxLoadConfigSchema = ttsChatterboxRuntimeConfigSchema
       ),
     ...ttsLavasrLoadFieldsShape
   })
-  .superRefine(refineLavasrDenoiserStreaming)
+  .superRefine(refineChatterboxLoadConfig)
 
-type TtsSupertonicLoadRefinementInput = {
+function refineChatterboxLoadConfig(
+  config: TtsLavasrCoremlRefinementInput & { streamChunkTokens?: number | undefined },
+  ctx: z.RefinementCtx
+) {
+  refineLavasrDenoiserStreaming(config, ctx)
+  refineLavasrCoreml(config, ctx)
+}
+
+type TtsSupertonicLoadRefinementInput = TtsLavasrCoremlRefinementInput & {
   ttsSpeed?: number | undefined
   pace?: string | undefined
   useGPU?: boolean | undefined
   nGpuLayers?: number | undefined
+  voiceStyleTtl?: number[] | undefined
+  voiceStyleDp?: number[] | undefined
   streamChunkTokens?: number | undefined
-  lavasrEnhancerModelSrc?: ModelSrcInput | undefined
-  lavasrDenoiserModelSrc?: ModelSrcInput | undefined
 }
 
 // Supertonic native chunk streaming rejects BOTH LavaSR stages, not just the
@@ -1061,6 +1378,7 @@ function refineSupertonicLoadConfig(
   ctx: z.RefinementCtx
 ) {
   refineSupertonicRateControls(config, ctx)
+  refineLavasrCoreml(config, ctx)
   if ((config.streamChunkTokens ?? 0) <= 0) return
   for (const field of ['lavasrEnhancerModelSrc', 'lavasrDenoiserModelSrc'] as const) {
     if (config[field] === undefined) continue
@@ -1092,10 +1410,7 @@ export const ttsSupertonicLoadConfigSchema = z
   })
   .superRefine(refineSupertonicLoadConfig)
 
-type TtsParlerLoadRefinementInput = TtsParlerRuntimeRefinementInput & {
-  lavasrEnhancerModelSrc?: ModelSrcInput | undefined
-  lavasrDenoiserModelSrc?: ModelSrcInput | undefined
-}
+type TtsParlerLoadRefinementInput = TtsParlerRuntimeRefinementInput & TtsLavasrCoremlRefinementInput
 
 function refineParlerLoadConfig(config: TtsParlerLoadRefinementInput, ctx: z.RefinementCtx) {
   refineParlerDescriptionFields(config, ctx)
@@ -1106,6 +1421,7 @@ function refineParlerLoadConfig(config: TtsParlerLoadRefinementInput, ctx: z.Ref
     refineParlerNativeStreamingRate(config, ctx)
   }
   refineLavasrDenoiserStreaming(config, ctx)
+  refineLavasrCoreml(config, ctx)
 }
 
 export const ttsParlerLoadConfigSchema = z
@@ -1182,10 +1498,8 @@ function refineCosyvoice3Cloning(
 }
 
 type TtsCosyvoice3LoadRefinementInput = TtsCosyvoice3RefinementInput &
-  TtsCosyvoice3CloningRefinementInput & {
-    lavasrEnhancerModelSrc?: ModelSrcInput | undefined
-    lavasrDenoiserModelSrc?: ModelSrcInput | undefined
-  }
+  TtsCosyvoice3CloningRefinementInput &
+  TtsLavasrCoremlRefinementInput
 
 function refineCosyvoice3LoadConfig(
   config: TtsCosyvoice3LoadRefinementInput,
@@ -1201,6 +1515,7 @@ function refineCosyvoice3LoadConfig(
   }
 
   refineLavasrDenoiserStreaming(config, ctx)
+  refineLavasrCoreml(config, ctx)
   refineCosyvoice3Cloning(config, ctx)
 }
 
@@ -1277,17 +1592,22 @@ export const ttsAudio8LoadConfigSchema = z
   .superRefine(refineAudio8LoadConfig)
 
 type TtsMossLoadRefinementInput = {
+  ttsEngine: 'moss'
+  backend?: string | undefined
   mossCodecEncoderModelSrc?: ModelSrcInput | undefined
   referenceAudioSrc?: ModelSrcInput | undefined
   dialogueReferenceSrcs?: ModelSrcInput[] | undefined
   useGPU?: boolean | undefined
   nGpuLayers?: number | undefined
+  durationTokens?: number | undefined
+  maxNewTokens?: number | undefined
 }
 
 // The addon enforces the same three rules at construction; catching them here
-// names the SDK field instead of the addon's `files.*` option.
+// names the SDK field instead of the addon's `files.*` option. Built from the
+// runtime *shape*, so the runtime refinements are re-run here too.
 function refineMossLoadConfig(config: TtsMossLoadRefinementInput, ctx: z.RefinementCtx) {
-  refineGpuIntent(config, ctx)
+  refineMossRuntimeConfig(config, ctx)
 
   if (config.referenceAudioSrc !== undefined && config.dialogueReferenceSrcs !== undefined) {
     ctx.addIssue({
@@ -1591,10 +1911,15 @@ export const ttsStatsSchema = z.object({
   generatedFrames: z.number().optional(),
   // Backend selection captured once at model load. `0` CPU / `1` GPU;
   // `backendId` codes the family (0 CPU, 1 Metal, 2 CUDA, 3 Vulkan, 4 OpenCL,
-  // 99 other GPU). The enhancer and denoiser fields report each LavaSR stage
-  // separately and are `-1` when that stage is not loaded.
+  // 5 WebGPU, 99 other GPU). The enhancer and denoiser fields report each
+  // LavaSR stage separately and are `-1` when that stage is not loaded.
   backendDevice: z.number().optional(),
-  backendId: z.number().optional(),
+  backendId: z
+    .number()
+    .optional()
+    .describe(
+      'Backend family the engine ran on: `0` CPU, `1` Metal, `2` CUDA, `3` Vulkan, `4` OpenCL, `5` WebGPU, `99` other.'
+    ),
   gpuUnsupported: z.number().optional(),
   enhancerBackendDevice: z.number().optional(),
   enhancerBackendId: z.number().optional(),
@@ -1617,6 +1942,33 @@ export const ttsStatsSchema = z.object({
     .optional()
     .describe(
       'Audio8: `1` when this synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` reports.'
+    ),
+  // Parler Core ML sidecars (macOS / iOS): availability flags keep the last
+  // report, the "used" flags are 1 only when every reported sentence used the
+  // stage. None of them says which hardware Core ML scheduled the work on.
+  decoderSidecarLoaded: z
+    .number()
+    .optional()
+    .describe(
+      'Parler on macOS / iOS: `1` while the Core ML decoder sidecar is attached, `0` once a fallback retired it.'
+    ),
+  dacSidecarLoaded: z
+    .number()
+    .optional()
+    .describe(
+      'Parler on macOS / iOS: `1` while the Core ML DAC sidecar is attached, `0` once a fallback retired it.'
+    ),
+  decoderOnCoreml: z
+    .number()
+    .optional()
+    .describe(
+      'Parler: `1` when this synthesis ran its decoder steps on Core ML, `0` for ggml or a mixed run.'
+    ),
+  dacOnCoreml: z
+    .number()
+    .optional()
+    .describe(
+      'Parler: `1` when this synthesis ran its DAC on Core ML, `0` for ggml or a mixed run.'
     ),
   // Chatterbox stage timings and counters.
   t3Ms: ttsStageMsSchema('Chatterbox T3 decode'),
@@ -1682,6 +2034,18 @@ const ttsResponseSampleRateSchema = z
   .optional()
   .describe('Sample rate in Hz of the signed 16-bit mono PCM in `buffer`.')
 
+// CosyVoice3 owns its speech-token trajectory and hands it back: with the PCM
+// in batch synthesis, on a final `isLast` frame with no audio under native
+// chunk streaming. One frame's array replays that one native synthesis through
+// the load config's `forceSpeechTokens`; the sentence paths run one synthesis
+// per sentence, so their arrays replay sentence by sentence, not joined.
+const ttsResponseSpeechTokenIdsSchema = z
+  .array(ttsSpeechTokenIdSchema)
+  .optional()
+  .describe(
+    'CosyVoice3: the speech tokens of this native synthesis. Batch synthesis carries them with the PCM; native chunk streaming on a final `isLast` frame with no audio; the sentence paths once per sentence. Pass one array back as `forceSpeechTokens` to replay that synthesis (a joined sentence stream cannot be replayed as one).'
+  )
+
 export const ttsResponseSchema = z.object({
   type: z.literal('textToSpeech'),
   text: z.string().optional().describe('MOSS-Speech reply text, including text-only replies.'),
@@ -1703,6 +2067,7 @@ export const ttsResponseSchema = z.object({
     .describe(
       'True on the final audio-bearing chunk of a pre-chunked synthesis. Absent when the chunk count is not known up front (streamed text in).'
     ),
+  speechTokenIds: ttsResponseSpeechTokenIdsSchema,
   // On the terminal frame only: how the run ended. A run stopped by
   // `cancel()` ends cleanly with `cancelled` rather than as an error.
   stopReason: z.enum(['completed', 'cancelled']).optional()
@@ -1758,6 +2123,7 @@ export const textToSpeechStreamResponseSchema = z.object({
     .describe(
       'True on the final audio-bearing chunk of a pre-chunked synthesis. Absent when the chunk count is not known up front (streamed text in).'
     ),
+  speechTokenIds: ttsResponseSpeechTokenIdsSchema,
   // On the terminal frame only: how the run ended. A run stopped by
   // `cancel()` ends cleanly with `cancelled` rather than as an error.
   stopReason: z.enum(['completed', 'cancelled']).optional()
@@ -1807,6 +2173,11 @@ export type TtsSentenceChunkUpdate = {
   chunkIndex?: number
   sentenceChunk?: string
   isLast?: boolean
+  /**
+   * CosyVoice3: the speech tokens of this sentence's synthesis, when the frame
+   * carried them. Each array replays its own sentence through `forceSpeechTokens`.
+   */
+  speechTokenIds?: number[]
 }
 
 export type TextToSpeechStreamRequest = z.infer<typeof textToSpeechStreamRequestSchema>
@@ -1854,6 +2225,18 @@ export interface TextToSpeechStreamResult {
    * `'completed'` otherwise. `undefined` if no terminal frame was seen.
    */
   stopReason: Promise<'completed' | 'cancelled' | undefined>
+  /**
+   * CosyVoice3: every speech token the run emitted, in order (one native
+   * synthesis per batch run; one array per sentence, concatenated, on the
+   * chunked paths). `undefined` when no frame carried any.
+   *
+   * Replay through the load config's `forceSpeechTokens` works for ONE native
+   * synthesis: a batch run, a native chunk stream, or a single sentence's
+   * array from `chunkUpdates`. `forceSpeechTokens` is fixed at load and every
+   * sentence of a chunked run starts its own synthesis with that same array,
+   * so replaying this concatenation does not restore the sentences it joined.
+   */
+  speechTokenIds: Promise<number[] | undefined>
 }
 
 export interface TextToSpeechStreamSession {
