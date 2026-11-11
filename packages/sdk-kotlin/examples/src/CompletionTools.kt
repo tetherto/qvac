@@ -91,11 +91,11 @@ fun main(): Unit = runBlocking {
 
         if (final.toolCalls.isNotEmpty()) {
             println("\n▸ Simulating Tool Execution...")
-            history += QvacMessage.assistant(final.text)
+            history += QvacMessage.assistant(final.text, toolCalls = final.toolCalls)
             for (call in final.toolCalls) {
                 val result = mockExecute(call.name, call.arguments)
                 println("▸ ${call.name}: $result")
-                history += QvacMessage.tool(result)
+                history += QvacMessage.tool(result, toolCallId = call.id, toolName = call.name)
             }
 
             println("\n▸ Follow-up Response with Tool Results:\n")
