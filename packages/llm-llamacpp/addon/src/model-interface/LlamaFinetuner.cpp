@@ -1,12 +1,17 @@
 #include "LlamaFinetuner.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <memory>
 #include <mutex>
+#include <string>
+#include <unordered_map>
+
+#include <inference-addon-cpp/Errors.hpp>
 
 #ifndef STANDALONE_TEST_BUILD
 
-#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -448,6 +453,15 @@ std::string LlamaFinetuner::finetune(
 }
 
 void LlamaFinetuner::validateModelForFinetuning() {
+  // Checked before finetune() reloads the model: a reload that throws leaves
+  // it with no context.
+  int64_t runtimeBackendDevice = 0;
+  {
+    std::shared_lock lock(model_.stateMtx_);
+    runtimeBackendDevice = model_.runtimeBackendDevice_;
+  }
+  rejectNpuTarget(model_.constructionArgs_.configFilemap, runtimeBackendDevice);
+
   auto fileType = model_.metadata_.tryGetU32("general.file_type");
   if (fileType.has_value()) {
     const uint32_t ft = *fileType;
@@ -957,6 +971,41 @@ void LlamaFinetuner::saveLoraAdapter(
 }
 
 #endif // STANDALONE_TEST_BUILD
+
+// Compiled in standalone test builds too: it reads only the load config and
+// the loaded device class.
+void LlamaFinetuner::rejectNpuTarget(
+    const std::unordered_map<std::string, std::string>& config,
+    int64_t runtimeBackendDevice) {
+  const auto deviceIt = config.find("device");
+  if (deviceIt != config.end() && deviceIt->second == "npu") {
+    // Rejected even when it fell back, so a model's finetunability does not
+    // depend on whether this host lists an NPU.
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "A model loaded with device 'npu' cannot be finetuned, whether it runs "
+        "on the NPU or fell back to a GPU or the CPU; reload it with device "
+        "'gpu' or 'cpu'.");
+  }
+  // An explicit device list that names the NPU puts layers on it, alone
+  // (backendDevice 2) or in a mixed split with a GPU (backendDevice 1).
+  bool listsNpu = runtimeBackendDevice == 2;
+  for (const char* key : {"devices", "device-list"}) {
+    if (const auto it = config.find(key); it != config.end()) {
+      std::string names = it->second;
+      std::ranges::transform(names, names.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+      });
+      listsNpu = listsNpu || names.find("xdna") != std::string::npos;
+    }
+  }
+  if (listsNpu) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "A model with XDNA0 in devices cannot be finetuned, alone or in a "
+        "mixed split; reload it without XDNA0 in devices.");
+  }
+}
 
 // The checkpoint-state/pause machinery below is compiled in standalone test
 // builds too: it is pure synchronization state (mutex + shared_ptr + atomics)
