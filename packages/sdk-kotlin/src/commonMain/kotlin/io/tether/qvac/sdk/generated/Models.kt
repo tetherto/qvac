@@ -2612,6 +2612,24 @@ object Models {
         params = "12B",
     )
 
+    val GLM_5_3_FLASH_320B_A18B_MULTIMODAL_Q4_K_M_SHARD = ModelConstant(
+        name = "GLM_5_3_FLASH_320B_A18B_MULTIMODAL_Q4_K_M_SHARD",
+        src = "registry://hf/bartowski/GLM-5.3-Flash-BF16-GGUF/resolve/66e5e9f0e337470e8801b99bae6c45779b042cc2/GLM-5.3-Flash-BF16-Q4_K_M/GLM-5.3-Flash-BF16-Q4_K_M-00001-of-00006.gguf",
+        registryPath = "bartowski/GLM-5.3-Flash-BF16-GGUF/resolve/66e5e9f0e337470e8801b99bae6c45779b042cc2/GLM-5.3-Flash-BF16-Q4_K_M/GLM-5.3-Flash-BF16-Q4_K_M-00001-of-00006.gguf",
+        registrySource = "hf",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 2225189,
+        blobBlockLength = 593018,
+        blobByteOffset = 145799638755,
+        modelId = "GLM-5.3-Flash-BF16-Q4_K_M-00001-of-00006.gguf",
+        expectedSize = 200828233184,
+        sha256Checksum = "117a0e308fbc31d68400f0496f0d47154c52d40814a6d3dedbc74893569d9188",
+        addon = "llm",
+        engine = "llamacpp-completion",
+        quantization = "q4_k_m",
+        params = "320B-A18B",
+    )
+
     val GPT_OSS_120B_INST_Q4_K_M_SHARD = ModelConstant(
         name = "GPT_OSS_120B_INST_Q4_K_M_SHARD",
         src = "registry://s3/qvac_models_compiled/ggml/gpt-oss120b/2026-03-17/gpt-oss-120b-Q4_K_M-00001-of-00002.gguf",
@@ -3674,6 +3692,42 @@ object Models {
         params = "4B",
     )
 
+    val MEGALOC_F16 = ModelConstant(
+        name = "MEGALOC_F16",
+        src = "registry://s3/qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-f16.gguf",
+        registryPath = "qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-f16.gguf",
+        registrySource = "s3",
+        blobCoreKey = "e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+        blobBlockOffset = 80859,
+        blobBlockLength = 6989,
+        blobByteOffset = 5297149504,
+        modelId = "megaloc-f16.gguf",
+        expectedSize = 458022688,
+        sha256Checksum = "f2519f42a826bb82f5d3bd6360e6017fb156ad3cb25f71d73163df01d26c6636",
+        addon = "classification",
+        engine = "ggml-image-embedding",
+        quantization = "f16",
+        params = "",
+    )
+
+    val MEGALOC_MIXED = ModelConstant(
+        name = "MEGALOC_MIXED",
+        src = "registry://s3/qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-mixed.gguf",
+        registryPath = "qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-mixed.gguf",
+        registrySource = "s3",
+        blobCoreKey = "e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+        blobBlockOffset = 87849,
+        blobBlockLength = 4459,
+        blobByteOffset = 5755185056,
+        modelId = "megaloc-mixed.gguf",
+        expectedSize = 292188448,
+        sha256Checksum = "c1215bca09ed783f34e66ab372b0b02e75213733bea8105764557b58f2082575",
+        addon = "classification",
+        engine = "ggml-image-embedding",
+        quantization = "f16-q6_k",
+        params = "",
+    )
+
     val MMPROJ_EMBEDDINGGEMMA_2_Q8_0 = ModelConstant(
         name = "MMPROJ_EMBEDDINGGEMMA_2_Q8_0",
         src = "registry://hf/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/mmproj-embeddinggemma-2-Q8_0.gguf",
@@ -3816,6 +3870,24 @@ object Models {
         engine = "llamacpp-completion",
         quantization = "f16",
         params = "4B",
+    )
+
+    val MMPROJ_GLM_5_3_FLASH_320B_A18B_MULTIMODAL_BF16 = ModelConstant(
+        name = "MMPROJ_GLM_5_3_FLASH_320B_A18B_MULTIMODAL_BF16",
+        src = "registry://hf/bartowski/GLM-5.3-Flash-BF16-GGUF/resolve/66e5e9f0e337470e8801b99bae6c45779b042cc2/mmproj-GLM-5.3-Flash-BF16-bf16.gguf",
+        registryPath = "bartowski/GLM-5.3-Flash-BF16-GGUF/resolve/66e5e9f0e337470e8801b99bae6c45779b042cc2/mmproj-GLM-5.3-Flash-BF16-bf16.gguf",
+        registrySource = "hf",
+        blobCoreKey = "e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+        blobBlockOffset = 63096,
+        blobBlockLength = 17762,
+        blobByteOffset = 4133118112,
+        modelId = "mmproj-GLM-5.3-Flash-BF16-bf16.gguf",
+        expectedSize = 1164010176,
+        sha256Checksum = "cf7ff0083e3fe7427ce02aa5bb89f0d79f5e830efa0b7f06a8987bc0d1e19ec5",
+        addon = "llm",
+        engine = "llamacpp-completion",
+        quantization = "bf16",
+        params = "320B-A18B",
     )
 
     val MMPROJ_OCR_0_6B_MULTIMODAL_F16 = ModelConstant(
@@ -5072,6 +5144,24 @@ object Models {
         modelId = "transcribepsy-250m-eu-sub-coreml.gguf",
         expectedSize = 17313056,
         sha256Checksum = "9b7a82f33891a8f55917333b58b920878fdcca3d29a1e92d4748c228ba6eb882",
+        addon = "parakeet",
+        engine = "parakeet-transcription",
+        quantization = "q8_0",
+        params = "250M",
+    )
+
+    val PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0 = ModelConstant(
+        name = "PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0",
+        src = "registry://s3/qvac_models_compiled/ggml/transcribepsy/2026-11-09/transcribepsy-250m-eu.gguf",
+        registryPath = "qvac_models_compiled/ggml/transcribepsy/2026-11-09/transcribepsy-250m-eu.gguf",
+        registrySource = "s3",
+        blobCoreKey = "e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+        blobBlockOffset = 92309,
+        blobBlockLength = 4691,
+        blobByteOffset = 6047386368,
+        modelId = "transcribepsy-250m-eu.gguf",
+        expectedSize = 307402624,
+        sha256Checksum = "1b81d33c96d687b00b4d98068b58e038d5dee909e11f74bada343bb6bedce3b2",
         addon = "parakeet",
         engine = "parakeet-transcription",
         quantization = "q8_0",
@@ -8679,6 +8769,7 @@ object Models {
         GEMMA4_4B_MULTIMODAL_Q4_K_M,
         GEMMA4_4B_MULTIMODAL_Q6_K,
         GEMMA_3_12B_Q4_K_XL,
+        GLM_5_3_FLASH_320B_A18B_MULTIMODAL_Q4_K_M_SHARD,
         GPT_OSS_120B_INST_Q4_K_M_SHARD,
         GPT_OSS_120B_INST_Q4_K_M_TENSORS,
         GPT_OSS_20B_INST_Q4_K_M,
@@ -8738,6 +8829,8 @@ object Models {
         MEDGEMMA_4B_IT_Q4_1_TENSORS,
         MEDGEMMA_4B_IT_Q8_0,
         MEDGEMMA_4B_IT_Q8_0_SHARD,
+        MEGALOC_F16,
+        MEGALOC_MIXED,
         MMPROJ_EMBEDDINGGEMMA_2_Q8_0,
         MMPROJ_GEMMA4_2B_MULTIMODAL_BF16,
         MMPROJ_GEMMA4_2B_MULTIMODAL_F16,
@@ -8746,6 +8839,7 @@ object Models {
         MMPROJ_GEMMA4_31B_MULTIMODAL_F16,
         MMPROJ_GEMMA4_4B_MULTIMODAL_BF16,
         MMPROJ_GEMMA4_4B_MULTIMODAL_F16,
+        MMPROJ_GLM_5_3_FLASH_320B_A18B_MULTIMODAL_BF16,
         MMPROJ_OCR_0_6B_MULTIMODAL_F16,
         MMPROJ_OCR_3B_MULTIMODAL_F16,
         MMPROJ_OCR_3B_MULTIMODAL_Q8_0,
@@ -8816,6 +8910,7 @@ object Models {
         PARAKEET_TDT_1_1B_F16,
         PARAKEET_TDT_1_1B_Q8_0,
         PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0,
+        PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0,
         PARAKEET_TRANSCRIBEPSY_250M_Q8_0,
         PARAKEET_UNIFIED_0_6B_F16,
         PARAKEET_UNIFIED_0_6B_Q4_0,

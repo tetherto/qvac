@@ -36,22 +36,26 @@ import { createStreamLogger, registerAddonLogger } from '@/logging/index'
 import { TtsArtifactsRequiredError, LegacyTtsModelDeprecatedError } from '@/errors/index'
 import { textToSpeech } from '@/plugins/builtin/tts-ggml/ops/text-to-speech'
 import { textToSpeechStream } from '@/plugins/builtin/tts-ggml/ops/text-to-speech-stream'
+import { toAddonInstruct } from '@/plugins/builtin/tts-ggml/ops/voice-options'
 import { ttsFitRequest } from '@/plugins/builtin/tts-ggml/fit'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
 import type { TtsOpYield } from '@/utils/tts-stats'
 
-// Everything a TTS frame carries beyond its PCM, forwarded verbatim from the
-// op yield onto the wire frame. Both handlers use it so the two response
-// shapes cannot drift apart.
+// Everything a TTS frame carries beyond its `buffer`, forwarded verbatim from
+// the op yield onto the wire frame: the base64 `pcm` the ops emit for int16
+// engine audio (see `pcmFrame`) and the chunk metadata. Both handlers use it
+// so the two response shapes cannot drift apart.
 function ttsFrameMetadata(value: TtsOpYield) {
   return {
+    ...(value.pcm !== undefined ? { pcm: value.pcm } : {}),
     ...(value.text !== undefined ? { text: value.text } : {}),
     ...(value.sampleRate !== undefined ? { sampleRate: value.sampleRate } : {}),
     ...(value.chunkIndex !== undefined ? { chunkIndex: value.chunkIndex } : {}),
     ...(typeof value.sentenceChunk === 'string' && value.sentenceChunk.length > 0
       ? { sentenceChunk: value.sentenceChunk }
       : {}),
-    ...(value.isLast !== undefined ? { isLast: value.isLast } : {})
+    ...(value.isLast !== undefined ? { isLast: value.isLast } : {}),
+    ...(value.speechTokenIds !== undefined ? { speechTokenIds: value.speechTokenIds } : {})
   }
 }
 
@@ -72,12 +76,32 @@ function dirname(path: string) {
   return path.slice(0, index)
 }
 
+// The load-only LavaSR fields: the two GGUF sources and, per stage, the Core
+// ML model directory and compute policy. All four engines that run LavaSR
+// take them, so one pick keeps the runtime configs free of them.
+type TtsLavasrLoadFields = Pick<
+  TtsChatterboxLoadConfig,
+  | 'lavasrEnhancerModelSrc'
+  | 'lavasrDenoiserModelSrc'
+  | 'lavasrEnhancerCoremlModelPath'
+  | 'lavasrEnhancerCoremlComputeUnits'
+  | 'lavasrDenoiserCoremlModelPath'
+  | 'lavasrDenoiserCoremlComputeUnits'
+>
+
 // Resolve the optional LavaSR enhancer/denoiser GGUFs shared by both engines.
-async function resolveLavasrArtifacts(
-  lavasrEnhancerModelSrc: TtsChatterboxLoadConfig['lavasrEnhancerModelSrc'],
-  lavasrDenoiserModelSrc: TtsChatterboxLoadConfig['lavasrDenoiserModelSrc'],
-  ctx: ResolveContext
-) {
+// The Core ML model directories are host paths, not sources: they ride along
+// as artifacts so createModel builds the addon's `enhancer` / `denoiser`
+// options from one place.
+async function resolveLavasrArtifacts(fields: TtsLavasrLoadFields, ctx: ResolveContext) {
+  const {
+    lavasrEnhancerModelSrc,
+    lavasrDenoiserModelSrc,
+    lavasrEnhancerCoremlModelPath,
+    lavasrEnhancerCoremlComputeUnits,
+    lavasrDenoiserCoremlModelPath,
+    lavasrDenoiserCoremlComputeUnits
+  } = fields
   const resolve = ctx.resolveModelPath
   const [lavasrEnhancerPath, lavasrDenoiserPath] = await Promise.all([
     lavasrEnhancerModelSrc ? resolve(lavasrEnhancerModelSrc) : Promise.resolve(undefined),
@@ -86,7 +110,11 @@ async function resolveLavasrArtifacts(
 
   return {
     ...(lavasrEnhancerPath ? { lavasrEnhancerPath } : {}),
-    ...(lavasrDenoiserPath ? { lavasrDenoiserPath } : {})
+    ...(lavasrDenoiserPath ? { lavasrDenoiserPath } : {}),
+    ...(lavasrEnhancerCoremlModelPath !== undefined ? { lavasrEnhancerCoremlModelPath } : {}),
+    ...(lavasrEnhancerCoremlComputeUnits !== undefined ? { lavasrEnhancerCoremlComputeUnits } : {}),
+    ...(lavasrDenoiserCoremlModelPath !== undefined ? { lavasrDenoiserCoremlModelPath } : {}),
+    ...(lavasrDenoiserCoremlComputeUnits !== undefined ? { lavasrDenoiserCoremlComputeUnits } : {})
   }
 }
 
@@ -103,6 +131,10 @@ async function resolveChatterboxConfig(
     cangjieTsvSrc,
     lavasrEnhancerModelSrc,
     lavasrDenoiserModelSrc,
+    lavasrEnhancerCoremlModelPath,
+    lavasrEnhancerCoremlComputeUnits,
+    lavasrDenoiserCoremlModelPath,
+    lavasrDenoiserCoremlComputeUnits,
     ...runtime
   } = config
   if (!s3genModelSrc) {
@@ -116,7 +148,17 @@ async function resolveChatterboxConfig(
       referenceAudioSrc ? resolve(referenceAudioSrc) : Promise.resolve(undefined),
       mecabDictSrc ? resolve(mecabDictSrc) : Promise.resolve(undefined),
       cangjieTsvSrc ? resolve(cangjieTsvSrc) : Promise.resolve(undefined),
-      resolveLavasrArtifacts(lavasrEnhancerModelSrc, lavasrDenoiserModelSrc, ctx)
+      resolveLavasrArtifacts(
+        {
+          lavasrEnhancerModelSrc,
+          lavasrDenoiserModelSrc,
+          lavasrEnhancerCoremlModelPath,
+          lavasrEnhancerCoremlComputeUnits,
+          lavasrDenoiserCoremlModelPath,
+          lavasrDenoiserCoremlComputeUnits
+        },
+        ctx
+      )
     ])
 
   return {
@@ -137,24 +179,66 @@ async function resolveSupertonicConfig(
 ): Promise<ResolveResult<TtsRuntimeConfig>> {
   rejectLegacyOnnxFields(config)
 
-  const { lavasrEnhancerModelSrc, lavasrDenoiserModelSrc, ...runtime } = config
-  const lavasrArtifacts = await resolveLavasrArtifacts(
+  const {
     lavasrEnhancerModelSrc,
     lavasrDenoiserModelSrc,
-    ctx
-  )
+    lavasrEnhancerCoremlModelPath,
+    lavasrEnhancerCoremlComputeUnits,
+    lavasrDenoiserCoremlModelPath,
+    lavasrDenoiserCoremlComputeUnits,
+    voiceJsonSrc,
+    noiseNpySrc,
+    ...runtime
+  } = config
+  const resolve = ctx.resolveModelPath
+  const [lavasrArtifacts, voiceJsonPath, noiseNpyPath] = await Promise.all([
+    resolveLavasrArtifacts(
+      {
+        lavasrEnhancerModelSrc,
+        lavasrDenoiserModelSrc,
+        lavasrEnhancerCoremlModelPath,
+        lavasrEnhancerCoremlComputeUnits,
+        lavasrDenoiserCoremlModelPath,
+        lavasrDenoiserCoremlComputeUnits
+      },
+      ctx
+    ),
+    voiceJsonSrc ? resolve(voiceJsonSrc) : Promise.resolve(undefined),
+    noiseNpySrc ? resolve(noiseNpySrc) : Promise.resolve(undefined)
+  ])
 
-  return { config: runtime, artifacts: lavasrArtifacts }
+  return {
+    config: runtime,
+    artifacts: {
+      ...lavasrArtifacts,
+      ...(voiceJsonPath ? { voiceJsonPath } : {}),
+      ...(noiseNpyPath ? { noiseNpyPath } : {})
+    }
+  }
 }
 
 async function resolveParlerConfig(
   config: TtsParlerLoadConfig,
   ctx: ResolveContext
 ): Promise<ResolveResult<TtsRuntimeConfig>> {
-  const { lavasrEnhancerModelSrc, lavasrDenoiserModelSrc, ...runtime } = config
-  const lavasrArtifacts = await resolveLavasrArtifacts(
+  const {
     lavasrEnhancerModelSrc,
     lavasrDenoiserModelSrc,
+    lavasrEnhancerCoremlModelPath,
+    lavasrEnhancerCoremlComputeUnits,
+    lavasrDenoiserCoremlModelPath,
+    lavasrDenoiserCoremlComputeUnits,
+    ...runtime
+  } = config
+  const lavasrArtifacts = await resolveLavasrArtifacts(
+    {
+      lavasrEnhancerModelSrc,
+      lavasrDenoiserModelSrc,
+      lavasrEnhancerCoremlModelPath,
+      lavasrEnhancerCoremlComputeUnits,
+      lavasrDenoiserCoremlModelPath,
+      lavasrDenoiserCoremlComputeUnits
+    },
     ctx
   )
 
@@ -172,6 +256,10 @@ async function resolveCosyvoice3Config(
   const {
     lavasrEnhancerModelSrc,
     lavasrDenoiserModelSrc,
+    lavasrEnhancerCoremlModelPath,
+    lavasrEnhancerCoremlComputeUnits,
+    lavasrDenoiserCoremlModelPath,
+    lavasrDenoiserCoremlComputeUnits,
     referenceAudioSrc,
     cosyvoice3S3tokModelSrc,
     cosyvoice3CampplusModelSrc,
@@ -181,7 +269,17 @@ async function resolveCosyvoice3Config(
   const resolve = ctx.resolveModelPath
   const [lavasrArtifacts, referenceAudioPath, cosyvoiceS3tokPath, cosyvoiceCampplusPath] =
     await Promise.all([
-      resolveLavasrArtifacts(lavasrEnhancerModelSrc, lavasrDenoiserModelSrc, ctx),
+      resolveLavasrArtifacts(
+        {
+          lavasrEnhancerModelSrc,
+          lavasrDenoiserModelSrc,
+          lavasrEnhancerCoremlModelPath,
+          lavasrEnhancerCoremlComputeUnits,
+          lavasrDenoiserCoremlModelPath,
+          lavasrDenoiserCoremlComputeUnits
+        },
+        ctx
+      ),
       referenceAudioSrc ? resolve(referenceAudioSrc) : Promise.resolve(undefined),
       cosyvoice3S3tokModelSrc ? resolve(cosyvoice3S3tokModelSrc) : Promise.resolve(undefined),
       cosyvoice3CampplusModelSrc ? resolve(cosyvoice3CampplusModelSrc) : Promise.resolve(undefined)
@@ -281,12 +379,15 @@ async function resolveMossConfig(
 // The generic ggml backend-loading knobs, forwarded on `config` the same way
 // Supertonic's vulkanCacheDir already is. Parler, Audio8 and MOSS configs carry
 // no `openclCacheDir` (their native builders do not read it), so it is simply
-// absent for them.
+// absent for them. `backend` is the explicit native backend / device selector
+// every engine reads from `config`.
 function ggmlBackendConfig(config: {
+  backend?: string | undefined
   backendsDir?: string | undefined
   openclCacheDir?: string | undefined
 }) {
   return {
+    ...(config.backend !== undefined ? { backend: config.backend } : {}),
     ...(config.backendsDir !== undefined ? { backendsDir: config.backendsDir } : {}),
     ...(config.openclCacheDir !== undefined ? { openclCacheDir: config.openclCacheDir } : {})
   }
@@ -300,6 +401,38 @@ function lavasrFiles(artifacts: Record<string, string | undefined>) {
   return {
     ...(lavasrEnhancer ? { lavasrEnhancer } : {}),
     ...(lavasrDenoiser ? { lavasrDenoiser } : {})
+  }
+}
+
+// The addon's `enhancer` / `denoiser` option objects, built only when a stage
+// runs on Core ML: the GGUF itself travels in `files`, so the object carries
+// just the compiled model directory and the compute policy the schema paired.
+function lavasrCoremlOptions(artifacts: Record<string, string | undefined>) {
+  const enhancerPath = artifacts['lavasrEnhancerCoremlModelPath']
+  const denoiserPath = artifacts['lavasrDenoiserCoremlModelPath']
+  return {
+    ...(enhancerPath
+      ? {
+          enhancer: {
+            type: 'lavasr' as const,
+            coremlModelPath: enhancerPath,
+            coremlComputeUnits: artifacts[
+              'lavasrEnhancerCoremlComputeUnits'
+            ] as TTSGgml.LavaSRCoreMLComputeUnits
+          }
+        }
+      : {}),
+    ...(denoiserPath
+      ? {
+          denoiser: {
+            type: 'lavasr' as const,
+            coremlModelPath: denoiserPath,
+            coremlComputeUnits: artifacts[
+              'lavasrDenoiserCoremlComputeUnits'
+            ] as TTSGgml.LavaSRCoreMLComputeUnits
+          }
+        }
+      : {})
   }
 }
 
@@ -330,6 +463,7 @@ function createChatterboxModel(
       ...(cangjieTsvPath ? { cangjieTsvPath } : {}),
       ...lavasrFiles(artifacts)
     },
+    ...lavasrCoremlOptions(artifacts),
     ...(referenceAudioPath ? { referenceAudio: referenceAudioPath } : {}),
     ...(config.streamChunkTokens !== undefined
       ? { streamChunkTokens: config.streamChunkTokens }
@@ -339,6 +473,21 @@ function createChatterboxModel(
       : {}),
     ...(config.cfmSteps !== undefined ? { cfmSteps: config.cfmSteps } : {}),
     ...(config.cfgRate !== undefined ? { cfgRate: config.cfgRate } : {}),
+    ...(config.streamLeftContextTokens !== undefined
+      ? { streamLeftContextTokens: config.streamLeftContextTokens }
+      : {}),
+    ...(config.batchCfmSteps !== undefined ? { batchCfmSteps: config.batchCfmSteps } : {}),
+    ...(config.nPredict !== undefined ? { nPredict: config.nPredict } : {}),
+    ...(config.maxSentenceChars !== undefined ? { maxSentenceChars: config.maxSentenceChars } : {}),
+    ...(config.crossfadeMs !== undefined ? { crossfadeMs: config.crossfadeMs } : {}),
+    ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
+    ...(config.topK !== undefined ? { topK: config.topK } : {}),
+    ...(config.topP !== undefined ? { topP: config.topP } : {}),
+    ...(config.repeatPenalty !== undefined ? { repeatPenalty: config.repeatPenalty } : {}),
+    ...(config.exaggeration !== undefined ? { exaggeration: config.exaggeration } : {}),
+    ...(config.cfgWeight !== undefined ? { cfgWeight: config.cfgWeight } : {}),
+    ...(config.minP !== undefined ? { minP: config.minP } : {}),
+    ...(config.voiceDir !== undefined ? { voiceDir: config.voiceDir } : {}),
     ...(config.nCtx !== undefined ? { nCtx: config.nCtx } : {}),
     ...(config.kvCacheType !== undefined ? { kvCacheType: config.kvCacheType } : {}),
     // Chatterbox has no pace channel; `speed` is its only rate control.
@@ -374,12 +523,47 @@ function createSupertonicModel(
     throw new TtsArtifactsRequiredError()
   }
 
+  const voiceJsonPath = artifacts['voiceJsonPath']
+  const noiseNpyPath = artifacts['noiseNpyPath']
+
   const logger = createStreamLogger(modelId, ModelType.ttsGgml)
 
   const model = new TTSGgml({
     engine: TTSGgml.ENGINE_SUPERTONIC,
     files: { supertonicModel, ...lavasrFiles(artifacts) },
+    ...lavasrCoremlOptions(artifacts),
     voice: config.voice ?? 'F1',
+    // An external voice JSON overrides the baked preset above, and in-memory
+    // style tensors override both.
+    ...(voiceJsonPath ? { voiceJsonPath } : {}),
+    ...(config.voiceStyleTtl !== undefined ? { voiceStyleTtl: config.voiceStyleTtl } : {}),
+    ...(config.voiceStyleDp !== undefined ? { voiceStyleDp: config.voiceStyleDp } : {}),
+    ...(noiseNpyPath ? { noiseNpyPath } : {}),
+    ...(config.prewarmText !== undefined ? { prewarmText: config.prewarmText } : {}),
+    ...(config.vulkanDevice !== undefined ? { vulkanDevice: config.vulkanDevice } : {}),
+    // Native precision and environment controls, forwarded as given.
+    ...(config.precision !== undefined ? { precision: config.precision } : {}),
+    ...(config.f16Attn !== undefined ? { f16Attn: config.f16Attn } : {}),
+    ...(config.f16Weights !== undefined ? { f16Weights: config.f16Weights } : {}),
+    ...(config.kvAttnType !== undefined ? { kvAttnType: config.kvAttnType } : {}),
+    ...(config.f16WeightsDenyList !== undefined
+      ? { f16WeightsDenyList: config.f16WeightsDenyList }
+      : {}),
+    ...(config.vulkanEnvOverrides !== undefined
+      ? { vulkanEnvOverrides: config.vulkanEnvOverrides }
+      : {}),
+    ...(config.streamChunkTokens !== undefined
+      ? { streamChunkTokens: config.streamChunkTokens }
+      : {}),
+    ...(config.streamFirstChunkTokens !== undefined
+      ? { streamFirstChunkTokens: config.streamFirstChunkTokens }
+      : {}),
+    ...(config.streamChunkTolerancePct !== undefined
+      ? { streamChunkTolerancePct: config.streamChunkTolerancePct }
+      : {}),
+    ...(config.streamMinChunkTokens !== undefined
+      ? { streamMinChunkTokens: config.streamMinChunkTokens }
+      : {}),
     ...(config.ttsSpeed !== undefined ? { speed: config.ttsSpeed } : {}),
     // Supertonic conditions pace when the engine is built, so it arrives as a
     // constructor option rather than a per-request field.
@@ -427,6 +611,13 @@ function createParlerModel(
   const model = new TTSGgml({
     engine: TTSGgml.ENGINE_PARLER,
     files: { parlerModel, ...lavasrFiles(artifacts) },
+    ...lavasrCoremlOptions(artifacts),
+    // Parler-only Core ML sidecar controls (load / reload, never per call).
+    ...(config.coremlDecoder !== undefined ? { coremlDecoder: config.coremlDecoder } : {}),
+    ...(config.coremlComputeUnits !== undefined
+      ? { coremlComputeUnits: config.coremlComputeUnits }
+      : {}),
+    ...(config.coremlStrict !== undefined ? { coremlStrict: config.coremlStrict } : {}),
     ...(config.description !== undefined ? { description: config.description } : {}),
     ...(config.voiceDescription !== undefined ? { voiceDescription: config.voiceDescription } : {}),
     ...(config.voice !== undefined ? { voice: config.voice } : {}),
@@ -468,17 +659,6 @@ function createParlerModel(
   return { model }
 }
 
-// Rebuild the structured instruct without explicit-undefined keys so it
-// satisfies the addon's exactOptionalPropertyTypes constructor typing.
-function toAddonInstruct(instruct: NonNullable<TtsCosyvoice3RuntimeConfig['instruct']>) {
-  if (typeof instruct === 'string') return instruct
-  return {
-    ...(instruct.dialect !== undefined ? { dialect: instruct.dialect } : {}),
-    ...(instruct.volume !== undefined ? { volume: instruct.volume } : {}),
-    ...(instruct.style !== undefined ? { style: instruct.style } : {})
-  }
-}
-
 function createCosyvoice3Model(
   modelId: string,
   config: TtsCosyvoice3RuntimeConfig,
@@ -510,11 +690,19 @@ function createCosyvoice3Model(
       ...(cosyvoiceCampplusModel ? { cosyvoiceCampplusModel } : {}),
       ...lavasrFiles(artifacts)
     },
+    ...lavasrCoremlOptions(artifacts),
     ...(referenceAudioPath ? { referenceAudio: referenceAudioPath } : {}),
     ...(config.promptText !== undefined ? { promptText: config.promptText } : {}),
     ...(config.emotion !== undefined ? { emotion: config.emotion } : {}),
     ...(config.pace !== undefined ? { pace: config.pace } : {}),
     ...(config.instruct !== undefined ? { instruct: toAddonInstruct(config.instruct) } : {}),
+    ...(config.flowCutPrompt !== undefined ? { flowCutPrompt: config.flowCutPrompt } : {}),
+    ...(config.vulkanDevice !== undefined ? { vulkanDevice: config.vulkanDevice } : {}),
+    // Greedy LM decoding and a forced speech-token trajectory (replay).
+    ...(config.greedy !== undefined ? { greedy: config.greedy } : {}),
+    ...(config.forceSpeechTokens !== undefined
+      ? { forceSpeechTokens: config.forceSpeechTokens }
+      : {}),
     ...(config.streamChunkTokens !== undefined
       ? { streamChunkTokens: config.streamChunkTokens }
       : {}),
@@ -620,6 +808,18 @@ function createMossModel(
     ...(config.durationTokens !== undefined ? { durationTokens: config.durationTokens } : {}),
     ...(config.streamChunkTokens !== undefined
       ? { streamChunkTokens: config.streamChunkTokens }
+      : {}),
+    // Context and generation budgets, then the text- and audio-channel samplers.
+    ...(config.nCtx !== undefined ? { nCtx: config.nCtx } : {}),
+    ...(config.maxNewTokens !== undefined ? { maxNewTokens: config.maxNewTokens } : {}),
+    ...(config.textTemperature !== undefined ? { textTemperature: config.textTemperature } : {}),
+    ...(config.textTopP !== undefined ? { textTopP: config.textTopP } : {}),
+    ...(config.textTopK !== undefined ? { textTopK: config.textTopK } : {}),
+    ...(config.audioTemperature !== undefined ? { audioTemperature: config.audioTemperature } : {}),
+    ...(config.audioTopP !== undefined ? { audioTopP: config.audioTopP } : {}),
+    ...(config.audioTopK !== undefined ? { audioTopK: config.audioTopK } : {}),
+    ...(config.audioRepetitionPenalty !== undefined
+      ? { audioRepetitionPenalty: config.audioRepetitionPenalty }
       : {}),
     ...(config.threads !== undefined ? { threads: config.threads } : {}),
     ...(config.nGpuLayers !== undefined ? { nGpuLayers: config.nGpuLayers } : {}),

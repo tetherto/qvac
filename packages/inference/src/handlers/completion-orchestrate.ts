@@ -1,3 +1,4 @@
+import Buffer from 'bare-buffer'
 import type {
   CompletionOrchestrateRequest,
   CompletionOrchestrateResponse,
@@ -32,7 +33,8 @@ const MAX_TOOL_RESULT_LINE_BYTES = 16 * 1024 * 1024
  * and the reader stops holding the request stream open.
  */
 export class ToolResultReader {
-  private buffer = ''
+  private pending: Buffer[] = []
+  private pendingBytes = 0
   private readonly results = new Map<string, ToolCallbackResult>()
   private readonly waiters = new Map<string, (result: ToolCallbackResult) => void>()
   private failed: Error | undefined
@@ -49,20 +51,38 @@ export class ToolResultReader {
       while (!this.closed) {
         const next = await this.iterator.next()
         if (next.done) break
-        this.buffer += next.value.toString()
+        const chunk = next.value
+        let start = 0
         let nl: number
-        while ((nl = this.buffer.indexOf('\n')) !== -1) {
-          const line = this.buffer.slice(0, nl)
-          this.buffer = this.buffer.slice(nl + 1)
+        while ((nl = chunk.indexOf(0x0a, start)) !== -1) {
+          this.append(chunk.subarray(start, nl))
+          // A transport chunk can end inside a UTF-8 character. Decode complete lines only.
+          const line = Buffer.concat(this.pending).toString('utf8')
+          this.pending = []
+          this.pendingBytes = 0
           if (line.trim()) this.accept(line)
+          start = nl + 1
         }
-        if (this.buffer.length > MAX_TOOL_RESULT_LINE_BYTES) {
-          throw new CompletionFailedError('tool result frame exceeds the maximum size')
-        }
+        this.append(chunk.subarray(start))
       }
-      if (!this.closed && this.buffer.trim()) this.accept(this.buffer)
+      if (!this.closed) {
+        const tail = Buffer.concat(this.pending).toString('utf8')
+        this.pending = []
+        this.pendingBytes = 0
+        if (tail.trim()) this.accept(tail)
+      }
     } catch (error) {
       this.failWaiters(error instanceof Error ? error : new Error(String(error)))
+    }
+  }
+
+  private append(bytes: Uint8Array): void {
+    if (this.pendingBytes + bytes.length > MAX_TOOL_RESULT_LINE_BYTES) {
+      throw new CompletionFailedError('tool result frame exceeds the maximum size')
+    }
+    if (bytes.length) {
+      this.pending.push(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength))
+      this.pendingBytes += bytes.length
     }
   }
 
@@ -113,7 +133,8 @@ export class ToolResultReader {
   close(): void {
     if (this.closed) return
     this.closed = true
-    this.buffer = ''
+    this.pending = []
+    this.pendingBytes = 0
     this.results.clear()
     if (!this.failed) this.failWaiters(new CompletionFailedError('tool result stream closed'))
     void this.iterator.return?.()
@@ -188,7 +209,7 @@ export async function* orchestrateCompletion(
           ...history,
           {
             role: 'tool',
-            content: executeToolSearch(request.tools ?? [], call.arguments, history)
+            content: executeToolSearch(request, call.arguments, history)
           }
         ]
         continue

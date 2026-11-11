@@ -191,6 +191,18 @@ bool isRpcDevice(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
       "rpc");
 }
 
+// The AMD XDNA NPU registers as an integrated GPU, but it is its own device
+// class here: `device: 'npu'` selects it and GPU selection never does. The
+// fused decode path rejects some quantizations outright, and there are no
+// NPU-vs-iGPU measurements to justify picking it automatically.
+bool isXdnaDevice(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
+  const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
+  return hasBackendFamily(
+      lowerCopy(bckI.ggml_backend_dev_name(dev)),
+      lowerCopy(reg != nullptr ? bckI.ggml_backend_reg_name(reg) : nullptr),
+      "xdna");
+}
+
 std::string
 deviceIdentity(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
   const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
@@ -322,10 +334,15 @@ void tryEmplaceDevice(
   const bool isGpuType = backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU ||
                          backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU;
   // Recorded before the main-gpu type filter so the CPU-fallback warning names
-  // a refused device even when `integrated`/`dedicated` skips its type.
+  // a refused device even when `integrated`/`dedicated` skips its type. The
+  // NPU is refused too, as it is never a GPU candidate.
   if (isGpuType && !isEligibleGpuDevice(bckI, dev) &&
       !(allowNonAdrenoOpenCl && isOpenCl)) {
-    rejectedDevices.emplace_back(deviceIdentity(bckI, dev));
+    // The NPU is a device class of its own, so say how to select it.
+    rejectedDevices.emplace_back(
+        isXdnaDevice(bckI, dev)
+            ? deviceIdentity(bckI, dev) + " [opt in with device: 'npu']"
+            : deviceIdentity(bckI, dev));
     return;
   }
   if (shouldProcessDevice(backendTypeEnum, isOpenCl, mainGpuType)) {
@@ -362,10 +379,13 @@ backend_selection::preferredBackendTypeFromString(const std::string& device) {
   if (device == "cpu") {
     return BackendType::CPU;
   }
+  if (device == "npu") {
+    return BackendType::NPU;
+  }
   throw qvac_errors::StatusError(
       qvac_errors::general_error::InvalidArgument,
-      "preferredDeviceFromString: wrong device specified, must be 'gpu' or "
-      "'cpu'.\n");
+      "preferredDeviceFromString: wrong device specified, must be 'gpu', "
+      "'npu' or 'cpu'.\n");
 }
 
 std::optional<MainGpu>
@@ -402,7 +422,8 @@ namespace {
 // mistyped `backend` value (hard error) apart from a correctly-spelled backend
 // that simply has no device on this machine (falls through). Deliberately does
 // NOT include "cpu": the CPU path is `device`, and accepting two spellings for
-// it would make `device: 'gpu', backend: 'cpu'` ambiguous.
+// it would make `device: 'gpu', backend: 'cpu'` ambiguous. Nor "xdna": the
+// NPU is `device: 'npu'`.
 constexpr std::array<std::string_view, 4> KNOWN_GPU_BACKEND_FAMILIES = {
     "cuda", "vulkan", "metal", "opencl"};
 
@@ -460,9 +481,9 @@ backend_selection::parseBackendOverride(const std::string& backendStr) {
           qvac_errors::general_error::InvalidArgument,
           string_format(
               "backend: unknown backend '%s'. Expected a comma-separated list "
-              "of cuda/vulkan/metal/opencl or 'auto', for "
-              "example "
-              "'cuda,vulkan'. To run on CPU use device 'cpu' instead.\n",
+              "of cuda/vulkan/metal/opencl or 'auto', for example "
+              "'cuda,vulkan'. To run on CPU use device 'cpu' instead, and "
+              "device 'npu' for the NPU.\n",
               family.c_str()));
     }
     if (std::ranges::find(families, family) == families.end()) {
@@ -488,7 +509,8 @@ backend_selection::parseBackendOverride(const std::string& backendStr) {
         string_format(
             "backend: '%s' names no backend. Expected a comma-separated list "
             "of cuda/vulkan/metal/opencl or 'auto', for example "
-            "'cuda,vulkan'. To run on CPU use device 'cpu' instead.\n",
+            "'cuda,vulkan'. To run on CPU use device 'cpu' instead, and "
+            "device 'npu' for the NPU.\n",
             backendStr.c_str()));
   }
   return families;
@@ -529,6 +551,41 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     std::optional<int>* outAdrenoVersion, const bool isFinetuning,
     bool* outIsMaliGpu, const std::vector<std::string>& backendOverride) {
 
+  // An NPU request with no NPU listed continues as a GPU request, so it falls
+  // back through the GPU order and then to the CPU.
+  BackendType searchType = preferredBackendType;
+  if (preferredBackendType == BackendType::NPU) {
+    // The first NPU in ggml's registration order wins. Each NPU is built into
+    // its host's processor, so one host lists at most one NPU backend; the
+    // rule only decides between several devices of that backend.
+    std::string chosen;
+    size_t npuCount = 0;
+    for (size_t i = 0; i < bckI.ggml_backend_dev_count(); ++i) {
+      const ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
+      if (::isXdnaDevice(bckI, dev)) {
+        if (npuCount++ == 0) {
+          chosen = lowerCopy(bckI.ggml_backend_dev_name(dev));
+        }
+      }
+    }
+    if (npuCount > 0) {
+      const std::string text =
+          npuCount == 1
+              ? string_format("Chosen NPU Backend: %s", chosen.c_str())
+              : string_format(
+                    "Chosen NPU Backend: %s, the first of %zu NPU devices",
+                    chosen.c_str(),
+                    npuCount);
+      bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, text.c_str(), nullptr);
+      return {BackendType::NPU, chosen};
+    }
+    bckI.llamaLogCallback(
+        GGML_LOG_LEVEL_WARN,
+        "No NPU device found; falling back to the GPU backend order, then CPU",
+        nullptr);
+    searchType = BackendType::GPU;
+  }
+
   std::vector<std::string> gpuBackends;
   std::vector<std::string> igpuBackends;
   std::vector<std::string> openClBackends;
@@ -540,7 +597,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
   std::optional<int> maxAdrenoVersion;
   bool sawMaliGpu = false;
 
-  if (preferredBackendType == BackendType::GPU) {
+  if (searchType == BackendType::GPU) {
     bool loopAllDevices = true;
     std::optional<MainGpuType> gpuType = std::nullopt;
     if (mainGpu.has_value()) {
@@ -667,7 +724,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
   // Skipped entirely for a CPU load. No devices are enumerated in that case, so
   // the block could only ever reach its "matched no available device" warning,
   // which would be noise on a deliberate device:'cpu' request.
-  if (!backendOverride.empty() && preferredBackendType == BackendType::GPU) {
+  if (!backendOverride.empty() && searchType == BackendType::GPU) {
     for (const std::string& family : backendOverride) {
       for (const std::vector<std::string>* candidates :
            {&openClBackends,
@@ -713,7 +770,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     return {BackendType::GPU, igpuBackends.front()};
   }
 
-  if (preferredBackendType == BackendType::GPU && !hadEligibleGpu &&
+  if (searchType == BackendType::GPU && !hadEligibleGpu &&
       !rejectedDevices.empty() && bckI.llamaLogCallback != nullptr) {
     std::string message = "No eligible GPU backend found; rejected ";
     for (size_t index = 0; index < rejectedDevices.size(); ++index) {
@@ -857,7 +914,8 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
       continue;
     }
     const size_t sourceGpuIndex = result.sourceGpuCount++;
-    if (!isEligibleGpuDevice(bckI, dev)) {
+    const bool isXdna = isXdnaDevice(bckI, dev);
+    if (!isXdna && !isEligibleGpuDevice(bckI, dev)) {
       result.rejectedDevices.emplace_back(deviceIdentity(bckI, dev));
       continue;
     }
@@ -894,6 +952,10 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
         .isOpenCl = hasBackendFamily(deviceName, registryName, "opencl"),
         .isMetal = hasMetalFamily(deviceName, registryName),
         .deviceId = deviceId};
+    if (isXdna) {
+      result.optInDevices.emplace_back(std::move(selected));
+      continue;
+    }
     if (selected.isRpc) {
       rpc.emplace_back(std::move(selected));
       continue;

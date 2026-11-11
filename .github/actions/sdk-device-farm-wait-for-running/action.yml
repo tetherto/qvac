@@ -52,8 +52,8 @@ runs:
           'PREPARING',
           'UNKNOWN',
         ]);
-        // Waiting for an UNMETERED slot.
-        const queuedStatuses = new Set(['PENDING', 'PENDING_CONCURRENCY']);
+        // Waiting for an UNMETERED slot. Device Farm shows this as SCHEDULING.
+        const queuedStatuses = new Set(['PENDING', 'PENDING_CONCURRENCY', 'SCHEDULING']);
         const terminalStatuses = new Set([
           'COMPLETED',
           'STOPPED',

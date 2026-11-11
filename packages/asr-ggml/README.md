@@ -1097,10 +1097,12 @@ gives the commands and the measured speedups.
 that a given call ran on it: an EOU input of another length, a Unified
 `runStreaming()` session, or a failed prediction still runs the encoder on
 ggml with the flag set. For what a job actually did, read
-`RuntimeStats.encoderUsedCoreml`: `1` when every offline ASR transcription in
-the job ran its encoder on Core ML, `0` when any ran on ggml. The engine
-reports per-call routing only for offline ASR, so the field is absent after
-Sortformer diarization and streaming jobs. Export sidecars with
+`RuntimeStats.encoderUsedCoreml`: `1` when every offline ASR transcription and
+batch diarization in the job ran its encoder on Core ML, `0` when any ran on
+ggml, such as a diarization longer than every staged diarizer bundle. A
+speaker-attributed job counts its transcription passes. The engine does not
+report per-call routing for streaming, so the field is absent after streaming
+jobs. Export sidecars with
 `engines/parakeet/scripts/export-encoder-coreml.py`, preferably from an `f16`
 or `f32` GGUF (a quantized source works, but its rounding is baked into the
 sidecar every tier shares), from the

@@ -622,6 +622,7 @@ private:
   std::optional<CacheCheckpoint> pendingHistoryCheckpoint_;
   size_t generationPromptTokens_ = 0;
   size_t historyCheckpointEntries_ = 0;
+  bool historyEndsAtUserTurn_ = false;
   qvac_lib_inference_addon_llama::cache::CheckpointPolicy
       cacheCheckpointPolicy_;
   size_t pendingReuseEntries_ = 0;

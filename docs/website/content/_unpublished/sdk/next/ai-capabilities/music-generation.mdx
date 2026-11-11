@@ -16,6 +16,8 @@ Pick ACE-Step when you need lyrics, per-song musical controls (BPM, key, time si
 - `requestId` — a synchronous identifier for targeted cancellation.
 - `progressStream` — stage and step updates while generation runs.
 - `audio` — a promise resolving to interleaved PCM, its sample rate, channel count, and `bitsPerSample`.
+- `chunkStream` — the same PCM as one `Int16Array` per chunk the engine emits: see [Read the PCM in chunks](#read-the-pcm-in-chunks).
+- `encoded` — a promise resolving to the audio as a file when the request names an `outputFormat`, and to `undefined` otherwise: see [Get an encoded file](#get-an-encoded-file).
 - `stats` — a promise resolving to timing statistics, plus what the run rendered: see [What the run rendered](#what-the-run-rendered-ace-step-only).
 
 Both engines return through this same shape; only the inputs to `loadModel()` and `audioGen()` differ. `audioUnderstand()` runs the same pipeline backwards and so returns `description` where the other two return `audio`.
@@ -107,6 +109,37 @@ Advanced load-time controls (`inferenceSteps`, `shift`, `nGpuLayers`, `threads`,
 
 For more about model constants and sources, see [SDK — Models](/sdk#models).
 
+#### Choose where each stage runs
+
+`useGPU` and `nGpuLayers` leave placement to the engine. To name the device yourself, set `backend` for the primary pipeline and `lmBackend` for the language model. The two are independent, so the LM can run on a different device from the rest of the pipeline.
+
+```ts
+const modelId = await loadModel({
+  modelType: "audiogen",
+  modelConfig: {
+    engine: "acestep",
+    textEncModelSrc: AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
+    lmModelSrc: AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
+    ditModelSrc: AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
+    vaeModelSrc: AUDIOGEN_VAE_BF16,
+    backend: "CUDA0",
+    lmBackend: "cpu",
+  },
+});
+```
+
+| Field | What it does |
+| --- | --- |
+| `backend` | The primary backend, by backend or device name: `"cpu"`, `"MTL0"`, `"CUDA0"` and so on. Unset or `"auto"` keeps the placement `useGPU` and `nGpuLayers` select. |
+| `lmBackend` | The backend the language model runs on, named the same way and chosen independently of `backend`. Unset or `"auto"` keeps the engine's own placement. |
+| `dumpStagesDir` | Diagnostics. An existing directory on the inference host that receives each stage's intermediate tensors. The engine does not create it, and writes nothing when the field is unset. |
+
+A named backend is a requirement, not a preference: when the host cannot provide it, the load fails instead of running somewhere else. The engine's own checks still apply, so a backend that cannot run a stage's operations is refused as well. `stats.backendDevice` and `stats.backendId` report the primary backend a run used; the device `lmBackend` names is not reported. [`assessModelFit()`](/sdk/models/assess-model-fit) projects the same placement, counting the device the LM runs on as well as the primary one.
+
+#### Core ML VAE decoder on Apple
+
+On macOS and iOS, the SDK downloads a compiled Core ML bundle with `AUDIOGEN_VAE_BF16` and stages it beside the GGUF, where the engine picks it up for the VAE decode. There is nothing to configure. The bundle lives in a companion directory with its GGUF, so a VAE that was already in the cache is downloaded once more on these platforms (337 MB), as happens for the Parakeet and Audio8 sidecars. A VAE loaded from your own file path uses a bundle only when one sits next to the GGUF under the name the engine looks for, which is `vae-decoder.mlmodelc` for `vae-BF16.gguf`. Without the bundle, and on every other platform, the VAE decodes on the backend the load selected. [`assessModelFit()`](/sdk/models/assess-model-fit) sizes the native VAE and does not count the Core ML bundle's memory.
+
 ### MiniMax-Music3
 
 MiniMax-Music3 uses two GGUF files that you supply as local paths — the language model (`mm3-lm-*.gguf`) and the synthesis model (`mm3-synth-*.gguf`). The SDK does not download MiniMax-Music3 from the registry, so bring your own converted files and point `lmModelSrc` and `synthModelSrc` at them. Weights are governed by the [MiniMax-Music3 Community License](https://huggingface.co/MiniMaxAI/MiniMax-Music3).
@@ -127,13 +160,58 @@ const modelId = await loadModel({
 
 `useGPU: true` runs on a GPU when one is usable and falls back to the CPU otherwise. To fail the load instead of falling back, set `device: "gpu"` in place of `useGPU`. `device` takes `"gpu"`, `"auto"` (what `useGPU: true` means) or `"cpu"`, and the SDK rejects a config that sets both `device` and `useGPU`.
 
-Every run reports where it ran: `stats.backendDevice` (0 CPU, 1 GPU) and `stats.backendId` (0 CPU, 1 Metal, 2 CUDA, 3 Vulkan, 4 OpenCL) describe the backend the engine used, not the one requested, and `stats.gpuFallbackReason` carries the engine's code for a GPU request that landed on the CPU (0 none, 1 not requested, 2 no devices, 3 init failed). The run's `diagnostics` promise names the same backend, and `diagnostics.fallback.reason` names a lost GPU (`"no-devices"` or `"init-failed"`), so a Metal fallback is distinguishable from a slow run.
+#### Full Core ML on macOS
+
+On macOS 15 or later, MiniMax-Music3 can run through a compiled Core ML profile instead of its native backend. Set `coremlProfileDir` and `coremlComputeUnits` together; the SDK rejects a config that sets only one of them.
+
+```ts
+const modelId = await loadModel({
+  modelType: "audiogen",
+  modelConfig: {
+    engine: "minimax",
+    lmModelSrc: "/path/to/mm3-lm-f16.gguf",
+    synthModelSrc: "/path/to/mm3-synth-f16.gguf",
+    coremlProfileDir: "/path/to/minimax-coreml",
+    coremlComputeUnits: "CPU_AND_NE",
+  },
+});
+```
+
+| Field | What it does |
+| --- | --- |
+| `coremlProfileDir` | Directory on the inference host holding the compiled profile for this GGUF pair: `manifest.json` plus the LM, depth, conditioner, DiT and vocoder programs. Use the original f16 pair the profile was exported from, and keep its weights and dimensions matched to it. |
+| `coremlComputeUnits` | The Apple compute units the profile may use: `"CPU_ONLY"`, `"CPU_AND_GPU"`, `"CPU_AND_NE"` or `"ALL"` (`AUDIOGEN_MINIMAX_COREML_COMPUTE_UNITS`). This is a policy: Core ML decides where each operation runs within the units it is allowed. |
+
+The pair takes precedence over `device` and `useGPU`. A Core ML request never switches backends quietly: the load fails when the build, the OS or the profile cannot support it, and the SDK refuses the config on any platform other than macOS before resolving the model files. The compiled programs stay loaded between generations and are released when the model is unloaded.
+
+A Core ML run reports `stats.backendId: 99` and leaves out `stats.backendDevice` and `stats.gpuFallbackReason`, so its `diagnostics` resolve to `undefined`. [`assessModelFit()`](/sdk/models/assess-model-fit) cannot size this route. Its output is not guaranteed to match the native backend sample for sample, and it is not necessarily faster: the engine's [Core ML validation guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/audiogen/docs/minimax-coreml-validation.md) records what has been measured.
+
+#### Core ML conditioner on macOS
+
+`coremlConditionerPath` moves one MiniMax stage to Core ML and leaves the rest alone. Point it at a compiled conditioner `.mlmodelc` on the inference host: the conditioner convolution runs through Core ML on the CPU and Neural Engine, and every other stage stays on the backend `device` or `useGPU` selects.
+
+```ts
+const modelId = await loadModel({
+  modelType: "audiogen",
+  modelConfig: {
+    engine: "minimax",
+    lmModelSrc: "/path/to/mm3-lm-q8.gguf",
+    synthModelSrc: "/path/to/mm3-synth-q8.gguf",
+    device: "gpu",
+    coremlConditionerPath: "/path/to/minimax-conditioner.mlmodelc",
+  },
+});
+```
+
+This is not the full Core ML profile and does not need `coremlProfileDir` or `coremlComputeUnits`. The load fails when the bundle is invalid or the build cannot use it, and the SDK refuses the field on any platform other than macOS before resolving the model files. [`assessModelFit()`](/sdk/models/assess-model-fit) cannot size a load that names a conditioner.
+
+Every run reports where it ran: `stats.backendDevice` (0 CPU, 1 GPU) and `stats.backendId` (0 CPU, 1 Metal, 2 CUDA, 3 Vulkan, 4 OpenCL) describe the primary backend the engine used, not the one requested, and `stats.gpuFallbackReason` carries the engine's code for a GPU request that landed on the CPU (0 none, 1 not requested, 2 no devices, 3 init failed). The run's `diagnostics` promise names the same backend, and `diagnostics.fallback.reason` names a lost GPU (`"no-devices"` or `"init-failed"`), so a Metal fallback is distinguishable from a slow run.
 
 ## Generate audio
 
 `caption` is required and cannot be empty. Everything else is engine-specific.
 
-The SDK returns raw interleaved PCM rather than a WAV file for both engines. Use `bitsPerSample` when calculating sample counts or constructing a WAV header so consumers remain correct if the addon changes sample width. The complete examples below include a dependency-free WAV writer.
+Both engines return raw interleaved PCM through `audio`. Use `bitsPerSample` when calculating sample counts so consumers remain correct if the addon changes sample width. For a file, set [`outputFormat`](#get-an-encoded-file) rather than writing a container by hand.
 
 ### With ACE-Step
 
@@ -289,6 +367,70 @@ const [{ pcm, sampleRate, channels, bitsPerSample }, stats] = await Promise.all(
 ```
 
 Besides the timing statistics, a MiniMax run's `stats` split the engine time by stage — `arMs` (the autoregressive semantic stage), `conditionMs`, `flowMs` and `vocoderMs`, all in milliseconds — and report `emittedFrames`, the semantic frames the model emitted at 25 per second. `emittedFrames` comes in below the frame cap when the song ended on its own.
+
+## Read the PCM in chunks
+
+`chunkStream` yields the run's PCM as `Int16Array` chunks of interleaved signed 16-bit samples, one per chunk the engine emits, without waiting for `audio`:
+
+```ts
+const run = audioGen({ modelId, caption: "ambient electronic music", duration: 10 });
+
+for await (const samples of run.chunkStream) {
+  // Interleaved: samples[0] is the first left sample, samples[1] the first right one.
+  player.write(samples);
+}
+const { sampleRate, channels } = await run.audio;
+```
+
+Both engines currently emit the whole track as a single chunk once generation finishes, so `chunkStream` exposes the engine's chunk boundary rather than audio that arrives while the song is still being generated. Code written against it keeps working if an engine starts emitting more chunks.
+
+`chunkStream` shares the run with `audio`: reading one does not consume the other, and `audio` still resolves with every chunk concatenated. Each chunk is its own copy, so processing it in place leaves `audio` untouched. The stream ends without an error when the run is cancelled and throws the run's error when it fails. `audioEdit()` returns the same view.
+
+## Get an encoded file
+
+Set `outputFormat` on `audioGen()` or `audioEdit()` to also receive the finished audio as a file. The PCM is still delivered; the file arrives through `encoded`:
+
+```ts
+import { writeFile } from "node:fs/promises";
+
+const run = audioGen({
+  modelId,
+  caption: "ambient electronic music",
+  duration: 10,
+  outputFormat: "flac",
+});
+
+const file = await run.encoded;
+if (file) {
+  await writeFile(`track.${file.extension}`, file.data);
+  console.log(file.format, file.mimeType, file.data.byteLength);
+}
+```
+
+`encoded` resolves to `{ data, format, mimeType, extension }`, where `data` is the complete file as a `Uint8Array` and `extension` has no leading dot. It resolves to `undefined` when the request names no `outputFormat`.
+
+| `outputFormat` | File | Needs FFmpeg |
+| --- | --- | --- |
+| `"wav"` | 16-bit PCM WAV | No |
+| `"flac"` | FLAC | Yes |
+| `"alac"` | Apple Lossless in an M4A container (extension `m4a`) | Yes |
+| `"aiff"` | 16-bit PCM AIFF | Yes |
+| `"caf"` | 16-bit PCM Core Audio Format | Yes |
+| `"m4a"` | AAC in an M4A container | Yes |
+| `"aac"` | AAC (ADTS) | Yes |
+| `"opus"` | Opus in an Ogg container, resampled to 48 kHz | Yes |
+| `"ogg"` | Vorbis in an Ogg container | Yes |
+| `"ac3"` | Dolby Digital | Yes |
+| `"wma"` | Windows Media Audio v2 | Yes |
+| `"mp2"` | MPEG-1 Audio Layer II | Yes |
+
+The list is exported as `AUDIOGEN_OUTPUT_FORMATS`. There is no MP3: the FFmpeg build that ships with the addon has no MP3 encoder.
+
+Encoding runs on the inference host, in the FFmpeg build bundled with `@qvac/audiogen-ggml`, so which compressed formats work depends on the encoders that build carries. The SDK checks the encoder before the request queues for the model: an `outputFormat` the host cannot produce fails with `AUDIO_ENCODE_FAILED` (code 52424) before any generation starts. `"wav"` is written without FFmpeg and is always available. The check runs once per format for the life of the inference process.
+
+If the encoder is present but encoding the finished audio still fails, only `encoded` rejects with `AudioEncodeFailedError`. The run itself completed: `audio`, `chunkStream`, `stats` and `diagnostics` deliver as usual, so the generated PCM is never lost to a failed file.
+
+The file is sent in addition to the PCM, so a run with an `outputFormat` transfers both. The QVAC CLI's `GET /qvac/v1/audio/generations/{id}/content` endpoint offers its own `format` parameter, encoded with the server's system `ffmpeg`; `outputFormat` is the library-side equivalent and does not change what the CLI serves.
 
 ## Reference audio and covers
 
@@ -459,8 +601,8 @@ The same description is repeated on the terminal frame as `stats.understand`, so
 
 [`assessModelFit()`](/sdk/models/assess-model-fit) runs the engine's own fitter over a load described as `loadModel()` takes it, reading model metadata only — no weights are downloaded or loaded. Both engines are covered:
 
-- ACE-Step, on every platform, from the registry's weightless descriptions of the four model constants, so before anything is downloaded, or from the files already on disk.
-- MiniMax-Music3, on desktop, from the LM and synthesis files on disk, since it has no registry constants. It projects the default generation (300 semantic frames, 12 s) on the device the config selects: `device` as given, otherwise `useGPU`.
+- ACE-Step, on every platform, from the registry's weightless descriptions of the four model constants, so before anything is downloaded, or from the files already on disk. It projects the placement the config asks for, including a named [`backend` and `lmBackend`](#choose-where-each-stage-runs).
+- MiniMax-Music3, on desktop, from the LM and synthesis files on disk, since it has no registry constants. It projects the default generation (300 semantic frames, 12 s) on the device the config selects: `device` as given, otherwise `useGPU`. A [Core ML profile](#full-core-ml-on-macos) or [conditioner](#core-ml-conditioner-on-macos) cannot be sized by the fitter.
 
 The audiogen fitter reports each device's peak across the pipeline phases, so an audiogen load is summed with the other models assessed alongside it like any other.
 

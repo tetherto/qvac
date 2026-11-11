@@ -22,6 +22,10 @@ registry access. When that GGUF is the loaded model's primary file,
 `clearStorage` removes the whole set, bundle included. A GGUF loaded without a
 bundle uses its ordinary single-file cache path.
 
+`@qvac/inference/model-cache-layout` (`getModelCacheLayout`) publishes where the
+cache keeps a registry model, without fs access. The loader takes its layout
+rules from the same module, `src/utils/cache/layout.ts`.
+
 The current schemas and handlers are authoritative for supported fields and model
 types. Do not maintain a second field inventory here.
 

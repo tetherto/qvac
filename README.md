@@ -235,7 +235,7 @@ cd qvac-server
 }
 ```
 
-4. Start the server (bound to `127.0.0.1:11434` by default):
+4. Start the server (bound to `127.0.0.1:11435` by default):
 
 ```bash
 qvac serve openai
@@ -246,7 +246,7 @@ The model downloads on first start and is preloaded into memory. You'll see prog
 5. From another terminal, hit it with any OpenAI-compatible client. A minimal `curl`:
 
 ```bash
-curl http://localhost:11434/v1/chat/completions \
+curl http://localhost:11435/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "my-llm",
@@ -256,7 +256,7 @@ curl http://localhost:11434/v1/chat/completions \
 
 The response comes back as a single JSON payload with the model's answer. Add `"stream": true` to the body to get an SSE stream instead.
 
-6. Point your AI tool at the server: open its model provider settings and add a new OpenAI-compatible provider with base URL `http://localhost:11434/v1`, any string as the API key, and `my-llm` as the model name.
+6. Point your AI tool at the server: open its model provider settings and add a new OpenAI-compatible provider with base URL `http://localhost:11435/v1`, any string as the API key, and `my-llm` as the model name.
 
 > [!IMPORTANT]
 > Setup varies by tool, and we ship dedicated plugins for some of them (like OpenCode and OpenClaw) that run the server for you. See [Connect AI tools to QVAC](https://docs.qvac.tether.io/cli/http-server/connection) for details.
