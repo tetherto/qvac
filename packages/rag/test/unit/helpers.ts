@@ -8,6 +8,7 @@ import { QvacErrorRAG } from '../../src/errors.js'
 import {
   loadNativeIndex,
   setNativeIndexLoader,
+  type NativeIndex,
   type NativeIndexModule
 } from '../../src/vector-index/native.js'
 import type {
@@ -171,6 +172,7 @@ export function useScan(t: Test): void {
 export interface NativeCalls {
   creates: number
   loads: number
+  compacts: number
 }
 
 // Counts how the index was opened: `create` is a rebuild, `load` a snapshot.
@@ -178,16 +180,24 @@ export async function countNativeCalls(t: Test): Promise<NativeCalls> {
   setNativeIndexLoader(null)
   const real = (await loadNativeIndex()) as NativeIndexModule
   if (!real) throw new Error('@qvac/turbovec-ggml is not loadable; index tests need it')
-  const calls: NativeCalls = { creates: 0, loads: 0 }
+  const calls: NativeCalls = { creates: 0, loads: 0, compacts: 0 }
+  function counted(native: NativeIndex): NativeIndex {
+    const compact = native.compact.bind(native)
+    native.compact = () => {
+      calls.compacts++
+      compact()
+    }
+    return native
+  }
   setNativeIndexLoader(() =>
     Promise.resolve({
       create(dim, storage) {
         calls.creates++
-        return real.create(dim, storage)
+        return counted(real.create(dim, storage))
       },
       load(path) {
         calls.loads++
-        return real.load(path)
+        return counted(real.load(path))
       }
     })
   )

@@ -670,3 +670,51 @@ test('a snapshot from another space is never loaded, even with the same dimensio
   t.is(calls.loads, 0, 'the snapshot was not loaded')
   t.is(calls.creates, 2, 'the index was rebuilt from the database')
 })
+
+test('replaced rows are compacted once they reach a quarter of the live ones', async (t) => {
+  const calls = await countNativeCalls(t)
+  const handle = await openStore(t)
+  const rag = await openOn(t, handle)
+  const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+  const ids = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+  await rag.ingest({
+    namespace: 'ns',
+    documents: ids.map((id) => doc(id, spaceId, [[id, [1, 0, 0]]]))
+  })
+  await search(rag, spaceId, [1, 0, 0])
+
+  await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a2', [0, 1, 0]]])] })
+  t.is(calls.compacts, 0, 'one removed row of eight')
+  await rag.ingest({ namespace: 'ns', documents: [doc('b', spaceId, [['b2', [0, 1, 0]]])] })
+  t.is(calls.compacts, 1, 'two removed rows of eight')
+
+  const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [0, 1, 0], spaceId, k: 2 })
+  t.alike(contents(hits).sort(), ['a2', 'b2'], 'the compacted index still serves every row')
+  t.is(calls.creates, 1, 'compacted in place, not rebuilt')
+})
+
+test('replay compacts the rows it removes', async (t) => {
+  const calls = await countNativeCalls(t)
+  const handle = await openStore(t)
+  const rag = await openOn(t, handle, { snapshotEvery: 1 })
+  const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+  await rag.ingest({
+    namespace: 'ns',
+    documents: [doc('a', spaceId, [['a', [1, 0, 0]]]), doc('b', spaceId, [['b', [0, 1, 0]]])]
+  })
+  await search(rag, spaceId, [1, 0, 0])
+  t.is(sidecarRevision(handle.dir), 2)
+
+  const coreDir = snapshotFiles(handle.dir)[0].split('/').slice(0, -1).join('/')
+  fs.chmodSync(coreDir, 0o555)
+  t.teardown(() => fs.chmodSync(coreDir, 0o755))
+  await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a2', [0, 0, 1]]])] })
+  await rag.close()
+  fs.chmodSync(coreDir, 0o755)
+  const compactsBefore = calls.compacts
+
+  const reopened = await openOn(t, handle, { snapshotEvery: 1 })
+  t.alike(contents(await search(reopened, spaceId, [1, 1, 1])).sort(), ['a2', 'b'])
+  t.is(calls.loads, 1, 'replayed from the snapshot')
+  t.is(calls.compacts, compactsBefore + 1, 'one removed row of two')
+})
