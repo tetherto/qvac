@@ -5,8 +5,9 @@ name: Publish SDK Kotlin
 #   - release-assets: one Maven repository zip per Android runtime profile,
 #     plus the JVM client, attached to the sdk-v<version> GitHub release. A
 #     Gradle project extracts a zip and points a Maven repository at it, so it
-#     needs no registry and no token. publish-sdk.yml calls this after it
-#     creates the release; a dispatch with `tag` backfills an existing release.
+#     needs no registry and no token. publish-sdk.yml, and release-train.yml
+#     for a train with the sdk-kotlin check, call this after they create the
+#     release; a dispatch with `tag` backfills an existing release.
 #   - central: Maven Central (staged unless release_central).
 # Each Android zip embeds the worker and its native addons, hundreds of MB, so
 # the AARs ship on the release rather than through a registry by default.

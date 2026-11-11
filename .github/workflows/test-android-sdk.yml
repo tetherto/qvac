@@ -381,8 +381,8 @@ jobs:
             exit 1
           fi
 
-      # Packs this commit's @qvac/sdk and @qvac/inference as pr-checks-sdk-kotlin.yml
-      # does, so the app tests the branch; inference-source applies to the producer only.
+      # Installs this commit's @qvac/sdk and @qvac/inference, so the app tests the
+      # branch; inference-source applies to the producer only.
       - name: Build Kotlin consumer APK
         if: inputs.app == 'kotlin'
         shell: bash
@@ -395,23 +395,7 @@ jobs:
             echo "::notice::The Kotlin consumer builds against this checkout's packages/inference; inference-source=$INFERENCE_SOURCE applies to the producer only."
           fi
 
-          pushd packages/sdk
-          git checkout -- package.json
-          npm run sdk-source:workspace
-          npx tsc --project tsconfig.json
-          npm run postcompile:aliases
-          git checkout -- package.json
-          sdk_tgz=$(npm pack --ignore-scripts --silent)
-          popd
-
-          pushd packages/inference
-          inf_tgz=$(npm pack --ignore-scripts --silent)
-          popd
-
-          pushd packages/sdk-kotlin
-          npm pkg set "overrides.@qvac/inference=file:../inference/${inf_tgz}"
-          npm install --ignore-scripts --legacy-peer-deps --no-package-lock "../sdk/${sdk_tgz}"
-          popd
+          packages/sdk-kotlin/scripts/install-workspace-sdk.sh
 
           # packages/sdk is built above: skip Gradle's rebuild of it and its Python step.
           cd "$WORKING_DIRECTORY"

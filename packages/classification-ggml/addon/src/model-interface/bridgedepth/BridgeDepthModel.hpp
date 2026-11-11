@@ -11,6 +11,7 @@
 #include <inference-addon-cpp/RuntimeStats.hpp>
 
 #include "model-interface/ImageInput.hpp"
+#include "model-interface/ModelFootprint.hpp"
 
 namespace classification_ggml::bridgedepth {
 
@@ -24,12 +25,14 @@ inline constexpr uint32_t MAX_SIDE = 2048;
 // 32640.
 inline constexpr int64_t MAX_GRID_CELLS = 32767;
 int64_t gridCells(uint32_t width, uint32_t height);
+// Throws InvalidArgument unless the size is one inference accepts.
+void checkSize(uint32_t width, uint32_t height);
 
 struct Config {
   std::string modelPath;
   std::string backendsDir;
   std::string backend;
-  int threads = 8;
+  int threads = DEFAULT_THREADS;
 };
 
 // A rectified stereo pair. Both images must have the same size.
@@ -63,8 +66,16 @@ public:
   [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
   runtimeStats() const override;
 
+  // The buffers a load with `config` plus one inference of a width x height
+  // pair would allocate. Reads only GGUF metadata and allocates none of them.
+  static MeasuredBuffers
+  measure(const Config& config, uint32_t width, uint32_t height);
+  // The buffers this loaded model holds, see BridgeDepthGraph.
+  [[nodiscard]] BufferFootprint allocatedBuffers() const;
+
 private:
   struct Impl;
+  static std::unique_ptr<Impl> open(const Config& config, bool measureOnly);
   std::unique_ptr<Impl> impl_;
   Config config_;
   mutable std::mutex mutex_;
