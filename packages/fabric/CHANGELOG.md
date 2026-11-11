@@ -1,5 +1,51 @@
 # Changelog
 
+## [0.29.0] - 2026-11-11
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11739.1.1` -> `11739.2.0`.
+  `GGML_TYPE_F8_E4M3` takes type 43 and the TurboQuant and PolarQuant KV-cache
+  types move from 43-50 to 52-59, so native consumers must rebuild against
+  these headers.
+- The RPC protocol moves from 113 to 116 for the new type number and the four
+  new ops, so RPC clients and `ggml-rpc-server` must move to this version
+  together.
+
+### Added
+
+- FP8 E4M3 (`GGML_TYPE_F8_E4M3`, `LLAMA_FTYPE_MOSTLY_F8_E4M3`) for weights and
+  the KV cache, with CUDA FP8 matmuls and flash attention.
+- ConvRot ops for ComfyUI TensorWise I8 diffusion weights: `ggml_mul_mat_convrot`,
+  `ggml_convrot`, `ggml_convrot_mul_mat` and `ggml_convrot_repack_q8_0`. F32
+  matmuls honor `GGML_PREC_F32`.
+- Ragged ubatches for the Qwen3.5 recurrent layers (`ggml_ssm_conv_ragged`,
+  `ggml_gated_delta_net_ragged`): sequences of different lengths share one
+  ubatch in a unified KV cache. `LLAMA_RS_RAGGED=0` turns them off.
+- Graph-leaf APIs: `ggml_graph_leaf`, `ggml_graph_leafs`, `ggml_graph_n_leafs`
+  and `ggml_graph_add_leaf`.
+
+### Fixed
+
+- Backend sampling marks every sampling chain as a graph output, so chains no
+  longer alias each other's buffers when several slots sample in one step.
+- The scheduler keeps `op_params` on its tensor copies.
+- CUDA keeps the tensors of concurrent branches allocated until they join.
+- XDNA flushes the K/V rows a state restore writes before the decode
+  attention, repairs a lost first row of a bf16 GEMM block, and holds the
+  compute lock in its support query.
+- Chat parsing allows reasoning, and keeps continued content, before a
+  required tool call.
+
+### Changed
+
+- XDNA runs prefill GEMMs and attention on one merged NPU design, and the
+  fused decode on residual widths up to 4096 (Qwen3.5 2B, 4B and 9B).
+- Metal fuses more of the Qwen3.5 decode: the FFN norm, the q/k L2 norms, the
+  conv state update and the gated delta net gates.
+- Qwen3.5 recurrent states are read in place, and `n_kv` is padded to at least
+  1/16 of the used cells.
+
 ## [0.28.0] - 2026-11-08
 
 ### Breaking
