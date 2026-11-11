@@ -5159,6 +5159,24 @@ PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0 = ModelConstant(
     params="250M",
 )
 
+PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0 = ModelConstant(
+    name="PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0",
+    src="registry://s3/qvac_models_compiled/ggml/transcribepsy/2026-11-09/transcribepsy-250m-eu.gguf",
+    registry_path="qvac_models_compiled/ggml/transcribepsy/2026-11-09/transcribepsy-250m-eu.gguf",
+    registry_source="s3",
+    blob_core_key="e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+    blob_block_offset=92309,
+    blob_block_length=4691,
+    blob_byte_offset=6047386368,
+    model_id="transcribepsy-250m-eu.gguf",
+    expected_size=307402624,
+    sha256_checksum="1b81d33c96d687b00b4d98068b58e038d5dee909e11f74bada343bb6bedce3b2",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="q8_0",
+    params="250M",
+)
+
 PARAKEET_TRANSCRIBEPSY_250M_Q8_0 = ModelConstant(
     name="PARAKEET_TRANSCRIBEPSY_250M_Q8_0",
     src="registry://hf/qvac/TranscribePsy-250M-EU-sub-gguf/resolve/92460e0a8e7dc20f2fb126198bdd9eebb9ba2dc7/transcribepsy-250m-eu-sub.gguf",
@@ -8902,6 +8920,7 @@ __all__ = [
     "PARAKEET_TDT_1_1B_F16",
     "PARAKEET_TDT_1_1B_Q8_0",
     "PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0",
+    "PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0",
     "PARAKEET_TRANSCRIBEPSY_250M_Q8_0",
     "PARAKEET_UNIFIED_0_6B_F16",
     "PARAKEET_UNIFIED_0_6B_Q4_0",

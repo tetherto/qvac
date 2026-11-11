@@ -31,6 +31,24 @@ test('ACE-Step: carries the four stages and the load placement', (t) => {
   })
 })
 
+// A named backend puts a stage on its own device, so the fitter has to be told
+// the placement the load will ask for, or it sizes the automatic one instead.
+test('ACE-Step: the named backends reach the fitter', (t) => {
+  const plan = audiogenFitRequest(
+    load({ useGPU: true, backend: 'CUDA0', lmBackend: 'cpu' }, ACE_STEP)
+  )
+  t.is(requestOf(plan)?.['backend'], 'CUDA0')
+  t.is(requestOf(plan)?.['lmBackend'], 'cpu')
+
+  const automatic = requestOf(audiogenFitRequest(load({ useGPU: true }, ACE_STEP)))
+  t.absent(automatic && 'backend' in automatic, 'unset leaves placement to the engine')
+  t.absent(automatic && 'lmBackend' in automatic)
+  t.absent(
+    'dumpStagesDir' in (requestOf(plan) ?? {}),
+    'the stage dumps are diagnostics, not placement'
+  )
+})
+
 test('ACE-Step: a missing stage is unknown, and the CPU is no offload', (t) => {
   const { vaeModelPath: _vae, ...partial } = ACE_STEP
   t.ok('unknown' in audiogenFitRequest(load({ useGPU: true }, partial)))
@@ -66,4 +84,22 @@ test('MiniMax: the Core ML profile reaches the fitter', (t) => {
     gpuLayers: 0,
     ...coreml
   })
+})
+
+test('MiniMax: the Core ML conditioner reaches the fitter', (t) => {
+  const pair = { lmModelPath: '/models/mm3-lm.gguf', synthModelPath: '/models/mm3-synth.gguf' }
+  const coremlConditionerPath = '/models/minimax-conditioner.mlmodelc'
+
+  t.alike(
+    requestOf(
+      audiogenFitRequest(load({ engine: 'minimax', device: 'gpu', coremlConditionerPath }, pair))
+    ),
+    {
+      engine: 'minimax',
+      lmPath: '/models/mm3-lm.gguf',
+      synthPath: '/models/mm3-synth.gguf',
+      device: 'gpu',
+      coremlConditionerPath
+    }
+  )
 })

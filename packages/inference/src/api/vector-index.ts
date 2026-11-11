@@ -12,6 +12,7 @@ import {
   type VectorIndexRequest,
   type VectorIndexResponse,
   type VectorIndexSearchParams,
+  type VectorIndexSetStagedSearchParams,
   type VectorIndexStorage,
   type VectorIndexWriteParams
 } from '@/schemas/index'
@@ -48,10 +49,34 @@ export interface VectorIndex {
   readonly storage: VectorIndexStorage | undefined
   /** Number of live entries as of the last call that changed or reported it. */
   readonly length: number
+  /**
+   * TQ+ calibration state as of create, load, or the last successful add.
+   * Undefined when an external provider does not report calibration.
+   */
+  readonly calibrated: boolean | undefined
+  /**
+   * Staged search setting as of the last successful call that reported it.
+   * Undefined when an external provider does not report the setting.
+   */
+  readonly stagedSearch: boolean | undefined
+
+  /**
+   * Turns TurboVec staged search on or off. Off on every new or loaded index.
+   * On supported hosts, dimensions divisible by 32 and at least 32,768 entries
+   * use a shortlist for faster searches with lower recall. Other dimensions
+   * and v3 snapshots retain the setting but scan in full. The setting is not
+   * saved in snapshots. Rejects non-TurboVec storage or unsupported providers.
+   */
+  setStagedSearch(
+    params: VectorIndexSetStagedSearchParams,
+    options?: RPCOptions
+  ): Promise<{ stagedSearch: boolean }>
 
   /**
    * Adds vectors under the given ids in one atomic batch. Rejects duplicate
    * ids, ids equal to 2^64 - 1, and rows whose length differs from `dim`.
+   * A fresh TurboVec index attempts calibration from a first batch of at
+   * least 1,000 vectors. A smaller first batch leaves it uncalibrated.
    * @returns The number of live entries after the add.
    */
   add(params: VectorIndexAddParams, options?: RPCOptions): Promise<{ length: number }>
@@ -112,6 +137,8 @@ interface OpenedIndex {
   dim: number
   length: number
   storage?: VectorIndexStorage | undefined
+  calibrated?: boolean | undefined
+  stagedSearch?: boolean | undefined
 }
 
 /**
@@ -136,6 +163,8 @@ export function createVectorIndexClient(transport: typeof send) {
   function createHandle(opened: OpenedIndex): VectorIndex {
     const { indexId, dim, storage } = opened
     let length = opened.length
+    let calibrated = opened.calibrated
+    let stagedSearch = opened.stagedSearch
     let disposed = false
 
     // Row lengths are checked here so a mismatch fails before any request is
@@ -173,6 +202,20 @@ export function createVectorIndexClient(transport: typeof send) {
       get length() {
         return length
       },
+      get calibrated() {
+        return calibrated
+      },
+      get stagedSearch() {
+        return stagedSearch
+      },
+      async setStagedSearch(params: VectorIndexSetStagedSearchParams, options?: RPCOptions) {
+        const response = await call(
+          { type: 'vectorIndex', operation: 'setStagedSearch', indexId, enabled: params.enabled },
+          options
+        )
+        stagedSearch = response.stagedSearch
+        return { stagedSearch }
+      },
       async add(params: VectorIndexAddParams, options?: RPCOptions) {
         assertRows(params.vectors, 'vectors')
         const response = await call(
@@ -186,6 +229,8 @@ export function createVectorIndexClient(transport: typeof send) {
           options
         )
         length = response.length
+        calibrated = response.calibrated
+        stagedSearch = response.stagedSearch
         return { length }
       },
       search,
@@ -268,7 +313,7 @@ const client = createVectorIndexClient(send)
  * documents.
  *
  * @param params - Index parameters
- * @param params.dim - Vector dimensionality, for example 1024 for GTE Large. TurboVec storage needs a multiple of 8 no greater than 1024.
+ * @param params.dim - Vector dimensionality, for example 1024 for GTE Large. TurboVec storage needs a multiple of 8 no greater than 16384.
  * @param params.storage - Storage mode from `VectorIndexStorage`; defaults to `TURBOVEC_Q4`. `TURBOVEC_Q2` halves memory again at lower recall; `F32`, `Q8`, and `Q4` are exact or generically quantised stores for dimensions TurboVec cannot hold.
  * @param options - Optional RPC options (timeout, profiling, force new connection, etc.).
  * @returns A handle whose methods add, search, remove, snapshot, and dispose the index.

@@ -38,7 +38,7 @@ import { createQvac } from '@qvac/ai-sdk-provider'
 import { streamText } from 'ai'
 
 const qvac = createQvac({
-  baseURL: 'http://localhost:11434/v1', // match your HTTP server
+  baseURL: 'http://localhost:11435/v1', // match your HTTP server
   apiKey: process.env.QVAC_API_KEY      // must match qvac serve --api-key when enabled
 })
 
@@ -168,10 +168,6 @@ interface QvacManagedOptions {
 ### `qvac`
 
 A default `createQvac()` instance with all defaults. Convenient for quick scripts; explicit `createQvac({ baseURL })` is recommended.
-
-<Callout type="warn" title="Default provider port does not match HTTP server's default port.">
-The provider defaults to `http://127.0.0.1:11435/v1`, while `qvac serve --openai` listens on `11434` by default. This mismatch is intentional — `11434` collides with Ollama, so the provider ships a placeholder port until the CLI default is changed. Until then, **always pass `baseURL` explicitly** when calling `createQvac({ baseURL })`, matching the port your `qvac serve --openai` instance is bound to (e.g. `http://127.0.0.1:11434/v1` for the CLI default).
-</Callout>
 
 ### `models`, `allModels`, `ModelConstant`, `EndpointCategory`
 

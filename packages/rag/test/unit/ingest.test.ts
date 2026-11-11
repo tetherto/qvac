@@ -45,7 +45,12 @@ test('ingest stores precomputed chunks with Float32 bytes and default chunk ids'
       }
     ]
   })
-  t.alike(result, { documents: [{ id: 'a', generation: 1, chunkCount: 2 }], revision: 1 })
+  t.alike(result, {
+    documents: [{ id: 'a', generation: 1, chunkCount: 2, status: 'created' }],
+    skipped: [],
+    cancelled: false,
+    revision: 1
+  })
   await rag.close()
 
   await inspect(store, async (reader) => {
@@ -137,7 +142,9 @@ test('re-ingest replaces a document and drops superseded chunks', async (t) => {
     namespace: 'ns',
     documents: [doc('a', spaceId, [['new', [0, 0, 1]]])]
   })
-  t.alike(result.documents, [{ id: 'a', generation: 2, chunkCount: 1 }])
+  t.alike(result.documents, [
+    { id: 'a', generation: 2, chunkCount: 1, status: 'replaced', removedChunks: 2 }
+  ])
 
   const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 1, 1], spaceId, k: 10 })
   t.alike(
