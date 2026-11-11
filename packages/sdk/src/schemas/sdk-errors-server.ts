@@ -1,7 +1,7 @@
 import { addCodes, isCodeRegistered, type ErrorCodesMap } from '@qvac/error'
 // Load @qvac/inference's registration first, then add only codes not already present, so a
 // shared @qvac/error instance (packed consumers, the Bare worker) is not double-registered.
-import '@qvac/inference/surface'
+import { modelRegistryBusyMessage } from '@qvac/inference/surface'
 
 // Server-side error codes (52,001-54,000 range for this SDK)
 export const SDK_SERVER_ERROR_CODES = {
@@ -675,10 +675,7 @@ const serverErrorDefinitions: ErrorCodesMap = {
   // Owned by @qvac/inference, which registers it first; kept here for the contract export.
   [SDK_SERVER_ERROR_CODES.QVAC_MODEL_REGISTRY_BUSY]: {
     name: 'QVAC_MODEL_REGISTRY_BUSY',
-    message: (holder: string, waitedMs: number) =>
-      holder === 'legacy'
-        ? `Another QVAC process on an older SDK holds the model registry until it exits; gave up after ${Math.round(waitedMs / 1000)}s. Close or upgrade that process, then retry.`
-        : `Another QVAC process is using the model registry; gave up after ${Math.round(waitedMs / 1000)}s. Retry once it finishes.`
+    message: modelRegistryBusyMessage
   }
 }
 

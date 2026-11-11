@@ -19,6 +19,7 @@ export const TEST_TIMINGS: RegistryClientTimings = {
   graceMs: 400,
   pollMs: 25,
   queryWaitMs: 800,
+  statusWaitMs: 200,
   legacyWaitMs: 500
 }
 

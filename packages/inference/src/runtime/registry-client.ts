@@ -6,10 +6,9 @@ import { QVACRegistryClient } from '@qvac/registry-client'
 import { getCacheDir } from '@/utils/cache/paths'
 import {
   getLifecycleState,
-  registerSwarm,
-  unregisterSwarm,
   registerCorestore,
-  unregisterCorestore
+  unregisterCorestore,
+  type SuspendableStore
 } from '@/runtime/runtime-lifecycle'
 import { getEngineLogger } from '@/logging/index'
 import { DEFAULT_REGISTRY_CORE_KEY } from '@/constants/index'
@@ -42,6 +41,8 @@ export interface RegistryClientTimings {
   pollMs: number
   /** How long a query waits for the store before giving up. */
   queryWaitMs: number
+  /** How long a cache-status lookup waits before it gives up and reports what is on disk. */
+  statusWaitMs: number
   /** How long any operation waits for an older SDK that holds the store until it exits. */
   legacyWaitMs: number
 }
@@ -50,6 +51,7 @@ const DEFAULT_TIMINGS: RegistryClientTimings = {
   graceMs: 5_000,
   pollMs: 250,
   queryWaitMs: 60_000,
+  statusWaitMs: 2_000,
   legacyWaitMs: 30_000
 }
 
@@ -62,10 +64,10 @@ export function setRegistryClientTimingsForTest(next: Partial<RegistryClientTimi
 
 /**
  * `download` waits for a holder on this SDK version until the caller cancels.
- * `query` gives up after `queryWaitMs`. Both give up after `legacyWaitMs` when
- * the holder is an older SDK.
+ * `query` gives up after `queryWaitMs`, and `status` after `statusWaitMs`. All
+ * give up after `legacyWaitMs` when the holder is an older SDK.
  */
-export type RegistryWait = 'download' | 'query'
+export type RegistryWait = 'download' | 'query' | 'status'
 
 export interface AcquireRegistryClientOptions {
   wait: RegistryWait
@@ -96,6 +98,8 @@ interface Waiter {
 interface OpenStore {
   client: QVACRegistryClient
   leaseMarker: MarkerLock | null
+  /** Registered with the runtime lifecycle in place of the client's store and swarm. */
+  lifecycle: SuspendableStore
 }
 
 interface MarkerLock {
@@ -321,7 +325,7 @@ function check(): void {
   if (Date.now() - idleSince >= timings.graceMs) void closeStore('idle')
 }
 
-function closeStore(reason: 'idle' | 'yield' | 'shutdown'): Promise<void> {
+function closeStore(reason: 'idle' | 'yield' | 'suspend' | 'shutdown'): Promise<void> {
   const open = store!
   store = null
   refs = 0
@@ -332,8 +336,6 @@ function closeStore(reason: 'idle' | 'yield' | 'shutdown'): Promise<void> {
   if (reason === 'yield') handoffUntil = Date.now() + 2 * timings.pollMs
 
   logger.info(`🔌 Closing registry client (${reason})...`)
-  const corestore = open.client.corestore
-  const hyperswarm = open.client.hyperswarm
   closing = (async () => {
     try {
       await open.client.close()
@@ -344,8 +346,7 @@ function closeStore(reason: 'idle' | 'yield' | 'shutdown'): Promise<void> {
         error instanceof Error ? error.message : String(error)
       )
     } finally {
-      if (corestore) unregisterCorestore(corestore)
-      if (hyperswarm) unregisterSwarm(hyperswarm)
+      unregisterCorestore(open.lifecycle)
       open.leaseMarker?.release()
     }
   })().finally(() => {
@@ -353,6 +354,20 @@ function closeStore(reason: 'idle' | 'yield' | 'shutdown'): Promise<void> {
     if (pending.size > 0) ensureOpener()
   })
   return closing
+}
+
+// The runtime suspends and resumes the store through these. An idle store is
+// closed rather than suspended, so another process can use it while this one is
+// in the background. A store with leases in flight is suspended with them, and
+// is handed over or closed once the runtime resumes.
+async function suspendStore(open: OpenStore): Promise<void> {
+  if (store !== open) return
+  if (refs === 0) await closeStore('suspend')
+  else await open.client.suspend()
+}
+
+async function resumeStore(open: OpenStore): Promise<void> {
+  if (store === open) await open.client.resume()
 }
 
 function ensureOpener(): void {
@@ -398,6 +413,14 @@ async function openWhenFree(): Promise<void> {
     }
 
     while (pending.size > 0 && !shuttingDown) {
+      // A store opened while suspended would sync in the background, outside
+      // the lifecycle's suspend. Wait for the runtime to resume.
+      if (!lifecycleActive()) {
+        waiting.lower()
+        await sleep(timings.pollMs)
+        continue
+      }
+
       if (probeStore() === 'free') {
         const opened = await tryOpen()
         if (opened) {
@@ -438,14 +461,19 @@ async function openWhenFree(): Promise<void> {
   }
 }
 
+function budgetFor(wait: RegistryWait): number {
+  if (wait === 'query') return timings.queryWaitMs
+  if (wait === 'status') return timings.statusWaitMs
+  return Infinity
+}
+
 function expireWaiters(holder: Holder, legacySince: number | null): void {
   const now = Date.now()
   for (const waiter of [...pending]) {
     const legacyFor = legacySince === null ? 0 : now - Math.max(legacySince, waiter.startedAt)
     const waited = now - waiter.startedAt
     const expired =
-      (holder === 'legacy' && legacyFor >= timings.legacyWaitMs) ||
-      (waiter.wait === 'query' && waited >= timings.queryWaitMs)
+      (holder === 'legacy' && legacyFor >= timings.legacyWaitMs) || waited >= budgetFor(waiter.wait)
     if (!expired) continue
     pending.delete(waiter)
     waiter.detach()
@@ -477,6 +505,9 @@ async function tryOpen(): Promise<OpenStore | null> {
   try {
     await client.ready()
   } catch (error) {
+    // Released first: a half-open store still holds its lock, and the probe
+    // below would take this process for another.
+    await discardFailedOpen(client)
     leaseMarker?.release()
     if (isFdLockError(error) || probeStore() === 'busy') {
       logger.debug('Registry store was taken by another process before this one opened it')
@@ -485,14 +516,29 @@ async function tryOpen(): Promise<OpenStore | null> {
     throw error
   }
 
-  if (client.corestore) {
-    registerCorestore(client.corestore, { label: 'registry-client', createdAt: Date.now() })
+  const lifecycle: SuspendableStore = {
+    suspend: () => suspendStore(open),
+    resume: () => resumeStore(open)
   }
-  if (client.hyperswarm) {
-    registerSwarm(client.hyperswarm, { label: 'registry-client', createdAt: Date.now() })
-  }
+  const open: OpenStore = { client, leaseMarker, lifecycle }
+  registerCorestore(lifecycle, { label: 'registry-client', createdAt: Date.now() })
   logger.info('✅ Registry client ready')
-  return { client, leaseMarker }
+  return open
+}
+
+// A failed open never reaches the client's own close, so release what it had
+// opened: the store with its file lock, and the swarm.
+async function discardFailedOpen(client: QVACRegistryClient): Promise<void> {
+  const opened = client as unknown as {
+    hyperswarm: { destroy(): Promise<void> } | null
+    corestore: { close(): Promise<void> } | null
+  }
+  try {
+    await opened.hyperswarm?.destroy()
+  } catch {}
+  try {
+    await opened.corestore?.close()
+  } catch {}
 }
 
 /**

@@ -15,6 +15,7 @@ import { fetchFitStub } from '@/model-fit/description/fetch'
 import { resolveRegistryModel } from '@/handlers/load-model/resolve'
 import type { ResolveResult } from '@/handlers/load-model/types'
 import { getRequestRegistry } from '@/runtime/index'
+import { getLifecycleState, resumeRuntime, suspendRuntime } from '@/runtime/runtime-lifecycle'
 import {
   DownloadCancelledError,
   InferenceCancelledError,
@@ -327,6 +328,7 @@ test('a lease queued behind a handover keeps its deadline, and goes ahead once n
   t.ok(busy instanceof ModelRegistryBusyError, 'a query queued behind the handover gives up')
   const typed = busy as ModelRegistryBusyError
   t.is(typed.holder, 'current')
+  t.ok(/next in line/.test(typed.message), 'the message covers a process owed the store next')
   t.ok(typed.waitedMs >= TEST_TIMINGS.queryWaitMs, 'after the query wait')
   t.ok(typed.waitedMs < TEST_TIMINGS.queryWaitMs + 500, 'not after the download ends')
   t.ok(hasActiveRegistryClient(), 'while the download keeps the store')
@@ -345,6 +347,78 @@ test('a lease queued behind a handover keeps its deadline, and goes ahead once n
   )
   await lease[Symbol.asyncDispose]()
   await download[Symbol.asyncDispose]()
+})
+
+test('a cache-status lookup gives up soon behind another holder', async (t) => {
+  setup(t, 'status')
+  const holder = await holdStore({ asCurrent: true })
+  t.teardown(() => holder.release())
+
+  const busy = await rejection(acquireRegistryClient({ wait: 'status' }))
+  t.ok(busy instanceof ModelRegistryBusyError)
+  const waited = (busy as ModelRegistryBusyError).waitedMs
+  t.ok(waited >= TEST_TIMINGS.statusWaitMs, 'after the status wait')
+  t.ok(waited < TEST_TIMINGS.queryWaitMs, `well before a query would give up (${waited}ms)`)
+})
+
+test('suspending closes an idle store, and nothing opens one until the runtime resumes', async (t) => {
+  setup(t, 'suspend-idle', { ...TEST_TIMINGS, graceMs: 30_000 })
+  t.teardown(() => resumeRuntime())
+  const first = await acquireRegistryClient({ wait: 'query' })
+  await first[Symbol.asyncDispose]()
+
+  await suspendRuntime()
+  t.absent(hasActiveRegistryClient(), 'the idle store is closed rather than suspended')
+  const other = await tryOpenStoreOnce()
+  t.ok(other, 'another process can use the store meanwhile')
+  await other?.release()
+
+  const next = acquireRegistryClient({ wait: 'download' })
+  const settled = settledFlag(next)
+  await sleep(TEST_TIMINGS.pollMs * 6)
+  t.absent(settled() || hasActiveRegistryClient(), 'nothing opens the store while suspended')
+
+  await resumeRuntime()
+  const lease = await next
+  t.ok(lease.client, 'the wait opens the store once the runtime resumes')
+  await lease[Symbol.asyncDispose]()
+})
+
+test('a store with a lease in flight is suspended with it, and resumes', async (t) => {
+  setup(t, 'suspend-busy')
+  t.teardown(() => resumeRuntime())
+  const lease = await acquireRegistryClient({ wait: 'download' })
+
+  await suspendRuntime()
+  t.ok(hasActiveRegistryClient(), 'the store is not closed under the lease')
+  await resumeRuntime()
+  t.is(getLifecycleState(), 'active', 'and resumes with the runtime')
+
+  const again = await acquireRegistryClient({ wait: 'query' })
+  t.is(again.client, lease.client, 'the same store serves leases after the resume')
+  await again[Symbol.asyncDispose]()
+  await lease[Symbol.asyncDispose]()
+})
+
+test('a failed open releases the store instead of taking itself for another process', async (t) => {
+  setup(t, 'failed-open')
+  const proto = QVACRegistryClient.prototype as unknown as Record<string, unknown>
+  const opensStore = proto['_open']
+  // The store opens and locks, then the registry view fails to sync.
+  proto['_open'] = async function (this: { corestore: { ready(): Promise<void> } }) {
+    await this.corestore.ready()
+    throw new Error('registry view did not sync')
+  }
+  try {
+    const error = await rejection(acquireRegistryClient({ wait: 'query' }))
+    t.is(error.message, 'registry view did not sync', 'the open error reaches the caller')
+  } finally {
+    proto['_open'] = opensStore
+  }
+
+  const other = await tryOpenStoreOnce()
+  t.ok(other, 'the half-open store released its lock')
+  await other?.release()
 })
 
 test('registry search passes the busy error through and stops on cancel', async (t) => {

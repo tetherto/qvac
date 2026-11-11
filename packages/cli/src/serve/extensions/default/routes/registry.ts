@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import {
+  InferenceCancelledError,
   ModelRegistryBusyError,
   ModelRegistryModelNotFoundError,
   modelRegistryGetModel,
@@ -67,7 +68,10 @@ const SDK_QUERIES: RegistryQueries = {
 export function registryRoutes(queries: RegistryQueries = SDK_QUERIES): FastifyPluginAsyncZod {
   // lunte-disable-next-line require-await
   return async (app) => {
-    function queryFailed(err: unknown, reply: FastifyReply): HttpError {
+    function queryFailed(err: unknown, reply: FastifyReply): unknown {
+      // Only a client disconnect cancels a query. The error handler drops it
+      // once the client is gone, so it is neither logged nor answered.
+      if (err instanceof InferenceCancelledError) return err
       if (err instanceof ModelRegistryBusyError) {
         if (err.holder === 'current') reply.header('retry-after', String(BUSY_RETRY_AFTER_S))
         return new HttpError(503, 'registry_busy', err.message)

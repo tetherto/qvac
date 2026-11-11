@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { tmpdir } from 'node:os'
 import type { FastifyInstance } from 'fastify'
 import {
+  InferenceCancelledError,
   ModelRegistryBusyError,
   ModelRegistryModelNotFoundError,
   type ModelRegistryEntry,
@@ -78,6 +79,7 @@ describe('registry routes', () => {
   let calls: ModelRegistrySearchParams[]
   let fail: boolean
   let busy: 'current' | 'legacy' | null = null
+  let cancelled = false
   let bound: string[] = []
 
   before(async () => {
@@ -105,6 +107,7 @@ describe('registry routes', () => {
           withId(
             Promise.resolve().then(() => {
               calls.push(params)
+              if (cancelled) throw new InferenceCancelledError('search-1')
               if (busy) throw new ModelRegistryBusyError(busy, 60_000)
               if (fail) throw new Error('registry offline')
               return ENTRIES
@@ -114,6 +117,7 @@ describe('registry routes', () => {
         getModel: (registryPath, registrySource) =>
           withId(
             Promise.resolve().then(() => {
+              if (cancelled) throw new InferenceCancelledError('lookup-1')
               if (busy) throw new ModelRegistryBusyError(busy, 60_000)
               if (fail) throw new Error('registry offline')
               const entry = ENTRIES.find(
@@ -136,6 +140,7 @@ describe('registry routes', () => {
     calls = []
     fail = false
     busy = null
+    cancelled = false
     bound = []
     return app.inject({ method: 'GET', url })
   }
@@ -218,6 +223,30 @@ describe('registry routes', () => {
         assert.equal(res.headers['retry-after'], holder === 'current' ? '5' : undefined, holder)
       }
     }
+  })
+
+  it('leaves a disconnect cancel to the error handler instead of logging a failure', async () => {
+    const logged: string[] = []
+    const error = app.qvac.logger.error
+    app.qvac.logger.error = (message) => logged.push(message)
+    try {
+      for (const url of [
+        '/qvac/v1/registry/models',
+        '/qvac/v1/registry/models/lookup?registrySource=hf&registryPath=x'
+      ]) {
+        calls = []
+        cancelled = true
+        const res = await app.inject({ method: 'GET', url })
+        cancelled = false
+        assert.notEqual(res.statusCode, 502, url)
+      }
+    } finally {
+      app.qvac.logger.error = error
+    }
+    assert.deepEqual(
+      logged.filter((line) => line.includes('registry query failed')),
+      []
+    )
   })
 
   it('maps an SDK failure to 502 on both routes', async () => {

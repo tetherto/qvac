@@ -135,7 +135,8 @@ async function handleOptionalCoremlModel(model: RegistryItem): Promise<CacheStat
       await fsPromises.access(primaryPath)
       let set: Awaited<ReturnType<typeof findCoremlCompanionSet>>
       {
-        await using lease = await acquireRegistryClient({ wait: 'query' })
+        // A status check reports what is on disk rather than wait on another process.
+        await using lease = await acquireRegistryClient({ wait: 'status' })
         set = await findCoremlCompanionSet(lease.client, model, platform)
       }
       if (set) {
