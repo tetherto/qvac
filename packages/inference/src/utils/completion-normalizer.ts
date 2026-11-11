@@ -8,7 +8,8 @@ import type {
 } from '@/schemas/index'
 import { parseToolCalls } from '@/utils/tools/index'
 
-type NormalizerState = 'content' | 'thinkingFraming' | 'toolFraming' | 'contentFraming'
+type NormalizerState =
+  'content' | 'thinkingFraming' | 'toolFraming' | 'contentFraming' | 'afterThinkingTool'
 
 type FrameSpec = {
   open: string
@@ -121,10 +122,10 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   let activeThinkingFrame: FrameSpec | null = null
 
   // Qwen-style templates open `<think>` in the prompt and the model sometimes
-  // skips `</think>`. A tool-call opener then ends the reasoning block, and a
-  // close marker arriving after it is dropped.
+  // skips `</think>` before calling a tool. A call parsed inside the block is
+  // held until what follows shows whether it was made or only quoted.
   let toolFrameOpenedInThinking = false
-  let dropLateThinkClose = false
+  let heldThinkingCalls: { raw: string; calls: ToolCall[] } | null = null
   // Index into `thinkingParts` where the current built-in block starts.
   let thinkingBlockStart = 0
 
@@ -150,6 +151,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   let toolFramingTail = ''
   let thinkingFramingTail = ''
   let contentFramingTail = ''
+  let afterThinkingToolTail = ''
 
   const streamedToolCallKeys = new Set<string>()
 
@@ -201,7 +203,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     for (const token of contentDropTokens) {
       normalized = normalized.split(token).join('')
     }
-    if (trimAfterThinking || (dropLateThinkClose && contentParts.length === 0)) {
+    if (trimAfterThinking) {
       normalized = normalized.trimStart()
       if (normalized) trimAfterThinking = false
     }
@@ -300,7 +302,6 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
 
     // The reasoning only mentioned the marker: still inside `<think>`.
     function returnToThinking() {
-      dropLateThinkClose = false
       trimThinkingStart = false
       emitThinking(events, raw)
       activeThinkingFrame = BUILTIN_THINKING
@@ -327,10 +328,16 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
 
     const { toolCalls, errors } = parseToolCalls(raw, config.tools, dialect)
 
-    for (const call of toolCalls) emitStreamedToolCall(events, call)
+    if (openedInThinking) {
+      if (toolCalls.length === 0) return returnToThinking()
+      if (closed) {
+        heldThinkingCalls = { raw, calls: toolCalls }
+        state = 'afterThinkingTool'
+        return
+      }
+    }
 
-    if (toolCalls.length === 0 && openedInThinking) return returnToThinking()
-    if (openedInThinking) dropLateThinkClose = true
+    for (const call of toolCalls) emitStreamedToolCall(events, call)
 
     if (toolCalls.length === 0) {
       if (errors.length > 0) {
@@ -379,6 +386,8 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
         return toolFramingTail
       case 'contentFraming':
         return contentFramingTail
+      case 'afterThinkingTool':
+        return afterThinkingToolTail
     }
   }
 
@@ -421,6 +430,41 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     return ''
   }
 
+  function releaseHeldCalls(events: CompletionEvent[]) {
+    const held = heldThinkingCalls
+    heldThinkingCalls = null
+    for (const call of held?.calls ?? []) emitStreamedToolCall(events, call)
+  }
+
+  // A held call was made if the turn ends, `</think>` closes the block, or
+  // another call follows. Any other text means the reasoning quoted it.
+  function stepAfterThinkingTool(events: CompletionEvent[], buf: string) {
+    const rest = buf.trimStart()
+    const markers = [BUILTIN_THINKING.close, ...toolOpeners]
+    const marker = markers.find((m) => rest.startsWith(m))
+    if (marker) {
+      releaseHeldCalls(events)
+      if (marker === BUILTIN_THINKING.close) {
+        trimAfterThinking = contentParts.length === 0
+        state = 'content'
+      } else {
+        openToolFrame(marker, markerToEntry.get(marker)!.spec, true)
+      }
+      return rest.slice(marker.length)
+    }
+    if (markers.some((m) => m.startsWith(rest))) {
+      afterThinkingToolTail = buf
+      return ''
+    }
+    const quoted = heldThinkingCalls?.raw ?? ''
+    heldThinkingCalls = null
+    trimThinkingStart = false
+    emitThinking(events, quoted + buf.slice(0, buf.length - rest.length))
+    activeThinkingFrame = BUILTIN_THINKING
+    state = 'thinkingFraming'
+    return rest
+  }
+
   function stepThinkingFraming(events: CompletionEvent[], buf: string) {
     if (!activeThinkingFrame) {
       state = 'content'
@@ -460,6 +504,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     thinkingFramingTail = ''
     toolFramingTail = ''
     contentFramingTail = ''
+    afterThinkingToolTail = ''
 
     while (buf.length > 0) {
       if (state === 'toolFraming') {
@@ -469,6 +514,11 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
 
       if (state === 'thinkingFraming') {
         buf = stepThinkingFraming(events, buf)
+        continue
+      }
+
+      if (state === 'afterThinkingTool') {
+        buf = stepAfterThinkingTool(events, buf)
         continue
       }
 
@@ -495,19 +545,10 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
         continue
       }
 
-      const markers = dropLateThinkClose
-        ? [...contentMarkers, BUILTIN_THINKING.close]
-        : contentMarkers
-      const hit = findEarliestMarker(buf, markers)
+      const hit = findEarliestMarker(buf, contentMarkers)
       if (hit) {
         emitContent(events, buf.slice(0, hit.idx))
         buf = buf.slice(hit.idx + hit.marker.length)
-
-        if (dropLateThinkClose && hit.marker === BUILTIN_THINKING.close) {
-          dropLateThinkClose = false
-          trimAfterThinking = contentParts.length === 0
-          continue
-        }
 
         if (dropTokenSet.has(hit.marker)) {
           // Glue token between frames — strip and stay in content state.
@@ -533,7 +574,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
         continue
       }
 
-      const tailLen = trailingPartialMarkerLen(buf, markers)
+      const tailLen = trailingPartialMarkerLen(buf, contentMarkers)
       const safeLen = buf.length - tailLen
       emitContent(events, buf.slice(0, safeLen))
       contentTail = buf.slice(safeLen)
@@ -588,6 +629,14 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
       }
     } else if (state === 'contentFraming') {
       activeContentFrame = null
+    }
+    if (heldThinkingCalls) {
+      if (opts?.error) {
+        emitThinking(events, heldThinkingCalls.raw)
+        heldThinkingCalls = null
+      } else {
+        releaseHeldCalls(events)
+      }
     }
     // The model answered inside the prompt-opened `<think>` and stopped on its
     // own: the reasoning is the answer.

@@ -1252,7 +1252,6 @@ test('open <think>: a tool call ends the reasoning without </think>', (t) => {
 
     t.is(joined(events, 'thinkingDelta'), 'Let me check the weather.', `chunk ${size}: thinking`)
     t.is(joined(events, 'contentDelta'), '', `chunk ${size}: no content`)
-    t.is(streamed.filter((e) => e.type === 'toolCall').length, 1, `chunk ${size}: streamed`)
     t.is(events.filter((e) => e.type === 'toolCall').length, 1, `chunk ${size}: not repeated`)
     t.is(events.filter((e) => e.type === 'toolError').length, 0, `chunk ${size}: no error`)
   }
@@ -1269,6 +1268,53 @@ test('open <think>: several tool calls and a late </think>', (t) => {
     t.is(joined(events, 'contentDelta'), 'Checking both.', `chunk ${size}: content`)
     t.is(events.filter((e) => e.type === 'toolCall').length, 2, `chunk ${size}: two calls`)
   }
+})
+
+test('open <think>: a complete call quoted in the reasoning is not made', (t) => {
+  const hermesCall =
+    '<tool_call>\n{"name": "get_weather", "arguments": {"city": "Paris"}}\n</tool_call>'
+  for (const [toolDialect, call] of [
+    ['hermes', hermesCall],
+    ['qwen35', QWEN_CALL]
+  ] as const) {
+    const raw = `<think>\nI'd use ${call} once I know the city.\n</think>\n\nWhich city?`
+    for (const size of [raw.length, 3, 1]) {
+      const n = createCompletionNormalizer(qwenThinkingConfig({ toolDialect }))
+      const events = [...pushAll(n, chunksOf(raw, size)), ...n.finish({ stopReason: 'eos' })]
+      const id = `${toolDialect} chunk ${size}`
+
+      t.is(
+        joined(events, 'thinkingDelta'),
+        `I'd use ${call} once I know the city.`,
+        `${id}: thinking`
+      )
+      t.is(joined(events, 'contentDelta'), 'Which city?', `${id}: content`)
+      t.is(events.filter((e) => e.type === 'toolCall').length, 0, `${id}: no call`)
+    }
+  }
+})
+
+test('open <think>: a call drafted in the reasoning and then made is emitted once', (t) => {
+  const raw = `<think>\nPlan: ${QWEN_CALL}\nLooks right.\n</think>\n\n${QWEN_CALL}`
+  for (const size of [raw.length, 3, 1]) {
+    const n = createCompletionNormalizer(qwenThinkingConfig())
+    const events = [...pushAll(n, chunksOf(raw, size)), ...n.finish({ stopReason: 'eos' })]
+
+    t.is(events.filter((e) => e.type === 'toolCall').length, 1, `chunk ${size}: one call`)
+    t.is(joined(events, 'contentDelta'), '', `chunk ${size}: no content`)
+    t.ok(joined(events, 'thinkingDelta').endsWith('Looks right.'), `chunk ${size}: thinking`)
+  }
+})
+
+test('open <think>: a held call is returned to reasoning when the turn errors', (t) => {
+  const n = createCompletionNormalizer(qwenThinkingConfig())
+  const events = [
+    ...pushAll(n, [`<think>\nLet me check.\n${QWEN_CALL}`]),
+    ...n.finish({ error: { message: 'boom' } })
+  ]
+
+  t.is(events.filter((e) => e.type === 'toolCall').length, 0)
+  t.ok(joined(events, 'thinkingDelta').endsWith('</tool_call>'))
 })
 
 test('open <think>: a mentioned <tool_call> stays reasoning', (t) => {
