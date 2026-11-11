@@ -56,7 +56,7 @@ jobs:
           fi
           read -r sha committed < <(gh api "repos/$FABRIC_REPO/commits/$branch" --jq '"\(.sha) \(.commit.committer.date)"')
           tag=$(git ls-remote --tags --refs --sort=-version:refname "https://github.com/$FABRIC_REPO.git" 'v*' \
-            | head -n1 | sed 's#.*refs/tags/##')
+            | sed -n '1s#.*refs/tags/##p')
 
           run=true
           reason="new commits on $branch"
