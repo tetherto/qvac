@@ -27,9 +27,8 @@
 // Completions and batches share the model's `parallel` admission cap: with
 // `parallel` in flight, admitting one more waits FIFO until a slot frees.
 //
-// RUN: ./gradlew run -Pexample=MultiJobCompletion
+// RUN: ./gradlew -p examples run -Pexample=MultiJobCompletion
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacCompletionCancelledException
 import io.tether.qvac.sdk.QvacCompletionOptions
@@ -41,6 +40,7 @@ import io.tether.qvac.sdk.generated.ModelConstant
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.run
 import kotlin.time.TimeSource
@@ -60,7 +60,7 @@ private val PROMPTS = listOf(
 )
 
 fun main(): Unit = runBlocking {
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         // `parallel: 4` opens the concurrent decode slots continuous batching needs.
         val modelId = client.loadWithProgress(

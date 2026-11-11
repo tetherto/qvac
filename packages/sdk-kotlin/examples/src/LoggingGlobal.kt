@@ -7,20 +7,20 @@
 // `config/logging/logging.config.json`, which sets `loggerConsoleOutput: false`
 // to disable the worker's default console output, so the only logs printed are
 // the ones the handler below receives. The JVM client takes the worker config
-// as the `config` argument of `connectResolved`, so the same setting is passed
-// inline.
+// as the `config` argument of `JvmBareKitTransport.connect`, so the same setting
+// is passed inline.
 //
 // `subscribeServerLogs(scope, handler)` launches the subscription in the given
 // scope and returns its `Job`; cancelling the `Job` is the unsubscribe.
 //
-// RUN: ./gradlew run -Pexample=LoggingGlobal
+// RUN: ./gradlew -p examples run -Pexample=LoggingGlobal
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacMessage
 import io.tether.qvac.sdk.completion
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.LoggingStreamResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.run
 import io.tether.qvac.sdk.subscribeServerLogs
@@ -34,7 +34,7 @@ private fun printLog(log: LoggingStreamResponse) {
 
 fun main(): Unit = runBlocking {
     val config = buildJsonObject { put("loggerConsoleOutput", false) }
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true, config = config))
+    val client = QvacClient(JvmBareKitTransport.connect(config = config))
     try {
         println("▸ Starting global logging demo...\n")
 

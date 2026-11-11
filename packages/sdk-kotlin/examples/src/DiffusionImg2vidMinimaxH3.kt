@@ -15,12 +15,12 @@
 // returned `QvacMediaRun` splits progress (`events` Flow) from the clips and
 // stats (`final` Deferred), as TypeScript does.
 //
-// RUN: ./gradlew run -Pexample=DiffusionImg2vidMinimaxH3 --args="<models-directory> <init-image> [output.avi]"
+// RUN: ./gradlew -p examples run -Pexample=DiffusionImg2vidMinimaxH3 --args="<models-directory> <init-image> [output.avi]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.generated.schema.VideoStreamRequest
 import io.tether.qvac.sdk.generated.schema.VideoStreamRequestMode
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.media
 import io.tether.qvac.sdk.models
 import java.nio.file.Files
@@ -41,7 +41,7 @@ fun main(args: Array<String>): Unit = runBlocking {
     if (modelsDir.isNullOrEmpty() || initImagePath == null) {
         System.err.println("✖ models directory and init image path are required")
         System.err.println(
-            "Usage: ./gradlew run -Pexample=DiffusionImg2vidMinimaxH3 " +
+            "Usage: ./gradlew -p examples run -Pexample=DiffusionImg2vidMinimaxH3 " +
                 "--args=\"<modelsDirectory> <initImagePath> [output.avi]\"",
         )
         exitProcess(1)
@@ -76,7 +76,7 @@ fun main(args: Array<String>): Unit = runBlocking {
         }
     }
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         println("▸ Loading MiniMax-H3 model (diffusion + Qwen3-VL + video VAE)...")
         val loaded = client.models.load(

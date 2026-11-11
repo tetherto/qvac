@@ -13,12 +13,12 @@
 // buffers its `events` Flow, so collecting it first and then awaiting the
 // `final` Deferred needs no extra concurrency.
 //
-// RUN: ./gradlew run -Pexample=DiffusionTxt2vidMinimaxH3 --args="<models-directory> [output.avi]"
+// RUN: ./gradlew -p examples run -Pexample=DiffusionTxt2vidMinimaxH3 --args="<models-directory> [output.avi]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.generated.schema.VideoStreamRequest
 import io.tether.qvac.sdk.generated.schema.VideoStreamRequestMode
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.media
 import io.tether.qvac.sdk.models
 import java.nio.file.Files
@@ -43,7 +43,8 @@ fun main(args: Array<String>): Unit = runBlocking {
     val modelsDir = args.getOrNull(0)
     if (modelsDir.isNullOrEmpty()) {
         System.err.println(
-            "Usage: ./gradlew run -Pexample=DiffusionTxt2vidMinimaxH3 --args=\"<models-directory> [output.avi]\"",
+            "Usage: ./gradlew -p examples run -Pexample=DiffusionTxt2vidMinimaxH3 " +
+                "--args=\"<models-directory> [output.avi]\"",
         )
         exitProcess(1)
     }
@@ -79,7 +80,7 @@ fun main(args: Array<String>): Unit = runBlocking {
         }
     }
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val loaded = client.models.load(
             source = modelSrc.toString(),

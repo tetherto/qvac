@@ -13,15 +13,15 @@
 // No `width`/`height` is passed, so the generation runs at the input image's
 // size. A large input therefore means much more work per step.
 //
-// RUN: ./gradlew run -Pexample=DiffusionFlux2KleinImg2img --args="<input-image> [prompt] [output-dir] [diffusion-src] [llm-src] [vae-src]"
+// RUN: ./gradlew -p examples run -Pexample=DiffusionFlux2KleinImg2img --args="<input-image> [prompt] [output-dir] [diffusion-src] [llm-src] [vae-src]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.DiffusionStreamRequest
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.media
 import io.tether.qvac.sdk.models
 import java.nio.file.Files
@@ -44,13 +44,13 @@ fun main(args: Array<String>): Unit = runBlocking {
     if (inputPath.isNullOrEmpty()) {
         System.err.println("✖ input image path is required")
         System.err.println(
-            "Usage: ./gradlew run -Pexample=DiffusionFlux2KleinImg2img --args=\"<inputImage> " +
+            "Usage: ./gradlew -p examples run -Pexample=DiffusionFlux2KleinImg2img --args=\"<inputImage> " +
                 "[prompt] [outputDir] [diffusionModelSrc] [llmModelSrc] [vaeModelSrc]\"",
         )
         exitProcess(1)
     }
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         println("▸ Loading FLUX.2 [klein] split-layout model...")
         val modelId = client.loadWithProgress(

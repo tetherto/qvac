@@ -11,9 +11,8 @@
 // `QvacKnownException.ServerModelFitRefused`, caught here because it is the
 // outcome this example demonstrates.
 //
-// RUN: ./gradlew run -Pexample=AdvisoryModelFit
+// RUN: ./gradlew -p examples run -Pexample=AdvisoryModelFit
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.QvacKnownException
@@ -22,6 +21,7 @@ import io.tether.qvac.sdk.generated.schema.LoadModelSrcRequest
 import io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppCompletion
 import io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppCompletionModelConfig
 import io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppCompletionModelFitPolicy
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.serverLogs
 import kotlin.system.exitProcess
@@ -34,7 +34,7 @@ import kotlinx.coroutines.runBlocking
 private const val SDK_LOG_ID = "__sdk__"
 
 fun main(): Unit = runBlocking {
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     // Verdicts go to the SDK server log stream, not stdout.
     val verdicts = launch {
         client.serverLogs(SDK_LOG_ID)

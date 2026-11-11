@@ -14,15 +14,15 @@
 // `client.bci.transcribeStream(modelId, chunks)` takes the same Flow but
 // returns only the aggregated result once the stream ends.
 //
-// RUN: ./gradlew run -Pexample=BciFilesystemStreaming --args="<neural-bin-file-path>"
+// RUN: ./gradlew -p examples run -Pexample=BciFilesystemStreaming --args="<neural-bin-file-path>"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.bciTranscribeStream
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.BciTranscribeStreamRequest
 import io.tether.qvac.sdk.generated.schema.BciTranscribeStreamRequestStreamOpts
 import io.tether.qvac.sdk.generated.schema.BciTranscribeStreamRequestStreamOptsEmit
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import java.io.File
 import kotlin.system.exitProcess
@@ -38,13 +38,16 @@ private const val CHUNK_SIZE = 64 * 1024
 
 fun main(args: Array<String>): Unit = runBlocking {
     if (args.isEmpty()) {
-        System.err.println("Usage: ./gradlew run -Pexample=BciFilesystemStreaming --args=\"<neural-bin-file-path>\"")
+        System.err.println(
+            "Usage: ./gradlew -p examples run -Pexample=BciFilesystemStreaming " +
+                "--args=\"<neural-bin-file-path>\"",
+        )
         exitProcess(1)
     }
 
     val neuralFilePath = args[0]
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         println("▸ BCI transcribeStream file test")
         println("▸ File: $neuralFilePath")

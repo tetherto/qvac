@@ -14,9 +14,8 @@
 // decodes it (any FFmpeg-decodable format) to the 48 kHz stereo float PCM the
 // engine expects.
 //
-// RUN: ./gradlew run -Pexample=AudiogenUnderstand --args="<source-audio> [language]"
+// RUN: ./gradlew -p examples run -Pexample=AudiogenUnderstand --args="<source-audio> [language]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.audioUnderstand
@@ -30,6 +29,7 @@ import io.tether.qvac.sdk.generated.schema.AudioUnderstandResponseUnderstand
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
 import io.tether.qvac.sdk.generated.schema.TextToSpeechResponseStopReason
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.qvacRequestId
 import kotlin.system.exitProcess
@@ -45,11 +45,14 @@ fun main(args: Array<String>): Unit = runBlocking {
     val vocalLanguage = args.getOrNull(1)
 
     if (sourcePath.isNullOrEmpty()) {
-        System.err.println("Usage: ./gradlew run -Pexample=AudiogenUnderstand --args=\"<source-audio> [language]\"")
+        System.err.println(
+            "Usage: ./gradlew -p examples run -Pexample=AudiogenUnderstand " +
+                "--args=\"<source-audio> [language]\"",
+        )
         exitProcess(1)
     }
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         println("▸ Loading ACE-Step AudioGen models...")
         val modelId = client.loadWithProgress(

@@ -12,9 +12,8 @@
 // int16 PCM values. The helpers below, ported from the JS example's `utils`,
 // save them to a WAV and play it through ffplay.
 //
-// RUN: ./gradlew run -Pexample=TextToSpeechSupertonicEnhanced
+// RUN: ./gradlew -p examples run -Pexample=TextToSpeechSupertonicEnhanced
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.ModelConstant
@@ -22,6 +21,7 @@ import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
 import io.tether.qvac.sdk.generated.schema.TextToSpeechRequest
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.textToSpeech
 import java.io.File
@@ -48,7 +48,7 @@ fun main(): Unit = runBlocking {
         put("lavasrEnhancerModelSrc", Models.TTS_ENHANCER_LAVASR_FP16.src)
     }
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val modelId = client.loadWithProgress(Models.TTS_MULTILINGUAL_SUPERTONIC3_Q8_0, modelConfig)
         println("▸ Model loaded: $modelId")

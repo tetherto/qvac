@@ -47,6 +47,25 @@ class MossBinding extends ParakeetMockedBinding {
   }
 }
 
+class ProgressBinding extends MossBinding {
+  runJob(handle, data) {
+    if (data.emitProgress) {
+      process.nextTick(() =>
+        this._callCallbacks(
+          'NativeProgress',
+          {
+            type: 'progress',
+            generatedTokens: 1,
+            maxNewTokens: 32
+          },
+          null
+        )
+      )
+    }
+    return super.runJob(handle, data)
+  }
+}
+
 function createMossModel({ binding = new MossBinding(), mossTranscribeConfig = {} } = {}) {
   const model = new ASRGgml({
     files: { model: MODEL_PATH },
@@ -235,5 +254,42 @@ test('MOSS-Transcribe: run options on the parakeet engine are rejected', async (
     /run options are moss-transcribe only \(engine is parakeet\)/
   )
   t.ok(getAddon(model), 'the parakeet instance stays usable')
+  await model.destroy()
+})
+
+test('MOSS progress is per-call and separate from transcript output', async (t) => {
+  const { model, binding } = createMossModel({ binding: new ProgressBinding() })
+  await model.load()
+  const updates = []
+  const first = await transcribe(model, { onProgress: (p) => updates.push(p), maxNewTokens: 32 })
+  t.alike(first, SEGMENTS)
+  t.alike(updates, [{ type: 'progress', generatedTokens: 1, maxNewTokens: 32 }])
+  t.is(binding.jobs[0].emitProgress, true)
+  t.absent(binding.jobs[0].onProgress)
+  await transcribe(model)
+  t.is(updates.length, 1)
+  t.absent(binding.jobs[1].emitProgress)
+  await model.destroy()
+})
+
+test('MOSS rejects an invalid progress callback before queueing', async (t) => {
+  const { model, binding } = createMossModel()
+  await model.load()
+  await t.exception(model.run(speech(), { onProgress: true }), /onProgress must be a function/)
+  t.is(binding.jobs.length, 0)
+  await model.destroy()
+})
+
+test('MOSS progress callback errors fail the job and allow a later request', async (t) => {
+  const { model } = createMossModel({ binding: new ProgressBinding() })
+  await model.load()
+  const response = await model.run(speech(), {
+    onProgress() {
+      throw new Error('consumer callback failed')
+    }
+  })
+  await t.exception(response.await(), /consumer callback failed/)
+  const next = await transcribe(model)
+  t.alike(next, SEGMENTS)
   await model.destroy()
 })

@@ -17,9 +17,8 @@
 // `QvacMediaRun` splits progress (`events` Flow) from the clips and stats
 // (`final` Deferred), as TypeScript does.
 //
-// RUN: ./gradlew run -Pexample=DiffusionIcLoraLtx --args="<absolute-lora-path> <reference-sheet-path> [prompt] [output-dir]"
+// RUN: ./gradlew -p examples run -Pexample=DiffusionIcLoraLtx --args="<absolute-lora-path> <reference-sheet-path> [prompt] [output-dir]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.Models
@@ -29,6 +28,7 @@ import io.tether.qvac.sdk.generated.schema.VideoStreamRequest
 import io.tether.qvac.sdk.generated.schema.VideoStreamRequestMode
 import io.tether.qvac.sdk.generated.schema.VideoStreamRequestScheduler
 import io.tether.qvac.sdk.generated.schema.VideoStreamRequestVae_tile_size
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.media
 import io.tether.qvac.sdk.models
 import java.nio.file.Files
@@ -50,7 +50,7 @@ fun main(args: Array<String>): Unit = runBlocking {
 
     if (loraPath.isNullOrEmpty() || referencePath.isNullOrEmpty()) {
         System.err.println(
-            "Usage: ./gradlew run -Pexample=DiffusionIcLoraLtx " +
+            "Usage: ./gradlew -p examples run -Pexample=DiffusionIcLoraLtx " +
                 "--args=\"<absolute-lora-path> <reference-sheet-path> [prompt] [output-dir]\"",
         )
         exitProcess(1)
@@ -62,7 +62,7 @@ fun main(args: Array<String>): Unit = runBlocking {
 
     val referenceSheet = Base64.getEncoder().encodeToString(Files.readAllBytes(Path.of(referencePath)))
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val modelId = client.loadWithProgress(
             source = Models.LTX_2_3_22B_Q5_K_M.src,

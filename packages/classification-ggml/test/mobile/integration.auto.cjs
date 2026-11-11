@@ -3,6 +3,10 @@ require('./integration-runtime.cjs')
 
 /* global runIntegrationModule */
 
+async function runBridgedepth (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/bridgedepth.test.js', options)
+}
+
 async function runClassify (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/classify.test.js', options)
 }

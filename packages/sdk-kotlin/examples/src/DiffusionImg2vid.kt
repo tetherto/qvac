@@ -12,9 +12,8 @@
 // returned `QvacMediaRun` splits progress (`events` Flow) from the clips and
 // stats (`final` Deferred), as TypeScript does.
 //
-// RUN: ./gradlew run -Pexample=DiffusionImg2vid --args="<init-image> [prompt] [output-dir] [i2v-src] [t5-src] [vae-src] [clip-vision-src]"
+// RUN: ./gradlew -p examples run -Pexample=DiffusionImg2vid --args="<init-image> [prompt] [output-dir] [i2v-src] [t5-src] [vae-src] [clip-vision-src]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.Models
@@ -22,6 +21,7 @@ import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
 import io.tether.qvac.sdk.generated.schema.VideoStreamRequest
 import io.tether.qvac.sdk.generated.schema.VideoStreamRequestMode
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.media
 import io.tether.qvac.sdk.models
 import java.nio.file.Files
@@ -45,7 +45,7 @@ fun main(args: Array<String>): Unit = runBlocking {
     if (initImagePath.isNullOrEmpty()) {
         System.err.println("✖ init image path is required")
         System.err.println(
-            "Usage: ./gradlew run -Pexample=DiffusionImg2vid --args=\"<initImagePath> " +
+            "Usage: ./gradlew -p examples run -Pexample=DiffusionImg2vid --args=\"<initImagePath> " +
                 "[prompt] [outputDir] [i2vModelSrc] [t5XxlModelSrc] [vaeModelSrc] [clipVisionModelSrc]\"",
         )
         exitProcess(1)
@@ -53,7 +53,7 @@ fun main(args: Array<String>): Unit = runBlocking {
 
     println("▸ Loading Wan 2.1 I2V model (diffusion + UMT5-XXL + VAE + CLIP vision)...")
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val modelId = client.loadWithProgress(
             source = diffusionModelSrc,

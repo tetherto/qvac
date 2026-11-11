@@ -115,6 +115,77 @@ function elfInfo(buffer) {
   return { needed, unresolvedCxx }
 }
 
+// Windows twin of the ELF reader: the DLL names in a PE32+ import table and
+// delay-load import table (a delay-loaded vulkan-1.dll would still mean the
+// GPU backend is linked into the addon). Enough for the prebuild artifacts
+// this test inspects; not a general PE parser.
+function peImports(buffer) {
+  const isMz = buffer.length > 0x40 && buffer[0] === 0x4d && buffer[1] === 0x5a
+  if (!isMz) throw new Error('not a PE file')
+  const pe = buffer.readUInt32LE(0x3c)
+  if (buffer.readUInt32LE(pe) !== 0x00004550) throw new Error('missing PE signature')
+  const numberOfSections = buffer.readUInt16LE(pe + 6)
+  const sizeOfOptionalHeader = buffer.readUInt16LE(pe + 20)
+  const optional = pe + 24
+  if (buffer.readUInt16LE(optional) !== 0x20b) throw new Error('only PE32+ is supported')
+
+  const sections = []
+  for (let i = 0; i < numberOfSections; i++) {
+    const off = optional + sizeOfOptionalHeader + i * 40
+    sections.push({
+      virtualAddress: buffer.readUInt32LE(off + 12),
+      sizeOfRawData: buffer.readUInt32LE(off + 16),
+      pointerToRawData: buffer.readUInt32LE(off + 20)
+    })
+  }
+  const rvaToOffset = (rva) => {
+    const s = sections.find(
+      (sec) => rva >= sec.virtualAddress && rva < sec.virtualAddress + sec.sizeOfRawData
+    )
+    if (!s) throw new Error('RVA outside every section: ' + rva)
+    return rva - s.virtualAddress + s.pointerToRawData
+  }
+
+  const imports = []
+  const readNames = (dirRva, descriptorSize, nameField) => {
+    if (dirRva === 0) return
+    for (let pos = rvaToOffset(dirRva); ; pos += descriptorSize) {
+      const nameRva = buffer.readUInt32LE(pos + nameField)
+      if (nameRva === 0) break
+      const nameOff = rvaToOffset(nameRva)
+      let end = nameOff
+      while (end < buffer.length && buffer[end] !== 0) end++
+      imports.push(buffer.toString('utf8', nameOff, end).toLowerCase())
+    }
+  }
+
+  // PE32+ puts the data directory at optional header offset 112, preceded by
+  // its entry count. Entry 1 is the import table (20-byte descriptors, name
+  // at +12), entry 13 the delay-load import table (32-byte descriptors, name
+  // at +4).
+  const numberOfRvaAndSizes = buffer.readUInt32LE(optional + 108)
+  const dirRva = (index) =>
+    index < numberOfRvaAndSizes ? buffer.readUInt32LE(optional + 112 + index * 8) : 0
+  readNames(dirRva(1), 20, 12)
+  readNames(dirRva(13), 32, 4)
+  return imports
+}
+
+// The Windows counterparts of FORBIDDEN_NEEDED and FORBIDDEN_RUNTIME: the
+// addon must not import the Vulkan loader, and neither it nor the backend
+// module may import the dynamic Visual C++ runtime (the prebuild links the
+// static CRT, see vcpkg-overlays/triplets/x64-windows.cmake). A dynamic UCRT
+// shows up as the api-ms-win-crt-* API sets, not as ucrtbase.dll.
+const FORBIDDEN_WIN_IMPORTS = [
+  'vulkan-1.dll',
+  'opencl.dll',
+  'nvcuda.dll',
+  'cudart64',
+  'cublas64',
+  'cublaslt64'
+]
+const FORBIDDEN_WIN_RUNTIME = ['vcruntime', 'msvcp', 'ucrtbase.dll', 'api-ms-win-crt-']
+
 test('linux prebuild has no hard GPU-loader deps and ships DL backend modules', async (t) => {
   if (os.platform() !== 'linux') {
     t.pass('dynamic-linking layout check is linux-only')
@@ -198,9 +269,83 @@ test('linux prebuild has no hard GPU-loader deps and ships DL backend modules', 
   }
 })
 
+test('win32 prebuild has no hard GPU-loader imports and ships the Vulkan and CUDA backend DLLs', async (t) => {
+  if (os.platform() !== 'win32') {
+    t.pass('PE import layout check is win32-only')
+    return
+  }
+  if (proc.env && proc.env.QVAC_SKIP_PREBUILD_LINK_CHECK === 'true') {
+    t.pass('QVAC_SKIP_PREBUILD_LINK_CHECK=true; skipping (custom local build)')
+    return
+  }
+
+  const target = `${os.platform()}-${os.arch()}`
+  const moduleName = moduleNameForHost(target)
+  const addonPath = path.join(PREBUILDS_DIR, target, `${moduleName}.bare`)
+  t.ok(fs.existsSync(addonPath), `prebuild present: ${addonPath}`)
+
+  // 1. The addon must load on a host without a Vulkan runtime: no GPU loader
+  //    and no dynamic CRT in its import table (QVAC-25560).
+  const addonImports = peImports(fs.readFileSync(addonPath))
+  t.comment(`${moduleName}.bare imports: ${addonImports.join(', ')}`)
+  for (const dll of [...FORBIDDEN_WIN_IMPORTS, ...FORBIDDEN_WIN_RUNTIME]) {
+    t.absent(
+      addonImports.find((n) => n.startsWith(dll)),
+      `addon must not import ${dll}* (breaks hosts without it)`
+    )
+  }
+
+  // 2. GPU support must not silently disappear: the Vulkan backend has to
+  //    ship as a runtime-loaded DLL next to the addon...
+  const vulkanModulePath = path.join(
+    PREBUILDS_DIR,
+    target,
+    moduleName,
+    'qvac-diffusion-ggml-vulkan.dll'
+  )
+  t.ok(fs.existsSync(vulkanModulePath), `Vulkan DL backend module present: ${vulkanModulePath}`)
+
+  // 3. ...and that DLL is where the vulkan-1.dll import belongs. It must be
+  //    self-contained w.r.t. the CRT, or LoadLibrary fails on a stock host
+  //    and the GPU never registers.
+  const moduleImports = peImports(fs.readFileSync(vulkanModulePath))
+  t.comment(`qvac-diffusion-ggml-vulkan.dll imports: ${moduleImports.join(', ')}`)
+  t.ok(
+    moduleImports.find((n) => n === 'vulkan-1.dll'),
+    'Vulkan module imports vulkan-1.dll (loaded only when present at runtime)'
+  )
+  for (const dll of FORBIDDEN_WIN_RUNTIME) {
+    t.absent(
+      moduleImports.find((n) => n.startsWith(dll)),
+      `Vulkan module must not import ${dll}* (LoadLibrary must work on stock hosts)`
+    )
+  }
+
+  const cudaPath = path.join(PREBUILDS_DIR, target, moduleName, 'qvac-diffusion-ggml-cuda.dll')
+  const requireCuda = proc.env.CI === 'true' || proc.env.QVAC_REQUIRE_CUDA_MODULE === 'true'
+  if (!fs.existsSync(cudaPath)) {
+    if (requireCuda) t.fail(`CUDA DL backend module missing: ${cudaPath}`)
+    else t.comment('CUDA module not built (SD_CUDA=OFF); skipping CUDA checks')
+    return
+  }
+  const cudaImports = peImports(fs.readFileSync(cudaPath))
+  t.comment(`qvac-diffusion-ggml-cuda.dll imports: ${cudaImports.join(', ')}`)
+  // Windows GGML_STATIC links cudart_static; only cuBLAS must be imported.
+  t.ok(
+    cudaImports.some((name) => name.startsWith('cublas64')),
+    'CUDA module imports cublas64*'
+  )
+  for (const dll of FORBIDDEN_WIN_RUNTIME) {
+    t.absent(
+      cudaImports.find((name) => name.startsWith(dll)),
+      `CUDA module must not import ${dll}* (LoadLibrary must work on stock hosts)`
+    )
+  }
+})
+
 // File-level layout checks above prove the module EXISTS; this proves Linux
-// can actually dlopen and register it. A packaging mistake in the backends
-// subdir, the dlopen search path, or module registration would pass the
+// and Windows can actually load and register it. A packaging mistake in the
+// backends subdir, the module search path, or registration would pass the
 // layout checks while GPU selection silently fell back to CPU. Backend
 // registration is PROCESS-GLOBAL and happens on the first model load in the
 // suite, so this test cannot rely on catching the one-time
@@ -208,69 +353,111 @@ test('linux prebuild has no hard GPU-loader deps and ships DL backend modules', 
 // `backend: 'vulkan0'`, which requires that named backend to be registered.
 // Device index zero may be CUDA on a Linux release, so it is not a stable
 // way to select Vulkan. An unavailable explicit backend fails model load.
-test(
-  'linux GPU host registers the Vulkan backend through the DL module',
-  { timeout: 600000 },
-  async (t) => {
-    if (os.platform() !== 'linux') {
-      t.pass('DL backend registration check is linux-only')
-      return
-    }
-    if (proc.env && proc.env.NO_GPU === 'true') {
-      t.pass('NO_GPU=true; DL registration needs a GPU host')
-      return
-    }
-    if (proc.env && proc.env.QVAC_SKIP_PREBUILD_LINK_CHECK === 'true') {
-      t.pass('QVAC_SKIP_PREBUILD_LINK_CHECK=true; skipping (custom local build)')
-      return
-    }
-
-    const binding = require('../../binding')
-    const ImgStableDiffusion = require('../../index')
-    const { ensureModel, releaseJsLogger } = require('./utils')
-
-    const logs = []
-    binding.setLogger((priority, message) => {
-      logs.push(String(message))
-    })
-
-    let model = null
-    try {
-      const [modelName, modelDir] = await ensureModel({
-        modelName: 'stable-diffusion-v2-1-Q8_0.gguf'
-      })
-
-      model = new ImgStableDiffusion({
-        files: { model: path.join(modelDir, modelName) },
-        config: {
-          device: 'gpu',
-          backend: 'vulkan0',
-          threads: 4,
-          prediction: 'v',
-          verbosity: 2
-        },
-        logger: console
-      })
-      await model.load()
-
-      // Successful load with an explicit Vulkan assignment proves the
-      // registered device is usable. The assignment is also logged by the
-      // addon, with C++ messages marshalled asynchronously to JS.
-      const deadline = Date.now() + 5000
-      let resolvedLine = null
-      while (!resolvedLine && Date.now() < deadline) {
-        resolvedLine = logs.find((line) =>
-          line.includes("Explicit stable-diffusion backend assignment 'vulkan0'")
-        )
-        if (!resolvedLine) await new Promise((resolve) => setTimeout(resolve, 50))
+for (const backend of ['Vulkan', 'CUDA']) {
+  const assignment = backend.toLowerCase() + '0'
+  test(
+    `linux and win32 GPU hosts register the ${backend} backend through the DL module`,
+    { timeout: 600000 },
+    async (t) => {
+      if (os.platform() !== 'linux' && os.platform() !== 'win32') {
+        t.pass('DL backend registration check is linux and win32 only')
+        return
       }
-      t.ok(
-        resolvedLine,
-        `explicit Vulkan backend loaded (DL module registered): ${resolvedLine || 'NO MATCHING LOG LINE'}`
-      )
-    } finally {
-      if (model) await model.unload().catch(() => {})
-      releaseJsLogger(binding)
+      if (proc.env && proc.env.NO_GPU === 'true') {
+        t.pass('NO_GPU=true; DL registration needs a GPU host')
+        return
+      }
+      if (proc.env && proc.env.QVAC_SKIP_PREBUILD_LINK_CHECK === 'true') {
+        t.pass('QVAC_SKIP_PREBUILD_LINK_CHECK=true; skipping (custom local build)')
+        return
+      }
+
+      // The new CUDA runtime gate is for Windows release artifacts. Local
+      // source builds remain CUDA-optional; opt in when testing a CUDA build.
+      if (
+        backend === 'CUDA' &&
+        (os.platform() !== 'win32' ||
+          (proc.env.CI !== 'true' && proc.env.QVAC_REQUIRE_CUDA_MODULE !== 'true'))
+      ) {
+        t.pass('CUDA runtime check requires a Windows release or explicit CUDA opt-in')
+        return
+      }
+
+      const binding = require('../../binding')
+      const ImgStableDiffusion = require('../../index')
+      const { ensureModel, isPng, releaseJsLogger } = require('./utils')
+
+      const logs = []
+      binding.setLogger((priority, message) => {
+        logs.push(String(message))
+      })
+
+      let model = null
+      try {
+        const [modelName, modelDir] = await ensureModel({
+          modelName: 'stable-diffusion-v2-1-Q8_0.gguf'
+        })
+
+        model = new ImgStableDiffusion({
+          files: { model: path.join(modelDir, modelName) },
+          config: {
+            device: 'gpu',
+            backend: assignment,
+            threads: 4,
+            prediction: 'v',
+            // Runtime backend evidence is emitted at DEBUG level.
+            verbosity: 3
+          },
+          logger: console
+        })
+        await model.load()
+
+        // Successful load with an explicit backend assignment proves the
+        // registered device is usable. The assignment is also logged by the
+        // addon, with C++ messages marshalled asynchronously to JS.
+        const deadline = Date.now() + 5000
+        let resolvedLine = null
+        while (!resolvedLine && Date.now() < deadline) {
+          resolvedLine = logs.find((line) =>
+            line.includes(`Explicit stable-diffusion backend assignment '${assignment}'`)
+          )
+          if (!resolvedLine) await new Promise((resolve) => setTimeout(resolve, 50))
+        }
+        t.ok(
+          resolvedLine,
+          `explicit ${backend} backend loaded (DL module registered): ${resolvedLine || 'NO MATCHING LOG LINE'}`
+        )
+        if (backend === 'CUDA') {
+          const images = []
+          const response = await model.run({
+            prompt: 'a red fox in a snowy forest',
+            steps: 2,
+            width: 256,
+            height: 256,
+            cfg_scale: 7.5,
+            seed: 42
+          })
+          await response
+            .onUpdate((data) => {
+              if (data instanceof Uint8Array) images.push(data)
+            })
+            .await()
+          t.is(images.length, 1, 'CUDA inference returned one image')
+          t.ok(images.length === 1 && isPng(images[0]), 'CUDA inference returned a valid PNG')
+          const executedOnCuda = () =>
+            logs.some((line) =>
+              /Diffusion model runtime backend: CUDA(?:[0-9]+)?(?:\s|$)/.test(line)
+            )
+          const runtimeDeadline = Date.now() + 5000
+          while (!executedOnCuda() && Date.now() < runtimeDeadline) {
+            await new Promise((resolve) => setTimeout(resolve, 50))
+          }
+          t.ok(executedOnCuda(), 'diffusion executed on CUDA without falling back')
+        }
+      } finally {
+        if (model) await model.unload().catch(() => {})
+        releaseJsLogger(binding)
+      }
     }
-  }
-)
+  )
+}

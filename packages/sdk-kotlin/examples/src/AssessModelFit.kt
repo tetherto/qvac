@@ -1,35 +1,31 @@
 // Kotlin port of packages/sdk/examples/assess-model-fit.ts.
 //
-// Which models is this machine likely to run — asked before downloading any
-// weights. Nothing is fetched, loaded or reserved.
+// Which models fit this machine, asked before downloading any weights. Each
+// engine's fitter reads the registry's weightless description of a model, so
+// nothing is fetched beyond tens of KB, loaded or reserved.
 //
-// The header prints the evidence the answer rests on: `system-memory` on a
-// CPU-only or integrated-GPU host, `device-memory` on a discrete card,
-// `device-budget` for the per-process allowance Windows grants on one. Which
-// of those applies depends on where the engine would put the model.
-//
-// `unknown` is a real answer, not an error: the evidence does not support a
-// call either way. Show it as "can't say", never as "no".
+// Each model gets its own status and the memory it takes on each device, and
+// the set gets one verdict for all of them loaded together, with what it takes
+// from each memory pool. `unknown` is a valid answer: show it as "can't say",
+// never as "no".
 //
 // The request and response are the generated typed models: each candidate
 // carries the model's full descriptor (as the JS and Python SDKs send a model
-// constant), and the verdicts are enums, so the mark lookup below is an
+// constant), and the status is an enum, so the mark lookup below is an
 // exhaustive `when` checked at compile time.
 //
-// RUN: ./gradlew run -Pexample=AssessModelFit
+// RUN: ./gradlew -p examples run -Pexample=AssessModelFit
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.generated.ModelConstant
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.AssessModelFitRequest
-import io.tether.qvac.sdk.generated.schema.AssessModelFitRequestExecution
 import io.tether.qvac.sdk.generated.schema.AssessModelFitRequestModelsItem
 import io.tether.qvac.sdk.generated.schema.AssessModelFitRequestModelsItemModelSrc
 import io.tether.qvac.sdk.generated.schema.AssessModelFitRequestModelsItemModelSrc1E6973DC
 import io.tether.qvac.sdk.generated.schema.AssessModelFitRequestModelsItemModelType
-import io.tether.qvac.sdk.generated.schema.AssessModelFitResponseModelsItemEvidence
-import io.tether.qvac.sdk.generated.schema.AssessModelFitResponseModelsItemVerdict
+import io.tether.qvac.sdk.generated.schema.ModelFitModelResultStatus
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -37,8 +33,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonPrimitive
 
-// Sizes the assessment the way it sizes the load: the estimator reads the
-// context out of the config `loadModel` would be given.
+// The fitter sizes the load as `loadModel` would run it, context included.
 private const val CONTEXT_TOKENS = 8192
 
 // A ladder ending well past what a laptop has, so one screen shows every verdict.
@@ -51,7 +46,7 @@ private val CANDIDATES = listOf(
 )
 
 fun main(): Unit = runBlocking {
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val result = client.models.assessFit(
             AssessModelFitRequest(
@@ -62,51 +57,28 @@ fun main(): Unit = runBlocking {
                         modelConfig = mapOf("ctx_size" to JsonPrimitive(CONTEXT_TOKENS)),
                     )
                 },
-                // Declared for aggregation only, not a scheduling instruction:
-                // SEQUENTIAL counts the largest operation peak, CONCURRENT
-                // counts one per model.
-                execution = AssessModelFitRequestExecution.SEQUENTIAL,
-                policy = "interactive-v1",
             ),
         )
 
-        println("▸ Budget basis: ${wireName(result.basis)}")
-        result.budget?.let { budget ->
-            println(
-                "    ${gib(budget.availableAfterReserveBytes)} budget" +
-                    " (${gib(budget.totalBytes)} total," +
-                    " ${gib(budget.usedBytes)} in use," +
-                    " ${gib(budget.availableBytes)} free," +
-                    " ${gib(budget.reservedBytes)} held back)",
-            )
-        }
-
-        // Says which device the verdicts assume, when the model would run on a GPU.
-        result.assumptions.firstOrNull { "assumed to execute on" in it }?.let { println("▸ $it") }
-
-        println("\n▸ At $CONTEXT_TOKENS tokens of context")
-        result.models.forEachIndexed { index, model ->
-            val mark = when (model.verdict) {
-                AssessModelFitResponseModelsItemVerdict.LIKELYFITS -> "✔"
-                AssessModelFitResponseModelsItemVerdict.LIKELYTOOLARGE -> "✖"
-                AssessModelFitResponseModelsItemVerdict.UNKNOWN -> "?"
+        println("▸ At $CONTEXT_TOKENS tokens of context, each model alone")
+        CANDIDATES.zip(result.models).forEach { (candidate, model) ->
+            val mark = when (model.status) {
+                ModelFitModelResultStatus.FITS -> "✔"
+                ModelFitModelResultStatus.DOESNOTFIT -> "✖"
+                ModelFitModelResultStatus.UNKNOWN -> "?"
             }
-            val size = gib(CANDIDATES[index].expectedSize.toDouble()).padStart(9)
-            val floor = model.floorBytes
-            val needs = if (model.evidence == AssessModelFitResponseModelsItemEvidence.COMPUTEDONLY && floor != null) {
-                "at least ${gib(floor)}"
-            } else {
-                ""
-            }
-            println("  $mark ${model.name.padEnd(46)} $size on disk  $needs")
-            // Present on every `unknown`, and worth surfacing: it names what is missing.
-            if (model.verdict == AssessModelFitResponseModelsItemVerdict.UNKNOWN) {
-                model.reasons.forEach { println("      $it") }
+            val size = gib(candidate.expectedSize.toDouble()).padStart(9)
+            println("  $mark ${candidate.name.padEnd(46)} $size on disk")
+            model.devices.forEach { device ->
+                println("      ${device.name.padEnd(10)} ${gib(device.usedBytes).padStart(10)}")
             }
         }
 
-        println("\n▸ All five together, sequentially: ${wireName(result.verdict)}")
-        println("▸ Advisory only — this does not gate loadModel or reserve anything.")
+        println("\n▸ All five loaded together: ${wireName(result.verdict)}")
+        result.pools.forEach { pool ->
+            val free = pool.freeBytes?.let { "of ${gib(it)} free" } ?: "no free figure"
+            println("  ${pool.id.padEnd(14)} ${gib(pool.usedBytes).padStart(10)} $free")
+        }
     } finally {
         client.close()
     }
@@ -129,5 +101,5 @@ private fun ModelConstant.toFitSource() = AssessModelFitRequestModelsItemModelSr
 
 private fun gib(bytes: Double) = "%.2f GiB".format(bytes / (1L shl 30))
 
-/** The value as it appears on the wire, e.g. `likely-fits` rather than `LIKELYFITS`. */
+/** The value as it appears on the wire, e.g. `does-not-fit` rather than `DOESNOTFIT`. */
 private inline fun <reified T> wireName(value: T): String = Json.encodeToJsonElement(value).jsonPrimitive.content

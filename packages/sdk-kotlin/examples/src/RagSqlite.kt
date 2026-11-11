@@ -14,9 +14,8 @@
 // extensions; `SQLiteConfig.enableLoadExtension(true)` turns them on for this
 // connection, and they are turned off again once the vector extension loads.
 //
-// RUN: SQLITE_VECTOR_EXTENSION=/path/to/vector ./gradlew run -Pexample=RagSqlite --args="[query]"
+// RUN: SQLITE_VECTOR_EXTENSION=/path/to/vector ./gradlew -p examples run -Pexample=RagSqlite --args="[query]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.embeddings
@@ -24,6 +23,7 @@ import io.tether.qvac.sdk.generated.ModelConstant
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import java.sql.Connection
 import kotlin.system.exitProcess
@@ -99,7 +99,7 @@ fun main(args: Array<String>): Unit = runBlocking {
         db.select("SELECT load_extension(?)", extension)
         db.unwrap(SQLiteConnection::class.java).database.enable_load_extension(false)
 
-        val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+        val client = QvacClient(JvmBareKitTransport.connect())
         try {
             val modelId = client.loadWithProgress(Models.GTE_LARGE_FP16)
 

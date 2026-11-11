@@ -8,7 +8,7 @@ import {
   parakeetEndOfTurnEventSchema,
   type TranscribeStreamEvent
 } from '@/schemas/transcription'
-import { toVadStateEvent } from '@/utils/asr-events'
+import { toEndOfTurnEvent, toVadStateEvent } from '@/utils/asr-events'
 
 // =============================================================================
 // vadStateEventSchema / endOfTurnEventSchema round-trip
@@ -269,5 +269,86 @@ test('toVadStateEvent: carries the detector source', (t) => {
     toVadStateEvent({ type: 'vad', speaking: true, score: 0.8, source: 'sortformer' }).source,
     'sortformer',
     'Sortformer speaker activity is passed through unchanged'
+  )
+})
+
+test('toVadStateEvent: carries the native chunk index', (t) => {
+  t.alike(
+    toVadStateEvent({
+      type: 'vad',
+      speaking: true,
+      score: 0.7,
+      source: 'energy',
+      timestamp: 2.5,
+      chunkIndex: 3
+    }),
+    { speaking: true, probability: 0.7, source: 'energy', timestamp: 2.5, chunkIndex: 3 }
+  )
+  t.alike(
+    toVadStateEvent({ type: 'vad', speaking: true, score: 0.7, source: 'energy', chunkIndex: -1 }),
+    { speaking: true, probability: 0.7, source: 'energy', chunkIndex: -1 },
+    'the unavailable sentinel is kept'
+  )
+  t.is(
+    'chunkIndex' in toVadStateEvent({ type: 'vad', speaking: true, score: 0.7, source: 'silero' }),
+    false,
+    'whisper events gain no chunkIndex key'
+  )
+})
+
+test('toEndOfTurnEvent: carries the native parakeet boundary detail', (t) => {
+  t.alike(
+    toEndOfTurnEvent({
+      type: 'endOfTurn',
+      source: 'model-eou',
+      timestamp: 4.125,
+      chunkIndex: 6,
+      confidence: 0.93
+    }),
+    { source: 'parakeet', timestamp: 4.125, chunkIndex: 6, confidence: 0.93 }
+  )
+  t.alike(
+    toEndOfTurnEvent({ type: 'endOfTurn', source: 'model-eou' }),
+    { source: 'parakeet' },
+    'a boundary without native detail stays bare'
+  )
+  t.alike(
+    toEndOfTurnEvent({ type: 'endOfTurn', source: 'vad-silence', silenceDurationMs: 600 }),
+    { source: 'whisper', silenceDurationMs: 600 },
+    'whisper boundaries are unchanged'
+  )
+})
+
+test('endOfTurnEventSchema and vadStateEventSchema: round-trip the parakeet detail', (t) => {
+  const endOfTurn = {
+    source: 'parakeet' as const,
+    timestamp: 4.125,
+    chunkIndex: 6,
+    confidence: 0.93
+  }
+  const parsedEot = endOfTurnEventSchema.safeParse(endOfTurn)
+  t.ok(parsedEot.success, 'parakeet endOfTurn with detail is valid')
+  if (parsedEot.success) t.alike(parsedEot.data, endOfTurn, 'the detail survives the parse')
+
+  const vad = { speaking: false, probability: 0.2, source: 'energy' as const, chunkIndex: -1 }
+  const parsedVad = vadStateEventSchema.safeParse(vad)
+  t.ok(parsedVad.success, 'vad with chunkIndex is valid')
+  if (parsedVad.success) t.alike(parsedVad.data, vad, 'chunkIndex survives the parse')
+
+  t.absent(
+    parakeetEndOfTurnEventSchema.safeParse({ source: 'parakeet', chunkIndex: 1.5 }).success,
+    'a fractional chunk index is rejected'
+  )
+  t.absent(
+    transcribeStreamResponseSchema.safeParse({
+      type: 'transcribeStream',
+      endOfTurn: { source: 'whisper', silenceDurationMs: 500, confidence: 0.5 }
+    }).data?.endOfTurn &&
+      'confidence' in
+        (transcribeStreamResponseSchema.safeParse({
+          type: 'transcribeStream',
+          endOfTurn: { source: 'whisper', silenceDurationMs: 500, confidence: 0.5 }
+        }).data?.endOfTurn ?? {}),
+    'whisper boundaries do not pick up parakeet fields'
   )
 })

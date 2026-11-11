@@ -12,14 +12,14 @@
 // format. The returned `QvacMediaRun` splits progress (`events` Flow) from the
 // images and stats (`final` Deferred), as TypeScript does.
 //
-// RUN: ./gradlew run -Pexample=DiffusionIdeogram --args="[model] [uncond] [llm] [vae] [output-dir]"
+// RUN: ./gradlew -p examples run -Pexample=DiffusionIdeogram --args="[model] [uncond] [llm] [vae] [output-dir]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.schema.DiffusionStreamRequest
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.media
 import io.tether.qvac.sdk.models
 import java.nio.file.Files
@@ -84,7 +84,10 @@ private val STRUCTURED_PROMPT = buildJsonObject {
 
 fun main(args: Array<String>): Unit = runBlocking {
     if ("--help" in args) {
-        println("Usage: ./gradlew run -Pexample=DiffusionIdeogram --args=\"[model] [uncond] [llm] [vae] [output-dir]\"")
+        println(
+            "Usage: ./gradlew -p examples run -Pexample=DiffusionIdeogram " +
+                "--args=\"[model] [uncond] [llm] [vae] [output-dir]\"",
+        )
         println("▸ Defaults use the four Hugging Face model URLs supported by the diffusion addon.")
         return@runBlocking
     }
@@ -95,7 +98,7 @@ fun main(args: Array<String>): Unit = runBlocking {
     val vaeModelSrc = args.getOrNull(3) ?: VAE_MODEL_SRC
     val outputDir = Path.of(args.getOrNull(4) ?: ".")
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         println("▸ Loading Ideogram 4 split-layout model...")
         val modelId = client.loadWithProgress(

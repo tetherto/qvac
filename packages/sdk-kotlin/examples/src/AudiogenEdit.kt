@@ -17,9 +17,8 @@
 // when the audio is already in memory as raw interleaved stereo 48 kHz Float32
 // LE PCM in [-1, 1].
 //
-// RUN: ./gradlew run -Pexample=AudiogenEdit --args="<source-audio> [from-caption] [to-caption] [output.wav]"
+// RUN: ./gradlew -p examples run -Pexample=AudiogenEdit --args="<source-audio> [from-caption] [to-caption] [output.wav]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.audioEditStream
@@ -38,6 +37,7 @@ import io.tether.qvac.sdk.generated.schema.AudioGenStreamResponseStats
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
 import io.tether.qvac.sdk.generated.schema.TextToSpeechResponseStopReason
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.qvacRequestId
 import java.io.ByteArrayInputStream
@@ -68,13 +68,13 @@ fun main(args: Array<String>): Unit = runBlocking {
 
     if (sourcePath.isNullOrEmpty()) {
         System.err.println(
-            "Usage: ./gradlew run -Pexample=AudiogenEdit " +
+            "Usage: ./gradlew -p examples run -Pexample=AudiogenEdit " +
                 "--args=\"<source-audio> [from-caption] [to-caption] [output.wav]\"",
         )
         exitProcess(1)
     }
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         println("▸ Loading ACE-Step AudioGen models...")
         val modelId = client.loadWithProgress(

@@ -16,15 +16,15 @@
 // `JsonElement`. The stream flow carries every wire frame, including the
 // closing `done` frame, so it is filtered out here.
 //
-// RUN: ./gradlew run -Pexample=Plugins --args="<model-src>"
+// RUN: ./gradlew -p examples run -Pexample=Plugins --args="<model-src>"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
 import io.tether.qvac.sdk.generated.schema.PluginInvokeRequest
 import io.tether.qvac.sdk.generated.schema.PluginInvokeStreamRequest
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.plugins
 import kotlin.system.exitProcess
@@ -38,7 +38,7 @@ import kotlinx.serialization.json.put
 fun main(args: Array<String>): Unit = runBlocking {
     if (args.isEmpty()) {
         System.err.println(
-            "Usage: ./gradlew run -Pexample=Plugins --args=\"<model-src>\"\n" +
+            "Usage: ./gradlew -p examples run -Pexample=Plugins --args=\"<model-src>\"\n" +
                 "  <model-src> must resolve to a model whose plugin exposes the " +
                 "'echo'/'echoStream' handlers (the custom-echo-plugin fixture).",
         )
@@ -46,7 +46,7 @@ fun main(args: Array<String>): Unit = runBlocking {
     }
     val modelSrc = args[0]
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         println("▸ Loading plugin-backed model...")
         val modelId = client.loadWithProgress(modelSrc, modelType = "echo")

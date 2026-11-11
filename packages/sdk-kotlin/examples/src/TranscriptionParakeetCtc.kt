@@ -10,15 +10,15 @@
 //
 // Audio should be 16 kHz mono PCM in a WAV container.
 //
-// RUN: ./gradlew run -Pexample=TranscriptionParakeetCtc --args="<wav-file> [parakeet-ctc-gguf]"
+// RUN: ./gradlew -p examples run -Pexample=TranscriptionParakeetCtc --args="<wav-file> [parakeet-ctc-gguf]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacDataInput
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.speech
 import kotlin.system.exitProcess
@@ -28,7 +28,8 @@ import kotlinx.serialization.json.JsonObject
 fun main(args: Array<String>): Unit = runBlocking {
     if (args.isEmpty()) {
         System.err.println(
-            "Usage: ./gradlew run -Pexample=TranscriptionParakeetCtc --args=\"<wav-file> [parakeet-ctc-gguf]\"",
+            "Usage: ./gradlew -p examples run -Pexample=TranscriptionParakeetCtc " +
+                "--args=\"<wav-file> [parakeet-ctc-gguf]\"",
         )
         System.err.println("\nIf the model path is omitted, defaults to the registry model.")
         exitProcess(1)
@@ -36,7 +37,7 @@ fun main(args: Array<String>): Unit = runBlocking {
     val audioPath = args[0]
     val parakeetModelSrc = args.getOrNull(1) ?: Models.PARAKEET_CTC_0_6B_Q8_0.src
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         println("▸ Loading Parakeet CTC model...")
         val modelId = client.loadWithProgress(parakeetModelSrc, "parakeet-transcription")

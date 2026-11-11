@@ -17,9 +17,9 @@ val exampleNames = layout.projectDirectory.dir("src").asFile
 fun sourceSetName(example: String) = example.replaceFirstChar(Char::lowercase)
 
 dependencies {
-    // The release archive holds exactly one version; inside the monorepo the
-    // included build substitutes the SDK source.
-    implementation("io.tether:qvac-sdk-kotlin:+")
+    // Both resolve to the included SDK build in the parent directory.
+    implementation("io.tether:qvac-sdk-kotlin")
+    implementation("io.tether:jvm-barekit")
 }
 
 exampleNames.forEach { example ->

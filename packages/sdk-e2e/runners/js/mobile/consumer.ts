@@ -1,3 +1,5 @@
+import { EmbeddingGemma2Executor } from '../shared/executors/embeddinggemma2-executor.js'
+import { ImageEmbeddingExecutor } from '../shared/executors/image-embedding-executor.js'
 import { DecisionExecutor } from '../shared/executors/decision-executor.js'
 import { RerankExecutor } from '../shared/executors/rerank-executor.js'
 import { MobileSpeakerAwareExecutor } from './executors/speaker-aware-executor.js'
@@ -12,6 +14,7 @@ import { resolveBundledAssetUri } from './asset-uri.js'
 import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
 import { ModelLoadingExecutor } from '../shared/executors/model-loading-executor.js'
 import { CompletionExecutor } from '../shared/executors/completion-executor.js'
+import { CalcTokensExecutor } from '../shared/executors/calc-tokens-executor.js'
 import { EmbeddingExecutor } from '../shared/executors/embedding-executor.js'
 import { ToolsExecutor } from '../shared/executors/tools-executor.js'
 import { DeferredToolsExecutor } from '../shared/executors/deferred-tools-executor.js'
@@ -64,26 +67,13 @@ async function resolveTableAsset(kind: string, file: string): Promise<string> {
   return await resolveBundledAssetUri(assetModule)
 }
 
-/**
- * Every `$packageAsset` the table names, written out statically. Metro resolves
- * `require` while it bundles, so a template literal fails the whole build.
- */
-const PACKAGE_ASSETS: Record<string, number> = {
-  // @ts-ignore - Metro turns the bundled data file into an asset module.
-  '@qvac/classification-ggml/weights/mobilenetv3_3class_v3_fp16.gguf': require('../../../../node_modules/@qvac/classification-ggml/weights/mobilenetv3_3class_v3_fp16.gguf')
-}
-
-/** A data file inside an installed package, as a bundled-asset URI. */
-async function resolveTablePackageAsset(pkg: string, file: string): Promise<string> {
-  const assetModule = PACKAGE_ASSETS[`${pkg}/${file}`]
-  if (assetModule === undefined) {
-    throw new Error(
-      `package asset not bundled on mobile: ${pkg}/${file} -- ` +
-        'add it to PACKAGE_ASSETS in runners/js/mobile/consumer.ts'
-    )
-  }
-  return await resolveBundledAssetUri(assetModule)
-}
+// The SDK places llm and embedding loads on the CPU on Pixel phones (`BUILTIN_DEVICE_PATTERNS` in
+// @qvac/inference), matched on the same brand and model `expo-device` reports.
+const androidConstants = Platform.constants as { Brand?: string; Model?: string }
+const hostLlamaOnCpu =
+  Platform.OS === 'android' &&
+  androidConstants.Brand?.toLowerCase() === 'google' &&
+  (androidConstants.Model?.startsWith('Pixel') ?? false)
 
 // Download plan and the unload settling mobile needs -- and why it needs it -- come from the shared
 // platform policy; see catalog/platform-policy.ts.
@@ -96,8 +86,7 @@ applyResourceTable(
   (dep, definition) => resources.define(dep, definition as never),
   {
     const: (name) => (MODEL_CONSTANTS as Record<string, unknown>)[name],
-    asset: (kind, file) => resolveTableAsset(kind, file),
-    packageAsset: (pkg, file) => resolveTablePackageAsset(pkg, file)
+    asset: (kind, file) => resolveTableAsset(kind, file)
   }
 )
 // NOTE: no "vla-pi05" resource on mobile by design — the pi05 q_aggressive
@@ -207,6 +196,7 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
 
 export const executor = createExecutor({
   handlers: [
+    new ImageEmbeddingExecutor(resources),
     new MobileSpeakerAwareExecutor(resources),
     // Mobile platform policy -- which suites are off, and on which OS -- is declared in the catalog
     // now; see catalog/platform-skips.ts.
@@ -217,15 +207,17 @@ export const executor = createExecutor({
       resolveAttachmentPath: resolveBatchAttachmentPath
     }),
     new CompletionExecutor(resources),
+    new CalcTokensExecutor(resources),
     new MobileTranscriptionExecutor(resources),
     new MobileTranscribeStreamEventsExecutor(resources),
     new EmbeddingExecutor(resources),
+    new EmbeddingGemma2Executor(resources, resolveTableAsset),
     new DecisionExecutor(resources),
     new RerankExecutor(resources),
     new MobileRagExecutor(resources),
     new VectorIndexExecutor(resources),
     new ModelInfoExecutor(resources),
-    new ModelFitExecutor(resources),
+    new ModelFitExecutor(resources, hostLlamaOnCpu),
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),

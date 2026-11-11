@@ -1,0 +1,80 @@
+name: Inference Pear Upstream Compatibility
+
+# Daily Pear e2e, so pear-runtime or Bare drift shows up the day it lands, not
+# on release day. Its runs on main also seed the model cache that releases use.
+
+on:
+  schedule:
+    - cron: "30 6 * * *" # daily 06:30 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: inference-pear-upstream-compat
+  cancel-in-progress: false
+
+jobs:
+  # Always latest, so a PEAR_E2E_*_VERSION pin does not hide drift.
+  pear-e2e:
+    name: Pear e2e
+    uses: ./.github/workflows/test-inference-pear-e2e.yml
+    with:
+      pear-runtime-version: latest
+      bare-runtime-version: latest
+      bare-pack-version: latest
+
+  notify-on-failure:
+    name: Open or update tracking issue
+    needs: pear-e2e
+    # Manual runs are for debugging; scheduled failures need a follow-up.
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open or update tracking issue
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        with:
+          script: |
+            const title = 'Inference Pear e2e failing on latest pear-runtime/Bare';
+            const label = 'github_actions';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              'Scheduled Pear e2e for `@qvac/inference` failed. It also gates `publish-inference.yml` and the sdk release train.',
+              '',
+              `- Run: ${runUrl}`,
+              '- Triage: compare the "Resolved versions" in the log with the last green run.',
+              '- To release meanwhile, pin the last-known-good versions with the `PEAR_E2E_*_VERSION` repository variables.',
+            ].join('\n');
+
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label,
+              per_page: 100,
+            });
+            const existing = issues.find((issue) => issue.pull_request === undefined && issue.title === title);
+
+            if (existing !== undefined) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body,
+              });
+              core.info(`Appended comment to existing issue #${existing.number}`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: [label],
+              });
+              core.info(`Opened new issue #${created.data.number}`);
+            }

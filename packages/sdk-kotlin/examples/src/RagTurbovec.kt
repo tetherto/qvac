@@ -13,9 +13,8 @@
 // result list per query. `client.embeddings.embed()` has a single-text overload
 // returning one vector and a list overload returning one vector per text.
 //
-// RUN: ./gradlew run -Pexample=RagTurbovec --args="[query]"
+// RUN: ./gradlew -p examples run -Pexample=RagTurbovec --args="[query]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.embeddings
@@ -33,6 +32,7 @@ import io.tether.qvac.sdk.generated.schema.VectorIndexRequestLoad
 import io.tether.qvac.sdk.generated.schema.VectorIndexRequestSearch
 import io.tether.qvac.sdk.generated.schema.VectorIndexRequestWrite
 import io.tether.qvac.sdk.generated.schema.VectorIndexResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.vectorIndex
 import kotlinx.coroutines.runBlocking
@@ -50,7 +50,7 @@ fun main(args: Array<String>): Unit = runBlocking {
         "4" to "The Pacific Ocean is the largest and deepest ocean on Earth.",
     )
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val modelId = client.loadWithProgress(Models.GTE_LARGE_FP16)
 

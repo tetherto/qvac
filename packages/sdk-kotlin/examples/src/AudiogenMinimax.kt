@@ -28,15 +28,15 @@
 //   AUDIOGEN_STEPS                flow sampling steps
 //
 // RUN: AUDIOGEN_MINIMAX_LM_MODEL=... AUDIOGEN_MINIMAX_SYNTH_MODEL=... \
-//        ./gradlew run -Pexample=AudiogenMinimax --args="[caption] [output.wav]"
+//        ./gradlew -p examples run -Pexample=AudiogenMinimax --args="[caption] [output.wav]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.schema.AudioGenStreamRequest
 import io.tether.qvac.sdk.generated.schema.AudioGenStreamResponseProgress
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.media
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.qvacRequestId
@@ -57,7 +57,7 @@ fun main(args: Array<String>): Unit = runBlocking {
     val caption = args.getOrNull(0) ?: "Warm cinematic piano with gentle strings"
     val outputPath = args.getOrNull(1) ?: "minimax-music3-output.wav"
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val threads = numberFromEnv("AUDIOGEN_THREADS")
         val maxFrames = numberFromEnv("AUDIOGEN_MAX_FRAMES")

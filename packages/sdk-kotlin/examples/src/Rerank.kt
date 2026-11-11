@@ -8,11 +8,11 @@
 // `RerankRequest` and returns a `RerankResponse` whose `scores` hold one score
 // per document, in input order.
 //
-// RUN: ./gradlew run -Pexample=Rerank --args="[path-or-url-to-reranker.gguf]"
+// RUN: ./gradlew -p examples run -Pexample=Rerank --args="[path-or-url-to-reranker.gguf]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.generated.schema.RerankRequest
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.rerank
 import kotlinx.coroutines.runBlocking
@@ -34,7 +34,7 @@ private val DOCUMENTS = listOf(
 fun main(args: Array<String>): Unit = runBlocking {
     val modelSrc = args.getOrNull(0) ?: DEFAULT_MODEL_SRC
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         System.err.println("▸ Loading reranker")
         val loaded = client.models.load(source = modelSrc, modelType = "llamacpp-rerank")

@@ -11,15 +11,15 @@
 //
 // Audio should be 16 kHz mono PCM in a WAV container.
 //
-// RUN: ./gradlew run -Pexample=TranscriptionParakeetIndicConformer --args="<wav-file> <language> [indic-conformer-gguf]"
+// RUN: ./gradlew -p examples run -Pexample=TranscriptionParakeetIndicConformer --args="<wav-file> <language> [indic-conformer-gguf]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacDataInput
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.speech
 import kotlin.system.exitProcess
@@ -31,7 +31,7 @@ import kotlinx.serialization.json.put
 fun main(args: Array<String>): Unit = runBlocking {
     if (args.size < 2) {
         System.err.println(
-            "Usage: ./gradlew run -Pexample=TranscriptionParakeetIndicConformer " +
+            "Usage: ./gradlew -p examples run -Pexample=TranscriptionParakeetIndicConformer " +
                 "--args=\"<wav-file> <language> [indic-conformer-gguf]\"",
         )
         System.err.println("\nExample: ... -Pexample=TranscriptionParakeetIndicConformer --args=\"speech.wav hi\"")
@@ -42,7 +42,7 @@ fun main(args: Array<String>): Unit = runBlocking {
     val language = args[1]
     val parakeetModelSrc = args.getOrNull(2) ?: Models.PARAKEET_INDIC_CONFORMER_600M_Q8_0.src
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         println("▸ Loading Indic Conformer CTC model...")
         val modelId = client.loadWithProgress(

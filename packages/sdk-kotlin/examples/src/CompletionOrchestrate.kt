@@ -13,9 +13,8 @@
 // of the public Kotlin completion API. Handlers are `suspend` functions that
 // return a `JsonElement`; the worker stringifies it into the `tool` message.
 //
-// RUN: ./gradlew run -Pexample=CompletionOrchestrate
+// RUN: ./gradlew -p examples run -Pexample=CompletionOrchestrate
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacMessage
 import io.tether.qvac.sdk.QvacProgressEvent
@@ -27,6 +26,7 @@ import io.tether.qvac.sdk.generated.ModelConstant
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.orchestrate
 import kotlinx.coroutines.runBlocking
@@ -60,7 +60,7 @@ private val TOOLS = listOf(
 private fun JsonObject.string(key: String): String? = get(key)?.jsonPrimitive?.content
 
 fun main(): Unit = runBlocking {
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val modelId = client.loadWithProgress(
             Models.QWEN3_1_7B_INST_Q4,

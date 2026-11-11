@@ -11,6 +11,14 @@
 // encoder and decoder bundles with the GGUF, and both stages run on the Neural
 // Engine. Anywhere else that constant is refused at load time.
 //
+// `--eu` loads the full 25-language TranscribePsy-250M-EU instead
+// (`Models.PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0`): one GGUF with its CAFE
+// language adapters and gate embedded, ggml on every platform, no Core ML
+// distribution. `--language` picks its route: `en` for the English trunk,
+// `other` for the non-English adapters, or `auto` (the default) to let the gate
+// decide from the first seconds of the recording. The route is sent as
+// `language` in the load's `modelConfig`.
+//
 // Long recordings are encoded in overlapping windows, so memory stays flat
 // however long the file is. Without `--window-sec` the engine uses the 60 s
 // windows with 25 % overlap the model recommends; an explicit window is sent as
@@ -23,9 +31,8 @@
 // joined as they come. `client.speech.transcribe()` returns the same text with
 // the stats as an untyped `JsonObject`.
 //
-// RUN: ./gradlew run -Pexample=TranscriptionParakeetTranscribepsy --args="<audio-file> [--coreml] [--window-sec <seconds>]"
+// RUN: ./gradlew -p examples run -Pexample=TranscriptionParakeetTranscribepsy --args="<audio-file> [--eu [--language en|other|auto]] [--coreml] [--window-sec <seconds>]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.Models
@@ -35,6 +42,7 @@ import io.tether.qvac.sdk.generated.schema.TranscribeRequest
 import io.tether.qvac.sdk.generated.schema.TranscribeRequestAudioChunk
 import io.tether.qvac.sdk.generated.schema.TranscribeRequestAudioChunkFilePath
 import io.tether.qvac.sdk.generated.schema.TranscribeResponseStats
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.transcribe
 import kotlin.math.roundToLong
@@ -46,10 +54,17 @@ import kotlinx.serialization.json.put
 
 private const val ENCODER_FRAMES_PER_SECOND = 12.5
 private const val RECOMMENDED_OVERLAP = 0.25
-private const val USAGE = "Usage: ./gradlew run -Pexample=TranscriptionParakeetTranscribepsy " +
-    "--args=\"<audio-file> [--coreml] [--window-sec <seconds>]\""
+private val EU_LANGUAGES = setOf("en", "other", "auto")
+private const val USAGE = "Usage: ./gradlew -p examples run -Pexample=TranscriptionParakeetTranscribepsy " +
+    "--args=\"<audio-file> [--eu [--language en|other|auto]] [--coreml] [--window-sec <seconds>]\""
 
-private data class Options(val audioPath: String, val useCoreml: Boolean, val windowSeconds: Double?)
+private data class Options(
+    val audioPath: String,
+    val useEu: Boolean,
+    val useCoreml: Boolean,
+    val language: String?,
+    val windowSeconds: Double?,
+)
 
 fun main(args: Array<String>): Unit = runBlocking {
     val parsed = parseArgs(args.toList())
@@ -57,11 +72,11 @@ fun main(args: Array<String>): Unit = runBlocking {
         System.err.println(USAGE)
         exitProcess(1)
     }
-    val (audioPath, useCoreml, windowSeconds) = parsed
+    val (audioPath, useEu, useCoreml, language, windowSeconds) = parsed
 
     // An explicit window becomes the engine's frame counts; the overlap is
     // shared half and half with each neighbouring window.
-    val longForm = buildJsonObject {
+    val modelConfig = buildJsonObject {
         if (windowSeconds != null) {
             put("longFormWindowFrames", (windowSeconds * ENCODER_FRAMES_PER_SECOND).roundToLong())
             put(
@@ -69,19 +84,20 @@ fun main(args: Array<String>): Unit = runBlocking {
                 (windowSeconds * ENCODER_FRAMES_PER_SECOND * RECOMMENDED_OVERLAP / 2).roundToLong(),
             )
         }
+        // The EU route only means something to the full model; EU-sub has no gate.
+        if (useEu && language != null) put("language", language)
     }
 
-    val modelSrc = if (useCoreml) {
-        Models.PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0.src
-    } else {
-        Models.PARAKEET_TRANSCRIBEPSY_250M_Q8_0.src
+    val (modelSrc, variant) = when {
+        useEu -> Models.PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0.src to "EU, 25 languages, route ${language ?: "auto"}"
+        useCoreml -> Models.PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0.src to "EU-sub, Core ML distribution"
+        else -> Models.PARAKEET_TRANSCRIBEPSY_250M_Q8_0.src to "EU-sub, ggml"
     }
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
-        val backend = if (useCoreml) "Core ML distribution" else "ggml"
-        println("▸ Loading TranscribePsy ($backend)...")
-        val modelId = client.loadWithProgress(modelSrc, "parakeet-transcription", modelConfig = longForm)
+        println("▸ Loading TranscribePsy ($variant)...")
+        val modelId = client.loadWithProgress(modelSrc, "parakeet-transcription", modelConfig = modelConfig)
 
         println(
             if (windowSeconds == null) {
@@ -127,16 +143,27 @@ private fun formatSeconds(seconds: Double): String =
     if (seconds % 1.0 == 0.0) seconds.toLong().toString() else seconds.toString()
 
 private fun parseArgs(args: List<String>): Options? {
-    val audioPath = args.firstOrNull { !it.startsWith("--") }
+    val valueFlags = setOf("--window-sec", "--language")
+    val audioPath = args.filterIndexed { index, arg ->
+        !arg.startsWith("--") && args.getOrNull(index - 1) !in valueFlags
+    }.firstOrNull()
     val useCoreml = "--coreml" in args
+    val useEu = "--eu" in args
     var windowSeconds: Double? = null
-    val index = args.indexOf("--window-sec")
-    if (index >= 0) {
-        windowSeconds = args.getOrNull(index + 1)?.toDoubleOrNull() ?: return null
+    val windowIndex = args.indexOf("--window-sec")
+    if (windowIndex >= 0) {
+        windowSeconds = args.getOrNull(windowIndex + 1)?.toDoubleOrNull() ?: return null
         if (!(windowSeconds > 0)) return null
     }
-    if (audioPath == null) return null
-    return Options(audioPath, useCoreml, windowSeconds)
+    var language: String? = null
+    val languageIndex = args.indexOf("--language")
+    if (languageIndex >= 0) {
+        language = args.getOrNull(languageIndex + 1)
+        // `--language` needs a value, and only the full EU model has a route to pick.
+        if (!useEu || language !in EU_LANGUAGES) return null
+    }
+    if (audioPath == null || (useEu && useCoreml)) return null
+    return Options(audioPath, useEu, useCoreml, language, windowSeconds)
 }
 
 /** Load [source] as [modelType], printing download progress, and return its model id. */

@@ -21,9 +21,8 @@
 // directory, so they are made absolute first. The adapter and its checkpoints
 // are written under `./finetune-output`.
 //
-// RUN: ./gradlew run -Pexample=Finetune --args="[--pause-resume] [<dataset dir>]"
+// RUN: ./gradlew -p examples run -Pexample=Finetune --args="[--pause-resume] [<dataset dir>]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.Models
@@ -40,6 +39,7 @@ import io.tether.qvac.sdk.generated.schema.FinetuneRunRequestOptionsValidation
 import io.tether.qvac.sdk.generated.schema.FinetuneRunRequestOptionsValidationDataset
 import io.tether.qvac.sdk.generated.schema.FinetuneStopRequest
 import io.tether.qvac.sdk.generated.schema.FinetuneStopRequestOperation
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.training
 import java.nio.file.Path
@@ -90,7 +90,7 @@ fun main(args: Array<String>): Unit = runBlocking {
         .toAbsolutePath()
         .normalize()
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     var modelId: String? = null
     try {
         val model = Models.QWEN3_600M_INST_Q4

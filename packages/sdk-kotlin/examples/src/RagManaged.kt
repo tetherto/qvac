@@ -9,9 +9,8 @@
 // response is read off the matching variant (`as RagResponse.Ingest`), where
 // the JS SDK has flat `ragIngest()` / `ragSearch()` wrappers.
 //
-// RUN: ./gradlew run -Pexample=RagManaged --args="[query]"
+// RUN: ./gradlew -p examples run -Pexample=RagManaged --args="[query]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.ModelConstant
@@ -24,6 +23,7 @@ import io.tether.qvac.sdk.generated.schema.RagRequestIngest
 import io.tether.qvac.sdk.generated.schema.RagRequestIngestDocuments
 import io.tether.qvac.sdk.generated.schema.RagRequestSearch
 import io.tether.qvac.sdk.generated.schema.RagResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.retrieval
 import kotlinx.coroutines.runBlocking
@@ -52,7 +52,7 @@ fun main(args: Array<String>): Unit = runBlocking {
     val query = args.getOrNull(0) ?: "machine learning algorithms"
     val workspace = "ingest-example"
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         println("▸ Query: \"$query\"")
         val modelId = client.loadWithProgress(Models.GTE_LARGE_FP16)

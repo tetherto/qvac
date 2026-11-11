@@ -12,9 +12,8 @@
 // with a missing field or a wrong type is a compile error. The result is
 // serialized back with its wire names, like the JS output.
 //
-// RUN: ./gradlew run -Pexample=Decisions --args="[path-to-decision.gguf]"
+// RUN: ./gradlew -p examples run -Pexample=Decisions --args="[path-to-decision.gguf]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.decide
 import io.tether.qvac.sdk.generated.Models
@@ -31,6 +30,7 @@ import io.tether.qvac.sdk.generated.schema.DecideSingleRequestQuestionsValueScor
 import io.tether.qvac.sdk.generated.schema.DecideSingleRequestQuestionsValueScoreCriteriaItem
 import io.tether.qvac.sdk.generated.schema.DecideSingleRequestQuestionsValueScoreInstructions
 import io.tether.qvac.sdk.generated.schema.DecideSingleRequestState
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -45,7 +45,7 @@ private val PRETTY = Json {
 fun main(args: Array<String>): Unit = runBlocking {
     val modelSrc = args.getOrNull(0) ?: Models.LAYA_MULTILINGUAL_322M_Q8_0.src
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     var modelId: String? = null
     try {
         System.err.println("▸ Loading decision model")

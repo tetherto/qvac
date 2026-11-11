@@ -14,9 +14,8 @@
 // Progress frames are the generated typed `ModelProgressResponse`; its nullable
 // `shardInfo` tells shard-pattern downloads apart from archive downloads.
 //
-// RUN: ./gradlew run -Pexample=ShardedModels
+// RUN: ./gradlew -p examples run -Pexample=ShardedModels
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacCompletionEvent
 import io.tether.qvac.sdk.QvacMessage
@@ -24,6 +23,7 @@ import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.completion
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.run
 import kotlinx.coroutines.runBlocking
@@ -35,7 +35,7 @@ private const val MODEL_SRC = "https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Inst
     "resolve/main/qwen2.5-coder-7b-instruct-q4_0-00001-of-00002.gguf"
 
 fun main(): Unit = runBlocking {
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val modelId = client.loadWithProgress(
             MODEL_SRC,

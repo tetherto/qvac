@@ -9,12 +9,12 @@
 // `client.models.info()` / `client.models.download()` take plain arguments and
 // return the typed `GetModelInfoResponse` / `DownloadAssetResponse`.
 //
-// RUN: ./gradlew run -Pexample=TranscriptionParakeetUnifiedCoreml --args="<regenerated-unified-gguf> <16-kHz-wav-file>"
+// RUN: ./gradlew -p examples run -Pexample=TranscriptionParakeetUnifiedCoreml --args="<regenerated-unified-gguf> <16-kHz-wav-file>"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacDataInput
 import io.tether.qvac.sdk.generated.schema.GetModelInfoResponseModelInfo
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.speech
 import java.io.File
@@ -37,7 +37,7 @@ private val COREML_FILES = listOf(
 fun main(args: Array<String>): Unit = runBlocking {
     if (args.size < 2) {
         System.err.println(
-            "Usage: ./gradlew run -Pexample=TranscriptionParakeetUnifiedCoreml " +
+            "Usage: ./gradlew -p examples run -Pexample=TranscriptionParakeetUnifiedCoreml " +
                 "--args=\"<regenerated-unified-gguf> <16-kHz-wav-file>\"",
         )
         exitProcess(1)
@@ -45,7 +45,7 @@ fun main(args: Array<String>): Unit = runBlocking {
     val modelPath = Path.of(args[0])
     val audioPath = args[1]
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     var stagingDir: File? = null
     var modelId: String? = null
     try {

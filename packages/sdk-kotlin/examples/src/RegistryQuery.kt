@@ -11,12 +11,12 @@
 // generated enums; `wireName()` renders the wire string, matching the JS SDK's
 // plain-string fields.
 //
-// RUN: ./gradlew run -Pexample=RegistryQuery
+// RUN: ./gradlew -p examples run -Pexample=RegistryQuery
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.generated.schema.ModelRegistryListResponseModelsItem
 import io.tether.qvac.sdk.generated.schema.ModelRegistrySearchRequest
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.registry
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -37,7 +37,7 @@ private fun listed(success: Boolean, models: List<ModelRegistryListResponseModel
     if (success) models.orEmpty() else error(error ?: "registry query failed")
 
 fun main(): Unit = runBlocking {
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         println("▸ QVAC Model Registry Query Examples\n")
 

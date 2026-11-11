@@ -7,9 +7,8 @@
 // overload resolves at compile time, so neither call needs to unwrap the
 // single-or-batch union the wire response carries.
 //
-// RUN: ./gradlew run -Pexample=Embeddings
+// RUN: ./gradlew -p examples run -Pexample=Embeddings
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.embeddings
@@ -17,12 +16,13 @@ import io.tether.qvac.sdk.generated.ModelConstant
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import kotlin.math.sqrt
 import kotlinx.coroutines.runBlocking
 
 fun main(): Unit = runBlocking {
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val modelId = client.loadWithProgress(Models.EMBEDDINGGEMMA_300M_Q4_0)
 

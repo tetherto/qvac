@@ -12,12 +12,12 @@
 //
 // Audio should be 16 kHz mono 16-bit PCM in a WAV container.
 //
-// RUN: ./gradlew run -Pexample=TranscriptionParakeetSortformer --args="<wav-file> [sortformer-gguf]"
+// RUN: ./gradlew -p examples run -Pexample=TranscriptionParakeetSortformer --args="<wav-file> [sortformer-gguf]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacDataInput
 import io.tether.qvac.sdk.generated.Models
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.speech
 import java.io.ByteArrayInputStream
@@ -45,7 +45,8 @@ private data class Entry(val speaker: Int, val start: Double, val end: Double, v
 fun main(args: Array<String>): Unit = runBlocking {
     if (args.isEmpty()) {
         System.err.println(
-            "Usage: ./gradlew run -Pexample=TranscriptionParakeetSortformer --args=\"<wav-file> [sortformer-gguf]\"",
+            "Usage: ./gradlew -p examples run -Pexample=TranscriptionParakeetSortformer " +
+                "--args=\"<wav-file> [sortformer-gguf]\"",
         )
         System.err.println("\nIf the model path is omitted, defaults to the registry model.")
         exitProcess(1)
@@ -53,7 +54,7 @@ fun main(args: Array<String>): Unit = runBlocking {
     val audioPath = args[0]
     val sortformerSrc = args.getOrNull(1) ?: Models.PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0.src
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         // ── Step 1: Diarize with Sortformer ──
 

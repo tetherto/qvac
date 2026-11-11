@@ -142,7 +142,7 @@ The script reads its config from `config/logging/logging.config.json`, relative 
 ```json file=<rootDir>/packages/sdk/examples/config/logging/logging.config.json title="config/logging/logging.config.json"
 ```
 
-The Kotlin examples pass the same setting inline, as the `config` argument of `JvmBareRpcTransport.connectResolved()`.
+The Kotlin examples pass the same setting inline, as the `config` argument of `JvmBareKitTransport.connect()`.
 
 `getLogger` is not available in the Kotlin client — use your application's logging framework. The log streams are: `client.serverLogs()` returns a cold `Flow`, and `client.subscribeServerLogs(scope, handler)` returns a `Job` that you cancel to unsubscribe.
 

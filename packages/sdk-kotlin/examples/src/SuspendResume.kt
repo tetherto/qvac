@@ -10,9 +10,8 @@
 // typed `QvacKnownException` hierarchy, so the blocked call is caught by its
 // own class, `ServerLifecycleOperationBlocked`, instead of comparing names.
 //
-// RUN: ./gradlew run -Pexample=SuspendResume
+// RUN: ./gradlew -p examples run -Pexample=SuspendResume
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacCompletionOptions
 import io.tether.qvac.sdk.QvacMessage
@@ -23,6 +22,7 @@ import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.QvacKnownException
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.run
 import io.tether.qvac.sdk.system
@@ -30,7 +30,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 
 fun main(): Unit = runBlocking {
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         // Load a model
         val modelId = client.loadWithProgress(Models.LLAMA_3_2_1B_INST_Q4_0)

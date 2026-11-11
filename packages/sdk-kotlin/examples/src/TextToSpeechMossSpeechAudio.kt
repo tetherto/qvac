@@ -15,9 +15,8 @@
 // `buffer` and reads `sampleRate` and `done` off them. The model is unloaded in
 // a `finally` block, as the TypeScript example does.
 //
-// RUN: ./gradlew run -Pexample=TextToSpeechMossSpeechAudio --args="<question.wav>"
+// RUN: ./gradlew -p examples run -Pexample=TextToSpeechMossSpeechAudio --args="<question.wav>"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.Models
@@ -26,6 +25,7 @@ import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
 import io.tether.qvac.sdk.generated.schema.TextToSpeechRequest
 import io.tether.qvac.sdk.generated.schema.TextToSpeechRequestMessagesItem
 import io.tether.qvac.sdk.generated.schema.TextToSpeechRequestMessagesItemRole
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.textToSpeech
 import java.io.File
@@ -41,12 +41,15 @@ import kotlinx.serialization.json.put
 
 fun main(args: Array<String>): Unit = runBlocking {
     if (args.isEmpty()) {
-        System.err.println("Usage: ./gradlew run -Pexample=TextToSpeechMossSpeechAudio --args=\"<question.wav>\"")
+        System.err.println(
+            "Usage: ./gradlew -p examples run -Pexample=TextToSpeechMossSpeechAudio " +
+                "--args=\"<question.wav>\"",
+        )
         exitProcess(1)
     }
     val (audio, questionRate) = readQuestion(args[0])
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val modelId = client.loadWithProgress(
             source = System.getenv("QVAC_MOSS_SPEECH_MODEL") ?: Models.TTS_MOSS_SPEECH_Q8_0.src,

@@ -8,9 +8,8 @@
 // wire field as JS and Python; a `ModelConstant` is passed by its `.src`.
 // Attachments are typed `QvacAttachment` values on `QvacMessage.user()`.
 //
-// RUN: ./gradlew run -Pexample=Multimodal --args="<image path> [<second image path>]"
+// RUN: ./gradlew -p examples run -Pexample=Multimodal --args="<image path> [<second image path>]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacAttachment
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacMessage
@@ -20,6 +19,7 @@ import io.tether.qvac.sdk.generated.ModelConstant
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.run
 import kotlin.system.exitProcess
@@ -39,7 +39,7 @@ fun main(args: Array<String>): Unit = runBlocking {
 
     val imageFilePath = args[0]
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         // Load the main model with projection in a single step
         val modelId = client.loadWithProgress(

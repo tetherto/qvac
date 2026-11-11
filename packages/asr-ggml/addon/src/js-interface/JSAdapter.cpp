@@ -155,6 +155,7 @@ JSAdapter::readMossTranscribeRequest(js::Object job, js_env_t* env) {
   readString(job, env, "prompt", request.prompt);
   request.hotwords = readOptionalStringArray(job, env, "hotwords");
   readInt(job, env, "maxNewTokens", request.maxNewTokens);
+  readBool(job, env, "emitProgress", request.emitProgress);
   return request;
 }
 

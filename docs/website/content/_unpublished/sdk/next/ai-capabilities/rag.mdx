@@ -10,6 +10,7 @@ schemaType: HowTo
 RAG (retrieval-augmented generation) uses [text embeddings](/sdk/ai-capabilities/text-embeddings): you embed (vectorize) documents, persist them in a vector store, and later retrieve the most relevant chunks for a query using similarity search.
 
 Compared to generating text embeddings only, the key differences are:
+
 - You must **persist embeddings** (vectors) alongside the original text (and optional metadata) in a vector store.
 - At query time, you **embed the query** and run **top‑K** vector search to fetch the most relevant documents/chunks.
 - You _typically_ pass the retrieved text to [`completion()`](/sdk/reference/api#completion) as context to ground the model's answer (this retrieval step is what makes it RAG).
@@ -39,16 +40,21 @@ For how to use each function, see [SDK — API reference](/sdk/reference/api/).
 Create your RAG pipeline using [text embeddings](/sdk/ai-capabilities/text-embeddings), the functions above, and [completion](/sdk/ai-capabilities/text-generation).
 
 Regarding vector storage, you may use:
+
 - **External vector DB:** use [`embed()`](/sdk/reference/api#embed) to generate vectors and store them wherever you want (e.g., MongoDB, LanceDB, ChromaDB, SQLite-Vector). Choose this when you need custom persistence, filtering, or integration with an existing database.
 - **Built-in TurboVec index with your own document store:** use [`embed()`](/sdk/reference/api#embed) for vectors and [`createVectorIndex()`](/sdk/reference/api#createvectorindex) for on-device nearest-neighbour search. QVAC indexes the vectors; your documents stay in whatever store you already have, and results come back as the ids you assigned. Snapshots can be saved and reopened with [`loadVectorIndex()`](/sdk/reference/api#loadvectorindex).
 - **Built-in vector store:** use the RAG workspace functions ([`ragIngest()`](/sdk/reference/api#ragingest), [`ragSearch()`](/sdk/reference/api#ragsearch), etc.). QVAC persists the vectors for you, so this is the simplest path.
 
 <Callout type="warn">
-**Built-in vector store is not production grade** and is intended for prototypes only. For production workloads, use one of the external vector DB paths shown below (MongoDB, SQLite, LanceDB, Chroma, etc.).
+  **Built-in vector store is not production grade** and is intended for
+  prototypes only. For production workloads, use one of the external vector DB
+  paths shown below (MongoDB, SQLite, LanceDB, Chroma, etc.).
 </Callout>
 
 <Callout type="info">
-**Important:** when using an external vector DB, make sure its schema matches the embedding dimensionality produced by your model (e.g., GTE Large embeddings used in the example are 1024‑dimensional).
+  **Important:** when using an external vector DB, make sure its schema matches
+  the embedding dimensionality produced by your model (e.g., GTE Large
+  embeddings used in the example are 1024‑dimensional).
 </Callout>
 
 ## Examples
@@ -56,7 +62,7 @@ Regarding vector storage, you may use:
 ### Built-in vector store
 
 <Callout type="warn">
-**Prototype only** — for production, prefer an external vector DB (below).
+  **Prototype only** — for production, prefer an external vector DB (below).
 </Callout>
 
 The following script shows how to ingest documents into a built-in RAG workspace with `ragIngest()` and query them with `ragSearch()`, without setting up an external vector DB:
@@ -66,7 +72,9 @@ The following script shows how to ingest documents into a built-in RAG workspace
 <WrapCode>
 
 ```js file=<rootDir>/packages/sdk/dist/examples/rag/rag-hyperdb/ingest.js title="rag-managed.js" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -74,7 +82,9 @@ The following script shows how to ingest documents into a built-in RAG workspace
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/rag/rag-hyperdb/ingest.ts title="rag-managed.ts" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -82,7 +92,9 @@ The following script shows how to ingest documents into a built-in RAG workspace
 <WrapCode>
 
 ```python file=<rootDir>/packages/sdk-python/examples/rag_managed.py title="rag_managed.py" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -96,7 +108,10 @@ The following script shows how to ingest documents into a built-in RAG workspace
 </Tabs>
 
 <Callout type="info">
-**Swap the backend:** to store the vectors in a TurboVec index instead of the default HyperDB, set `"ragTurbovec": true` in `qvac.config.json`. The RAG API is the same. See [Configuration › `ragTurbovec`](/sdk/configuration#options) for details.
+  **Swap the backend:** to store the vectors in a TurboVec index instead of the
+  default HyperDB, set `"ragTurbovec": true` in `qvac.config.json`. The RAG API
+  is the same. See [Configuration › `ragTurbovec`](/sdk/configuration#options)
+  for details.
 </Callout>
 
 ### TurboVec index with your own document store
@@ -108,7 +123,9 @@ The following script keeps the documents in a plain `Map`, embeds them with `emb
 <WrapCode>
 
 ```js file=<rootDir>/packages/sdk/dist/examples/rag/rag-turbovec.js title="rag-turbovec.js" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -116,7 +133,9 @@ The following script keeps the documents in a plain `Map`, embeds them with `emb
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/rag/rag-turbovec.ts title="rag-turbovec.ts" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -124,7 +143,9 @@ The following script keeps the documents in a plain `Map`, embeds them with `emb
 <WrapCode>
 
 ```python file=<rootDir>/packages/sdk-python/examples/rag_turbovec.py title="rag_turbovec.py" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -138,8 +159,19 @@ The following script keeps the documents in a plain `Map`, embeds them with `emb
 </Tabs>
 
 <Callout type="info">
-TurboVec quantises vectors (`VectorIndexStorage.TURBOVEC_Q4` by default, `TURBOVEC_Q2` for half the memory) and needs a dimension divisible by 8 and no greater than 1024. `GTE_LARGE_FP16` produces 1024-dimensional vectors and fits. Search uses dot products, so L2-normalise vectors when you need cosine similarity. The index lives in the SDK worker; after a worker restart, reopen it from the snapshot.
+  TurboVec quantises vectors (`VectorIndexStorage.TURBOVEC_Q4` by default,
+  `TURBOVEC_Q2` for half the memory) and needs a dimension divisible by 8 and no
+  greater than 16,384. `GTE_LARGE_FP16` produces 1024-dimensional vectors and
+  fits. Search uses dot products, so L2-normalise vectors when you need cosine
+  similarity. The index lives in the SDK worker; after a worker restart, reopen
+  it from the snapshot.
 </Callout>
+
+A fresh TurboVec index attempts TQ+ calibration before encoding its first successful nonempty `add()` batch when that batch has at least 1,000 vectors. A smaller first batch leaves it uncalibrated, and later adds do not calibrate it. `index.calibrated` reports the state after creation, loading, or the last successful add. Calibration improves recall when the fit succeeds and persists in snapshots.
+
+Staged search is off for every new or loaded index. Use `await index.setStagedSearch({ enabled: true })` to trade recall for faster queries, or pass `false` to score every vector. On supported hosts, staged search applies at 32,768 or more vectors and a dimension divisible by 32. Other dimensions and indexes loaded from v3 snapshots retain the setting but search every vector. `index.stagedSearch` reports the setting, which is not saved in snapshots. Generic `F32`, `Q8`, and `Q4` storage reject staged search controls.
+
+External index providers may omit these controls. Their `calibrated` and `stagedSearch` properties report `undefined`, and `setStagedSearch()` rejects with `VectorIndexFailedError` when unsupported.
 
 ### External vector DB
 
@@ -162,7 +194,9 @@ The following script stores each document in MongoDB alongside its vector, build
 <WrapCode>
 
 ```js file=<rootDir>/packages/sdk/dist/examples/rag/rag-mongodb.js title="rag-mongodb.js" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -170,7 +204,9 @@ The following script stores each document in MongoDB alongside its vector, build
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/rag/rag-mongodb.ts title="rag-mongodb.ts" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -178,7 +214,9 @@ The following script stores each document in MongoDB alongside its vector, build
 <WrapCode>
 
 ```python file=<rootDir>/packages/sdk-python/examples/rag_mongodb.py title="rag_mongodb.py" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -214,7 +252,9 @@ The following script shows the same workflow using `embed()` plus a SQLite vecto
 <WrapCode>
 
 ```js file=<rootDir>/packages/sdk/dist/examples/rag/rag-sqlite.js title="rag-sqlite.js" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -222,7 +262,9 @@ The following script shows the same workflow using `embed()` plus a SQLite vecto
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/rag/rag-sqlite.ts title="rag-sqlite.ts" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -230,7 +272,9 @@ The following script shows the same workflow using `embed()` plus a SQLite vecto
 <WrapCode>
 
 ```python file=<rootDir>/packages/sdk-python/examples/rag_sqlite.py title="rag_sqlite.py" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -246,10 +290,13 @@ The following script shows the same workflow using `embed()` plus a SQLite vecto
 In Kotlin, the [examples build](/sdk/kotlin-sdk#quickstart) adds the SQLite JDBC driver, `org.xerial:sqlite-jdbc:3.53.4.0`, to this example only. The driver always supports loadable extensions, but the vector extension itself is a prebuilt binary: download the one for your platform from the [sqlite-vector releases](https://github.com/sqliteai/sqlite-vector/releases) and point `SQLITE_VECTOR_EXTENSION` at it:
 
 ```bash
-SQLITE_VECTOR_EXTENSION=/path/to/vector ./gradlew run -Pexample=RagSqlite
+SQLITE_VECTOR_EXTENSION=/path/to/vector ./gradlew -p examples run -Pexample=RagSqlite
 ```
 
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart), the [Python quickstart](/sdk/python-sdk#quickstart), or the [Kotlin quickstart](/sdk/kotlin-sdk#quickstart).
+  **Tip:** all examples throughout this documentation are self-contained and
+  runnable. For instructions on how to run them, see the [JS/TS
+  quickstart](/sdk/js-ts-sdk#quickstart), the [Python
+  quickstart](/sdk/python-sdk#quickstart), or the [Kotlin
+  quickstart](/sdk/kotlin-sdk#quickstart).
 </Callout>
-

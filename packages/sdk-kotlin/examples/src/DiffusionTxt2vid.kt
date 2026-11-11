@@ -14,9 +14,8 @@
 // convenience overload lacks (negative prompt, fps, flow shift...), and `mode`
 // is the generated `VideoStreamRequestMode` enum.
 //
-// RUN: ./gradlew run -Pexample=DiffusionTxt2vid --args="[diffusion-src] [t5-src] [vae-src] [prompt] [output-dir]"
+// RUN: ./gradlew -p examples run -Pexample=DiffusionTxt2vid --args="[diffusion-src] [t5-src] [vae-src] [prompt] [output-dir]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.Models
@@ -24,6 +23,7 @@ import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
 import io.tether.qvac.sdk.generated.schema.VideoStreamRequest
 import io.tether.qvac.sdk.generated.schema.VideoStreamRequestMode
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.media
 import io.tether.qvac.sdk.models
 import java.nio.file.Files
@@ -47,7 +47,7 @@ fun main(args: Array<String>): Unit = runBlocking {
 
     println("▸ Loading Wan 2.1 T2V model (diffusion + UMT5-XXL + VAE)...")
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val modelId = client.loadWithProgress(
             source = diffusionModelSrc,

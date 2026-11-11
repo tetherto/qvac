@@ -18,9 +18,8 @@
 // helpers below, ported from the JS example's `utils`, save the samples to a
 // WAV and play it through ffplay.
 //
-// RUN: ./gradlew run -Pexample=TextToSpeechMoss [--args="<reference-audio.wav>"]
+// RUN: ./gradlew -p examples run -Pexample=TextToSpeechMoss [--args="<reference-audio.wav>"]
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.ModelConstant
@@ -29,6 +28,7 @@ import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
 import io.tether.qvac.sdk.generated.schema.TextToSpeechRequest
 import io.tether.qvac.sdk.generated.schema.TextToSpeechResponseStats
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.textToSpeech
 import java.io.File
@@ -61,7 +61,7 @@ fun main(args: Array<String>): Unit = runBlocking {
         }
     }
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val modelId = client.loadWithProgress(Models.TTS_DELAY_LLM_MOSS_TTS_F16, modelConfig)
         println("▸ Model loaded: $modelId")

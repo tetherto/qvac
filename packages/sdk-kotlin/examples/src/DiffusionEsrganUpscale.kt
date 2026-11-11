@@ -12,9 +12,8 @@
 // Each `QvacMediaRun` splits progress (`events` Flow) from the images and
 // stats (`final` Deferred), as TypeScript does.
 //
-// RUN: ./gradlew run -Pexample=DiffusionEsrganUpscale --args="[esrgan-src] [prompt] [output-dir]"
+// RUN: ./gradlew -p examples run -Pexample=DiffusionEsrganUpscale --args="[esrgan-src] [prompt] [output-dir]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacMediaRun
 import io.tether.qvac.sdk.QvacProgressEvent
@@ -25,6 +24,7 @@ import io.tether.qvac.sdk.generated.schema.DiffusionStreamRequestUpscale9B8B4FE2
 import io.tether.qvac.sdk.generated.schema.DiffusionStreamResponse
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.media
 import io.tether.qvac.sdk.models
 import java.nio.file.Files
@@ -47,7 +47,7 @@ fun main(args: Array<String>): Unit = runBlocking {
 
     println("▸ Loading SD 2.1 + ESRGAN upscaler...")
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val modelId = client.loadWithProgress(
             source = Models.SD_V2_1_1B_Q8_0.src,

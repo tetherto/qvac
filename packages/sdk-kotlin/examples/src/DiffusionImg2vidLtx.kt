@@ -16,9 +16,8 @@
 // returned `QvacMediaRun` splits progress (`events` Flow) from the clips and
 // stats (`final` Deferred), as TypeScript does.
 //
-// RUN: ./gradlew run -Pexample=DiffusionImg2vidLtx --args="<init-image> [prompt] [output-dir] [diffusion-src] [llm-src] [vae-src] [audio-vae-src] [connectors-src]"
+// RUN: ./gradlew -p examples run -Pexample=DiffusionImg2vidLtx --args="<init-image> [prompt] [output-dir] [diffusion-src] [llm-src] [vae-src] [audio-vae-src] [connectors-src]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.Models
@@ -26,6 +25,7 @@ import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
 import io.tether.qvac.sdk.generated.schema.VideoStreamRequest
 import io.tether.qvac.sdk.generated.schema.VideoStreamRequestMode
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.media
 import io.tether.qvac.sdk.models
 import java.nio.file.Files
@@ -50,7 +50,7 @@ fun main(args: Array<String>): Unit = runBlocking {
     if (initImagePath.isNullOrEmpty()) {
         System.err.println("✖ init image path is required")
         System.err.println(
-            "Usage: ./gradlew run -Pexample=DiffusionImg2vidLtx --args=\"<initImagePath> " +
+            "Usage: ./gradlew -p examples run -Pexample=DiffusionImg2vidLtx --args=\"<initImagePath> " +
                 "[prompt] [outputDir] [diffusionModelSrc] [llmModelSrc] " +
                 "[vaeModelSrc] [audioVaeModelSrc] [embeddingsConnectorsModelSrc]\"",
         )
@@ -59,7 +59,7 @@ fun main(args: Array<String>): Unit = runBlocking {
 
     println("▸ Loading LTX-2 model (diffusion + Gemma + video VAE + audio VAE + connectors)...")
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         // No clipVisionModelSrc -- LTX-2 img2vid does not use CLIP vision.
         val modelId = client.loadWithProgress(

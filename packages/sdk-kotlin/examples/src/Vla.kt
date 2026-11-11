@@ -10,14 +10,14 @@
 // numpy-style dependency. `client.vla.hparams()` returns the typed
 // `QvacVlaHparams`.
 //
-// RUN: ./gradlew run -Pexample=Vla [--args="path/to/smolvla.gguf"]
+// RUN: ./gradlew -p examples run -Pexample=Vla [--args="path/to/smolvla.gguf"]
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.qvacVlaPadState
 import io.tether.qvac.sdk.qvacVlaPreprocessImage
@@ -31,7 +31,7 @@ import kotlinx.serialization.json.putJsonArray
 fun main(args: Array<String>): Unit = runBlocking {
     val modelSrc = args.getOrNull(0) ?: Models.SMOLVLA_LIBERO_VISION_Q8.src
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         println("▸ Loading SmolVLA model...")
         val modelId = client.loadWithProgress(

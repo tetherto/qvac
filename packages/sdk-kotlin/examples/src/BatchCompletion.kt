@@ -21,9 +21,8 @@
 // Each prompt may also carry `tools`, `attachments` or `responseFormat`, as in
 // the JS example; they are left out here to keep the run fast.
 //
-// RUN: ./gradlew run -Pexample=BatchCompletion
+// RUN: ./gradlew -p examples run -Pexample=BatchCompletion
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.completion
@@ -33,10 +32,12 @@ import io.tether.qvac.sdk.generated.schema.BatchCompletionStreamRequest
 import io.tether.qvac.sdk.generated.schema.BatchCompletionStreamRequestPromptsItem
 import io.tether.qvac.sdk.generated.schema.BatchCompletionStreamRequestPromptsItemGenerationParams
 import io.tether.qvac.sdk.generated.schema.BatchCompletionStreamRequestPromptsItemHistoryItem
+import io.tether.qvac.sdk.generated.schema.BatchCompletionStreamRequestPromptsItemHistoryItemContent
 import io.tether.qvac.sdk.generated.schema.BatchCompletionStreamResponseEventsItemEvent
 import io.tether.qvac.sdk.generated.schema.BatchCompletionStreamResponseStats
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
@@ -50,7 +51,12 @@ private val PROMPTS = listOf(
 ).map { (id, ask) ->
     BatchCompletionStreamRequestPromptsItem(
         id = id,
-        history = listOf(BatchCompletionStreamRequestPromptsItemHistoryItem(role = "user", content = ask)),
+        history = listOf(
+            BatchCompletionStreamRequestPromptsItemHistoryItem(
+                role = "user",
+                content = BatchCompletionStreamRequestPromptsItemHistoryItemContent.Variant1(ask),
+            ),
+        ),
         generationParams = BatchCompletionStreamRequestPromptsItemGenerationParams(
             temp = 0.0,
             seed = 42.0,
@@ -60,7 +66,7 @@ private val PROMPTS = listOf(
 }
 
 fun main(): Unit = runBlocking {
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     var modelId: String? = null
     try {
         // `parallel: 4` opens the concurrent decode slots batching needs.

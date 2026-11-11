@@ -16,13 +16,12 @@
 // was never created needs no guard, and the index-build poll waits with
 // `delay` instead of a hand-rolled timer.
 //
-// RUN: ./gradlew run -Pexample=RagMongodb --args="[query] [category]"
+// RUN: ./gradlew -p examples run -Pexample=RagMongodb --args="[query] [category]"
 
 import com.mongodb.MongoException
 import com.mongodb.client.model.SearchIndexModel
 import com.mongodb.client.model.SearchIndexType
 import com.mongodb.kotlin.client.coroutine.MongoClient
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.embeddings
@@ -30,6 +29,7 @@ import io.tether.qvac.sdk.generated.ModelConstant
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import kotlin.system.exitProcess
 import kotlinx.coroutines.delay
@@ -124,7 +124,7 @@ fun main(args: Array<String>): Unit = runBlocking {
     val collection = mongo.getDatabase("qvac").getCollection<Document>("documents")
 
     try {
-        val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+        val client = QvacClient(JvmBareKitTransport.connect())
         try {
             val modelId = client.loadWithProgress(Models.GTE_LARGE_FP16)
 

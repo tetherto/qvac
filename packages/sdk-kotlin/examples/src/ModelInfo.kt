@@ -5,15 +5,15 @@
 // `GetModelInfoResponse`; `client.models.downloadWithProgress()` is a `Flow` of
 // sealed `QvacProgressEvent`s (progress frames, then the result).
 //
-// RUN: ./gradlew run -Pexample=ModelInfo
+// RUN: ./gradlew -p examples run -Pexample=ModelInfo
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.DownloadAssetResponse
 import io.tether.qvac.sdk.generated.schema.GetModelInfoResponseModelInfo
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -25,7 +25,7 @@ private const val MB = 1024.0 * 1024.0
 private val MODEL = Models.WHISPER_TINY
 
 fun main(): Unit = runBlocking {
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         println("▸ Model Info + Cache Management Demo")
 

@@ -19,11 +19,12 @@
 // is a `Flow<ByteArray>` fed from a `Channel`: each `toolCallback` frame is
 // answered with one newline-delimited `{callId, result}` line, and the worker
 // resumes generation. `group` is the heading the tool is listed under in the
-// catalog, and is ignored for tools that are not deferred.
+// catalog, and is ignored for tools that are not deferred. The `tool_search`
+// limits go in the request's typed `toolSearch` field
+// (`CompletionStreamRequestToolSearch`).
 //
-// RUN: ./gradlew run -Pexample=CompletionDeferredTools
+// RUN: ./gradlew -p examples run -Pexample=CompletionDeferredTools
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.completionOrchestrate
@@ -31,10 +32,13 @@ import io.tether.qvac.sdk.generated.ModelConstant
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequest
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItem
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContent
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestToolSearch
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestToolsItem
 import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItem
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -101,7 +105,7 @@ private val TOOLS = listOf(
 )
 
 fun main(): Unit = runBlocking {
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val modelId = client.loadWithProgress(
             Models.QWEN3_1_7B_INST_Q4,
@@ -118,11 +122,19 @@ fun main(): Unit = runBlocking {
             history = listOf(
                 CompletionStreamRequestHistoryItem(
                     role = "system",
-                    content = "You are a helpful assistant. Search for a tool before calling it.",
+                    content = CompletionStreamRequestHistoryItemContent.Variant1(
+                        "You are a helpful assistant. Search for a tool before calling it.",
+                    ),
                 ),
-                CompletionStreamRequestHistoryItem(role = "user", content = "What's my horoscope for Aquarius?"),
+                CompletionStreamRequestHistoryItem(
+                    role = "user",
+                    content = CompletionStreamRequestHistoryItemContent.Variant1("What's my horoscope for Aquarius?"),
+                ),
             ),
             tools = TOOLS,
+            // One search loads at most two definitions, one unless the
+            // model asks for more.
+            toolSearch = CompletionStreamRequestToolSearch(defaultLimit = 1, maxLimit = 2),
             stream = true,
             maxToolTurns = 4,
         )

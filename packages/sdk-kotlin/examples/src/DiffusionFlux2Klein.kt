@@ -10,15 +10,15 @@
 // closing stats. The typed `DiffusionStreamRequest` overload carries the fields
 // the convenience overload lacks (`guidance`, `cfg_scale`).
 //
-// RUN: ./gradlew run -Pexample=DiffusionFlux2Klein --args="[diffusion-src] [llm-src] [vae-src] [prompt] [output-dir]"
+// RUN: ./gradlew -p examples run -Pexample=DiffusionFlux2Klein --args="[diffusion-src] [llm-src] [vae-src] [prompt] [output-dir]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.DiffusionStreamRequest
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.media
 import io.tether.qvac.sdk.models
 import java.nio.file.Files
@@ -40,7 +40,7 @@ fun main(args: Array<String>): Unit = runBlocking {
 
     println("▸ Loading FLUX.2 [klein] split-layout model...")
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val modelId = client.loadWithProgress(
             source = diffusionModelSrc,

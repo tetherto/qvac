@@ -14,15 +14,15 @@
 // The delayed cancel is a child coroutine (`launch`) of the script's scope, so
 // structured concurrency joins it before the scope ends.
 //
-// RUN: ./gradlew run -Pexample=Cancel
+// RUN: ./gradlew -p examples run -Pexample=Cancel
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacCompletionCancelledException
 import io.tether.qvac.sdk.QvacCompletionEvent
 import io.tether.qvac.sdk.QvacMessage
 import io.tether.qvac.sdk.completion
 import io.tether.qvac.sdk.generated.Models
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.run
 import kotlinx.coroutines.delay
@@ -32,7 +32,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 fun main(): Unit = runBlocking {
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val model = Models.QWEN3_600M_INST_Q4
         val loaded = client.models.load(

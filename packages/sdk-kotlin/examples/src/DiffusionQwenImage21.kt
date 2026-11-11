@@ -12,21 +12,24 @@
 // `sampling_method` is a generated enum (`DiffusionStreamRequestSamplingMethod`),
 // so a misspelled sampler fails at compile time instead of at the worker. The
 // returned `QvacMediaRun` splits progress (`events` Flow) from the images and
-// stats (`final` Deferred), as TypeScript does.
+// stats (`final` Deferred), as TypeScript does. The Turbo fields are nullable
+// constructor parameters, so `steps = null` leaves the step count out of the
+// request, as TypeScript's conditional spread does.
 //
 // The defaults download pinned Hugging Face weights. Model overrides accept local
-// paths or URLs.
+// paths or URLs. Set QWEN_TURBO=1 and pass Turbo weights as the model argument
+// to use the fixed eight-step schedule with CFG 1.
 // Model terms: https://huggingface.co/Qwen/Qwen-Image-2.1/blob/d26bb61231c349cf6b7896fa83353113880e1ba3/LICENSE
 //
-// RUN: ./gradlew run -Pexample=DiffusionQwenImage21 --args="<reference-a> <reference-b> [prompt] [output-dir] [model] [llm] [vae] [projector]"
+// RUN: ./gradlew -p examples run -Pexample=DiffusionQwenImage21 --args="<reference-a> <reference-b> [prompt] [output-dir] [model] [llm] [vae] [projector]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.schema.DiffusionStreamRequest
 import io.tether.qvac.sdk.generated.schema.DiffusionStreamRequestSamplingMethod
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.media
 import io.tether.qvac.sdk.models
 import java.nio.file.Files
@@ -50,8 +53,10 @@ private const val PROJECTION_MODEL_SRC = "$ENCODER_REPO/mmproj-Qwen3VL-8B-Instru
 private const val DEFAULT_PROMPT =
     "Place the subjects from both reference images side by side. " +
         "Generate an RGBA image with a transparent background and no scenery."
+// Official Turbo sample_sigmas plus the native terminal zero.
+private val TURBO_SIGMAS = listOf(1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0.0)
 private const val USAGE =
-    "Usage: ./gradlew run -Pexample=DiffusionQwenImage21 --args=\"<referenceA> <referenceB> " +
+    "Usage: ./gradlew -p examples run -Pexample=DiffusionQwenImage21 --args=\"<referenceA> <referenceB> " +
         "[prompt] [outputDir] [model] [llm] [vae] [projector]\""
 
 /** Pass URLs through; resolve local paths to absolute ones. */
@@ -66,15 +71,17 @@ fun main(args: Array<String>): Unit = runBlocking {
     if ("--help" in args) {
         println(USAGE)
         println("▸ Defaults download pinned Hugging Face weights. Model overrides accept paths or URLs.")
+        println("▸ Turbo: set QWEN_TURBO=1 and pass your Turbo weights as the model argument.")
         println("▸ The default prompt combines both subjects on a transparent background.")
         return@runBlocking
     }
 
+    val turbo = System.getenv("QWEN_TURBO") == "1"
     val referencePathA = args.getOrNull(0)
     val referencePathB = args.getOrNull(1)
     val prompt = args.getOrNull(2)?.takeIf { it.isNotEmpty() } ?: DEFAULT_PROMPT
     val outputDir = Path.of(args.getOrNull(3) ?: ".")
-    val diffusionModelSrc = args.getOrNull(4) ?: DIFFUSION_MODEL_SRC
+    val diffusionModelSrc = args.getOrNull(4)?.takeIf { it.isNotEmpty() } ?: DIFFUSION_MODEL_SRC
     val llmModelSrc = args.getOrNull(5) ?: LLM_MODEL_SRC
     val vaeModelSrc = args.getOrNull(6) ?: VAE_MODEL_SRC
     val projectionModelSrc = args.getOrNull(7) ?: PROJECTION_MODEL_SRC
@@ -85,7 +92,12 @@ fun main(args: Array<String>): Unit = runBlocking {
         exitProcess(1)
     }
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    if (turbo && args.getOrNull(4).isNullOrEmpty()) {
+        System.err.println("✖ Pass the Turbo diffusion weights as the model argument, as a path or URL")
+        exitProcess(1)
+    }
+
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val initImages = listOf(referencePathA, referencePathB).map { path ->
             Base64.getEncoder().encodeToString(Files.readAllBytes(Path.of(path)))
@@ -114,8 +126,9 @@ fun main(args: Array<String>): Unit = runBlocking {
                     init_images = initImages,
                     width = 512,
                     height = 512,
-                    steps = 30,
-                    cfg_scale = 6.0,
+                    steps = if (turbo) null else 30,
+                    cfg_scale = if (turbo) 1.0 else 6.0,
+                    custom_sigmas = if (turbo) TURBO_SIGMAS else null,
                     sampling_method = DiffusionStreamRequestSamplingMethod.EULER,
                     seed = 42,
                 ),
@@ -129,7 +142,7 @@ fun main(args: Array<String>): Unit = runBlocking {
 
             check(result.data.isNotEmpty()) { "Qwen-Image-2.1 returned no image." }
             result.data.forEachIndexed { index, image ->
-                val outputPath = outputDir.resolve("qwen_image_21_$index.png")
+                val outputPath = outputDir.resolve("qwen_image_21${if (turbo) "_turbo" else ""}_$index.png")
                 Files.write(outputPath, Base64.getDecoder().decode(image))
                 println("▸ Saved $outputPath")
             }

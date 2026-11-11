@@ -6,21 +6,21 @@
 // which `text()` awaits (non-stream mode here). With `from` omitted for an LLM
 // model, the worker detects the source language from the input.
 //
-// RUN: ./gradlew run -Pexample=Translation
+// RUN: ./gradlew -p examples run -Pexample=Translation
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.ModelConstant
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.translation
 import kotlinx.coroutines.runBlocking
 
 fun main(): Unit = runBlocking {
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val modelId = client.loadWithProgress(Models.SALAMANDRATA_2B_INST_Q4)
 

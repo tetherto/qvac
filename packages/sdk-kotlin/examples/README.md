@@ -9,31 +9,31 @@ WAV writer are repeated inline as private functions, so a file copied out of
 this directory still builds. The build enforces that: each file is its own
 source set, compiled only against the SDK. The docs embed these files verbatim.
 
-On Android, connect with `AndroidServiceTransport.connect(context)` instead of
-`JvmBareRpcTransport.connectResolved(...)`; the rest of the code is the same.
+On Android the SDK calls are the same: connect with
+`AndroidServiceTransport.connect(context)` instead of
+`JvmBareKitTransport.connect()`. The desktop-only helpers need Android
+replacements: `VoiceAssistant` records and plays audio with
+`javax.sound.sampled`, and the `Audiogen*` examples and
+`TranscriptionParakeetSortformer` use it to read or write WAV files.
 
 ## Running
 
-Inside this monorepo, the build resolves `io.tether:qvac-sdk-kotlin` to the SDK
-source in the parent directory. From `packages/sdk-kotlin`:
+The build resolves the SDK and its desktop JVM host (`:jvm-barekit`, which is
+not published) from the parent directory of this checkout. From
+`packages/sdk-kotlin`:
 
 ```bash
 ./gradlew -p examples run -Pexample=Quickstart
 ./gradlew -p examples run -Pexample=Transcription --args="path/to/audio-16khz.wav"
 ```
 
-Outside the monorepo, extract the release's `qvac-sdk-kotlin-jvm-<version>-maven.zip`
-and set `qvacMavenRepository=/absolute/path/to/it` in `gradle.properties`; the
-[Kotlin quickstart](https://docs.qvac.tether.io/sdk/kotlin-sdk#quickstart) walks
-through it.
-
-On first use, `connectResolved(installWorkerIfMissing = true)` installs the
-pinned `@qvac/sdk` worker with npm. Models download over P2P from the registry
-and are cached locally. Each file's header comment names its arguments and any
-environment variable it reads.
+The first run builds the SDK and bundles its worker, which needs JDK 17,
+Node.js 22 and an Android SDK; see the [package README](../README.md). Models
+download over P2P from the registry and are cached locally. Each file's header
+comment names its arguments and any environment variable it reads.
 
 Worker settings that the JS/TS examples read from a `qvac.config.*` file are
-passed inline, as the `config` argument of `connectResolved`.
+passed inline, as the `config` argument of `JvmBareKitTransport.connect()`.
 
 `RagMongodb` and `RagSqlite` write to third-party stores. The build adds their
 database drivers to those two examples only. `Finetune` trains on
@@ -56,9 +56,9 @@ database drivers to those two examples only. `Finetune` trains on
 | `AbotWorld.kt` | `packages/sdk/examples/abot-world.ts` |
 | `AdvisoryModelFit.kt` | `packages/sdk/examples/advisory-model-fit.ts` |
 | `AssessModelFit.kt` | `packages/sdk/examples/assess-model-fit.ts` |
+| `Audiogen.kt` | `packages/sdk/examples/audiogen/generate-music.ts` |
 | `AudiogenCover.kt` | `packages/sdk/examples/audiogen/generate-cover.ts` |
 | `AudiogenEdit.kt` | `packages/sdk/examples/audiogen/edit-music.ts` |
-| `Audiogen.kt` | `packages/sdk/examples/audiogen/generate-music.ts` |
 | `AudiogenMinimax.kt` | `packages/sdk/examples/audiogen/generate-music-minimax.ts` |
 | `AudiogenUnderstand.kt` | `packages/sdk/examples/audiogen/understand-music.ts` |
 | `BatchCompletion.kt` | `packages/sdk/examples/batch-completion.ts` |
@@ -72,8 +72,9 @@ database drivers to those two examples only. `Finetune` trains on
 | `CompletionTools.kt` | `packages/sdk/examples/tools/llamacpp-native-tools.ts` |
 | `Decisions.kt` | `packages/sdk/examples/decisions.ts` |
 | `DiffusionEsrganUpscale.kt` | `packages/sdk/examples/diffusion-esrgan-upscale.ts` |
-| `DiffusionFlux2KleinImg2img.kt` | `packages/sdk/examples/diffusion-flux2-klein-img2img.ts` |
 | `DiffusionFlux2Klein.kt` | `packages/sdk/examples/diffusion-flux2-klein.ts` |
+| `DiffusionFlux2KleinImg2img.kt` | `packages/sdk/examples/diffusion-flux2-klein-img2img.ts` |
+| `DiffusionFlux3Klein.kt` | `packages/sdk/examples/diffusion-flux3-klein.ts` |
 | `DiffusionIcLoraLtx.kt` | `packages/sdk/examples/diffusion-ic-lora-ltx.ts` |
 | `DiffusionIdeogram.kt` | `packages/sdk/examples/diffusion-ideogram.ts` |
 | `DiffusionImg2vid.kt` | `packages/sdk/examples/diffusion-img2vid.ts` |
@@ -104,17 +105,17 @@ database drivers to those two examples only. `Finetune` trains on
 | `Rerank.kt` | `packages/sdk/examples/rerank.ts` |
 | `ShardedModels.kt` | `packages/sdk/examples/llamacpp-sharded.ts` |
 | `SuspendResume.kt` | `packages/sdk/examples/suspend-resume.ts` |
-| `TextToSpeechAudio8.kt` | `packages/sdk/examples/tts/audio8.ts` |
-| `TextToSpeechChatterboxEnhanced.kt` | `packages/sdk/examples/tts/chatterbox-enhanced.ts` |
-| `TextToSpeechChatterbox.kt` | `packages/sdk/examples/tts/chatterbox.ts` |
-| `TextToSpeechCosyvoice3.kt` | `packages/sdk/examples/tts/cosyvoice3.ts` |
 | `TextToSpeech.kt` | `packages/sdk/examples/tts/supertonic.ts` |
-| `TextToSpeechMossDialogue.kt` | `packages/sdk/examples/tts/moss-dialogue.ts` |
+| `TextToSpeechAudio8.kt` | `packages/sdk/examples/tts/audio8.ts` |
+| `TextToSpeechChatterbox.kt` | `packages/sdk/examples/tts/chatterbox.ts` |
+| `TextToSpeechChatterboxEnhanced.kt` | `packages/sdk/examples/tts/chatterbox-enhanced.ts` |
+| `TextToSpeechCosyvoice3.kt` | `packages/sdk/examples/tts/cosyvoice3.ts` |
 | `TextToSpeechMoss.kt` | `packages/sdk/examples/tts/moss.ts` |
-| `TextToSpeechMossSoundEffectControls.kt` | `packages/sdk/examples/tts/moss-sound-effect-controls.ts` |
+| `TextToSpeechMossDialogue.kt` | `packages/sdk/examples/tts/moss-dialogue.ts` |
 | `TextToSpeechMossSoundEffect.kt` | `packages/sdk/examples/tts/moss-sound-effect.ts` |
-| `TextToSpeechMossSpeechAudio.kt` | `packages/sdk/examples/tts/moss-speech-audio.ts` |
+| `TextToSpeechMossSoundEffectControls.kt` | `packages/sdk/examples/tts/moss-sound-effect-controls.ts` |
 | `TextToSpeechMossSpeech.kt` | `packages/sdk/examples/tts/moss-speech.ts` |
+| `TextToSpeechMossSpeechAudio.kt` | `packages/sdk/examples/tts/moss-speech-audio.ts` |
 | `TextToSpeechParler.kt` | `packages/sdk/examples/tts/parler.ts` |
 | `TextToSpeechSupertonicEnhanced.kt` | `packages/sdk/examples/tts/supertonic-enhanced.ts` |
 | `Transcription.kt` | `packages/sdk/examples/asr/whispercpp-filesystem.ts` |
@@ -123,10 +124,10 @@ database drivers to those two examples only. `Finetune` trains on
 | `TranscriptionParakeetSortformer.kt` | `packages/sdk/examples/asr/parakeet-sortformer.ts` |
 | `TranscriptionParakeetTdt.kt` | `packages/sdk/examples/asr/parakeet-tdt-filesystem.ts` |
 | `TranscriptionParakeetTranscribepsy.kt` | `packages/sdk/examples/asr/parakeet-transcribepsy-filesystem.ts` |
-| `TranscriptionParakeetUnifiedCoreml.kt` | `packages/sdk/examples/asr/parakeet-unified-coreml.ts` |
 | `TranscriptionParakeetUnified.kt` | `packages/sdk/examples/asr/parakeet-unified-filesystem.ts` |
+| `TranscriptionParakeetUnifiedCoreml.kt` | `packages/sdk/examples/asr/parakeet-unified-coreml.ts` |
 | `Translation.kt` | `packages/sdk/examples/translation/translation-llm.ts` |
-| `VlaGroot.kt` | `packages/sdk/examples/vla-groot.ts` |
 | `Vla.kt` | `packages/sdk/examples/vla-smolvla.ts` |
+| `VlaGroot.kt` | `packages/sdk/examples/vla-groot.ts` |
 | `VlaPi05.kt` | `packages/sdk/examples/vla-pi05.ts` |
 | `VoiceAssistant.kt` | `packages/sdk/examples/voice-assistant/voice-assistant.ts` |

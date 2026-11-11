@@ -13,9 +13,8 @@
 // The engine ships its own weights, so the load passes an empty source and the
 // four component models as `*ModelSrc` fields of `modelConfig`.
 //
-// RUN: ./gradlew run -Pexample=Audiogen --args="'lo-fi hip hop, mellow piano' audiogen-output.wav"
+// RUN: ./gradlew -p examples run -Pexample=Audiogen --args="'lo-fi hip hop, mellow piano' audiogen-output.wav"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.Models
@@ -23,6 +22,7 @@ import io.tether.qvac.sdk.generated.schema.AudioGenStreamRequest
 import io.tether.qvac.sdk.generated.schema.AudioGenStreamResponseProgress
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.media
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.qvacRequestId
@@ -43,7 +43,7 @@ fun main(args: Array<String>): Unit = runBlocking {
     val caption = args.getOrNull(0) ?: "Lo-fi hip hop with mellow piano, soft drums, and warm bass"
     val outputPath = args.getOrNull(1) ?: "audiogen-output.wav"
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         println("▸ Loading ACE-Step AudioGen models...")
         val modelId = client.loadWithProgress(

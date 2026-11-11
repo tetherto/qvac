@@ -13,15 +13,15 @@
 // reads `sampleRate` and `done` off them. The model is unloaded in a `finally`
 // block, as the TypeScript example does.
 //
-// RUN: ./gradlew run -Pexample=TextToSpeechMossSoundEffect
+// RUN: ./gradlew -p examples run -Pexample=TextToSpeechMossSoundEffect
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
 import io.tether.qvac.sdk.generated.schema.TextToSpeechRequest
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.textToSpeech
 import java.io.File
@@ -35,7 +35,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 fun main(): Unit = runBlocking {
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val modelId = client.loadWithProgress(
             source = System.getenv("QVAC_MOSS_SFX_MODEL") ?: Models.AUDIOGEN_MOSS_SFX_V2_Q8_0.src,

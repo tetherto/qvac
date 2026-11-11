@@ -1,10 +1,11 @@
 # QVAC SDK for Kotlin
 
-Local Kotlin client for the `@qvac/sdk` Bare worker, including a native Android
-host backed by BareKit and an authenticated desktop JVM sidecar transport.
+Local Kotlin client for the `@qvac/sdk` Bare worker, with Android and desktop
+JVM hosts that run the worker on Bare Kit.
 
-The published Kotlin targets are Android and desktop JVM. Native targets are
-deferred until each has a tested worker host; no hostless Kotlin/Native
+The Android runtimes are published. The desktop JVM worker host is experimental
+and built from this repository; see [Desktop JVM](#desktop-jvm). Native targets
+are deferred until each has a tested worker host; no hostless Kotlin/Native
 artifacts are published. Android embeds the same QVAC mobile worker and native
 addons used by the Expo integration. The sample hosts it in an
 `android:process=":qvac_worker"` bound service so addon crashes are isolated
@@ -50,10 +51,10 @@ configuration, or build it from the command line:
 ./gradlew :android-example:assembleDebug
 ```
 
-The first build runs `npm install` to fetch the exact-pinned `@qvac/sdk` and
-BareKit dependencies, bundles the worker for `android-arm64`, links the
-configured native addons,
-and packages the BareKit runtime, worker asset, and addons into the APK.
+The first build runs `npm install` to fetch the exact-pinned `@qvac/sdk`, then
+has bare-stow write the worker for `android-arm64` as a Kotlin module: the
+harness that starts it, the bundle and the configured native addons, linked.
+The APK packages that module with the Bare Kit runtime from `bare-kit-kotlin`.
 The sample is intentionally restricted to `arm64-v8a`, API 29+. It is a native
 Jetpack Compose app whose launcher is an executable Feature Lab with independent
 and run-all buttons for completion, vision, OCR, transcription, TTS, embeddings,
@@ -75,7 +76,7 @@ are loaded one at a time and retained in the SDK cache after unload.
 | TTS | `TTS_MULTILINGUAL_SUPERTONIC3_Q4_0` | 85 MB | 24.9 s |
 | Embeddings | `EMBEDDINGGEMMA_300M_Q4_0` | 278 MB | 15.5 s |
 | Translation | `BERGAMOT_EN_FR` + vocabularies | 32 MB + companions | 1.8 s |
-| Classification | bundled MobileNetV3 | 3 MB | 1.3 s |
+| Classification | `MOBILENETV3_3CLASS_V3_FP16` | 3 MB | 1.3 s |
 
 The cached matrix completed in 117.8 seconds. A clean first run additionally
 downloads roughly 1.4 GB and depends on network speed. AudioGen,
@@ -90,7 +91,8 @@ QVAC_DEVICE_TEST_SCOPE=feature-lab ./scripts/run-android-device-tests.sh
 ### Consume a published artifact
 
 Each `sdk-v<version>` GitHub Release, from `sdk-v0.23.0` on, carries one Maven
-repository ZIP per Android runtime profile and one for the desktop JVM client.
+repository ZIP per Android runtime profile and one for the Kotlin client's JVM
+variant, which carries no worker host.
 Download the profile the app needs, for example
 `qvac-sdk-android-llm-<version>-maven.zip`, extract it, and point a Gradle
 Maven repository at the extracted directory:
@@ -102,7 +104,7 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         exclusiveContent {
-            forRepository { maven("https://jitpack.io") } // bare-rpc-kotlin
+            forRepository { maven("https://jitpack.io") } // Holepunch's Kotlin libraries
             filter { includeGroupByRegex("com\\.github\\.holepunchto\\..*") }
         }
         maven { url = uri("/absolute/path/to/extracted-qvac-repository") }
@@ -124,7 +126,8 @@ artifacts. The archive includes the selected runtime and the Kotlin client
 modules it depends on, but not the Holepunch libraries from JitPack. Verify
 downloads against the release's `qvac-sdk-kotlin-<version>-SHA256SUMS` asset.
 
-The artifacts depend on `bare-rpc-kotlin`, which is compiled with Kotlin 2.4,
+The artifacts depend on Holepunch's `bare-rpc-kotlin`, `bare-stow-host-kotlin`
+and, on Android, `bare-kit-kotlin`. They are compiled with Kotlin 2.4,
 so the consuming project needs a Kotlin 2.3 or newer compiler. AGP 9's built-in
 Kotlin compiles with the Kotlin Gradle plugin version on the classpath, and
 bundles 2.2 when none is declared, so such a project adds the plugin without
@@ -231,9 +234,8 @@ and a discoverable production signing public key must be configured beforehand.
 Never run both staging and automatic publication for the same release blindly;
 finish or drop an existing deployment in the Portal before retrying.
 
-Central publication fails closed without signing and a matching authenticated
-published JS worker, even though the plugin stages artifacts on disk first.
-The tokenless published npm worker is not eligible for external Kotlin release.
+Central publication fails closed without signing, even though the plugin stages
+artifacts on disk first.
 
 Start and close the isolated worker with the application lifecycle:
 
@@ -253,24 +255,23 @@ fun runQvac(applicationContext: android.content.Context) = runBlocking {
 }
 ```
 
-`client.close()` stops the service and performs the worker cleanup round trip.
-For an in-process host, use `AndroidBareKitTransport.connect()` directly; the
-same typed client and worker bundle are used in either topology.
-Initialization and cleanup are dispatched to Android's main thread internally;
-calling the suspend API from `Dispatchers.Default` or `Dispatchers.IO` is supported.
-Service duplex input is registered before writes are accepted, fragmented into
-64 KiB Binder transactions, and buffered with bounded backpressure. Cancelling
-collection cancels the service-side duplex request instead of merely sending EOF.
-IPC reads/writes also run on the main thread. An in-flight frame finishes before
-cancellation releases the write lock; a write failure or 10-second write timeout
-closes the connection rather than letting later requests use a partial frame.
+`client.close()` stops the service and the worker. For an in-process host, use
+`AndroidBareKitTransport.connect()` directly; the same typed client and worker
+bundle are used in either topology. The suspend API can be called from any
+dispatcher. Service duplex input is registered before writes are accepted,
+fragmented into 64 KiB Binder transactions, and buffered with bounded
+backpressure. Cancelling collection cancels the service-side duplex request
+instead of merely sending EOF.
+
+A stopping worker gets 10 seconds to unload its models before it is killed. A
+worker killed that way, or one that dies, leaves native state in the process,
+so every later `connect()` in that process throws `QvacWorkerStartException`
+until the app restarts.
 
 `QvacWorkerService` is declared `android:exported="false"` in the library
 manifest and has no intent filter, so Android only lets components running
 under the owning application's UID bind it. There is no cross-application
-caller, so the Binder surface carries no authentication token; the
-per-session token described under Desktop JVM applies to the loopback TCP
-transport only. Keep `android:exported="false"` when merging the manifest
+caller, so the Binder surface carries no authentication token. Keep `android:exported="false"` when merging the manifest
 (do not override it with `tools:replace`). Exporting the service, or sharing
 it across applications through a shared UID, would need an explicit caller
 check before dispatch, which the service does not implement.
@@ -282,23 +283,20 @@ build and publish only one of them.
 
 ## Desktop JVM
 
-Desktop JVM worker hosting is experimental. The client resolves the same worker
-tiers as Python: explicit paths, `QVAC_WORKER_PATH`/`QVAC_BARE_PATH`,
-`QVAC_SDK_DIR`, a local `node_modules`, the versioned managed cache, and a global
-npm installation. It requires a worker whose version matches this client and
-runs it over a loopback channel. Android uses its embedded BareKit worker and is
-unaffected.
+Desktop JVM worker hosting is experimental. The `:jvm-barekit` module runs the
+worker inside the JVM as a Bare Kit worklet, as `AndroidBareKitTransport` does on
+Android. Its build bundles the worker, with every built-in plugin, for the
+desktop host it runs on, and carries the bundle and its addons as classpath
+resources, which bare-stow's harness extracts to a temporary folder when the
+worker starts. The module is built from this repository and is not published.
 
 ```kotlin
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import kotlinx.coroutines.runBlocking
 
 fun main() = runBlocking {
-    val transport = JvmBareRpcTransport.connectResolved(
-        sdkDirectory = "/path/to/qvac/packages/sdk", // a local @qvac/sdk installation
-    )
-    val client = QvacClient(transport)
+    val client = QvacClient(JvmBareKitTransport.connect())
 
     try {
         println(client.heartbeat())
@@ -308,19 +306,12 @@ fun main() = runBlocking {
 }
 ```
 
-`installWorkerIfMissing = true` installs and caches the pinned `@qvac/sdk`
-version on first use; cached packages are re-checked. The transport launches
-`bare` and creates a loopback-only TCP endpoint. The worker authenticates with a
-per-session token passed in its environment, and the transport rejects any
-other local connection before a frame is exchanged. A worker whose `@qvac/sdk`
-`package.json` does not declare `"qvacIpcAuthentication": "token-v1"` is refused;
-`connect(..., authenticated = false)` is the only way to run one.
-
-Worker stdout/stderr are continuously drained into `transport.recentWorkerLogs`
-(a bounded 16K-character tail); `isWorkerAlive` reports the child process state.
-Always call `close()` in `finally`. Close is idempotent and cancellation-safe;
-a JVM shutdown hook is an additional best-effort cleanup, not protection from
-SIGKILL or a host crash. The SDK never silently restarts/replays inference.
+`homeDirectory` defaults to `QVAC_HOME_DIR`, then the user's home folder. The
+worker shares the JVM process, so a native addon crash ends the application,
+and a worker killed before its cleanup finished makes later `connect()` calls
+throw `QvacWorkerStartException` until the process restarts.
+Always call `close()` in `finally`. Close is idempotent and cancellation-safe.
+The SDK never silently restarts/replays inference.
 
 ## Full worker contract
 
@@ -417,6 +408,13 @@ A tool describes flat parameters with `parameters` and `required`, or passes a
 complete JSON Schema object as `parametersSchema` for nested `properties`,
 `items`, `anyOf` or `$defs`; that object is sent as written.
 
+A tool with `deferLoading = true` stays out of the prompt until the model loads
+it through the built-in `tool_search`. Use `orchestrate()` for deferred tools:
+the worker runs the search there. With `run()` the search comes back as an
+ordinary tool call that no handler can answer, because the Kotlin SDK has no
+`tool_search` implementation. `QvacCompletionOptions(toolSearch = ...)` sets how
+many definitions one search loads; keep it the same for the whole conversation.
+
 `run()` intentionally accumulates the complete result, including streams not
 collected by the caller. Its memory usage grows with output. Use the cold
 `completion.stream(...)` or generated stream methods for incremental processing
@@ -486,20 +484,23 @@ is large by design; edit the exporter/generator, never generated DTOs.
 ## Bare-RPC
 
 Both transports speak bare-rpc through Holepunch's
-[`bare-rpc-kotlin`](https://github.com/holepunchto/bare-rpc-kotlin), published
-on JitPack, so a consuming project lists the JitPack repository next to Maven
-Central as the snippets above do. A frame over 16 MiB fails the call it belongs
-to with `QvacWorkerProtocolException` and leaves the connection usable: the
-transport splits frames before the library sees them, because the library
-would fail the whole connection. A JSON line over 16 MiB, including one split
-across frames, fails its call the same way. A stream buffering more than
-64 MiB ahead of its collector fails the connection; the worker's stream is
-paused once 16 KiB is buffered ahead of its collector and resumed once the
-collector takes that back below 16 KiB, so this is reached only if the worker
-ignores the pause. These are memory-safety limits, not generation cutoffs.
+[`bare-rpc-kotlin`](https://github.com/holepunchto/bare-rpc-kotlin), inside
+bare-stow's framing from
+[`bare-stow-host-kotlin`](https://github.com/holepunchto/bare-stow-host-kotlin),
+which also carries the worker's `ready`, errors and exit code and the client's
+`terminate`. Both are published on JitPack, so a consuming project lists the
+JitPack repository next to Maven Central as the snippets above do. A frame over 16 MiB fails the call it belongs
+to with `QvacWorkerProtocolException` and leaves the connection usable. A JSON
+line over 16 MiB, including one split across frames, fails its call the same
+way. A stream buffering more than 64 MiB ahead of its collector fails the
+connection; the worker's stream is paused once 16 KiB is buffered ahead of its
+collector and resumed once the collector takes that back below 16 KiB, so this
+is reached only if the worker ignores the pause. These limits reject oversized
+replies; they are not generation cutoffs, and a frame is assembled in full
+before its size is checked.
 
-Pass `rpcLimits = RpcLimits(maxFrameBytes = ...)` to `JvmBareRpcTransport.connect`,
-`connectResolved` or `AndroidBareKitTransport.connect` for a call whose reply
+Pass `rpcLimits = RpcLimits(maxFrameBytes = ...)` to `JvmBareKitTransport.connect`
+or `AndroidBareKitTransport.connect` for a call whose reply
 or stream chunk is larger than 16 MiB, such as a large `upscaleStream` image.
 The JSON line bound and the stream cap follow it. A frame is held in memory
 several times over while it is decoded, so account for device RAM.
@@ -508,6 +509,7 @@ several times over while it is decoded, so account for device RAM.
 
 ```bash
 ./gradlew jvmTest
+./gradlew :jvm-barekit:test
 ./gradlew :android-barekit:assemble
 ./gradlew :android-example:assembleDebug
 ./gradlew publishSdkToBuildRepository
@@ -519,19 +521,17 @@ The runnable examples the docs embed live in [`examples/`](examples/README.md).
 Real-engine cross-client conformance uses the same corpus as JS/Python:
 
 ```bash
-python3 ../sdk-python/scripts/build_worker.py --force
-QVAC_RUN_CONFORMANCE=1 ./gradlew jvmTest --tests '*WorkerConformanceTest' --rerun-tasks
+QVAC_RUN_CONFORMANCE=1 ./gradlew :jvm-barekit:test --tests '*WorkerConformanceTest' --rerun-tasks
 ```
 
 This downloads small models and tests generation, translation, embeddings,
 load/unload, cancellation, the tool loop, and TTS. Without the opt-in variable
-this test is explicitly skipped; ordinary JVM tests still exercise a live
-JavaScript bare-rpc peer. CI runs real inference on `test-e2e-smoke`-labelled PRs or manual
+this test is explicitly skipped; `:jvm-barekit:test` still starts the worker
+and checks a heartbeat. CI runs real inference on `test-e2e-smoke`-labelled PRs or manual
 dispatch. Publishing requires a release tag, explicit dispatch, or the SDK
 release workflow.
 
-External Maven publication is gated on an already-published, version-matched
-SDK. Central destinations require an in-memory signing key; local Maven
+Central destinations require an in-memory signing key; local Maven
 verification does not.
 
 ## Current boundary
@@ -539,7 +539,10 @@ verification does not.
 The supported runtime matrix is intentionally explicit:
 
 - Android `arm64-v8a`, API 29+: embedded in-process or isolated-service host.
-- Desktop JVM: experimental, resolves a workspace `@qvac/sdk` worker through
-  `connectResolved` over a loopback channel.
+  The app compiles with `compileSdk` 36 or newer, which Bare Kit requires, and
+  sets `ndk { abiFilters += "arm64-v8a" }`: Bare Kit ships for four ABIs, the
+  QVAC addons for `arm64-v8a` only.
+- Desktop JVM: experimental, an in-process Bare Kit worker built for the host
+  `:jvm-barekit` is built on.
 - Kotlin/Native: not published in this phase. Each target will be added only
   with a real worker host and target-specific release evidence.

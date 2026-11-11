@@ -9,6 +9,7 @@ import {
 } from "@qvac/infer-base";
 
 import { QvacErrorAddonASRGgml, ERR_CODES } from "./lib/error";
+import { NEMOTRON_STREAMING_CHUNK_MS } from "./lib/constants";
 import {
   assessFit as assessFitImpl,
   type AsrFitDevice,
@@ -30,6 +31,9 @@ import {
   type EndOfTurnEvent,
   type InferenceClientState,
   type ParakeetRuntimeStats,
+  type MossTranscribeProgress,
+  type MossTranscribeRuntimeStats,
+  type SpeakerProbabilities,
   type RuntimeStats,
   type RuntimeStatsCore,
   type TranscriptionSegment,
@@ -72,9 +76,7 @@ import {
 const GGUF_MAGIC = [0x47, 0x47, 0x55, 0x46]; // ASCII "GGUF"
 
 type ASRGgmlConfig =
-  | WhisperEngineConfig
-  | ParakeetEngineConfig
-  | MossTranscribeEngineConfig;
+  WhisperEngineConfig | ParakeetEngineConfig | MossTranscribeEngineConfig;
 
 interface ASRGgmlOptions {
   files: ASRGgmlFiles;
@@ -174,7 +176,11 @@ function sniffEngine(modelPath: string): EngineType {
 }
 
 function isKnownEngine(value: unknown): value is EngineType {
-  return value === "whisper" || value === "parakeet" || value === ENGINE_MOSS_TRANSCRIBE;
+  return (
+    value === "whisper" ||
+    value === "parakeet" ||
+    value === ENGINE_MOSS_TRANSCRIBE
+  );
 }
 
 /**
@@ -214,6 +220,8 @@ class ASRGgml {
   static readonly ENGINE_MOSS_TRANSCRIBE = ENGINE_MOSS_TRANSCRIBE;
 
   static readonly ERR_CODES = ERR_CODES;
+  /** Chunk cadences (ms) Nemotron streaming accepts; see `runStreaming()`. */
+  static readonly NEMOTRON_STREAMING_CHUNK_MS = NEMOTRON_STREAMING_CHUNK_MS;
   static readonly Error = QvacErrorAddonASRGgml;
 
   static readonly inferenceManagerConfig = Object.freeze({
@@ -311,7 +319,9 @@ class ASRGgml {
       this._driver = new MossTranscribeDriver(
         ctx,
         files,
-        (config as MossTranscribeEngineConfig) || { engine: ENGINE_MOSS_TRANSCRIBE },
+        (config as MossTranscribeEngineConfig) || {
+          engine: ENGINE_MOSS_TRANSCRIBE,
+        },
       );
     } else if (this._engineType === "parakeet") {
       this._driver = new ParakeetDriver(
@@ -453,7 +463,10 @@ class ASRGgml {
       await this._waitForClosingSessionOrThrow(
         "concurrent run() during an open streaming session",
       );
-      return await this._driver.run(this._driver.normalizeAudio(audio), options);
+      return await this._driver.run(
+        this._driver.normalizeAudio(audio),
+        options,
+      );
     };
 
     if (this.exclusiveRun) {
@@ -558,7 +571,6 @@ class ASRGgml {
     await session.done;
     if (this._openSession === session) this._openSession = null;
   }
-
 }
 
 type EngineTypeShape = EngineType;
@@ -589,6 +601,9 @@ type BackendInfoShape = BackendInfo;
 type RuntimeStatsCoreShape = RuntimeStatsCore;
 type WhisperRuntimeStatsShape = WhisperRuntimeStats;
 type ParakeetRuntimeStatsShape = ParakeetRuntimeStats;
+type MossTranscribeProgressShape = MossTranscribeProgress;
+type MossTranscribeRuntimeStatsShape = MossTranscribeRuntimeStats;
+type SpeakerProbabilitiesShape = SpeakerProbabilities;
 type RuntimeStatsShape = RuntimeStats;
 type InferenceClientStateShape = InferenceClientState;
 type AsrFitDeviceShape = AsrFitDevice;
@@ -632,6 +647,9 @@ namespace ASRGgml {
   export type RuntimeStatsCore = RuntimeStatsCoreShape;
   export type WhisperRuntimeStats = WhisperRuntimeStatsShape;
   export type ParakeetRuntimeStats = ParakeetRuntimeStatsShape;
+  export type MossTranscribeProgress = MossTranscribeProgressShape;
+  export type MossTranscribeRuntimeStats = MossTranscribeRuntimeStatsShape;
+  export type SpeakerProbabilities = SpeakerProbabilitiesShape;
   export type RuntimeStats = RuntimeStatsShape;
   export type InferenceClientState = InferenceClientStateShape;
   export type AsrFitDevice = AsrFitDeviceShape;
@@ -646,7 +664,8 @@ namespace ASRGgml {
   export import BackendId = BackendIdEnum;
 
   export const assessFit = assessFitImpl;
-  export type ParakeetSpeakerAttributionConfig = ParakeetSpeakerAttributionConfigShape;
+  export type ParakeetSpeakerAttributionConfig =
+    ParakeetSpeakerAttributionConfigShape;
 }
 
 export = ASRGgml;

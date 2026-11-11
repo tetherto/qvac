@@ -246,7 +246,7 @@ The following script shows the same workflow using `embed()` plus a SQLite vecto
 In Kotlin, the [examples build](/sdk/kotlin-sdk#quickstart) adds the SQLite JDBC driver, `org.xerial:sqlite-jdbc:3.53.4.0`, to this example only. The driver always supports loadable extensions, but the vector extension itself is a prebuilt binary: download the one for your platform from the [sqlite-vector releases](https://github.com/sqliteai/sqlite-vector/releases) and point `SQLITE_VECTOR_EXTENSION` at it:
 
 ```bash
-SQLITE_VECTOR_EXTENSION=/path/to/vector ./gradlew run -Pexample=RagSqlite
+SQLITE_VECTOR_EXTENSION=/path/to/vector ./gradlew -p examples run -Pexample=RagSqlite
 ```
 
 <Callout type="success">

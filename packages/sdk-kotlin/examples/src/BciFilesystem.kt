@@ -11,9 +11,8 @@
 // `QvacTranscriptionResult.segments`; an error frame is thrown as a
 // `QvacFeatureException`.
 //
-// RUN: ./gradlew run -Pexample=BciFilesystem --args="<neural-bin-file-path>"
+// RUN: ./gradlew -p examples run -Pexample=BciFilesystem --args="<neural-bin-file-path>"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacDataInput
 import io.tether.qvac.sdk.QvacProgressEvent
@@ -22,6 +21,7 @@ import io.tether.qvac.sdk.generated.ModelConstant
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import kotlin.system.exitProcess
 import kotlinx.coroutines.runBlocking
@@ -32,13 +32,13 @@ import kotlinx.serialization.json.putJsonObject
 
 fun main(args: Array<String>): Unit = runBlocking {
     if (args.isEmpty()) {
-        System.err.println("Usage: ./gradlew run -Pexample=BciFilesystem --args=\"<neural-bin-file-path>\"")
+        System.err.println("Usage: ./gradlew -p examples run -Pexample=BciFilesystem --args=\"<neural-bin-file-path>\"")
         exitProcess(1)
     }
 
     val neuralFilePath = args[0]
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         println("▸ Starting BCI transcription example...")
 

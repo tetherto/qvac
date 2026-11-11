@@ -82,6 +82,7 @@ jobs:
               "packages/inference/package.json",
               "packages/inference/src/schemas/",
               "packages/sdk/src/worker/",
+              "packages/sdk/src/commands/",
               "packages/sdk-e2e/catalog/conformance/",
               "packages/sdk-e2e/runners/kotlin/",
               "packages/sdk/contract/",
@@ -213,6 +214,7 @@ jobs:
             -PqvacProfile="$QVAC_PROFILE" \
             checkContract \
             jvmTest \
+            :jvm-barekit:test \
             :android-example:testDebugUnitTest \
             :android-example:checkDebugBuild \
             :android-example:compileDebugAndroidTestKotlin \
@@ -221,7 +223,10 @@ jobs:
 
           # Compile every example the docs embed, each in isolation against this
           # SDK, so an API change that breaks one fails here.
-          ./gradlew --no-daemon -p examples check
+          # -x buildWorkspaceSdk: packages/sdk is built above.
+          ./gradlew --no-daemon -p examples \
+            -x :sdk-kotlin:android-barekit:buildWorkspaceSdk \
+            check
           popd
 
           # Build and unit-test the Kotlin e2e app against this SDK, so an API break fails

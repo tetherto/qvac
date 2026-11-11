@@ -23,9 +23,8 @@
 //     `runBlocking`, and a cancelled block surfaces as the typed
 //     `QvacKnownException.ServerInferenceCancelled`.
 //
-// RUN: ./gradlew run -Pexample=AbotWorld --args="<first-frame-image> [prompt] [output-dir] [blocks] [width] [height]"
+// RUN: ./gradlew -p examples run -Pexample=AbotWorld --args="<first-frame-image> [prompt] [output-dir] [blocks] [width] [height]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.cancel
 import io.tether.qvac.sdk.generated.Models
@@ -37,6 +36,7 @@ import io.tether.qvac.sdk.generated.schema.WorldSceneStreamResponseStats
 import io.tether.qvac.sdk.generated.schema.WorldStepStreamRequest
 import io.tether.qvac.sdk.generated.schema.WorldStepStreamRequestKeysItem
 import io.tether.qvac.sdk.generated.schema.WorldStepStreamResponseStats
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.media
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.qvacRequestId
@@ -70,13 +70,13 @@ fun main(args: Array<String>): Unit = runBlocking {
     if (firstFramePath.isNullOrEmpty()) {
         System.err.println("✖ first frame image path is required")
         System.err.println(
-            "Usage: ./gradlew run -Pexample=AbotWorld " +
+            "Usage: ./gradlew -p examples run -Pexample=AbotWorld " +
                 "--args=\"<firstFrameImage> [prompt] [outputDir] [blocks] [width] [height]\"",
         )
         exitProcess(1)
     }
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         println("▸ Loading ABot-World session (DiT + taehv + scene encoders)...")
         val loaded = client.models.load(

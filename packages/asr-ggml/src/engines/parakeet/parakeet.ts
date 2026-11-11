@@ -1,11 +1,9 @@
 import {
+  ERR_CODES as SHARED_ERR_CODES,
   ERR_CODES_PARAKEET as ERR_CODES,
   QvacErrorAddonASRGgml,
 } from "../../lib/error";
-import {
-  END_OF_INPUT,
-  MAX_BUFFERED_BYTES,
-} from "../../lib/constants";
+import { END_OF_INPUT, MAX_BUFFERED_BYTES } from "../../lib/constants";
 import { mergeFloat32Chunks, pcmS16ToFloat32 } from "../../lib/audio";
 import type { BackendInfo } from "../../lib/types";
 import type { ParakeetSpeakerAttributionConfig } from "./options";
@@ -100,10 +98,7 @@ export interface WeightData {
 }
 
 export type AudioInput =
-  | Float32Array
-  | Int16Array
-  | ArrayBuffer
-  | ArrayBufferView;
+  Float32Array | Int16Array | ArrayBuffer | ArrayBufferView;
 
 export type AppendData =
   | { type: "audio"; data?: ArrayBufferLike }
@@ -298,9 +293,17 @@ export class ParakeetInterface {
     }
     if (isError || eventStr.includes("Error")) return "Error";
     if (
-      data !== null && typeof data === "object" &&
+      data !== null &&
+      typeof data === "object" &&
       (data as { type?: unknown }).type === "endOfTurn"
-    ) return "EndOfTurn";
+    )
+      return "EndOfTurn";
+    if (
+      data !== null &&
+      typeof data === "object" &&
+      (data as { type?: unknown }).type === "progress"
+    )
+      return "Progress";
     if (this._looksLikeVadEvent(data)) return "VadState";
     if (eventStr.includes("RuntimeStats")) return "JobEnded";
     if (eventStr.includes("Output")) return "Output";
@@ -333,8 +336,7 @@ export class ParakeetInterface {
   ): void {
     const isError = typeof error === "string" && error.length > 0;
     const mappedEvent = this._mapAddonEvent(event, data, isError);
-    const isTerminal =
-      mappedEvent === "Error" || mappedEvent === "JobEnded";
+    const isTerminal = mappedEvent === "Error" || mappedEvent === "JobEnded";
     const jobId = this._activeJobId;
 
     if (jobId === null) {
@@ -432,7 +434,11 @@ export class ParakeetInterface {
     const previousState = this._state;
     let accepted = false;
     try {
-      accepted = this._binding.runJob(this._handle, { ...job, type: "audio", input });
+      accepted = this._binding.runJob(this._handle, {
+        ...job,
+        type: "audio",
+        input,
+      });
     } catch (error) {
       this._setState(previousState);
       throw error;
@@ -681,9 +687,11 @@ export class ParakeetInterface {
       return Promise.resolve(currentJobId);
     } catch (error) {
       const normalized = normalizeError(error);
+      // New in 0.11.x with no historical parakeet number, so it carries the
+      // shared code (6012): one number per name across both engines.
       return Promise.reject(
         createParakeetError(
-          ERR_CODES.FAILED_TO_APPEND,
+          SHARED_ERR_CODES.FAILED_TO_START_STREAMING,
           normalized.message,
           error,
         ),

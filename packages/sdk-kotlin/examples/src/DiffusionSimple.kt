@@ -8,11 +8,11 @@
 // closing stats. Like the TypeScript `outputs` promise, this example awaits only
 // `final` and never collects `events`.
 //
-// RUN: ./gradlew run -Pexample=DiffusionSimple --args="[model-src] [prompt]"
+// RUN: ./gradlew -p examples run -Pexample=DiffusionSimple --args="[model-src] [prompt]"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.generated.Models
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.media
 import io.tether.qvac.sdk.models
 import java.nio.file.Files
@@ -26,7 +26,7 @@ fun main(args: Array<String>): Unit = runBlocking {
     val modelSrc = args.getOrNull(0) ?: Models.SD_V2_1_1B_Q8_0.src
     val prompt = args.getOrNull(1) ?: "a photo of a cat sitting on a windowsill"
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val loaded = client.models.load(
             source = modelSrc,

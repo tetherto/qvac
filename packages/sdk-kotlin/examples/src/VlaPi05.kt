@@ -18,14 +18,14 @@
 // The VLA helpers work on plain Kotlin arrays, so no numpy-style dependency is
 // needed; `stats` is the raw `JsonObject` the addon returns.
 //
-// RUN: ./gradlew run -Pexample=VlaPi05 [--args="/abs/path/to/pi05.gguf"]
+// RUN: ./gradlew -p examples run -Pexample=VlaPi05 [--args="/abs/path/to/pi05.gguf"]
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.qvacVlaPreprocessImage
 import io.tether.qvac.sdk.vla
@@ -40,7 +40,7 @@ import kotlinx.serialization.json.putJsonArray
 fun main(args: Array<String>): Unit = runBlocking {
     val modelSrc = args.getOrNull(0) ?: Models.PI05_BASE_Q_AGGRESSIVE.src
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         println("▸ Loading π₀.₅ (pi05) model...")
         val modelId = client.loadWithProgress(

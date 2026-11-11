@@ -10,9 +10,8 @@
 // `parameters` object sent on the wire. Tool calls arrive as the
 // `QvacCompletionEvent.ToolCallEvent` arm of the sealed event type.
 //
-// RUN: ./gradlew run -Pexample=CompletionTools
+// RUN: ./gradlew -p examples run -Pexample=CompletionTools
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacCompletionEvent
 import io.tether.qvac.sdk.QvacMessage
@@ -25,6 +24,7 @@ import io.tether.qvac.sdk.generated.ModelConstant
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.run
 import kotlinx.coroutines.runBlocking
@@ -57,7 +57,7 @@ private fun mockExecute(name: String, arguments: JsonObject): String = when (nam
 private fun JsonObject.string(key: String): String? = get(key)?.jsonPrimitive?.content
 
 fun main(): Unit = runBlocking {
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val modelId = client.loadWithProgress(
             Models.QWEN3_1_7B_INST_Q4,

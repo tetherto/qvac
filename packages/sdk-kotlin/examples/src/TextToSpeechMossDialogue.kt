@@ -17,13 +17,13 @@
 // below, ported from the JS example's `utils`, save the samples to a WAV and
 // play it through ffplay.
 //
-// RUN: ./gradlew run -Pexample=TextToSpeechMossDialogue
+// RUN: ./gradlew -p examples run -Pexample=TextToSpeechMossDialogue
 //      --args='<moss-ttsd.gguf> <s1.wav> "<s1 transcript>" <s2.wav> "<s2 transcript>"'
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.TextToSpeechRequest
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.textToSpeech
 import java.io.File
@@ -44,14 +44,14 @@ private const val MOSS_SAMPLE_RATE = 24000
 fun main(args: Array<String>): Unit = runBlocking {
     if (args.size < 5 || args.take(5).any { it.isEmpty() }) {
         System.err.println(
-            "Usage: ./gradlew run -Pexample=TextToSpeechMossDialogue " +
+            "Usage: ./gradlew -p examples run -Pexample=TextToSpeechMossDialogue " +
                 "--args='<moss-ttsd.gguf> <s1.wav> \"<s1 transcript>\" <s2.wav> \"<s2 transcript>\"'",
         )
         exitProcess(1)
     }
     val (backbone, s1Audio, s1Text, s2Audio, s2Text) = args
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val loaded = client.models.load(
             source = backbone,

@@ -122,6 +122,7 @@ For the broader cancellation contract (errors, decorated-promise pattern across 
 - Pause: call [`cancel()`](/sdk/reference/api#cancel) with `requestId: op.requestId` from the decorated promise returned by `downloadAsset()` / `loadModel()`.
 - Resume: run the same `downloadAsset()` / `loadModel()` call again — the SDK will reuse the partial file and continue downloading.
 - Discard partial file: call `cancel({ requestId: op.requestId, clearCache: true })`.
+- Discard a download you already paused: call [`deleteCache({ modelSrc })`](/sdk/reference/api#deletecache) with the model's `registry://` source.
 
 ## Example
 

@@ -11,9 +11,8 @@
 // Pass a 16 kHz mono WAV path, e.g. the SDK's own sample
 // packages/sdk/examples/audio/sample-16khz.wav.
 //
-// RUN: ./gradlew run -Pexample=Transcription --args="<wav-file-path>"
+// RUN: ./gradlew -p examples run -Pexample=Transcription --args="<wav-file-path>"
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacDataInput
 import io.tether.qvac.sdk.QvacProgressEvent
@@ -21,6 +20,7 @@ import io.tether.qvac.sdk.generated.ModelConstant
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.speech
 import kotlin.system.exitProcess
@@ -31,12 +31,12 @@ import kotlinx.serialization.json.put
 
 fun main(args: Array<String>): Unit = runBlocking {
     if (args.isEmpty()) {
-        System.err.println("Usage: ./gradlew run -Pexample=Transcription --args=\"<wav-file-path>\"")
+        System.err.println("Usage: ./gradlew -p examples run -Pexample=Transcription --args=\"<wav-file-path>\"")
         exitProcess(1)
     }
     val audioPath = args[0]
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         println("▸ Loading Whisper model...")
         val modelId = client.loadWithProgress(

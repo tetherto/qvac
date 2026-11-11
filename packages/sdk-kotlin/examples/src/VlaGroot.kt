@@ -39,9 +39,8 @@
 // validated client-side before it reaches the worker. The VLA helpers work on
 // plain Kotlin arrays, so no numpy-style dependency is needed.
 //
-// RUN: ./gradlew run -Pexample=VlaGroot [--args="/abs/path/to/groot.gguf"]
+// RUN: ./gradlew -p examples run -Pexample=VlaGroot [--args="/abs/path/to/groot.gguf"]
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.QvacVlaEmbodiment
@@ -49,6 +48,7 @@ import io.tether.qvac.sdk.QvacVlaHparams
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.qvacVlaPadState
 import io.tether.qvac.sdk.vla
@@ -79,7 +79,7 @@ fun main(args: Array<String>): Unit = runBlocking {
     val embodiment = embodimentFromEnv("QVAC_GROOT_EMBODIMENT")
     val switchEmbodiment = embodimentFromEnv("QVAC_GROOT_SWITCH_EMBODIMENT")
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         println("▸ Loading GR00T (N1.7-3B LIBERO) model...")
         val modelId = client.loadWithProgress(

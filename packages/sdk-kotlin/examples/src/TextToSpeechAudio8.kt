@@ -15,9 +15,8 @@
 // `TextToSpeechResponseStats`. The helpers below, ported from the JS example's
 // `utils`, save them to a WAV and play it through ffplay.
 //
-// RUN: ./gradlew run -Pexample=TextToSpeechAudio8
+// RUN: ./gradlew -p examples run -Pexample=TextToSpeechAudio8
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.generated.ModelConstant
@@ -26,6 +25,7 @@ import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
 import io.tether.qvac.sdk.generated.schema.TextToSpeechRequest
 import io.tether.qvac.sdk.generated.schema.TextToSpeechResponseStats
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.textToSpeech
 import java.io.File
@@ -50,7 +50,7 @@ fun main(): Unit = runBlocking {
         put("seed", 42)
     }
 
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val modelId = client.loadWithProgress(Models.TTS_LM_MULTILINGUAL_AUDIO8_Q8_0, modelConfig)
         println("▸ Model loaded: $modelId")

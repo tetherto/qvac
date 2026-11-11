@@ -13,9 +13,8 @@
 // for exhaustiveness at compile time. Set `captureThinking = true` for
 // best-effort `<think>` parsing into `ThinkingDelta` events.
 //
-// RUN: ./gradlew run -Pexample=CompletionEvents
+// RUN: ./gradlew -p examples run -Pexample=CompletionEvents
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacCompletionEvent
 import io.tether.qvac.sdk.QvacCompletionOptions
@@ -26,6 +25,7 @@ import io.tether.qvac.sdk.generated.ModelConstant
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.LoadModelResponse
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.run
 import kotlinx.coroutines.runBlocking
@@ -37,7 +37,7 @@ private const val DIM = "\u001b[2m"
 private const val RESET = "\u001b[0m"
 
 fun main(): Unit = runBlocking {
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     try {
         val modelId = client.loadWithProgress(
             Models.QWEN3_600M_INST_Q4,

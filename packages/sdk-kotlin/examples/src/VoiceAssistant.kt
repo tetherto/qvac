@@ -23,9 +23,8 @@
 //
 // Requirements: microphone access, speakers.
 //
-// RUN: ./gradlew run -Pexample=VoiceAssistant
+// RUN: ./gradlew -p examples run -Pexample=VoiceAssistant
 
-import io.tether.qvac.sdk.JvmBareRpcTransport
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacCompletionEvent
 import io.tether.qvac.sdk.QvacMessage
@@ -33,6 +32,7 @@ import io.tether.qvac.sdk.completion
 import io.tether.qvac.sdk.generated.ModelConstant
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.TranscribeStreamRequest
+import io.tether.qvac.sdk.jvm.JvmBareKitTransport
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.run
 import io.tether.qvac.sdk.speech
@@ -176,7 +176,7 @@ private fun playAudio(pcm: ByteArray, sampleRate: Int) {
 // ── Main ──
 
 fun main(): Unit = runBlocking {
-    val client = QvacClient(JvmBareRpcTransport.connectResolved(installWorkerIfMissing = true))
+    val client = QvacClient(JvmBareKitTransport.connect())
     val modelIds = mutableListOf<String>()
     try {
         println("▸ Loading whisper-tiny + Silero VAD...")
