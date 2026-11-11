@@ -15,36 +15,45 @@
 ### Added
 
 - FP8 E4M3 (`GGML_TYPE_F8_E4M3`, `LLAMA_FTYPE_MOSTLY_F8_E4M3`) for weights and
-  the KV cache, with CUDA FP8 matmuls and flash attention.
+  the KV cache, with CUDA FP8 matmuls and flash attention. The FP8
+  prompt-processing attention kernel is opt-in with `GGML_CUDA_FA_F8=1`.
 - ConvRot ops for ComfyUI TensorWise I8 diffusion weights: `ggml_mul_mat_convrot`,
   `ggml_convrot`, `ggml_convrot_mul_mat` and `ggml_convrot_repack_q8_0`. F32
   matmuls honor `GGML_PREC_F32`.
-- Ragged ubatches for the Qwen3.5 recurrent layers (`ggml_ssm_conv_ragged`,
-  `ggml_gated_delta_net_ragged`): sequences of different lengths share one
-  ubatch in a unified KV cache. `LLAMA_RS_RAGGED=0` turns them off.
+- Ragged ubatches for the qwen35 and qwen35moe recurrent layers
+  (`ggml_ssm_conv_ragged`, `ggml_gated_delta_net_ragged`, CPU and CUDA):
+  sequences of different lengths share one ubatch. They are used with a
+  unified KV cache, no speculative rollback, and devices that support the ops;
+  `LLAMA_RS_RAGGED=0` turns them off.
 - Graph-leaf APIs: `ggml_graph_leaf`, `ggml_graph_leafs`, `ggml_graph_n_leafs`
   and `ggml_graph_add_leaf`.
 
 ### Fixed
 
-- Backend sampling marks every sampling chain as a graph output, so chains no
-  longer alias each other's buffers when several slots sample in one step.
-- The scheduler keeps `op_params` on its tensor copies.
-- CUDA keeps the tensors of concurrent branches allocated until they join.
+- Speculative drafts (DFlash, DSpark, EAGLE3) over several sequences mark
+  every sampling chain as a graph output, so the chains no longer share
+  buffers and one sequence's acceptance no longer collapses.
+- With `GGML_CUDA_GRAPH_OPT=1`, CUDA keeps the tensors of concurrent branches
+  allocated until they join, so attention results no longer depend on timing.
 - XDNA flushes the K/V rows a state restore writes before the decode
-  attention, repairs a lost first row of a bf16 GEMM block, and holds the
-  compute lock in its support query.
-- Chat parsing allows reasoning, and keeps continued content, before a
-  required tool call.
+  attention, repairs a lost first line of a bf16 GEMM block's output, and
+  holds the compute lock in its support query.
+- Under `tool_choice` required, the chat grammar accepts only a reasoning
+  block before the tool call, so a model can no longer write prose until the
+  context fills without calling. Continuing an assistant message that already
+  holds content still works.
 
 ### Changed
 
-- XDNA runs prefill GEMMs and attention on one merged NPU design, and the
-  fused decode on residual widths up to 4096 (Qwen3.5 2B, 4B and 9B).
+- XDNA runs the fused decode by default for residual widths above 1024
+  (Qwen3.5 2B, 4B and 9B; `GGML_XDNA_FUSED_WIDE=0` keeps the host decode), and
+  can run the prefill GEMM and attention on one merged design with
+  `GGML_XDNA_PFX=1`.
 - Metal fuses more of the Qwen3.5 decode: the FFN norm, the q/k L2 norms, the
   conv state update and the gated delta net gates.
-- Qwen3.5 recurrent states are read in place, and `n_kv` is padded to at least
-  1/16 of the used cells.
+- qwen35, qwen35moe and qwen3next read their recurrent states in place, and
+  `n_kv` is padded to at least 1/16 of the used cells once more than 4096
+  cells are in use.
 
 ## [0.28.0] - 2026-11-08
 
