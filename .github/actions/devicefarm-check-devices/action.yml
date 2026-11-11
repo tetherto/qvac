@@ -1,0 +1,43 @@
+name: Check Device Farm devices
+description: Fail a manual mobile run before any build when a device does not exist, selectors overlap, the tests filter matches nothing, or the run count is over the cap. The job holds the AWS credentials.
+
+inputs:
+  platform:
+    description: Android or iOS
+    required: true
+  devices:
+    description: Comma-separated device models
+    required: true
+  device-model-operator:
+    description: EQUALS or CONTAINS, as the scheduler will match
+    default: CONTAINS
+  tests:
+    description: Optional mocha --grep over runner names
+    default: ""
+  test-groups:
+    description: Path to the package's test/mobile/test-groups.json, when it shards
+    default: ""
+  runner-source:
+    description: Path to the package's test/mobile/integration.auto.cjs, when it does not
+    default: ""
+  package:
+    description: The published build the run installs, if any; not together with prebuild-run-id
+    default: ""
+  prebuild-run-id:
+    description: The run whose prebuilds the run installs, if any; not together with package
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        PLATFORM: ${{ inputs.platform }}
+        DEVICES: ${{ inputs.devices }}
+        OPERATOR: ${{ inputs.device-model-operator }}
+        TESTS: ${{ inputs.tests }}
+        GROUPS_PATH: ${{ inputs.test-groups }}
+        AUTO_PATH: ${{ inputs.runner-source }}
+        PACKAGE: ${{ inputs.package }}
+        PREBUILD_RUN_ID: ${{ inputs.prebuild-run-id }}
+      run: node "$GITHUB_ACTION_PATH/devicefarm-check-devices.mjs"

@@ -1,0 +1,39 @@
+name: Bootstrap vcpkg
+description: Point VCPKG_ROOT at the runner's vcpkg (cloned on macOS), set the build policy, and clear stale build trees.
+
+runs:
+  using: composite
+  steps:
+    - if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        set -euo pipefail
+        git clone --depth=1 --filter=blob:none --sparse https://github.com/microsoft/vcpkg.git
+        cd vcpkg
+        git sparse-checkout set --no-cone '/*' '!/ports' '!/versions'
+        ./bootstrap-vcpkg.sh -disableMetrics
+        echo "VCPKG_ROOT=$(pwd)" >> "$GITHUB_ENV"
+        pwd >> "$GITHUB_PATH"
+    - if: runner.os == 'Linux'
+      shell: bash
+      run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> "$GITHUB_ENV"
+    - if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        if (-not $env:VCPKG_INSTALLATION_ROOT -or -not (Test-Path $env:VCPKG_INSTALLATION_ROOT)) {
+          Write-Error "VCPKG_INSTALLATION_ROOT is not set or missing; expected a preinstalled vcpkg"
+          exit 1
+        }
+        $root = $env:VCPKG_INSTALLATION_ROOT -replace '\\', '/'
+        echo "VCPKG_ROOT=$root" >> $env:GITHUB_ENV
+        echo $root >> $env:GITHUB_PATH
+    # Per-job downloads: a shared $VCPKG_ROOT/downloads races across self-hosted jobs.
+    - shell: bash
+      run: |
+        mkdir -p "$GITHUB_WORKSPACE/.vcpkg-downloads"
+        {
+          echo "VCPKG_BUILD_TYPE=release"
+          echo "VCPKG_CMAKE_CONFIGURE_OPTIONS=--no-parallel-configure"
+          echo "VCPKG_DOWNLOADS=$GITHUB_WORKSPACE/.vcpkg-downloads"
+        } >> "$GITHUB_ENV"
+        rm -rf "$VCPKG_ROOT"/buildtrees/* "$VCPKG_ROOT"/packages/*

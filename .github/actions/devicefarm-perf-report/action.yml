@@ -1,0 +1,37 @@
+name: Extract perf report
+description: Build a package's performance report from Device Farm logs with scripts/perf-report, and render it to the step summary.
+
+inputs:
+  log-dir:
+    description: Logs from devicefarm-download-logs, zips already unpacked
+    required: true
+  output-dir:
+    description: Where the report is written
+    required: true
+  title:
+    description: Step summary heading; empty skips the summary
+    default: ""
+  filter:
+    description: Regex passed to extract-from-log.js --filter
+    default: ""
+  merge:
+    description: Union several reports from one device
+    default: "false"
+
+outputs:
+  extracted:
+    description: true when a non-empty report was produced
+    value: ${{ steps.extract.outputs.extracted }}
+
+runs:
+  using: composite
+  steps:
+    - id: extract
+      shell: bash
+      env:
+        LOG_DIR: ${{ inputs.log-dir }}
+        OUT_DIR: ${{ inputs.output-dir }}
+        TITLE: ${{ inputs.title }}
+        FILTER: ${{ inputs.filter }}
+        MERGE: ${{ inputs.merge }}
+      run: node "$GITHUB_ACTION_PATH/devicefarm-perf-report.mjs"
