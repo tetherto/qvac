@@ -5,6 +5,7 @@ export interface Hypercore {
   // Hypercore's internal state, shared by every session of this core in one
   // storage. Set once ready() resolves.
   core?: object | null
+  key?: Uint8Array | null
   ready(): Promise<void>
   close(): Promise<void>
 }

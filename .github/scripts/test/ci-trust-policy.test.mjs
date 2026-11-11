@@ -3263,7 +3263,7 @@ for (const [workflow, nextStep] of [
     const path = `.github/workflows/${workflow}`;
     const source = read(path);
     const steps = source.split(/\n {6}- /);
-    const verification = steps.findIndex((step) => step.startsWith("name: Verify MegaLoc test models"));
+    const verification = steps.findIndex((step) => step.startsWith("name: Verify classification test models"));
     const cleanup = steps.findIndex((step) => step.startsWith("name: Drop staging AWS credentials"));
     const consumer = steps.findIndex((step) => step.startsWith(`name: ${nextStep}`));
     assert.ok(verification >= 0 && verification < cleanup && cleanup < consumer);

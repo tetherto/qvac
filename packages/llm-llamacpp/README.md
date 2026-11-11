@@ -61,8 +61,16 @@ On an XDNA2 NPU (Strix Point, Strix Halo, Krackan) with XRT 2.25 or newer instal
 `@qvac/fabric` build that ships the XDNA backend, the NPU registers as `XDNA0` when the
 process can read and write its `/dev/accel` node; otherwise fabric logs that it is not listed.
 
-- It is never chosen automatically. Select it with `backend: "xdna"` or `devices: "XDNA0"`.
-  Without a listed NPU or XRT, `backend: "xdna"` is skipped like any other absent backend.
+- The NPU is its own device class, beside `gpu` and `cpu`, and `device: "gpu"` never picks it.
+  Select it with `device: "npu"`, which takes the first NPU fabric lists. When none is listed it
+  warns and falls back to the normal GPU order, then the CPU. `device: "npu"` cannot be combined
+  with `backend`, `devices`, `split-mode`, `main-gpu`, `rpc-servers` or finetuning; only the
+  defaults `backend: "auto"`, `devices: ""` and `split-mode: "none"` are accepted with it.
+  Runtime stats report `backendDevice: "npu"`.
+- `device: "gpu"` with `devices: "XDNA0"` also runs on the NPU alone and reports
+  `backendDevice: "npu"`; a mixed list such as `XDNA0,Vulkan0` is a GPU load. Finetuning is
+  rejected for any load with `XDNA0` in `devices`, alone or in a mixed split. `backend` takes
+  GPU families only.
 - Fabric lists the NPU without opening it. The first load that uses `XDNA0` opens it and
   registers its kernels, and the process then holds an NPU context. An NPU that fails to open
   stays listed but takes no work: the load runs on the CPU and fabric logs
@@ -72,11 +80,15 @@ process can read and write its `/dev/accel` node; otherwise fabric logs that it 
   load time. Fabric looks for them in `GGML_XDNA_KERNEL_DIR` when set, then next to that
   library. If they are missing, fabric logs `no GEMM kernels found` and the matrix
   multiplications run on the CPU.
-- On an XDNA load the NPU runs the ops it supports and the CPU runs the rest. The GPU is not
-  used, so another model can run on it at the same time. All loads in a process share one NPU
-  context and take turns on it.
-- A vision model's projector runs on the CPU with `backend: "xdna"` or with `XDNA0` first in
-  `devices`; it is untested on the NPU. `mmproj-use-gpu: true` moves it there.
+- On an XDNA load the NPU runs the ops it supports and the CPU runs the rest. The LLM layers do
+  not use the GPU; a vision model's projector does by default (see below), and
+  `mmproj-use-gpu: false` keeps the GPU free. All loads in a process share one NPU context and
+  take turns on it.
+- With `device: "npu"`, or `XDNA0` first in `devices`, a vision model's projector runs on a GPU:
+  one in `devices` if the list has one, else the first local GPU the multi-GPU split would use
+  (RPC devices do not count). With no GPU it runs on the CPU; it is untested on the NPU.
+  `mmproj-use-gpu: false` keeps it on the CPU, and `mmproj-use-gpu: true` on a host with no GPU
+  moves it to the NPU.
 - The backend is built around Qwen3.5. A model whose `ssm_out` quantization the fused decode
   layer does not cover, such as Qwen's own Qwen3.5-0.8B `Q4_K_M` GGUF with `Q8_0` `ssm_out`, fails at
   the first decode with `unsupported fused weight set` instead of falling back. Requantize
@@ -191,7 +203,7 @@ const config = {
 
 | Parameter         | Range / Type                                | Default                      | Description                                           |
 |-------------------|---------------------------------------------|------------------------------|-------------------------------------------------------|
-| device            | `"gpu"` or `"cpu"`                          | — (required)                 | Device to run inference on                            |
+| device            | `"gpu"`, `"cpu"` or `"npu"`                 | — (required)                 | Device class to run inference on. `"npu"` is the AMD XDNA NPU on Linux x64 (see the note on the AMD XDNA NPU above) |
 | gpu_layers        | integer                                     | 0                            | Number of model layers to offload to GPU              |
 | ctx_size          | 0 – model-dependent                         | 4096 (0 = loaded from model) | Context window size                                   |
 | poll              | integer 0 – 100                             | 0                            | Main GGML threadpool busy-wait level. `0` sleeps while idle; higher values can reduce wake latency but consume CPU during GPU work |
@@ -211,7 +223,7 @@ const config = {
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
 | image-max-megapixels | positive integer                            | 50                           | Maximum reported image pixel count in millions, checked before decode. Alias: `image_max_megapixels`. |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
-| backend           | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, `xdna`, or `auto` | N/A | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU. Cannot be combined with `split-mode` or `devices`. `xdna` selects the AMD XDNA NPU on Linux x64, which is never chosen automatically (see the note on the AMD XDNA NPU above) |
+| backend           | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, or `auto` | N/A | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU. Cannot be combined with `split-mode` or `devices`. Use `device: "npu"` for the AMD XDNA NPU |
 | split-mode        | `"none"`, `"layer"`, or `"tensor"` | `"none"`                     | How to split the model across GPUs. `"tensor"` is EXPERIMENTAL and desktop-only; `"row"` is rejected ([details](./docs/multi-gpu.md)) |
 | tensor-split      | comma-separated proportions (e.g. `"1,1"`)  | —                            | GPU split ratios for the multi-GPU split modes ([details](./docs/multi-gpu.md)) |
 | parallel          | integer                                     | 1                            | Concurrent sequence slots for continuous batching. Values `>= 2` enable batch `run()` and split the KV cache uniformly across slots ([details](./docs/continuous-batching.md)) |
@@ -224,7 +236,7 @@ const config = {
 | flash-attn        | `"on"`/`"enabled"`/`"true"`/`"1"`, `"off"`/`"disabled"`/`"false"`/`"0"`, or `"auto"` | `"on"`, except when finetuning or on a BitNet model, where it is forced off | Flash attention. The four truthy and four falsey spellings are equivalent; `"auto"` is a third state that defers to qvac-fabric's runtime capability probe. Lower-case only — matching is case-sensitive and any other value is rejected. Affects the KV-cache auto-default — see below. Also accepted as `flash_attn`; supplying both spellings is an error |
 | cache-type-k      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **key** quantization type. Unset = auto-default (see KV-cache type below) |
 | cache-type-v      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **value** quantization type. Quantizing V requires `flash-attn` on |
-| mmproj-use-gpu    | `"true"`/`"on"`/`"1"` or `"false"`/`"off"`/`"0"` | auto (see below)         | Run the multimodal projector (mmproj / vision encoder) on the GPU. Only honoured when a GPU backend is selected (ignored with a warning on CPU / GPU-fallback). Unset = auto-default (see mmproj backend below) |
+| mmproj-use-gpu    | `"true"`/`"on"`/`"1"` or `"false"`/`"off"`/`"0"` | auto (see below)         | Run the multimodal projector (mmproj / vision encoder) on the GPU. Only honoured when a GPU or NPU backend is selected (ignored with a warning on CPU / GPU-fallback). Unset = auto-default (see mmproj backend below) |
 | spec-type         | `"none"`, `"draft-mtp"`, `"draft-dflash"`, `"draft-dspark"` or `"auto"` | `"none"` | Speculative decoding, as llama-server's `--spec-type`: `draft-mtp` drafts with the model's own multi-token-prediction head, `draft-dflash` with the DFlash model in `spec-draft-model`, `draft-dspark` with the DSpark model in `spec-draft-model`, `auto` with whichever of the three the `spec-draft-model` header names (see [Speculative decoding](#speculative-decoding-mtp-dflash-dspark) below). Also accepted as `spec_type` |
 | spec-draft-model  | absolute path                               | –                            | Draft model, as llama-server's `--spec-draft-model` (`-md`): the DFlash or DSpark model, required by `spec-type: "draft-dflash"` and `"draft-dspark"`, or an external MTP head for `spec-type: "draft-mtp"`. Placed like the model (`device`, `gpu-layers`). Also accepted as `spec_draft_model` |
 | spec-draft-n-max  | 1 – 64                                      | 3                            | Longest draft per step. Also accepted as `spec_draft_n_max` |
@@ -266,7 +278,7 @@ For vision (VLM) models, the projector / image-encoder backend is auto-selected 
 | Android — Arm Mali | **CPU** | Projector encode measured slower on the Mali GPU than on CPU (QVAC-21257). |
 | Android — Adreno < 800 (e.g. Adreno 740) | **CPU** | Weaker tiers not yet benchmarked; conservative default (may be relaxed once benchmarked). |
 | Android — undetectable Adreno tier | **CPU** | Conservative default when the GPU's Adreno version can't be parsed. |
-| Linux x64 — AMD XDNA NPU (`XDNA0`) | **CPU** | The projector is untested on the NPU. |
+| Linux x64 — AMD XDNA NPU (`XDNA0`) | **GPU** beside the NPU, else **CPU** | The projector is untested on the NPU; the LLM layers stay on the NPU. |
 
 In every Android **CPU** case above the LLM layers still run on the GPU — only the projector stays on CPU.
 
@@ -296,8 +308,6 @@ MTP, DFlash and DSpark work on single prompts, multimodal prompts and continuous
 - Greedy output can differ from plain decoding where two tokens are nearly tied: the verification batch evaluates several positions at once, which changes floating-point rounding.
 - The gain depends on the device being bandwidth bound. On a Radeon 8060S, Qwen3.6-27B-MTP Q4_K_M decodes a single prompt at about 30 t/s instead of 13 t/s with 80% of the drafts accepted; with four concurrent sequences the larger verification batches cost more than they save, as they do in llama-server.
 - DSpark, greedy, one sequence: on an RTX 5090 (Vulkan), Qwen3.8-27B UD-Q4_K_XL with a DSpark Q8_0 drafter decodes at 120 t/s instead of 69.5 t/s with `spec-draft-n-max` 3 (1.73×, 1.98× on code), and less with longer drafts (1.46× at 6, 1.31× at the 7-token block). On an Apple M4, LFM2.5-1.2B-Instruct gains 1.65× at `spec-draft-n-max` 6. Fast mixture-of-experts models gain nothing: LFM2.5-24B-A2B and LFM2.5-8B-A1B, at 350–580 t/s on the RTX 5090, decode 10–20% slower with DSpark, as they do in llama-server. Drafting the whole block is rarely fastest; start at 3 and measure.
-- DSpark with `parallel >= 2` fails the request with `FailedToDecode` on some large models (LFM2.5-24B-A2B and Qwen3.8-27B in testing): a fabric `11739.1.1` bug that aborts llama-server the same way. One sequence, and smaller models such as LFM2.5-1.2B with several, are unaffected.
-
 ### 4. Create Model Instance
 
 ```js
@@ -342,7 +352,7 @@ try {
 }
 ```
 
-When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `TTFT`, `TPS`, token counters, and `backendDevice` (`"cpu"` or `"gpu"`). `backendDevice` reflects the resolved device used at runtime after backend selection/fallback logic, not only the requested config.
+When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `TTFT`, `TPS`, token counters, and `backendDevice` (`"cpu"`, `"gpu"` or `"npu"`). `backendDevice` reflects the resolved device used at runtime after backend selection/fallback logic, not only the requested config.
 
 #### Tool calling
 

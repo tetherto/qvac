@@ -34,6 +34,13 @@ public:
    */
   static void decrementRefCount();
 
+  /**
+   * Set LLAMA_RS_RAGGED=0 unless the caller already set it. Fabric's RPC
+   * device reports the ragged ops as supported, and a server without them
+   * aborts (tetherto/qvac-fabric-llm.cpp#519).
+   */
+  static void defaultRaggedUbatchesOff();
+
 private:
   friend class LlamaBackendsHandle;
   static void

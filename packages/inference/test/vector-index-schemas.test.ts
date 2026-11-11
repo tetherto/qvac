@@ -46,6 +46,7 @@ test('vectorIndexRequestSchema: every operation is a member of the global reques
     { type: 'vectorIndex', operation: 'remove', indexId: 'i', ids: ['1'] },
     { type: 'vectorIndex', operation: 'contains', indexId: 'i', ids: ['1'] },
     { type: 'vectorIndex', operation: 'write', indexId: 'i', path: 'index.qvi' },
+    { type: 'vectorIndex', operation: 'setStagedSearch', indexId: 'i', enabled: true },
     { type: 'vectorIndex', operation: 'dispose', indexId: 'i' }
   ]
   for (const request of requests) {
@@ -92,6 +93,7 @@ test('vectorIndexResponseSchema: responses are members of the global response un
     { type: 'vectorIndex', operation: 'remove', removed: [true, false], length: 1 },
     { type: 'vectorIndex', operation: 'contains', present: [true] },
     { type: 'vectorIndex', operation: 'write', path: '/tmp/index.qvi' },
+    { type: 'vectorIndex', operation: 'setStagedSearch', stagedSearch: false },
     { type: 'vectorIndex', operation: 'dispose', disposed: true }
   ]
   for (const response of responses) {
@@ -118,4 +120,23 @@ test('helpers: ids, row lengths, and storage parsing', (t) => {
   t.is(findVectorRowLengthMismatch([[1, 2], [3]], 2), 1)
   t.alike(Object.values(VectorIndexStorage), ['f32', 'q8', 'q4', 'turbovec-q4', 'turbovec-q2'])
   t.is(VectorIndexStorage.TURBOVEC_Q4, 'turbovec-q4')
+})
+
+test('vector index staged search: enabled must be a boolean', (t) => {
+  for (const enabled of [undefined, null, 'true', 0, 1]) {
+    t.absent(
+      vectorIndexRequestSchema.safeParse({
+        type: 'vectorIndex',
+        operation: 'setStagedSearch',
+        indexId: 'i',
+        enabled
+      }).success
+    )
+  }
+})
+
+test('createVectorIndexParamsSchema: accepts dimensions above 1024', (t) => {
+  for (const dim of [2048, 16384]) {
+    t.ok(createVectorIndexParamsSchema.safeParse({ dim }).success)
+  }
 })

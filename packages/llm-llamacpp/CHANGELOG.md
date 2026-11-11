@@ -14,10 +14,10 @@
   load fails, and `assessFit` rejects, a `draft-dspark` drafter that is not a
   DSpark model, or `spec-draft-p-min` above 0 with one that has no confidence
   head. A DSpark model given to `draft-dflash` loads with a warning. Fabric
-  already ships DSpark in `qvac-fabric` `11739.1.1`, so no dependency changes.
-  Known limit: with `parallel >= 2`, some large models (LFM2.5-24B-A2B,
-  Qwen3.8-27B) fail the request with `FailedToDecode`, from a fabric
-  `11739.1.1` bug that aborts llama-server the same way.
+  runs DSpark since `qvac-fabric` `11739.1.1`; with `parallel >= 2` it needs
+  `11739.2.0` (`@qvac/fabric` 0.29.0), whose fix for speculative-draft
+  sampling chains that shared buffers stops large models (LFM2.5-24B-A2B,
+  Qwen3.8-27B) from failing batched requests with `FailedToDecode`.
 - `spec-type: 'auto'` with `spec-draft-model` reads the speculative type from
   the drafter's header with fabric's own detection, as llama-server does for
   `-md` without `--spec-type`: `draft-dspark`, `draft-dflash` or `draft-mtp`.
@@ -38,6 +38,70 @@
 - `assessFit` with `spec-type: 'auto'` no longer blocks on a draft model path
   that is not a regular file (a FIFO): it is rejected before the drafter's
   header is read, as the load does.
+
+## [0.70.1] - 2026-11-11
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.28.0` -> `^0.29.0`, which carries
+  `qvac-fabric` `11739.1.1` -> `11739.2.0`
+  ([#5706](https://github.com/tetherto/qvac/pull/5706)): FP8 E4M3 weights and
+  KV cache with CUDA FP8 matmuls, the ConvRot ops, ragged ubatches for
+  qwen35 recurrent layers, a fix for speculative-draft sampling chains that
+  shared buffers, and XDNA and Metal decode work. A caret on a `0.x` version
+  locks the minor, so `^0.28.0` would not have resolved `0.29.0` on its own.
+  The mobile dev and peer dependencies `@qvac/fabric-android-arm64` /
+  `@qvac/fabric-ios` move to `^0.29.0` with it.
+- `@qvac/fabric` 0.29.0 renumbers the TurboQuant and PolarQuant KV-cache types
+  (43-50 -> 52-59) and moves the RPC protocol from 113 to 116, so it is not
+  ABI-compatible with 0.28.x. Every addon loaded in one process must resolve
+  the same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.29.0` together.
+- The `tbq*` / `pq*` `cache-type-k` / `cache-type-v` values keep their names;
+  the addon is rebuilt against the 0.29.0 headers for the new type numbers.
+- Under `tool_choice: 'required'`, the chat grammar accepts only a reasoning
+  block before the tool call, so a model can no longer write prose until the
+  context fills without calling a tool.
+- RPC peers must match the new protocol: use `@qvac/ggml-rpc-server` 0.9.1 or
+  newer.
+
+### Fixed
+
+- The addon sets `LLAMA_RS_RAGGED=0` unless the process already set it, so
+  qwen35 models keep the equal ubatch split. With `rpc-servers`, fabric's RPC
+  device reports the new ragged ops as supported, and a Metal, Vulkan or OpenCL
+  server without them aborts
+  ([qvac-fabric-llm.cpp#519](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/519)).
+  The addon does not enable a unified KV cache, so ragged ubatches would not
+  speed it up.
+
+## [0.70.0] - 2026-11-10
+
+### Added
+
+- `device: "npu"` selects the AMD XDNA NPU as its own device class, beside
+  `gpu` and `cpu`. It takes the first NPU fabric lists, falls back to the GPU
+  order and then the CPU with a warning when none is listed, and is rejected
+  with `InvalidArgument` together with `backend`, `devices`, `split-mode`,
+  `main-gpu` or `rpc-servers`, except the defaults `backend: "auto"`,
+  `devices: ""` and `split-mode: "none"`. Runtime stats report
+  `backendDevice: "npu"`
+  (native code `2`) for an NPU load, including `devices: "XDNA0"`
+  ([#5701](https://github.com/tetherto/qvac/pull/5701)).
+
+### Changed
+
+- `backend` takes GPU families only: `device: "npu"` replaces
+  `backend: "xdna"` from 0.69.0
+  ([#5701](https://github.com/tetherto/qvac/pull/5701)).
+- Finetuning is refused with `InvalidArgument` for a model loaded with
+  `device: "npu"` and for any load with `XDNA0` in `devices`, alone or in a
+  mixed split such as `XDNA0,Vulkan0`, which 0.69.0 allowed
+  ([#5701](https://github.com/tetherto/qvac/pull/5701)).
+- When the NPU leads a load, a vision model's projector now defaults to a GPU
+  beside it (a GPU in `devices`, else the first local GPU) instead of the CPU,
+  and to the CPU only when there is no GPU. `mmproj-use-gpu` still overrides
+  it ([#5701](https://github.com/tetherto/qvac/pull/5701)).
 
 ## [0.69.0] - 2026-11-09
 
