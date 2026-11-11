@@ -82,6 +82,10 @@
       "types": "./dist/models/registry/index.d.ts",
       "import": "./dist/models/registry/index.js"
     },
+    "./model-cache-layout": {
+      "types": "./dist/model-cache-layout.d.ts",
+      "import": "./dist/model-cache-layout.js"
+    },
     "./llamacpp-completion/plugin": {
       "types": "./dist/plugins/builtin/llamacpp-completion/plugin.d.ts",
       "import": "./dist/plugins/builtin/llamacpp-completion/plugin.js"
