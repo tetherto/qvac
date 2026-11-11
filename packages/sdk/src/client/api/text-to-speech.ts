@@ -13,7 +13,9 @@ import {
   type TextToSpeechStreamSession,
   type TextToSpeechStreamResult,
   type TtsSentenceChunkUpdate,
-  type TtsStats
+  type TtsStats,
+  withDecodedTtsPcm,
+  decodeTtsPcm
 } from '@qvac/inference/surface'
 import { stream as streamRpc, duplex, type DuplexReadable } from '@/client/rpc/rpc-client'
 import { getClientLogger } from '@/logging'
@@ -184,7 +186,13 @@ function buildTextToSpeechStreamRequest(
     ...(params.expressivity !== undefined && { expressivity: params.expressivity }),
     ...(params.noise !== undefined && { noise: params.noise }),
     ...(params.reverb !== undefined && { reverb: params.reverb }),
-    ...(params.quality !== undefined && { quality: params.quality })
+    ...(params.quality !== undefined && { quality: params.quality }),
+    // Per-request voice controls: CosyVoice3's instruct, Audio8's reference pair.
+    ...(params.instruct !== undefined && { instruct: params.instruct }),
+    ...(params.referenceAudioSrc !== undefined && {
+      referenceAudioSrc: params.referenceAudioSrc
+    }),
+    ...(params.referenceText !== undefined && { referenceText: params.referenceText })
   }
 }
 
@@ -274,8 +282,9 @@ async function* ttsResponseSource(
   side: TtsSideChannel
 ): AsyncGenerator<TtsResponse> {
   try {
-    for await (const response of streamRpc(request, options)) {
-      if (response.type !== 'textToSpeech') continue
+    for await (const raw of streamRpc(request, options)) {
+      if (raw.type !== 'textToSpeech') continue
+      const response = withDecodedTtsPcm(raw)
       side.observe(response)
       yield response
     }
@@ -298,6 +307,7 @@ export type TtsSideChannel = {
   sampleRate: Promise<number | undefined>
   stats: Promise<TtsStats | undefined>
   stopReason: Promise<'completed' | 'cancelled' | undefined>
+  speechTokenIds: Promise<number[] | undefined>
   observe(response: TtsResponse): void
   settle(): void
 }
@@ -312,6 +322,7 @@ export function createTtsSideChannel(): TtsSideChannel {
   let resolveSampleRate!: (value: number | undefined) => void
   let resolveStats!: (value: TtsStats | undefined) => void
   let resolveStopReason!: (value: 'completed' | 'cancelled' | undefined) => void
+  let resolveSpeechTokenIds!: (value: number[] | undefined) => void
   const sampleRate = new Promise<number | undefined>((resolve) => {
     resolveSampleRate = resolve
   })
@@ -321,10 +332,16 @@ export function createTtsSideChannel(): TtsSideChannel {
   const stopReason = new Promise<'completed' | 'cancelled' | undefined>((resolve) => {
     resolveStopReason = resolve
   })
+  const speechTokenIds = new Promise<number[] | undefined>((resolve) => {
+    resolveSpeechTokenIds = resolve
+  })
 
   let seenSampleRate: number | undefined
   let latestStats: TtsStats | undefined
   let seenStopReason: 'completed' | 'cancelled' | undefined
+  // CosyVoice3 hands back one array per native synthesis; the chunked paths
+  // run one per sentence, so the run's trajectory is their concatenation.
+  let seenSpeechTokenIds: number[] | undefined
   let settled = false
 
   return {
@@ -332,6 +349,7 @@ export function createTtsSideChannel(): TtsSideChannel {
     sampleRate,
     stats,
     stopReason,
+    speechTokenIds,
     observe(response) {
       if (response.text !== undefined) seenText = response.text
       // Resolve on the FIRST frame that carries a rate, not at end of stream:
@@ -344,6 +362,12 @@ export function createTtsSideChannel(): TtsSideChannel {
       }
       if (response.stats !== undefined) latestStats = response.stats
       if (response.stopReason !== undefined) seenStopReason = response.stopReason
+      if (response.speechTokenIds !== undefined) {
+        // Append into one owned array: a spread per frame would copy every
+        // token collected so far on each sentence of a long stream.
+        seenSpeechTokenIds ??= []
+        for (const id of response.speechTokenIds) seenSpeechTokenIds.push(id)
+      }
     },
     settle() {
       if (settled) return
@@ -352,6 +376,7 @@ export function createTtsSideChannel(): TtsSideChannel {
       resolveSampleRate(seenSampleRate)
       resolveStats(latestStats)
       resolveStopReason(seenStopReason)
+      resolveSpeechTokenIds(seenSpeechTokenIds)
     }
   }
 }
@@ -380,7 +405,8 @@ function sentenceStreamTts(
     text: side.text,
     sampleRate: side.sampleRate,
     stats: side.stats,
-    stopReason: side.stopReason
+    stopReason: side.stopReason,
+    speechTokenIds: side.speechTokenIds
   }
 }
 
@@ -418,7 +444,8 @@ async function* sentenceChunkUpdates(
     const hasAudio = m.buffer.length > 0
     const hasMeta =
       m.chunkIndex !== undefined ||
-      (typeof m.sentenceChunk === 'string' && m.sentenceChunk.length > 0)
+      (typeof m.sentenceChunk === 'string' && m.sentenceChunk.length > 0) ||
+      m.speechTokenIds !== undefined
     if (hasAudio || hasMeta) {
       yield {
         buffer: hasAudio ? [...m.buffer] : [],
@@ -427,7 +454,8 @@ async function* sentenceChunkUpdates(
         ...(typeof m.sentenceChunk === 'string' && m.sentenceChunk.length > 0
           ? { sentenceChunk: m.sentenceChunk }
           : {}),
-        ...(m.isLast !== undefined ? { isLast: m.isLast } : {})
+        ...(m.isLast !== undefined ? { isLast: m.isLast } : {}),
+        ...(m.speechTokenIds !== undefined ? { speechTokenIds: m.speechTokenIds } : {})
       }
     }
     if (m.done) break
@@ -458,7 +486,8 @@ function plainStreamTts(
     text: side.text,
     sampleRate: side.sampleRate,
     stats: side.stats,
-    stopReason: side.stopReason
+    stopReason: side.stopReason,
+    speechTokenIds: side.speechTokenIds
   }
 }
 
@@ -471,15 +500,19 @@ async function* plainTtsChunkStream(
 ): AsyncGenerator<Int16Array> {
   let settled = false
   try {
-    for await (const response of streamRpc(request, options)) {
-      if (response.type !== 'textToSpeech') continue
+    for await (const raw of streamRpc(request, options)) {
+      if (raw.type !== 'textToSpeech') continue
       // See TtsMulticast.pump — skip per-frame Zod validation; the server is
       // the source of truth for this wire shape.
-      side.observe(response)
-      if (response.buffer.length > 0) {
-        yield Int16Array.from(response.buffer)
+      // The side channel reads text, rate, stats and stopReason, never the
+      // audio, so a `pcm` frame is decoded straight to the typed array callers
+      // get instead of through an intermediate `number[]`.
+      side.observe(raw)
+      const chunk = raw.pcm !== undefined ? decodeTtsPcm(raw.pcm) : Int16Array.from(raw.buffer)
+      if (chunk.length > 0) {
+        yield chunk
       }
-      if (response.done) {
+      if (raw.done) {
         settled = true
         resolveDone(true)
       }
@@ -521,7 +554,8 @@ function collectTts(
     text: side.text,
     sampleRate: side.sampleRate,
     stats: side.stats,
-    stopReason: side.stopReason
+    stopReason: side.stopReason,
+    speechTokenIds: side.speechTokenIds
   }
 }
 
@@ -540,8 +574,9 @@ async function collectTtsBuffer(
 ): Promise<number[]> {
   let buffer: number[] = []
   try {
-    for await (const response of streamRpc(request, options)) {
-      if (response.type !== 'textToSpeech') continue
+    for await (const raw of streamRpc(request, options)) {
+      if (raw.type !== 'textToSpeech') continue
+      const response = withDecodedTtsPcm(raw)
       side.observe(response)
       buffer = buffer.concat(response.buffer)
       if (response.done) {
@@ -684,5 +719,5 @@ function processTextToSpeechStreamLine(line: string): TextToSpeechStreamResponse
     throw new TextToSpeechStreamFailedError((obj['message'] as string) ?? 'Unknown server error')
   }
 
-  return textToSpeechStreamResponseSchema.parse(parsed)
+  return withDecodedTtsPcm(textToSpeechStreamResponseSchema.parse(parsed))
 }

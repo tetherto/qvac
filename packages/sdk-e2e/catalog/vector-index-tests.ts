@@ -100,6 +100,24 @@ export const vectorIndexAddSearch = createVectorIndexTest(
   ['smoke'],
   [
     ...openIndexSteps(),
+    // Three documents are below the 1,000-vector calibration threshold.
+    { project: { from: '$added', path: 'calibrated', as: 'calibrated' } },
+    { assert: { on: '$calibrated', named: 'valueIn', with: { values: [false] } } },
+    {
+      call: {
+        method: 'vectorIndexSetStagedSearch',
+        params: { indexId: '$indexId', enabled: true },
+        as: 'staged'
+      }
+    },
+    { project: { from: '$staged', path: 'stagedSearch', as: 'enabled' } },
+    { assert: { on: '$enabled', named: 'valueIn', with: { values: [true] } } },
+    {
+      call: {
+        method: 'vectorIndexSetStagedSearch',
+        params: { indexId: '$indexId', enabled: false }
+      }
+    },
     ...searchSteps('$indexId', 'best'),
     { assert: { on: '$best', named: 'valueIn', with: { values: ['$params.expectedId'] } } },
     { project: { from: '$added', path: 'length', as: 'length' } },
@@ -166,6 +184,9 @@ export const vectorIndexWriteLoad = createVectorIndexTest(
   undefined,
   [
     ...openIndexSteps('$params.storage'),
+    {
+      call: { method: 'vectorIndexSetStagedSearch', params: { indexId: '$indexId', enabled: true } }
+    },
     ...searchSteps('$indexId', 'best'),
     { assert: { on: '$best', named: 'valueIn', with: { values: ['$params.expectedId'] } } },
     // A fixed name, so repeated runs overwrite one file instead of accumulating snapshots in the
@@ -186,6 +207,8 @@ export const vectorIndexWriteLoad = createVectorIndexTest(
       }
     },
     { project: { from: '$reloaded', path: 'indexId', as: 'reloadedId' } },
+    { project: { from: '$reloaded', path: 'stagedSearch', as: 'reloadedStaged' } },
+    { assert: { on: '$reloadedStaged', named: 'valueIn', with: { values: [false] } } },
     ...searchSteps('$reloadedId', 'reloadedBest'),
     {
       assert: {
@@ -207,8 +230,43 @@ export const vectorIndexWriteLoad = createVectorIndexTest(
   ]
 )
 
+/** Params for the storage rejection case, which opens an empty index instead of embedding. */
+export interface VectorIndexRejectionParams {
+  dim: number
+  storage: VectorIndexStorage
+}
+
+// Staged search is refused by storage type, so an empty index is enough and no model loads.
+export const vectorIndexStagedSearchUnsupported: TestDefinition = {
+  testId: 'vector-index-staged-search-unsupported',
+  params: { dim: 8, storage: 'q8' } satisfies VectorIndexRejectionParams,
+  expectation: { validation: 'throws-error', errorContains: 'InvalidArgument' },
+  steps: [
+    {
+      call: {
+        method: 'createVectorIndex',
+        params: { dim: '$params.dim', storage: '$params.storage' },
+        as: 'index'
+      }
+    },
+    { project: { from: '$index', path: 'indexId', as: 'indexId' } },
+    {
+      callError: {
+        method: 'vectorIndexSetStagedSearch',
+        params: { indexId: '$indexId', enabled: true },
+        as: 'error'
+      }
+    },
+    { project: { from: '$error', path: 'message', as: 'message' } },
+    { assert: { on: '$message', use: 'expectation' } }
+  ],
+  finally: disposeIndex,
+  metadata: { category: 'vector-index', dependency: 'none', estimatedDurationMs: 2000 }
+}
+
 export const vectorIndexTests = [
   vectorIndexAddSearch,
   vectorIndexRemoveContains,
-  vectorIndexWriteLoad
+  vectorIndexWriteLoad,
+  vectorIndexStagedSearchUnsupported
 ]

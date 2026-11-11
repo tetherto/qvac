@@ -29,6 +29,8 @@ from . import (
     BciTranscribeResponse,
     BciTranscribeStreamRequest,
     BciTranscribeStreamResponse,
+    CalcTokensRequest,
+    CalcTokensResponse,
     CancelRequest,
     CancelResponse,
     ClassifyRequest,
@@ -47,6 +49,8 @@ from . import (
     DiscoverRpcServersResponse,
     DownloadAssetRequest,
     DownloadAssetResponse,
+    EmbedBatchRequest,
+    EmbedBatchResponse,
     EmbedRequest,
     EmbedResponse,
     FinetuneProgressResponse,
@@ -172,6 +176,13 @@ async def bci_transcribe_stream(
         yield BciTranscribeStreamResponse.model_validate(chunk)
 
 
+async def calc_tokens(
+    transport: Transport, params: CalcTokensRequest
+) -> CalcTokensResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return CalcTokensResponse.model_validate(await transport.call(payload))
+
+
 async def cancel(transport: Transport, params: CancelRequest) -> CancelResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     return CancelResponse.model_validate(await transport.call(payload))
@@ -255,6 +266,13 @@ async def download_asset_with_progress(
 async def embed(transport: Transport, params: EmbedRequest) -> EmbedResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     return EmbedResponse.model_validate(await transport.call(payload))
+
+
+async def embed_batch(
+    transport: Transport, params: EmbedBatchRequest
+) -> EmbedBatchResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return EmbedBatchResponse.model_validate(await transport.call(payload))
 
 
 async def finetune(transport: Transport, params: FinetuneRequest) -> FinetuneResponse:
@@ -533,6 +551,7 @@ __all__ = [
     "batch_completion_stream",
     "bci_transcribe",
     "bci_transcribe_stream",
+    "calc_tokens",
     "cancel",
     "classify",
     "completion_orchestrate",
@@ -544,6 +563,7 @@ __all__ = [
     "download_asset",
     "download_asset_with_progress",
     "embed",
+    "embed_batch",
     "finetune",
     "finetune_with_progress",
     "get_loaded_model_info",

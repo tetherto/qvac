@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { toolSchema } from '@/schemas/tools'
+import { toolSchema, toolSearchOptionsSchema } from '@/schemas/tools'
 import { TOOL_SEARCH_NAME } from '@/utils/tools/defer'
 import { completionEventSchema } from '@/schemas/completion-event'
 import { REASONING_BUDGET_MAX } from '@/schemas/llamacpp-config'
@@ -38,6 +38,35 @@ export const attachmentSchema = z.object({
       'Absolute or resolvable path to the attachment file (e.g., image for multimodal models).'
     )
 })
+
+/**
+ * One ordered piece of a message's `content`. A media part keeps its place in
+ * the turn, so text that refers to "this image" sits next to it; `attachments`
+ * cannot express that because every attachment is sent before the text.
+ */
+export const historyContentPartSchema = z.discriminatedUnion('type', [
+  z
+    .object({
+      type: z.literal('text'),
+      text: z.string().describe('Text rendered at this position in the turn.')
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('media'),
+      path: z
+        .string()
+        .min(1)
+        .describe(
+          'Absolute or resolvable path to the media file (e.g., image for multimodal models).'
+        )
+    })
+    .strict()
+])
+
+export type HistoryContentPart = z.infer<typeof historyContentPartSchema>
+/** A message's content: plain text, or ordered text/media parts. */
+export type HistoryContent = string | HistoryContentPart[]
 
 const kvCacheSchema = z.union([
   z.boolean(),
@@ -196,63 +225,111 @@ const historyToolCallSchema = z.object({
   arguments: z.record(z.string(), z.unknown()).describe('Arguments the tool was called with.')
 })
 
-export const historyMessageSchema = z
-  .object({
-    role: z
-      .string()
-      .describe('Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'),
-    content: z
-      .string()
-      .nullish()
-      .describe(
-        'Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.'
-      ),
-    attachments: z
-      .array(attachmentSchema)
-      .optional()
-      .describe('Optional file attachments for multimodal models.'),
-    toolCalls: z
-      .array(historyToolCallSchema)
-      .optional()
-      .describe(
-        "Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty."
-      ),
-    toolCallId: z
-      .string()
-      .optional()
-      .describe('On a `tool` turn: the id of the call this result answers.'),
-    toolName: z
-      .string()
-      .optional()
-      .describe('On a `tool` turn: the name of the tool that produced the result.')
-  })
-  .superRefine((message, ctx) => {
-    const callsOnly = message.role === 'assistant' && (message.toolCalls?.length ?? 0) > 0
-    if ((message.content === null || message.content === undefined) && !callsOnly) {
+const historyMessageObjectSchema = z.object({
+  role: z.string().describe('Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'),
+  content: z
+    .union([z.string(), z.array(historyContentPartSchema)])
+    .nullish()
+    .describe(
+      'Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string. A user turn may instead pass an ordered array of text/media parts, so each image keeps its position in the turn.'
+    ),
+  attachments: z
+    .array(attachmentSchema)
+    .optional()
+    .describe('Optional file attachments for multimodal models.'),
+  toolCalls: z
+    .array(historyToolCallSchema)
+    .optional()
+    .describe(
+      "Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty."
+    ),
+  toolCallId: z
+    .string()
+    .optional()
+    .describe('On a `tool` turn: the id of the call this result answers.'),
+  toolName: z
+    .string()
+    .optional()
+    .describe('On a `tool` turn: the name of the tool that produced the result.')
+})
+
+function refineHistoryMessage(
+  message: z.infer<typeof historyMessageObjectSchema>,
+  ctx: z.RefinementCtx
+) {
+  const callsOnly = message.role === 'assistant' && (message.toolCalls?.length ?? 0) > 0
+  if ((message.content === null || message.content === undefined) && !callsOnly) {
+    ctx.addIssue({
+      code: 'custom',
+      message: '`content` is required unless an assistant message carries `toolCalls`.',
+      path: ['content']
+    })
+  }
+  if (Array.isArray(message.content)) {
+    if (message.role !== 'user') {
       ctx.addIssue({
         code: 'custom',
-        message: '`content` is required unless an assistant message carries `toolCalls`.',
+        message: '`content` parts are only valid on a user message.',
         path: ['content']
       })
     }
-    if (message.toolCalls !== undefined && message.role !== 'assistant') {
+    if (message.attachments !== undefined && message.attachments.length > 0) {
       ctx.addIssue({
         code: 'custom',
-        message: '`toolCalls` is only valid on an assistant message.',
-        path: ['toolCalls']
+        message: 'Pass media either as `attachments` or as `content` parts, not both.',
+        path: ['attachments']
       })
     }
-    for (const key of ['toolCallId', 'toolName'] as const) {
-      if (message[key] !== undefined && message.role !== 'tool') {
-        ctx.addIssue({
-          code: 'custom',
-          message: `\`${key}\` is only valid on a tool message.`,
-          path: [key]
-        })
-      }
+  }
+  if (message.toolCalls !== undefined && message.role !== 'assistant') {
+    ctx.addIssue({
+      code: 'custom',
+      message: '`toolCalls` is only valid on an assistant message.',
+      path: ['toolCalls']
+    })
+  }
+  for (const key of ['toolCallId', 'toolName'] as const) {
+    if (message[key] !== undefined && message.role !== 'tool') {
+      ctx.addIssue({
+        code: 'custom',
+        message: `\`${key}\` is only valid on a tool message.`,
+        path: [key]
+      })
+    }
+  }
+}
+
+function normalizeHistoryMessage(message: z.infer<typeof historyMessageObjectSchema>) {
+  return { ...message, content: message.content ?? '' }
+}
+
+export const historyMessageSchema = historyMessageObjectSchema
+  .superRefine(refineHistoryMessage)
+  .transform(normalizeHistoryMessage)
+
+export const historyMessageWithoutAttachmentsSchema = historyMessageObjectSchema
+  .extend({
+    content: z
+      .union([z.string(), z.array(historyContentPartSchema)])
+      .nullish()
+      .describe(
+        'Message content to count; media parts are rejected with guidance to use completion().'
+      ),
+    attachments: z
+      .array(attachmentSchema)
+      .max(0, 'calcTokens does not support attachments; use completion() for attachments.')
+      .optional()
+  })
+  .superRefine((message, ctx) => {
+    refineHistoryMessage(message, ctx)
+    if (Array.isArray(message.content) && message.content.some((part) => part.type === 'media')) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'calcTokens does not support media content; use completion() for media.',
+        path: ['content']
+      })
     }
   })
-  .transform((message) => ({ ...message, content: message.content ?? '' }))
 
 export type HistoryMessage = z.infer<typeof historyMessageSchema>
 
@@ -264,12 +341,19 @@ export const completionParamsSchema = z.object({
   kvCache: kvCacheSchema
     .optional()
     .describe(
-      'KV cache configuration — `true` to auto-generate a cache key from history, a string to use a custom key, or `false`/`undefined` to disable.'
+      'KV cache configuration — `true` to auto-generate a cache key from history, a string to use a custom key, or `false`/`undefined` to avoid a persistent cache key. Keyless requests reuse a model-wide shared prefix only when the model loads with `cache_share_across_keys: true`.'
     ),
   prefill: z
     .boolean()
     .optional()
-    .describe('Evaluate the prompt without generating an answer. Requires an enabled KV cache.')
+    .describe('Evaluate the prompt without generating an answer. Requires an enabled KV cache.'),
+  seedFrom: z
+    .string()
+    .min(1, 'seedFrom cannot be empty string')
+    .optional()
+    .describe(
+      'Name of another caller-managed cache to start this chat from, such as a primed system prompt and tools. On the first turn of a chat whose `kvCache` key has no cache yet, the model reads that cache and reuses the prefix it shares with the prompt, so only the rest is processed; the source is never written. Ignored once the chat has a cache. Needs a string `kvCache` other than itself. Refused when no cache of that name exists for this model and system prompt, or when the model was not loaded with `cache_share_across_keys: true`, which is off by default.'
+    )
 })
 
 const completionClientParamsBaseSchema = completionParamsSchema.extend({
@@ -279,6 +363,7 @@ const completionClientParamsBaseSchema = completionParamsSchema.extend({
     .describe(
       'Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call.'
     ),
+  toolSearch: toolSearchOptionsSchema.optional(),
   stream: z
     .boolean()
     .describe('Whether to stream tokens (`true`) or return the complete response once (`false`).'),

@@ -1,5 +1,5 @@
 import { closeRpcResources } from '@/handlers/rpc-server'
-import { initEnv } from '@/runtime/env'
+import { initEnv, type EnvOptions } from '@/runtime/env'
 import { closeAllRagInstances } from '@/rag/index'
 import { disposeAllVectorIndexes } from '@/runtime/vector-index-registry'
 import { cleanupDownloads } from '@/handlers/load-model/download-manager'
@@ -26,18 +26,20 @@ let cleanupPromise: Promise<void> | null = null
 
 const logger = getEngineLogger()
 
+export type InitializeOptions = EnvOptions
+
 /**
- * Initialize the engine: start log buffering, read env, and acquire the cache
- * lock (guards the cache dir against a second instance in the same home).
- * Idempotent.
+ * Initialize the engine: start log buffering, set the home folder, and acquire
+ * the cache lock (guards the cache dir against a second instance in the same
+ * home). Idempotent: options are only read by the first call.
  */
-export function initialize(): void {
+export function initialize(options: InitializeOptions = {}): void {
   if (initialized) return
 
   startLogBuffering(LOG_ID)
   startLogBuffering(ALL_LOG_ID)
 
-  initEnv()
+  initEnv(options)
   acquireCacheLock()
   initializeResourceCollector(nativeResourceCollectorDependencies)
 
