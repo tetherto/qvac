@@ -43,11 +43,11 @@ Let's use the official Expo scaffold to create a minimal app structure.
 Create a new project:
 
 ```bash
-npx create-expo-app@latest qvac-expo-chat --template blank-typescript@sdk-54
+npx create-expo-app@latest qvac-expo-chat --template blank-typescript@sdk-58
 cd qvac-expo-chat
 ```
 
-This creates a minimal TypeScript Expo project with a single `App.tsx` entry point. This tutorial uses QVAC SDK 0.23, which supports Expo SDK 54.
+This creates a minimal TypeScript Expo project with a single `App.tsx` entry point. This tutorial uses QVAC SDK 0.24, which supports Expo SDK 58.
 </Step>
 
 <Step>
@@ -68,10 +68,10 @@ At this point, you should see the default Expo screen rendered on your phone. Th
 
 ## Step 3: install QVAC
 
-In this step we'll add QVAC SDK 0.23 to the project and complete the Expo-specific setup for running local inference on a physical device.
+In this step we'll add QVAC SDK 0.24 to the project and complete the Expo-specific setup for running local inference on a physical device.
 
 <Callout type="info">
-This tutorial is pinned to `@qvac/sdk` 0.23. For the Expo SDK and `react-native-bare-kit` versions other QVAC releases need, see the [Expo compatibility table](/sdk/js-ts-sdk#expo).
+This tutorial is pinned to `@qvac/sdk` 0.24. For the Expo SDK and `react-native-bare-kit` versions it needs, see [JS/TS SDK — Expo](/sdk/js-ts-sdk#expo).
 </Callout>
 
 <Steps>
@@ -79,8 +79,10 @@ This tutorial is pinned to `@qvac/sdk` 0.23. For the Expo SDK and `react-native-
 Install the SDK at the version this tutorial uses:
 
 ```bash
-npm i @qvac/sdk@0.23.0 'bare-rpc@^1.3.2'
+npm i @qvac/sdk@0.24.0 'bare-rpc@^1.3.9'
 ```
+
+With pnpm or bun's isolated linker, also add `bare-stow-runtime` and `bare-stow-host`, which the generated worker files import. Yarn needs `nodeLinker: node-modules` in `.yarnrc.yml`, because the bundler reads packages from `node_modules`.
 </Step>
 
 <Step>
@@ -118,15 +120,15 @@ Check that `package.json` now lists these versions:
 ```json title="package.json"
 {
   "dependencies": {
-    "@qvac/sdk": "^0.23.0",
-    "bare-rpc": "^1.3.2",
-    "expo": "~54.0.33",
-    "react-native-bare-kit": "^0.16.0"
+    "@qvac/sdk": "^0.24.0",
+    "bare-rpc": "^1.3.9",
+    "expo": "~58.0.23",
+    "react-native-bare-kit": "^0.17.1"
   }
 }
 ```
 
-If `expo` shows another major version, your project uses a different Expo SDK than QVAC 0.23 supports. Create the project again from Step 2.
+If `expo` shows another major version, your project uses a different Expo SDK than QVAC 0.24 supports. Create the project again from Step 2.
 </Step>
 </Steps>
 
