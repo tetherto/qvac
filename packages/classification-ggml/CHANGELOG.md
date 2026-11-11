@@ -29,6 +29,9 @@ and this project adheres to
   inside 1280x720, as the model authors recommend, and returns the disparity
   at the input size in input pixels. `assessFit` sizes such a workload as the
   downsampled run plus the disparity at the input size.
+- BridgeDepth accepts sides up to 4096 pixels, up from 2048, with no pixel
+  count limit, instead of at most about 2 MP. The graph only runs on the
+  downsampled pair, so the limit that kept ggml from aborting is gone.
 
 ### Pull Requests
 

@@ -22,16 +22,11 @@ namespace classification_ggml::bridgedepth {
 inline constexpr uint32_t MAX_MODEL_WIDTH = 1280;
 inline constexpr uint32_t MAX_MODEL_HEIGHT = 720;
 
-// Largest accepted side. MAX_GRID_CELLS bounds the pixel count.
-inline constexpr uint32_t MAX_SIDE = 2048;
-
-// Largest (H/8) * (W/8) after padding to a multiple of 16, about 2 MP.
-// 1920x1088 is 32640. The graph never sees an input this large since the
-// downsampling; the limit is the one inference had before it, when ggml
-// aborted above it (Metal past INT16_MAX at 2048x1088, CUDA and Vulkan at
-// 65536 at 2048x2048), so the accepted sizes did not change.
-inline constexpr int64_t MAX_GRID_CELLS = 32767;
-int64_t gridCells(uint32_t width, uint32_t height);
+// Largest accepted side. The graph only sees the downsampled pair, so this
+// bounds the host memory of the decoded views and the returned disparity:
+// covers 4K (3840x2160) and 12 MP (4000x3000) photos, where the shared
+// decoder's MAX_IMAGE_DIMENSION would let two views take 1.6 GB.
+inline constexpr uint32_t MAX_SIDE = 4096;
 // Throws InvalidArgument unless the size is one inference accepts.
 void checkSize(uint32_t width, uint32_t height);
 

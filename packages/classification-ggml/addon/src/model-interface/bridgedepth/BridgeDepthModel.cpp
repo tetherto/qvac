@@ -36,20 +36,6 @@ void checkSize(uint32_t width, uint32_t height) {
   check(
       width <= MAX_SIDE && height <= MAX_SIDE,
       "image sides must be at most " + std::to_string(MAX_SIDE) + " pixels");
-  check(
-      gridCells(width, height) <= MAX_GRID_CELLS,
-      "image " + std::to_string(width) + "x" + std::to_string(height) +
-          " is too large: at most about 2 MP is supported, (height/8) * "
-          "(width/8) after padding to a multiple of 16 must be at most " +
-          std::to_string(MAX_GRID_CELLS) + " (1920x1080 fits)");
-}
-
-int64_t gridCells(uint32_t width, uint32_t height) {
-  const Padding pad = computePadding(
-      static_cast<int>(height), static_cast<int>(width), PAD_DIVISOR);
-  const int64_t gridStride = 8;
-  return (static_cast<int64_t>(height) + pad.top) / gridStride *
-         ((static_cast<int64_t>(width) + pad.right) / gridStride);
 }
 
 namespace {

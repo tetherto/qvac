@@ -26,9 +26,7 @@ await model.destroy()
 
 `infer()` takes two JPEG/PNG buffers, or two packed RGB buffers with one shared
 `{ width, height, channels: 3 }`. Both views must have the same size, each side
-between 32 and 2048 pixels and at most about 2 MP in total: after padding to a
-multiple of 16, `(height / 8) * (width / 8)` must be at most 32767. 1920 x 1080
-fits, 2048 x 1088 does not; larger inputs are rejected with an error.
+between 32 and 4096 pixels; other sizes are rejected with an error.
 
 The model runs on at most 1280 x 720. The model authors recommend downsampling
 inputs above 720p, for speed and for accuracy, and the graph memory grows with

@@ -139,29 +139,21 @@ TEST(BridgeDepthInput, RejectsSizesOutsideTheSupportedRange) {
         bd::toPlanarRgb(large, width, height);
       }).find("at most"),
       std::string::npos);
-  // 1080p pads to 1088 rows: 136 * 240 = 32640 cells, the largest common
-  // size under the limit. 2048x1088 is 34816 and aborts on Metal.
-  EXPECT_EQ(bd::gridCells(1920, 1080), 32640);
-  ImageInput fullHd;
-  fullHd.rawRgb = RawRgbDims{1920, 1080, 3};
-  fullHd.data.resize(static_cast<size_t>(1920) * 1080 * 3);
+  // The largest side at a 4K height is accepted, well past the old 2 MP
+  // limit: the model only sees it downsampled.
+  constexpr uint32_t uhdHeight = 2160;
+  ImageInput maxSize;
+  maxSize.rawRgb = RawRgbDims{bd::MAX_SIDE, uhdHeight, 3};
+  maxSize.data.resize(static_cast<size_t>(bd::MAX_SIDE) * uhdHeight * 3);
   EXPECT_EQ(
-      bd::toPlanarRgb(fullHd, width, height).size(),
-      static_cast<size_t>(1920) * 1080 * 3);
-  ImageInput wide;
-  wide.rawRgb = RawRgbDims{2048, 1088, 3};
-  wide.data.resize(static_cast<size_t>(2048) * 1088 * 3);
-  EXPECT_NE(
-      expectThrows([&] {
-        bd::toPlanarRgb(wide, width, height);
-      }).find("too large"),
-      std::string::npos);
-  // A PNG signature, an IHDR claiming 4096x4096 and an empty IDAT, which is
+      bd::toPlanarRgb(maxSize, width, height).size(),
+      static_cast<size_t>(bd::MAX_SIDE) * uhdHeight * 3);
+  // A PNG signature, an IHDR claiming 8192x8192 and an empty IDAT, which is
   // enough for stbi_info but not for a decode. The size error proves the
   // header is checked before the full decode.
   ImageInput hugePng;
   hugePng.data = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, 0, 0,    13,
-                  'I',  'H', 'D', 'R', 0,    0,    0x10, 0,    0, 0, 0x10, 0,
+                  'I',  'H', 'D', 'R', 0,    0,    0x20, 0,    0, 0, 0x20, 0,
                   8,    2,   0,   0,   0,    0,    0,    0,    0, 0, 0,    0,
                   0,    'I', 'D', 'A', 'T',  0,    0,    0,    0};
   const std::string hugeError =

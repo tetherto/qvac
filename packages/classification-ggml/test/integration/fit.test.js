@@ -156,9 +156,9 @@ test('assessFit rejects invalid requests and files that are not models', async (
       assessFit({ modelPath: models.bridgedepth, workload: { width: 0 } }),
       /workload.width must be a positive safe integer/
     )
-    // Past the input BridgeDepth inference accepts, which it rejects.
+    // One pixel past the 4096 side BridgeDepth inference accepts, which it rejects.
     await t.exception(
-      assessFit({ modelPath: models.bridgedepth, workload: { width: 4096, height: 4096 } }),
+      assessFit({ modelPath: models.bridgedepth, workload: { width: 4097, height: 4096 } }),
       /BridgeDepth: image/
     )
   }

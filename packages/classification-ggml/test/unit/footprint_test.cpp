@@ -49,6 +49,8 @@ constexpr auto HD_HEIGHT =
 // A 16:9 size above the box, downsampled to exactly HD_WIDTH x HD_HEIGHT.
 constexpr uint32_t FULL_HD_WIDTH = 1920;
 constexpr uint32_t FULL_HD_HEIGHT = 1080;
+// 4K height, paired with bd::MAX_SIDE for the widest accepted input.
+constexpr uint32_t UHD_HEIGHT = 2160;
 constexpr uint32_t RGB_CHANNELS = 3;
 
 std::string envOr(const char* name, const std::string& fallback) {
@@ -216,6 +218,11 @@ TEST(ModelFootprint, BridgeDepthFullHdEqualsLoadedBuffers) {
 
 // The full HD measure is the 1280x720 one plus the disparity resized back to
 // the input, which the inference phase holds on the host.
+// A 4K-wide pair, accepted since the model runs it at 1280x675.
+TEST(ModelFootprint, BridgeDepthMaxSideEqualsLoadedBuffers) {
+  checkBridgeDepth(bd::MAX_SIDE, UHD_HEIGHT);
+}
+
 TEST(ModelFootprint, BridgeDepthAboveTheBoxIsSizedAtTheModelSize) {
   const std::string path = envOr("QVAC_BRIDGEDEPTH_MODEL_PATH", "");
   if (path.empty())
@@ -247,11 +254,10 @@ TEST(ModelFootprint, BridgeDepthRejectsSizesInferenceRejects) {
   if (path.empty())
     GTEST_SKIP() << "QVAC_BRIDGEDEPTH_MODEL_PATH is not set";
   const int tooSmall = bd::MIN_SIDE - 1;
-  const int tooLarge = static_cast<int>(bd::MAX_SIDE);
+  const int tooLarge = static_cast<int>(bd::MAX_SIDE) + 1;
   EXPECT_THROW(
       qcc::measureFootprint(path, "CPU", "", tooSmall, bd::MIN_SIDE),
       std::exception);
-  // MAX_SIDE x MAX_SIDE passes the side limit and exceeds MAX_GRID_CELLS.
   EXPECT_THROW(
       qcc::measureFootprint(path, "CPU", "", tooLarge, tooLarge),
       std::exception);
