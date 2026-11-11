@@ -1306,6 +1306,34 @@ test('open <think>: a call drafted in the reasoning and then made is emitted onc
   }
 })
 
+test('open <think>: text after a call in a block that never closes is the reply', (t) => {
+  const raw = `<think>\nLet me check.\n${QWEN_CALL}\nChecking Paris now.`
+  const call = { id: 'call_0', name: 'get_weather', arguments: { city: 'Paris' } }
+  for (const size of [raw.length, 3, 1]) {
+    const n = createCompletionNormalizer(qwenThinkingConfig())
+    const events = [
+      ...pushAll(n, chunksOf(raw, size)),
+      ...n.finish({ toolCalls: [call], stopReason: 'eos' })
+    ]
+
+    t.is(events.filter((e) => e.type === 'toolCall').length, 1, `chunk ${size}: one call`)
+    t.is(joined(events, 'contentDelta'), 'Checking Paris now.', `chunk ${size}: content`)
+  }
+})
+
+test('a call quoted in closed reasoning is not made by the end-of-turn parse', (t) => {
+  const n = createCompletionNormalizer(qwenThinkingConfig())
+  const raw = `<think>\nI'd use ${QWEN_CALL} once I know the city.\n</think>\n\nWhich city?`
+  const call = { id: 'call_0', name: 'get_weather', arguments: { city: 'Paris' } }
+  const events = [
+    ...pushAll(n, chunksOf(raw, 3)),
+    ...n.finish({ toolCalls: [call], stopReason: 'eos' })
+  ]
+
+  t.is(events.filter((e) => e.type === 'toolCall').length, 0)
+  t.is(joined(events, 'contentDelta'), 'Which city?')
+})
+
 test('open <think>: a held call is returned to reasoning when the turn errors', (t) => {
   const n = createCompletionNormalizer(qwenThinkingConfig())
   const events = [

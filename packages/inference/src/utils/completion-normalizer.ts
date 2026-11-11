@@ -128,6 +128,11 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   let heldThinkingCalls: { raw: string; calls: ToolCall[] } | null = null
   // Index into `thinkingParts` where the current built-in block starts.
   let thinkingBlockStart = 0
+  // Calls in the current block that were followed by more reasoning. They were
+  // quoted if the block closes, and made if the turn ends with it still open.
+  let undecidedCalls: ToolCall[] = []
+  let undecidedAnswerStart = 0
+  const quotedToolCallKeys = new Set<string>()
 
   // Content frame: inner streamed as it arrives; partial close tail buffered.
   let activeContentFrame: FrameSpec | null = null
@@ -246,7 +251,8 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   }
 
   function emitFinalToolCall(events: CompletionEvent[], call: ToolCall) {
-    if (streamedToolCallKeys.has(getToolCallKey(call))) return
+    const key = getToolCallKey(call)
+    if (streamedToolCallKeys.has(key) || quotedToolCallKeys.has(key)) return
     events.push({ type: 'toolCall', seq: nextSeq(), call })
   }
 
@@ -407,8 +413,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
       const { raw } = takeToolFrame()
       trimThinkingStart = false
       emitThinking(events, raw + buf.slice(0, thinkClose))
-      trimAfterThinking = contentParts.length === 0
-      state = 'content'
+      closeThinkingBlock()
       return buf.slice(thinkClose + BUILTIN_THINKING.close.length)
     }
 
@@ -430,6 +435,14 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     return ''
   }
 
+  function closeThinkingBlock() {
+    for (const call of undecidedCalls) quotedToolCallKeys.add(getToolCallKey(call))
+    undecidedCalls = []
+    activeThinkingFrame = null
+    trimAfterThinking = contentParts.length === 0
+    state = 'content'
+  }
+
   function releaseHeldCalls(events: CompletionEvent[]) {
     const held = heldThinkingCalls
     heldThinkingCalls = null
@@ -445,8 +458,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     if (marker) {
       releaseHeldCalls(events)
       if (marker === BUILTIN_THINKING.close) {
-        trimAfterThinking = contentParts.length === 0
-        state = 'content'
+        closeThinkingBlock()
       } else {
         openToolFrame(marker, markerToEntry.get(marker)!.spec, true)
       }
@@ -456,10 +468,12 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
       afterThinkingToolTail = buf
       return ''
     }
-    const quoted = heldThinkingCalls?.raw ?? ''
+    const held = heldThinkingCalls
     heldThinkingCalls = null
     trimThinkingStart = false
-    emitThinking(events, quoted + buf.slice(0, buf.length - rest.length))
+    emitThinking(events, (held?.raw ?? '') + buf.slice(0, buf.length - rest.length))
+    undecidedCalls.push(...(held?.calls ?? []))
+    undecidedAnswerStart = thinkingParts.length
     activeThinkingFrame = BUILTIN_THINKING
     state = 'thinkingFraming'
     return rest
@@ -482,9 +496,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     }
     if (closeIdx >= 0) {
       emitThinking(events, buf.slice(0, closeIdx))
-      activeThinkingFrame = null
-      trimAfterThinking = contentParts.length === 0
-      state = 'content'
+      closeThinkingBlock()
       return buf.slice(closeIdx + closeMarker.length)
     }
     const tailLen = trailingPartialMarkerLen(
@@ -564,6 +576,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
         } else if (entry.kind === 'thinking') {
           activeThinkingFrame = entry.spec
           thinkingBlockStart = thinkingParts.length
+          undecidedCalls = []
           trimThinkingStart = true
           pendingThinkingWhitespace = ''
           state = 'thinkingFraming'
@@ -638,19 +651,19 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
         releaseHeldCalls(events)
       }
     }
-    // The model answered inside the prompt-opened `<think>` and stopped on its
-    // own: the reasoning is the answer.
+    // The model stopped on its own inside the prompt-opened `<think>`: calls it
+    // left there were made, and the reasoning after them, or the whole block
+    // when there are none, is the answer.
     const naturalStop = opts?.stopReason === 'eos' || opts?.stopReason === 'stopSequence'
-    if (
-      activeThinkingFrame === BUILTIN_THINKING &&
-      !opts?.error &&
-      naturalStop &&
-      contentParts.length === 0 &&
-      streamedToolCallKeys.size === 0 &&
-      !opts?.toolCalls?.length
-    ) {
-      emitContent(events, thinkingParts.slice(thinkingBlockStart).join('').trimStart())
+    if (activeThinkingFrame === BUILTIN_THINKING && !opts?.error && naturalStop) {
+      const hadCalls = streamedToolCallKeys.size > 0 || !!opts?.toolCalls?.length
+      const answerStart = undecidedCalls.length > 0 ? undecidedAnswerStart : thinkingBlockStart
+      for (const call of undecidedCalls) emitStreamedToolCall(events, call)
+      if (contentParts.length === 0 && (undecidedCalls.length > 0 || !hadCalls)) {
+        emitContent(events, thinkingParts.slice(answerStart).join('').trim())
+      }
     }
+    undecidedCalls = []
     activeThinkingFrame = null
     state = 'content'
 
