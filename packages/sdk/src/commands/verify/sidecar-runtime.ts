@@ -51,5 +51,7 @@ export function resolvePearRuntime(projectRoot: string): BareRuntimeResolution {
       path.join(projectRoot, 'node_modules', 'pear-runtime')
     ])
   }
-  return resolveSidecarRuntime(dir)
+  // pnpm links pear-runtime into node_modules; its bare-sidecar sits next to
+  // the real directory in the store, not next to the link.
+  return resolveSidecarRuntime(fs.realpathSync(dir))
 }

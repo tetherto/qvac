@@ -76,6 +76,8 @@ npx expo prebuild
 ```
 
 Prebuild also writes Bare Kit and QVAC's native addons into `android/qvac-bare-kit` and `ios/QvacBareKit`, and adds them to the app. Builds download Bare Kit from JitPack on Android and from GitHub on iOS.
+
+Prebuild writes the QVAC worker into `node_modules/@qvac/sdk/dist/worker-mobile`. Reinstalling packages clears it, so run `npx expo prebuild` again after an install before building.
 </Step>
 
 <Step>

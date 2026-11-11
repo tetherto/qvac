@@ -742,6 +742,22 @@
     "type": "parakeet-transcription",
     "config": {}
   },
+  "parakeet-transcribepsy-eu": {
+    "constant": {
+      "$const": "PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0"
+    },
+    "type": "parakeet-transcription",
+    "config": {}
+  },
+  "parakeet-transcribepsy-eu-en": {
+    "constant": {
+      "$const": "PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0"
+    },
+    "type": "parakeet-transcription",
+    "config": {
+      "language": "en"
+    }
+  },
   "bci": {
     "skipPreDownloadOn": [
       "mobile"

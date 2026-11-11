@@ -209,7 +209,7 @@ export async function* orchestrateCompletion(
           ...history,
           {
             role: 'tool',
-            content: executeToolSearch(request.tools ?? [], call.arguments, history)
+            content: executeToolSearch(request, call.arguments, history)
           }
         ]
         continue

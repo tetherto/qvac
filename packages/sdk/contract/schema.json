@@ -29,6 +29,9 @@
           "$ref": "#/$defs/bciTranscribeStream.request"
         },
         {
+          "$ref": "#/$defs/calcTokens.request"
+        },
+        {
           "$ref": "#/$defs/cancel.request"
         },
         {
@@ -180,6 +183,9 @@
         },
         {
           "$ref": "#/$defs/bciTranscribeStream.response"
+        },
+        {
+          "$ref": "#/$defs/calcTokens.response"
         },
         {
           "$ref": "#/$defs/cancel.response"
@@ -1121,9 +1127,11 @@
               "type": "number"
             },
             "backendDevice": {
+              "description": "The primary backend the run used: 0 CPU, 1 GPU. The device an ACE-Step `lmBackend` names is not reported here.",
               "type": "number"
             },
             "backendId": {
+              "description": "The primary backend the run used, as the engine codes it: 0 CPU, 1 Metal, 2 CUDA, 3 Vulkan, 4 OpenCL, 99 other.",
               "type": "number"
             },
             "gpuFallbackReason": {
@@ -1793,9 +1801,11 @@
               "type": "number"
             },
             "backendDevice": {
+              "description": "The primary backend the run used: 0 CPU, 1 GPU. The device an ACE-Step `lmBackend` names is not reported here.",
               "type": "number"
             },
             "backendId": {
+              "description": "The primary backend the run used, as the engine codes it: 0 CPU, 1 Metal, 2 CUDA, 3 Vulkan, 4 OpenCL, 99 other.",
               "type": "number"
             },
             "gpuFallbackReason": {
@@ -2224,9 +2234,11 @@
               "type": "number"
             },
             "backendDevice": {
+              "description": "The primary backend the run used: 0 CPU, 1 GPU. The device an ACE-Step `lmBackend` names is not reported here.",
               "type": "number"
             },
             "backendId": {
+              "description": "The primary backend the run used, as the engine codes it: 0 CPU, 1 Metal, 2 CUDA, 3 Vulkan, 4 OpenCL, 99 other.",
               "type": "number"
             },
             "gpuFallbackReason": {
@@ -2737,6 +2749,26 @@
                     "title": "BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchema"
                   }
                 ]
+              },
+              "toolSearch": {
+                "type": "object",
+                "properties": {
+                  "defaultLimit": {
+                    "description": "How many tool definitions one `tool_search` call loads when the model does not ask for a number with its `limit` argument. Defaults to 3, or `maxLimit` when that is lower.",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "maxLimit": {
+                    "description": "The most tool definitions one `tool_search` call can load. A larger `limit` from the model is lowered to this. Defaults to 8.",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "additionalProperties": false,
+                "description": "Limits on what the built-in `tool_search` loads per call. Only used when a tool sets `deferLoading`. The limits are stated in the `tool_search` definition at the front of the prompt, so set them once per conversation: changing them re-prefills from there.",
+                "title": "BatchCompletionStreamRequestPromptsItemToolSearch"
               },
               "tools": {
                 "description": "Resolved per-prompt tools the model can call.",
@@ -3551,6 +3583,29 @@
                 "additionalProperties": false,
                 "title": "BciTranscribeResponseSegmentTokensItem"
               }
+            },
+            "tokenIds": {
+              "description": "Native token ids of the segment. Parakeet streaming only.",
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "isFinal": {
+              "description": "Native finality of the segment, including empty final markers; prefer it over non-empty text to detect a finalized chunk. Parakeet streaming only.",
+              "type": "boolean"
+            },
+            "chunkIndex": {
+              "description": "Native streaming chunk index the segment belongs to; `-1` when unknown. Parakeet streaming only.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "eotConfidence": {
+              "description": "Native end-of-turn confidence of the segment; may be `0` when the model reports none. Parakeet EOU streaming only.",
+              "type": "number"
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
@@ -3948,6 +4003,29 @@
                 "title": "BciTranscribeStreamResponseSegmentTokensItem"
               }
             },
+            "tokenIds": {
+              "description": "Native token ids of the segment. Parakeet streaming only.",
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "isFinal": {
+              "description": "Native finality of the segment, including empty final markers; prefer it over non-empty text to detect a finalized chunk. Parakeet streaming only.",
+              "type": "boolean"
+            },
+            "chunkIndex": {
+              "description": "Native streaming chunk index the segment belongs to; `-1` when unknown. Parakeet streaming only.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "eotConfidence": {
+              "description": "Native end-of-turn confidence of the segment; may be `0` when the model reports none. Parakeet EOU streaming only.",
+              "type": "number"
+            },
             "windowStartTimestep": {
               "description": "Absolute index of the 20 ms timestep at which this segment's owning decode window began. Emitted with `emit: 'delta'` only: the segment's own timestamps are window-local, so add `windowStartTimestep * 20` ms to `startMs` / `endMs` to place them on the stream timeline.",
               "type": "integer",
@@ -3965,6 +4043,315 @@
         }
       },
       "required": ["type"],
+      "additionalProperties": false
+    },
+    "calcTokens.request": {
+      "title": "CalcTokensRequest",
+      "type": "object",
+      "properties": {
+        "modelId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Loaded language model to tokenize with."
+        },
+        "tools": {
+          "description": "Tools to include in the rendered prompt when the model was loaded with `modelConfig.tools: true`.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "function"
+              },
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "deferLoading": {
+                "description": "Opt out of the initial prompt. A deferred tool is registered but only its name and description reach the model, in the catalog carried by the built-in `tool_search`; its parameter schema is appended to the conversation once the model searches for it. Tools without this field behave as before.",
+                "type": "boolean"
+              },
+              "group": {
+                "description": "Optional heading this tool is listed under in the deferred catalog — a skill or an MCP server name. Ignored for tools that are not deferred.",
+                "type": "string"
+              },
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "object"
+                  },
+                  "properties": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "string",
+                                "number",
+                                "integer",
+                                "boolean",
+                                "object",
+                                "array",
+                                "null"
+                              ],
+                              "title": "CalcTokensToolParametersPropertiesValueType"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "string",
+                                  "number",
+                                  "integer",
+                                  "boolean",
+                                  "object",
+                                  "array",
+                                  "null"
+                                ],
+                                "title": "CalcTokensToolParametersPropertiesValueTypeItem"
+                              }
+                            }
+                          ]
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "enum": {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      "additionalProperties": {},
+                      "title": "CalcTokensToolParametersPropertiesValue"
+                    },
+                    "title": "CalcTokensToolParametersProperties"
+                  },
+                  "required": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": ["type", "properties"],
+                "additionalProperties": {},
+                "title": "CalcTokensToolParameters"
+              }
+            },
+            "required": ["type", "name", "description", "parameters"],
+            "title": "CalcTokensTool"
+          }
+        },
+        "toolSearch": {
+          "type": "object",
+          "properties": {
+            "defaultLimit": {
+              "description": "How many tool definitions one `tool_search` call loads when the model does not ask for a number with its `limit` argument. Defaults to 3, or `maxLimit` when that is lower.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "maxLimit": {
+              "description": "The most tool definitions one `tool_search` call can load. A larger `limit` from the model is lowered to this. Defaults to 8.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "additionalProperties": false,
+          "description": "Limits on what the built-in `tool_search` loads per call. Only used when a tool sets `deferLoading`. The limits are stated in the `tool_search` definition at the front of the prompt, so set them once per conversation: changing them re-prefills from there.",
+          "title": "CalcTokensToolSearch"
+        },
+        "text": {
+          "type": "string",
+          "description": "Raw text, or the final user turn when history or enabled tools are present."
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string",
+                "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`, `\"tool\"`)."
+              },
+              "content": {
+                "description": "Message content to count; media parts are rejected with guidance to use completion().",
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "text"
+                                },
+                                "text": {
+                                  "type": "string",
+                                  "description": "Text rendered at this position in the turn."
+                                }
+                              },
+                              "required": ["type", "text"],
+                              "additionalProperties": false,
+                              "title": "CalcTokensHistoryMessageContentItemText"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "media"
+                                },
+                                "path": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "description": "Absolute or resolvable path to the media file (e.g., image for multimodal models)."
+                                }
+                              },
+                              "required": ["type", "path"],
+                              "additionalProperties": false,
+                              "title": "CalcTokensHistoryMessageContentItemMedia"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "attachments": {
+                "maxItems": 0,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "description": "Absolute or resolvable path to the attachment file (e.g., image for multimodal models)."
+                    }
+                  },
+                  "required": ["path"],
+                  "title": "CalcTokensHistoryMessageAttachmentsItem"
+                }
+              },
+              "toolCalls": {
+                "description": "Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "description": "Call id, echoed by the `tool` message that answers it.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Name of the tool that was called."
+                    },
+                    "arguments": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {},
+                      "description": "Arguments the tool was called with.",
+                      "title": "CalcTokensHistoryMessageToolCallsItemArguments"
+                    }
+                  },
+                  "required": ["name", "arguments"],
+                  "title": "CalcTokensHistoryMessageToolCallsItem"
+                }
+              },
+              "toolCallId": {
+                "description": "On a `tool` turn: the id of the call this result answers.",
+                "type": "string"
+              },
+              "toolName": {
+                "description": "On a `tool` turn: the name of the tool that produced the result.",
+                "type": "string"
+              }
+            },
+            "required": ["role"],
+            "title": "CalcTokensHistoryMessage"
+          },
+          "description": "Text-only conversation to render with the loaded model chat template."
+        },
+        "type": {
+          "type": "string",
+          "const": "calcTokens"
+        }
+      },
+      "required": ["modelId", "type"],
+      "additionalProperties": false,
+      "if": {
+        "not": {
+          "required": ["text"]
+        }
+      },
+      "then": {
+        "properties": {
+          "history": {
+            "minItems": 1
+          }
+        },
+        "required": ["history"]
+      }
+    },
+    "calcTokens.response": {
+      "title": "CalcTokensResponse",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "calcTokens"
+        },
+        "tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": ["type", "tokens"],
       "additionalProperties": false
     },
     "cancel.request": {
@@ -4280,6 +4667,11 @@
           "description": "Evaluate the prompt without generating an answer. Requires an enabled KV cache.",
           "type": "boolean"
         },
+        "seedFrom": {
+          "description": "Name of another caller-managed cache to start this chat from, such as a primed system prompt and tools. On the first turn of a chat whose `kvCache` key has no cache yet, the model reads that cache and reuses the prefix it shares with the prompt, so only the rest is processed; the source is never written. Ignored once the chat has a cache. Needs a string `kvCache` other than itself. Refused when no cache of that name exists for this model and system prompt, or when the model was not loaded with `cache_share_across_keys: true`, which is off by default.",
+          "type": "string",
+          "minLength": 1
+        },
         "tools": {
           "description": "Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call.",
           "type": "array",
@@ -4395,6 +4787,26 @@
             "required": ["type", "name", "description", "parameters"],
             "title": "CompletionOrchestrateRequestToolsItem"
           }
+        },
+        "toolSearch": {
+          "type": "object",
+          "properties": {
+            "defaultLimit": {
+              "description": "How many tool definitions one `tool_search` call loads when the model does not ask for a number with its `limit` argument. Defaults to 3, or `maxLimit` when that is lower.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "maxLimit": {
+              "description": "The most tool definitions one `tool_search` call can load. A larger `limit` from the model is lowered to this. Defaults to 8.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "additionalProperties": false,
+          "description": "Limits on what the built-in `tool_search` loads per call. Only used when a tool sets `deferLoading`. The limits are stated in the `tool_search` definition at the front of the prompt, so set them once per conversation: changing them re-prefills from there.",
+          "title": "CompletionOrchestrateRequestToolSearch"
         },
         "stream": {
           "type": "boolean",
@@ -5034,6 +5446,11 @@
           "description": "Evaluate the prompt without generating an answer. Requires an enabled KV cache.",
           "type": "boolean"
         },
+        "seedFrom": {
+          "description": "Name of another caller-managed cache to start this chat from, such as a primed system prompt and tools. On the first turn of a chat whose `kvCache` key has no cache yet, the model reads that cache and reuses the prefix it shares with the prompt, so only the rest is processed; the source is never written. Ignored once the chat has a cache. Needs a string `kvCache` other than itself. Refused when no cache of that name exists for this model and system prompt, or when the model was not loaded with `cache_share_across_keys: true`, which is off by default.",
+          "type": "string",
+          "minLength": 1
+        },
         "tools": {
           "description": "Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call.",
           "type": "array",
@@ -5149,6 +5566,26 @@
             "required": ["type", "name", "description", "parameters"],
             "title": "CompletionStreamRequestToolsItem"
           }
+        },
+        "toolSearch": {
+          "type": "object",
+          "properties": {
+            "defaultLimit": {
+              "description": "How many tool definitions one `tool_search` call loads when the model does not ask for a number with its `limit` argument. Defaults to 3, or `maxLimit` when that is lower.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "maxLimit": {
+              "description": "The most tool definitions one `tool_search` call can load. A larger `limit` from the model is lowered to this. Defaults to 8.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "additionalProperties": false,
+          "description": "Limits on what the built-in `tool_search` loads per call. Only used when a tool sets `deferLoading`. The limits are stated in the `tool_search` definition at the front of the prompt, so set them once per conversation: changing them re-prefills from there.",
+          "title": "CompletionStreamRequestToolSearch"
         },
         "stream": {
           "type": "boolean",
@@ -5922,11 +6359,23 @@
         "MOSS_SPEECH"
       ]
     },
+    "constants.TtsLavasrCoremlComputeUnits": {
+      "title": "TtsLavasrCoremlComputeUnits",
+      "type": "string",
+      "enum": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"],
+      "x-enum-varnames": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"]
+    },
     "constants.TtsPace": {
       "title": "TtsPace",
       "type": "string",
       "enum": ["slow", "moderate", "fast"],
       "x-enum-varnames": ["SLOW", "MODERATE", "FAST"]
+    },
+    "constants.TtsParlerCoremlComputeUnits": {
+      "title": "TtsParlerCoremlComputeUnits",
+      "type": "string",
+      "enum": ["all", "cpu_and_ane", "cpu_and_gpu", "cpu_only"],
+      "x-enum-varnames": ["ALL", "CPU_AND_ANE", "CPU_AND_GPU", "CPU_ONLY"]
     },
     "constants.TtsParlerEmotion": {
       "title": "TtsParlerEmotion",
@@ -6035,6 +6484,12 @@
         "UK",
         "VI"
       ]
+    },
+    "constants.TtsSupertonicPrecision": {
+      "title": "TtsSupertonicPrecision",
+      "type": "string",
+      "enum": ["auto", "f32", "f16", "q8_0"],
+      "x-enum-varnames": ["AUTO", "F32", "F16", "Q8_0"]
     },
     "constants.VectorIndexStorage": {
       "title": "VectorIndexStorage",
@@ -7554,7 +8009,7 @@
           "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
         },
         "init_images": {
-          "description": "Ordered base64-encoded PNG/JPEG references for models with reference editing, including FLUX.2 and Qwen-Image-2.1. Native model detection validates support. Qwen-Image-2.1 requires projectionModelSrc, preserves alpha, and does not need FLUX @imageN tags or a prediction override. Mutually exclusive with init_image.",
+          "description": "Ordered base64-encoded PNG/JPEG references for models with reference editing, including FLUX.2, FLUX.3 and Qwen-Image-2.1. Native model detection validates support. FLUX.3 and Qwen-Image-2.1 do not need FLUX.2 @imageN tags or a prediction override; Qwen-Image-2.1 requires projectionModelSrc and preserves alpha. Mutually exclusive with init_image.",
           "minItems": 1,
           "type": "array",
           "items": {
@@ -7578,7 +8033,7 @@
           "pattern": "^(\\/|[A-Za-z]:[\\\\/]|\\\\\\\\)"
         },
         "strength": {
-          "description": "img2img denoising strength for SD/SDXL SDEdit. Does not control reference-editing strength for FLUX.2 or Qwen-Image-2.1; these models start the target from noise.",
+          "description": "img2img denoising strength for SD/SDXL SDEdit. Does not control reference-editing strength for FLUX.2, FLUX.3 or Qwen-Image-2.1; these models start the target from noise.",
           "type": "number",
           "minimum": 0,
           "maximum": 1
@@ -13513,7 +13968,7 @@
                       ]
                     },
                     "system_prompt": {
-                      "description": "Seeds conversation history on the JS side only; never forwarded to the addon. Default `'You are a helpful assistant.'`",
+                      "description": "Prepended as the system message when a request's history carries none; applied on the JS side and never forwarded to the addon. Unset by default, so the model sees the history as sent.",
                       "type": "string"
                     },
                     "load_mode": {
@@ -14812,6 +15267,134 @@
                       "description": "Enable the ggml GPU backend. Default false.",
                       "type": "boolean"
                     },
+                    "backend": {
+                      "description": "Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `opencl`, `metal`, or an exact ggml device name such as `CUDA0` or `MTL0`. An explicit selection overrides `useGPU` and the load fails if it is unavailable instead of falling back. Applies to the speaker-attribution diarization model too, and reaches `assessModelFit`.",
+                      "type": "string"
+                    },
+                    "speakerAttribution": {
+                      "description": "Transcribe each speaker turn found by a separate diarization model, reporting `speakerId` per segment. Batch `transcribe()` only; cannot be combined with `streaming`.",
+                      "type": "object",
+                      "properties": {
+                        "modelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "llamacpp-decision",
+                                        "llamacpp-rerank",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "moss-transcribe",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-image-embedding",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestParakeetTranscriptionModelConfigSpeakerAttributionModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestParakeetTranscriptionModelConfigSpeakerAttributionModelSrc"
+                            }
+                          ],
+                          "description": "Diarization model (Sortformer or Nemotron 3 Diarization GGUF) loaded beside the ASR model, as `loadModel` takes a `modelSrc`."
+                        },
+                        "mergeSameSpeaker": {
+                          "description": "Merge adjacent retained turns assigned to the same speaker. Default true.",
+                          "type": "boolean"
+                        },
+                        "minSegmentMs": {
+                          "description": "Minimum padded turn duration, in ms, before it is sent to ASR; `0` keeps short turns. Default 200.",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "padSegmentMs": {
+                          "description": "Extend the ASR audio slice around each turn, in ms; returned timestamps still describe the diarized turn. Default 0.",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        }
+                      },
+                      "required": ["modelSrc"],
+                      "additionalProperties": false,
+                      "title": "LoadModelSrcRequestParakeetTranscriptionModelConfigSpeakerAttribution"
+                    },
                     "sampleRate": {
                       "description": "Input audio sample rate in Hz. Default 16000.",
                       "type": "integer",
@@ -14891,9 +15474,9 @@
                       "maximum": 9007199254740991
                     },
                     "language": {
-                      "description": "Indic CTC language id or Nemotron locale alias (e.g. `hi`, `ta`, `en-US`, `hi-IN`, or `auto`). Empty selects `auto` for Nemotron and keeps full-vocabulary CTC decoding.",
+                      "description": "Indic CTC language id, Nemotron locale alias (e.g. `hi`, `ta`, `en-US`, `hi-IN`, or `auto`), or the TranscribePsy EU route: `en` for the English trunk, `other` for the non-English adapters, `auto` to route automatically. Empty selects `auto` for Nemotron and TranscribePsy EU and keeps full-vocabulary CTC decoding.",
                       "type": "string",
-                      "pattern": "^(|auto|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$"
+                      "pattern": "^(|auto|other|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$"
                     },
                     "streamingSpeakerVad": {
                       "description": "Emit speaker-activity VAD events with the dominant speaker id during diarization streaming. Default false.",
@@ -16857,6 +17440,11 @@
                           "minimum": -2147483648,
                           "maximum": 2147483647
                         },
+                        "backend": {
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "type": "string",
+                          "minLength": 1
+                        },
                         "backendsDir": {
                           "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                           "type": "string",
@@ -17461,6 +18049,28 @@
                             }
                           ]
                         },
+                        "lavasrEnhancerCoremlModelPath": {
+                          "description": "macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR enhancer’s neural core; requires `lavasrEnhancerModelSrc` and `lavasrEnhancerCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "lavasrEnhancerCoremlComputeUnits": {
+                          "description": "macOS / iOS: Core ML compute policy for the LavaSR enhancer; required with `lavasrEnhancerCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+                          "type": "string",
+                          "enum": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerCoremlComputeUnits"
+                        },
+                        "lavasrDenoiserCoremlModelPath": {
+                          "description": "macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR denoiser’s neural core; requires `lavasrDenoiserModelSrc` and `lavasrDenoiserCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "lavasrDenoiserCoremlComputeUnits": {
+                          "description": "macOS / iOS: Core ML compute policy for the LavaSR denoiser; required with `lavasrDenoiserCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+                          "type": "string",
+                          "enum": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserCoremlComputeUnits"
+                        },
                         "ttsSupertonicMultilingual": {},
                         "ttsTokenizerSrc": {},
                         "ttsSpeechEncoderSrc": {},
@@ -17613,6 +18223,70 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 2147483647
+                        },
+                        "precision": {
+                          "description": "Weight precision the engine loads at: `auto` keeps the GGUF’s own, `f32` / `f16` / `q8_0` convert on load and change the weight footprint.",
+                          "type": "string",
+                          "enum": ["auto", "f32", "f16", "q8_0"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigSupertonicPrecision"
+                        },
+                        "f16Attn": {
+                          "description": "Attention precision override: `-1` automatic (default), `0` f32, `1` f16.",
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "f16Weights": {
+                          "description": "Weight precision override: `-1` automatic (default), `0` off, `1` f16.",
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "kvAttnType": {
+                          "description": "Native KV attention type code; `-1` leaves the automatic selection.",
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "f16WeightsDenyList": {
+                          "description": "Tensor-name patterns kept at their original precision when `f16Weights` is on.",
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "vulkanEnvOverrides": {
+                          "description": "Vulkan environment overrides (string values) passed to the engine; explicit entries win over the `vulkanCacheDir` convenience setting.",
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "string"
+                          },
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigSupertonicVulkanEnvOverrides"
+                        },
+                        "voiceStyleTtl": {
+                          "description": "In-memory voice: the flattened `style_ttl` tensor of a cloned voice. Paired with `voiceStyleDp`; the engine checks the sizes against the model, and the pair wins over `voiceJsonSrc` and the baked `voice`.",
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        },
+                        "voiceStyleDp": {
+                          "description": "In-memory voice: the flattened `style_dp` tensor, paired with `voiceStyleTtl`.",
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        },
+                        "backend": {
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "type": "string",
+                          "minLength": 1
                         },
                         "backendsDir": {
                           "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
@@ -17821,6 +18495,28 @@
                               "title": "LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc"
                             }
                           ]
+                        },
+                        "lavasrEnhancerCoremlModelPath": {
+                          "description": "macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR enhancer’s neural core; requires `lavasrEnhancerModelSrc` and `lavasrEnhancerCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "lavasrEnhancerCoremlComputeUnits": {
+                          "description": "macOS / iOS: Core ML compute policy for the LavaSR enhancer; required with `lavasrEnhancerCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+                          "type": "string",
+                          "enum": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerCoremlComputeUnits"
+                        },
+                        "lavasrDenoiserCoremlModelPath": {
+                          "description": "macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR denoiser’s neural core; requires `lavasrDenoiserModelSrc` and `lavasrDenoiserCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "lavasrDenoiserCoremlComputeUnits": {
+                          "description": "macOS / iOS: Core ML compute policy for the LavaSR denoiser; required with `lavasrDenoiserCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+                          "type": "string",
+                          "enum": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserCoremlComputeUnits"
                         },
                         "voiceJsonSrc": {
                           "description": "External voice JSON source (`{ style_ttl, style_dp }`, e.g. a cloned voice) that overrides the baked `voice` preset; the engine checks the tensor sizes against the loaded model.",
@@ -18192,6 +18888,25 @@
                           "description": "Parler prompt digit expansion (engine default: enabled).",
                           "type": "boolean"
                         },
+                        "coremlDecoder": {
+                          "description": "macOS / iOS: run the decoder steps on the `<model>-decoder.mlmodelc` sidecar beside the GGUF (the DAC sidecar is picked up by presence); unset keeps the engine default.",
+                          "type": "boolean"
+                        },
+                        "coremlComputeUnits": {
+                          "description": "macOS / iOS: Core ML compute policy for the Parler sidecars; unset inherits the engine’s environment default.",
+                          "type": "string",
+                          "enum": ["all", "cpu_and_ane", "cpu_and_gpu", "cpu_only"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigParlerCoremlComputeUnits"
+                        },
+                        "coremlStrict": {
+                          "description": "macOS / iOS: `true` fails the load when a sidecar is unusable instead of falling back to ggml, `false` permits the fallback; unset inherits the engine’s strict mode.",
+                          "type": "boolean"
+                        },
+                        "backend": {
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "type": "string",
+                          "minLength": 1
+                        },
                         "backendsDir": {
                           "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                           "type": "string",
@@ -18394,6 +19109,28 @@
                               "title": "LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc"
                             }
                           ]
+                        },
+                        "lavasrEnhancerCoremlModelPath": {
+                          "description": "macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR enhancer’s neural core; requires `lavasrEnhancerModelSrc` and `lavasrEnhancerCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "lavasrEnhancerCoremlComputeUnits": {
+                          "description": "macOS / iOS: Core ML compute policy for the LavaSR enhancer; required with `lavasrEnhancerCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+                          "type": "string",
+                          "enum": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerCoremlComputeUnits"
+                        },
+                        "lavasrDenoiserCoremlModelPath": {
+                          "description": "macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR denoiser’s neural core; requires `lavasrDenoiserModelSrc` and `lavasrDenoiserCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "lavasrDenoiserCoremlComputeUnits": {
+                          "description": "macOS / iOS: Core ML compute policy for the LavaSR denoiser; required with `lavasrDenoiserCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+                          "type": "string",
+                          "enum": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserCoremlComputeUnits"
                         }
                       },
                       "required": ["ttsEngine"],
@@ -18487,6 +19224,20 @@
                           "minimum": -1,
                           "maximum": 2147483647
                         },
+                        "greedy": {
+                          "description": "Greedy LM decoding: take the argmax speech token instead of sampling (engine default off).",
+                          "type": "boolean"
+                        },
+                        "forceSpeechTokens": {
+                          "description": "Speech-token trajectory of ONE native synthesis to replay instead of generating, as a previous batch run, native chunk stream or single sentence returned it in `speechTokenIds`. Fixed at load: every synthesis of the model replays this same array, so a joined sentence stream cannot be replayed sentence by sentence. An empty array restores generation.",
+                          "type": "array",
+                          "items": {
+                            "type": "integer",
+                            "minimum": -2147483648,
+                            "maximum": 2147483647,
+                            "title": "TtsSpeechTokenId"
+                          }
+                        },
                         "useGPU": {
                           "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
@@ -18526,6 +19277,11 @@
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
+                        },
+                        "backend": {
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "type": "string",
+                          "minLength": 1
                         },
                         "backendsDir": {
                           "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
@@ -18734,6 +19490,28 @@
                               "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc"
                             }
                           ]
+                        },
+                        "lavasrEnhancerCoremlModelPath": {
+                          "description": "macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR enhancer’s neural core; requires `lavasrEnhancerModelSrc` and `lavasrEnhancerCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "lavasrEnhancerCoremlComputeUnits": {
+                          "description": "macOS / iOS: Core ML compute policy for the LavaSR enhancer; required with `lavasrEnhancerCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+                          "type": "string",
+                          "enum": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerCoremlComputeUnits"
+                        },
+                        "lavasrDenoiserCoremlModelPath": {
+                          "description": "macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR denoiser’s neural core; requires `lavasrDenoiserModelSrc` and `lavasrDenoiserCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "lavasrDenoiserCoremlComputeUnits": {
+                          "description": "macOS / iOS: Core ML compute policy for the LavaSR denoiser; required with `lavasrDenoiserCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+                          "type": "string",
+                          "enum": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserCoremlComputeUnits"
                         },
                         "referenceAudioSrc": {
                           "description": "CosyVoice3 voice-cloning reference recording source (wav; 0.5–30 s, 5–15 s of clean speech recommended). Replaces the baked voice.",
@@ -19105,6 +19883,11 @@
                           "minimum": -2147483648,
                           "maximum": 2147483647
                         },
+                        "backend": {
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "type": "string",
+                          "minLength": 1
+                        },
                         "backendsDir": {
                           "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                           "type": "string",
@@ -19426,16 +20209,67 @@
                           "minLength": 1
                         },
                         "durationTokens": {
-                          "description": "Target length of each synthesis in codec frames (12.5 per second, so 38 ≈ 3 s), 0–2015; 0 or unset keeps the length free.",
+                          "description": "Target length of each synthesis in codec frames (12.5 per second, so 38 ≈ 3 s), at most `maxNewTokens` − 33 (2015 by default); 0 or unset keeps the length free.",
                           "type": "integer",
                           "minimum": 0,
-                          "maximum": 2015
+                          "maximum": 2147483647
                         },
                         "streamChunkTokens": {
                           "description": "Codec frames per native streaming chunk (12.5 per second, so 25 ≈ 2 s); 0 or unset synthesizes the whole text before emitting.",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 2147483647
+                        },
+                        "nCtx": {
+                          "description": "Context capacity of the backbone in rows; unset keeps the native value.",
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "maxNewTokens": {
+                          "description": "Generation budget in rows (engine default 2048), of which 33 are delay/EOS rows; bounds `durationTokens`.",
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "textTemperature": {
+                          "description": "Text-channel sampling temperature; unset keeps the engine default.",
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "textTopP": {
+                          "description": "Text-channel top-p (nucleus) cutoff, 0 < p ≤ 1; unset keeps the engine default.",
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1
+                        },
+                        "textTopK": {
+                          "description": "Text-channel top-k cutoff; unset keeps the engine default.",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "audioTemperature": {
+                          "description": "Audio-channel sampling temperature; unset keeps the engine default.",
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "audioTopP": {
+                          "description": "Audio-channel top-p (nucleus) cutoff, 0 < p ≤ 1; unset keeps the engine default.",
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1
+                        },
+                        "audioTopK": {
+                          "description": "Audio-channel top-k cutoff; unset keeps the engine default.",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "audioRepetitionPenalty": {
+                          "description": "Audio-channel repetition penalty; 1 = off, unset keeps the engine default.",
+                          "type": "number",
+                          "exclusiveMinimum": 0
                         },
                         "useGPU": {
                           "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
@@ -19458,6 +20292,11 @@
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
+                        },
+                        "backend": {
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "type": "string",
+                          "minLength": 1
                         },
                         "backendsDir": {
                           "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
@@ -19900,6 +20739,11 @@
                           "minimum": -2147483648,
                           "maximum": 2147483647
                         },
+                        "backend": {
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "type": "string",
+                          "minLength": 1
+                        },
                         "backendsDir": {
                           "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                           "type": "string",
@@ -19967,6 +20811,11 @@
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
+                        },
+                        "backend": {
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "type": "string",
+                          "minLength": 1
                         },
                         "backendsDir": {
                           "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
@@ -20363,7 +21212,7 @@
                   "properties": {
                     "mode": {
                       "default": "diffusion",
-                      "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX / Qwen-Image pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` selects MiniMax-H3 text/image-to-video (optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU. At 832x480, the default walk with resident weights needs at least 20 GB free VRAM. `world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can reduce that requirement.",
+                      "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX / Qwen-Image pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, external tokenizer, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` selects MiniMax-H3 text/image-to-video (optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU. At 832x480, the default walk with resident weights needs at least 20 GB free VRAM. `world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can reduce that requirement.",
                       "type": "string",
                       "enum": ["diffusion", "upscale", "video", "world"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigMode"
@@ -20379,7 +21228,7 @@
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigDevice"
                     },
                     "main-gpu": {
-                      "description": "GPU to pin when `device` is \"gpu\": a GPU-device index, \"integrated\", or \"dedicated\" (the discrete GPU with the most VRAM). Omit to let the backend choose the first enumerated device. Resolved against the addon's own ggml device enumeration, so it cannot desync from the device list the backend actually uses. If an explicit request cannot be satisfied (e.g. \"integrated\" with no integrated GPU, \"dedicated\" with no discrete GPU, or an out-of-range index) the addon falls back to CPU rather than substituting a different GPU. Stripped on mobile (single-GPU devices).",
+                      "description": "GPU to pin when `device` is \"gpu\": a GPU-device index, \"integrated\", or \"dedicated\" (the discrete GPU with the most VRAM). Omit to let automatic placement choose: a dedicated GPU first, then an integrated one, taking the largest available memory budget within each. Resolved against the addon's own ggml device enumeration, so it cannot desync from the device list the backend actually uses. If an explicit request cannot be satisfied (e.g. \"integrated\" with no integrated GPU, \"dedicated\" with no discrete GPU, or an out-of-range index) the addon falls back to CPU rather than substituting a different GPU. Stripped on mobile (single-GPU devices).",
                       "anyOf": [
                         {
                           "type": "integer",
@@ -20806,7 +21655,7 @@
                       ]
                     },
                     "llmModelSrc": {
-                      "description": "LLM text encoder model — required for FLUX.2 [klein] (Qwen3), Qwen-Image-2.1 and Ideogram 4 (Qwen3-VL), LTX-2 video (Gemma), and MiniMax-H3 (H3-specific Qwen3-VL).",
+                      "description": "LLM text encoder model — required for FLUX.2 [klein] (Qwen3), FLUX.3 Image Klein, Qwen-Image-2.1 and Ideogram 4 (Qwen3-VL), MOSS-Image (Qwen3.5), LTX-2 video (Gemma), and MiniMax-H3 (H3-specific Qwen3-VL).",
                       "anyOf": [
                         {
                           "type": "string"
@@ -21004,7 +21853,7 @@
                       ]
                     },
                     "vaeModelSrc": {
-                      "description": "VAE decoder model, required for Qwen-Image-2.1, FLUX.2 [klein], Ideogram 4, LTX-2 video, and MiniMax-H3 video; optional for SDXL.",
+                      "description": "VAE decoder model, required for Qwen-Image-2.1, FLUX.2 [klein], FLUX.3 Image Klein, Ideogram 4, MOSS-Image, LTX-2 video, and MiniMax-H3 video; optional for SDXL.",
                       "anyOf": [
                         {
                           "type": "string"
@@ -21297,6 +22146,105 @@
                           },
                           "required": ["src"],
                           "title": "LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc"
+                        }
+                      ]
+                    },
+                    "tokenizerSrc": {
+                      "description": "External `tokenizer.json` for the Qwen3.5 text encoder — MOSS-Image only. Requires diffusion mode, llmModelSrc (Qwen3.5) and vaeModelSrc. Layout prompts can be passed as a JSON string.",
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "src": {
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                            },
+                            "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
+                              "type": "string"
+                            },
+                            "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
+                              "type": "string"
+                            },
+                            "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
+                              "type": "string"
+                            },
+                            "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
+                              "type": "string"
+                            },
+                            "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
+                              "type": "string"
+                            },
+                            "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                              "type": "number"
+                            },
+                            "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                              "type": "string"
+                            },
+                            "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
+                              "type": "number"
+                            },
+                            "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
+                              "type": "string"
+                            },
+                            "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "llamacpp-completion",
+                                    "whispercpp-transcription",
+                                    "bci-whispercpp-transcription",
+                                    "llamacpp-embedding",
+                                    "llamacpp-decision",
+                                    "llamacpp-rerank",
+                                    "nmtcpp-translation",
+                                    "onnx-tts",
+                                    "tts-ggml",
+                                    "parakeet-transcription",
+                                    "moss-transcribe",
+                                    "ggml-ocr",
+                                    "sdcpp-generation",
+                                    "audiogen-ggml",
+                                    "ggml-vla",
+                                    "ggml-image-embedding",
+                                    "ggml-classification",
+                                    "llm",
+                                    "whisper",
+                                    "bci",
+                                    "embeddings",
+                                    "nmt",
+                                    "parakeet",
+                                    "tts",
+                                    "ocr",
+                                    "diffusion",
+                                    "audiogen",
+                                    "vla",
+                                    "classification"
+                                  ],
+                                  "title": "LoadModelSrcRequestSdcppGenerationModelConfigTokenizerSrcAddon"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "vad"
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["src"],
+                          "title": "LoadModelSrcRequestSdcppGenerationModelConfigTokenizerSrc"
                         }
                       ]
                     },
@@ -22111,7 +23059,7 @@
                           "const": "acestep"
                         },
                         "useGPU": {
-                          "description": "Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the backend actually used.",
+                          "description": "Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the primary backend a run used.",
                           "type": "boolean"
                         },
                         "threads": {
@@ -22142,6 +23090,21 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9007199254740991
+                        },
+                        "backend": {
+                          "description": "Advanced: ACE-Step's primary backend, by backend or device name (`cpu`, `MTL0`, `CUDA0`, …). Unset or `auto` keeps the placement `useGPU` and `nGpuLayers` select; any other value overrides both, so `useGPU: false` with `backend: 'CUDA0'` runs on CUDA0. A named backend the host cannot provide fails the load instead of falling back.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "lmBackend": {
+                          "description": "Advanced: the backend ACE-Step's language model runs on, chosen independently of `backend` and named the same way. Unset or `auto` keeps the engine's own placement for the LM; any other value overrides it. A named backend the host cannot provide fails the load instead of falling back.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "dumpStagesDir": {
+                          "description": "Diagnostics: an existing directory on the inference host that receives the intermediate tensors of each ACE-Step stage. The engine does not create it. Unset writes nothing.",
+                          "type": "string",
+                          "minLength": 1
                         },
                         "textEncModelSrc": {
                           "anyOf": [
@@ -22553,7 +23516,7 @@
                           "description": "Use the MiniMax-Music3 generation engine."
                         },
                         "useGPU": {
-                          "description": "Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the backend actually used.",
+                          "description": "Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the primary backend a run used.",
                           "type": "boolean"
                         },
                         "threads": {
@@ -22583,6 +23546,11 @@
                           "type": "string",
                           "enum": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"],
                           "title": "LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxCoremlComputeUnits"
+                        },
+                        "coremlConditionerPath": {
+                          "description": "Advanced, macOS: absolute path on the inference host to a compiled conditioner `.mlmodelc`. Runs the conditioner convolution alone through Core ML (CPU and Neural Engine); every other stage stays on the backend `device` or `useGPU` selects. Does not enable the full Core ML profile. The load fails when the bundle is invalid or the build cannot use it.",
+                          "type": "string",
+                          "minLength": 1
                         },
                         "inferenceSteps": {
                           "description": "MiniMax flow sampling steps; `0` uses the engine default (20).",
@@ -25721,6 +26689,7 @@
               "type": "number"
             },
             "backendId": {
+              "description": "Backend family the engine ran on: `0` CPU, `1` Metal, `2` CUDA, `3` Vulkan, `4` OpenCL, `5` WebGPU, `99` other.",
               "type": "number"
             },
             "gpuUnsupported": {
@@ -25746,6 +26715,22 @@
             },
             "codecOnCoreml": {
               "description": "Audio8: `1` when this synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` reports.",
+              "type": "number"
+            },
+            "decoderSidecarLoaded": {
+              "description": "Parler on macOS / iOS: `1` while the Core ML decoder sidecar is attached, `0` once a fallback retired it.",
+              "type": "number"
+            },
+            "dacSidecarLoaded": {
+              "description": "Parler on macOS / iOS: `1` while the Core ML DAC sidecar is attached, `0` once a fallback retired it.",
+              "type": "number"
+            },
+            "decoderOnCoreml": {
+              "description": "Parler: `1` when this synthesis ran its decoder steps on Core ML, `0` for ggml or a mixed run.",
+              "type": "number"
+            },
+            "dacOnCoreml": {
+              "description": "Parler: `1` when this synthesis ran its DAC on Core ML, `0` for ggml or a mixed run.",
               "type": "number"
             },
             "t3Ms": {
@@ -25871,6 +26856,16 @@
         "isLast": {
           "description": "True on the final audio-bearing chunk of a pre-chunked synthesis. Absent when the chunk count is not known up front (streamed text in).",
           "type": "boolean"
+        },
+        "speechTokenIds": {
+          "description": "CosyVoice3: the speech tokens of this native synthesis. Batch synthesis carries them with the PCM; native chunk streaming on a final `isLast` frame with no audio; the sentence paths once per sentence. Pass one array back as `forceSpeechTokens` to replay that synthesis (a joined sentence stream cannot be replayed as one).",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 2147483647,
+            "title": "TtsSpeechTokenId"
+          }
         },
         "stopReason": {
           "type": "string",
@@ -26198,6 +27193,7 @@
               "type": "number"
             },
             "backendId": {
+              "description": "Backend family the engine ran on: `0` CPU, `1` Metal, `2` CUDA, `3` Vulkan, `4` OpenCL, `5` WebGPU, `99` other.",
               "type": "number"
             },
             "gpuUnsupported": {
@@ -26223,6 +27219,22 @@
             },
             "codecOnCoreml": {
               "description": "Audio8: `1` when this synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` reports.",
+              "type": "number"
+            },
+            "decoderSidecarLoaded": {
+              "description": "Parler on macOS / iOS: `1` while the Core ML decoder sidecar is attached, `0` once a fallback retired it.",
+              "type": "number"
+            },
+            "dacSidecarLoaded": {
+              "description": "Parler on macOS / iOS: `1` while the Core ML DAC sidecar is attached, `0` once a fallback retired it.",
+              "type": "number"
+            },
+            "decoderOnCoreml": {
+              "description": "Parler: `1` when this synthesis ran its decoder steps on Core ML, `0` for ggml or a mixed run.",
+              "type": "number"
+            },
+            "dacOnCoreml": {
+              "description": "Parler: `1` when this synthesis ran its DAC on Core ML, `0` for ggml or a mixed run.",
               "type": "number"
             },
             "t3Ms": {
@@ -26348,6 +27360,16 @@
         "isLast": {
           "description": "True on the final audio-bearing chunk of a pre-chunked synthesis. Absent when the chunk count is not known up front (streamed text in).",
           "type": "boolean"
+        },
+        "speechTokenIds": {
+          "description": "CosyVoice3: the speech tokens of this native synthesis. Batch synthesis carries them with the PCM; native chunk streaming on a final `isLast` frame with no audio; the sentence paths once per sentence. Pass one array back as `forceSpeechTokens` to replay that synthesis (a joined sentence stream cannot be replayed as one).",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 2147483647,
+            "title": "TtsSpeechTokenId"
+          }
         },
         "stopReason": {
           "type": "string",
@@ -26668,6 +27690,29 @@
                 "additionalProperties": false,
                 "title": "TranscribeResponseSegmentTokensItem"
               }
+            },
+            "tokenIds": {
+              "description": "Native token ids of the segment. Parakeet streaming only.",
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "isFinal": {
+              "description": "Native finality of the segment, including empty final markers; prefer it over non-empty text to detect a finalized chunk. Parakeet streaming only.",
+              "type": "boolean"
+            },
+            "chunkIndex": {
+              "description": "Native streaming chunk index the segment belongs to; `-1` when unknown. Parakeet streaming only.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "eotConfidence": {
+              "description": "Native end-of-turn confidence of the segment; may be `0` when the model reports none. Parakeet EOU streaming only.",
+              "type": "number"
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
@@ -26692,6 +27737,12 @@
             "timestamp": {
               "description": "Parakeet: event time in seconds from the start of the streaming session.",
               "type": "number"
+            },
+            "chunkIndex": {
+              "description": "Parakeet: native streaming chunk index of the event; `-1` when unavailable.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             },
             "source": {
               "description": "Detector behind the event: `'silero'` for Whisper, `'energy'` for Parakeet energy VAD, or `'sortformer'` for Sortformer speaker activity.",
@@ -26727,6 +27778,20 @@
                 "source": {
                   "type": "string",
                   "const": "parakeet"
+                },
+                "timestamp": {
+                  "description": "Native event time in seconds from the start of the streaming session.",
+                  "type": "number"
+                },
+                "chunkIndex": {
+                  "description": "Native streaming chunk index of the boundary; `-1` when unknown.",
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "confidence": {
+                  "description": "Native end-of-turn confidence reported by the EOU model.",
+                  "type": "number"
                 }
               },
               "required": ["source"],
@@ -27202,6 +28267,29 @@
                 "additionalProperties": false,
                 "title": "TranscribeStreamResponseSegmentTokensItem"
               }
+            },
+            "tokenIds": {
+              "description": "Native token ids of the segment. Parakeet streaming only.",
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "isFinal": {
+              "description": "Native finality of the segment, including empty final markers; prefer it over non-empty text to detect a finalized chunk. Parakeet streaming only.",
+              "type": "boolean"
+            },
+            "chunkIndex": {
+              "description": "Native streaming chunk index the segment belongs to; `-1` when unknown. Parakeet streaming only.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "eotConfidence": {
+              "description": "Native end-of-turn confidence of the segment; may be `0` when the model reports none. Parakeet EOU streaming only.",
+              "type": "number"
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
@@ -27226,6 +28314,12 @@
             "timestamp": {
               "description": "Parakeet: event time in seconds from the start of the streaming session.",
               "type": "number"
+            },
+            "chunkIndex": {
+              "description": "Parakeet: native streaming chunk index of the event; `-1` when unavailable.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             },
             "source": {
               "description": "Detector behind the event: `'silero'` for Whisper, `'energy'` for Parakeet energy VAD, or `'sortformer'` for Sortformer speaker activity.",
@@ -27261,6 +28355,20 @@
                 "source": {
                   "type": "string",
                   "const": "parakeet"
+                },
+                "timestamp": {
+                  "description": "Native event time in seconds from the start of the streaming session.",
+                  "type": "number"
+                },
+                "chunkIndex": {
+                  "description": "Native streaming chunk index of the boundary; `-1` when unknown.",
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "confidence": {
+                  "description": "Native end-of-turn confidence reported by the EOU model.",
+                  "type": "number"
                 }
               },
               "required": ["source"],
@@ -27899,6 +29007,28 @@
         {
           "type": "object",
           "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "setStagedSearch"
+            }
+          },
+          "required": ["enabled", "type", "indexId", "operation"],
+          "title": "VectorIndexRequestSetStagedSearch"
+        },
+        {
+          "type": "object",
+          "properties": {
             "type": {
               "type": "string",
               "const": "vectorIndex"
@@ -27926,6 +29056,12 @@
             "type": {
               "type": "string",
               "const": "vectorIndex"
+            },
+            "calibrated": {
+              "type": "boolean"
+            },
+            "stagedSearch": {
+              "type": "boolean"
             },
             "operation": {
               "type": "string",
@@ -27962,6 +29098,12 @@
               "type": "string",
               "const": "vectorIndex"
             },
+            "calibrated": {
+              "type": "boolean"
+            },
+            "stagedSearch": {
+              "type": "boolean"
+            },
             "operation": {
               "type": "string",
               "const": "load"
@@ -27996,6 +29138,12 @@
             "type": {
               "type": "string",
               "const": "vectorIndex"
+            },
+            "calibrated": {
+              "type": "boolean"
+            },
+            "stagedSearch": {
+              "type": "boolean"
             },
             "operation": {
               "type": "string",
@@ -28114,6 +29262,25 @@
           "required": ["type", "operation", "path"],
           "additionalProperties": false,
           "title": "VectorIndexResponseWrite"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "setStagedSearch"
+            },
+            "stagedSearch": {
+              "type": "boolean"
+            }
+          },
+          "required": ["type", "operation", "stagedSearch"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseSetStagedSearch"
         },
         {
           "type": "object",
