@@ -1158,6 +1158,55 @@ test('AudioGen MiniMax load config takes the Core ML profile and its compute uni
   )
 })
 
+test('AudioGen ACE-Step load config names its backends and a stage dump directory', (t) => {
+  const accepts = (config: Record<string, unknown>) =>
+    audioGenRuntimeConfigSchema.safeParse(config).success &&
+    audioGenConfigSchema.safeParse({ ...modelConfig, ...config }).success
+
+  t.ok(accepts({ backend: 'CUDA0', lmBackend: 'cpu' }), 'the two are chosen independently')
+  t.ok(accepts({ lmBackend: 'MTL0' }), 'the LM backend alone')
+  t.ok(accepts({ useGPU: true, nGpuLayers: 99, backend: 'auto' }), 'auto keeps useGPU placement')
+  t.ok(accepts({ dumpStagesDir: '/tmp/acestep-stages' }))
+
+  for (const key of ['backend', 'lmBackend', 'dumpStagesDir']) {
+    t.absent(accepts({ [key]: '' }), `${key}: omit it instead of passing an empty string`)
+    t.absent(accepts({ [key]: 'a\0b' }), `${key}: the addon refuses a NUL`)
+    t.absent(accepts({ [key]: 0 }), `${key}: a string`)
+    t.absent(
+      audioGenRuntimeConfigSchema.safeParse({ engine: 'minimax', [key]: 'cpu' }).success,
+      `${key} is an ACE-Step control`
+    )
+  }
+})
+
+test('AudioGen MiniMax load config takes a Core ML conditioner on its own', (t) => {
+  const minimax = {
+    engine: 'minimax',
+    lmModelSrc: 'minimax-lm.gguf',
+    synthModelSrc: 'minimax-synth.gguf'
+  }
+  const coremlConditionerPath = '/models/minimax-conditioner.mlmodelc'
+
+  t.ok(
+    audioGenConfigSchema.safeParse({ ...minimax, coremlConditionerPath }).success,
+    'it does not need the full profile pair'
+  )
+  t.ok(
+    audioGenConfigSchema.safeParse({ ...minimax, coremlConditionerPath, device: 'gpu' }).success,
+    'the other stages keep their device'
+  )
+  t.ok(audioGenRuntimeConfigSchema.safeParse({ engine: 'minimax', coremlConditionerPath }).success)
+  t.absent(audioGenConfigSchema.safeParse({ ...minimax, coremlConditionerPath: '' }).success)
+  t.absent(
+    audioGenConfigSchema.safeParse({ ...minimax, coremlConditionerPath: '/models/a\0b' }).success,
+    'the addon refuses a NUL in the path'
+  )
+  t.absent(
+    audioGenConfigSchema.safeParse({ ...modelConfig, coremlConditionerPath }).success,
+    'the conditioner is a MiniMax stage'
+  )
+})
+
 test('audioGen and audioEdit take an outputFormat from the addon encoder list', (t) => {
   t.alike(
     [...AUDIOGEN_OUTPUT_FORMATS],
