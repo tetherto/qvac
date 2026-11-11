@@ -5,16 +5,25 @@ import semver from 'semver'
 import {
   fetchBareVersionFromGitHub,
   fetchBindingBareKitFromGitHub,
-  fetchText
+  fetchText,
+  NETWORK_TIMEOUT_MS
 } from '@/commands/verify/bare-kit-runtime'
 import {
   BARE_KIT_BARE_VERSIONS,
   BARE_KIT_KOTLIN_BARE_KITS,
-  BARE_KIT_SWIFT_BARE_KITS
+  BARE_KIT_KOTLIN_WITHOUT_BARE_KIT,
+  BARE_KIT_SWIFT_BARE_KITS,
+  BARE_KIT_SWIFT_WITHOUT_BARE_KIT,
+  BARE_KIT_WITHOUT_BARE
 } from '@/commands/verify/bare-kit-runtimes'
 import type { BareKitBinding } from '@/commands/verify/abi'
 
 const CONCURRENCY = 8
+
+const TAGS_PER_PAGE = 100
+
+/** prettier-config-holepunch's printWidth, which decides when a list fits on one line. */
+const PRINT_WIDTH = 100
 
 const OUTPUT_PATH = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -26,26 +35,35 @@ const OUTPUT_PATH = path.resolve(
 )
 
 async function listTags(repo: string) {
-  const tags = JSON.parse(
-    await fetchText(`https://api.github.com/repos/holepunchto/${repo}/tags?per_page=100`)
-  ) as Array<{ name: string }>
-  return tags.map((tag) => tag.name.replace(/^v/, ''))
-}
-
-function latest(versions: string[]) {
-  const valid = versions.filter((version) => semver.valid(version) !== null)
-  return valid.length === 0 ? null : valid.sort(semver.rcompare)[0]!
+  const names: string[] = []
+  for (let page = 1; ; page++) {
+    const tags = JSON.parse(
+      await fetchText(
+        `https://api.github.com/repos/holepunchto/${repo}/tags?per_page=${TAGS_PER_PAGE}&page=${page}`
+      )
+    ) as Array<{ name: string }>
+    names.push(...tags.map((tag) => tag.name.replace(/^v/, '')))
+    if (tags.length < TAGS_PER_PAGE) return names
+  }
 }
 
 /**
- * Releases newer than the newest one already in the table, oldest first.
- * Everything at or below it was probed on an earlier run, including releases
- * whose CMakeLists.txt names no version to parse.
+ * A release without the file reads as empty, so it parses as naming no
+ * version. Any other failure throws, so it is never recorded as a release
+ * without a version.
  */
-function newerThan(versions: string[], lastKnown: string | null) {
+async function fetchReleaseFile(url: string) {
+  const response = await fetch(url, { signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS) })
+  if (response.status === 404) return ''
+  if (!response.ok) throw new Error(`GET ${url} returned HTTP ${response.status}`)
+  return response.text()
+}
+
+/** Releases not yet in the table or the list of releases without a version, oldest first. */
+function unchecked(versions: string[], table: Record<string, string>, without: Set<string>) {
   return versions
     .filter((version) => semver.valid(version) !== null)
-    .filter((version) => lastKnown === null || semver.gt(version, lastKnown))
+    .filter((version) => table[version] === undefined && !without.has(version))
     .sort(semver.compare)
 }
 
@@ -62,31 +80,28 @@ async function mapConcurrent<T, R>(items: T[], fn: (item: T) => Promise<R>) {
   return results
 }
 
-async function tryFetch(fn: () => Promise<string | null>) {
-  try {
-    return await fn()
-  } catch {
-    return null
-  }
-}
-
-/** Adds the releases of `repo` newer than the table's newest entry, as found by `lookUp`. */
+/**
+ * Adds each release of `repo` not checked before to `table` with the version
+ * `lookUp` finds, or to `without` when its CMakeLists.txt names none.
+ */
 async function extend(
   table: Record<string, string>,
+  without: Set<string>,
   repo: string,
   lookUp: (version: string) => Promise<string | null>
 ) {
-  const versions = newerThan(await listTags(repo), latest(Object.keys(table)))
+  const versions = unchecked(await listTags(repo), table, without)
   console.log(`Resolving ${versions.length} new ${repo} releases...`)
-  const found = await mapConcurrent(versions, (version) => tryFetch(() => lookUp(version)))
+  const found = await mapConcurrent(versions, lookUp)
   versions.forEach((version, index) => {
     const value = found[index]
     if (value) table[version] = value
+    else without.add(version)
   })
 }
 
 function bindingLookUp(binding: BareKitBinding) {
-  return (version: string) => fetchBindingBareKitFromGitHub(binding, version)
+  return (version: string) => fetchBindingBareKitFromGitHub(binding, version, fetchReleaseFile)
 }
 
 function sortedEntries(record: Record<string, string>) {
@@ -108,30 +123,67 @@ function table(doc: string, name: string, record: Record<string, string>) {
   ]
 }
 
-function render(
-  kotlin: Record<string, string>,
-  swift: Record<string, string>,
+/** A string array in the repo's Prettier style: on one line when it fits. */
+function list(doc: string, name: string, versions: Set<string>) {
+  const items = [...versions].sort(semver.compare).map((version) => `'${version}'`)
+  const head = `export const ${name}: string[] = [`
+  const oneLine = `${head}${items.join(', ')}]`
+  if (oneLine.length <= PRINT_WIDTH) return [`/** ${doc} */`, oneLine]
+  return [
+    `/** ${doc} */`,
+    head,
+    ...items.map((item, index) => `  ${item}${index === items.length - 1 ? '' : ','}`),
+    ']'
+  ]
+}
+
+interface Tables {
+  kotlin: Record<string, string>
+  kotlinWithout: Set<string>
+  swift: Record<string, string>
+  swiftWithout: Set<string>
   bare: Record<string, string>
-) {
+  bareWithout: Set<string>
+}
+
+function render(tables: Tables) {
   return [
     '// Generated by scripts/generate-bare-kit-runtimes.ts. Do not edit by hand.',
     '',
     ...table(
       'bare-kit release each bare-kit-kotlin release is built from.',
       'BARE_KIT_KOTLIN_BARE_KITS',
-      kotlin
+      tables.kotlin
+    ),
+    '',
+    ...list(
+      'bare-kit-kotlin releases whose CMakeLists.txt names no bare-kit version.',
+      'BARE_KIT_KOTLIN_WITHOUT_BARE_KIT',
+      tables.kotlinWithout
     ),
     '',
     ...table(
       'bare-kit release each bare-kit-swift release is built from.',
       'BARE_KIT_SWIFT_BARE_KITS',
-      swift
+      tables.swift
+    ),
+    '',
+    ...list(
+      'bare-kit-swift releases whose CMakeLists.txt names no bare-kit version.',
+      'BARE_KIT_SWIFT_WITHOUT_BARE_KIT',
+      tables.swiftWithout
     ),
     '',
     ...table(
       'Bare version each bare-kit release is built against.',
       'BARE_KIT_BARE_VERSIONS',
-      bare
+      tables.bare
+    ),
+    '',
+    ...list(
+      'bare-kit releases whose CMakeLists.txt names no Bare version.',
+      'BARE_KIT_WITHOUT_BARE',
+      tables.bareWithout
     ),
     ''
   ].join('\n')
@@ -139,18 +191,31 @@ function render(
 
 async function main() {
   const full = process.argv.includes('--full')
-  const kotlin: Record<string, string> = full ? {} : { ...BARE_KIT_KOTLIN_BARE_KITS }
-  const swift: Record<string, string> = full ? {} : { ...BARE_KIT_SWIFT_BARE_KITS }
-  const bare: Record<string, string> = full ? {} : { ...BARE_KIT_BARE_VERSIONS }
+  const tables: Tables = {
+    kotlin: full ? {} : { ...BARE_KIT_KOTLIN_BARE_KITS },
+    kotlinWithout: new Set(full ? [] : BARE_KIT_KOTLIN_WITHOUT_BARE_KIT),
+    swift: full ? {} : { ...BARE_KIT_SWIFT_BARE_KITS },
+    swiftWithout: new Set(full ? [] : BARE_KIT_SWIFT_WITHOUT_BARE_KIT),
+    bare: full ? {} : { ...BARE_KIT_BARE_VERSIONS },
+    bareWithout: new Set(full ? [] : BARE_KIT_WITHOUT_BARE)
+  }
 
-  await extend(bare, 'bare-kit', (version) => fetchBareVersionFromGitHub(version))
-  await extend(kotlin, 'bare-kit-kotlin', bindingLookUp('bare-kit-kotlin'))
-  await extend(swift, 'bare-kit-swift', bindingLookUp('bare-kit-swift'))
+  await extend(tables.bare, tables.bareWithout, 'bare-kit', (version) =>
+    fetchBareVersionFromGitHub(version, fetchReleaseFile)
+  )
+  await extend(
+    tables.kotlin,
+    tables.kotlinWithout,
+    'bare-kit-kotlin',
+    bindingLookUp('bare-kit-kotlin')
+  )
+  await extend(tables.swift, tables.swiftWithout, 'bare-kit-swift', bindingLookUp('bare-kit-swift'))
 
-  await fsp.writeFile(OUTPUT_PATH, render(kotlin, swift, bare))
+  await fsp.writeFile(OUTPUT_PATH, render(tables))
   console.log(
-    `Wrote ${Object.keys(kotlin).length} bare-kit-kotlin, ${Object.keys(swift).length} ` +
-      `bare-kit-swift and ${Object.keys(bare).length} bare-kit entries to ${OUTPUT_PATH}`
+    `Wrote ${Object.keys(tables.kotlin).length} bare-kit-kotlin, ` +
+      `${Object.keys(tables.swift).length} bare-kit-swift and ` +
+      `${Object.keys(tables.bare).length} bare-kit entries to ${OUTPUT_PATH}`
   )
 }
 
