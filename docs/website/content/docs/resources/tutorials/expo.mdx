@@ -79,7 +79,7 @@ This tutorial is pinned to `@qvac/sdk` 0.24. For the Expo SDK and `react-native-
 Install the SDK at the version this tutorial uses:
 
 ```bash
-npm i @qvac/sdk@0.24.0 'bare-rpc@^1.3.9'
+npm i @qvac/sdk@0.24.0
 ```
 
 With pnpm or bun's isolated linker, also add `bare-stow-runtime` and `bare-stow-host`, which the generated worker files import. Yarn needs `nodeLinker: node-modules` in `.yarnrc.yml`, because the bundler reads packages from `node_modules`.
@@ -121,7 +121,6 @@ Check that `package.json` now lists these versions:
 {
   "dependencies": {
     "@qvac/sdk": "^0.24.0",
-    "bare-rpc": "^1.3.9",
     "expo": "~58.0.23",
     "react-native-bare-kit": "^0.17.1"
   }
