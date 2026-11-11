@@ -52,8 +52,9 @@ run(
 
 mkdirSync(electronDist, { recursive: true })
 cpSync(electronOutput, packagedSnapApp, { recursive: true })
-// On Node 24, cpSync keeps the packager's 0700 output mode, which `snap pack` rejects.
-chmodSync(packagedSnapApp, 0o755)
+// The installed Snap is root-owned: a 0700 directory from the packaging (seen on Node 24) is
+// unreadable to the app and rejected by `snap pack`.
+run('chmod', ['-R', 'a+rX', packagedSnapApp], projectDir)
 // A mounted Snap is read-only, so the Bare binary has to be executable before packaging.
 chmodSync(packagedBareBinary, 0o755)
 writeFileSync(
