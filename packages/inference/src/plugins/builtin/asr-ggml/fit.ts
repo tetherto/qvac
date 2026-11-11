@@ -5,6 +5,8 @@ import type {
 } from '@qvac/asr-ggml'
 
 import { gpuLayersFromGate } from '@/model-fit/gpu'
+import { withCoremlLongFormDefault } from '@/plugins/builtin/asr-ggml/coreml-long-form'
+import { getRuntimeContext } from '@/runtime/state'
 import type { MossTranscribeConfig, ParakeetConfig, WhisperConfig } from '@/schemas/index'
 import type { FitLoad, FitRequestPlan } from '@/schemas/plugin'
 
@@ -92,8 +94,17 @@ const UNREPRESENTABLE_STREAMING: readonly (keyof ParakeetConfig)[] = [
 ]
 
 /** The Parakeet fit request for a load, covering its live session when it streams. */
-export function parakeetFitRequest(load: FitLoad): FitRequestPlan {
-  const config = (load.modelConfig ?? {}) as ParakeetConfig
+export function parakeetFitRequest(
+  load: FitLoad,
+  platform: string | undefined = getRuntimeContext().platform
+): FitRequestPlan {
+  // The same long-form default the load applies, so the projection sizes the
+  // encoder pass the engine will run.
+  const config = withCoremlLongFormDefault(
+    (load.modelConfig ?? {}) as ParakeetConfig,
+    load.modelPath,
+    platform
+  )
 
   if (config.streaming === true) {
     for (const key of UNREPRESENTABLE_STREAMING) {
