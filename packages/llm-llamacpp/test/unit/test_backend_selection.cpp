@@ -1556,7 +1556,182 @@ TEST_F(BackendSelectionTest, OverrideBindsIntegratedCuda) {
   EXPECT_FALSE(loggedOverrideMiss(mockBackend));
 }
 
+// ---- AMD XDNA NPU: never a GPU candidate ----
+
+constexpr const char* XDNA_DESC = "NPU Strix Halo (RyzenAI-npu5)";
+constexpr const char* XDNA0_BACK = "XDNA0";
+constexpr const char* XDNA_REG = "XDNA";
+constexpr const char* RADEON_DESC = "AMD Radeon 8060S Graphics";
+
+static MockDevice createXdnaDevice() {
+  return {XDNA_DESC, XDNA0_BACK, GGML_BACKEND_DEVICE_TYPE_IGPU, XDNA_REG};
+}
+
+// XDNA registers before Vulkan here, so a plain iGPU bucket would pick it.
+TEST_F(BackendSelectionTest, XdnaNotChosenByDefault) {
+  mockBackend.addDevice(createXdnaDevice());
+  mockBackend.addDevice(createIGPUDevice(RADEON_DESC, VULKAN0_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
+}
+
+TEST_F(BackendSelectionTest, XdnaOnlyHostFallsBackToCpuByDefault) {
+  mockBackend.addDevice(createXdnaDevice());
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none");
+  EXPECT_TRUE(std::ranges::any_of(mockBackend.logs, [](const auto& log) {
+    return log.first == GGML_LOG_LEVEL_WARN &&
+           log.second.find("XDNA0 (XDNA) [opt in with device: 'npu']") !=
+               std::string::npos;
+  }));
+}
+
+// Only the NPU gets the opt-in hint; other rejected devices are unusable.
+TEST_F(BackendSelectionTest, CpuFallbackHintNamesOnlyXdna) {
+  mockBackend.addDevice(createXdnaDevice());
+  mockBackend.addDevice(createIGPUDevice("Mali-G720", "OpenCL0"));
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none");
+  EXPECT_TRUE(std::ranges::any_of(mockBackend.logs, [](const auto& log) {
+    return log.first == GGML_LOG_LEVEL_WARN &&
+           log.second.find("OpenCL0 (standard); falling back") !=
+               std::string::npos;
+  }));
+}
+
+// A GPU override never reaches the NPU, even on a host where it is the only
+// other device.
+TEST_F(BackendSelectionTest, GpuOverrideNeverReachesXdna) {
+  mockBackend.addDevice(createXdnaDevice());
+  mockBackend.addDevice(createIGPUDevice(RADEON_DESC, VULKAN0_BACK));
+  auto result = chooseWithOverride(mockBackend, {"vulkan"});
+  expectChosen(result, BackendType::GPU, "vulkan0");
+  EXPECT_FALSE(loggedOverrideMiss(mockBackend));
+}
+
+TEST_F(BackendSelectionTest, GpuOverrideOnXdnaOnlyHostFallsBackToCpu) {
+  mockBackend.addDevice(createXdnaDevice());
+  auto result = chooseWithOverride(mockBackend, {"vulkan"});
+  EXPECT_EQ(result.first, BackendType::CPU);
+  EXPECT_EQ(result.second, "none");
+  EXPECT_TRUE(loggedOverrideMiss(mockBackend));
+}
+
+// The NPU is an iGPU to ggml, but 'integrated' still never selects it.
+TEST_F(BackendSelectionTest, MainGpuIntegratedNeverPicksXdna) {
+  mockBackend.addDevice(createXdnaDevice());
+  expectChosenForPreference(
+      mockBackend,
+      BackendType::GPU,
+      BackendType::CPU,
+      "none",
+      MainGpu(MainGpuType::Integrated));
+}
+
+TEST_F(BackendSelectionTest, MainGpuIndexOnXdnaFallsBackToCpu) {
+  mockBackend.addDevice(createIGPUDevice(RADEON_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createXdnaDevice());
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none", MainGpu(1));
+}
+
+// ---- device: 'npu' ----
+
+static bool loggedAt(
+    const MockBackendInterface& mockBackend, ggml_log_level level,
+    const std::string& text) {
+  return std::ranges::any_of(mockBackend.logs, [&](const auto& log) {
+    return log.first == level && log.second.find(text) != std::string::npos;
+  });
+}
+
+TEST_F(BackendSelectionTest, DeviceNpuPicksXdna) {
+  mockBackend.addDevice(createIGPUDevice(RADEON_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createXdnaDevice());
+  expectChosenForPreference(
+      mockBackend, BackendType::NPU, BackendType::NPU, "xdna0");
+  EXPECT_TRUE(
+      loggedAt(mockBackend, GGML_LOG_LEVEL_INFO, "Chosen NPU Backend: xdna0"));
+}
+
+// The first NPU in registration order wins, and the log says it was one of
+// several.
+TEST_F(BackendSelectionTest, DeviceNpuPicksFirstOfSeveralNpus) {
+  mockBackend.addDevice(createIGPUDevice(RADEON_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createXdnaDevice());
+  mockBackend.addDevice(
+      {XDNA_DESC, "XDNA1", GGML_BACKEND_DEVICE_TYPE_IGPU, XDNA_REG});
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(BackendType::NPU, bckI);
+  EXPECT_EQ(result.first, BackendType::NPU);
+  EXPECT_EQ(result.second, "xdna0");
+  EXPECT_TRUE(loggedAt(
+      mockBackend,
+      GGML_LOG_LEVEL_INFO,
+      "Chosen NPU Backend: xdna0, the first of 2 NPU devices"));
+}
+
+TEST_F(BackendSelectionTest, DeviceNpuPicksXdnaBesideDiscreteGpu) {
+  mockBackend.addDevice(createGPUDevice(NVIDIA_DESC, CUDA0_BACK));
+  mockBackend.addDevice(createXdnaDevice());
+  expectChosenForPreference(
+      mockBackend, BackendType::NPU, BackendType::NPU, "xdna0");
+}
+
+// With no NPU listed, an NPU request runs the GPU order, then the CPU.
+TEST_F(BackendSelectionTest, DeviceNpuWithoutNpuFallsBackToGpu) {
+  mockBackend.addDevice(createIGPUDevice(RADEON_DESC, VULKAN0_BACK));
+  expectChosenForPreference(
+      mockBackend, BackendType::NPU, BackendType::GPU, "vulkan0");
+  EXPECT_TRUE(loggedAt(
+      mockBackend,
+      GGML_LOG_LEVEL_WARN,
+      "No NPU device found; falling back to the GPU backend order, then CPU"));
+}
+
+TEST_F(BackendSelectionTest, DeviceNpuFallbackPrefersCudaLikeGpu) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  expectChosenForPreference(
+      mockBackend, BackendType::NPU, BackendType::GPU, "cuda0");
+}
+
+TEST_F(BackendSelectionTest, DeviceNpuWithoutNpuOrGpuFallsBackToCpu) {
+  mockBackend.addDevice(createIGPUDevice("Mali-G720", "OpenCL0"));
+  expectChosenForPreference(
+      mockBackend, BackendType::NPU, BackendType::CPU, "none");
+  EXPECT_TRUE(loggedAt(
+      mockBackend,
+      GGML_LOG_LEVEL_WARN,
+      "No NPU device found; falling back to the GPU backend order, then CPU"));
+  EXPECT_TRUE(loggedAt(
+      mockBackend, GGML_LOG_LEVEL_WARN, "No eligible GPU backend found"));
+}
+
+// The GPU guards still apply on the fallback: BitNet TQ on Adreno <800 stays
+// on the CPU.
+TEST_F(BackendSelectionTest, DeviceNpuFallbackKeepsAdrenoGuards) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createIGPUDevice(ADRENO_DESC, VULKAN0_BACK));
+  MockModelMetaData bitnetMeta(true, "bitnet");
+  expectChosenWithMetadata(
+      mockBackend, BackendType::NPU, BackendType::CPU, "none", bitnetMeta);
+}
+
+TEST_F(BackendSelectionTest, PreferredBackendTypeFromStringAcceptsNpu) {
+  EXPECT_EQ(preferredBackendTypeFromString("gpu"), BackendType::GPU);
+  EXPECT_EQ(preferredBackendTypeFromString("cpu"), BackendType::CPU);
+  EXPECT_EQ(preferredBackendTypeFromString("npu"), BackendType::NPU);
+  EXPECT_THROW(
+      preferredBackendTypeFromString("xdna"), qvac_errors::StatusError);
+}
+
 // ---- parseBackendOverride ----
+
+// The NPU is `device: 'npu'`, not a GPU backend family.
+TEST_F(BackendSelectionTest, ParseBackendOverrideRejectsXdna) {
+  EXPECT_THROW(parseBackendOverride("XDNA"), qvac_errors::StatusError);
+  EXPECT_THROW(parseBackendOverride("xdna,vulkan"), qvac_errors::StatusError);
+}
 
 TEST_F(BackendSelectionTest, ParseBackendOverrideBasic) {
   EXPECT_EQ(
@@ -1938,6 +2113,29 @@ TEST_F(BackendSelectionTest, SplitDevices_OnlyCpuAndAccel_ReturnsEmpty) {
   mockBackend.addDevice(createACCELDevice("accelerate", "blas"));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_TRUE(getSplitDeviceNames(bckI).empty());
+}
+
+// XDNA never joins an automatic split, but stays nameable through `devices`.
+TEST_F(BackendSelectionTest, SplitDevices_XdnaIsOptInOnly) {
+  mockBackend.addDevice(createXdnaDevice());
+  mockBackend.addDevice(createIGPUDevice(RADEON_DESC, VULKAN0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  const SplitDeviceSelection selection = getSplitDeviceSelection(bckI);
+  ASSERT_EQ(selection.devices.size(), 1u);
+  EXPECT_EQ(selection.devices.front().name, VULKAN0_BACK);
+  EXPECT_EQ(selection.devices.front().sourceGpuIndex, 1u);
+  ASSERT_EQ(selection.optInDevices.size(), 1u);
+  EXPECT_EQ(selection.optInDevices.front().name, XDNA0_BACK);
+  EXPECT_EQ(selection.optInDevices.front().sourceGpuIndex, 0u);
+  EXPECT_TRUE(selection.rejectedDevices.empty());
+  EXPECT_EQ(selection.sourceGpuCount, 2u);
+}
+
+TEST_F(BackendSelectionTest, SplitDevices_XdnaAloneLeavesNoAutomaticDevice) {
+  mockBackend.addDevice(createXdnaDevice());
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_TRUE(getSplitDeviceNames(bckI).empty());
+  EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 0u);
 }
 
 TEST_F(BackendSelectionTest, SplitDevices_ExcludeRocmAndSycl) {

@@ -10,6 +10,10 @@ export interface OpenVectorIndex {
   readonly dim: number
   readonly length: number
   readonly storage: VectorIndexStorage | undefined
+  readonly calibrated: boolean | undefined
+  readonly stagedSearch: boolean | undefined
+  /** Returns the setting as the native index reports it afterwards. */
+  setStagedSearch(enabled: boolean): boolean
   /** Adds `ids.length` vectors of `dim` components each, atomically. */
   add(vectors: Float32Array, ids: BigUint64Array): void
   /** One hit list per query row, ordered by descending score; never padded. */

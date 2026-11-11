@@ -9,7 +9,7 @@ schemaType: HowTo
 
 Multimodal embeddings use the Fabric LLM inference engine through [`@qvac/embed-llamacpp`](https://github.com/tetherto/qvac/tree/main/packages/embed-llamacpp). Load EmbeddingGemma 2 using `modelType: "llamacpp-embedding"` to embed text, images, and audio in a shared vector space.
 
-Pass an `inputs` array to [`embed()`](/sdk/reference/api#embed). It returns `number[][]`, with one 768-dimensional vector per item. Compare these vectors to retrieve images or audio using a text query.
+Pass an `inputs` array to [`embedBatch()`](/sdk/reference/api#embedbatch). It returns `number[][]`, with one 768-dimensional vector per item. Compare these vectors to retrieve images or audio using a text query.
 
 <Callout type="info">
 For text-only models and the `text` input form, see [Text embeddings](/sdk/ai-capabilities/text-embeddings).
@@ -20,7 +20,7 @@ For text-only models and the `text` input form, see [Text embeddings](/sdk/ai-ca
 Use the following sequence of function calls:
 
 1. [`loadModel()`](/sdk/reference/api#loadmodel)
-2. [`embed()`](/sdk/reference/api#embed)
+2. [`embed()`](/sdk/reference/api#embed) or [`embedBatch()`](/sdk/reference/api#embedbatch)
 3. [`unloadModel()`](/sdk/reference/api#unloadmodel)
 
 For how to use each function, see [SDK API reference](/sdk/reference/api/).
@@ -33,7 +33,7 @@ For models available as constants, see [SDK Models](/sdk#models).
 
 ## Inputs
 
-Pass `inputs` to [`embed()`](/sdk/reference/api#embed). Each item is a text string or an ordered array of text strings and `{ media: { type, value } }` parts. Use `type: "base64"` for encoded image or audio bytes, or `type: "filePath"` for a path accessible to the inference worker. The result is `number[][]`, with one vector per input item, including a batch with only one item. Plain text still works with a loaded projector. Choose either `text` or `inputs` in each call. Task prompts such as `task: search result | query: ` remain text you supply.
+Pass `inputs` to [`embedBatch()`](/sdk/reference/api#embedbatch). Each item is a text string or an ordered array of text strings and `{ media: { type, value } }` parts. Use `type: "base64"` for encoded image or audio bytes, or `type: "filePath"` for a path accessible to the inference worker. The result is `number[][]`, with one vector per input item, including a batch with only one item. Plain text still works with a loaded projector. Use `embed({ modelId, input })` for one text or ordered text/media input. It returns `embedding: number[]`. `embed({ text })` still works. `embed({ inputs })` keeps its original return shape, but it is deprecated and logs a warning. Use `embedBatch()` instead. Choose one input field per call. Task prompts such as `task: search result | query: ` remain text you supply.
 
 Media requires a projector. Images include JPEG, PNG and BMP; audio supports WAV, MP3 and FLAC. WebP, AAC/M4A, Ogg and video are unsupported.
 

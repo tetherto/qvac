@@ -234,20 +234,23 @@
         "cwd": "packages/classification-ggml",
         "parallel": false,
         "commands": [
-          "pnpm run test:cpp:run"
+          "node ci/cpp-tests.mjs test:cpp:run"
         ]
       },
       "configurations": {
         "linux-x64": {
           "commands": [
             "node ci/test-converter.mjs",
-            "pnpm run test:cpp:fuzz:run"
+            "node ci/cpp-tests.mjs test:cpp:fuzz:run"
           ],
           "ci": {
             "runner": "linux_ubuntu2404_x64"
           }
         },
         "darwin-arm64": {
+          "commands": [
+            "node ci/cpp-tests.mjs test:cpp:run MTL0"
+          ],
           "ci": {
             "runner": "macos_arm64_gpu"
           }
@@ -298,13 +301,13 @@
           }
         },
         "darwin-arm64": {
-          "args": "--set QVAC_MEGALOC_EXPECT_GPU=1",
+          "args": "--set QVAC_MEGALOC_EXPECT_GPU=1 --set QVAC_BRIDGEDEPTH_EXPECT_GPU=1",
           "ci": {
             "runner": "macos_arm64_gpu"
           }
         },
         "win32-x64": {
-          "args": "--set QVAC_MEGALOC_EXPECT_GPU=1",
+          "args": "--set QVAC_MEGALOC_EXPECT_GPU=1 --set QVAC_BRIDGEDEPTH_EXPECT_GPU=1",
           "ci": {
             "runner": "win_2025_x64_gpu"
           }

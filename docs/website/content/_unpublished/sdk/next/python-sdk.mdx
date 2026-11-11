@@ -108,16 +108,16 @@ Create `qvac.config.json` with the server provider:
 }
 ```
 
-Build the worker:
+Build the worker for Python:
 
 ```bash
-npx qvac bundle sdk
+npx qvac bundle sdk --language python
 ```
 
-Python's `Client()` does not automatically select the generated `qvac/worker.entry.mjs`. Set `QVAC_WORKER_PATH` when running the serving example, or pass that path as `worker_path=` to `Client()`:
+Python's `Client()` does not automatically select the generated `qvac/worker/`. Set `QVAC_WORKER_PATH` when running the serving example, or pass that folder as `worker_path=` to `Client()`:
 
 ```bash
-QVAC_WORKER_PATH=./qvac/worker.entry.mjs python rpc_servers.py serve <private-ipv4> <topic>
+QVAC_WORKER_PATH=./qvac/worker python rpc_servers.py serve <private-ipv4> <topic>
 ```
 
 Replace `<private-ipv4>` and `<topic>` with your server's private IPv4 address and shared discovery topic. Discovery uses the default worker and does not require the server provider:
@@ -178,7 +178,7 @@ Everything you normally need is imported flat from `tetherto.qvac_sdk`; model co
 | Client | `Client` (`client.transport` is passed to every call) |
 | Ergonomic wrappers | `load_model`, `assess_model_fit`, `unload_model`, `completion`, `translate`, `cancel`, `delete_cache`, `invoke_plugin`, `invoke_plugin_stream`, `model_registry_list` / `_search` / `_get_model` |
 | Result types | `CompletionRun` (`.events`, `.final`), `CompletionFinal`, `ToolCall`, `TranslateRun` |
-| Generated methods | `embed`, `transcribe`, `text_to_speech`, `ocr_stream`, `diffusion_stream`, `classify`, `get_model_info`, `download_asset`, … (each takes a typed request model) |
+| Generated methods | `embed`, `embed_batch`, `transcribe`, `text_to_speech`, `ocr_stream`, `diffusion_stream`, `classify`, `get_model_info`, `download_asset`, … (each takes a typed request model) |
 | RPC server methods | `start_rpc_server`, `stop_rpc_server`, `discover_rpc_servers` from `tetherto.qvac_sdk.methods`, with typed requests from `tetherto.qvac_sdk.schemas`; discovery returns a response with `.servers` |
 | Models & enums | `LoadModelRequest`, `ModelType`, … (also in `tetherto.qvac_sdk.schemas`) |
 | Errors | `QvacError`, `RPCError`, `InferenceCancelledError`, `ContextOverflowError`, … |
