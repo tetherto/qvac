@@ -1218,3 +1218,152 @@ test('dsml streaming: wrapper-less invoke pushed one character at a time', (t) =
   t.alike((toolEvents[0] as { call: { arguments: unknown } }).call.arguments, { city: 'Lima' })
   t.is(n.getAccumulated().contentText, '', 'no marker leak')
 })
+
+const QWEN_CALL =
+  '<tool_call>\n<function=get_weather>\n<parameter=city>\nParis\n</parameter>\n</function>\n</tool_call>'
+
+function qwenThinkingConfig(overrides?: Partial<NormalizerConfig>) {
+  return baseConfig({
+    capabilities: TEXT_PARSE_CAPS,
+    tools: [GET_WEATHER_TOOL],
+    toolDialect: 'qwen35',
+    captureThinking: true,
+    ...overrides
+  })
+}
+
+function chunksOf(text: string, size: number) {
+  const out: string[] = []
+  for (let i = 0; i < text.length; i += size) out.push(text.slice(i, i + size))
+  return out
+}
+
+function joined(events: CompletionEvent[], type: string) {
+  return texts(events, type).join('')
+}
+
+test('open <think>: a tool call ends the reasoning without </think>', (t) => {
+  const raw = `<think>\nLet me check the weather.\n\n${QWEN_CALL}`
+  for (const size of [raw.length, 3, 1]) {
+    const n = createCompletionNormalizer(qwenThinkingConfig())
+    const streamed = pushAll(n, chunksOf(raw, size))
+    const call = { id: 'call_0', name: 'get_weather', arguments: { city: 'Paris' } }
+    const events = [...streamed, ...n.finish({ toolCalls: [call], stopReason: 'eos' })]
+
+    t.is(joined(events, 'thinkingDelta'), 'Let me check the weather.', `chunk ${size}: thinking`)
+    t.is(joined(events, 'contentDelta'), '', `chunk ${size}: no content`)
+    t.is(streamed.filter((e) => e.type === 'toolCall').length, 1, `chunk ${size}: streamed`)
+    t.is(events.filter((e) => e.type === 'toolCall').length, 1, `chunk ${size}: not repeated`)
+    t.is(events.filter((e) => e.type === 'toolError').length, 0, `chunk ${size}: no error`)
+  }
+})
+
+test('open <think>: several tool calls and a late </think>', (t) => {
+  const second = QWEN_CALL.replace('Paris', 'Lima')
+  const raw = `<think>\nTwo cities.\n${QWEN_CALL}\n${second}\n</think>\n\nChecking both.`
+  for (const size of [raw.length, 3, 1]) {
+    const n = createCompletionNormalizer(qwenThinkingConfig())
+    const events = [...pushAll(n, chunksOf(raw, size)), ...n.finish({ stopReason: 'eos' })]
+
+    t.is(joined(events, 'thinkingDelta'), 'Two cities.', `chunk ${size}: thinking`)
+    t.is(joined(events, 'contentDelta'), 'Checking both.', `chunk ${size}: content`)
+    t.is(events.filter((e) => e.type === 'toolCall').length, 2, `chunk ${size}: two calls`)
+  }
+})
+
+test('open <think>: a mentioned <tool_call> stays reasoning', (t) => {
+  const closed = '<think>\nI could emit a <tool_call> here, but no.\n</think>\n\nHello.'
+  const unparsed = '<think>\nSyntax is <tool_call>name</tool_call>, noted.\n</think>\n\nHello.'
+  for (const raw of [closed, unparsed]) {
+    for (const size of [raw.length, 3, 1]) {
+      const n = createCompletionNormalizer(qwenThinkingConfig())
+      const events = [...pushAll(n, chunksOf(raw, size)), ...n.finish({ stopReason: 'eos' })]
+
+      t.ok(joined(events, 'thinkingDelta').includes('<tool_call>'), `chunk ${size}: kept`)
+      t.is(joined(events, 'contentDelta'), 'Hello.', `chunk ${size}: content`)
+      t.is(events.filter((e) => e.type === 'toolCall').length, 0, `chunk ${size}: no call`)
+      t.is(events.filter((e) => e.type === 'toolError').length, 0, `chunk ${size}: no error`)
+    }
+  }
+})
+
+test('open <think>: a tool call cut off mid-frame returns to reasoning', (t) => {
+  const n = createCompletionNormalizer(qwenThinkingConfig())
+  const raw = '<think>\nLet me check.\n<tool_call>\n<function=get_weather>\n<parameter=city>\nPar'
+  const events = [...pushAll(n, chunksOf(raw, 3)), ...n.finish({ stopReason: 'length' })]
+
+  t.ok(joined(events, 'thinkingDelta').endsWith('Par'))
+  t.is(joined(events, 'contentDelta'), '')
+  t.is(events.filter((e) => e.type === 'toolError').length, 0)
+})
+
+test('open <think>: an answer left in reasoning becomes content on a natural stop', (t) => {
+  for (const stopReason of ['eos', 'stopSequence'] as const) {
+    const n = createCompletionNormalizer(qwenThinkingConfig())
+    const events = [
+      ...pushAll(n, chunksOf('<think>\nDone. Created NOTES.md.', 3)),
+      ...n.finish({ stopReason })
+    ]
+
+    t.is(joined(events, 'thinkingDelta'), 'Done. Created NOTES.md.', stopReason)
+    t.alike(texts(events, 'contentDelta'), ['Done. Created NOTES.md.'], stopReason)
+  }
+})
+
+test('open <think>: reasoning is not promoted when the turn did not end on its own', (t) => {
+  const raw = '<think>\nDone. Created NOTES.md.'
+  const finishes = [
+    { stopReason: 'length' as const },
+    { stopReason: 'cancelled' as const },
+    { error: { message: 'boom' } },
+    {}
+  ]
+  for (const opts of finishes) {
+    const n = createCompletionNormalizer(qwenThinkingConfig())
+    const events = [...pushAll(n, [raw]), ...n.finish(opts)]
+    t.is(joined(events, 'contentDelta'), '', JSON.stringify(opts))
+  }
+})
+
+test('open <think>: reasoning is not promoted next to a tool call', (t) => {
+  const n = createCompletionNormalizer(qwenThinkingConfig({ toolDialect: 'json' }))
+  const call = { id: 'call_0', name: 'get_weather', arguments: { city: 'Paris' } }
+  const events = [
+    ...pushAll(n, ['<think>\nCalling the tool.']),
+    ...n.finish({ toolCalls: [call], stopReason: 'eos' })
+  ]
+
+  t.is(joined(events, 'contentDelta'), '')
+  t.is(events.filter((e) => e.type === 'toolCall').length, 1)
+})
+
+test('closed <think> with an empty answer is not promoted', (t) => {
+  const n = createCompletionNormalizer(qwenThinkingConfig())
+  const events = [
+    ...pushAll(n, ['<think>\nNothing to add.\n</think>\n\n']),
+    ...n.finish({ stopReason: 'eos' })
+  ]
+
+  t.is(joined(events, 'thinkingDelta'), 'Nothing to add.')
+  t.is(joined(events, 'contentDelta'), '')
+})
+
+test('dialect thinking frames ignore tool openers and are not promoted', (t) => {
+  const harmony = createCompletionNormalizer(qwenThinkingConfig({ toolDialect: 'harmony' }))
+  const harmonyEvents = [
+    ...pushAll(harmony, [
+      '<|channel|>analysis<|message|>plan <|channel|>commentary to=functions.x rest'
+    ]),
+    ...harmony.finish({ stopReason: 'eos' })
+  ]
+  t.is(joined(harmonyEvents, 'contentDelta'), '')
+  t.is(harmonyEvents.filter((e) => e.type === 'toolCall' || e.type === 'toolError').length, 0)
+
+  const gemma = createCompletionNormalizer(qwenThinkingConfig({ toolDialect: 'gemma4' }))
+  const gemmaEvents = [
+    ...pushAll(gemma, ['<|channel>thought plan <|tool_call> rest']),
+    ...gemma.finish({ stopReason: 'eos' })
+  ]
+  t.is(joined(gemmaEvents, 'contentDelta'), '')
+  t.is(gemmaEvents.filter((e) => e.type === 'toolCall' || e.type === 'toolError').length, 0)
+})
