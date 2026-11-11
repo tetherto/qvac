@@ -12,25 +12,23 @@ export function isTerminalChunk<T>(value: T): value is T & { done: true } {
   return typeof value === 'object' && value !== null && 'done' in value && value.done === true
 }
 
-export type Wire = ReturnType<RPC.IncomingRequest['createResponseStream']>
-
 /**
- * Opens the response stream of `req`. When the client goes away, bare-rpc
- * destroys a response stream that is still open with the channel or cancel
- * error. No one is left to read that error, and an `error` event without a
- * listener is thrown as an uncaught exception, so it is dropped here.
+ * When the client goes away, bare-rpc destroys a response stream that is
+ * still open with the channel or cancel error. No one is left to read that
+ * error, and an `error` event without a listener is thrown as an uncaught
+ * exception, so it is dropped here.
  */
-export function openWire(req: RPC.IncomingRequest): Wire {
-  const wire = req.createResponseStream()
-  wire.on('error', () => {})
-  return wire
+export function createResponseStreamIgnoringErrors(req: RPC.IncomingRequest): RPC.OutgoingStream {
+  const responseStream = req.createResponseStream()
+  responseStream.on('error', () => {})
+  return responseStream
 }
 
-/** Aborts when the client destroys its end of `wire` (and after a normal end). */
-export function signalOnWireClose(wire: {
+/** Aborts when the client destroys its end of `stream` (and after a normal end). */
+export function signalOnStreamClose(stream: {
   on(event: 'close', listener: () => void): unknown
 }): AbortSignal {
   const controller = new AbortController()
-  wire.on('close', () => controller.abort(undefined))
+  stream.on('close', () => controller.abort(undefined))
   return controller.signal
 }

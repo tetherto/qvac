@@ -4,16 +4,19 @@ import os from 'node:os'
 import path from 'node:path'
 import RPC from 'bare-rpc'
 import type { AbortSignal } from 'bare-abort-controller'
-import { openWire, signalOnWireClose, type Wire } from '@/server/rpc/rpc-utils'
+import { createResponseStreamIgnoringErrors, signalOnStreamClose } from '@/server/rpc/rpc-utils'
 
-// Real bare-rpc pair over a socket; the server hands each response stream to `onWire`.
-async function rpcPair(onWire: (wire: Wire) => void) {
-  const socketPath = path.join(os.tmpdir(), `qvac-wire-close-${process.pid}-${Date.now()}.sock`)
+// Real bare-rpc pair over a socket; the server hands each response stream to `onResponseStream`.
+async function rpcPair(onResponseStream: (responseStream: RPC.OutgoingStream) => void) {
+  const socketPath = path.join(
+    os.tmpdir(),
+    `qvac-response-stream-close-${process.pid}-${Date.now()}.sock`
+  )
   const sockets: net.Socket[] = []
   const server = net.createServer((socket) => {
     sockets.push(socket)
     new RPC(socket as never, (req: RPC.IncomingRequest) => {
-      onWire(openWire(req))
+      onResponseStream(createResponseStreamIgnoringErrors(req))
     })
   })
   await new Promise<void>((resolve) => server.listen(socketPath, resolve))
@@ -45,11 +48,11 @@ function waitFor(condition: () => boolean, ms = 2000): Promise<boolean> {
   })
 }
 
-test('the wire signal aborts when the client destroys its end of the stream', async function (t) {
+test('the stream signal aborts when the client destroys its end of the stream', async function (t) {
   let signal: AbortSignal | undefined
-  const pair = await rpcPair((wire) => {
-    signal = signalOnWireClose(wire)
-    wire.write('{"open":true}\n', 'utf-8')
+  const pair = await rpcPair((responseStream) => {
+    signal = signalOnStreamClose(responseStream)
+    responseStream.write('{"open":true}\n', 'utf-8')
   })
   t.teardown(() => pair.close())
 
@@ -66,10 +69,10 @@ test('the wire signal aborts when the client destroys its end of the stream', as
   t.ok(await waitFor(() => signal!.aborted), 'the signal aborts once the client destroys its end')
 })
 
-test('the wire signal stays live while the stream is open', async function (t) {
+test('the stream signal stays live while the stream is open', async function (t) {
   let signal: AbortSignal | undefined
-  const pair = await rpcPair((wire) => {
-    signal = signalOnWireClose(wire)
+  const pair = await rpcPair((responseStream) => {
+    signal = signalOnStreamClose(responseStream)
   })
   t.teardown(() => pair.close())
 
@@ -82,22 +85,22 @@ test('the wire signal stays live while the stream is open', async function (t) {
   t.absent(signal!.aborted, 'nothing aborts it while the client keeps its end')
 })
 
-test('a client that disconnects mid-stream closes the wire without throwing', async function (t) {
-  let wire: Wire | undefined
+test('a client that disconnects mid-stream closes the response stream without throwing', async function (t) {
+  let responseStream: RPC.OutgoingStream | undefined
   let signal: AbortSignal | undefined
   const pair = await rpcPair((opened) => {
-    wire = opened
-    signal = signalOnWireClose(opened)
+    responseStream = opened
+    signal = signalOnStreamClose(opened)
   })
   t.teardown(() => pair.close())
 
   const req = pair.client.request(1)
   req.send('{}', 'utf-8')
   req.createResponseStream({ encoding: 'utf-8' })
-  t.ok(await waitFor(() => wire !== undefined), 'the worker opened the stream')
+  t.ok(await waitFor(() => responseStream !== undefined), 'the worker opened the stream')
 
   pair.disconnectClient()
 
   t.ok(await waitFor(() => signal!.aborted), 'the signal aborts once the client is gone')
-  t.ok(wire!.destroyed, 'the wire is destroyed')
+  t.ok(responseStream!.destroyed, 'the response stream is destroyed')
 })
