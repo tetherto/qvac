@@ -63,16 +63,21 @@ struct ModelFootprint {
   uint64_t hostWorkBytes = 0;
   // Largest host memory the addon allocates itself at one time, the larger of
   // the load and the inference phase plus what stays allocated between them.
-  // It does not count the caller's encoded or decoded input image, ggml's
-  // tensor and graph metadata, or allocations inside a backend.
+  // It does not count ggml's tensor and graph metadata or allocations inside
+  // a backend. MobileNet and MegaLoc do not count the caller's input image.
   //   MobileNet: the GGUF data section (the loader reads it whole), or the
   //     [224, 224, 3] float input.
   //   MegaLoc: the 8 MiB read chunk, or the patch input plus the descriptor.
-  //   BridgeDepth: the host copies of pos_embed and the relative position
-  //     indices, plus the larger of the read buffer (the largest tensor) and
-  //     one inference: both views as planar floats, every graph input built on
-  //     the host (padded images, masks, expanded indices, resized pos_embed),
-  //     the padded output and the returned disparity.
+  //   BridgeDepth: the host copies of pos_embed, its copy resized for the
+  //     size the model runs at and the relative position indices, plus the
+  //     larger of the read buffer (the largest tensor) and one job. A job
+  //     holds both views copied from JS, counted as raw RGB, through its
+  //     largest phase: decoding one view (16 B/px, a 16-bit RGBA PNG in
+  //     stb_image) next to the other planar view; the run (both planar views,
+  //     every graph input built on the host, the padded output and the
+  //     returned disparity, at the size the model runs at); the resize back
+  //     of the disparity to the input; or the copy of the disparity to JS. A
+  //     PNG input larger than its raw RGB is not covered.
   uint64_t hostStagingBytes = 0;
   // ggml device name that a load with the same arguments selects.
   std::string deviceName;
@@ -86,8 +91,10 @@ struct ModelFootprint {
 // `backend` and `backendsDir` follow GgmlBackends. MobileNet always loads on
 // the CPU, so `backend` is ignored for it. `width` and `height` are the
 // BridgeDepth input size, checked against the limits inference enforces, and
-// are ignored for the other models. `threads` is the CPU thread count the
-// model will be configured with; MobileNet does not take one.
+// are ignored for the other models. An input above 1280x720 (720x1280 for a
+// portrait pair) is sized at the downsampled size inference runs it at.
+// `threads` is the CPU thread count the model will be configured with;
+// MobileNet does not take one.
 ModelFootprint measureFootprint(
     const std::string& path, const std::string& backend,
     const std::string& backendsDir, int width, int height,
