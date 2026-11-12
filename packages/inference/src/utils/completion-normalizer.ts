@@ -128,9 +128,10 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   let heldThinkingCalls: { raw: string; calls: ToolCall[] } | null = null
   // Index into `thinkingParts` where the current built-in block starts.
   let thinkingBlockStart = 0
-  // Calls in the current block that were followed by more reasoning. They were
-  // quoted if the block closes, and made if the turn ends with it still open.
-  let undecidedCalls: ToolCall[] = []
+  // Calls in the current block from the first one followed by more reasoning.
+  // That kind was quoted if the block closes and made if the turn ends with it
+  // open; calls made after it wait here so they are emitted in order.
+  let deferredCalls: { call: ToolCall; made: boolean }[] = []
   let undecidedAnswerStart = 0
 
   // Content frame: inner streamed as it arrives; partial close tail buffered.
@@ -412,7 +413,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
       const { raw } = takeToolFrame()
       trimThinkingStart = false
       emitThinking(events, raw + buf.slice(0, thinkClose))
-      closeThinkingBlock()
+      closeThinkingBlock(events)
       return buf.slice(thinkClose + BUILTIN_THINKING.close.length)
     }
 
@@ -434,17 +435,22 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     return ''
   }
 
-  function closeThinkingBlock() {
-    undecidedCalls = []
+  function closeThinkingBlock(events: CompletionEvent[]) {
+    for (const { call, made } of deferredCalls) if (made) emitStreamedToolCall(events, call)
+    deferredCalls = []
     activeThinkingFrame = null
     trimAfterThinking = contentParts.length === 0
     state = 'content'
   }
 
+  // A made call waits behind earlier undecided ones so the order is kept.
   function releaseHeldCalls(events: CompletionEvent[]) {
     const held = heldThinkingCalls
     heldThinkingCalls = null
-    for (const call of held?.calls ?? []) emitStreamedToolCall(events, call)
+    for (const call of held?.calls ?? []) {
+      if (deferredCalls.length > 0) deferredCalls.push({ call, made: true })
+      else emitStreamedToolCall(events, call)
+    }
   }
 
   // A held call was made if the turn ends, `</think>` closes the block, or
@@ -456,7 +462,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     if (marker) {
       releaseHeldCalls(events)
       if (marker === BUILTIN_THINKING.close) {
-        closeThinkingBlock()
+        closeThinkingBlock(events)
       } else {
         openToolFrame(marker, markerToEntry.get(marker)!.spec, true)
       }
@@ -470,7 +476,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     heldThinkingCalls = null
     trimThinkingStart = false
     emitThinking(events, (held?.raw ?? '') + buf.slice(0, buf.length - rest.length))
-    undecidedCalls.push(...(held?.calls ?? []))
+    for (const call of held?.calls ?? []) deferredCalls.push({ call, made: false })
     undecidedAnswerStart = thinkingParts.length
     activeThinkingFrame = BUILTIN_THINKING
     state = 'thinkingFraming'
@@ -494,7 +500,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     }
     if (closeIdx >= 0) {
       emitThinking(events, buf.slice(0, closeIdx))
-      closeThinkingBlock()
+      closeThinkingBlock(events)
       return buf.slice(closeIdx + closeMarker.length)
     }
     const tailLen = trailingPartialMarkerLen(
@@ -574,7 +580,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
         } else if (entry.kind === 'thinking') {
           activeThinkingFrame = entry.spec
           thinkingBlockStart = thinkingParts.length
-          undecidedCalls = []
+          deferredCalls = []
           trimThinkingStart = true
           pendingThinkingWhitespace = ''
           state = 'thinkingFraming'
@@ -652,15 +658,15 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   // The model stopped on its own inside the prompt-opened `<think>`: calls it
   // left there were made, and the reasoning after them, or the whole block
   // when the turn has no call at all, is the answer.
-  function promoteOpenThinking(events: CompletionEvent[], finalCalls: ToolCall[]) {
-    const made = undecidedCalls
-    undecidedCalls = []
-    const turnHasCalls = made.length + streamedToolCallKeys.size + finalCalls.length > 0
-    for (const call of made) emitStreamedToolCall(events, call)
+  function promoteOpenThinking(
+    events: CompletionEvent[],
+    callsLeftInBlock: boolean,
+    finalCalls: ToolCall[]
+  ) {
     if (contentParts.length > 0) return
-    if (made.length > 0) {
+    if (callsLeftInBlock) {
       emitContent(events, thinkingParts.slice(undecidedAnswerStart).join('').trim())
-    } else if (!turnHasCalls) {
+    } else if (streamedToolCallKeys.size + finalCalls.length === 0) {
       emitContent(events, thinkingParts.slice(thinkingBlockStart).join('').trim())
     }
   }
@@ -679,10 +685,13 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     drainTails(events)
     closeOpenFrames(events, failed)
     settleHeldCalls(events, failed)
+    // The block never closed, so every call left in it was made.
+    const leftInBlock = failed ? [] : deferredCalls
+    deferredCalls = []
+    for (const { call } of leftInBlock) emitStreamedToolCall(events, call)
     if (activeThinkingFrame === BUILTIN_THINKING && naturalStop && !failed) {
-      promoteOpenThinking(events, finalCalls)
+      promoteOpenThinking(events, leftInBlock.length > 0, finalCalls)
     }
-    undecidedCalls = []
     activeThinkingFrame = null
     state = 'content'
 

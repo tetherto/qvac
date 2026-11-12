@@ -1356,6 +1356,45 @@ test('open <think>: a partial marker buffered after a held call is kept on cutof
   }
 })
 
+test('open <think>: calls left in a block that never closes keep their order and count', (t) => {
+  const callFor = (city: string) => QWEN_CALL.replace('Paris', city)
+  for (const cities of [
+    ['Paris', 'Rome'],
+    ['Paris', 'Paris'],
+    ['Paris', 'Rome', 'Oslo']
+  ]) {
+    const [first, ...rest] = cities.map(callFor)
+    const raw = `<think>\n${first}\nAnd one more.\n${rest.join('\n')}`
+    const parsed = cities.map((city, i) => ({
+      id: `call_${i}`,
+      name: 'get_weather',
+      arguments: { city }
+    }))
+    for (const size of [raw.length, 3, 1]) {
+      const n = createCompletionNormalizer(qwenThinkingConfig())
+      const events = [
+        ...pushAll(n, chunksOf(raw, size)),
+        ...n.finish({ toolCalls: parsed, stopReason: 'eos' })
+      ]
+      const made = events.flatMap((e) => (e.type === 'toolCall' ? [e.call.arguments['city']] : []))
+
+      t.alike(made, cities, `${cities.join(',')} chunk ${size}`)
+    }
+  }
+})
+
+test('open <think>: a call made after a quoted one is kept when the block closes', (t) => {
+  const rome = QWEN_CALL.replace('Paris', 'Rome')
+  const raw = `<think>\nNot ${QWEN_CALL} but this.\n${rome}\n</think>\n\n`
+  for (const size of [raw.length, 3, 1]) {
+    const n = createCompletionNormalizer(qwenThinkingConfig())
+    const events = [...pushAll(n, chunksOf(raw, size)), ...n.finish({ stopReason: 'eos' })]
+    const made = events.flatMap((e) => (e.type === 'toolCall' ? [e.call.arguments['city']] : []))
+
+    t.alike(made, ['Rome'], `chunk ${size}`)
+  }
+})
+
 test('open <think>: a mentioned <tool_call> stays reasoning', (t) => {
   const closed = '<think>\nI could emit a <tool_call> here, but no.\n</think>\n\nHello.'
   const unparsed = '<think>\nSyntax is <tool_call>name</tool_call>, noted.\n</think>\n\nHello.'
