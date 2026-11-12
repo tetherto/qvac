@@ -9,6 +9,7 @@
 #   - "test-e2e-rerun-failed" label applied: re-runs only the tests that failed
 #     on the last smoke/full run, on the platforms where they failed
 #   - PR opened/updated targeting release-* branch with SDK/inference changes: runs full suite
+#     on desktop + mobile and the Kotlin Android app
 #
 # Smoke/full/release runs are "base" runs: they record their per-platform failure
 # set (sdk-e2e-base-state) and, on success, apply the "e2e-tested" label. Reruns
@@ -131,10 +132,12 @@ jobs:
                 ;;
             esac
           elif echo "$TARGET" | grep -q '^release-'; then
-            # Path filter already ensures SDK or inference changes exist.
+            # Path filter already ensures SDK or inference changes exist. The
+            # release ships the Kotlin SDK's Maven zips, so its app runs too.
             echo "::notice::Release branch PR with SDK/inference changes — running full suite"
             SHOULD_RUN=true
             MODE=base
+            TARGETS="desktop,android,kotlin-android,ios"
           fi
 
           {

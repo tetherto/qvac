@@ -21,7 +21,7 @@ import { profiler } from '@qvac/sdk'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { ResourceManager } from '../shared/resource-manager.js'
-import { collectTestDeps } from '../shared/collect-test-deps.js'
+import { resolveBootstrapDeps, resolveBootstrapModels } from '../shared/bootstrap-deps.js'
 import { ModelLoadingExecutor } from '../shared/executors/model-loading-executor.js'
 import { CompletionExecutor } from '../shared/executors/completion-executor.js'
 import { ToolsExecutor } from '../shared/executors/tools-executor.js'
@@ -137,8 +137,12 @@ function ensureElectronE2EConfig() {
 export async function bootstrap(filteredTests?: TestDefinition[]) {
   ensureElectronE2EConfig()
 
-  const allowedDeps = filteredTests ? collectTestDeps(filteredTests) : undefined
-  await resources.downloadAllOnce(console.log, { allowedDeps })
+  const allowedDeps = resolveBootstrapDeps(filteredTests)
+  await resources.downloadAllOnce(console.log, {
+    allowedDeps,
+    // Standalone bootstrap only
+    onlyModels: filteredTests ? undefined : resolveBootstrapModels()
+  })
 }
 
 export async function runSnapRefreshProbe() {

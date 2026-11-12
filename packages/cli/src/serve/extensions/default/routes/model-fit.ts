@@ -173,7 +173,8 @@ function assertConstantSources(config: Record<string, unknown>, path: string): v
   for (const [key, value] of Object.entries(config)) {
     const at = `${path}.${key}`
     if (isModelSrcKey(key)) {
-      if (typeof value !== 'string' || !constants.has(value)) {
+      const sources = Array.isArray(value) ? value : [value]
+      if (!sources.every((source) => typeof source === 'string' && constants.has(source))) {
         throw new HttpError(
           400,
           'invalid_model_src',

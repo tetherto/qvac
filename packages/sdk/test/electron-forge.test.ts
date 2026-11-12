@@ -61,6 +61,27 @@ test('createIgnore: keeps the bundled worker addons under qvac/worker', (t) => {
   )
 })
 
+test('createIgnore: leaves out scratch folders an interrupted bundle left in qvac/', (t) => {
+  const scratch = [
+    '/qvac/.worker-0f8e6c2a-3b1d-4e5f-9a7b-1c2d3e4f5a6b',
+    '/qvac/.worker-0f8e6c2a-3b1d-4e5f-9a7b-1c2d3e4f5a6b/worker/index.bundle',
+    '/qvac/.worker-scan-0f8e6c2a-3b1d-4e5f-9a7b-1c2d3e4f5a6b/worker-scan/index.js'
+  ]
+  const kept = ['/qvac/worker/index.bundle', '/qvac/worker.entry.mjs']
+  const fromArray = createIgnore([], undefined)
+  const fromFunction = createIgnore([], () => false)
+  const ignoredByArray = (filePath: string) => fromArray.some((re: RegExp) => re.test(filePath))
+
+  for (const filePath of scratch) {
+    t.ok(ignoredByArray(filePath), `${filePath} excluded (array form)`)
+    t.ok(fromFunction(filePath), `${filePath} excluded (function form)`)
+  }
+  for (const filePath of kept) {
+    t.absent(ignoredByArray(filePath), `${filePath} kept (array form)`)
+    t.absent(fromFunction(filePath), `${filePath} kept (function form)`)
+  }
+})
+
 test('createIgnore: composes with user array', (t) => {
   const userPattern = /^\/secret\//
   const ignore = createIgnore(['@qvac/ocr-ggml'], [userPattern])
