@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import semver from 'semver'
 import { createLimiter } from '@/commands/verify/addon-source'
 import {
   newestMatchingPin,
@@ -643,6 +644,36 @@ describe('verifyBundle engines.bare against the phone runtimes', () => {
       })
       assert.equal(hasErrors(result), false)
       assert.deepEqual(result.advice, [])
+    })
+  })
+
+  it('passes an addon needing Bare 1.37 on the Bare Kit that bare-stow 0.3.7 pins', async () => {
+    await withTempDir(async (dir) => {
+      writeMobileProject(dir, { hosts: ['android-arm64', 'ios-arm64'], enginesBare: '>=1.37.0' })
+      // bare-stow 0.3.7 pins bare-kit-kotlin 0.2.+ and bare-kit-swift from 2.3.0.
+      const bareStowDir = writeBareStow(dir, { kotlin: '0.2.+', swift: '2.3.0' })
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: path.join(dir, 'node_modules'),
+        hosts: ['android-arm64', 'ios-arm64'],
+        bareStowDir,
+        fetchText: failingFetch(),
+        fetchPackageMetadata: () => Promise.reject(new Error('unexpected registry request'))
+      })
+      assert.equal(hasErrors(result), false)
+      assert.deepEqual(result.advice, [])
+
+      const runtime = (platform: string) => {
+        const resolution = result.runtimes.find((entry) => entry.platform === platform)?.resolution
+        assert.ok(resolution?.resolved === true)
+        return resolution.runtime
+      }
+      // bare-kit-swift 2.3.0 is built from bare-kit 3.1.0, Bare 1.37.1.
+      assert.equal(runtime('ios').version, '1.37.1')
+      // 0.2.+ follows the newest 0.2.x in the table, so a later release may raise its Bare.
+      const android = runtime('android')
+      assert.match(android.packageVersion, /^0\.2\.\d+$/)
+      assert.ok(semver.gte(android.version, '1.37.1'), android.version)
     })
   })
 
