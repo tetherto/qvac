@@ -8,7 +8,7 @@ import { unregisterAddonLogger, getEngineLogger } from '@/logging/index'
 import { type UnloadModelParams, unloadModelParamsSchema } from '@/schemas/index'
 import { ModelNotLoadedError } from '@/errors/index'
 import { detectShardedModel } from '@/utils/index'
-import { getClearStorageTarget } from '@/utils/cache/paths'
+import { completeMarkerPath, getClearStorageTarget } from '@/utils/cache/paths'
 
 const logger = getEngineLogger()
 
@@ -45,6 +45,9 @@ export async function unloadModel(params: UnloadModelParams) {
           recursive: target.kind === 'directory',
           force: true
         })
+        if (target.kind === 'file') {
+          await fsPromises.rm(completeMarkerPath(target.path), { force: true })
+        }
         logger.info(`Model storage cleared (${target.kind}): ${target.path}`)
       }
     }
