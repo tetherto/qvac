@@ -48,6 +48,7 @@ exports.AUDIOGEN_BACKEND_NAMES = {
     2: 'cuda',
     3: 'vulkan',
     4: 'opencl',
+    5: 'webgpu',
     99: 'other'
 };
 /** `undefined` for an unset or unrecognised id, never a guessed name. */
@@ -365,8 +366,19 @@ function validateAcestepOptions(files, config) {
     if (config.device !== undefined) {
         throw invalidInput('ACE-Step does not accept device (use useGPU and nGpuLayers)');
     }
-    if (config.coremlProfileDir !== undefined || config.coremlComputeUnits !== undefined) {
-        throw invalidInput('coremlProfileDir and coremlComputeUnits are MiniMax-only options');
+    validateRuntimeStrings(config);
+    if (config.coremlConditionerPath !== undefined ||
+        config.coremlProfileDir !== undefined ||
+        config.coremlComputeUnits !== undefined) {
+        throw invalidInput('coremlConditionerPath, coremlProfileDir and coremlComputeUnits are MiniMax-only options');
+    }
+}
+function validateRuntimeStrings(config) {
+    for (const key of ['backend', 'lmBackend', 'dumpStagesDir', 'coremlConditionerPath']) {
+        const value = config[key];
+        if (value !== undefined && (typeof value !== 'string' || value.includes('\0'))) {
+            throw invalidInput(`${key} must be a string without NUL characters`);
+        }
     }
 }
 function validateMinimaxCoreMLConfig(config) {
@@ -384,6 +396,12 @@ function validateMinimaxCoreMLConfig(config) {
     }
 }
 function validateMinimaxConfig(config) {
+    validateRuntimeStrings(config);
+    if (config.backend !== undefined ||
+        config.lmBackend !== undefined ||
+        config.dumpStagesDir !== undefined) {
+        throw invalidInput('MiniMax does not accept backend, lmBackend or dumpStagesDir');
+    }
     validateMinimaxCoreMLConfig(config);
     if (config.useGPU !== undefined && typeof config.useGPU !== 'boolean') {
         throw invalidInput('useGPU must be a boolean');
@@ -610,6 +628,7 @@ class AudioGen {
                 threads,
                 useGPU: config.useGPU ?? false,
                 device: config.device,
+                coremlConditionerPath: config.coremlConditionerPath,
                 coremlProfileDir: config.coremlProfileDir,
                 coremlComputeUnits: config.coremlComputeUnits,
                 backendsDir
@@ -634,6 +653,9 @@ class AudioGen {
                 inferenceSteps: this._defaultInferenceSteps,
                 shift: requireAcestepShift(config.shift ?? 0),
                 useGPU: config.useGPU ?? false,
+                backend: config.backend,
+                lmBackend: config.lmBackend,
+                dumpStagesDir: config.dumpStagesDir,
                 nGpuLayers: requireFiniteNumber(config.nGpuLayers ?? 99, 'nGpuLayers', true),
                 threads,
                 backendsDir

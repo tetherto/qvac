@@ -64,15 +64,17 @@ test('an unassigned runner is reported once per platform family', () => {
   assert.ok(problems.every((problem) => problem.includes('runBrandNewTest')))
 })
 
-test('benchmark shards and desktop-only finetuning are exempt from coverage', () => {
+test('benchmark shards and desktop-only tests are exempt from coverage', () => {
   assert.equal(isOverrideOnly('runBenchmarkPerf4bQ80F16Test'), true)
   assert.equal(isOverrideOnly('runFinetuningMoeTest'), true)
+  assert.equal(isOverrideOnly('runXdnaTest'), true)
   assert.equal(isOverrideOnly('runBrandNewTest'), false)
   assert.deepEqual(
     validateTestGroups(groups, [
       ...committedRunners(),
       'runBenchmarkPerf4bQ80F16Test',
-      'runFinetuningMoeTest'
+      'runFinetuningMoeTest',
+      'runXdnaTest'
     ]),
     []
   )

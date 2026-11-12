@@ -12,14 +12,24 @@ drives the same worker contract as the JS/TS and Python clients, and provides
 Kotlin data classes, `Flow` streams, structured completion runs, and an
 isolated Android service host.
 
+<Callout type="info">
+The Kotlin SDK is in preview and is not on Maven Central yet. Install it from the GitHub release archives or build it from source, and [open a GitHub issue](https://github.com/tetherto/qvac/issues) if you need something else.
+</Callout>
+
 ## Requirements
 
-- Android: `arm64-v8a`, API 29 or newer.
-- Desktop JVM: experimental. The client resolves and starts a local `@qvac/sdk`
-  worker.
-- A Kotlin 2.3 or newer compiler. The artifacts depend on
-  [`bare-rpc-kotlin`](https://github.com/holepunchto/bare-rpc-kotlin), which is
-  compiled with Kotlin 2.4.
+- Android: `arm64-v8a`, API 29 or newer, compiled with `compileSdk` 36 or newer.
+  Bare Kit ships for four ABIs while the QVAC addons ship for `arm64-v8a` only,
+  so set `ndk { abiFilters += "arm64-v8a" }` in the app's `defaultConfig`;
+  without it the app carries about 108 MB of unusable libraries and installs on
+  devices it cannot run on.
+- Desktop JVM: experimental. The worker runs inside the JVM on Bare Kit, built
+  from this repository for the host it is built on.
+- A Kotlin 2.3 or newer compiler. The artifacts depend on Holepunch's
+  [`bare-rpc-kotlin`](https://github.com/holepunchto/bare-rpc-kotlin),
+  [`bare-stow-host-kotlin`](https://github.com/holepunchto/bare-stow-host-kotlin)
+  and [`bare-kit-kotlin`](https://github.com/holepunchto/bare-kit-kotlin), which
+  are compiled with Kotlin 2.4.
 
 Kotlin/Native targets are not published.
 
@@ -39,8 +49,10 @@ Gradle at. There is one archive per Android runtime profile:
 | `qvac-sdk-android-media-0.23.0-maven.zip` | `io.tether:qvac-sdk-android-media` | audio, image, video, world generation, and upscaling |
 | `qvac-sdk-android-robotics-0.23.0-maven.zip` | `io.tether:qvac-sdk-android-robotics` | VLA inference |
 
-For the experimental desktop JVM client, see the
-[package README](https://github.com/tetherto/qvac/blob/main/packages/sdk-kotlin/README.md).
+The experimental desktop JVM worker host is not in these archives; it is built
+from this repository, as the
+[package README](https://github.com/tetherto/qvac/blob/main/packages/sdk-kotlin/README.md)
+describes.
 
 <Steps>
 
@@ -52,9 +64,9 @@ For example, the LLM profile:
 
 ```bash
 curl -fLO https://github.com/tetherto/qvac/releases/download/sdk-v0.23.0/qvac-sdk-android-llm-0.23.0-maven.zip
-curl -fLO https://github.com/tetherto/qvac/releases/download/sdk-v0.23.0/SHA256SUMS
-sha256sum --check --ignore-missing SHA256SUMS
-# macOS: shasum -a 256 --check --ignore-missing SHA256SUMS
+curl -fLO https://github.com/tetherto/qvac/releases/download/sdk-v0.23.0/qvac-sdk-kotlin-0.23.0-SHA256SUMS
+sha256sum --check --ignore-missing qvac-sdk-kotlin-0.23.0-SHA256SUMS
+# macOS: shasum -a 256 --check --ignore-missing qvac-sdk-kotlin-0.23.0-SHA256SUMS
 ```
 </Step>
 
@@ -69,7 +81,7 @@ unzip qvac-sdk-android-llm-0.23.0-maven.zip -d qvac-maven-repository
 
 <Step>
 Declare the extracted directory as a Maven repository, next to JitPack, which
-serves the `bare-rpc-kotlin` dependency the archive does not include:
+serves the Holepunch libraries the archive does not include:
 
 ```kotlin
 // settings.gradle.kts
@@ -78,7 +90,7 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         exclusiveContent {
-            forRepository { maven("https://jitpack.io") } // bare-rpc-kotlin
+            forRepository { maven("https://jitpack.io") } // Holepunch's Kotlin libraries
             filter { includeGroupByRegex("com\\.github\\.holepunchto\\..*") }
         }
         maven { url = uri("/absolute/path/to/qvac-maven-repository") }
@@ -120,6 +132,54 @@ contain throws `UnsupportedCapabilityException`. Inspect it with
 To build the artifacts yourself instead, see the
 [package README](https://github.com/tetherto/qvac/blob/main/packages/sdk-kotlin/README.md).
 
+## Quickstart
+
+Run your first example using the desktop JVM client, which you build from the QVAC repository. Every example in this documentation is a desktop JVM program. On Android the SDK calls are the same: connect with `AndroidServiceTransport` as shown in [Connect](#connect), and replace desktop-only helpers, such as the `javax.sound.sampled` audio code, with Android equivalents.
+
+You need git, JDK 17, Node.js 22, Python 3, and an Android SDK with NDK 29.0.14206865 at `ANDROID_HOME`.
+
+<Steps>
+
+<Step>
+Clone the repository and go to the Kotlin SDK:
+
+```bash
+git clone --depth 1 https://github.com/tetherto/qvac.git
+cd qvac/packages/sdk-kotlin
+```
+</Step>
+
+<Step>
+The examples live in `examples/src/`. This is the quickstart script, `examples/src/Quickstart.kt`:
+
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/Quickstart.kt title="Quickstart.kt" lineNumbers
+```
+</WrapCode>
+</Step>
+
+<Step>
+Run the quickstart script:
+
+```bash
+./gradlew -p examples run -Pexample=Quickstart
+```
+
+The first run builds the SDK and its desktop worker, which takes a few minutes.
+</Step>
+
+</Steps>
+
+## Running examples
+
+Follow these instructions to run any example in this documentation:
+- All examples are self-contained, runnable Kotlin programs in `packages/sdk-kotlin/examples/src/`. Run one by file name, from `packages/sdk-kotlin`: `./gradlew -p examples run -Pexample=<FileName>`.
+- Each file compiles on its own, so you can save your own copy of an example in `examples/src/` and run it the same way. `./gradlew -p examples compileExamples` compiles them all.
+- Pass arguments with `--args`, for example `./gradlew -p examples run -Pexample=Transcription --args="path/to/audio.wav"`. Each example's header comment shows how to run it.
+- The JS/TS examples read worker settings from a `qvac.config.*` file. The Kotlin examples pass them inline instead, as the `config` argument of `JvmBareKitTransport.connect()`.
+- Some examples need companion files — sample audio, an image, or a dataset — that aren't part of the embedded code. These can be found in the examples directories of the [JS/TS](https://github.com/tetherto/qvac/tree/main/packages/sdk/examples) and [Kotlin](https://github.com/tetherto/qvac/tree/main/packages/sdk-kotlin/examples) SDKs.
+
 ## Connect
 
 ```kotlin
@@ -134,9 +194,8 @@ try {
 ```
 
 The service runs in the app's private `:qvac_worker` process. Desktop JVM uses
-`JvmBareRpcTransport.connectResolved()`, which starts the resolved `@qvac/sdk`
-worker over a loopback channel. Kotlin/Native targets are not published until
-they have tested worker hosts.
+`JvmBareKitTransport.connect()`, which starts the worker inside the JVM.
+Kotlin/Native targets are not published until they have tested worker hosts.
 
 ## Completion and multimodal input
 

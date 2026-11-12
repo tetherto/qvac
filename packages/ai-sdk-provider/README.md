@@ -56,7 +56,7 @@ export QVAC_API_KEY='replace-with-a-random-secret'
 qvac serve --openai --no-default --api-key "$QVAC_API_KEY"
 ```
 
-By default, `qvac serve` listens on `http://127.0.0.1:11434/v1` (the port may change in a future CLI release — see the **Default base URL** note below).
+By default, `qvac serve` listens on `http://127.0.0.1:11435/v1`. `@qvac/cli` 0.18 and earlier default to `11434`.
 
 ### 2. Use the provider
 
@@ -65,7 +65,7 @@ import { createQvac } from '@qvac/ai-sdk-provider'
 import { streamText } from 'ai'
 
 const qvac = createQvac({
-  baseURL: 'http://127.0.0.1:11434/v1', // match your `qvac serve` port
+  baseURL: 'http://127.0.0.1:11435/v1', // match your `qvac serve` port
   apiKey: process.env.QVAC_API_KEY // must match the serve's --api-key value
 })
 
@@ -368,7 +368,7 @@ This is an industry-wide reality for local AI, not specific to QVAC. Calibrate u
 const qvac = createQvac() // uses DEFAULT_BASE_URL
 ```
 
-> ⚠️ **The default `baseURL` is a placeholder pending the CLI port-change ticket.** `qvac serve` today defaults to `11434` (which collides with Ollama). The CLI will move to a non-conflicting port in a future release, and this package's default will move with it. **Set `baseURL` explicitly to your `qvac serve` port** until the default is finalized — otherwise the provider will fail to connect.
+The default `baseURL` is `http://127.0.0.1:11435/v1`, the `qvac serve` default port. Against `@qvac/cli` 0.18 or earlier, which listen on `11434`, pass `baseURL` explicitly or start the serve with `--port 11435`.
 
 In external mode, the provider's default `apiKey` is the literal string `'qvac'`. If `qvac serve` was started with `--api-key`, pass that exact key to `createQvac`; otherwise authenticated requests are rejected. Managed mode does not use this default: it generates and owns a random key for the spawned serve.
 

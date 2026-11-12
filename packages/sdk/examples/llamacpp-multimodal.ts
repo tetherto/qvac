@@ -3,7 +3,8 @@ import {
   loadModel,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
-  unloadModel
+  unloadModel,
+  type HistoryContentPart
 } from '@qvac/sdk'
 
 if (process.argv.length < 3) {
@@ -79,6 +80,30 @@ try {
   const stats2 = await result2.stats
 
   console.log('\n▸ Performance Stats:', stats2)
+
+  console.log('▸ --------------------------------')
+
+  // Ordered text and media: each image keeps its position in the turn, so the
+  // text can sit next to the picture it refers to. Attachments can't do this,
+  // because they are all sent before the text.
+  const content: HistoryContentPart[] = [
+    { type: 'text', text: 'Image A: ' },
+    { type: 'media', path: imageFilePath },
+    { type: 'text', text: '\nImage B: ' },
+    { type: 'media', path: imageFilePath2 },
+    { type: 'text', text: '\nWhich image is a newspaper?' }
+  ]
+  const history3 = [{ role: 'user', content }]
+
+  const result3 = completion({ modelId, history: history3, stream: true })
+
+  for await (const token of result3.tokenStream) {
+    process.stdout.write(token)
+  }
+
+  const stats3 = await result3.stats
+
+  console.log('\n▸ Performance Stats:', stats3)
 
   console.log('▸ --------------------------------')
 

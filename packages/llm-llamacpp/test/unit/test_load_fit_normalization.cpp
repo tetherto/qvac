@@ -1002,6 +1002,37 @@ TEST_F(LoadFitNormalizationTest, SplitModeWarnsWhenEveryGpuIsRejected) {
           "ROCm0 (HIP); falling back to CPU"));
 }
 
+// An NPU-only host: the NPU never joins an automatic split, so the CPU
+// fallback warning says how to name it.
+TEST_F(LoadFitNormalizationTest, SplitModeWarnsHowToOptInToXdna) {
+  using qvac_lib_inference_addon_cpp::logger::Priority;
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  auto selection = splitSelection({"XDNA0"});
+  selection.optInDevices.push_back(selection.devices[0]);
+  selection.devices.pop_back();
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  auto& verbosity = qvac_lib_inference_addon_llama::logging::g_verbosityLevel;
+  const Priority previous = verbosity;
+  verbosity = Priority::WARNING;
+  ::testing::internal::CaptureStdout();
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+  const std::string output = ::testing::internal::GetCapturedStdout();
+  verbosity = previous;
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
+  EXPECT_EQ(result.runtimeBackendDevice, 0);
+  EXPECT_THAT(
+      output,
+      ::testing::HasSubstr(
+          "[WARNING]: [LlamaModel] no eligible GPU backend found; rejected "
+          "XDNA0 [opt in with devices: 'XDNA0']; falling back to CPU"));
+}
+
 // The message must direct callers to the two modes that do work.
 TEST_F(LoadFitNormalizationTest, SplitModeRowIsRejected) {
   auto config = baseConfig();
@@ -2419,6 +2450,440 @@ TEST_F(LoadFitNormalizationTest, ExplicitDevicesNamingOneCardTwiceAreRejected) {
       static_cast<void>(lfn::normalizeLoadForFit(
           "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies)),
       qvac_errors::StatusError);
+}
+
+// An opt-in device (the XDNA NPU) is never in the automatic set but can be
+// named. "none" stands in for its name because fabric's --device parser
+// accepts it without a registered device.
+TEST_F(LoadFitNormalizationTest, ExplicitDevicesCanNameOptInDevice) {
+  auto config = baseConfig();
+  config["devices"] = "none";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "local"}, {"local"});
+  auto selection = splitSelection({"local", "none"});
+  selection.optInDevices.push_back(selection.devices[1]);
+  selection.devices.pop_back();
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  EXPECT_EQ(result.params.mmproj_backend, "none");
+}
+
+// Without an NPU, XDNA0 is in no device set: naming it fails the load.
+TEST_F(LoadFitNormalizationTest, ExplicitDevicesRejectAbsentOptInDevice) {
+  auto config = baseConfig();
+  config["devices"] = "XDNA0";
+  const auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "local"}, {"local"});
+
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies)),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, TensorSplitRejectsXdna) {
+  auto config = baseConfig();
+  config["devices"] = "local,XDNA0";
+  config["split-mode"] = "tensor";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "local"}, {"local"});
+  auto selection = splitSelection({"local", "XDNA0"});
+  selection.optInDevices.push_back(selection.devices[1]);
+  selection.devices.pop_back();
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies));
+    FAIL() << "a tensor split with XDNA0 must be rejected";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr("split-mode 'tensor' does not support the XDNA"));
+  }
+}
+
+// No device is registered in the unit tests, so fabric's --device parser
+// refuses the list. Failing there, on its first name, shows normalization
+// accepted the layer split and handed the whole list to fabric.
+TEST_F(LoadFitNormalizationTest, LayerSplitAcceptsXdna) {
+  auto config = baseConfig();
+  config["devices"] = "local,XDNA0";
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "local"}, {"local"});
+  auto selection = splitSelection({"local", "XDNA0"});
+  selection.optInDevices.push_back(selection.devices[1]);
+  selection.devices.pop_back();
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies));
+    FAIL() << "fabric's --device parser must refuse the unregistered names";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr(
+            "error while handling argument \"--device\": invalid device: "
+            "local"));
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, AutomaticSplitLeavesOutOptInDevices) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "local"}, {"local"});
+  auto selection = splitSelection({"local", "XDNA0"});
+  selection.optInDevices.push_back(selection.devices[1]);
+  selection.devices.pop_back();
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  ASSERT_EQ(result.params.devices.size(), 2U);
+  EXPECT_EQ(result.params.devices[0], selection.devices[0].handle);
+  EXPECT_EQ(result.params.devices[1], nullptr);
+  EXPECT_EQ(result.params.mmproj_backend, "local");
+}
+
+// isXdna keeps the KV cache at f16 on the NPU (tuneLoadConfigMap).
+TEST(UsesBackendFamilyTest, MatchesXdnaOverrideName) {
+  EXPECT_TRUE(lfn::usesBackendFamily(true, "xdna0", {}, "xdna"));
+}
+
+TEST(UsesBackendFamilyTest, MatchesExplicitXdnaDevice) {
+  const std::vector<backend_selection::SplitDevice> split{{.name = "XDNA0"}};
+  EXPECT_TRUE(lfn::usesBackendFamily(true, "XDNA0", split, "xdna"));
+}
+
+TEST(UsesBackendFamilyTest, MatchesXdnaInMixedSplit) {
+  const std::vector<backend_selection::SplitDevice> split{
+      {.name = "Vulkan0"}, {.name = "XDNA0"}};
+  EXPECT_TRUE(lfn::usesBackendFamily(true, "Vulkan0", split, "xdna"));
+  EXPECT_FALSE(lfn::usesBackendFamily(true, "Vulkan0", split, "cuda"));
+}
+
+TEST(UsesBackendFamilyTest, FalseOnCpuFallback) {
+  const std::vector<backend_selection::SplitDevice> split{{.name = "XDNA0"}};
+  EXPECT_FALSE(lfn::usesBackendFamily(false, "xdna0", split, "xdna"));
+}
+
+TEST(UsesBackendFamilyTest, FalseWithoutXdnaDevice) {
+  const std::vector<backend_selection::SplitDevice> split{{.name = "Vulkan0"}};
+  EXPECT_FALSE(lfn::usesBackendFamily(true, "vulkan0", split, "xdna"));
+  EXPECT_TRUE(lfn::usesBackendFamily(true, "CUDA0", {}, "cuda"));
+}
+
+// The explicit `devices` path cannot reach the end of normalization in unit
+// tests (fabric's --device parser refuses every name but "none"), so the
+// classification it applies is tested directly.
+TEST(RunsOnNpuOnlyTest, NpuAloneIsAnNpuLoad) {
+  EXPECT_TRUE(lfn::runsOnNpuOnly({{.name = "XDNA0"}}));
+}
+
+TEST(RunsOnNpuOnlyTest, MixedSplitIsAGpuLoad) {
+  const std::vector<backend_selection::SplitDevice> split{
+      {.name = "XDNA0"}, {.name = "Vulkan0"}};
+  EXPECT_FALSE(lfn::runsOnNpuOnly(split));
+  EXPECT_TRUE(lfn::usesBackendFamily(true, "XDNA0", split, "xdna"));
+}
+
+TEST(RunsOnNpuOnlyTest, GpuOnlyOrEmptyIsNotAnNpuLoad) {
+  EXPECT_FALSE(lfn::runsOnNpuOnly({{.name = "Vulkan0"}}));
+  EXPECT_FALSE(lfn::runsOnNpuOnly({}));
+}
+
+// Fabric's --device parser refuses any device name in the unit tests but
+// "none", so XDNA0 sits in the mock's automatic split, which pins the devices
+// without --device. Both defaults read only the participating device names.
+TEST_F(LoadFitNormalizationTest, XdnaLoadKeepsF16KvAndCpuProjector) {
+  for (const std::string name : {"XDNA0", "vulkan0"}) {
+    const bool isXdna = name == "XDNA0";
+    auto config = baseConfig();
+    config["split-mode"] = "layer";
+    config["flash-attn"] = "on";
+
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = name}, {name}));
+
+    EXPECT_EQ(result.params.cache_type_k == GGML_TYPE_Q8_0, !isXdna) << name;
+    EXPECT_EQ(result.params.cache_type_v == GGML_TYPE_Q8_0, !isXdna) << name;
+    EXPECT_EQ(result.params.mmproj_backend, name);
+    EXPECT_EQ(result.params.mmproj_use_gpu, !isXdna) << name;
+    // A split of the NPU alone reports as an NPU load.
+    EXPECT_EQ(result.runtimeBackendDevice, isXdna ? 2 : 1) << name;
+  }
+}
+
+// Fabric's --device parser accepts "none" in the unit tests, so it stands in
+// for XDNA0. The NPU places layers like a GPU, but reports device class 2 and
+// keeps the GPU-only defaults off. With no GPU on the host, its projector runs
+// on the CPU.
+TEST_F(LoadFitNormalizationTest, NpuLoadKeepsF16KvAndCpuProjector) {
+  for (const auto type : {backend_selection::GPU, backend_selection::NPU}) {
+    const bool isNpu = type == backend_selection::NPU;
+    auto config = baseConfig();
+    config["device"] = isNpu ? "npu" : "gpu";
+    config["flash-attn"] = "on";
+
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = type, .name = "none"}, {}));
+
+    EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
+    EXPECT_EQ(result.runtimeBackendDevice, isNpu ? 2 : 1);
+    EXPECT_EQ(result.params.mmproj_backend, "none");
+    EXPECT_EQ(result.params.mmproj_use_gpu, !isNpu);
+    EXPECT_EQ(result.params.cache_type_k == GGML_TYPE_Q8_0, !isNpu);
+    EXPECT_EQ(result.params.cache_type_v == GGML_TYPE_Q8_0, !isNpu);
+  }
+}
+
+// An NPU-led load runs its projector on a local GPU when the host has one.
+// RPC devices do not count.
+TEST_F(LoadFitNormalizationTest, NpuProjectorDefaultsToALocalGpu) {
+  auto config = baseConfig();
+  config["device"] = "npu";
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend(
+          {.type = backend_selection::NPU, .name = "none"},
+          {"RPC0", "Vulkan0"}));
+
+  EXPECT_EQ(result.runtimeBackendDevice, 2);
+  EXPECT_TRUE(result.params.mmproj_use_gpu);
+  EXPECT_EQ(result.params.mmproj_backend, "Vulkan0");
+}
+
+TEST_F(LoadFitNormalizationTest, NpuProjectorWithOnlyRpcDevicesStaysOnCpu) {
+  auto config = baseConfig();
+  config["device"] = "npu";
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::NPU, .name = "none"}, {"RPC0"}));
+
+  EXPECT_FALSE(result.params.mmproj_use_gpu);
+}
+
+// mmproj-use-gpu still decides: false keeps the projector on the CPU beside a
+// GPU, and true with no GPU puts it on the NPU.
+TEST_F(LoadFitNormalizationTest, MmprojUseGpuOverridesTheNpuProjectorDefault) {
+  {
+    auto config = baseConfig();
+    config["device"] = "npu";
+    config["mmproj-use-gpu"] = "false";
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::NPU, .name = "none"}, {"Vulkan0"}));
+    EXPECT_FALSE(result.params.mmproj_use_gpu);
+  }
+  {
+    auto config = baseConfig();
+    config["device"] = "npu";
+    config["mmproj-use-gpu"] = "true";
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::NPU, .name = "none"}, {}));
+    EXPECT_TRUE(result.params.mmproj_use_gpu);
+    EXPECT_EQ(result.params.mmproj_backend, "none");
+  }
+}
+
+// A mixed split led by the NPU runs its projector on the split's own GPU.
+TEST_F(LoadFitNormalizationTest, MixedSplitProjectorUsesTheSplitGpu) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend(
+          {.type = backend_selection::GPU, .name = "XDNA0"},
+          {"XDNA0", "vulkan0"}));
+
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  EXPECT_TRUE(result.params.mmproj_use_gpu);
+  EXPECT_EQ(result.params.mmproj_backend, "vulkan0");
+}
+
+TEST(FirstLocalGpuTest, SkipsTheNpuAndRpcDevices) {
+  const std::vector<backend_selection::SplitDevice> devices{
+      {.name = "XDNA0"}, {.name = "RPC0", .isRpc = true}, {.name = "Vulkan0"}};
+  EXPECT_EQ(lfn::firstLocalGpu(devices), "Vulkan0");
+  EXPECT_EQ(lfn::firstLocalGpu({{.name = "XDNA0"}}), "");
+  EXPECT_EQ(lfn::firstLocalGpu({}), "");
+}
+
+// With no NPU, chooseBackend resolves an NPU request through the GPU order;
+// a GPU it lands on loads as an ordinary GPU load.
+TEST_F(LoadFitNormalizationTest, NpuFallbackToGpuLoadsAsGpu) {
+  auto config = baseConfig();
+  config["device"] = "npu";
+  config["flash-attn"] = "on";
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  EXPECT_TRUE(result.params.mmproj_use_gpu);
+  EXPECT_EQ(result.params.cache_type_k, GGML_TYPE_Q8_0);
+  EXPECT_EQ(result.params.cache_type_v, GGML_TYPE_Q8_0);
+}
+
+// ...and with no GPU either, as a CPU load.
+TEST_F(LoadFitNormalizationTest, NpuWithoutDeviceFallsBackToCpu) {
+  auto config = baseConfig();
+  config["device"] = "npu";
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::CPU, .name = "none"}));
+
+  EXPECT_EQ(result.runtimeBackendDevice, 0);
+  EXPECT_FALSE(result.params.mmproj_use_gpu);
+}
+
+TEST_F(LoadFitNormalizationTest, NpuRejectsGpuSelectors) {
+  for (const auto& [key, value] :
+       std::vector<std::pair<std::string, std::string>>{
+           {"split-mode", "layer"},
+           {"devices", "none"},
+           {"backend", "vulkan"},
+           {"main-gpu", "0"}}) {
+    auto config = baseConfig();
+    config["device"] = "npu";
+    config[key] = value;
+    try {
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::NPU, .name = "none"})));
+      FAIL() << "device 'npu' with " << key << " must be rejected";
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_THAT(
+          error.what(), ::testing::HasSubstr("device 'npu' cannot be combined"))
+          << key;
+    }
+  }
+}
+
+// Default values select nothing, so they leave a plain NPU load.
+TEST_F(LoadFitNormalizationTest, NpuAcceptsDefaultSelectors) {
+  for (const auto& [key, value] :
+       std::vector<std::pair<std::string, std::string>>{
+           {"split-mode", "none"}, {"backend", "auto"}, {"devices", ""}}) {
+    auto config = baseConfig();
+    config["device"] = "npu";
+    config[key] = value;
+
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::NPU, .name = "none"}, {}));
+
+    EXPECT_EQ(result.runtimeBackendDevice, 2) << key;
+    EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE) << key;
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, NpuRejectsRpcServers) {
+  auto config = baseConfig();
+  config["device"] = "npu";
+  config["rpc-servers"] = "127.0.0.1:50052";
+  std::vector<std::string> registrations;
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend(
+            {.type = backend_selection::NPU, .name = "none"},
+            {"mock-device"},
+            &registrations)));
+    FAIL() << "device 'npu' with rpc-servers must be rejected";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr("device: 'npu' runs on the local NPU"));
+  }
+  EXPECT_TRUE(registrations.empty());
+}
+
+// `backend` takes GPU families only; the NPU is `device: 'npu'`.
+TEST_F(LoadFitNormalizationTest, BackendXdnaIsRejected) {
+  auto config = baseConfig();
+  config["backend"] = "xdna";
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "none"})));
+    FAIL() << "backend 'xdna' must be rejected";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("unknown backend 'xdna'"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("device 'npu'"));
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, MmprojUseGpuOverridesXdnaProjectorDefault) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["mmproj-use-gpu"] = "true";
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "XDNA0"}, {"XDNA0"}));
+
+  EXPECT_EQ(result.params.mmproj_backend, "XDNA0");
+  EXPECT_TRUE(result.params.mmproj_use_gpu);
 }
 
 TEST_F(LoadFitNormalizationTest, DefaultSplitModeAllowsOneExplicitDevice) {

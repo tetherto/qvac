@@ -44,9 +44,9 @@ function audio8(filename: string): RegistryItem {
   }
 }
 
-function bundle(name: string): QVACModelEntry[] {
+function bundle(name: string, root = AUDIO8_ROOT): QVACModelEntry[] {
   return COMPONENTS.map((component, index) => ({
-    path: `${AUDIO8_ROOT}${name}.mlmodelc/${component}`,
+    path: `${root}${name}.mlmodelc/${component}`,
     source: 's3',
     engine: '@qvac/tts-ggml',
     license: 'Apache-2.0',
@@ -192,6 +192,64 @@ test('Core ML sidecars: the generated catalog describes the Audio8 bundle', (t) 
     t.is(set?.files[5]?.targetName, 'audio8-codec-decoder.mlmodelc/weights/weight.bin')
     t.absent(findCatalogCoremlCompanionSet(model!, 'android'))
   }
+})
+
+// ---------------------------------------------------------------------------
+// ACE-Step: the VAE decoder bundle, published in a later registry directory
+// ---------------------------------------------------------------------------
+
+const ACESTEP_GGUF_DIR = 'qvac_models_compiled/ggml/acestep/2026-07-22/'
+const ACESTEP_COREML_ROOT = 'qvac_models_compiled/ggml/acestep/2026-10-28/'
+
+function acestep(filename: string): RegistryItem {
+  return { ...audio8(filename), registryPath: `${ACESTEP_GGUF_DIR}${filename}`, addon: 'audiogen' }
+}
+
+test('Core ML sidecars: the ACE-Step VAE is staged beside its decoder bundle on Apple', async (t) => {
+  const set = await findCoremlCompanionSet(
+    client(bundle('vae-decoder', ACESTEP_COREML_ROOT)),
+    acestep('vae-BF16.gguf'),
+    'darwin'
+  )
+
+  t.ok(set)
+  t.is(set!.files.length, 6)
+  t.is(set!.files[0]!.targetName, 'vae-BF16.gguf')
+  t.is(set!.files[0]!.primary, true)
+  // The addon drops the quantization tier and looks for `vae-decoder.mlmodelc`.
+  t.alike(
+    set!.files.slice(1).map((file) => file.targetName),
+    COMPONENTS.map((component) => `vae-decoder.mlmodelc/${component}`)
+  )
+  t.is(set!.files[5]!.registryPath, `${ACESTEP_COREML_ROOT}vae-decoder.mlmodelc/weights/weight.bin`)
+})
+
+test('Core ML sidecars: only the ACE-Step VAE pairs with a bundle, and only on Apple', (t) => {
+  const vae = `${ACESTEP_GGUF_DIR}vae-BF16.gguf`
+  t.ok(getCoremlSidecarSpec(vae, 's3', 'darwin'))
+  t.ok(getCoremlSidecarSpec(vae, 's3', 'ios'))
+
+  for (const platform of ['linux', 'win32', 'android', undefined]) {
+    t.absent(getCoremlSidecarSpec(vae, 's3', platform), `${platform}`)
+  }
+  for (const other of [
+    'acestep-v15-turbo-Q8_0.gguf',
+    'acestep-5Hz-lm-0.6B-Q8_0.gguf',
+    'Qwen3-Embedding-0.6B-Q8_0.gguf'
+  ]) {
+    t.absent(getCoremlSidecarSpec(`${ACESTEP_GGUF_DIR}${other}`, 's3', 'darwin'), other)
+  }
+  t.absent(getCoremlSidecarSpec('other/vae-BF16.gguf', 's3', 'darwin'))
+})
+
+test('Core ML sidecars: the generated catalog describes the ACE-Step VAE bundle', (t) => {
+  const model = models.find((entry) => entry.name === 'AUDIOGEN_VAE_BF16')
+  t.ok(model)
+  const set = findCatalogCoremlCompanionSet(model!, 'darwin')
+  t.is(set?.files.length, 6, 'the VAE pairs with all five components')
+  t.is(set?.files[5]?.targetName, 'vae-decoder.mlmodelc/weights/weight.bin')
+  t.is(set?.files[5]?.registryPath, `${ACESTEP_COREML_ROOT}vae-decoder.mlmodelc/weights/weight.bin`)
+  t.absent(findCatalogCoremlCompanionSet(model!, 'linux'))
 })
 
 // ---------------------------------------------------------------------------

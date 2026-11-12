@@ -65,11 +65,14 @@ not need a sweeper of your own:
 
 Caches held by an in-flight request are never evicted.
 
-**Named caches are not covered.** The policy applies only to the _automatic_ caches these
-endpoints create. A caller-owned named cache — `completion({ kvCache: "my-session" })`
-through the SDK — is exempt from both the quota and the TTL, and the endpoint below never
-touches it. Clean those up with the SDK's `deleteCache({ kvCacheKey })`. Serve itself only
-ever creates automatic caches; it does not use named keys.
+**Responses caches follow the same policy.** `/v1/responses` names one cache per
+conversation key (`responses-<sha256>`); serve applies the same quota and TTL to those,
+counted separately, and the endpoint below reclaims them too. The quota and the endpoint
+only delete Responses caches this server has used, since other processes may share the
+directory; the TTL applies to all of them. A cache that any running QVAC process is using
+(it holds a lease file under `.responses-leases`) is never deleted. Any other caller-owned named
+cache — `completion({ kvCache: "my-session" })` through the SDK — is exempt from both, and
+the endpoint never touches it. Clean those up with the SDK's `deleteCache({ kvCacheKey })`.
 
 ## `POST /qvac/v1/chat/batch`
 
@@ -122,7 +125,7 @@ The batch succeeds or fails as a whole. The request blocks until every prompt fi
 client disconnect cancels it.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/chat/batch \
+curl -sS http://localhost:11435/qvac/v1/chat/batch \
   -H "Content-Type: application/json" \
   -d '{"model":"my-llm","prompts":[
         {"id":"cherry","messages":[{"role":"user","content":"Reply with only the word CHERRY."}]},
@@ -176,7 +179,7 @@ conversations warm: deleting a cache costs the next turn a full prefill instead 
 one, and loses no conversation content, since a KV cache is derived data.
 
 ```bash
-curl -X DELETE http://localhost:11434/qvac/v1/kv_cache
+curl -X DELETE http://localhost:11435/qvac/v1/kv_cache
 ```
 
 ```json
@@ -211,7 +214,7 @@ Every figure is a metric with a `status`. Only `supported` carries a `value`, wi
 not give a trustworthy number, and may carry a `reason`.
 
 ```bash
-curl -sS "http://localhost:11434/qvac/v1/system?sample=true"
+curl -sS "http://localhost:11435/qvac/v1/system?sample=true"
 ```
 
 ```json
@@ -270,7 +273,7 @@ While the runtime is `suspending`, `suspended` or `resuming`, every route except
 ### `GET /qvac/v1/runtime/state`
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/runtime/state
+curl -sS http://localhost:11435/qvac/v1/runtime/state
 ```
 
 ```json
@@ -310,7 +313,7 @@ load say, gets `503 runtime_suspended`. Both are idempotent and return the state
 runtime in.
 
 ```bash
-curl -sS -X POST http://localhost:11434/qvac/v1/runtime/suspend \
+curl -sS -X POST http://localhost:11435/qvac/v1/runtime/suspend \
   -H "Authorization: Bearer $QVAC_API_KEY"
 ```
 
@@ -332,32 +335,43 @@ curl -sS -X POST http://localhost:11434/qvac/v1/runtime/suspend \
 
 ## `POST /qvac/v1/models/fit`
 
-Ask whether models are likely to fit in the host's memory before loading them, backed by the
-SDK's `assessModelFit()`. Nothing is downloaded or loaded: each model's weightless registry
-description is fetched (tens of KB) and the engine's own fitter runs against it, falling back to
-a floor computed from catalog facts.
+Ask whether models fit in the host's memory when loaded together, before loading them, backed
+by the SDK's `assessModelFit()`. Nothing is downloaded or loaded: each model's weightless
+registry description is fetched (tens of KB) and the engine's own fitter runs against it. The
+memory each load takes is summed per device and compared against what is free.
 
-| Field                  | Type                           | Required | Meaning                                                  |
-| ---------------------- | ------------------------------ | -------- | -------------------------------------------------------- |
-| `models`               | `object[]`                     | Yes      | Up to 16 models, assessed together under one budget      |
-| `models[].model`       | `string`                       | Yes      | A `serve.models` alias, or an SDK model constant name    |
-| `models[].modelConfig` | `object`                       | No       | Config to assess with, merged over an alias's own config |
-| `execution`            | `"sequential" \| "concurrent"` | No       | Co-residency assumption; `sequential` by default         |
-| `policy`               | `"interactive-v1"`             | No       | Headroom policy; withholds 20% of available memory       |
+| Field                  | Type       | Required | Meaning                                                  |
+| ---------------------- | ---------- | -------- | -------------------------------------------------------- |
+| `models`               | `object[]` | Yes      | Up to 16 models, assessed as if loaded at the same time  |
+| `models[].model`       | `string`   | Yes      | A `serve.models` alias, or an SDK model constant name    |
+| `models[].modelConfig` | `object`   | No       | Config to assess with, merged over an alias's own config |
 
 An alias is assessed with the config it would load with. `modelConfig` is merged over it key
 by key, nested objects included, so `{"ctx_size": 32768}` asks about a longer context and an
 override inside `contextParams` keeps the alias's other context params. Model sources cannot be given in the request:
-companion sources in `modelConfig` (`*ModelSrc` keys) must name SDK model constants, so a request
+companion sources in `modelConfig` (every `*Src` key, such as `llmModelSrc` or `tokenizerSrc`,
+and every entry of a `*Srcs` list) must name SDK model constants, so a request
 never makes the server read a path or URL of its choosing.
 
-The answer is advisory. `verdict` is `likely-fits`, `likely-too-large` or `unknown`, combined
-across every model under `execution`. `unknown` means the evidence supports neither answer, not
-"no". `models` carries one verdict per entry in request order, and `budget` the memory it was
-judged against.
+The answer is advisory. `verdict` is `fits`, `does-not-fit` or `unknown` for every model loaded
+together. `unknown` means the load would start but cannot be sized: an engine with no fitter, a
+load the fitter cannot project, a model with no registry description that is not on disk, or a
+device that reported no free memory. A `modelConfig` the engine's schema refuses is a 400. Any other
+load that `loadModel` would refuse fails the request.
+
+`pools` gives each memory pool the verdict was judged on, with what the set takes from it and the
+lowest free and total figures reported for it. Every device that shares the host's memory joins
+the `host` pool; a GPU with its own memory is a pool of its own, keyed by its `id`. A single model's
+`verdict` is its own `status`. A set of models does not fit when any pool would use more than 90%
+of its free memory.
+
+`models` carries each entry's engine fit result, in request order: its own `status`, one row per
+device the load uses (the host last), and its `stats`: the context size and GPU layers for a
+llama.cpp load with a verdict, empty otherwise. A row's `id` is the PCI bus ID
+where the backend reports one, so the same GPU matches across engines.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/models/fit \
+curl -sS http://localhost:11435/qvac/v1/models/fit \
   -H "Content-Type: application/json" \
   -d '{"models":[{"model":"my-llm","modelConfig":{"ctx_size":8192}}]}'
 ```
@@ -365,45 +379,63 @@ curl -sS http://localhost:11434/qvac/v1/models/fit \
 ```json
 {
   "object": "model_fit",
-  "verdict": "likely-fits",
-  "basis": "system-memory",
-  "execution": "sequential",
-  "evidence": "native-fit",
-  "budget": {
-    "totalBytes": 25769803776,
-    "usedBytes": 21211299840,
-    "availableBytes": 4558503936,
-    "reservedBytes": 911700787,
-    "availableAfterReserveBytes": 3646803149
-  },
+  "verdict": "fits",
+  "pools": [
+    {
+      "id": "0000:00:04.0",
+      "unified": false,
+      "usedBytes": 1082130432,
+      "freeBytes": 15230566400,
+      "totalBytes": 16037969920
+    },
+    {
+      "id": "host",
+      "unified": true,
+      "usedBytes": 234881024,
+      "freeBytes": 27416264704,
+      "totalBytes": 34355544064
+    }
+  ],
   "models": [
     {
       "model": "my-llm",
-      "name": "QWEN3_600M_INST_Q4",
-      "verdict": "likely-fits",
-      "evidence": "native-fit",
-      "device": "gpu",
-      "reasons": ["..."]
+      "status": "fits",
+      "devices": [
+        {
+          "id": "0000:00:04.0",
+          "name": "Vulkan0",
+          "unified": false,
+          "usedBytes": 1082130432,
+          "freeBytes": 15230566400,
+          "totalBytes": 16037969920
+        },
+        {
+          "id": "CPU",
+          "name": "CPU",
+          "unified": true,
+          "usedBytes": 234881024,
+          "freeBytes": 27416264704,
+          "totalBytes": 34355544064
+        }
+      ],
+      "stats": { "ctxSize": 8192, "gpuLayers": 37 }
     }
-  ],
-  "reasons": ["..."],
-  "assumptions": ["..."]
+  ]
 }
 ```
 
 ### Errors
 
-| HTTP | `error.code`        | When                                                       |
-| ---- | ------------------- | ---------------------------------------------------------- |
-| 400  | `invalid_json`      | Body is not valid JSON                                     |
-| 400  | `invalid_models`    | `models` is missing or empty, or an entry is malformed     |
-| 400  | `too_many_models`   | `models` carries more than 16 entries                      |
-| 400  | `invalid_execution` | `execution` is not `sequential` or `concurrent`            |
-| 400  | `invalid_policy`    | `policy` is not `interactive-v1`                           |
-| 400  | `invalid_model_src` | A companion source in `modelConfig` is not an SDK constant |
-| 400  | `invalid_request`   | The body carries an unknown field                          |
-| 404  | `model_not_found`   | An entry names neither an alias nor an SDK model constant  |
-| 500  | `model_fit_failed`  | The SDK assessment failed                                  |
+| HTTP | `error.code`           | When                                                                            |
+| ---- | ---------------------- | ------------------------------------------------------------------------------- |
+| 400  | `invalid_json`         | Body is not valid JSON                                                          |
+| 400  | `invalid_models`       | `models` is missing or empty, or an entry is malformed                          |
+| 400  | `too_many_models`      | `models` carries more than 16 entries                                           |
+| 400  | `invalid_model_src`    | A companion source in `modelConfig` is not an SDK constant                      |
+| 400  | `invalid_model_config` | An entry's config is one the engine's schema refuses                            |
+| 400  | `invalid_request`      | The body carries an unknown field                                               |
+| 404  | `model_not_found`      | An entry names neither an alias nor an SDK model constant                       |
+| 500  | `model_fit_failed`     | The SDK assessment failed, or an entry is another load `loadModel` would refuse |
 
 ## `POST /qvac/v1/translate`
 
@@ -440,7 +472,7 @@ whole `text`, and these arrive together once the batch finishes. Both end with o
 A client disconnect cancels the request and its result is dropped.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/translate \
+curl -sS http://localhost:11435/qvac/v1/translate \
   -H "Content-Type: application/json" \
   -d '{"model":"ta-en","text":"வணக்கம் உலகம்"}'
 ```
@@ -511,7 +543,7 @@ OCR cannot be cancelled: a client disconnect drops the result, but the image is 
 the end.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/ocr \
+curl -sS http://localhost:11435/qvac/v1/ocr \
   -F model=ocr-en \
   -F image=@receipt.png
 ```
@@ -582,7 +614,7 @@ Classification cannot be cancelled: a client disconnect drops the result, but th
 still classified.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/classifications \
+curl -sS http://localhost:11435/qvac/v1/classifications \
   -F model=classifier \
   -F image=@photo.jpg \
   -F top_k=1
@@ -643,7 +675,7 @@ is `registry://<registrySource>/<registryPath>`.
 The first request after start-up connects to the registry over P2P and can take several seconds.
 
 ```bash
-curl -sS "http://localhost:11434/qvac/v1/registry/models?addon=llm&search=qwen3&limit=1"
+curl -sS "http://localhost:11435/qvac/v1/registry/models?addon=llm&search=qwen3&limit=1"
 ```
 
 ```json
@@ -686,7 +718,7 @@ Fetch one registry entry by the `registrySource` and `registryPath` a list row c
 shape as a list row. Both params are required.
 
 ```bash
-curl -sS -G http://localhost:11434/qvac/v1/registry/models/lookup \
+curl -sS -G http://localhost:11435/qvac/v1/registry/models/lookup \
   --data-urlencode registrySource=hf \
   --data-urlencode registryPath=unsloth/Qwen3-0.6B-GGUF/blob/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q4_0.gguf
 ```
@@ -740,7 +772,7 @@ The other `audioGen()` fields (`bpm`, `keyscale`, `timesignature`, `vocalLanguag
 accepted under the same names.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/audio/generations \
+curl -sS http://localhost:11435/qvac/v1/audio/generations \
   -H 'Content-Type: application/json' \
   -d '{ "model": "music", "caption": "calm lofi piano", "lyrics": "[Instrumental]", "duration": 30 }'
 ```
@@ -780,7 +812,7 @@ above full scale; the job then fails with `audio_edit_failed` (`sourceAudio must
 in [-1, 1]`). Lowering the source's gain avoids it.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/audio/edits \
+curl -sS http://localhost:11435/qvac/v1/audio/edits \
   -F model=music \
   -F sourceAudio=@song.wav \
   -F 'operations=[{"type":"repaint","caption":"analog synth solo","start":10,"end":20}]'
@@ -922,7 +954,7 @@ Upscaling cannot be cancelled: a client disconnect drops the result, but the
 image is still upscaled to the end.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/images/upscale \
+curl -sS http://localhost:11435/qvac/v1/images/upscale \
   -F model=upscaler -F image=@photo.png -F repeats=1
 ```
 
@@ -1039,9 +1071,9 @@ then `[DONE]`. A block that fails after its first frame ends the stream with an 
 event and no `[DONE]`. A client disconnect cancels the block.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/world/scenes \
+curl -sS http://localhost:11435/qvac/v1/world/scenes \
   -F model=abot-world -F prompt='| unknown | A forest path' -F image=@first-frame.jpg
-curl -sS http://localhost:11434/qvac/v1/world/scenes/scene_3f1c.../steps \
+curl -sS http://localhost:11435/qvac/v1/world/scenes/scene_3f1c.../steps \
   -H 'Content-Type: application/json' -d '{"keys":["W"]}'
 ```
 

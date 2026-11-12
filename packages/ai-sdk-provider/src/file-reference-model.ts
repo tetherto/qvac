@@ -13,6 +13,7 @@ import {
 import { mergeHeaders } from './headers.js'
 
 interface ResolveOptions {
+  /** No trailing slash: `createExternalQvac` normalizes it. */
   readonly baseURL: string
   readonly headers: Record<string, string>
   readonly fetch?: typeof fetch
@@ -34,7 +35,7 @@ async function resolvePrompt(
           if (part.type !== 'file' || part.data.type !== 'reference') return part
           const id = resolveProviderReference({ reference: part.data.reference, provider: 'qvac' })
           const response = await getFromApi({
-            url: `${options.baseURL.replace(/\/+$/, '')}/files/${encodeURIComponent(id)}/content`,
+            url: `${options.baseURL}/files/${encodeURIComponent(id)}/content`,
             headers: mergeHeaders(options.headers, headers),
             failedResponseHandler,
             successfulResponseHandler,

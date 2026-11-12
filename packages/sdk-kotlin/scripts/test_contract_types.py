@@ -56,6 +56,13 @@ class ContractTypesTest(unittest.TestCase):
         self.assertIn('progressType = "modelProgress"', methods)
         self.assertIn("sealed interface QvacProgressEvent", methods)
         self.assertNotIn('progressType = "loadModel:progress"', methods)
+        # Speech frames are decoded at the public typed method boundary.
+        for line in methods.splitlines():
+            if line.startswith("fun QvacClient.`textToSpeech`("):
+                self.assertTrue(line.endswith("streamTyped<io.tether.qvac.sdk.generated.schema.TextToSpeechRequest, io.tether.qvac.sdk.generated.schema.TextToSpeechResponse>(request).map { it.withDecodedPcm() }"), line)
+            if line.startswith("fun QvacClient.`textToSpeechStream`("):
+                self.assertTrue(line.endswith("(request, input).map { it.withDecodedPcm() }"), line)
+        self.assertEqual(methods.count(".withDecodedPcm()"), 2)
 
     def test_same_field_under_two_methods_shares_one_type(self):
         def request(title, method):

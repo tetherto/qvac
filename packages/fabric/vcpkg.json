@@ -22,7 +22,7 @@
           "platform": "linux & x64"
         }
       ],
-      "version>=": "11739.0.0#1"
+      "version>=": "11739.2.0"
     },
     {
       "name": "qvac-lint-cpp",

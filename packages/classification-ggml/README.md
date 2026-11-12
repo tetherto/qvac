@@ -1,6 +1,6 @@
 # @qvac/classification-ggml
 
-GGML-powered vision addon for QVAC. `ImageClassifier` runs a MobileNetV3-Small triage model on CPU from a weights path you pass in. `MegaLoc` produces visual place descriptors using a local GGUF on CPU or a Fabric GPU backend. `@qvac/inference` downloads the default classifier from the registry when `modelSrc` is omitted.
+GGML-powered vision addon for QVAC. `ImageClassifier` runs a MobileNetV3-Small triage model on CPU from a weights path you pass in. `MegaLoc` produces visual place descriptors using a local GGUF on CPU or a Fabric GPU backend. `BridgeDepth` estimates stereo disparity from a rectified image pair, also from a local GGUF. `@qvac/inference` downloads the default classifier from the registry when `modelSrc` is omitted.
 
 ## MegaLoc image embeddings
 
@@ -18,6 +18,88 @@ await model.destroy()
 **F16 is the default conversion format.** F16 body + Q6_K projection is the other
 supported format. MegaLoc weights are supplied separately; the package includes
 a local conversion script and does not download or redistribute these GGUFs.
+
+## BridgeDepth stereo disparity
+
+**Detailed BridgeDepth guide: [API, accuracy, GGUF conversion and tests](docs/bridgedepth.md).**
+
+```js
+const { BridgeDepth } = require('@qvac/classification-ggml')
+
+const model = new BridgeDepth({ modelPath: './bridgedepth-vits-f32.gguf' })
+await model.load()
+const { width, height, disparity } = await model.infer(leftPng, rightPng) // left-view disparity in pixels
+await model.destroy()
+```
+
+BridgeDepth weights are supplied separately; the package includes a local
+conversion script and does not download or redistribute the GGUF.
+
+## Check model fit
+
+`assessFit` checks whether a MobileNet, MegaLoc or BridgeDepth GGUF fits in the
+memory that is free now. It reads only GGUF metadata: it builds the same
+graphs the load and one inference build and sizes their buffers without
+reading weight data or allocating them. The model kind comes from the file.
+
+```js
+const { assessFit } = require('@qvac/classification-ggml')
+
+const fit = await assessFit({
+  modelPath: '/abs/path/bridgedepth-vits-f32.gguf',
+  backend: 'MTL0', // optional, as MegaLoc and BridgeDepth take it
+  threads: 8, // optional, the CPU threads the model will use
+  marginBytes: 512 * 1024 * 1024, // optional, 256 MiB when omitted
+  workload: { width: 1280, height: 720 } // BridgeDepth input size, optional
+})
+
+fit.status // 'fits' | 'does-not-fit' | 'unknown'
+fit.devices // [{ id, name, unified, usedBytes, freeBytes, totalBytes }]
+fit.stats // {}
+```
+
+`devices` holds the selected device, then the host CPU. The device row carries
+the weights and the compute buffer; the CPU row carries the compute buffer and
+workspace of graph parts that fall back to the CPU, plus the host memory the
+addon stages while loading and running. A load on the CPU, which is every
+MobileNet load, is one row, and `unknown` has none. `id` is the PCI bus ID when
+the backend reports one, the device name otherwise. `unified` is true for
+memory the host owns: the CPU, an integrated GPU, a GPU that shares the host's
+memory, Android's OpenCL GPU, and a device that reports no memory of its own,
+which takes the host's figures.
+
+The sizes are measured, so the verdict is direct: `fits` when every memory pool
+holds what the load takes with `marginBytes` left free, `does-not-fit`
+otherwise. Unified rows and the host row are one pool, judged against the
+lowest free figure among them; a GPU with its own memory is a pool alone.
+`unknown` means a device's memory could not be read or there is no CPU device.
+`marginBytes` defaults to 256 MiB. On
+iOS every unified row is first capped at the app's memory limit,
+`os_proc_available_memory()`.
+
+`workload` only matters for BridgeDepth, whose compute buffers grow with the
+input. It defaults to 1280x720, the largest input the model authors
+recommend; the addon does not downsample. `threads` defaults to 8, as
+`MegaLoc` and `BridgeDepth` do.
+
+Tensor data is not read, so a file whose weights `load()` rejects can still be
+reported as fitting. The verdict covers one input size: BridgeDepth keeps the
+resized position embedding of up to 8 input sizes, so a caller that cycles
+through sizes holds a little more host memory per size. Each call initializes the selected backend, so it costs
+about what a backend init costs.
+
+`assessFit` returns a Promise and concurrent calls run one at a time. A request
+with a relative `modelPath`, an option of the wrong type, a string holding a
+NUL character or an out-of-range number rejects with a
+`TypeError` or `RangeError` before the addon is called. A model that cannot be
+read, a GGUF of another model, an unavailable backend, a BridgeDepth size
+inference would reject, or an otherwise invalid request rejects with an
+`InvalidArgument` error, and a backend that fails to initialize or a graph that
+cannot be sized rejects with an `InternalError`.
+
+`backendsDir` overrides where the dynamic ggml backends are loaded from. Every
+library in it is loaded as native code, so pass only a trusted directory, as
+for `createInstance`.
 
 ## MobileNet classification
 
@@ -161,6 +243,10 @@ suite, manually convert both MegaLoc formats as described in
 `test/fixtures/` or set `QVAC_MEGALOC_F16_MODEL_PATH` and
 `QVAC_MEGALOC_MIXED_MODEL_PATH` to your converted files. These weights are not
 bundled with the addon.
+
+BridgeDepth tests need `QVAC_BRIDGEDEPTH_MODEL_PATH`, see
+[docs/bridgedepth.md](docs/bridgedepth.md#tests); without it, the tests that
+need weights are skipped.
 
 ### Mobile tests
 

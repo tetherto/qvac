@@ -497,3 +497,46 @@ test('batchCompletion client: routes handlers by position when ids are omitted',
   await toolPromptFinal.toolCalls[0]?.invoke?.()
   t.alike(calls, ['inline:Tokyo'])
 })
+
+test('batchCompletion client: forwards each prompt toolSearch limits', async (t) => {
+  let capturedRequest: BatchCompletionStreamRequest | undefined
+  const deferred = {
+    type: 'function' as const,
+    name: 'create_issue',
+    description: 'Open an issue',
+    deferLoading: true,
+    parameters: { type: 'object' as const, properties: {} }
+  }
+  const run = createBatchCompletionRun(
+    {
+      modelId: 'llama',
+      prompts: [
+        {
+          id: 'limited',
+          history: [{ role: 'user', content: 'open an issue' }],
+          tools: [deferred],
+          toolSearch: { defaultLimit: 1, maxLimit: 2 }
+        },
+        { id: 'default', history: [{ role: 'user', content: 'open an issue' }], tools: [deferred] }
+      ]
+    },
+    function streamFactory(request) {
+      capturedRequest = request
+      return mockResponses([
+        {
+          type: 'batchCompletionStream',
+          done: true,
+          ids: ['limited', 'default'],
+          events: [
+            { id: 'limited', event: { type: 'completionDone', seq: 0 } },
+            { id: 'default', event: { type: 'completionDone', seq: 0 } }
+          ]
+        }
+      ])
+    }
+  )
+
+  await collect(run.events)
+  t.alike(capturedRequest?.prompts[0]?.toolSearch, { defaultLimit: 1, maxLimit: 2 })
+  t.is(capturedRequest?.prompts[1]?.toolSearch, undefined)
+})
