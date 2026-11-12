@@ -238,7 +238,7 @@
   },
   "dependencies": {
     "@qvac/asr-ggml": "^0.12.0",
-    "@qvac/audiogen-ggml": "^0.10.0",
+    "@qvac/audiogen-ggml": "^0.10.1",
     "@qvac/bci-whispercpp": "^0.15.0",
     "@qvac/classification-ggml": "^0.36.0",
     "@qvac/decoder-audio": "^0.9.0",
@@ -248,7 +248,7 @@
     "@qvac/ggml-rpc-server": "^0.9.0",
     "@qvac/inference": "^0.23.0",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.69.0",
+    "@qvac/llm-llamacpp": "^0.70.0",
     "@qvac/logging": "^0.1.0",
     "@qvac/ocr-ggml": "^0.33.0",
     "@qvac/translation-nmtcpp": "^0.25.0",

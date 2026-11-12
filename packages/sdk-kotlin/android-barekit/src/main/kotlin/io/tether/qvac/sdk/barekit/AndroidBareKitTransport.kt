@@ -26,6 +26,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import to.holepunch.bare.kit.Worklet
 import to.holepunch.bare.stow.host.Ipc
+import to.holepunch.bare.stow.host.WorkerError
 
 /** The worker started by bare-stow's `bare-kit` harness, with bare-rpc over its `ipc`. */
 class AndroidBareKitTransport private constructor(
@@ -121,6 +122,9 @@ class AndroidBareKitTransport private constructor(
                 )
             } catch (error: Throwable) {
                 if (error is CancellationException) throw error
+                // A start that fails hands back no Ipc to watch, so the error code is the
+                // only sign of whether the worker reported its exit.
+                if (error is WorkerError && error.code in UNREPORTED_EXIT_CODES) uncleanStop = true
                 throw QvacWorkerStartException("Failed to start QVAC BareKit worker", error)
             }
             watchExit(started.ipc)
@@ -157,6 +161,9 @@ class AndroidBareKitTransport private constructor(
             put("deviceModel", android.os.Build.MODEL)
             override?.forEach { (key, value) -> put(key, value) }
         }
+
+        /** bare-stow-host codes for a worker that ended before ready without reporting its exit. */
+        private val UNREPORTED_EXIT_CODES = setOf("WORKER_TIMEOUT", "WORKER_CLOSED", "WORKER_KILLED", "TRANSPORT_ERROR")
 
         private const val DEFAULT_MEMORY_LIMIT_BYTES = 0
         private const val DEFAULT_LINGER_MS = 30_000
