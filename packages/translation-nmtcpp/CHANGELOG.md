@@ -5,18 +5,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Changed
-
-- `qvac-lib-inference-addon-cpp` dependency floor raised `1.5.0` -> `1.6.0`
-  ([#5728](https://github.com/tetherto/qvac/pull/5728)). In 1.6.0 a runtime stat value is
-  `RuntimeStatValue = std::variant<double, int64_t, std::string>`, so
-  `TranslationModel::runtimeStats()` and the C++ tests now build their stats
-  with `RuntimeStatValue` instead of `std::variant<double, int64_t>`.
-  Compile-time only. The stats keys, values and types that JavaScript sees
-  stay the same.
-
 ## [0.25.1] - 2026-11-11
 
 ### Changed
