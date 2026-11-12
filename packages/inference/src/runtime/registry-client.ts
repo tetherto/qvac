@@ -1,4 +1,5 @@
 import { QVACRegistryClient } from '@qvac/registry-client'
+import { promises as fsPromises } from 'bare-fs'
 import { getCacheDir } from '@/utils/cache/paths'
 import {
   registerSwarm,
@@ -38,18 +39,32 @@ function isFdLockError(error: unknown): boolean {
   return false
 }
 
+export async function removeInvalidRegistryStore(
+  error: unknown,
+  storage: string
+): Promise<boolean> {
+  if ((error as { code?: unknown } | null)?.code !== 'DEVICE_FILE') return false
+  logger.warn(
+    `Registry corestore at ${storage} is invalid (${error instanceof Error ? error.message : String(error)}); removing it so it can be rebuilt`
+  )
+  await fsPromises.rm(storage, { recursive: true, force: true })
+  return true
+}
+
 async function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 async function initRegistryClient(): Promise<QVACRegistryClient> {
   let lastError: unknown
+  let storeRemoved = false
   const deadline = Date.now() + MAX_TOTAL_WAIT_MS
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const storage = getCacheDir(`registry-corestore/${DEFAULT_REGISTRY_CORE_KEY}`)
     try {
       const client = new QVACRegistryClient({
         registryCoreKey: DEFAULT_REGISTRY_CORE_KEY,
-        storage: getCacheDir(`registry-corestore/${DEFAULT_REGISTRY_CORE_KEY}`),
+        storage,
         corestoreOpts: { wait: false }
       })
 
@@ -73,6 +88,10 @@ async function initRegistryClient(): Promise<QVACRegistryClient> {
       return client
     } catch (error) {
       lastError = error
+      if (!storeRemoved && (await removeInvalidRegistryStore(error, storage))) {
+        storeRemoved = true
+        continue
+      }
       if (isFdLockError(error) && attempt < MAX_RETRIES) {
         const remaining = deadline - Date.now()
         if (remaining <= 0) {
