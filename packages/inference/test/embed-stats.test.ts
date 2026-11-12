@@ -43,3 +43,13 @@ test('embed: preserves CPU fallback and does not infer names for older addons', 
   t.alike(legacy.stats, { backendDevice: 'gpu' })
   t.is((await embed({ modelId: 'embed-backend-empty', text: 'hello' })).stats, undefined)
 })
+
+test('embed: drops an empty or non-string backendName', async (t) => {
+  const values: unknown[] = ['', 1, null, ['metal']]
+  for (const [index, backendName] of values.entries()) {
+    const id = `embed-backend-invalid-${index}`
+    fixture(t, id, { backendDevice: 'gpu', backendName } as unknown as EmbedStats)
+    const response = await embed({ modelId: id, text: 'hello' })
+    t.alike(response.stats, { backendDevice: 'gpu' })
+  }
+})

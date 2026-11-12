@@ -158,3 +158,11 @@ test('normalizeCompletionStats: preserves the reported backend family without in
   t.alike(normalizeCompletionStats({ backendDevice: 'gpu' }), { backendDevice: 'gpu' })
   t.is(normalizeCompletionStats({}), undefined)
 })
+
+test('normalizeCompletionStats: drops an empty or non-string backendName', (t) => {
+  for (const backendName of ['', 1, null, ['metal']]) {
+    const stats = { backendName } as unknown as Parameters<typeof normalizeCompletionStats>[0]
+    t.is(normalizeCompletionStats(stats), undefined)
+    t.alike(normalizeCompletionStats({ ...stats, backendDevice: 'gpu' }), { backendDevice: 'gpu' })
+  }
+})
