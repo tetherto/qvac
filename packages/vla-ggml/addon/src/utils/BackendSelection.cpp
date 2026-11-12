@@ -40,6 +40,28 @@ bool backendNameMatchesFamily(
   return family == "metal" && lowercasedBackendName.rfind("mtl", 0) == 0;
 }
 
+std::string backendFamilyName(std::string_view backendName) {
+  std::string family(backendName);
+  std::transform(
+      family.begin(), family.end(), family.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+      });
+  while (!family.empty() &&
+         std::isdigit(static_cast<unsigned char>(family.back())) != 0) {
+    family.pop_back();
+  }
+  if (family == "none" || family == "unknown") {
+    return {};
+  }
+  if (family == "mtl") {
+    return "metal";
+  }
+  if (family == "gpuopencl") {
+    return "opencl";
+  }
+  return family;
+}
+
 std::vector<std::string> parseBackendOverride(const std::string& backendStr) {
   std::vector<std::string> families;
   std::string current;

@@ -113,13 +113,6 @@ function pickPrimaryGgufPath(files: string[]): string {
   return files.find((p) => FIRST_SHARD_REGEX.test(p)) || files[0];
 }
 
-function backendFamily(name: string): string {
-  const family = name.toLowerCase().replace(/\d+$/, "");
-  if (family === "mtl") return "metal";
-  if (family === "gpuopencl") return "opencl";
-  return family;
-}
-
 // Largest camera count the native resolver accepts (GROOT_MAX_SANE_NUM_CAMERAS)
 // — validated here too so a typo is a JS config error instead of a native throw.
 const MAX_NUM_CAMERAS = 64;
@@ -622,12 +615,7 @@ class VlaModel {
       return;
     }
     if (outputData && typeof outputData === "object") {
-      const stats = {
-        ...outputData,
-        ...(this._backendName !== null && {
-          backendName: backendFamily(this._backendName),
-        }),
-      };
+      const stats = outputData;
       const actions = this._pending ? this._pending.actions : null;
       this._pending = null;
       this._job.end(this.opts.stats ? stats : null, { actions, stats });
@@ -704,6 +692,9 @@ class VlaModel {
               : "",
         },
         (jsHandle, eventTypeName, outputData, errorData) => {
+          // A destroyed instance can still deliver queued events, e.g. when a
+          // cancel task outlives destroyInstance() and drops the last native
+          // owner later. _job is shared across instances, so drop them.
           if (generation !== this._instanceGeneration) return;
           this._onAddonEvent(jsHandle, eventTypeName, outputData, errorData);
         },
@@ -1100,7 +1091,10 @@ namespace VlaModel {
     total_ms: number;
     /** 0 = CPU backend, 1 = GPU backend (Vulkan / Metal / OpenCL). */
     backendDevice: number;
-    /** Backend family, such as `cpu`, `cuda`, `metal`, or `vulkan`. */
+    /**
+     * Backend family, such as `cpu`, `cuda`, `metal`, or `vulkan`. Absent when
+     * the native side cannot name the backend.
+     */
     backendName?: string;
   }
 
