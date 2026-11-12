@@ -815,9 +815,6 @@ importers:
       bare-path:
         specifier: ^3.1.1
         version: 3.1.1
-      bare-rpc:
-        specifier: ^1.3.9
-        version: 1.5.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
       bare-stream:
         specifier: ^2.13.3
         version: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -1666,8 +1663,8 @@ importers:
         specifier: ^3.0.1
         version: 3.1.1
       bare-rpc:
-        specifier: ^1.3.9
-        version: 1.5.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+        specifier: ^2.0.0
+        version: 2.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
       bare-sidecar:
         specifier: ^0.5.15
         version: 0.5.15(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -6017,11 +6014,14 @@ packages:
   bare-readline@1.3.1:
     resolution: {integrity: sha512-QtSU4ZfgQcDI6AQssjDFqTiRe4rCiciMn+Yqx6siMJZBIftAIFrNSOK0sa5SBrmNv/a7CD9Dm0onUDCRyn5Fdg==}
 
-  bare-rpc@1.5.0:
-    resolution: {integrity: sha512-R26nV7D6ObZXOpxK7MgBaiknaFmxnCGiqxHaFb26smvcfxH28CdWPXnMsrggheG+xhvQwdoWGuU9sygAFKW8Hg==}
+  bare-rpc@2.0.0:
+    resolution: {integrity: sha512-E2dHwvuN3CfCW+F3nS3grxusbWQzY7pEoeinjhGq0UMgCcF5sIg6EtM46AyyFd+cKqbK5/ufuC7NaFVq5P2I2A==}
     peerDependencies:
+      bare-abort-controller: '*'
       bare-buffer: '*'
     peerDependenciesMeta:
+      bare-abort-controller:
+        optional: true
       bare-buffer:
         optional: true
 
@@ -16055,16 +16055,16 @@ snapshots:
       - bare-events
       - react-native-b4a
 
-  bare-rpc@1.5.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)):
+  bare-rpc@2.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)):
     dependencies:
       b4a: 1.8.1
       bare-stream: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
       compact-encoding: 3.3.0
       safety-catch: 1.0.3
     optionalDependencies:
+      bare-abort-controller: 1.1.2
       bare-buffer: 3.6.2
     transitivePeerDependencies:
-      - bare-abort-controller
       - bare-events
       - react-native-b4a
 
