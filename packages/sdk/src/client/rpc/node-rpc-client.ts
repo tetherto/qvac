@@ -456,6 +456,10 @@ export async function createDuplexSession(payload: string, commandId: number) {
   const req = rpc.request(commandId)
   const requestStream = req.createRequestStream()
   const responseStream = req.createResponseStream({ encoding: 'utf-8' })
+  // bare-rpc cancels the request when the response stream closes first, which
+  // destroys this stream with CANCELLED. Consumers read errors from the
+  // response stream, so pass the error there instead of throwing it uncaught.
+  requestStream.on('error', (error: unknown) => responseStream.destroy(error as Error))
   requestStream.write(payload, 'utf-8')
 
   // Destroy on worker death so consumers' for-await throws instead of hangs.

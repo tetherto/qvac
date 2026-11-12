@@ -4,6 +4,8 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <initializer_list>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -15,6 +17,8 @@
 #include <ggml.h>
 #include <gguf.h>
 #include <inference-addon-cpp/Errors.hpp>
+
+#include "model-interface/GgmlBackend.hpp"
 
 namespace classification_ggml::graph {
 
@@ -42,17 +46,46 @@ void fp16ToFp32(const void* src, float* out, size_t count) {
   }
 }
 
-struct ggml_tensor* cloneRaw(
-    struct ggml_context* bundleCtx, const gguf_context* gguf,
-    struct ggml_context* ggufCtx, const char* name) {
-  const int idx = gguf_find_tensor(gguf, name);
-  if (idx < 0) {
-    raise(std::string("Missing tensor in GGUF: ") + name);
-  }
-  struct ggml_tensor* src = ggml_get_tensor(ggufCtx, name);
+// What a GGUF tensor may hold. Conv weights are copied as stored and the
+// graph takes them as F16; BN, SE bias and classifier tensors are read on the
+// host by loadVector1d, which takes F16 or F32.
+enum class TensorKind { ConvWeight, Vector };
+
+/// Rejects a tensor that is missing or whose type or shape (ggml order,
+/// innermost first) differs from the compiled-in config. Unchecked, a wrong
+/// shape trips a GGML_ASSERT in the graph, which aborts the process.
+void expectTensor(
+    struct ggml_context* ggufCtx, const std::string& name, TensorKind kind,
+    std::initializer_list<int64_t> shape) {
+  const struct ggml_tensor* src = ggml_get_tensor(ggufCtx, name.c_str());
   if (src == nullptr) {
-    raise(std::string("Cannot resolve tensor from ggml ctx: ") + name);
+    raiseInvalid("Missing tensor in GGUF: " + name);
   }
+  const bool typeOk =
+      kind == TensorKind::ConvWeight
+          ? src->type == GGML_TYPE_F16
+          : src->type == GGML_TYPE_F16 || src->type == GGML_TYPE_F32;
+  if (!typeOk) {
+    raiseInvalid("Unsupported tensor type for " + name);
+  }
+  size_t axis = 0;
+  for (const int64_t dimension : shape) {
+    if (src->ne[axis++] != dimension) {
+      raiseInvalid("Wrong shape for tensor " + name);
+    }
+  }
+  for (; axis < GGML_MAX_DIMS; ++axis) {
+    if (src->ne[axis] != 1) {
+      raiseInvalid("Wrong rank for tensor " + name);
+    }
+  }
+}
+
+/// Copies a checked tensor's declaration (see expectTensor) into `bundleCtx`.
+struct ggml_tensor* cloneRaw(
+    struct ggml_context* bundleCtx, struct ggml_context* ggufCtx,
+    const char* name) {
+  struct ggml_tensor* src = ggml_get_tensor(ggufCtx, name);
   struct ggml_tensor* dst =
       ggml_new_tensor(bundleCtx, src->type, ggml_n_dims(src), src->ne);
   ggml_set_name(dst, name);
@@ -316,35 +349,83 @@ void ComputeGraph::reset() {
   }
 }
 
-WeightsBundle loadWeights(
-    const std::string& ggufPath, ggml_backend_t backend,
-    std::vector<std::string>& outLabels) {
-  outLabels.clear();
+namespace {
+
+struct GgufFile {
+  std::unique_ptr<gguf_context, decltype(&gguf_free)> gguf{nullptr, gguf_free};
+  std::unique_ptr<struct ggml_context, decltype(&ggml_free)> ctx{
+      nullptr, ggml_free};
+  uint64_t fileBytes = 0;
+};
+
+/// `metadataOnly` leaves the tensor data in the file. Rejects a file whose
+/// tensor data runs past its end: a metadata-only open does not read the data,
+/// so it would not notice.
+GgufFile openGguf(const std::string& ggufPath, bool metadataOnly) {
   struct ggml_context* ggufCtx = nullptr;
-  gguf_init_params params{/*no_alloc=*/false, &ggufCtx};
-  gguf_context* gguf = gguf_init_from_file(ggufPath.c_str(), params);
-  if (gguf == nullptr) {
+  gguf_init_params params{/*no_alloc=*/metadataOnly, &ggufCtx};
+  GgufFile file;
+  file.gguf.reset(gguf_init_from_file(ggufPath.c_str(), params));
+  file.ctx.reset(ggufCtx);
+  if (file.gguf == nullptr || file.ctx == nullptr) {
     raiseInvalid("Failed to open GGUF file: " + ggufPath);
   }
-  std::unique_ptr<gguf_context, decltype(&gguf_free)> ggufGuard(
-      gguf, gguf_free);
-  std::unique_ptr<struct ggml_context, decltype(&ggml_free)> ggufCtxGuard(
-      ggufCtx, ggml_free);
+  std::error_code error;
+  file.fileBytes = std::filesystem::file_size(ggufPath, error);
+  if (error) {
+    raiseInvalid("Failed to read the size of GGUF file: " + ggufPath);
+  }
+  const gguf_context* gguf = file.gguf.get();
+  const uint64_t dataOffset = gguf_get_data_offset(gguf);
+  for (int64_t i = 0; i < gguf_get_n_tensors(gguf); ++i) {
+    const char* name = gguf_get_tensor_name(gguf, i);
+    const struct ggml_tensor* tensor = ggml_get_tensor(file.ctx.get(), name);
+    const uint64_t offset = gguf_get_tensor_offset(gguf, i);
+    if (tensor == nullptr || dataOffset > file.fileBytes ||
+        offset > file.fileBytes - dataOffset ||
+        ggml_nbytes(tensor) > file.fileBytes - dataOffset - offset) {
+      raiseInvalid(std::string("Truncated tensor in GGUF: ") + name);
+    }
+  }
+  return file;
+}
 
+/// The key's value type, or a rejection when the key is present with another.
+/// Returns false when the key is absent.
+bool findKey(
+    const gguf_context* gguf, const std::string& key, gguf_type type,
+    int64_t& index) {
+  index = gguf_find_key(gguf, key.c_str());
+  if (index < 0) {
+    return false;
+  }
+  if (gguf_get_kv_type(gguf, index) != type) {
+    raiseInvalid("GGUF metadata '" + key + "' has the wrong type");
+  }
+  return true;
+}
+
+/// Checks the metadata, reads the labels and declares every weight tensor
+/// with the dtype the graph uses. Nothing is allocated and no tensor data is
+/// read. Returns the BN epsilon.
+float declareWeights(
+    const gguf_context* gguf, struct ggml_context* ggufCtx,
+    WeightsBundle& bundle, std::vector<std::string>& outLabels) {
+  outLabels.clear();
   // Default to the architecture-standard 0.001 (PyTorch's BN default).
   // Never silently fall back to torchvision's 1e-5 reference value.
   float bnEps = BATCH_NORM_EPSILON;
   {
-    const int64_t epsIdx = gguf_find_key(gguf, "mobilenet.bn_eps");
-    if (epsIdx >= 0) {
+    int64_t epsIdx = -1;
+    if (findKey(gguf, "mobilenet.bn_eps", GGUF_TYPE_FLOAT32, epsIdx)) {
       bnEps = gguf_get_val_f32(gguf, static_cast<int>(epsIdx));
     }
   }
 
   {
     uint32_t numClasses = NUM_CLASSES;
-    const int64_t idxN = gguf_find_key(gguf, "mobilenet.num_classes");
-    if (idxN >= 0) {
+    int64_t idxN = -1;
+    if (findKey(gguf, "mobilenet.num_classes", GGUF_TYPE_UINT32, idxN)) {
       numClasses = gguf_get_val_u32(gguf, static_cast<int>(idxN));
     }
     // Mismatch silently corrupts the classifier upload and the per-call
@@ -360,8 +441,8 @@ WeightsBundle loadWeights(
     }
     for (uint32_t i = 0; i < numClasses; ++i) {
       const std::string key = "mobilenet.class_" + std::to_string(i);
-      const int64_t idx = gguf_find_key(gguf, key.c_str());
-      if (idx < 0) {
+      int64_t idx = -1;
+      if (!findKey(gguf, key, GGUF_TYPE_STRING, idx)) {
         outLabels.clear();
         break;
       }
@@ -369,7 +450,6 @@ WeightsBundle loadWeights(
     }
   }
 
-  WeightsBundle bundle;
   const size_t ctxSize = ggml_tensor_overhead() * 4096;
   bundle.ctx = std::unique_ptr<struct ggml_context, decltype(&ggml_free)>(
       ggml_init({ctxSize, nullptr, /*no_alloc=*/true}), ggml_free);
@@ -383,17 +463,19 @@ WeightsBundle loadWeights(
     tensors.emplace(ggml_get_name(dst), dst);
   };
 
-  auto addConvWeight = [&](const std::string& name) {
-    struct ggml_tensor* t =
-        cloneRaw(bundle.ctx.get(), gguf, ggufCtx, name.c_str());
-    registerTensor(t);
-  };
+  // `shape` is ggml's conv kernel order: width, height, input channels per
+  // group, output channels.
+  auto addConvWeight =
+      [&](const std::string& name, std::initializer_list<int64_t> shape) {
+        expectTensor(ggufCtx, name, TensorKind::ConvWeight, shape);
+        registerTensor(cloneRaw(bundle.ctx.get(), ggufCtx, name.c_str()));
+      };
 
   // SE bias is registered twice: 1D raw (used by unit tests) and an F32
   // [1,1,C,1] broadcast view (consumed by the graph against 4D feature maps).
   auto addSeBiasBroadcast = [&](const std::string& name, int channels) {
-    struct ggml_tensor* raw =
-        cloneRaw(bundle.ctx.get(), gguf, ggufCtx, name.c_str());
+    expectTensor(ggufCtx, name, TensorKind::Vector, {channels});
+    struct ggml_tensor* raw = cloneRaw(bundle.ctx.get(), ggufCtx, name.c_str());
     registerTensor(raw);
 
     const int64_t shape4d[4] = {1, 1, channels, 1};
@@ -405,6 +487,9 @@ WeightsBundle loadWeights(
 
   // Fold BN at load time: replaces ~34 per-inference sqrt + 4-op chains.
   auto addFoldedBn = [&](const std::string& bnPrefix, int channels) {
+    for (const char* param : {"weight", "bias", "running_mean", "running_var"})
+      expectTensor(
+          ggufCtx, bnPrefix + "." + param, TensorKind::Vector, {channels});
     const int64_t shape4d[4] = {1, 1, channels, 1};
     struct ggml_tensor* scale = cloneAsFp32(
         bundle.ctx.get(), (bnPrefix + ".scale").c_str(), 4, shape4d);
@@ -415,19 +500,23 @@ WeightsBundle loadWeights(
   };
 
   auto addFcWeightFp32 = [&](const std::string& name, int in, int out) {
+    expectTensor(ggufCtx, name, TensorKind::Vector, {in, out});
     const int64_t shape[2] = {in, out};
     struct ggml_tensor* t =
         cloneAsFp32(bundle.ctx.get(), name.c_str(), 2, shape);
     tensors.emplace(name, t);
   };
   auto addFcBiasFp32 = [&](const std::string& name, int out) {
+    expectTensor(ggufCtx, name, TensorKind::Vector, {out});
     const int64_t shape[1] = {out};
     struct ggml_tensor* t =
         cloneAsFp32(bundle.ctx.get(), name.c_str(), 1, shape);
     tensors.emplace(name, t);
   };
 
-  addConvWeight("features.0.0.weight");
+  addConvWeight(
+      "features.0.0.weight",
+      {STEM_KERNEL, STEM_KERNEL, INPUT_CHANNELS, STEM_OUT_CHANNELS});
   addFoldedBn("features.0.1", STEM_OUT_CHANNELS);
 
   for (const BlockConfig& cfg : BLOCKS) {
@@ -437,7 +526,12 @@ WeightsBundle loadWeights(
     int seIdx = -1;
     int projIdx = 0;
     if (hasExpand) {
-      addConvWeight(base + ".block.0.0.weight");
+      addConvWeight(
+          base + ".block.0.0.weight",
+          {POINTWISE_KERNEL,
+           POINTWISE_KERNEL,
+           cfg.inputChannels,
+           cfg.expandedChannels});
       addFoldedBn(base + ".block.0.1", cfg.expandedChannels);
       dwIdx = 1;
       if (cfg.useSe) {
@@ -455,29 +549,69 @@ WeightsBundle loadWeights(
       }
     }
     const std::string dwBase = base + ".block." + std::to_string(dwIdx);
-    addConvWeight(dwBase + ".0.weight");
+    // Depthwise: one input channel per group.
+    addConvWeight(
+        dwBase + ".0.weight",
+        {cfg.depthwiseKernel, cfg.depthwiseKernel, 1, cfg.expandedChannels});
     addFoldedBn(dwBase + ".1", cfg.expandedChannels);
 
     if (cfg.useSe) {
       const std::string seBase = base + ".block." + std::to_string(seIdx);
-      addConvWeight(seBase + ".fc1.weight");
+      addConvWeight(
+          seBase + ".fc1.weight",
+          {POINTWISE_KERNEL,
+           POINTWISE_KERNEL,
+           cfg.expandedChannels,
+           cfg.seReducedChannels});
       addSeBiasBroadcast(seBase + ".fc1.bias", cfg.seReducedChannels);
-      addConvWeight(seBase + ".fc2.weight");
+      addConvWeight(
+          seBase + ".fc2.weight",
+          {POINTWISE_KERNEL,
+           POINTWISE_KERNEL,
+           cfg.seReducedChannels,
+           cfg.expandedChannels});
       addSeBiasBroadcast(seBase + ".fc2.bias", cfg.expandedChannels);
     }
 
     const std::string projBase = base + ".block." + std::to_string(projIdx);
-    addConvWeight(projBase + ".0.weight");
+    addConvWeight(
+        projBase + ".0.weight",
+        {POINTWISE_KERNEL,
+         POINTWISE_KERNEL,
+         cfg.expandedChannels,
+         cfg.outputChannels});
     addFoldedBn(projBase + ".1", cfg.outputChannels);
   }
 
-  addConvWeight("features.12.0.weight");
+  addConvWeight(
+      "features.12.0.weight",
+      {POINTWISE_KERNEL,
+       POINTWISE_KERNEL,
+       BLOCKS.back().outputChannels,
+       TAIL_OUT_CHANNELS});
   addFoldedBn("features.12.1", TAIL_OUT_CHANNELS);
 
   addFcWeightFp32("classifier.0.weight", TAIL_OUT_CHANNELS, CLASSIFIER_HIDDEN);
   addFcBiasFp32("classifier.0.bias", CLASSIFIER_HIDDEN);
   addFcWeightFp32("classifier.3.weight", CLASSIFIER_HIDDEN, NUM_CLASSES);
   addFcBiasFp32("classifier.3.bias", NUM_CLASSES);
+  return bnEps;
+}
+
+/// The forward graph over declared weights, with no tensor allocated.
+ComputeGraph declareGraph(const WeightsBundle& weights);
+
+} // namespace
+
+WeightsBundle loadWeights(
+    const std::string& ggufPath, ggml_backend_t backend,
+    std::vector<std::string>& outLabels) {
+  const GgufFile file = openGguf(ggufPath, /*metadataOnly=*/false);
+  const gguf_context* gguf = file.gguf.get();
+  struct ggml_context* ggufCtx = file.ctx.get();
+  WeightsBundle bundle;
+  const float bnEps = declareWeights(gguf, ggufCtx, bundle, outLabels);
+  auto& tensors = bundle.tensors;
 
   bundle.backendBuffer =
       ggml_backend_alloc_ctx_tensors(bundle.ctx.get(), backend);
@@ -587,7 +721,8 @@ WeightsBundle loadWeights(
   return bundle;
 }
 
-ComputeGraph buildGraph(const WeightsBundle& weights, ggml_backend_t backend) {
+namespace {
+ComputeGraph declareGraph(const WeightsBundle& weights) {
   ComputeGraph cg;
   const size_t ctxSize = ggml_tensor_overhead() * 4096 + ggml_graph_overhead();
   cg.ctx = std::unique_ptr<struct ggml_context, decltype(&ggml_free)>(
@@ -598,7 +733,8 @@ ComputeGraph buildGraph(const WeightsBundle& weights, ggml_backend_t backend) {
   struct ggml_context* ctx = cg.ctx.get();
 
   // WHCN: width, height, channels, batch.
-  cg.input = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, INPUT_HW, INPUT_HW, 3, 1);
+  cg.input = ggml_new_tensor_4d(
+      ctx, GGML_TYPE_F32, INPUT_HW, INPUT_HW, INPUT_CHANNELS, 1);
   ggml_set_name(cg.input, "input");
 
   GraphBuilder gb{ctx, weights.tensors};
@@ -607,12 +743,12 @@ ComputeGraph buildGraph(const WeightsBundle& weights, ggml_backend_t backend) {
       cg.input,
       "features.0.0",
       "features.0.1",
-      /*stride=*/2,
-      /*kernel=*/3,
+      STEM_STRIDE,
+      STEM_KERNEL,
       /*activate=*/true,
       /*useHardswish=*/true);
 
-  int spatial = INPUT_HW / 2;
+  int spatial = INPUT_HW / STEM_STRIDE;
 
   for (const BlockConfig& cfg : BLOCKS) {
     x = gb.invertedResidual(x, cfg, spatial);
@@ -658,13 +794,54 @@ ComputeGraph buildGraph(const WeightsBundle& weights, ggml_backend_t backend) {
 
   cg.graph = ggml_new_graph_custom(ctx, 8192, /*grads=*/false);
   ggml_build_forward_expand(cg.graph, cg.output);
+  return cg;
+}
+} // namespace
 
-  cg.backendBuffer = ggml_backend_alloc_ctx_tensors(ctx, backend);
+ComputeGraph buildGraph(const WeightsBundle& weights, ggml_backend_t backend) {
+  ComputeGraph cg = declareGraph(weights);
+  cg.backendBuffer = ggml_backend_alloc_ctx_tensors(cg.ctx.get(), backend);
   if (cg.backendBuffer == nullptr) {
     raise("Failed to allocate backend buffer for compute graph");
   }
 
   return cg;
+}
+
+MeasuredBuffers
+measureBuffers(const std::string& ggufPath, ggml_backend_t backend) {
+  const GgufFile file = openGguf(ggufPath, /*metadataOnly=*/true);
+  WeightsBundle weights;
+  std::vector<std::string> labels;
+  declareWeights(file.gguf.get(), file.ctx.get(), weights, labels);
+  const ComputeGraph compute = declareGraph(weights);
+  MeasuredBuffers result;
+  result.buffers.weightBytes = ctxBufferBytes(weights.ctx.get(), backend);
+  result.buffers.deviceComputeBytes =
+      ctxBufferBytes(compute.ctx.get(), backend);
+  result.buffers.cpuWorkBytes =
+      ggml_backend_graph_get_work_size(backend, compute.graph);
+  // loadWeights reads the whole data section into host memory before it
+  // uploads; classify() holds one preprocessed input.
+  // openGguf checked that the data offset is inside the file.
+  const uint64_t dataOffset = gguf_get_data_offset(file.gguf.get());
+  const uint64_t dataSectionBytes =
+      file.fileBytes > dataOffset ? file.fileBytes - dataOffset : 0;
+  const uint64_t inputBytes = static_cast<uint64_t>(INPUT_HW) * INPUT_HW *
+                              INPUT_CHANNELS * sizeof(float);
+  result.hostStagingBytes = std::max(dataSectionBytes, inputBytes);
+  return result;
+}
+
+BufferFootprint allocatedBuffers(
+    const WeightsBundle& weights, const ComputeGraph& compute,
+    ggml_backend_t backend) {
+  BufferFootprint result;
+  result.weightBytes = allocatedCtxBytes(weights.ctx.get());
+  result.deviceComputeBytes = allocatedCtxBytes(compute.ctx.get());
+  // The workspace the CPU backend holds, sized by the graphs it has run.
+  result.cpuWorkBytes = ggml_backend_get_work_size(backend);
+  return result;
 }
 
 } // namespace classification_ggml::graph
