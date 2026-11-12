@@ -159,6 +159,12 @@ async function validateCachedFile(
   }
 }
 
+// The full size from a 416 response's `Content-Range: bytes */<size>`, if present.
+function parseUnsatisfiedRangeSize(header: unknown): number | undefined {
+  const match = /^bytes \*\/(\d+)$/.exec(String(header ?? '').trim())
+  return match ? parseInt(match[1]!) : undefined
+}
+
 interface HttpDownloadMeta {
   hubSha256?: string | undefined
 }
@@ -231,9 +237,26 @@ async function performHttpDownload(
   const isOk = response.status >= 200 && response.status <= 299
 
   if (!isOk) {
-    // 416 Range Not Satisfiable — the partial on disk is already the whole file.
+    // 416 Range Not Satisfiable — the partial on disk is already the whole file,
+    // unless the server reports a different size (the file at the URL changed or
+    // the local file was over-written). Without a size the file is kept as is.
     if (response.status === 416 && startOffset > 0) {
       response.body.destroy()
+      const remoteSize = parseUnsatisfiedRangeSize(response.headers['content-range'])
+      if (remoteSize !== undefined && remoteSize !== startOffset) {
+        logger.warn(
+          `⚠️ Cached file is ${startOffset} bytes but the server reports ${remoteSize}, downloading again`
+        )
+        await fsPromises.unlink(modelPath)
+        return performHttpDownload(
+          url,
+          modelPath,
+          downloadKey,
+          requireSecureTransport,
+          progressCallback,
+          signal
+        )
+      }
       logger.info(`✅ File already completely downloaded`)
       // Send 100% progress for already complete file
       if (progressCallback) {

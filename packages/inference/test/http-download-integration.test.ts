@@ -49,6 +49,11 @@ async function startServer(): Promise<Server> {
     if (range !== undefined) {
       const match = /bytes=(\d+)-/.exec(String(range))
       const start = match && match[1] ? parseInt(match[1]) : 0
+      if (start >= CONTENT.length) {
+        res.writeHead(416, { 'content-range': `bytes */${CONTENT.length}` })
+        res.end()
+        return
+      }
       const chunk = CONTENT.subarray(start)
       sent206 = true
       res.writeHead(206, {
@@ -107,6 +112,29 @@ test('downloadModelFromHttp: resumes a partial download via a Range/206 request'
   t.ok(
     bytesEqual(fs.readFileSync(resumedPath) as Buffer, CONTENT),
     'resumed file is complete and correct'
+  )
+})
+
+test('downloadModelFromHttp: replaces a cached file larger than the remote one', async (t) => {
+  const cacheDir = useTestCacheDir()
+  fs.rmSync(cacheDir, { recursive: true, force: true })
+  const server = await startServer()
+  t.teardown(async () => {
+    await server.close()
+    fs.rmSync(cacheDir, { recursive: true, force: true })
+  })
+
+  const url = `${server.base}/larger-model.gguf`
+  const modelPath = await downloadModelFromHttp(url)
+
+  // A larger cached file (an older version at the same URL) makes the resume
+  // Range start past the end; the server answers 416 with the real size.
+  fs.writeFileSync(modelPath, Buffer.alloc(CONTENT.length + 1000, 9))
+  const reloadedPath = await downloadModelFromHttp(url)
+
+  t.ok(
+    bytesEqual(fs.readFileSync(reloadedPath) as Buffer, CONTENT),
+    'cached file is replaced with the remote content'
   )
 })
 
