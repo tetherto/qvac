@@ -1,5 +1,4 @@
 #pragma once
-
 #include <algorithm>
 #include <any>
 #include <cmath>
@@ -38,7 +37,6 @@
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 #include <inference-addon-cpp/queue/QueueCallbacks.hpp>
 
-#include "JsBackendRuntimeStatsOutputHandler.hpp"
 #include "addon/JsBatchIds.hpp"
 #include "addon/PayloadHandler.hpp"
 #include "handlers/FinetuneParamHandlers.hpp"
@@ -438,10 +436,6 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       dynamic_cast<model::IModelCancelById*>(model.get()));
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
-  outHandlers.add(
-      make_shared<qvac_lib_inference_addon_llama::backend_reporting::
-                      JsBackendRuntimeStatsOutputHandler>(
-          static_cast<LlamaModel*>(model.get())->runtimeBackendName()));
   outHandlers.add(make_shared<out_handl::JsStringOutputHandler>());
   outHandlers.add(make_shared<out_handl::JsStringArrayOutputHandler>());
   outHandlers.add(make_shared<JsFinetuneProgressOutputHandler>());
