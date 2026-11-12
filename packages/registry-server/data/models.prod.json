@@ -10410,7 +10410,7 @@
     "quantization": "BF16",
     "params": "5B",
     "tags": ["generation", "diffusion"],
-    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT"
+    "link": "https://huggingface.co/Comfy-Org/MOSS-Image"
   },
   {
     "source": "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/530a4c94f92c35ef6818b1b035a983fe9dcf5f54/vae/flux2-vae_small.safetensors",
@@ -10419,7 +10419,7 @@
     "notes": "The FLUX.2 small decoder, Apache-2.0 (https://huggingface.co/black-forest-labs/FLUX.2-small-decoder).",
     "licenseId": "Apache-2.0",
     "tags": ["vae"],
-    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT"
+    "link": "https://huggingface.co/Comfy-Org/MOSS-Image"
   },
   {
     "source": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT/resolve/f972bd4b4b9e3852133cc5da954d87bc32cd8fb9/tokenizer/tokenizer.json",
