@@ -549,7 +549,10 @@ void LlamaModelLoader::init(
 }
 
 void LlamaModelLoader::init(LlamaModelSetup& setup) {
-  runtimeBackendDevice_ = setup.resolvedBackendDevice;
+  {
+    std::lock_guard lock(runtimeBackendMutex_);
+    runtimeBackendDevice_ = setup.resolvedBackendDevice;
+  }
   common_params& params = setup.params;
 
   lazyCommonInit();
@@ -580,11 +583,14 @@ void LlamaModelLoader::init(LlamaModelSetup& setup) {
   if (hooks_.onLoaded) {
     hooks_.onLoaded(model_, ctx_);
   }
-  const auto backendName = qvac_lib_inference_addon_embed::backend_reporting::
+  auto backendName = qvac_lib_inference_addon_embed::backend_reporting::
       runtimeModelBackendName(ctx_);
-  runtimeBackendName_->set(backendName);
-  if (!backendName.empty()) {
-    runtimeBackendDevice_ = backendName == "cpu" ? 0 : 1;
+  {
+    std::lock_guard lock(runtimeBackendMutex_);
+    if (!backendName.empty()) {
+      runtimeBackendDevice_ = backendName == "cpu" ? 0 : 1;
+    }
+    runtimeBackendName_ = std::move(backendName);
   }
 
   // print system information

@@ -350,6 +350,9 @@ qvac_lib_inference_addon_cpp::RuntimeStats RerankModel::runtimeStats() const {
   stats.emplace_back(
       "context_size", static_cast<long long>(llama_n_ctx(loader_.context())));
   stats.emplace_back("backendDevice", loader_.runtimeBackendDevice());
+  if (auto backendName = loader_.runtimeBackendName(); !backendName.empty()) {
+    stats.emplace_back("backendName", std::move(backendName));
+  }
   return stats;
 }
 
