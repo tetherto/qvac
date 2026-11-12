@@ -7,6 +7,7 @@ const {
   IOSConfig,
   WarningAggregator,
   withAppBuildGradle,
+  withEntitlementsPlist,
   withGradleProperties,
   withPlugins,
   withProjectBuildGradle,
@@ -24,12 +25,15 @@ const JITPACK = 'https://www.jitpack.io'
 /** bare-kit-kotlin is built with Kotlin 2.4, which Expo builds from SDK 58. */
 const MIN_KOTLIN_VERSION = '2.4.20'
 
+/** V8 in Bare 1.37+ reserves more address space than iOS gives an app without it. */
+const EXTENDED_VIRTUAL_ADDRESSING = 'com.apple.developer.kernel.extended-virtual-addressing'
+
 /**
  * Expo plugin: adds the Bare Kit module that `withMobileBundle` writes to the
- * app, as a Gradle module on Android and a local Swift package on iOS, and
- * raises the app's Kotlin to the version Bare Kit needs. Fails when
- * expo-bare-kit is also configured, since both write Bare Kit and the native
- * addons into the app.
+ * app, as a Gradle module on Android and a local Swift package on iOS, raises
+ * the app's Kotlin to the version Bare Kit needs, and adds the iOS entitlement
+ * V8 needs to start. Fails when expo-bare-kit is also configured, since both
+ * write Bare Kit and the native addons into the app.
  */
 function withBareKit(config: ExpoConfig): ExpoConfig {
   if (hasPlugin(config, 'expo-bare-kit')) {
@@ -39,7 +43,27 @@ function withBareKit(config: ExpoConfig): ExpoConfig {
     )
   }
 
-  return withPlugins(config, [withAndroidModule, withJitPack, withKotlinVersion, withIosPackage])
+  return withPlugins(config, [
+    withAndroidModule,
+    withJitPack,
+    withKotlinVersion,
+    withIosPackage,
+    withExtendedVirtualAddressing
+  ])
+}
+
+export function addExtendedVirtualAddressing(
+  entitlements: Record<string, unknown>
+): Record<string, unknown> {
+  entitlements[EXTENDED_VIRTUAL_ADDRESSING] = true
+  return entitlements
+}
+
+function withExtendedVirtualAddressing(config: ExpoConfig): ExpoConfig {
+  return withEntitlementsPlist(config, (config) => {
+    addExtendedVirtualAddressing(config.modResults)
+    return config
+  })
 }
 
 function hasPlugin(config: ExpoConfig, name: string): boolean {

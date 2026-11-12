@@ -171,6 +171,8 @@ npx expo prebuild
 Prebuild also writes Bare Kit and QVAC's native addons into `android/qvac-bare-kit` and `ios/QvacBareKit`, and adds them to the app. Builds download Bare Kit from JitPack on Android and from GitHub on iOS.
 
 Prebuild writes the QVAC worker into `node_modules/@qvac/sdk/dist/worker-mobile`. Reinstalling packages clears it, so run `npx expo prebuild` again after an install before building.
+
+On iOS, prebuild also adds the `com.apple.developer.kernel.extended-virtual-addressing` entitlement. The JavaScript engine in Bare Kit needs it to start; without it the app crashes when it first calls QVAC. Turn on **Extended Virtual Addressing** for your App ID in your Apple Developer account. Personal (free) teams cannot sign apps with this entitlement.
 </Step>
 </Steps>
 

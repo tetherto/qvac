@@ -1,6 +1,7 @@
 import test from 'brittle'
 import configPlugins from '@expo/config-plugins'
 import withBareKit, {
+  addExtendedVirtualAddressing,
   addFolderResource,
   addJitPack,
   addModuleDependency,
@@ -102,6 +103,21 @@ test('addFolderResource: copies the assets folder into the app once', (t) => {
     ['bare-stow in Resources']
   )
   t.is(project.hash.project.objects.PBXGroup['MAIN']!.children.length, 1)
+})
+
+test('addExtendedVirtualAddressing: adds the entitlement and keeps the others', (t) => {
+  const entitlements = addExtendedVirtualAddressing({ 'aps-environment': 'development' })
+  t.alike(entitlements, {
+    'aps-environment': 'development',
+    'com.apple.developer.kernel.extended-virtual-addressing': true
+  })
+})
+
+test('withBareKit: registers an iOS entitlements mod', (t) => {
+  const config = withBareKit({ name: 'app', slug: 'app', _internal: { projectRoot: '.' } }) as {
+    mods?: { ios?: { entitlements?: unknown } }
+  }
+  t.is(typeof config.mods?.ios?.entitlements, 'function')
 })
 
 test('withBareKit: refuses an app that also uses expo-bare-kit', (t) => {
