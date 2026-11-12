@@ -34,6 +34,7 @@ export type RequestKind =
   | 'finetune'
   | 'loadModel'
   | 'downloadAsset'
+  | 'modelRegistry'
   | 'rag'
   | 'rpcServer'
   | 'rpcDiscovery'

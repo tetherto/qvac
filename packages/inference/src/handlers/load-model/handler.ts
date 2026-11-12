@@ -23,6 +23,7 @@ import {
   ModelTypeMismatchError,
   ModelNotFoundError,
   ModelLoadFailedError,
+  ModelRegistryBusyError,
   PluginLoadConfigValidationFailedError,
   PluginNotFoundError
 } from '@/errors/index'
@@ -240,6 +241,8 @@ export async function handleLoadModel(
       log.info(`loadModel cancelled requestId=${requestId}`)
       throw error
     }
+    // Typed so callers can tell another process has the registry.
+    if (error instanceof ModelRegistryBusyError) throw error
     logger.error('Error loading model:', error)
     return {
       type: 'loadModel',
