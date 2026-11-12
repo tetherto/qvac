@@ -817,7 +817,7 @@ test('vector index: setIvf(null) turns IVF off and nProbe then rejects', async (
   )
 })
 
-test('vector index: a failed IVF build keeps the previous state', async (t) => {
+test('vector index: a failed IVF build falls back to the full scan', async (t) => {
   await withProvider(
     async (calls, failures, _failRemoveId, lastIvfArgs) => {
       const index = await createVectorIndex({ dim: 2 })
@@ -833,11 +833,18 @@ test('vector index: a failed IVF build keeps the previous state', async (t) => {
       failures.buildIvf = false
       const previous = { nLists: 1, nProbe: 1, built: true }
       t.alike(index.ivf, previous, 'the handle keeps the last reported state')
+      // The native index may drop its lists when a build fails, so the worker
+      // stops probing them.
       await index.search({ query: [1, 0], k: 1 })
-      t.is(calls.searchIvf, 1, 'search still probes the earlier lists')
-      t.is(lastIvfArgs.nProbe, 1, 'with the earlier probe count')
+      t.is(calls.searchIvf, 0, 'search never probes lists from before the failed build')
+      t.is(calls.search, 1, 'search falls back to the full scan')
       await index.add({ ids: ['2'], vectors: [[0, 1]] })
-      t.alike(index.ivf, { ...previous, built: false }, 'the worker kept the same settings')
+      t.alike(index.ivf, { ...previous, built: false }, 'the worker kept the earlier settings')
+      await index.setIvf({ nLists: 1, nProbe: 1 })
+      t.is(calls.buildIvf, 3, 'the earlier settings build again')
+      await index.search({ query: [1, 0], k: 1 })
+      t.is(calls.searchIvf, 1, 'search probes the rebuilt lists')
+      t.is(lastIvfArgs.nProbe, 1)
     },
     { ivf: true }
   )

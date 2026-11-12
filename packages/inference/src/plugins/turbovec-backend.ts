@@ -122,6 +122,10 @@ function openIndex(
       }
       const listsCurrent = ivfBuilt && ivfSettings !== null && sameListBuild(ivfSettings, settings)
       if (!listsCurrent) {
+        // Mark the lists stale before building. If the build throws, search
+        // scans every entry instead of probing lists the native index may
+        // already have dropped.
+        ivfBuilt = false
         index.buildIvf(settings.nLists, settings.nIter ?? 0)
         ivfBuilt = true
       }

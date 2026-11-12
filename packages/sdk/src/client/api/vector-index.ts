@@ -102,7 +102,9 @@ export interface VectorIndex {
    * keeps the initial centroids. Null turns IVF off.
    *
    * Any later add or remove sets `ivf.built` to false, and searches scan every
-   * entry until the next `setIvf()`. Snapshots do not save the setting.
+   * entry until the next `setIvf()`. So does a build that fails; the handle
+   * keeps its last reported state until another call reports one. Snapshots
+   * do not save the setting.
    * Repeating the call with the same `nLists` and `nIter` on a built index
    * only changes `nProbe`. Staged search, when on, also applies within the
    * probed lists. Rejects providers without IVF support.

@@ -173,7 +173,31 @@ Staged search is off for every new or loaded index. Use `await index.setStagedSe
 
 IVF search is off for every new or loaded index. Call `await index.setIvf({ nLists, nProbe })` to group the vectors into `nLists` lists. After that, `search()` scans only the `nProbe` lists closest to each query. That's faster, but it can miss some true nearest vectors. A higher `nProbe` finds more of them and takes longer, and an `nProbe` of at least `nLists` scans every vector. Pass `nProbe` to a single `search()` call to override the setting for that call. `nIter` sets how many k-means passes refine the lists, and the default 0 keeps the initial centroids. While the lists are built, calling `setIvf()` again with the same `nLists` and `nIter` changes only `nProbe` and skips the rebuild. Pass `null` to turn IVF off.
 
-An `add()`, or a `remove()` that deletes an entry, makes the lists stale. `index.ivf.built` turns `false`, and `search()` scans every vector until you call `setIvf()` again. Snapshots don't save the setting. While IVF is off, `index.ivf` is `null` and a `search()` with `nProbe` rejects with `VectorIndexFailedError`. When staged search is also on, it applies within the probed lists.
+An `add()`, or a `remove()` that deletes an entry, makes the lists stale. `index.ivf.built` turns `false`, and `search()` scans every vector until you call `setIvf()` again. A `setIvf()` that fails while building the lists has the same effect, though `index.ivf` keeps showing the last state a call reported. Snapshots don't save the setting. While IVF is off, `index.ivf` is `null` and a `search()` with `nProbe` rejects with `VectorIndexFailedError`. When staged search is also on, it applies within the probed lists.
+
+The following script turns IVF on for a small TurboVec index, compares a probed search with a full scan, overrides `nProbe` for one call, and rebuilds the lists after an `add()`.
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/rag/rag-turbovec-ivf.js title="rag-turbovec-ivf.js" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/rag/rag-turbovec-ivf.ts title="rag-turbovec-ivf.ts" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+</Tabs>
 
 External index providers may omit these controls. Their `calibrated`, `stagedSearch` and `ivf` properties report `undefined`, while `setStagedSearch()` and `setIvf()` reject with `VectorIndexFailedError` when unsupported.
 
