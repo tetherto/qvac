@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Documentation
+
+- The XDNA NPU note describes `@qvac/fabric` 0.29: a model outside the fused
+  decode layers' weight set loads and decodes on the host CPU, instead of
+  failing at the first decode. It also names the `attn_output` types the
+  attention tail takes ([#5640](https://github.com/tetherto/qvac/pull/5640)).
+
 ## [0.70.1] - 2026-11-11
 
 ### Changed
