@@ -13,8 +13,13 @@ import {
 import { handleModelRegistrySearch } from '@/handlers/registry'
 import { fetchFitStub } from '@/model-fit/description/fetch'
 import { resolveRegistryModel } from '@/handlers/load-model/resolve'
+import { downloadModelFromRegistry } from '@/handlers/load-model/registry'
 import type { ResolveResult } from '@/handlers/load-model/types'
+import { models, type RegistryItem } from '@/models/registry/models'
 import { getRequestRegistry } from '@/runtime/index'
+import { getRuntimeContext } from '@/runtime/state'
+import { getSingleFileCachePath } from '@/utils/cache/paths'
+import { measureChecksum } from '@/utils/checksum'
 import { getLifecycleState, resumeRuntime, suspendRuntime } from '@/runtime/runtime-lifecycle'
 import {
   DownloadCancelledError,
@@ -451,6 +456,49 @@ test('a busy registry falls back to fallbackSrc, and otherwise passes through', 
 
   t.is(await rejection(resolveRegistryModel({ ...params, hasFallback: false })), busy)
   t.is((await resolveRegistryModel({ ...params, hasFallback: true })).path, fallback.path)
+})
+
+test('a cached GGUF loads when the optional Core ML lookup finds the registry busy', async (t) => {
+  setup(t, 'coreml-cached')
+  const context = getRuntimeContext()
+  const platform = context.platform
+  context.platform = 'darwin'
+  t.teardown(() => {
+    context.platform = platform
+  })
+
+  // A Core ML model whose GGUF an earlier load cached without the sidecars.
+  const registryPath =
+    'qvac_models_compiled/ggml/parakeet/registry-lock-test/parakeet-tdt-0.6b-v3.q8_0.gguf'
+  const ggufPath = getSingleFileCachePath(registryPath)
+  fs.mkdirSync(path.dirname(ggufPath), { recursive: true })
+  fs.writeFileSync(ggufPath, 'gguf')
+  const model: RegistryItem = {
+    name: 'TEST_PARAKEET_COREML',
+    registryPath,
+    registrySource: 's3',
+    modelId: 'parakeet-tdt-0.6b-v3.q8_0.gguf',
+    addon: 'parakeet',
+    engine: 'parakeet-transcription',
+    quantization: 'q8_0',
+    params: '0.6B',
+    expectedSize: 4,
+    sha256Checksum: await measureChecksum(ggufPath),
+    blobCoreKey: 'core-key',
+    blobBlockOffset: 0,
+    blobBlockLength: 1,
+    blobByteOffset: 0
+  }
+  const catalog = models as unknown as RegistryItem[]
+  catalog.push(model)
+  t.teardown(() => {
+    catalog.splice(catalog.indexOf(model), 1)
+  })
+
+  const holder = await holdStore()
+  t.teardown(() => holder.release())
+
+  t.is(await downloadModelFromRegistry(registryPath, 's3'), ggufPath)
 })
 
 // ---------- Two processes ----------

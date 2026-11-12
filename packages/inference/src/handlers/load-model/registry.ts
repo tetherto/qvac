@@ -296,6 +296,16 @@ async function downloadShardedFilesFromRegistry(
   return getShardPath(cacheKey, shards[0]!.filename)
 }
 
+// A size check only: the single-file path validates the file before using it.
+async function hasFileOfSize(path: string, expectedSize: number): Promise<boolean> {
+  if (expectedSize <= 0) return false
+  try {
+    return (await fsPromises.stat(path)).size === expectedSize
+  } catch {
+    return false
+  }
+}
+
 export async function downloadModelFromRegistry(
   registryPath: string,
   registrySource: string,
@@ -458,8 +468,18 @@ export async function downloadModelFromRegistry(
           if (ctx.signal.aborted || error instanceof DownloadCancelledError) {
             throw new DownloadCancelledError()
           }
-          // The GGUF needs the same registry, so it would wait just as long.
-          if (error instanceof ModelRegistryBusyError) throw error
+          // Unless the GGUF is already on disk, loading it needs the same
+          // registry and would wait just as long.
+          if (error instanceof ModelRegistryBusyError) {
+            const { expectedSize } = resolveRegistryDownloadMetadata(
+              modelMetadata,
+              explicitMetadata,
+              expectedChecksum
+            )
+            if (!(await hasFileOfSize(getSingleFileCachePath(registryPath), expectedSize))) {
+              throw error
+            }
+          }
           logger.warn('Core ML sidecar unavailable; loading the GGUF without it', {
             registryPath,
             error
