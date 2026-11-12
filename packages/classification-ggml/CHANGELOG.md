@@ -28,14 +28,17 @@ and this project adheres to
 - BridgeDepth downsamples a pair wider than 1280 or taller than 720 to fit
   inside 1280x720, as the model authors recommend, and returns the disparity
   at the input size in input pixels. `assessFit` sizes such a workload as the
-  downsampled run plus the disparity at the input size.
+  downsampled run plus the disparity at the input size
+  ([#5735](https://github.com/tetherto/qvac/pull/5735)).
 - BridgeDepth accepts sides up to 4096 pixels, up from 2048, with no pixel
   count limit, instead of at most about 2 MP. The graph only runs on the
-  downsampled pair, so the limit that kept ggml from aborting is gone.
+  downsampled pair, so the limit that kept ggml from aborting is gone
+  ([#5735](https://github.com/tetherto/qvac/pull/5735)).
 
 ### Pull Requests
 
 - [#5705](https://github.com/tetherto/qvac/pull/5705) - `assessFit` for MobileNet, MegaLoc and BridgeDepth.
+- [#5735](https://github.com/tetherto/qvac/pull/5735) - BridgeDepth downsamples inputs above 1280x720.
 
 ## [0.37.0] - 2026-11-10
 
