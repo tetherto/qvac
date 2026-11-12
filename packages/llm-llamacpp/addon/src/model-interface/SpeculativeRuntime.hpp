@@ -87,12 +87,13 @@ struct GgufShape {
   /// A DFlash or DSpark model's `target_layers`: the target layers whose
   /// inputs it drafts from.
   std::vector<int64_t> targetLayers;
-  /// A `d2t` tensor, which maps a reduced draft vocabulary to the target's.
-  bool draftVocabMap = false;
   /// A DSpark Markov head (`markov_w1.weight`), which tells a DSpark model
   /// from a plain DFlash one, as fabric's type detection does. Looked for in
   /// every shard of a split model, as fabric's loader assembles them.
   bool markovHead = false;
+  /// `dflash.block_size`, which fabric's DSpark Markov head asserts is
+  /// present and positive; 0 when absent.
+  int64_t blockSize = 0;
   /// False when a split model's other shards could not all be read, so a
   /// tensor not found may still be in one of them.
   bool tensorsComplete = true;
@@ -131,9 +132,10 @@ std::string draftModelMismatch(const common_params_speculative& params);
 
 /// Why the DFlash or DSpark model `drafter` cannot draft for a target of
 /// `targetWidth` hidden width, `targetLayers` layers (MTP layers excluded)
-/// and `targetVocab` tokens, or empty: another vocabulary (unless a `d2t`
-/// map translates it), another hidden width, or a target layer past the
-/// model's last. Fabric checks none of these and aborts the process on each.
+/// and `targetVocab` tokens, or empty: another vocabulary (a `d2t` map does
+/// not change it), another hidden width, a target layer past the model's
+/// last, or a Markov head without a positive `dflash.block_size`. Fabric
+/// checks none of these and aborts the process on each.
 /// Empty for a model that is not `dflash`; a value of 0 is unknown and not
 /// compared.
 std::string dflashTargetMismatch(
@@ -154,16 +156,18 @@ std::string draftTargetMismatch(
 std::string draftTargetMismatchForFile(
     const common_params_speculative& params, const std::string& targetPath);
 
-/// The speculative type the draft model at `path` drafts with, read by
-/// fabric's `common_speculative_types_from_gguf` so it matches llama-server:
-/// `draft-dspark` for a `dflash` model with a Markov head, `draft-dflash` for
-/// one without, `draft-mtp` for a model whose last block has MTP layers. The
-/// header is checked first for what fabric's reader assumes without checking
-/// (a string architecture and, outside `dflash`, a positive u32
-/// `<arch>.block_count`), so a malformed file is an error instead of an
+/// The speculative type the draft model at `path` drafts with, by the rules
+/// of fabric's `common_speculative_types_from_gguf` so it matches
+/// llama-server: `draft-dspark` for a `dflash` model with a Markov head,
+/// `draft-dflash` for one without, `draft-mtp` for a model whose last block
+/// has an MTP projection (`blk.N.nextn.eh_proj.weight`; a Gemma 4 assistant
+/// names its MTP tensors differently and is not detected). The rules run on
+/// the one header read here, after checking what fabric's reader assumes
+/// without checking (a string architecture and, outside `dflash`, a positive
+/// u32 `<arch>.block_count`), so a malformed file is an error instead of an
 /// abort. Throws std::invalid_argument for an unreadable file, one shard of a
 /// split model (fabric reads only the first shard; give the type
-/// explicitly), malformed metadata, or a model none of the three fits.
+/// explicitly), malformed metadata, or a model none of the rules detects.
 common_speculative_type detectSpeculativeType(const std::string& path);
 
 /// Resolves `spec-type: "auto"` with `detectSpeculativeType`, then copies

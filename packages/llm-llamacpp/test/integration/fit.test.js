@@ -234,7 +234,7 @@ test(
         'spec-type': 'auto',
         'spec-draft-model': await localModel(NO_MTP_MODEL)
       }),
-      /neither a DFlash or DSpark model nor a model with MTP layers/,
+      /no speculative type was detected/,
       'the load fails the same way'
     )
   }

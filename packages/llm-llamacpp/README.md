@@ -308,6 +308,7 @@ MTP, DFlash and DSpark work on single prompts, multimodal prompts and continuous
 - Greedy output can differ from plain decoding where two tokens are nearly tied: the verification batch evaluates several positions at once, which changes floating-point rounding.
 - The gain depends on the device being bandwidth bound. On a Radeon 8060S, Qwen3.6-27B-MTP Q4_K_M decodes a single prompt at about 30 t/s instead of 13 t/s with 80% of the drafts accepted; with four concurrent sequences the larger verification batches cost more than they save, as they do in llama-server.
 - DSpark, greedy, one sequence: on an RTX 5090 (Vulkan), Qwen3.8-27B UD-Q4_K_XL with a DSpark Q8_0 drafter decodes at 120 t/s instead of 69.5 t/s with `spec-draft-n-max` 3 (1.73×, 1.98× on code), and less with longer drafts (1.46× at 6, 1.31× at the 7-token block). On an Apple M4, LFM2.5-1.2B-Instruct gains 1.65× at `spec-draft-n-max` 6. Fast mixture-of-experts models gain nothing: LFM2.5-24B-A2B and LFM2.5-8B-A1B, at 350–580 t/s on the RTX 5090, decode 10–20% slower with DSpark, as they do in llama-server. Drafting the whole block is rarely fastest; start at 3 and measure.
+
 ### 4. Create Model Instance
 
 ```js

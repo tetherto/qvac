@@ -11,6 +11,10 @@
 #include <gtest/gtest.h>
 #include <llama.h>
 
+#ifndef _WIN32
+#include <sys/stat.h>
+#endif
+
 #include "model-interface/LlmContext.hpp"
 #include "model-interface/MultiRequestBatcher.hpp"
 #include "model-interface/SpeculativeRuntime.hpp"
@@ -328,7 +332,7 @@ TEST(SpeculativeAutoTest, MtpMetadataWithoutTheTensorIsNotMtp) {
                         gguf_set_val_u32(ctx, "qwen35.block_count", 3);
                         gguf_set_val_u32(ctx, "qwen35.nextn_predict_layers", 1);
                       }))
-          .find("neither a DFlash or DSpark model nor a model with MTP"),
+          .find("no speculative type was detected"),
       std::string::npos);
   // An MTP tensor on another block than the last does not count either.
   EXPECT_NE(
@@ -412,7 +416,7 @@ TEST(SpeculativeAutoTest, MalformedHeadersAreErrorsNotAborts) {
         gguf_set_val_str(ctx, "general.architecture", "llama");
         gguf_set_val_u32(ctx, "llama.block_count", 2);
       },
-      "neither a DFlash or DSpark model nor a model with MTP layers");
+      "no speculative type was detected");
 }
 
 TEST(SpeculativeAutoTest, UnreadableFilesAreErrors) {
@@ -547,6 +551,23 @@ TEST(SpeculativeConfigTest, AMissingShardLeavesTheMarkovHeadToTheLoad) {
   std::filesystem::remove(first);
 }
 
+#ifndef _WIN32
+TEST(SpeculativeConfigTest, AShardThatIsNotARegularFileIsNotOpened) {
+  // A FIFO named as the second shard would block the open; it is skipped like
+  // a missing shard, so the head is left to fabric's load.
+  const std::string first = writeDsparkShard("dspark-fifo", 0, false);
+  const std::string fifo = absoluteModelPath("dspark-fifo-00002-of-00002.gguf");
+  std::filesystem::remove(fifo);
+  ASSERT_EQ(mkfifo(fifo.c_str(), 0600), 0) << fifo;
+  const GgufShape shape = readGgufShape(first);
+  EXPECT_FALSE(shape.markovHead);
+  EXPECT_FALSE(shape.tensorsComplete);
+  EXPECT_EQ(explicitDsparkMismatch(first), "");
+  std::filesystem::remove(first);
+  std::filesystem::remove(fifo);
+}
+#endif
+
 TEST(SpeculativeConfigTest, ParsesDraftMtpWithAnExternalHead) {
   const std::string headPath = absoluteModelPath("mtp-head.gguf");
   ConfigMap config{{"spec-type", "draft-mtp"}, {"spec_draft_model", headPath}};
@@ -621,7 +642,8 @@ TEST(SpeculativeConfigTest, ADflashDrafterMustMatchTheModel) {
       .embd = 2048,
       .vocab = 65536,
       .targetLayers = {3, 6, 9, 12, 15},
-      .markovHead = true};
+      .markovHead = true,
+      .blockSize = 7};
   EXPECT_EQ(dflashTargetMismatch(drafter, 2048, 16, 65536), "");
   // The last layer's input is the final hidden state, which fabric reads.
   EXPECT_EQ(dflashTargetMismatch(drafter, 2048, 15, 65536), "");
@@ -646,10 +668,15 @@ TEST(SpeculativeConfigTest, ADflashDrafterMustMatchTheModel) {
       dflashTargetMismatch(negative, 2048, 16, 65536),
       "it reads target layer -1, the model has 16 layers");
 
-  // A `d2t` map translates a reduced vocabulary to the model's.
-  GgufShape mapped = drafter;
-  mapped.draftVocabMap = true;
-  EXPECT_EQ(dflashTargetMismatch(mapped, 2048, 16, 128000), "");
+  // fabric's DSpark Markov head asserts on a missing or zero block size.
+  GgufShape noBlock = drafter;
+  noBlock.blockSize = 0;
+  EXPECT_EQ(
+      dflashTargetMismatch(noBlock, 2048, 16, 65536),
+      "it has a DSpark Markov head but no positive dflash.block_size");
+  // A DFlash model has no Markov head to build.
+  noBlock.markovHead = false;
+  EXPECT_EQ(dflashTargetMismatch(noBlock, 2048, 16, 65536), "");
 
   // Unknown values are not compared, and only DFlash models are judged.
   EXPECT_EQ(dflashTargetMismatch(drafter, 0, 0, 0), "");
@@ -666,6 +693,7 @@ TEST(SpeculativeConfigTest, ADflashDrafterIsComparedFromItsHeader) {
       gguf_set_val_str(ctx, "general.architecture", "dflash");
       gguf_set_val_u32(ctx, "dflash.embedding_length", 2048);
       gguf_set_val_u32(ctx, "dflash.block_count", 5);
+      gguf_set_val_u32(ctx, "dflash.block_size", 7);
       const std::array<int32_t, 3> layers{3, 10, 28};
       gguf_set_arr_data(
           ctx,
@@ -688,9 +716,8 @@ TEST(SpeculativeConfigTest, ADflashDrafterIsComparedFromItsHeader) {
   EXPECT_EQ(shape.layers, 5);
   EXPECT_EQ(shape.vocab, 4);
   EXPECT_EQ(shape.targetLayers, (std::vector<int64_t>{3, 10, 28}));
-  EXPECT_FALSE(shape.draftVocabMap);
+  EXPECT_EQ(shape.blockSize, 7);
   const std::string mapped = write("dflash-target-d2t.gguf", true);
-  EXPECT_TRUE(readGgufShape(mapped).draftVocabMap);
 
   // The load and the fit read the drafter the params load, for both types.
   common_params params;
@@ -706,12 +733,127 @@ TEST(SpeculativeConfigTest, ADflashDrafterIsComparedFromItsHeader) {
   EXPECT_EQ(
       draftTargetMismatch(params.speculative, 2048, 30, 8),
       "4 tokens, the model's 8");
+  // A `d2t` map only shrinks the output head: the drafter's own vocabulary
+  // still has to be the model's.
+  params.speculative.draft.mparams.path = mapped;
+  EXPECT_EQ(
+      draftTargetMismatch(params.speculative, 2048, 30, 8),
+      "4 tokens, the model's 8");
+  EXPECT_EQ(draftTargetMismatch(params.speculative, 2048, 30, 4), "");
+  params.speculative.draft.mparams.path = path;
   // MTP drafts from the model's own hidden state.
   params.speculative.types = {COMMON_SPECULATIVE_TYPE_DRAFT_MTP};
   EXPECT_EQ(draftTargetMismatch(params.speculative, 1024, 16, 8), "");
 
   std::filesystem::remove(path);
   std::filesystem::remove(mapped);
+}
+
+TEST(SpeculativeConfigTest, ADflashDrafterIsComparedWithTheModelFile) {
+  // The drafter reads target layers 3, 10 and 28 at width 2048.
+  const std::string drafter =
+      writeGguf("dflash-for-file.gguf", [](gguf_context* ctx, ggml_context* m) {
+        gguf_set_val_str(ctx, "general.architecture", "dflash");
+        gguf_set_val_u32(ctx, "dflash.embedding_length", 2048);
+        gguf_set_val_u32(ctx, "dflash.block_count", 5);
+        gguf_set_val_u32(ctx, "dflash.block_size", 7);
+        const std::array<int32_t, 3> layers{3, 10, 28};
+        gguf_set_arr_data(
+            ctx,
+            "dflash.target_layers",
+            GGUF_TYPE_INT32,
+            layers.data(),
+            layers.size());
+        std::array<const char*, 4> tokens{"a", "b", "c", "d"};
+        gguf_set_arr_str(
+            ctx, "tokenizer.ggml.tokens", tokens.data(), tokens.size());
+        addTensor(ctx, m, "markov_w1.weight");
+      });
+  // A model with one MTP layer and a wider `embedding_length_out` (as
+  // hyper-connections give): the drafter is compared with
+  // `embedding_length` and with the layers left once the MTP layers are out.
+  const auto target = [](const char* name, uint32_t blocks) {
+    return writeGguf(name, [blocks](gguf_context* ctx, ggml_context*) {
+      gguf_set_val_str(ctx, "general.architecture", "qwen35");
+      gguf_set_val_u32(ctx, "qwen35.embedding_length", 2048);
+      gguf_set_val_u32(ctx, "qwen35.embedding_length_out", 8192);
+      gguf_set_val_u32(ctx, "qwen35.block_count", blocks);
+      gguf_set_val_u32(ctx, "qwen35.nextn_predict_layers", 1);
+      std::array<const char*, 4> tokens{"a", "b", "c", "d"};
+      gguf_set_arr_str(
+          ctx, "tokenizer.ggml.tokens", tokens.data(), tokens.size());
+    });
+  };
+  const std::string fits = target("dflash-target-29.gguf", 29);
+  const std::string shallow = target("dflash-target-28.gguf", 28);
+  common_params params;
+  applySpeculativeConfig(
+      SpeculativeConfig{
+          .type = COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK,
+          .draftModelPath = drafter},
+      params);
+  // 29 blocks less 1 MTP layer: 28 layers, so layer 28 is the final state.
+  EXPECT_EQ(draftTargetMismatchForFile(params.speculative, fits), "");
+  // 28 blocks less 1 MTP layer: 27 layers.
+  EXPECT_EQ(
+      draftTargetMismatchForFile(params.speculative, shallow),
+      "it reads target layer 28, the model has 27 layers");
+  // MTP drafts from the model's own hidden state.
+  params.speculative.types = {COMMON_SPECULATIVE_TYPE_DRAFT_MTP};
+  EXPECT_EQ(draftTargetMismatchForFile(params.speculative, shallow), "");
+  std::filesystem::remove(drafter);
+  std::filesystem::remove(fits);
+  std::filesystem::remove(shallow);
+}
+
+TEST(SpeculativeConfigTest, AMarkovHeadNeedsABlockSizeInTheHeader) {
+  // fabric parses `dflash.block_size` from its string form, so any integer
+  // type is a block size; absent or 0, its Markov head asserts.
+  const auto write = [](const char* name, const GgufFill& blockSize) {
+    return writeGguf(name, [&blockSize](gguf_context* ctx, ggml_context* m) {
+      gguf_set_val_str(ctx, "general.architecture", "dflash");
+      blockSize(ctx, m);
+      addTensor(ctx, m, "markov_w1.weight");
+    });
+  };
+  const std::string u16 =
+      write("dspark-block-u16.gguf", [](gguf_context* ctx, ggml_context*) {
+        gguf_set_val_u16(ctx, "dflash.block_size", 5);
+      });
+  const std::string absent =
+      write("dspark-block-absent.gguf", [](gguf_context*, ggml_context*) {});
+  const std::string zero =
+      write("dspark-block-zero.gguf", [](gguf_context* ctx, ggml_context*) {
+        gguf_set_val_u32(ctx, "dflash.block_size", 0);
+      });
+  const std::string expected =
+      "it has a DSpark Markov head but no positive dflash.block_size";
+  EXPECT_EQ(readGgufShape(u16).blockSize, 5);
+  EXPECT_EQ(dflashTargetMismatch(readGgufShape(u16), 0, 0, 0), "");
+  EXPECT_EQ(dflashTargetMismatch(readGgufShape(absent), 0, 0, 0), expected);
+  EXPECT_EQ(dflashTargetMismatch(readGgufShape(zero), 0, 0, 0), expected);
+  std::filesystem::remove(u16);
+  std::filesystem::remove(absent);
+  std::filesystem::remove(zero);
+}
+
+TEST(SpeculativeConfigTest, AStringArrayOfTargetLayersReadsAsNone) {
+  // fabric's `gguf_get_arr_data` asserts on a string array, so reading one
+  // must not reach it: a malformed header is no target layers, not an abort.
+  const std::string path = writeGguf(
+      "dflash-string-layers.gguf", [](gguf_context* ctx, ggml_context* m) {
+        gguf_set_val_str(ctx, "general.architecture", "dflash");
+        gguf_set_val_u32(ctx, "dflash.embedding_length", 2048);
+        gguf_set_val_u32(ctx, "dflash.block_count", 5);
+        std::array<const char*, 2> layers{"3", "28"};
+        gguf_set_arr_str(
+            ctx, "dflash.target_layers", layers.data(), layers.size());
+        addTensor(ctx, m, "markov_w1.weight");
+      });
+  const GgufShape shape = readGgufShape(path);
+  EXPECT_EQ(shape.embd, 2048);
+  EXPECT_TRUE(shape.targetLayers.empty());
+  std::filesystem::remove(path);
 }
 
 TEST(SpeculativeConfigTest, DflashNeedsAnAbsoluteDraftModel) {

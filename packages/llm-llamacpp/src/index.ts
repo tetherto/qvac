@@ -1489,8 +1489,11 @@ namespace LlmLlamacpp {
      * `spec_draft_model`, and `'draft-dspark'` with the DSpark model (a
      * DFlash model with a Markov head) given as `spec_draft_model`. `'auto'`
      * reads which of the three from the `spec_draft_model` header, as
-     * llama-server does for `-md` without `--spec-type`; it fails the load
-     * for a split model's shard or a model none of them fits. Either way the
+     * llama-server does for `-md` without `--spec-type`: a `dflash` model is
+     * DSpark with a Markov head and DFlash without, and MTP is detected only
+     * by the last block's `blk.N.nextn.eh_proj` tensor, so a Gemma 4
+     * assistant needs `'draft-mtp'` given explicitly. It fails the load for
+     * a split model's shard or a model none of them fits. Either way the
      * model verifies the draft, so the output keeps the distribution of plain
      * decoding. `'none'` (default) decodes one token per step. Works on single
      * prompts, multimodal prompts and continuous batching. Also accepted as

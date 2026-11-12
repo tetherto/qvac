@@ -323,6 +323,18 @@ void LlamaModel::init(bool acquireLock) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument, e.what());
   }
+  // A `draft-dspark` drafter that is no DSpark model, checked from its header
+  // before the target is loaded, as `assessFit` does.
+  if (const std::string mismatch =
+          qvac_lib_inference_addon_llama::speculative::draftModelMismatch(
+              params.speculative);
+      !mismatch.empty()) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(qvac_lib_inference_addon_llama::errors::UnableToLoadModel),
+        "[Speculative] '" + params.speculative.draft.mparams.path +
+            "' cannot draft for spec-type \"draft-dspark\": " + mismatch);
+  }
   // A DFlash or DSpark model for another model aborts the process in fabric
   // (a ggml shape assert) once it is fitted next to this one, so it is
   // refused before `common_init_from_params`.

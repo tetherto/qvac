@@ -4,10 +4,11 @@
 
 ### Added
 
-- DSpark speculative decoding: `spec-type: 'draft-dspark'` with
-  `spec-draft-model`, as llama-server's `--spec-type draft-dspark -md
-  <model>`. A DSpark model is a DFlash model with a Markov head and a
-  confidence head; it drafts up to its block size per step, and
+- DSpark speculative decoding
+  ([#5694](https://github.com/tetherto/qvac/pull/5694)): `spec-type:
+  'draft-dspark'` with `spec-draft-model`, as llama-server's `--spec-type
+  draft-dspark -md <model>`. A DSpark model is a DFlash model with a Markov
+  head and a confidence head; it drafts up to its block size per step, and
   `spec-draft-p-min` is the confidence threshold that ends a draft. It is
   loaded, placed, fitted and run like a DFlash model, on single prompts,
   multimodal prompts, continuous batching and `cacheKey` conversations. The
@@ -18,26 +19,30 @@
   `11739.2.0` (`@qvac/fabric` 0.29.0), whose fix for speculative-draft
   sampling chains that shared buffers stops large models (LFM2.5-24B-A2B,
   Qwen3.8-27B) from failing batched requests with `FailedToDecode`.
-- `spec-type: 'auto'` with `spec-draft-model` reads the speculative type from
-  the drafter's header with fabric's own detection, as llama-server does for
-  `-md` without `--spec-type`: `draft-dspark`, `draft-dflash` or `draft-mtp`.
-  This applies to DFlash models and external MTP heads as well as DSpark. The
-  header is checked first, so an unreadable file, a split model's shard,
-  malformed metadata or a model of no type fails the load with
-  `InvalidArgument` (and `assessFit` rejects it) instead of aborting in
-  fabric's reader. A Gemma 4 assistant is not detected, as in llama-server;
-  give it `draft-mtp`.
+- `spec-type: 'auto'` with `spec-draft-model`
+  ([#5694](https://github.com/tetherto/qvac/pull/5694)) reads the speculative
+  type from the drafter's header by fabric's own detection rules, as
+  llama-server does for `-md` without `--spec-type`: `draft-dspark`,
+  `draft-dflash` or `draft-mtp`. This applies to DFlash models and external
+  MTP heads as well as DSpark. The header is checked first, so an unreadable
+  file, a split model's shard, malformed metadata or a model of no type fails
+  the load with `InvalidArgument` (and `assessFit` rejects it) instead of
+  aborting in fabric's reader. A Gemma 4 assistant is not detected, as in
+  llama-server; give it `draft-mtp`.
 
 ### Fixed
 
 - A DFlash or DSpark model trained for another model no longer aborts the
-  process. The load fails with `UnableToLoadModel`, and `assessFit` rejects
-  it, when the drafter's vocabulary or hidden width differs from the model's
-  or it reads a layer past the model's last; fabric checked none of these and
-  hit a ggml assert.
+  process ([#5694](https://github.com/tetherto/qvac/pull/5694)). The load
+  fails with `UnableToLoadModel`, and `assessFit` rejects it, when the
+  drafter's vocabulary (with or without a `d2t` map) or hidden width differs
+  from the model's, it reads a layer past the model's last, or it has a
+  DSpark Markov head without a positive `dflash.block_size`; fabric checked
+  none of these and hit a ggml assert.
 - `assessFit` with `spec-type: 'auto'` no longer blocks on a draft model path
   that is not a regular file (a FIFO): it is rejected before the drafter's
-  header is read, as the load does.
+  header is read, as the load does
+  ([#5694](https://github.com/tetherto/qvac/pull/5694)).
 
 ## [0.70.1] - 2026-11-11
 
