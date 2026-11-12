@@ -125,12 +125,16 @@ if ! "$QVAC_REAL_BIN" --version | tee -a "$ARTIFACT_DIR/qvac-version.txt"; then
   echo "Unable to read QVAC CLI version from $QVAC_REAL_BIN" | tee -a "$ARTIFACT_DIR/qvac-version.txt"
 fi
 
+# OpenCode 2.x installs a plugin named by package into its own cache, so point it
+# at the copy installed above; that is the one whose versions are reported.
+QVAC_PLUGIN_DIR="$SMOKE_DIR/node_modules/@qvac/opencode-plugin"
+
 cat > opencode.json <<JSON
 {
   "\$schema": "https://opencode.ai/config.json",
   "plugins": [
     {
-      "package": "@qvac/opencode-plugin",
+      "package": "${QVAC_PLUGIN_DIR}",
       "options": {
         "model": "${QVAC_MODEL}",
         "ctxSize": 32768,
@@ -201,7 +205,7 @@ node "$VERIFY_RUN_OUTPUT" "$ARTIFACT_DIR/opencode-run.jsonl"
   echo
   echo "## Smoke result"
   echo
-  echo "OpenCode completed successfully through \`@qvac/opencode-plugin@latest\` using \`qvac/${QVAC_MODEL}\`."
+  echo "OpenCode completed successfully through \`${QVAC_PLUGIN_SPEC}\` using \`qvac/${QVAC_MODEL}\`."
 } | tee "$ARTIFACT_DIR/smoke-result.md" > /dev/null
 
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
