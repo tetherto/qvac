@@ -177,7 +177,9 @@ runs by passing only the real views. Check `hparams.numCameras` /
 
 Run stats include `backendName`, the lowercase backend family, such as `"cpu"`,
 `"metal"`, or `"cuda"`. It reports the selected backend after fallback, while
-`load({ backend })` specifies a priority list.
+`load({ backend })` specifies a priority list. The addon drops the device
+index, so `"CUDA1"` reports as `"cuda"`; `model.backendName` keeps the full
+ggml label. Stats omit the key when the addon cannot name the backend.
 
 ## JavaScript API
 

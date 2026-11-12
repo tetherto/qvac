@@ -52,19 +52,15 @@ const input = {
   mask: new Uint8Array(1)
 }
 
-test('run stats report backend families and preserve native device labels', async (t) => {
+// The native side normalizes `backendName` (see test_runtime_stats.cpp); the
+// wrapper passes the JobEnded stats through as they arrive.
+test('run stats pass the native backendName through', async (t) => {
   const cases = [
-    ['CPU', 'cpu'],
-    ['CUDA0', 'cuda'],
-    ['CUDA1', 'cuda'],
-    ['MTL0', 'metal'],
-    ['Metal', 'metal'],
-    ['Vulkan0', 'vulkan'],
-    ['GPUOpenCL', 'opencl'],
-    ['ROCm0', 'rocm'],
-    ['SYCL0', 'sycl']
+    ['MTL0', { total_ms: 5, backendDevice: 1, backendName: 'metal' }],
+    ['CPU', { total_ms: 5, backendDevice: 0, backendName: 'cpu' }],
+    ['none', { total_ms: 5, backendDevice: 0 }]
   ]
-  for (const [device, family] of cases) {
+  for (const [device, nativeStats] of cases) {
     for (const enabled of [false, true]) {
       const { model, instances } = createModel(device, enabled)
       try {
@@ -73,14 +69,12 @@ test('run stats report backend families and preserve native device labels', asyn
         const updates = []
         response.on('stats', (value) => updates.push(value))
         const actions = new Float32Array([1, 2])
-        const nativeStats = { total_ms: 5, backendDevice: family === 'cpu' ? 0 : 1 }
         emit(instances[0], 'Output', actions)
         emit(instances[0], 'JobEnded', nativeStats)
         const result = await response.await()
         t.is(model.backendName, device, 'native device label is unchanged')
         t.is(result.actions, actions)
-        t.alike(result.stats, { ...nativeStats, backendName: family })
-        t.absent('backendName' in nativeStats, 'native stats are unchanged')
+        t.alike(result.stats, nativeStats)
         t.alike(updates, enabled ? [result.stats] : [], 'stats events follow opts.stats')
       } finally {
         await model.unload()
@@ -102,14 +96,17 @@ test('callbacks from an unloaded instance cannot complete a new run', async (t) 
     const actions = new Float32Array([1])
     emit(instances[1], 'Output', actions)
     emit(old, 'Output', new Float32Array([99]))
-    emit(old, 'JobEnded', { total_ms: 99 })
+    emit(old, 'JobEnded', { total_ms: 99, backendName: 'cuda' })
     emit(old, 'Error', null, 'stale error')
     t.alike(updates, [], 'old stats are dropped')
-    emit(instances[1], 'JobEnded', { total_ms: 1 })
+    emit(instances[1], 'JobEnded', { total_ms: 1, backendName: 'metal' })
     const result = await response.await()
     t.is(result.actions, actions, 'only current actions reach the response')
-    t.is(result.stats.total_ms, 1, 'only current timings reach the response')
-    t.is(result.stats.backendName, 'metal')
+    t.alike(
+      result.stats,
+      { total_ms: 1, backendName: 'metal' },
+      'only current stats reach the response'
+    )
     t.alike(updates, [result.stats], 'only current stats reach listeners')
   } finally {
     await model.unload()
