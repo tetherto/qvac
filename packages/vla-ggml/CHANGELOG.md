@@ -1,27 +1,5 @@
 # Changelog
 
-## [Unreleased]
-
-### Added
-
-- Run stats report `backendName`, the backend family the model runs on after
-  any fallback, such as `"cpu"`, `"metal"`, `"cuda"`, or `"vulkan"`. The addon
-  emits it natively as a string stat next to `backendDevice` and omits it when
-  it cannot name the backend.
-  ([#5502](https://github.com/tetherto/qvac/pull/5502))
-
-### Fixed
-
-- Output callbacks from an unloaded native instance no longer reach a run
-  started on a later `load()`.
-  ([#5502](https://github.com/tetherto/qvac/pull/5502))
-
-### Changed
-
-- `qvac-lib-inference-addon-cpp` dependency floor raised `1.5.0` -> `1.6.0`
-  for string values in `RuntimeStats`
-  ([#5721](https://github.com/tetherto/qvac/pull/5721)).
-
 ## [0.36.1] - 2026-11-11
 
 ### Changed
