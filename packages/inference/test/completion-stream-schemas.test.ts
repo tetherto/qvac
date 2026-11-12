@@ -11,13 +11,14 @@ import {
 import { toolSchema } from '@/schemas/tools'
 import { REASONING_BUDGET_MAX } from '@/schemas/llamacpp-config'
 
-test("completionStatsSchema: accepts backendDevice 'cpu' and 'gpu'", (t) => {
+test("completionStatsSchema: accepts backendDevice 'cpu', 'gpu' and 'npu'", (t) => {
   t.is(completionStatsSchema.safeParse({ backendDevice: 'cpu' }).success, true)
   t.is(completionStatsSchema.safeParse({ backendDevice: 'gpu' }).success, true)
+  t.is(completionStatsSchema.safeParse({ backendDevice: 'npu' }).success, true)
 })
 
 test('completionStatsSchema: rejects unknown backendDevice values', (t) => {
-  const result = completionStatsSchema.safeParse({ backendDevice: 'npu' })
+  const result = completionStatsSchema.safeParse({ backendDevice: 'tpu' })
   t.is(result.success, false)
 })
 
