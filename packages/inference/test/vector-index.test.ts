@@ -581,3 +581,43 @@ for (const operation of ['create', 'load'] as const) {
     })
   }
 }
+
+test('vector index: providers without controls remain usable and reject staged search', async (t) => {
+  await withProvider(async () => {
+    const index = await createVectorIndex({ dim: 8 })
+    t.is(index.calibrated, undefined)
+    t.is(index.stagedSearch, undefined)
+    await expectRejects(
+      t,
+      () => index.setStagedSearch({ enabled: true }),
+      VectorIndexFailedError,
+      'unsupported provider reports a coded error'
+    )
+    t.is(index.stagedSearch, undefined)
+    await index.dispose()
+    await expectRejects(
+      t,
+      () => index.setStagedSearch({ enabled: true }),
+      VectorIndexNotFoundError,
+      'a disposed index rejects controls'
+    )
+  })
+})
+
+test('vector index: the worker rejects a non-boolean staged search setting', async (t) => {
+  await withProvider(async () => {
+    const index = await createVectorIndex({ dim: 8 })
+    await expectRejects(
+      t,
+      () =>
+        send({
+          type: 'vectorIndex',
+          operation: 'setStagedSearch',
+          indexId: index.indexId,
+          enabled: 'true'
+        } as never),
+      RequestValidationFailedError,
+      'validation runs before the provider is reached'
+    )
+  })
+})

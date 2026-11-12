@@ -296,8 +296,7 @@ export async function* transcribe(
 
     if (metadata) {
       for (const chunk of chunks) {
-        if (!chunk.text) continue
-        if (silenceMarker && chunk.text.includes(silenceMarker)) continue
+        if (!carriesSegment(chunk, silenceMarker)) continue
         yield toTranscribeSegment(chunk)
       }
       continue
@@ -458,20 +457,36 @@ export async function* transcribeStream(
   }
 }
 
+/**
+ * Whether a native segment becomes a metadata segment. Text-less segments are
+ * dropped, except an explicit final marker: parakeet streaming closes a chunk
+ * with `isFinal: true` and no text, and that marker is the only finality signal
+ * the caller gets for the chunk.
+ */
+function carriesSegment(
+  segment: { text: string; isFinal?: boolean },
+  silenceMarker: string
+): boolean {
+  if (!segment.text) return segment.isFinal === true
+  return !silenceMarker || !segment.text.includes(silenceMarker)
+}
+
 function* emitSegment(
   segment: StreamingSegment,
   metadata: boolean | undefined,
   silenceMarker: string
 ): Generator<string | TranscribeSegment | TranscribeStreamEvent> {
+  if (metadata) {
+    if (carriesSegment(segment, silenceMarker)) yield toTranscribeSegment(segment)
+    return
+  }
   if (!segment.text) {
     return
   }
   if (silenceMarker && segment.text.includes(silenceMarker)) {
     return
   }
-  if (metadata) {
-    yield toTranscribeSegment(segment)
-  } else if (segment.text.trim()) {
+  if (segment.text.trim()) {
     yield segment.text
   }
 }

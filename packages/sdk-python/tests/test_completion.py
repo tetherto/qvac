@@ -484,3 +484,88 @@ async def test_deferred_tool_alias_is_mapped_on_the_wire_form():
     sent_tool = transport.sent["tools"][0]
     assert sent_tool["deferLoading"] is True
     assert "defer_loading" not in sent_tool
+
+
+_DEFERRED_TOOL = {
+    "name": "create_issue",
+    "description": "Open a new issue on a repository",
+    "parameters": {"type": "object", "properties": {}},
+    "defer_loading": True,
+}
+
+
+@pytest.mark.parametrize(
+    "tool_search",
+    [
+        {"defaultLimit": 2, "maxLimit": 5},
+        {"default_limit": 2, "max_limit": 5},
+    ],
+)
+async def test_tool_search_limits_reach_the_wire(tool_search):
+    transport = FakeTransport(
+        stream_items=[_chunk([_done(0, stopReason="eos")], done=True)]
+    )
+    run = completion(
+        transport,
+        model_id="m-1",
+        history=[{"role": "user", "content": "open an issue"}],
+        tools=[_DEFERRED_TOOL],
+        tool_search=tool_search,
+    )
+    await run.final
+
+    assert transport.sent["toolSearch"] == {"defaultLimit": 2, "maxLimit": 5}
+
+
+async def test_without_tool_search_no_limits_are_sent():
+    transport = FakeTransport(
+        stream_items=[_chunk([_done(0, stopReason="eos")], done=True)]
+    )
+    run = completion(
+        transport,
+        model_id="m-1",
+        history=[{"role": "user", "content": "open an issue"}],
+        tools=[_DEFERRED_TOOL],
+    )
+    await run.final
+
+    assert "toolSearch" not in transport.sent
+
+
+@pytest.mark.parametrize(
+    "tool_search",
+    [{"defaultLimit": 0}, {"max_limit": -1}, {"limit": 3}, {"maxLimit": 1.5}],
+)
+def test_invalid_tool_search_limits_are_rejected(tool_search):
+    with pytest.raises(ValueError):
+        completion(
+            FakeTransport(),
+            model_id="m-1",
+            history=[{"role": "user", "content": "open an issue"}],
+            tools=[_DEFERRED_TOOL],
+            tool_search=tool_search,
+        )
+
+
+async def test_orchestrate_forwards_tool_search_limits():
+    from tetherto.qvac_sdk._completion import completion_orchestrate
+
+    class LimitsTransport(OrchestratingFakeTransport):
+        async def call_duplex(self, payload, up):
+            self.sent = payload
+            yield _orch(turn=0, events=[_done(0)])
+            yield _orch(done=True)
+
+    async def create_issue(arguments):
+        return {"ok": True}
+
+    transport = LimitsTransport()
+    run = completion_orchestrate(
+        transport,
+        model_id="m",
+        history=[{"role": "user", "content": "open an issue"}],
+        tools=[{**_DEFERRED_TOOL, "handler": create_issue}],
+        tool_search={"default_limit": 1, "max_limit": 2},
+    )
+    await run.final
+    assert transport.sent["toolSearch"] == {"defaultLimit": 1, "maxLimit": 2}

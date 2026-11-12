@@ -167,7 +167,10 @@ function normalizeGPUCapabilities(
     driverVersion: normalizeStringMetric(gpu.driverVersion, gpuDeviceProvenance),
     drivers: normalizeDriverCapabilities(gpu.drivers),
     unifiedMemory: normalizeBooleanMetric(gpu.unifiedMemory, gpuDeviceProvenance),
-    memoryTotalBytes: normalizeDeclaredGPUMemory(gpu.memory, gpu.unifiedMemory)
+    memoryTotalBytes: normalizeDeclaredGPUMemory(gpu.memory, gpu.unifiedMemory),
+    // Trusted even when the rest of the GPU's memory is shared: an integrated
+    // GPU's carve-out is reserved for it and the OS does not count it as RAM.
+    dedicatedMemoryTotalBytes: normalizeNonNegativeMetric(gpu.dedicatedMemory, gpuDeviceProvenance)
   } satisfies GPUResourceCapabilities
 }
 
@@ -190,6 +193,7 @@ function failedGPUSample(id: string, reason: string) {
     decode: failedMetric(reason),
     memoryUsedBytes: failedMetric(reason),
     memoryTotalBytes: failedMetric(reason),
+    dedicatedMemoryUsedBytes: failedMetric(reason),
     powerWatts: failedMetric(reason),
     temperatureCelsius: failedMetric(reason)
   } satisfies GPUResourceSample
@@ -223,6 +227,13 @@ function normalizeGPUSample(
       'GPU memory usage scope is unverified'
     ),
     memoryTotalBytes: normalizeSampledGPUMemory(usage.memoryTotal, scope, GPU_MEMORY_SCOPE_REASON),
+    // A discrete GPU's dedicated usage is its memory usage, so it shares that
+    // scope. An integrated GPU's carve-out usage is read device-wide.
+    dedicatedMemoryUsedBytes: normalizeSampledGPUMemory(
+      usage.dedicatedMemoryUsed,
+      device?.unifiedMemory === true ? 'device' : scope,
+      'GPU memory usage scope is unverified'
+    ),
     powerWatts: normalizeNonNegativeMetric(usage.power, gpuDeviceProvenance),
     temperatureCelsius: normalizeNonNegativeMetric(usage.temperature, gpuDeviceProvenance)
   } satisfies GPUResourceSample

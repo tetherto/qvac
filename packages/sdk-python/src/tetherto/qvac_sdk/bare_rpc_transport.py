@@ -1,72 +1,75 @@
 r"""Production `tetherto.qvac_sdk._transport.Transport` implementation, backed by
-`bare_rpc.RPC` (github.com/holepunchto/bare-rpc-python).
+`bare_rpc.RPC` (github.com/holepunchto/bare-rpc-python) over the worker's
+bare-stow IPC (github.com/holepunchto/bare-stow-host-python).
 
-Like the JS SDK's `client/rpc/node-rpc-client.ts`, this listens for the
-worker to dial back and wires `bare_rpc.RPC` to that connection. It differs
-in the socket family: the Node client uses a Unix domain socket (or a
-`\\.\pipe\...` named pipe on Windows), but asyncio has no cross-platform
-server for either (`start_unix_server` is Unix-only). So this binds a
-loopback TCP port (`127.0.0.1:0`) on every OS and hands the worker a
-`tcp://127.0.0.1:<port>` endpoint. One code path everywhere, and Windows
-works without a named-pipe server.
+The IPC multiplexes the bare-rpc byte stream with bare-stow's control frames:
+the worker's `ready`, `error` and `exit`, and the client's `terminate`. A worker
+that fails to start raises `WorkerStartupError`; one that faults or exits while
+calls are in flight fails them with `WorkerCrashedError`, and closing the
+transport fails them with `WorkerShutdownError`.
 
-Any local user can dial a loopback port, so the worker authenticates: it gets
-a per-session token in its environment (readable only by the same user or
-root, unlike argv) and writes it, newline-terminated, before any RPC frame.
-Only the first connection that presents it is wired to the RPC; the listener
-then closes.
-
-Locating the Bare binary and the worker's JS entry point is not this
-module's job — `command` is supplied by the caller. This is a thin
-client that expects the worker to be available separately; bundling
-those artifacts into the installed package is a separate concern.
+Starting the worker is not this module's job -- `start` is supplied by the
+caller (see `tetherto.qvac_sdk.client`).
 """
 
 from __future__ import annotations
 
 import asyncio
-import hmac
 import json
 import os
-import secrets
-from collections.abc import AsyncIterable, AsyncIterator, Sequence
+import sys
+from collections.abc import (
+    AsyncIterable,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Iterator,
+)
+from contextlib import contextmanager
 from typing import Any
 
 import bare_rpc
+from bare_stow_host import IPC, WorkerError
 
-from .errors import reconstruct_error
+from .errors import (
+    QvacError,
+    SetConfigFailedError,
+    WorkerCrashedError,
+    WorkerShutdownError,
+    WorkerStartupError,
+    reconstruct_error,
+)
 
-_IPC_TOKEN_ENV = "QVAC_IPC_AUTH_TOKEN"
-_HANDSHAKE_TIMEOUT = 10
+__all__ = ["BareRpcTransport", "WorkerStart"]
 
+WorkerStart = Callable[[float], Awaitable[IPC]]
+"""Starts the worker and returns its IPC once it signals ready within the given
+number of seconds."""
 
-def _patch_bare_rpc_outgoing_destroy() -> None:
-    """Work around a bare-rpc-python bug: `RPC._on_stream` handles a peer STREAM
-    DESTROY frame by calling the *async* `OutgoingStream.destroy()` without
-    awaiting or scheduling it, so the coroutine is dropped -- the outgoing stream
-    is never closed and Python warns "coroutine 'OutgoingStream.destroy' was
-    never awaited" (seen tearing down the completion-orchestrate duplex). Wrap
-    `destroy` so it schedules the original on the RPC's own task set -- it
-    actually runs and stays referenced -- and returns the task, so a direct
-    `await stream.destroy()` keeps working too. Idempotent. Remove once bare-rpc
-    schedules/awaits the destroy itself.
-    """
-    outgoing_stream = bare_rpc.OutgoingStream
-    original = outgoing_stream.destroy
-    if getattr(original, "_qvac_scheduled", False):
-        return
-
-    def destroy(self, error=None):
-        task = asyncio.ensure_future(original(self, error))
-        self._rpc._tasks.add(task)
-        task.add_done_callback(self._rpc._tasks.discard)
-        return task
-
-    destroy._qvac_scheduled = True  # type: ignore[attr-defined]
-    outgoing_stream.destroy = destroy  # type: ignore[method-assign]
+DEFAULT_START_TIMEOUT = 60.0
+"""Seconds a worker gets to start, from launch until it has applied its
+configuration, when neither `timeout` nor the config's `rpcInitTimeoutMs` is set."""
 
 
-_patch_bare_rpc_outgoing_destroy()
+def _startup_failed(err: WorkerError) -> WorkerStartupError:
+    timed_out = err.code == "WORKER_TIMEOUT"
+    return WorkerStartupError(
+        (
+            "Worker did not signal ready in time"
+            if timed_out
+            else "Worker failed before signalling ready"
+        ),
+        timed_out=timed_out,
+        exit_code=err.exit_code,
+        signal=err.signal_code,
+        cause=err,
+    )
+
+
+def _platform() -> str:
+    if sys.platform.startswith("linux"):
+        return "linux"
+    return sys.platform
 
 
 def _json_or_raise(data: bytes) -> Any:
@@ -107,24 +110,23 @@ async def _iter_json_lines(chunks: AsyncIterator[bytes]) -> AsyncIterator[Any]:
 
 
 class BareRpcTransport:
-    """Spawns a QVAC SDK worker and speaks to it via `bare_rpc.RPC`,
-    satisfying `tetherto.qvac_sdk._transport.Transport`'s async call/call_stream/call_duplex
-    shape directly.
+    """Starts a QVAC SDK worker with `start` and speaks to it via
+    `bare_rpc.RPC`, satisfying `tetherto.qvac_sdk._transport.Transport`'s async
+    call/call_stream/call_duplex shape directly.
 
-    `command` is the Bare invocation up to (not including) the worker's
-    JSON config argument, e.g. `["bare", "/path/to/worker.js"]` — this
-    class appends `{"QVAC_IPC_SOCKET_PATH": ..., "HOME_DIR": ...}` itself,
-    since that handshake is protocol, not caller, concern.
+    Closing it closes the RPC session, which terminates the worker through its
+    IPC: the worker gets the grace period `start` gave it to stop, then is
+    killed.
     """
 
     def __init__(
         self,
-        command: Sequence[str],
+        start: WorkerStart,
         *,
         home_dir: str | None = None,
         config: dict[str, Any] | None = None,
     ) -> None:
-        self._command = list(command)
+        self._start = start
         # QVAC_HOME_DIR lets CI/tests pin the worker's storage root (models,
         # registry) to a cacheable, per-OS-explicit path instead of the
         # ambiguous expanduser("~") (which Windows resolves via USERPROFILE).
@@ -141,174 +143,106 @@ class BareRpcTransport:
         if cache_dir and "cacheDirectory" not in merged_config:
             merged_config["cacheDirectory"] = cache_dir
         self._config: dict[str, Any] = merged_config
-        self._server: asyncio.AbstractServer | None = None
-        self._proc: asyncio.subprocess.Process | None = None
-        self._writer: asyncio.StreamWriter | None = None
-        self._read_task: asyncio.Task | None = None
-        self._handshakes: set[asyncio.Task] = set()
+        self._closing = False
+        self._starting: asyncio.Future[IPC] | None = None
+        self.ipc: IPC | None = None
         self.rpc: bare_rpc.RPC | None = None
 
-    async def connect(self, *, timeout: float = 30) -> BareRpcTransport:
-        connected: asyncio.Future[None] = asyncio.get_running_loop().create_future()
-        token = secrets.token_hex(32).encode("ascii")
-        rejected = 0
-        wired = False
-
-        async def on_client(
-            reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-        ) -> None:
-            nonlocal rejected, wired
-            handshake = asyncio.current_task()
-            assert handshake is not None
-            self._handshakes.add(handshake)
-            try:
-                authenticated = await self._authenticate(reader, token)
-            except asyncio.CancelledError:
-                writer.close()
-                raise
-            finally:
-                self._handshakes.discard(handshake)
-            if not authenticated:
-                rejected += 1
-                writer.close()
-                return
-            if wired:
-                writer.close()
-                return
-            wired = True
-            self._writer = writer
-            self._read_task = asyncio.current_task()
-            assert self._server is not None
-            self._server.close()
-            if not connected.done():
-                connected.set_result(None)
-            # rpc is created right after the worker is spawned below, long
-            # before the worker can start and dial back into this callback.
-            assert self.rpc is not None
-            try:
-                while True:
-                    chunk = await reader.read(65536)
-                    if not chunk:
-                        break
-                    await self.rpc.receive(chunk)
-            except asyncio.CancelledError:
-                # Expected on teardown: the receive pump is cancelled when the
-                # transport closes. Nothing to unwind here.
-                pass
-            finally:
-                # The socket closed -- the worker exited or crashed (EOF), or we
-                # are tearing down. Either way close the RPC so `_reject_all`
-                # fails every pending call/stream future; otherwise a worker
-                # crash leaves callers awaiting a reply that never comes.
-                # Idempotent with close(), which may have already closed it.
-                if self.rpc is not None:
-                    self.rpc.close()
-
-        # Loopback TCP on every OS -- see the module docstring for why this is
-        # not a Unix socket. port=0 lets the kernel pick a free port.
-        self._server = await asyncio.start_server(on_client, host="127.0.0.1", port=0)
-        port = self._server.sockets[0].getsockname()[1]
-        endpoint = f"tcp://127.0.0.1:{port}"
-
-        spawn_config = json.dumps(
-            {"QVAC_IPC_SOCKET_PATH": endpoint, "HOME_DIR": self._home_dir}
-        )
-        try:
-            self._proc = await asyncio.create_subprocess_exec(
-                *self._command,
-                spawn_config,
-                env={**os.environ, _IPC_TOKEN_ENV: token.decode("ascii")},
+    async def connect(self, *, timeout: float | None = None) -> BareRpcTransport:
+        """Starts the worker and hands it the home folder, config and runtime
+        context. `timeout` bounds the whole start, in seconds; it defaults to
+        the config's `rpcInitTimeoutMs`, then to 60 s."""
+        if timeout is None:
+            timeout_ms = self._config.get("rpcInitTimeoutMs")
+            timeout = (
+                timeout_ms / 1000
+                if isinstance(timeout_ms, (int, float))
+                and not isinstance(timeout_ms, bool)
+                else DEFAULT_START_TIMEOUT
             )
-
-            def send(frame: bytes) -> None:
-                # bare_rpc only calls send once it has a connection, at which
-                # point on_client above has already set the writer.
-                assert self._writer is not None
-                self._writer.write(frame)
-
-            self.rpc = bare_rpc.RPC(send=send)
-            # A worker that cannot authenticate (or crashes on startup) exits
-            # long before `timeout`; fail as soon as it does.
-            exited = asyncio.ensure_future(self._proc.wait())
-            waiters: set[asyncio.Future[Any]] = {connected, exited}
-            try:
-                done, _ = await asyncio.wait(
-                    waiters, timeout=timeout, return_when=asyncio.FIRST_COMPLETED
-                )
-            finally:
-                if not exited.done():
-                    exited.cancel()
-            if connected not in done:
-                detail = (
-                    f" ({rejected} connection(s) rejected); a worker older than "
-                    "this client does not send the IPC token"
-                    if rejected
-                    else ""
-                )
-                if exited in done:
-                    raise RuntimeError(
-                        f"worker exited with code {exited.result()} before "
-                        f"authenticating{detail}"
-                    )
-                raise asyncio.TimeoutError(
-                    f"worker did not authenticate within {timeout}s{detail}"
-                )
-            # Apply SDK config before any method call, mirroring the JS client's
-            # `__init_config` on connect (server/rpc/handle-request.ts routes it).
+        self._closing = False
+        self.ipc = None
+        self.rpc = None
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        # Held so close() can cancel a start that has not signalled ready;
+        # bare-stow-host closes the worker of a cancelled start.
+        starting = asyncio.ensure_future(self._start(timeout))
+        self._starting = starting
+        try:
+            self.ipc = await starting
+        except asyncio.CancelledError as err:
+            if not (self._closing and starting.cancelled()):
+                raise
+            raise WorkerShutdownError(cause=err) from err
+        except WorkerError as err:
+            raise _startup_failed(err) from err
+        finally:
+            self._starting = None
+        if self._closing:
+            await self.ipc.close()
+            raise WorkerShutdownError()
+        self.rpc = bare_rpc.RPC(self.ipc)
+        try:
+            init: dict[str, Any] = {
+                "type": "__init_config",
+                "homeDir": self._home_dir,
+                "runtimeContext": {"platform": _platform()},
+            }
             if self._config:
-                _json_or_raise(
-                    await self.rpc.request(
-                        command=0,
-                        data=json.dumps(
-                            {"type": "__init_config", "config": self._config}
-                        ).encode("utf-8"),
-                    )
+                init["config"] = self._config
+            reply = json.loads(
+                await asyncio.wait_for(
+                    self.rpc.request(command=0, data=json.dumps(init).encode("utf-8")),
+                    deadline - loop.time(),
                 )
+            )
+            if not reply.get("success"):
+                raise SetConfigFailedError(reply.get("error"))
             return self
+        except asyncio.TimeoutError as err:
+            await self.close()
+            raise WorkerStartupError(
+                "Worker did not apply its configuration in time", timed_out=True
+            ) from err
+        except WorkerError as err:
+            await self.close()
+            raise _startup_failed(err) from err
         except BaseException:
-            # Spawn / connect / init-config failures must tear down the
-            # loopback server bound above; otherwise the port stays open.
             await self.close()
             raise
 
-    @staticmethod
-    async def _authenticate(reader: asyncio.StreamReader, token: bytes) -> bool:
-        try:
-            presented = await asyncio.wait_for(
-                reader.readexactly(len(token) + 1), timeout=_HANDSHAKE_TIMEOUT
-            )
-        except (asyncio.IncompleteReadError, asyncio.TimeoutError, OSError):
-            return False
-        return hmac.compare_digest(presented, token + b"\n")
-
     async def close(self) -> None:
-        for handshake in list(self._handshakes):
-            handshake.cancel()
-        if self._read_task:
-            self._read_task.cancel()
-        if self.rpc:
-            self.rpc.close()
-        if self._proc and self._proc.returncode is None:
-            # Only signal a still-running worker: terminate()/kill() on an
-            # already-exited process raises ProcessLookupError (the worker may
-            # have crashed on its own before close()).
-            self._proc.terminate()
-            try:
-                await asyncio.wait_for(self._proc.wait(), timeout=5)
-            except asyncio.TimeoutError:
-                self._proc.kill()
-        if self._writer:
-            self._writer.close()
-        self._writer = None
-        self._read_task = None
-        if self._server:
-            self._server.close()
-            try:
-                await asyncio.wait_for(self._server.wait_closed(), timeout=5)
-            except asyncio.TimeoutError:
-                # Best-effort close: if the server socket doesn't finish within
-                # the timeout, don't block teardown on it.
-                pass
+        self._closing = True
+        if self._starting is not None:
+            self._starting.cancel()
+        if self.rpc is not None:
+            await self.rpc.close()
+        elif self.ipc is not None:
+            await self.ipc.close()
+
+    def _worker_failed(self, err: WorkerError) -> QvacError:
+        if self._closing:
+            return WorkerShutdownError(cause=err)
+        return WorkerCrashedError(err.exit_code, err.signal_code, cause=err)
+
+    @contextmanager
+    def _session_errors(self) -> Iterator[None]:
+        """Raises the SDK's error for a call that the end of the session cut
+        off. bare-rpc fails calls with `CHANNEL_CLOSED` when the session ends
+        without a worker fault: on `close()`, or when the worker reported its
+        exit and its IPC ended, as on SIGTERM."""
+        try:
+            yield
+        except WorkerError as err:
+            raise self._worker_failed(err) from err
+        except bare_rpc.RPCError as err:
+            if err.code != "CHANNEL_CLOSED" or isinstance(err, bare_rpc.RPCRemoteError):
+                raise
+            if self._closing:
+                raise WorkerShutdownError(cause=err) from err
+            exit_code = self.ipc.exit_code if self.ipc is not None else None
+            raise WorkerCrashedError(exit_code, cause=err) from err
 
     async def __aenter__(self) -> BareRpcTransport:
         return await self.connect()
@@ -318,51 +252,66 @@ class BareRpcTransport:
 
     # ---- Transport protocol ----------------------------------------------
 
-    def _require_rpc(self) -> Any:
+    def _require_rpc(self) -> bare_rpc.RPC:
         if self.rpc is None:
             raise RuntimeError("BareRpcTransport used before connect()")
         return self.rpc
 
     async def call(self, payload: dict) -> dict:
-        """Unary, via bare_rpc.RPC.request -- no hand-rolled framing at all."""
-        data = await self._require_rpc().request(
-            command=0, data=json.dumps(payload).encode("utf-8")
-        )
+        """Unary, via bare_rpc.RPC.request."""
+        with self._session_errors():
+            data = await self._require_rpc().request(
+                command=0, data=json.dumps(payload).encode("utf-8")
+            )
         return _json_or_raise(data)
 
     async def call_stream(self, payload: dict) -> AsyncIterator[dict]:
         """Server-stream, via bare_rpc.RPC.request_with_response_stream."""
-        stream = await self._require_rpc().request_with_response_stream(
-            command=0, data=json.dumps(payload).encode("utf-8")
-        )
-        async for value in _iter_json_lines(stream):
-            yield value
+        with self._session_errors():
+            stream = await self._require_rpc().request_with_response_stream(
+                command=0, data=json.dumps(payload).encode("utf-8")
+            )
+            async for value in _iter_json_lines(stream):
+                yield value
 
     async def call_duplex(
         self, payload: dict, up: AsyncIterable[bytes]
     ) -> AsyncIterator[dict]:
         """Duplex, via bare_rpc.RPC.create_bidirectional_stream -- first outgoing
         chunk is the JSON payload, then `up`'s chunks; yields parsed response
-        chunks with the same buffer-and-split-on-newline handling as call_stream."""
-        outgoing, incoming = await self._require_rpc().create_bidirectional_stream(
-            command=0
-        )
-        await outgoing.write(json.dumps(payload).encode("utf-8"))
+        chunks with the same buffer-and-split-on-newline handling as call_stream.
+
+        When `up` raises, both directions are closed so the worker stops
+        waiting for input, and the error is raised once the reply has ended."""
+        with self._session_errors():
+            outgoing, incoming = await self._require_rpc().create_bidirectional_stream(
+                command=0
+            )
+            await outgoing.write(json.dumps(payload).encode("utf-8"))
 
         async def _pump_up() -> None:
-            async for chunk in up:
-                await outgoing.write(chunk)
+            try:
+                async for chunk in up:
+                    try:
+                        await outgoing.write(chunk)
+                    except Exception:
+                        # The worker stopped reading; its reply says why.
+                        return
+            except BaseException:
+                outgoing.destroy()
+                incoming.destroy()
+                raise
             await outgoing.end()
 
         pump_task = asyncio.ensure_future(_pump_up())
         try:
-            async for value in _iter_json_lines(incoming):
-                yield value
+            with self._session_errors():
+                async for value in _iter_json_lines(incoming):
+                    yield value
         finally:
             if not pump_task.done():
                 pump_task.cancel()
             try:
                 await pump_task
             except asyncio.CancelledError:
-                # Expected: pump_task was cancelled as part of close().
                 pass

@@ -76,12 +76,20 @@ export function summarizeRequest(request: Request): Record<string, unknown> {
     return summary
   }
 
-  if (request.type === 'embed') {
+  if (request.type === 'embed' || request.type === 'embedBatch') {
+    if (request.input !== undefined) {
+      summary['input'] = '[1 embedding input]'
+      return summary
+    }
+    if (request.inputs !== undefined) {
+      summary['inputs'] = `[${request.inputs.length} embedding inputs]`
+      return summary
+    }
     const text = request['text']
     if (Array.isArray(text)) {
       const totalLen = text.reduce((sum, t) => sum + t.length, 0)
       summary['text'] = `[${text.length} items, ${totalLen} chars]`
-    } else if (text.length > 200) {
+    } else if (text !== undefined && text.length > 200) {
       summary['text'] = `[${text.length} chars]`
     } else {
       summary['text'] = text

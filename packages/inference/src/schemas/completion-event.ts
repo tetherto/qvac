@@ -25,7 +25,7 @@ export const completionStatsSchema = z.object({
   // Speculative decoding (`spec_type`): draft tokens proposed, and accepted.
   draftTokens: z.number().optional(),
   draftAcceptedTokens: z.number().optional(),
-  backendDevice: z.enum(['cpu', 'gpu']).optional(),
+  backendDevice: z.enum(['cpu', 'gpu', 'npu']).optional(),
   backendName: z
     .string()
     .optional()

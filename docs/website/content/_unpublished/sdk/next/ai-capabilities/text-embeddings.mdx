@@ -7,9 +7,13 @@ schemaType: HowTo
 
 ## Overview
 
-Text embeddings uses [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp) as inference engine. Load any supported model using `modelType: "embeddings"`. Then, provide text input as `text` where the value is either a single `string` or an array of strings.
+Text embeddings use [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp) as the inference engine. Load a supported model using `modelType: "embeddings"`. Call `embed({ modelId, input: "query" })` for one text string, or `embedBatch({ modelId, inputs: ["first", "second"] })` for a batch.
 
-`embed()` returns a single embedding vector (`number[]`) for single text input, or an array of embedding vectors (`number[][]`) for batch input.
+`embed()` returns `embedding: number[]`. `embedBatch()` returns `embedding: number[][]`, with one vector per input in order, including one-item batches. `embed({ text: "query" })` still works. `embed({ text: ["first", "second"] })` and `embed({ inputs })` keep their original return shapes, but they are deprecated and log a warning. Use `embedBatch()` instead.
+
+<Callout type="info">
+For image and audio inputs with EmbeddingGemma 2, see [Multimodal embeddings](/sdk/ai-capabilities/multimodal-embeddings).
+</Callout>
 
 `modelConfig.pooling` accepts `"none"`, `"mean"`, `"cls"`, or `"last"`. Omit it to use the model default. `"rank"` fails validation, including in `deviceDefaults` in [`qvac.config.*`](/sdk/configuration): it produces reranker scores, not embeddings, and `embed()` does not support reranker models; use [reranking](/sdk/ai-capabilities/reranking) for those.
 
@@ -17,7 +21,7 @@ Text embeddings uses [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fa
 
 Use the following sequence of function calls:
 1. [`loadModel()`](/sdk/reference/api#loadmodel)
-2. [`embed()`](/sdk/reference/api#embed)
+2. [`embed()`](/sdk/reference/api#embed) or [`embedBatch()`](/sdk/reference/api#embedbatch)
 3. [`unloadModel()`](/sdk/reference/api#unloadmodel)
 
 For how to use each function, see [SDK — API reference](/sdk/reference/api/).
@@ -68,8 +72,16 @@ The following script shows an example of embedding:
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/Embeddings.kt title="Embeddings.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart), the [Python quickstart](/sdk/python-sdk#quickstart), or the [Kotlin quickstart](/sdk/kotlin-sdk#quickstart).
 </Callout>

@@ -171,14 +171,15 @@ test('contract completionStream.response: validates streaming event chunks', (t)
   const contract = contractValidate('completionStream.response', statsChunk)
   t.ok(contract.valid, `contract accepts stats + done chunk: ${contract.errors}`)
 
-  const badDevice = {
+  const withDevice = (backendDevice: string) => ({
     type: 'completionStream',
     events: [
-      { type: 'completionStats', seq: 0, stats: { backendDevice: 'npu' } },
+      { type: 'completionStats', seq: 0, stats: { backendDevice } },
       { type: 'completionDone', seq: 1 }
     ]
-  }
-  t.is(contractValidate('completionStream.response', badDevice).valid, false)
+  })
+  t.ok(contractValidate('completionStream.response', withDevice('npu')).valid)
+  t.is(contractValidate('completionStream.response', withDevice('tpu')).valid, false)
 
   const extraKey = {
     type: 'completionStream',
@@ -310,7 +311,7 @@ test('contract finetune.response: validates terminal stats payload', (t) => {
   t.ok(contract.valid, `contract accepts terminal stats payload: ${contract.errors}`)
 })
 
-test('contract backendName: completion, batch and embedding preserve optional string stats', (t) => {
+test('contract backendName: completion, batch, embed and embedBatch preserve optional string stats', (t) => {
   for (const backendName of ['cpu', 'metal', 'cuda,vulkan']) {
     const event = { type: 'completionStats', seq: 0, stats: { backendName } }
     t.is(
@@ -333,6 +334,15 @@ test('contract backendName: completion, batch and embedding preserve optional st
         type: 'embed',
         success: true,
         embedding: [1, 0],
+        stats: { backendName }
+      }).valid,
+      true
+    )
+    t.is(
+      contractValidate('embedBatch.response', {
+        type: 'embedBatch',
+        success: true,
+        embedding: [[1, 0]],
         stats: { backendName }
       }).valid,
       true
@@ -365,4 +375,27 @@ test('contract backendName: completion, batch and embedding preserve optional st
     }).valid,
     true
   )
+})
+
+test('contract diffusion request carries custom schedules and VAE tile sizes', (t) => {
+  const request = {
+    type: 'diffusionStream',
+    modelId: 'qwen-turbo',
+    prompt: 'A red teapot.',
+    custom_sigmas: [1, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0],
+    cfg_scale: 1,
+    sampling_method: 'euler',
+    vae_tiling: true,
+    vae_tile_size: 64
+  }
+  t.ok(contractValidate('diffusionStream.request', request).valid)
+  for (const custom_sigmas of [[], [0], [-1, 0], [Number.MAX_VALUE, 0], ['1', 0]]) {
+    t.is(contractValidate('diffusionStream.request', { ...request, custom_sigmas }).valid, false)
+  }
+  for (const vae_tile_size of [1, 2147483647, '64x32']) {
+    t.ok(contractValidate('diffusionStream.request', { ...request, vae_tile_size }).valid)
+  }
+  for (const vae_tile_size of [0, 64.5, 2147483648, '64', 'garbage', '64.5x32']) {
+    t.is(contractValidate('diffusionStream.request', { ...request, vae_tile_size }).valid, false)
+  }
 })

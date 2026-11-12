@@ -64,6 +64,10 @@ test('manifest lists every method with its call shape', (t) => {
   const names = manifest.methods.map((method) => method.name)
 
   t.alike(names, Object.keys(methodShapes).sort(), 'one manifest entry per method, sorted')
+  t.alike(
+    names.filter((name) => name.startsWith('embed')),
+    ['embed', 'embedBatch']
+  )
 
   for (const method of manifest.methods) {
     t.is(
@@ -302,6 +306,10 @@ test('models registry catalog exports every named model constant', (t) => {
     names.includes('PARAKEET_TRANSCRIBEPSY_250M_Q8_0') &&
       names.includes('PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0'),
     'the Hugging Face TranscribePsy GGUFs are named model constants'
+  )
+  t.ok(
+    names.includes('PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0'),
+    'the full TranscribePsy-250M-EU GGUF is named apart from the EU-sub constants'
   )
 
   for (const [legacyName, canonicalName] of [

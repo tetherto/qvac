@@ -65,7 +65,9 @@ export const llmConfigBaseSchema = z.object({
   device: z
     .string()
     .optional()
-    .describe("Device to run inference on: `'gpu'` or `'cpu'`. Default `'gpu'`."),
+    .describe(
+      "Device class to run inference on: `'gpu'`, `'cpu'` or `'npu'`. Default `'gpu'`. `'npu'` is the AMD XDNA2 NPU on Linux x64, which needs XRT 2.25 or newer and read/write access to its /dev/accel node; GPU selection never picks it. With no NPU listed, `'npu'` falls back to the GPU order, then the CPU. It cannot be combined with backend, devices, split-mode (beyond their defaults), main-gpu, rpc-servers or finetuning, and a listed NPU that fails to open runs the load on the CPU."
+    ),
   predict: z
     .union([
       z.literal(-1), // special: until stop token
@@ -78,7 +80,7 @@ export const llmConfigBaseSchema = z.object({
     .string()
     .optional()
     .describe(
-      "Seeds conversation history on the JS side only; never forwarded to the addon. Default `'You are a helpful assistant.'`"
+      "Prepended as the system message when a request's history carries none; applied on the JS side and never forwarded to the addon. Unset by default, so the model sees the history as sent."
     ),
   load_mode: z
     .enum(['none', 'mmap', 'mlock', 'mmap+mlock', 'dio'])
@@ -149,6 +151,12 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       "Writable directory for checkpoint files, required with `cache_checkpoint_storage: 'disk'` and rejected without it. The addon writes in a private directory it creates inside it (on Windows, in the directory itself). On mobile, pass the app's cache directory."
     ),
+  cache_share_across_keys: z
+    .boolean()
+    .optional()
+    .describe(
+      'Let a request reuse the longest prompt prefix another conversation on this model holds. Default false: each request keeps to its own `kvCache` key, and a request without one starts cold. With `true`, callers can tell from prompt-token counts and timing whether another conversation shares their prompt.'
+    ),
   cache_ram_mib: z
     .number()
     .int()
@@ -192,13 +200,13 @@ export const llmConfigBaseSchema = z.object({
     .min(1)
     .optional()
     .describe(
-      "Explicit ordered native device names, for example RPC0,RPC1. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order."
+      "Explicit ordered native device names, for example RPC0,RPC1, or XDNA0 for the AMD XDNA NPU alone, which reports `backendDevice` `'npu'`; naming XDNA0 without a listed NPU fails the load, and a load with XDNA0 in devices, alone or with other devices, cannot finetune. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order."
     ),
   'split-mode': z
     .enum(['none', 'layer', 'tensor'])
     .optional()
     .describe(
-      "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctx_size` explicitly)."
+      "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctx_size` explicitly). `'tensor'` is rejected with the XDNA0 NPU."
     ),
   'flash-attn': z
     .enum(['on', 'off', 'auto'])
@@ -434,7 +442,7 @@ export const llmConfigBaseSchema = z.object({
     .boolean()
     .optional()
     .describe(
-      'Run the multimodal projector (mmproj / vision encoder) on the GPU (multimodal models only). `true` forces GPU, `false` forces CPU. When unset, the backend is auto-selected per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on every other Android GPU (Arm Mali, Adreno <800, and undetectable Adreno tiers), with the LLM layers still on the GPU. Only honoured when the model itself runs on a GPU backend — ignored with a warning on CPU.'
+      "Run the multimodal projector (mmproj / vision encoder) on the GPU (multimodal models only). `true` forces GPU, `false` forces CPU. When unset, the backend is auto-selected per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on every other Android GPU (Arm Mali, Adreno <800, and undetectable Adreno tiers), with the LLM layers still on the GPU. On an NPU load (`device: 'npu'` or XDNA0 as the first local device in devices) it runs on a GPU beside the NPU, else the CPU; `true` with no GPU runs it on the NPU. Only honoured when the model itself runs on a GPU or NPU backend — ignored with a warning on CPU."
     )
 })
 
@@ -446,11 +454,15 @@ export type LlmConfigInput = z.infer<typeof llmConfigBaseSchema>
 // which then aborts its fit instead of placing layers to free device memory.
 // Absent emits no `--gpu-layers`, so the addon keeps fabric's own -1 — already
 // "every layer" whenever the fit does not run.
+//
+// system_prompt carries no default either: a caller that sends no system
+// message gets the model's chat template as written, the same prompt any other
+// llama.cpp host renders for that history.
 export const LLM_CONFIG_DEFAULTS = {
   ctx_size: 1024,
   device: 'gpu',
-  system_prompt: 'You are a helpful assistant.',
-  image_tile_mode: 'sequential'
+  image_tile_mode: 'sequential',
+  cache_share_across_keys: false
 } as const satisfies Partial<LlmConfigInput>
 
 // Full schema - applies defaults via transform (no duplication)
@@ -474,6 +486,55 @@ export type LlmConfig = z.infer<typeof llmConfigSchema>
 
 // Base schema - validates types, all fields optional (for input validation)
 export const embedConfigBaseSchema = z.object({
+  ctxSize: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      'Runtime context size in tokens. Unset uses the model trained context size. Lower it to bound memory for long-context models.'
+    ),
+  projectionModelSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'Projection model for image and audio embeddings, such as EmbeddingGemma 2 mmproj. Omit for text-only use.'
+    ),
+  imageMaxTokens: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      'Maximum image token budget. Unset keeps the projector default. Each input must fit in batchSize.'
+    ),
+  imageMinTokens: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe('Minimum image token budget. Must not exceed imageMaxTokens.'),
+  mmprojNoAudio: z
+    .boolean()
+    .optional()
+    .describe('Skip the audio encoder. Defaults to false. Audio is rejected when enabled.'),
+  mmprojUseGpu: z
+    .boolean()
+    .optional()
+    .describe(
+      'Projector GPU override. Unset follows the addon device policy; ignored when the model runs on CPU.'
+    ),
+  imageMaxMegapixels: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe('Maximum image size before decoding. Defaults to 50 megapixels.'),
+  audioMaxSeconds: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe('Maximum audio duration before decoding. Defaults to 600 seconds.'),
   poll: z
     .number()
     .int()
@@ -570,6 +631,40 @@ export const embedConfigBaseSchema = z.object({
 })
 
 export type EmbedConfigInput = z.infer<typeof embedConfigBaseSchema>
+
+function refineEmbedLoadConfig(config: EmbedConfigInput, ctx: z.RefinementCtx) {
+  if (
+    config.imageMinTokens !== undefined &&
+    config.imageMaxTokens !== undefined &&
+    config.imageMinTokens > config.imageMaxTokens
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['imageMinTokens'],
+      message: 'imageMinTokens must not exceed imageMaxTokens.'
+    })
+  }
+
+  if (config.projectionModelSrc) return
+  for (const key of [
+    'imageMinTokens',
+    'imageMaxTokens',
+    'imageMaxMegapixels',
+    'audioMaxSeconds',
+    'mmprojNoAudio',
+    'mmprojUseGpu'
+  ] as const) {
+    if (config[key] !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [key],
+        message: `${key} requires projectionModelSrc.`
+      })
+    }
+  }
+}
+
+export const embedLoadConfigSchema = embedConfigBaseSchema.superRefine(refineEmbedLoadConfig)
 
 // Default values - typed as partial of the config
 export const EMBED_CONFIG_DEFAULTS = {

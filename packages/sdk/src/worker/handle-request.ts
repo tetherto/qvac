@@ -9,12 +9,7 @@ import { send, stream, duplex, dispatchTransport } from '@qvac/inference/engine'
 import type RPC from 'bare-rpc'
 import { sendErrorResponse, sendStreamErrorResponse } from '@/server/error-handlers'
 import { PluginHandlerTypeMismatchError } from '@/utils/errors-server'
-import {
-  handleInitConfig,
-  isInitConfigMessage,
-  handleShutdown,
-  isShutdownMessage
-} from './handler-utils'
+import { handleInitConfig, isInitConfigMessage } from './handler-utils'
 import { createServerProfiler, type ServerProfiler } from '@/server/rpc/profiling'
 import { isTerminalChunk, signalOnWireClose } from '@/server/rpc/rpc-utils'
 import { createProgressThrottle } from '@/server/rpc/progress-throttle'
@@ -44,10 +39,6 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
     // Internal control messages bypass the engine.
     if (isInitConfigMessage(jsonData)) {
       handleInitConfig(req, jsonData)
-      return
-    }
-    if (isShutdownMessage(jsonData)) {
-      await handleShutdown(req)
       return
     }
 

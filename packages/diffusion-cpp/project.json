@@ -28,9 +28,10 @@
           "artifactNamePrefix": "sd-cpp-",
           "includeVulkanSdk": true,
           "includeCuda": true,
+          "includeCudaWin32": true,
           "includeCudaArm64": true,
-          "platformCmakeDefines": "linux: -D SD_CUDA=ON",
-          "postArtifactBuildCommand": "if [ \"$BUILD_PLATFORM\" = linux ]; then node scripts/verify-prebuild-linking.mjs prebuilds; fi"
+          "platformCmakeDefines": "linux: -D SD_CUDA=ON\nwin32: -D SD_CUDA=ON",
+          "postArtifactBuildCommand": "if [ \"$BUILD_PLATFORM\" = linux ] || [ \"$BUILD_PLATFORM\" = win32 ]; then node scripts/verify-prebuild-linking.mjs prebuilds; fi"
         }
       },
       "inputs": [

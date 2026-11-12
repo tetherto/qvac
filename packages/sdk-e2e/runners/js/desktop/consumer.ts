@@ -1,3 +1,4 @@
+import { ImageEmbeddingExecutor } from '../shared/executors/image-embedding-executor.js'
 import { SpeakerAwareExecutor } from '../shared/executors/node/speaker-aware-executor.js'
 import { DecisionExecutor } from '../shared/executors/decision-executor.js'
 import { RerankExecutor } from '../shared/executors/rerank-executor.js'
@@ -8,7 +9,7 @@ import { profiler } from '@qvac/sdk'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { ResourceManager } from '../shared/resource-manager.js'
-import { collectTestDeps } from '../shared/collect-test-deps.js'
+import { resolveBootstrapDeps, resolveBootstrapModels } from '../shared/bootstrap-deps.js'
 import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
 import { ModelLoadingExecutor } from '../shared/executors/model-loading-executor.js'
 import { CompletionExecutor } from '../shared/executors/completion-executor.js'
@@ -126,16 +127,19 @@ function resolveBatchAttachmentPath(inputPath: string) {
 export async function bootstrap(filteredTests?: TestDefinition[]) {
   ensureDesktopE2EConfig()
 
-  // `filteredTests` (when present) is the producer's post-filter test list
-  // delivered via register-ack; absence keeps the legacy "warm everything" path.
-  const allowedDeps = filteredTests ? collectTestDeps(filteredTests) : undefined
-  await resources.downloadAllOnce(console.log, { allowedDeps })
+  const allowedDeps = resolveBootstrapDeps(filteredTests)
+  await resources.downloadAllOnce(console.log, {
+    allowedDeps,
+    // Standalone bootstrap only
+    onlyModels: filteredTests ? undefined : resolveBootstrapModels()
+  })
 }
 
 const stepBindings = createStepBindings(resources)
 
 export const executor = createExecutor({
   handlers: [
+    new ImageEmbeddingExecutor(resources),
     new SpeakerAwareExecutor(resources),
     new DecisionExecutor(resources),
     new RerankExecutor(resources),

@@ -10,7 +10,8 @@ import {
   buildWavHeader,
   buildStreamingWavHeader,
   buildWavBuffer,
-  speechAliasKey
+  speechAliasKey,
+  speechInstructFor
 } from '@/serve/extensions/openai/audio'
 import { parseOpenAIOptions } from '@/serve/extensions/openai/config'
 import { speechEncodeArgs, ENCODED_SPEECH_FORMATS } from '@/serve/lib/audio-transcode'
@@ -115,6 +116,19 @@ describe('resolveSampleRate', () => {
 
   it('maps Supertonic to 44100 Hz', () => {
     assert.equal(resolveSampleRate({ ttsEngine: 'supertonic' }), 44100)
+  })
+
+  it('knows the native rate of every @qvac/tts-ggml engine', () => {
+    for (const [ttsEngine, sampleRate] of [
+      ['parler', 44100],
+      ['cosyvoice3', 24000],
+      ['audio8', 44100],
+      ['moss', 24000],
+      ['moss-sfx', 48000],
+      ['moss-speech', 24000]
+    ] as const) {
+      assert.equal(resolveSampleRate({ ttsEngine }), sampleRate, ttsEngine)
+    }
   })
 
   it('is case-insensitive on engine name', () => {
@@ -292,5 +306,42 @@ describe('parseOpenAIOptions — audio.speech.maxInputChars', () => {
         /serve\.openai\.audio\.speech\.maxInputChars must be a positive integer or null/
       )
     }
+  })
+})
+
+describe('speechInstructFor', () => {
+  const cosyvoice3 = { ttsEngine: 'cosyvoice3' }
+
+  it('forwards a trimmed instructions string to a CosyVoice3 alias without conditioning', () => {
+    assert.equal(speechInstructFor(cosyvoice3, '  请用广东话表达。 '), '请用广东话表达。')
+    // `moderate` disengages the pace channel, so it is not a configured control.
+    assert.equal(
+      speechInstructFor({ ...cosyvoice3, pace: 'moderate' }, 'speak softly'),
+      'speak softly'
+    )
+  })
+
+  it('keeps the conditioning an operator configured on the alias', () => {
+    for (const configured of [
+      { instruct: { dialect: 'cantonese' } },
+      { instruct: '请用四川话表达。' },
+      { emotion: 'happy' },
+      { pace: 'fast' }
+    ]) {
+      assert.equal(
+        speechInstructFor({ ...cosyvoice3, ...configured }, 'speak in a cheerful tone'),
+        undefined,
+        JSON.stringify(configured)
+      )
+    }
+  })
+
+  it('returns undefined for other engines, blank text, and non-strings', () => {
+    assert.equal(speechInstructFor({ ttsEngine: 'chatterbox' }, 'speak softly'), undefined)
+    assert.equal(speechInstructFor(undefined, 'speak softly'), undefined)
+    assert.equal(speechInstructFor({}, 'speak softly'), undefined)
+    assert.equal(speechInstructFor(cosyvoice3, '   '), undefined)
+    assert.equal(speechInstructFor(cosyvoice3, undefined), undefined)
+    assert.equal(speechInstructFor(cosyvoice3, 42), undefined)
   })
 })
