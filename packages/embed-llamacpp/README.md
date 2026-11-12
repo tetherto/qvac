@@ -220,7 +220,7 @@ const embeddings = await response.await()
 
 When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `total_tokens`, `total_time_ms`, `tokens_per_second`, `context_size`, `trained_context_size`, `backendDevice`, and `backendName`. `context_size` is the active runtime llama context size, while `trained_context_size` is the model's trained context size.
 
-The backend fields describe the primary model's final placement after backend selection and fitting. `backendDevice` is `"cpu"` or `"gpu"`. `backendName` is the lowercase backend family, such as `"cpu"`, `"cuda"`, `"vulkan"`, `"metal"`, `"opencl"`, or `"rpc"`. It reports `"cpu"` when no layers are offloaded. A model split across different backend families reports their distinct names in sorted, comma-separated order, such as `"cuda,vulkan"`. CPU work that accompanies GPU offload and a separately configured projector do not add names. Older native addons omit `backendName`. It is available in terminal stats and the `stats` event.
+The backend fields describe the primary model's final placement after backend selection and fitting. `backendDevice` is `"cpu"` or `"gpu"`. `backendName` is the lowercase backend family, such as `"cpu"`, `"cuda"`, `"vulkan"`, `"metal"`, `"opencl"`, or `"rpc"`. It reports `"cpu"` when no layers are offloaded. A model split across different backend families reports their distinct names in sorted, comma-separated order, such as `"cuda,vulkan"`. CPU work that accompanies GPU offload and a separately configured projector do not add names. The stat is left out when the addon cannot identify the backend, and native addons older than this field never send it. It is available in terminal stats and the `stats` event.
 
 #### Embed images and audio
 
