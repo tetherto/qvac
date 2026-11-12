@@ -13,6 +13,7 @@ We'll build an LLM chat mobile application using the following stack:
 
 ## Prerequisites
 
+- Node.js `^22.21.0 || >=24.9.0` (prebuild bundles the QVAC worker, which needs it)
 - npm `>= v10.9`
 - macOS for iOS; Linux or macOS for Android (Windows with small adjustments)
 - Mobile development environment with a physical device (iOS or Android)
@@ -47,7 +48,7 @@ npx create-expo-app@latest qvac-expo-chat --template blank-typescript@sdk-58
 cd qvac-expo-chat
 ```
 
-This creates a minimal TypeScript Expo project with a single `App.tsx` entry point. This tutorial uses QVAC SDK 0.24, which supports Expo SDK 58.
+This creates a minimal TypeScript Expo project with a single `App.tsx` entry point. QVAC needs Expo SDK 58 or newer.
 </Step>
 
 <Step>
@@ -68,18 +69,18 @@ At this point, you should see the default Expo screen rendered on your phone. Th
 
 ## Step 3: install QVAC
 
-In this step we'll add QVAC SDK 0.24 to the project and complete the Expo-specific setup for running local inference on a physical device.
+In this step we'll add QVAC SDK to the project and complete the Expo-specific setup for running local inference on a physical device.
 
 <Callout type="info">
-This tutorial is pinned to `@qvac/sdk` 0.24. For the Expo SDK and `react-native-bare-kit` versions it needs, see [JS/TS SDK — Expo](/sdk/js-ts-sdk#expo).
+For the Expo SDK and `react-native-bare-kit` versions QVAC needs, see [JS/TS SDK — Expo](/sdk/js-ts-sdk#expo).
 </Callout>
 
 <Steps>
 <Step>
-Install the SDK at the version this tutorial uses:
+Install the SDK:
 
 ```bash
-npm i @qvac/sdk@0.24.0
+npm i @qvac/sdk
 ```
 
 With pnpm or bun's isolated linker, also add `bare-stow-runtime` and `bare-stow-host`, which the generated worker files import. Yarn needs `nodeLinker: node-modules` in `.yarnrc.yml`, because the bundler reads packages from `node_modules`.
@@ -120,14 +121,13 @@ Check that `package.json` now lists these versions:
 ```json title="package.json"
 {
   "dependencies": {
-    "@qvac/sdk": "^0.24.0",
     "expo": "~58.0.x",
     "react-native-bare-kit": "^0.17.1"
   }
 }
 ```
 
-If `expo` shows another major version, your project uses a different Expo SDK than QVAC 0.24 supports. Create the project again from Step 2.
+If `expo` is older than 58, your project uses an Expo SDK that QVAC doesn't support. Create the project again from Step 2.
 </Step>
 </Steps>
 
@@ -180,7 +180,7 @@ export default function App() {
         setStatus("Loading model…");
         modelId = await loadModel({
           modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-          modelType: "llm",
+          modelType: "llamacpp-completion",
           modelConfig: {
             device: "gpu",
             ctx_size: 2048,
@@ -207,9 +207,11 @@ export default function App() {
         });
 
         let acc = "";
-        for await (const token of result.tokenStream) {
-          acc += token;
-          if (!cancelled) setOutput(acc);
+        for await (const event of result.events) {
+          if (event.type === "contentDelta") {
+            acc += event.text;
+            if (!cancelled) setOutput(acc);
+          }
         }
 
         if (!cancelled) setStatus("Done ✅");
@@ -387,7 +389,7 @@ export default function App() {
 
         const id = await loadModel({
           modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-          modelType: "llm",
+          modelType: "llamacpp-completion",
           modelConfig: {
             device: "gpu",
             ctx_size: 2048,
@@ -461,8 +463,9 @@ export default function App() {
 
       let acc = "";
 
-      for await (const token of result.tokenStream) {
-        acc += token;
+      for await (const event of result.events) {
+        if (event.type !== "contentDelta") continue;
+        acc += event.text;
 
         // Update only the last assistant message content
         setMessages((prev) =>
@@ -471,10 +474,8 @@ export default function App() {
       }
 
       // Optional: stats (log only)
-      try {
-        const stats = await result.stats;
-        console.log("📊 Completion stats:", stats);
-      } catch {}
+      const final = await result.final;
+      if (final.stats) console.log("📊 Completion stats:", final.stats);
     } catch (e: any) {
       // Show any error in the assistant bubble.
       setMessages((prev) =>
