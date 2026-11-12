@@ -14,7 +14,10 @@ import {
   tryAcquireDownloadLocks
 } from '@/handlers/load-model/download-lock'
 import { downloadModelFromHttp } from '@/handlers/load-model/http'
-import { downloadModelFromHyperdrive } from '@/handlers/load-model/hyperdrive'
+import {
+  downloadAndValidateFile,
+  downloadModelFromHyperdrive
+} from '@/handlers/load-model/hyperdrive'
 import { validateCachedFile } from '@/handlers/load-model/registry-download-utils'
 import {
   cancelTransfer,
@@ -181,6 +184,28 @@ function useTempSdkHome(t: { teardown(fn: () => void): void }): string {
 
 function cachedHttpPath(cacheDir: string, url: string, filename: string): string {
   return path.join(cacheDir, `${generateShortHash(url)}_${filename}`)
+}
+
+// Slows every write to a partial file so one is in flight when a download is cancelled.
+function slowPartialWrites(t: { teardown(fn: () => void): void }): { closed: () => boolean } {
+  let closed = false
+  const createWriteStream = fs.createWriteStream
+  fs.createWriteStream = (...args: Parameters<typeof createWriteStream>) => {
+    const stream = createWriteStream(...args)
+    if (String(args[0]).endsWith('.part')) {
+      const slow = stream as unknown as { _writev(batch: unknown, cb: () => void): void }
+      const writev = slow._writev.bind(stream)
+      slow._writev = (batch, cb) => setTimeout(() => writev(batch, cb), 300)
+      stream.on('close', () => {
+        closed = true
+      })
+    }
+    return stream
+  }
+  t.teardown(() => {
+    fs.createWriteStream = createWriteStream
+  })
+  return { closed: () => closed }
 }
 
 test('acquireDownloadLock: a second holder waits until the first releases', async (t) => {
@@ -523,23 +548,8 @@ test('downloadModelFromHttp: a cancelled download releases its lock only after i
   const server = await startGatedServer()
   const url = `${server.base}/slow-write-${Math.random().toString(16).slice(2)}.gguf`
   const key = createHttpDownloadKey(url)
-  let writeStreamClosed = false
-  const createWriteStream = fs.createWriteStream
-  // Slow every write to the partial file so one is in flight when the download is cancelled.
-  fs.createWriteStream = (...args: Parameters<typeof createWriteStream>) => {
-    const stream = createWriteStream(...args)
-    if (String(args[0]).endsWith('.part')) {
-      const slow = stream as unknown as { _writev(batch: unknown, cb: () => void): void }
-      const writev = slow._writev.bind(stream)
-      slow._writev = (batch, cb) => setTimeout(() => writev(batch, cb), 300)
-      stream.on('close', () => {
-        writeStreamClosed = true
-      })
-    }
-    return stream
-  }
+  const partialWrites = slowPartialWrites(t)
   t.teardown(async () => {
-    fs.createWriteStream = createWriteStream
     await server.close()
     const modelPath = cachedHttpPath(cacheDir, url, url.split('/').pop()!)
     fs.rmSync(partialDownloadPath(modelPath), { force: true })
@@ -555,9 +565,49 @@ test('downloadModelFromHttp: a cancelled download releases its lock only after i
     if (!lock) await sleep(5)
   }
   t.ok(lock, 'the cancelled download releases its lock')
-  t.ok(writeStreamClosed, 'its partial file was closed before the lock was released')
+  t.ok(partialWrites.closed(), 'its partial file was closed before the lock was released')
   await lock?.[Symbol.asyncDispose]()
   t.ok((await download) instanceof DownloadCancelledError, 'the download is cancelled')
+})
+
+test('downloadAndValidateFile: a cancelled Hyperdrive download returns only after its last write lands', async (t) => {
+  const dir = makeTempDir('hyperdrive-cancel')
+  const store = new Corestore(path.join(dir, 'store'))
+  const drive = new Hyperdrive(store)
+  await drive.ready()
+  // The engine's Hyperdrive typings cover reads only.
+  await (drive as unknown as { put(name: string, data: Buffer): Promise<void> }).put(
+    '/model.gguf',
+    CONTENT
+  )
+  const partialWrites = slowPartialWrites(t)
+  t.teardown(async () => {
+    await drive.close()
+    await store.close()
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  // A seeded download leaves its drive open, so its caller releases the lock as soon as this returns.
+  const targetPath = path.join(dir, 'model.gguf')
+  const controller = new AbortController()
+  const download = downloadAndValidateFile(
+    drive,
+    'model.gguf',
+    targetPath,
+    0,
+    '',
+    undefined,
+    controller.signal
+  ).then(
+    () => null,
+    (error: unknown) => ({ error, closed: partialWrites.closed() })
+  )
+  await waitUntil(() => fs.existsSync(partialDownloadPath(targetPath)))
+  controller.abort(undefined)
+
+  const result = await download
+  t.ok(result?.error instanceof DownloadCancelledError, 'the download is cancelled')
+  t.ok(result?.closed, 'its partial file was closed before it returned')
 })
 
 test('deleteCache: refused while another process downloads the model, and deletes nothing', async (t) => {

@@ -391,7 +391,8 @@ async function downloadSingleFileToFilesystem(
   }
 }
 
-async function downloadAndValidateFile(
+// Exported for tests.
+export async function downloadAndValidateFile(
   drive: Hyperdrive,
   sourceFileName: string,
   targetFilePath: string,
@@ -460,12 +461,15 @@ async function downloadAndValidateFile(
   const partialPath = partialDownloadPath(targetFilePath)
   let readStream: Readable | undefined
   let writeStream: Writable | undefined
+  let writeStreamClosed: Promise<void> | undefined
 
   try {
     // Stream to the partial file; it is published after the checks below.
     drive.download(targetPath)
     readStream = drive.createReadStream(targetPath) as unknown as Readable
-    writeStream = fs.createWriteStream(partialPath) as unknown as Writable
+    const partialStream = fs.createWriteStream(partialPath) as unknown as Writable
+    writeStreamClosed = new Promise<void>((resolve) => partialStream.once('close', resolve))
+    writeStream = partialStream
 
     readStream.pipe(writeStream)
 
@@ -506,7 +510,9 @@ async function downloadAndValidateFile(
       readStream.destroy()
     }
     if (writeStream) {
+      // Let an in-flight write land before the caller can release its lock.
       writeStream.destroy()
+      await writeStreamClosed
     }
     blobs.core.off('download', progressHandler)
     throw error
