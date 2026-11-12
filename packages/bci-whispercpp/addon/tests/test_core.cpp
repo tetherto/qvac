@@ -431,7 +431,7 @@ TEST(ModuleBackendsDir, UnconfiguredDirIsTheLoadedModulesOwn) {
 
 namespace {
 
-const std::variant<double, int64_t>* findStat(
+const qvac_lib_inference_addon_cpp::RuntimeStatValue* findStat(
     const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
     const std::string& key) {
   for (const auto& [name, value] : stats) {

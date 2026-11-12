@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the `qvac-lib-inference-addon-cpp` floor to `1.6.0`, where a runtime
+  stat value can also hold a string. The core tests now spell the stat value
+  type as `RuntimeStatValue`. No runtime behaviour change.
+
 ## [0.15.1] - 2026-11-10
 
 ## [0.15.0] - 2026-11-05
