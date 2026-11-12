@@ -2,6 +2,20 @@
 
 ## [0.38.0] - 2026-11-19
 
+### Added
+
+- Run stats report `backendName`, the backend family the model runs on after
+  any fallback, such as `"cpu"`, `"metal"`, `"cuda"`, or `"vulkan"`. The addon
+  emits it natively as a string stat next to `backendDevice` and omits it when
+  it cannot name the backend.
+  ([#5502](https://github.com/tetherto/qvac/pull/5502))
+
+### Fixed
+
+- Output callbacks from an unloaded native instance no longer reach a run
+  started on a later `load()`.
+  ([#5502](https://github.com/tetherto/qvac/pull/5502))
+
 ### Changed
 
 - `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries

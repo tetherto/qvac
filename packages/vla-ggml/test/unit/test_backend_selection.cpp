@@ -6,6 +6,7 @@
 
 #include "utils/BackendSelection.hpp"
 
+using vla_backend_selection::backendFamilyName;
 using vla_backend_selection::backendNameMatchesFamily;
 using vla_backend_selection::DeviceInterface;
 using vla_backend_selection::parseAdrenoModel;
@@ -117,6 +118,26 @@ TEST(VlaBackendSelection, MatchesFamilyBySubstring) {
   EXPECT_TRUE(backendNameMatchesFamily("cuda0", "cuda"));
   EXPECT_TRUE(backendNameMatchesFamily("gpuopencl", "opencl"));
   EXPECT_FALSE(backendNameMatchesFamily("rocm0", "cuda"));
+}
+
+// The run-stats `backendName`: lowercase family, device index dropped.
+TEST(VlaBackendSelection, BackendFamilyNameNormalizesDeviceNames) {
+  EXPECT_EQ(backendFamilyName("CPU"), "cpu");
+  EXPECT_EQ(backendFamilyName("CUDA0"), "cuda");
+  EXPECT_EQ(backendFamilyName("CUDA1"), "cuda");
+  EXPECT_EQ(backendFamilyName("MTL0"), "metal");
+  EXPECT_EQ(backendFamilyName("Metal"), "metal");
+  EXPECT_EQ(backendFamilyName("Vulkan0"), "vulkan");
+  EXPECT_EQ(backendFamilyName("Vulkan12"), "vulkan");
+  EXPECT_EQ(backendFamilyName("GPUOpenCL"), "opencl");
+  EXPECT_EQ(backendFamilyName("ROCm0"), "rocm");
+  EXPECT_EQ(backendFamilyName("SYCL0"), "sycl");
+}
+
+TEST(VlaBackendSelection, BackendFamilyNameIsEmptyForUnknownBackends) {
+  EXPECT_EQ(backendFamilyName(""), "");
+  EXPECT_EQ(backendFamilyName("none"), "");
+  EXPECT_EQ(backendFamilyName("unknown"), "");
 }
 
 // createInstance maps a bare 'auto' to no preference; inside a list it must be
