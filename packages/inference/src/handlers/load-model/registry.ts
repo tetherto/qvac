@@ -15,10 +15,12 @@ import { getModelByPath, type RegistryItem } from '@/models/registry/index'
 import { acquireRegistryClient, type RegistryWait } from '@/runtime/registry-client'
 import { getRuntimeContext } from '@/runtime/state'
 import {
+  createRegistryCacheKey,
   createRegistryDownloadKey,
   startOrJoinDownload,
   applyJoinedDownloadStats
 } from '@/handlers/load-model/download-manager'
+import { acquireDownloadLock, partialDownloadPath } from '@/handlers/load-model/download-lock'
 import {
   buildBlobBinding,
   validateCachedFile,
@@ -313,6 +315,11 @@ export async function downloadModelFromRegistry(
   const result = startOrJoinDownload(
     downloadKey,
     async (ctx) => {
+      // Every source of a registry path writes the same files, so lock the path.
+      await using _downloadLock = await acquireDownloadLock(
+        createRegistryCacheKey(registryPath),
+        ctx.signal
+      )
       if (shardInfo.isSharded) {
         const cacheKey = generateShortHash(registryPath)
         const localShardMeta = modelMetadata?.shardMetadata
@@ -538,11 +545,12 @@ export async function downloadModelFromRegistry(
         )
       } catch (error) {
         if (error instanceof DownloadCancelledError && ctx.shouldClearCache()) {
+          const partialPath = partialDownloadPath(modelPath)
           try {
-            await fsPromises.unlink(modelPath)
+            await fsPromises.unlink(partialPath)
           } catch (cleanupError) {
-            logger.debug('Failed to delete model file during cleanup', {
-              path: modelPath,
+            logger.debug('Failed to delete partial model file during cleanup', {
+              path: partialPath,
               error: cleanupError
             })
           }
