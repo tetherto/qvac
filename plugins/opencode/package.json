@@ -22,7 +22,8 @@
     "NOTICE"
   ],
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "opencode": ">=2.0.0"
   },
   "keywords": [
     "qvac",
