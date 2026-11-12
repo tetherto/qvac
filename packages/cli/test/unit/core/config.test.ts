@@ -221,6 +221,27 @@ describe('resolveNestedModelSrcConstants', () => {
     assert.equal(out['steps'], 20)
   })
 
+  it('treats every *Src key as a model source', () => {
+    const out = resolveNestedModelSrcConstants({
+      srcVocabSrc: 'WHISPER_EN_TINY_Q8_0',
+      tokenizerSrc: './models/tokenizer.json',
+      referenceAudioSrc: 'voice.wav'
+    })
+    assert.equal(out['srcVocabSrc'], WHISPER_EN_TINY_Q8_0)
+    assert.equal(out['tokenizerSrc'], './models/tokenizer.json')
+    assert.equal(out['referenceAudioSrc'], 'voice.wav')
+  })
+
+  it('resolves each entry of a *Srcs list and nested modelSrc', () => {
+    const out = resolveNestedModelSrcConstants({
+      dialogueReferenceSrcs: ['WHISPER_EN_TINY_Q8_0', './speaker2.wav'],
+      pivotModel: { modelSrc: 'TTS_S3GEN_EN_CHATTERBOX' }
+    })
+    assert.deepEqual(out['dialogueReferenceSrcs'], [WHISPER_EN_TINY_Q8_0, './speaker2.wav'])
+    const pivot = out['pivotModel'] as Record<string, unknown>
+    assert.equal(pivot['modelSrc'], TTS_S3GEN_EN_CHATTERBOX)
+  })
+
   it('rewrites nested objects and upscaler.model_src', () => {
     const out = resolveNestedModelSrcConstants({
       whisperConfig: { vadModelSrc: 'WHISPER_EN_TINY_Q8_0' },

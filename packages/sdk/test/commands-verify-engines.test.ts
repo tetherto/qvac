@@ -17,6 +17,7 @@ import {
 } from '@/commands/verify/engines-advice'
 import { formatVerifyBundleResult, hasErrors, verifyBundle } from '@/commands/verify/index'
 import { writeBundleFile } from './fixtures/bundle-file'
+import { linkDependency } from './fixtures/link-dependency'
 
 async function withTempDir(fn: (dir: string) => Promise<void> | void): Promise<void> {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-verify-engines-')))
@@ -80,7 +81,7 @@ function failingFetch(): (url: string) => Promise<string> {
   return () => Promise.reject(new Error('unexpected network request'))
 }
 
-/** GitHub CMakeLists.txt files for bindings newer than the built-in tables. */
+/** GitHub CMakeLists.txt files for bindings missing from the built-in tables. */
 function fakeGitHub(files: Record<string, string>, requested: string[] = []) {
   return (url: string) => {
     requested.push(url)
@@ -222,7 +223,7 @@ describe('resolveBareKitRuntime', () => {
     })
   })
 
-  it('resolves iOS from the built-in tables and calls the Swift pin a minimum', async () => {
+  it('resolves iOS from the built-in tables at the pinned Swift version', async () => {
     await withTempDir(async (dir) => {
       const resolution = await resolveBareKitRuntime({
         platform: 'ios',
@@ -233,7 +234,7 @@ describe('resolveBareKitRuntime', () => {
       assert.equal(resolution.runtime.version, '1.36.2')
       assert.equal(resolution.runtime.source, 'bare-kit-swift')
       assert.equal(resolution.runtime.packageVersion, '2.2.0')
-      assert.match(resolution.runtime.detail, /bare-kit-swift 2\.2\.0 or newer/)
+      assert.match(resolution.runtime.detail, /bare-kit-swift 2\.2\.0, built from/)
     })
   })
 
@@ -272,14 +273,36 @@ describe('resolveBareKitRuntime', () => {
     })
   })
 
-  it('does not query GitHub for a binding older than the newest table entry', async () => {
+  it('looks up a binding older than the newest table entry that the table lacks', async () => {
+    await withTempDir(async (dir) => {
+      const requested: string[] = []
+      const resolution = await resolveBareKitRuntime({
+        platform: 'android',
+        bareStowDir: writeBareStow(dir, { kotlin: '0.0.1' }),
+        fetchText: fakeGitHub(
+          { '/bare-kit-kotlin/v0.0.1/': 'fetch_package("github:holepunchto/bare-kit@3.0.1")' },
+          requested
+        )
+      })
+      assert.ok(resolution.resolved)
+      assert.equal(resolution.runtime.version, '1.36.2')
+      assert.match(resolution.runtime.detail, /bare-kit 3\.0\.1, looked up on GitHub/)
+      assert.equal(requested.length, 1)
+    })
+  })
+
+  it('reports an older binding the table lacks as not in the table when offline', async () => {
     await withTempDir(async (dir) => {
       const resolution = await resolveBareKitRuntime({
         platform: 'android',
         bareStowDir: writeBareStow(dir, { kotlin: '0.0.1' }),
+        network: false,
         fetchText: failingFetch()
       })
       assert.equal(resolution.resolved, false)
+      if (!resolution.resolved) {
+        assert.match(resolution.error.reason, /bare-kit-kotlin@0\.0\.1 is not in the built-in/)
+      }
     })
   })
 
@@ -723,6 +746,97 @@ describe('verifyBundle engines.bare against the phone runtimes', () => {
         mismatches[0]!.message,
         /runtime is 1\.36\.2 \(from bare-sidecar: bare-sidecar 0\.5\.2/
       )
+    })
+  })
+
+  it('checks a bundle stamped for pear-runtime against the bare-sidecar pear-runtime resolves', async () => {
+    await withTempDir(async (dir) => {
+      const { bundlePath, bareStowDir } = writeMixedHostBundle(dir, { linkedOnDesktop: true })
+      writeFile(
+        path.join(path.dirname(bundlePath), 'package.json'),
+        JSON.stringify({ name: 'qvac-worker', qvacTarget: 'pear-runtime' })
+      )
+      writeSidecar(dir, '1.40.0')
+      writePackage(dir, 'node_modules/pear-runtime', { name: 'pear-runtime', version: '1.3.1' })
+      const nested = writePackage(dir, 'node_modules/pear-runtime/node_modules/bare-sidecar', {
+        name: 'bare-sidecar',
+        version: '0.5.2'
+      })
+      writeFile(path.join(nested, 'versions.json'), JSON.stringify({ bare: '1.36.2' }))
+
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: bundlePath,
+        hosts: ['darwin-arm64'],
+        bareStowDir,
+        network: false
+      })
+      const mismatches = result.issues.filter((issue) => issue.code === 'abi-mismatch')
+      assert.equal(mismatches.length, 1)
+      assert.match(
+        mismatches[0]!.message,
+        /runtime is 1\.36\.2 \(from bare-sidecar: bare-sidecar 0\.5\.2/
+      )
+    })
+  })
+
+  it('checks a Kotlin desktop bundle against bare-kit-kotlin from the target recorded at its harness root', async () => {
+    await withTempDir(async (dir) => {
+      const { bundlePath: written, bareStowDir } = writeMixedHostBundle(dir, {
+        linkedOnDesktop: true
+      })
+      const harnessRoot = path.join(dir, 'jvm', 'worker')
+      const bundlePath = path.join(harnessRoot, 'src', 'main', 'resources', 'com', 'example')
+      fs.mkdirSync(bundlePath, { recursive: true })
+      fs.renameSync(written, path.join(bundlePath, 'index.bundle'))
+      writeFile(
+        path.join(harnessRoot, 'qvac-bundle.json'),
+        JSON.stringify({ qvacTarget: 'bare-kit' })
+      )
+      writeSidecar(dir, '1.40.0')
+
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: path.join(bundlePath, 'index.bundle'),
+        hosts: ['darwin-arm64'],
+        bareStowDir,
+        network: false
+      })
+      const mismatches = result.issues.filter((issue) => issue.code === 'abi-mismatch')
+      assert.equal(mismatches.length, 1)
+      assert.match(mismatches[0]!.message, /runtime is 1\.36\.2 \(from bare-kit-kotlin/)
+    })
+  })
+
+  it('finds the bare-sidecar next to a pnpm-linked pear-runtime', async () => {
+    await withTempDir(async (dir) => {
+      const bareStowDir = writeMobileProject(dir, { hosts: ['darwin-arm64'] })
+      writeSidecar(dir, '1.40.0')
+      const store = path.join(dir, 'node_modules', '.pnpm', 'pear-runtime@1.3.1')
+      writePackage(store, 'node_modules/pear-runtime', { name: 'pear-runtime', version: '1.3.1' })
+      const sibling = writePackage(store, 'node_modules/bare-sidecar', {
+        name: 'bare-sidecar',
+        version: '0.5.2'
+      })
+      writeFile(path.join(sibling, 'versions.json'), JSON.stringify({ bare: '1.36.2' }))
+      linkDependency(dir, 'pear-runtime', store)
+
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: path.join(dir, 'node_modules'),
+        hosts: ['darwin-arm64'],
+        desktopRuntime: 'pear-runtime',
+        bareStowDir,
+        network: false
+      })
+      const desktop = result.runtimes.find((runtime) => runtime.platform === 'desktop')
+      assert.equal(
+        desktop?.resolution.resolved ? desktop.resolution.runtime.packageVersion : null,
+        '0.5.2'
+      )
+      const mismatches = result.issues.filter((issue) => issue.code === 'abi-mismatch')
+      assert.equal(mismatches.length, 1)
+      assert.match(mismatches[0]!.message, /runtime is 1\.36\.2/)
     })
   })
 
