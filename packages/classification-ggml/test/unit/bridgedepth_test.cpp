@@ -173,7 +173,7 @@ TEST(BridgeDepthResize, ModelSizeFitsInsideTheBoxKeepingTheAspect) {
   constexpr uint32_t boxW = bd::MAX_MODEL_WIDTH;
   constexpr uint32_t boxH = bd::MAX_MODEL_HEIGHT;
   constexpr auto minSide = static_cast<uint32_t>(bd::MIN_SIDE);
-  // At or inside the box: untouched.
+  // At or inside the box: untouched. 640x480 is a VGA frame.
   EXPECT_EQ(bd::modelInputSize(boxW, boxH), (Size{boxW, boxH}));
   EXPECT_EQ(bd::modelInputSize(640, 480), (Size{640, 480}));
   EXPECT_EQ(bd::modelInputSize(boxW, minSide), (Size{boxW, minSide}));
@@ -183,6 +183,7 @@ TEST(BridgeDepthResize, ModelSizeFitsInsideTheBoxKeepingTheAspect) {
   EXPECT_EQ(bd::modelInputSize(boxW + 1, boxH), (Size{boxW, 719}));
   // 1080 * 720 / 1440 = 540, height-limited.
   EXPECT_EQ(bd::modelInputSize(1080, 1440), (Size{540, boxH}));
+  // Square, so the height limits it.
   EXPECT_EQ(bd::modelInputSize(1000, 1000), (Size{boxH, boxH}));
   // 32 * 1280 / 2048 = 20 would be below the smallest side.
   EXPECT_EQ(bd::modelInputSize(bd::MAX_SIDE, minSide), (Size{boxW, minSide}));
@@ -486,7 +487,9 @@ TEST_F(BridgeDepthReference, RepeatedAndMixedSizesGiveTheSameResult) {
 namespace {
 
 // A textured raw RGB view; the right one is the left shifted by `shift`
-// pixels, so the pair has a disparity to find.
+// pixels, so the pair has a disparity to find. The periods are coprime primes
+// so the pattern does not repeat in a small window, and `level` spreads the
+// values over 0..255.
 ImageInput stereoView(uint32_t width, uint32_t height, uint32_t shift) {
   ImageInput image;
   image.rawRgb = RawRgbDims{width, height, 3};
@@ -517,11 +520,13 @@ float maxAbsDiff(const std::vector<float>& a, const std::vector<float>& b) {
 } // namespace
 
 // A pair inside the box runs as before: the model output equals the graph run
-// on the plain planar views. A wider pair runs downsampled and the disparity
-// comes back at the input size, scaled to input pixels. Narrow heights keep
-// both runs cheap.
+// on the plain planar views. A pair above it runs downsampled and the
+// disparity comes back at the input size, scaled to input pixels. Narrow
+// sides keep every run cheap.
 TEST_F(BridgeDepthReference, ResizesOnlyAboveTheBox) {
+  // Two grid rows of 32 after the 8x downsample inside the graph.
   constexpr uint32_t height = 64;
+  // A few pixels of disparity, well inside what the model resolves.
   constexpr uint32_t shift = 4;
   constexpr float sameRun = 1e-4F;
   classification_ggml::GgmlBackends backends(backend_, "", 4, "test");
@@ -544,29 +549,47 @@ TEST_F(BridgeDepthReference, ResizesOnlyAboveTheBox) {
   ASSERT_EQ(unchanged.disparity.size(), direct.size());
   EXPECT_LT(maxAbsDiff(unchanged.disparity, direct), sameRun);
 
-  // 1600 wide fits as 1280 x 51.2, rounded to 51.
-  constexpr uint32_t wideWidth = 1600;
-  const bd::ImageSize wide{wideWidth, height};
-  const bd::ImageSize downsized = bd::modelInputSize(wideWidth, height);
-  ASSERT_EQ(downsized, (bd::ImageSize{bd::MAX_MODEL_WIDTH, 51}));
-  const bd::StereoInput above{
-      stereoView(wideWidth, height, 0), stereoView(wideWidth, height, shift)};
-  const auto smallLeft = bd::resizeToPlanar(above.left.data, wide, downsized);
-  const auto smallRight = bd::resizeToPlanar(above.right.data, wide, downsized);
-  const auto expected = bd::resizeDisparity(
-      graph.infer(
-          smallLeft.data(),
-          smallRight.data(),
-          static_cast<int>(downsized.height),
-          static_cast<int>(downsized.width)),
-      downsized,
-      wide);
-  const auto resized =
-      std::any_cast<bd::DisparityOutput>(model.process(std::any(above)));
-  EXPECT_EQ(resized.width, wideWidth);
-  EXPECT_EQ(resized.height, height);
-  ASSERT_EQ(resized.disparity.size(), static_cast<size_t>(wideWidth) * height);
-  EXPECT_LT(maxAbsDiff(resized.disparity, expected), sameRun);
+  auto checkAbove = [&](bd::ImageSize input, bd::ImageSize expectedModel) {
+    SCOPED_TRACE(
+        std::to_string(input.width) + "x" + std::to_string(input.height));
+    const bd::ImageSize downsized =
+        bd::modelInputSize(input.width, input.height);
+    ASSERT_EQ(downsized, expectedModel);
+    const bd::StereoInput above{
+        stereoView(input.width, input.height, 0),
+        stereoView(input.width, input.height, shift)};
+    const auto smallLeft =
+        bd::resizeToPlanar(above.left.data, input, downsized);
+    const auto smallRight =
+        bd::resizeToPlanar(above.right.data, input, downsized);
+    const auto expected = bd::resizeDisparity(
+        graph.infer(
+            smallLeft.data(),
+            smallRight.data(),
+            static_cast<int>(downsized.height),
+            static_cast<int>(downsized.width)),
+        downsized,
+        input);
+    const auto resized =
+        std::any_cast<bd::DisparityOutput>(model.process(std::any(above)));
+    EXPECT_EQ(resized.width, input.width);
+    EXPECT_EQ(resized.height, input.height);
+    ASSERT_EQ(
+        resized.disparity.size(),
+        static_cast<size_t>(input.width) * input.height);
+    EXPECT_LT(maxAbsDiff(resized.disparity, expected), sameRun);
+  };
+  constexpr auto minSide = static_cast<uint32_t>(bd::MIN_SIDE);
+  // Wide: 1600 fits as 1280 x 51.2, rounded to 51.
+  checkAbove({1600, height}, {bd::MAX_MODEL_WIDTH, 51});
+  // One pixel over the box width: 64 * 1280 / 1281 rounds back to 64, so only
+  // the width is resampled.
+  checkAbove({bd::MAX_MODEL_WIDTH + 1, height}, {bd::MAX_MODEL_WIDTH, height});
+  // Tall: twice the box height halves it, and the width 48 / 2 = 24 is held
+  // at the smallest side, so the two axes resample by different factors.
+  constexpr uint32_t tallWidth = 48;
+  checkAbove(
+      {tallWidth, 2 * bd::MAX_MODEL_HEIGHT}, {minSide, bd::MAX_MODEL_HEIGHT});
 }
 
 // An index outside the rpe table would make GPU get_rows read past it, and the

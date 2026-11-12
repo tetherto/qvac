@@ -49,11 +49,14 @@ function floats(name) {
 }
 
 // A pair wider than the 1280x720 box the model runs at, see docs/bridgedepth.md.
+// A narrow height keeps the run cheap; the shift is a few pixels of disparity.
 const WIDE_WIDTH = 1600
 const WIDE_HEIGHT = 64
 const WIDE_SHIFT = 4
 
 // Packed RGB stripes; the right view is the left shifted by `shift` pixels.
+// The periods are coprime primes so the pattern does not repeat in a small
+// window, and `level` spreads the values over the 0..255 range.
 function texture(width, height, shift) {
   const xPeriod = 37
   const yPeriod = 23

@@ -216,11 +216,15 @@ TEST(ModelFootprint, BridgeDepthFullHdEqualsLoadedBuffers) {
   checkBridgeDepth(FULL_HD_WIDTH, FULL_HD_HEIGHT);
 }
 
-// The full HD measure is the 1280x720 one plus the disparity resized back to
-// the input, which the inference phase holds on the host.
 // A 4K-wide pair, accepted since the model runs it at 1280x675.
 TEST(ModelFootprint, BridgeDepthMaxSideEqualsLoadedBuffers) {
   checkBridgeDepth(bd::MAX_SIDE, UHD_HEIGHT);
+}
+
+// The largest input, run at 720x720: the case where the resize back to the
+// input can outweigh the graph run on the host.
+TEST(ModelFootprint, BridgeDepthMaxSquareEqualsLoadedBuffers) {
+  checkBridgeDepth(bd::MAX_SIDE, bd::MAX_SIDE);
 }
 
 TEST(ModelFootprint, BridgeDepthAboveTheBoxIsSizedAtTheModelSize) {
@@ -243,10 +247,24 @@ TEST(ModelFootprint, BridgeDepthAboveTheBoxIsSizedAtTheModelSize) {
   EXPECT_EQ(fullHd.hostWeightBytes, hd.hostWeightBytes);
   EXPECT_EQ(fullHd.hostComputeBytes, hd.hostComputeBytes);
   EXPECT_EQ(fullHd.hostWorkBytes, hd.hostWorkBytes);
-  const uint64_t resizedDisparityBytes =
-      static_cast<uint64_t>(FULL_HD_WIDTH) * FULL_HD_HEIGHT * sizeof(float);
-  EXPECT_EQ(
-      fullHd.hostStagingBytes, hd.hostStagingBytes + resizedDisparityBytes);
+  // The resize back holds the disparity at 1280x720 and at 1920x1080, 12 MB,
+  // after the run has freed its two planar views at 1280x720, 22 MB alone,
+  // so the run stays the host peak.
+  EXPECT_EQ(fullHd.hostStagingBytes, hd.hostStagingBytes);
+  // At 4096x4096 the model runs at 720x720 and the resize back holds both
+  // disparities, which the host total must cover.
+  const auto square = measure(bd::MAX_SIDE, bd::MAX_SIDE);
+  const auto squareModel = bd::modelInputSize(bd::MAX_SIDE, bd::MAX_SIDE);
+  const auto pixels = [](uint64_t width, uint64_t height) {
+    return width * height;
+  };
+  const uint64_t resizeBackBytes =
+      (pixels(bd::MAX_SIDE, bd::MAX_SIDE) +
+       pixels(squareModel.width, squareModel.height)) *
+      sizeof(float);
+  EXPECT_GE(square.hostStagingBytes, resizeBackBytes);
+  const auto atModelSize = measure(squareModel.width, squareModel.height);
+  EXPECT_GE(square.hostStagingBytes, atModelSize.hostStagingBytes);
 }
 
 TEST(ModelFootprint, BridgeDepthRejectsSizesInferenceRejects) {

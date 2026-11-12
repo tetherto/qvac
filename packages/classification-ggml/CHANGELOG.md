@@ -28,7 +28,8 @@ and this project adheres to
 - BridgeDepth downsamples a pair wider than 1280 or taller than 720 to fit
   inside 1280x720, as the model authors recommend, and returns the disparity
   at the input size in input pixels. `assessFit` sizes such a workload as the
-  downsampled run plus the disparity at the input size
+  downsampled run, and the host as the larger of that run and the resize of
+  the disparity back to the input size
   ([#5735](https://github.com/tetherto/qvac/pull/5735)).
 - BridgeDepth accepts sides up to 4096 pixels, up from 2048, with no pixel
   count limit, instead of at most about 2 MP. The graph only runs on the

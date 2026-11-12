@@ -6,6 +6,7 @@
 
 #include "GgmlBackend.hpp"
 #include "ModelFootprint.hpp"
+#include "bridgedepth/BridgeDepthModel.hpp"
 
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
@@ -18,6 +19,14 @@
 #include <inference-addon-cpp/Errors.hpp>
 
 namespace classification_ggml::fit {
+
+// ModelFit.hpp keeps the box as literals so it stays free of model headers;
+// these keep the default workload on the size inference runs at.
+static_assert(
+    DEFAULT_FIT_WIDTH == static_cast<int>(bridgedepth::MAX_MODEL_WIDTH) &&
+        DEFAULT_FIT_HEIGHT == static_cast<int>(bridgedepth::MAX_MODEL_HEIGHT),
+    "the default BridgeDepth workload must be the model box");
+
 namespace {
 
 using qvac_errors::StatusError;

@@ -69,12 +69,12 @@ struct ModelFootprint {
   //     [224, 224, 3] float input.
   //   MegaLoc: the 8 MiB read chunk, or the patch input plus the descriptor.
   //   BridgeDepth: the host copies of pos_embed and the relative position
-  //     indices, plus the larger of the read buffer (the largest tensor) and
-  //     one inference: both views as planar floats, every graph input built on
-  //     the host (padded images, masks, expanded indices, resized pos_embed),
-  //     the padded output and the returned disparity, all at the size the
-  //     model runs at, plus the disparity resized back to an input above
-  //     1280x720.
+  //     indices, plus the largest of the read buffer (the largest tensor),
+  //     one inference (both views as planar floats, every graph input built
+  //     on the host: padded images, masks, expanded indices, resized
+  //     pos_embed, the padded output and the returned disparity, all at the
+  //     size the model runs at) and, for an input above 1280x720, the resize
+  //     back (the model-size disparity plus the one at the input size).
   uint64_t hostStagingBytes = 0;
   // ggml device name that a load with the same arguments selects.
   std::string deviceName;

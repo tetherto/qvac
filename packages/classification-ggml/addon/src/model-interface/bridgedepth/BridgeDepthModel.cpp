@@ -135,6 +135,16 @@ void resizeBilinear(
 
 constexpr size_t RGB_CHANNELS = 3;
 
+// The resize helpers are exported, so a caller passing a buffer that does not
+// match its stated size gets an error instead of an out-of-bounds read.
+void checkLength(size_t actual, size_t expected, const char* what) {
+  if (actual != expected)
+    throw StatusError(
+        InternalError,
+        std::string("BridgeDepth: ") + what + " has " + std::to_string(actual) +
+            " values, expected " + std::to_string(expected));
+}
+
 } // namespace
 
 ImageSize modelInputSize(uint32_t width, uint32_t height) {
@@ -160,6 +170,10 @@ ImageSize modelInputSize(uint32_t width, uint32_t height) {
 
 std::vector<float>
 resizeToPlanar(std::span<const uint8_t> rgb, ImageSize from, ImageSize to) {
+  checkLength(
+      rgb.size(),
+      static_cast<size_t>(from.width) * from.height * RGB_CHANNELS,
+      "RGB view");
   const size_t plane = static_cast<size_t>(to.width) * to.height;
   std::vector<float> chw(plane * RGB_CHANNELS);
   if (from == to) {
@@ -184,6 +198,10 @@ resizeToPlanar(std::span<const uint8_t> rgb, ImageSize from, ImageSize to) {
 
 std::vector<float> resizeDisparity(
     const std::vector<float>& disparity, ImageSize from, ImageSize to) {
+  checkLength(
+      disparity.size(),
+      static_cast<size_t>(from.width) * from.height,
+      "disparity");
   // Disparity is a horizontal offset, so it scales with the width alone.
   const float scale = static_cast<float>(to.width) / from.width;
   std::vector<float> out(static_cast<size_t>(to.width) * to.height);
@@ -205,6 +223,33 @@ toPlanarRgb(const ImageInput& input, uint32_t& width, uint32_t& height) {
   height = size.height;
   return resizeToPlanar(rgb, size, size);
 }
+
+namespace {
+
+struct PlanarView {
+  ImageSize input;
+  ImageSize model;
+  std::vector<float> planar;
+};
+
+// One view as planar floats at the size the model runs it at. The decoded RGB
+// is freed on return, so the two views are never decoded at the same time.
+// `expected`, when set, is the size the view must have.
+PlanarView
+planarAtModelSize(const ImageInput& input, const ImageSize* expected) {
+  std::vector<uint8_t> storage;
+  PlanarView view;
+  const auto rgb = decodeView(input, storage, view.input);
+  if (expected != nullptr)
+    check(
+        view.input == *expected,
+        "left and right images must have the same size");
+  view.model = modelInputSize(view.input.width, view.input.height);
+  view.planar = resizeToPlanar(rgb, view.input, view.model);
+  return view;
+}
+
+} // namespace
 
 struct BridgeDepthModel::Impl {
   // Declared first so the backends outlive the graph's buffers.
@@ -254,7 +299,8 @@ MeasuredBuffers BridgeDepthModel::measure(
   checkSize(width, height);
   const ImageSize input{width, height};
   const ImageSize model = modelInputSize(width, height);
-  // A downsampled run also holds the disparity resized back to the input.
+  // A downsampled run resizes the disparity back to the input after the graph
+  // run, while the model-size disparity is still held.
   const uint64_t resizedOutputBytes =
       model == input ? 0
                      : static_cast<uint64_t>(width) * height * sizeof(float);
@@ -294,38 +340,38 @@ std::any BridgeDepthModel::process(const std::any& input) {
   // Decoding and resizing count, as MegaLoc's total_time_ms includes its
   // preprocess().
   const auto start = std::chrono::steady_clock::now();
-  std::vector<uint8_t> leftStorage;
-  std::vector<uint8_t> rightStorage;
-  ImageSize inputSize;
-  ImageSize rightSize;
-  const auto leftRgb = decodeView(pair->left, leftStorage, inputSize);
-  const auto rightRgb = decodeView(pair->right, rightStorage, rightSize);
-  check(
-      inputSize == rightSize, "left and right images must have the same size");
-  const ImageSize model = modelInputSize(inputSize.width, inputSize.height);
-  DisparityOutput output{inputSize.width, inputSize.height, {}};
+  DisparityOutput output;
   try {
-    const auto left = resizeToPlanar(leftRgb, inputSize, model);
-    const auto right = resizeToPlanar(rightRgb, inputSize, model);
-    // The decoded views are no longer read.
-    leftStorage = {};
-    rightStorage = {};
-    output.disparity = impl_->graph->infer(
-        left.data(),
-        right.data(),
-        static_cast<int>(model.height),
-        static_cast<int>(model.width));
+    ImageSize inputSize;
+    ImageSize model;
+    std::vector<float> disparity;
+    {
+      // Scoped so the planar views are freed before the disparity is resized
+      // back, the phases BridgeDepthGraph::measure sizes.
+      const auto left = planarAtModelSize(pair->left, nullptr);
+      const auto right = planarAtModelSize(pair->right, &left.input);
+      inputSize = left.input;
+      model = left.model;
+      disparity = impl_->graph->infer(
+          left.planar.data(),
+          right.planar.data(),
+          static_cast<int>(model.height),
+          static_cast<int>(model.width));
+    }
+    // Checked at the model size: a bilinear resize of finite values times a
+    // finite scale stays finite.
+    for (const float value : disparity) {
+      if (!std::isfinite(value))
+        throw StatusError(
+            InternalError, "BridgeDepth produced a non-finite disparity");
+    }
+    if (model != inputSize)
+      disparity = resizeDisparity(disparity, model, inputSize);
+    output = {inputSize.width, inputSize.height, std::move(disparity)};
   } catch (const StatusError&) {
     throw;
   } catch (const std::exception& error) {
     throw StatusError(InternalError, error.what());
-  }
-  if (model != inputSize)
-    output.disparity = resizeDisparity(output.disparity, model, inputSize);
-  for (const float value : output.disparity) {
-    if (!std::isfinite(value))
-      throw StatusError(
-          InternalError, "BridgeDepth produced a non-finite disparity");
   }
   lastInferenceMs_ = std::chrono::duration<double, std::milli>(
                          std::chrono::steady_clock::now() - start)

@@ -44,8 +44,10 @@ ImageSize modelInputSize(uint32_t width, uint32_t height);
 
 // Packed RGB `rgb` of `from` to [3, to.height, to.width] floats in 0..255.
 // A size change is bilinear with pixel centres aligned and the result rounded
-// to whole values, as the cv2.resize INTER_LINEAR on 8-bit images the upstream
-// demo.py downsamples with.
+// to whole values: the sampling of the cv2.resize INTER_LINEAR on 8-bit images
+// the upstream demo.py downsamples with, within 1 of it since cv2 uses 11-bit
+// fixed-point weights. Not stb_image_resize2, whose default downsample filter
+// is Mitchell, not two-tap bilinear.
 std::vector<float>
 resizeToPlanar(std::span<const uint8_t> rgb, ImageSize from, ImageSize to);
 
@@ -74,7 +76,9 @@ struct DisparityOutput {
   std::vector<float> disparity;
 };
 
-// Decodes or validates one view and returns it as [3, h, w] floats in 0..255.
+// Decodes or validates one view and returns it as [3, h, w] floats in 0..255
+// at its own size, without the downsample. A test helper: inference goes
+// through modelInputSize(), and the graph aborts on a grid above about 2 MP.
 std::vector<float>
 toPlanarRgb(const ImageInput& input, uint32_t& width, uint32_t& height);
 

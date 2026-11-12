@@ -2117,7 +2117,7 @@ std::vector<float> BridgeDepthGraph::infer(
 }
 
 MeasuredBuffers
-BridgeDepthGraph::measure(int h, int w, uint64_t extraRunHostBytes) {
+BridgeDepthGraph::measure(int h, int w, uint64_t afterRunHostBytes) {
   Impl& m = *impl_;
   if (!m.measureOnly)
     throw std::runtime_error("BridgeDepth: graph was not opened to measure");
@@ -2130,14 +2130,19 @@ BridgeDepthGraph::measure(int h, int w, uint64_t extraRunHostBytes) {
   for (const auto& [name, elements] : m.rpeIndexElems)
     persistentBytes += static_cast<uint64_t>(elements) * sizeof(int32_t);
   // BridgeDepthModel::process holds both views as planar floats during the
-  // run, and forward() returns the unpadded disparity.
+  // run, and forward() returns the unpadded disparity. The views are freed
+  // before the caller's after-run allocation, which coexists only with the
+  // returned disparity.
   const uint64_t pixels = static_cast<uint64_t>(h) * w;
   const uint64_t planarViewFloats = 2ULL * 3 * pixels;
+  const uint64_t disparityBytes = pixels * sizeof(float);
   const uint64_t inferenceBytes = m.measuredRunHostBytes +
-                                  (planarViewFloats + pixels) * sizeof(float) +
-                                  extraRunHostBytes;
+                                  planarViewFloats * sizeof(float) +
+                                  disparityBytes;
+  const uint64_t afterRunBytes = disparityBytes + afterRunHostBytes;
   result.hostStagingBytes =
-      persistentBytes + std::max(m.readBufferBytes, inferenceBytes);
+      persistentBytes +
+      std::max({m.readBufferBytes, inferenceBytes, afterRunBytes});
   return result;
 }
 

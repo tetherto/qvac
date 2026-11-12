@@ -31,10 +31,12 @@ between 32 and 4096 pixels; other sizes are rejected with an error.
 The model runs on at most 1280 x 720. The model authors recommend downsampling
 inputs above 720p, for speed and for accuracy, and the graph memory grows with
 the pixel count. A pair wider than 1280 or taller than 720 is scaled by one
-factor to fit inside 1280 x 720, bilinear as the upstream `demo.py` does, and
+factor to fit inside 1280 x 720, with the bilinear sampling of the cv2 resize
+the upstream `demo.py` uses (within 1 of it per 8-bit value), and
 the disparity is resized back to the input size and multiplied by the input
 width over the model width, so `width`, `height` and the values stay in input
-pixels. A side the scaling would take below 32 stays at 32. A pair inside
+pixels. A side the scaling would take below 32 stays at 32. The box is
+landscape, so a portrait 720 x 1280 pair runs at 405 x 720. A pair inside
 1280 x 720 runs at its own size. Inputs are padded on the top and the right by
 edge replication and the result is cropped back, as in the original
 `InputPadder`.

@@ -18,10 +18,8 @@ const { isMobile, TEST_TIMEOUT, resolveModelPath } = require('./utils')
 const SMALL = { width: 200, height: 100 }
 const LARGE = { width: 400, height: 200 }
 // Above the 1280x720 box BridgeDepth runs at: downsampled to exactly 1280x720,
-// so it takes the default workload's bytes plus the float32 disparity resized
-// back to the input on the host.
+// so it takes the default workload's bytes.
 const FULL_HD = { width: 1920, height: 1080 }
-const FLOAT32_BYTES = 4
 
 // GGUF header layout (ggml docs/gguf.md): magic "GGUF" read as a little-endian
 // uint32, uint32 version, uint64 tensor count, uint64 metadata count.
@@ -135,14 +133,15 @@ test('assessFit: BridgeDepth grows with the workload', { skip: !models.bridgedep
 
   const fullHd = await assessFit(request(models.bridgedepth, backend, { workload: FULL_HD }))
   checkRows(t, fullHd, `${label} ${FULL_HD.width}x${FULL_HD.height}`)
-  const resizedDisparityBytes = FULL_HD.width * FULL_HD.height * FLOAT32_BYTES
   if (fullHd.devices.length === 2) {
     t.is(fullHd.devices[0].usedBytes, fit.devices[0].usedBytes, 'the device sizes the 1280x720 run')
   }
+  // The resize back to 1920x1080 holds less than the 1280x720 run, see
+  // test/unit/footprint_test.cpp, so the host row is the same too.
   t.is(
     fullHd.devices[fullHd.devices.length - 1].usedBytes,
-    fit.devices[fit.devices.length - 1].usedBytes + resizedDisparityBytes,
-    'the host adds only the disparity resized back to 1920x1080'
+    fit.devices[fit.devices.length - 1].usedBytes,
+    'the host sizes the 1280x720 run'
   )
 })
 

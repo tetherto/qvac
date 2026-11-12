@@ -79,8 +79,9 @@ iOS every unified row is first capped at the app's memory limit,
 
 `workload` only matters for BridgeDepth, whose compute buffers grow with the
 input. It defaults to 1280x720, the largest size the model runs at: a larger
-input is downsampled to fit inside it, so it is sized as the downsampled run
-plus the disparity at the input size. `threads` defaults to 8, as `MegaLoc`
+input is downsampled to fit inside it, so it is sized as the downsampled run,
+and the host as the larger of that run and the resize of the disparity back to
+the input size. `threads` defaults to 8, as `MegaLoc`
 and `BridgeDepth` do.
 
 Tensor data is not read, so a file whose weights `load()` rejects can still be

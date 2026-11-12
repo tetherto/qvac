@@ -68,9 +68,9 @@ public:
 
   // Mode::Measure only. The buffers the load plus one infer() of an h x w
   // pair on a fresh graph would allocate, sized from the same graph infer()
-  // builds. `extraRunHostBytes` is host memory the caller holds during the
-  // run on top of the views and the disparity, counted in the inference phase.
-  MeasuredBuffers measure(int h, int w, uint64_t extraRunHostBytes = 0);
+  // builds. `afterRunHostBytes` is host memory the caller allocates after the
+  // run while it still holds the returned disparity, a phase of its own.
+  MeasuredBuffers measure(int h, int w, uint64_t afterRunHostBytes = 0);
   // The buffers held after the last infer(). The scheduler buffers only grow,
   // so after several sizes this is the largest need of each buffer.
   [[nodiscard]] BufferFootprint allocatedBuffers() const;
