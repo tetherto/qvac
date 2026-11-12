@@ -69,7 +69,7 @@ type CompletionParams = Omit<CompletionClientParams, 'tools'> & {
  *   validation must encode it explicitly in `schema`.
  *
  *   Cannot be combined with `tools` (tools already constrain output via their parameter schema).
- * @param params.prefill - Evaluate the prompt and tools without generating an answer. Requires an enabled kvCache; cannot force tool_choice. Await final before sending the question with the same prefix.
+ * @param params.prefill - Evaluate the prompt and tools without generating an answer. Requires an enabled kvCache and at least one message (from history or `modelConfig.system_prompt`); cannot force tool_choice. Await final before sending the question with the same prefix.
  * @param params.seedFrom - Optional name of another caller-managed cache to start this chat from, such as a
  *   system prompt and tools primed with `prefill`. On the first turn of a chat whose `kvCache` key has no
  *   cache yet, the model reads that cache and reuses the prefix it shares with the prompt, so only the rest is

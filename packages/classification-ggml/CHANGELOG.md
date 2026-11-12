@@ -9,6 +9,26 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-11-12
+
+### Added
+
+- `assessFit(request)` checks whether a MobileNet, MegaLoc or BridgeDepth GGUF
+  fits in the memory free now, from the GGUF metadata alone. It returns
+  `{ status, devices, stats }`: `fits`, `does-not-fit` or `unknown`, and the
+  selected device, then the host CPU, each with the measured bytes the load
+  and one inference take. `marginBytes` is the memory to leave free, 256 MiB
+  by default. BridgeDepth is sized for `workload`, 1280x720 by
+  default. On an iOS device, unified memory is capped at the app's memory
+  limit. A request that fails the JS checks rejects with a `TypeError` or
+  `RangeError`, an unreadable model or an otherwise invalid request with an
+  `InvalidArgument` error
+  ([#5705](https://github.com/tetherto/qvac/pull/5705)).
+
+### Pull Requests
+
+- [#5705](https://github.com/tetherto/qvac/pull/5705) - `assessFit` for MobileNet, MegaLoc and BridgeDepth.
+
 ## [0.37.0] - 2026-11-10
 
 ### Added
