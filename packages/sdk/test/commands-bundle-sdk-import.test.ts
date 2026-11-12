@@ -730,7 +730,7 @@ describe('bundleSdk', () => {
       runtime.hosts.includes('android-arm64')
     )?.resolution
     assert.ok(resolution?.resolved === true)
-    // A dynamic pin such as `0.2.+` resolves to a release, so the pin itself is in the detail.
+    // A range like `0.2.+` resolves to a release, so check the pin in the detail.
     assert.ok(
       resolution.runtime.detail.includes(`bare-kit-kotlin ${bundlerPins.android}`),
       resolution.runtime.detail

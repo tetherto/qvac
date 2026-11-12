@@ -650,7 +650,7 @@ describe('verifyBundle engines.bare against the phone runtimes', () => {
   it('passes an addon needing Bare 1.37 on the Bare Kit that bare-stow 0.3.7 pins', async () => {
     await withTempDir(async (dir) => {
       writeMobileProject(dir, { hosts: ['android-arm64', 'ios-arm64'], enginesBare: '>=1.37.0' })
-      // bare-stow 0.3.7 pins bare-kit-kotlin 0.2.+ and bare-kit-swift from 2.3.0.
+      // The pins bare-stow 0.3.7 uses.
       const bareStowDir = writeBareStow(dir, { kotlin: '0.2.+', swift: '2.3.0' })
       const result = await verifyBundle({
         projectRoot: dir,
@@ -668,9 +668,9 @@ describe('verifyBundle engines.bare against the phone runtimes', () => {
         assert.ok(resolution?.resolved === true)
         return resolution.runtime
       }
-      // bare-kit-swift 2.3.0 is built from bare-kit 3.1.0, Bare 1.37.1.
+      // bare-kit-swift 2.3.0 ships Bare 1.37.1.
       assert.equal(runtime('ios').version, '1.37.1')
-      // 0.2.+ follows the newest 0.2.x in the table, so a later release may raise its Bare.
+      // `0.2.+` tracks the newest 0.2.x, so its Bare can only go up.
       const android = runtime('android')
       assert.match(android.packageVersion, /^0\.2\.\d+$/)
       assert.ok(semver.gte(android.version, '1.37.1'), android.version)

@@ -39,7 +39,7 @@ const BINDINGS: Record<BareKitPlatform, BindingInfo> = {
     name: 'bare-kit-kotlin',
     bareKits: BARE_KIT_KOTLIN_BARE_KITS,
     withoutBareKit: BARE_KIT_KOTLIN_WITHOUT_BARE_KIT,
-    // An exact version, or a Gradle dynamic version such as `0.2.+`.
+    // Exact version, or a Gradle range like `0.2.+`.
     pin: /['"]com\.github\.holepunchto\.bare-kit-kotlin:bare-kit-kotlin['"]\s*:\s*['"]v?(\d+(?:\.\d+)*\.\+|\d+\.\d+\.\d+[^'"\s]*)['"]/
   },
   ios: {
@@ -95,15 +95,11 @@ export function parseBareKitVersion(cmakeLists: string) {
   return match?.[1] ?? null
 }
 
-/** Whether `pin` is a Gradle dynamic version, such as `0.2.+`, rather than an exact one. */
 export function isDynamicPin(pin: string) {
   return pin.endsWith('+')
 }
 
-/**
- * The newest of `versions` that the Gradle dynamic version `pin` matches, or
- * null when none does. `0.2.+` matches every `0.2.x` release.
- */
+/** Newest version matching a Gradle range like `0.2.+`, or null. */
 export function newestMatchingPin(pin: string, versions: string[]) {
   const prefix = pin.slice(0, -1)
   const matching = versions.filter(
@@ -179,12 +175,10 @@ function resolved(
 
 /**
  * Bare version a phone platform runs: the one in the bare-kit that the Bare
- * Kit binding pinned by the SDK's bare-stow is built from. Android links
- * bare-kit-kotlin at an exact version or a Gradle dynamic version such as
- * `0.2.+`, which this resolves at the newest matching release in the built-in
- * table; Gradle picks the newest published one, so the app runs that Bare or
- * a newer one. iOS links bare-kit-swift from a minimum version, which this
- * resolves at that minimum.
+ * Kit binding pinned by the SDK's bare-stow is built from. Android pins
+ * bare-kit-kotlin exactly or as a Gradle range like `0.2.+`, read as the
+ * newest matching release in the table. iOS pins a minimum bare-kit-swift
+ * version, read at that minimum.
  *
  * Checks the built-in tables, and only then GitHub.
  */
