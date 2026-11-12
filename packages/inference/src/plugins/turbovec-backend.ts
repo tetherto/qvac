@@ -1,10 +1,19 @@
 import type { TurboVecIndex } from '@qvac/rag'
 import { getTurboVecIndexProvider } from '@/plugins/registry'
-import { VECTOR_ID_RESERVED, VectorIndexStorage, type VectorIndexHit } from '@/schemas/index'
+import {
+  VECTOR_ID_RESERVED,
+  VectorIndexStorage,
+  type VectorIndexHit,
+  type VectorIndexIvfSettings
+} from '@/schemas/index'
 import type { OpenVectorIndex, VectorIndexBackend } from '@/runtime/vector-index-backend'
 
 // The native index pads short result rows with UINT64_MAX.
 const PADDING_ID = BigInt(VECTOR_ID_RESERVED)
+
+const IVF_UNSUPPORTED_MESSAGE = 'The vector index provider does not support IVF search'
+
+type TurboVecIndexSearchResult = ReturnType<TurboVecIndex['search']>
 
 /**
  * The native index reports only its effective bit width after a load. Three
@@ -25,7 +34,7 @@ export function storageFromBitWidth(bitWidth: unknown): VectorIndexStorage | und
   }
 }
 
-function toHitRows(result: ReturnType<TurboVecIndex['search']>): VectorIndexHit[][] {
+function toHitRows(result: TurboVecIndexSearchResult): VectorIndexHit[][] {
   const rows: VectorIndexHit[][] = []
   for (let row = 0; row < result.m; row++) {
     const hits: VectorIndexHit[] = []
@@ -42,10 +51,16 @@ function toHitRows(result: ReturnType<TurboVecIndex['search']>): VectorIndexHit[
 
 // The native index exposes these beyond the TurboVecIndex interface, which
 // does not declare them; a provider that predates them leaves them out.
-type IndexWithControls = TurboVecIndex & {
+export type IndexWithControls = TurboVecIndex & {
   readonly calibrated?: boolean
   readonly stagedSearch?: boolean
   setStagedSearch?: (enabled: boolean) => void
+  buildIvf?: (nLists: number, nIter?: number) => void
+  searchIvf?: (queries: Float32Array, k: number, nProbe: number) => TurboVecIndexSearchResult
+}
+
+function sameListBuild(a: VectorIndexIvfSettings, b: VectorIndexIvfSettings) {
+  return a.nLists === b.nLists && (a.nIter ?? 0) === (b.nIter ?? 0)
 }
 
 function openIndex(
@@ -56,6 +71,19 @@ function openIndex(
   // after a change; running it eagerly keeps that cost out of the first
   // query's latency.
   let needsPrepare = true
+  function prepareOnce() {
+    if (needsPrepare) {
+      index.prepare()
+      needsPrepare = false
+    }
+  }
+  const ivfSupported = index.buildIvf !== undefined && index.searchIvf !== undefined
+  let ivfSettings: VectorIndexIvfSettings | null = null
+  let ivfBuilt = false
+  function markChanged() {
+    needsPrepare = true
+    ivfBuilt = false
+  }
   return {
     get dim() {
       return index.dim
@@ -70,6 +98,10 @@ function openIndex(
     get stagedSearch() {
       return index.stagedSearch
     },
+    get ivf() {
+      if (!ivfSupported) return undefined
+      return ivfSettings && { ...ivfSettings, built: ivfBuilt }
+    },
     setStagedSearch(enabled) {
       // Without the getter the setting could not be confirmed, so a provider
       // needs both halves of the control.
@@ -79,14 +111,38 @@ function openIndex(
       index.setStagedSearch(enabled)
       return index.stagedSearch
     },
+    setIvf(settings) {
+      if (!index.buildIvf || !index.searchIvf) {
+        throw new Error(IVF_UNSUPPORTED_MESSAGE)
+      }
+      if (settings === null) {
+        ivfSettings = null
+        ivfBuilt = false
+        return null
+      }
+      const listsCurrent = ivfBuilt && ivfSettings !== null && sameListBuild(ivfSettings, settings)
+      if (!listsCurrent) {
+        index.buildIvf(settings.nLists, settings.nIter ?? 0)
+        ivfBuilt = true
+      }
+      ivfSettings = settings
+      return { ...ivfSettings, built: ivfBuilt }
+    },
     add(vectors, ids) {
       index.addWithIds(vectors, ids)
-      needsPrepare = true
+      markChanged()
     },
-    search(queries, k) {
-      if (needsPrepare) {
-        index.prepare()
-        needsPrepare = false
+    search(queries, k, nProbe) {
+      if (nProbe !== undefined && ivfSettings === null) {
+        throw new Error(
+          ivfSupported
+            ? 'nProbe applies only to IVF search; call setIvf() first'
+            : IVF_UNSUPPORTED_MESSAGE
+        )
+      }
+      prepareOnce()
+      if (ivfSettings && ivfBuilt && index.searchIvf) {
+        return toHitRows(index.searchIvf(queries, k, nProbe ?? ivfSettings.nProbe))
       }
       return toHitRows(index.search(queries, k))
     },
@@ -95,7 +151,7 @@ function openIndex(
     },
     remove(id) {
       const removed = index.remove(id)
-      if (removed) needsPrepare = true
+      if (removed) markChanged()
       return removed
     },
     write(path) {

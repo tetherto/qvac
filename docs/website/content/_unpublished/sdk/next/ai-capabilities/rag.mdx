@@ -171,7 +171,11 @@ A fresh TurboVec index attempts TQ+ calibration before encoding its first succes
 
 Staged search is off for every new or loaded index. Use `await index.setStagedSearch({ enabled: true })` to trade recall for faster queries, or pass `false` to score every vector. On supported hosts, staged search applies at 32,768 or more vectors and a dimension divisible by 32. Other dimensions and indexes loaded from v3 snapshots retain the setting but search every vector. `index.stagedSearch` reports the setting, which is not saved in snapshots. Generic `F32`, `Q8`, and `Q4` storage reject staged search controls.
 
-External index providers may omit these controls. Their `calibrated` and `stagedSearch` properties report `undefined`, and `setStagedSearch()` rejects with `VectorIndexFailedError` when unsupported.
+IVF search is off for every new or loaded index. Call `await index.setIvf({ nLists, nProbe })` to group the vectors into `nLists` lists. After that, `search()` scans only the `nProbe` lists closest to each query. That's faster, but it can miss some true nearest vectors. A higher `nProbe` finds more of them and takes longer, and an `nProbe` of at least `nLists` scans every vector. Pass `nProbe` to a single `search()` call to override the setting for that call. `nIter` sets how many k-means passes refine the lists, and the default 0 keeps the initial centroids. While the lists are built, calling `setIvf()` again with the same `nLists` and `nIter` changes only `nProbe` and skips the rebuild. Pass `null` to turn IVF off.
+
+An `add()`, or a `remove()` that deletes an entry, makes the lists stale. `index.ivf.built` turns `false`, and `search()` scans every vector until you call `setIvf()` again. Snapshots don't save the setting. While IVF is off, `index.ivf` is `null` and a `search()` with `nProbe` rejects with `VectorIndexFailedError`. When staged search is also on, it applies within the probed lists.
+
+External index providers may omit these controls. Their `calibrated`, `stagedSearch` and `ivf` properties report `undefined`, while `setStagedSearch()` and `setIvf()` reject with `VectorIndexFailedError` when unsupported.
 
 ### External vector DB
 

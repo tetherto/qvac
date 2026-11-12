@@ -213,6 +213,8 @@ export {
   type LoadVectorIndexParams,
   type VectorIndexAddParams,
   type VectorIndexIdsParams,
+  type VectorIndexIvfSettings,
+  type VectorIndexIvfState,
   type VectorIndexSearchParams,
   type VectorIndexSetStagedSearchParams,
   type VectorIndexWriteParams,

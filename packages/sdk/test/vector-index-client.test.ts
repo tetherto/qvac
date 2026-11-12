@@ -42,6 +42,10 @@ function fakeTransport(
             { id: String(i + 1), score: 0.9 }
           ])
         }
+      case 'setIvf': {
+        const ivf = req['ivf'] as Record<string, unknown> | null
+        return { type: 'vectorIndex', operation: 'setIvf', ivf: ivf && { ...ivf, built: true } }
+      }
       case 'remove':
         length -= 1
         return { type: 'vectorIndex', operation: 'remove', removed: [true, false], length }
@@ -349,4 +353,75 @@ test('vector index client: providers without controls leave state unknown', asyn
   const index = await createVectorIndexClient(send).createVectorIndex({ dim: 8 })
   t.is(index.calibrated, undefined)
   t.is(index.stagedSearch, undefined)
+})
+
+test('vector index client: setIvf sends the settings and tracks the reported state', async (t) => {
+  const { send, sent } = fakeTransport({
+    add: () => ({
+      type: 'vectorIndex',
+      operation: 'add',
+      length: 1,
+      ivf: { nLists: 4, nProbe: 2, built: false }
+    }),
+    remove: () => ({ type: 'vectorIndex', operation: 'remove', removed: [true], length: 0 })
+  })
+  const { createVectorIndex } = createVectorIndexClient(send)
+  const index = await createVectorIndex({ dim: 2 })
+  t.is(index.ivf, undefined, 'a create response without ivf leaves it unknown')
+
+  const setting = index.setIvf({ nLists: 4, nProbe: 2 })
+  const result = await setting
+  t.alike(result, { ivf: { nLists: 4, nProbe: 2, built: true } })
+  t.alike(index.ivf, result.ivf)
+  t.alike(
+    sent[1]?.request,
+    {
+      type: 'vectorIndex',
+      operation: 'setIvf',
+      indexId: 'idx-1',
+      ivf: { nLists: 4, nProbe: 2 },
+      requestId: setting.requestId
+    },
+    'an omitted nIter is left off the wire'
+  )
+  await index.setIvf({ nLists: 4, nProbe: 2, nIter: 0 }, { timeout: 1000 })
+  t.alike(sent[2]?.request['ivf'], { nLists: 4, nProbe: 2, nIter: 0 }, 'nIter 0 is sent')
+  t.alike(sent[2]?.options, { timeout: 1000 }, 'RPC options reach the transport')
+
+  await index.add({ ids: ['1'], vectors: [[1, 0]] })
+  t.alike(index.ivf, { nLists: 4, nProbe: 2, built: false }, 'add updates the IVF state')
+  await index.remove({ ids: ['1'] })
+  t.is(index.ivf, undefined, 'remove updates the IVF state too')
+
+  t.alike(await index.setIvf(null), { ivf: null })
+  t.is(sent.at(-1)?.request['ivf'], null, 'null turns IVF off on the wire')
+  t.is(index.ivf, null)
+})
+
+test('vector index client: search sends nProbe only when given', async (t) => {
+  const { send, sent } = fakeTransport()
+  const { createVectorIndex } = createVectorIndexClient(send)
+  const index = await createVectorIndex({ dim: 2 })
+
+  const searching = index.search({ query: [1, 0], k: 3, nProbe: 2 })
+  const hits = await searching
+  t.alike(hits, [{ id: '1', score: 0.9 }], 'a single query returns one flat hit list')
+  t.alike(sent[1]?.request, {
+    type: 'vectorIndex',
+    operation: 'search',
+    indexId: 'idx-1',
+    queries: [[1, 0]],
+    k: 3,
+    nProbe: 2,
+    requestId: searching.requestId
+  })
+  const rows = await index.search({
+    queries: [
+      [1, 0],
+      [0, 1]
+    ],
+    k: 1
+  })
+  t.is(rows.length, 2, 'batch search returns one list per query')
+  t.absent('nProbe' in (sent[2]?.request ?? {}), 'an omitted nProbe is left off the wire')
 })
