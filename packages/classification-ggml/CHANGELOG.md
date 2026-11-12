@@ -9,6 +9,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-11-12
+
 ### Added
 
 - `assessFit(request)` checks whether a MobileNet, MegaLoc or BridgeDepth GGUF
