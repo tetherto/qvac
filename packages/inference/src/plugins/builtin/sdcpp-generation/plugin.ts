@@ -81,6 +81,7 @@ type DiffusionArtifactKey =
   | 'vaeModelPath'
   | 'highNoiseDiffusionModelPath'
   | 'uncondModelPath'
+  | 'tokenizerPath'
   | 'audioVaeModelPath'
   | 'embeddingsConnectorsModelPath'
   | 'esrganModelPath'
@@ -126,6 +127,18 @@ export const diffusionPlugin = definePlugin({
       throw new ModelLoadFailedError(
         'modelConfig.uncondModelSrc selects the Ideogram 4 layout and requires ' +
           'modelConfig.llmModelSrc (Qwen3-VL) and modelConfig.vaeModelSrc.'
+      )
+    }
+    if (cfg.tokenizerSrc && cfg.mode !== 'diffusion') {
+      throw new ModelLoadFailedError(
+        'modelConfig.tokenizerSrc is MOSS-Image diffusion only. ' +
+          "Use mode: 'diffusion' or remove tokenizerSrc."
+      )
+    }
+    if (cfg.tokenizerSrc && (!cfg.llmModelSrc || !cfg.vaeModelSrc)) {
+      throw new ModelLoadFailedError(
+        'modelConfig.tokenizerSrc selects the MOSS-Image layout and requires ' +
+          'modelConfig.llmModelSrc (Qwen3.5) and modelConfig.vaeModelSrc.'
       )
     }
     // A high-noise expert only has somewhere to go in the Wan 2.2 A14B video
@@ -242,6 +255,7 @@ export const diffusionPlugin = definePlugin({
       vaeModelSrc,
       highNoiseDiffusionModelSrc,
       uncondModelSrc,
+      tokenizerSrc,
       audioVaeModelSrc,
       embeddingsConnectorsModelSrc,
       taehvModelSrc,
@@ -305,6 +319,7 @@ export const diffusionPlugin = definePlugin({
       vaeModelSrc,
       highNoiseDiffusionModelSrc,
       uncondModelSrc,
+      tokenizerSrc,
       audioVaeModelSrc,
       embeddingsConnectorsModelSrc,
       esrganModelSrc,
@@ -328,6 +343,7 @@ export const diffusionPlugin = definePlugin({
       vaeModelPath,
       highNoiseDiffusionModelPath,
       uncondModelPath,
+      tokenizerPath,
       audioVaeModelPath,
       embeddingsConnectorsModelPath,
       esrganModelPath,
@@ -343,6 +359,7 @@ export const diffusionPlugin = definePlugin({
       vaeModelSrc ? resolve(vaeModelSrc) : undefined,
       highNoiseDiffusionModelSrc ? resolve(highNoiseDiffusionModelSrc) : undefined,
       uncondModelSrc ? resolve(uncondModelSrc) : undefined,
+      tokenizerSrc ? resolve(tokenizerSrc) : undefined,
       audioVaeModelSrc ? resolve(audioVaeModelSrc) : undefined,
       embeddingsConnectorsModelSrc ? resolve(embeddingsConnectorsModelSrc) : undefined,
       esrganModelSrc ? resolve(esrganModelSrc) : undefined,
@@ -362,6 +379,7 @@ export const diffusionPlugin = definePlugin({
         ...(vaeModelPath && { vaeModelPath }),
         ...(highNoiseDiffusionModelPath && { highNoiseDiffusionModelPath }),
         ...(uncondModelPath && { uncondModelPath }),
+        ...(tokenizerPath && { tokenizerPath }),
         ...(audioVaeModelPath && { audioVaeModelPath }),
         ...(embeddingsConnectorsModelPath && { embeddingsConnectorsModelPath }),
         ...(esrganModelPath && { esrganModelPath }),

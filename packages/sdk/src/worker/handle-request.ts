@@ -11,7 +11,11 @@ import { sendErrorResponse, sendStreamErrorResponse } from '@/server/error-handl
 import { PluginHandlerTypeMismatchError } from '@/utils/errors-server'
 import { handleInitConfig, isInitConfigMessage } from './handler-utils'
 import { createServerProfiler, type ServerProfiler } from '@/server/rpc/profiling'
-import { isTerminalChunk, signalOnWireClose } from '@/server/rpc/rpc-utils'
+import {
+  createResponseStreamLoggingErrors,
+  isTerminalChunk,
+  signalOnStreamClose
+} from '@/server/rpc/rpc-utils'
 import { createProgressThrottle } from '@/server/rpc/progress-throttle'
 
 type Transport = 'reply' | 'stream' | 'progress' | 'duplex' | undefined
@@ -53,7 +57,7 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
     transport = dispatchTransport(request)
 
     if (transport === 'stream' || transport === 'progress') {
-      await streamToWire(req, request, profiler, transport === 'progress')
+      await streamToResponse(req, request, profiler, transport === 'progress')
     } else if (transport === 'duplex') {
       throw new PluginHandlerTypeMismatchError(request.type, 'reply or stream', 'duplex')
     } else {
@@ -64,25 +68,25 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
     }
   } catch (error) {
     if (transport === 'stream' || transport === 'progress') {
-      sendStreamErrorResponse(req.createResponseStream(), error, profiler)
+      sendStreamErrorResponse(createResponseStreamLoggingErrors(req), error, profiler)
     } else {
       sendErrorResponse(req, error, profiler)
     }
   }
 }
 
-async function streamToWire(
+async function streamToResponse(
   req: RPC.IncomingRequest,
   request: Request,
   profiler: ServerProfiler,
   throttleProgress: boolean
 ): Promise<void> {
-  const wire = req.createResponseStream()
+  const responseStream = createResponseStreamLoggingErrors(req)
   profiler.startHandler()
   let sentFinalChunk = false
 
   // Lets an `endsOnAbort` handler (log stream) release its source when the client aborts.
-  const signal = signalOnWireClose(wire)
+  const signal = signalOnStreamClose(responseStream)
 
   // A progress stream (a reply op that streams because of `withProgress`) can
   // emit hundreds of updates, so batch them on a time window before writing to
@@ -90,7 +94,10 @@ async function streamToWire(
   // through immediately and are never throttled.
   const throttle = throttleProgress
     ? createProgressThrottle<Response>((updates) => {
-        wire.write(updates.map((u) => profiler.serialize(u, false)).join('\n') + '\n', 'utf-8')
+        responseStream.write(
+          updates.map((u) => profiler.serialize(u, false)).join('\n') + '\n',
+          'utf-8'
+        )
       })
     : undefined
 
@@ -99,12 +106,12 @@ async function streamToWire(
       if (isTerminalChunk(response)) {
         throttle?.flush()
         profiler.endHandler()
-        wire.write(profiler.serialize(response, true) + '\n', 'utf-8')
+        responseStream.write(profiler.serialize(response, true) + '\n', 'utf-8')
         sentFinalChunk = true
       } else if (throttle) {
         throttle.push(response)
       } else {
-        wire.write(profiler.serialize(response, false) + '\n', 'utf-8')
+        responseStream.write(profiler.serialize(response, false) + '\n', 'utf-8')
       }
     }
 
@@ -113,21 +120,21 @@ async function streamToWire(
       profiler.endHandler()
       const trailer = profiler.serialize()
       if (trailer) {
-        wire.write(trailer + '\n', 'utf-8')
+        responseStream.write(trailer + '\n', 'utf-8')
       }
     }
 
-    wire.end()
+    responseStream.end()
   } catch (error) {
     throttle?.flush()
     profiler.endHandler()
-    sendStreamErrorResponse(wire, error, profiler)
+    sendStreamErrorResponse(responseStream, error, profiler)
   }
 }
 
 async function handleDuplexRequest(req: RPC.IncomingRequest): Promise<void> {
   const rpcInput = req.createRequestStream()
-  const rpcOutput = req.createResponseStream()
+  const rpcOutput = createResponseStreamLoggingErrors(req)
   let profiler: ServerProfiler | undefined
 
   try {
@@ -159,7 +166,7 @@ async function handleDuplexRequest(req: RPC.IncomingRequest): Promise<void> {
     const session = await duplex(request)
 
     // Feed the remaining RPC input into the engine's input stream, and forward
-    // the engine's newline-framed responses back out to the wire.
+    // the engine's newline-framed responses back out to the response stream.
     rpcInput.on('data', (chunk: unknown) => session.requestStream.write(chunk as Uint8Array))
     rpcInput.on('end', () => session.requestStream.end())
     rpcInput.on('error', () => session.requestStream.destroy())

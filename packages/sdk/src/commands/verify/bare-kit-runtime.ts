@@ -1,11 +1,13 @@
 import { promises as fsp } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
-import semver from 'semver'
 import {
   BARE_KIT_BARE_VERSIONS,
   BARE_KIT_KOTLIN_BARE_KITS,
-  BARE_KIT_SWIFT_BARE_KITS
+  BARE_KIT_KOTLIN_WITHOUT_BARE_KIT,
+  BARE_KIT_SWIFT_BARE_KITS,
+  BARE_KIT_SWIFT_WITHOUT_BARE_KIT,
+  BARE_KIT_WITHOUT_BARE
 } from '@/commands/verify/bare-kit-runtimes'
 import { findInAncestorNodeModules } from '@/expo/plugins/find-in-ancestor-node-modules'
 import type { BareKitBinding, BareRuntimeResolution } from '@/commands/verify/abi'
@@ -26,6 +28,8 @@ export const BARE_KIT_PLATFORMS: BareKitPlatform[] = ['android', 'ios']
 interface BindingInfo {
   name: BareKitBinding
   bareKits: Record<string, string>
+  /** Releases the table generator checked and found naming no bare-kit version. */
+  withoutBareKit: string[]
   pin: RegExp
 }
 
@@ -33,11 +37,13 @@ const BINDINGS: Record<BareKitPlatform, BindingInfo> = {
   android: {
     name: 'bare-kit-kotlin',
     bareKits: BARE_KIT_KOTLIN_BARE_KITS,
+    withoutBareKit: BARE_KIT_KOTLIN_WITHOUT_BARE_KIT,
     pin: /['"]com\.github\.holepunchto\.bare-kit-kotlin:bare-kit-kotlin['"]\s*:\s*['"]v?(\d+\.\d+\.\d+[^'"\s]*)['"]/
   },
   ios: {
     name: 'bare-kit-swift',
     bareKits: BARE_KIT_SWIFT_BARE_KITS,
+    withoutBareKit: BARE_KIT_SWIFT_WITHOUT_BARE_KIT,
     pin: /['"]https:\/\/github\.com\/holepunchto\/bare-kit-swift(?:\.git)?['"]\s*,\s*from\s*:\s*['"]v?(\d+\.\d+\.\d+[^'"\s]*)['"]/
   }
 }
@@ -110,20 +116,6 @@ export async function fetchBareVersionFromGitHub(
 ) {
   const cmakeLists = await fetch(`${RAW_GITHUB_BASE}/bare-kit/v${bareKitVersion}/CMakeLists.txt`)
   return parseBareVersion(cmakeLists)
-}
-
-function newestKey(record: Record<string, unknown>) {
-  const versions = Object.keys(record).filter((version) => semver.valid(version) !== null)
-  return versions.length === 0 ? null : versions.sort(semver.rcompare)[0]!
-}
-
-/**
- * The table generator has already probed every release up to the newest
- * entry, so only newer releases can have data on GitHub that the table lacks.
- */
-function isNewerThanTable(version: string, record: Record<string, unknown>) {
-  const newest = newestKey(record)
-  return newest === null || semver.valid(version) === null || semver.gt(version, newest)
 }
 
 /** The bare-stow of the project's `@qvac/sdk`, which bundles its app, else this SDK's. */
@@ -209,11 +201,11 @@ export async function resolveBareKitRuntime(
     return resolved(platform, tableBare, version, tableBareKit, false)
   }
 
-  const canLookUp =
+  const checkedWithoutVersion =
     tableBareKit === null
-      ? isNewerThanTable(version, binding.bareKits)
-      : isNewerThanTable(tableBareKit, BARE_KIT_BARE_VERSIONS)
-  if (!canLookUp) {
+      ? binding.withoutBareKit.includes(version)
+      : BARE_KIT_WITHOUT_BARE.includes(tableBareKit)
+  if (checkedWithoutVersion) {
     return unresolved(
       `The Bare version of ${binding.name}@${version} could not be determined: ` +
         (tableBareKit === null

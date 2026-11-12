@@ -65,7 +65,9 @@ export const llmConfigBaseSchema = z.object({
   device: z
     .string()
     .optional()
-    .describe("Device to run inference on: `'gpu'` or `'cpu'`. Default `'gpu'`."),
+    .describe(
+      "Device class to run inference on: `'gpu'`, `'cpu'` or `'npu'`. Default `'gpu'`. `'npu'` is the AMD XDNA2 NPU on Linux x64, which needs XRT 2.25 or newer and read/write access to its /dev/accel node; GPU selection never picks it. With no NPU listed, `'npu'` falls back to the GPU order, then the CPU. It cannot be combined with backend, devices, split-mode (beyond their defaults), main-gpu, rpc-servers or finetuning, and a listed NPU that fails to open runs the load on the CPU."
+    ),
   predict: z
     .union([
       z.literal(-1), // special: until stop token
@@ -198,13 +200,13 @@ export const llmConfigBaseSchema = z.object({
     .min(1)
     .optional()
     .describe(
-      "Explicit ordered native device names, for example RPC0,RPC1. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order."
+      "Explicit ordered native device names, for example RPC0,RPC1, or XDNA0 for the AMD XDNA NPU alone, which reports `backendDevice` `'npu'`; naming XDNA0 without a listed NPU fails the load, and a load with XDNA0 in devices, alone or with other devices, cannot finetune. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order."
     ),
   'split-mode': z
     .enum(['none', 'layer', 'tensor'])
     .optional()
     .describe(
-      "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctx_size` explicitly)."
+      "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctx_size` explicitly). `'tensor'` is rejected with the XDNA0 NPU."
     ),
   'flash-attn': z
     .enum(['on', 'off', 'auto'])
@@ -440,7 +442,7 @@ export const llmConfigBaseSchema = z.object({
     .boolean()
     .optional()
     .describe(
-      'Run the multimodal projector (mmproj / vision encoder) on the GPU (multimodal models only). `true` forces GPU, `false` forces CPU. When unset, the backend is auto-selected per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on every other Android GPU (Arm Mali, Adreno <800, and undetectable Adreno tiers), with the LLM layers still on the GPU. Only honoured when the model itself runs on a GPU backend — ignored with a warning on CPU.'
+      "Run the multimodal projector (mmproj / vision encoder) on the GPU (multimodal models only). `true` forces GPU, `false` forces CPU. When unset, the backend is auto-selected per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on every other Android GPU (Arm Mali, Adreno <800, and undetectable Adreno tiers), with the LLM layers still on the GPU. On an NPU load (`device: 'npu'` or XDNA0 as the first local device in devices) it runs on a GPU beside the NPU, else the CPU; `true` with no GPU runs it on the NPU. Only honoured when the model itself runs on a GPU or NPU backend — ignored with a warning on CPU."
     )
 })
 

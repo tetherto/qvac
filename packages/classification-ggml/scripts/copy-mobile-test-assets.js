@@ -169,22 +169,28 @@ function main() {
   copyWeightsToTestAssets()
   copyTestImagesToTestAssets()
   const fixtures = path.join(ADDON_DIR, 'test', 'fixtures')
-  // [file, path override, model, conversion guide, runner in integration.auto.cjs]
+  // [file, path override, model, conversion guide, runners in integration.auto.cjs]
   const models = [
-    ['megaloc-f16.gguf', 'QVAC_MEGALOC_F16_MODEL_PATH', 'MegaLoc', 'docs/megaloc.md', 'runMegaloc'],
+    [
+      'megaloc-f16.gguf',
+      'QVAC_MEGALOC_F16_MODEL_PATH',
+      'MegaLoc',
+      'docs/megaloc.md',
+      ['runMegaloc', 'runFit']
+    ],
     [
       'megaloc-mixed.gguf',
       'QVAC_MEGALOC_MIXED_MODEL_PATH',
       'MegaLoc',
       'docs/megaloc.md',
-      'runMegaloc'
+      ['runMegaloc']
     ],
     [
       'bridgedepth-vits-f32.gguf',
       'QVAC_BRIDGEDEPTH_MODEL_PATH',
       'BridgeDepth',
       'docs/bridgedepth.md',
-      'runBridgedepth'
+      ['runBridgedepth', 'runFit']
     ]
   ]
   // A manual dispatch can pick runners with a mocha grep over their names
@@ -193,9 +199,11 @@ function main() {
   const testFilter = process.env.MOBILE_TESTS_FILTER
     ? new RegExp(process.env.MOBILE_TESTS_FILTER)
     : null
-  for (const [filename, variable, model, guide, runner] of models) {
-    if (testFilter && !testFilter.test(runner)) {
-      console.log(`[mobile:copy-prebuilds] ${runner} not selected, skipping ${filename}`)
+  for (const [filename, variable, model, guide, runners] of models) {
+    if (testFilter && !runners.some((runner) => testFilter.test(runner))) {
+      console.log(
+        `[mobile:copy-prebuilds] ${runners.join(', ')} not selected, skipping ${filename}`
+      )
       continue
     }
     const source = process.env[variable] || path.join(fixtures, filename)
