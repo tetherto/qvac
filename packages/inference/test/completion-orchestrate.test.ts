@@ -1,5 +1,11 @@
 import test from 'brittle'
-import { orchestrateCompletion, ToolResultReader } from '@/handlers/completion-orchestrate'
+import {
+  orchestrateCompletion,
+  registeredToolWaits,
+  ToolResultReader
+} from '@/handlers/completion-orchestrate'
+import { getRequestRegistry } from '@/runtime/request-context'
+import { openTestSessions } from './fixtures/sessions'
 import type {
   CompletionOrchestrateRequest,
   CompletionOrchestrateResponse,
@@ -374,6 +380,69 @@ test('ToolResultReader: close() returns the upstream and fails a pending waiter'
   t.ok(result.error && /closed/.test(result.error), 'pending waiter fails on close')
   t.ok(returned, 'close() returned the upstream iterator')
   reader.close() // idempotent -- second call is a no-op
+})
+
+test('orchestrateCompletion: a session close during a tool wait ends the completion and waits for it', async (t) => {
+  openTestSessions(t, 'A')
+  // The client never answers the tool call.
+  async function* silentClient(): AsyncGenerator<Buffer> {
+    await new Promise<void>(() => {})
+  }
+  const reader = new ToolResultReader(silentClient())
+  t.teardown(() => reader.close())
+  async function* runTurn() {
+    yield toolTurn('call-1', 'get_weather', { city: 'Tokyo' })
+  }
+  const request = baseRequest({ requestId: 'r-1', sessionId: 'A' })
+  const frames: CompletionOrchestrateResponse[] = []
+  const completion = (async () => {
+    for await (const frame of orchestrateCompletion(
+      request,
+      runTurn,
+      registeredToolWaits(reader, request)
+    )) {
+      frames.push(frame)
+    }
+  })()
+  const registry = getRequestRegistry()
+  while (!registry.get('r-1', 'A')) await new Promise<void>((resolve) => setTimeout(resolve, 1))
+
+  t.is(
+    await registry.drainSession('A', 'sessionClosed'),
+    1,
+    'the close finds the waiting completion'
+  )
+  t.absent(registry.get('r-1', 'A'), 'the close returns after the wait left the registry')
+  await completion
+  t.alike(frames.at(-2)?.events, [{ type: 'completionDone', seq: 0, stopReason: 'cancelled' }])
+  t.is(frames.at(-1)?.done, true, 'the completion ends as cancelled')
+})
+
+test('orchestrateCompletion: a cancel between turns wins over a tool result already received', async (t) => {
+  openTestSessions(t, 'A')
+  async function* answeringClient(): AsyncGenerator<Buffer> {
+    yield Buffer.from(JSON.stringify({ callId: 'call-1', result: 'sunny' }) + '\n')
+    await new Promise<void>(() => {})
+  }
+  const reader = new ToolResultReader(answeringClient())
+  t.teardown(() => reader.close())
+  await new Promise<void>((resolve) => setTimeout(resolve, 1))
+  let turns = 0
+  async function* runTurn() {
+    turns++
+    yield turns === 1 ? toolTurn('call-1', 'get_weather', { city: 'Tokyo' }) : contentTurn('Sunny.')
+  }
+  const request = baseRequest({ requestId: 'r-1', sessionId: 'A' })
+  // No request is registered yet, so the cancel waits for the next begin under the id.
+  getRequestRegistry().cancel({ requestId: 'r-1', sessionId: 'A' })
+
+  const frames = await collect(
+    orchestrateCompletion(request, runTurn, registeredToolWaits(reader, request))
+  )
+
+  t.is(turns, 1, 'no turn starts after the cancel')
+  t.alike(frames.at(-2)?.events, [{ type: 'completionDone', seq: 0, stopReason: 'cancelled' }])
+  t.is(frames.at(-1)?.done, true)
 })
 
 test('orchestrateCompletion: runs tool_search itself and never asks the client', async (t) => {
