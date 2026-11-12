@@ -5,6 +5,7 @@ import {
   type InferenceCancelledPartial,
   ContextOverflowError,
   ModelRegistryModelNotFoundError,
+  ModelRegistryBusyError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
@@ -171,6 +172,15 @@ const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
     return new ModelRegistryModelNotFoundError(
       readStringField(response.typedFields, 'registrySource', ''),
       readStringField(response.typedFields, 'registryPath', ''),
+      response.cause
+    )
+  },
+  QVAC_MODEL_REGISTRY_BUSY: (response) => {
+    return new ModelRegistryBusyError(
+      readStringField(response.typedFields, 'holder', 'current') === 'legacy'
+        ? 'legacy'
+        : 'current',
+      readOptionalNumberField(response.typedFields, 'waitedMs') ?? 0,
       response.cause
     )
   },
