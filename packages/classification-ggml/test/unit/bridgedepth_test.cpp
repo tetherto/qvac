@@ -547,19 +547,19 @@ TEST_F(BridgeDepthReference, ResizesOnlyAboveTheBox) {
   // 1600 wide fits as 1280 x 51.2, rounded to 51.
   constexpr uint32_t wideWidth = 1600;
   const bd::ImageSize wide{wideWidth, height};
-  const bd::ImageSize small = bd::modelInputSize(wideWidth, height);
-  ASSERT_EQ(small, (bd::ImageSize{bd::MAX_MODEL_WIDTH, 51}));
+  const bd::ImageSize downsized = bd::modelInputSize(wideWidth, height);
+  ASSERT_EQ(downsized, (bd::ImageSize{bd::MAX_MODEL_WIDTH, 51}));
   const bd::StereoInput above{
       stereoView(wideWidth, height, 0), stereoView(wideWidth, height, shift)};
-  const auto smallLeft = bd::resizeToPlanar(above.left.data, wide, small);
-  const auto smallRight = bd::resizeToPlanar(above.right.data, wide, small);
+  const auto smallLeft = bd::resizeToPlanar(above.left.data, wide, downsized);
+  const auto smallRight = bd::resizeToPlanar(above.right.data, wide, downsized);
   const auto expected = bd::resizeDisparity(
       graph.infer(
           smallLeft.data(),
           smallRight.data(),
-          static_cast<int>(small.height),
-          static_cast<int>(small.width)),
-      small,
+          static_cast<int>(downsized.height),
+          static_cast<int>(downsized.width)),
+      downsized,
       wide);
   const auto resized =
       std::any_cast<bd::DisparityOutput>(model.process(std::any(above)));
