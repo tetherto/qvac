@@ -730,7 +730,11 @@ describe('bundleSdk', () => {
       runtime.hosts.includes('android-arm64')
     )?.resolution
     assert.ok(resolution?.resolved === true)
-    assert.equal(resolution.runtime.packageVersion, bundlerPins.android)
+    // A dynamic pin such as `0.2.+` resolves to a release, so the pin itself is in the detail.
+    assert.ok(
+      resolution.runtime.detail.includes(`bare-kit-kotlin ${bundlerPins.android}`),
+      resolution.runtime.detail
+    )
   })
 
   it('names the addon and hosts a desktop bundle has no native build for', async (t) => {

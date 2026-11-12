@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { createLimiter } from '@/commands/verify/addon-source'
 import {
+  newestMatchingPin,
   parseBareKitPins,
   parseBareKitVersion,
   parseBareVersion,
@@ -199,6 +200,20 @@ describe('Bare Kit CMakeLists and bare-stow pin parsing', () => {
     })
     assert.deepEqual(parseBareKitPins("exports.name = 'bare-kit'"), { android: null, ios: null })
   })
+
+  it('reads a Gradle dynamic bare-kit-kotlin pin', () => {
+    assert.deepEqual(parseBareKitPins(bareKitTarget({ kotlin: '0.2.+', swift: '2.3.0' })), {
+      android: '0.2.+',
+      ios: '2.3.0'
+    })
+  })
+
+  it('matches a dynamic pin to the newest release with its prefix', () => {
+    const versions = ['0.1.2', '0.2.0', '0.2.10', '0.2.3', '0.3.0']
+    assert.equal(newestMatchingPin('0.2.+', versions), '0.2.10')
+    assert.equal(newestMatchingPin('0.+', versions), '0.3.0')
+    assert.equal(newestMatchingPin('1.+', versions), null)
+  })
 })
 
 describe('resolveBareKitRuntime', () => {
@@ -235,6 +250,37 @@ describe('resolveBareKitRuntime', () => {
       assert.equal(resolution.runtime.source, 'bare-kit-swift')
       assert.equal(resolution.runtime.packageVersion, '2.2.0')
       assert.match(resolution.runtime.detail, /bare-kit-swift 2\.2\.0 or newer/)
+    })
+  })
+
+  it('resolves a dynamic Android pin at the newest matching release in the tables', async () => {
+    await withTempDir(async (dir) => {
+      const resolution = await resolveBareKitRuntime({
+        platform: 'android',
+        bareStowDir: writeBareStow(dir, { kotlin: '0.1.+' }),
+        fetchText: failingFetch()
+      })
+      assert.ok(resolution.resolved)
+      assert.equal(resolution.runtime.version, '1.36.2')
+      assert.equal(resolution.runtime.packageVersion, '0.1.2')
+      assert.match(
+        resolution.runtime.detail,
+        /bare-kit-kotlin 0\.1\.\+ \(newest known release 0\.1\.2\), built from bare-kit 3\.0\.1/
+      )
+    })
+  })
+
+  it('leaves a dynamic Android pin with no matching release unresolved', async () => {
+    await withTempDir(async (dir) => {
+      const resolution = await resolveBareKitRuntime({
+        platform: 'android',
+        bareStowDir: writeBareStow(dir, { kotlin: '9.+' }),
+        fetchText: failingFetch()
+      })
+      assert.equal(resolution.resolved, false)
+      if (!resolution.resolved) {
+        assert.match(resolution.error.reason, /pins bare-kit-kotlin 9\.\+, and no release matching/)
+      }
     })
   })
 
