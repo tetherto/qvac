@@ -10400,5 +10400,33 @@
     "tags": ["image-embedding", "visual-place-recognition", "megaloc"],
     "notes": "Converted from the supported MegaLoc checkpoint. JPEG/PNG and packed RGB input. Requires the ggml-image-embedding plugin.",
     "link": "https://huggingface.co/gberton/MegaLoc"
+  },
+  {
+    "source": "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/530a4c94f92c35ef6818b1b035a983fe9dcf5f54/diffusion_models/moss_image_sft_bf16.safetensors",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "MOSS-Image SFT 5B JSON-layout text-to-image model",
+    "notes": "BF16 repackage of https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT. Loads with the Qwen3.5 9B Q4_K_M text encoder as llmModelSrc, the MOSS-Image VAE as vaeModelSrc and the MOSS-Image tokenizer as tokenizerSrc.",
+    "licenseId": "Apache-2.0",
+    "quantization": "BF16",
+    "params": "5B",
+    "tags": ["generation", "diffusion"],
+    "link": "https://huggingface.co/Comfy-Org/MOSS-Image"
+  },
+  {
+    "source": "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/530a4c94f92c35ef6818b1b035a983fe9dcf5f54/vae/flux2-vae_small.safetensors",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "MOSS-Image Variational Autoencoder model",
+    "notes": "The FLUX.2 small decoder, Apache-2.0 (https://huggingface.co/black-forest-labs/FLUX.2-small-decoder).",
+    "licenseId": "Apache-2.0",
+    "tags": ["vae"],
+    "link": "https://huggingface.co/Comfy-Org/MOSS-Image"
+  },
+  {
+    "source": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT/resolve/f972bd4b4b9e3852133cc5da954d87bc32cd8fb9/tokenizer/tokenizer.json",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "MOSS-Image tokenizer (tokenizer.json) for the Qwen3.5 text encoder",
+    "licenseId": "Apache-2.0",
+    "tags": ["tokenizer"],
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT"
   }
 ]
