@@ -138,7 +138,6 @@ function resolved(
   viaGitHub: boolean
 ): BareRuntimeResolution {
   const binding = BINDINGS[platform].name
-  const pinned = platform === 'ios' ? `${version} or newer` : version
   return {
     resolved: true,
     runtime: {
@@ -146,7 +145,7 @@ function resolved(
       source: binding,
       packageVersion: version,
       detail:
-        `bare-stow pins ${binding} ${pinned}, built from bare-kit ${bareKit}` +
+        `bare-stow pins ${binding} ${version}, built from bare-kit ${bareKit}` +
         (viaGitHub ? ', looked up on GitHub' : '')
     }
   }
@@ -155,8 +154,8 @@ function resolved(
 /**
  * Bare version a phone platform runs: the one in the bare-kit that the Bare
  * Kit binding pinned by the SDK's bare-stow is built from. Android links
- * bare-kit-kotlin at an exact version; iOS links bare-kit-swift from a
- * minimum version, which this resolves at that minimum.
+ * bare-kit-kotlin at an exact version. bare-stow names a minimum
+ * bare-kit-swift, which the link step writes into the app as an exact version.
  *
  * Checks the built-in tables, and only then GitHub.
  */
