@@ -1,5 +1,4 @@
 #pragma once
-
 #include <atomic>
 #include <cstdint>
 #include <functional>
@@ -34,7 +33,6 @@
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
 #include "utils/JobCancelRegistry.hpp"
-#include "utils/ModelBackendName.hpp"
 
 using namespace qvac_lib_inference_addon_cpp::model;
 
@@ -259,11 +257,6 @@ public:
   common_params& getCommonParams();
 
   qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const final;
-  [[nodiscard]] std::shared_ptr<const qvac_lib_inference_addon_llama::
-                                    backend_reporting::RuntimeBackendName>
-  runtimeBackendName() const {
-    return runtimeBackendName_;
-  }
   static void
   llamaLogCallback(ggml_log_level level, const char* text, void* userData);
 
@@ -419,6 +412,11 @@ private:
         normalizedFitSnapshot_;
     std::optional<CacheManager> cacheManager_;
 
+    /// The primary model's backend family, reported as the `backendName`
+    /// stat. Empty when unknown. Written by init() under the exclusive
+    /// `stateMtx_` and read under the shared one.
+    std::string backendName_;
+
     /// Mode flags for the most recent `processPrompt*` call, used by
     /// `runtimeStats()` to dispatch between the single-prompt and batch
     /// stat sources. The numbers themselves are NOT cached here: the
@@ -519,11 +517,6 @@ private:
       qvac_lib_inference_addon_cpp::kNoJobId};
 
   int64_t runtimeBackendDevice_ = 0;
-  std::shared_ptr<
-      qvac_lib_inference_addon_llama::backend_reporting::RuntimeBackendName>
-      runtimeBackendName_ =
-          std::make_shared<qvac_lib_inference_addon_llama::backend_reporting::
-                               RuntimeBackendName>();
 
   /// Live tagged jobs and each one's cancel action: a concurrent job binds
   /// its scheduler-slot teardown at slot admission (see SeqAssignedObserver),

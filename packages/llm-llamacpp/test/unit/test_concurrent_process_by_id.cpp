@@ -307,7 +307,8 @@ TEST_F(ConcurrentProcessByIdTest, ConsumeJobStatsLeavesLlamaPerfCountersAlone) {
         "generatedTokens",
         "promptTokens",
         "avgConcurrentSeq",
-        "backendDevice"}) {
+        "backendDevice",
+        "backendName"}) {
     const bool present =
         std::any_of(stats.begin(), stats.end(), [key](const auto& stat) {
           return stat.first == key;

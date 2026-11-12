@@ -1,4 +1,6 @@
-#include <memory>
+#include <cstdint>
+#include <string>
+#include <variant>
 
 #include <gtest/gtest.h>
 
@@ -58,13 +60,21 @@ TEST(ModelBackendName, PreservesRpcFamily) {
   EXPECT_EQ(modelBackendName({{4096, "rpc", false}}), "rpc");
 }
 
-TEST(ModelBackendName, MetadataRemainsAvailableAfterItsOwnerReleasesIt) {
-  auto owner = std::make_shared<
-      qvac_lib_inference_addon_llama::backend_reporting::RuntimeBackendName>();
-  owner->set("metal");
-  std::shared_ptr<const qvac_lib_inference_addon_llama::backend_reporting::
-                      RuntimeBackendName>
-      queued = owner;
-  owner.reset();
-  EXPECT_EQ(queued->get(), "metal");
+TEST(ModelBackendName, AppendsKnownNameAsStringStat) {
+  using qvac_lib_inference_addon_llama::backend_reporting::appendBackendName;
+  qvac_lib_inference_addon_cpp::RuntimeStats stats{
+      {"backendDevice", int64_t{1}}};
+  appendBackendName(stats, "cuda,vulkan");
+  ASSERT_EQ(stats.size(), 2U);
+  EXPECT_EQ(stats.back().first, "backendName");
+  const auto* name = std::get_if<std::string>(&stats.back().second);
+  ASSERT_NE(name, nullptr);
+  EXPECT_EQ(*name, "cuda,vulkan");
+}
+
+TEST(ModelBackendName, OmitsUnknownNameFromStats) {
+  using qvac_lib_inference_addon_llama::backend_reporting::appendBackendName;
+  qvac_lib_inference_addon_cpp::RuntimeStats stats;
+  appendBackendName(stats, "");
+  EXPECT_TRUE(stats.empty());
 }
