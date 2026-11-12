@@ -9,10 +9,11 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - `qvac-lib-inference-addon-cpp` dependency floor raised `1.5.0` -> `1.6.0`
-  ([#5731](https://github.com/tetherto/qvac/pull/5731)). In 1.6.0 a `RuntimeStats` value is a `RuntimeStatValue`, which adds
-  `std::string` to `double` and `int64_t`, so the runtime stats now use that
-  type. Compile-time only. The stats object JS receives keeps the same keys
-  and number values.
+  ([#5731](https://github.com/tetherto/qvac/pull/5731)). In 1.6.0 a
+  `RuntimeStats` value is a `RuntimeStatValue`, which adds `std::string` to
+  `double` and `int64_t`, so the runtime stats now use that type.
+  Compile-time only. The stats object JS receives keeps the same keys and
+  number values.
 
 ## [0.33.1] - 2026-11-11
 
