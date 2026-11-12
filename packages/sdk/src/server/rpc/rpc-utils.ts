@@ -1,5 +1,8 @@
 import { AbortController, type AbortSignal } from 'bare-abort-controller'
 import type RPC from 'bare-rpc'
+import { getServerLogger } from '@/logging'
+
+const logger = getServerLogger()
 
 let commandCounter = 0
 
@@ -16,11 +19,13 @@ export function isTerminalChunk<T>(value: T): value is T & { done: true } {
  * When the client goes away, bare-rpc destroys a response stream that is
  * still open with the channel or cancel error. No one is left to read that
  * error, and an `error` event without a listener is thrown as an uncaught
- * exception, so it is dropped here.
+ * exception, so it is logged here instead.
  */
-export function createResponseStreamIgnoringErrors(req: RPC.IncomingRequest): RPC.OutgoingStream {
+export function createResponseStreamLoggingErrors(req: RPC.IncomingRequest): RPC.OutgoingStream {
   const responseStream = req.createResponseStream()
-  responseStream.on('error', () => {})
+  responseStream.on('error', (error: unknown) => {
+    logger.debug('Response stream closed with an error:', error)
+  })
   return responseStream
 }
 

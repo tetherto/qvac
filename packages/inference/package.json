@@ -201,7 +201,6 @@
     "bare-net": "^2.3.2",
     "bare-os": "^3.9.3",
     "bare-path": "^3.1.1",
-    "bare-rpc": "^2.0.0",
     "bare-stream": "^2.13.3",
     "bare-url": "^2.4.5",
     "bare-zlib": "^1.4.0",

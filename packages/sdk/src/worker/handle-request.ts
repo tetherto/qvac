@@ -12,7 +12,7 @@ import { PluginHandlerTypeMismatchError } from '@/utils/errors-server'
 import { handleInitConfig, isInitConfigMessage } from './handler-utils'
 import { createServerProfiler, type ServerProfiler } from '@/server/rpc/profiling'
 import {
-  createResponseStreamIgnoringErrors,
+  createResponseStreamLoggingErrors,
   isTerminalChunk,
   signalOnStreamClose
 } from '@/server/rpc/rpc-utils'
@@ -68,7 +68,7 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
     }
   } catch (error) {
     if (transport === 'stream' || transport === 'progress') {
-      sendStreamErrorResponse(createResponseStreamIgnoringErrors(req), error, profiler)
+      sendStreamErrorResponse(createResponseStreamLoggingErrors(req), error, profiler)
     } else {
       sendErrorResponse(req, error, profiler)
     }
@@ -81,7 +81,7 @@ async function streamToResponse(
   profiler: ServerProfiler,
   throttleProgress: boolean
 ): Promise<void> {
-  const responseStream = createResponseStreamIgnoringErrors(req)
+  const responseStream = createResponseStreamLoggingErrors(req)
   profiler.startHandler()
   let sentFinalChunk = false
 
@@ -134,7 +134,7 @@ async function streamToResponse(
 
 async function handleDuplexRequest(req: RPC.IncomingRequest): Promise<void> {
   const rpcInput = req.createRequestStream()
-  const rpcOutput = createResponseStreamIgnoringErrors(req)
+  const rpcOutput = createResponseStreamLoggingErrors(req)
   let profiler: ServerProfiler | undefined
 
   try {

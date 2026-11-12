@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import RPC from 'bare-rpc'
 import type { AbortSignal } from 'bare-abort-controller'
-import { createResponseStreamIgnoringErrors, signalOnStreamClose } from '@/server/rpc/rpc-utils'
+import { createResponseStreamLoggingErrors, signalOnStreamClose } from '@/server/rpc/rpc-utils'
 
 // Real bare-rpc pair over a socket; the server hands each response stream to `onResponseStream`.
 async function rpcPair(onResponseStream: (responseStream: RPC.OutgoingStream) => void) {
@@ -16,7 +16,7 @@ async function rpcPair(onResponseStream: (responseStream: RPC.OutgoingStream) =>
   const server = net.createServer((socket) => {
     sockets.push(socket)
     new RPC(socket as never, (req: RPC.IncomingRequest) => {
-      onResponseStream(createResponseStreamIgnoringErrors(req))
+      onResponseStream(createResponseStreamLoggingErrors(req))
     })
   })
   await new Promise<void>((resolve) => server.listen(socketPath, resolve))
