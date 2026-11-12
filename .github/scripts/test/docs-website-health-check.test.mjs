@@ -135,7 +135,7 @@ test('probeUrl reports ok for 2xx and failure for 4xx', async () => {
 
 test('probeUrl captures network errors without throwing', async () => {
   const fetchImpl = async () => { throw new Error('ECONNREFUSED') }
-  const res = await probeUrl(`${ORIGIN}/`, { fetchImpl })
+  const res = await probeUrl(`${ORIGIN}/`, { fetchImpl, retryDelayMs: 0 })
   assert.equal(res.ok, false)
   assert.equal(res.status, null)
   assert.match(res.error, /ECONNREFUSED/)
@@ -150,7 +150,7 @@ test('probeUrl reports a timeout when the request aborts', async () => {
         reject(err)
       })
     })
-  const res = await probeUrl(`${ORIGIN}/`, { fetchImpl, timeoutMs: 10 })
+  const res = await probeUrl(`${ORIGIN}/`, { fetchImpl, timeoutMs: 10, retryDelayMs: 0 })
   assert.equal(res.ok, false)
   assert.match(res.error, /timeout after 10ms/)
 })
@@ -209,6 +209,33 @@ test('probeUrl surfaces the underlying error cause', async () => {
   assert.match(res.error, /fetch failed \(ECONNRESET\)/)
 })
 
+test('probeUrl reports the cause as code: message', async () => {
+  const fetchImpl = async () => {
+    const err = new TypeError('fetch failed')
+    err.cause = { code: 'UND_ERR_SOCKET', message: 'other side closed' }
+    throw err
+  }
+  const res = await probeUrl(`${ORIGIN}/`, { fetchImpl, retries: 0 })
+  assert.equal(res.error, 'fetch failed (UND_ERR_SOCKET: other side closed)')
+})
+
+test('runProbes reports each retry with its error and category', async () => {
+  let calls = 0
+  const fetchImpl = async () => {
+    calls++
+    if (calls === 1) throw new Error('fetch failed')
+    return new Response('', { status: 200 })
+  }
+  const retried = []
+  const [result] = await runProbes([{ url: `${ORIGIN}/a/`, category: 'redirect' }], {
+    fetchImpl,
+    retryDelayMs: 0,
+    onRetry: (r, attempt) => retried.push([r.url, r.category, r.error, attempt])
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(retried, [[`${ORIGIN}/a/`, 'redirect', 'fetch failed', 1]])
+})
+
 test('runProbes preserves order and attaches category', async () => {
   const entries = [
     { url: `${ORIGIN}/`, category: 'sitemap' },
@@ -216,7 +243,7 @@ test('runProbes preserves order and attaches category', async () => {
     { url: `${ORIGIN}/llms.txt`, category: 'llms' }
   ]
   const fetchImpl = async (url) => new Response('', { status: url.endsWith('index.md') ? 500 : 200 })
-  const results = await runProbes(entries, { fetchImpl, concurrency: 2 })
+  const results = await runProbes(entries, { fetchImpl, concurrency: 2, retryDelayMs: 0 })
   assert.equal(results.length, 3)
   assert.equal(results[0].category, 'sitemap')
   assert.equal(results[1].category, 'markdown')

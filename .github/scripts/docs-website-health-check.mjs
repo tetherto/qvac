@@ -141,11 +141,16 @@ export function buildUrlSet ({ origin, sitemapXml, redirectsText }) {
   return [...seen.entries()].map(([url, category]) => ({ url, category }))
 }
 
-/** Describe a thrown fetch error, including the underlying `cause` (undici hides it behind "fetch failed"). */
-function describeError (err, timeoutMs) {
+/**
+ * Describe a thrown fetch error, including the underlying `cause` as
+ * `code: message` (undici hides it behind "fetch failed"), e.g.
+ * `fetch failed (UND_ERR_SOCKET: other side closed)`.
+ */
+export function describeError (err, timeoutMs) {
   if (err?.name === 'AbortError') return `timeout after ${timeoutMs}ms`
   const message = err?.message || String(err)
-  const cause = err?.cause?.code || err?.cause?.message
+  const { code, message: causeMessage } = err?.cause || {}
+  const cause = [code, causeMessage].filter(Boolean).join(': ')
   return cause && !message.includes(cause) ? `${message} (${cause})` : message
 }
 
@@ -179,11 +184,13 @@ async function probeOnce (url, { timeoutMs, fetchImpl }) {
  * Probe a single URL. Never throws — failures are returned as data. Transient
  * failures (network error, timeout, 429, 5xx) are retried with linear backoff
  * so a one-off connection reset does not raise a false alarm; a 404 is never
- * retried.
+ * retried. `onRetry(result, attempt)` fires before each retry with the failed
+ * attempt, so absorbed failures stay visible in the log.
  */
-export async function probeUrl (url, { timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl = fetch, retries = DEFAULT_RETRIES, retryDelayMs = DEFAULT_RETRY_DELAY_MS } = {}) {
+export async function probeUrl (url, { timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl = fetch, retries = DEFAULT_RETRIES, retryDelayMs = DEFAULT_RETRY_DELAY_MS, onRetry } = {}) {
   let result = await probeOnce(url, { timeoutMs, fetchImpl })
   for (let attempt = 1; attempt <= retries && !result.ok && isTransient(result); attempt++) {
+    onRetry?.(result, attempt)
     await new Promise((resolveDelay) => setTimeout(resolveDelay, retryDelayMs * attempt))
     result = await probeOnce(url, { timeoutMs, fetchImpl })
   }
@@ -195,14 +202,20 @@ export async function probeUrl (url, { timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl
  * `onResult` fires as each probe settles, so callers can report failures
  * before the whole run finishes (a job killed by its timeout keeps its log).
  */
-export async function runProbes (entries, { concurrency = DEFAULT_CONCURRENCY, timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl = fetch, onResult } = {}) {
+export async function runProbes (entries, { concurrency = DEFAULT_CONCURRENCY, timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl = fetch, retries, retryDelayMs, onResult, onRetry } = {}) {
   const results = new Array(entries.length)
   let next = 0
   async function worker () {
     while (next < entries.length) {
       const index = next++
       const { url, category } = entries[index]
-      const result = await probeUrl(url, { timeoutMs, fetchImpl })
+      const result = await probeUrl(url, {
+        timeoutMs,
+        fetchImpl,
+        retries,
+        retryDelayMs,
+        onRetry: onRetry && ((failed, attempt) => onRetry({ ...failed, category }, attempt))
+      })
       results[index] = { ...result, category }
       onResult?.(results[index])
     }
@@ -330,7 +343,7 @@ async function main () {
   try {
     sitemapXml = await fetchText(new URL('/sitemap.xml', args.origin).toString(), args.timeoutMs)
   } catch (err) {
-    console.error(`error: could not fetch sitemap from ${args.origin}/sitemap.xml (${err.message})`)
+    console.error(`error: could not fetch sitemap from ${args.origin}/sitemap.xml (${describeError(err, args.timeoutMs)})`)
     process.exit(1)
   }
 
@@ -346,6 +359,9 @@ async function main () {
   const results = await runProbes(entries, {
     concurrency: args.concurrency,
     timeoutMs: args.timeoutMs,
+    onRetry: (r, attempt) => {
+      console.warn(`  retry ${attempt}: [${r.category}] ${r.url} -> ${r.status ?? r.error}`)
+    },
     onResult: (r) => {
       if (!r.ok) console.error(`  broken: [${r.category}] ${r.url} -> ${r.status ?? r.error}`)
     }

@@ -65,11 +65,13 @@ jobs:
           node-version: lts/*
 
       - name: Probe docs.qvac.tether.io
-        # Concurrency stays low on purpose: at 12, the edge dropped every
-        # in-flight connection from the runner once the redirect section
-        # (2–3 requests per URL) spiked the request rate, failing ~10 URLs
-        # with `fetch failed` every night. Transient failures are also
-        # retried inside the script.
+        # Transient failures (network error, timeout, 429, 5xx) are retried
+        # inside the script; that is what absorbs the nightly drops. The likely
+        # cause: at concurrency 12 the edge dropped the runner's in-flight
+        # connections once the redirect section (2–3 requests per URL) spiked
+        # the request rate, failing ~10 URLs with `fetch failed` per night.
+        # Daytime runs at 12 pass, so this is unconfirmed; the lower
+        # concurrency only limits how many requests a drop hits at once.
         # `_redirects` is pulled from the `docs-production` branch (what Sevalla
         # actually serves); the checked-out copy on the default branch is the
         # offline fallback. `github.repository` keeps forks self-contained.
@@ -86,8 +88,10 @@ jobs:
     name: Open or update tracking issue
     needs: probe-production
     # Only the scheduled trigger should file issues. Manual `workflow_dispatch`
-    # runs (used for testing) intentionally stay silent.
-    if: failure() && github.event_name == 'schedule'
+    # runs (used for testing) intentionally stay silent. `always()` plus an
+    # explicit result check also covers a probe that hit its timeout: a
+    # timed-out job ends `cancelled`, which `failure()` does not match.
+    if: always() && github.event_name == 'schedule' && needs.probe-production.result != 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
