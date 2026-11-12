@@ -605,16 +605,8 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     return events
   }
 
-  function finish(opts?: {
-    stats?: CompletionStats
-    toolCalls?: ToolCall[]
-    error?: CompletionError
-    stopReason?: StopReason
-  }): CompletionEvent[] {
-    const events: CompletionEvent[] = []
-
-    // Drain pending tail bytes so we don't lose trailing chars when the
-    // stream ends mid-marker.
+  // Emits tail bytes held back while a marker might still be arriving.
+  function drainTails(events: CompletionEvent[]) {
     if (state === 'content' && contentTail) {
       emitContent(events, contentTail)
       contentTail = ''
@@ -625,69 +617,82 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
       toolCallBuffer += toolFramingTail
       toolFramingTail = ''
     } else if (state === 'contentFraming' && contentFramingTail) {
-      // Cutoff inside a partial close marker — emit tail as content.
       emitContent(events, contentFramingTail)
       contentFramingTail = ''
     }
+  }
 
-    if (state === 'toolFraming' && activeToolFrame) {
-      if (opts?.error) {
-        const { raw, openedInThinking } = takeToolFrame()
-        if (openedInThinking) emitThinking(events, raw)
-        else emitContent(events, raw)
-      } else {
-        flushToolBuffer(events, false)
-      }
-    } else if (state === 'contentFraming') {
+  // A frame still open at the end is parsed, or returned as text on error.
+  function closeOpenFrames(events: CompletionEvent[], failed: boolean) {
+    if (state === 'contentFraming') {
       activeContentFrame = null
+    } else if (state === 'toolFraming' && activeToolFrame && !failed) {
+      flushToolBuffer(events, false)
+    } else if (state === 'toolFraming' && activeToolFrame) {
+      const { raw, openedInThinking } = takeToolFrame()
+      if (openedInThinking) emitThinking(events, raw)
+      else emitContent(events, raw)
     }
-    if (heldThinkingCalls) {
-      if (opts?.error) {
-        emitThinking(events, heldThinkingCalls.raw)
-        heldThinkingCalls = null
-      } else {
-        releaseHeldCalls(events)
-      }
-      // A partial marker was still buffered after the call.
-      if (opts?.error || afterThinkingToolTail.trim()) {
-        emitThinking(events, afterThinkingToolTail)
-      }
-      afterThinkingToolTail = ''
+  }
+
+  // The turn ended right after a call inside `<think>`: it was made, unless
+  // the turn failed. A partial marker buffered after it stays reasoning.
+  function settleHeldCalls(events: CompletionEvent[], failed: boolean) {
+    if (!heldThinkingCalls) return
+    if (failed) {
+      emitThinking(events, heldThinkingCalls.raw + afterThinkingToolTail)
+      heldThinkingCalls = null
+    } else {
+      releaseHeldCalls(events)
+      if (afterThinkingToolTail.trim()) emitThinking(events, afterThinkingToolTail)
     }
-    // The model stopped on its own inside the prompt-opened `<think>`: calls it
-    // left there were made, and the reasoning after them, or the whole block
-    // when there are none, is the answer.
+    afterThinkingToolTail = ''
+  }
+
+  // The model stopped on its own inside the prompt-opened `<think>`: calls it
+  // left there were made, and the reasoning after them, or the whole block
+  // when the turn has no call at all, is the answer.
+  function promoteOpenThinking(events: CompletionEvent[], finalCalls: ToolCall[]) {
+    const made = undecidedCalls
+    undecidedCalls = []
+    const turnHasCalls = made.length + streamedToolCallKeys.size + finalCalls.length > 0
+    for (const call of made) emitStreamedToolCall(events, call)
+    if (contentParts.length > 0) return
+    if (made.length > 0) {
+      emitContent(events, thinkingParts.slice(undecidedAnswerStart).join('').trim())
+    } else if (!turnHasCalls) {
+      emitContent(events, thinkingParts.slice(thinkingBlockStart).join('').trim())
+    }
+  }
+
+  function finish(opts?: {
+    stats?: CompletionStats
+    toolCalls?: ToolCall[]
+    error?: CompletionError
+    stopReason?: StopReason
+  }): CompletionEvent[] {
+    const events: CompletionEvent[] = []
+    const failed = !!opts?.error
+    const finalCalls = failed ? [] : (opts?.toolCalls ?? [])
     const naturalStop = opts?.stopReason === 'eos' || opts?.stopReason === 'stopSequence'
-    if (activeThinkingFrame === BUILTIN_THINKING && !opts?.error && naturalStop) {
-      const hadCalls = streamedToolCallKeys.size > 0 || !!opts?.toolCalls?.length
-      const answerStart = undecidedCalls.length > 0 ? undecidedAnswerStart : thinkingBlockStart
-      for (const call of undecidedCalls) emitStreamedToolCall(events, call)
-      if (contentParts.length === 0 && (undecidedCalls.length > 0 || !hadCalls)) {
-        emitContent(events, thinkingParts.slice(answerStart).join('').trim())
-      }
+
+    drainTails(events)
+    closeOpenFrames(events, failed)
+    settleHeldCalls(events, failed)
+    if (activeThinkingFrame === BUILTIN_THINKING && naturalStop && !failed) {
+      promoteOpenThinking(events, finalCalls)
     }
     undecidedCalls = []
     activeThinkingFrame = null
     state = 'content'
 
-    if (!opts?.error) {
-      if (opts?.toolCalls) {
-        for (const call of opts.toolCalls) {
-          emitFinalToolCall(events, call)
-        }
-      }
-    }
+    for (const call of finalCalls) emitFinalToolCall(events, call)
 
     if (opts?.stats) {
-      events.push({
-        type: 'completionStats',
-        seq: nextSeq(),
-        stats: opts.stats
-      })
+      events.push({ type: 'completionStats', seq: nextSeq(), stats: opts.stats })
     }
 
     const raw = { fullText: rawText }
-
     if (opts?.error) {
       events.push({
         type: 'completionDone',
@@ -697,12 +702,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
         raw
       })
     } else if (opts?.stopReason) {
-      events.push({
-        type: 'completionDone',
-        seq: nextSeq(),
-        stopReason: opts.stopReason,
-        raw
-      })
+      events.push({ type: 'completionDone', seq: nextSeq(), stopReason: opts.stopReason, raw })
     } else {
       events.push({ type: 'completionDone', seq: nextSeq(), raw })
     }
