@@ -24,14 +24,14 @@ env:
 
 jobs:
   smoke:
-    name: opencode-ai@latest + @qvac/opencode-plugin@latest
+    name: "@opencode/cli@latest + @qvac/opencode-plugin@latest"
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
       contents: read
     steps:
       # persist-credentials: false because this smoke installs upstream packages
-      # with their lifecycle scripts enabled on purpose -- opencode-ai's
+      # with their lifecycle scripts enabled on purpose -- @opencode/cli's
       # postinstall is what it tests. Leaving the checkout token out of
       # .git/config is what keeps that job empty of anything worth reaching.
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -90,7 +90,7 @@ jobs:
               `- Run: ${runUrl}`,
               `- Artifact: \`opencode-upstream-compat\``,
               `- Triage: inspect package versions, \`opencode-run.stderr\`, \`opencode-run.jsonl\`, \`qvac-host.log\`, \`qvac-serve.stdout\`/\`qvac-serve.stderr\`, and \`prompt-surface.md\` from the artifact.`,
-              `- Likely cause: latest \`opencode-ai\` changed plugin/provider behavior, request shape, model handling, or runtime assumptions that the latest published \`@qvac/opencode-plugin\` no longer satisfies.`,
+              `- Likely cause: latest \`@opencode/cli\` changed plugin/provider behavior, request shape, model handling, or runtime assumptions that the latest published \`@qvac/opencode-plugin\` no longer satisfies.`,
             ].join('\n');
 
             const issues = await github.paginate(github.rest.issues.listForRepo, {
