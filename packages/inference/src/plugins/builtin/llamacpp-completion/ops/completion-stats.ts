@@ -5,6 +5,10 @@ function finiteNumber(value: number | undefined) {
   return value !== undefined && Number.isFinite(value) ? value : undefined
 }
 
+function nonEmptyString(value: unknown) {
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
 export function normalizeCompletionStats(stats: LlmStats | undefined) {
   if (!stats) return undefined
 
@@ -18,6 +22,7 @@ export function normalizeCompletionStats(stats: LlmStats | undefined) {
   const toolDefinitionsDropped = finiteNumber(stats.toolDefinitionsDropped)
   const draftTokens = finiteNumber(stats.draftTokens)
   const draftAcceptedTokens = finiteNumber(stats.draftAcceptedTokens)
+  const backendName = nonEmptyString(stats.backendName)
 
   const normalized: CompletionStats = {
     ...(timeToFirstToken !== undefined && { timeToFirstToken }),
@@ -31,7 +36,7 @@ export function normalizeCompletionStats(stats: LlmStats | undefined) {
     ...(draftTokens !== undefined && { draftTokens }),
     ...(draftAcceptedTokens !== undefined && { draftAcceptedTokens }),
     ...(stats.backendDevice !== undefined && { backendDevice: stats.backendDevice }),
-    ...(stats.backendName !== undefined && { backendName: stats.backendName })
+    ...(backendName !== undefined && { backendName })
   }
 
   if (
@@ -46,7 +51,7 @@ export function normalizeCompletionStats(stats: LlmStats | undefined) {
     draftTokens === undefined &&
     draftAcceptedTokens === undefined &&
     stats.backendDevice === undefined &&
-    stats.backendName === undefined
+    backendName === undefined
   ) {
     return undefined
   }
