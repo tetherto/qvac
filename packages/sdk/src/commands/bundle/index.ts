@@ -355,6 +355,24 @@ export function describeMissingAddonBuild(error: unknown, hosts: string[]): Erro
   )
 }
 
+/**
+ * Packages every importer gets from the SDK's own dependencies. Their newer
+ * releases need a newer Bare than the Bare Kit this SDK links, and a project
+ * may install one through another package's range.
+ */
+const SDK_PINNED_MODULES = ['bare-type']
+
+function pinSdkModules(imports: ImportsMap, sdkPath: string, logger: Logger) {
+  const sdkRequire = createRequire(path.join(sdkPath, 'package.json'))
+  for (const name of SDK_PINNED_MODULES) {
+    try {
+      imports[name] = pathToFileURL(sdkRequire.resolve(name)).href
+    } catch {
+      logger.debug(`   ${name} is not among the SDK's dependencies; bundling the project's`)
+    }
+  }
+}
+
 /** Files an older `@qvac/sdk` wrote into `qvac/`, which nothing reads now. */
 const STALE_QVAC_FILES = ['worker.bundle.js', 'addons.manifest.json']
 
@@ -491,6 +509,8 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
       imports[runtime] = pathToFileURL(sdkRequire.resolve(runtime)).href
     }
   }
+
+  pinSdkModules(imports, sdkPath, logger)
 
   const pluginSpecifiers = resolvePluginSpecifiers(config, sdkName, logger)
   logger.info(`\n📦 Plugins to include (${pluginSpecifiers.length}):`)
