@@ -3,52 +3,13 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
-#include <cstdint>
-#include <mutex>
 #include <set>
 #include <string>
-#include <utility>
 #include <vector>
 
+#include <inference-addon-cpp/RuntimeStats.hpp>
+
 namespace qvac_lib_inference_addon_llama::backend_reporting {
-
-inline constexpr const char* K_BACKEND_NAME_ID = "_backendNameId";
-
-// Stats capture an index into these names before a reload can change placement.
-// Repeated placements reuse their index, so storage does not grow per job.
-class RuntimeBackendName {
-public:
-  void set(std::string name) {
-    std::lock_guard lock(mutex_);
-    const auto found = std::find(names_.begin(), names_.end(), name);
-    if (found == names_.end()) {
-      names_.push_back(std::move(name));
-      current_ = names_.size() - 1;
-    } else {
-      current_ = static_cast<size_t>(found - names_.begin());
-    }
-  }
-
-  [[nodiscard]] int64_t snapshot() const {
-    std::lock_guard lock(mutex_);
-    return static_cast<int64_t>(current_);
-  }
-
-  [[nodiscard]] std::string get(int64_t id) const {
-    std::lock_guard lock(mutex_);
-    return names_.at(static_cast<size_t>(id));
-  }
-
-  [[nodiscard]] std::string get() const {
-    std::lock_guard lock(mutex_);
-    return names_[current_];
-  }
-
-private:
-  mutable std::mutex mutex_;
-  std::vector<std::string> names_{""};
-  size_t current_ = 0;
-};
 
 inline std::string canonicalBackendFamily(std::string name) {
   std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) {
@@ -98,6 +59,15 @@ modelBackendName(const std::vector<ModelBackendAllocation>& allocations) {
     result += name;
   }
   return result.empty() && cpu ? "cpu" : result;
+}
+
+// An unknown name is left out of the stats rather than reported as empty.
+inline void appendBackendName(
+    qvac_lib_inference_addon_cpp::RuntimeStats& stats,
+    const std::string& name) {
+  if (!name.empty()) {
+    stats.emplace_back("backendName", name);
+  }
 }
 
 } // namespace qvac_lib_inference_addon_llama::backend_reporting
