@@ -2,6 +2,14 @@
 
 ## [0.58.0] - 2026-11-19
 
+### Added
+
+- Embedding, Laya and rerank stats report `backendName`, the lowercase backend
+  family that holds the primary model's weights, such as `cpu`, `cuda`,
+  `vulkan` or `metal`. A model split across families reports them sorted and
+  comma-separated, such as `cuda,vulkan`. The key is left out when the backend
+  cannot be identified ([#5501](https://github.com/tetherto/qvac/pull/5501)).
+
 ### Changed
 
 - `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries
