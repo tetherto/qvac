@@ -16,7 +16,7 @@ export interface LlmStats {
   // the model was loaded with `spec_type`.
   draftTokens?: number
   draftAcceptedTokens?: number
-  backendDevice?: 'cpu' | 'gpu'
+  backendDevice?: 'cpu' | 'gpu' | 'npu'
   stopReason?:
     'none' | 'eos' | 'antiprompt' | 'predictionLimit' | 'sequenceLimit' | 'contextOverflow'
 }

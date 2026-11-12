@@ -44,10 +44,22 @@ test('LLM and embedding backend names match their addon allow-list', (t) => {
     for (const backend of ['cuda', 'vulkan', 'metal', 'opencl', 'auto']) {
       t.alike(schema.parse({ backend: [backend] }).backend, [backend])
     }
-    for (const backend of ['cpu', 'hip', 'rocm', 'sycl', 'unknown']) {
+    for (const backend of ['cpu', 'hip', 'rocm', 'sycl', 'xdna', 'unknown']) {
       t.is(schema.safeParse({ backend: [backend] }).success, false)
     }
   }
+})
+
+test('LLM device npu survives public options, wire requests, and the transform', (t) => {
+  const modelType = ModelType.llamacppCompletion
+  const input = { modelType, modelSrc: 'model.gguf', modelConfig: { device: 'npu' } }
+  const options = loadModelOptionsToRequestSchema.parse(input)
+  t.is((options.modelConfig as { device?: string }).device, 'npu')
+  const wire = loadModelSrcRequestSchema.parse({ ...input, type: 'loadModel' })
+  t.is((wire.modelConfig as { device?: string }).device, 'npu')
+  const defaults = deviceConfigDefaultsSchema.parse({ [modelType]: { device: 'npu' } })
+  t.is(defaults[modelType]?.['device'], 'npu')
+  t.is(transformLlmConfig(llmConfigSchema.parse({ device: 'npu' }))['device'], 'npu')
 })
 
 test('LLM and embedding transforms join backend arrays without adding defaults', (t) => {
