@@ -60,6 +60,17 @@ TEST(ModelBackendName, PreservesRpcFamily) {
   EXPECT_EQ(modelBackendName({{4096, "rpc", false}}), "rpc");
 }
 
+TEST(ModelBackendName, PlacementCorrectsBackendDevice) {
+  using qvac_lib_inference_addon_llama::backend_reporting::placedBackendDevice;
+  EXPECT_EQ(placedBackendDevice(1, "cpu"), 0);
+  EXPECT_EQ(placedBackendDevice(2, "cpu"), 0);
+  EXPECT_EQ(placedBackendDevice(0, "cuda"), 1);
+  EXPECT_EQ(placedBackendDevice(1, "vulkan"), 1);
+  EXPECT_EQ(placedBackendDevice(2, "xdna"), 2);
+  EXPECT_EQ(placedBackendDevice(2, ""), 2);
+  EXPECT_EQ(placedBackendDevice(1, ""), 1);
+}
+
 TEST(ModelBackendName, AppendsKnownNameAsStringStat) {
   using qvac_lib_inference_addon_llama::backend_reporting::appendBackendName;
   qvac_lib_inference_addon_cpp::RuntimeStats stats{

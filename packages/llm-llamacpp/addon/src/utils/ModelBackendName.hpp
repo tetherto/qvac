@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
+#include <cstdint>
 #include <set>
 #include <string>
 #include <vector>
@@ -59,6 +60,19 @@ modelBackendName(const std::vector<ModelBackendAllocation>& allocations) {
     result += name;
   }
   return result.empty() && cpu ? "cpu" : result;
+}
+
+// The backendDevice code (0 cpu, 1 gpu, 2 npu) after placement: a model with
+// no offloaded layers is on the CPU, and an NPU load keeps its own class.
+inline int64_t
+placedBackendDevice(int64_t selectedDevice, const std::string& backendName) {
+  if (backendName.empty()) {
+    return selectedDevice;
+  }
+  if (backendName == "cpu") {
+    return 0;
+  }
+  return selectedDevice == 0 ? 1 : selectedDevice;
 }
 
 // An unknown name is left out of the stats rather than reported as empty.

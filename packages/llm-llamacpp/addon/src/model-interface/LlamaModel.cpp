@@ -335,9 +335,9 @@ void LlamaModel::init(bool acquireLock) {
   if (llamaInit && llamaInit->context() != nullptr) {
     snap->backendName_ = qvac_lib_inference_addon_llama::backend_reporting::
         runtimeModelBackendName(llamaInit->context());
-    if (!snap->backendName_.empty()) {
-      runtimeBackendDevice_ = snap->backendName_ == "cpu" ? 0 : 1;
-    }
+    runtimeBackendDevice_ =
+        qvac_lib_inference_addon_llama::backend_reporting::placedBackendDevice(
+            runtimeBackendDevice_, snap->backendName_);
   }
 
   std::unique_ptr<
