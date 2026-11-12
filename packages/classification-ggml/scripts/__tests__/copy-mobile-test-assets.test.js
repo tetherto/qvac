@@ -93,3 +93,13 @@ test('mobile assets reject missing models and invalid explicit paths', (t) => {
   assert.notEqual(noDepth.status, 0)
   assert.match(noDepth.stderr, /Convert the BridgeDepth test models first/)
 })
+
+test('a filtered mobile run ships only the models its runners use', (t) => {
+  const root = fixture(t)
+  const result = stage(root, { MOBILE_TESTS_FILTER: 'runFit' })
+  assert.equal(result.status, 0, result.stderr)
+  const assets = path.join(root, 'test/mobile/testAssets')
+  assert.ok(fs.existsSync(path.join(assets, 'megaloc-f16.gguf.bin')))
+  assert.ok(fs.existsSync(path.join(assets, 'bridgedepth-vits-f32.gguf.bin')))
+  assert.ok(!fs.existsSync(path.join(assets, 'megaloc-mixed.gguf.bin')))
+})

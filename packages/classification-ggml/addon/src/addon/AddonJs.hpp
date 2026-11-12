@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <string>
@@ -24,6 +25,8 @@
 #include <js.h>
 
 #include "model-interface/ImagePreprocessor.hpp"
+#include "model-interface/ModelFit.hpp"
+#include "model-interface/ModelFootprint.hpp"
 #include "model-interface/bridgedepth/BridgeDepthModel.hpp"
 #include "model-interface/megaloc/MegaLocModel.hpp"
 #include "model-interface/mobilenet/ClassificationModel.hpp"
@@ -35,6 +38,16 @@ namespace jsu = qvac_lib_inference_addon_cpp::js;
 
 using qvac_errors::StatusError;
 using qvac_errors::general_error::InvalidArgument;
+
+// The bounds createInstance and assessFit enforce on `threads`.
+constexpr double MIN_THREADS = 1;
+constexpr double MAX_THREADS = 1024;
+
+inline std::string threadsRangeMessage() {
+  return "threads must be an integer between " +
+         std::to_string(static_cast<int>(MIN_THREADS)) + " and " +
+         std::to_string(static_cast<int>(MAX_THREADS));
+}
 
 /// `QVAC_CLASSIFICATION_TRACE=1` dumps each marshalled entry to stderr.
 struct JsClassifyOutputHandler
@@ -140,10 +153,9 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     if (auto threads =
             innerConfig->getOptionalProperty<jsu::Number>(env, "threads")) {
       const double value = threads->as<double>(env);
-      if (!std::isfinite(value) || value < 1 || value > 1024 ||
+      if (!std::isfinite(value) || value < MIN_THREADS || value > MAX_THREADS ||
           std::floor(value) != value)
-        throw StatusError(
-            InvalidArgument, "threads must be an integer between 1 and 1024");
+        throw StatusError(InvalidArgument, threadsRangeMessage());
       megaConfig.threads = static_cast<int>(value);
     }
   }
@@ -369,6 +381,130 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   }
 
   return instance.runJob(std::any(std::move(cppInput)));
+}
+JSCATCH
+
+namespace fit_binding {
+
+// measureFootprint takes the BridgeDepth input sides as int; it rejects sizes
+// inference would not run.
+constexpr double MIN_SIDE = 1;
+constexpr auto MAX_SIDE = static_cast<double>(std::numeric_limits<int>::max());
+
+struct FitRequest {
+  std::string modelPath;
+  std::string backend;
+  std::string backendsDir;
+  int threads = DEFAULT_THREADS;
+  int width = fit::DEFAULT_FIT_WIDTH;
+  int height = fit::DEFAULT_FIT_HEIGHT;
+  uint64_t marginBytes = fit::DEFAULT_MARGIN_BYTES;
+};
+
+// A whole number in [min, max]; the JS layer validates first, this guards
+// direct binding callers.
+inline double wholeNumber(
+    js_env_t* env, jsu::Number value, double min, double max,
+    const std::string& message) {
+  const double number = value.as<double>(env);
+  if (!std::isfinite(number) || number < min || number > max ||
+      std::trunc(number) != number)
+    throw StatusError(InvalidArgument, message);
+  return number;
+}
+
+inline FitRequest parseFitRequest(js_env_t* env, js_callback_info_t* info) {
+  addon_cpp::JsArgsParser args(env, info);
+  auto request = args.getJsObject(0, "request");
+  FitRequest parsed;
+  parsed.modelPath =
+      request.getProperty<jsu::String>(env, "modelPath").as<std::string>(env);
+  if (auto backend = request.getOptionalProperty<jsu::String>(env, "backend"))
+    parsed.backend = backend->as<std::string>(env);
+  if (auto dir = request.getOptionalProperty<jsu::String>(env, "backendsDir"))
+    parsed.backendsDir = dir->as<std::string>(env);
+  if (auto threads = request.getOptionalProperty<jsu::Number>(env, "threads"))
+    parsed.threads = static_cast<int>(wholeNumber(
+        env, *threads, MIN_THREADS, MAX_THREADS, threadsRangeMessage()));
+  if (auto margin =
+          request.getOptionalProperty<jsu::Number>(env, "marginBytes"))
+    parsed.marginBytes = static_cast<uint64_t>(wholeNumber(
+        env,
+        *margin,
+        0,
+        static_cast<double>(fit::MAX_JS_SAFE_INTEGER),
+        "marginBytes must be a non-negative safe integer"));
+  if (auto workload =
+          request.getOptionalProperty<jsu::Object>(env, "workload")) {
+    if (auto width = workload->getOptionalProperty<jsu::Number>(env, "width"))
+      parsed.width = static_cast<int>(wholeNumber(
+          env,
+          *width,
+          MIN_SIDE,
+          MAX_SIDE,
+          "workload.width must be a positive integer"));
+    if (auto height = workload->getOptionalProperty<jsu::Number>(env, "height"))
+      parsed.height = static_cast<int>(wholeNumber(
+          env,
+          *height,
+          MIN_SIDE,
+          MAX_SIDE,
+          "workload.height must be a positive integer"));
+  }
+  return parsed;
+}
+
+// Runs on the worker thread with owned values only. Backend registration
+// and device lookup take backendRegistryMutex, which model loads take too; fits
+// are also serialised so two do not measure at once.
+inline fit::FitResult runFit(const FitRequest& request) {
+  static std::mutex fitMutex;
+  const std::lock_guard<std::mutex> lock(fitMutex);
+  return fit::assessModelFit(
+      request.modelPath,
+      request.backend,
+      request.backendsDir,
+      request.width,
+      request.height,
+      request.threads,
+      request.marginBytes);
+}
+
+inline js_value_t*
+fitResultObject(js_env_t* env, const fit::FitResult& result) {
+  auto bytes = [env](uint64_t value) {
+    return jsu::Number::create(env, static_cast<double>(value));
+  };
+  auto out = jsu::Object::create(env);
+  out.setProperty(env, "status", jsu::String::create(env, result.status));
+  auto devices = jsu::Array::create(env);
+  for (size_t i = 0; i < result.devices.size(); ++i) {
+    const auto& row = result.devices[i];
+    auto entry = jsu::Object::create(env);
+    entry.setProperty(env, "id", jsu::String::create(env, row.id));
+    entry.setProperty(env, "name", jsu::String::create(env, row.name));
+    entry.setProperty(env, "unified", jsu::Boolean::create(env, row.unified));
+    entry.setProperty(env, "usedBytes", bytes(row.usedBytes));
+    entry.setProperty(env, "freeBytes", bytes(row.freeBytes));
+    entry.setProperty(env, "totalBytes", bytes(row.totalBytes));
+    devices.set(env, i, entry);
+  }
+  out.setProperty(env, "devices", devices);
+  out.setProperty(env, "stats", jsu::Object::create(env));
+  return out;
+}
+
+} // namespace fit_binding
+
+// Resolves the fit on a worker thread. The request is parsed and the result
+// marshalled on the JS thread; the worker makes no js_* calls.
+inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+  return jsu::JsAsyncTask::run(
+      env,
+      [request = fit_binding::parseFitRequest(env, info)]() {
+        return fit_binding::runFit(request);
+      },
+      fit_binding::fitResultObject);
 }
 JSCATCH
 

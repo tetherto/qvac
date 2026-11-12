@@ -1,6 +1,6 @@
 {
   "name": "@qvac/classification-ggml",
-  "version": "0.37.0",
+  "version": "0.38.0",
   "description": "GGML vision addon for QVAC: MobileNet classification, MegaLoc image embeddings and BridgeDepth stereo disparity",
   "addon": true,
   "scripts": {
@@ -17,7 +17,7 @@
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
     "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
-    "lint-cpp": "clang-tidy -p build addon/src/js-interface/binding.cpp addon/src/model-interface/mobilenet/ClassificationModel.cpp addon/src/model-interface/ImagePreprocessor.cpp addon/src/model-interface/mobilenet/MobileNetGraph.cpp addon/src/model-interface/megaloc/MegaLocModel.cpp addon/src/model-interface/megaloc/MegaLocPreprocessor.cpp addon/src/model-interface/GgmlBackend.cpp addon/src/model-interface/bridgedepth/BridgeDepthGraph.cpp addon/src/model-interface/bridgedepth/BridgeDepthModel.cpp",
+    "lint-cpp": "clang-tidy -p build addon/src/js-interface/binding.cpp addon/src/model-interface/mobilenet/ClassificationModel.cpp addon/src/model-interface/ImagePreprocessor.cpp addon/src/model-interface/mobilenet/MobileNetGraph.cpp addon/src/model-interface/megaloc/MegaLocModel.cpp addon/src/model-interface/megaloc/MegaLocPreprocessor.cpp addon/src/model-interface/GgmlBackend.cpp addon/src/model-interface/ModelFootprint.cpp addon/src/model-interface/ModelFit.cpp addon/src/model-interface/bridgedepth/BridgeDepthGraph.cpp addon/src/model-interface/bridgedepth/BridgeDepthModel.cpp",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "npm run test:types && npm run test:package && npm run test:integration",
     "test:package": "node --test test/package/package-contract.test.js",
@@ -58,6 +58,8 @@
     "bridgedepth.d.ts",
     "ggml-model.js",
     "ggml-model.d.ts",
+    "fit.js",
+    "fit.d.ts",
     "scripts/convert-megaloc.py",
     "scripts/convert-bridgedepth.py",
     "LICENSE-MegaLoc",
@@ -86,8 +88,8 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "^0.28.0",
-    "@qvac/fabric-ios": "^0.28.0",
+    "@qvac/fabric-android-arm64": "^0.29.0",
+    "@qvac/fabric-ios": "^0.29.0",
     "@types/node": "^24.2.1",
     "cmake-bare": "^1.9.0",
     "cmake-vcpkg": "^1.1.0",
@@ -104,7 +106,7 @@
     "bare-process": "^4.2.2"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.28.0",
+    "@qvac/fabric": "^0.29.0",
     "@qvac/infer-base": "^0.8.0",
     "@qvac/logging": "^0.1.0",
     "bare-env": "^3.0.0",
@@ -116,15 +118,15 @@
     "brittle": "^3.16.5"
   },
   "optionalDependencies": {
-    "@qvac/fabric-linux-x64": "^0.28.0",
-    "@qvac/fabric-linux-arm64": "^0.28.0",
-    "@qvac/fabric-darwin-arm64": "^0.28.0",
-    "@qvac/fabric-darwin-x64": "^0.28.0",
-    "@qvac/fabric-win32-x64": "^0.28.0"
+    "@qvac/fabric-linux-x64": "^0.29.0",
+    "@qvac/fabric-linux-arm64": "^0.29.0",
+    "@qvac/fabric-darwin-arm64": "^0.29.0",
+    "@qvac/fabric-darwin-x64": "^0.29.0",
+    "@qvac/fabric-win32-x64": "^0.29.0"
   },
   "peerDependencies": {
-    "@qvac/fabric-android-arm64": "^0.28.0",
-    "@qvac/fabric-ios": "^0.28.0"
+    "@qvac/fabric-android-arm64": "^0.29.0",
+    "@qvac/fabric-ios": "^0.29.0"
   },
   "peerDependenciesMeta": {
     "@qvac/fabric-android-arm64": {
