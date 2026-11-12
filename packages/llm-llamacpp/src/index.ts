@@ -1493,7 +1493,7 @@ namespace LlmLlamacpp {
      * DSpark with a Markov head and DFlash without, and MTP is detected only
      * by the last block's `blk.N.nextn.eh_proj` tensor, so a Gemma 4
      * assistant needs `'draft-mtp'` given explicitly. It fails the load for
-     * a split model's shard or a model none of them fits. Either way the
+     * a model none of them fits. Either way the
      * model verifies the draft, so the output keeps the distribution of plain
      * decoding. `'none'` (default) decodes one token per step. Works on single
      * prompts, multimodal prompts and continuous batching. Also accepted as
@@ -1523,8 +1523,10 @@ namespace LlmLlamacpp {
      * Minimum draft-head probability for a token to extend the draft
      * (default 0, between 0 and 1), as `--spec-draft-p-min`. With
      * `'draft-dspark'` it is the confidence head's threshold: the draft stops
-     * at the first token below it, and a value above 0 needs a DSpark model
-     * with a confidence head. Also accepted as `spec-draft-p-min`.
+     * at the first token below it. With a DSpark model that has no confidence
+     * head, a value above 0 makes fabric refuse to draft, and the model
+     * decodes without speculation, as llama-server does. Also accepted as
+     * `spec-draft-p-min`.
      */
     spec_draft_p_min?: NumericLike;
     [key: string]: string | number | boolean | string[] | undefined;

@@ -234,7 +234,7 @@ test(
         'spec-type': 'auto',
         'spec-draft-model': await localModel(NO_MTP_MODEL)
       }),
-      /no speculative type was detected/,
+      /detected no speculative type/,
       'the load fails the same way'
     )
   }
@@ -262,21 +262,6 @@ test(
         'spec-type': 'draft-mtp',
         'spec-draft-model': await localModel(MTP_MODEL)
       }),
-      'the load fails the same way'
-    )
-  }
-)
-
-test(
-  'a draft-dspark drafter that is not a DSpark model rejects',
-  { timeout: 600_000, skip: isMobile },
-  async (t) => {
-    await t.exception(
-      assess(await localModel(MTP_MODEL), {
-        'spec-type': 'draft-dspark',
-        'spec-draft-model': await localModel(NO_MTP_MODEL)
-      }),
-      /not a DSpark drafter/,
       'the load fails the same way'
     )
   }

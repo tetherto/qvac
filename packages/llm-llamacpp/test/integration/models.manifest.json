@@ -108,30 +108,6 @@
       "bytes": 316669472,
       "warm": false
     },
-    "LFM2.5-VL-3B-Q4_K_M.gguf": {
-      "urls": [
-        "https://huggingface.co/LiquidAI/LFM2.5-VL-3B-GGUF/resolve/6f730e9a2c454e8af9adc29db58e638e01e5957f/LFM2.5-VL-3B-Q4_K_M.gguf"
-      ],
-      "sha256": "2436cf4bbac9a16e5dfc7799a140e583c2bc15958f4b24a391f8a8b10ecb8884",
-      "bytes": 1674455072,
-      "warm": false
-    },
-    "mmproj-LFM2.5-VL-3B-Q8_0.gguf": {
-      "urls": [
-        "https://huggingface.co/LiquidAI/LFM2.5-VL-3B-GGUF/resolve/6f730e9a2c454e8af9adc29db58e638e01e5957f/mmproj-LFM2.5-VL-3B-Q8_0.gguf"
-      ],
-      "sha256": "ecbbe7097f696dba67172738d79c9f01132cdb6c0b457606315e268df3d67e64",
-      "bytes": 583109984,
-      "warm": false
-    },
-    "LFM2.5-VL-3B-DSpark-F16.gguf": {
-      "urls": [
-        "https://huggingface.co/LiquidAI/LFM2.5-VL-3B-DSpark-GGUF/resolve/5ff73699214238467e230f40bf12b4a5ffa445be/LFM2.5-VL-3B-DSpark-F16.gguf"
-      ],
-      "sha256": "4eb314404b7b4c0033799faf5662f8277cf3d94163b8d791a22363165e294821",
-      "bytes": 567205280,
-      "warm": false
-    },
     "Qwen3.5-0.8B-Q4_0.gguf": {
       "urls": [
         "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q4_0.gguf"
