@@ -12,21 +12,26 @@ interface BackendNameParams {
 const history = [{ role: 'user', content: 'Reply with only the word APPLE.' }]
 const generationParams = { temp: 0, top_k: 1, seed: 42, predict: 16 }
 
+// A lowercase backend family such as "cpu", "cuda", or "metal". The addons drop the device index,
+// so a family never ends in a digit. New ggml backends need no allowlist update.
+const BACKEND_FAMILY = /^[a-z](?:[a-z0-9_-]*[a-z_-])?$/
+
 function requireBackend(stats: { backendName?: string; backendDevice?: string } | undefined): void {
   const name = stats?.backendName
   if (!name) {
     throw new Error(`Missing or unexpected backendName: ${JSON.stringify(stats)}`)
   }
+  // A model split across backends reports a sorted, comma-separated list such as "cuda,vulkan".
   const families = name.split(',')
   if (
-    families.some(
-      (family) => !['cpu', 'cuda', 'metal', 'vulkan', 'opencl', 'rpc'].includes(family)
-    ) ||
+    families.some((family) => !BACKEND_FAMILY.test(family)) ||
     families.join(',') !== [...new Set(families)].sort().join(',')
   ) {
     throw new Error(`Expected canonical, distinct, sorted backend families, got ${name}`)
   }
-  if (stats?.backendDevice !== (name === 'cpu' ? 'cpu' : 'gpu')) {
+  const device = stats?.backendDevice
+  const deviceMatches = name === 'cpu' ? device === 'cpu' : device === 'gpu' || device === 'npu'
+  if (!deviceMatches) {
     throw new Error(`backendDevice disagrees with backendName: ${JSON.stringify(stats)}`)
   }
 }
