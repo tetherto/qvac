@@ -1,6 +1,7 @@
 // Worker for rpc-stream-abort.test.ts. Holds loggingStream requests open and
 // reports `opened:<id>` / `closed:<id>` on the `probe` stream. `chatty` gets one
-// log, `pair` two in one write, any other id none.
+// log, `pair` two in one write, any other id none. A duplex request (no request
+// data) echoes each chunk back as one log and reports as `duplex`.
 
 import RPC from 'bare-rpc'
 
@@ -25,8 +26,26 @@ function report(message) {
   else pending.push(message)
 }
 
+function echoDuplex(req) {
+  const requestStream = req.createRequestStream()
+  const responseStream = req.createResponseStream()
+  // The client cancelling the request destroys both streams with an error.
+  requestStream.on('error', () => {})
+  responseStream.on('error', () => {})
+  responseStream.on('close', () => report('closed:duplex'))
+  requestStream.on('data', (chunk) => {
+    responseStream.write(frame('duplex', chunk.toString()), 'utf-8')
+  })
+  report('opened:duplex')
+}
+
 export default function start(ipc) {
   new RPC(ipc, (req) => {
+    if (!req.data || req.data.length === 0) {
+      echoDuplex(req)
+      return
+    }
+
     const request = JSON.parse(req.data.toString())
 
     // Sent by the client before its first call.
@@ -36,16 +55,18 @@ export default function start(ipc) {
     }
     if (request.type !== 'loggingStream') return
 
-    const wire = req.createResponseStream()
+    const responseStream = req.createResponseStream()
     if (request.id === 'probe') {
-      probe = wire
+      probe = responseStream
       for (const message of pending.splice(0)) report(message)
       return
     }
 
-    wire.on('close', () => report(`closed:${request.id}`))
+    responseStream.on('close', () => report(`closed:${request.id}`))
     report(`opened:${request.id}`)
-    if (request.id === 'chatty') wire.write(frame('chatty', 'hello'), 'utf-8')
-    if (request.id === 'pair') wire.write(frame('pair', 'first') + frame('pair', 'second'), 'utf-8')
+    if (request.id === 'chatty') responseStream.write(frame('chatty', 'hello'), 'utf-8')
+    if (request.id === 'pair') {
+      responseStream.write(frame('pair', 'first') + frame('pair', 'second'), 'utf-8')
+    }
   })
 }
