@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Runtime stats report `backendName`, the lowercase backend family the
+  primary model runs on after backend selection and fitting, such as `cpu`,
+  `cuda`, `vulkan` or `metal`. A model split across families reports them
+  sorted and comma-separated, such as `cuda,vulkan`. The stat is absent when
+  the family cannot be identified
+  ([#5500](https://github.com/tetherto/qvac/pull/5500)).
+
+### Changed
+
+- The addon requires `qvac-lib-inference-addon-cpp` 1.6.0 or newer, whose
+  runtime stats can carry string values
+  ([#5500](https://github.com/tetherto/qvac/pull/5500)).
+
 ## [0.70.1] - 2026-11-11
 
 ### Changed
