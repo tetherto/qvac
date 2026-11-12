@@ -15,6 +15,7 @@ import {
   getSingleFileCachePath
 } from '@/utils/cache/paths'
 import { buildBlobBinding } from '@/handlers/load-model/registry-download-utils'
+import { partialDownloadPath, tryAcquireDownloadLocks } from '@/handlers/load-model/download-lock'
 import { getLegacyCompanionSetPaths } from '@/handlers/load-model/registry-companion-set'
 import {
   findLocallyCachedCoremlCompanionSet,
@@ -49,6 +50,7 @@ export async function deleteRegistryModelCache(modelSrc: string): Promise<void> 
 
   // Downloads and loads of this path, from any source, are refused until the files are gone.
   await withDownloadBlocked([cacheKey], async () => {
+    await using _lock = await lockOutOtherProcesses(modelSrc, [cacheKey])
     const client = await getRegistryClient()
     const entry = getModelByPath(registryPath)
     const catalogued = entry?.registrySource === registrySource ? entry : undefined
@@ -63,6 +65,7 @@ export async function deleteRegistryModelCache(modelSrc: string): Promise<void> 
     assertNotDownloading(modelSrc, sharedKeys)
 
     await withDownloadBlocked(sharedKeys, async () => {
+      await using _sharedLock = await lockOutOtherProcesses(modelSrc, sharedKeys)
       assertNotLoaded(modelSrc, plan.targets)
 
       for (const binding of plan.bindings) await client.clearBlob(binding)
@@ -70,6 +73,8 @@ export async function deleteRegistryModelCache(modelSrc: string): Promise<void> 
       assertNotLoaded(modelSrc, plan.targets)
       for (const target of plan.targets) {
         await fsPromises.rm(target, { recursive: true, force: true })
+        // A paused download's partial file.
+        await fsPromises.rm(partialDownloadPath(target), { force: true })
       }
     })
   })
@@ -80,6 +85,20 @@ function assertNotDownloading(modelSrc: string, cacheKeys: string[]): void {
   if (cacheKeys.some(hasActiveTransfer)) {
     throw new DeleteCacheFailedError(`${modelSrc} is downloading; cancel it first`)
   }
+}
+
+// Other processes' downloads hold their locks; holding them blocks new ones mid-delete.
+async function lockOutOtherProcesses(
+  modelSrc: string,
+  cacheKeys: string[]
+): Promise<AsyncDisposable> {
+  const lock = await tryAcquireDownloadLocks(cacheKeys)
+  if (!lock) {
+    throw new DeleteCacheFailedError(
+      `${modelSrc} is downloading in another process; try again once it finishes`
+    )
+  }
+  return lock
 }
 
 // Every catalogued model whose own download writes one of these registry paths.
