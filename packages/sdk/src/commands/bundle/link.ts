@@ -3,7 +3,12 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import stow from 'bare-stow'
 import semver from 'semver'
-import { discardScratch, scratchFolderFor, type Staged } from '@/commands/bundle/scratch'
+import {
+  discardScratch,
+  removeStaleScratch,
+  scratchFolderFor,
+  type Staged
+} from '@/commands/bundle/scratch'
 import { findInAncestorNodeModules } from '@/expo/plugins/find-in-ancestor-node-modules'
 import { AddonLinkFailedError, ReactNativeBareKitUnsupportedError } from '@/utils/errors-client'
 import type { Logger } from '@/logging/types'
@@ -97,6 +102,7 @@ export async function stageAddons(
       }
 
       const out = path.join(projectRoot, module.dir)
+      await removeStaleScratch(out)
       const scratch = await scratchFolderFor(out)
       staged.push({ dir: out, next: scratch })
       const platformWritten: string[] = []

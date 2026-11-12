@@ -13,6 +13,7 @@ import { AbstractModelExecutor } from './abstract-model-executor.js'
 import {
   modelLoadLlm,
   modelLoadLlmLoadModeNone,
+  modelLoadLlmNpuDevice,
   modelLoadLlmLegacyNoMmapRejected,
   modelLoadLlmPromptCacheKeys,
   modelLoadLlmCacheCheckpointsOutOfRangeRejected,
@@ -34,6 +35,7 @@ import {
 const modelLoadTests = [
   modelLoadLlm,
   modelLoadLlmLoadModeNone,
+  modelLoadLlmNpuDevice,
   modelLoadLlmLegacyNoMmapRejected,
   modelLoadLlmPromptCacheKeys,
   modelLoadLlmCacheCheckpointsOutOfRangeRejected,
@@ -58,6 +60,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
   protected handlers = {
     [modelLoadLlm.testId]: this.loadLlm.bind(this),
     [modelLoadLlmLoadModeNone.testId]: this.loadLlmWithLoadMode.bind(this),
+    [modelLoadLlmNpuDevice.testId]: this.loadLlmWithNpuDevice.bind(this),
     [modelLoadLlmLegacyNoMmapRejected.testId]: this.rejectLegacyNoMmap.bind(this),
     [modelLoadLlmPromptCacheKeys.testId]: this.loadLlmWithPromptCacheKeys.bind(this),
     [modelLoadLlmCacheCheckpointsOutOfRangeRejected.testId]:
@@ -292,6 +295,24 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
         modelSrc: LLAMA_3_2_1B_INST_Q4_0,
         modelType: 'llamacpp-completion',
         modelConfig: { verbosity: 0, ctx_size: 2048, load_mode: loadMode }
+      })
+      this.resources.register(dep, modelId)
+      return ValidationHelpers.validate(modelId, expectation)
+    } finally {
+      await this.resources.evict(dep)
+    }
+  }
+
+  async loadLlmWithNpuDevice(
+    _params: typeof modelLoadLlmNpuDevice.params,
+    expectation: typeof modelLoadLlmNpuDevice.expectation
+  ): Promise<TestResult> {
+    const dep = 'llm-npu-device'
+    try {
+      const modelId = await loadModel({
+        modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+        modelType: 'llamacpp-completion',
+        modelConfig: { verbosity: 0, ctx_size: 2048, device: 'npu' }
       })
       this.resources.register(dep, modelId)
       return ValidationHelpers.validate(modelId, expectation)

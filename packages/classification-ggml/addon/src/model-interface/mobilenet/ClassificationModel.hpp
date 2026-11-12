@@ -55,6 +55,13 @@ public:
   /// @qvac/fabric ships. No-op on platforms where the backends are static.
   void setBackendsDir(std::string backendsDir);
 
+  /// The buffers load() would allocate. Reads only GGUF metadata and
+  /// allocates none of them.
+  static MeasuredBuffers
+  measure(const std::string& modelPath, const std::string& backendsDir);
+  /// The buffers this loaded model holds.
+  [[nodiscard]] BufferFootprint allocatedBuffers() const;
+
 private:
   std::string modelPath_;
   std::string backendsDir_;
