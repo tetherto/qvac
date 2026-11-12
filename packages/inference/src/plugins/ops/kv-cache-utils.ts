@@ -21,7 +21,8 @@ const logger = getEngineLogger()
 
 export function extractSystemPrompt(messages: CacheMessage[]): string | null {
   const systemMessage = messages.find((msg) => msg.role === 'system')
-  return systemMessage ? systemMessage.content : null
+  if (!systemMessage || typeof systemMessage.content !== 'string') return null
+  return systemMessage.content
 }
 
 // Names the cache file by system prompt only. Tools stay out on purpose: the
@@ -51,7 +52,13 @@ export function generateCacheKey(messages: CacheMessage[], tools?: readonly Tool
   return hashString.substring(0, 16)
 }
 
-function resolveCacheFilePath(modelId: string, configHash: string, cacheKey: string): string {
+// Resolves the path without creating its directories, for a cache that may
+// not exist (a seed source).
+export function resolveCacheFilePath(
+  modelId: string,
+  configHash: string,
+  cacheKey: string
+): string {
   const cacheDir = getKVCacheDir()
   const sessionCacheDir = validateAndJoinPath(cacheDir, cacheKey)
   const modelCacheDir = validateAndJoinPath(sessionCacheDir, modelId)

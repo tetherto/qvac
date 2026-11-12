@@ -316,6 +316,7 @@ void TextLlmContext::tokenizeChat(
   if (cacheReconciliationEnabled_) {
     const auto& lastRole = chatMsgs.back().role;
     isLastMessageFromUser = lastRole == "user" || lastRole == "tool";
+    historyEndsAtUserTurn_ = lastRole == "user";
     addSpecial = true;
   } else if (nPast_ == 0 && !isCacheLoaded) {
     const auto& lastRole = chatMsgs.back().role;
@@ -825,6 +826,7 @@ void TextLlmContext::onPrefillComplete(
   if (thinkingForcedOpen_ && reasoningEnabled_) {
     reasoningState_.inside_reasoning = true;
   }
+  thinkingOpenerPending_ = thinkingForcedOpen_;
 }
 
 void TextLlmContext::flushPendingUtf8ToCallback(
@@ -868,6 +870,7 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
   // opener to the visible stream so consumers see a balanced tag pair;
   // `inside_reasoning` and the span capture were already set in
   // `onPrefillComplete`.
+  thinkingOpenerPending_ = false;
   if (thinkingForcedOpen_ && outputCallback) {
     outputCallback(thinkingForcedOpenText_);
     reasoningState_.inside_reasoning = true;
@@ -1190,6 +1193,12 @@ SequenceStepResult TextLlmContext::onLogitsReady(
     int logitIdx, unsigned generatedAfterAccept,
     const std::function<void(const std::string&)>& outputCallback,
     LlamaBatch* inlineDecodeBatch) {
+  // The batch path has no `generateResponse`; its first sample emits the
+  // force-opened reasoning opener, as `generateResponse` does.
+  if (thinkingOpenerPending_) {
+    thinkingOpenerPending_ = false;
+    emitOutputPiece(outputCallback, thinkingForcedOpenText_);
+  }
   const SequenceStepResult result = sampleFromLogits(
       logitIdx, generatedAfterAccept, outputCallback, inlineDecodeBatch);
   // The single-prompt loop records a token itself once it decoded it; on the
@@ -1812,7 +1821,8 @@ void TextLlmContext::commitCacheRequest() {
         cacheCheckpoints_,
         std::move(*pendingHistoryCheckpoint_),
         cacheCheckpointPolicy_,
-        [](const CacheCheckpoint& entry) { return entry.state.bytes(); });
+        [](const CacheCheckpoint& entry) { return entry.state.bytes(); },
+        [](const CacheCheckpoint& entry) { return entry.endsAtUserTurn; });
     pendingHistoryCheckpoint_.reset();
   }
   cacheRequestActive_ = false;
@@ -1839,7 +1849,8 @@ void TextLlmContext::captureHistoryCheckpoint(llama_pos pos) {
             ledger.positions()));
     return;
   }
-  CacheCheckpoint checkpoint{.ledger = std::move(ledger)};
+  CacheCheckpoint checkpoint{
+      .ledger = std::move(ledger), .endsAtUserTurn = historyEndsAtUserTurn_};
   // Only an optimisation for the next turn: a failed capture costs that turn
   // a longer prefill, never this request.
   if (!snapshotSequenceState(
@@ -2188,6 +2199,7 @@ void TextLlmContext::resetStateKeepingMemory(bool resetStats) {
   utf8Buffer_.clear();
   thinkingForcedOpen_ = false;
   thinkingForcedOpenText_.clear();
+  thinkingOpenerPending_ = false;
   requestRollback_.clear();
   llama_synchronize(modelCtx_.lctx);
   if (resetStats) {

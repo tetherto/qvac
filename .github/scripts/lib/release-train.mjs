@@ -13,7 +13,7 @@ export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../
 export const BRANCH_PATTERN = /^release-train-([a-z0-9][a-z0-9-]*)-(\d+\.\d+\.\d+)$/
 
 // Each kind is a job in release-train.yml; a train lists the ones it requires.
-export const CHECK_KINDS = ['shared-runtime-libs', 'sdk-python', 'package-checks', 'pear-e2e']
+export const CHECK_KINDS = ['shared-runtime-libs', 'sdk-python', 'sdk-kotlin', 'package-checks', 'pear-e2e']
 
 export const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']
 
@@ -69,6 +69,10 @@ export function loadTrain (name, catalog, nxJson) {
   }
   if (checks.includes('package-checks') && !train.packageChecks) {
     throw new Error(`Train '${name}': package-checks needs packageChecks, the per-package check config`)
+  }
+  // The Kotlin Maven zips attach to the sdk-v<version> release.
+  if (checks.includes('sdk-kotlin') && train.githubRelease?.project !== '@qvac/sdk') {
+    throw new Error(`Train '${name}': sdk-kotlin needs the @qvac/sdk GitHub release, which its Maven zips attach to`)
   }
   return {
     name,

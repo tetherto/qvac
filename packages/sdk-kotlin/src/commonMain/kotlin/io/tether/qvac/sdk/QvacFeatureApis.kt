@@ -17,7 +17,8 @@ import io.tether.qvac.sdk.generated.schema.ClassifyRequest
 import io.tether.qvac.sdk.generated.schema.DiffusionStreamRequest
 import io.tether.qvac.sdk.generated.schema.DiffusionStreamResponse
 import io.tether.qvac.sdk.generated.schema.EmbedRequest
-import io.tether.qvac.sdk.generated.schema.EmbedRequestText
+import io.tether.qvac.sdk.generated.schema.EmbedTextRequest
+import io.tether.qvac.sdk.generated.schema.EmbedTextRequestText
 import io.tether.qvac.sdk.generated.schema.EmbedResponseEmbedding
 import io.tether.qvac.sdk.generated.schema.OcrStreamRequest
 import io.tether.qvac.sdk.generated.schema.OcrStreamRequestImage
@@ -30,6 +31,8 @@ import io.tether.qvac.sdk.generated.schema.TextToSpeechRequest
 import io.tether.qvac.sdk.generated.schema.TextToSpeechRequestEmotion
 import io.tether.qvac.sdk.generated.schema.TextToSpeechRequestPace
 import io.tether.qvac.sdk.generated.schema.TextToSpeechResponse
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 import io.tether.qvac.sdk.generated.schema.TextToSpeechStreamRequest
 import io.tether.qvac.sdk.generated.schema.TextToSpeechStreamResponse
 import io.tether.qvac.sdk.generated.schema.TranscribeRequest
@@ -122,7 +125,10 @@ class QvacSpeech internal constructor(private val client: QvacClient) {
         audio: Flow<ByteArray>,
     ): Flow<TranscribeStreamResponse> = client.transcribeStream(request, audio)
 
-    /** Text chunks are UTF-8 bytes. Collect concurrently with producing input. No result aggregation. */
+    /**
+     * Text chunks are UTF-8 bytes. Collect concurrently with producing input. No result aggregation.
+     * Frames arrive with their samples in `buffer`: `QvacClient.textToSpeechStream` decodes the `pcm` the worker sent.
+     */
     fun synthesizeStream(
         request: TextToSpeechStreamRequest,
         text: Flow<ByteArray>,
@@ -179,7 +185,7 @@ class QvacSpeech internal constructor(private val client: QvacClient) {
                 voice = voice.voice,
             ),
         ).collect { (response, frame) ->
-            samples += response.buffer
+            samples += ttsSamples(response.buffer, response.pcm)
             response.sentenceChunk?.let(sentences::add)
             frame.rawStats()?.let { stats = it }
         }
@@ -424,10 +430,12 @@ private fun translateRequest(
 class QvacEmbeddings internal constructor(private val client: QvacClient) {
     suspend fun embed(modelId: String, text: String, requestId: String = qvacRequestId()): List<Double> {
         val response = client.embed(
-            EmbedRequest(
-                modelId = modelId,
-                requestId = requestId,
-                text = EmbedRequestText.Variant1(text),
+            EmbedRequest.EmbedTextRequest(
+                EmbedTextRequest(
+                    modelId = modelId,
+                    requestId = requestId,
+                    text = EmbedTextRequestText.Variant1(text),
+                ),
             ),
         )
         if (!response.success) throw QvacFeatureException(response.error ?: "Embedding failed")
@@ -440,10 +448,12 @@ class QvacEmbeddings internal constructor(private val client: QvacClient) {
 
     suspend fun embed(modelId: String, texts: List<String>, requestId: String = qvacRequestId()): List<List<Double>> {
         val response = client.embed(
-            EmbedRequest(
-                modelId = modelId,
-                requestId = requestId,
-                text = EmbedRequestText.Variant2(texts),
+            EmbedRequest.EmbedTextRequest(
+                EmbedTextRequest(
+                    modelId = modelId,
+                    requestId = requestId,
+                    text = EmbedTextRequestText.Variant2(texts),
+                ),
             ),
         )
         if (!response.success) throw QvacFeatureException(response.error ?: "Embedding failed")
@@ -646,3 +656,34 @@ private fun OcrStreamResponseBlocksItem.toOcrBlock() = QvacOcrBlock(
     boundingBox = bbox?.mapNotNull { it.jsonPrimitive.doubleOrNull }.orEmpty(),
     confidence = confidence,
 )
+
+/**
+ * The frame with its samples in `buffer` whatever the wire carried. Applied by
+ * the generated `QvacClient.textToSpeech` / `textToSpeechStream` methods, so
+ * every public typed path returns decoded audio.
+ */
+internal fun TextToSpeechResponse.withDecodedPcm(): TextToSpeechResponse =
+    if (pcm.isNullOrEmpty()) this else copy(buffer = ttsSamples(buffer, pcm), pcm = null)
+
+internal fun TextToSpeechStreamResponse.withDecodedPcm(): TextToSpeechStreamResponse =
+    if (pcm.isNullOrEmpty()) this else copy(buffer = ttsSamples(buffer, pcm), pcm = null)
+
+/**
+ * The PCM of a TTS frame. The worker sends it as base64 little-endian signed
+ * 16-bit bytes in `pcm` with `buffer` empty; a frame without `pcm` carries
+ * its samples in `buffer`.
+ */
+@OptIn(ExperimentalEncodingApi::class)
+internal fun ttsSamples(buffer: List<Double>, pcm: String?): List<Double> {
+    if (pcm.isNullOrEmpty()) return buffer
+    val bytes = Base64.Default.decode(pcm)
+    val out = ArrayList<Double>(bytes.size / 2)
+    var i = 0
+    while (i + 1 < bytes.size) {
+        val lo = bytes[i].toInt() and 0xff
+        val hi = bytes[i + 1].toInt()
+        out.add(((hi shl 8) or lo).toShort().toDouble())
+        i += 2
+    }
+    return out
+}

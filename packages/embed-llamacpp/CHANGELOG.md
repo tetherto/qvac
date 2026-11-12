@@ -1,5 +1,51 @@
 # Changelog
 
+## [0.56.1] - 2026-11-11
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.28.0` -> `^0.29.0`, which carries
+  `qvac-fabric` `11739.1.1` -> `11739.2.0`
+  ([#5706](https://github.com/tetherto/qvac/pull/5706)): FP8 E4M3 weights and
+  KV cache with CUDA FP8 matmuls, the ConvRot ops, ragged ubatches for
+  qwen35 recurrent layers, a fix for speculative-draft sampling chains that
+  shared buffers, and XDNA and Metal decode work. A caret on a `0.x` version
+  locks the minor, so `^0.28.0` would not have resolved `0.29.0` on its own.
+  The mobile dev and peer dependencies `@qvac/fabric-android-arm64` /
+  `@qvac/fabric-ios` move to `^0.29.0` with it.
+- `@qvac/fabric` 0.29.0 renumbers the TurboQuant and PolarQuant KV-cache types
+  (43-50 -> 52-59) and moves the RPC protocol from 113 to 116, so it is not
+  ABI-compatible with 0.28.x. Every addon loaded in one process must resolve
+  the same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.29.0` together.
+- This package needed no code change for the new fabric.
+
+## [0.56.0] - 2026-11-09
+
+### Fixed
+
+- `./binding.js` is now in the package `exports`, so mobile test apps can bundle
+  the integration tests that require it (`model-loading.test.js`). Without it,
+  the mobile test-app bundle failed with `PACKAGE_PATH_NOT_EXPORTED`
+  ([#5638](https://github.com/tetherto/qvac/pull/5638)).
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.26.0` -> `^0.28.0`, which carries
+  `qvac-fabric` `11739.0.0` -> `11739.1.1`
+  ([#5574](https://github.com/tetherto/qvac/pull/5574),
+  [#5658](https://github.com/tetherto/qvac/pull/5658)): the Linux x64 package
+  ships the AMD XDNA backend (system XRT 2.25 or newer to load it), which falls
+  back to the CPU on any setup error, plus OpenCL, TurboQuant and mtmd fixes.
+  A caret on a `0.x` version locks the minor, so `^0.26.0` would not have
+  resolved `0.28.0` on its own. The mobile dev and peer dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.28.0` with it.
+- `@qvac/fabric` 0.28.0 adds four fields to `common_params`, which this addon
+  uses, so it is rebuilt against the 0.28.0 headers and is not ABI-compatible
+  with 0.26.x. Every addon loaded in one process must resolve the same
+  `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.28.0` together.
+
 ## [0.55.0] - 2026-11-04
 
 ### Breaking

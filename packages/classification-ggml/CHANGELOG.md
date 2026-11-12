@@ -7,6 +7,90 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `assessFit(request)` checks whether a MobileNet, MegaLoc or BridgeDepth GGUF
+  fits in the memory free now, from the GGUF metadata alone. It returns
+  `{ status, devices, stats }`: `fits`, `does-not-fit` or `unknown`, and the
+  selected device, then the host CPU, each with the measured bytes the load
+  and one inference take. `marginBytes` is the memory to leave free, 256 MiB
+  by default. BridgeDepth is sized for `workload`, 1280x720 by
+  default. On an iOS device, unified memory is capped at the app's memory
+  limit. A request that fails the JS checks rejects with a `TypeError` or
+  `RangeError`, an unreadable model or an otherwise invalid request with an
+  `InvalidArgument` error
+  ([#5705](https://github.com/tetherto/qvac/pull/5705)).
+
+### Pull Requests
+
+- [#5705](https://github.com/tetherto/qvac/pull/5705) - `assessFit` for MobileNet, MegaLoc and BridgeDepth.
+
+## [0.37.0] - 2026-11-10
+
+### Added
+
+- `BridgeDepth`: stereo disparity from a rectified left/right pair, with the
+  Depth Anything V2 ViT-S mono branch. `infer(left, right)` returns
+  `{ width, height, disparity }` for inputs up to about 2 MP (1920 x 1080
+  fits). Weights are converted locally with
+  `scripts/convert-bridgedepth.py`; see `docs/bridgedepth.md`
+  ([#5531](https://github.com/tetherto/qvac/pull/5531)).
+
+### Pull Requests
+
+- [#5531](https://github.com/tetherto/qvac/pull/5531) - BridgeDepth stereo disparity.
+
+## [0.36.1] - 2026-11-11
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.28.0` -> `^0.29.0`, which carries
+  `qvac-fabric` `11739.1.1` -> `11739.2.0`
+  ([#5706](https://github.com/tetherto/qvac/pull/5706)): FP8 E4M3 weights and
+  KV cache with CUDA FP8 matmuls, the ConvRot ops, ragged ubatches for
+  qwen35 recurrent layers, a fix for speculative-draft sampling chains that
+  shared buffers, and XDNA and Metal decode work. A caret on a `0.x` version
+  locks the minor, so `^0.28.0` would not have resolved `0.29.0` on its own.
+  The mobile dev and peer dependencies `@qvac/fabric-android-arm64` /
+  `@qvac/fabric-ios` move to `^0.29.0` with it.
+- `@qvac/fabric` 0.29.0 renumbers the TurboQuant and PolarQuant KV-cache types
+  (43-50 -> 52-59) and moves the RPC protocol from 113 to 116, so it is not
+  ABI-compatible with 0.28.x. Every addon loaded in one process must resolve
+  the same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.29.0` together.
+- This package needed no code change for the new fabric.
+- Released from the 0.36 line (`classification-ggml-v0.36.0`), so it does not
+  include BridgeDepth from 0.37.0. npm `latest` stays on 0.37.0; this version
+  is published under the `release-0.36` dist-tag
+  ([#5711](https://github.com/tetherto/qvac/pull/5711)).
+
+## [0.36.0] - 2026-11-09
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.26.0` -> `^0.28.0`, which carries
+  `qvac-fabric` `11739.0.0` -> `11739.1.1`
+  ([#5574](https://github.com/tetherto/qvac/pull/5574),
+  [#5658](https://github.com/tetherto/qvac/pull/5658)): the Linux x64 package
+  ships the AMD XDNA backend (system XRT 2.25 or newer to load it), which falls
+  back to the CPU on any setup error, plus OpenCL, TurboQuant and mtmd fixes.
+  A caret on a `0.x` version locks the minor, so `^0.26.0` would not have
+  resolved `0.28.0` on its own. The mobile dev and peer dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.28.0` with it.
+- `@qvac/fabric` 0.28.0 adds four fields to `common_params` and is not
+  ABI-compatible with 0.26.x, so every addon loaded in one process must resolve
+  the same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.28.0` together.
+- This package needed no code change for the new fabric.
+
+### Pull Requests
+
+- [#5574](https://github.com/tetherto/qvac/pull/5574) - ship the XDNA backend in `@qvac/fabric` 0.27.0.
+- [#5658](https://github.com/tetherto/qvac/pull/5658) - bump `qvac-fabric` to `11739.1.1` in `@qvac/fabric` 0.28.0.
+- [#5681](https://github.com/tetherto/qvac/pull/5681) - move the fabric consumers to `@qvac/fabric` `^0.28.0`.
+
 ## [0.35.0] - 2026-11-04
 
 ### Breaking

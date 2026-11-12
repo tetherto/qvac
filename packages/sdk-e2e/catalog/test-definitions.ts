@@ -1,5 +1,7 @@
+import { embeddingGemma2Tests } from './embeddinggemma2-tests.js'
 import { speakerAwareTests } from './speaker-aware-tests.js'
 import { decisionTests } from './decision-tests.js'
+import { imageEmbeddingTests } from './image-embedding-tests.js'
 import { rerankTests } from './rerank-tests.js'
 import { rpcServerTests } from './rpc-server-tests.js'
 // Real SDK tests
@@ -7,6 +9,7 @@ import type { Step, TestDefinition } from '@qvac/test-suite'
 import { applyPlatformSkips } from './platform-skips.js'
 import { batchCompletionTests } from './batch-completion-tests.js'
 import { completionTests } from './completion-tests.js'
+import { calcTokensTests } from './calc-tokens-tests.js'
 import { transcriptionTests } from './transcription-tests.js'
 import { transcribeStreamEventsTests } from './transcribe-stream-events-tests.js'
 import { embeddingTests } from './embedding-tests.js'
@@ -107,6 +110,21 @@ export const modelLoadLlmLoadModeNone: TestDefinition = {
   }
 }
 
+// On a host without a listed NPU the addon falls back to the GPU order, then the CPU, so the load
+// passes only if the SDK accepts `device: 'npu'` and the addon does not reject it.
+export const modelLoadLlmNpuDevice: TestDefinition = {
+  testId: 'model-load-llm-npu-device',
+  params: {},
+  expectation: { validation: 'type', expectedType: 'string' },
+  steps: loadsWithConfig('llm', { verbosity: 0, ctx_size: 2048, device: 'npu' }),
+  finally: [{ call: { method: 'unloadModel', params: { modelId: '$modelId?' } } }],
+  metadata: {
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 60000
+  }
+}
+
 // Asserts the validation code, not the key name: a native --no-mmap error names it too.
 export const modelLoadLlmLegacyNoMmapRejected: TestDefinition = {
   testId: 'model-load-llm-legacy-no-mmap-rejected',
@@ -150,7 +168,8 @@ export const modelLoadLlmPromptCacheKeys: TestDefinition = {
     cacheCheckpoints: 2,
     cacheCheckpointsMaxBytes: 1073741824,
     cacheCheckpointStorage: 'memory',
-    cacheRamMib: 256
+    cacheRamMib: 256,
+    cacheShareAcrossKeys: false
   },
   expectation: { validation: 'type', expectedType: 'string' },
   steps: loadsWithConfig('llm', {
@@ -159,7 +178,8 @@ export const modelLoadLlmPromptCacheKeys: TestDefinition = {
     cache_checkpoints: '$params.cacheCheckpoints',
     cache_checkpoints_max_bytes: '$params.cacheCheckpointsMaxBytes',
     cache_checkpoint_storage: '$params.cacheCheckpointStorage',
-    cache_ram_mib: '$params.cacheRamMib'
+    cache_ram_mib: '$params.cacheRamMib',
+    cache_share_across_keys: '$params.cacheShareAcrossKeys'
   }),
   metadata: {
     category: 'model',
@@ -538,6 +558,7 @@ const catalog: TestDefinition[] = [
   // Model tests (first section)
   modelLoadLlm,
   modelLoadLlmLoadModeNone,
+  modelLoadLlmNpuDevice,
   modelLoadLlmLegacyNoMmapRejected,
   modelLoadLlmPromptCacheKeys,
   modelLoadLlmCacheCheckpointsOutOfRangeRejected,
@@ -557,6 +578,7 @@ const catalog: TestDefinition[] = [
 
   // Completion tests
   ...completionTests,
+  ...calcTokensTests,
   ...batchCompletionTests,
 
   // Transcription tests
@@ -570,6 +592,7 @@ const catalog: TestDefinition[] = [
 
   // Embedding tests
   ...embeddingTests,
+  ...embeddingGemma2Tests,
 
   // RAG tests
   ...ragTests,
@@ -620,6 +643,7 @@ const catalog: TestDefinition[] = [
   ...classificationTests,
   ...decisionTests,
   ...rerankTests,
+  ...imageEmbeddingTests,
 
   // TTS tests
   ...ttsTests,

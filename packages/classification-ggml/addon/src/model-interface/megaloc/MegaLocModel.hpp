@@ -8,6 +8,7 @@
 #include <inference-addon-cpp/ModelInterfaces.hpp>
 #include <inference-addon-cpp/RuntimeStats.hpp>
 
+#include "model-interface/GgmlBackend.hpp"
 #include "model-interface/ImageInput.hpp"
 
 namespace classification_ggml::megaloc {
@@ -22,7 +23,7 @@ struct Config {
   std::string modelPath;
   std::string backendsDir;
   std::string backend;
-  int threads = 8;
+  int threads = DEFAULT_THREADS;
 };
 
 class MegaLocModel : public qvac_lib_inference_addon_cpp::model::IModel {
@@ -38,6 +39,12 @@ public:
   [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
   runtimeStats() const override;
 
+  // The buffers a load with `config` plus one inference would allocate. Reads
+  // only GGUF metadata and allocates none of them.
+  static MeasuredBuffers measure(const Config& config);
+  // The buffers this loaded model holds.
+  [[nodiscard]] BufferFootprint allocatedBuffers() const;
+
 private:
   struct Impl;
   std::unique_ptr<Impl> impl_;
@@ -47,6 +54,6 @@ private:
 };
 
 std::vector<float> preprocess(const ImageInput& input);
-int backendId(const char* name);
+using classification_ggml::backendId;
 
 } // namespace classification_ggml::megaloc

@@ -43,7 +43,12 @@ import {
   bciTranscribeStreamRequestSchema,
   bciTranscribeStreamResponseSchema
 } from '@/schemas/bci'
-import { embedRequestSchema, embedResponseSchema } from '@/schemas/embed'
+import {
+  embedRequestSchema,
+  embedResponseSchema,
+  embedBatchRequestSchema,
+  embedBatchResponseSchema
+} from '@/schemas/embed'
 import { cancelRequestSchema, cancelResponseSchema } from '@/schemas/cancel'
 import { translateRequestSchema, translateResponseSchema } from '@/schemas/translate'
 import { loggingStreamRequestSchema, loggingStreamResponseSchema } from '@/schemas/logging-stream'
@@ -113,6 +118,7 @@ import {
 import { decideRequestSchema, decideResponseSchema } from '@/schemas/decision'
 import { rerankRequestSchema, rerankResponseSchema } from '@/schemas/rerank'
 import { classifyRequestSchema, classifyResponseSchema } from '@/schemas/classification'
+import { calcTokensRequestSchema, calcTokensResponseSchema } from '@/schemas/calc-tokens'
 import {
   audioEditStreamRequestSchema,
   audioEditStreamResponseSchema,
@@ -130,6 +136,7 @@ export const requestSchema = z.union([
   stopRpcServerRequestSchema,
   discoverRpcServersRequestSchema,
   heartbeatRequestSchema,
+  calcTokensRequestSchema,
   loadModelRequestSchema,
   downloadAssetRequestSchema,
   completionStreamRequestSchema,
@@ -142,6 +149,7 @@ export const requestSchema = z.union([
   bciTranscribeStreamRequestSchema,
   loggingStreamRequestSchema,
   embedRequestSchema,
+  embedBatchRequestSchema,
   translateRequestSchema,
   ttsRequestSchema,
   textToSpeechStreamRequestSchema,
@@ -181,6 +189,7 @@ export const responseSchema = z.discriminatedUnion('type', [
   stopRpcServerResponseSchema,
   discoverRpcServersResponseSchema,
   heartbeatResponseSchema,
+  calcTokensResponseSchema,
   loadModelResponseSchema,
   downloadAssetResponseSchema,
   completionStreamResponseSchema,
@@ -194,6 +203,7 @@ export const responseSchema = z.discriminatedUnion('type', [
   bciTranscribeStreamResponseSchema,
   loggingStreamResponseSchema,
   embedResponseSchema,
+  embedBatchResponseSchema,
   translateResponseSchema,
   ttsResponseSchema,
   textToSpeechStreamResponseSchema,

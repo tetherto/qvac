@@ -21,15 +21,12 @@ Some models may be distributed as **multiple files** (shards) instead of a singl
 
 ## Local sharded models
 
-All files **must** be present in the same directory:
+All numbered shard files **must** be present in the same directory, under their original names, for example:
 
-- All numbered shard files, for example:
-  - `model-00001-of-00005.gguf`
-  - `model-00002-of-00005.gguf`
-  - …
-  - `model-00005-of-00005.gguf`
-- A companion tensors manifest file:
-  - `model.tensors.txt`
+- `model-00001-of-00005.gguf`
+- `model-00002-of-00005.gguf`
+- …
+- `model-00005-of-00005.gguf`
 
 When using `loadModel()`, you pass the path to the first shard (e.g., `model-00001-of-00005.gguf`), and the SDK automatically detects and loads the remaining shards.
 
@@ -69,8 +66,16 @@ The following script shows an example of loading a sharded model with per-shard 
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/ShardedModels.kt title="ShardedModels.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart), the [Python quickstart](/sdk/python-sdk#quickstart), or the [Kotlin quickstart](/sdk/kotlin-sdk#quickstart).
 </Callout>

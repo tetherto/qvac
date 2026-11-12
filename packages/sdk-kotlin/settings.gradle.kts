@@ -11,7 +11,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        // Holepunch publishes bare-rpc-kotlin and compact-encoding-kotlin through JitPack.
+        // Holepunch publishes its Kotlin libraries through JitPack.
         exclusiveContent {
             forRepository { maven("https://jitpack.io") }
             filter { includeGroupByRegex("com\\.github\\.holepunchto\\..*") }
@@ -26,3 +26,4 @@ rootProject.name = "qvac-sdk-kotlin"
 
 include(":android-barekit")
 include(":android-example")
+include(":jvm-barekit")

@@ -103,6 +103,22 @@
       "dependencies": [
         "gtest"
       ]
+    },
+    "webgpu": {
+      "description": "Opt-in native WebGPU (Dawn) for the ASR engines. Build with ASR_WEBGPU=ON.",
+      "dependencies": [
+        {
+          "name": "speech-cpp",
+          "default-features": false,
+          "features": [
+            "webgpu"
+          ]
+        },
+        {
+          "name": "dawn",
+          "default-features": false
+        }
+      ]
     }
   },
   "overrides": [
@@ -113,8 +129,12 @@
     },
     {
       "name": "speech-cpp",
-      "version": "2026-11-04",
+      "version": "2026-11-06",
       "port-version": 0
+    },
+    {
+      "name": "dawn",
+      "version": "20260410.140140"
     }
   ]
 }

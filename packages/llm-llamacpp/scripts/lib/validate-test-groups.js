@@ -22,9 +22,12 @@ function platformFamily(key) {
 
 // Benchmark shards run only through benchmark-perf-llm-llamacpp.yml's
 // test_groups override. The MoE finetune test is desktop opt-in only (see
-// test/integration/finetuning-moe.test.js), so neither belongs in this file.
+// test/integration/finetuning-moe.test.js), and the XDNA NPU exists only on
+// Linux x64 (see test/integration/xdna.test.js), so none belongs in this file.
 function isOverrideOnly(name) {
-  return name.startsWith('runBenchmarkPerf') || name === 'runFinetuningMoeTest'
+  return (
+    name.startsWith('runBenchmarkPerf') || name === 'runFinetuningMoeTest' || name === 'runXdnaTest'
+  )
 }
 
 function isGroupMap(value) {

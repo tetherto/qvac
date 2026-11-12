@@ -1,6 +1,6 @@
 {
   "name": "@qvac/asr-ggml",
-  "version": "0.11.2",
+  "version": "0.12.1",
   "description": "Multi-engine ASR (Whisper + NVIDIA Parakeet + MOSS-Transcribe-Diarize) inference addon for qvac on the Bare runtime",
   "qvac": {
     "ggml-speech": "2026-10-27#1"
@@ -130,7 +130,9 @@
     "example:parakeet:mic-diarize": "bare examples/parakeet-live-mic-diarized.js",
     "example:parakeet:mic-diarize-aosc": "bare examples/parakeet-live-mic-diarized-aosc.js",
     "example:parakeet:decode-audio": "bare examples/parakeet-decode-audio.js",
-    "prepare:husky": "husky"
+    "prepare:husky": "husky",
+    "example:parakeet:diarization-probabilities": "bare examples/parakeet-diarization-probabilities.js",
+    "example:moss-transcribe:progress": "bare examples/moss-transcribe-progress.js"
   },
   "files": [
     "addonLogging.js",
@@ -174,7 +176,7 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/decoder-audio": "^0.8.0",
+    "@qvac/decoder-audio": "^0.9.0",
     "@qvac/registry-client": "^0.6.1",
     "@types/node": "^22.15.3",
     "bare-buffer": "^3.4.2",

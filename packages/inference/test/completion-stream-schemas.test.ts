@@ -11,13 +11,14 @@ import {
 import { toolSchema } from '@/schemas/tools'
 import { REASONING_BUDGET_MAX } from '@/schemas/llamacpp-config'
 
-test("completionStatsSchema: accepts backendDevice 'cpu' and 'gpu'", (t) => {
+test("completionStatsSchema: accepts backendDevice 'cpu', 'gpu' and 'npu'", (t) => {
   t.is(completionStatsSchema.safeParse({ backendDevice: 'cpu' }).success, true)
   t.is(completionStatsSchema.safeParse({ backendDevice: 'gpu' }).success, true)
+  t.is(completionStatsSchema.safeParse({ backendDevice: 'npu' }).success, true)
 })
 
 test('completionStatsSchema: rejects unknown backendDevice values', (t) => {
-  const result = completionStatsSchema.safeParse({ backendDevice: 'npu' })
+  const result = completionStatsSchema.safeParse({ backendDevice: 'tpu' })
   t.is(result.success, false)
 })
 
@@ -352,4 +353,30 @@ test('completionClientParamsSchema: tool_choice cannot name a deferred tool', (t
     generationParams: { tool_choice: 'tool_search' }
   })
   t.is(noDefer.success, false, 'there is no search tool when nothing defers')
+})
+
+test('request schemas: single and orchestrated completion accept toolSearch and reject invalid limits', (t) => {
+  const deferred = { ...weatherTool, deferLoading: true }
+  const schemas = [
+    [completionClientParamsSchema, {}],
+    [completionStreamRequestSchema, { type: 'completionStream' }],
+    [completionOrchestrateRequestSchema, { type: 'completionOrchestrate' }]
+  ] as const
+  for (const [schema, extra] of schemas) {
+    const parse = (toolSearch: unknown) =>
+      schema.safeParse({ ...baseCompletion, ...extra, tools: [deferred], toolSearch })
+    const accepted = parse({ defaultLimit: 1, maxLimit: 2 })
+    t.is(accepted.success, true)
+    t.alike(accepted.success && accepted.data.toolSearch, { defaultLimit: 1, maxLimit: 2 })
+    t.is(parse({}).success, true, 'both limits are optional')
+    for (const invalid of [
+      { defaultLimit: 0 },
+      { maxLimit: 2.5 },
+      { defaultLimit: 3, maxLimit: 2 },
+      { defaultLimit: 9 },
+      { max: 4 }
+    ]) {
+      t.is(parse(invalid).success, false, JSON.stringify(invalid))
+    }
+  }
 })

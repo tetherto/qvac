@@ -9,6 +9,8 @@ type ParakeetDependency =
   | 'parakeet-transcribepsy'
   | 'parakeet-transcribepsy-windowed'
   | 'parakeet-transcribepsy-coreml'
+  | 'parakeet-transcribepsy-eu'
+  | 'parakeet-transcribepsy-eu-en'
 
 /**
  * One parakeet transcription. Same shape as the whisper ones; the difference is which model the
@@ -310,6 +312,75 @@ export const parakeetTranscribePsyCoremlWav: TestDefinition = {
   ]
 }
 
+// ── TranscribePsy EU tests ────────────────────────────────────────────────────
+// TranscribePsy-250M-EU: the full 25-language model, one GGUF with its CAFE
+// language adapters and gate embedded, published from the S3 registry. It runs
+// on ggml on every platform (no Core ML distribution). Without `language` the
+// gate routes each recording itself; the English fixtures must come out the
+// same on the automatic route and on the English trunk picked explicitly.
+
+export const parakeetTranscribePsyEuWav = createParakeetTest(
+  'parakeet-transcribepsy-eu-wav',
+  'parakeet-transcribepsy-eu',
+  'transcription-short-wav.wav',
+  { validation: 'contains-all', contains: ['test', 'automation'] },
+  300000, // download ~307 MB
+  ['smoke']
+)
+
+export const parakeetTranscribePsyEuMp3 = createParakeetTest(
+  'parakeet-transcribepsy-eu-mp3',
+  'parakeet-transcribepsy-eu',
+  'transcription-short-mp3.mp3',
+  { validation: 'contains-all', contains: ['test', 'automation'] },
+  120000
+)
+
+export const parakeetTranscribePsyEuSilence = createParakeetTest(
+  'parakeet-transcribepsy-eu-silence',
+  'parakeet-transcribepsy-eu',
+  'silence.m4a',
+  { validation: 'type', expectedType: 'string' },
+  120000
+)
+
+// Corrupted WAV on the TranscribePsy EU path
+export const parakeetTranscribePsyEuCorruptedWav = createParakeetTest(
+  'parakeet-transcribepsy-eu-corrupted-wav',
+  'parakeet-transcribepsy-eu',
+  'corrupted-wav.wav',
+  { validation: 'throws-error', errorContains: '' },
+  60000
+)
+
+// A German clip on the automatic route: the gate has to pick the non-English
+// adapters, which is what the full model adds over EU-sub. The fixture is a
+// native speaker reading "Deutschland ist ein bundesstaatlich verfasstes Land
+// in Mitteleuropa, das aus den 16 deutschen Ländern gebildet wird." (Wikimedia
+// Commons, File:DE-Deutschland-sentence-Labtec-AM-232-external-mic.flac by
+// MartinThoma, CC0; resampled to 16 kHz mono); any one of its distinctive
+// words in the transcript shows the adapters decoded German.
+export const parakeetTranscribePsyEuDeWav = createParakeetTest(
+  'parakeet-transcribepsy-eu-de-wav',
+  'parakeet-transcribepsy-eu',
+  'transcription-short-de.wav',
+  {
+    validation: 'contains-any',
+    contains: ['deutschland', 'mitteleuropa', 'bundesstaatlich', 'ländern', 'land']
+  },
+  120000
+)
+
+// `language: "en"` skips the gate and decodes on the English trunk; the
+// resource loads the same GGUF with that route pinned.
+export const parakeetTranscribePsyEuEnWav = createParakeetTest(
+  'parakeet-transcribepsy-eu-en-wav',
+  'parakeet-transcribepsy-eu-en',
+  'transcription-short-wav.wav',
+  { validation: 'contains-all', contains: ['test', 'automation'] },
+  120000
+)
+
 // ── Indic Conformer CTC (desktop-only) ────────────────────────────────────────
 // Multilingual CTC with a required `modelConfig.language` mask. Happy path
 // uses the asr-ggml Hindi sample (`sample_hi.raw` wrapped as WAV) and asserts
@@ -405,6 +476,15 @@ export const parakeetTranscribePsyTests = [
   parakeetTranscribePsyCoremlWav
 ]
 
+export const parakeetTranscribePsyEuTests = [
+  parakeetTranscribePsyEuWav,
+  parakeetTranscribePsyEuMp3,
+  parakeetTranscribePsyEuSilence,
+  parakeetTranscribePsyEuCorruptedWav,
+  parakeetTranscribePsyEuDeWav,
+  parakeetTranscribePsyEuEnWav
+]
+
 export const parakeetIndicConformerTests = [
   parakeetIndicConformerHi,
   parakeetIndicConformerSilence,
@@ -418,6 +498,7 @@ export const parakeetTests = [
   ...parakeetCtcTests,
   ...parakeetUnifiedTests,
   ...parakeetTranscribePsyTests,
+  ...parakeetTranscribePsyEuTests,
   ...parakeetIndicConformerTests,
   ...parakeetSortformerTests
 ]

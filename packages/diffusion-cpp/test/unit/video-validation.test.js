@@ -1058,3 +1058,17 @@ test('lifecycle | run() before load() throws "Addon not initialized"', async (t)
     /Addon not initialized\. Call load\(\) first\./
   )
 })
+
+test('video constructor rejects invalid tokenizer companion paths', async (t) => {
+  for (const tokenizer of ['', 'tokenizer.json']) {
+    await t.exception.all(
+      () => makeWanModel({ files: { model: FAKE_MODEL, tokenizer } }),
+      /tokenizer/,
+      'rejects invalid tokenizer path'
+    )
+  }
+  t.execution(
+    () => makeWanModel({ files: { model: FAKE_MODEL, tokenizer: '/tmp/tokenizer.json' } }),
+    'accepts an absolute tokenizer path'
+  )
+})
