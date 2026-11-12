@@ -5,6 +5,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -54,6 +55,18 @@ double getStatValue(
     }
   }
   return 0.0;
+}
+
+std::string getStatString(
+    const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
+    const std::string& key) {
+  for (const auto& [statKey, value] : stats) {
+    if (statKey == key) {
+      const auto* text = std::get_if<std::string>(&value);
+      return text != nullptr ? *text : std::string();
+    }
+  }
+  return {};
 }
 } // namespace
 
@@ -297,7 +310,7 @@ TEST_F(BertModelTest, RuntimeStatsBeforeProcessing) {
       getStatValue(stats, "trained_context_size"),
       static_cast<double>(llama_model_n_ctx_train(model.getModel())));
   EXPECT_EQ(getStatValue(stats, "backendDevice"), 0.0);
-  EXPECT_EQ(model.runtimeBackendName()->get(), "cpu");
+  EXPECT_EQ(getStatString(stats, "backendName"), "cpu");
 }
 
 TEST_F(BertModelTest, DefaultContextSizeMatchesTrainedContext) {

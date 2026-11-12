@@ -1,5 +1,3 @@
-#include <memory>
-
 #include <gtest/gtest.h>
 
 #include "utils/ModelBackendName.hpp"
@@ -56,15 +54,4 @@ TEST(ModelBackendName, LeavesMissingOrUnidentifiedPlacementUnknown) {
 
 TEST(ModelBackendName, PreservesRpcFamily) {
   EXPECT_EQ(modelBackendName({{4096, "rpc", false}}), "rpc");
-}
-
-TEST(ModelBackendName, MetadataRemainsAvailableAfterItsOwnerReleasesIt) {
-  auto owner = std::make_shared<
-      qvac_lib_inference_addon_embed::backend_reporting::RuntimeBackendName>();
-  owner->set("metal");
-  std::shared_ptr<const qvac_lib_inference_addon_embed::backend_reporting::
-                      RuntimeBackendName>
-      queued = owner;
-  owner.reset();
-  EXPECT_EQ(queued->get(), "metal");
 }

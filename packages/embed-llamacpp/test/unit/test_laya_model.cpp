@@ -9,6 +9,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <type_traits>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -84,6 +85,7 @@ std::string layaModelPath() {
   return findModel("models/unit-test/laya-test.gguf");
 }
 
+/// Numeric stats by key. String stats such as backendName are left out.
 std::unordered_map<std::string, double> statsOf(const LayaModel& model) {
   std::unordered_map<std::string, double> stats;
   for (const auto& [key, value] : model.runtimeStats()) {
@@ -95,6 +97,16 @@ std::unordered_map<std::string, double> statsOf(const LayaModel& model) {
     }
   }
   return stats;
+}
+
+std::string backendNameOf(const LayaModel& model) {
+  for (const auto& [key, value] : model.runtimeStats()) {
+    if (key == "backendName") {
+      const auto* name = std::get_if<std::string>(&value);
+      return name != nullptr ? *name : std::string();
+    }
+  }
+  return {};
 }
 
 const char* kTicketRequest = R"({
@@ -416,6 +428,9 @@ TEST_F(LayaModelTest, RuntimeStatsDescribeLastRequest) {
   EXPECT_GT(stats.at("total_tokens"), 0.0);
   EXPECT_GT(stats.at("total_time_ms"), 0.0);
   EXPECT_EQ(stats.at("batch_size"), 2048.0);
+  const std::string backendName = backendNameOf(*model_);
+  EXPECT_FALSE(backendName.empty());
+  EXPECT_EQ(backendName == "cpu", stats.at("backendDevice") == 0.0);
 }
 
 TEST(LayaModelBatchTest, BatchSizeSetsTheContext) {

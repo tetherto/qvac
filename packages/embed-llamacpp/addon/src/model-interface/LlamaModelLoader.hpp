@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <streambuf>
 #include <string>
@@ -14,7 +15,6 @@
 #include "LlamaLazyInitializeBackend.hpp"
 #include "ModelMetadata.hpp"
 #include "inference-addon-cpp/InitLoader.hpp"
-#include "utils/ModelBackendName.hpp"
 
 struct LlamaCommonInitResult {
   common_params params;
@@ -106,11 +106,12 @@ public:
   [[nodiscard]] llama_context* context() const { return ctx_; }
   [[nodiscard]] const common_params& params() const { return init_.params; }
   [[nodiscard]] int64_t runtimeBackendDevice() const {
+    std::lock_guard lock(runtimeBackendMutex_);
     return runtimeBackendDevice_;
   }
-  [[nodiscard]] std::shared_ptr<const qvac_lib_inference_addon_embed::
-                                    backend_reporting::RuntimeBackendName>
-  runtimeBackendName() const {
+  /// Lowercase backend family of the loaded model, or empty when unknown.
+  [[nodiscard]] std::string runtimeBackendName() const {
+    std::lock_guard lock(runtimeBackendMutex_);
     return runtimeBackendName_;
   }
 
@@ -129,11 +130,9 @@ private:
 
   InitLoader initLoader_;
   std::optional<LlamaBackendsHandle> backendsHandle_;
+  // init() can run on the InitLoader thread while a job reads stats.
+  mutable std::mutex runtimeBackendMutex_;
   int64_t runtimeBackendDevice_ = 0;
-  std::shared_ptr<
-      qvac_lib_inference_addon_embed::backend_reporting::RuntimeBackendName>
-      runtimeBackendName_ =
-          std::make_shared<qvac_lib_inference_addon_embed::backend_reporting::
-                               RuntimeBackendName>();
+  std::string runtimeBackendName_;
   ModelMetaData metadata_;
 };
