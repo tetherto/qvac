@@ -55,7 +55,7 @@ The design rule is: keep general OpenAI-compatible behavior in `@qvac/cli`, gene
 
 `@qvac/opencode-plugin` depends on:
 
-- `@opencode-ai/plugin` for OpenCode plugin hooks/types.
+- `@opencode/plugin` (dev only; OpenCode 2.x supplies it at runtime) for the V2 plugin API and types.
 - `@qvac/ai-sdk-provider` for managed mode and model catalog resolution.
 - `@qvac/cli` so managed mode can run `qvac serve`.
 - `@ai-sdk/openai-compatible` and `ai`, because OpenCode consumes Vercel AI SDK providers.
