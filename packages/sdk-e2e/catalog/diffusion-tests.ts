@@ -815,6 +815,82 @@ export const diffusionStandaloneUpscalerCpu = createDiffusionTest(
   }
 )
 
+// ---- MOSS-Image JSON layout ----
+
+const MOSS_SIZE = 512
+
+// Boxes are [y_min, x_min, y_max, x_max] in pixels with the canvas centre as the origin.
+const MOSS_LAYOUT = {
+  summary: {
+    meta: ['poster'],
+    canvas: 'single',
+    caption: 'A minimalist poster of a snowy mountain at sunrise, flat illustration style.'
+  },
+  items: [
+    {
+      label: 'text',
+      caption: 'Bold white sans-serif title across the top.',
+      text: 'SUMMIT',
+      bbox: [-224, -176, -160, 176]
+    },
+    {
+      label: 'object',
+      caption: 'A snowy mountain peak lit by an orange sunrise.',
+      bbox: [-112, -160, 192, 160]
+    }
+  ],
+  bbox_coord_space: 'abs_centralized',
+  bbox_format: 'yxyx'
+}
+
+export const diffusionMossImageLayout = createDiffusionTest(
+  'diffusion-moss-image-layout',
+  {
+    prompt: JSON.stringify(MOSS_LAYOUT),
+    width: MOSS_SIZE,
+    height: MOSS_SIZE,
+    steps: 8,
+    cfg_scale: 3,
+    sampling_method: 'euler',
+    scheduler: 'discrete',
+    seed: 42
+  },
+  { validation: 'function', fn: validatePngDims(MOSS_SIZE, MOSS_SIZE, 'MOSS-Image PNG') },
+  {
+    estimatedDurationMs: 600000,
+    dependency: 'diffusion-moss',
+    steps: [
+      { useModel: { deps: ['diffusion-moss'], as: 'model' } },
+      {
+        call: {
+          method: 'diffusion',
+          collect: 'all',
+          params: {
+            modelId: '$model',
+            prompt: '$params.prompt',
+            width: '$params.width',
+            height: '$params.height',
+            steps: '$params.steps',
+            cfg_scale: '$params.cfg_scale',
+            sampling_method: '$params.sampling_method',
+            scheduler: '$params.scheduler',
+            seed: '$params.seed'
+          },
+          as: 'run'
+        }
+      },
+      { project: { from: '$run', path: 'all', as: 'outputs' } },
+      {
+        assert: {
+          on: '$outputs',
+          named: 'pngDimensions',
+          with: { width: MOSS_SIZE, height: MOSS_SIZE }
+        }
+      }
+    ]
+  }
+)
+
 export const diffusionTests = [
   diffusionBasicTxt2img,
   diffusionDefaultSize,
@@ -836,6 +912,7 @@ export const diffusionTests = [
   diffusionFaDisabledAccepted,
   diffusionFusionFlux2Basic,
   diffusionEsrganUpscaleX4,
+  diffusionMossImageLayout,
   diffusionStandaloneUpscalerX4,
   diffusionStandaloneUpscalerBackendDevice,
   diffusionStandaloneUpscalerCpu

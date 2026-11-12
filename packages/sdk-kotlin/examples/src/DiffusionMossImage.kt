@@ -17,6 +17,7 @@
 
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
+import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.DiffusionStreamRequest
 import io.tether.qvac.sdk.generated.schema.DiffusionStreamRequestSamplingMethod
 import io.tether.qvac.sdk.generated.schema.DiffusionStreamRequestScheduler
@@ -36,15 +37,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
-
-private const val HF = "https://huggingface.co"
-private const val MOSS_REPO = "$HF/Comfy-Org/MOSS-Image/resolve/530a4c94f92c35ef6818b1b035a983fe9dcf5f54"
-private const val DIFFUSION_MODEL_SRC = "$MOSS_REPO/diffusion_models/moss_image_sft_bf16.safetensors"
-private const val LLM_MODEL_SRC =
-    "$HF/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf"
-private const val VAE_MODEL_SRC = "$MOSS_REPO/vae/flux2-vae_small.safetensors"
-private const val TOKENIZER_SRC =
-    "$HF/OpenMOSS-Team/MOSS-Image-SFT/resolve/f972bd4b4b9e3852133cc5da954d87bc32cd8fb9/tokenizer/tokenizer.json"
 
 private const val WIDTH = 1024
 private const val HEIGHT = 1024
@@ -81,26 +73,26 @@ fun main(args: Array<String>): Unit = runBlocking {
             "Usage: ./gradlew -p examples run -Pexample=DiffusionMossImage " +
                 "--args=\"[output-dir] [model] [llm] [vae] [tokenizer]\"",
         )
-        println("▸ Defaults download pinned Hugging Face weights. Model overrides accept paths or URLs.")
+        println("▸ Defaults download the MOSS-Image registry models. Model overrides accept paths or URLs.")
         return@runBlocking
     }
 
     val outputDir = Path.of(args.getOrNull(0) ?: ".")
-    val diffusionModelSrc = args.getOrNull(1) ?: DIFFUSION_MODEL_SRC
-    val llmModelSrc = args.getOrNull(2) ?: LLM_MODEL_SRC
-    val vaeModelSrc = args.getOrNull(3) ?: VAE_MODEL_SRC
-    val tokenizerSrc = args.getOrNull(4) ?: TOKENIZER_SRC
+    val diffusionModelSrc = args.getOrNull(1)?.let(::modelSource) ?: Models.MOSS_IMAGE_SFT_5B_BF16.src
+    val llmModelSrc = args.getOrNull(2)?.let(::modelSource) ?: Models.QWEN3_5_9B_MULTIMODAL_Q4_K_M.src
+    val vaeModelSrc = args.getOrNull(3)?.let(::modelSource) ?: Models.MOSS_IMAGE_VAE.src
+    val tokenizerSrc = args.getOrNull(4)?.let(::modelSource) ?: Models.MOSS_IMAGE_SFT_TOKENIZER.src
 
     val client = QvacClient(JvmBareKitTransport.connect())
     try {
         println("▸ Loading MOSS-Image...")
         val modelId = client.loadWithProgress(
-            source = modelSource(diffusionModelSrc),
+            source = diffusionModelSrc,
             modelType = "sdcpp-generation",
             modelConfig = buildJsonObject {
-                put("llmModelSrc", modelSource(llmModelSrc))
-                put("vaeModelSrc", modelSource(vaeModelSrc))
-                put("tokenizerSrc", modelSource(tokenizerSrc))
+                put("llmModelSrc", llmModelSrc)
+                put("vaeModelSrc", vaeModelSrc)
+                put("tokenizerSrc", tokenizerSrc)
                 put("flash_attn", true)
             },
         )

@@ -611,6 +611,21 @@ export const RESOURCE_TABLE: ResourceTable = {
     }
   },
 
+  // MOSS-Image pulls about 16 GB, so it runs on the Linux JS leg only.
+  'diffusion-moss': {
+    on: ['desktop-linux'],
+    constant: { $const: 'MOSS_IMAGE_SFT_5B_BF16' },
+    type: 'sdcpp-generation',
+    config: {
+      device: 'gpu',
+      threads: 4,
+      flash_attn: true,
+      llmModelSrc: { $const: 'QWEN3_5_9B_MULTIMODAL_Q4_K_M' },
+      vaeModelSrc: { $const: 'MOSS_IMAGE_VAE' },
+      tokenizerSrc: { $const: 'MOSS_IMAGE_SFT_TOKENIZER' }
+    }
+  },
+
   world: {
     on: ['desktop-linux', 'desktop-python'],
     constant: { $const: 'ABOT_WORLD_0_5B_Q8_0' },
