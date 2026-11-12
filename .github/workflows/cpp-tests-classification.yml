@@ -73,8 +73,12 @@ jobs:
       contents: read
     uses: ./.github/workflows/reusable-runner-names.yml
 
+  test-models:
+    permissions: {}
+    uses: ./.github/workflows/reusable-test-models-classification-ggml.yml
+
   test-cpp:
-    needs: runner_names
+    needs: [runner_names, test-models]
     permissions:
       contents: read
       id-token: write
@@ -90,6 +94,7 @@ jobs:
             platform: darwin
             arch: arm64
             runner: ${{ needs.runner_names.outputs.macos_arm64_gpu }}
+            bridgedepth_backend: MTL0
           - os: windows-2025
             platform: win32
             arch: x64
@@ -101,6 +106,16 @@ jobs:
 
     env:
       WORKDIR: ${{ inputs.workdir }}
+      # BridgeDepth parity and the measured footprint checks run on Metal on
+      # the macOS GPU runner, CPU elsewhere.
+      QVAC_BRIDGEDEPTH_BACKEND: ${{ matrix.bridgedepth_backend || 'CPU' }}
+      QVAC_FOOTPRINT_BACKEND: ${{ matrix.bridgedepth_backend || 'CPU' }}
+      # The fixture models addon-test needs, each with the variable its tests
+      # read the staged path from. The select and verify steps both use it.
+      FIXTURE_MODEL_ENV: >-
+        {"bridgedepth-vits-f32.gguf": "QVAC_BRIDGEDEPTH_MODEL_PATH",
+        "megaloc-f16.gguf": "QVAC_MEGALOC_F16_MODEL_PATH",
+        "megaloc-mixed.gguf": "QVAC_MEGALOC_MIXED_MODEL_PATH"}
 
     steps:
       - name: Manual Workspace Cleanup
@@ -181,6 +196,56 @@ jobs:
           prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
+
+      # The BridgeDepth reference tests and the MegaLoc and BridgeDepth
+      # footprint tests in addon-test skip without the converted weights, so
+      # stage those models from the shared manifest.
+      - name: Select BridgeDepth and MegaLoc test models
+        id: fixture-models
+        if: hashFiles(format('{0}/test/unit/bridgedepth_test.cpp', env.WORKDIR)) != ''
+        shell: bash
+        env:
+          MODEL_MANIFEST: ${{ needs.test-models.outputs.manifest }}
+        run: |
+          node -e '
+            const names = Object.keys(JSON.parse(process.env.FIXTURE_MODEL_ENV));
+            const all = JSON.parse(process.env.MODEL_MANIFEST);
+            const picked = all.filter((e) => names.some((n) => e.dest.endsWith("/" + n)));
+            if (picked.length !== names.length) throw new Error("BridgeDepth or MegaLoc model missing from the manifest");
+            require("fs").appendFileSync(process.env.GITHUB_OUTPUT, "manifest=" + JSON.stringify(picked) + "\n");
+          '
+
+      - name: Stage BridgeDepth and MegaLoc test models
+        if: steps.fixture-models.outcome == 'success'
+        uses: tetherto/qvac/.github/actions/stage-integration-models@94eb8ef3e888f8bc1f1717d5e31f55b14d4ac915
+        with:
+          workdir: ${{ env.WORKDIR }}
+          aws-role: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          bucket: ${{ secrets.MODEL_S3_BUCKET }}
+          s3-manifest: ${{ steps.fixture-models.outputs.manifest }}
+
+      - name: Verify BridgeDepth and MegaLoc test models
+        if: steps.fixture-models.outcome == 'success'
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        env:
+          MODEL_MANIFEST: ${{ steps.fixture-models.outputs.manifest }}
+        run: |
+          node --input-type=module -e '
+            import { createHash } from "node:crypto";
+            import { createReadStream, appendFileSync } from "node:fs";
+            import { basename, resolve } from "node:path";
+            const envNames = JSON.parse(process.env.FIXTURE_MODEL_ENV);
+            for (const { dest, sha256 } of JSON.parse(process.env.MODEL_MANIFEST)) {
+              const envName = envNames[basename(dest)];
+              if (!envName) throw new Error("No path variable for fixture model: " + dest);
+              const hash = createHash("sha256");
+              for await (const chunk of createReadStream(dest)) hash.update(chunk);
+              if (hash.digest("hex") !== sha256) throw new Error("Checksum mismatch: " + dest);
+              appendFileSync(process.env.GITHUB_ENV, envName + "=" + resolve(dest) + "\n");
+              console.log("Verified " + dest);
+            }
+          '
 
       # Non-Linux: unit tests only (fuzzing is Linux-only — libFuzzer + ASan,
       # matching the if(NOT WIN32) ASan gate). These use the vcpkg GoogleTest in

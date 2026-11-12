@@ -7,6 +7,7 @@ async function runTests () {
 
   test.pause()
 
+  await import('./fit.test.js')
   await import('./map-addon-event.test.js')
   await import('./megaloc-options.test.js')
 

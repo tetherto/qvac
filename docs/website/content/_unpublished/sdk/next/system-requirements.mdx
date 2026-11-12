@@ -7,7 +7,7 @@ schemaType: TechArticle
 
 ## Overview
 
-Minimum host requirements for running the SDK and CLI. These are worker-level — all SDK clients (JS/TS and Python) drive the same worker, so the requirements below apply regardless of which client you use.
+Minimum host requirements for running the SDK and CLI. These are worker-level — all SDK clients (JS/TS, Python, and Kotlin) drive the same worker, so the requirements below apply regardless of which client you use.
 
 You can validate your environment against the machine-checkable subset with:
 
@@ -23,9 +23,11 @@ Use `--json` for machine-readable output and `--quiet` to set the exit code only
 |----------|-------------|-----|-----|-------|
 | macOS | 14.0+ | arm64 | Metal | Arch x64 supports CPU inference only; Intel iGPU acceleration not supported |
 | iOS | 17.0+ | arm64 | Metal | Requires Expo |
-| Linux | Ubuntu 22+ | arm64, x64 | Vulkan `>= 1.4` | Vulkan is required for GPU inference. If not available, it falls back to CPU. |
+| Linux | Ubuntu 22+ | arm64, x64 | Vulkan `>= 1.4`; AMD XDNA2 NPU (x64, opt-in) | Vulkan is required for GPU inference. If not available, it falls back to CPU. The AMD NPU needs XRT 2.25 or newer and is used only on request; see [Text generation](/sdk/ai-capabilities/text-generation#amd-npu). |
 | Android | 12+ | arm64 | Vulkan, OpenCL (Adreno 700+) | Requires Expo |
 | Windows | 10+ | x64 | Vulkan `>= 1.4` | Vulkan is required even for CPU-only inference |
+
+The Python client gets Bare from the `bare-sidecar` wheels, which cover the desktop platforms above. Linux needs glibc `>= 2.34`: with an older glibc, or musl, `bare-sidecar` installs without Bare and the Python client cannot start.
 
 ## Environment setup
 
@@ -149,11 +151,11 @@ The `qvac` CLI itself runs on desktops only. The SDK additionally targets Androi
 
 ## Deploy targets
 
-These checks are informational. They never cause `qvac doctor` to exit non-zero, because cross-bundling is always supported via bare-pack prebuilt binaries. What is checked here is the host toolchain needed to install/deploy to each target class.
+These checks are informational. They never cause `qvac doctor` to exit non-zero. What is checked here is the host toolchain needed to install/deploy to each target class.
 
 | Target | Check | Status when missing |
 | --- | --- | --- |
-| `darwin-{arm64,x64}`, `linux-{arm64,x64}`, `win32-x64` | Listed under "Desktop"; native host flagged with `(native)`. | Always `pass` — cross-bundling is built in. |
+| `darwin-{arm64,x64}`, `linux-{arm64,x64}`, `win32-x64` | Listed under "Desktop"; native host flagged with `(native)`. | Always `pass`. Bundling for a desktop host other than the native one needs that host's addon platform packages installed; see [Electron](/resources/tutorials/electron). |
 | `android-arm64` | `adb --version` | `warn` — install [Android platform tools](https://developer.android.com/tools/releases/platform-tools) to deploy to devices. |
 | `ios-arm64` + simulators | `xcodebuild -version` (macOS only) | `warn` on macOS without Xcode, `info` on non-macOS hosts. |
 

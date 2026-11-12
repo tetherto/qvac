@@ -3,6 +3,8 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const test = require('brittle')
 const process = require('bare-process')
+const os = require('bare-os')
+const ASRGgml = require('../../index.js')
 const { spawnSync } = require('bare-subprocess')
 const { WhisperInterface } = require('@qvac/asr-ggml/test-support.js')
 const binding = require('../../binding')
@@ -26,6 +28,56 @@ const { modelPath, vadModelPath, audioPath } = getTestPaths()
 const backendsDir = getBackendsDir()
 const activationRunnerPath = path.resolve(__dirname, 'activate-without-backends-dir.runner.js')
 const ACTIVATION_TIMEOUT_MS = 120000
+
+test(
+  'Whisper reports native encoder state with and without a Core ML sidecar',
+  {
+    skip: process.platform !== 'darwin',
+    timeout: ACTIVATION_TIMEOUT_MS
+  },
+  async (t) => {
+    await ensureWhisperModel(modelPath)
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'asr-whisper-state-'))
+    const stagedModel = path.join(directory, 'model.bin')
+    const sidecar = path.join(directory, 'whisper-state-encoder.mlmodelc')
+    const modelSidecar = path.join(directory, 'model-encoder.mlmodelc')
+    let model
+    try {
+      fs.copyFileSync(modelPath, stagedModel)
+      const compiled = spawnSync(
+        'xcrun',
+        [
+          'coremlcompiler',
+          'compile',
+          path.join(__dirname, '..', 'fixtures', 'whisper-state-encoder.mlmodel'),
+          directory
+        ],
+        { encoding: 'utf8', timeout: ACTIVATION_TIMEOUT_MS }
+      )
+      t.is(compiled.status, 0, `the synthetic encoder fixture compiles: ${compiled.stderr}`)
+      fs.renameSync(sidecar, modelSidecar)
+      model = new ASRGgml({
+        files: { model: stagedModel },
+        config: { engine: 'whisper', contextParams: { use_gpu: false } }
+      })
+      await model.load()
+      const active = model.getBackendInfo()
+      t.is(active.encoderOnCoreml, true, 'a loaded native sidecar is reported')
+      t.is(active.encoderBackend, 'coreml')
+      t.is(active.backendDevice, 'CPU', 'Core ML routing is independent of the ggml GPU setting')
+      await model.unload()
+      fs.renameSync(modelSidecar, sidecar)
+      await model.load()
+      const fallback = model.getBackendInfo()
+      t.is(fallback.encoderOnCoreml, false, 'the missing sidecar falls back to ggml')
+      t.is(fallback.encoderBackend, fallback.backendName)
+      t.is(fallback.backendDevice, 'CPU')
+    } finally {
+      if (model) await model.unload()
+      fs.rmSync(directory, { recursive: true, force: true })
+    }
+  }
+)
 
 test(
   '[low level] Real C++ addon bindings work correctly',

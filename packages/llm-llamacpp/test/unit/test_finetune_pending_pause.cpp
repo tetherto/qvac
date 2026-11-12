@@ -2,8 +2,11 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include <gtest/gtest.h>
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "model-interface/LlamaFinetuner.hpp"
 #include "model-interface/LlamaModel.hpp"
@@ -217,4 +220,75 @@ TEST(FinetunePendingPauseTest, InternalReloadDoesNotRequestFinetunePause) {
   LlamaFinetunerTestPeer::publishCheckpointState(finetuner, state);
   EXPECT_FALSE(state->pauseRequested.load())
       << "an ordinary finetune must start without a pause from its own reload";
+}
+
+namespace {
+
+// The rejection message, or empty when the check passes.
+std::string npuRejection(
+    const std::unordered_map<std::string, std::string>& config,
+    int64_t runtimeBackendDevice) {
+  try {
+    LlamaFinetuner::rejectNpuTarget(config, runtimeBackendDevice);
+  } catch (const qvac_errors::StatusError& error) {
+    return error.what();
+  }
+  return "";
+}
+
+bool contains(const std::string& text, const std::string& part) {
+  return text.find(part) != std::string::npos;
+}
+
+} // namespace
+
+// finetune() runs this check before it reloads the model, for both NPU
+// routes. The runtime device class: 0 = CPU, 1 = GPU, 2 = NPU.
+TEST(FinetuneNpuTest, DeviceNpuIsRejectedEvenAfterFallback) {
+  const std::unordered_map<std::string, std::string> config{{"device", "npu"}};
+  for (const int64_t device : {0, 1, 2}) {
+    const std::string message = npuRejection(config, device);
+    EXPECT_TRUE(
+        contains(message, "loaded with device 'npu' cannot be finetuned"))
+        << device << ": " << message;
+    EXPECT_TRUE(contains(message, "reload it with device 'gpu' or 'cpu'"))
+        << device << ": " << message;
+  }
+}
+
+// devices: 'XDNA0' loads on the NPU alone and reports device class 2. The
+// caller asked for device 'gpu', so the hint is about the device list.
+TEST(FinetuneNpuTest, LoadOnTheNpuIsRejected) {
+  const std::unordered_map<std::string, std::string> config{
+      {"device", "gpu"}, {"devices", "XDNA0"}};
+  const std::string message = npuRejection(config, 2);
+  EXPECT_TRUE(contains(message, "XDNA0 in devices cannot be finetuned"))
+      << message;
+  EXPECT_TRUE(contains(message, "reload it without XDNA0 in devices"))
+      << message;
+}
+
+// A mixed split reports device class 1 but still puts layers on the NPU. The
+// list is matched case-insensitively, under either key.
+TEST(FinetuneNpuTest, MixedSplitWithTheNpuIsRejected) {
+  for (const auto& [key, names] :
+       std::vector<std::pair<std::string, std::string>>{
+           {"devices", "XDNA0,Vulkan0"},
+           {"devices", "vulkan0, xdna0"},
+           {"device-list", "XDNA0,CUDA0"}}) {
+    const std::unordered_map<std::string, std::string> config{
+        {"device", "gpu"}, {"split-mode", "layer"}, {key, names}};
+    const std::string message = npuRejection(config, 1);
+    EXPECT_TRUE(contains(message, "alone or in a mixed split"))
+        << key << "=" << names << ": " << message;
+  }
+}
+
+TEST(FinetuneNpuTest, GpuAndCpuLoadsAreAccepted) {
+  EXPECT_NO_THROW(LlamaFinetuner::rejectNpuTarget({{"device", "gpu"}}, 1));
+  EXPECT_NO_THROW(LlamaFinetuner::rejectNpuTarget({{"device", "cpu"}}, 0));
+  EXPECT_NO_THROW(LlamaFinetuner::rejectNpuTarget({}, 0));
+  EXPECT_NO_THROW(
+      LlamaFinetuner::rejectNpuTarget(
+          {{"device", "gpu"}, {"devices", "Vulkan0,CUDA0"}}, 1));
 }

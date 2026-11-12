@@ -27,9 +27,14 @@ test('runtime stats preserve the native backend name without guessing from the d
   t.absent('backendName' in legacy.data, 'older addons do not gain an inferred name')
 })
 
+test('TPS-shaped data maps backendDevice 2 to "npu"', function (t) {
+  const result = mapAddonEvent('anything', { TPS: 50, backendDevice: 2 }, null)
+  t.is(result.data.backendDevice, 'npu')
+})
+
 test('TPS-shaped data preserves unknown backendDevice values as-is', function (t) {
-  const result = mapAddonEvent('anything', { TPS: 1, backendDevice: 2 }, null)
-  t.is(result.data.backendDevice, 2)
+  const result = mapAddonEvent('anything', { TPS: 1, backendDevice: 3 }, null)
+  t.is(result.data.backendDevice, 3)
 })
 
 // stopReason rides the per-job stats on both the sequential and the concurrent

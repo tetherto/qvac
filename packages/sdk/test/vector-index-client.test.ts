@@ -226,3 +226,75 @@ test('vector index client: a response of another type is rejected', async (t) =>
     t.ok(error instanceof InvalidResponseError)
   }
 })
+
+test('vector index client: calibration and staged search follow confirmed responses', async (t) => {
+  let reject = false
+  const { send, sent } = fakeTransport({
+    create: () => ({
+      type: 'vectorIndex',
+      operation: 'create',
+      indexId: 'i',
+      dim: 8,
+      storage: 'turbovec-q4',
+      length: 0,
+      calibrated: false,
+      stagedSearch: false
+    }),
+    add: () => {
+      if (reject) throw new Error('add failed')
+      return {
+        type: 'vectorIndex',
+        operation: 'add',
+        length: 1000,
+        calibrated: true,
+        // Another caller turned the setting off on the worker.
+        stagedSearch: false
+      }
+    },
+    setStagedSearch: (req) => {
+      if (reject) throw new Error('setting failed')
+      return { type: 'vectorIndex', operation: 'setStagedSearch', stagedSearch: req['enabled'] }
+    },
+    load: () => ({
+      type: 'vectorIndex',
+      operation: 'load',
+      indexId: 'loaded',
+      dim: 8,
+      length: 1000,
+      calibrated: true,
+      stagedSearch: false
+    })
+  })
+  const client = createVectorIndexClient(send)
+  const index = await client.createVectorIndex({ dim: 8 })
+  t.is(index.calibrated, false)
+  t.is(index.stagedSearch, false)
+  t.alike(await index.setStagedSearch({ enabled: true }, { timeout: 1234 }), { stagedSearch: true })
+  t.is(index.stagedSearch, true)
+  t.alike(sent[1]?.request, {
+    type: 'vectorIndex',
+    operation: 'setStagedSearch',
+    indexId: 'i',
+    enabled: true
+  })
+  t.alike(sent[1]?.options, { timeout: 1234 })
+  reject = true
+  await t.exception(() => index.setStagedSearch({ enabled: false }), /setting failed/)
+  await t.exception(() => index.add({ ids: ['1'], vectors: [new Array(8).fill(1)] }), /add failed/)
+  t.is(index.stagedSearch, true, 'a failed setting does not change cached state')
+  t.is(index.calibrated, false, 'a failed add does not change cached state')
+  reject = false
+  await index.add({ ids: ['1'], vectors: [new Array(8).fill(1)] })
+  t.is(index.calibrated, true)
+  t.is(index.stagedSearch, false, 'add reports the setting held by the worker')
+  const loaded = await client.loadVectorIndex({ path: 'calibrated.qvi' })
+  t.is(loaded.calibrated, true)
+  t.is(loaded.stagedSearch, false, 'loading reports the reset setting')
+})
+
+test('vector index client: providers without controls leave state unknown', async (t) => {
+  const { send } = fakeTransport()
+  const index = await createVectorIndexClient(send).createVectorIndex({ dim: 8 })
+  t.is(index.calibrated, undefined)
+  t.is(index.stagedSearch, undefined)
+})

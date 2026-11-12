@@ -7,8 +7,7 @@ import type { AbortSignal } from 'bare-abort-controller'
 import {
   detectShardedModel,
   generateShardFilenames,
-  extractTensorsFromShards,
-  validateShardedModelCache
+  checkAllShardsExist
 } from '@/utils/shard-utils'
 import {
   ModelLoadFailedError,
@@ -38,7 +37,7 @@ export function isArchiveUrl(url: string) {
 }
 
 // Whitelist of model file extensions to extract from archives
-const ALLOWED_MODEL_EXTENSIONS = ['.gguf', '.tensors.txt']
+const ALLOWED_MODEL_EXTENSIONS = ['.gguf']
 
 function isModelFile(entryName: string) {
   const basename = path.basename(entryName)
@@ -109,25 +108,43 @@ export async function extractTarStream(
   const gunzip = useGunzip ? createGunzip() : null
 
   return new Promise((resolve, reject) => {
-    let aborted = false
+    let settled = false
     let readStream: ReturnType<typeof fs.createReadStream> | null = null
+    // Settles, with the write's error if any, when the current entry's file is
+    // closed. tar-stream can emit 'finish' before the last entry's write
+    // completes (an archive without end-of-archive blocks), so completion
+    // waits for it too.
+    let writeClosed: Promise<unknown> = Promise.resolve(undefined)
+    let writeStream: ReturnType<typeof fs.createWriteStream> | null = null
 
-    const cleanup = () => {
-      aborted = true
-      readStream?.destroy()
-      gunzip?.destroy()
-      extract.destroy()
-    }
-
-    if (signal) {
-      signal.addEventListener('abort', () => {
-        cleanup()
-        reject(new DownloadCancelledError())
+    const settle = (error?: unknown) => {
+      if (settled) return
+      settled = true
+      signal?.removeEventListener('abort', onAbort)
+      if (error !== undefined) {
+        readStream?.destroy()
+        gunzip?.destroy()
+        extract.destroy()
+        writeStream?.destroy()
+      }
+      // Nothing is written after the caller sees the outcome.
+      void writeClosed.then((writeError) => {
+        const outcome = error ?? writeError
+        if (outcome === undefined) resolve()
+        else reject(outcome)
       })
     }
+    const onAbort = () => settle(new DownloadCancelledError())
+    if (signal?.aborted) {
+      settle(new DownloadCancelledError())
+      return
+    }
+    signal?.addEventListener('abort', onAbort)
 
     extract.on('entry', (header, stream, next) => {
-      if (aborted) {
+      stream.on('error', settle)
+
+      if (settled) {
         stream.resume()
         return
       }
@@ -152,26 +169,34 @@ export async function extractTarStream(
         const dir = path.dirname(filePath)
         fs.mkdirSync(dir, { recursive: true })
 
-        const writeStream = fs.createWriteStream(filePath)
-        stream.pipe(writeStream)
-
-        writeStream.on('finish', next)
-        writeStream.on('error', reject)
+        const entryWriteStream = fs.createWriteStream(filePath)
+        writeStream = entryWriteStream
+        writeClosed = new Promise((resolveClose) => {
+          let writeError: unknown
+          entryWriteStream.on('error', (error) => {
+            writeError = error
+            settle(error)
+          })
+          entryWriteStream.on('close', () => resolveClose(writeError))
+        })
+        entryWriteStream.on('close', () => {
+          if (!settled) next()
+        })
+        stream.pipe(entryWriteStream)
       } else {
-        stream.on('end', next)
+        stream.on('end', () => {
+          if (!settled) next()
+        })
         stream.resume()
       }
     })
 
-    extract.on('finish', resolve)
-    extract.on('error', reject)
-
-    if (gunzip) {
-      gunzip.on('error', reject)
-    }
+    extract.on('finish', () => settle())
+    extract.on('error', settle)
+    gunzip?.on('error', settle)
 
     readStream = fs.createReadStream(archivePath)
-    readStream.on('error', reject)
+    readStream.on('error', settle)
 
     // tar-stream's extract is a streamx Writable at runtime; cast past the
     // nominal private brand its shim can't carry (see types/tar-stream).
@@ -189,7 +214,48 @@ export async function extractTarStream(
   })
 }
 
-export async function extractAndValidateShardedArchive(
+const EXTRACTION_COMPLETE_MARKER = '.extraction-complete'
+
+async function pathExists(filePath: string) {
+  return fsPromises.access(filePath).then(
+    () => true,
+    () => false
+  )
+}
+
+/**
+ * An extracted sharded archive is complete when every shard exists and the
+ * extraction that wrote them finished. Caches from earlier SDK versions have no
+ * marker, so the first load after upgrading extracts the archive again, which
+ * downloads it again when it came over HTTP.
+ */
+export async function isShardedExtractionComplete(extractDir: string, shardFilename: string) {
+  return (
+    (await checkAllShardsExist(extractDir, shardFilename)) &&
+    (await pathExists(path.join(extractDir, EXTRACTION_COMPLETE_MARKER)))
+  )
+}
+
+// Concurrent loads of one archive share an extract directory, so they share
+// one extraction instead of writing the same files at the same time. A joining
+// caller shares the first caller's abort signal.
+const inFlightExtractions = new Map<string, Promise<string>>()
+
+export function extractAndValidateShardedArchive(
+  archivePath: string,
+  extractDir: string,
+  signal?: AbortSignal
+) {
+  const inFlight = inFlightExtractions.get(extractDir)
+  if (inFlight) return inFlight
+  const extraction = extractAndValidateShardedArchiveOnce(archivePath, extractDir, signal).finally(
+    () => inFlightExtractions.delete(extractDir)
+  )
+  inFlightExtractions.set(extractDir, extraction)
+  return extraction
+}
+
+async function extractAndValidateShardedArchiveOnce(
   archivePath: string,
   extractDir: string,
   signal?: AbortSignal
@@ -200,7 +266,7 @@ export async function extractAndValidateShardedArchive(
     const existingShard = existingFiles.find((f) => detectShardedModel(String(f)).isSharded)
 
     if (existingShard) {
-      const isComplete = await validateShardedModelCache(extractDir, String(existingShard))
+      const isComplete = await isShardedExtractionComplete(extractDir, String(existingShard))
 
       if (isComplete) {
         logger.info(`✅ Archive already extracted: ${extractDir}`)
@@ -216,6 +282,7 @@ export async function extractAndValidateShardedArchive(
 
   logger.info(`Extracting archive: ${path.basename(archivePath)}`)
 
+  await fsPromises.rm(path.join(extractDir, EXTRACTION_COMPLETE_MARKER), { force: true })
   try {
     await extractArchive(archivePath, extractDir, signal)
   } catch (error) {
@@ -250,9 +317,7 @@ export async function extractAndValidateShardedArchive(
     }
   }
 
-  // Generate tensors.txt if it doesn't exist
-  await extractTensorsFromShards(extractDir, shardedFileName)
-
+  await fsPromises.writeFile(path.join(extractDir, EXTRACTION_COMPLETE_MARKER), '')
   logger.info(`Archive extracted to ${extractDir} successfully: ${files.length} files`)
 
   return path.join(extractDir, shardFilenames[0]!)
