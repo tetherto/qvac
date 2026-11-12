@@ -13,7 +13,8 @@ namespace classification_ggml::fit {
 
 // BridgeDepth input size assumed when the request names none: the largest
 // size the model runs at, since inference downsamples a larger pair to fit
-// inside it (bridgedepth::MAX_MODEL_WIDTH x MAX_MODEL_HEIGHT).
+// inside it (bridgedepth::MAX_MODEL_WIDTH x MAX_MODEL_HEIGHT). A portrait
+// 720x1280 pair runs at its own size and measures the same.
 inline constexpr int DEFAULT_FIT_WIDTH = 1280;
 inline constexpr int DEFAULT_FIT_HEIGHT = 720;
 

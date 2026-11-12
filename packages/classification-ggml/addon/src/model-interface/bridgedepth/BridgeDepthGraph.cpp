@@ -324,6 +324,9 @@ struct BridgeDepthGraph::Impl {
   int64_t posDim = 0;
   int64_t posRows = 0;
   std::map<std::pair<int, int>, std::vector<float>> posCache;
+  // Measure mode: bytes of the pos_embed table the last run resized, which
+  // posCache keeps for the life of the model.
+  uint64_t measuredPosTableBytes = 0;
 
   ~Impl() {
     if (sched)
@@ -2117,32 +2120,35 @@ std::vector<float> BridgeDepthGraph::infer(
 }
 
 MeasuredBuffers
-BridgeDepthGraph::measure(int h, int w, uint64_t afterRunHostBytes) {
+BridgeDepthGraph::measure(int h, int w, const CallerHostBytes& caller) {
   Impl& m = *impl_;
   if (!m.measureOnly)
     throw std::runtime_error("BridgeDepth: graph was not opened to measure");
   m.forward(nullptr, nullptr, h, w, nullptr);
   MeasuredBuffers result;
   result.buffers = m.measured;
-  // The host copies inference keeps of pos_embed and the rpe indices.
+  // The host copies inference keeps of pos_embed and the rpe indices, and the
+  // pos_embed table resized for this size, which posCache keeps after the run.
   uint64_t persistentBytes =
-      static_cast<uint64_t>(m.posDim) * m.posRows * sizeof(float);
+      static_cast<uint64_t>(m.posDim) * m.posRows * sizeof(float) +
+      m.measuredPosTableBytes;
   for (const auto& [name, elements] : m.rpeIndexElems)
     persistentBytes += static_cast<uint64_t>(elements) * sizeof(int32_t);
-  // BridgeDepthModel::process holds both views as planar floats during the
-  // run, and forward() returns the unpadded disparity. The views are freed
-  // before the caller's after-run allocation, which coexists only with the
-  // returned disparity.
+  // The run: every graph input and output on the host, the resized pos_embed
+  // already counted above, plus both views as planar floats and the unpadded
+  // disparity forward() returns.
   const uint64_t pixels = static_cast<uint64_t>(h) * w;
   const uint64_t planarViewFloats = 2ULL * 3 * pixels;
   const uint64_t disparityBytes = pixels * sizeof(float);
-  const uint64_t inferenceBytes = m.measuredRunHostBytes +
-                                  planarViewFloats * sizeof(float) +
-                                  disparityBytes;
-  const uint64_t afterRunBytes = disparityBytes + afterRunHostBytes;
+  const uint64_t runBytes = m.measuredRunHostBytes - m.measuredPosTableBytes +
+                            planarViewFloats * sizeof(float) + disparityBytes;
+  const uint64_t jobPeak = std::max(
+      {caller.prepareBytes,
+       runBytes,
+       disparityBytes + caller.afterRunBytes,
+       caller.outputBytes});
   result.hostStagingBytes =
-      persistentBytes +
-      std::max({m.readBufferBytes, inferenceBytes, afterRunBytes});
+      persistentBytes + std::max(m.readBufferBytes, caller.jobBytes + jobPeak);
   return result;
 }
 
@@ -2172,6 +2178,8 @@ std::vector<float> BridgeDepthGraph::Impl::forward(
   const int ph = hDim / 8 * 7 / 14, pw = wDim / 8 * 7 / 14;
   const std::vector<float> noFloats;
   const std::vector<float>& pos = m.measureOnly ? noFloats : m.posEmbed(ph, pw);
+  m.measuredPosTableBytes =
+      static_cast<uint64_t>(m.posDim) * (1 + ph * pw) * sizeof(float);
   const std::vector<float> mean =
       hostOnly([] { return channelConst(MEAN_RGB); });
   const std::vector<float> stdv =

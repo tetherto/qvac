@@ -7,6 +7,7 @@
 // BridgeDepth from QVAC_BRIDGEDEPTH_MODEL_PATH; a test without its model is
 // skipped. QVAC_FOOTPRINT_BACKEND picks the device (default CPU).
 
+#include <algorithm>
 #include <any>
 #include <cstdint>
 #include <cstdio>
@@ -247,24 +248,68 @@ TEST(ModelFootprint, BridgeDepthAboveTheBoxIsSizedAtTheModelSize) {
   EXPECT_EQ(fullHd.hostWeightBytes, hd.hostWeightBytes);
   EXPECT_EQ(fullHd.hostComputeBytes, hd.hostComputeBytes);
   EXPECT_EQ(fullHd.hostWorkBytes, hd.hostWorkBytes);
-  // The resize back holds the disparity at 1280x720 and at 1920x1080, 12 MB,
-  // after the run has freed its two planar views at 1280x720, 22 MB alone,
-  // so the run stays the host peak.
-  EXPECT_EQ(fullHd.hostStagingBytes, hd.hostStagingBytes);
-  // At 4096x4096 the model runs at 720x720 and the resize back holds both
-  // disparities, which the host total must cover.
-  const auto square = measure(bd::MAX_SIDE, bd::MAX_SIDE);
-  const auto squareModel = bd::modelInputSize(bd::MAX_SIDE, bd::MAX_SIDE);
-  const auto pixels = [](uint64_t width, uint64_t height) {
-    return width * height;
+}
+
+// The host total is the graph's own host bytes plus the caller phases of
+// callerHostBytes, combined as BridgeDepthGraph::measure documents. A fresh
+// measure-mode graph per call gives the graph's terms: an empty caller gives
+// persistent + run, and a prepare phase larger than any other gives
+// persistent + that phase alone.
+TEST(ModelFootprint, BridgeDepthHostStagingAddsTheCallerPhases) {
+  const std::string path = envOr("QVAC_BRIDGEDEPTH_MODEL_PATH", "");
+  if (path.empty())
+    GTEST_SKIP() << "QVAC_BRIDGEDEPTH_MODEL_PATH is not set";
+  qcc::GgmlBackends backends(backendName(), "", TEST_THREADS, "test");
+  auto graphStaging = [&](bd::ImageSize model,
+                          const bd::CallerHostBytes& caller) {
+    bd::BridgeDepthGraph graph(
+        path,
+        backends.device(),
+        backends.cpu(),
+        bd::BridgeDepthGraph::Mode::Measure);
+    return graph
+        .measure(
+            static_cast<int>(model.height),
+            static_cast<int>(model.width),
+            caller)
+        .hostStagingBytes;
   };
-  const uint64_t resizeBackBytes =
-      (pixels(bd::MAX_SIDE, bd::MAX_SIDE) +
-       pixels(squareModel.width, squareModel.height)) *
-      sizeof(float);
-  EXPECT_GE(square.hostStagingBytes, resizeBackBytes);
-  const auto atModelSize = measure(squareModel.width, squareModel.height);
-  EXPECT_GE(square.hostStagingBytes, atModelSize.hostStagingBytes);
+  // Larger than any host phase of these sizes, 1 TiB.
+  constexpr uint64_t probeBytes = 1ULL << 40;
+  const std::vector<bd::ImageSize> inputs = {
+      {HD_WIDTH, HD_HEIGHT},
+      {FULL_HD_WIDTH, FULL_HD_HEIGHT},
+      {HD_HEIGHT, HD_WIDTH},
+      {bd::MAX_SIDE, UHD_HEIGHT},
+      {bd::MAX_SIDE, bd::MAX_SIDE}};
+  for (const bd::ImageSize input : inputs) {
+    const std::string label =
+        std::to_string(input.width) + "x" + std::to_string(input.height);
+    const bd::ImageSize model = bd::modelInputSize(input.width, input.height);
+    const uint64_t withRun = graphStaging(model, {});
+    const uint64_t persistent =
+        graphStaging(model, {.prepareBytes = probeBytes}) - probeBytes;
+    const uint64_t run = withRun - persistent;
+    // The run outweighs the load's read buffer, so a job byte adds one byte.
+    ASSERT_EQ(graphStaging(model, {.jobBytes = 1}), withRun + 1) << label;
+    const auto caller = bd::callerHostBytes(input.width, input.height);
+    const uint64_t modelDisparityBytes =
+        static_cast<uint64_t>(model.width) * model.height * sizeof(float);
+    const uint64_t expected = persistent + caller.jobBytes +
+                              std::max(
+                                  {caller.prepareBytes,
+                                   run,
+                                   modelDisparityBytes + caller.afterRunBytes,
+                                   caller.outputBytes});
+    const auto measured = qcc::measureFootprint(
+        path,
+        backendName(),
+        "",
+        static_cast<int>(input.width),
+        static_cast<int>(input.height),
+        TEST_THREADS);
+    EXPECT_EQ(measured.hostStagingBytes, expected) << label;
+  }
 }
 
 TEST(ModelFootprint, BridgeDepthRejectsSizesInferenceRejects) {

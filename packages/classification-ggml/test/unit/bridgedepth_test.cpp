@@ -181,12 +181,34 @@ TEST(BridgeDepthResize, ModelSizeFitsInsideTheBoxKeepingTheAspect) {
   EXPECT_EQ(bd::modelInputSize(1920, 1080), (Size{boxW, boxH}));
   // One pixel over on one side scales both: 720 * 1280 / 1281 = 719.4.
   EXPECT_EQ(bd::modelInputSize(boxW + 1, boxH), (Size{boxW, 719}));
-  // 1080 * 720 / 1440 = 540, height-limited.
-  EXPECT_EQ(bd::modelInputSize(1080, 1440), (Size{540, boxH}));
-  // Square, so the height limits it.
+  // A portrait pair fits inside the swapped box: 720p upright is untouched,
+  // 1080p upright lands on it, and 1440 * 720 / 1080 = 960, width-limited.
+  EXPECT_EQ(bd::modelInputSize(boxH, boxW), (Size{boxH, boxW}));
+  EXPECT_EQ(bd::modelInputSize(1080, 1920), (Size{boxH, boxW}));
+  EXPECT_EQ(bd::modelInputSize(1080, 1440), (Size{boxH, 960}));
+  // Square is not portrait, so the landscape box's height limits it.
   EXPECT_EQ(bd::modelInputSize(1000, 1000), (Size{boxH, boxH}));
-  // 32 * 1280 / 2048 = 20 would be below the smallest side.
+  // 32 * 1280 / 4096 = 10 would be below the smallest side.
   EXPECT_EQ(bd::modelInputSize(bd::MAX_SIDE, minSide), (Size{boxW, minSide}));
+  EXPECT_EQ(bd::modelInputSize(minSide, bd::MAX_SIDE), (Size{minSide, boxW}));
+}
+
+// Per pixel: 2 views x 3 B raw RGB for the job, 16 B for the stb_image decode
+// peak plus 12 B per model pixel for the other planar view, 4 B for the
+// disparity resized back, and 2 x 4 B for the disparity and its JS copy.
+TEST(BridgeDepthResize, CallerHostBytesAreSizedAtTheInputAndModelSizes) {
+  // 1280 x 720 = 921600 pixels, run at its own size, so no resize back.
+  const auto hd = bd::callerHostBytes(1280, 720);
+  EXPECT_EQ(hd.jobBytes, 5'529'600U);
+  EXPECT_EQ(hd.prepareBytes, 14'745'600U + 11'059'200U);
+  EXPECT_EQ(hd.afterRunBytes, 0U);
+  EXPECT_EQ(hd.outputBytes, 7'372'800U);
+  // 1920 x 1080 = 2073600 pixels, run at 1280 x 720.
+  const auto fullHd = bd::callerHostBytes(1920, 1080);
+  EXPECT_EQ(fullHd.jobBytes, 12'441'600U);
+  EXPECT_EQ(fullHd.prepareBytes, 33'177'600U + 11'059'200U);
+  EXPECT_EQ(fullHd.afterRunBytes, 8'294'400U);
+  EXPECT_EQ(fullHd.outputBytes, 16'588'800U);
 }
 
 TEST(BridgeDepthResize, DownsampleIsBilinearWithAlignedCentres) {
@@ -585,11 +607,12 @@ TEST_F(BridgeDepthReference, ResizesOnlyAboveTheBox) {
   // One pixel over the box width: 64 * 1280 / 1281 rounds back to 64, so only
   // the width is resampled.
   checkAbove({bd::MAX_MODEL_WIDTH + 1, height}, {bd::MAX_MODEL_WIDTH, height});
-  // Tall: twice the box height halves it, and the width 48 / 2 = 24 is held
-  // at the smallest side, so the two axes resample by different factors.
+  // Tall: twice the portrait box height halves it, and the width 48 / 2 = 24
+  // is held at the smallest side, so the two axes resample by different
+  // factors.
   constexpr uint32_t tallWidth = 48;
   checkAbove(
-      {tallWidth, 2 * bd::MAX_MODEL_HEIGHT}, {minSide, bd::MAX_MODEL_HEIGHT});
+      {tallWidth, 2 * bd::MAX_MODEL_WIDTH}, {minSide, bd::MAX_MODEL_WIDTH});
 }
 
 // An index outside the rpe table would make GPU get_rows read past it, and the

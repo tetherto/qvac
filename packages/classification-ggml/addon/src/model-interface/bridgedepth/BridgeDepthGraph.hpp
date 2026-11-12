@@ -44,6 +44,18 @@ struct ResourceError : std::runtime_error {
   using std::runtime_error::runtime_error;
 };
 
+// Host memory the caller holds around infer(), by phase, for measure().
+struct CallerHostBytes {
+  // Held through every phase of the job, such as the input buffers.
+  uint64_t jobBytes = 0;
+  // Before the run: decoding the views and building the planar ones.
+  uint64_t prepareBytes = 0;
+  // After the run, while the returned disparity is still held.
+  uint64_t afterRunBytes = 0;
+  // After the returned disparity is freed, such as the output handed to JS.
+  uint64_t outputBytes = 0;
+};
+
 class BridgeDepthGraph {
 public:
   // `device` and `cpu` stay owned by the caller and must outlive the graph;
@@ -68,9 +80,8 @@ public:
 
   // Mode::Measure only. The buffers the load plus one infer() of an h x w
   // pair on a fresh graph would allocate, sized from the same graph infer()
-  // builds. `afterRunHostBytes` is host memory the caller allocates after the
-  // run while it still holds the returned disparity, a phase of its own.
-  MeasuredBuffers measure(int h, int w, uint64_t afterRunHostBytes = 0);
+  // builds, with `caller` added to the host phases it falls in.
+  MeasuredBuffers measure(int h, int w, const CallerHostBytes& caller = {});
   // The buffers held after the last infer(). The scheduler buffers only grow,
   // so after several sizes this is the largest need of each buffer.
   [[nodiscard]] BufferFootprint allocatedBuffers() const;

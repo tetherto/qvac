@@ -134,6 +134,11 @@ void resizeBilinear(
 }
 
 constexpr size_t RGB_CHANNELS = 3;
+// Peak bytes per pixel while stb_image decodes one view to 8-bit RGB: a 16-bit
+// RGBA PNG holds its inflated rows (8 B/px) and its 16-bit output (8 B/px) at
+// once in stbi__parse_png_file. JPEG and 8-bit PNG peak at 6 B/px, stb's
+// result plus the copy decodeToRgb makes.
+constexpr uint64_t DECODE_PEAK_BYTES_PER_PIXEL = 16;
 
 // The resize helpers are exported, so a caller passing a buffer that does not
 // match its stated size gets an error instead of an out-of-bounds read.
@@ -148,19 +153,24 @@ void checkLength(size_t actual, size_t expected, const char* what) {
 } // namespace
 
 ImageSize modelInputSize(uint32_t width, uint32_t height) {
-  if (width <= MAX_MODEL_WIDTH && height <= MAX_MODEL_HEIGHT)
+  // The box follows the pair's orientation: a portrait pair fits inside
+  // 720x1280.
+  const bool portrait = height > width;
+  const uint64_t boxW = portrait ? MAX_MODEL_HEIGHT : MAX_MODEL_WIDTH;
+  const uint64_t boxH = portrait ? MAX_MODEL_WIDTH : MAX_MODEL_HEIGHT;
+  if (width <= boxW && height <= boxH)
     return {width, height};
   // Integer arithmetic so the limited side lands exactly on the box edge and
   // the other is rounded to the nearest pixel.
   const uint64_t w = width;
   const uint64_t h = height;
   ImageSize size;
-  if (w * MAX_MODEL_HEIGHT >= h * MAX_MODEL_WIDTH) {
-    size.width = MAX_MODEL_WIDTH;
-    size.height = static_cast<uint32_t>((h * MAX_MODEL_WIDTH + w / 2) / w);
+  if (w * boxH >= h * boxW) {
+    size.width = static_cast<uint32_t>(boxW);
+    size.height = static_cast<uint32_t>((h * boxW + w / 2) / w);
   } else {
-    size.height = MAX_MODEL_HEIGHT;
-    size.width = static_cast<uint32_t>((w * MAX_MODEL_HEIGHT + h / 2) / h);
+    size.height = static_cast<uint32_t>(boxH);
+    size.width = static_cast<uint32_t>((w * boxH + h / 2) / h);
   }
   const auto minSide = static_cast<uint32_t>(MIN_SIDE);
   size.width = std::max(size.width, minSide);
@@ -294,22 +304,39 @@ void BridgeDepthModel::load() {
   impl_ = open(config_, false);
 }
 
+CallerHostBytes callerHostBytes(uint32_t width, uint32_t height) {
+  const ImageSize model = modelInputSize(width, height);
+  const uint64_t inputPixels = static_cast<uint64_t>(width) * height;
+  const uint64_t modelPixels =
+      static_cast<uint64_t>(model.width) * model.height;
+  const uint64_t planarViewBytes = RGB_CHANNELS * modelPixels * sizeof(float);
+  const uint64_t inputDisparityBytes = inputPixels * sizeof(float);
+  // The input kind is not known here, so each phase takes the largest kind.
+  CallerHostBytes caller;
+  // Both views copied from JS for the whole job, as raw RGB. JPEG and 8-bit
+  // PNG inputs are smaller; a PNG larger than its raw RGB is not covered.
+  caller.jobBytes = 2 * RGB_CHANNELS * inputPixels;
+  // The right view decodes while the left planar view is held, one view at a
+  // time.
+  caller.prepareBytes =
+      DECODE_PEAK_BYTES_PER_PIXEL * inputPixels + planarViewBytes;
+  // The resize back holds the input-size disparity next to the model-size one.
+  caller.afterRunBytes =
+      model == ImageSize{width, height} ? 0 : inputDisparityBytes;
+  // The JS output handler copies the disparity into a Float32Array.
+  caller.outputBytes = 2 * inputDisparityBytes;
+  return caller;
+}
+
 MeasuredBuffers BridgeDepthModel::measure(
     const Config& config, uint32_t width, uint32_t height) {
   checkSize(width, height);
-  const ImageSize input{width, height};
   const ImageSize model = modelInputSize(width, height);
-  // A downsampled run resizes the disparity back to the input after the graph
-  // run, while the model-size disparity is still held.
-  const uint64_t resizedOutputBytes =
-      model == input ? 0
-                     : static_cast<uint64_t>(width) * height * sizeof(float);
+  const CallerHostBytes caller = callerHostBytes(width, height);
   const auto state = open(config, true);
   try {
     MeasuredBuffers result = state->graph->measure(
-        static_cast<int>(model.height),
-        static_cast<int>(model.width),
-        resizedOutputBytes);
+        static_cast<int>(model.height), static_cast<int>(model.width), caller);
     result.deviceName = deviceName(state->backends->device());
     result.deviceIsCpu = state->backends->device() == state->backends->cpu();
     return result;
