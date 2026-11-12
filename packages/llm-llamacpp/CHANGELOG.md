@@ -6,8 +6,10 @@
 
 - The XDNA NPU note describes `@qvac/fabric` 0.29: a model outside the fused
   decode layers' weight set loads and decodes on the host CPU, instead of
-  failing at the first decode. It also names the `attn_qkv`, `attn_gate` and
-  `attn_output` types that still fail there
+  failing at the first decode. It also notes that on 0.29.0 and 0.29.1 an
+  `attn_qkv`, `attn_gate` or `attn_output` outside `Q4_K`/`Q5_K`/`Q6_K` still
+  fails at the first decode, until
+  [qvac-fabric-llm.cpp#530](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/530)
   ([#5640](https://github.com/tetherto/qvac/pull/5640)).
 
 ## [0.70.1] - 2026-11-11
