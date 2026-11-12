@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `qvac-lib-inference-addon-cpp` dependency floor raised `1.5.0` -> `1.6.0`.
-  In 1.6.0 a runtime stat value is
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.5.0` -> `1.6.0`
+  ([#5728](https://github.com/tetherto/qvac/pull/5728)). In 1.6.0 a runtime stat value is
   `RuntimeStatValue = std::variant<double, int64_t, std::string>`, so
   `TranslationModel::runtimeStats()` and the C++ tests now build their stats
   with `RuntimeStatValue` instead of `std::variant<double, int64_t>`.
