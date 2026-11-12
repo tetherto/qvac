@@ -9,6 +9,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-11-12
+
 ### Changed
 
 - BridgeDepth downsamples a pair larger than 1280x720, or 720x1280 for a
