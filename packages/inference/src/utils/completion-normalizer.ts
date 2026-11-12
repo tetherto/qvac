@@ -250,6 +250,12 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     events.push({ type: 'toolCall', seq: nextSeq(), call })
   }
 
+  // A made call waits behind earlier undecided ones so the order is kept.
+  function emitMadeCall(events: CompletionEvent[], call: ToolCall) {
+    if (deferredCalls.length > 0) deferredCalls.push({ call, made: true })
+    else emitStreamedToolCall(events, call)
+  }
+
   function emitFinalToolCall(events: CompletionEvent[], call: ToolCall) {
     const key = getToolCallKey(call)
     if (streamedToolCallKeys.has(key)) return
@@ -343,7 +349,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
       }
     }
 
-    for (const call of toolCalls) emitStreamedToolCall(events, call)
+    for (const call of toolCalls) emitMadeCall(events, call)
 
     if (toolCalls.length === 0) {
       if (errors.length > 0) {
@@ -443,14 +449,10 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     state = 'content'
   }
 
-  // A made call waits behind earlier undecided ones so the order is kept.
   function releaseHeldCalls(events: CompletionEvent[]) {
     const held = heldThinkingCalls
     heldThinkingCalls = null
-    for (const call of held?.calls ?? []) {
-      if (deferredCalls.length > 0) deferredCalls.push({ call, made: true })
-      else emitStreamedToolCall(events, call)
-    }
+    for (const call of held?.calls ?? []) emitMadeCall(events, call)
   }
 
   // A held call was made if the turn ends, `</think>` closes the block, or

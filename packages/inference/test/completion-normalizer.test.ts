@@ -1383,6 +1383,19 @@ test('open <think>: calls left in a block that never closes keep their order and
   }
 })
 
+test('open <think>: a call recovered from an unclosed frame keeps its place after earlier ones', (t) => {
+  const hermes = (city: string) =>
+    `<tool_call>\n{"name": "get_weather", "arguments": {"city": "${city}"}}`
+  const raw = `<think>\n${hermes('Paris')}\n</tool_call>\nAnd one more.\n${hermes('Rome')}`
+  for (const size of [raw.length, 3, 1]) {
+    const n = createCompletionNormalizer(qwenThinkingConfig({ toolDialect: 'hermes' }))
+    const events = [...pushAll(n, chunksOf(raw, size)), ...n.finish({ stopReason: 'eos' })]
+    const made = events.flatMap((e) => (e.type === 'toolCall' ? [e.call.arguments['city']] : []))
+
+    t.alike(made, ['Paris', 'Rome'], `chunk ${size}`)
+  }
+})
+
 test('open <think>: a call made after a quoted one is kept when the block closes', (t) => {
   const rome = QWEN_CALL.replace('Paris', 'Rome')
   const raw = `<think>\nNot ${QWEN_CALL} but this.\n${rome}\n</think>\n\n`
