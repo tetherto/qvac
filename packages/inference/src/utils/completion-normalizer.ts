@@ -685,8 +685,10 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     drainTails(events)
     closeOpenFrames(events, failed)
     settleHeldCalls(events, failed)
-    // The block never closed, so every call left in it was made.
-    const leftInBlock = failed ? [] : deferredCalls
+    // The block never closed, so every call left in it was made. A cancelled
+    // turn says nothing about the ones the model had not confirmed.
+    const cancelled = opts?.stopReason === 'cancelled'
+    const leftInBlock = failed ? [] : deferredCalls.filter((d) => d.made || !cancelled)
     deferredCalls = []
     for (const { call } of leftInBlock) emitStreamedToolCall(events, call)
     if (activeThinkingFrame === BUILTIN_THINKING && naturalStop && !failed) {

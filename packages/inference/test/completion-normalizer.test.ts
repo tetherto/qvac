@@ -1395,6 +1395,24 @@ test('open <think>: a call made after a quoted one is kept when the block closes
   }
 })
 
+test('open <think>: a call followed by more reasoning is not made when the turn is cancelled', (t) => {
+  const rome = QWEN_CALL.replace('Paris', 'Rome')
+  const quoted = `<think>\nI'd use ${QWEN_CALL} once I know the city.`
+  for (const [raw, expected] of [
+    [quoted, []],
+    [`${quoted}\n${rome}`, ['Rome']]
+  ] as const) {
+    for (const size of [raw.length, 3, 1]) {
+      const n = createCompletionNormalizer(qwenThinkingConfig())
+      const events = [...pushAll(n, chunksOf(raw, size)), ...n.finish({ stopReason: 'cancelled' })]
+      const made = events.flatMap((e) => (e.type === 'toolCall' ? [e.call.arguments['city']] : []))
+
+      t.alike(made, expected, `chunk ${size}`)
+      t.is(joined(events, 'contentDelta'), '', `chunk ${size}: no content`)
+    }
+  }
+})
+
 test('open <think>: a mentioned <tool_call> stays reasoning', (t) => {
   const closed = '<think>\nI could emit a <tool_call> here, but no.\n</think>\n\nHello.'
   const unparsed = '<think>\nSyntax is <tool_call>name</tool_call>, noted.\n</think>\n\nHello.'
