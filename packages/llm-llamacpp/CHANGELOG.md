@@ -84,6 +84,15 @@ Loads with `parallel >= 2` change as follows:
 
 ## [0.72.1] - 2026-11-23
 
+### Added
+
+- Runtime stats report `backendName`, the lowercase backend family the
+  primary model runs on after backend selection and fitting, such as `cpu`,
+  `cuda`, `vulkan` or `metal`. A model split across families reports them
+  sorted and comma-separated, such as `cuda,vulkan`. The stat is absent when
+  the family cannot be identified
+  ([#5500](https://github.com/tetherto/qvac/pull/5500)).
+
 ### Changed
 
 - `image-max-megapixels` is also passed to fabric's mtmd-helper, which checks it
@@ -92,6 +101,9 @@ Loads with `parallel >= 2` change as follows:
   the prompt is processed stays, so an oversized image is still rejected before
   the session cache changes, and formats stb_image cannot read (WebP, video) are
   still rejected rather than handed to ffmpeg.
+- The addon requires `qvac-lib-inference-addon-cpp` 1.6.0 or newer, whose
+  runtime stats can carry string values
+  ([#5500](https://github.com/tetherto/qvac/pull/5500)).
 
 ### Fixed
 
