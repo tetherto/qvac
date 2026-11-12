@@ -691,6 +691,59 @@ TEST(MultiRequestBatcherCapacityTest, EvenSplitNeverExceedsRemainingToFeed) {
   }
 }
 
+TEST(MultiRequestBatcherStepLimitsTest, CapsEachSlotAndTheStep) {
+  MultiRequestBatcher batcher(8, 100, 3);
+  LlamaBatch batch(24, 0, 3);
+  uint32_t a = 0, b = 0, c = 0;
+  ASSERT_EQ(
+      batcher.addRequest({1, 2, 3, 4, 5, 6}, a),
+      MultiRequestBatcher::AddStatus::Ok);
+  ASSERT_EQ(
+      batcher.addRequest({1, 2, 3, 4, 5, 6}, b),
+      MultiRequestBatcher::AddStatus::Ok);
+  ASSERT_EQ(
+      batcher.addRequest({1, 2, 3, 4, 5, 6}, c),
+      MultiRequestBatcher::AddStatus::Ok);
+
+  const MultiRequestBatcher::StepLimits limits{
+      .perSeq = {3, 0, 6}, .total = 5};
+  const auto result = batcher.fillBatch(batch, &limits);
+
+  EXPECT_EQ(result.numActiveSequences, 2u);
+  EXPECT_LE(batcher.chunkSizeFor(a), 3u);
+  EXPECT_EQ(batcher.chunkSizeFor(b), 0u);
+  EXPECT_GT(batcher.chunkSizeFor(c), 0u);
+  EXPECT_LE(result.totalTokens, 5u);
+  batcher.advance();
+  EXPECT_EQ(batcher.requestAt(b)->prefillFedCount, 0u);
+}
+
+TEST(MultiRequestBatcherStepLimitsTest, PausedReplyKeepsItsSample) {
+  MultiRequestBatcher batcher(8, 100, 1);
+  LlamaBatch batch(8, 0, 1);
+  uint32_t seqId = 0;
+  ASSERT_EQ(
+      batcher.addRequest({10, 20}, seqId), MultiRequestBatcher::AddStatus::Ok);
+  ASSERT_EQ(batcher.fillBatch(batch).totalTokens, 2u);
+  batcher.advance();
+  batcher.sampleAndAppendIdle([](uint32_t, int) { return 30; });
+
+  const MultiRequestBatcher::StepLimits paused{.perSeq = {0}, .total = 8};
+  EXPECT_EQ(batcher.fillBatch(batch, &paused).totalTokens, 0u);
+  batcher.advance();
+  int sampled = 0;
+  batcher.sampleAndAppendIdle([&sampled](uint32_t, int) {
+    sampled++;
+    return 40;
+  });
+  EXPECT_EQ(sampled, 0);
+  EXPECT_EQ(batcher.requestAt(seqId)->currentPos, 2);
+
+  ASSERT_EQ(batcher.fillBatch(batch).totalTokens, 1u);
+  EXPECT_EQ((*batch).token[0], 30);
+  EXPECT_EQ((*batch).pos[0], 2);
+}
+
 /// Committing a step is one-shot. A second advance() with no fillBatch()
 /// between must not replay the budgets: that would run currentPos ahead of
 /// the KV cache with nothing decoded, and nothing downstream would notice.

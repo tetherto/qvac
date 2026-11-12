@@ -1,6 +1,7 @@
 #include "MultiRequestBatcher.hpp"
 
 #include <algorithm>
+#include <limits>
 #include <ranges>
 
 namespace qvac_lib_inference_addon_llama::batching {
@@ -222,8 +223,13 @@ std::optional<uint32_t> MultiRequestBatcher::firstFreeSeqId() const {
 }
 
 MultiRequestBatcher::FillResult
-MultiRequestBatcher::planChunksForActiveSeqs(const LlamaBatch& batch) {
+MultiRequestBatcher::planChunksForActiveSeqs(
+    const LlamaBatch& batch, const StepLimits* limits) {
   std::ranges::fill(chunkSizes_, 0u);
+  const auto capFor = [limits](uint32_t seqId) {
+    return limits != nullptr ? limits->perSeq[seqId]
+                             : std::numeric_limits<unsigned>::max();
+  };
 
   // Reused across steps (capacity reserved once in the ctor) so the planner
   // does not allocate on the per-decode-step hot path.
@@ -232,6 +238,9 @@ MultiRequestBatcher::planChunksForActiveSeqs(const LlamaBatch& batch) {
   unsigned numPrefilling = 0;
   for (const auto& slot :
        slots_ | views::filter(Request::isOptHasTokensToFeed)) {
+    if (capFor(slot->seqId) == 0) {
+      continue;
+    }
     numActive++;
     if (slot->isPrefillPending()) {
       numPrefilling++;
@@ -245,7 +254,10 @@ MultiRequestBatcher::planChunksForActiveSeqs(const LlamaBatch& batch) {
   // LlamaBatch has a total capacity (for all sequences), make sure we do not
   // exceed it and cause a crash. Every active slot must get at least one
   // token or none does: a partial step would starve an arbitrary subset.
-  const auto capacity = static_cast<unsigned>(batch.capacity());
+  auto capacity = static_cast<unsigned>(batch.capacity());
+  if (limits != nullptr) {
+    capacity = std::min(capacity, limits->total);
+  }
   if (capacity < numActive) {
     return {
         .numActiveSequences = numActive,
@@ -285,8 +297,8 @@ MultiRequestBatcher::planChunksForActiveSeqs(const LlamaBatch& batch) {
     // the current index, which is not advanced.
     for (size_t i = 0; i < unbudgeted_.size();) {
       const uint32_t seqId = unbudgeted_[i];
-      const unsigned want =
-          std::min(maxChunkSize_, slots_[seqId]->remainingToFeed());
+      const unsigned want = std::min(
+          {maxChunkSize_, slots_[seqId]->remainingToFeed(), capFor(seqId)});
       if (want > share) {
         i++;
         continue;
@@ -322,13 +334,13 @@ MultiRequestBatcher::planChunksForActiveSeqs(const LlamaBatch& batch) {
 }
 
 MultiRequestBatcher::FillResult
-MultiRequestBatcher::fillBatch(LlamaBatch& batch) {
+MultiRequestBatcher::fillBatch(LlamaBatch& batch, const StepLimits* limits) {
   llama_batch& lBatch = *batch;
   lBatch.n_tokens = 0;
 
   std::ranges::fill(lastLogitIndices_, -1);
 
-  FillResult bState = planChunksForActiveSeqs(batch);
+  FillResult bState = planChunksForActiveSeqs(batch, limits);
   // A draft is fed whole or not at all: verification needs the sample and
   // every draft token. A slot granted less keeps only its sample.
   std::fill(draftDropped_.begin(), draftDropped_.end(), false);

@@ -223,12 +223,22 @@ public:
     unsigned decodeTokens = 0;
   };
 
+  /// Caps for one step, for a KV pool the slots share: a slot capped at 0
+  /// sits the step out with its state as it is.
+  struct StepLimits {
+    /// Indexed by seqId.
+    std::vector<unsigned> perSeq;
+    unsigned total = 0;
+  };
+
   /// Fill batch with tokens from active slots. Never writes past
-  /// `batch.capacity()`; if the batch cannot hold at least one token per
-  /// active sequence, returns `totalTokens == 0` and leaves the batch empty.
-  /// Side effect: refreshes the per-slot chunk budgets consumed by advance()
-  /// and the logit-index bookkeeping consumed by sampleAndAppendIdle().
-  [[nodiscard]] FillResult fillBatch(LlamaBatch& batch);
+  /// `batch.capacity()` or `limits`; if the batch cannot hold at least one
+  /// token per active sequence, returns `totalTokens == 0` and leaves the
+  /// batch empty. Side effect: refreshes the per-slot chunk budgets consumed
+  /// by advance() and the logit-index bookkeeping consumed by
+  /// sampleAndAppendIdle().
+  [[nodiscard]] FillResult
+  fillBatch(LlamaBatch& batch, const StepLimits* limits = nullptr);
 
   /// Tokens fed to `seqId` by the most recent fillBatch(); 0 if none.
   /// Valid until the next fillBatch(), whose planChunksForActiveSeqs()
@@ -333,7 +343,8 @@ private:
 
   /// Assign each active slot its own chunk for this step and report the
   /// totals. Writes `chunkSizes_`.
-  [[nodiscard]] FillResult planChunksForActiveSeqs(const LlamaBatch& batch);
+  [[nodiscard]] FillResult
+  planChunksForActiveSeqs(const LlamaBatch& batch, const StepLimits* limits);
 };
 
 } // namespace qvac_lib_inference_addon_llama::batching
