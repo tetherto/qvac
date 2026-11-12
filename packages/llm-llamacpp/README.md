@@ -89,10 +89,20 @@ process can read and write its `/dev/accel` node; otherwise fabric logs that it 
   (RPC devices do not count). With no GPU it runs on the CPU; it is untested on the NPU.
   `mmproj-use-gpu: false` keeps it on the CPU, and `mmproj-use-gpu: true` on a host with no GPU
   moves it to the NPU.
-- The backend is built around Qwen3.5. A model whose `ssm_out` quantization the fused decode
-  layer does not cover, such as Qwen's own Qwen3.5-0.8B `Q4_K_M` GGUF with `Q8_0` `ssm_out`, fails at
-  the first decode with `unsupported fused weight set` instead of falling back. Requantize
-  `ssm_out` or use another backend.
+- The backend is built around Qwen3.5. Its fused decode layers take `Q4_K` FFN gate and up,
+  `Q4_K`/`Q6_K` FFN down and, with the shipped kernels, `Q5_K`/`Q6_K` `ssm_out`. A model with
+  other types there, such as Qwen's own Qwen3.5-0.8B `Q4_K_M` GGUF with `Q8_0` `ssm_out`, still
+  loads: fabric logs one warning naming the weight, and the decode runs on the host CPU while
+  the prefill keeps the NPU. Requantize those weights to keep the decode on the NPU.
+- With `@qvac/fabric` 0.29.0 and 0.29.1, a model whose FFN and `ssm_out` are in that set still
+  fails at the first decode when a recurrent layer's `attn_qkv` or `attn_gate` is not `Q4_K`,
+  `Q5_K` or `Q6_K` (`the in-projection (...) does not split into the core's inputs`), or an
+  attention layer's `attn_output` is not (`attention tail N: cannot build it`). Requantizing
+  those weights is the fix. `GGML_XDNA_ATTN_TAIL=0` avoids the second and keeps the recurrent
+  layers fused; `GGML_XDNA_FUSED_LAYER=0` avoids both, but decodes per op, slower and at more
+  energy a token than either the fused layers or the host decode.
+  [qvac-fabric-llm.cpp#530](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/530) sends
+  such a model to the host decode instead.
 - Keep flash attention on (the default) and the KV cache at `f16` (the default on XDNA); the
   NPU's attention kernels need both. `poll: 0` (the default) stops the threadpool busy-waiting
   while the NPU works.
