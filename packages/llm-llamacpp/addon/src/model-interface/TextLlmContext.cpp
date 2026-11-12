@@ -908,15 +908,10 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
       break;
     }
 
+    // `onLogitsReady` already streamed this token, so it is decoded even when
+    // a cancel landed meanwhile: a cancel keeps everything the caller
+    // received. The loop-top check then routes the cancel to `onCancel`.
     llamaBatchClear(*batch);
-    if (stopGeneration_.load()) {
-      // Route through the post-loop `onCancel` instead of injecting
-      // EOT — EOT would advance `nPast_` past the rollback target.
-      //
-      // `onLogitsReady` already streamed this token, so the caller saw it.
-      ++lastGeneratedTokenCount_;
-      break;
-    }
     llamaBatchAdd(*batch, step.token, nPast_, {seqId_}, true);
 
     // NOLINT(clang-analyzer-core.CallAndMessage)
@@ -986,15 +981,12 @@ void TextLlmContext::generateSpeculative(
   llama_token sampled = step.token;
 
   while (true) {
-    if (stopGeneration_.load()) {
-      // Like the plain loop: `sampled` was streamed, so the caller saw it.
-      ++lastGeneratedTokenCount_;
-      return;
-    }
-    if (params_.n_predict > 0 &&
-        generatedAfterAccept >= static_cast<unsigned>(params_.n_predict)) {
-      // The plain loop decodes the token it stops on for the prediction
-      // budget, so the sequence and the ledger hold it.
+    if (stopGeneration_.load() ||
+        (params_.n_predict > 0 &&
+         generatedAfterAccept >= static_cast<unsigned>(params_.n_predict))) {
+      // `sampled` was streamed, so a cancel or the prediction budget stops
+      // after decoding it, like the plain loop: the sequence and the ledger
+      // hold every token the caller received.
       llamaBatchClear(*batch);
       llamaBatchAdd(*batch, sampled, nPast_, {seqId_}, false);
       if (llama_decode(modelCtx_.lctx, *batch) != 0) {
