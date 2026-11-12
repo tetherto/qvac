@@ -107,7 +107,12 @@ async function validateCachedFile(
 ): Promise<string | null> {
   try {
     await fsPromises.access(modelPath)
+  } catch {
+    await assertPartialCanResume(modelPath, url, requireSecureTransport, signal)
+    return null
+  }
 
+  try {
     const localStats = await fsPromises.stat(modelPath)
     const localSize = localStats.size
 
@@ -164,6 +169,36 @@ async function validateCachedFile(
       throw error
     }
     return null
+  }
+}
+
+// Only the `.part` of an interrupted download is on disk. Resuming it needs the
+// network, so offline this fails as an offline partial instead of retrying.
+async function assertPartialCanResume(
+  modelPath: string,
+  url: string,
+  requireSecureTransport: boolean,
+  signal?: AbortSignal
+): Promise<void> {
+  const partialSize = await fsPromises.stat(partialDownloadPath(modelPath)).then(
+    (stats) => stats.size,
+    () => 0
+  )
+  if (partialSize === 0) return
+  try {
+    const response = await safeFetch(url, {
+      method: 'HEAD',
+      timeoutMs: getConfig().httpConnectionTimeoutMs ?? DEFAULT_HTTP_CONNECTION_TIMEOUT_MS,
+      enforceSecureTransport: shouldEnforceSecureTransport(url, requireSecureTransport),
+      ...(signal && { signal })
+    })
+    response.body.resume()
+  } catch (error) {
+    if (signal?.aborted || error instanceof InsecureModelSourceError) throw error
+    logger.error(
+      `❌ Offline with partial download (${partialSize} bytes). Cannot resume without network.`
+    )
+    throw new PartialDownloadOfflineError(url, partialSize)
   }
 }
 

@@ -8,7 +8,8 @@ import {
   ChecksumUnavailableError,
   ChecksumValidationFailedError,
   HTTPError,
-  InsecureModelSourceError
+  InsecureModelSourceError,
+  PartialDownloadOfflineError
 } from '@/errors/index'
 import { useTestCacheDir } from './fixtures/test-cache'
 
@@ -110,6 +111,35 @@ test('downloadModelFromHttp: resumes a partial download via a Range/206 request'
     'resumed file is complete and correct'
   )
   t.absent(fs.existsSync(partialDownloadPath(modelPath)), 'the partial file was moved into place')
+})
+
+test('downloadModelFromHttp: offline with only a partial download fails as an offline partial', async (t) => {
+  const cacheDir = useTestCacheDir()
+  fs.rmSync(cacheDir, { recursive: true, force: true })
+  t.teardown(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
+
+  const server = await startServer()
+  const url = `${server.base}/offline-model.gguf`
+  const modelPath = await downloadModelFromHttp(url)
+  await server.close()
+
+  // An interrupted download left only its partial, and the server is gone.
+  fs.rmSync(modelPath)
+  const partial = CONTENT.subarray(0, CONTENT.length / 2)
+  fs.writeFileSync(partialDownloadPath(modelPath), partial)
+
+  let error: unknown
+  try {
+    await downloadModelFromHttp(url)
+  } catch (caught) {
+    error = caught
+  }
+  t.ok(error instanceof PartialDownloadOfflineError, 'fails as an offline partial download')
+  t.is(
+    fs.statSync(partialDownloadPath(modelPath)).size,
+    partial.length,
+    'the partial is kept for a later resume'
+  )
 })
 
 test('downloadModelFromHttp: replaces an incomplete file at the model path instead of appending', async (t) => {
