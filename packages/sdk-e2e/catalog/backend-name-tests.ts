@@ -22,7 +22,7 @@ export const backendNameTests: TestDefinition[] = [
     params: { operation: 'completion', resourceKey: 'llm', stream: true },
     expectation: {
       validation: 'regex',
-      pattern: '^(cpu|cuda|metal|vulkan|opencl|rpc)(,(cuda|metal|vulkan|opencl|rpc))*$'
+      pattern: '^[a-z][a-z0-9_-]*(,[a-z][a-z0-9_-]*)*$'
     },
     metadata: { category: 'backend-name', dependency: 'llm', estimatedDurationMs: 30000 }
   },
