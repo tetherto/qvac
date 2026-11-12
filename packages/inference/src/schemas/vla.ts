@@ -229,7 +229,7 @@ export const vlaStatsSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Selected backend name, matching vlaHparams().backendName. Optional with older addons.'
+      'Lowercase backend family the model runs on after fallback, such as "cpu", "metal", or "cuda". Differs from vlaHparams().backendName, which keeps the raw ggml label such as "MTL0" or "CUDA0". Optional with older addons.'
     )
 })
 

@@ -53,7 +53,7 @@ You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible
 
 ## Backend reporting
 
-Read `backendName` from `await run.stats`, `final.stats`, or a `completionStats` event. It identifies the backend used by the primary model after loading and fitting, such as `"cpu"`, `"cuda"`, `"vulkan"`, `"metal"`, or `"opencl"`. `backendDevice` remains `"cpu"` or `"gpu"`. The reported backend can differ from the requested `modelConfig.backend` priority list after fallback.
+Read `backendName` from `await run.stats`, `final.stats`, or a `completionStats` event. It identifies the backend used by the primary model after loading and fitting, such as `"cpu"`, `"cuda"`, `"vulkan"`, `"metal"`, or `"opencl"`. `backendDevice` keeps reporting the device class: `"cpu"`, `"gpu"`, or `"npu"`. The reported backend can differ from the requested `modelConfig.backend` priority list after fallback.
 
 ```ts
 const run = completion({
