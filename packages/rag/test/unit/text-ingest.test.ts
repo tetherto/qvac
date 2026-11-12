@@ -8,8 +8,8 @@ import { ERR_CODES, computeSpaceId, createRag } from '../../src/index.js'
 import { EMBED_BATCH_SIZE } from '../../src/embeddings.js'
 import { decodeVectorInto } from '../../src/db/encoding.js'
 import { CHUNKS, DOCUMENTS, type ChunkRecord, type DocumentRecord } from '../../src/db/records.js'
-import { SPACE, inspect, rejectsWithCode, type Test } from './helpers.js'
-import type { EmbeddingSpace, EmbeddingsPort, IngestProgress, Rag } from '../../src/types.js'
+import { SPACE, fakePort, inspect, rejectsWithCode, type Test } from './helpers.js'
+import type { EmbeddingsPort, IngestProgress, Rag } from '../../src/types.js'
 import type { Corestore as Store } from '../../src/db/db-types.js'
 
 function abortedSignal(): AbortSignal {
@@ -19,44 +19,6 @@ function abortedSignal(): AbortSignal {
 }
 
 const ALL_NS = { gte: { namespace: 'ns' }, lte: { namespace: 'ns' } }
-const WORDS = ['cat', 'dog', 'fish']
-
-// One dimension per keyword, so a query ranks the chunks that mention it.
-function embed(text: string): number[] {
-  const lower = text.toLowerCase()
-  return WORDS.map((word) => (lower.includes(word) ? 1 : 0))
-}
-
-interface FakePort extends EmbeddingsPort {
-  batches: string[][]
-  queries: string[]
-}
-
-function fakePort(
-  space: EmbeddingSpace = SPACE,
-  onBatch?: (batch: number, signal?: AbortSignal) => void
-): FakePort {
-  const port: FakePort = {
-    space,
-    batches: [],
-    queries: [],
-    embedDocuments(texts, options) {
-      port.batches.push(texts)
-      try {
-        onBatch?.(port.batches.length, options?.signal)
-      } catch (error) {
-        return Promise.reject(error)
-      }
-      return Promise.resolve(Float32Array.from(texts.flatMap(embed)))
-    },
-    embedQuery(text) {
-      port.queries.push(text)
-      return Promise.resolve(Float32Array.from(embed(text)))
-    }
-  }
-  return port
-}
-
 async function openWithPort(
   t: Test,
   port?: EmbeddingsPort
@@ -105,8 +67,8 @@ test('text documents are chunked with rag-extract defaults and embedded through 
   })
   t.alike(result, {
     documents: [
-      { id: 'long', generation: 1, chunkCount: expected.length },
-      { id: 'short', generation: 1, chunkCount: 1 }
+      { id: 'long', generation: 1, chunkCount: expected.length, status: 'created' },
+      { id: 'short', generation: 1, chunkCount: 1, status: 'created' }
     ],
     skipped: [],
     cancelled: false,
@@ -453,7 +415,7 @@ test('aborting mid-ingest keeps committed documents and reports the skipped ones
     { signal: controller.signal as AbortSignal }
   )
   t.alike(result, {
-    documents: [{ id: 'a', generation: 1, chunkCount: EMBED_BATCH_SIZE }],
+    documents: [{ id: 'a', generation: 1, chunkCount: EMBED_BATCH_SIZE, status: 'created' }],
     skipped: ['b', 'c'],
     cancelled: true,
     revision: before.revision + 1

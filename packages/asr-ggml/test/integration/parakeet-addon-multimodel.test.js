@@ -25,9 +25,9 @@ function loadAudioSample(filename = 'sample.raw') {
   return audio
 }
 
-async function transcribe(model, audio) {
+async function transcribe(model, audio, options) {
   const segments = []
-  const response = await model.run(audio)
+  const response = await model.run(audio, options)
   await response
     .onUpdate((out) => {
       const items = Array.isArray(out) ? out : [out]
@@ -237,6 +237,50 @@ test(
     } finally {
       await model.unload()
     }
+  }
+)
+
+test(
+  'Sortformer exposes owned probability matrices only when requested',
+  { timeout: 600000 },
+  async (t) => {
+    const modelPath = await loadGgufOrSkip(t, 'sortformer')
+    if (!modelPath) return
+    const audio = loadAudioSample()
+    t.ok(audio, 'the staged audio fixture is available')
+    if (!audio) return
+    const model = new ASRGgml({
+      files: { model: modelPath },
+      config: { engine: 'parakeet', parakeetConfig: { backend: 'cpu', maxThreads: 4 } }
+    })
+    let matrix
+    let retained
+    try {
+      await model.load()
+      for (const value of [null, 1, 'true', {}]) {
+        await t.exception(model.run(audio, { includeSpeakerProbabilities: value }), /boolean/)
+      }
+      const withMatrix = await transcribe(model, audio, { includeSpeakerProbabilities: true })
+      t.is(withMatrix.length, 1, 'diarization returns one matrix with its speaker spans')
+      matrix = withMatrix[0].speakerProbabilities
+      t.ok(matrix, 'the option reaches native diarization')
+      t.ok(matrix.values instanceof Float32Array, 'native values are copied into a Float32Array')
+      t.ok(Number.isInteger(matrix.frames) && matrix.frames > 0)
+      t.is(matrix.speakers, 4)
+      t.ok(matrix.frameStrideSeconds > 0)
+      t.is(matrix.values.length, matrix.frames * matrix.speakers)
+      t.ok(matrix.values.every((value) => Number.isFinite(value) && value >= 0 && value <= 1))
+      retained = matrix.values.slice()
+      for (const options of [{ includeSpeakerProbabilities: false }, undefined]) {
+        const compact = await transcribe(model, audio, options)
+        t.is(compact.length, 1)
+        t.absent(compact[0].speakerProbabilities, 'false and omitted preserve compact output')
+        t.alike(matrix.values, retained, 'another request preserves the earlier matrix')
+      }
+    } finally {
+      await model.unload()
+    }
+    t.alike(matrix.values, retained, 'the JavaScript matrix survives native unload')
   }
 )
 

@@ -25,6 +25,8 @@ void check(bool condition, const std::string& message) {
     throw StatusError(InvalidArgument, "BridgeDepth: " + message);
 }
 
+} // namespace
+
 void checkSize(uint32_t width, uint32_t height) {
   check(
       width >= static_cast<uint32_t>(MIN_SIDE) &&
@@ -40,8 +42,6 @@ void checkSize(uint32_t width, uint32_t height) {
           "(width/8) after padding to a multiple of 16 must be at most " +
           std::to_string(MAX_GRID_CELLS) + " (1920x1080 fits)");
 }
-
-} // namespace
 
 int64_t gridCells(uint32_t width, uint32_t height) {
   const Padding pad = computePadding(
@@ -102,20 +102,22 @@ BridgeDepthModel::BridgeDepthModel(Config config)
     : config_(std::move(config)) {}
 BridgeDepthModel::~BridgeDepthModel() = default;
 
-void BridgeDepthModel::load() {
-  std::scoped_lock lock(mutex_);
-  if (impl_)
-    return;
-  check(!config_.modelPath.empty(), "modelPath is required");
+std::unique_ptr<BridgeDepthModel::Impl>
+BridgeDepthModel::open(const Config& config, bool measureOnly) {
+  check(!config.modelPath.empty(), "modelPath is required");
   check(
-      config_.threads > 0 && config_.threads <= 1024,
+      config.threads > 0 && config.threads <= 1024,
       "threads must be between 1 and 1024");
   auto state = std::make_unique<Impl>();
   state->backends = std::make_unique<GgmlBackends>(
-      config_.backend, config_.backendsDir, config_.threads, "BridgeDepth");
+      config.backend, config.backendsDir, config.threads, "BridgeDepth");
   try {
     state->graph = std::make_unique<BridgeDepthGraph>(
-        config_.modelPath, state->backends->device(), state->backends->cpu());
+        config.modelPath,
+        state->backends->device(),
+        state->backends->cpu(),
+        measureOnly ? BridgeDepthGraph::Mode::Measure
+                    : BridgeDepthGraph::Mode::Infer);
   } catch (const StatusError&) {
     throw;
   } catch (const ResourceError& error) {
@@ -123,7 +125,40 @@ void BridgeDepthModel::load() {
   } catch (const std::exception& error) {
     throw StatusError(InvalidArgument, error.what());
   }
-  impl_ = std::move(state);
+  return state;
+}
+
+void BridgeDepthModel::load() {
+  std::scoped_lock lock(mutex_);
+  if (impl_)
+    return;
+  impl_ = open(config_, false);
+}
+
+MeasuredBuffers BridgeDepthModel::measure(
+    const Config& config, uint32_t width, uint32_t height) {
+  checkSize(width, height);
+  const auto state = open(config, true);
+  try {
+    MeasuredBuffers result = state->graph->measure(
+        static_cast<int>(height), static_cast<int>(width));
+    result.deviceName = deviceName(state->backends->device());
+    result.deviceIsCpu = state->backends->device() == state->backends->cpu();
+    return result;
+  } catch (const StatusError&) {
+    throw;
+  } catch (const ResourceError& error) {
+    throw StatusError(InternalError, error.what());
+  } catch (const std::exception& error) {
+    throw StatusError(InvalidArgument, error.what());
+  }
+}
+
+BufferFootprint BridgeDepthModel::allocatedBuffers() const {
+  std::scoped_lock lock(mutex_);
+  if (!impl_)
+    throw StatusError(InternalError, "BridgeDepth is not loaded");
+  return impl_->graph->allocatedBuffers();
 }
 
 std::string BridgeDepthModel::getName() const { return "bridgedepth-ggml"; }

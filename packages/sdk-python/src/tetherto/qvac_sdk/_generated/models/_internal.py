@@ -899,8 +899,20 @@ class AudioEditStreamResponseStats(GeneratedBaseModel):
     audio_duration_ms: Annotated[float | None, Field(alias="audioDurationMs")] = None
     total_time_ms: Annotated[float | None, Field(alias="totalTimeMs")] = None
     real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
-    backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
-    backend_id: Annotated[float | None, Field(alias="backendId")] = None
+    backend_device: Annotated[
+        float | None,
+        Field(
+            alias="backendDevice",
+            description="The primary backend the run used: 0 CPU, 1 GPU. The device an ACE-Step `lmBackend` names is not reported here.",
+        ),
+    ] = None
+    backend_id: Annotated[
+        float | None,
+        Field(
+            alias="backendId",
+            description="The primary backend the run used, as the engine codes it: 0 CPU, 1 Metal, 2 CUDA, 3 Vulkan, 4 OpenCL, 99 other.",
+        ),
+    ] = None
     gpu_fallback_reason: Annotated[
         float | None,
         Field(
@@ -1607,8 +1619,20 @@ class AudioGenStreamResponseStats(GeneratedBaseModel):
     audio_duration_ms: Annotated[float | None, Field(alias="audioDurationMs")] = None
     total_time_ms: Annotated[float | None, Field(alias="totalTimeMs")] = None
     real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
-    backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
-    backend_id: Annotated[float | None, Field(alias="backendId")] = None
+    backend_device: Annotated[
+        float | None,
+        Field(
+            alias="backendDevice",
+            description="The primary backend the run used: 0 CPU, 1 GPU. The device an ACE-Step `lmBackend` names is not reported here.",
+        ),
+    ] = None
+    backend_id: Annotated[
+        float | None,
+        Field(
+            alias="backendId",
+            description="The primary backend the run used, as the engine codes it: 0 CPU, 1 Metal, 2 CUDA, 3 Vulkan, 4 OpenCL, 99 other.",
+        ),
+    ] = None
     gpu_fallback_reason: Annotated[
         float | None,
         Field(
@@ -2047,8 +2071,20 @@ class AudioUnderstandResponseStats(GeneratedBaseModel):
     audio_duration_ms: Annotated[float | None, Field(alias="audioDurationMs")] = None
     total_time_ms: Annotated[float | None, Field(alias="totalTimeMs")] = None
     real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
-    backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
-    backend_id: Annotated[float | None, Field(alias="backendId")] = None
+    backend_device: Annotated[
+        float | None,
+        Field(
+            alias="backendDevice",
+            description="The primary backend the run used: 0 CPU, 1 GPU. The device an ACE-Step `lmBackend` names is not reported here.",
+        ),
+    ] = None
+    backend_id: Annotated[
+        float | None,
+        Field(
+            alias="backendId",
+            description="The primary backend the run used, as the engine codes it: 0 CPU, 1 Metal, 2 CUDA, 3 Vulkan, 4 OpenCL, 99 other.",
+        ),
+    ] = None
     gpu_fallback_reason: Annotated[
         float | None,
         Field(
@@ -2859,6 +2895,7 @@ class BatchCompletionStreamResponseEventsItemEventCompletionStatsStatsBackendDev
 ):
     cpu = "cpu"
     gpu = "gpu"
+    npu = "npu"
 
 
 class BatchCompletionStreamResponseEventsItemEventCompletionStatsStats(
@@ -3000,6 +3037,7 @@ class BatchCompletionStreamResponseEventsItem(GeneratedBaseModel):
 class BatchCompletionStreamResponseStatsBackendDevice(Enum):
     cpu = "cpu"
     gpu = "gpu"
+    npu = "npu"
 
 
 class BatchCompletionStreamResponseStats(GeneratedBaseModel):
@@ -4785,6 +4823,7 @@ class CompletionOrchestrateResponseEventsItemToolError(GeneratedBaseModel):
 class CompletionOrchestrateResponseEventsItemCompletionStatsStatsBackendDevice(Enum):
     cpu = "cpu"
     gpu = "gpu"
+    npu = "npu"
 
 
 class CompletionOrchestrateResponseEventsItemCompletionStatsStats(GeneratedBaseModel):
@@ -5501,6 +5540,7 @@ class CompletionStreamResponseEventsItemToolError(GeneratedBaseModel):
 class CompletionStreamResponseEventsItemCompletionStatsStatsBackendDevice(Enum):
     cpu = "cpu"
     gpu = "gpu"
+    npu = "npu"
 
 
 class CompletionStreamResponseEventsItemCompletionStatsStats(GeneratedBaseModel):
@@ -12434,7 +12474,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     device: Annotated[
         str | None,
         Field(
-            description="Device to run inference on: `'gpu'` or `'cpu'`. Default `'gpu'`."
+            description="Device class to run inference on: `'gpu'`, `'cpu'` or `'npu'`. Default `'gpu'`. `'npu'` is the AMD XDNA2 NPU on Linux x64, which needs XRT 2.25 or newer and read/write access to its /dev/accel node; GPU selection never picks it. With no NPU listed, `'npu'` falls back to the GPU order, then the CPU. It cannot be combined with backend, devices, split-mode (beyond their defaults), main-gpu, rpc-servers or finetuning, and a listed NPU that fails to open runs the load on the CPU."
         ),
     ] = None
     predict: Annotated[
@@ -12577,7 +12617,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     devices: Annotated[
         str | None,
         Field(
-            description="Explicit ordered native device names, for example RPC0,RPC1. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order.",
+            description="Explicit ordered native device names, for example RPC0,RPC1, or XDNA0 for the AMD XDNA NPU alone, which reports `backendDevice` `'npu'`; naming XDNA0 without a listed NPU fails the load, and a load with XDNA0 in devices, alone or with other devices, cannot finetune. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order.",
             min_length=1,
         ),
     ] = None
@@ -12585,7 +12625,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
         LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode | None,
         Field(
             alias="split-mode",
-            description="How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
+            description="How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctx_size` explicitly). `'tensor'` is rejected with the XDNA0 NPU.",
             title="LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode",
         ),
     ] = None
@@ -12858,7 +12898,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
         bool | None,
         Field(
             alias="mmproj-use-gpu",
-            description="Run the multimodal projector (mmproj / vision encoder) on the GPU (multimodal models only). `true` forces GPU, `false` forces CPU. When unset, the backend is auto-selected per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on every other Android GPU (Arm Mali, Adreno <800, and undetectable Adreno tiers), with the LLM layers still on the GPU. Only honoured when the model itself runs on a GPU backend — ignored with a warning on CPU.",
+            description="Run the multimodal projector (mmproj / vision encoder) on the GPU (multimodal models only). `true` forces GPU, `false` forces CPU. When unset, the backend is auto-selected per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on every other Android GPU (Arm Mali, Adreno <800, and undetectable Adreno tiers), with the LLM layers still on the GPU. On an NPU load (`device: 'npu'` or XDNA0 as the first local device in devices) it runs on a GPU beside the NPU, else the CPU; `true` with no GPU runs it on the NPU. Only honoured when the model itself runs on a GPU or NPU backend — ignored with a warning on CPU.",
         ),
     ] = None
 
@@ -21603,7 +21643,7 @@ class MainGpu6(RootModel[int]):
     root: Annotated[
         int,
         Field(
-            description='GPU to pin when `device` is "gpu": a GPU-device index, "integrated", or "dedicated" (the discrete GPU with the most VRAM). Omit to let the backend choose the first enumerated device. Resolved against the addon\'s own ggml device enumeration, so it cannot desync from the device list the backend actually uses. If an explicit request cannot be satisfied (e.g. "integrated" with no integrated GPU, "dedicated" with no discrete GPU, or an out-of-range index) the addon falls back to CPU rather than substituting a different GPU. Stripped on mobile (single-GPU devices).',
+            description='GPU to pin when `device` is "gpu": a GPU-device index, "integrated", or "dedicated" (the discrete GPU with the most VRAM). Omit to let automatic placement choose: a dedicated GPU first, then an integrated one, taking the largest available memory budget within each. Resolved against the addon\'s own ggml device enumeration, so it cannot desync from the device list the backend actually uses. If an explicit request cannot be satisfied (e.g. "integrated" with no integrated GPU, "dedicated" with no discrete GPU, or an out-of-range index) the addon falls back to CPU rather than substituting a different GPU. Stripped on mobile (single-GPU devices).',
             ge=0,
             le=9007199254740991,
         ),
@@ -22545,6 +22585,116 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc(GeneratedBaseM
     ] = None
 
 
+class LoadModelSrcRequestSdcppGenerationModelConfigTokenizerSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
+    llamacpp_rerank = "llamacpp-rerank"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestSdcppGenerationModelConfigTokenizerSrc(GeneratedBaseModel):
+    src: Annotated[
+        str,
+        Field(
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+        ),
+    ]
+    name: Annotated[
+        str | None,
+        Field(
+            description="Display name for this model instance; overrides the name derived from the source."
+        ),
+    ] = None
+    model_id: Annotated[
+        str | None,
+        Field(
+            alias="modelId",
+            description="Unique identifier used to reference the model in QVAC calls.",
+        ),
+    ] = None
+    registry_path: Annotated[
+        str | None,
+        Field(
+            alias="registryPath",
+            description="Registry-relative path to the model (set for registry-backed models).",
+        ),
+    ] = None
+    registry_source: Annotated[
+        str | None,
+        Field(
+            alias="registrySource",
+            description="Registry source identifier, e.g. `huggingface`.",
+        ),
+    ] = None
+    blob_core_key: Annotated[
+        str | None,
+        Field(
+            alias="blobCoreKey",
+            description="Hyperdrive blob core key for the model file.",
+        ),
+    ] = None
+    blob_index: Annotated[
+        float | None,
+        Field(
+            alias="blobIndex",
+            description="Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+        ),
+    ] = None
+    engine: Annotated[
+        str | None,
+        Field(
+            description="Canonical inference engine identifier, e.g. `llamacpp-completion`."
+        ),
+    ] = None
+    expected_size: Annotated[
+        float | None,
+        Field(
+            alias="expectedSize",
+            description="Expected total size of the model file in bytes.",
+        ),
+    ] = None
+    sha256_checksum: Annotated[
+        str | None,
+        Field(
+            alias="sha256Checksum",
+            description="Expected SHA-256 checksum of the model file.",
+        ),
+    ] = None
+    addon: Annotated[
+        LoadModelSrcRequestSdcppGenerationModelConfigTokenizerSrcAddon
+        | Literal["vad"]
+        | None,
+        Field(
+            description="Inference addon / capability category this model belongs to."
+        ),
+    ] = None
+
+
 class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -23396,7 +23546,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     mode: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigMode | None,
         Field(
-            description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX / Qwen-Image pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` selects MiniMax-H3 text/image-to-video (optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU. At 832x480, the default walk with resident weights needs at least 20 GB free VRAM. `world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can reduce that requirement.",
+            description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX / Qwen-Image pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, external tokenizer, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` selects MiniMax-H3 text/image-to-video (optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU. At 832x480, the default walk with resident weights needs at least 20 GB free VRAM. `world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can reduce that requirement.",
             title="LoadModelSrcRequestSdcppGenerationModelConfigMode",
         ),
     ] = "diffusion"
@@ -23415,7 +23565,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         MainGpu6 | LoadModelSrcRequestSdcppGenerationModelConfigMainGpu | None,
         Field(
             alias="main-gpu",
-            description='GPU to pin when `device` is "gpu": a GPU-device index, "integrated", or "dedicated" (the discrete GPU with the most VRAM). Omit to let the backend choose the first enumerated device. Resolved against the addon\'s own ggml device enumeration, so it cannot desync from the device list the backend actually uses. If an explicit request cannot be satisfied (e.g. "integrated" with no integrated GPU, "dedicated" with no discrete GPU, or an out-of-range index) the addon falls back to CPU rather than substituting a different GPU. Stripped on mobile (single-GPU devices).',
+            description='GPU to pin when `device` is "gpu": a GPU-device index, "integrated", or "dedicated" (the discrete GPU with the most VRAM). Omit to let automatic placement choose: a dedicated GPU first, then an integrated one, taking the largest available memory budget within each. Resolved against the addon\'s own ggml device enumeration, so it cannot desync from the device list the backend actually uses. If an explicit request cannot be satisfied (e.g. "integrated" with no integrated GPU, "dedicated" with no discrete GPU, or an out-of-range index) the addon falls back to CPU rather than substituting a different GPU. Stripped on mobile (single-GPU devices).',
         ),
     ] = None
     prediction: Annotated[
@@ -23541,7 +23691,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         str | LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc | None,
         Field(
             alias="llmModelSrc",
-            description="LLM text encoder model — required for FLUX.2 [klein] (Qwen3), FLUX.3 Image Klein, Qwen-Image-2.1 and Ideogram 4 (Qwen3-VL), LTX-2 video (Gemma), and MiniMax-H3 (H3-specific Qwen3-VL).",
+            description="LLM text encoder model — required for FLUX.2 [klein] (Qwen3), FLUX.3 Image Klein, Qwen-Image-2.1 and Ideogram 4 (Qwen3-VL), MOSS-Image (Qwen3.5), LTX-2 video (Gemma), and MiniMax-H3 (H3-specific Qwen3-VL).",
         ),
     ] = None
     projection_model_src: Annotated[
@@ -23555,7 +23705,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         str | LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc | None,
         Field(
             alias="vaeModelSrc",
-            description="VAE decoder model, required for Qwen-Image-2.1, FLUX.2 [klein], FLUX.3 Image Klein, Ideogram 4, LTX-2 video, and MiniMax-H3 video; optional for SDXL.",
+            description="VAE decoder model, required for Qwen-Image-2.1, FLUX.2 [klein], FLUX.3 Image Klein, Ideogram 4, MOSS-Image, LTX-2 video, and MiniMax-H3 video; optional for SDXL.",
         ),
     ] = None
     high_noise_diffusion_model_src: Annotated[
@@ -23572,6 +23722,13 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         Field(
             alias="uncondModelSrc",
             description="Unconditional diffusion model — Ideogram 4 only. Requires diffusion mode, llmModelSrc (Qwen3-VL), vaeModelSrc, and a JSON-serialized structured caption with explicit bounding boxes as the generation prompt. Plain-text prompts produce degenerate output or the model's placeholder response.",
+        ),
+    ] = None
+    tokenizer_src: Annotated[
+        str | LoadModelSrcRequestSdcppGenerationModelConfigTokenizerSrc | None,
+        Field(
+            alias="tokenizerSrc",
+            description="External `tokenizer.json` for the Qwen3.5 text encoder — MOSS-Image only. Requires diffusion mode, llmModelSrc (Qwen3.5) and vaeModelSrc. Layout prompts can be passed as a JSON string.",
         ),
     ] = None
     clip_vision_model_src: Annotated[
@@ -24150,7 +24307,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestep(GeneratedBaseModel):
         bool | None,
         Field(
             alias="useGPU",
-            description="Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the backend actually used.",
+            description="Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the primary backend a run used.",
         ),
     ] = None
     threads: Annotated[
@@ -24193,6 +24350,29 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestep(GeneratedBaseModel):
             description="ACE-Step GPU layers to offload when `useGPU` is set (99 = all). Ignored on CPU.",
             ge=0,
             le=9007199254740991,
+        ),
+    ] = None
+    backend: Annotated[
+        str | None,
+        Field(
+            description="Advanced: ACE-Step's primary backend, by backend or device name (`cpu`, `MTL0`, `CUDA0`, …). Unset or `auto` keeps the placement `useGPU` and `nGpuLayers` select; any other value overrides both, so `useGPU: false` with `backend: 'CUDA0'` runs on CUDA0. A named backend the host cannot provide fails the load instead of falling back.",
+            min_length=1,
+        ),
+    ] = None
+    lm_backend: Annotated[
+        str | None,
+        Field(
+            alias="lmBackend",
+            description="Advanced: the backend ACE-Step's language model runs on, chosen independently of `backend` and named the same way. Unset or `auto` keeps the engine's own placement for the LM; any other value overrides it. A named backend the host cannot provide fails the load instead of falling back.",
+            min_length=1,
+        ),
+    ] = None
+    dump_stages_dir: Annotated[
+        str | None,
+        Field(
+            alias="dumpStagesDir",
+            description="Diagnostics: an existing directory on the inference host that receives the intermediate tensors of each ACE-Step stage. The engine does not create it. Unset writes nothing.",
+            min_length=1,
         ),
     ] = None
     text_enc_model_src: Annotated[
@@ -24472,7 +24652,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimax(GeneratedBaseModel):
         bool | None,
         Field(
             alias="useGPU",
-            description="Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the backend actually used.",
+            description="Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the primary backend a run used.",
         ),
     ] = None
     threads: Annotated[
@@ -24512,6 +24692,14 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimax(GeneratedBaseModel):
             alias="coremlComputeUnits",
             description="Apple compute units the Core ML profile may use: `CPU_ONLY`, `CPU_AND_GPU`, `CPU_AND_NE` or `ALL`. A policy, not a guarantee of where each operation runs. Requires `coremlProfileDir`.",
             title="LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxCoremlComputeUnits",
+        ),
+    ] = None
+    coreml_conditioner_path: Annotated[
+        str | None,
+        Field(
+            alias="coremlConditionerPath",
+            description="Advanced, macOS: absolute path on the inference host to a compiled conditioner `.mlmodelc`. Runs the conditioner convolution alone through Core ML (CPU and Neural Engine); every other stage stays on the backend `device` or `useGPU` selects. Does not enable the full Core ML profile. The load fails when the bundle is invalid or the build cannot use it.",
+            min_length=1,
         ),
     ] = None
     inference_steps: Annotated[
