@@ -833,6 +833,9 @@ importers:
       fast-safe-stringify:
         specifier: 2.1.1
         version: 2.1.1
+      fs-native-extensions:
+        specifier: ^1.5.0
+        version: 1.5.0(bare-url@2.4.6)
       hyperdrive:
         specifier: ^13.3.3
         version: 13.3.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
