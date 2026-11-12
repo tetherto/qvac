@@ -94,9 +94,11 @@ process can read and write its `/dev/accel` node; otherwise fabric logs that it 
   other types there, such as Qwen's own Qwen3.5-0.8B `Q4_K_M` GGUF with `Q8_0` `ssm_out`, still
   loads: fabric logs one warning naming the weight, and the decode runs on the host CPU while
   the prefill keeps the NPU. Requantize those weights to keep the decode on the NPU.
-- An attention layer whose `attn_output` is not `Q4_K`, `Q5_K` or `Q6_K` fails at the first
-  decode with `attention tail N: cannot build it`. `GGML_XDNA_ATTN_TAIL=0` runs those layers
-  per op; requantizing `attn_output` avoids it.
+- A recurrent layer whose `attn_qkv` or `attn_gate` is not `Q4_K`, `Q5_K` or `Q6_K` fails at
+  the first decode with `the in-projection (...) does not split into the core's inputs`, and an
+  attention layer whose `attn_output` is not one of them fails with
+  `attention tail N: cannot build it`. Requantize those weights; `GGML_XDNA_FUSED_LAYER=0`
+  avoids both failures, and `GGML_XDNA_ATTN_TAIL=0` the second.
 - Keep flash attention on (the default) and the KV cache at `f16` (the default on XDNA); the
   NPU's attention kernels need both. `poll: 0` (the default) stops the threadpool busy-waiting
   while the NPU works.
