@@ -369,9 +369,14 @@ class BareRpcTransport:
             stream = await self._require_rpc().request_with_response_stream(
                 command=0, data=json.dumps(payload).encode("utf-8")
             )
-            async for value in _iter_json_lines(stream):
-                self._track_owner_model(payload, value)
-                yield value
+            try:
+                async for value in _iter_json_lines(stream):
+                    self._track_owner_model(payload, value)
+                    yield value
+            finally:
+                # A reader that stops early destroys the stream, and the
+                # worker stops the request. Does nothing once the stream ended.
+                stream.destroy()
 
     async def call_duplex(
         self, payload: dict, up: AsyncIterable[bytes]
@@ -409,6 +414,8 @@ class BareRpcTransport:
                 async for value in _iter_json_lines(incoming):
                     yield value
         finally:
+            # As in call_stream: a reader that stops early stops the request.
+            incoming.destroy()
             if not pump_task.done():
                 pump_task.cancel()
             try:
