@@ -1,21 +1,5 @@
 # Changelog
 
-## [Unreleased]
-
-### Added
-
-- Embedding, Laya and rerank stats report `backendName`, the lowercase backend
-  family that holds the primary model's weights, such as `cpu`, `cuda`,
-  `vulkan` or `metal`. A model split across families reports them sorted and
-  comma-separated, such as `cuda,vulkan`. The key is left out when the backend
-  cannot be identified ([#5501](https://github.com/tetherto/qvac/pull/5501)).
-
-### Changed
-
-- `qvac-lib-inference-addon-cpp` dependency floor raised `1.5.0` -> `1.6.0`
-  ([#5501](https://github.com/tetherto/qvac/pull/5501)). Version 1.6.0 lets a
-  runtime stat hold a string, which `backendName` uses.
-
 ## [0.56.1] - 2026-11-11
 
 ### Changed
