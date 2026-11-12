@@ -3,31 +3,11 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
-#include <mutex>
 #include <set>
 #include <string>
-#include <utility>
 #include <vector>
 
 namespace qvac_lib_inference_addon_embed::backend_reporting {
-
-// Metadata is set during model loading and read by queued JS callbacks.
-class RuntimeBackendName {
-public:
-  void set(std::string name) {
-    std::lock_guard lock(mutex_);
-    name_ = std::move(name);
-  }
-
-  [[nodiscard]] std::string get() const {
-    std::lock_guard lock(mutex_);
-    return name_;
-  }
-
-private:
-  mutable std::mutex mutex_;
-  std::string name_;
-};
 
 inline std::string canonicalBackendFamily(std::string name) {
   std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) {
