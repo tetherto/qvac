@@ -488,6 +488,8 @@ TEST_F(TextLlmContextTest, CancelFromCallbackKeepsStreamedToken) {
   const int generatedTokens =
       static_cast<int>(getStatValue(stats, "generatedTokens"));
   EXPECT_GT(generatedTokens, 0);
+  // Below the fixture's `n_predict` (10): the cancel stopped generation.
+  EXPECT_LT(generatedTokens, 10) << "the cancel must stop generation";
   EXPECT_EQ(cacheTokens, promptTokens + generatedTokens)
       << "a cancel must keep every streamed token resident";
 }

@@ -7,8 +7,8 @@
 - A cancel that landed after a token was streamed but before it was decoded
   dropped that token from the context and the cache, so `CacheTokens` could
   stay one short of what the caller received. The streamed token is now
-  decoded before the cancel settles, on the text and multimodal paths, with
-  and without speculative decoding.
+  decoded before the cancel settles on the single-prompt text and multimodal
+  paths, with and without speculative decoding.
 
 ## [0.70.1] - 2026-11-11
 

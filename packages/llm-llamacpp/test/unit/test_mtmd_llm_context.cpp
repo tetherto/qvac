@@ -558,6 +558,48 @@ TEST_F(MtmdLlmContextTest, CacheTokensMatchesLlamaMemoryTokenCount) {
   EXPECT_EQ(getStatValue(stats, "CacheTokens"), expectedCacheTokens);
 }
 
+// A cancel issued from the output callback lands after the token is streamed
+// and before it is decoded. The request still keeps every streamed token.
+TEST_F(MtmdLlmContextTest, CancelFromCallbackKeepsStreamedToken) {
+  if (!hasValidModel()) {
+    FAIL() << "Multimodal model or projection file not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  LlmContext* ctx = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(dynamic_cast<MtmdLlmContext*>(ctx), nullptr);
+
+  bool cancelled = false;
+  LlamaModel::Prompt prompt;
+  prompt.input =
+      R"([{"role": "user", "content": "Name three colours of the rainbow."}])";
+  prompt.outputCallback = [&](const std::string&) {
+    if (!cancelled) {
+      cancelled = true;
+      ctx->stop();
+    }
+  };
+
+  ASSERT_NO_THROW(model->processPrompt(prompt));
+  ASSERT_TRUE(cancelled) << "test did not reach the streaming callback";
+
+  auto stats = model->runtimeStats();
+  const int cacheTokens = static_cast<int>(getStatValue(stats, "CacheTokens"));
+  const int promptTokens =
+      static_cast<int>(getStatValue(stats, "promptTokens"));
+  const int generatedTokens =
+      static_cast<int>(getStatValue(stats, "generatedTokens"));
+  EXPECT_GT(generatedTokens, 0);
+  // Below the fixture's `n_predict` (10): the cancel stopped generation.
+  EXPECT_LT(generatedTokens, 10) << "the cancel must stop generation";
+  EXPECT_EQ(cacheTokens, promptTokens + generatedTokens)
+      << "a cancel must keep every streamed token resident";
+}
+
 TEST_F(MtmdLlmContextTest, Qwen35MultimodalReportsMemoryTokenCountAndPosMax) {
   if (!hasValidQwen35Model()) {
     FAIL() << "Qwen3.5 multimodal model or projection file not found";
