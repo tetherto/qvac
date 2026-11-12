@@ -33,7 +33,7 @@ using qvac::ttsggml::kBackendDeviceGpu;
 using qvac::ttsggml::loadDenoiser;
 using qvac_errors::StatusError;
 using Stats = qvac_lib_inference_addon_cpp::RuntimeStats;
-using StatValue = std::variant<double, int64_t>;
+using StatValue = qvac_lib_inference_addon_cpp::RuntimeStatValue;
 
 namespace {
 
