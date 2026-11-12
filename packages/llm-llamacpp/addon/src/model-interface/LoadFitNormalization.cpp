@@ -2085,6 +2085,40 @@ NormalizedLoad normalizeLoadForFit(
     }
   }
 
+  // fabric registers --kv-unified for its server only, not the COMMON parser
+  if (configFilemap.contains("kv-unified") &&
+      configFilemap.contains("kv_unified")) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        string_format(
+            "%s: both 'kv-unified' and 'kv_unified' are present; use one or "
+            "the other.\n",
+            K_LEGACY_PARSER_NAME.data()));
+  }
+  for (const std::string& key : {"kv-unified", "kv_unified"}) {
+    if (auto iter = configFilemap.find(key); iter != configFilemap.end()) {
+      if (common_arg_utils::is_truthy(iter->second)) {
+        params.kv_unified = true;
+      } else if (common_arg_utils::is_falsey(iter->second)) {
+        params.kv_unified = false;
+      } else {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            string_format(
+                "%s: unknown value for %s: '%s'. Accepted (lower-case): on, "
+                "enabled, true, 1, off, disabled, false, 0.\n",
+                K_LEGACY_PARSER_NAME.data(),
+                key.c_str(),
+                iter->second.c_str()));
+      }
+      configFilemap.erase(iter);
+    }
+  }
+
   // transform json config into the format required by llama.cpp
   for (auto& keyValuePair : configFilemap) {
     configVector.push_back(std::string("--") + keyValuePair.first);

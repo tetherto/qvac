@@ -3005,3 +3005,155 @@ TEST_F(
   std::error_code ec;
   fs::remove(cachePath, ec);
 }
+
+namespace {
+// About ten tokens per sentence.
+std::string fillerSentences(int count) {
+  std::string text;
+  for (int i = 0; i < count; ++i) {
+    text += "The quick brown fox jumps over the lazy dog number " +
+            std::to_string(i) + ". ";
+  }
+  return text;
+}
+} // namespace
+
+/// A shared pool lets one request use more than `ctx_size / parallel`.
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    SharedKvPoolServesAPromptPastTheEvenSplit) {
+  REQUIRE_MODEL(qwen35HybridModel_);
+  const auto prompt =
+      makePrompt(fillerSentences(35) + "How many sentences were there?");
+
+  {
+    auto split = loadModel(qwen35HybridModel_);
+    std::vector<LlamaModel::Prompt> prompts{prompt};
+    EXPECT_THROW(split->processPromptBatch(prompts), qvac_errors::StatusError);
+  }
+
+  config_["kv_unified"] = "true";
+  auto shared = loadModel(qwen35HybridModel_);
+  std::vector<LlamaModel::Prompt> prompts{prompt};
+  const auto outputs = shared->processPromptBatch(prompts);
+  ASSERT_EQ(outputs.size(), 1u);
+  EXPECT_FALSE(outputs[0].empty());
+}
+
+/// Requests the shared pool cannot hold at once wait for room, not fail.
+TEST_F(ContinuousBatchingIntegrationTest, SharedKvPoolQueuesWhatDoesNotFit) {
+  REQUIRE_MODEL(qwen35HybridModel_);
+  config_["kv_unified"] = "true";
+  auto model = loadModel(qwen35HybridModel_);
+
+  std::vector<LlamaModel::Prompt> prompts;
+  for (int i = 0; i < 4; ++i) {
+    prompts.push_back(makePrompt(
+        fillerSentences(30) + "Reply with the number " + std::to_string(i) +
+        "."));
+  }
+  const auto outputs = model->processPromptBatch(prompts);
+  ASSERT_EQ(outputs.size(), 4u);
+  for (const auto& output : outputs) {
+    EXPECT_FALSE(output.empty());
+  }
+}
+
+/// Replies that outgrow a full shared pool pause, and the newest is ended,
+/// instead of a failed decode failing every request.
+TEST_F(ContinuousBatchingIntegrationTest, SharedKvPoolOutgrownByRepliesEndsOne) {
+  REQUIRE_MODEL(qwen35HybridModel_);
+  config_["kv_unified"] = "true";
+  config_["ctx_size"] = "512";
+  config_["n_predict"] = "-1";
+  auto model = loadModel(qwen35HybridModel_);
+
+  std::vector<LlamaModel::Prompt> prompts;
+  for (const char* topic : {"dragons", "rivers", "comets", "forests"}) {
+    prompts.push_back(
+        makePrompt(std::string("Write a long story about ") + topic + "."));
+  }
+  const auto outputs = model->processPromptBatch(prompts);
+  ASSERT_EQ(outputs.size(), 4u);
+  for (const auto& output : outputs) {
+    EXPECT_FALSE(output.empty());
+  }
+}
+
+namespace {
+LlamaModel::Prompt userPrompt(const std::string& text) {
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role":"user","content":")" + text + R"("}])";
+  return prompt;
+}
+
+/// Admitted first with a 128-cell reply reserve in a 512-cell pool of 4.
+LlamaModel::Prompt poolHolder() {
+  auto prompt = userPrompt("Write a long story about dragons.");
+  prompt.generationParams.n_predict = 200;
+  return prompt;
+}
+
+/// Over 351 prompt cells plus an 8-cell reserve: waits while the holder runs.
+LlamaModel::Prompt poolWaiter() {
+  auto prompt = userPrompt(
+      fillerSentences(30) + "How many sentences were there?");
+  prompt.generationParams.n_predict = 8;
+  return prompt;
+}
+} // namespace
+
+/// A request waiting for room is cancelled like a queued one, not left hanging.
+TEST_F(ContinuousBatchingIntegrationTest, SharedKvPoolCancelsAWaitingRequest) {
+  REQUIRE_MODEL(qwen35HybridModel_);
+  config_["kv_unified"] = "true";
+  config_["ctx_size"] = "512";
+  auto model = loadModel(qwen35HybridModel_);
+
+  std::atomic<bool> cancelFired = false;
+  std::atomic<bool> waiterRan = false;
+  auto holder = poolHolder();
+  holder.outputCallback = [&model, &cancelFired](const std::string&) {
+    bool expected = false;
+    if (cancelFired.compare_exchange_strong(expected, true)) {
+      model->cancel();
+    }
+  };
+  auto waiter = poolWaiter();
+  waiter.outputCallback = [&waiterRan](const std::string&) {
+    waiterRan.store(true);
+  };
+  std::vector<LlamaModel::Prompt> prompts{holder, waiter};
+  EXPECT_THROW(model->processPromptBatch(prompts), qvac_errors::StatusError)
+      << "the waiting request never ran, so it is reported as cancelled";
+  EXPECT_TRUE(cancelFired.load());
+  EXPECT_FALSE(waiterRan.load());
+}
+
+/// A keyed request that waited for room keeps its conversation for the next
+/// turn on its key.
+TEST_F(ContinuousBatchingIntegrationTest, SharedKvPoolKeyedRequestAfterAWait) {
+  REQUIRE_MODEL(qwen35HybridModel_);
+  config_["kv_unified"] = "true";
+  config_["ctx_size"] = "512";
+  auto model = loadModel(qwen35HybridModel_);
+  const fs::path cachePath =
+      fs::temp_directory_path() / ("pool-wait-" + uniqueTestId() + ".bin");
+
+  auto waiter = poolWaiter();
+  waiter.cacheKey = cachePath.string();
+  std::vector<LlamaModel::Prompt> prompts{poolHolder(), waiter};
+  const auto outputs = model->processPromptBatch(prompts);
+  ASSERT_EQ(outputs.size(), 2u);
+  EXPECT_FALSE(outputs[0].empty());
+  EXPECT_FALSE(outputs[1].empty());
+
+  auto followup = userPrompt("Say yes.");
+  followup.cacheKey = cachePath.string();
+  followup.generationParams.n_predict = 8;
+  std::vector<LlamaModel::Prompt> followups{std::move(followup)};
+  const auto followupOutputs = model->processPromptBatch(followups);
+  ASSERT_EQ(followupOutputs.size(), 1u);
+  EXPECT_FALSE(followupOutputs[0].empty());
+  fs::remove(cachePath);
+}

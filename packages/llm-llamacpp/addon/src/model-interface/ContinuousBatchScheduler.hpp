@@ -314,10 +314,15 @@ public:
   ///                            non-empty: the model layer owns the single
   ///                            text-vs-multimodal selection, so the scheduler
   ///                            never names a concrete driver type.
+  /// @param sharedKvPool        The context was made with `kv_unified`: every
+  ///                            slot draws on the whole pool, so the
+  ///                            per-sequence ceiling is `ctxTotalTokens` and
+  ///                            admission and each step are sized by the cells
+  ///                            the pool has left.
   ContinuousBatchScheduler(
       LlmModelContext shared, unsigned maxChunkSize, unsigned ctxTotalTokens,
       size_t batchSize, int32_t batchCapacity, const common_params& baseParams,
-      DriverFactory driverFactory);
+      DriverFactory driverFactory, bool sharedKvPool = false);
 
   ContinuousBatchScheduler(const ContinuousBatchScheduler&) = delete;
   ContinuousBatchScheduler& operator=(const ContinuousBatchScheduler&) = delete;
@@ -612,12 +617,18 @@ private:
     /// a cancel aimed at a finished request cannot hit the recycled seqId's
     /// next occupant.
     uint64_t admissionId = K_UNKNOWN_ADMISSION_ID;
+    /// Shared pool only: the cells the sequence may hold (its prompt plus a
+    /// reply reserve, raised by top-ups), and the most it can ever need.
+    unsigned poolLimit = 0;
+    unsigned poolCeiling = 0;
   };
 
   void ensureWorkerStartedLocked();
   void workerLoop();
   void admitPendingIntoFreeSlotsLocked();
-  [[nodiscard]] uint32_t submitLocked(QueuedRequest&& queued);
+  /// Nullopt when a shared pool has no room for the request yet; `queued` is
+  /// then left as it was, for a later attempt.
+  [[nodiscard]] std::optional<uint32_t> submitLocked(QueuedRequest&& queued);
   /// Drives one fillBatch + decode + advance + sample iteration.
   /// Returns `true` on a successful decode *or* a no-op (no slot had
   /// tokens to feed). Returns `false` if `llama_decode` reported a
@@ -780,6 +791,24 @@ private:
   void failSaveJobsLocked() noexcept;
   /// Fails every key-deferred request's group with a `Cancelled` error.
   void cancelKeyDeferredLocked() noexcept;
+  /// Shared pool: cells in `seqId`, and cells no sequence holds.
+  [[nodiscard]] unsigned seqCellsLocked(uint32_t seqId) const noexcept;
+  [[nodiscard]] unsigned poolFreeLocked() const noexcept;
+  /// Free cells no running request is promised.
+  [[nodiscard]] unsigned poolSpareLocked() const noexcept;
+  /// Cells held by parked conversations, which eviction can free.
+  [[nodiscard]] unsigned poolParkedCellsLocked() const noexcept;
+  /// The parked conversation to give up first: anonymous ones, then the
+  /// least recently used.
+  [[nodiscard]] std::optional<uint32_t> parkedToEvictLocked() const;
+  /// Evicts it. False when none is parked.
+  bool evictOneParkedLocked() noexcept;
+  /// This step's caps: each slot feeds from its promise, and a reply that
+  /// ran through it is promised more. A slot left at 0 pauses in place.
+  [[nodiscard]] const MultiRequestBatcher::StepLimits& poolStepLimitsLocked();
+  /// A paused reply can take spare cells: within its even share, or while
+  /// no request waits for room.
+  [[nodiscard]] bool poolMayGrowLocked(uint32_t seqId) const noexcept;
   /// Remove every KV-cache cell owned by `seqId` from the shared context.
   /// Single home for the cleanup repeated across all slot-teardown paths.
   void clearSeqKv(uint32_t seqId) noexcept;
@@ -798,9 +827,16 @@ private:
   common_params baseParams_;
   DriverFactory driverFactory_;
 
-  /// Per-seq hard ceiling = ctxTotalTokens / batchSize. Drives prompt-size
-  /// admission and per-request `prompt + n_predict` validation.
+  bool sharedKvPool_;
+  unsigned ctxTotalTokens_;
+  /// Per-seq hard ceiling = ctxTotalTokens / batchSize (the whole pool when
+  /// shared). Drives prompt-size admission and per-request
+  /// `prompt + n_predict` validation.
   unsigned perSeqMaxTokens_;
+  /// What `ctxTotalTokens / batchSize` gives each slot without sharing.
+  unsigned poolEvenShare_;
+  /// Cells promised to a reply at admission when the pool is shared.
+  unsigned poolReplyReserve_;
   MultiRequestBatcher batcher_;
   LlamaBatch batch_;
   std::vector<std::optional<SlotState>> slots_;
@@ -873,6 +909,15 @@ private:
   /// `keyDeferred_` so each key is served in order and never forks.
   std::unordered_set<std::string> busyKeys_;
   std::deque<QueuedRequest> keyDeferred_;
+  /// The request waiting for room in a shared pool. Nothing is admitted
+  /// past it, so a long prompt is not starved by short ones. Retried only
+  /// once a slot frees (`poolRetry_`), since an attempt renders the prompt.
+  std::optional<QueuedRequest> poolWaiting_;
+  bool poolRetry_ = false;
+  /// Per-step buffers for `poolStepLimitsLocked`, indexed by seqId.
+  MultiRequestBatcher::StepLimits poolLimits_;
+  std::vector<unsigned> poolCells_;
+  std::vector<uint32_t> poolFeeding_;
   /// Explicit saves waiting for the worker (see `saveConversation`).
   struct SaveJob {
     std::string cacheKey;

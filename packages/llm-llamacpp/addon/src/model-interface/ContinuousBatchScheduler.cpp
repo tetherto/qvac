@@ -107,6 +107,9 @@ unsigned perSeqCeiling(unsigned ctxTotalTokens, size_t batchSize) {
   return ctxTotalTokens / static_cast<unsigned>(batchSize);
 }
 
+// Replies in recorded workbench chats ran to 618 tokens at most.
+constexpr unsigned K_POOL_REPLY_RESERVE = 2048;
+
 /// Terminal reason a driver should record for a scheduler-imposed stop.
 /// `ContextOverflow` survives `stopReasonAfterRequestRollback`, so a recurrent
 /// driver rolls back the current request.
@@ -166,11 +169,16 @@ TimedDecodeResult timeDecodeStep(
 ContinuousBatchScheduler::ContinuousBatchScheduler(
     LlmModelContext shared, unsigned maxChunkSize, unsigned ctxTotalTokens,
     size_t batchSize, int32_t batchCapacity, const common_params& baseParams,
-    DriverFactory driverFactory)
+    DriverFactory driverFactory, bool sharedKvPool)
     : shared_(shared), baseSampling_(baseParams.sampling),
       baseNPredict_(baseParams.n_predict), baseParams_(baseParams),
-      driverFactory_(std::move(driverFactory)),
-      perSeqMaxTokens_(perSeqCeiling(ctxTotalTokens, batchSize)),
+      driverFactory_(std::move(driverFactory)), sharedKvPool_(sharedKvPool),
+      ctxTotalTokens_(ctxTotalTokens),
+      perSeqMaxTokens_(
+          sharedKvPool ? ctxTotalTokens
+                       : perSeqCeiling(ctxTotalTokens, batchSize)),
+      poolEvenShare_(perSeqCeiling(ctxTotalTokens, batchSize)),
+      poolReplyReserve_(std::min(K_POOL_REPLY_RESERVE, poolEvenShare_)),
       batcher_(maxChunkSize, perSeqMaxTokens_, batchSize),
       batch_(batchCapacity, 0, static_cast<int32_t>(batchSize)),
       slots_(batchSize), decodeFunc_(llama_decode),
@@ -196,7 +204,7 @@ ContinuousBatchScheduler::ContinuousBatchScheduler(
         "ContinuousBatchScheduler: batchCapacity must be >= batchSize so "
         "every active slot can feed at least one token per step");
   }
-  const bool perSeqRoom = perSeqMaxTokens_ > 0;
+  const bool perSeqRoom = poolEvenShare_ > 0;
   if (!perSeqRoom) {
     throw std::invalid_argument(
         "ContinuousBatchScheduler: ctxTotalTokens / batchSize underflowed "
@@ -206,6 +214,11 @@ ContinuousBatchScheduler::ContinuousBatchScheduler(
   // standard library's deque move can throw (MSVC), and checkpoints are
   // move-only.
   parked_ = std::vector<std::optional<ParkedState>>(batchSize);
+  if (sharedKvPool_) {
+    poolLimits_.perSeq.resize(batchSize);
+    poolCells_.resize(batchSize);
+    poolFeeding_.reserve(batchSize);
+  }
 }
 
 ContinuousBatchScheduler::~ContinuousBatchScheduler() {
@@ -278,8 +291,17 @@ BatchResult ContinuousBatchScheduler::processBatch(
 
 uint32_t ContinuousBatchScheduler::submit(SubmitRequest&& request) {
   std::scoped_lock lock(mutex_);
-  return submitLocked(
+  const std::optional<uint32_t> seqId = submitLocked(
       QueuedRequest{.request = std::move(request), .group = nullptr});
+  if (!seqId.has_value()) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        "ContinuousBatchScheduler::submit: the shared KV pool has no room "
+        "for the request yet");
+  }
+  return *seqId;
 }
 
 void ContinuousBatchScheduler::ensureWorkerStartedLocked() {
@@ -366,16 +388,34 @@ void ContinuousBatchScheduler::workerLoop() {
 }
 
 void ContinuousBatchScheduler::admitPendingIntoFreeSlotsLocked() {
+  // False when the request now waits for room in the pool.
   const auto admit = [this](QueuedRequest&& queued) {
     const std::shared_ptr<BatchGroup> group = queued.group;
     try {
-      const uint32_t seqId = submitLocked(std::move(queued));
-      (void)seqId;
+      if (!submitLocked(std::move(queued)).has_value()) {
+        poolWaiting_.emplace(std::move(queued));
+        poolRetry_ = false;
+        return false;
+      }
     } catch (...) {
       failGroupLocked(
           group, std::current_exception(), SaveCachePolicy::KeepAdopted);
     }
+    return true;
   };
+  if (poolWaiting_.has_value()) {
+    if (poolWaiting_->group && poolWaiting_->group->done) {
+      poolWaiting_.reset();
+    } else if (!poolRetry_ || !batcher_.firstFreeSeqId().has_value()) {
+      return;
+    } else {
+      QueuedRequest waiting = std::move(*poolWaiting_);
+      poolWaiting_.reset();
+      if (!admit(std::move(waiting))) {
+        return;
+      }
+    }
+  }
   const auto keyBusy = [this](const QueuedRequest& queued) {
     return !queued.request.cacheKey.empty() &&
            busyKeys_.contains(queued.request.cacheKey);
@@ -393,7 +433,9 @@ void ContinuousBatchScheduler::admitPendingIntoFreeSlotsLocked() {
     }
     QueuedRequest queued = std::move(*it);
     it = keyDeferred_.erase(it);
-    admit(std::move(queued));
+    if (!admit(std::move(queued))) {
+      return;
+    }
   }
   QueuedRequest queued;
   while (batcher_.firstFreeSeqId().has_value() &&
@@ -412,11 +454,14 @@ void ContinuousBatchScheduler::admitPendingIntoFreeSlotsLocked() {
       keyDeferred_.push_back(std::move(queued));
       continue;
     }
-    admit(std::move(queued));
+    if (!admit(std::move(queued))) {
+      return;
+    }
   }
 }
 
-uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
+std::optional<uint32_t>
+ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   SubmitRequest& request = queued.request;
   // Resolve per-request sampling/cap on a *local* common_params, reusing
   // applyGenerationParamsToContext's validation without touching context
@@ -746,6 +791,50 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
             " (ctxTotalTokens / n_parallel)");
   }
 
+  unsigned poolLimit = 0;
+  unsigned poolCeiling = 0;
+  if (sharedKvPool_) {
+    unsigned reply = 0;
+    if (!request.prefill) {
+      reply = perSeqMaxTokens_ - promptKvSize;
+      if (tmpParams.n_predict > 0) {
+        reply = std::min(reply, static_cast<unsigned>(tmpParams.n_predict));
+      }
+    }
+    const unsigned cells = seqCellsLocked(seqId);
+    const auto promptCells = static_cast<unsigned>(plan.totalKvTokens());
+    const unsigned poolCommit =
+        promptCells + std::min(poolReplyReserve_, reply);
+    poolLimit = cells + poolCommit;
+    poolCeiling = cells + promptCells + reply;
+    if (poolCommit <= poolSpareLocked() + poolParkedCellsLocked()) {
+      while (poolCommit > poolSpareLocked() && evictOneParkedLocked()) {
+      }
+    }
+    if (poolCommit > poolSpareLocked()) {
+      // Nothing running will free cells for it.
+      if (numActiveLocked() == 0) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            "ContinuousBatchScheduler::submit: " + std::to_string(poolCommit) +
+                " KV cells for the prompt and its reply do not fit the " +
+                std::to_string(poolSpareLocked()) +
+                " free in the shared pool");
+      }
+      // The rollback below parks a state with unsaved turns together with
+      // its checkpoints; any other state's checkpoints would be dropped.
+      if (!adoptedDirtyState && !key.empty()) {
+        cache::Checkpoints checkpoints = driver->releaseCheckpoints();
+        if (!checkpoints.empty()) {
+          storeCheckpointsLocked(key, std::move(checkpoints));
+        }
+      }
+      return std::nullopt;
+    }
+  }
+
   StreamCallbacks streamsLocal = std::move(request.streams);
   // A prefill-only request whose prompt is already resident (cache reuse
   // covered all of it) has nothing to feed. It is admitted empty and finished
@@ -789,7 +878,9 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
           .adoptedDirty = adoptedDirtyState,
           .adoptedEphemeral = adoptedEphemeral,
           .enqueuedAt = request.enqueuedAt,
-          .admissionId = admissionId});
+          .admissionId = admissionId,
+          .poolLimit = poolLimit,
+          .poolCeiling = poolCeiling});
   cacheGuard.dismiss();
   if (!slots_[seqId]->cacheKey.empty()) {
     busyKeys_.insert(slots_[seqId]->cacheKey);
@@ -1117,7 +1208,9 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
 
   prepareSpeculativeDraftsLocked(lock);
 
-  const auto fillResult = batcher_.fillBatch(batch_);
+  const MultiRequestBatcher::StepLimits* limits =
+      sharedKvPool_ ? &poolStepLimitsLocked() : nullptr;
+  const auto fillResult = batcher_.fillBatch(batch_, limits);
   if (shared_.speculative != nullptr) {
     for (uint32_t seqId = 0; seqId < slots_.size(); seqId++) {
       if (batcher_.draftDropped(seqId) && slots_[seqId].has_value() &&
@@ -1127,6 +1220,23 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
     }
   }
   if (fillResult.totalTokens == 0) {
+    // Every slot with tokens is paused on a full pool, so none will free
+    // cells: a parked conversation goes first, then the reply holding the
+    // most cells ends, as it would have overflowed an even split.
+    if (limits != nullptr && !poolFeeding_.empty() &&
+        !batcher_.nextAwaitingMedia().has_value() &&
+        !batcher_.nextAwaitingCheckpoint().has_value() &&
+        !evictOneParkedLocked()) {
+      std::optional<uint32_t> largest;
+      for (const uint32_t seqId : poolFeeding_) {
+        if (!largest.has_value() || poolCells_[seqId] >= poolCells_[*largest]) {
+          largest = seqId;
+        }
+      }
+      if (largest.has_value()) {
+        batcher_.markFinished(*largest, StopReason::ContextOverflow);
+      }
+    }
     // A media segment serviced above can finish a slot (prefill-only
     // request or per-sequence cap) without leaving tokens to feed; drain
     // here or the worker would spin on the occupied slot forever.
@@ -1372,7 +1482,8 @@ bool ContinuousBatchScheduler::hasWork() const {
 }
 
 bool ContinuousBatchScheduler::hasWorkLocked() const noexcept {
-  return numActiveLocked() > 0 || !keyDeferred_.empty();
+  return numActiveLocked() > 0 || !keyDeferred_.empty() ||
+         poolWaiting_.has_value();
 }
 
 unsigned ContinuousBatchScheduler::numActive() const {
@@ -1383,7 +1494,8 @@ unsigned ContinuousBatchScheduler::numActive() const {
 unsigned ContinuousBatchScheduler::occupancy() const {
   std::scoped_lock lock(mutex_);
   const size_t total = static_cast<size_t>(numActiveLocked()) +
-                       pending_.size_approx() + keyDeferred_.size();
+                       pending_.size_approx() + keyDeferred_.size() +
+                       (poolWaiting_.has_value() ? 1 : 0);
   return static_cast<unsigned>(
       std::min<size_t>(total, std::numeric_limits<unsigned>::max()));
 }
@@ -1917,6 +2029,23 @@ void ContinuousBatchScheduler::cancelPendingLocked() {
 }
 
 void ContinuousBatchScheduler::cancelKeyDeferredLocked() noexcept {
+  if (poolWaiting_.has_value()) {
+    const std::shared_ptr<BatchGroup> group = std::move(poolWaiting_->group);
+    poolWaiting_.reset();
+    if (group) {
+      failGroupLocked(
+          group,
+          std::make_exception_ptr(
+              qvac_errors::StatusError(
+                  ADDON_ID,
+                  qvac_lib_inference_addon_llama::errors::toString(
+                      qvac_lib_inference_addon_llama::errors::Cancelled),
+                  "ContinuousBatchScheduler: request cancelled before it "
+                  "could run (waiting for room in the shared KV pool when "
+                  "cancel was requested)")),
+          SaveCachePolicy::Save);
+    }
+  }
   std::deque<QueuedRequest> waiting;
   waiting.swap(keyDeferred_);
   for (QueuedRequest& queued : waiting) {
@@ -2091,6 +2220,14 @@ std::optional<uint32_t> ContinuousBatchScheduler::chooseSeqIdLocked(
       return seqId;
     }
   }
+  const std::optional<uint32_t> oldest = parkedToEvictLocked();
+  if (oldest.has_value()) {
+    evicted = evictParkedLocked(*oldest, /*keepCells=*/true);
+  }
+  return oldest;
+}
+
+std::optional<uint32_t> ContinuousBatchScheduler::parkedToEvictLocked() const {
   // An anonymous state goes before any keyed one: evicting it never writes a
   // file, and nothing but a shared prefix will ask for it again.
   const auto evictsBefore = [this](uint32_t a, uint32_t b) {
@@ -2102,16 +2239,128 @@ std::optional<uint32_t> ContinuousBatchScheduler::chooseSeqIdLocked(
     return parked_[a]->lastUse < parked_[b]->lastUse;
   };
   std::optional<uint32_t> oldest;
-  for (uint32_t seqId = 0; seqId < nSeq; ++seqId) {
-    if (isFree(seqId) && parked_[seqId].has_value() &&
+  for (uint32_t seqId = 0; seqId < parked_.size(); ++seqId) {
+    if (isFreeLocked(seqId) && parked_[seqId].has_value() &&
         (!oldest.has_value() || evictsBefore(seqId, *oldest))) {
       oldest = seqId;
     }
   }
-  if (oldest.has_value()) {
-    evicted = evictParkedLocked(*oldest, /*keepCells=*/true);
-  }
   return oldest;
+}
+
+bool ContinuousBatchScheduler::evictOneParkedLocked() noexcept {
+  const std::optional<uint32_t> oldest = parkedToEvictLocked();
+  if (oldest.has_value()) {
+    (void)evictParkedLocked(*oldest);
+  }
+  return oldest.has_value();
+}
+
+unsigned ContinuousBatchScheduler::seqCellsLocked(
+    uint32_t seqId) const noexcept {
+  return llama_memory_seq_token_count(
+      llama_get_memory(shared_.lctx), static_cast<llama_seq_id>(seqId));
+}
+
+unsigned ContinuousBatchScheduler::poolFreeLocked() const noexcept {
+  const uint32_t used =
+      llama_memory_seq_token_count(llama_get_memory(shared_.lctx), -1);
+  return used < ctxTotalTokens_ ? ctxTotalTokens_ - used : 0;
+}
+
+unsigned ContinuousBatchScheduler::poolSpareLocked() const noexcept {
+  unsigned owed = 0;
+  for (uint32_t seqId = 0; seqId < slots_.size(); ++seqId) {
+    if (slots_[seqId].has_value()) {
+      const unsigned cells = seqCellsLocked(seqId);
+      owed += slots_[seqId]->poolLimit > cells
+                  ? slots_[seqId]->poolLimit - cells
+                  : 0;
+    }
+  }
+  const unsigned free = poolFreeLocked();
+  return free > owed ? free - owed : 0;
+}
+
+unsigned ContinuousBatchScheduler::poolParkedCellsLocked() const noexcept {
+  unsigned cells = 0;
+  for (uint32_t seqId = 0; seqId < parked_.size(); ++seqId) {
+    if (isFreeLocked(seqId) && parked_[seqId].has_value()) {
+      cells += seqCellsLocked(seqId);
+    }
+  }
+  return cells;
+}
+
+bool ContinuousBatchScheduler::poolMayGrowLocked(
+    uint32_t seqId) const noexcept {
+  return slots_[seqId]->poolLimit < slots_[seqId]->poolCeiling &&
+         (poolCells_[seqId] < poolEvenShare_ || !poolWaiting_.has_value());
+}
+
+const MultiRequestBatcher::StepLimits&
+ContinuousBatchScheduler::poolStepLimitsLocked() {
+  const auto owed = [this](uint32_t seqId) {
+    return slots_[seqId]->poolLimit > poolCells_[seqId]
+               ? slots_[seqId]->poolLimit - poolCells_[seqId]
+               : 0;
+  };
+  // Freeing parked cells is only worth it for a paused reply that may grow.
+  bool pausedMayGrow = true;
+  while (pausedMayGrow) {
+    std::ranges::fill(poolLimits_.perSeq, 0u);
+    poolFeeding_.clear();
+    unsigned owedTotal = 0;
+    for (uint32_t seqId = 0; seqId < slots_.size(); ++seqId) {
+      if (!slots_[seqId].has_value()) {
+        continue;
+      }
+      poolCells_[seqId] = seqCellsLocked(seqId);
+      owedTotal += owed(seqId);
+      const Request* req = batcher_.requestAt(seqId);
+      if (req != nullptr && req->hasTokensToFeed()) {
+        poolFeeding_.push_back(seqId);
+      }
+    }
+    std::ranges::sort(poolFeeding_, {}, [this](uint32_t seqId) {
+      return slots_[seqId]->admissionId;
+    });
+    const unsigned free = poolFreeLocked();
+    unsigned spare = free > owedTotal ? free - owedTotal : 0;
+    pausedMayGrow = false;
+    for (const uint32_t seqId : poolFeeding_) {
+      const Request& req = *batcher_.requestAt(seqId);
+      SlotState& slot = *slots_[seqId];
+      const unsigned want = req.remainingToFeed();
+      if (req.isPrefillComplete() && owed(seqId) < want &&
+          poolMayGrowLocked(seqId)) {
+        // Another reserve from the spare cells keeps this reply ahead of
+        // requests admitted after it.
+        const unsigned grant = std::min(
+            {poolReplyReserve_, slot.poolCeiling - slot.poolLimit, spare});
+        slot.poolLimit += grant;
+        spare -= grant;
+        // Within its even share a reply also takes what this step needs from
+        // newer replies, newest first.
+        for (auto it = poolFeeding_.rbegin();
+             *it != seqId && owed(seqId) < want &&
+             poolCells_[seqId] < poolEvenShare_;
+             ++it) {
+          if (!batcher_.requestAt(*it)->isPrefillComplete()) {
+            continue;
+          }
+          const unsigned take = std::min(want - owed(seqId), owed(*it));
+          slots_[*it]->poolLimit -= take;
+          slot.poolLimit += take;
+        }
+        pausedMayGrow = pausedMayGrow || owed(seqId) == 0;
+      }
+      poolLimits_.perSeq[seqId] = std::min(owed(seqId), want);
+    }
+    pausedMayGrow = pausedMayGrow && evictOneParkedLocked();
+  }
+  poolLimits_.total = poolFreeLocked();
+  return poolLimits_;
 }
 
 std::optional<std::vector<llama_token>>
@@ -2421,6 +2670,7 @@ void ContinuousBatchScheduler::storeCheckpointsLocked(
 
 void ContinuousBatchScheduler::freeSlot(uint32_t seqId) noexcept {
   if (seqId < slots_.size()) {
+    poolRetry_ = true;
     auto& slot = slots_[seqId];
     // Every teardown path frees here, after the driver finalized, so this is
     // where the request's state and checkpoints outlive its driver: parked

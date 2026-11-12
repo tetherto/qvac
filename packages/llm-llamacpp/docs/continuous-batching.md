@@ -18,6 +18,7 @@
   - [SequenceDriver and TextLlmContext](#sequencedriver-and-textllmcontext)
 - [Queued vs active requests](#queued-vs-active-requests)
 - [Per-sequence context caps](#per-sequence-context-caps)
+- [Shared KV pool (`kv_unified`)](#shared-kv-pool-kv_unified)
 - [Sequence ids and streaming](#sequence-ids-and-streaming)
 - [Cache per slot](#cache-per-slot)
 - [KV reuse: single-prompt vs batch](#kv-reuse-single-prompt-vs-batch)
@@ -57,7 +58,7 @@ const model = new LlmLlamacpp({
 })
 ```
 
-`parallel` maps to `n_seq_max` in llama.cpp. The KV cache is split uniformly: with `ctx_size: '8192'` and `parallel: '4'`, each slot gets a 2048-token window. Values less than 2 leave the single-prompt path active; batch `run()` calls throw `InvalidArgument` in that case.
+`parallel` maps to `n_seq_max` in llama.cpp. The KV cache is split uniformly: with `ctx_size: '8192'` and `parallel: '4'`, each slot gets a 2048-token window, unless the slots share one pool (see [Shared KV pool](#shared-kv-pool-kv_unified)). Values less than 2 leave the single-prompt path active; batch `run()` calls throw `InvalidArgument` in that case.
 
 The accepted range is `1..256`. The ceiling is the engine's own sequence limit (`LLAMA_MAX_SEQ`), so anything above it is rejected when the instance is constructed — otherwise it would spawn the full thread pool and only then fail the model load, where llama.cpp swallows the real reason into a log line. `ctx_size / parallel` must also leave at least one token per slot, so a `parallel` too large for the context (or a `batch_size` smaller than `parallel`) is refused as an `InvalidArgument` naming the knobs involved.
 
@@ -348,6 +349,20 @@ With `parallel = N` and `ctx_size = C`, each slot gets `C / N` tokens. This affe
 - **KV cells** — the physical cell span (`getKvCellsUsed()` plus the plan's KV tokens) is checked against `C / N` independently of the token count, because M-RoPE media consumes more cells than positions.
 - **Budget check** — when `n_predict > 0`, `max(prompt_tokens, prompt_kv_cells) + n_predict` must fit within `C / N`; requests that exceed it are rejected at admission rather than truncated silently. A non-positive `n_predict` (e.g. `predict: -1`) has no budget to check and is admitted, then stops at the slot ceiling with `contextOverflow`.
 - **Cache loading** — the overflow check on cached prompts uses `C / N` as the ceiling.
+
+With `kv_unified` every `C / N` above is `C`.
+
+---
+
+## Shared KV pool (`kv_unified`)
+
+`kv_unified: 'true'` loads the context with llama.cpp's unified KV cache: the `parallel` slots draw on one pool of `ctx_size` cells instead of `ctx_size / parallel` each. The memory is the same as the even split, but a long chat can use the whole pool while the others are short. A pure recurrent model holds one cell per sequence, so the option has no effect there.
+
+The scheduler keeps the pool from running out mid-step, where a failed `llama_decode` would fail every request:
+
+- **Admission:** a request is admitted when its new prompt cells plus a reply reserve fit the cells no running request is promised. The reserve is `min(2048, ctx_size / parallel)` tokens, lowered to `n_predict` when that is set. Parked conversations are evicted first (to the RAM tier or their file, as when a slot is claimed), but only when that frees enough. Otherwise the request waits, and nothing is admitted past it, so a long prompt is not starved by short ones. It is retried when a slot frees.
+- **Each step:** a request feeds only from the cells promised to it. A reply that runs through its reserve is promised another one from the free cells, up to `n_predict`. A reply within its even share (`ctx_size / parallel`) also takes what its next step needs from newer replies, so the replies started first keep going. While a request waits for room, a reply past its even share stops growing. A reply that gets nothing pauses in place: it keeps its cells and its streamed text, and continues once space frees.
+- **A full pool of paused replies:** parked conversations are evicted first. If every request that has tokens to feed is still paused, the one holding the most cells ends with `contextOverflow`, as it would have overflowed an even split, and the rest continue.
 
 ---
 

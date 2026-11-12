@@ -324,6 +324,17 @@ declare namespace LlmLlamacpp {
          */
         parallel?: NumericLike;
         /**
+         * With `parallel >= 2`, share one KV pool of `ctx_size` tokens across the
+         * slots instead of splitting it evenly (`--kv-unified` in llama.cpp). Each
+         * request may then use up to `ctx_size` tokens, as long as the pool has
+         * room: a request waits to start until its prompt plus a reply reserve
+         * fits, and a reply that outgrows its reserve while the pool is full
+         * pauses until another request frees space. See
+         * docs/continuous-batching.md. Default `'false'`. Also accepted as
+         * `kv-unified`.
+         */
+        kv_unified?: "true" | "false" | "on" | "off" | "1" | "0";
+        /**
          * Per-sequence cap on the process-local full-state checkpoints kept for
          * cached requests on hybrid / recurrent models (Qwen3.5, Jamba,
          * Granite-Hybrid, DeepSeek V4, ...). Such models cannot trim a KV tail,
