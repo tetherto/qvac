@@ -717,10 +717,6 @@ inline FitResult runFit(FitRequest request) {
     const auto speculativeConfig =
         qvac_lib_inference_addon_llama::speculative::parseSpeculativeConfig(
             configFilemap);
-    // Before `spec-type: "auto"` opens the draft model to read its type: a
-    // FIFO would block that open. The load checks it at the same point.
-    qvac_lib_inference_addon_llama::speculative::requireDraftModelFile(
-        speculativeConfig);
     ModelMetaData metadata;
     metadata.parse(modelPath, ADDON_ID);
     auto normalized = load_fit_normalization::normalizeLoadForFit(
@@ -736,8 +732,8 @@ inline FitResult runFit(FitRequest request) {
   } catch (const std::exception& e) {
     throwFitError(qvac_errors::general_error::InvalidArgument, e.what());
   }
-  // The draft model (DFlash, DSpark or an MTP head) is a second file the fit
-  // reads; probed like the target above. The load requires a regular file, and
+  // The draft model (DFlash or an MTP head) is a second file the fit reads;
+  // probed like the target above. The load requires a regular file, and
   // `fopen` opens a directory on POSIX.
   if (const std::string& draftPath = loadParams.speculative.draft.mparams.path;
       !draftPath.empty()) {
@@ -820,8 +816,8 @@ inline FitResult runFit(FitRequest request) {
     return unknownResult();
   }
 
-  // A draft context (MTP, or a DFlash or DSpark draft model) is fitted next to
-  // the model, as the load does.
+  // A draft context (MTP, or a DFlash draft model) is fitted next to the
+  // model, as the load does.
   const auto speculativeFit =
       qvac_lib_inference_addon_llama::speculative::SpeculativeFitModel::create(
           loadParams);
@@ -838,22 +834,6 @@ inline FitResult runFit(FitRequest request) {
     if (!mismatch.empty()) {
       throwFitError(qvac_errors::general_error::InvalidArgument, mismatch);
     }
-  }
-  // Likewise a `draft-dspark` drafter that is not a DSpark model.
-  if (const std::string mismatch =
-          qvac_lib_inference_addon_llama::speculative::draftModelMismatch(
-              loadParams.speculative);
-      !mismatch.empty()) {
-    throwFitError(qvac_errors::general_error::InvalidArgument, mismatch);
-  }
-  // And a DFlash or DSpark model for another model, which aborts fabric's
-  // fit as it does the load.
-  if (const std::string mismatch = qvac_lib_inference_addon_llama::speculative::
-          draftTargetMismatchForFile(loadParams.speculative, modelPath);
-      !mismatch.empty()) {
-    throwFitError(
-        qvac_errors::general_error::InvalidArgument,
-        "the draft model does not match the model: " + mismatch);
   }
 
   common_params_fit_status status{};

@@ -6,7 +6,6 @@
 #include <cstdlib>
 #include <filesystem>
 #include <mutex>
-#include <optional>
 #include <stdexcept>
 #include <unordered_map>
 #include <utility>
@@ -43,40 +42,6 @@ float parseProbability(const std::string& raw, const std::string& option) {
   return value;
 }
 
-// The types `spec-draft-model` and the `spec-draft-*` options apply to.
-constexpr const char* SPEC_TYPES_WITH_DRAFT =
-    "\"draft-mtp\", \"draft-dflash\", \"draft-dspark\" or \"auto\"";
-
-// A non-negative integer stored as any GGUF unsigned or signed integer type,
-// or nullopt when `key` is absent or not an integer.
-std::optional<uint64_t>
-readGgufUnsigned(const gguf_context* ctx, const char* key) {
-  const int64_t id = gguf_find_key(ctx, key);
-  if (id < 0) {
-    return std::nullopt;
-  }
-  switch (gguf_get_kv_type(ctx, id)) {
-  case GGUF_TYPE_UINT8:
-    return gguf_get_val_u8(ctx, id);
-  case GGUF_TYPE_UINT16:
-    return gguf_get_val_u16(ctx, id);
-  case GGUF_TYPE_UINT32:
-    return gguf_get_val_u32(ctx, id);
-  case GGUF_TYPE_UINT64:
-    return gguf_get_val_u64(ctx, id);
-  case GGUF_TYPE_INT8:
-    return std::max<int64_t>(0, gguf_get_val_i8(ctx, id));
-  case GGUF_TYPE_INT16:
-    return std::max<int64_t>(0, gguf_get_val_i16(ctx, id));
-  case GGUF_TYPE_INT32:
-    return std::max<int64_t>(0, gguf_get_val_i32(ctx, id));
-  case GGUF_TYPE_INT64:
-    return std::max<int64_t>(0, gguf_get_val_i64(ctx, id));
-  default:
-    return std::nullopt;
-  }
-}
-
 bool hasType(
     const common_params_speculative& params, common_speculative_type type) {
   for (const auto candidate : params.types) {
@@ -96,59 +61,8 @@ int64_t readGgufU32(const gguf_context* ctx, const std::string& key) {
   return gguf_get_val_u32(ctx, id);
 }
 
-// The integer array at `key`, of any GGUF integer type, or empty.
-std::vector<int64_t>
-readGgufIntArray(const gguf_context* ctx, const std::string& key) {
-  std::vector<int64_t> values;
-  const int64_t id = gguf_find_key(ctx, key.c_str());
-  if (id < 0 || gguf_get_kv_type(ctx, id) != GGUF_TYPE_ARRAY) {
-    return values;
-  }
-  const size_t n = gguf_get_arr_n(ctx, id);
-  // `gguf_get_arr_data` asserts on a string array, so it is called only once
-  // the element type is known to be an integer.
-  const auto read = [&](auto typed) {
-    using T = decltype(typed);
-    const T* items = static_cast<const T*>(gguf_get_arr_data(ctx, id));
-    values.reserve(n);
-    for (size_t i = 0; i < n; ++i) {
-      values.push_back(static_cast<int64_t>(items[i]));
-    }
-  };
-  switch (gguf_get_arr_type(ctx, id)) {
-  case GGUF_TYPE_INT8:
-    read(int8_t{});
-    break;
-  case GGUF_TYPE_UINT8:
-    read(uint8_t{});
-    break;
-  case GGUF_TYPE_INT16:
-    read(int16_t{});
-    break;
-  case GGUF_TYPE_UINT16:
-    read(uint16_t{});
-    break;
-  case GGUF_TYPE_INT32:
-    read(int32_t{});
-    break;
-  case GGUF_TYPE_UINT32:
-    read(uint32_t{});
-    break;
-  case GGUF_TYPE_INT64:
-    read(int64_t{});
-    break;
-  case GGUF_TYPE_UINT64:
-    // A value past INT64_MAX reads as negative, which is no layer either.
-    read(uint64_t{});
-    break;
-  default:
-    break;
-  }
-  return values;
-}
-
 // The speculative types the addon creates a draft context for: MTP, on the
-// target's layers or an external head, or a DFlash or DSpark model.
+// target's layers or an external head, or a DFlash model.
 bool hasDraftContext(const common_params_speculative& params) {
   return hasType(params, COMMON_SPECULATIVE_TYPE_DRAFT_MTP) || params.has_dft();
 }
@@ -179,69 +93,6 @@ bool allowsPositionGaps(const llama_model* model) {
   }
 }
 
-// Room past `path` for the split suffix `llama_split_path` writes, such as
-// "-00001-of-00002.gguf" (20 characters), with headroom.
-constexpr size_t kSplitSuffixRoom = 64;
-
-// Whether `tensor` is in another shard of the split model whose shard
-// `splitNo` of `splitCount` is `path`. The shards are named as fabric's
-// loader finds them (`llama_get_list_splits`). `complete` turns false when a
-// shard cannot be read, so absence is then unknown.
-bool tensorInOtherShards(
-    const std::string& path, uint64_t splitNo, uint64_t splitCount,
-    const char* tensor, bool& complete) {
-  // split.count is a u16 in fabric; a larger value is not a model it loads.
-  if (splitCount > UINT16_MAX || splitNo >= splitCount) {
-    complete = false;
-    return false;
-  }
-  std::vector<char> buf(path.size() + kSplitSuffixRoom, 0);
-  const int32_t prefixLen = llama_split_prefix(
-      buf.data(),
-      buf.size(),
-      path.c_str(),
-      static_cast<int32_t>(splitNo),
-      static_cast<int32_t>(splitCount));
-  if (prefixLen <= 0) {
-    complete = false;
-    return false;
-  }
-  const std::string prefix(buf.data(), static_cast<size_t>(prefixLen));
-  for (uint64_t shard = 0; shard < splitCount; ++shard) {
-    if (shard == splitNo) {
-      continue;
-    }
-    const int32_t len = llama_split_path(
-        buf.data(),
-        buf.size(),
-        prefix.c_str(),
-        static_cast<int32_t>(shard),
-        static_cast<int32_t>(splitCount));
-    const std::string shardPath(
-        buf.data(), static_cast<size_t>(std::max(len, 0)));
-    // Only regular files are opened, as for the first file
-    // (`requireDraftModelFile`): opening a FIFO would block.
-    std::error_code error;
-    if (!std::filesystem::is_regular_file(shardPath, error)) {
-      complete = false;
-      continue;
-    }
-    gguf_init_params init = {};
-    init.no_alloc = true;
-    gguf_context* ctx = gguf_init_from_file(shardPath.c_str(), init);
-    if (ctx == nullptr) {
-      complete = false;
-      continue;
-    }
-    const bool found = gguf_find_tensor(ctx, tensor) >= 0;
-    gguf_free(ctx);
-    if (found) {
-      return true;
-    }
-  }
-  return false;
-}
-
 } // namespace
 
 GgufShape readGgufShape(const std::string& path) {
@@ -258,42 +109,17 @@ GgufShape readGgufShape(const std::string& path) {
     shape.arch = prefix;
     // As fabric's `n_embd_out()`: a Gemma 4 assistant carries the target's
     // width in `embedding_length_out` and its own in `embedding_length`.
-    shape.embd = readGgufU32(ctx, prefix + ".embedding_length");
     shape.width = readGgufU32(ctx, prefix + ".embedding_length_out");
     if (shape.width == 0) {
-      shape.width = shape.embd;
+      shape.width = readGgufU32(ctx, prefix + ".embedding_length");
     }
-    shape.layers = readGgufU32(ctx, prefix + ".block_count");
     shape.mtpLayers = readGgufU32(ctx, prefix + ".nextn_predict_layers");
-    shape.targetLayers = readGgufIntArray(ctx, prefix + ".target_layers");
-    // Fabric parses it from its string form, so any integer type is taken.
-    shape.blockSize = static_cast<int64_t>(
-        readGgufUnsigned(ctx, (prefix + ".block_size").c_str()).value_or(0));
-    // As fabric's `llama_model_meta_val_str` check: absent, or "true".
-    const int64_t confidence =
-        gguf_find_key(ctx, (prefix + ".has_confidence_head").c_str());
-    if (confidence >= 0) {
-      const auto type = gguf_get_kv_type(ctx, confidence);
-      shape.confidenceHead =
-          (type == GGUF_TYPE_BOOL && gguf_get_val_bool(ctx, confidence)) ||
-          (type == GGUF_TYPE_STRING &&
-           std::string(gguf_get_val_str(ctx, confidence)) == "true");
-    }
   }
-  shape.markovHead = gguf_find_tensor(ctx, "markov_w1.weight") >= 0;
   const int64_t tokens = gguf_find_key(ctx, "tokenizer.ggml.tokens");
   if (tokens >= 0 && gguf_get_kv_type(ctx, tokens) == GGUF_TYPE_ARRAY) {
     shape.vocab = static_cast<int64_t>(gguf_get_arr_n(ctx, tokens));
   }
-  const uint64_t splitCount = readGgufUnsigned(ctx, "split.count").value_or(1);
-  const uint64_t splitNo = readGgufUnsigned(ctx, "split.no").value_or(0);
   gguf_free(ctx);
-  // Fabric's loader assembles every shard's tensors into one model, so a
-  // tensor of a split model may be in any of them.
-  if (!shape.markovHead && splitCount > 1) {
-    shape.markovHead = tensorInOtherShards(
-        path, splitNo, splitCount, "markov_w1.weight", shape.tensorsComplete);
-  }
   return shape;
 }
 
@@ -306,25 +132,21 @@ parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config) {
       result.type = COMMON_SPECULATIVE_TYPE_DRAFT_MTP;
     } else if (type->second == "draft-dflash") {
       result.type = COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH;
-    } else if (type->second == "draft-dspark") {
-      result.type = COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK;
-    } else if (type->second == "auto") {
-      result.autoDetect = true;
     } else if (type->second != "none") {
       throw std::invalid_argument(
           type->first +
-          " must be \"none\", \"draft-mtp\", \"draft-dflash\", "
-          "\"draft-dspark\" or \"auto\", got: \"" +
+          " must be \"none\", \"draft-mtp\" or \"draft-dflash\", got: \"" +
           type->second + "\"");
     }
   }
   if (const auto draftModel = takeConfigKey(
           config, SPEC_DRAFT_MODEL_KEY, SPEC_DRAFT_MODEL_KEY_DASHED)) {
-    // A DFlash or DSpark model, or an external MTP head (llama-server's
+    // A DFlash model, or an external MTP head (llama-server's
     // `--spec-type draft-mtp -md`).
     if (!result.enabled()) {
       throw std::invalid_argument(
-          draftModel->first + " requires spec-type " + SPEC_TYPES_WITH_DRAFT);
+          draftModel->first +
+          " requires spec-type \"draft-mtp\" or \"draft-dflash\"");
     }
     const std::string& path = draftModel->second;
     const auto isSeparator = [](char c) { return c == '/' || c == '\\'; };
@@ -338,20 +160,10 @@ parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config) {
     }
     result.draftModelPath = path;
   }
-  if (result.draftModelPath.empty()) {
-    if (result.type == COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH) {
-      throw std::invalid_argument(
-          "spec-type \"draft-dflash\" requires spec-draft-model");
-    }
-    if (result.type == COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK) {
-      throw std::invalid_argument(
-          "spec-type \"draft-dspark\" requires spec-draft-model");
-    }
-    if (result.autoDetect) {
-      throw std::invalid_argument(
-          "spec-type \"auto\" requires spec-draft-model, whose header it "
-          "reads the type from");
-    }
+  if (result.type == COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH &&
+      result.draftModelPath.empty()) {
+    throw std::invalid_argument(
+        "spec-type \"draft-dflash\" requires spec-draft-model");
   }
   const common_params_speculative_draft defaults;
   if (const auto nMax = takeConfigKey(
@@ -373,8 +185,8 @@ parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config) {
                               result.draftPMin.has_value();
   if (hasDraftOption && !result.enabled()) {
     throw std::invalid_argument(
-        std::string("spec-draft-* options require spec-type ") +
-        SPEC_TYPES_WITH_DRAFT);
+        "spec-draft-* options require spec-type \"draft-mtp\" or "
+        "\"draft-dflash\"");
   }
   const int32_t nMax = result.draftNMax.value_or(defaults.n_max);
   if (result.draftNMin.value_or(defaults.n_min) > nMax) {
@@ -413,179 +225,10 @@ std::string mtpHeadMismatch(
   return reason;
 }
 
-std::string dsparkDrafterMismatch(const GgufShape& drafter, float pMin) {
-  if (drafter.arch.empty()) {
-    return "";
-  }
-  if (drafter.arch != "dflash") {
-    return "it is a " + drafter.arch + " model, not a DSpark drafter";
-  }
-  // Not found in a shard set that could not all be read is not absent.
-  if (!drafter.markovHead && drafter.tensorsComplete) {
-    return "it has no DSpark Markov head (markov_w1); a DFlash drafter takes "
-           "spec-type \"draft-dflash\"";
-  }
-  if (pMin > 0.0F && !drafter.confidenceHead) {
-    return "it has no confidence head, which spec-draft-p-min needs; set "
-           "spec-draft-p-min to 0";
-  }
-  return "";
-}
-
-std::string dflashTargetMismatch(
-    const GgufShape& drafter, int64_t targetWidth, int64_t targetLayers,
-    int64_t targetVocab) {
-  if (drafter.arch != "dflash") {
-    return "";
-  }
-  std::string reason;
-  const auto add = [&reason](const std::string& part) {
-    reason += reason.empty() ? "" : "; ";
-    reason += part;
-  };
-  // Its token embeddings and Markov head are sized to its own vocabulary,
-  // which fabric indexes with the model's token ids, also with a `d2t` map:
-  // that only shrinks the output head, and scatters it back to the drafter's
-  // own vocabulary. Fabric's converter gives every drafter the model's
-  // tokenizer, so another size means another model.
-  if (drafter.vocab > 0 && targetVocab > 0 && drafter.vocab != targetVocab) {
-    add(std::to_string(drafter.vocab) + " tokens, the model's " +
-        std::to_string(targetVocab));
-  }
-  // Its input projection takes each target layer's hidden state at its own
-  // width.
-  if (drafter.embd > 0 && targetWidth > 0 && drafter.embd != targetWidth) {
-    add("hidden width " + std::to_string(drafter.embd) + ", the model's " +
-        std::to_string(targetWidth));
-  }
-  // Fabric reads layer inputs 0 through the layer count, the last being the
-  // final hidden state.
-  if (targetLayers > 0) {
-    for (const int64_t layer : drafter.targetLayers) {
-      if (layer < 0 || layer > targetLayers) {
-        add("it reads target layer " + std::to_string(layer) +
-            ", the model has " + std::to_string(targetLayers) + " layers");
-        break;
-      }
-    }
-  }
-  // Fabric builds a Markov head, under draft-dspark and draft-dflash alike,
-  // only with a positive `dflash.block_size`; without one its fit asserts.
-  if (drafter.markovHead && drafter.blockSize <= 0) {
-    add("it has a DSpark Markov head but no positive dflash.block_size");
-  }
-  return reason;
-}
-
-std::string draftTargetMismatch(
-    const common_params_speculative& params, int64_t targetWidth,
-    int64_t targetLayers, int64_t targetVocab) {
-  if (!params.has_dft() ||
-      (!hasType(params, COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH) &&
-       !hasType(params, COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK))) {
-    return "";
-  }
-  return dflashTargetMismatch(
-      readGgufShape(params.draft.mparams.path),
-      targetWidth,
-      targetLayers,
-      targetVocab);
-}
-
-std::string draftTargetMismatchForFile(
-    const common_params_speculative& params, const std::string& targetPath) {
-  if (!params.has_dft() ||
-      (!hasType(params, COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH) &&
-       !hasType(params, COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK))) {
-    return "";
-  }
-  const GgufShape target = readGgufShape(targetPath);
-  // Fabric's layer count leaves the MTP layers out.
-  const int64_t layers =
-      target.layers > target.mtpLayers ? target.layers - target.mtpLayers : 0;
-  return draftTargetMismatch(params, target.embd, layers, target.vocab);
-}
-
-std::string draftModelMismatch(const common_params_speculative& params) {
-  if (!hasType(params, COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK) ||
-      !params.has_dft()) {
-    return "";
-  }
-  return dsparkDrafterMismatch(
-      readGgufShape(params.draft.mparams.path), params.draft.p_min);
-}
-
-common_speculative_type detectSpeculativeType(const std::string& path) {
-  const std::string prefix =
-      "spec-type \"auto\" cannot read the type of '" + path + "': ";
-  gguf_init_params init = {};
-  init.no_alloc = true;
-  gguf_context* ctx = gguf_init_from_file(path.c_str(), init);
-  if (ctx == nullptr) {
-    throw std::invalid_argument(prefix + "it is not a readable GGUF file");
-  }
-  // Fabric's detection (`common_speculative_types_from_gguf`), applied to the
-  // header opened once here: the file is not reopened, and every key fabric's
-  // reader takes for granted is checked, so a malformed header is an error
-  // rather than a GGML_ASSERT.
-  common_speculative_type type = COMMON_SPECULATIVE_TYPE_NONE;
-  std::string reason;
-  const int64_t archId = gguf_find_key(ctx, "general.architecture");
-  if (archId < 0 || gguf_get_kv_type(ctx, archId) != GGUF_TYPE_STRING) {
-    reason = "general.architecture is missing or not a string";
-  } else if (readGgufUnsigned(ctx, "split.count").value_or(1) > 1) {
-    reason = "it is one shard of a split model, of which fabric reads only "
-             "the first; set spec-type explicitly";
-  } else if (
-      const std::string arch = gguf_get_val_str(ctx, archId);
-      arch == "dflash") {
-    // The Markov head distinguishes draft-dspark from draft-dflash.
-    type = gguf_find_tensor(ctx, "markov_w1.weight") >= 0
-               ? COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK
-               : COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH;
-  } else {
-    const std::string key = arch + ".block_count";
-    const int64_t id = gguf_find_key(ctx, key.c_str());
-    if (id < 0 || gguf_get_kv_type(ctx, id) != GGUF_TYPE_UINT32 ||
-        gguf_get_val_u32(ctx, id) == 0) {
-      reason = key + " is missing, not a u32 or 0";
-    } else {
-      // MTP is the last block's NextN projection only, as in llama-server:
-      // a Gemma 4 assistant names its MTP tensors differently.
-      const std::string mtp = "blk." +
-                              std::to_string(gguf_get_val_u32(ctx, id) - 1) +
-                              ".nextn.eh_proj.weight";
-      if (gguf_find_tensor(ctx, mtp.c_str()) >= 0) {
-        type = COMMON_SPECULATIVE_TYPE_DRAFT_MTP;
-      } else {
-        reason = "no speculative type was detected: it is not a dflash "
-                 "model and has no " +
-                 mtp + "; set spec-type explicitly";
-      }
-    }
-  }
-  gguf_free(ctx);
-  if (!reason.empty()) {
-    throw std::invalid_argument(prefix + reason);
-  }
-  return type;
-}
-
 void applySpeculativeConfig(
-    const SpeculativeConfig& requested, common_params& params) {
-  if (!requested.enabled()) {
+    const SpeculativeConfig& config, common_params& params) {
+  if (!config.enabled()) {
     return;
-  }
-  SpeculativeConfig config = requested;
-  if (config.autoDetect) {
-    config.type = detectSpeculativeType(config.draftModelPath);
-    config.autoDetect = false;
-    QLOG_IF(
-        Priority::INFO,
-        string_format(
-            "[Speculative] spec-type \"auto\" detected \"%s\" from '%s'\n",
-            common_speculative_type_to_str(config.type).c_str(),
-            config.draftModelPath.c_str()));
   }
   params.speculative.types = {config.type};
   if (config.draftNMax.has_value()) {
@@ -607,8 +250,8 @@ void applySpeculativeConfig(
 
   // Every generating sequence feeds its sample plus its whole draft in one
   // step: the batch scheduler grants a sequence at most one ubatch and drops
-  // a draft that does not fit, and DFlash and DSpark draft every sequence in
-  // one batch of n_batch tokens, which fabric asserts on overflow.
+  // a draft that does not fit, and DFlash drafts every sequence in one batch
+  // of n_batch tokens, which fabric asserts on overflow.
   const int32_t perSeqTokens = std::min(
       std::min(params.n_ubatch, params.n_batch),
       params.n_batch / std::max<int32_t>(1, params.n_parallel));
@@ -762,16 +405,6 @@ std::unique_ptr<SpeculativeRuntime> SpeculativeRuntime::create(
             "[Speculative] the MTP head '" + paramsDft.model.path +
                 "' does not match the model: " + mismatch + "\n");
       }
-    }
-    if (hasType(params.speculative, COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH) &&
-        params.speculative.has_dft() &&
-        readGgufShape(paramsDft.model.path).markovHead) {
-      // Fabric runs the Markov head either way, but drafts with DFlash's
-      // block layout and without confidence truncation.
-      QLOG_IF(
-          Priority::WARNING,
-          "[Speculative] the draft model has a DSpark Markov head; spec-type "
-          "\"draft-dspark\" drafts with it as trained\n");
     }
     runtime->specInit_ =
         common_speculative_init_from_params(paramsDft, modelTgt, ctxTgt);

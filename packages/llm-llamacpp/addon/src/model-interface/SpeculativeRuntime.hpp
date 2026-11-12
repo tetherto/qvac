@@ -30,42 +30,33 @@ inline constexpr const char* SPEC_DRAFT_MODEL_KEY_DASHED = "spec-draft-model";
 /// Upper bound for `spec-draft-n-max`. A verification step decodes the
 /// sampled token plus the whole draft, so the draft has to fit one ubatch
 /// with room to spare; llama-server does not bound it, but no MTP head or
-/// DFlash or DSpark block produces useful drafts this long.
+/// DFlash block produces useful drafts this long.
 inline constexpr unsigned MAX_SPEC_DRAFT_N_MAX = 64;
 
 /// Speculative-decoding options from the load config. Absent keys keep
 /// llama.cpp's `common_params_speculative` defaults.
 struct SpeculativeConfig {
-  /// `COMMON_SPECULATIVE_TYPE_NONE` when `spec-type` is absent, "none" or
-  /// "auto" (until `applySpeculativeConfig` detects it).
+  /// `COMMON_SPECULATIVE_TYPE_NONE` when `spec-type` is absent or "none".
   common_speculative_type type = COMMON_SPECULATIVE_TYPE_NONE;
-  /// `spec-type: "auto"`: the type is read from the draft model's header, as
-  /// llama-server does for `-md` without `--spec-type`.
-  bool autoDetect = false;
   std::optional<int32_t> draftNMax;
   std::optional<int32_t> draftNMin;
   std::optional<float> draftPMin;
   /// The draft model file (`spec-draft-model`, llama-server's `-md`): the
-  /// DFlash or DSpark model, or an external MTP head for `draft-mtp`.
+  /// DFlash model, or an external MTP head for `draft-mtp`.
   std::string draftModelPath;
 
-  /// True for a resolved type and for an unresolved `auto`.
   [[nodiscard]] bool enabled() const {
-    return autoDetect || type != COMMON_SPECULATIVE_TYPE_NONE;
+    return type != COMMON_SPECULATIVE_TYPE_NONE;
   }
 };
 
 /// Consumes the speculative keys from the load config. `spec-type` accepts
 /// `none`, `draft-mtp`, which drafts with the target model's own
 /// next-token heads or with the external MTP head given as
-/// `spec-draft-model`, `draft-dflash`, which drafts with the DFlash model
-/// given as `spec-draft-model`, `draft-dspark`, which drafts with the
-/// DSpark model (a DFlash model with a Markov head) given as
-/// `spec-draft-model`, and `auto`, which reads one of the three from the
-/// `spec-draft-model` header (see `detectSpeculativeType`). Throws
-/// std::invalid_argument for an unknown type, a malformed or out-of-range
-/// value, both spellings of one key, draft options without a type,
-/// `draft-dflash`, `draft-dspark` or `auto` without `spec-draft-model`, a
+/// `spec-draft-model`, and `draft-dflash`, which drafts with the DFlash model
+/// given as `spec-draft-model`. Throws std::invalid_argument for an unknown
+/// type, a malformed or out-of-range value, both spellings of one key, draft
+/// options without a type, `draft-dflash` without `spec-draft-model`, a
 /// `spec-draft-model` that is not an absolute local path, or one without a
 /// type.
 SpeculativeConfig
@@ -78,37 +69,14 @@ void requireDraftModelFile(const SpeculativeConfig& config);
 struct GgufShape {
   std::string arch;
   int64_t width = 0;
-  /// `embedding_length`: the model's own hidden width (fabric's `n_embd`).
-  int64_t embd = 0;
   int64_t vocab = 0;
-  /// `block_count`, MTP layers included.
-  int64_t layers = 0;
   int64_t mtpLayers = 0;
-  /// A DFlash or DSpark model's `target_layers`: the target layers whose
-  /// inputs it drafts from.
-  std::vector<int64_t> targetLayers;
-  /// A DSpark Markov head (`markov_w1.weight`), which tells a DSpark model
-  /// from a plain DFlash one, as fabric's type detection does. Looked for in
-  /// every shard of a split model, as fabric's loader assembles them.
-  bool markovHead = false;
-  /// `dflash.block_size`, which fabric's DSpark Markov head asserts is
-  /// present and positive; 0 when absent.
-  int64_t blockSize = 0;
-  /// False when a split model's other shards could not all be read, so a
-  /// tensor not found may still be in one of them.
-  bool tensorsComplete = true;
-  /// `dflash.has_confidence_head`, which fabric reads as present when the
-  /// key is absent.
-  bool confidenceHead = true;
 };
 
 /// The architecture, the hidden-state width an MTP head reads, its vocabulary
-/// size, its MTP layers (`nextn_predict_layers`) and its DSpark heads, from a
-/// GGUF's header, empty or 0 when absent. The width is `embedding_length_out`
-/// when set, as fabric's `n_embd_out()`, else `embedding_length`. Metadata
-/// comes from `path`, the first shard of a split model; tensors are looked
-/// for in every shard, found by fabric's own split naming
-/// (`llama_split_prefix` / `llama_split_path`).
+/// size and its MTP layers (`nextn_predict_layers`), from a GGUF's header,
+/// empty or 0 when absent. The width is `embedding_length_out` when set, as
+/// fabric's `n_embd_out()`, else `embedding_length`.
 GgufShape readGgufShape(const std::string& path);
 
 /// Why an external MTP head cannot draft for the target, or empty. Fabric
@@ -117,67 +85,13 @@ std::string mtpHeadMismatch(
     int64_t headWidth, int64_t targetWidth, int64_t headVocab,
     int64_t targetVocab);
 
-/// Why `drafter` cannot draft for `spec-type: "draft-dspark"`, or empty: it
-/// is not a DFlash-architecture model, it has no Markov head (a plain DFlash
-/// model, which fabric would run with DSpark's block layout and draft
-/// poorly), or `pMin` asks for confidence truncation from a model without a
-/// confidence head (fabric then refuses to start speculation). An unreadable
-/// header (no architecture), or a Markov head that may be in a shard that
-/// could not be read, is not judged: the load reports it.
-std::string dsparkDrafterMismatch(const GgufShape& drafter, float pMin);
-
-/// `dsparkDrafterMismatch` for the draft model `params` loads, read from its
-/// header; empty unless `params` asks for `draft-dspark` with a draft model.
-std::string draftModelMismatch(const common_params_speculative& params);
-
-/// Why the DFlash or DSpark model `drafter` cannot draft for a target of
-/// `targetWidth` hidden width, `targetLayers` layers (MTP layers excluded)
-/// and `targetVocab` tokens, or empty: another vocabulary (a `d2t` map does
-/// not change it), another hidden width, a target layer past the model's
-/// last, or a Markov head without a positive `dflash.block_size`. Fabric
-/// checks none of these and aborts the process on each.
-/// Empty for a model that is not `dflash`; a value of 0 is unknown and not
-/// compared.
-std::string dflashTargetMismatch(
-    const GgufShape& drafter, int64_t targetWidth, int64_t targetLayers,
-    int64_t targetVocab);
-
-/// `dflashTargetMismatch` for the draft model `params` loads, read from its
-/// header; empty unless `params` asks for `draft-dflash` or `draft-dspark`
-/// with a draft model.
-std::string draftTargetMismatch(
-    const common_params_speculative& params, int64_t targetWidth,
-    int64_t targetLayers, int64_t targetVocab);
-
-/// `draftTargetMismatch` against the model at `targetPath`, read from its
-/// header (its width, its layers without the MTP layers, its vocabulary).
-/// The load and the fit run it before fabric fits the draft model next to
-/// the target, which is where a mismatch aborts.
-std::string draftTargetMismatchForFile(
-    const common_params_speculative& params, const std::string& targetPath);
-
-/// The speculative type the draft model at `path` drafts with, by the rules
-/// of fabric's `common_speculative_types_from_gguf` so it matches
-/// llama-server: `draft-dspark` for a `dflash` model with a Markov head,
-/// `draft-dflash` for one without, `draft-mtp` for a model whose last block
-/// has an MTP projection (`blk.N.nextn.eh_proj.weight`; a Gemma 4 assistant
-/// names its MTP tensors differently and is not detected). The rules run on
-/// the one header read here, after checking what fabric's reader assumes
-/// without checking (a string architecture and, outside `dflash`, a positive
-/// u32 `<arch>.block_count`), so a malformed file is an error instead of an
-/// abort. Throws std::invalid_argument for an unreadable file, one shard of a
-/// split model (fabric reads only the first shard; give the type
-/// explicitly), malformed metadata, or a model none of the rules detects.
-common_speculative_type detectSpeculativeType(const std::string& path);
-
-/// Resolves `spec-type: "auto"` with `detectSpeculativeType`, then copies
-/// `config` into `params.speculative` and sizes the target context's
+/// Copies `config` into `params.speculative` and sizes the target context's
 /// output buffers for a verification batch, exactly as llama-server does
 /// before it creates the target context (`server_output_limits`). A draft
-/// model (DFlash, DSpark or an external MTP head) is placed like the target
-/// model (its GPU layers and devices), since the addon has no separate
-/// options for it. `n_max` is lowered to fit one ubatch and the batch's
-/// per-sequence share; throws
+/// model (DFlash or an external MTP head) is placed like the target model
+/// (its GPU layers and devices), since the addon has no separate options for
+/// it. `n_max` is
+/// lowered to fit one ubatch and the batch's per-sequence share; throws
 /// `std::invalid_argument` when not even one draft token fits. Must run
 /// before `common_init_from_params`: `load_mtp` and `n_rs_seq` are derived
 /// from `params.speculative` when the model and context are created.
@@ -186,8 +100,8 @@ void applySpeculativeConfig(
 
 /// The draft model and context as fabric fits them next to the target model
 /// (`common_init_from_params`): an MTP context on the target's weights or an
-/// external head, or a DFlash or DSpark draft model. Lets a fit projection
-/// count the draft side like the load does.
+/// external head, or a DFlash draft model. Lets a fit projection count the
+/// draft side like the load does.
 class SpeculativeFitModel {
 public:
   /// Null when `params` has no MTP or draft-model speculative decoding.
@@ -201,8 +115,8 @@ public:
 
   /// Measures the draft side as fabric's fit does, at the context of
   /// `cparamsTarget` and, for a draft that borrows from the target (a Gemma 4
-  /// assistant, a DFlash or DSpark model without its own embeddings), next to
-  /// the target model, then adds it to `breakdown`, the target's rows on
+  /// assistant, a DFlash model without its own embeddings), next to the
+  /// target model, then adds it to `breakdown`, the target's rows on
   /// `devices` (see `addDraftMemory`). As in fabric's fit, it is measured at
   /// the requested placement, not the fitted one. False, with `breakdown`
   /// untouched, when it cannot be measured.
@@ -276,9 +190,9 @@ void restoreDraftSequenceState(
 void resetDraftSequence(llama_context* ctxTgt, llama_seq_id seqId);
 
 /// Model-wide speculative-decoding state: the draft context (MTP, on the
-/// target's weights or an external head, DFlash or DSpark) created against
-/// the target model, and the `common_speculative` that drafts for every
-/// sequence of the target context. One per loaded model; sequence
+/// target's weights or an external head, or DFlash) created against the
+/// target model, and the `common_speculative` that drafts for
+/// every sequence of the target context. One per loaded model; sequence
 /// drivers hold a non-owning pointer through `LlmModelContext`.
 ///
 /// Must be destroyed before the target context: the draft context points at
@@ -316,9 +230,9 @@ public:
   [[nodiscard]] int32_t nDraftMax() const;
 
   /// Feeds a batch the target context just decoded to the speculative state
-  /// (the MTP head, DFlash and DSpark read the target's hidden states). Call
-  /// after every successful target `llama_decode`, as llama-server does after
-  /// each decode. Returns false on a draft-context decode failure.
+  /// (the MTP head and DFlash read the target's hidden states). Call after
+  /// every successful target `llama_decode`, as llama-server does after each
+  /// decode. Returns false on a draft-context decode failure.
   [[nodiscard]] bool process(const llama_batch& batch) const;
 
   /// The runtime whose target context is `ctxTgt`, or null.
