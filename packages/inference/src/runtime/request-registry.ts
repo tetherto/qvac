@@ -251,6 +251,21 @@ export interface RequestRegistry {
    * Idempotent — calling `end` after a scope dispose is a no-op.
    */
   end(requestId: string, outcome: RequestOutcome, sessionId?: string): Promise<void>
+
+  /**
+   * Make `signal` the parent signal of the request the caller is about to
+   * begin under `(sessionId, requestId)`, unless that begin passes its own
+   * `parentSignal`. The host binds the transport's signal of a call before
+   * dispatching it, so a cancel over the transport aborts the call's work. A
+   * call whose id is already in use binds nothing: its begin is refused, and
+   * its signal must not reach the request that holds the id. Returns a
+   * function that removes the binding; call it once the call has finished.
+   */
+  bindTransportSignal(
+    requestId: string,
+    sessionId: string | undefined,
+    signal: AbortSignalLike & { readonly reason?: unknown }
+  ): () => void
 }
 
 interface RegistryEntry {
@@ -450,6 +465,9 @@ export function createRequestRegistry(options?: {
    * work after the session closed.
    */
   const pendingBegins = new Map<string, PendingBegin>()
+  // The transport signal of each call the host is dispatching, by the key its
+  // request begins under: see `bindTransportSignal`.
+  const transportSignals = new Map<string, AbortSignalLike & { readonly reason?: unknown }>()
   // Models being torn down: a begin(...) for one starts aborted. The barrier
   // half of cancelAndDrain — catches begins its scan can't see yet.
   const drainingModels = new Set<string>()
@@ -794,10 +812,37 @@ export function createRequestRegistry(options?: {
     }
   }
 
-  async function begin(opts: BeginOpts): Promise<ManagedRequestContext> {
-    const sessionId = opts.sessionId ?? OWNER_SESSION_ID
+  function idInUse(registryKey: string): boolean {
+    return (
+      entries.has(registryKey) ||
+      waitersById.has(registryKey) ||
+      pendingBegins.has(registryKey) ||
+      disposingIds.has(registryKey)
+    )
+  }
+
+  function bindTransportSignal(
+    requestId: string,
+    sessionId: string | undefined,
+    signal: AbortSignalLike & { readonly reason?: unknown }
+  ): () => void {
+    const registryKey = requestRegistryKey(sessionId ?? OWNER_SESSION_ID, requestId)
+    if (transportSignals.has(registryKey) || idInUse(registryKey)) return () => {}
+    transportSignals.set(registryKey, signal)
+    return () => {
+      if (transportSignals.get(registryKey) === signal) transportSignals.delete(registryKey)
+    }
+  }
+
+  async function begin(beginOpts: BeginOpts): Promise<ManagedRequestContext> {
+    const sessionId = beginOpts.sessionId ?? OWNER_SESSION_ID
     if (sessionId !== OWNER_SESSION_ID) options?.assertSessionOpen?.(sessionId)
-    const registryKey = requestRegistryKey(sessionId, opts.requestId)
+    const registryKey = requestRegistryKey(sessionId, beginOpts.requestId)
+    const transportSignal = transportSignals.get(registryKey)
+    const opts =
+      beginOpts.parentSignal || !transportSignal
+        ? beginOpts
+        : { ...beginOpts, parentSignal: transportSignal }
     // A request id is reserved for its whole lifecycle: the time it spends
     // *queued* for an admission slot, while it is active, and while it is
     // tearing down. `waitersById` holds the still-queued begins (not yet in
@@ -806,12 +851,7 @@ export function createRequestRegistry(options?: {
     // otherwise a second begin with the same id would enqueue behind the first
     // and overwrite its `waitersById` index (unreachable by `cancel(...)`), or
     // activate while the prior request is still releasing its native context.
-    if (
-      entries.has(registryKey) ||
-      waitersById.has(registryKey) ||
-      pendingBegins.has(registryKey) ||
-      disposingIds.has(registryKey)
-    ) {
+    if (idInUse(registryKey)) {
       throw new RequestIdConflictError(opts.requestId)
     }
     // Reserve synchronously so a same-tick duplicate begin is rejected before
@@ -1156,6 +1196,7 @@ export function createRequestRegistry(options?: {
     drainSession,
     end,
     policy,
+    bindTransportSignal,
     // Test-only: lets the registry race tests assert the bound
     // invariants on the internal "cancelled-before-begin" set without
     // exposing it as a public surface. Kept off the `RequestRegistry`

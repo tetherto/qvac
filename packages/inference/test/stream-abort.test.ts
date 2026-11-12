@@ -9,6 +9,7 @@ import { registerPlugin, clearPlugins } from '@/plugins'
 import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
 import { ModelType } from '@/schemas'
 import type { Request, Response } from '@/schemas'
+import { InferenceCancelledError } from '@/errors'
 import { ALL_LOG_ID, getAppLogger } from '@/logging'
 import { loggingStream } from '@/api/logging-stream'
 import { subscribeServerLogs } from '@/api/subscribe-logs'
@@ -227,7 +228,7 @@ test('stream with a signal still runs a reply handler', async function (t) {
   }
 })
 
-test('a plugin stream ignores the signal and runs to its end', async function (t) {
+test('a plugin stream stops when its transport signal aborts', async function (t) {
   clearPlugins()
   clearAllLoggingStreams()
   let release: () => void = () => {}
@@ -280,14 +281,11 @@ test('a plugin stream ignores the signal and runs to its end', async function (t
     controller.abort(new Error('stop'))
     release()
 
-    t.is(tokenOf(await responses.next()), 'b', 'the stream keeps running after the abort')
-    const last = await responses.next()
-    t.is(
-      (last.value as unknown as { done: boolean }).done,
-      true,
-      'the stream ends with the handler'
+    await t.exception(
+      responses.next(),
+      InferenceCancelledError as unknown as new () => Error,
+      'the next chunk is not delivered: the invoke was cancelled'
     )
-    t.ok((await responses.next()).done, 'nothing follows the done frame')
   } finally {
     unregisterModel('gated-model')
     await tearDown()

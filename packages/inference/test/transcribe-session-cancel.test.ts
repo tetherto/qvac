@@ -1,7 +1,8 @@
 import test from 'brittle'
 import { registerModel, unregisterModel } from '@/runtime/model-registry'
 import { getRequestRegistry } from '@/runtime/request-context'
-import { transcribe } from '@/plugins/ops/transcribe'
+import Buffer from 'bare-buffer'
+import { transcribe, transcribeStream } from '@/plugins/ops/transcribe'
 import { bciTranscribe, bciTranscribeStream } from '@/plugins/ops/bci-transcribe'
 import { InferenceCancelledError } from '@/errors/index'
 import { ModelType } from '@/schemas'
@@ -60,6 +61,56 @@ test('transcribe: cancelling a queued request leaves the running one alone', asy
     release()
     t.is((await firstChunk).value, 'first', 'the running request finishes')
     await running.return(undefined as never)
+  } finally {
+    unregisterModel(modelId)
+  }
+})
+
+// A model-wide cancel of a running parakeet stream leaves its stream state to
+// the next session, so an aborted stream ends its input instead and drains.
+test('transcribe stream: an abort ends the input instead of cancelling the model', async (t) => {
+  const modelId = `transcribe-stream-abort-${Date.now()}`
+  let addonCancelCalls = 0
+  let inputEnded = false
+  const model = {
+    async runStreaming(input: AsyncIterable<unknown>) {
+      return {
+        async *iterate() {
+          for await (const _ of input) yield [{ text: 'chunk' }]
+          inputEnded = true
+        },
+        async await() {},
+        stats: {}
+      }
+    },
+    async reload() {},
+    addon: {
+      async cancel() {
+        addonCancelCalls++
+      }
+    }
+  }
+  registerModel(modelId, {
+    model: model as never,
+    path: '/tmp/whisper.gguf',
+    config: { audio_format: 's16le' } as never,
+    modelType: ModelType.whispercppTranscription
+  } as never)
+  // Live audio: the caller never ends it.
+  const audio = (async function* () {
+    yield Buffer.from('a')
+    await new Promise(() => {})
+  })()
+
+  try {
+    const stream = transcribeStream(modelId, audio as never, undefined, false, undefined, 's-1')
+    t.is((await stream.next()).value, 'chunk')
+
+    t.is(getRequestRegistry().cancel({ requestId: 's-1' }), 1)
+
+    t.ok((await stream.next()).done, 'the stream ends')
+    t.ok(inputEnded, 'the session saw its input end')
+    t.is(addonCancelCalls, 0, 'the model was not cancelled')
   } finally {
     unregisterModel(modelId)
   }

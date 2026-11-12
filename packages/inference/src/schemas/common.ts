@@ -285,5 +285,5 @@ export type Request = z.input<typeof requestSchema>
 export type Response = z.infer<typeof responseSchema>
 export type RPCOptions = z.infer<typeof rpcOptionsSchema>
 
-/** `signal` ends only streams with `endsOnAbort` (the log stream); stop inference with `cancel`. */
+/** `signal` aborting ends the call and cancels its request on the worker. */
 export type AbortableRPCOptions = RPCOptions & { signal?: AbortSignalLike }

@@ -230,9 +230,23 @@ async function* iterateWithLifeSignal<T>(source: AsyncGenerator<T>): AsyncGenera
   }
 }
 
-// Destroying the response stream makes the worker abort the engine stream.
-// Registered before `untilAborted`, so the destroyed stream's late rejection is
-// dropped there instead of reaching `iterateWithLifeSignal` as a worker crash.
+/** A reply that times out cancels the request, so the worker stops its work too. */
+async function replyWithin(
+  req: RPC.OutgoingRequest,
+  timeout?: number
+): Promise<Buffer | string | null> {
+  try {
+    return await withTimeout(req.reply('utf-8'), timeout)
+  } catch (error) {
+    if (error instanceof OperationTimeoutError) req.cancel(error)
+    throw error
+  }
+}
+
+// Destroying the response stream before the reply ends cancels the request,
+// and the worker cancels its work. Registered before `untilAborted`, so the
+// destroyed stream's late rejection is dropped there instead of reaching
+// `iterateWithLifeSignal` as a worker crash.
 function destroyOnAbort(responseStream: { destroy(): void }, signal?: AbortSignalLike): () => void {
   if (!signal) return () => {}
   const onAbort = () => responseStream.destroy()
@@ -417,7 +431,7 @@ async function sendBase<T extends Request>(
   const payload = JSON.stringify(payloadObj)
   req.send(payload, 'utf-8')
 
-  const response = await awaitWithLifeSignal(withTimeout(req.reply('utf-8'), options?.timeout))
+  const response = await awaitWithLifeSignal(replyWithin(req, options?.timeout))
 
   const resPayload = responseSchema.parse(JSON.parse(response?.toString() || '{}'))
   logger.debug('ResPayload', { type: resPayload.type })
@@ -456,7 +470,7 @@ async function sendProfiled<T extends Request>(
     timings.sendStart = nowMs()
     req.send(payload, 'utf-8')
 
-    const response = await awaitWithLifeSignal(withTimeout(req.reply('utf-8'), options?.timeout))
+    const response = await awaitWithLifeSignal(replyWithin(req, options?.timeout))
     timings.firstResponseAt = nowMs()
 
     const parseStart = nowMs()
@@ -492,7 +506,7 @@ async function sendProfiled<T extends Request>(
   }
 }
 
-/** `options.signal` ends the stream; only `endsOnAbort` handlers stop on the worker. */
+/** `options.signal` ends the stream and cancels the request on the worker. */
 export async function* stream<T extends Request>(
   input: T,
   options: AbortableRPCOptions = {},

@@ -13,6 +13,7 @@ import {
 import type ASRGgml from '@qvac/asr-ggml'
 import type Buffer from 'bare-buffer'
 import { createAudioStream } from '@/utils/audio-input'
+import { untilAborted } from '@/utils/until-aborted'
 import { getEngineLogger } from '@/logging/index'
 import { InferenceCancelledError, TranscriptionFailedError } from '@/errors/index'
 import type { TranscribeResponse } from '@/utils/addon-responses'
@@ -56,6 +57,10 @@ interface StreamableModel {
     audioStream: AsyncIterable<Buffer>,
     opts?: RunStreamingOpts
   ): Promise<StreamingModelResponse>
+}
+
+async function* iterateAll<T>(source: AsyncIterable<T>): AsyncGenerator<T> {
+  yield* source
 }
 
 function hasRunStreaming(model: AnyModel): model is AnyModel & StreamableModel {
@@ -417,28 +422,20 @@ export async function* transcribeStream(
     throw new TranscriptionFailedError(`Model ${modelId} does not support streaming transcription`)
   }
 
-  const onAbort = () => {
-    const addon = model.addon
-    if (addon?.cancel) {
-      addon.cancel.call(addon).catch((err: unknown) => {
-        requestLogger.warn(
-          `[cancel] addon.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`
-        )
-      })
-    }
-  }
-  ctx.signal.addEventListener('abort', onAbort, { once: true })
-  if (ctx.signal.aborted) onAbort()
-  ctx.scope.defer(() => {
-    ctx.signal.removeEventListener('abort', onAbort)
-  })
+  // A streaming session ends when its input ends, so an abort ends the input
+  // and the session drains the audio it already has, yielding nothing more.
+  // The model-wide `addon.cancel()` the unary path uses is not safe here: a
+  // parakeet stream cancelled that way leaves its stream state to the next
+  // session, whose output starts with the cancelled session's audio and never
+  // ends.
+  const input = untilAborted(iterateAll(audioInputStream), ctx.signal)
 
   const runOpts = buildRunStreamingOpts(engineType, opts)
   const modelStart = nowMs()
-  const response = await model.runStreaming(audioInputStream, runOpts)
+  const response = await model.runStreaming(input, runOpts)
 
   for await (const output of response.iterate()) {
-    if (ctx.signal.aborted) break
+    if (ctx.signal.aborted) continue
     requestLogger.debug('Live Transcription Update:', output)
 
     if (!Array.isArray(output)) {

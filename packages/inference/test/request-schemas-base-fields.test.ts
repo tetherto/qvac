@@ -1,35 +1,12 @@
 import test from 'brittle'
 import type { z } from 'zod'
 import { requestSchema } from '@/schemas/common'
-import { trackedRequestSchema } from '@/schemas/request-base'
+import { trackedRequestSchema, UNTRACKED_REQUEST_TYPES } from '@/schemas/request-base'
 
 // Every request the engine accepts carries the caller session, and every
 // request that registers cancellable work carries the caller's request id.
 // This walks the request union so a method added without the base schema
 // fails here rather than silently running as the owner session.
-
-/** Methods that only need the session: lifecycle, lookups and the session methods themselves. */
-const SESSION_SCOPED_ONLY = new Set([
-  'assessModelFit',
-  'calcTokens',
-  'cancel',
-  'closeSession',
-  'deleteCache',
-  'getLoadedModelInfo',
-  'getModelInfo',
-  'getSystemResources',
-  'heartbeat',
-  'loggingStream',
-  'modelRegistryGetModel',
-  'modelRegistryList',
-  'modelRegistrySearch',
-  'openSession',
-  'resume',
-  'state',
-  'stopRpcServer',
-  'suspend',
-  'unloadModel'
-])
 
 type AnySchema = z.ZodType & {
   def: {
@@ -106,13 +83,14 @@ test('every request schema carries the caller session', (t) => {
   }
 })
 
-test('every request that registers work carries a request id', (t) => {
+// The engine assigns a request id to every request type outside
+// `UNTRACKED_REQUEST_TYPES` that arrives without one, so the two must agree.
+test('every request that registers work carries a request id, and no other does', (t) => {
   const leaves = leafObjects(requestSchema as unknown as AnySchema)
   for (const leaf of leaves) {
     const type = requestType(leaf)
-    if (SESSION_SCOPED_ONLY.has(type)) continue
     // `cancel` names a target requestId of its own; only the base field counts.
     const tracked = leaf.shape?.['requestId'] === trackedRequestSchema.shape.requestId
-    t.ok(tracked, `${type} registers work and takes a requestId`)
+    t.is(tracked, !UNTRACKED_REQUEST_TYPES.has(type), `${type} takes a requestId: ${tracked}`)
   }
 })

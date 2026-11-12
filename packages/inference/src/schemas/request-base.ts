@@ -47,5 +47,33 @@ export const trackedRequestSchema = sessionScopedRequestSchema.extend({
   requestId: requestIdSchema.optional()
 })
 
+/**
+ * The request types that register no work of their own: lifecycle, lookups
+ * and the session methods. Their schemas extend `sessionScopedRequestSchema`;
+ * every other request type extends `trackedRequestSchema`.
+ * `test/request-schemas-base-fields.test.ts` holds the two lists to that.
+ */
+export const UNTRACKED_REQUEST_TYPES: ReadonlySet<string> = new Set([
+  'assessModelFit',
+  'calcTokens',
+  'cancel',
+  'closeSession',
+  'deleteCache',
+  'getLoadedModelInfo',
+  'getModelInfo',
+  'getSystemResources',
+  'heartbeat',
+  'loggingStream',
+  'modelRegistryGetModel',
+  'modelRegistryList',
+  'modelRegistrySearch',
+  'openSession',
+  'resume',
+  'state',
+  'stopRpcServer',
+  'suspend',
+  'unloadModel'
+])
+
 export type SessionScopedRequest = z.infer<typeof sessionScopedRequestSchema>
 export type TrackedRequest = z.infer<typeof trackedRequestSchema>
