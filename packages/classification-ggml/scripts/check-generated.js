@@ -12,7 +12,9 @@ const files = [
   'bridgedepth.js',
   'bridgedepth.d.ts',
   'ggml-model.js',
-  'ggml-model.d.ts'
+  'ggml-model.d.ts',
+  'fit.js',
+  'fit.d.ts'
 ]
 const result = spawnSync(
   'git',
