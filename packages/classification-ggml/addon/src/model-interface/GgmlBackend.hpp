@@ -12,7 +12,8 @@
 
 namespace classification_ggml {
 
-// Held around backend registration, device selection and device queries.
+// Held around backend registration and device lookup. Device init and memory
+// queries run outside it, they can be slow and do not touch the registry.
 // ggml's backend registry has no lock of its own, and a backendsDir load
 // appends to it while another thread may be iterating it. It covers this
 // addon's callers only.

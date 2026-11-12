@@ -22,6 +22,19 @@ test('assessFit rejects a path with a NUL character before loading the binding',
     assessFit({ modelPath: MODEL, backendsDir: '/backends\0' }),
     /backendsDir must not contain a NUL character/
   )
+  await t.exception.all(
+    assessFit({ modelPath: MODEL, backend: 'MTL0\0junk' }),
+    /backend must not contain a NUL character/
+  )
+})
+
+test('assessFit rejects options of the wrong type before loading the binding', async (t) => {
+  await t.exception.all(assessFit({ modelPath: MODEL, backend: 5 }), /backend must be a string/)
+  await t.exception.all(
+    assessFit({ modelPath: MODEL, backendsDir: 5 }),
+    /backendsDir must be a string/
+  )
+  await t.exception.all(assessFit({ modelPath: MODEL, workload: 7 }), /workload must be an object/)
 })
 
 test('assessFit rejects invalid memory margins before loading the binding', async (t) => {

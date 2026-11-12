@@ -84,12 +84,14 @@ plus the disparity at the input size. `threads` defaults to 8, as `MegaLoc`
 and `BridgeDepth` do.
 
 Tensor data is not read, so a file whose weights `load()` rejects can still be
-reported as fitting. Each call initializes the selected backend, so it costs
+reported as fitting. The verdict covers one input size: BridgeDepth keeps the
+resized position embedding of up to 8 input sizes, so a caller that cycles
+through sizes holds a little more host memory per size. Each call initializes the selected backend, so it costs
 about what a backend init costs.
 
 `assessFit` returns a Promise and concurrent calls run one at a time. A request
-with a relative `modelPath`, a path holding a NUL character or an out-of-range
-number rejects with a
+with a relative `modelPath`, an option of the wrong type, a string holding a
+NUL character or an out-of-range number rejects with a
 `TypeError` or `RangeError` before the addon is called. A model that cannot be
 read, a GGUF of another model, an unavailable backend, a BridgeDepth size
 inference would reject, or an otherwise invalid request rejects with an

@@ -454,9 +454,9 @@ inline FitRequest parseFitRequest(js_env_t* env, js_callback_info_t* info) {
   return parsed;
 }
 
-// Runs on the worker thread with owned values only. Backend registration,
-// device selection and device queries take backendRegistryMutex, which model
-// loads take too; fits are also serialised so two do not measure at once.
+// Runs on the worker thread with owned values only. Backend registration
+// and device lookup take backendRegistryMutex, which model loads take too; fits
+// are also serialised so two do not measure at once.
 inline fit::FitResult runFit(const FitRequest& request) {
   static std::mutex fitMutex;
   const std::lock_guard<std::mutex> lock(fitMutex);

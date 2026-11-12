@@ -1,0 +1,36 @@
+name: SDK e2e model cache
+description: |
+  Caches SDK e2e models one actions/cache entry per model, from a plan written by
+  packages/sdk-e2e/scripts/model-cache-plan.mjs, keyed by the registry sha256 of the model's
+  files. `save` (on-merge-sdk-e2e-model-cache.yml) uploads only entries the cache lacks, only on
+  main, and only files whose sha256 matches the registry.
+
+  The runner executes dist/. After editing src/, run `npm ci && npm run build` and commit dist/.
+
+inputs:
+  mode:
+    description: "`restore` or `save`."
+    required: true
+  plan:
+    description: Path to the model-cache plan JSON.
+    required: true
+  lookup-only:
+    description: "`restore` only: check which entries exist without downloading them."
+    required: false
+    default: "false"
+  fail-on-save-error:
+    description: "`save` only: fail when a planned entry could not be saved (the seed sets it)."
+    required: false
+    default: "false"
+
+outputs:
+  hits:
+    description: Entries restored (or present, with lookup-only).
+  complete:
+    description: "'true' when nothing is left to download."
+  missing-models:
+    description: JSON array of model constants left to download, for QVAC_E2E_BOOTSTRAP_MODELS.
+
+runs:
+  using: node24
+  main: dist/index.mjs

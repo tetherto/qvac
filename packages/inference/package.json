@@ -82,6 +82,10 @@
       "types": "./dist/models/registry/index.d.ts",
       "import": "./dist/models/registry/index.js"
     },
+    "./model-cache-layout": {
+      "types": "./dist/model-cache-layout.d.ts",
+      "import": "./dist/model-cache-layout.js"
+    },
     "./llamacpp-completion/plugin": {
       "types": "./dist/plugins/builtin/llamacpp-completion/plugin.d.ts",
       "import": "./dist/plugins/builtin/llamacpp-completion/plugin.js"
@@ -220,7 +224,7 @@
     "@qvac/diffusion-cpp": "^0.35.0",
     "@qvac/embed-llamacpp": "^0.56.0",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.69.0",
+    "@qvac/llm-llamacpp": "^0.70.0",
     "@qvac/ocr-ggml": "^0.33.0",
     "@qvac/translation-nmtcpp": "^0.25.0",
     "@qvac/tts-ggml": "^0.15.0",
@@ -284,7 +288,7 @@
     "@qvac/diffusion-cpp": "^0.35.0",
     "@qvac/embed-llamacpp": "^0.56.0",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.69.0",
+    "@qvac/llm-llamacpp": "^0.70.0",
     "@qvac/ocr-ggml": "^0.33.0",
     "@qvac/translation-nmtcpp": "^0.25.0",
     "@qvac/tts-ggml": "^0.15.0",
