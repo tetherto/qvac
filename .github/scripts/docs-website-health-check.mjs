@@ -287,29 +287,54 @@ function parseArgs (argv) {
   return args
 }
 
-async function fetchText (url, timeoutMs) {
+async function fetchTextOnce (url, { timeoutMs, fetchImpl }) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const res = await fetch(url, {
+    const res = await fetchImpl(url, {
       redirect: 'follow',
       signal: controller.signal,
       headers: { 'user-agent': USER_AGENT }
     })
-    if (res.status >= 400) throw new Error(`HTTP ${res.status}`)
+    if (res.status >= 400) {
+      const err = new Error(`HTTP ${res.status}`)
+      err.status = res.status
+      throw err
+    }
     return await res.text()
   } finally {
     clearTimeout(timer)
   }
 }
 
+/**
+ * Fetch a text resource (sitemap, `_redirects`) with the same retry policy as
+ * `probeUrl`: network errors, timeouts, 429 and 5xx are retried; any other
+ * HTTP error (e.g. a 404 sitemap) throws on the first attempt.
+ */
+export async function fetchText (url, { timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl = fetch, retries = DEFAULT_RETRIES, retryDelayMs = DEFAULT_RETRY_DELAY_MS, onRetry } = {}) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fetchTextOnce(url, { timeoutMs, fetchImpl })
+    } catch (err) {
+      if (attempt >= retries || !isTransient({ status: err.status ?? null })) throw err
+      onRetry?.(err, attempt + 1)
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, retryDelayMs * (attempt + 1)))
+    }
+  }
+}
+
+function logFetchRetry (url, timeoutMs) {
+  return (err, attempt) => console.warn(`  retry ${attempt}: ${url} -> ${describeError(err, timeoutMs)}`)
+}
+
 async function loadRedirects (args) {
   if (args.redirectsUrl) {
     try {
-      const text = await fetchText(args.redirectsUrl, args.timeoutMs)
+      const text = await fetchText(args.redirectsUrl, { timeoutMs: args.timeoutMs, onRetry: logFetchRetry(args.redirectsUrl, args.timeoutMs) })
       return { text, source: args.redirectsUrl }
     } catch (err) {
-      console.warn(`warning: could not fetch _redirects from ${args.redirectsUrl} (${err.message})`)
+      console.warn(`warning: could not fetch _redirects from ${args.redirectsUrl} (${describeError(err, args.timeoutMs)})`)
     }
   }
   if (args.redirectsFile) {
@@ -341,7 +366,8 @@ async function main () {
 
   let sitemapXml
   try {
-    sitemapXml = await fetchText(new URL('/sitemap.xml', args.origin).toString(), args.timeoutMs)
+    const sitemapUrl = new URL('/sitemap.xml', args.origin).toString()
+    sitemapXml = await fetchText(sitemapUrl, { timeoutMs: args.timeoutMs, onRetry: logFetchRetry(sitemapUrl, args.timeoutMs) })
   } catch (err) {
     console.error(`error: could not fetch sitemap from ${args.origin}/sitemap.xml (${describeError(err, args.timeoutMs)})`)
     process.exit(1)
@@ -376,10 +402,9 @@ async function main () {
     return
   }
 
-  console.error(`FAILED — ${failures.length} of ${results.length} URL(s) broken:`)
-  for (const f of failures) {
-    console.error(`  [${f.category}] ${f.url} -> ${f.status ?? f.error}`)
-  }
+  // Each broken URL was already logged as a `broken:` line when its probe
+  // settled, and the step summary lists them all; only the total goes here.
+  console.error(`FAILED — ${failures.length} of ${results.length} URL(s) broken (see the \`broken:\` lines above).`)
   process.exit(1)
 }
 

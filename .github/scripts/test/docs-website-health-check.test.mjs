@@ -9,6 +9,7 @@ import {
   buildUrlSet,
   probeUrl,
   runProbes,
+  fetchText,
   formatSummary
 } from '../docs-website-health-check.mjs'
 
@@ -234,6 +235,28 @@ test('runProbes reports each retry with its error and category', async () => {
   })
   assert.equal(result.ok, true)
   assert.deepEqual(retried, [[`${ORIGIN}/a/`, 'redirect', 'fetch failed', 1]])
+})
+
+test('fetchText retries a transient sitemap failure and returns the body', async () => {
+  let calls = 0
+  const fetchImpl = async () => {
+    calls++
+    if (calls === 1) throw new TypeError('fetch failed')
+    if (calls === 2) return new Response('', { status: 503 })
+    return new Response('<urlset/>', { status: 200 })
+  }
+  const retried = []
+  const text = await fetchText(`${ORIGIN}/sitemap.xml`, { fetchImpl, retryDelayMs: 0, onRetry: (_err, attempt) => retried.push(attempt) })
+  assert.equal(text, '<urlset/>')
+  assert.equal(calls, 3)
+  assert.deepEqual(retried, [1, 2])
+})
+
+test('fetchText fails a 404 sitemap on the first attempt', async () => {
+  let calls = 0
+  const fetchImpl = async () => { calls++; return new Response('', { status: 404 }) }
+  await assert.rejects(fetchText(`${ORIGIN}/sitemap.xml`, { fetchImpl, retryDelayMs: 0 }), /HTTP 404/)
+  assert.equal(calls, 1)
 })
 
 test('runProbes preserves order and attaches category', async () => {
