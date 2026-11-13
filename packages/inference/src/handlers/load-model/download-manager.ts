@@ -52,7 +52,6 @@ export interface Transfer {
   abortController: AbortController
   subscribers: Map<string, Subscriber>
   lastProgress?: ModelProgressUpdate | undefined
-  downloadPromise?: Promise<string> | undefined
   clearCache: boolean
   cacheHit?: boolean
 }
@@ -71,6 +70,8 @@ export interface StartOrJoinResult {
 }
 
 const activeTransfers = new Map<string, Transfer>()
+// Every download until it settles, including a cancelled one a retry replaced.
+const runningDownloads = new Set<Promise<string>>()
 const deletingKeys = new Set<string>()
 let nextSubscriberId = 0
 
@@ -266,7 +267,7 @@ export function startOrJoinDownload(
       transfer.cacheHit = cacheHit
     }
   })
-  transfer.downloadPromise = downloadPromise
+  runningDownloads.add(downloadPromise)
 
   downloadPromise
     .then(
@@ -283,6 +284,7 @@ export function startOrJoinDownload(
       }
     )
     .finally(() => {
+      runningDownloads.delete(downloadPromise)
       if (activeTransfers.get(downloadKey) === transfer) {
         activeTransfers.delete(downloadKey)
       }
@@ -459,9 +461,7 @@ export async function cleanupDownloads(): Promise<void> {
   isCleaningUp = true
 
   try {
-    const downloadPromises = Array.from(activeTransfers.values())
-      .filter((t) => t.downloadPromise !== undefined)
-      .map((t) => t.downloadPromise!.catch(() => {}))
+    const downloadPromises = Array.from(runningDownloads, (download) => download.catch(() => {}))
 
     cancelAllDownloads()
 
@@ -470,5 +470,7 @@ export async function cleanupDownloads(): Promise<void> {
     }
   } catch (error) {
     logger.error('❌ Error during download cleanup:', error)
+  } finally {
+    isCleaningUp = false
   }
 }

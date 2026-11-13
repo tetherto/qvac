@@ -1,8 +1,13 @@
 import test from 'brittle'
 import { AbortController } from 'bare-abort-controller'
-import { startOrJoinDownload, type DownloadContext } from '@/handlers/load-model/download-manager'
+import {
+  cancelTransfer,
+  cleanupDownloads,
+  startOrJoinDownload,
+  type DownloadContext
+} from '@/handlers/load-model/download-manager'
 import { createDisposableScope } from '@/runtime/disposable-scope'
-import { InferenceCancelledError } from '@/errors'
+import { DownloadCancelledError, InferenceCancelledError } from '@/errors'
 
 // -----------------------------------------------------------------------------
 // download-manager: per-`requestId` cancel + content-addressed dedup.
@@ -255,4 +260,29 @@ test('download-manager: cancel error carries the requestId', async (t) => {
   }
 
   dl.reject(new Error('download aborted'))
+})
+
+test('download-manager: cleanup waits for a cancelled download a retry replaced', async (t) => {
+  const key = `cleanup-replaced:${Math.random()}`
+  const cancelled = makeControllableDownload()
+  startOrJoinDownload(key, cancelled.start).promise.catch(() => {})
+  await cancelled.attached
+  cancelTransfer(key)
+
+  const retry = makeControllableDownload()
+  const retried = startOrJoinDownload(key, retry.start).promise
+  await retry.attached
+  retry.settle('/models/retried')
+  await retried
+
+  let done = false
+  const cleanup = cleanupDownloads().then(() => {
+    done = true
+  })
+  await new Promise<void>((resolve) => setTimeout(() => resolve(), 50))
+  t.absent(done, 'cleanup waits while the cancelled download is still running')
+
+  cancelled.reject(new DownloadCancelledError())
+  await cleanup
+  t.ok(done, 'cleanup finishes once it settles')
 })
