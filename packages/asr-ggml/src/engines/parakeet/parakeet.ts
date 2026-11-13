@@ -466,7 +466,11 @@ export class ParakeetInterface {
         MAX_BUFFERED_BYTES + " bytes",
       );
     }
-    this._bufferedAudio.push(normalized);
+    // Kept until end of input: copy when it still shares the caller's memory,
+    // since the caller may reuse its buffer for the next chunk.
+    this._bufferedAudio.push(
+      sharesMemory(normalized, rawData) ? normalized.slice() : normalized,
+    );
     this._bufferedBytes += normalized.byteLength;
     return this._nextJobId;
   }
@@ -806,4 +810,14 @@ export class ParakeetInterface {
     if (this._bufferedAudio.length === 1) return this._bufferedAudio[0];
     return mergeFloat32Chunks(this._bufferedAudio);
   }
+}
+
+function sharesMemory(
+  samples: Float32Array,
+  source: ArrayBufferLike | ArrayBufferView | undefined,
+): boolean {
+  if (source === undefined) return false;
+  return ArrayBuffer.isView(source)
+    ? samples.buffer === source.buffer
+    : samples.buffer === source;
 }
