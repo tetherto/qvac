@@ -1,0 +1,330 @@
+name: Mobile Tests (Fabric Consumers)
+
+# On-demand Device Farm validation of a fabric change: runs every fabric
+# consumer's mobile suite, Android and iOS, in one run, with the
+# `fabric-prebuilds` artifact of an `On PR Trigger (Fabric)` run overlaid on the
+# device. Each consumer installs its addon prebuilds from the matching
+# *_prebuild_run_id, or the published release when that input is empty. An
+# ABI-breaking fabric needs the run ids: published addons cannot load against it.
+#
+# Devices are each consumer's workflow_call defaults (addon pool, dual flagship
+# or sharded pool), not the one-device manual path. See
+# docs/ci/MOBILE-ON-DEMAND.md#fabric-consumers-in-one-run.
+
+on:
+  workflow_dispatch:
+    inputs:
+      fabric_prebuild_run_id:
+        description: "`On PR Trigger (Fabric)` run whose `fabric-prebuilds` artifact replaces the published @qvac/fabric runtime on every device."
+        type: string
+        required: true
+      nx_prebuild_run_id:
+        description: "`On PR Trigger (nx)` run whose prebuilds to install for embed-llamacpp, ggml-rpc-server, llm-llamacpp, model-fit, ocr-ggml, translation-nmtcpp and turbovec-ggml. Empty installs the published addons."
+        type: string
+        required: false
+        default: ""
+      classification_prebuild_run_id:
+        description: "`On PR Trigger (Classification-ggml)` run whose prebuilds to install for classification-ggml. Empty installs the published addon."
+        type: string
+        required: false
+        default: ""
+      vla_prebuild_run_id:
+        description: "`On PR Trigger (VLA)` run whose prebuilds to install for vla. Empty installs the published addon."
+        type: string
+        required: false
+        default: ""
+      consumers:
+        description: "Comma-separated consumers to run, or `all`: classification-ggml, embed-llamacpp, ggml-rpc-server, llm-llamacpp, model-fit, ocr-ggml, translation-nmtcpp, turbovec-ggml, vla."
+        type: string
+        required: false
+        default: all
+      ref:
+        description: "Git ref the consumers' test code is checked out from (branch, tag, SHA or refs/pull/<n>/head). Blank uses the dispatched commit."
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+# A second dispatch for the same fabric run and consumers supersedes the first,
+# so the Device Farm runs are never stacked; a subset dispatch leaves a full run
+# alone. The called workflows key their own groups per package, so the consumers
+# below run in parallel.
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.fabric_prebuild_run_id }}-${{ inputs.consumers }}
+  cancel-in-progress: true
+
+jobs:
+  # Fails in seconds, before any build, on a bad input or a run that lacks an
+  # artifact a selected consumer needs.
+  resolve:
+    name: Resolve consumers
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    outputs:
+      consumers: ${{ steps.resolve.outputs.consumers }}
+    steps:
+      - name: Resolve consumers and prebuild sources
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          FABRIC_RUN_ID: ${{ inputs.fabric_prebuild_run_id }}
+          NX_RUN_ID: ${{ inputs.nx_prebuild_run_id }}
+          CLASSIFICATION_RUN_ID: ${{ inputs.classification_prebuild_run_id }}
+          VLA_RUN_ID: ${{ inputs.vla_prebuild_run_id }}
+          CONSUMERS: ${{ inputs.consumers }}
+        run: |
+          set -euo pipefail
+          set -f
+
+          ALL_CONSUMERS="classification-ggml embed-llamacpp ggml-rpc-server llm-llamacpp model-fit ocr-ggml translation-nmtcpp turbovec-ggml vla"
+          errors=0
+          fail() { echo "::error::$1"; errors=$((errors + 1)); }
+
+          is_run_id() { [[ "$1" =~ ^[1-9][0-9]*$ ]]; }
+          if ! is_run_id "$FABRIC_RUN_ID"; then
+            fail "fabric_prebuild_run_id must be a numeric run id, got '$FABRIC_RUN_ID'."
+          fi
+          for pair in "nx_prebuild_run_id=$NX_RUN_ID" "classification_prebuild_run_id=$CLASSIFICATION_RUN_ID" "vla_prebuild_run_id=$VLA_RUN_ID"; do
+            value="${pair#*=}"
+            if [ -n "$value" ] && ! is_run_id "$value"; then
+              fail "${pair%%=*} must be empty or a numeric run id, got '$value'."
+            fi
+          done
+
+          requested="$(printf '%s' "$CONSUMERS" | tr ',' ' ')"
+          if ! [[ "$requested" =~ ^[a-z0-9\ -]*$ ]]; then
+            fail "consumers may only hold consumer names, commas and spaces, got '$CONSUMERS'."
+            requested=""
+          fi
+          if [ -z "${requested// /}" ] || [ "${requested// /}" = "all" ]; then
+            requested="$ALL_CONSUMERS"
+          fi
+          selected=()
+          for consumer in $requested; do
+            case " $ALL_CONSUMERS " in
+              *" $consumer "*) ;;
+              *) fail "Unknown consumer '$consumer'. Valid: ${ALL_CONSUMERS// /, }, or all."; continue ;;
+            esac
+            case " ${selected[*]:-} " in *" $consumer "*) continue ;; esac
+            selected+=("$consumer")
+          done
+          [ "$errors" -eq 0 ] || exit 1
+
+          # One artifact listing per run id, live (unexpired) names only. Returns
+          # 2 when the run cannot be read, 3 when that was already reported.
+          listed() {
+            local run="$1" cache="$RUNNER_TEMP/artifacts-$1.txt"
+            [ -f "$cache.failed" ] && return 3
+            if [ ! -f "$cache" ]; then
+              if ! gh api --paginate "repos/$REPO/actions/runs/$run/artifacts?per_page=100" \
+                  --jq '.artifacts[] | select(.expired | not) | .name' > "$cache"; then
+                rm -f "$cache"
+                touch "$cache.failed"
+                return 2
+              fi
+            fi
+            grep -qxF "$2" "$cache"
+          }
+          require() {
+            local input="$1" run="$2" artifact="$3" status=0
+            listed "$run" "$artifact" || status=$?
+            case "$status" in
+              0) return 0 ;;
+              2) fail "Cannot read run $run from $input. Check that it is a run in $REPO." ;;
+              3) ;;
+              *) fail "Run $run from $input has no live '$artifact' artifact (missing, expired, or not built by that run)." ;;
+            esac
+            return 1
+          }
+
+          require fabric_prebuild_run_id "$FABRIC_RUN_ID" fabric-prebuilds || true
+
+          used_nx=false; used_classification=false; used_vla=false
+          {
+            echo "### Fabric consumers"
+            echo ""
+            echo "Fabric: run $FABRIC_RUN_ID"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+          for consumer in "${selected[@]}"; do
+            case "$consumer" in
+              classification-ggml) input=classification_prebuild_run_id; run="$CLASSIFICATION_RUN_ID"; used_classification=true ;;
+              vla) input=vla_prebuild_run_id; run="$VLA_RUN_ID"; used_vla=true ;;
+              *) input=nx_prebuild_run_id; run="$NX_RUN_ID"; used_nx=true ;;
+            esac
+            bundle="prebuilds-$consumer"
+            [ "$consumer" = vla ] && bundle="prebuilds-vla-ggml"
+            if [ -n "$run" ]; then
+              if require "$input" "$run" "$bundle"; then
+                echo "- $consumer: \`$bundle\` from run $run" >> "$GITHUB_STEP_SUMMARY"
+              fi
+            else
+              echo "::notice::$consumer installs the published addon ($input is empty). An ABI-breaking fabric needs that run id."
+              echo "- $consumer: published addon" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+          for pair in "nx_prebuild_run_id=$NX_RUN_ID=$used_nx" "classification_prebuild_run_id=$CLASSIFICATION_RUN_ID=$used_classification" "vla_prebuild_run_id=$VLA_RUN_ID=$used_vla"; do
+            IFS='=' read -r input run used <<< "$pair"
+            if [ -n "$run" ] && [ "$used" = false ]; then
+              echo "::warning::$input=$run is set but no selected consumer uses it."
+            fi
+          done
+
+          [ "$errors" -eq 0 ] || exit 1
+          echo "consumers=$(printf '%s\n' "${selected[@]}" | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
+
+  # One call per consumer. Each called workflow runs Android and iOS itself.
+  # Every caller job grants actions: read so the called workflow can download
+  # another run's artifacts (mobile-caller-permissions.test.mjs).
+  classification-ggml:
+    needs: resolve
+    if: contains(fromJSON(needs.resolve.outputs.consumers || '[]'), 'classification-ggml')
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-classification-ggml.yml
+    secrets: inherit
+    with:
+      ref: ${{ inputs.ref }}
+      fabric_prebuild_run_id: ${{ inputs.fabric_prebuild_run_id }}
+      prebuild_run_id: ${{ inputs.classification_prebuild_run_id }}
+
+  embed-llamacpp:
+    needs: resolve
+    if: contains(fromJSON(needs.resolve.outputs.consumers || '[]'), 'embed-llamacpp')
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-embed-llamacpp.yml
+    secrets: inherit
+    with:
+      ref: ${{ inputs.ref }}
+      fabric_prebuild_run_id: ${{ inputs.fabric_prebuild_run_id }}
+      prebuild_run_id: ${{ inputs.nx_prebuild_run_id }}
+
+  ggml-rpc-server:
+    needs: resolve
+    if: contains(fromJSON(needs.resolve.outputs.consumers || '[]'), 'ggml-rpc-server')
+    # contents/packages: write cover the called workflow's manual-only
+    # prebuild-manual job. GitHub checks a called job's permissions when the
+    # run starts, even for a job that will be skipped.
+    permissions:
+      actions: read
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-ggml-rpc-server.yml
+    secrets: inherit
+    with:
+      ref: ${{ inputs.ref }}
+      fabric_prebuild_run_id: ${{ inputs.fabric_prebuild_run_id }}
+      prebuild_run_id: ${{ inputs.nx_prebuild_run_id }}
+
+  llm-llamacpp:
+    needs: resolve
+    if: contains(fromJSON(needs.resolve.outputs.consumers || '[]'), 'llm-llamacpp')
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
+    secrets: inherit
+    with:
+      ref: ${{ inputs.ref }}
+      fabric_prebuild_run_id: ${{ inputs.fabric_prebuild_run_id }}
+      prebuild_run_id: ${{ inputs.nx_prebuild_run_id }}
+
+  model-fit:
+    needs: resolve
+    if: contains(fromJSON(needs.resolve.outputs.consumers || '[]'), 'model-fit')
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-model-fit.yml
+    secrets: inherit
+    with:
+      ref: ${{ inputs.ref }}
+      fabric_prebuild_run_id: ${{ inputs.fabric_prebuild_run_id }}
+      prebuild_run_id: ${{ inputs.nx_prebuild_run_id }}
+
+  ocr-ggml:
+    needs: resolve
+    if: contains(fromJSON(needs.resolve.outputs.consumers || '[]'), 'ocr-ggml')
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-ocr-ggml.yml
+    secrets: inherit
+    with:
+      ref: ${{ inputs.ref }}
+      fabric_prebuild_run_id: ${{ inputs.fabric_prebuild_run_id }}
+      prebuild_run_id: ${{ inputs.nx_prebuild_run_id }}
+
+  translation-nmtcpp:
+    needs: resolve
+    if: contains(fromJSON(needs.resolve.outputs.consumers || '[]'), 'translation-nmtcpp')
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-translation-nmtcpp.yml
+    secrets: inherit
+    with:
+      ref: ${{ inputs.ref }}
+      fabric_prebuild_run_id: ${{ inputs.fabric_prebuild_run_id }}
+      prebuild_run_id: ${{ inputs.nx_prebuild_run_id }}
+
+  turbovec-ggml:
+    needs: resolve
+    if: contains(fromJSON(needs.resolve.outputs.consumers || '[]'), 'turbovec-ggml')
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-turbovec-ggml.yml
+    secrets: inherit
+    with:
+      ref: ${{ inputs.ref }}
+      fabric_prebuild_run_id: ${{ inputs.fabric_prebuild_run_id }}
+      prebuild_run_id: ${{ inputs.nx_prebuild_run_id }}
+
+  vla:
+    needs: resolve
+    if: contains(fromJSON(needs.resolve.outputs.consumers || '[]'), 'vla')
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-vla.yml
+    secrets: inherit
+    with:
+      ref: ${{ inputs.ref }}
+      fabric_prebuild_run_id: ${{ inputs.fabric_prebuild_run_id }}
+      prebuild_run_id: ${{ inputs.vla_prebuild_run_id }}
