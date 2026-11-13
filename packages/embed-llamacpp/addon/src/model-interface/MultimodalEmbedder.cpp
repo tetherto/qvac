@@ -5,6 +5,7 @@
 #include <charconv>
 #include <initializer_list>
 #include <limits>
+#include <mutex>
 #include <regex>
 #include <stdexcept>
 #include <system_error>
@@ -333,6 +334,15 @@ takeMultimodalOptions(ConfigMap& config, bool hasProjectionModel) {
   return options;
 }
 
+std::optional<int> imageTokenCap(int budget, int nUbatch) {
+  // At least one token: clip reads 0 as "keep the projector's default".
+  const int cap = std::max(nUbatch / 2, 1);
+  if (budget <= cap) {
+    return std::nullopt;
+  }
+  return cap;
+}
+
 MultimodalEmbedder::MultimodalEmbedder(
     const std::string& projectionPath, llama_model* model, llama_context* ctx,
     const common_params& params, bool modelOnGpu,
@@ -358,14 +368,62 @@ MultimodalEmbedder::MultimodalEmbedder(
   mparams.image_max_tokens = options.imageMaxTokens;
   mparams.skip_audio = options.noAudio;
 
+  // An input is decoded in one ubatch, so an image larger than the batch could
+  // never embed. As llama-server does for a mixed batch, the image budget is
+  // capped to half of it before the projector loads, the rest left for text.
+  const int nUbatch = static_cast<int>(llama_n_ubatch(ctx_));
+  std::optional<int> cap;
+  {
+    // The budget comes from the projector's metadata and the options, not
+    // from the backend, so the probe skips initializing the GPU.
+    mtmd_context_params probe = mparams;
+    probe.use_gpu = false;
+    probe.device = nullptr;
+    // mtmd_get_memory_usage swaps mtmd's process-wide logger while it runs;
+    // two loads probing at once would restore each other's swap.
+    static std::mutex probeMutex;
+    const std::lock_guard<std::mutex> lock(probeMutex);
+    cap = imageTokenCap(
+        mtmd_get_memory_usage(projectionPath.c_str(), probe).image_max_tokens,
+        nUbatch);
+  }
+  if (cap) {
+    std::string message = string_format(
+        "[BertModel] image-max-tokens capped to %d (half of batch_size %d) so "
+        "an image fits in one batch; raise batch_size for a larger image "
+        "budget\n",
+        *cap,
+        nUbatch);
+    if (mparams.image_min_tokens > *cap) {
+      message += string_format(
+          "[BertModel] image-min-tokens lowered from %d to %d with it\n",
+          mparams.image_min_tokens,
+          *cap);
+    }
+    llamaLogCallback(GGML_LOG_LEVEL_WARN, message.c_str(), nullptr);
+    mparams.image_max_tokens = *cap;
+    mparams.image_min_tokens = std::min(mparams.image_min_tokens, *cap);
+  }
+
   mctx_.reset(mtmd_init_from_file(projectionPath.c_str(), model_, mparams));
   if (!mctx_) {
+    // A cap below the projector's smallest image budget fails the load, and
+    // nothing in mtmd's result tells that apart from other failures.
+    const std::string hint =
+        cap ? string_format(
+                  " (image-max-tokens was capped to %d for batch_size %d: if "
+                  "that is below the projector's smallest image budget, raise "
+                  "batch_size or set image-min-tokens lower)",
+                  *cap,
+                  nUbatch)
+            : "";
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnableToLoadProjectionModel),
         string_format(
-            "failed to load the projection model '%s'",
-            projectionPath.c_str()));
+            "failed to load the projection model '%s'%s",
+            projectionPath.c_str(),
+            hint.c_str()));
   }
   batch_.reset(llama_batch_ext_init(ctx_));
 }
