@@ -37,6 +37,7 @@ export function handleGetLoadedModelInfo(
     modelType: entry.local.modelType,
     handlers,
     loadedAt: entry.local.loadedAt,
+    leaseCount: entry.leases.size,
     ...(plugin && { displayName: plugin.displayName }),
     ...(plugin && { addonPackage: plugin.addonPackage }),
     ...(entry.local.name && { name: entry.local.name }),

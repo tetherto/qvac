@@ -9,6 +9,7 @@ const callParams = {
   sampleRate: '$params.sampleRate?',
   textReply: '$params.textReply?',
   greedy: '$params.greedy?',
+  maxNewTokens: '$params.maxNewTokens?',
   messages: '$params.messages?'
 }
 
@@ -83,7 +84,14 @@ export const ttsMossTests: TestDefinition[] = [
   },
   {
     testId: 'tts-moss-speech-default-stream',
-    params: { text: 'What is two plus two? Answer briefly.', textReply: true, greedy: true },
+    // Without maxNewTokens the KV cache is sized for the whole 40960-token context (~6 GiB),
+    // which does not fit a shared 20 GB GPU next to the 9 GiB weights.
+    params: {
+      text: 'What is two plus two? Answer briefly.',
+      textReply: true,
+      greedy: true,
+      maxNewTokens: 64
+    },
     expectation: { validation: 'contains-any', contains: ['four', 'Four', '4'] },
     metadata: { category: 'tts', dependency: 'tts-moss-speech', estimatedDurationMs: 120000 },
     steps: textReplySteps()
@@ -98,7 +106,8 @@ export const ttsMossTests: TestDefinition[] = [
       ],
       stream: false,
       textReply: true,
-      greedy: true
+      greedy: true,
+      maxNewTokens: 64
     },
     expectation: { validation: 'contains-any', contains: ['two', 'Two', '2'] },
     metadata: { category: 'tts', dependency: 'tts-moss-speech', estimatedDurationMs: 120000 },

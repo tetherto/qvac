@@ -10,6 +10,8 @@ ARTIFACT_DIR="${ARTIFACT_DIR:-$(mktemp -d)}"
 QVAC_MODEL="${QVAC_MODEL:-qwen3.5-0.8b}"
 OPENCODE_TIMEOUT="${OPENCODE_TIMEOUT:-45m}"
 QVAC_HOST_LOG="${QVAC_HOST_LOG:-}"
+# Override to smoke an unpublished build, e.g. a local `npm pack` tarball.
+QVAC_PLUGIN_SPEC="${QVAC_PLUGIN_SPEC:-@qvac/opencode-plugin@latest}"
 
 mkdir -p "$SMOKE_DIR" "$ARTIFACT_DIR"
 SMOKE_DIR="$(cd "$SMOKE_DIR" && pwd -P)"
@@ -28,11 +30,11 @@ printf '%s\n' \
   > .npmrc
 
 npm install --no-fund --no-audit \
-  opencode-ai@latest \
-  @qvac/opencode-plugin@latest
+  @opencode/cli@latest \
+  "$QVAC_PLUGIN_SPEC"
 
 npm ls --json \
-  opencode-ai \
+  @opencode/cli \
   @qvac/opencode-plugin \
   @qvac/ai-sdk-provider \
   @qvac/cli \
@@ -48,7 +50,7 @@ const { createRequire } = require('node:module')
 
 const requireFromProject = createRequire(`${process.cwd()}/package.json`)
 const names = [
-  'opencode-ai',
+  '@opencode/cli',
   '@qvac/opencode-plugin',
   '@qvac/ai-sdk-provider',
   '@qvac/cli',
@@ -123,20 +125,24 @@ if ! "$QVAC_REAL_BIN" --version | tee -a "$ARTIFACT_DIR/qvac-version.txt"; then
   echo "Unable to read QVAC CLI version from $QVAC_REAL_BIN" | tee -a "$ARTIFACT_DIR/qvac-version.txt"
 fi
 
+# OpenCode 2.x installs a plugin named by package into its own cache, so point it
+# at the copy installed above; that is the one whose versions are reported.
+QVAC_PLUGIN_DIR="$SMOKE_DIR/node_modules/@qvac/opencode-plugin"
+
 cat > opencode.json <<JSON
 {
   "\$schema": "https://opencode.ai/config.json",
-  "plugin": [
-    [
-      "@qvac/opencode-plugin",
-      {
+  "plugins": [
+    {
+      "package": "${QVAC_PLUGIN_DIR}",
+      "options": {
         "model": "${QVAC_MODEL}",
         "ctxSize": 32768,
         "reasoningBudget": 0,
         "tools": true,
         "serveBinPath": "${QVAC_SERVE_WRAPPER}"
       }
-    ]
+    }
   ]
 }
 JSON
@@ -160,8 +166,9 @@ fi
 
 run_opencode=(
   npx opencode run
+  --standalone
   --print-logs
-  --log-level DEBUG
+  --log-level debug
   --model "qvac/${QVAC_MODEL}"
   --format json
   "Reply with only the word qvac-ok."
@@ -198,7 +205,7 @@ node "$VERIFY_RUN_OUTPUT" "$ARTIFACT_DIR/opencode-run.jsonl"
   echo
   echo "## Smoke result"
   echo
-  echo "OpenCode completed successfully through \`@qvac/opencode-plugin@latest\` using \`qvac/${QVAC_MODEL}\`."
+  echo "OpenCode completed successfully through \`${QVAC_PLUGIN_SPEC}\` using \`qvac/${QVAC_MODEL}\`."
 } | tee "$ARTIFACT_DIR/smoke-result.md" > /dev/null
 
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then

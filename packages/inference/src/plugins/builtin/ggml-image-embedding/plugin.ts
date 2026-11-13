@@ -37,14 +37,14 @@ export const imageEmbeddingPlugin = definePlugin({
       responseSchema: embedResponseSchema,
       streaming: false,
       cancel: { scope: 'none' },
-      handler: embed
+      handler: (request, _inputStream, context) => embed(request, context)
     }),
     embedBatch: defineHandler({
       requestSchema: embedBatchRequestSchema,
       responseSchema: embedBatchResponseSchema,
       streaming: false,
       cancel: { scope: 'none' },
-      handler: embedBatch
+      handler: (request, _inputStream, context) => embedBatch(request, context)
     })
   }
 })

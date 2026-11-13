@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url'
 import { createCommandLogger } from '@/commands/command-logger'
 import {
   assertReactNativeBareKitSupported,
+  pinBareKitSwift,
   stageAddons,
   type StageAddonsOptions,
   warnOverwritten
@@ -326,9 +327,29 @@ test(
 
     const manifest = join(projectRoot, 'ios', 'QvacBareKit', 'Package.swift')
     t.ok(linked.includes(manifest))
-    t.ok(readFileSync(manifest, 'utf8').includes('bare-kit-swift'))
+    const source = readFileSync(manifest, 'utf8')
+    t.ok(source.includes('bare-kit-swift'))
+    t.ok(
+      /bare-kit-swift", exact: "\d+\.\d+\.\d+"/.test(source),
+      'bare-kit-swift is linked at an exact version'
+    )
   }
 )
+
+test('pinBareKitSwift: turns the minimum version into an exact one', (t) => {
+  const manifest = [
+    '    .package(url: "https://github.com/holepunchto/bare-kit-swift", from: "2.2.0"),',
+    '    .package(url: "https://github.com/holepunchto/other", from: "1.0.0"),'
+  ].join('\n')
+
+  t.is(
+    pinBareKitSwift(manifest),
+    [
+      '    .package(url: "https://github.com/holepunchto/bare-kit-swift", exact: "2.2.0"),',
+      '    .package(url: "https://github.com/holepunchto/other", from: "1.0.0"),'
+    ].join('\n')
+  )
+})
 
 test('warnOverwritten: names the libraries several addons wrote to the same path', (t) => {
   const warnings: string[] = []

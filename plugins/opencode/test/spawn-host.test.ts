@@ -163,20 +163,113 @@ test('a host that exits before handshaking surfaces its exit code', async () => 
   })
 })
 
-test('a malformed handshake injects no OpenCode provider config', async () => {
+type PluginContext = Parameters<typeof QvacManagedServe.setup>[0]
+
+interface FakeContext {
+  readonly ctx: PluginContext
+  readonly providers: unknown[]
+  readonly defaults: [string, string][]
+}
+
+function fakeContext(pluginOptions: RawOptions, failProviderTransform = false): FakeContext {
+  const providers: unknown[] = []
+  const defaults: [string, string][] = []
+  const ctx = {
+    options: pluginOptions,
+    location: { directory: tmpdir() },
+    provider: {
+      transform: (fn: (editor: { add(input: unknown): void }) => void) => {
+        if (failProviderTransform) return Promise.reject(new Error('provider transform rejected'))
+        fn({ add: (input) => providers.push(input) })
+        return Promise.resolve()
+      }
+    },
+    model: {
+      transform: (
+        fn: (editor: { default: { set(providerID: string, modelID: string): void } }) => void
+      ) => {
+        fn({ default: { set: (providerID, modelID) => defaults.push([providerID, modelID]) } })
+        return Promise.resolve()
+      }
+    }
+  } as unknown as PluginContext
+  return { ctx, providers, defaults }
+}
+
+test('plugin is a V2 definition with a stable id', () => {
+  assert.equal(QvacManagedServe.id, 'qvac')
+  assert.equal(typeof QvacManagedServe.setup, 'function')
+})
+
+test('setup registers the qvac provider, sets the default model, and cleanup stops the host', async () => {
   await withFakeRuntimes(async (runtimes) => {
-    const plugin = QvacManagedServe as unknown as (
-      input: { directory: string },
-      pluginOptions: RawOptions
-    ) => Promise<unknown>
+    const fake = fakeContext({ runtime: runtimes.path('fd3-handshake'), listenTimeoutMs: 1_500 })
+
+    const cleanup = await QvacManagedServe.setup(fake.ctx)
+    const pid = await hostPid(runtimes)
+    try {
+      assert.equal(fake.providers.length, 1)
+      const provider = fake.providers[0] as {
+        info: { id: string; settings: Record<string, unknown> }
+        models: { id: string }[]
+      }
+      assert.equal(provider.info.id, 'qvac')
+      assert.equal(provider.info.settings['apiKey'], PROXY_TOKEN)
+      assert.equal(provider.info.settings['baseURL'], 'http://127.0.0.1:45678/v1')
+      assert.deepEqual(
+        provider.models.map((m) => m.id),
+        ['qwen3.5-0.8b']
+      )
+      assert.deepEqual(fake.defaults, [['qvac', 'qwen3.5-0.8b']])
+      assert.ok(isAlive(pid))
+    } finally {
+      assert.equal(typeof cleanup, 'function')
+      if (typeof cleanup === 'function') await cleanup()
+    }
+    assert.equal(await waitForExit(pid), true)
+  })
+})
+
+test('setDefaultModel: false leaves the default model untouched', async () => {
+  await withFakeRuntimes(async (runtimes) => {
+    const fake = fakeContext({
+      runtime: runtimes.path('fd3-handshake'),
+      listenTimeoutMs: 1_500,
+      setDefaultModel: false
+    })
+
+    const cleanup = await QvacManagedServe.setup(fake.ctx)
+    if (typeof cleanup === 'function') await cleanup()
+
+    assert.equal(fake.providers.length, 1)
+    assert.deepEqual(fake.defaults, [])
+  })
+})
+
+test('a failed provider registration terminates the host', async () => {
+  await withFakeRuntimes(async (runtimes) => {
+    const fake = fakeContext(
+      { runtime: runtimes.path('fd3-handshake'), listenTimeoutMs: 1_500 },
+      true
+    )
 
     await assert.rejects(
-      plugin(
-        { directory: tmpdir() },
-        { runtime: runtimes.path('fd3-malformed'), listenTimeoutMs: 1_500 }
-      ),
+      () => Promise.resolve(QvacManagedServe.setup(fake.ctx)),
+      /provider transform rejected/
+    )
+    assert.equal(await waitForExit(await hostPid(runtimes)), true)
+  })
+})
+
+test('a malformed handshake registers no provider and terminates the host', async () => {
+  await withFakeRuntimes(async (runtimes) => {
+    const fake = fakeContext({ runtime: runtimes.path('fd3-malformed'), listenTimeoutMs: 1_500 })
+
+    await assert.rejects(
+      () => Promise.resolve(QvacManagedServe.setup(fake.ctx)),
       /invalid QVAC_LISTENING handshake/
     )
+    assert.equal(fake.providers.length, 0)
     assert.equal(await waitForExit(await hostPid(runtimes)), true)
   })
 })

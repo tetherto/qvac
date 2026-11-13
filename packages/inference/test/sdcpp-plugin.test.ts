@@ -1142,11 +1142,12 @@ test('diffusion plugin: appends { result: null, done: true } sentinel after hand
       }
 
       t.is(chunks.length, yieldedChunks.length + 1)
-      t.alike(chunks[chunks.length - 1], {
-        type: 'pluginInvokeStream',
-        result: null,
-        done: true
-      })
+      const sentinel = chunks[chunks.length - 1] as Record<string, unknown>
+      t.ok(typeof sentinel['requestId'] === 'string', 'the sentinel names the request')
+      t.alike(
+        { ...sentinel, requestId: undefined },
+        { type: 'pluginInvokeStream', requestId: undefined, result: null, done: true }
+      )
     }
   )
 })
