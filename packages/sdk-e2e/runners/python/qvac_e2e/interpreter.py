@@ -241,7 +241,9 @@ async def _logging_stream_open(transport: Any, params: dict[str, Any]) -> Any:
 async def _logging_stream_mark(transport: Any, params: dict[str, Any]) -> Any:
     """Marks the point the logs are counted from."""
     state = _logging_state(params["streamId"])
-    state["cutoffMs"] = time.time() * 1000
+    # Whole ms, as the server stamps entries with Date.now(): a fractional cutoff
+    # drops every entry delivered in the same millisecond as the mark.
+    state["cutoffMs"] = time.time_ns() // 1_000_000
     return {"markedAt": state["cutoffMs"]}
 
 
