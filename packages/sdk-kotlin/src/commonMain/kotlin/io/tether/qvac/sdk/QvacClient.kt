@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlin.concurrent.Volatile
 
 /**
  * The owner of a runtime. Besides every operation a [QvacSession] may call,
@@ -32,6 +33,11 @@ open class QvacClient private constructor(
     // report its loss.
     private val sessions = MutableStateFlow<List<SessionTransport>>(emptyList())
 
+    // Why the runtime ended, kept so a session registered after the end is
+    // ended too instead of reaching a dead transport.
+    @Volatile
+    private var ended: String? = null
+
     init {
         ownerModels.lost?.let { lost ->
             scope.launch {
@@ -43,6 +49,12 @@ open class QvacClient private constructor(
 
     internal fun registerSession(session: SessionTransport) {
         sessions.update { it + session }
+        // `endRuntime` sets `ended` before it takes the list, so a registration
+        // that missed the list sees `ended` here.
+        ended?.let { reason ->
+            session.markEnded(reason)
+            unregisterSession(session)
+        }
     }
 
     internal fun unregisterSession(session: SessionTransport) {
@@ -53,6 +65,7 @@ open class QvacClient private constructor(
 
     // The first reason a session or an owner model sees is kept.
     private fun endRuntime(reason: String) {
+        if (ended == null) ended = reason
         sessions.getAndUpdate { emptyList() }.forEach { it.markEnded(reason) }
         ownerModels.invalidate(reason)
     }

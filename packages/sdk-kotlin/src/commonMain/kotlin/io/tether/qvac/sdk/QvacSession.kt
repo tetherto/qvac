@@ -3,6 +3,7 @@ package io.tether.qvac.sdk
 import io.tether.qvac.sdk.generated.QvacMethods
 import io.tether.qvac.sdk.generated.schema.CloseSessionRequest
 import io.tether.qvac.sdk.generated.schema.OpenSessionRequest
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
@@ -208,7 +209,9 @@ class QvacOwnerOnlyException(val operation: String, val sessionId: String) :
  */
 fun QvacClient.openSession(name: String? = null): QvacSession {
     val sessionId = qvacRequestId()
-    val opened = scope.async {
+    // The handle is registered before the open starts, so a worker loss or an
+    // owner close during the open ends it too.
+    val opened = scope.async(start = CoroutineStart.LAZY) {
         openSession(OpenSessionRequest(sessionId = sessionId, name = name))
         Unit
     }
@@ -217,5 +220,6 @@ fun QvacClient.openSession(name: String? = null): QvacSession {
     // A session the worker refused never opened: the handle keeps the failure
     // for its later calls, and the client lets it go.
     opened.invokeOnCompletion { cause -> if (cause != null) unregisterSession(transport) }
+    opened.start()
     return QvacSession(sessionId, name, this, transport, json)
 }

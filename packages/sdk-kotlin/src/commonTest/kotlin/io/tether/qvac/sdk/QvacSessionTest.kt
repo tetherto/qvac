@@ -177,6 +177,21 @@ class QvacSessionTest {
     }
 
     @Test
+    fun aSessionOpenedAfterTheWorkerIsLostIsEndedAtOnce() = runTest {
+        val lost = CompletableDeferred<Unit>()
+        val client = QvacClient(SessionRecordingTransport(lost = lost))
+        val earlier = client.openSession()
+        earlier.opened.await()
+        lost.complete(Unit)
+        awaitSessionEnd(earlier)
+
+        val late = client.openSession()
+
+        assertEquals("crashed", assertFailsWith<QvacSessionClosedException> { late.heartbeat() }.reason)
+        assertEquals(0, client.trackedSessionCount, "the client keeps no session of a lost runtime")
+    }
+
+    @Test
     fun aModelLoadedThroughTheSessionNamesItsOwnErrorAfterTheSessionEnds() = runTest {
         val transport = SessionRecordingTransport()
         val client = QvacClient(transport)
