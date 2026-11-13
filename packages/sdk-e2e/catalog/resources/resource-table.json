@@ -221,6 +221,18 @@
       "parallel": 2
     }
   },
+  "prefill-llm-system-prompt": {
+    "constant": {
+      "$const": "QWEN3_5_0_8B_MULTIMODAL_Q4_K_M"
+    },
+    "type": "llamacpp-completion",
+    "config": {
+      "ctx_size": 4096,
+      "tools": true,
+      "parallel": 1,
+      "system_prompt": "Follow the user instructions. Be brief."
+    }
+  },
   "tools-qwen35": {
     "on": [
       "desktop",
@@ -741,6 +753,22 @@
     },
     "type": "parakeet-transcription",
     "config": {}
+  },
+  "parakeet-transcribepsy-eu": {
+    "constant": {
+      "$const": "PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0"
+    },
+    "type": "parakeet-transcription",
+    "config": {}
+  },
+  "parakeet-transcribepsy-eu-en": {
+    "constant": {
+      "$const": "PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0"
+    },
+    "type": "parakeet-transcription",
+    "config": {
+      "language": "en"
+    }
   },
   "bci": {
     "skipPreDownloadOn": [

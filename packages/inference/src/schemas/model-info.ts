@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { toolDialectSchema } from '@/schemas/completion-stream'
 import { modelFitProbeSchema } from '@/schemas/assess-model-fit'
+import { sessionScopedRequestSchema } from '@/schemas/request-base'
 
 // ============== Model info (catalog) ==============
 
@@ -8,9 +9,11 @@ export const getModelInfoParamsSchema = z.object({
   name: z.string().describe("The model's registry name (as found in QVAC's built-in catalog).")
 })
 
-export const getModelInfoRequestSchema = getModelInfoParamsSchema.extend({
-  type: z.literal('getModelInfo')
-})
+export const getModelInfoRequestSchema = getModelInfoParamsSchema
+  .extend({
+    type: z.literal('getModelInfo')
+  })
+  .extend(sessionScopedRequestSchema.shape)
 
 export const loadedInstanceSchema = z.object({
   registryId: z.string().describe('Identifier of the registered loaded instance.'),
@@ -117,9 +120,11 @@ export const getLoadedModelInfoParamsSchema = z.object({
   modelId: z.string()
 })
 
-export const getLoadedModelInfoRequestSchema = getLoadedModelInfoParamsSchema.extend({
-  type: z.literal('getLoadedModelInfo')
-})
+export const getLoadedModelInfoRequestSchema = getLoadedModelInfoParamsSchema
+  .extend({
+    type: z.literal('getLoadedModelInfo')
+  })
+  .extend(sessionScopedRequestSchema.shape)
 
 /**
  * Loaded model info: routing plugin known on this node, so modelType +
@@ -138,6 +143,12 @@ export const loadedModelInfoSchema = z
     name: z.string().optional(),
     path: z.string().optional(),
     toolDialect: toolDialectSchema.optional(),
+    leaseCount: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe('Number of caller sessions, the owner included, that hold the model loaded.'),
     fitProbe: modelFitProbeSchema
       .optional()
       .describe(

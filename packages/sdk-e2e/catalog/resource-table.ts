@@ -145,6 +145,18 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: { ctx_size: 4096, tools: true, parallel: 2 }
   },
 
+  // A prefill needs a message; this one comes from `system_prompt`.
+  'prefill-llm-system-prompt': {
+    constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
+    type: 'llamacpp-completion',
+    config: {
+      ctx_size: 4096,
+      tools: true,
+      parallel: 1,
+      system_prompt: 'Follow the user instructions. Be brief.'
+    }
+  },
+
   'tools-qwen35': {
     on: ['desktop', 'electron', 'snap'],
     constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
@@ -520,6 +532,24 @@ export const RESOURCE_TABLE: ResourceTable = {
     constant: { $const: 'PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0' },
     type: 'parakeet-transcription',
     config: {}
+  },
+
+  // The full 25-language TranscribePsy-250M-EU: one GGUF with its CAFE language
+  // adapters and gate embedded. ggml on every platform (no Core ML
+  // distribution); without `language` the gate routes each recording itself.
+  'parakeet-transcribepsy-eu': {
+    constant: { $const: 'PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0' },
+    type: 'parakeet-transcription',
+    config: {}
+  },
+
+  // The same GGUF pinned to its English trunk (`language: "en"`), the route
+  // the gate would pick for the English fixtures; `"other"` would select the
+  // non-English adapters instead.
+  'parakeet-transcribepsy-eu-en': {
+    constant: { $const: 'PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0' },
+    type: 'parakeet-transcription',
+    config: { language: 'en' }
   },
 
   bci: {

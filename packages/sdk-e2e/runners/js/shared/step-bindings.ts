@@ -11,6 +11,7 @@ import {
   loggingStream,
   SDK_LOG_ID,
   cancel,
+  calcTokens,
   classify,
   close,
   completion,
@@ -66,6 +67,7 @@ const CALLS: Record<string, (params: never) => Promise<unknown>> = {
   embed: (params) => embed(params),
   classify: async (params) => ({ results: await classify(params) }),
   rerank: async (params) => ({ scores: await rerank(params) }),
+  calcTokens: (params) => calcTokens(params),
   /**
    * One transcription, bound under the name that says what came back: `metadata` swaps the flat
    * transcript for per-segment records, so a body that projected `text` off a metadata run would be
@@ -414,10 +416,13 @@ const STREAMS: Record<string, Fold> = {
       // completion is the expensive part, and "how did it stop" and "what did it cost" are
       // questions about the run that just happened, not reasons to run it again.
       // A streaming run's text is read off the token stream, so a stream that yields nothing fails.
-      const streamed = p.stream ? joinStream(run.tokenStream) : undefined
-      const final = await run.final
+      // Await both: a failed run rejects each, and an unhandled rejection kills a Node consumer.
+      const [streamed, final] = await Promise.all([
+        p.stream ? joinStream(run.tokenStream) : undefined,
+        run.final
+      ])
       return {
-        text: streamed ? await streamed : await run.text,
+        text: streamed ?? (await run.text),
         toolCalls: (await run.toolCalls) ?? [],
         stats: final.stats,
         stopReason: final.stopReason,

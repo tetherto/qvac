@@ -1,124 +1,21 @@
 import type { QVACModelEntry, QVACRegistryClient } from '@qvac/registry-client'
 import type { RegistryItem } from '@/models/registry/models'
-import { models } from '@/models/registry/models'
 import { generateShortHash } from '@/utils/formatting'
+import {
+  COREML_COMPONENTS,
+  getCatalogCoremlSidecars,
+  getCoremlSetKeySource,
+  getCoremlSidecarSpec,
+  type CoremlSidecarSpec
+} from '@/utils/cache/layout'
 import { getModelsCacheDir } from '@/utils/cache/paths'
 import { validateAndJoinPath } from '@/utils/path-security'
 import { modelInputToSrcSchema, registryUrlSchema } from '@/schemas/index'
 import { promises as fsPromises } from 'bare-fs'
 import { z } from 'zod'
 
-// Apple Core ML sidecars for registry GGUFs. A native addon runs a stage on a
-// compiled `.mlmodelc` bundle when one sits next to the GGUF and falls back to
-// ggml otherwise, so on macOS and iOS the bundle is downloaded with its GGUF
-// into one companion-set directory. The registry publishes a bundle as its
-// individual component files, none of which is a model constant of its own.
-// TranscribePsy's Core ML distribution goes further: its GGUF carries no
-// encoder weights, so that GGUF only loads with its bundles beside it.
-
-const COREML_COMPONENTS = [
-  'analytics/coremldata.bin',
-  'coremldata.bin',
-  'metadata.json',
-  'model.mil',
-  'weights/weight.bin'
-] as const
-
-type BundleSpec = { sourceName: string; targetSuffix: string }
-
-/**
- * A model family whose GGUFs the native addon pairs with compiled Core ML
- * bundles staged beside them. The addon finds a bundle by name next to the
- * GGUF, as `<modelStem><targetSuffix>.mlmodelc`.
- */
-type SidecarFamily = {
-  /** Registry source that publishes the family's GGUFs and bundles. */
-  source: 's3' | 'hf'
-  /**
-   * Registry directory holding the family's published `.mlmodelc` bundles.
-   * Omitted when the bundles sit in the GGUF's own directory, as the files of
-   * one Hugging Face repository revision do.
-   */
-  root?: string
-  /** Selects the family from a GGUF's registry path. */
-  pathPattern: RegExp
-  /** Captures the model stem (the filename without its quantization tier). */
-  stemPattern: RegExp
-  /** Bundles the pinned addon actually uses, keyed by model stem. */
-  bundlesByStem: Record<string, readonly BundleSpec[]>
-  /**
-   * Set when the family's GGUF carries no encoder and loads only with its
-   * bundles beside it: the model constant to load where the bundles cannot be
-   * staged, which is every platform but macOS and iOS.
-   */
-  withoutBundlesUse?: string
-}
-
-export type CoremlSidecarSpec = {
-  source: string
-  root: string
-  modelStem: string
-  bundles: readonly BundleSpec[]
-  withoutBundlesUse?: string
-}
-
-const SIDECAR_FAMILIES: readonly SidecarFamily[] = [
-  {
-    // The pinned ASR addon supports these encoder sidecars. The other bundles
-    // in the registry (CTC, Indic CTC, Nemotron, and TDT 1.1B) must not be
-    // downloaded until the addon can actually use them. Nor is the EOU bundle:
-    // it is compiled for one fixed 1101-frame (11 s) input, and the engine
-    // runs an EOU encoder sidecar only on an input of exactly that length,
-    // which the default streaming windows never are.
-    source: 's3',
-    root: 'qvac_models_compiled/ggml/parakeet/2026-09-28/',
-    pathPattern: /\/ggml\/parakeet\//,
-    stemPattern: /^(.+)\.(?:f16|q4_0|q8_0)\.gguf$/,
-    bundlesByStem: {
-      'parakeet-tdt-0.6b-v3': [
-        { sourceName: 'parakeet-tdt-0.6b-v3-encoder', targetSuffix: '-encoder' }
-      ],
-      'parakeet-unified-en-0.6b': [
-        { sourceName: 'parakeet-unified-en-0.6b-encoder', targetSuffix: '-encoder' }
-      ],
-      'diar_streaming_sortformer_4spk-v2.1': [
-        { sourceName: 'diar_streaming_sortformer_4spk-v2.1-encoder', targetSuffix: '-encoder' },
-        {
-          sourceName: 'diar_streaming_sortformer_4spk-v2.1-encoder-bypass-pre-encode',
-          targetSuffix: '-encoder-bypass-pre-encode'
-        }
-      ]
-    }
-  },
-  {
-    // TranscribePsy's Core ML distribution is published on Hugging Face as an
-    // encoder-less GGUF with its encoder and decoder bundles beside it; the ASR
-    // addon runs both stages on the Neural Engine. The full GGUF
-    // (`transcribepsy-250m-eu-sub.gguf`) has no sidecar and runs on ggml.
-    source: 'hf',
-    pathPattern: /^qvac\/TranscribePsy-250M-EU-sub-coreml\/resolve\//,
-    stemPattern: /^(transcribepsy-250m-eu-sub-coreml)\.gguf$/,
-    bundlesByStem: {
-      'transcribepsy-250m-eu-sub-coreml': [
-        { sourceName: 'transcribepsy-250m-eu-sub-coreml-encoder', targetSuffix: '-encoder' },
-        { sourceName: 'transcribepsy-250m-eu-sub-coreml-decoder', targetSuffix: '-decoder' }
-      ]
-    },
-    withoutBundlesUse: 'PARAKEET_TRANSCRIBEPSY_250M_Q8_0'
-  },
-  {
-    // The TTS addon runs the Audio8 codec's synthesis stack on this bundle when
-    // it sits beside the codec decoder GGUF. Every quantization tier shares the
-    // one bundle, which is why its name drops the tier.
-    source: 's3',
-    root: 'qvac_models_compiled/ggml/audio8/2026-09-30/',
-    pathPattern: /\/ggml\/audio-?8\//,
-    stemPattern: /^(.+)-(?:f16|f32|q8_0)\.gguf$/,
-    bundlesByStem: {
-      'audio8-codec-decoder': [{ sourceName: 'audio8-codec-decoder', targetSuffix: '' }]
-    }
-  }
-]
+// Family table and catalog lookups: utils/cache/layout.ts.
+export { getCoremlSidecarSpec, type CoremlSidecarSpec }
 
 type CompanionSet = NonNullable<RegistryItem['companionSet']>
 const CACHE_METADATA_NAME = '.coreml-companions.json'
@@ -141,33 +38,6 @@ const cachedSetSchema = z.object({
   primaryKey: z.literal('modelPath'),
   files: z.array(cachedFileSchema)
 })
-
-export function getCoremlSidecarSpec(
-  registryPath: string,
-  registrySource: string,
-  platform: string | undefined
-): CoremlSidecarSpec | undefined {
-  if (platform !== 'darwin' && platform !== 'ios') return undefined
-
-  const filename = registryPath.split('/').pop() || ''
-  for (const family of SIDECAR_FAMILIES) {
-    if (family.source !== registrySource || !family.pathPattern.test(registryPath)) continue
-    const modelStem = filename.match(family.stemPattern)?.[1]
-    const bundles = modelStem ? family.bundlesByStem[modelStem] : undefined
-    if (modelStem && bundles) {
-      return {
-        source: family.source,
-        root: family.root ?? registryPath.slice(0, registryPath.length - filename.length),
-        modelStem,
-        bundles,
-        ...(family.withoutBundlesUse !== undefined && {
-          withoutBundlesUse: family.withoutBundlesUse
-        })
-      }
-    }
-  }
-  return undefined
-}
 
 /**
  * For the encoder-less GGUF of a Core ML distribution, the model constant to
@@ -210,7 +80,7 @@ export function getRegistryModelPlatformRefusal(
 }
 
 export function getCoremlSetKey(model: RegistryItem, spec: CoremlSidecarSpec): string {
-  return generateShortHash(`${model.registrySource}:${model.registryPath}:coreml:${spec.root}`)
+  return generateShortHash(getCoremlSetKeySource(model, spec))
 }
 
 function getCachedSetMetadataPath(
@@ -314,33 +184,18 @@ export function findCatalogCoremlCompanionSet(
   const spec = getCoremlSidecarSpec(model.registryPath, model.registrySource, platform)
   if (!spec) return undefined
 
-  const sidecarFiles: CompanionSet['files'][number][] = []
-  for (const bundle of spec.bundles) {
-    const targetPrefix = `${spec.modelStem}${bundle.targetSuffix}.mlmodelc/`
-    const registryPrefix = `${spec.root}${bundle.sourceName}.mlmodelc/`
-    const entries = COREML_COMPONENTS.map((component) =>
-      models.find(
-        (entry) =>
-          entry.registrySource === spec.source && entry.registryPath === registryPrefix + component
-      )
-    )
-    if (entries.some((entry) => !entry)) continue
-    for (let index = 0; index < entries.length; index++) {
-      const entry = entries[index]!
-      sidecarFiles.push({
-        key: `${bundle.sourceName}/${COREML_COMPONENTS[index]}`,
-        registryPath: entry.registryPath,
-        registrySource: entry.registrySource,
-        targetName: targetPrefix + COREML_COMPONENTS[index],
-        expectedSize: entry.expectedSize,
-        sha256Checksum: entry.sha256Checksum,
-        blobCoreKey: entry.blobCoreKey,
-        blobBlockOffset: entry.blobBlockOffset,
-        blobBlockLength: entry.blobBlockLength,
-        blobByteOffset: entry.blobByteOffset
-      })
-    }
-  }
+  const sidecarFiles = getCatalogCoremlSidecars(spec).map(({ key, targetName, entry }) => ({
+    key,
+    registryPath: entry.registryPath,
+    registrySource: entry.registrySource,
+    targetName,
+    expectedSize: entry.expectedSize,
+    sha256Checksum: entry.sha256Checksum,
+    blobCoreKey: entry.blobCoreKey,
+    blobBlockOffset: entry.blobBlockOffset,
+    blobBlockLength: entry.blobBlockLength,
+    blobByteOffset: entry.blobByteOffset
+  }))
   return createCompanionSet(model, spec, sidecarFiles)
 }
 

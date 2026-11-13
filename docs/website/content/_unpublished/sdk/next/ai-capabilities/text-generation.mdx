@@ -49,6 +49,7 @@ You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible
 * Multi-job continuous batching: load with `modelConfig.parallel >= 2` (default `1`) to run several `completion()` calls in parallel on one loaded model. Up to `parallel` prompts finish in roughly the time of the slowest one (extras queue), and each call has its own `requestId` so you can cancel one without touching the others — see [Concurrent completions](#concurrent-completions).
 * Batch processing: run multiple prompts through a single loaded model in one call with `batchCompletion()` — optimizes resources and reduces total run time. See [Batch processing](/sdk/ai-capabilities/batch-processing).
 * Speculative decoding: load with `modelConfig.spec_type` to draft several tokens per step and verify them in one decode, with multi-token-prediction (MTP) layers, the model's own or an external head, or with a separate DFlash draft model. Output keeps the distribution of plain decoding. See [Speculative decoding](#speculative-decoding).
+* AMD NPU: on Linux x64 with an AMD XDNA2 NPU, load with `modelConfig.device: "npu"` to run the ops the NPU supports on it, with the CPU running the rest; the LLM layers leave the GPU free for another model. See [AMD NPU](#amd-npu).
 
 ## Examples
 
@@ -77,6 +78,14 @@ The canonical way to consume `completion()` is the `events` async iterable plus 
 <WrapCode>
 
 ```python file=<rootDir>/packages/sdk-python/examples/completion_events.py title="completion_events.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/CompletionEvents.kt title="CompletionEvents.kt" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -119,6 +128,14 @@ The following script loads a `parallel: 4` model, fires four completions at once
 <WrapCode>
 
 ```python file=<rootDir>/packages/sdk-python/examples/multi_job_completion.py title="multi_job_completion.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/MultiJobCompletion.kt title="MultiJobCompletion.kt" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -172,11 +189,19 @@ The following script shows how to provide tool definitions to `completion()`, co
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/CompletionTools.kt title="CompletionTools.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Worker-orchestrated tool loop
 
-Python also exposes an advanced worker-orchestrated path, where the worker runs
+Python and Kotlin also expose an advanced worker-orchestrated path, where the worker runs
 the whole multi-turn tool loop and calls back into your local handlers. Use this
 only when you need the worker to own the tool loop rather than managing each
 turn in application code:
@@ -186,6 +211,14 @@ turn in application code:
 <WrapCode>
 
 ```python file=<rootDir>/packages/sdk-python/examples/completion_orchestrate.py title="completion_orchestrate.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/CompletionOrchestrate.kt title="CompletionOrchestrate.kt" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -225,9 +258,17 @@ The JavaScript and TypeScript examples below import the same `shared` module sho
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/CompletionDeferredTools.kt title="CompletionDeferredTools.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
-The Python example takes the [worker-orchestrated loop](#worker-orchestrated-tool-loop) while the others take the client-side one. Deferring a tool works the same in both languages — the worker builds the catalog and reads back what the conversation has loaded — but running `tool_search` from client code needs the `executeToolSearch` helper, which only the JS SDK exports. On the orchestrated path the worker runs the search itself.
+The Python and Kotlin examples take the [worker-orchestrated loop](#worker-orchestrated-tool-loop) while the others take the client-side one. Deferring a tool works the same in both languages — the worker builds the catalog and reads back what the conversation has loaded — but running `tool_search` from client code needs the `executeToolSearch` helper, which only the JS SDK exports. On the orchestrated path the worker runs the search itself.
 
 The model calls `tool_search({ query })` with a capability or an exact tool
 name; the SDK searches the registered tools outside inference and returns a
@@ -312,8 +353,24 @@ You create and manage the MCP client, connect it to one or more MCP servers, and
 </Tabs>
 
 <Callout type="warn">
-MCP is available in the JS/TS client only. The integration lives in the client, not in the worker, so the Python client cannot reach it.
+MCP is available in the JS/TS client only. The integration lives in the client, not in the worker, so the Python and Kotlin clients cannot reach it.
 </Callout>
+
+### Count tokens before generation
+
+Use `calcTokens()` with a loaded language model to estimate prompt size without starting a generation job:
+
+```ts
+const tokens = await calcTokens({
+  modelId,
+  history: [{ role: 'system', content: 'You are a helpful assistant.' }],
+  text: 'Summarize this conversation.'
+})
+```
+
+When neither `history` nor enabled tools are supplied, `text` is counted as raw text. Otherwise, the SDK renders the prompt with the loaded model's chat template, adds the model's configured system prompt when the history has none, and appends `text` as the final user turn. Load the model with `modelConfig: { tools: true }` for tool definitions to be counted; otherwise they are ignored and text-only input remains raw. Pass the same `toolSearch` limits to `calcTokens()` and `completion()` when using deferred tools. Media content and attachments are not supported. The call returns a number and can run while the model is generating.
+
+The count uses every supplied tool and the reasoning setting from model load. If `completion()` uses a named `generationParams.tool_choice` or overrides `generationParams.reasoning_budget` for one request, that request can render a different prompt and report a different `promptTokens` value.
 
 ### KV cache
 
@@ -389,7 +446,7 @@ const answer = await completion({
 }).final;
 ```
 
-Load the model with `modelConfig: { tools: true }` when passing tools. Resend the same system prompt and tools on the question so their cached prefix can be reused. A prefill rejects forced `generationParams.tool_choice` values (`"required"` or a named tool, including `"tool_search"`); use the default `"auto"` or `"none"` instead. Auto-cache priming saves the complete prompt history without appending an empty assistant message.
+Load the model with `modelConfig: { tools: true }` when passing tools. Resend the same system prompt and tools on the question so their cached prefix can be reused. A prefill rejects forced `generationParams.tool_choice` values (`"required"` or a named tool, including `"tool_search"`); use the default `"auto"` or `"none"` instead. A prefill also needs at least one message: a system message in the history, or `modelConfig.system_prompt` set at load. Tools alone are rejected. Auto-cache priming saves the complete prompt history without appending an empty assistant message.
 
 With `kvCache: true`, the first question moves the cache to the conversation's new history, so the prime serves one conversation. Use a named key for reuse across conversations, or prime each conversation separately.
 
@@ -423,6 +480,14 @@ The following script enables `kvCache: true` to speed up follow-up turns, and th
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/KvCache.kt title="KvCache.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Speculative decoding
@@ -448,6 +513,28 @@ const modelId = await loadModel({
 });
 ```
 
+### AMD NPU
+
+On Linux x64 with an AMD XDNA2 NPU (Strix Point, Strix Halo or Krackan), load with `modelConfig.device: "npu"` to run the ops the NPU supports on it, with the CPU running the rest. The NPU needs XRT 2.25 or newer and read/write access to its `/dev/accel` node, and is never selected automatically.
+
+- Without a listed NPU, `device: "npu"` falls back to the GPU, then the CPU. A listed NPU that fails to open runs the load on the CPU.
+- The LLM layers leave the GPU free for another model. A vision model's projector runs on a GPU beside the NPU by default, and `mmproj-use-gpu: false` keeps it on the CPU.
+- `stats.backendDevice` reports `"npu"` when the NPU is selected.
+
+Only a model with a 1024-wide hidden size, such as Qwen3.5-0.8B, decodes on the NPU, and only with the weight types its fused decode layer takes. Those depend on how the GGUF was quantized, not on its quantization name. Of the registry builds:
+
+- `QWEN3_5_0_8B_MULTIMODAL_Q4_K_M` runs.
+- `QWEN3_5_0_8B_MULTIMODAL_Q6_K` and `QWEN3_5_0_8B_MULTIMODAL_Q8_0` fail at the first decode.
+- With `QWEN3_5_2B_MULTIMODAL_Q4_K_M`, `QWEN3_5_4B_MULTIMODAL_Q4_K_M` and `QWEN3_5_9B_MULTIMODAL_Q4_K_M`, only prefill runs on the NPU, and decode runs on the CPU.
+
+```js
+const modelId = await loadModel({
+  modelSrc: QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
+  modelType: "llm",
+  modelConfig: { device: "npu" },
+});
+```
+
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart), the [Python quickstart](/sdk/python-sdk#quickstart), or the [Kotlin quickstart](/sdk/kotlin-sdk#quickstart).
 </Callout>

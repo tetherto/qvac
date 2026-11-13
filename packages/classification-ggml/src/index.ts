@@ -7,6 +7,16 @@ import { createJobHandler, exclusiveRunQueue, type JobHandler } from "@qvac/infe
 import { MegaLoc } from "./megaloc";
 export { MegaLoc, type MegaLocOptions, type ImageEmbeddingOptions, type MegaLocRuntimeStats } from "./megaloc";
 import { BridgeDepth } from "./bridgedepth";
+import { assessFit } from "./fit";
+export {
+  assessFit,
+  type ClassificationFitRequest,
+  type ClassificationFitWorkload,
+  type ClassificationFitStatus,
+  type ClassificationFitDevice,
+  type ClassificationFitStats,
+  type ClassificationFitResult,
+} from "./fit";
 export {
   BridgeDepth,
   type BridgeDepthOptions,
@@ -326,9 +336,11 @@ const cjsExports = ImageClassifier as typeof ImageClassifier & {
   ImageClassifier?: typeof ImageClassifier;
   MegaLoc?: typeof MegaLoc;
   BridgeDepth?: typeof BridgeDepth;
+  assessFit?: typeof assessFit;
 };
 cjsExports.ImageClassifier = ImageClassifier;
 cjsExports.MegaLoc = MegaLoc;
 cjsExports.BridgeDepth = BridgeDepth;
+cjsExports.assessFit = assessFit;
 module.exports = cjsExports;
 

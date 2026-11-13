@@ -58,11 +58,27 @@ class ContractTypesTest(unittest.TestCase):
         self.assertNotIn('progressType = "loadModel:progress"', methods)
         # Speech frames are decoded at the public typed method boundary.
         for line in methods.splitlines():
-            if line.startswith("fun QvacClient.`textToSpeech`("):
+            if line.startswith("fun QvacCaller.`textToSpeech`("):
                 self.assertTrue(line.endswith("streamTyped<io.tether.qvac.sdk.generated.schema.TextToSpeechRequest, io.tether.qvac.sdk.generated.schema.TextToSpeechResponse>(request).map { it.withDecodedPcm() }"), line)
-            if line.startswith("fun QvacClient.`textToSpeechStream`("):
+            if line.startswith("fun QvacCaller.`textToSpeechStream`("):
                 self.assertTrue(line.endswith("(request, input).map { it.withDecodedPcm() }"), line)
         self.assertEqual(methods.count(".withDecodedPcm()"), 2)
+
+    def test_owner_only_methods_extend_the_owner_client_alone(self):
+        manifest = {"methods": [
+            {"name": "suspend", "callShape": "request-reply", "ownerOnly": True,
+             "requestSchema": "schema.json#/$defs/suspend.request", "responseSchema": "schema.json#/$defs/suspend.response"},
+            {"name": "state", "callShape": "request-reply",
+             "requestSchema": "schema.json#/$defs/state.request", "responseSchema": "schema.json#/$defs/state.response"},
+        ]}
+        defs = {name: {"title": title, "type": "object", "properties": {"type": {"type": "string", "const": method}}}
+                for name, title, method in [
+                    ("suspend.request", "SuspendRequest", "suspend"), ("suspend.response", "SuspendResponse", "suspend"),
+                    ("state.request", "StateRequest", "state"), ("state.response", "StateResponse", "state")]}
+        methods = render_schema_methods(TypeGraph({"$defs": defs}), manifest)
+        self.assertIn("suspend fun QvacClient.`suspend`(", methods)
+        self.assertNotIn("QvacCaller.`suspend`(", methods)
+        self.assertIn("suspend fun QvacCaller.`state`(", methods)
 
     def test_same_field_under_two_methods_shares_one_type(self):
         def request(title, method):

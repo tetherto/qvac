@@ -307,6 +307,10 @@ test('models registry catalog exports every named model constant', (t) => {
       names.includes('PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0'),
     'the Hugging Face TranscribePsy GGUFs are named model constants'
   )
+  t.ok(
+    names.includes('PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0'),
+    'the full TranscribePsy-250M-EU GGUF is named apart from the EU-sub constants'
+  )
 
   for (const [legacyName, canonicalName] of [
     ['PARAKEET_0_6B_F16', 'PARAKEET_NEMOTRON_0_6B_F16'],

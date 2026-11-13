@@ -14,6 +14,7 @@ data class QvacMethodDescriptor(
     val responseType: String,
     val progressResponseType: String? = null,
     val progressCondition: String? = null,
+    val ownerOnly: Boolean = false,
 )
 
 object QvacMethods {
@@ -24,6 +25,7 @@ object QvacMethods {
         responseType = "AssessModelFitResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val audioEditStream = QvacMethodDescriptor(
         name = "audioEditStream",
@@ -32,6 +34,7 @@ object QvacMethods {
         responseType = "AudioEditStreamResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val audioGenStream = QvacMethodDescriptor(
         name = "audioGenStream",
@@ -40,6 +43,7 @@ object QvacMethods {
         responseType = "AudioGenStreamResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val audioUnderstand = QvacMethodDescriptor(
         name = "audioUnderstand",
@@ -48,6 +52,7 @@ object QvacMethods {
         responseType = "AudioUnderstandResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val batchCompletionStream = QvacMethodDescriptor(
         name = "batchCompletionStream",
@@ -56,6 +61,7 @@ object QvacMethods {
         responseType = "BatchCompletionStreamResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val bciTranscribe = QvacMethodDescriptor(
         name = "bciTranscribe",
@@ -64,6 +70,7 @@ object QvacMethods {
         responseType = "BciTranscribeResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val bciTranscribeStream = QvacMethodDescriptor(
         name = "bciTranscribeStream",
@@ -72,6 +79,16 @@ object QvacMethods {
         responseType = "BciTranscribeStreamResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
+    )
+    val calcTokens = QvacMethodDescriptor(
+        name = "calcTokens",
+        callShape = QvacCallShape.REQUEST_REPLY,
+        requestType = "CalcTokensRequest",
+        responseType = "CalcTokensResponse",
+        progressResponseType = null,
+        progressCondition = null,
+        ownerOnly = false,
     )
     val cancel = QvacMethodDescriptor(
         name = "cancel",
@@ -80,6 +97,7 @@ object QvacMethods {
         responseType = "CancelResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val classify = QvacMethodDescriptor(
         name = "classify",
@@ -88,6 +106,16 @@ object QvacMethods {
         responseType = "ClassifyResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
+    )
+    val closeSession = QvacMethodDescriptor(
+        name = "closeSession",
+        callShape = QvacCallShape.REQUEST_REPLY,
+        requestType = "CloseSessionRequest",
+        responseType = "CloseSessionResponse",
+        progressResponseType = null,
+        progressCondition = null,
+        ownerOnly = true,
     )
     val completionOrchestrate = QvacMethodDescriptor(
         name = "completionOrchestrate",
@@ -96,6 +124,7 @@ object QvacMethods {
         responseType = "CompletionOrchestrateResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val completionStream = QvacMethodDescriptor(
         name = "completionStream",
@@ -104,6 +133,7 @@ object QvacMethods {
         responseType = "CompletionStreamResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val decide = QvacMethodDescriptor(
         name = "decide",
@@ -112,6 +142,7 @@ object QvacMethods {
         responseType = "DecideResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val deleteCache = QvacMethodDescriptor(
         name = "deleteCache",
@@ -120,6 +151,7 @@ object QvacMethods {
         responseType = "DeleteCacheResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = true,
     )
     val diffusionStream = QvacMethodDescriptor(
         name = "diffusionStream",
@@ -128,6 +160,7 @@ object QvacMethods {
         responseType = "DiffusionStreamResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val discoverRpcServers = QvacMethodDescriptor(
         name = "discoverRpcServers",
@@ -136,6 +169,7 @@ object QvacMethods {
         responseType = "DiscoverRpcServersResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val downloadAsset = QvacMethodDescriptor(
         name = "downloadAsset",
@@ -144,6 +178,7 @@ object QvacMethods {
         responseType = "DownloadAssetResponse",
         progressResponseType = "ModelProgressResponse",
         progressCondition = "request.withProgress === true",
+        ownerOnly = false,
     )
     val embed = QvacMethodDescriptor(
         name = "embed",
@@ -152,6 +187,7 @@ object QvacMethods {
         responseType = "EmbedResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val embedBatch = QvacMethodDescriptor(
         name = "embedBatch",
@@ -160,6 +196,7 @@ object QvacMethods {
         responseType = "EmbedBatchResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val finetune = QvacMethodDescriptor(
         name = "finetune",
@@ -168,6 +205,7 @@ object QvacMethods {
         responseType = "FinetuneResponse",
         progressResponseType = "FinetuneProgressResponse",
         progressCondition = "request.withProgress === true && ['start', 'resume', undefined].includes(request.operation)",
+        ownerOnly = false,
     )
     val getLoadedModelInfo = QvacMethodDescriptor(
         name = "getLoadedModelInfo",
@@ -176,6 +214,7 @@ object QvacMethods {
         responseType = "GetLoadedModelInfoResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val getModelInfo = QvacMethodDescriptor(
         name = "getModelInfo",
@@ -184,6 +223,7 @@ object QvacMethods {
         responseType = "GetModelInfoResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val getSystemResources = QvacMethodDescriptor(
         name = "getSystemResources",
@@ -192,6 +232,7 @@ object QvacMethods {
         responseType = "GetSystemResourcesResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val heartbeat = QvacMethodDescriptor(
         name = "heartbeat",
@@ -200,6 +241,7 @@ object QvacMethods {
         responseType = "HeartbeatResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val loadModel = QvacMethodDescriptor(
         name = "loadModel",
@@ -208,6 +250,7 @@ object QvacMethods {
         responseType = "LoadModelResponse",
         progressResponseType = "ModelProgressResponse",
         progressCondition = "request.withProgress === true",
+        ownerOnly = false,
     )
     val loggingStream = QvacMethodDescriptor(
         name = "loggingStream",
@@ -216,6 +259,7 @@ object QvacMethods {
         responseType = "LoggingStreamResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val modelRegistryGetModel = QvacMethodDescriptor(
         name = "modelRegistryGetModel",
@@ -224,6 +268,7 @@ object QvacMethods {
         responseType = "ModelRegistryGetModelResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val modelRegistryList = QvacMethodDescriptor(
         name = "modelRegistryList",
@@ -232,6 +277,7 @@ object QvacMethods {
         responseType = "ModelRegistryListResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val modelRegistrySearch = QvacMethodDescriptor(
         name = "modelRegistrySearch",
@@ -240,6 +286,7 @@ object QvacMethods {
         responseType = "ModelRegistrySearchResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val ocrStream = QvacMethodDescriptor(
         name = "ocrStream",
@@ -248,6 +295,16 @@ object QvacMethods {
         responseType = "OcrStreamResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
+    )
+    val openSession = QvacMethodDescriptor(
+        name = "openSession",
+        callShape = QvacCallShape.REQUEST_REPLY,
+        requestType = "OpenSessionRequest",
+        responseType = "OpenSessionResponse",
+        progressResponseType = null,
+        progressCondition = null,
+        ownerOnly = true,
     )
     val pluginInvoke = QvacMethodDescriptor(
         name = "pluginInvoke",
@@ -256,6 +313,7 @@ object QvacMethods {
         responseType = "PluginInvokeResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val pluginInvokeStream = QvacMethodDescriptor(
         name = "pluginInvokeStream",
@@ -264,6 +322,7 @@ object QvacMethods {
         responseType = "PluginInvokeStreamResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val rag = QvacMethodDescriptor(
         name = "rag",
@@ -272,6 +331,7 @@ object QvacMethods {
         responseType = "RagResponse",
         progressResponseType = "RagProgressResponse",
         progressCondition = "request.withProgress === true && ['ingest', 'saveEmbeddings', 'reindex'].includes(request.operation)",
+        ownerOnly = false,
     )
     val rerank = QvacMethodDescriptor(
         name = "rerank",
@@ -280,6 +340,7 @@ object QvacMethods {
         responseType = "RerankResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val resume = QvacMethodDescriptor(
         name = "resume",
@@ -288,6 +349,7 @@ object QvacMethods {
         responseType = "ResumeResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = true,
     )
     val startRpcServer = QvacMethodDescriptor(
         name = "startRpcServer",
@@ -296,6 +358,7 @@ object QvacMethods {
         responseType = "StartRpcServerResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = true,
     )
     val state = QvacMethodDescriptor(
         name = "state",
@@ -304,6 +367,7 @@ object QvacMethods {
         responseType = "StateResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val stopRpcServer = QvacMethodDescriptor(
         name = "stopRpcServer",
@@ -312,6 +376,7 @@ object QvacMethods {
         responseType = "StopRpcServerResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = true,
     )
     val `suspend` = QvacMethodDescriptor(
         name = "suspend",
@@ -320,6 +385,7 @@ object QvacMethods {
         responseType = "SuspendResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = true,
     )
     val textToSpeech = QvacMethodDescriptor(
         name = "textToSpeech",
@@ -328,6 +394,7 @@ object QvacMethods {
         responseType = "TextToSpeechResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val textToSpeechStream = QvacMethodDescriptor(
         name = "textToSpeechStream",
@@ -336,6 +403,7 @@ object QvacMethods {
         responseType = "TextToSpeechStreamResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val transcribe = QvacMethodDescriptor(
         name = "transcribe",
@@ -344,6 +412,7 @@ object QvacMethods {
         responseType = "TranscribeResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val transcribeStream = QvacMethodDescriptor(
         name = "transcribeStream",
@@ -352,6 +421,7 @@ object QvacMethods {
         responseType = "TranscribeStreamResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val translate = QvacMethodDescriptor(
         name = "translate",
@@ -360,6 +430,7 @@ object QvacMethods {
         responseType = "TranslateResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val unloadModel = QvacMethodDescriptor(
         name = "unloadModel",
@@ -368,6 +439,7 @@ object QvacMethods {
         responseType = "UnloadModelResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val upscaleStream = QvacMethodDescriptor(
         name = "upscaleStream",
@@ -376,6 +448,7 @@ object QvacMethods {
         responseType = "UpscaleStreamResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val vectorIndex = QvacMethodDescriptor(
         name = "vectorIndex",
@@ -384,6 +457,7 @@ object QvacMethods {
         responseType = "VectorIndexResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val videoStream = QvacMethodDescriptor(
         name = "videoStream",
@@ -392,6 +466,7 @@ object QvacMethods {
         responseType = "VideoStreamResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val worldSceneStream = QvacMethodDescriptor(
         name = "worldSceneStream",
@@ -400,6 +475,7 @@ object QvacMethods {
         responseType = "WorldSceneStreamResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
     val worldStepStream = QvacMethodDescriptor(
         name = "worldStepStream",
@@ -408,6 +484,7 @@ object QvacMethods {
         responseType = "WorldStepStreamResponse",
         progressResponseType = null,
         progressCondition = null,
+        ownerOnly = false,
     )
 
     val all: List<QvacMethodDescriptor> = listOf(
@@ -418,8 +495,10 @@ object QvacMethods {
         batchCompletionStream,
         bciTranscribe,
         bciTranscribeStream,
+        calcTokens,
         cancel,
         classify,
+        closeSession,
         completionOrchestrate,
         completionStream,
         decide,
@@ -440,6 +519,7 @@ object QvacMethods {
         modelRegistryList,
         modelRegistrySearch,
         ocrStream,
+        openSession,
         pluginInvoke,
         pluginInvokeStream,
         rag,

@@ -1,7 +1,8 @@
 import {
   videoStreamResponseSchema,
   type VideoClientParams,
-  type VideoStats
+  type VideoStats,
+  type RPCOptions
 } from '@qvac/inference/surface'
 import { stream as streamRpc } from '@/client/rpc/rpc-client'
 import { generateClientRequestId } from '@/client/api/client-request-id'
@@ -25,6 +26,7 @@ export interface VideoResult {
  * Generates a video using a loaded video diffusion model.
  *
  * @param params - Video request parameters (model, prompt, dimensions, frame count, fps, sampler, seed, etc.).
+ * @param options - Optional RPC options (timeout, profiling, force new connection).
  * @returns A result object exposing `requestId` (stable identifier for this in-flight generation), `progressStream` (async iterator of `{ step, totalSteps, elapsedMs }`), `outputs` (promise of the generated video buffers, typically a single AVI file), and `stats` (promise of generation statistics).
  *
  * Supports `txt2vid` (text-to-video) and `img2vid` (image-to-video) for Wan,
@@ -134,7 +136,7 @@ export interface VideoResult {
  * await cancel(requestId);
  * ```
  */
-export function video(params: VideoClientParams): VideoResult {
+export function video(params: VideoClientParams, options?: RPCOptions): VideoResult {
   const requestId = generateClientRequestId()
   const request = createVideoStreamRequest(params, requestId)
 
@@ -162,7 +164,7 @@ export function video(params: VideoClientParams): VideoResult {
 
   async function processResponses() {
     try {
-      for await (const response of streamRpc(request)) {
+      for await (const response of streamRpc(request, options)) {
         if (
           response &&
           typeof response === 'object' &&

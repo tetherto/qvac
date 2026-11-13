@@ -7,7 +7,7 @@ schemaType: HowTo
 
 ## Overview
 
-Transcription uses your choice of either [`qvac-fabric-speech.cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) (via the GGML-based [`parakeet-cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp/tree/master/engines/parakeet) engine) as inference engine. Load a model using `modelType: "whisper"` for `qvac-fabric-speech.cpp`, or `modelType: "parakeet-transcription"` for Parakeet. Parakeet supports multilingual transcription (TDT), English-only transcription (CTC), English transcription with a single model that supports both batch and duplex streaming (Unified), the small [TranscribePsy](https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-gguf) distillation for eight European languages, Indic-language transcription (Indic Conformer CTC), speaker diarization (Sortformer and Nemotron 3), and end-of-utterance detection (EOU) for duplex streaming.
+Transcription uses your choice of either [`qvac-fabric-speech.cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) (via the GGML-based [`parakeet-cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp/tree/master/engines/parakeet) engine) as inference engine. Load a model using `modelType: "whisper"` for `qvac-fabric-speech.cpp`, or `modelType: "parakeet-transcription"` for Parakeet. Parakeet supports multilingual transcription (TDT), English-only transcription (CTC), English transcription with a single model that supports both batch and duplex streaming (Unified), the [TranscribePsy](https://huggingface.co/qvac/TranscribePsy-250M-EU) family (the full 25-language EU model and its EU-sub distillation for eight European languages), Indic-language transcription (Indic Conformer CTC), speaker diarization (Sortformer and Nemotron 3), and end-of-utterance detection (EOU) for duplex streaming.
 
 Provide audio input as `audioChunk`, either as a file path (string) or an in-memory audio buffer.
 
@@ -56,7 +56,7 @@ await loadModel({
 });
 
 await loadModel({
-  modelSrc: './TranscribePsy-250M-EU.q8_0.gguf',  // 25 European languages
+  modelSrc: PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0,  // 25 European languages
   modelType: "parakeet-transcription",
   modelConfig: { language: "auto" },            // "en", "other" or "auto" (default)
 });
@@ -78,11 +78,11 @@ await loadModel({
 });
 ```
 
-On macOS and iOS, loading a supported Parakeet registry constant also downloads its complete Core ML encoder bundle and stages the `.mlmodelc` directory beside the GGUF. This applies to TDT 0.6B v3, Unified English 0.6B, and streaming Sortformer v2.1. EOU 120M v1 downloads its GGUF alone and uses the GGUF encoder, because the registry's EOU bundle is compiled for one fixed 11 s input that its streaming windows never match. The sidecar weights increase the first download and disk use. Other platforms download the GGUF alone; if a sidecar is unavailable or cannot load, the GGUF encoder is used.
+On macOS and iOS, loading a supported Parakeet registry constant also downloads its complete Core ML encoder bundle and stages the `.mlmodelc` directory beside the GGUF. This applies to TDT 0.6B v3, Unified English 0.6B, and streaming Sortformer v2.1. EOU 120M v1 downloads its GGUF alone and uses the GGUF encoder, because the registry's EOU bundle is compiled for one fixed 11 s input that its default streaming windows never match. The sidecar weights increase the first download and disk use. Other platforms download the GGUF alone; if a sidecar is unavailable or cannot load, the GGUF encoder is used.
 
-TranscribePsy publishes a separate Core ML distribution. `PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0` is an encoder-less GGUF whose encoder and decoder bundles the SDK downloads and stages beside it, so both stages run on the Apple Neural Engine; `stats.encoderUsedCoreml` on the `transcribe()` call reports it. That constant loads on macOS and iOS only: elsewhere the load is refused up front, and `PARAKEET_TRANSCRIBEPSY_250M_Q8_0` is the one to use.
+TranscribePsy EU-sub publishes a separate Core ML distribution. `PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0` is an encoder-less GGUF whose encoder and decoder bundles the SDK downloads and stages beside it, so both stages run on the Apple Neural Engine; `stats.encoderUsedCoreml` on the `transcribe()` call reports it. That constant loads on macOS and iOS only: elsewhere the load is refused up front, and `PARAKEET_TRANSCRIBEPSY_250M_Q8_0` is the one to use.
 
-**TranscribePsy EU.** The 25-language TranscribePsy-250M-EU GGUF embeds its language adapters and routes each recording itself. `language` in `modelConfig` overrides that routing: `"en"` decodes on the English trunk, `"other"` on the non-English adapters, and `"auto"` (the default when omitted) lets the model choose.
+**TranscribePsy EU.** The full TranscribePsy-250M-EU model (`PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0`) covers 25 European languages from one GGUF that embeds its CAFE language adapters and gate, and it runs on ggml on every platform: it has no Core ML distribution, and the EU-sub bundles do not contain its adapters. `language` in `modelConfig` picks the route: `"en"` decodes on the English trunk, `"other"` on the non-English adapters, and `"auto"` (the default when omitted) runs the gate on the first 20 seconds of the recording and routes it.
 
 **Backend selection.** `modelConfig.backend` selects the native backend explicitly: `auto` (the default), `cpu`, `cuda`, `vulkan`, `opencl`, `metal`, or an exact ggml device name such as `CUDA0` or `MTL0`. An explicit selection overrides `useGPU`, and the load fails if that backend is unavailable instead of falling back to the CPU. The same selector reaches `assessModelFit`, where it also overrides the GPU gate. Core ML sidecars keep their own routing; a ggml selector does not move them.
 
@@ -319,6 +319,14 @@ The following script shows an example of `qvac-fabric-speech.cpp` transcription 
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/Transcription.kt title="Transcription.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Parakeet TDT
@@ -346,6 +354,14 @@ The following script shows an example of multilingual transcription using the Pa
 <WrapCode>
 
 ```python file=<rootDir>/packages/sdk-python/examples/transcription_parakeet_tdt.py title="transcription_parakeet_tdt.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/TranscriptionParakeetTdt.kt title="TranscriptionParakeetTdt.kt" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -379,6 +395,14 @@ The following script shows an example of English-only transcription using the Pa
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/TranscriptionParakeetCtc.kt title="TranscriptionParakeetCtc.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Parakeet Unified
@@ -406,6 +430,14 @@ The following script shows an example of English transcription using the Parakee
 <WrapCode>
 
 ```python file=<rootDir>/packages/sdk-python/examples/transcription_parakeet_unified.py title="transcription_parakeet_unified.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/TranscriptionParakeetUnified.kt title="TranscriptionParakeetUnified.kt" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -439,6 +471,14 @@ The following macOS script loads a regenerated Unified GGUF from disk, downloads
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/TranscriptionParakeetUnifiedCoreml.kt title="TranscriptionParakeetUnifiedCoreml.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### TranscribePsy
@@ -466,6 +506,14 @@ The following script transcribes a file with TranscribePsy. By default it loads 
 <WrapCode>
 
 ```python file=<rootDir>/packages/sdk-python/examples/transcription_parakeet_transcribepsy.py title="transcription_parakeet_transcribepsy.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/TranscriptionParakeetTranscribepsy.kt title="TranscriptionParakeetTranscribepsy.kt" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -499,6 +547,14 @@ The following script shows an example of Indic-language transcription using the 
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/TranscriptionParakeetIndicConformer.kt title="TranscriptionParakeetIndicConformer.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Parakeet Sortformer
@@ -529,8 +585,16 @@ The following script shows an example of speaker diarization using the Parakeet 
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/TranscriptionParakeetSortformer.kt title="TranscriptionParakeetSortformer.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart), the [Python quickstart](/sdk/python-sdk#quickstart), or the [Kotlin quickstart](/sdk/kotlin-sdk#quickstart).
 </Callout>

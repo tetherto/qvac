@@ -14,6 +14,7 @@ import { resolveBundledAssetUri } from './asset-uri.js'
 import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
 import { ModelLoadingExecutor } from '../shared/executors/model-loading-executor.js'
 import { CompletionExecutor } from '../shared/executors/completion-executor.js'
+import { CalcTokensExecutor } from '../shared/executors/calc-tokens-executor.js'
 import { EmbeddingExecutor } from '../shared/executors/embedding-executor.js'
 import { ToolsExecutor } from '../shared/executors/tools-executor.js'
 import { DeferredToolsExecutor } from '../shared/executors/deferred-tools-executor.js'
@@ -46,6 +47,7 @@ import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
 import { SystemResourcesExecutor } from '../shared/executors/system-resources-executor.js'
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { MobileCancellationExecutor } from './executors/cancellation-executor.js'
+import { SessionExecutor } from '../shared/executors/session-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
 
 import * as MODEL_CONSTANTS from '@qvac/sdk'
@@ -206,6 +208,7 @@ export const executor = createExecutor({
       resolveAttachmentPath: resolveBatchAttachmentPath
     }),
     new CompletionExecutor(resources),
+    new CalcTokensExecutor(resources),
     new MobileTranscriptionExecutor(resources),
     new MobileTranscribeStreamEventsExecutor(resources),
     new EmbeddingExecutor(resources),
@@ -242,6 +245,7 @@ export const executor = createExecutor({
     new SystemResourcesExecutor(Platform.OS),
     new ConfigExecutor(),
     new MobileCancellationExecutor(resources),
+    new SessionExecutor(resources),
     new PluginExecutor(resources)
   ],
   profiling: {

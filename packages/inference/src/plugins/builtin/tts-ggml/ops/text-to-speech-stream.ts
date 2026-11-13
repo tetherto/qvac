@@ -1,3 +1,4 @@
+import type { PluginHandlerContext } from '@/schemas/plugin'
 import type { AbortSignal } from 'bare-abort-controller'
 import { getModel } from '@/runtime/model-registry'
 import { textToSpeechStreamRequestSchema, type TextToSpeechStreamRequest } from '@/schemas/index'
@@ -9,6 +10,7 @@ import type { TtsStats as AddonTtsStats } from '@/utils/addon-responses'
 import {
   type TtsStreamChunk,
   type TtsOpYield,
+  carriesSpeechTokenIds,
   collectTtsStats,
   pcmFrame,
   chunkMetadata
@@ -150,7 +152,8 @@ function buildRunStreamingOptions(
 
 export async function* textToSpeechStream(
   params: TextToSpeechStreamRequest,
-  inputStream: AsyncIterable<Buffer>
+  inputStream: AsyncIterable<Buffer>,
+  context?: PluginHandlerContext
 ): AsyncGenerator<TtsOpYield, TtsOpResult, unknown> {
   const request = textToSpeechStreamRequestSchema.parse(params)
 
@@ -162,7 +165,13 @@ export async function* textToSpeechStream(
   assertParlerJobOptionsSupported(model, parlerJobOptions, 'textToSpeechStream')
   assertVoiceJobOptionsSupported(model, request, 'textToSpeechStream')
 
-  await using ctx = await bindTtsCancel(model, request.modelId, request.requestId)
+  await using ctx = await bindTtsCancel(
+    model,
+    request.modelId,
+    request.requestId,
+    request.sessionId,
+    context
+  )
   if (ctx.signal.aborted) return { ...buildStreamResult(0), cancelled: true }
 
   // Resolved inside the request context: an uncached remote reference
@@ -170,7 +179,8 @@ export async function* textToSpeechStream(
   const voiceJobOptions = await resolveVoiceJobOptions(request, {
     signal: ctx.signal,
     scope: ctx.scope,
-    requestId: ctx.requestId
+    requestId: ctx.requestId,
+    sessionId: ctx.sessionId
   })
   if (voiceJobOptions === null) return { ...buildStreamResult(0), cancelled: true }
 
@@ -196,7 +206,9 @@ export async function* textToSpeechStream(
       if (data.outputArray == null) {
         continue
       }
-      if (data.outputArray.length === 0) {
+      // An empty chunk is a native end marker, unless it carries the sentence's
+      // speech tokens (CosyVoice3 native streaming), which the caller wants.
+      if (data.outputArray.length === 0 && !carriesSpeechTokenIds(data)) {
         continue
       }
       yield { ...pcmFrame(data.outputArray), ...chunkMetadata(data) }

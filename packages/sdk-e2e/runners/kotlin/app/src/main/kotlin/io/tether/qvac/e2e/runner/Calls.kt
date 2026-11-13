@@ -325,7 +325,7 @@ class Calls(
         var sampleRate: Any? = null
         var text: Any? = null
         for (frame in frames(request, "textToSpeech")) {
-            pcm.addAll(asList(frame["buffer"]))
+            pcm.addAll(Wire.ttsSamples(frame))
             if (frame["text"] != null) text = frame["text"]
             if (sampleRate == null && frame["sampleRate"] != null) sampleRate = frame["sampleRate"]
             if (frame["done"] == true) done = true
@@ -770,6 +770,7 @@ class Calls(
         },
         "getModelInfo" to { p -> wire.send(mapOf("type" to "getModelInfo", "name" to p["name"]))["modelInfo"] },
         "getLoadedModelInfo" to { p -> wire.send(mapOf("type" to "getLoadedModelInfo", "modelId" to p["modelId"]))["info"] },
+        "calcTokens" to { p -> wire.send(mapOf("type" to "calcTokens") + p)["tokens"] },
         "modelRegistryList" to { _ -> registry("modelRegistryList", emptyMap(), "models") },
         "modelRegistrySearch" to { p ->
             val rest = p - "modelType"

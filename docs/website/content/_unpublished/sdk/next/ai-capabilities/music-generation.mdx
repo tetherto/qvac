@@ -109,6 +109,37 @@ Advanced load-time controls (`inferenceSteps`, `shift`, `nGpuLayers`, `threads`,
 
 For more about model constants and sources, see [SDK — Models](/sdk#models).
 
+#### Choose where each stage runs
+
+`useGPU` and `nGpuLayers` leave placement to the engine. To name the device yourself, set `backend` for the primary pipeline and `lmBackend` for the language model. The two are independent, so the LM can run on a different device from the rest of the pipeline.
+
+```ts
+const modelId = await loadModel({
+  modelType: "audiogen",
+  modelConfig: {
+    engine: "acestep",
+    textEncModelSrc: AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
+    lmModelSrc: AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
+    ditModelSrc: AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
+    vaeModelSrc: AUDIOGEN_VAE_BF16,
+    backend: "CUDA0",
+    lmBackend: "cpu",
+  },
+});
+```
+
+| Field | What it does |
+| --- | --- |
+| `backend` | The primary backend, by backend or device name: `"cpu"`, `"MTL0"`, `"CUDA0"` and so on. Unset or `"auto"` keeps the placement `useGPU` and `nGpuLayers` select. |
+| `lmBackend` | The backend the language model runs on, named the same way and chosen independently of `backend`. Unset or `"auto"` keeps the engine's own placement. |
+| `dumpStagesDir` | Diagnostics. An existing directory on the inference host that receives each stage's intermediate tensors. The engine does not create it, and writes nothing when the field is unset. |
+
+A named backend is a requirement, not a preference: when the host cannot provide it, the load fails instead of running somewhere else. The engine's own checks still apply, so a backend that cannot run a stage's operations is refused as well. `stats.backendDevice` and `stats.backendId` report the primary backend a run used; the device `lmBackend` names is not reported. [`assessModelFit()`](/sdk/models/assess-model-fit) projects the same placement, counting the device the LM runs on as well as the primary one.
+
+#### Core ML VAE decoder on Apple
+
+On macOS and iOS, the SDK downloads a compiled Core ML bundle with `AUDIOGEN_VAE_BF16` and stages it beside the GGUF, where the engine picks it up for the VAE decode. There is nothing to configure. The bundle lives in a companion directory with its GGUF, so a VAE that was already in the cache is downloaded once more on these platforms (337 MB), as happens for the Parakeet and Audio8 sidecars. A VAE loaded from your own file path uses a bundle only when one sits next to the GGUF under the name the engine looks for, which is `vae-decoder.mlmodelc` for `vae-BF16.gguf`. Without the bundle, and on every other platform, the VAE decodes on the backend the load selected. [`assessModelFit()`](/sdk/models/assess-model-fit) sizes the native VAE and does not count the Core ML bundle's memory.
+
 ### MiniMax-Music3
 
 MiniMax-Music3 uses two GGUF files that you supply as local paths — the language model (`mm3-lm-*.gguf`) and the synthesis model (`mm3-synth-*.gguf`). The SDK does not download MiniMax-Music3 from the registry, so bring your own converted files and point `lmModelSrc` and `synthModelSrc` at them. Weights are governed by the [MiniMax-Music3 Community License](https://huggingface.co/MiniMaxAI/MiniMax-Music3).
@@ -155,7 +186,26 @@ The pair takes precedence over `device` and `useGPU`. A Core ML request never sw
 
 A Core ML run reports `stats.backendId: 99` and leaves out `stats.backendDevice` and `stats.gpuFallbackReason`, so its `diagnostics` resolve to `undefined`. [`assessModelFit()`](/sdk/models/assess-model-fit) cannot size this route. Its output is not guaranteed to match the native backend sample for sample, and it is not necessarily faster: the engine's [Core ML validation guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/audiogen/docs/minimax-coreml-validation.md) records what has been measured.
 
-Every run reports where it ran: `stats.backendDevice` (0 CPU, 1 GPU) and `stats.backendId` (0 CPU, 1 Metal, 2 CUDA, 3 Vulkan, 4 OpenCL) describe the backend the engine used, not the one requested, and `stats.gpuFallbackReason` carries the engine's code for a GPU request that landed on the CPU (0 none, 1 not requested, 2 no devices, 3 init failed). The run's `diagnostics` promise names the same backend, and `diagnostics.fallback.reason` names a lost GPU (`"no-devices"` or `"init-failed"`), so a Metal fallback is distinguishable from a slow run.
+#### Core ML conditioner on macOS
+
+`coremlConditionerPath` moves one MiniMax stage to Core ML and leaves the rest alone. Point it at a compiled conditioner `.mlmodelc` on the inference host: the conditioner convolution runs through Core ML on the CPU and Neural Engine, and every other stage stays on the backend `device` or `useGPU` selects.
+
+```ts
+const modelId = await loadModel({
+  modelType: "audiogen",
+  modelConfig: {
+    engine: "minimax",
+    lmModelSrc: "/path/to/mm3-lm-q8.gguf",
+    synthModelSrc: "/path/to/mm3-synth-q8.gguf",
+    device: "gpu",
+    coremlConditionerPath: "/path/to/minimax-conditioner.mlmodelc",
+  },
+});
+```
+
+This is not the full Core ML profile and does not need `coremlProfileDir` or `coremlComputeUnits`. The load fails when the bundle is invalid or the build cannot use it, and the SDK refuses the field on any platform other than macOS before resolving the model files. [`assessModelFit()`](/sdk/models/assess-model-fit) cannot size a load that names a conditioner.
+
+Every run reports where it ran: `stats.backendDevice` (0 CPU, 1 GPU) and `stats.backendId` (0 CPU, 1 Metal, 2 CUDA, 3 Vulkan, 4 OpenCL) describe the primary backend the engine used, not the one requested, and `stats.gpuFallbackReason` carries the engine's code for a GPU request that landed on the CPU (0 none, 1 not requested, 2 no devices, 3 init failed). The run's `diagnostics` promise names the same backend, and `diagnostics.fallback.reason` names a lost GPU (`"no-devices"` or `"init-failed"`), so a Metal fallback is distinguishable from a slow run.
 
 ## Generate audio
 
@@ -551,8 +601,8 @@ The same description is repeated on the terminal frame as `stats.understand`, so
 
 [`assessModelFit()`](/sdk/models/assess-model-fit) runs the engine's own fitter over a load described as `loadModel()` takes it, reading model metadata only — no weights are downloaded or loaded. Both engines are covered:
 
-- ACE-Step, on every platform, from the registry's weightless descriptions of the four model constants, so before anything is downloaded, or from the files already on disk.
-- MiniMax-Music3, on desktop, from the LM and synthesis files on disk, since it has no registry constants. It projects the default generation (300 semantic frames, 12 s) on the device the config selects: `device` as given, otherwise `useGPU`. A [Core ML profile](#full-core-ml-on-macos) cannot be sized by the fitter.
+- ACE-Step, on every platform, from the registry's weightless descriptions of the four model constants, so before anything is downloaded, or from the files already on disk. It projects the placement the config asks for, including a named [`backend` and `lmBackend`](#choose-where-each-stage-runs).
+- MiniMax-Music3, on desktop, from the LM and synthesis files on disk, since it has no registry constants. It projects the default generation (300 semantic frames, 12 s) on the device the config selects: `device` as given, otherwise `useGPU`. A [Core ML profile](#full-core-ml-on-macos) or [conditioner](#core-ml-conditioner-on-macos) cannot be sized by the fitter.
 
 The audiogen fitter reports each device's peak across the pipeline phases, so an audiogen load is summed with the other models assessed alongside it like any other.
 
@@ -647,6 +697,14 @@ This example loads the registry-hosted ACE-Step models, reports progress, genera
 
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/Audiogen.kt title="Audiogen.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 The cover example takes an existing recording (any FFmpeg-decodable file), an optional timbre reference, and a new caption, and writes the `cover-nofsq` result as WAV:
@@ -679,6 +737,14 @@ The cover example takes an existing recording (any FFmpeg-decodable file), an op
 
 ```
 
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/AudiogenCover.kt title="AudiogenCover.kt" lineNumbers
+```
 </WrapCode>
 </Tab>
 </Tabs>
@@ -715,6 +781,14 @@ The edit example takes an existing recording plus a source and a target caption,
 
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/AudiogenEdit.kt title="AudiogenEdit.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 The understand example takes an existing recording and prints the caption, musical metadata, and recovered code count the LM reports for it:
@@ -749,7 +823,17 @@ The understand example takes an existing recording and prints the caption, music
 
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/AudiogenUnderstand.kt title="AudiogenUnderstand.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
+
+In the Kotlin tabs, `client.media.audio()` returns a run with a `Flow` of progress frames and a `Deferred` final result that holds the base64 PCM chunks and the stats. The cover tab sets the typed `taskType` on an `AudioGenStreamRequest`; the edit and understand tabs call the generated `client.audioEditStream()` and `client.audioUnderstand()` methods, each a `Flow`. `sourceAudio` and `referenceAudio` are sealed `FilePath` / `Base64` classes rather than tagged dictionaries.
 
 ### MiniMax-Music3
 
@@ -785,10 +869,19 @@ This example loads a local MiniMax-Music3 pair from the `AUDIOGEN_MINIMAX_LM_MOD
 
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/AudiogenMinimax.kt title="AudiogenMinimax.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 <Callout type="success">
-  **Tip:** see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python
-  quickstart](/sdk/python-sdk#quickstart) for setup instructions, and apply the
+  **Tip:** see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart), the [Python
+  quickstart](/sdk/python-sdk#quickstart), or the [Kotlin
+  quickstart](/sdk/kotlin-sdk#quickstart) for setup instructions, and apply the
   first-run download configuration above on constrained connections.
 </Callout>

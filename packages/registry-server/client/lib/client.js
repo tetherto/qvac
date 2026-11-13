@@ -38,6 +38,7 @@ class QVACRegistryClient extends ReadyResource {
     this._pendingReleases = new Map()
 
     this.storage = this.registryConfig.getRegistryStorage(opts.storage)
+    this._tempStorage = this.registryConfig.tempStoragePath || null
     this.registryCoreKey = this.registryConfig.getRegistryCoreKey(opts.registryCoreKey)
     this.corestore = new Corestore(this.storage, opts.corestoreOpts || {})
 
@@ -740,6 +741,7 @@ class QVACRegistryClient extends ReadyResource {
     await fs.promises.mkdir(dir, { recursive: true })
 
     const writeStream = fs.createWriteStream(filePath)
+    const writerClosed = new Promise((resolve) => writeStream.once('close', resolve))
 
     try {
       await new Promise((resolve, reject) => {
@@ -767,6 +769,10 @@ class QVACRegistryClient extends ReadyResource {
         }
       })
     } finally {
+      // Callers may release a file lock as soon as this settles.
+      stream.destroy()
+      writeStream.destroy()
+      await writerClosed
       rangeDownload.destroy()
       core.off('download', progressHandler)
     }
@@ -836,6 +842,16 @@ class QVACRegistryClient extends ReadyResource {
       this.logger.debug('Closing corestore')
       await this.corestore.close()
       this.corestore = null
+    }
+
+    if (this._tempStorage) {
+      this.logger.debug('Removing temp storage', { storage: this._tempStorage })
+      try {
+        await fs.promises.rm(this._tempStorage, { recursive: true, force: true })
+      } catch (e) {
+        this.logger.warn('Failed to remove temp storage', { error: e.message })
+      }
+      this._tempStorage = null
     }
 
     this.logger.debug('QVACRegistryClient closed')

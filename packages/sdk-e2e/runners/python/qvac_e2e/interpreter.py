@@ -19,6 +19,7 @@ from typing import Any
 
 from tetherto.qvac_sdk import (
     BciTranscribeRequest,
+    CalcTokensRequest,
     DownloadAssetRequest,
     EmbedRequest,
     FinetuneRequest,
@@ -35,6 +36,7 @@ from tetherto.qvac_sdk import (
     VectorIndexRequest,
     bci_transcribe,
     bci_transcribe_stream_session,
+    calc_tokens,
     cancel,
     completion,
     delete_cache,
@@ -239,7 +241,9 @@ async def _logging_stream_open(transport: Any, params: dict[str, Any]) -> Any:
 async def _logging_stream_mark(transport: Any, params: dict[str, Any]) -> Any:
     """Marks the point the logs are counted from."""
     state = _logging_state(params["streamId"])
-    state["cutoffMs"] = time.time() * 1000
+    # Whole ms, as the server stamps entries with Date.now(): a fractional cutoff
+    # drops every entry delivered in the same millisecond as the mark.
+    state["cutoffMs"] = time.time_ns() // 1_000_000
     return {"markedAt": state["cutoffMs"]}
 
 
@@ -372,6 +376,12 @@ async def _get_loaded_model_info(transport: Any, params: dict[str, Any]) -> Any:
     )
     response = await get_loaded_model_info(transport, request)
     return _jsonable(response.info)
+
+
+async def _calc_tokens(transport: Any, params: dict[str, Any]) -> Any:
+    request = CalcTokensRequest.model_validate({"type": "calcTokens", **params})
+    response = await calc_tokens(transport, request)
+    return response.tokens
 
 
 async def _vla_hparams(transport: Any, params: dict[str, Any]) -> Any:
@@ -604,6 +614,7 @@ CALLS: dict[str, Callable[[Any, dict[str, Any]], Any]] = {
     ),
     "getModelInfo": _get_model_info,
     "getLoadedModelInfo": _get_loaded_model_info,
+    "calcTokens": _calc_tokens,
     # --- registry ------------------------------------------------------------
     "modelRegistryList": lambda transport, params: model_registry_list(transport),
     "modelRegistrySearch": lambda transport, params: model_registry_search(

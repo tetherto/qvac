@@ -3,7 +3,8 @@ export { downloadAsset } from './download-asset'
 export { batchCompletion } from './batch-completion'
 export { completion } from './completion-stream'
 export { deleteCache } from './delete-cache'
-export { unloadModel } from './unload-model'
+export { calcTokens, type CalcTokensClientParams } from './calc-tokens'
+export { unloadModel, type UnloadModelResult } from './unload-model'
 export { loggingStream } from './logging-stream'
 export { subscribeServerLogs, type ServerLogHandler } from './subscribe-logs'
 export { heartbeat } from './heartbeat'
@@ -24,7 +25,12 @@ export {
   ragCloseWorkspace,
   ragDeleteWorkspace
 } from './rag'
-export { createVectorIndex, loadVectorIndex, type VectorIndex } from './vector-index'
+export {
+  createVectorIndex,
+  loadVectorIndex,
+  type VectorIndex,
+  type VectorIndexOperation
+} from './vector-index'
 export { textToSpeech, textToSpeechStream } from './text-to-speech'
 export { getModelInfo } from './get-model-info'
 export { getLoadedModelInfo } from './get-loaded-model-info'

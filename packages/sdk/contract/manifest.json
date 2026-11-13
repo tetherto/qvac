@@ -43,6 +43,12 @@
       "responseSchema": "schema.json#/$defs/bciTranscribeStream.response"
     },
     {
+      "name": "calcTokens",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/calcTokens.request",
+      "responseSchema": "schema.json#/$defs/calcTokens.response"
+    },
+    {
       "name": "cancel",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/cancel.request",
@@ -53,6 +59,13 @@
       "callShape": "server-stream",
       "requestSchema": "schema.json#/$defs/classify.request",
       "responseSchema": "schema.json#/$defs/classify.response"
+    },
+    {
+      "name": "closeSession",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/closeSession.request",
+      "responseSchema": "schema.json#/$defs/closeSession.response",
+      "ownerOnly": true
     },
     {
       "name": "completionOrchestrate",
@@ -76,7 +89,8 @@
       "name": "deleteCache",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/deleteCache.request",
-      "responseSchema": "schema.json#/$defs/deleteCache.response"
+      "responseSchema": "schema.json#/$defs/deleteCache.response",
+      "ownerOnly": true
     },
     {
       "name": "diffusionStream",
@@ -187,6 +201,13 @@
       "responseSchema": "schema.json#/$defs/ocrStream.response"
     },
     {
+      "name": "openSession",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/openSession.request",
+      "responseSchema": "schema.json#/$defs/openSession.response",
+      "ownerOnly": true
+    },
+    {
       "name": "pluginInvoke",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/pluginInvoke.request",
@@ -218,13 +239,15 @@
       "name": "resume",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/resume.request",
-      "responseSchema": "schema.json#/$defs/resume.response"
+      "responseSchema": "schema.json#/$defs/resume.response",
+      "ownerOnly": true
     },
     {
       "name": "startRpcServer",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/startRpcServer.request",
-      "responseSchema": "schema.json#/$defs/startRpcServer.response"
+      "responseSchema": "schema.json#/$defs/startRpcServer.response",
+      "ownerOnly": true
     },
     {
       "name": "state",
@@ -236,13 +259,15 @@
       "name": "stopRpcServer",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/stopRpcServer.request",
-      "responseSchema": "schema.json#/$defs/stopRpcServer.response"
+      "responseSchema": "schema.json#/$defs/stopRpcServer.response",
+      "ownerOnly": true
     },
     {
       "name": "suspend",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/suspend.request",
-      "responseSchema": "schema.json#/$defs/suspend.response"
+      "responseSchema": "schema.json#/$defs/suspend.response",
+      "ownerOnly": true
     },
     {
       "name": "textToSpeech",

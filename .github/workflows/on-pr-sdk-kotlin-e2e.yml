@@ -1,8 +1,10 @@
 name: QVAC Tests (sdk-kotlin) - real worker
 
 on:
+  # Runs on test-e2e-smoke-labelled PRs, and on every PR into a release branch:
+  # the release ships the Kotlin SDK.
   pull_request:
-    types: [labeled, synchronize]
+    types: [labeled, opened, synchronize, reopened]
     paths:
       - 'packages/sdk-kotlin/**'
       - 'packages/inference/package.json'
@@ -19,12 +21,22 @@ permissions:
   contents: read
 
 concurrency:
-  group: kotlin-conformance-${{ github.event.pull_request.number || github.ref }}
+  # A label other than test-e2e-smoke gets a group of its own, so adding it
+  # does not cancel a running check.
+  group: >-
+    kotlin-conformance-${{ github.event.pull_request.number || github.ref }}-${{
+      (github.event.action == 'labeled' && github.event.label.name != 'test-e2e-smoke')
+      && format('ignored-{0}', github.event.label.name) || 'run' }}
   cancel-in-progress: true
 
 jobs:
   conformance:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'test-e2e-smoke')
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || github.event.label.name == 'test-e2e-smoke'
+      || (github.event.action != 'labeled'
+          && (startsWith(github.event.pull_request.base.ref, 'release-')
+              || contains(github.event.pull_request.labels.*.name, 'test-e2e-smoke')))
     runs-on: ubuntu-latest
     timeout-minutes: 90
     defaults:
@@ -50,8 +62,13 @@ jobs:
           # Drops `tools` from the action's default: the obsolete SDK Tools
           # package is gone from Google's repository and fails provisioning.
           packages: platform-tools
+      - name: Build and install the in-repo @qvac/sdk and @qvac/inference
+        run: ./scripts/install-workspace-sdk.sh
+      # packages/sdk is built above, so Gradle skips its rebuild.
       - name: Run shared cross-client corpus
-        run: ./gradlew --no-daemon :jvm-barekit:test --tests '*WorkerConformanceTest' --rerun-tasks
+        run: >-
+          ./gradlew --no-daemon :jvm-barekit:test --tests '*WorkerConformanceTest' --rerun-tasks
+          -x :android-barekit:buildWorkspaceSdk
         env:
           QVAC_RUN_CONFORMANCE: '1'
       - name: Upload conformance reports

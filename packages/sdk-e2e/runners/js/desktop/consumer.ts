@@ -9,7 +9,7 @@ import { profiler } from '@qvac/sdk'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { ResourceManager } from '../shared/resource-manager.js'
-import { collectTestDeps } from '../shared/collect-test-deps.js'
+import { resolveBootstrapDeps, resolveBootstrapModels } from '../shared/bootstrap-deps.js'
 import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
 import { ModelLoadingExecutor } from '../shared/executors/model-loading-executor.js'
 import { CompletionExecutor } from '../shared/executors/completion-executor.js'
@@ -53,6 +53,7 @@ import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { NoLingeringBareExecutor } from '../shared/executors/node/no-lingering-bare-executor.js'
 import { KvCacheRestartExecutor } from '../shared/executors/node/kv-cache-restart-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
+import { SessionExecutor } from '../shared/executors/session-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
 
 import * as MODEL_CONSTANTS from '@qvac/sdk'
@@ -126,10 +127,12 @@ function resolveBatchAttachmentPath(inputPath: string) {
 export async function bootstrap(filteredTests?: TestDefinition[]) {
   ensureDesktopE2EConfig()
 
-  // `filteredTests` (when present) is the producer's post-filter test list
-  // delivered via register-ack; absence keeps the legacy "warm everything" path.
-  const allowedDeps = filteredTests ? collectTestDeps(filteredTests) : undefined
-  await resources.downloadAllOnce(console.log, { allowedDeps })
+  const allowedDeps = resolveBootstrapDeps(filteredTests)
+  await resources.downloadAllOnce(console.log, {
+    allowedDeps,
+    // Standalone bootstrap only
+    onlyModels: filteredTests ? undefined : resolveBootstrapModels()
+  })
 }
 
 const stepBindings = createStepBindings(resources)
@@ -192,6 +195,7 @@ export const executor = createExecutor({
     new NoLingeringBareExecutor(),
     new KvCacheRestartExecutor(resources),
     new NodeCancellationExecutor(resources),
+    new SessionExecutor(resources),
     new PluginExecutor(resources)
   ],
   profiling: {

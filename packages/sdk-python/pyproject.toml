@@ -14,7 +14,7 @@ requires-python = ">=3.10"
 license = "Apache-2.0"
 dependencies = [
   "pydantic>=2.6,<3",
-  "bare-rpc~=0.2.0",
+  "bare-rpc~=0.3.0",
   "bare-sidecar~=0.1.3",
   "bare-stow-host~=0.2.1",
 ]

@@ -3,10 +3,13 @@ export {
   batchCompletion,
   completion,
   deleteCache,
+  calcTokens,
+  type CalcTokensClientParams,
   loadModel,
   downloadAsset,
   heartbeat,
   unloadModel,
+  type UnloadModelResult,
   transcribe,
   transcribeStream,
   bciTranscribe,
@@ -28,6 +31,7 @@ export {
   createVectorIndex,
   loadVectorIndex,
   type VectorIndex,
+  type VectorIndexOperation,
   textToSpeech,
   textToSpeechStream,
   getModelInfo,
@@ -76,6 +80,7 @@ export {
   type FinetuneHandle
 } from './client/api'
 export { close } from './client'
+export { openSession, type QvacSession, type OpenSessionOptions } from './client/session'
 export { plugins } from './client/plugins-factory'
 export {
   type LifecycleState,
@@ -92,6 +97,7 @@ export {
   type CompletionFinal,
   type CompletionRun,
   type CompletionStats,
+  type CalcTokensParams,
   type BatchCompletionEvent,
   type BatchCompletionResult,
   type BatchCompletionRun,
@@ -169,6 +175,9 @@ export {
   TTS_COSYVOICE3_INSTRUCT_DIALECTS,
   TTS_COSYVOICE3_INSTRUCT_VOLUMES,
   TTS_COSYVOICE3_INSTRUCT_STYLES,
+  TTS_PARLER_COREML_COMPUTE_UNITS,
+  TTS_LAVASR_COREML_COMPUTE_UNITS,
+  TTS_SUPERTONIC_PRECISIONS,
   type TtsPace,
   type TtsCosyvoice3Emotion,
   type TtsCosyvoice3Instruct,
@@ -324,6 +333,8 @@ export {
   definePlugin,
   defineHandler,
   defineDuplexHandler,
+  requestParent,
+  type PluginHandlerContext,
   PluginDefinitionInvalidError,
   type QvacPlugin,
   type CreateModelParams,
@@ -405,6 +416,7 @@ export {
   ContextOverflowError,
   type ContextOverflowErrorSizes,
   ModelRegistryModelNotFoundError,
+  ModelRegistryBusyError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
@@ -412,7 +424,13 @@ export {
   AudioEncodeFailedError,
   InvalidSeedFromParamsError,
   KvCacheSeedSourceNotFoundError,
-  KvCacheSeedSharingDisabledError
+  KvCacheSeedSharingDisabledError,
+  SessionIdConflictError,
+  SessionNotOpenError,
+  ModelLeasedError,
+  ModelReconfiguredError,
+  OwnerOnlyError,
+  RAGWorkspaceBusyError
 } from './utils/errors-server'
 
 // `WorkerCrashedError` and `WorkerShutdownError` are thrown by the
@@ -434,7 +452,9 @@ export {
   WorkerStartupError,
   RequestValidationFailedError,
   StreamEndedError,
-  TextToSpeechStreamFailedError
+  TextToSpeechStreamFailedError,
+  SessionInvalidatedError,
+  ModelHandleInvalidatedError
 } from './utils/errors-client'
 
 // Logging exports
