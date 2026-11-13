@@ -23,6 +23,8 @@ namespace fs = std::filesystem;
 
 namespace {
 
+constexpr int K_FIXTURE_N_PREDICT = 10;
+
 fs::path uniqueTextCachePath(const char* prefix) {
   const auto id =
       std::chrono::high_resolution_clock::now().time_since_epoch().count();
@@ -52,7 +54,7 @@ protected:
     config_files["device"] = test_common::getTestDevice();
     config_files["ctx_size"] = "2048";
     config_files["gpu_layers"] = test_common::getTestGpuLayers();
-    config_files["n_predict"] = "10";
+    config_files["n_predict"] = std::to_string(K_FIXTURE_N_PREDICT);
 
     test_model_path = test_common::BaseTestModelPath::get();
     test_projection_path = "";
@@ -451,6 +453,48 @@ TEST_F(TextLlmContextTest, CancelMethod) {
   }
 
   EXPECT_NO_THROW(model->cancel());
+}
+
+// A cancel issued from the output callback lands after the token is streamed
+// and before it is decoded. The request still keeps every streamed token.
+TEST_F(TextLlmContextTest, CancelFromCallbackKeepsStreamedToken) {
+  if (!hasValidModel()) {
+    FAIL() << "Test model not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  LlmContext* ctx = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(ctx, nullptr);
+
+  bool cancelled = false;
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello"}])";
+  prompt.outputCallback = [&](const std::string&) {
+    if (!cancelled) {
+      cancelled = true;
+      ctx->stop();
+    }
+  };
+
+  ASSERT_NO_THROW(model->processPrompt(prompt));
+  ASSERT_TRUE(cancelled) << "test did not reach the streaming callback";
+
+  auto stats = model->runtimeStats();
+  const int cacheTokens = static_cast<int>(getStatValue(stats, "CacheTokens"));
+  const int promptTokens =
+      static_cast<int>(getStatValue(stats, "promptTokens"));
+  const int generatedTokens =
+      static_cast<int>(getStatValue(stats, "generatedTokens"));
+  EXPECT_GT(generatedTokens, 0);
+  // Below the fixture's `n_predict`: the cancel stopped generation.
+  EXPECT_LT(generatedTokens, K_FIXTURE_N_PREDICT)
+      << "the cancel must stop generation";
+  EXPECT_EQ(cacheTokens, promptTokens + generatedTokens)
+      << "a cancel must keep every streamed token resident";
 }
 
 TEST_F(TextLlmContextTest, ProcessWithTools) {

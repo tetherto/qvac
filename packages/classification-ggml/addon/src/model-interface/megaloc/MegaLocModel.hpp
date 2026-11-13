@@ -23,7 +23,7 @@ struct Config {
   std::string modelPath;
   std::string backendsDir;
   std::string backend;
-  int threads = 8;
+  int threads = DEFAULT_THREADS;
 };
 
 class MegaLocModel : public qvac_lib_inference_addon_cpp::model::IModel {
@@ -38,6 +38,12 @@ public:
   std::any process(const std::any& input) override;
   [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
   runtimeStats() const override;
+
+  // The buffers a load with `config` plus one inference would allocate. Reads
+  // only GGUF metadata and allocates none of them.
+  static MeasuredBuffers measure(const Config& config);
+  // The buffers this loaded model holds.
+  [[nodiscard]] BufferFootprint allocatedBuffers() const;
 
 private:
   struct Impl;

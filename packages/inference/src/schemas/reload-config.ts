@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { whisperConfigSchema } from '@/schemas/transcription-config'
 import { whisperModelTypeSchema } from '@/schemas/model-types'
+import { trackedRequestSchema } from '@/schemas/request-base'
 
 export const modelIdSchema = z.string().regex(/^[0-9a-f]{16}$/, 'Invalid modelId format')
 
@@ -17,24 +18,30 @@ export const reloadConfigOptionsToRequestSchema = z.union([
     .object({
       modelId: modelIdSchema,
       modelType: whisperModelTypeSchema,
-      modelConfig: whisperConfigSchema.partial().strict()
+      modelConfig: whisperConfigSchema.partial().strict(),
+      requestId: z.string().optional()
     })
     .transform((data) => ({
       type: 'loadModel' as const,
       modelId: data.modelId,
       modelType: data.modelType,
-      modelConfig: data.modelConfig
+      modelConfig: data.modelConfig,
+      // A reload is registered under this id, so `cancel({ requestId })`
+      // reaches it while it waits for another load of the same model.
+      ...(data.requestId !== undefined && { requestId: data.requestId })
     }))
 ])
 
-const reloadConfigRequestBaseSchema = z.object({
-  type: z.literal('loadModel'),
-  modelId: modelIdSchema,
-  // Explicitly exclude load-specific fields for type narrowing
-  modelSrc: z.never().optional(),
-  withProgress: z.never().optional(),
-  seed: z.never().optional()
-})
+const reloadConfigRequestBaseSchema = z
+  .object({
+    type: z.literal('loadModel'),
+    modelId: modelIdSchema,
+    // Explicitly exclude load-specific fields for type narrowing
+    modelSrc: z.never().optional(),
+    withProgress: z.never().optional(),
+    seed: z.never().optional()
+  })
+  .extend(trackedRequestSchema.shape)
 
 export const reloadConfigWhisperRequestSchema = reloadConfigRequestBaseSchema.extend({
   modelType: whisperModelTypeSchema,

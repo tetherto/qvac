@@ -9,7 +9,7 @@
  * files are downloaded through the SDK registry and staged beside the GGUF.
  */
 import { downloadAsset, getModelInfo, loadModel, transcribe, unloadModel } from '@qvac/sdk'
-import { link, mkdir, mkdtemp, open, rm, symlink } from 'node:fs/promises'
+import { copyFile, link, mkdir, mkdtemp, open, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 
@@ -69,7 +69,13 @@ async function stageModel(path: string): Promise<{ modelSrc: string; dir: string
 
       const targetPath = join(bundleDir, relativePath)
       await mkdir(join(targetPath, '..'), { recursive: true })
-      await link(sourcePath, targetPath)
+      try {
+        await link(sourcePath, targetPath)
+      } catch (error) {
+        // A hard link cannot cross filesystems, e.g. a QVAC_HOME_DIR on another drive.
+        if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error
+        await copyFile(sourcePath, targetPath)
+      }
     }
 
     return { modelSrc, dir }

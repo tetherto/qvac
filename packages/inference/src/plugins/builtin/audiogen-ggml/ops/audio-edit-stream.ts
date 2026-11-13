@@ -1,3 +1,5 @@
+import type Buffer from 'bare-buffer'
+import type { PluginHandlerContext } from '@/schemas/plugin'
 import { RepaintMode, type AudioEditSession } from '@qvac/audiogen-ggml'
 import {
   AUDIOGEN_INPUT_CHANNELS,
@@ -19,11 +21,14 @@ const REPAINT_MODES: Record<AudioGenRepaintMode, RepaintMode> = {
 }
 
 export function audioEditStream(
-  request: AudioEditStreamRequest
+  request: AudioEditStreamRequest,
+  _inputStream?: AsyncIterable<Buffer>,
+  context?: PluginHandlerContext
 ): AsyncGenerator<AudioEditStreamResponse> {
   return streamAudioGenRun({
     type: 'audioEditStream',
     request,
+    context,
     async start(model, ctx, logger) {
       // The source and reference are decoded before the run is admitted so
       // the model slot is never held by a request that fails on input

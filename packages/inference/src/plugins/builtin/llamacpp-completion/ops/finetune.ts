@@ -1,3 +1,4 @@
+import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
 import fs from 'bare-fs'
 import { getModel, type AnyModel } from '@/runtime/model-registry'
 import type {
@@ -13,6 +14,7 @@ import type {
 import { CompletionFailedError } from '@/errors/index'
 import { getRequestRegistry, withRequestContext } from '@/runtime/index'
 import { generateRandomRequestId } from '@/runtime/request-id'
+import { OWNER_SESSION_ID, resolveSessionId } from '@/runtime/session-id'
 import { getEngineLogger } from '@/logging/index'
 
 const PAUSE_CHECKPOINT_PREFIX = 'pause_checkpoint_step_'
@@ -71,20 +73,41 @@ const admittedFinetunes = new Set<string>()
 // handoff leaves a brief window where the request is in neither the wait queue nor the
 // active set — a broad cancel misses it, but cancel({ requestId }) covers it via the
 // cancel-before-begin tripwire.
-const finetuneRequestIds = new Map<string, string>()
+const finetuneRequestIds = new Map<string, { requestId: string; sessionId: string | undefined }>()
 
 // Models whose admitted finetune is mid-pause: model.pause() has been called but has
 // not settled. A new finetune is rejected during this window even if the runtime ref
 // has already cleared, because handle.await() can settle before model.pause() resolves.
 const pausingModels = new Set<string>()
 
+// A finetune may be stopped by the session that started it, or by the owner,
+// who may stop any session's finetune. Another session's pause or cancel is a
+// no-op, as its registry cancel would be.
+function callerMayStop(
+  tracked: { sessionId: string | undefined },
+  callerSessionId: string
+): boolean {
+  if (callerSessionId === OWNER_SESSION_ID) return true
+  return (tracked.sessionId ?? OWNER_SESSION_ID) === callerSessionId
+}
+
 // Cancel the model's in-flight finetune by its tracked requestId (covers the
 // registry grant→register handoff window via the cancel-before-begin tripwire),
-// falling back to a broad cancel if the id is unknown.
-function cancelTrackedFinetune(modelId: string): void {
-  const requestId = finetuneRequestIds.get(modelId)
-  if (requestId !== undefined) getRequestRegistry().cancel({ requestId })
-  else getRequestRegistry().cancel({ modelId, kind: 'finetune' })
+// falling back to a broad cancel within the caller's own session if the id is
+// unknown. Returns false when the finetune belongs to another session.
+function cancelTrackedFinetune(modelId: string, callerSessionId: string): boolean {
+  const tracked = finetuneRequestIds.get(modelId)
+  if (tracked !== undefined) {
+    if (!callerMayStop(tracked, callerSessionId)) return false
+    getRequestRegistry().cancel(tracked)
+    return true
+  }
+  if (callerSessionId === OWNER_SESSION_ID) {
+    getRequestRegistry().cancel({ modelId, kind: 'finetune', allSessions: true })
+  } else {
+    getRequestRegistry().cancel({ modelId, kind: 'finetune', sessionId: callerSessionId })
+  }
+  return true
 }
 
 export function getFinetuneStateFromCheckpoints(options: FinetuneOptions): FinetuneStatus {
@@ -138,7 +161,8 @@ function validateExplicitFinetuneOperation(request: FinetuneRunRequest) {
 
 export async function startFinetune(
   request: FinetuneRunRequest,
-  onProgress?: (progress: FinetuneProgress) => void
+  onProgress?: (progress: FinetuneProgress) => void,
+  context?: PluginHandlerContext
 ): Promise<FinetuneResult> {
   const model = getModel(request.modelId) as FinetuneCapableModel
   validateExplicitFinetuneOperation(request)
@@ -161,7 +185,11 @@ export async function startFinetune(
   // observes RUNNING, not IDLE, and a concurrent start is rejected above. Released
   // on a failed begin() or on scope unwind below.
   registerRunningFinetune(request.modelId)
-  finetuneRequestIds.set(request.modelId, requestId)
+  // Under an invoke the job runs as the invoke's session, the owner included,
+  // so the stop paths compare against that session and not one named inside
+  // the params.
+  const tracked = { requestId, sessionId: context ? context.sessionId : request.sessionId }
+  finetuneRequestIds.set(request.modelId, tracked)
 
   // Scope the run into the registry so cancel({ requestId }) and
   // cancel({ modelId, kind: "finetune" }) reach it; onAbort forwards to
@@ -169,12 +197,14 @@ export async function startFinetune(
   await using ctx = await getRequestRegistry()
     .begin({
       requestId,
+      sessionId: request.sessionId,
+      ...requestParent(context),
       kind: 'finetune',
       modelId: request.modelId
     })
     .catch((err: unknown) => {
       clearFinetuneRuntimeState(request.modelId)
-      if (finetuneRequestIds.get(request.modelId) === requestId) {
+      if (finetuneRequestIds.get(request.modelId) === tracked) {
         finetuneRequestIds.delete(request.modelId)
       }
       throw err
@@ -184,7 +214,7 @@ export async function startFinetune(
   // removes the listener first.
   ctx.scope.defer(() => {
     clearFinetuneRuntimeState(request.modelId)
-    if (finetuneRequestIds.get(request.modelId) === requestId) {
+    if (finetuneRequestIds.get(request.modelId) === tracked) {
       finetuneRequestIds.delete(request.modelId)
     }
   })
@@ -243,10 +273,18 @@ export async function startFinetune(
   }
 }
 
-export async function pauseFinetune(modelId: string): Promise<FinetuneResult> {
+export async function pauseFinetune(
+  modelId: string,
+  callerSessionId: string = OWNER_SESSION_ID
+): Promise<FinetuneResult> {
   // Validate the model is loaded on every path (matches main; getModel throws
   // ModelNotFoundError for an unknown/unloaded model) before reporting any state.
   const model = getModel(modelId) as FinetuneCapableModel
+
+  const tracked = finetuneRequestIds.get(modelId)
+  if (tracked !== undefined && !callerMayStop(tracked, callerSessionId)) {
+    return { type: 'finetune', status: 'RUNNING' }
+  }
 
   if (admittedFinetunes.has(modelId)) {
     // The single finetune holds the model exclusively, so the addon-global pause is
@@ -267,7 +305,7 @@ export async function pauseFinetune(modelId: string): Promise<FinetuneResult> {
     // pause would cancel that unrelated reader, so cancel the queued finetune by its
     // own requestId. Nothing has trained, so report CANCELLED rather than a false
     // PAUSED.
-    cancelTrackedFinetune(modelId)
+    cancelTrackedFinetune(modelId, callerSessionId)
     return { type: 'finetune', status: 'CANCELLED' }
   }
 
@@ -277,8 +315,13 @@ export async function pauseFinetune(modelId: string): Promise<FinetuneResult> {
 
 // Routes cancellation through the registry; the model.cancel() forward is
 // installed by startFinetune, so never call model.cancel() here.
-export function cancelFinetune(modelId: string): Promise<FinetuneResult> {
-  cancelTrackedFinetune(modelId)
+export function cancelFinetune(
+  modelId: string,
+  callerSessionId: string = OWNER_SESSION_ID
+): Promise<FinetuneResult> {
+  if (!cancelTrackedFinetune(modelId, callerSessionId)) {
+    return Promise.resolve({ type: 'finetune', status: 'RUNNING' })
+  }
 
   return Promise.resolve({
     type: 'finetune',
@@ -297,22 +340,26 @@ export function getFinetuneState(params: FinetuneGetStateRequest): FinetuneResul
 
 export async function finetune(
   request: FinetuneRequest,
-  onProgress?: (progress: FinetuneProgress) => void
+  onProgress?: (progress: FinetuneProgress) => void,
+  context?: PluginHandlerContext
 ): Promise<FinetuneResult> {
   if (
     request.operation === undefined ||
     request.operation === 'start' ||
     request.operation === 'resume'
   ) {
-    return startFinetune(request, onProgress)
+    return startFinetune(request, onProgress, context)
   }
 
+  // Under a plugin invoke the caller is the invoke's session; the nested
+  // params name whatever the caller put there.
+  const callerSessionId = resolveSessionId(context ?? request)
   switch (request.operation) {
     case 'getState':
       return getFinetuneState(request)
     case 'pause':
-      return pauseFinetune(request.modelId)
+      return pauseFinetune(request.modelId, callerSessionId)
     case 'cancel':
-      return cancelFinetune(request.modelId)
+      return cancelFinetune(request.modelId, callerSessionId)
   }
 }

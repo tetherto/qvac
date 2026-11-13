@@ -48,6 +48,12 @@ In-flight operations started **before** `suspend()` follow the matrix below:
 | Local native inference (e.g. `completion()`) | Runs to completion | n/a |
 | New operation (e.g. `completion()`, `loadModel()`) | Throws `LIFECYCLE_OPERATION_BLOCKED` | Accepted |
 
+## Sessions and the lifecycle
+
+`suspend()` and `resume()` change the runtime for every [session](/sdk/runtime/sessions), so only the owner, the caller that uses the module-level SDK, may call them. A session handle has no `suspend()` or `resume()`, and the worker refuses both from a session with `OwnerOnlyError`. A session may call `state()`, and its calls are blocked while the runtime is not `"active"` like the owner's.
+
+Only the owner's `close()` stops the runtime, and it ends every open session. On Node and Electron, the runtime that closes itself after the last `unloadModel()` stays up while any session is open.
+
 ## Example
 
 The following script loads a model, runs a completion, suspends the runtime, demonstrates that a new `completion()` is blocked while suspended, then resumes and runs another completion. `state()` is sampled at each step:
@@ -76,8 +82,16 @@ The following script loads a model, runs a completion, suspends the runtime, dem
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/SuspendResume.kt title="SuspendResume.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart), the [Python quickstart](/sdk/python-sdk#quickstart), or the [Kotlin quickstart](/sdk/kotlin-sdk#quickstart).
 </Callout>
