@@ -833,7 +833,7 @@ class Calls(
             val open = index(p["indexId"])
             val response = vectorIndex("remove", mapOf("indexId" to p["indexId"], "ids" to p["ids"]))
             open.length = response["length"]
-            mapOf("removed" to response["removed"], "length" to open.length)
+            mapOf("removed" to response["removed"], "length" to open.length, "calibrated" to response["calibrated"], "stagedSearch" to response["stagedSearch"], "ivf" to response["ivf"])
         },
         "vectorIndexContains" to { p ->
             index(p["indexId"])

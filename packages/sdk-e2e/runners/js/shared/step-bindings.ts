@@ -189,7 +189,14 @@ const CALLS: Record<string, (params: never) => Promise<unknown>> = {
     const p = params as { indexId: string; ids: unknown[] }
     const index = vectorIndex(p.indexId)
     const removed = await index.remove({ ids: p.ids as never })
-    return { removed, length: index.length }
+    // Like add, the post-remove state lives on the handle, not the method result.
+    return {
+      removed,
+      length: index.length,
+      calibrated: index.calibrated,
+      stagedSearch: index.stagedSearch,
+      ivf: index.ivf
+    }
   },
   vectorIndexContains: async (params: never) => {
     const p = params as { indexId: string; ids: unknown[] }
