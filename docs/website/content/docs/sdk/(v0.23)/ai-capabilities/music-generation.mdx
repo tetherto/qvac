@@ -553,6 +553,14 @@ This example loads the registry-hosted ACE-Step models, reports progress, genera
 
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/Audiogen.kt title="Audiogen.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 The cover example takes an existing recording (any FFmpeg-decodable file), an optional timbre reference, and a new caption, and writes the `cover-nofsq` result as WAV:
@@ -585,6 +593,14 @@ The cover example takes an existing recording (any FFmpeg-decodable file), an op
 
 ```
 
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/AudiogenCover.kt title="AudiogenCover.kt" lineNumbers
+```
 </WrapCode>
 </Tab>
 </Tabs>
@@ -621,6 +637,14 @@ The edit example takes an existing recording plus a source and a target caption,
 
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/AudiogenEdit.kt title="AudiogenEdit.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 The understand example takes an existing recording and prints the caption, musical metadata, and recovered code count the LM reports for it:
@@ -655,7 +679,17 @@ The understand example takes an existing recording and prints the caption, music
 
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/AudiogenUnderstand.kt title="AudiogenUnderstand.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
+
+In the Kotlin tabs, `client.media.audio()` returns a run with a `Flow` of progress frames and a `Deferred` final result that holds the base64 PCM chunks and the stats. The cover tab sets the typed `taskType` on an `AudioGenStreamRequest`; the edit and understand tabs call the generated `client.audioEditStream()` and `client.audioUnderstand()` methods, each a `Flow`. `sourceAudio` and `referenceAudio` are sealed `FilePath` / `Base64` classes rather than tagged dictionaries.
 
 ### MiniMax-Music3
 
@@ -691,10 +725,19 @@ This example loads a local MiniMax-Music3 pair from the `AUDIOGEN_MINIMAX_LM_MOD
 
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/AudiogenMinimax.kt title="AudiogenMinimax.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 <Callout type="success">
-  **Tip:** see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python
-  quickstart](/sdk/python-sdk#quickstart) for setup instructions, and apply the
+  **Tip:** see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart), the [Python
+  quickstart](/sdk/python-sdk#quickstart), or the [Kotlin
+  quickstart](/sdk/kotlin-sdk#quickstart) for setup instructions, and apply the
   first-run download configuration above on constrained connections.
 </Callout>

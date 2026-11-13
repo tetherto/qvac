@@ -74,7 +74,7 @@ test('registry: begin emits a [request-lifecycle] begin line', async (t) => {
   const lines = infoLines(log)
   t.ok(
     lines.includes(
-      '[request-lifecycle] begin requestId=r-1 kind=completion modelId=m1 state=running'
+      '[request-lifecycle] begin sessionId=owner requestId=r-1 kind=completion modelId=m1 state=running'
     ),
     'begin line carries kind, modelId, and state=running'
   )
@@ -100,7 +100,7 @@ test('registry: cancel-by-requestId emits a [request-lifecycle] cancel line once
   t.is(cancels.length, 1, 'cancel line emitted exactly once')
   t.is(
     cancels[0],
-    '[request-lifecycle] cancel requestId=r-1 kind=completion modelId=m1 state=cancelling'
+    '[request-lifecycle] cancel sessionId=owner requestId=r-1 kind=completion modelId=m1 state=cancelling'
   )
 })
 
@@ -125,7 +125,7 @@ test('registry: end emits a [request-lifecycle] end line with the terminal state
   )
   t.is(
     stripDuration(ends[0]),
-    '[request-lifecycle] end requestId=r-happy kind=completion modelId=m1 state=completed',
+    '[request-lifecycle] end sessionId=owner requestId=r-happy kind=completion modelId=m1 state=completed',
     'happy end carries state=completed'
   )
 
@@ -145,7 +145,7 @@ test('registry: end emits a [request-lifecycle] end line with the terminal state
     allEnds
       .map(stripDuration)
       .includes(
-        '[request-lifecycle] end requestId=r-cancelled kind=completion modelId=m1 state=cancelled'
+        '[request-lifecycle] end sessionId=owner requestId=r-cancelled kind=completion modelId=m1 state=cancelled'
       ),
     'cancelled end carries state=cancelled'
   )
@@ -179,7 +179,7 @@ test('registry: failed end emits at warn level, not info', async (t) => {
   t.is(failedWarn.length, 1, 'failed end emits exactly one warn line')
   t.is(
     stripDuration(failedWarn[0]),
-    '[request-lifecycle] end requestId=r-failed kind=completion modelId=m1 state=failed'
+    '[request-lifecycle] end sessionId=owner requestId=r-failed kind=completion modelId=m1 state=failed'
   )
   t.ok(
     DURATION_SUFFIX_RE.test(failedWarn[0]),
@@ -210,12 +210,12 @@ test('registry: cancelAll emits one cancel line per active request', async (t) =
   t.is(cancels.length, 2, 'one cancel line per active entry')
   t.ok(
     cancels.includes(
-      '[request-lifecycle] cancel requestId=r-a kind=completion modelId=m1 state=cancelling'
+      '[request-lifecycle] cancel sessionId=owner requestId=r-a kind=completion modelId=m1 state=cancelling'
     )
   )
   t.ok(
     cancels.includes(
-      '[request-lifecycle] cancel requestId=r-b kind=embeddings modelId=m2 state=cancelling'
+      '[request-lifecycle] cancel sessionId=owner requestId=r-b kind=embeddings modelId=m2 state=cancelling'
     )
   )
 })
@@ -238,7 +238,7 @@ test('registry: parentSignal already aborted lands begin with state=cancelling',
   const begins = infoLines(log).filter((l) => l.startsWith('[request-lifecycle] begin'))
   t.is(
     begins[0],
-    '[request-lifecycle] begin requestId=r-pre kind=completion modelId=m1 state=cancelling',
+    '[request-lifecycle] begin sessionId=owner requestId=r-pre kind=completion modelId=m1 state=cancelling',
     'begin line reflects pre-aborted parent'
   )
 })
@@ -256,7 +256,7 @@ test('registry: begin without modelId emits state line with modelId=-', async (t
   const begins = infoLines(log).filter((l) => l.startsWith('[request-lifecycle] begin'))
   t.is(
     begins[0],
-    '[request-lifecycle] begin requestId=r-no-model kind=completion modelId=- state=running',
+    '[request-lifecycle] begin sessionId=owner requestId=r-no-model kind=completion modelId=- state=running',
     'absent modelId surfaces as `-` placeholder so grep `modelId=` still hits'
   )
 })

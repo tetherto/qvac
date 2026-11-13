@@ -1,4 +1,5 @@
 import type {
+  ModelRegistryListRequest,
   ModelRegistryListResponse,
   ModelRegistrySearchRequest,
   ModelRegistrySearchResponse,
@@ -14,9 +15,17 @@ import {
   resolveCanonicalEngine,
   resolveRegistryEngine
 } from '@/schemas/engine-addon-map'
-import { getRegistryClient } from '@/runtime/registry-client'
+import { acquireRegistryClient } from '@/runtime/registry-client'
+import { getRequestRegistry } from '@/runtime/index'
+import { generateRandomRequestId } from '@/runtime/request-id'
+import { resolveSessionId } from '@/runtime/session-id'
 import { getEngineLogger } from '@/logging/index'
-import { ModelRegistryModelNotFoundError, ModelRegistryQueryFailedError } from '@/errors/index'
+import {
+  InferenceCancelledError,
+  ModelRegistryBusyError,
+  ModelRegistryModelNotFoundError,
+  ModelRegistryQueryFailedError
+} from '@/errors/index'
 
 interface QvacError extends Error {
   code?: number
@@ -32,6 +41,41 @@ function toHexString(value: Buffer | string | { data: number[] } | undefined): s
     return Buffer.from(value.data).toString('hex')
   }
   return ''
+}
+
+type RegistryClient = Awaited<ReturnType<typeof acquireRegistryClient>>['client']
+
+// One query, cancellable by `requestId` while it waits for another process to
+// release the registry.
+async function withRegistryClient<T>(
+  request: { requestId?: string | undefined; sessionId?: string | undefined },
+  query: (client: RegistryClient) => Promise<T>
+): Promise<T> {
+  const id = request.requestId ?? generateRandomRequestId()
+  await using ctx = await getRequestRegistry().begin({
+    requestId: id,
+    sessionId: resolveSessionId(request),
+    kind: 'modelRegistry'
+  })
+  await using lease = await acquireRegistryClient({
+    wait: 'query',
+    signal: ctx.signal,
+    cancelled: () => new InferenceCancelledError(id)
+  })
+  // Awaited here: returning the promise would release the lease before the query ends.
+  return await query(lease.client)
+}
+
+// Errors a caller can act on pass through unwrapped.
+function isPassThrough(error: unknown): boolean {
+  const code = (error as QvacError).code
+  return (
+    error instanceof ModelRegistryBusyError ||
+    error instanceof InferenceCancelledError ||
+    code === REGISTRY_ERROR_CODES.FAILED_TO_CONNECT ||
+    code === REGISTRY_ERROR_CODES.FAILED_TO_CLOSE ||
+    code === REGISTRY_ERROR_CODES.MODEL_NOT_FOUND
+  )
 }
 
 export function processRegistryModel(model: QVACModelEntry): ModelRegistryEntry | null {
@@ -76,12 +120,13 @@ export function processRegistryModel(model: QVACModelEntry): ModelRegistryEntry 
   }
 }
 
-export async function handleModelRegistryList(): Promise<ModelRegistryListResponse> {
+export async function handleModelRegistryList(
+  request: ModelRegistryListRequest = { type: 'modelRegistryList' }
+): Promise<ModelRegistryListResponse> {
   logger.debug('Handling QVAC model registry list request')
 
   try {
-    const client = await getRegistryClient()
-    const registryModels = await client.findBy()
+    const registryModels = await withRegistryClient(request, (client) => client.findBy())
     const models = registryModels
       .map(processRegistryModel)
       .filter((m): m is ModelRegistryEntry => m !== null)
@@ -95,16 +140,7 @@ export async function handleModelRegistryList(): Promise<ModelRegistryListRespon
     }
   } catch (error) {
     logger.error('QVAC model registry list failed:', error)
-
-    // Re-throw registry client errors directly (19001-19003)
-    const qvacError = error as QvacError
-    if (
-      qvacError.code === REGISTRY_ERROR_CODES.FAILED_TO_CONNECT ||
-      qvacError.code === REGISTRY_ERROR_CODES.FAILED_TO_CLOSE ||
-      qvacError.code === REGISTRY_ERROR_CODES.MODEL_NOT_FOUND
-    ) {
-      throw error
-    }
+    if (isPassThrough(error)) throw error
 
     // Wrap unknown errors in a typed error
     throw new ModelRegistryQueryFailedError(
@@ -120,11 +156,11 @@ export async function handleModelRegistrySearch(
   logger.debug('Handling QVAC model registry search request', request)
 
   try {
-    const client = await getRegistryClient()
-
-    const registryModels = await client.findBy({
-      ...(request.quantization && { quantization: request.quantization })
-    })
+    const registryModels = await withRegistryClient(request, (client) =>
+      client.findBy({
+        ...(request.quantization && { quantization: request.quantization })
+      })
+    )
 
     let models = registryModels
       .map(processRegistryModel)
@@ -159,17 +195,7 @@ export async function handleModelRegistrySearch(
     }
   } catch (error) {
     logger.error('QVAC model registry search failed:', error)
-
-    // Re-throw registry client errors directly (19001-19003)
-    const qvacError = error as QvacError
-
-    if (
-      qvacError.code === REGISTRY_ERROR_CODES.FAILED_TO_CONNECT ||
-      qvacError.code === REGISTRY_ERROR_CODES.FAILED_TO_CLOSE ||
-      qvacError.code === REGISTRY_ERROR_CODES.MODEL_NOT_FOUND
-    ) {
-      throw error
-    }
+    if (isPassThrough(error)) throw error
 
     throw new ModelRegistryQueryFailedError(
       error instanceof Error ? error.message : 'Unknown error',
@@ -184,9 +210,9 @@ export async function handleModelRegistryGetModel(
   logger.debug('Handling QVAC model registry get model request', request)
 
   try {
-    const client = await getRegistryClient()
-
-    const rawModel = await client.getModel(request.registryPath, request.registrySource)
+    const rawModel = await withRegistryClient(request, (client) =>
+      client.getModel(request.registryPath, request.registrySource)
+    )
 
     if (!rawModel) {
       throw new ModelRegistryModelNotFoundError(request.registrySource, request.registryPath)
@@ -211,16 +237,7 @@ export async function handleModelRegistryGetModel(
     if (error instanceof ModelRegistryModelNotFoundError) throw error
 
     logger.error('QVAC model registry get model failed:', error)
-
-    // Re-throw registry client errors directly (19001-19003)
-    const qvacError = error as QvacError
-    if (
-      qvacError.code === REGISTRY_ERROR_CODES.FAILED_TO_CONNECT ||
-      qvacError.code === REGISTRY_ERROR_CODES.FAILED_TO_CLOSE ||
-      qvacError.code === REGISTRY_ERROR_CODES.MODEL_NOT_FOUND
-    ) {
-      throw error
-    }
+    if (isPassThrough(error)) throw error
 
     throw new ModelRegistryQueryFailedError(
       error instanceof Error ? error.message : 'Unknown error',

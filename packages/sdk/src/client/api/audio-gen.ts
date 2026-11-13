@@ -1,4 +1,4 @@
-import type { AudioGenClientParams, AudioGenResult } from '@qvac/inference/surface'
+import type { AudioGenClientParams, AudioGenResult, RPCOptions } from '@qvac/inference/surface'
 import { stream as streamRpc } from '@/client/rpc/rpc-client'
 import { createAudioGenResult } from '@/client/api/audio-gen-result'
 
@@ -147,6 +147,6 @@ import { createAudioGenResult } from '@/client/api/audio-gen-result'
  * });
  * ```
  */
-export function audioGen(params: AudioGenClientParams): AudioGenResult {
-  return createAudioGenResult(params, streamRpc)
+export function audioGen(params: AudioGenClientParams, options?: RPCOptions): AudioGenResult {
+  return createAudioGenResult(params, (request) => streamRpc(request, options))
 }

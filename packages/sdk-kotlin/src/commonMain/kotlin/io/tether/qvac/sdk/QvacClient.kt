@@ -1,129 +1,82 @@
 package io.tether.qvac.sdk
 
-import io.tether.qvac.sdk.generated.schema.HeartbeatRequest
-import io.tether.qvac.sdk.generated.schema.HeartbeatResponse
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.getAndUpdate
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.encodeToJsonElement
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import kotlin.concurrent.Volatile
 
-class QvacClient(
-    private val transport: QvacTransport,
-    internal val json: Json = Json {
-        ignoreUnknownKeys = true
-        explicitNulls = true
-    },
-) {
-    internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    val runtimeProfile: QvacRuntimeProfile? get() = transport.runtimeProfile
+/**
+ * The owner of a runtime. Besides every operation a [QvacSession] may call,
+ * it opens sessions, calls the operations that change the runtime for every
+ * session, and shuts the runtime down with [close].
+ */
+open class QvacClient private constructor(
+    private val ownerModels: OwnerModelTransport,
+    json: Json,
+) : QvacCaller(ownerModels, json) {
+    constructor(
+        transport: QvacTransport,
+        json: Json = Json {
+            ignoreUnknownKeys = true
+            explicitNulls = true
+        },
+    ) : this(OwnerModelTransport(transport), json)
 
-    suspend fun heartbeat(): HeartbeatResponse = heartbeat(HeartbeatRequest())
+    /** The transport a session handle wraps; see [openSession]. */
+    internal val transportForSessions: QvacTransport get() = ownerModels
 
-    suspend fun call(payload: JsonObject): JsonObject {
-        transport.runtimeProfile?.requirePayload(payload)
-        return checkResponse(transport.call(payload))
-    }
+    // The sessions opened on this client that have not ended. They end with
+    // their own close, the owner's close, and the worker when the transport can
+    // report its loss.
+    private val sessions = MutableStateFlow<List<SessionTransport>>(emptyList())
 
-    fun stream(payload: JsonObject): Flow<JsonObject> {
-        transport.runtimeProfile?.requirePayload(payload)
-        return transport.stream(payload).map(::checkResponse)
-    }
+    // Why the runtime ended, kept so a session registered after the end is
+    // ended too instead of reaching a dead transport.
+    @Volatile
+    private var ended: String? = null
 
-    fun duplex(payload: JsonObject, input: Flow<ByteArray>): Flow<JsonObject> {
-        transport.runtimeProfile?.requirePayload(payload)
-        return transport.duplex(payload, input).map(::checkResponse)
-    }
-
-    internal suspend inline fun <reified Request : Any, reified Response : Any> callTyped(
-        request: Request,
-    ): Response {
-        val payload = json.encodeToJsonElement(request).jsonObject
-        transport.runtimeProfile?.requirePayload(payload)
-        return json.decodeFromJsonElement(checkResponse(transport.call(payload)))
-    }
-
-    internal inline fun <reified Request : Any, reified Response : Any> streamTyped(
-        request: Request,
-    ): Flow<Response> {
-        val payload = json.encodeToJsonElement(request).jsonObject
-        transport.runtimeProfile?.requirePayload(payload)
-        return transport.stream(payload).map { response ->
-            json.decodeFromJsonElement(checkResponse(response))
-        }
-    }
-
-    internal inline fun <reified Request : Any, reified Response : Any> duplexTyped(
-        request: Request,
-        input: Flow<ByteArray>,
-    ): Flow<Response> {
-        val payload = json.encodeToJsonElement(request).jsonObject
-        transport.runtimeProfile?.requirePayload(payload)
-        return transport.duplex(payload, input).map { response ->
-            json.decodeFromJsonElement(checkResponse(response))
-        }
-    }
-
-    /** Typed request, undecoded frames: for callers that decode frames leniently. */
-    internal inline fun <reified Request : Any> streamEncoded(request: Request): Flow<JsonObject> =
-        stream(json.encodeToJsonElement(request).jsonObject)
-
-    internal inline fun <reified Request : Any> duplexEncoded(
-        request: Request,
-        input: Flow<ByteArray>,
-    ): Flow<JsonObject> = duplex(json.encodeToJsonElement(request).jsonObject, input)
-
-    /** Typed frames paired with the raw frame, for open objects such as `stats` whose extra keys the types drop. */
-    internal inline fun <reified Request : Any, reified Response : Any> streamWithRaw(
-        request: Request,
-    ): Flow<Pair<Response, JsonObject>> =
-        streamEncoded(request).map { frame -> json.decodeFromJsonElement<Response>(frame) to frame }
-
-    internal inline fun <reified Request : Any, reified Response : Any> duplexWithRaw(
-        request: Request,
-        input: Flow<ByteArray>,
-    ): Flow<Pair<Response, JsonObject>> =
-        duplexEncoded(request, input).map { frame -> json.decodeFromJsonElement<Response>(frame) to frame }
-
-    internal inline fun <
-        reified Request : Any,
-        reified Progress : Any,
-        reified Response : Any,
-        > progressTyped(
-        request: Request,
-        progressType: String,
-    ): Flow<QvacProgressEvent<Progress, Response>> {
-        val payload = json.encodeToJsonElement(request).jsonObject
-        transport.runtimeProfile?.requirePayload(payload)
-        return transport.stream(payload).map { response ->
-            val checked = checkResponse(response)
-            if (checked["type"]?.jsonPrimitive?.content == progressType) {
-                QvacProgressEvent.Progress(json.decodeFromJsonElement<Progress>(checked))
-            } else {
-                QvacProgressEvent.Result(json.decodeFromJsonElement<Response>(checked))
+    init {
+        ownerModels.lost?.let { lost ->
+            scope.launch {
+                lost.await()
+                endRuntime("crashed")
             }
         }
     }
 
-    suspend fun close() {
-        try {
-            transport.close()
-        } finally {
-            scope.cancel()
+    internal fun registerSession(session: SessionTransport) {
+        sessions.update { it + session }
+        // `endRuntime` sets `ended` before it takes the list, so a registration
+        // that missed the list sees `ended` here.
+        ended?.let { reason ->
+            session.markEnded(reason)
+            unregisterSession(session)
         }
     }
 
-    private fun checkResponse(response: JsonObject): JsonObject {
-        if (response["type"]?.jsonPrimitive?.content == "error") {
-            throw QvacException.from(response)
+    internal fun unregisterSession(session: SessionTransport) {
+        sessions.update { it - session }
+    }
+
+    internal val trackedSessionCount: Int get() = sessions.value.size
+
+    // The first reason a session or an owner model sees is kept.
+    private fun endRuntime(reason: String) {
+        if (ended == null) ended = reason
+        sessions.getAndUpdate { emptyList() }.forEach { it.markEnded(reason) }
+        ownerModels.invalidate(reason)
+    }
+
+    /** Owner shutdown: ends every session opened on this client, then stops the transport. */
+    override suspend fun close() {
+        endRuntime("shutdown")
+        try {
+            ownerModels.close()
+        } finally {
+            scope.cancel()
         }
-        return response
     }
 }

@@ -32,6 +32,7 @@ from .errors import __all__ as _errors_all
 from ._generated.numeric_constants import *  # noqa: F401,F403
 from ._generated.numeric_constants import __all__ as _numeric_constants_all
 from .client import Client, WorkerNotFoundError  # noqa: F401
+from .caller_session import Session, open_session  # noqa: F401
 from .logging_streams import (  # noqa: F401
     SDK_ALL_LOG_ID,
     SDK_LOG_ID,

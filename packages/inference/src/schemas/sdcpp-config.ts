@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { modelSrcInputSchema } from '@/schemas/model-src-utils'
+import { trackedRequestSchema } from '@/schemas/request-base'
 
 const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
 
@@ -664,6 +665,7 @@ export type VideoStats = z.infer<typeof videoStatsSchema>
 
 export const diffusionStreamResponseSchema = z.object({
   type: z.literal('diffusionStream'),
+  requestId: z.string().optional().describe('Identity of the request, on the terminal frame.'),
   step: z.number().optional(),
   totalSteps: z.number().optional(),
   elapsedMs: z.number().optional(),
@@ -876,9 +878,11 @@ export const diffusionRequestSchema = z
 
 export type DiffusionRequest = z.input<typeof diffusionRequestSchema>
 
-export const diffusionStreamRequestSchema = diffusionRequestSchema.extend({
-  type: z.literal('diffusionStream')
-})
+export const diffusionStreamRequestSchema = diffusionRequestSchema
+  .extend({
+    type: z.literal('diffusionStream')
+  })
+  .extend(trackedRequestSchema.shape)
 
 export type DiffusionStreamRequest = z.input<typeof diffusionStreamRequestSchema>
 
@@ -1354,6 +1358,7 @@ export type VideoRequest = z.input<typeof videoRequestSchema>
 
 export const videoStreamRequestSchema = videoRequestObjectSchema
   .extend({ type: z.literal('videoStream') })
+  .extend(trackedRequestSchema.shape)
   .superRefine(refineVideoMode)
 
 export type VideoStreamRequest = z.input<typeof videoStreamRequestSchema>
@@ -1482,14 +1487,17 @@ export const upscaleRequestSchema = z.object({
 
 export type UpscaleRequest = z.input<typeof upscaleRequestSchema>
 
-export const upscaleStreamRequestSchema = upscaleRequestSchema.extend({
-  type: z.literal('upscaleStream')
-})
+export const upscaleStreamRequestSchema = upscaleRequestSchema
+  .extend({
+    type: z.literal('upscaleStream')
+  })
+  .extend(trackedRequestSchema.shape)
 
 export type UpscaleStreamRequest = z.input<typeof upscaleStreamRequestSchema>
 
 export const upscaleStreamResponseSchema = z.object({
   type: z.literal('upscaleStream'),
+  requestId: z.string().optional().describe('Identity of the request, on the terminal frame.'),
   data: z.string().optional(),
   outputIndex: z.number().optional(),
   done: z.boolean().optional(),
@@ -1603,9 +1611,11 @@ export const worldStepRequestSchema = z.object({
 
 export type WorldStepRequest = z.input<typeof worldStepRequestSchema>
 
-export const worldStepStreamRequestSchema = worldStepRequestSchema.extend({
-  type: z.literal('worldStepStream')
-})
+export const worldStepStreamRequestSchema = worldStepRequestSchema
+  .extend({
+    type: z.literal('worldStepStream')
+  })
+  .extend(trackedRequestSchema.shape)
 
 export type WorldStepStreamRequest = z.input<typeof worldStepStreamRequestSchema>
 
@@ -1809,7 +1819,11 @@ export const worldSceneRequestSchema = z
 export type WorldSceneRequest = z.input<typeof worldSceneRequestSchema>
 
 export const worldSceneStreamRequestSchema = z
-  .object({ ...worldSceneRequestShape, type: z.literal('worldSceneStream') })
+  .object({
+    ...worldSceneRequestShape,
+    type: z.literal('worldSceneStream')
+  })
+  .extend(trackedRequestSchema.shape)
   .superRefine(refineWorldSceneBudget)
 
 export type WorldSceneStreamRequest = z.input<typeof worldSceneStreamRequestSchema>

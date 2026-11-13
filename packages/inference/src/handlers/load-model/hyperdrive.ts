@@ -25,6 +25,11 @@ import {
   startOrJoinDownload,
   applyJoinedDownloadStats
 } from '@/handlers/load-model/download-manager'
+import {
+  acquireDownloadLock,
+  partialDownloadPath,
+  publishDownload
+} from '@/handlers/load-model/download-lock'
 import { getConfig } from '@/runtime/state'
 import {
   FileNotFoundError,
@@ -372,11 +377,12 @@ async function downloadSingleFileToFilesystem(
 
     // Only delete corestore and partial file if user explicitly requested clearCache
     if (signal?.aborted && shouldClearCache?.()) {
+      const partialPath = partialDownloadPath(modelPath)
       try {
-        await fsPromises.unlink(modelPath)
+        await fsPromises.unlink(partialPath)
       } catch (cleanupError) {
         logger.debug('Failed to delete partial model file during cleanup', {
-          path: modelPath,
+          path: partialPath,
           error: cleanupError
         })
       }
@@ -385,7 +391,8 @@ async function downloadSingleFileToFilesystem(
   }
 }
 
-async function downloadAndValidateFile(
+// Exported for tests.
+export async function downloadAndValidateFile(
   drive: Hyperdrive,
   sourceFileName: string,
   targetFilePath: string,
@@ -451,14 +458,18 @@ async function downloadAndValidateFile(
 
   blobs.core.on('download', progressHandler)
 
+  const partialPath = partialDownloadPath(targetFilePath)
   let readStream: Readable | undefined
   let writeStream: Writable | undefined
+  let writeStreamClosed: Promise<void> | undefined
 
   try {
-    // Download blocks and stream to file
+    // Stream to the partial file; it is published after the checks below.
     drive.download(targetPath)
     readStream = drive.createReadStream(targetPath) as unknown as Readable
-    writeStream = fs.createWriteStream(targetFilePath) as unknown as Writable
+    const partialStream = fs.createWriteStream(partialPath) as unknown as Writable
+    writeStreamClosed = new Promise<void>((resolve) => partialStream.once('close', resolve))
+    writeStream = partialStream
 
     readStream.pipe(writeStream)
 
@@ -473,7 +484,7 @@ async function downloadAndValidateFile(
     blobs.core.off('download', progressHandler)
 
     // Validate file size
-    const stats = await fsPromises.stat(targetFilePath)
+    const stats = await fsPromises.stat(partialPath)
     if (stats.size !== fileSizeToValidate) {
       throw new ChecksumValidationFailedError(
         `${path.basename(targetFilePath)}. File size mismatch: expected ${fileSizeToValidate}, got ${stats.size}`
@@ -482,9 +493,9 @@ async function downloadAndValidateFile(
 
     // Validate checksum
     if (expectedChecksum && expectedChecksum.length === 64) {
-      const checksum = await measureChecksum(targetFilePath, hooks)
+      const checksum = await measureChecksum(partialPath, hooks)
       if (checksum !== expectedChecksum) {
-        await fsPromises.unlink(targetFilePath)
+        await fsPromises.unlink(partialPath)
         throw new ChecksumValidationFailedError(
           `${path.basename(targetFilePath)}. Expected: ${expectedChecksum}. Actual: ${checksum}`
         )
@@ -492,12 +503,16 @@ async function downloadAndValidateFile(
     } else if (!expectedChecksum) {
       logger.warn(`⚠️  No checksum available for validation`)
     }
+
+    await publishDownload(targetFilePath)
   } catch (error) {
     if (readStream) {
       readStream.destroy()
     }
     if (writeStream) {
+      // Let an in-flight write land before the caller can release its lock.
       writeStream.destroy()
+      await writeStreamClosed
     }
     blobs.core.off('download', progressHandler)
     throw error
@@ -729,6 +744,7 @@ export async function downloadModelFromHyperdrive(
   const result = startOrJoinDownload(
     downloadKey,
     async (ctx) => {
+      await using _downloadLock = await acquireDownloadLock(downloadKey, ctx.signal)
       if (shardInfo.isSharded && model?.shardMetadata) {
         const hooksWithCacheHit: DownloadHooks = {
           ...hooks,
@@ -742,7 +758,7 @@ export async function downloadModelFromHyperdrive(
           }
         }
 
-        return downloadShardedFilesToFilesystem(
+        return await downloadShardedFilesToFilesystem(
           hyperdriveKey,
           modelFileName,
           model.shardMetadata,

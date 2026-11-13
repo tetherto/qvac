@@ -12,6 +12,7 @@ import {
   createErrorResponse,
   ContextOverflowError as InferenceContextOverflowError,
   ModelRegistryModelNotFoundError as InferenceModelRegistryModelNotFoundError,
+  ModelRegistryBusyError as InferenceModelRegistryBusyError,
   RequestIdConflictError as InferenceRequestIdConflictError,
   RequestNotFoundError as InferenceRequestNotFoundError,
   RequestRejectedByPolicyError as InferenceRequestRejectedByPolicyError,
@@ -19,12 +20,15 @@ import {
   AudioEncodeFailedError as InferenceAudioEncodeFailedError,
   InvalidSeedFromParamsError as InferenceInvalidSeedFromParamsError,
   KvCacheSeedSourceNotFoundError as InferenceKvCacheSeedSourceNotFoundError,
-  KvCacheSeedSharingDisabledError as InferenceKvCacheSeedSharingDisabledError
+  KvCacheSeedSharingDisabledError as InferenceKvCacheSeedSharingDisabledError,
+  ModelReconfiguredError as InferenceModelReconfiguredError,
+  RAGWorkspaceBusyError as InferenceRAGWorkspaceBusyError
 } from '@qvac/inference/surface'
 import {
   ContextOverflowError,
   InferenceCancelledError,
   ModelRegistryModelNotFoundError,
+  ModelRegistryBusyError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
@@ -32,7 +36,9 @@ import {
   AudioEncodeFailedError,
   InvalidSeedFromParamsError,
   KvCacheSeedSourceNotFoundError,
-  KvCacheSeedSharingDisabledError
+  KvCacheSeedSharingDisabledError,
+  ModelReconfiguredError,
+  RAGWorkspaceBusyError
 } from '@/utils/errors-server'
 
 test('reconstructError: cancellation preserves its public request ID and partial output', (t) => {
@@ -134,6 +140,20 @@ test('reconstructError: ModelRegistryModelNotFoundError round-trips', (t) => {
   t.is((reconstructed as ModelRegistryModelNotFoundError).registrySource, 'hf')
   t.is((reconstructed as ModelRegistryModelNotFoundError).registryPath, 'org/m.gguf')
   t.is((reconstructed as ModelRegistryModelNotFoundError).code, 53951)
+})
+
+test('reconstructError: ModelRegistryBusyError round-trips with its holder and wait', (t) => {
+  for (const holder of ['current', 'legacy'] as const) {
+    const original = new InferenceModelRegistryBusyError(holder, 60_250)
+    const reconstructed = reconstructError(createErrorResponse(original))
+
+    t.ok(reconstructed instanceof ModelRegistryBusyError, holder)
+    const busy = reconstructed as ModelRegistryBusyError
+    t.is(busy.holder, holder)
+    t.is(busy.waitedMs, 60_250)
+    t.is(busy.code, 53952)
+    t.is(busy.message, original.message)
+  }
 })
 
 test('reconstructError: ContextOverflowError round-trips with all fields', (t) => {
@@ -330,4 +350,20 @@ test('reconstructError: native RPC errors preserve details and cause', (t) => {
   t.is(rpcError.code, 52423)
   t.ok(rpcError.cause)
   t.ok(rpcError.cause?.message.includes('native cause'))
+})
+
+test('reconstructError: the session refusals keep their typed fields', (t) => {
+  const reconfigured = reconstructError(
+    JSON.parse(JSON.stringify(createErrorResponse(new InferenceModelReconfiguredError('m-1'))))
+  )
+  t.ok(reconfigured instanceof ModelReconfiguredError)
+  t.is((reconfigured as ModelReconfiguredError).modelId, 'm-1')
+  t.is((reconfigured as ModelReconfiguredError).code, 53624)
+
+  const busy = reconstructError(
+    JSON.parse(JSON.stringify(createErrorResponse(new InferenceRAGWorkspaceBusyError('default'))))
+  )
+  t.ok(busy instanceof RAGWorkspaceBusyError)
+  t.is((busy as RAGWorkspaceBusyError).workspace, 'default')
+  t.is((busy as RAGWorkspaceBusyError).code, 52812)
 })
