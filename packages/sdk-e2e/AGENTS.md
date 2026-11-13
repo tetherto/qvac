@@ -10,6 +10,8 @@ Use [`README.md`](README.md) and the current package scripts as the source of tr
 - The Python and Kotlin runners mirror the JS step bindings
   (`runners/js/shared/step-bindings.ts`): a method or named assertion added there is
   `incomplete` on the other clients until their runners gain it.
+- Runners have no unit tests; do not add any. Verify a runner change by running the
+  affected e2e tests on the platform it targets.
 - Extend existing definitions and executors when possible. New behavior should cover
   success, failure, and relevant platform-specific paths without broad fixtures.
 - Keep smoke coverage small and deterministic. Put platform implementation in the
