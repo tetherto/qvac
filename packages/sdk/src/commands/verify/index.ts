@@ -37,6 +37,7 @@ import {
 import type { PackageRecord } from '@/commands/verify/addon-source'
 import { bundleTargetOf } from '@/client/rpc/bundle-stamp'
 import { isBundleTarget, type BundleTarget } from '@/commands/bundle/targets'
+import type { IosEngine } from '@/commands/bundle/ios-engine'
 
 export type DesktopRuntime = 'bare-sidecar' | 'pear-runtime' | 'bare-kit-kotlin'
 
@@ -61,11 +62,14 @@ export interface VerifyBundleOptions {
    */
   desktopRuntime?: DesktopRuntime
   /**
-   * Allow GitHub and npm registry requests: GitHub for a Bare Kit binding or
-   * bare-kit release missing from the built-in tables, the registry only after
-   * a mismatch is found, to suggest an override. Defaults to true.
+   * Allow GitHub and npm registry requests: GitHub for the newest release of a
+   * Bare Kit binding and for a release missing from the built-in tables, the
+   * registry only after a mismatch is found, to suggest an override. Defaults
+   * to true.
    */
   network?: boolean
+  /** The engine the iOS worker runs with. Defaults to the bundler's default. */
+  iosEngine?: IosEngine
   /** Called before any step that waits on the network. */
   onProgress?: ProgressFn
   /** Test seams for the bare-stow whose Bare Kit pins are read, and the network lookups. */
@@ -258,6 +262,7 @@ export async function verifyBundle(options: VerifyBundleOptions): Promise<Verify
       projectRoot,
       bareStowDir: options.bareStowDir,
       network: options.network,
+      iosEngine: options.iosEngine,
       onProgress: options.onProgress,
       fetchText: options.fetchText
     })

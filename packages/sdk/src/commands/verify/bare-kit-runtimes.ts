@@ -9,7 +9,8 @@ export const BARE_KIT_KOTLIN_BARE_KITS: Record<string, string> = {
   '0.2.3': '3.1.0',
   '0.2.4': '3.1.0',
   '0.2.5': '3.1.0',
-  '0.2.6': '3.1.0'
+  '0.2.6': '3.1.0',
+  '0.2.7': '3.2.1'
 }
 
 /** bare-kit-kotlin releases whose CMakeLists.txt names no bare-kit version. */
@@ -21,7 +22,9 @@ export const BARE_KIT_SWIFT_BARE_KITS: Record<string, string> = {
   '2.1.0': '3.0.1',
   '2.2.0': '3.0.1',
   '2.3.0': '3.1.0',
-  '2.4.0': '3.1.0'
+  '2.4.0': '3.1.0',
+  '2.4.1': '3.1.0',
+  '2.4.2': '3.2.1'
 }
 
 /** bare-kit-swift releases whose CMakeLists.txt names no bare-kit version. */
@@ -115,7 +118,9 @@ export const BARE_KIT_BARE_VERSIONS: Record<string, string> = {
   '2.5.5': '1.33.4',
   '3.0.0': '1.36.1',
   '3.0.1': '1.36.2',
-  '3.1.0': '1.37.1'
+  '3.1.0': '1.37.1',
+  '3.2.0': '1.38.0',
+  '3.2.1': '1.38.0'
 }
 
 /** bare-kit releases whose CMakeLists.txt names no Bare version. */

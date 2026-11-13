@@ -23,7 +23,11 @@ import {
   listBundledAddonModules,
   listBundledAddons
 } from '@/commands/bundle/addons'
-import { assertReactNativeBareKitSupported, stageAddons } from '@/commands/bundle/link'
+import {
+  assertReactNativeBareKitSupported,
+  stageAddons,
+  type IosEngine
+} from '@/commands/bundle/link'
 import { assertNodeCanBundle } from '@/commands/bundle/node-support'
 import { readBundle } from '@/commands/bundle/read-bundle'
 import {
@@ -121,6 +125,13 @@ export interface BundleSdkOptions {
    * list links only those hosts. Defaults to true.
    */
   link?: boolean | string[] | undefined
+  /**
+   * The JavaScript engine Bare Kit runs the worker with on iOS. Defaults to
+   * `'javascriptcore'`, which every Apple developer account can sign. `'v8'`
+   * needs the `com.apple.developer.kernel.extended-virtual-addressing`
+   * entitlement, which free accounts cannot sign with.
+   */
+  iosEngine?: IosEngine | undefined
 }
 
 export interface BundleSdkResult {
@@ -196,6 +207,7 @@ interface VerifyOutputOptions {
   hosts: string[]
   target: BundleTarget
   network: boolean | undefined
+  iosEngine: IosEngine | undefined
   logger: Logger
 }
 
@@ -223,7 +235,7 @@ function bundlerBareStowDir(): string {
 }
 
 async function verifyOutput(options: VerifyOutputOptions): Promise<VerifyBundleResult> {
-  const { projectRoot, bundlePath, hosts, target, network, logger } = options
+  const { projectRoot, bundlePath, hosts, target, network, iosEngine, logger } = options
 
   logger.info('\n🔎 Verifying the bundle...')
   const result = await verifyBundle({
@@ -233,6 +245,7 @@ async function verifyOutput(options: VerifyOutputOptions): Promise<VerifyBundleR
     bareStowDir: bundlerBareStowDir(),
     desktopRuntime: DESKTOP_RUNTIMES[target],
     ...(network !== undefined ? { network } : {}),
+    ...(iosEngine !== undefined ? { iosEngine } : {}),
     onProgress: (message) => logger.info(`   ${message}`)
   })
 
@@ -629,6 +642,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
         hosts,
         target,
         network: options.network,
+        iosEngine: options.iosEngine,
         logger
       })
     }
@@ -642,6 +656,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
         hosts: linkHosts,
         imports,
         defer: deferModules,
+        iosEngine: options.iosEngine,
         logger
       })
       staged.push(...nativeModules.staged)
