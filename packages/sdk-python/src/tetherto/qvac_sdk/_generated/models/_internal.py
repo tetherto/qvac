@@ -2895,6 +2895,7 @@ class BatchCompletionStreamResponseEventsItemEventCompletionStatsStatsBackendDev
 ):
     cpu = "cpu"
     gpu = "gpu"
+    npu = "npu"
 
 
 class BatchCompletionStreamResponseEventsItemEventCompletionStatsStats(
@@ -3036,6 +3037,7 @@ class BatchCompletionStreamResponseEventsItem(GeneratedBaseModel):
 class BatchCompletionStreamResponseStatsBackendDevice(Enum):
     cpu = "cpu"
     gpu = "gpu"
+    npu = "npu"
 
 
 class BatchCompletionStreamResponseStats(GeneratedBaseModel):
@@ -4188,6 +4190,7 @@ class CancelRequestBroadKind(Enum):
     finetune = "finetune"
     load_model = "loadModel"
     download_asset = "downloadAsset"
+    model_registry = "modelRegistry"
     rpc_server = "rpcServer"
     rpc_discovery = "rpcDiscovery"
     rag = "rag"
@@ -4821,6 +4824,7 @@ class CompletionOrchestrateResponseEventsItemToolError(GeneratedBaseModel):
 class CompletionOrchestrateResponseEventsItemCompletionStatsStatsBackendDevice(Enum):
     cpu = "cpu"
     gpu = "gpu"
+    npu = "npu"
 
 
 class CompletionOrchestrateResponseEventsItemCompletionStatsStats(GeneratedBaseModel):
@@ -5537,6 +5541,7 @@ class CompletionStreamResponseEventsItemToolError(GeneratedBaseModel):
 class CompletionStreamResponseEventsItemCompletionStatsStatsBackendDevice(Enum):
     cpu = "cpu"
     gpu = "gpu"
+    npu = "npu"
 
 
 class CompletionStreamResponseEventsItemCompletionStatsStats(GeneratedBaseModel):
@@ -12470,7 +12475,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     device: Annotated[
         str | None,
         Field(
-            description="Device to run inference on: `'gpu'` or `'cpu'`. Default `'gpu'`."
+            description="Device class to run inference on: `'gpu'`, `'cpu'` or `'npu'`. Default `'gpu'`. `'npu'` is the AMD XDNA2 NPU on Linux x64, which needs XRT 2.25 or newer and read/write access to its /dev/accel node; GPU selection never picks it. With no NPU listed, `'npu'` falls back to the GPU order, then the CPU. It cannot be combined with backend, devices, split-mode (beyond their defaults), main-gpu, rpc-servers or finetuning, and a listed NPU that fails to open runs the load on the CPU."
         ),
     ] = None
     predict: Annotated[
@@ -12613,7 +12618,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     devices: Annotated[
         str | None,
         Field(
-            description="Explicit ordered native device names, for example RPC0,RPC1. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order.",
+            description="Explicit ordered native device names, for example RPC0,RPC1, or XDNA0 for the AMD XDNA NPU alone, which reports `backendDevice` `'npu'`; naming XDNA0 without a listed NPU fails the load, and a load with XDNA0 in devices, alone or with other devices, cannot finetune. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order.",
             min_length=1,
         ),
     ] = None
@@ -12621,7 +12626,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
         LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode | None,
         Field(
             alias="split-mode",
-            description="How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
+            description="How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctx_size` explicitly). `'tensor'` is rejected with the XDNA0 NPU.",
             title="LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode",
         ),
     ] = None
@@ -12894,7 +12899,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
         bool | None,
         Field(
             alias="mmproj-use-gpu",
-            description="Run the multimodal projector (mmproj / vision encoder) on the GPU (multimodal models only). `true` forces GPU, `false` forces CPU. When unset, the backend is auto-selected per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on every other Android GPU (Arm Mali, Adreno <800, and undetectable Adreno tiers), with the LLM layers still on the GPU. Only honoured when the model itself runs on a GPU backend — ignored with a warning on CPU.",
+            description="Run the multimodal projector (mmproj / vision encoder) on the GPU (multimodal models only). `true` forces GPU, `false` forces CPU. When unset, the backend is auto-selected per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on every other Android GPU (Arm Mali, Adreno <800, and undetectable Adreno tiers), with the LLM layers still on the GPU. On an NPU load (`device: 'npu'` or XDNA0 as the first local device in devices) it runs on a GPU beside the NPU, else the CPU; `true` with no GPU runs it on the NPU. Only honoured when the model itself runs on a GPU or NPU backend — ignored with a warning on CPU.",
         ),
     ] = None
 
@@ -25747,6 +25752,14 @@ class ModelRegistryGetModelRequest(GeneratedBaseModel):
     type: Literal["modelRegistryGetModel"] = "modelRegistryGetModel"
     registry_path: Annotated[str, Field(alias="registryPath")]
     registry_source: Annotated[str, Field(alias="registrySource")]
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Identifier for this in-flight query, generated by the caller. Exposed on the decorated promise so callers can stop a query that is waiting for the registry with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
 
 
 class ModelRegistryGetModelResponseModelAddon(Enum):
@@ -25890,6 +25903,14 @@ class ModelRegistryGetModelResponse(GeneratedBaseModel):
 
 class ModelRegistryListRequest(GeneratedBaseModel):
     type: Literal["modelRegistryList"] = "modelRegistryList"
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Identifier for this in-flight query, generated by the caller. Exposed on the decorated promise so callers can stop a query that is waiting for the registry with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
 
 
 class ModelRegistryListResponseModelsItemAddon(Enum):
@@ -26054,6 +26075,14 @@ class ModelRegistrySearchRequest(GeneratedBaseModel):
     addon: Annotated[
         ModelRegistrySearchRequestAddon | None,
         Field(title="ModelRegistrySearchRequestAddon"),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Identifier for this in-flight query, generated by the caller. Exposed on the decorated promise so callers can stop a query that is waiting for the registry with `cancel({ requestId })`.",
+            min_length=1,
+        ),
     ] = None
 
 

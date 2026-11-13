@@ -1,6 +1,6 @@
 {
   "name": "@qvac/classification-ggml",
-  "version": "0.37.0",
+  "version": "0.39.0",
   "description": "GGML vision addon for QVAC: MobileNet classification, MegaLoc image embeddings and BridgeDepth stereo disparity",
   "addon": true,
   "scripts": {

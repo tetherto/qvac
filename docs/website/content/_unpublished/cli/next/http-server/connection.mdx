@@ -16,12 +16,13 @@ Manual HTTP-server setup is still available for other OpenAI-compatible tools, o
 
 ## OpenCode quickstart
 
+The plugin requires OpenCode 2.x. On OpenCode 1.x, use `@qvac/opencode-plugin@0.3`, which takes the older `"plugin"` config key.
+
 Add the plugin to your project's `opencode.json`:
 
 ```json title="opencode.json"
 {
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": ["@qvac/opencode-plugin"]
+  "plugins": ["@qvac/opencode-plugin"]
 }
 ```
 
@@ -31,12 +32,13 @@ Then run OpenCode normally:
 opencode
 ```
 
-The plugin uses `qvac/qwen3.5-9b` by default. Use that for the best friendly-id default. You can also choose a different model with the plugin tuple; for example, use the larger GPT-OSS 20B model for more demanding local agent work:
+The plugin uses `qvac/qwen3.5-9b` by default. Use that for the best friendly-id default. You can also choose a different model with the plugin entry's `options`; for example, use the larger GPT-OSS 20B model for more demanding local agent work:
 
 ```json title="opencode.json"
 {
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": [["@qvac/opencode-plugin", { "model": "GPT_OSS_20B_INST_Q4_K_M" }]]
+  "plugins": [
+    { "package": "@qvac/opencode-plugin", "options": { "model": "GPT_OSS_20B_INST_Q4_K_M" } }
+  ]
 }
 ```
 

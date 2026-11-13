@@ -59,7 +59,7 @@ Validation rules: prompt `id`s must be unique within a batch, and a prompt's `re
 </Callout>
 
 <Callout type="warn">
-The features above describe the JS/TS `BatchCompletionRun`. The Python client exposes the frame stream underneath it: each frame carries the interleaved `events`, one frame carries the assigned `ids`, and the final frame carries the batch-level `stats`. Group the events by prompt id yourself, as the Python example does — there is no run object with `byId()` or ordered `results`.
+The features above describe the JS/TS `BatchCompletionRun`. The Python and Kotlin clients expose the frame stream underneath it: each frame carries the interleaved `events`, one frame carries the assigned `ids`, and the final frame carries the batch-level `stats`. Group the events by prompt id yourself, as the Python and Kotlin examples do — there is no run object with `byId()` or ordered `results`.
 </Callout>
 
 ## Example
@@ -90,8 +90,16 @@ The following script loads a model with `parallel: 4`, submits several prompts i
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/BatchCompletion.kt title="BatchCompletion.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart), the [Python quickstart](/sdk/python-sdk#quickstart), or the [Kotlin quickstart](/sdk/kotlin-sdk#quickstart).
 </Callout>

@@ -26,13 +26,35 @@ function payload(extra: Record<string, unknown> = {}): string {
   })
 }
 
-test('handshake carries the proxy token into OpenCode provider options', () => {
+test('handshake carries the proxy token into the V2 provider settings', () => {
   const listening = parseHostListening(payload())
 
-  const provider = createManagedProviderConfig(listening, 123_000)
+  const { info } = createManagedProviderConfig(listening, {
+    readyTimeoutMs: 123_000,
+    ctxSize: 32768
+  })
 
-  assert.equal(provider.options?.apiKey, proxyToken)
-  assert.notEqual(provider.options?.apiKey, 'qvac')
+  assert.equal(info.id, 'qvac')
+  assert.equal(info.activation, 'enabled')
+  assert.equal(info.package, '@opencode/ai/providers/openai-compatible')
+  assert.equal(info.settings?.['apiKey'], proxyToken)
+  assert.equal(info.settings?.['baseURL'], 'http://127.0.0.1:12345/v1')
+  assert.equal(info.settings?.timeout, 123_000)
+})
+
+test('provider config exposes the managed model with tools and the serve context window', () => {
+  const listening = parseHostListening(payload())
+
+  const { models } = createManagedProviderConfig(listening, { readyTimeoutMs: 1, ctxSize: 16384 })
+
+  assert.equal(models.length, 1)
+  const [model] = models
+  assert.equal(model?.id, 'qwen3.5-9b')
+  assert.equal(model?.providerID, 'qvac')
+  assert.equal(model?.name, 'Qwen 3.5 9B (local)')
+  assert.equal(model?.capabilities.tools, true)
+  assert.equal(model?.limit.context, 16384)
+  assert.ok((model?.limit.output ?? Infinity) <= 16384)
 })
 
 test('handshake rejects a missing proxy token', () => {

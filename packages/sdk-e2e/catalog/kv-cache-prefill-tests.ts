@@ -144,11 +144,48 @@ const invalidCases = [
   metadata: { category: 'kv-cache', dependency: 'none', estimatedDurationMs: 5000 }
 }))
 
+// Tools alone, on a model with no `system_prompt`: rejected before the addon.
+const noMessageCase: TestDefinition = {
+  testId: 'kv-cache-prefill-no-message',
+  params: {
+    history: [],
+    tools,
+    kvCache: true,
+    prefill: true,
+    stream: false,
+    dependency: 'prefill-llm'
+  },
+  expectation: { validation: 'throws-error', errorContains: 'prefill needs at least one message' },
+  steps: [
+    { useModel: { deps: ['prefill-llm'], as: 'model' } },
+    {
+      callError: {
+        method: 'completion',
+        collect: 'text',
+        params: {
+          modelId: '$model',
+          history: '$params.history',
+          tools: '$params.tools',
+          kvCache: '$params.kvCache',
+          prefill: '$params.prefill',
+          stream: '$params.stream'
+        },
+        as: 'error'
+      }
+    },
+    { project: { from: '$error', path: 'message', as: 'message' } },
+    { assert: { on: '$message', use: 'expectation' } }
+  ],
+  metadata: { category: 'kv-cache', dependency: 'prefill-llm', estimatedDurationMs: 5000 }
+}
+
 export const kvCachePrefillTests = [
   reuseCase('named', 'prefill-named', true),
   reuseCase('auto', true, true, { dependency: 'prefill-llm-parallel' }),
   reuseCase('reload', 'prefill-reload', true, { reload: true }),
-  reuseCase('tools-only', true, true, { history: [] }),
   reuseCase('system-only', 'prefill-system-only', false),
+  noMessageCase,
+  // Tools only; the system message comes from the model's `system_prompt`.
+  reuseCase('tools-only', true, true, { history: [], dependency: 'prefill-llm-system-prompt' }),
   ...invalidCases
 ]
