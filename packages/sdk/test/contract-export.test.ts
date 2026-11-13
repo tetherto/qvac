@@ -203,12 +203,16 @@ test('every nested object/enum schema carries a title, not a positional name', (
   // Regression guard: without per-node titling, codegen produces unlabeled
   // positional class names for every untitled nested schema (`Stats13`,
   // `Events7`, `NeuralData1`) with no indication of what they represent.
-  // Every def must be fully titled down to its leaves, and all titles
-  // (top-level + nested) must be globally unique in one flat check.
+  // Every def must be fully titled down to its leaves, and each title
+  // (top-level + nested) must name one shape in one flat check. A schema
+  // reused under its own explicit title, such as `VectorIndexIvfState` in
+  // several vector index responses, repeats that title on identical copies,
+  // which codegen emits as one class. Two different shapes under one title
+  // would collide, so they fail.
   const { schemaDocument } = buildContract()
   const defs = schemaDocument.$defs as Record<string, JsonSchema>
 
-  const allTitles = new Set<string>()
+  const shapeByTitle = new Map<string, string>()
   for (const [defName, def] of Object.entries(defs)) {
     const nodes: JsonSchema[] = []
     collectTitleableNodes(def, nodes)
@@ -216,8 +220,13 @@ test('every nested object/enum schema carries a title, not a positional name', (
       const title = node['title']
       t.ok(typeof title === 'string' && title.length > 0, `untitled node under ${defName}`)
       if (typeof title === 'string') {
-        t.ok(!allTitles.has(title), `title "${title}" (under ${defName}) is globally unique`)
-        allTitles.add(title)
+        const shape = JSON.stringify(node)
+        const seen = shapeByTitle.get(title)
+        t.ok(
+          seen === undefined || seen === shape,
+          `title "${title}" (under ${defName}) names one shape`
+        )
+        shapeByTitle.set(title, seen ?? shape)
       }
     }
   }

@@ -2,11 +2,24 @@ import { createVectorIndex, embed, loadVectorIndex, type VectorIndex } from '@qv
 import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import {
+  vectorIndexIvfProbeWithoutIvf,
+  vectorIndexIvfSearch,
+  vectorIndexIvfStale,
   vectorIndexStagedSearchUnsupported,
   vectorIndexTests,
+  type VectorIndexIvfParams,
   type VectorIndexParams,
   type VectorIndexRejectionParams
 } from '../../../../catalog/vector-index-tests.js'
+
+async function rejectionMessage(call: () => Promise<unknown>): Promise<string | undefined> {
+  try {
+    await call()
+    return undefined
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error)
+  }
+}
 
 // Pure SDK calls only, so the same executor runs on desktop, Electron, and
 // mobile. The snapshot path is relative and resolves under the QVAC data
@@ -14,14 +27,77 @@ import {
 export class VectorIndexExecutor extends AbstractModelExecutor<typeof vectorIndexTests> {
   pattern = /^vector-index-/
 
+  // The mobile runner can't use step bindings because they need Node
+  // built-ins, so it runs these handlers instead of the catalog `steps`.
+  // Keep each one in sync with its catalog case.
+  private readonly special = new Map<
+    unknown,
+    (params: unknown, expectation: unknown) => Promise<TestResult>
+  >([
+    [vectorIndexStagedSearchUnsupported, this.rejectsStagedSearch.bind(this)],
+    [vectorIndexIvfSearch, this.ivfSearch.bind(this)],
+    [vectorIndexIvfStale, this.ivfStale.bind(this)],
+    [vectorIndexIvfProbeWithoutIvf, this.ivfProbeWithoutIvf.bind(this)]
+  ])
+
   protected handlers = Object.fromEntries(
-    vectorIndexTests.map((test) => [
-      test.testId,
-      test === vectorIndexStagedSearchUnsupported
-        ? this.rejectsStagedSearch.bind(this)
-        : this.generic.bind(this)
-    ])
+    vectorIndexTests.map((test) => [test.testId, this.special.get(test) ?? this.generic.bind(this)])
   ) as never
+
+  private async openFixedIndex(p: VectorIndexIvfParams): Promise<VectorIndex> {
+    const index = await createVectorIndex({ dim: p.dim })
+    try {
+      await index.add({ ids: p.ids, vectors: p.vectors })
+      return index
+    } catch (error) {
+      await index.dispose()
+      throw error
+    }
+  }
+
+  private async searchBest(index: VectorIndex, p: VectorIndexIvfParams): Promise<string> {
+    const [best] = await index.search({ query: p.query, k: 1, nProbe: p.searchNProbe })
+    return `best:${best?.id ?? 'none'}`
+  }
+
+  async ivfSearch(params: unknown, expectation: unknown): Promise<TestResult> {
+    const p = params as VectorIndexIvfParams
+    const index = await this.openFixedIndex(p)
+    try {
+      const { ivf } = await index.setIvf({ nLists: p.nLists, nProbe: p.nProbe })
+      if (ivf?.built !== true) return { passed: false, output: 'setIvf did not build the lists' }
+      return ValidationHelpers.validate(await this.searchBest(index, p), expectation as Expectation)
+    } finally {
+      await index.dispose()
+    }
+  }
+
+  async ivfStale(params: unknown, expectation: unknown): Promise<TestResult> {
+    const p = params as VectorIndexIvfParams
+    const index = await this.openFixedIndex(p)
+    try {
+      await index.setIvf({ nLists: p.nLists, nProbe: p.nProbe })
+      await index.add({ ids: ['9'], vectors: [p.query] })
+      const output = `built:${String(index.ivf?.built)} ${await this.searchBest(index, p)}`
+      return ValidationHelpers.validate(output, expectation as Expectation)
+    } finally {
+      await index.dispose()
+    }
+  }
+
+  async ivfProbeWithoutIvf(params: unknown, expectation: unknown): Promise<TestResult> {
+    const p = params as VectorIndexIvfParams
+    const index = await this.openFixedIndex(p)
+    try {
+      const message = await rejectionMessage(() => this.searchBest(index, p))
+      if (message === undefined) {
+        return { passed: false, output: 'search accepted nProbe while IVF was off' }
+      }
+      return ValidationHelpers.validate(message, expectation as Expectation)
+    } finally {
+      await index.dispose()
+    }
+  }
 
   // The rejection depends only on storage, so this path opens an empty index
   // and loads no model.
@@ -29,14 +105,11 @@ export class VectorIndexExecutor extends AbstractModelExecutor<typeof vectorInde
     const p = params as VectorIndexRejectionParams
     const index = await createVectorIndex({ dim: p.dim, storage: p.storage })
     try {
-      // Only this call may produce the expected error; a failed create above still fails the test.
-      try {
-        await index.setStagedSearch({ enabled: true })
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error)
-        return ValidationHelpers.validate(errorMsg, expectation as Expectation)
+      const message = await rejectionMessage(() => index.setStagedSearch({ enabled: true }))
+      if (message === undefined) {
+        return { passed: false, output: 'Generic storage accepted staged search' }
       }
-      return { passed: false, output: 'Generic storage accepted staged search' }
+      return ValidationHelpers.validate(message, expectation as Expectation)
     } finally {
       await index.dispose()
     }

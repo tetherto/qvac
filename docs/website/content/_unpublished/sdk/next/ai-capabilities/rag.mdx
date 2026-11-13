@@ -171,7 +171,55 @@ A fresh TurboVec index attempts TQ+ calibration before encoding its first succes
 
 Staged search is off for every new or loaded index. Use `await index.setStagedSearch({ enabled: true })` to trade recall for faster queries, or pass `false` to score every vector. On supported hosts, staged search applies at 32,768 or more vectors and a dimension divisible by 32. Other dimensions and indexes loaded from v3 snapshots retain the setting but search every vector. `index.stagedSearch` reports the setting, which is not saved in snapshots. Generic `F32`, `Q8`, and `Q4` storage reject staged search controls.
 
-External index providers may omit these controls. Their `calibrated` and `stagedSearch` properties report `undefined`, and `setStagedSearch()` rejects with `VectorIndexFailedError` when unsupported.
+IVF (Inverted File Index) search groups the vectors into lists and scans only the lists closest to each query. Turn it on with `await index.setIvf({ nLists, nProbe })`, where `nLists` is the number of lists to build and `nProbe` is the number each search scans. Pass `null` to turn it off. IVF is off on every new or loaded index, and snapshots don't save the setting.
+
+IVF trades recall for speed. A higher `nProbe` finds more of the true nearest vectors but searches slower. The speedup depends on the storage. A large `F32` index can search many times faster. The `TURBOVEC_Q4` and `TURBOVEC_Q2` storage formats already score vectors in blocks, so IVF saves little there and can be slower than a full scan. Measure it on your data.
+
+Building the lists blocks the SDK worker until it finishes. An `add()` or `remove()` makes the lists stale and sets `index.ivf.built` to `false`. Searches then scan every vector until you call `setIvf()` again.
+
+The following script turns IVF on for a small `F32` index, compares a probed search with a full scan, overrides `nProbe` for one call, and rebuilds the lists after an `add()`.
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/rag/rag-turbovec-ivf.js title="rag-turbovec-ivf.js" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/rag/rag-turbovec-ivf.ts title="rag-turbovec-ivf.ts" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/rag_turbovec_ivf.py title="rag_turbovec_ivf.py" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/RagTurbovecIvf.kt title="RagTurbovecIvf.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+External index providers may not support these controls. Their `calibrated`, `stagedSearch` and `ivf` properties are then `undefined`, and `setStagedSearch()` and `setIvf()` reject with `VectorIndexFailedError`. The Python and Kotlin SDKs report a missing `ivf` as `null`, the same value as IVF turned off. In those SDKs, the only way to tell that a provider doesn't support IVF is that `setIvf()` rejects.
 
 ### External vector DB
 

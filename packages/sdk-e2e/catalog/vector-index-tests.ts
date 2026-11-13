@@ -264,9 +264,135 @@ export const vectorIndexStagedSearchUnsupported: TestDefinition = {
   metadata: { category: 'vector-index', dependency: 'none', estimatedDurationMs: 2000 }
 }
 
+/** Params for the IVF cases, which index fixed vectors instead of embeddings. */
+export interface VectorIndexIvfParams {
+  dim: number
+  ids: string[]
+  vectors: number[][]
+  query: number[]
+  expectedId: string
+  nLists: number
+  nProbe: number
+  /** Per-search override, at least `nLists` so the search scans every entry. */
+  searchNProbe: number
+}
+
+// Each orthogonal unit vector is its own nearest neighbour in every storage mode,
+// so results depend on neither a model nor quantisation.
+const unitVectors = Array.from({ length: 8 }, (_row, i) =>
+  Array.from({ length: 8 }, (_column, j) => (i === j ? 1 : 0))
+)
+const ivfParams = {
+  dim: 8,
+  ids: unitVectors.map((_row, i) => String(i + 1)),
+  vectors: unitVectors,
+  query: unitVectors[2] ?? [],
+  expectedId: '3',
+  nLists: 4,
+  nProbe: 1,
+  searchNProbe: 4
+} satisfies VectorIndexIvfParams
+
+const openFixedIndexSteps: Step[] = [
+  { call: { method: 'createVectorIndex', params: { dim: '$params.dim' }, as: 'index' } },
+  { project: { from: '$index', path: 'indexId', as: 'indexId' } },
+  {
+    call: {
+      method: 'vectorIndexAdd',
+      params: { indexId: '$indexId', ids: '$params.ids', vectors: '$params.vectors' }
+    }
+  }
+]
+
+const setIvfStep: Step = {
+  call: {
+    method: 'vectorIndexSetIvf',
+    params: { indexId: '$indexId', ivf: { nLists: '$params.nLists', nProbe: '$params.nProbe' } },
+    as: 'ivfState'
+  }
+}
+
+const ivfSearchSteps: Step[] = [
+  {
+    call: {
+      method: 'vectorIndexSearch',
+      params: { indexId: '$indexId', query: '$params.query', k: 1, nProbe: '$params.searchNProbe' },
+      as: 'bestResponse'
+    }
+  },
+  { project: { from: '$bestResponse', path: 'results[0].id', as: 'best' } },
+  { assert: { on: '$best', named: 'valueIn', with: { values: ['$params.expectedId'] } } }
+]
+
+export const vectorIndexIvfSearch: TestDefinition = {
+  testId: 'vector-index-ivf-search',
+  params: ivfParams,
+  expectation: { validation: 'contains-all', contains: ['best:3'] },
+  steps: [
+    ...openFixedIndexSteps,
+    setIvfStep,
+    { project: { from: '$ivfState', path: 'ivf.built', as: 'built' } },
+    { assert: { on: '$built', named: 'valueIn', with: { values: [true] } } },
+    ...ivfSearchSteps
+  ],
+  finally: disposeIndex,
+  metadata: { category: 'vector-index', dependency: 'none', estimatedDurationMs: 2000 }
+}
+
+// Stale IVF lists after an add must fall back to a full scan instead of failing.
+export const vectorIndexIvfStale: TestDefinition = {
+  testId: 'vector-index-ivf-stale',
+  params: ivfParams,
+  expectation: { validation: 'contains-all', contains: ['built:false', 'best:3'] },
+  steps: [
+    ...openFixedIndexSteps,
+    setIvfStep,
+    {
+      call: {
+        method: 'vectorIndexAdd',
+        params: { indexId: '$indexId', ids: ['9'], vectors: ['$params.query'] },
+        as: 'added'
+      }
+    },
+    { project: { from: '$added', path: 'ivf.built', as: 'built' } },
+    { assert: { on: '$built', named: 'valueIn', with: { values: [false] } } },
+    ...ivfSearchSteps
+  ],
+  finally: disposeIndex,
+  metadata: { category: 'vector-index', dependency: 'none', estimatedDurationMs: 2000 }
+}
+
+export const vectorIndexIvfProbeWithoutIvf: TestDefinition = {
+  testId: 'vector-index-ivf-probe-without-ivf',
+  params: ivfParams,
+  expectation: { validation: 'throws-error', errorContains: 'nProbe applies only to IVF search' },
+  steps: [
+    ...openFixedIndexSteps,
+    {
+      callError: {
+        method: 'vectorIndexSearch',
+        params: {
+          indexId: '$indexId',
+          query: '$params.query',
+          k: 1,
+          nProbe: '$params.searchNProbe'
+        },
+        as: 'error'
+      }
+    },
+    { project: { from: '$error', path: 'message', as: 'message' } },
+    { assert: { on: '$message', use: 'expectation' } }
+  ],
+  finally: disposeIndex,
+  metadata: { category: 'vector-index', dependency: 'none', estimatedDurationMs: 2000 }
+}
+
 export const vectorIndexTests = [
   vectorIndexAddSearch,
   vectorIndexRemoveContains,
   vectorIndexWriteLoad,
-  vectorIndexStagedSearchUnsupported
+  vectorIndexStagedSearchUnsupported,
+  vectorIndexIvfSearch,
+  vectorIndexIvfStale,
+  vectorIndexIvfProbeWithoutIvf
 ]

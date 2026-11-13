@@ -15,6 +15,7 @@ import {
   loadVectorIndex,
   removeVectors,
   searchVectors,
+  setVectorIndexIvf,
   setVectorIndexStagedSearch,
   writeVectorIndex
 } from '@/runtime/vector-index-registry'
@@ -84,6 +85,8 @@ async function handleVectorIndexInternal(input: VectorIndexRequest): Promise<Vec
     }
     case 'setStagedSearch':
       return { ...base, operation: 'setStagedSearch', ...setVectorIndexStagedSearch(request) }
+    case 'setIvf':
+      return { ...base, operation: 'setIvf', ...setVectorIndexIvf(request) }
     case 'dispose':
       return { ...base, operation: 'dispose', ...disposeVectorIndex(request) }
   }
