@@ -16,7 +16,8 @@ import {
   findCoremlCompanionSet,
   findLocallyCachedCoremlCompanionSet,
   getCoremlSidecarSpec,
-  getCoremlSetKey
+  getCoremlSetKey,
+  getRetiredCoremlSetDir
 } from '@/handlers/load-model/coreml-sidecars'
 import { acquireRegistryClient } from '@/runtime/registry-client'
 import { getRuntimeContext } from '@/runtime/state'
@@ -146,7 +147,25 @@ async function handleOptionalCoremlModel(model: RegistryItem): Promise<CacheStat
     } catch {}
   }
 
-  return handleSingleFileModel(model.registryPath, model.expectedSize, model.sha256Checksum)
+  const singleFile = await handleSingleFileModel(
+    model.registryPath,
+    model.expectedSize,
+    model.sha256Checksum
+  )
+  if (singleFile.isCached) return singleFile
+
+  // A Core ML set an earlier release staged and this one no longer stages
+  // still holds the GGUF until the next load moves it to the single-file path.
+  const retiredDir = getRetiredCoremlSetDir(model, platform)
+  if (retiredDir !== undefined) {
+    const filename = model.registryPath.split('/').pop() || model.registryPath
+    const retired = await checkCacheStatus(
+      [{ filename, expectedSize: model.expectedSize, sha256Checksum: model.sha256Checksum }],
+      [validateAndJoinPath(retiredDir, filename)]
+    )
+    if (retired.isCached) return retired
+  }
+  return singleFile
 }
 
 async function handleShardedModel(
