@@ -238,3 +238,139 @@ test('a named assertion that the client does not have is incomplete', async () =
   ])
   assert.equal(result.incomplete, true)
 })
+
+const PASSING_BODY = [
+  { call: { method: 'fine', as: 'value' } },
+  { assert: { on: '$value', use: 'expectation' } }
+]
+
+test('endTest runs once after a passing body', async () => {
+  const seen = []
+  const result = await run(PASSING_BODY, {
+    call: async (method) => (seen.push(method), 'text'),
+    endTest: async () => {
+      seen.push('endTest')
+    }
+  })
+  assert.equal(result.passed, true)
+  assert.deepEqual(seen, ['fine', 'endTest'])
+})
+
+test('endTest runs after a failing body and teardown, and keeps the body diagnosis', async () => {
+  const seen = []
+  const result = await run(
+    [{ call: { method: 'boom' } }],
+    {
+      call: async (method) => {
+        seen.push(method)
+        if (method === 'boom') throw new Error('body blew up')
+        return 'ok'
+      },
+      endTest: async () => {
+        seen.push('endTest')
+      }
+    },
+    { finally: [{ call: { method: 'cleanup' } }] }
+  )
+  assert.equal(result.passed, false)
+  assert.match(result.output, /body blew up/)
+  assert.deepEqual(seen, ['boom', 'cleanup', 'endTest'])
+})
+
+test('endTest runs when the run throws, and the original error propagates', async () => {
+  let ended = 0
+  const interpreter = new StepInterpreter(
+    bindings({
+      evictAllExcept: async () => {
+        throw new Error('evict blew up')
+      },
+      endTest: async () => {
+        ended++
+        throw new Error('release blew up')
+      }
+    })
+  )
+  await assert.rejects(interpreter.run(definition(PASSING_BODY)), /evict blew up/)
+  assert.equal(ended, 1)
+})
+
+test('endTest waits for calls the body started and never settled', async () => {
+  const seen = []
+  const result = await run([{ start: { method: 'slow', as: 'pending' } }, ...PASSING_BODY], {
+    call: (method) =>
+      method === 'slow'
+        ? new Promise((resolve) =>
+            setTimeout(() => {
+              seen.push('slow settled')
+              resolve('late')
+            }, 30)
+          )
+        : Promise.resolve('text'),
+    endTest: async () => {
+      seen.push('endTest')
+    }
+  })
+  assert.equal(result.passed, true)
+  assert.deepEqual(seen, ['slow settled', 'endTest'])
+})
+
+test('a failing endTest fails a passing body', async () => {
+  const result = await run(PASSING_BODY, {
+    call: async () => 'text',
+    endTest: async () => {
+      throw new Error('release blew up')
+    }
+  })
+  assert.equal(result.passed, false)
+  assert.match(result.output, /end-of-test release failed: release blew up/)
+})
+
+test('a failing endTest keeps a failing body diagnosis', async () => {
+  const result = await run([{ call: { method: 'boom' } }], {
+    call: async () => {
+      throw new Error('body blew up')
+    },
+    endTest: async () => {
+      throw new Error('release blew up')
+    }
+  })
+  assert.equal(result.passed, false)
+  assert.match(result.output, /body blew up \[end-of-test release also failed: release blew up\]/)
+})
+
+test('a definition without steps does not reach endTest', async () => {
+  let ended = 0
+  const result = await new StepInterpreter(
+    bindings({
+      endTest: async () => {
+        ended++
+      }
+    })
+  ).run(definition([]))
+  assert.equal(result.incomplete, true)
+  assert.equal(ended, 0)
+})
+
+test('a run superseded by a newer one skips endTest', async () => {
+  const ended = []
+  let release
+  const interpreter = new StepInterpreter(
+    bindings({
+      call: (method) =>
+        method === 'hang' ? new Promise((resolve) => (release = resolve)) : Promise.resolve('text'),
+      endTest: async () => {
+        ended.push('endTest')
+      }
+    })
+  )
+  const abandoned = interpreter.run(
+    definition([{ call: { method: 'hang', as: 'value' } }, ...PASSING_BODY.slice(1)])
+  )
+  await new Promise((resolve) => setImmediate(resolve))
+  const newer = await interpreter.run(definition(PASSING_BODY))
+  assert.equal(newer.passed, true)
+  assert.deepEqual(ended, ['endTest'])
+  release('late')
+  await abandoned
+  assert.deepEqual(ended, ['endTest'], 'the abandoned run must not release the newer run')
+})

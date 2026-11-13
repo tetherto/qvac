@@ -130,10 +130,15 @@ export interface ResourceManagerOptions {
   singleUseResources?: readonly string[]
 }
 
+/**
+ * A model behind a resource key is shared across tests. A model a `loadModel` step loaded is
+ * test-scoped: released when the test ends, or at the latest before the next one starts.
+ */
 export class ResourceManager {
   private definitions = new Map<string, ModelDefinition>()
   private resolvedConfigs = new Map<string, ModelConfig>()
   private models = new Map<string, TrackedModel>()
+  private testScoped = new Set<string>()
   private testCount = 0
   private downloaded = false
   private readonly unloadSettleMs: number
@@ -329,13 +334,7 @@ export class ResourceManager {
     }
 
     const modelId = await loadModel((await this.loadParams(dep)) as never)
-
-    this.models.set(dep, {
-      modelId,
-      dep,
-      lastUsedAtTest: this.testCount
-    })
-
+    this.register(dep, modelId)
     return modelId
   }
 
@@ -344,6 +343,39 @@ export class ResourceManager {
    */
   register(dep: string, modelId: string) {
     this.models.set(dep, { modelId, dep, lastUsedAtTest: this.testCount })
+    // Ids are hashes of the load request, so a key can land on a test-scoped id; the key wins.
+    this.testScoped.delete(modelId)
+  }
+
+  /** No-op for a key-owned id: a config reload or an identical load returns it. */
+  adoptTestLoad(modelId: string): void {
+    if (this.isShared(modelId)) return
+    this.testScoped.add(modelId)
+  }
+
+  /** Forgets an id a step unloaded, so no key hands out a stale id. Idempotent. */
+  released(modelId: string): void {
+    this.testScoped.delete(modelId)
+    this.unregister(modelId)
+  }
+
+  /**
+   * Never throws: an unload error is logged. A timed-out test's release can overlap the next test,
+   * so it unloads only ids it started with that are still test-scoped.
+   */
+  async releaseTestScope(): Promise<void> {
+    for (const modelId of Array.from(this.testScoped)) {
+      if (!this.testScoped.delete(modelId)) continue
+      console.info(`🧹 Releasing test-scoped model ${modelId}`)
+      await this.unload(modelId, modelId)
+    }
+  }
+
+  private isShared(modelId: string): boolean {
+    for (const entry of this.models.values()) {
+      if (entry.modelId === modelId) return true
+    }
+    return false
   }
 
   /**
@@ -369,22 +401,32 @@ export class ResourceManager {
   async forgetLostModels(): Promise<void> {
     const lost: string[] = []
     for (const [dep, entry] of this.models) {
-      try {
-        await getLoadedModelInfo({ modelId: entry.modelId })
-      } catch (error) {
-        const code = (error as { code?: unknown } | null)?.code
-        if (code === SDK_SERVER_ERROR_CODES.MODEL_NOT_FOUND) lost.push(dep)
-      }
+      if (await this.isLost(entry.modelId)) lost.push(dep)
     }
     for (const dep of lost) {
       this.models.delete(dep)
+    }
+    for (const modelId of Array.from(this.testScoped)) {
+      if (await this.isLost(modelId)) this.testScoped.delete(modelId)
     }
     if (lost.length > 0) {
       console.warn(`♻️  Worker lost ${lost.join(', ')}; reloading on next use`)
     }
   }
 
+  private async isLost(modelId: string): Promise<boolean> {
+    try {
+      await getLoadedModelInfo({ modelId })
+      return false
+    } catch (error) {
+      const code = (error as { code?: unknown } | null)?.code
+      return code === SDK_SERVER_ERROR_CODES.MODEL_NOT_FOUND
+    }
+  }
+
   async evictExcept(keep: string[]): Promise<string[]> {
+    // Catches what a timed-out test left behind.
+    await this.releaseTestScope()
     const keepSet = new Set(keep)
     const evicted: string[] = []
     for (const dep of this.models.keys()) {
@@ -416,25 +458,29 @@ export class ResourceManager {
       console.info(
         `🧹 Evicting model ${dep} (test count: ${this.testCount}, last used at test: ${entry.lastUsedAtTest})`
       )
-      try {
-        await cancel({ operation: 'inference', modelId: entry.modelId })
-      } catch (error) {
-        console.debug(`Error canceling inference ${dep}: ${error}`)
-      }
-      try {
-        await unloadModel({ modelId: entry.modelId })
-        // Optionally yield so the OS can reclaim pages before the next
-        // load starts allocating. See `unloadSettleMs` docs above. Only
-        // wait when the unload actually succeeded; on failure there's
-        // nothing to settle.
-        if (this.unloadSettleMs > 0) {
-          await new Promise<void>((resolve) => setTimeout(resolve, this.unloadSettleMs))
-        }
-      } catch (error) {
-        console.warn(`Error unloading model ${dep}: ${error}`)
-      }
-
+      await this.unload(dep, entry.modelId)
       this.models.delete(dep)
+    }
+  }
+
+  /** Never throws: errors are logged. */
+  private async unload(label: string, modelId: string): Promise<void> {
+    try {
+      await cancel({ operation: 'inference', modelId })
+    } catch (error) {
+      console.debug(`Error canceling inference ${label}: ${error}`)
+    }
+    try {
+      await unloadModel({ modelId })
+      // Optionally yield so the OS can reclaim pages before the next
+      // load starts allocating. See `unloadSettleMs` docs above. Only
+      // wait when the unload actually succeeded; on failure there's
+      // nothing to settle.
+      if (this.unloadSettleMs > 0) {
+        await new Promise<void>((resolve) => setTimeout(resolve, this.unloadSettleMs))
+      }
+    } catch (error) {
+      console.warn(`Error unloading model ${label}: ${error}`)
     }
   }
 
@@ -446,6 +492,7 @@ export class ResourceManager {
   }
 
   async evictAll(): Promise<void> {
+    await this.releaseTestScope()
     for (const dep of this.models.keys()) {
       await this.evict(dep)
     }
@@ -455,5 +502,6 @@ export class ResourceManager {
   /** Drops every tracked model without unloading it, once the worker that held them is gone. */
   forgetAll(): void {
     this.models.clear()
+    this.testScoped.clear()
   }
 }

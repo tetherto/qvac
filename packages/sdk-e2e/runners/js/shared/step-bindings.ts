@@ -2027,7 +2027,10 @@ const ASSERTIONS: Record<
   }
 }
 
-export function createStepBindings(resources: ResourceManager): StepBindings {
+/** `endTest` is typed here too: `@qvac/test-suite` <0.14 lacks it and never calls it. */
+export function createStepBindings(
+  resources: ResourceManager
+): StepBindings & { endTest(): Promise<void> } {
   return {
     async useModel(deps) {
       const ids: string[] = []
@@ -2095,7 +2098,15 @@ export function createStepBindings(resources: ResourceManager): StepBindings {
       if (!call) {
         throw new StepIncompleteError(`SDK method "${method}" is not wired into these bindings yet`)
       }
-      return call(params as never)
+      const value = await call(params as never)
+      // Step loads bypass `useModel`; tell the resource manager who owns the model.
+      if (method === 'loadModel') {
+        const modelId = (value as { modelId?: unknown } | null)?.modelId
+        if (typeof modelId === 'string') resources.adoptTestLoad(modelId)
+      } else if (method === 'unloadModel') {
+        resources.released(String((params as { modelId?: unknown }).modelId))
+      }
+      return value
     },
 
     async modelSource(dep) {
@@ -2140,6 +2151,10 @@ export function createStepBindings(resources: ResourceManager): StepBindings {
 
     async evictAllExcept(keep) {
       await resources.evictExcept([...keep])
+    },
+
+    async endTest() {
+      await resources.releaseTestScope()
     }
   }
 }

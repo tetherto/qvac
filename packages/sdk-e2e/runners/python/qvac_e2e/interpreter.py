@@ -1221,6 +1221,19 @@ class Interpreter:
         teardown: list[dict[str, Any]] | None = None,
     ) -> StepResult:
         teardown = teardown or []
+        try:
+            return await self._run_declared(steps, params, expectation, teardown)
+        finally:
+            # After `_run_declared` drains started calls, so none of them loses its model.
+            await self._resources.release_test_scope()
+
+    async def _run_declared(
+        self,
+        steps: list[dict[str, Any]],
+        params: dict[str, Any],
+        expectation: dict[str, Any],
+        teardown: list[dict[str, Any]],
+    ) -> StepResult:
         # Evict anything this test did not declare before it starts, so a run does not
         # depend on the order tests happened to arrive in.
         declared = {
@@ -1414,6 +1427,24 @@ class Interpreter:
         collect: str | None,
     ) -> Any:
         """One call, folded if the step asked for a fold."""
+        response = await self._dispatch(method, call, params, collect)
+        # Step loads bypass `useModel`; tell the resource manager who owns the model.
+        # Here, not in `_call_value`, so a `callError` load that succeeds is tracked too.
+        if method == "loadModel" and isinstance(response, dict):
+            model_id = response.get("modelId")
+            if isinstance(model_id, str):
+                self._resources.adopt_test_load(model_id)
+        elif method == "unloadModel":
+            self._resources.released(str(params.get("modelId")))
+        return response
+
+    async def _dispatch(
+        self,
+        method: str,
+        call: Callable[[Any, dict[str, Any]], Any] | None,
+        params: dict[str, Any],
+        collect: str | None,
+    ) -> Any:
         if collect:
             stream = STREAMS.get(method)
             if stream is None:
