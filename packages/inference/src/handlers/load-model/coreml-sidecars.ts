@@ -10,9 +10,12 @@ import {
   type CoremlSidecarSpec
 } from '@/utils/cache/layout'
 import { getModelsCacheDir } from '@/utils/cache/paths'
+import { calculateCachedFileChecksum, renameWithCachedChecksum } from '@/utils/checksum'
 import { validateAndJoinPath } from '@/utils/path-security'
 import { modelInputToSrcSchema, registryUrlSchema } from '@/schemas/index'
 import { promises as fsPromises } from 'bare-fs'
+import os from 'bare-os'
+import path from 'bare-path'
 import { z } from 'zod'
 
 // Family table and catalog lookups: utils/cache/layout.ts.
@@ -183,46 +186,78 @@ export function getRetiredCoremlSetDir(
   return spec ? validateAndJoinPath(cacheDir, 'sets', getCoremlSetKey(model, spec)) : undefined
 }
 
+export type RetiredCoremlSetResult =
+  /** No retired set is cached. */
+  | { status: 'none' }
+  /** The set is gone. `singleFilePath` holds a valid GGUF, or the loader downloads one. */
+  | { status: 'cleared' }
+  /**
+   * The set's GGUF is the only valid copy and could not be moved, for example
+   * in a read-only cache, so the set is left as it was. Load `ggufPath`
+   * through `linkAwayFromCoremlBundles`, never from beside its bundle.
+   */
+  | { status: 'kept'; ggufPath: string; error: unknown }
+
 /**
  * Clears the set an earlier release staged for `model` and this one no longer
- * stages. Its GGUF moves to `singleFilePath`, where the loader now keeps the
- * model, unless a file is already there, so the load that follows does not
- * download it again (the loader still checks its size and checksum). The
- * bundles and the set directory are removed. Returns whether a set was found.
+ * stages. The loader now keeps the model at `singleFilePath`. A file there
+ * that passes the loader's size and checksum checks stays. Otherwise the set's
+ * GGUF replaces it when that one passes them, so the load that follows does
+ * not download it again. The set directory, bundles included, is removed only
+ * after that, and not at all when its valid GGUF cannot be moved.
  */
 export async function clearRetiredCoremlSet(
   model: RegistryItem,
   platform: string | undefined,
   singleFilePath: string,
   cacheDir = getModelsCacheDir()
-): Promise<boolean> {
+): Promise<RetiredCoremlSetResult> {
   const setDir = getRetiredCoremlSetDir(model, platform, cacheDir)
-  if (setDir === undefined || !(await isDirectory(setDir))) return false
+  if (setDir === undefined || !(await isDirectory(setDir))) return { status: 'none' }
 
   const filename = model.registryPath.split('/').pop() || model.registryPath
-  if (!(await exists(singleFilePath))) {
+  const setGguf = validateAndJoinPath(setDir, filename)
+  if (!(await holdsModel(singleFilePath, model)) && (await holdsModel(setGguf, model))) {
     try {
-      await fsPromises.rename(validateAndJoinPath(setDir, filename), singleFilePath)
-    } catch {
-      // No GGUF in the set: the loader downloads it.
+      await renameWithCachedChecksum(setGguf, singleFilePath)
+    } catch (error) {
+      return { status: 'kept', ggufPath: setGguf, error }
     }
   }
   await fsPromises.rm(setDir, { recursive: true, force: true })
-  return true
+  return { status: 'cleared' }
 }
 
-async function isDirectory(target: string): Promise<boolean> {
+/**
+ * A path to `ggufPath` in a new directory under `tempDir`, with no Core ML
+ * bundle beside it: the engine looks for a bundle only next to the path it
+ * loads. Nothing is written beside `ggufPath`.
+ */
+export async function linkAwayFromCoremlBundles(
+  ggufPath: string,
+  tempDir = os.tmpdir()
+): Promise<string> {
+  const dir = await fsPromises.mkdtemp(path.join(tempDir, 'qvac-gguf-'))
+  const link = path.join(dir, path.basename(ggufPath))
+  await fsPromises.symlink(ggufPath, link)
+  return link
+}
+
+// The size and checksum checks the loader runs on a cached file.
+async function holdsModel(filePath: string, model: RegistryItem): Promise<boolean> {
   try {
-    return (await fsPromises.stat(target)).isDirectory()
+    const stats = await fsPromises.stat(filePath)
+    if (!stats.isFile() || stats.size !== model.expectedSize) return false
+    if (model.sha256Checksum.length !== 64) return true
+    return (await calculateCachedFileChecksum(filePath)) === model.sha256Checksum
   } catch {
     return false
   }
 }
 
-async function exists(target: string): Promise<boolean> {
+async function isDirectory(target: string): Promise<boolean> {
   try {
-    await fsPromises.stat(target)
-    return true
+    return (await fsPromises.stat(target)).isDirectory()
   } catch {
     return false
   }

@@ -24,10 +24,14 @@ bundle uses its ordinary single-file cache path.
 
 When a release stops staging a bundle for a GGUF (`retiredBundlesByStem` in
 `src/utils/cache/layout.ts`), the set an earlier release left in the cache is
-cleared on the model's next load: its GGUF moves to the single-file path unless
-a file is already there, and the set directory, bundle included, is removed.
-Until then `getModelInfo` reports the GGUF in the set as cached, and deleting
-the model's cache removes the set too.
+cleared on the model's next load. A copy at the single-file path that passes
+the size and checksum checks stays; otherwise the set's GGUF moves there if it
+passes them, so it is not downloaded again. Only then is the set directory,
+bundle included, removed. When the set's GGUF is the only valid copy and cannot
+be moved, as in a read-only cache, the set stays as it is and the GGUF loads
+through a link in a new temporary directory, so the engine does not find the
+bundle beside it. Until the set is cleared `getModelInfo` reports its GGUF as
+cached, and deleting the model's cache removes the set too.
 
 `@qvac/inference/model-cache-layout` (`getModelCacheLayout`) publishes where the
 cache keeps a registry model, without fs access. The loader takes its layout
