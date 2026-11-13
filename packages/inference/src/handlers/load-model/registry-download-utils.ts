@@ -4,12 +4,13 @@ import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import type { AbortSignal } from 'bare-abort-controller'
 import { measureChecksum, calculatePercentage } from '@/utils/index'
-import { getRegistryClient } from '@/runtime/registry-client'
+import { acquireRegistryClient } from '@/runtime/registry-client'
 import { getConfig } from '@/runtime/state'
 import { buildRegistryClientOptions } from '@/handlers/load-model/registry-client-options'
 import { ChecksumValidationFailedError, DownloadCancelledError } from '@/errors/index'
 import { getEngineLogger } from '@/logging/index'
 import type { DownloadHooks } from '@/handlers/load-model/types'
+import { partialDownloadPath, publishDownload } from '@/handlers/load-model/download-lock'
 
 const logger = getEngineLogger()
 
@@ -38,7 +39,8 @@ export function buildBlobBinding(meta: {
 }
 
 /**
- * Validate a cached file against expected size and checksum.
+ * Validate a cached file against expected size and checksum. Never deletes: a
+ * mismatched file may be an older SDK's download in progress.
  */
 export async function validateCachedFile(
   modelPath: string,
@@ -69,14 +71,12 @@ export async function validateCachedFile(
     }
 
     logger.warn(
-      `🗑️ Removing incomplete cached file (expected ${expectedSize}, got ${localSize}): ${modelPath}`
+      `📥 Cached file is incomplete (expected ${expectedSize}, got ${localSize}); downloading: ${modelPath}`
     )
-    await fsPromises.unlink(modelPath)
     return null
   } catch (error) {
     if (error instanceof ChecksumValidationFailedError) {
-      logger.warn(`🗑️ Removing corrupted cached file: ${modelPath}`)
-      await fsPromises.unlink(modelPath).catch(() => {})
+      logger.warn(`📥 Cached file failed checksum validation; downloading: ${modelPath}`)
     }
     return null
   }
@@ -86,6 +86,7 @@ export async function validateCachedFile(
  * Download a single file from the registry to filesystem.
  * When blobBinding is provided, uses direct blob download (skips metadata sync).
  * Otherwise falls back to metadata-based downloadModel.
+ * Publishes to `modelPath` only after the checks pass. Callers hold the lock.
  */
 export async function downloadSingleFileFromRegistry(
   registryPath: string,
@@ -105,8 +106,6 @@ export async function downloadSingleFileFromRegistry(
     throw new DownloadCancelledError()
   }
 
-  const client = await getRegistryClient()
-
   const dir = path.dirname(modelPath)
   await fsPromises.mkdir(dir, { recursive: true })
 
@@ -123,42 +122,48 @@ export async function downloadSingleFileFromRegistry(
       }
     : undefined
 
+  const partialPath = partialDownloadPath(modelPath)
   const clientOptions = buildRegistryClientOptions({
     config: getConfig(),
-    outputFile: modelPath,
+    outputFile: partialPath,
     onProgress,
     signal,
     shouldClearCache
   })
 
-  if (blobBinding) {
-    logger.info(`📥 Downloading blob directly: ${modelFileName}`)
-    await client.downloadBlob(blobBinding, clientOptions)
-  } else {
-    logger.info(`📥 Downloading from registry: ${registryPath}`)
-    await client.downloadModel(registryPath, registrySource, clientOptions)
+  {
+    // Held only for the transfer: the checks below need no registry.
+    await using lease = await acquireRegistryClient({ wait: 'download', signal })
+    if (blobBinding) {
+      logger.info(`📥 Downloading blob directly: ${modelFileName}`)
+      await lease.client.downloadBlob(blobBinding, clientOptions)
+    } else {
+      logger.info(`📥 Downloading from registry: ${registryPath}`)
+      await lease.client.downloadModel(registryPath, registrySource, clientOptions)
+    }
   }
 
-  logger.info(`✅ Downloaded to ${modelPath}`)
-
-  const stats = await fsPromises.stat(modelPath)
+  const stats = await fsPromises.stat(partialPath)
   if (expectedSize && stats.size !== expectedSize) {
-    await fsPromises.unlink(modelPath).catch(() => {})
+    await fsPromises.unlink(partialPath).catch(() => {})
     throw new ChecksumValidationFailedError(
       `${modelFileName}. File size mismatch: expected ${expectedSize}, got ${stats.size}`
     )
   }
 
   if (expectedChecksum && expectedChecksum.length === 64) {
-    const checksum = await measureChecksum(modelPath, hooks)
+    const checksum = await measureChecksum(partialPath, hooks)
     if (checksum !== expectedChecksum) {
-      await fsPromises.unlink(modelPath)
+      await fsPromises.unlink(partialPath).catch(() => {})
       throw new ChecksumValidationFailedError(
         `${modelFileName}. Expected: ${expectedChecksum}. Actual: ${checksum}`
       )
     }
     logger.info(`✅ Checksum validated for ${modelFileName}`)
   }
+
+  await publishDownload(modelPath)
+  logger.info(`✅ Downloaded to ${modelPath}`)
 
   if (progressCallback) {
     progressCallback({

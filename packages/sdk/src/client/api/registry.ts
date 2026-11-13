@@ -10,6 +10,8 @@ import type {
 } from '@qvac/inference/surface'
 import { send } from '@/client/rpc/rpc-client'
 import { ModelRegistryQueryFailedError } from '@/utils/errors-client'
+import { generateClientRequestId } from '@/client/api/client-request-id'
+import { decoratePromise } from '@/utils/decorate-promise'
 
 export type { ModelRegistryEntry, ModelRegistryEntryAddon }
 
@@ -26,6 +28,9 @@ interface RegistryResponse {
   error?: string | undefined
 }
 
+/** A registry query's result, with the id that `cancel({ requestId })` takes. */
+export type RegistryQuery<T> = Promise<T> & { requestId: string }
+
 function validateRegistryResponse(response: RegistryResponse): void {
   if (!response.success) {
     throw new ModelRegistryQueryFailedError(response.error ?? 'Unknown registry error')
@@ -35,12 +40,20 @@ function validateRegistryResponse(response: RegistryResponse): void {
 /**
  * Returns all available models from the QVAC distributed model registry.
  *
- * @returns A promise resolving to an array of `ModelRegistryEntry` describing every model the SDK's connected registry knows about.
+ * @returns A promise resolving to an array of `ModelRegistryEntry` describing every model the SDK's connected registry knows about,
+ *   decorated with a synchronous `requestId` for `cancel({ requestId })` while the query waits for the registry.
+ * @throws {ModelRegistryBusyError} When another QVAC process kept the registry for longer than the query waits.
  * @throws {ModelRegistryQueryFailedError} When the registry query fails.
  */
-async function modelRegistryList(): Promise<ModelRegistryEntry[]> {
+function modelRegistryList(): RegistryQuery<ModelRegistryEntry[]> {
+  const requestId = generateClientRequestId()
+  return decoratePromise(runList(requestId), { requestId })
+}
+
+async function runList(requestId: string): Promise<ModelRegistryEntry[]> {
   const request: ModelRegistryListRequest = {
-    type: 'modelRegistryList'
+    type: 'modelRegistryList',
+    requestId
   }
 
   const response = (await send(request)) as ModelRegistryListResponse
@@ -58,17 +71,28 @@ async function modelRegistryList(): Promise<ModelRegistryEntry[]> {
  * @param params.quantization - Quantization identifier (e.g., `"Q4_K_M"`).
  * @param params.modelType - Alias for `addon`; kept for backward compatibility.
  * @param params.addon - Model addon / category to restrict results to.
- * @returns A promise resolving to the matching `ModelRegistryEntry` entries.
+ * @returns A promise resolving to the matching `ModelRegistryEntry` entries, decorated with a
+ *   synchronous `requestId` for `cancel({ requestId })` while the query waits for the registry.
+ * @throws {ModelRegistryBusyError} When another QVAC process kept the registry for longer than the query waits.
  * @throws {ModelRegistryQueryFailedError} When the registry query fails.
  */
-async function modelRegistrySearch(
+function modelRegistrySearch(
   params: ModelRegistrySearchParams = {}
+): RegistryQuery<ModelRegistryEntry[]> {
+  const requestId = generateClientRequestId()
+  return decoratePromise(runSearch(params, requestId), { requestId })
+}
+
+async function runSearch(
+  params: ModelRegistrySearchParams,
+  requestId: string
 ): Promise<ModelRegistryEntry[]> {
   const { modelType, ...rest } = params
   const request: ModelRegistrySearchRequest = {
     type: 'modelRegistrySearch',
     ...rest,
-    addon: modelType ?? rest.addon
+    addon: modelType ?? rest.addon,
+    requestId
   }
 
   const response = (await send(request)) as ModelRegistrySearchResponse
@@ -82,18 +106,30 @@ async function modelRegistrySearch(
  *
  * @param registryPath - Registry-relative path of the model to fetch.
  * @param registrySource - Registry source identifier (e.g., `"huggingface"`, `"local"`).
- * @returns A promise resolving to the matching `ModelRegistryEntry`.
+ * @returns A promise resolving to the matching `ModelRegistryEntry`, decorated with a
+ *   synchronous `requestId` for `cancel({ requestId })` while the query waits for the registry.
  * @throws {ModelRegistryModelNotFoundError} When the registry has no model at this source and path.
+ * @throws {ModelRegistryBusyError} When another QVAC process kept the registry for longer than the query waits.
  * @throws {ModelRegistryQueryFailedError} When the registry query fails.
  */
-async function modelRegistryGetModel(
+function modelRegistryGetModel(
   registryPath: string,
   registrySource: string
+): RegistryQuery<ModelRegistryEntry> {
+  const requestId = generateClientRequestId()
+  return decoratePromise(runGetModel(registryPath, registrySource, requestId), { requestId })
+}
+
+async function runGetModel(
+  registryPath: string,
+  registrySource: string,
+  requestId: string
 ): Promise<ModelRegistryEntry> {
   const request: ModelRegistryGetModelRequest = {
     type: 'modelRegistryGetModel',
     registryPath,
-    registrySource
+    registrySource,
+    requestId
   }
 
   const response = (await send(request)) as ModelRegistryGetModelResponse
