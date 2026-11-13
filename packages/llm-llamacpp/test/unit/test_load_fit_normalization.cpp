@@ -2241,28 +2241,38 @@ TEST_F(LoadFitNormalizationTest, CoreMlFfnAcceptsTheUnderscoreSpelling) {
 TEST_F(LoadFitNormalizationTest, CoreMlFfnUnknownValueIsRejected) {
   auto config = baseConfig();
   config["coreml-ffn"] = "maybe";
-  EXPECT_THROW(
-      static_cast<void>(lfn::normalizeLoadForFit(
-          "/tmp/model.gguf",
-          std::move(config),
-          metadata_,
-          {},
-          backend({.type = backend_selection::GPU, .name = "none"}))),
-      qvac_errors::StatusError);
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "none"})));
+    FAIL() << "unknown coreml-ffn value must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(), ::testing::HasSubstr("unknown value for coreml-ffn"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("'maybe'"));
+  }
 }
 
 TEST_F(LoadFitNormalizationTest, CoreMlFfnBothSpellingsAreRejected) {
   auto config = baseConfig();
   config["coreml-ffn"] = "true";
   config["coreml_ffn"] = "true";
-  EXPECT_THROW(
-      static_cast<void>(lfn::normalizeLoadForFit(
-          "/tmp/model.gguf",
-          std::move(config),
-          metadata_,
-          {},
-          backend({.type = backend_selection::GPU, .name = "none"}))),
-      qvac_errors::StatusError);
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "none"})));
+    FAIL() << "both coreml-ffn spellings must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr("more than one of 'coreml-ffn', 'coreml_ffn'"));
+  }
 }
 
 TEST_F(LoadFitNormalizationTest, CoreMlFfnCacheAndSplitReachCommonParams) {
@@ -2285,14 +2295,19 @@ TEST_F(LoadFitNormalizationTest, CoreMlFfnCacheAndSplitReachCommonParams) {
 TEST_F(LoadFitNormalizationTest, CoreMlFfnInvalidSplitIsRejected) {
   auto config = baseConfig();
   config["coreml-ffn-split"] = "8192";
-  EXPECT_THROW(
-      static_cast<void>(lfn::normalizeLoadForFit(
-          "/tmp/model.gguf",
-          std::move(config),
-          metadata_,
-          {},
-          backend({.type = backend_selection::GPU, .name = "none"}))),
-      qvac_errors::StatusError);
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "none"})));
+    FAIL() << "malformed coreml-ffn-split must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr("--coreml-ffn-split must look like"));
+  }
 }
 
 TEST(DeprecatedLoadFlagModeTest, MapsEachFlagAndPolarity) {

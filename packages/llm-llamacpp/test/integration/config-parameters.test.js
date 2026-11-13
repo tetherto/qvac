@@ -111,10 +111,9 @@ const scenarios = [
     expectLoadFailure: /load-mode must be one of/
   },
   {
-    // The sidecar needs a Core ML FFN fabric build and Qwen3.8-27B, so this load
-    // falls back. It checks that "true" is accepted; the unit tests check that it
-    // sets coreml_ffn.
-    name: 'coreml-ffn on an unsupported model falls back and generates',
+    // No CI fabric is built with Core ML FFN, so this load falls back. It checks
+    // that "true" is accepted; the unit tests check that it sets coreml_ffn.
+    name: 'coreml-ffn "true" is accepted and the load falls back',
     overrides: {
       'coreml-ffn': 'true',
       n_predict: '16'
