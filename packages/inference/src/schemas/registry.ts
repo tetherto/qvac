@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { ModelType } from '@/schemas/model-types'
-import { sessionScopedRequestSchema } from '@/schemas/request-base'
+import { trackedRequestSchema } from '@/schemas/request-base'
 
 // QVAC Model Registry entry schema matching the RegistryItem from models/registry/models.ts
 const modelRegistryEntryAddonSchema = z.enum([
@@ -75,7 +75,7 @@ export const modelRegistryListRequestSchema = z
   .object({
     type: z.literal('modelRegistryList')
   })
-  .extend(sessionScopedRequestSchema.shape)
+  .extend(trackedRequestSchema.shape)
 
 export const modelRegistryListResponseSchema = z.object({
   type: z.literal('modelRegistryList'),
@@ -96,7 +96,7 @@ export const modelRegistrySearchRequestSchema = z
     quantization: z.string().optional(),
     addon: modelRegistryEntryAddonSchema.optional()
   })
-  .extend(sessionScopedRequestSchema.shape)
+  .extend(trackedRequestSchema.shape)
 
 export const modelRegistrySearchResponseSchema = z.object({
   type: z.literal('modelRegistrySearch'),
@@ -115,7 +115,7 @@ export const modelRegistryGetModelRequestSchema = z
     registryPath: z.string(),
     registrySource: z.string()
   })
-  .extend(sessionScopedRequestSchema.shape)
+  .extend(trackedRequestSchema.shape)
 
 export const modelRegistryGetModelResponseSchema = z.object({
   type: z.literal('modelRegistryGetModel'),

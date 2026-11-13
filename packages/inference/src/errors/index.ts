@@ -1227,6 +1227,27 @@ export class ModelRegistryModelNotFoundError extends QvacErrorBase {
   }
 }
 
+/**
+ * Another QVAC process had the model registry for longer than this call would
+ * wait. `holder` is `legacy` when that process runs an older SDK, which keeps
+ * the registry until it exits; `current` when it runs this one and will hand it
+ * over once its own registry work ends. `waitedMs` is how long this call waited.
+ */
+export class ModelRegistryBusyError extends QvacErrorBase {
+  readonly holder: 'current' | 'legacy'
+  readonly waitedMs: number
+
+  constructor(holder: 'current' | 'legacy', waitedMs: number, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.QVAC_MODEL_REGISTRY_BUSY, [holder, waitedMs], cause))
+    this.holder = holder
+    this.waitedMs = waitedMs
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { holder: this.holder, waitedMs: this.waitedMs }
+  }
+}
+
 export class RpcServerOperationError extends QvacErrorBase {
   readonly operation: string
   readonly details: string

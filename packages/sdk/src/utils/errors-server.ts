@@ -1210,4 +1210,4 @@ export class ModelRegistryModelNotFoundError extends QvacErrorBase {
   }
 }
 
-export { RpcServerOperationError } from '@qvac/inference/surface'
+export { RpcServerOperationError, ModelRegistryBusyError } from '@qvac/inference/surface'

@@ -12,6 +12,7 @@ import {
   createErrorResponse,
   ContextOverflowError as InferenceContextOverflowError,
   ModelRegistryModelNotFoundError as InferenceModelRegistryModelNotFoundError,
+  ModelRegistryBusyError as InferenceModelRegistryBusyError,
   RequestIdConflictError as InferenceRequestIdConflictError,
   RequestNotFoundError as InferenceRequestNotFoundError,
   RequestRejectedByPolicyError as InferenceRequestRejectedByPolicyError,
@@ -27,6 +28,7 @@ import {
   ContextOverflowError,
   InferenceCancelledError,
   ModelRegistryModelNotFoundError,
+  ModelRegistryBusyError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
@@ -138,6 +140,20 @@ test('reconstructError: ModelRegistryModelNotFoundError round-trips', (t) => {
   t.is((reconstructed as ModelRegistryModelNotFoundError).registrySource, 'hf')
   t.is((reconstructed as ModelRegistryModelNotFoundError).registryPath, 'org/m.gguf')
   t.is((reconstructed as ModelRegistryModelNotFoundError).code, 53951)
+})
+
+test('reconstructError: ModelRegistryBusyError round-trips with its holder and wait', (t) => {
+  for (const holder of ['current', 'legacy'] as const) {
+    const original = new InferenceModelRegistryBusyError(holder, 60_250)
+    const reconstructed = reconstructError(createErrorResponse(original))
+
+    t.ok(reconstructed instanceof ModelRegistryBusyError, holder)
+    const busy = reconstructed as ModelRegistryBusyError
+    t.is(busy.holder, holder)
+    t.is(busy.waitedMs, 60_250)
+    t.is(busy.code, 53952)
+    t.is(busy.message, original.message)
+  }
 })
 
 test('reconstructError: ContextOverflowError round-trips with all fields', (t) => {

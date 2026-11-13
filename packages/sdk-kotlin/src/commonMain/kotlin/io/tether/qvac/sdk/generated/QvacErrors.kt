@@ -150,6 +150,8 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("PLUGIN_RESPONSE_VALIDATION_FAILED", reportedCode, message, payload)
     class ServerProjectionModelRequired(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("PROJECTION_MODEL_REQUIRED", reportedCode, message, payload)
+    class ServerQvacModelRegistryBusy(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("QVAC_MODEL_REGISTRY_BUSY", reportedCode, message, payload)
     class ServerQvacModelRegistryModelNotFound(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND", reportedCode, message, payload)
     class ServerQvacModelRegistryQueryFailed(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -385,6 +387,7 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "PLUGIN_REQUEST_VALIDATION_FAILED" && (code == null || code == 53852) -> QvacKnownException.ServerPluginRequestValidationFailed(message, payload, code)
     name == "PLUGIN_RESPONSE_VALIDATION_FAILED" && (code == null || code == 53853) -> QvacKnownException.ServerPluginResponseValidationFailed(message, payload, code)
     name == "PROJECTION_MODEL_REQUIRED" && (code == null || code == 52204) -> QvacKnownException.ServerProjectionModelRequired(message, payload, code)
+    name == "QVAC_MODEL_REGISTRY_BUSY" && (code == null || code == 53952) -> QvacKnownException.ServerQvacModelRegistryBusy(message, payload, code)
     name == "QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND" && (code == null || code == 53951) -> QvacKnownException.ServerQvacModelRegistryModelNotFound(message, payload, code)
     name == "QVAC_MODEL_REGISTRY_QUERY_FAILED" && (code == null || code == 53950) -> QvacKnownException.ServerQvacModelRegistryQueryFailed(message, payload, code)
     name == "RAG_CHUNK_FAILED" && (code == null || code == 52810) -> QvacKnownException.ServerRagChunkFailed(message, payload, code)

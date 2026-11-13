@@ -15,7 +15,7 @@ import { getEngineLogger } from '@/logging/index'
 import { getRequestRegistry, withRequestContext } from '@/runtime/index'
 import { generateRandomRequestId } from '@/runtime/request-id'
 import { resolveSessionId } from '@/runtime/session-id'
-import { InferenceCancelledError } from '@/errors/index'
+import { InferenceCancelledError, ModelRegistryBusyError } from '@/errors/index'
 
 const logger = getEngineLogger()
 
@@ -114,12 +114,14 @@ export async function handleDownloadAsset(
   } catch (error: unknown) {
     // Mirror the load-model handler's cancel contract: a typed cancel
     // bubbles up as the rejection so client-side callers can branch on
-    // `instanceof InferenceCancelledError`. Every other error keeps
-    // the legacy `success: false` envelope.
+    // `instanceof InferenceCancelledError`, and so does a busy registry.
+    // Every other error keeps the legacy `success: false` envelope.
     if (error instanceof InferenceCancelledError) {
       log.info(`downloadAsset cancelled requestId=${requestId}`)
       throw error
     }
+    // Typed so callers can tell another process has the registry.
+    if (error instanceof ModelRegistryBusyError) throw error
     logger.error('Error downloading asset:', error)
     return {
       type: 'downloadAsset',

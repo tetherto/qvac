@@ -1,7 +1,7 @@
 import { addCodes, isCodeRegistered, type ErrorCodesMap } from '@qvac/error'
 // Load @qvac/inference's registration first, then add only codes not already present, so a
 // shared @qvac/error instance (packed consumers, the Bare worker) is not double-registered.
-import '@qvac/inference/surface'
+import { modelRegistryBusyMessage } from '@qvac/inference/surface'
 
 // Server-side error codes (52,001-54,000 range for this SDK)
 export const SDK_SERVER_ERROR_CODES = {
@@ -145,7 +145,8 @@ export const SDK_SERVER_ERROR_CODES = {
   // QVAC Model Registry Operations (53,950-54,000)
   // Note: Registry client errors (19,001-20,000) are re-thrown directly
   QVAC_MODEL_REGISTRY_QUERY_FAILED: 53950,
-  QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND: 53951
+  QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND: 53951,
+  QVAC_MODEL_REGISTRY_BUSY: 53952
 } as const
 
 const serverErrorDefinitions: ErrorCodesMap = {
@@ -708,6 +709,11 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: 'QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND',
     message: (registrySource: string, registryPath: string) =>
       `QVAC model registry has no model at ${registrySource}/${registryPath}`
+  },
+  // Owned by @qvac/inference, which registers it first; kept here for the contract export.
+  [SDK_SERVER_ERROR_CODES.QVAC_MODEL_REGISTRY_BUSY]: {
+    name: 'QVAC_MODEL_REGISTRY_BUSY',
+    message: modelRegistryBusyMessage
   }
 }
 

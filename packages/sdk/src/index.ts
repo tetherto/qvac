@@ -416,6 +416,7 @@ export {
   ContextOverflowError,
   type ContextOverflowErrorSizes,
   ModelRegistryModelNotFoundError,
+  ModelRegistryBusyError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,

@@ -50,6 +50,7 @@ _CODE_DELETE_CACHE_FAILED = _CODES["DELETE_CACHE_FAILED"]
 _CODE_INVALID_DELETE_CACHE_PARAMS = _CODES["INVALID_DELETE_CACHE_PARAMS"]
 _CODE_MODEL_REGISTRY_QUERY_FAILED = _CODES["QVAC_MODEL_REGISTRY_QUERY_FAILED"]
 _CODE_MODEL_REGISTRY_MODEL_NOT_FOUND = _CODES["QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND"]
+_CODE_MODEL_REGISTRY_BUSY = _CODES["QVAC_MODEL_REGISTRY_BUSY"]
 _CODE_INVALID_RESPONSE_TYPE = _CODES["INVALID_RESPONSE_TYPE"]
 _CODE_STREAM_ENDED_WITHOUT_RESPONSE = _CODES["STREAM_ENDED_WITHOUT_RESPONSE"]
 _CODE_MODEL_TYPE_REQUIRED = _CODES["MODEL_TYPE_REQUIRED"]
@@ -417,6 +418,32 @@ class ModelRegistryModelNotFoundError(QvacError):
         )
 
 
+class ModelRegistryBusyError(QvacError):
+    """Another QVAC process kept the model registry longer than the call waits.
+
+    ``holder`` is ``"legacy"`` when that process runs an older SDK, which keeps
+    the registry until it exits, and ``"current"`` when it will hand the
+    registry over once its own registry work ends.
+    """
+
+    def __init__(
+        self,
+        holder: str,
+        waited_ms: int,
+        *,
+        cause: Any = None,
+        message: str | None = None,
+    ) -> None:
+        self.holder = holder
+        self.waited_ms = waited_ms
+        super().__init__(
+            message or "another QVAC process is using the model registry",
+            name="QVAC_MODEL_REGISTRY_BUSY",
+            code=_CODE_MODEL_REGISTRY_BUSY,
+            cause=cause,
+        )
+
+
 class InvalidDeleteCacheParamsError(QvacError):
     def __init__(self, *, cause: Any = None) -> None:
         super().__init__(
@@ -733,6 +760,16 @@ def _reconstruct_request_not_found(response: dict[str, Any]) -> QvacError:
     )
 
 
+def _reconstruct_registry_busy(response: dict[str, Any]) -> QvacError:
+    fields = _typed_fields(response)
+    return ModelRegistryBusyError(
+        "legacy" if _str_field(fields, "holder") == "legacy" else "current",
+        _opt_num_field(fields, "waitedMs") or 0,
+        cause=response.get("cause"),
+        message=_opt_str(response, "message"),
+    )
+
+
 def _reconstruct_registry_model_not_found(response: dict[str, Any]) -> QvacError:
     fields = _typed_fields(response)
     return ModelRegistryModelNotFoundError(
@@ -857,6 +894,7 @@ _RECONSTRUCTORS: dict[str, Callable[[dict[str, Any]], QvacError]] = {
     "REQUEST_REJECTED_BY_POLICY": _reconstruct_request_rejected,
     "CONTEXT_OVERFLOW": _reconstruct_context_overflow,
     "QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND": _reconstruct_registry_model_not_found,
+    "QVAC_MODEL_REGISTRY_BUSY": _reconstruct_registry_busy,
     "TRANSLATION_FAILED": _reconstruct_translation_failed,
 }
 
@@ -912,6 +950,7 @@ __all__ = [
     "ModelUnloadFailedError",
     "ModelRegistryQueryFailedError",
     "ModelRegistryModelNotFoundError",
+    "ModelRegistryBusyError",
     "InvalidDeleteCacheParamsError",
     "InvalidCancelParamsError",
     "DeleteCacheFailedError",

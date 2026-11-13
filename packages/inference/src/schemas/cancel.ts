@@ -46,6 +46,7 @@ const cancelKindSchema = z
     'finetune',
     'loadModel',
     'downloadAsset',
+    'modelRegistry',
     'rpcServer',
     'rpcDiscovery',
     'rag'

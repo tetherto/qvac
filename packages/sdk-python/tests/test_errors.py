@@ -7,6 +7,7 @@ import pytest
 
 from tetherto.qvac_sdk.errors import (
     ContextOverflowError,
+    ModelRegistryBusyError,
     ModelRegistryModelNotFoundError,
     QvacError,
     RequestIdConflictError,
@@ -68,6 +69,20 @@ def test_registry_model_not_found_reconstructs():
     assert isinstance(err, ModelRegistryModelNotFoundError)
     assert err.registry_source == "hf"
     assert err.registry_path == "org/m.gguf"
+
+
+def test_registry_busy_reconstructs():
+    err = reconstruct_error(
+        _envelope(
+            name="QVAC_MODEL_REGISTRY_BUSY",
+            code=53952,
+            typedFields={"holder": "legacy", "waitedMs": 30000},
+        )
+    )
+    assert isinstance(err, ModelRegistryBusyError)
+    assert err.holder == "legacy"
+    assert err.waited_ms == 30000
+    assert err.code == 53952
 
 
 def test_request_rejected_by_policy_reconstructs_all_fields():

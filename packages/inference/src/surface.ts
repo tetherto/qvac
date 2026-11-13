@@ -218,6 +218,7 @@ export {
   RAGWorkspaceBusyError,
   ModelNotLoadedError,
   ModelRegistryModelNotFoundError,
+  ModelRegistryBusyError,
   TranslationFailedError,
   InvalidSeedFromParamsError,
   KvCacheSeedSourceNotFoundError,
