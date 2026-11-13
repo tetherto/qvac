@@ -910,7 +910,8 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
 
     // `onLogitsReady` already streamed this token, so it is decoded even when
     // a cancel landed meanwhile: a cancel keeps everything the caller
-    // received. The loop-top check then routes the cancel to `onCancel`.
+    // received. The next stop check, at the loop top or after the loop, then
+    // routes the cancel to `onCancel`.
     llamaBatchClear(*batch);
     llamaBatchAdd(*batch, step.token, nPast_, {seqId_}, true);
 
@@ -1208,7 +1209,7 @@ SequenceStepResult TextLlmContext::sampleFromLogits(
     LlamaBatch* inlineDecodeBatch) {
   if (stopGeneration_.load()) {
     // Leave `stopGeneration_` set so the post-loop `onCancel` runs;
-    // do NOT emit EOT since the rollback drops all sampled tokens.
+    // do NOT emit EOT, the cancel path settles the request itself.
     return {.finished = true};
   }
 

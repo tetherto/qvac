@@ -8,7 +8,8 @@
   dropped that token from the context and the cache, so `CacheTokens` could
   stay one short of what the caller received. The streamed token is now
   decoded before the cancel settles on the single-prompt text and multimodal
-  paths, with and without speculative decoding.
+  paths, with and without speculative decoding
+  ([#5744](https://github.com/tetherto/qvac/pull/5744)).
 
 ## [0.70.1] - 2026-11-11
 

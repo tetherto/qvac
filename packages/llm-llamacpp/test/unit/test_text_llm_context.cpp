@@ -23,6 +23,8 @@ namespace fs = std::filesystem;
 
 namespace {
 
+constexpr int K_FIXTURE_N_PREDICT = 10;
+
 fs::path uniqueTextCachePath(const char* prefix) {
   const auto id =
       std::chrono::high_resolution_clock::now().time_since_epoch().count();
@@ -52,7 +54,7 @@ protected:
     config_files["device"] = test_common::getTestDevice();
     config_files["ctx_size"] = "2048";
     config_files["gpu_layers"] = test_common::getTestGpuLayers();
-    config_files["n_predict"] = "10";
+    config_files["n_predict"] = std::to_string(K_FIXTURE_N_PREDICT);
 
     test_model_path = test_common::BaseTestModelPath::get();
     test_projection_path = "";
@@ -488,8 +490,9 @@ TEST_F(TextLlmContextTest, CancelFromCallbackKeepsStreamedToken) {
   const int generatedTokens =
       static_cast<int>(getStatValue(stats, "generatedTokens"));
   EXPECT_GT(generatedTokens, 0);
-  // Below the fixture's `n_predict` (10): the cancel stopped generation.
-  EXPECT_LT(generatedTokens, 10) << "the cancel must stop generation";
+  // Below the fixture's `n_predict`: the cancel stopped generation.
+  EXPECT_LT(generatedTokens, K_FIXTURE_N_PREDICT)
+      << "the cancel must stop generation";
   EXPECT_EQ(cacheTokens, promptTokens + generatedTokens)
       << "a cancel must keep every streamed token resident";
 }
