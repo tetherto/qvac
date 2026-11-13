@@ -143,3 +143,19 @@ test('wire response: events required, no legacy fields', (t) => {
   bad({ type: 'completionStream', events: [], stats: { tokensPerSecond: 1 } })
   bad({ type: 'completionStream', events: [], toolCalls: [] })
 })
+
+test('completionStats event: preserves optional backendName and rejects invalid types', (t) => {
+  for (const backendName of ['cpu', 'metal', 'cuda,vulkan']) {
+    const result = completionEventSchema.parse({
+      type: 'completionStats',
+      seq: 0,
+      stats: { backendName }
+    })
+    t.ok(result.type === 'completionStats')
+    if (result.type === 'completionStats') t.is(result.stats.backendName, backendName)
+  }
+  t.alike(completionStatsSchema.parse({ backendDevice: 'cpu' }), { backendDevice: 'cpu' })
+  for (const backendName of [1, null, ['metal']]) {
+    t.is(completionStatsSchema.safeParse({ backendName }).success, false)
+  }
+})

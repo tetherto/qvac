@@ -175,6 +175,12 @@ export const embedStatsSchema = z.object({
     .enum(['cpu', 'gpu'])
     .optional()
     .describe('Compute backend used for inference. llama.cpp embedding models only.'),
+  backendName: z
+    .string()
+    .optional()
+    .describe(
+      'Backend families used by the primary model after loading and fitting, in lowercase. Multiple families are sorted and comma-separated. Optional with older addons. llama.cpp embedding models only.'
+    ),
   contextSize: z
     .number()
     .optional()
