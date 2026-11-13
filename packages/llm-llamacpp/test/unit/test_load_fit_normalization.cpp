@@ -489,6 +489,36 @@ TEST_F(LoadFitNormalizationTest, ExplicitBatchPollOverridesPrimaryPoll) {
   EXPECT_EQ(result.params.cpuparams_batch.poll, 1U);
 }
 
+TEST_F(LoadFitNormalizationTest, KvUnifiedSharesThePoolWhenAsked) {
+  const auto load = [this](lfn::ConfigMap config) {
+    return lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "none"}));
+  };
+  EXPECT_FALSE(load(baseConfig()).params.kv_unified);
+  for (const std::string key : {"kv_unified", "kv-unified"}) {
+    auto on = baseConfig();
+    on[key] = "true";
+    EXPECT_TRUE(load(std::move(on)).params.kv_unified) << key;
+    auto off = baseConfig();
+    off[key] = "off";
+    EXPECT_FALSE(load(std::move(off)).params.kv_unified) << key;
+    auto bad = baseConfig();
+    bad[key] = "maybe";
+    EXPECT_THROW(
+        static_cast<void>(load(std::move(bad))), qvac_errors::StatusError)
+        << key;
+  }
+  auto both = baseConfig();
+  both["kv_unified"] = "true";
+  both["kv-unified"] = "true";
+  EXPECT_THROW(
+      static_cast<void>(load(std::move(both))), qvac_errors::StatusError);
+}
+
 TEST_F(LoadFitNormalizationTest, RejectsPollLevelsOutsideZeroToHundred) {
   for (const std::string key : {"poll", "poll-batch", "poll_batch"}) {
     for (const std::string value : {"-1", "101", "4294967396", "", "5x"}) {

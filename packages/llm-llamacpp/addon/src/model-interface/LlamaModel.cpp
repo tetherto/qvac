@@ -507,7 +507,10 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
             state.llmContext_->visionContext(),
             state.cacheCheckpointPolicy_,
             state.cacheShareAcrossKeys_,
-            maxImagePixels_));
+            maxImagePixels_),
+        // A pure recurrent model keeps one cell per sequence: nothing to share.
+        cparams.kv_unified &&
+            (!llama_model_is_recurrent(mdl) || llama_model_is_hybrid(mdl)));
     scheduler->setRamTier(state.ramTier_);
     scheduler->setFileIndex(state.fileIndex_);
     return scheduler;
