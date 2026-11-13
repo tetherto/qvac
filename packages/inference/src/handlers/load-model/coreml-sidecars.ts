@@ -241,13 +241,22 @@ export async function linkAwayFromCoremlBundles(
   const dir = path.join(tempDir, `qvac-gguf-${generateShortHash(ggufPath)}`)
   await fsPromises.mkdir(dir, { recursive: true })
   const link = path.join(dir, path.basename(ggufPath))
-  if ((await readLink(link)) === ggufPath) return link
-  await fsPromises.rm(link, { force: true })
   try {
     await fsPromises.symlink(ggufPath, link)
+    return link
+  } catch {
+    // The link exists already, possibly from a concurrent load of this file.
+    if ((await readLink(link)) === ggufPath) return link
+  }
+  // Something else sits at the link path. Replace it in one rename so that a
+  // load which already returned this path never sees it missing.
+  const staged = `${link}.${generateShortHash(`${link}:${Date.now()}:${Math.random()}`)}`
+  await fsPromises.symlink(ggufPath, staged)
+  try {
+    await fsPromises.rename(staged, link)
   } catch (error) {
-    // Another load of the same file may have created the link first.
-    if ((await readLink(link)) !== ggufPath) throw error
+    await fsPromises.rm(staged, { force: true })
+    throw error
   }
   return link
 }
