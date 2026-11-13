@@ -1,14 +1,15 @@
 #include <ggml-backend.h>
 #include <gtest/gtest.h>
+#include <qvac-fabric.h>
 
 namespace {
 
 class TtsBackendEnvironment : public ::testing::Environment {
 public:
   void SetUp() override {
-    ggml_backend_load_all_from_path(QVAC_TTS_TEST_BACKENDS_DIR);
+    qvac_fabric_load_backends();
     ASSERT_NE(ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU), nullptr)
-        << "No CPU backend found in " << QVAC_TTS_TEST_BACKENDS_DIR;
+        << "No CPU backend found in " << qvac_fabric_backends_dir();
   }
 };
 
