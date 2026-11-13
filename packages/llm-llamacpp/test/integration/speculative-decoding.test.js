@@ -514,8 +514,8 @@ safeTest('an external head without MTP layers fails to load', { timeout: 300_000
   await model.unload().catch(() => {})
 })
 
-// A head for another model is refused before fabric loads it; fabric itself
-// aborts on a width mismatch and does not check the vocabulary.
+// A head for another model is refused from both GGUF headers, before any
+// weights are read.
 // prestage-ignore: Qwen3-0.6B-Q8_0.gguf — desktop-only; the test skips on mobile
 safeTest(
   'an external head for another model fails to load',
@@ -526,7 +526,7 @@ safeTest(
       config: baseConfig({ 'spec-draft-model': await modelPath(MTP_MODEL) }),
       logger: null
     })
-    await t.exception(model.load(), /the MTP head '.*' does not match the model/)
+    await t.exception(model.load(), /the draft model '.*' does not match the model/)
     await model.unload().catch(() => {})
   }
 )
