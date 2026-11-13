@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Fixes
+
+- Fix corrupted images on Android Adreno GPUs (OpenCL backend). Stable
+  Diffusion images generated with a CFG scale above 1 came out as a flat color
+  field, and with flash attention enabled, large images such as SD 2.1 at
+  768x768 came out as a mosaic
+  ([#5722](https://github.com/tetherto/qvac/pull/5722)).
+
 ## [0.35.1] - 2026-11-09
 
 ### Fixes

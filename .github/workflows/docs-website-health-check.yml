@@ -65,6 +65,13 @@ jobs:
           node-version: lts/*
 
       - name: Probe docs.qvac.tether.io
+        # Transient failures (network error, timeout, 429, 5xx) are retried
+        # inside the script; that is what absorbs the nightly drops. The likely
+        # cause: at concurrency 12 the edge dropped the runner's in-flight
+        # connections once the redirect section (2–3 requests per URL) spiked
+        # the request rate, failing ~10 URLs with `fetch failed` per night.
+        # Daytime runs at 12 pass, so this is unconfirmed; the lower
+        # concurrency only limits how many requests a drop hits at once.
         # `_redirects` is pulled from the `docs-production` branch (what Sevalla
         # actually serves); the checked-out copy on the default branch is the
         # offline fallback. `github.repository` keeps forks self-contained.
@@ -75,14 +82,16 @@ jobs:
             --origin https://docs.qvac.tether.io \
             --redirects-url "$REDIRECTS_URL" \
             --redirects-file docs/website/public/_redirects \
-            --concurrency 12
+            --concurrency 4
 
   notify-on-failure:
     name: Open or update tracking issue
     needs: probe-production
     # Only the scheduled trigger should file issues. Manual `workflow_dispatch`
-    # runs (used for testing) intentionally stay silent.
-    if: failure() && github.event_name == 'schedule'
+    # runs (used for testing) intentionally stay silent. `always()` plus an
+    # explicit result check also covers a probe that hit its timeout: a
+    # timed-out job ends `cancelled`, which `failure()` does not match.
+    if: always() && github.event_name == 'schedule' && needs.probe-production.result != 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -95,17 +104,35 @@ jobs:
 
       - name: Open or update tracking issue
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        env:
+          PROBE_RESULT: ${{ needs.probe-production.result }}
         with:
           script: |
+            // `always()` also runs this job when the probe timed out, was
+            // cancelled by hand or lost its runner, so only a `failure` claims
+            // broken pages. Any other result points at the run log instead.
+            const probeResult = process.env.PROBE_RESULT;
+            const probeFailed = probeResult === 'failure';
+            const headline = probeFailed
+              ? 'The daily docs health-check found one or more broken pages on https://docs.qvac.tether.io.'
+              : `The daily docs health-check did not finish (probe job result: \`${probeResult}\`), so the run is incomplete.`;
             const title = 'Docs site health-check detected broken pages';
             const label = 'docs-health';
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const details = probeFailed
+              ? [
+                  `- The full list of broken URLs is in the run's **Probe production docs** job (step summary + logs). It is deliberately kept out of this issue and out of Slack.`,
+                  `- Triage: a 404 usually means a page was removed/renamed without a matching \`301\` in \`docs/website/public/_redirects\`, or a stale entry in the sitemap. Fix the redirect or the source page and re-run this workflow to confirm.`,
+                ]
+              : [
+                  `- Check the **Probe production docs** job log: any broken URLs found before it stopped are listed there as \`broken:\` lines. A timeout usually means many URLs were hanging, which points to a real outage.`,
+                  `- If the job was cancelled by hand or lost its runner, re-run this workflow to get a complete result.`,
+                ];
             const body = [
-              `The daily docs health-check found one or more broken pages on https://docs.qvac.tether.io.`,
+              headline,
               ``,
               `- Run: ${runUrl}`,
-              `- The full list of broken URLs is in the run's **Probe production docs** job (step summary + logs). It is deliberately kept out of this issue and out of Slack.`,
-              `- Triage: a 404 usually means a page was removed/renamed without a matching \`301\` in \`docs/website/public/_redirects\`, or a stale entry in the sitemap. Fix the redirect or the source page and re-run this workflow to confirm.`,
+              ...details,
             ].join('\n');
 
             const { data: existing } = await github.rest.issues.listForRepo({

@@ -88,7 +88,7 @@ export const whisperPlugin = definePlugin({
       // is interrupted on the currently-running transcription.
       cancel: { scope: 'model', hard: true },
 
-      handler: async function* (request) {
+      handler: async function* (request, _inputStream, context) {
         const metadata = request.metadata === true
         const stream = metadata
           ? transcribe(
@@ -100,7 +100,9 @@ export const whisperPlugin = definePlugin({
                 maxNewTokens: request.maxNewTokens,
                 metadata: true
               },
-              request.requestId
+              request.requestId,
+              request.sessionId,
+              context
             )
           : transcribe(
               {
@@ -110,7 +112,9 @@ export const whisperPlugin = definePlugin({
                 hotwords: request.hotwords,
                 maxNewTokens: request.maxNewTokens
               },
-              request.requestId
+              request.requestId,
+              request.sessionId,
+              context
             )
 
         try {
@@ -157,7 +161,7 @@ export const whisperPlugin = definePlugin({
       // route through the whisper.cpp addon.
       cancel: { scope: 'model', hard: true },
 
-      handler: async function* (request, inputStream) {
+      handler: async function* (request, inputStream, context) {
         const streamOpts = {
           ...(request.emitVadEvents !== undefined && {
             emitVadEvents: request.emitVadEvents
@@ -178,7 +182,9 @@ export const whisperPlugin = definePlugin({
               request.prompt,
               true,
               streamOpts,
-              request.requestId
+              request.requestId,
+              request.sessionId,
+              context
             )
           : transcribeStream(
               request.modelId,
@@ -186,7 +192,9 @@ export const whisperPlugin = definePlugin({
               request.prompt,
               false,
               streamOpts,
-              request.requestId
+              request.requestId,
+              request.sessionId,
+              context
             )
 
         try {

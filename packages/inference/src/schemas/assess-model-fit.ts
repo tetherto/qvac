@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { modelSrcInputSchema } from '@/schemas/model-src-utils'
 import { modelTypeInputSchema } from '@/schemas/model-types'
 import { transcribeParamsSchema } from '@/schemas/transcription'
+import { sessionScopedRequestSchema } from '@/schemas/request-base'
 
 export const transcriptionFitWorkloadSchema = transcribeParamsSchema
   .pick({ prompt: true, hotwords: true, maxNewTokens: true })
@@ -177,9 +178,11 @@ export const modelFitProbeSchema = z
   })
   .meta({ title: 'ModelFitProbe' })
 
-export const assessModelFitRequestSchema = assessModelFitInputSchema.extend({
-  type: z.literal('assessModelFit')
-})
+export const assessModelFitRequestSchema = assessModelFitInputSchema
+  .extend({
+    type: z.literal('assessModelFit')
+  })
+  .extend(sessionScopedRequestSchema.shape)
 
 export const assessModelFitResponseSchema = assessModelFitResultSchema.extend({
   type: z.literal('assessModelFit')

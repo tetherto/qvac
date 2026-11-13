@@ -1,5 +1,5 @@
 import { getRagInstance } from '@/rag/rag-workspace-manager'
-import { embed } from '@/plugins/ops/embed'
+import { createWorkspaceEmbeddingFunction } from '@/rag/embedding-scope'
 import { ragIngestParamsSchema, type RagIngestParams } from '@/schemas/index'
 import type { AbortSignal } from 'bare-abort-controller'
 import type { IngestOpts, IngestStage } from '@qvac/rag'
@@ -13,12 +13,11 @@ export async function ingest(params: RagIngestParams, options?: IngestHandlerOpt
   const { modelId, documents, chunk, chunkOpts, workspace, progressInterval } =
     ragIngestParamsSchema.parse(params)
 
-  async function embeddingFunction(text: string | string[]) {
-    const result = await embed({ modelId, text })
-    return result.embedding
-  }
-
-  const rag = await getRagInstance(modelId, embeddingFunction, workspace)
+  const rag = await getRagInstance(
+    modelId,
+    createWorkspaceEmbeddingFunction(modelId, workspace),
+    workspace
+  )
 
   const ingestOpts: IngestOpts = {
     chunk,

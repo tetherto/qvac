@@ -32,8 +32,9 @@ export interface ClassificationFitRequest {
   marginBytes?: number;
   /**
    * BridgeDepth input size; ignored for the other models. The default
-   * 1280x720 is the largest input the model authors recommend; they suggest
-   * downsampling anything above 720p first. The addon does not downsample.
+   * 1280x720 is the largest size the model runs at (720x1280 for a portrait
+   * pair, which measures the same). A larger input is downsampled to fit
+   * inside it and sized that way, plus the host buffers at the input size.
    */
   workload?: ClassificationFitWorkload;
 }
