@@ -276,7 +276,23 @@ test('a linked GGUF has no Core ML bundle beside it', async (t) => {
   t.is(fs.readFileSync(link, 'utf8'), GGUF, 'it reads the GGUF')
   t.absent(fs.existsSync(path.join(path.dirname(link), `${TDT_V3}-encoder.mlmodelc`)))
   t.alike(treeOf(cacheDir), before, 'nothing is written beside the GGUF')
-  t.not(await linkAwayFromCoremlBundles(gguf, linkRoot), link, 'each load gets its own directory')
+  t.is(await linkAwayFromCoremlBundles(gguf, linkRoot), link, 'a later load reuses the same link')
+  t.is(fs.readdirSync(linkRoot).length, 1, 'repeated loads leave one directory')
+})
+
+test('a stale link to another file is replaced', async (t) => {
+  const linkRoot = tempCache(t)
+  const cacheDir = tempCache(t)
+  const model = await stagedModel(`${TDT_V3}.q8_0.gguf`)
+  const setDir = stageRetiredSet(cacheDir, model)
+  const gguf = path.join(setDir, `${TDT_V3}.q8_0.gguf`)
+
+  const link = await linkAwayFromCoremlBundles(gguf, linkRoot)
+  fs.rmSync(link)
+  fs.symlinkSync(path.join(cacheDir, 'elsewhere.gguf'), link)
+  t.is(await linkAwayFromCoremlBundles(gguf, linkRoot), link, 'the same path is returned')
+  t.is(fs.readlinkSync(link), gguf, 'the link points at the GGUF again')
+  t.is(fs.readFileSync(link, 'utf8'), GGUF, 'it reads the GGUF')
 })
 
 test('clearing touches nothing off Apple or for a model whose set is current', async (t) => {

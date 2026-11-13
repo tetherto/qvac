@@ -229,18 +229,35 @@ export async function clearRetiredCoremlSet(
 }
 
 /**
- * A path to `ggufPath` in a new directory under `tempDir`, with no Core ML
- * bundle beside it: the engine looks for a bundle only next to the path it
- * loads. Nothing is written beside `ggufPath`.
+ * A path to `ggufPath` under `tempDir`, with no Core ML bundle beside it: the
+ * engine looks for a bundle only next to the path it loads. Nothing is written
+ * beside `ggufPath`. The directory is named after `ggufPath`, so every load of
+ * the same file reuses one link instead of leaving a new directory behind.
  */
 export async function linkAwayFromCoremlBundles(
   ggufPath: string,
   tempDir = os.tmpdir()
 ): Promise<string> {
-  const dir = await fsPromises.mkdtemp(path.join(tempDir, 'qvac-gguf-'))
+  const dir = path.join(tempDir, `qvac-gguf-${generateShortHash(ggufPath)}`)
+  await fsPromises.mkdir(dir, { recursive: true })
   const link = path.join(dir, path.basename(ggufPath))
-  await fsPromises.symlink(ggufPath, link)
+  if ((await readLink(link)) === ggufPath) return link
+  await fsPromises.rm(link, { force: true })
+  try {
+    await fsPromises.symlink(ggufPath, link)
+  } catch (error) {
+    // Another load of the same file may have created the link first.
+    if ((await readLink(link)) !== ggufPath) throw error
+  }
   return link
+}
+
+async function readLink(linkPath: string): Promise<string | undefined> {
+  try {
+    return await fsPromises.readlink(linkPath)
+  } catch {
+    return undefined
+  }
 }
 
 // The size and checksum checks the loader runs on a cached file.
