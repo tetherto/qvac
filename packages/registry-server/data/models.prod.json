@@ -10259,6 +10259,94 @@
     "link": "https://github.com/tetherto/qvac/tree/main/packages/classification-ggml"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 1/8; imatrix-calibrated Q4_K_M quantization of deepseek-ai/DeepSeek-V4.1-Flash-1017. Pair with the F16 mmproj entry for image input.",
+    "link": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00002-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 2/8; imatrix-calibrated Q4_K_M quantization of deepseek-ai/DeepSeek-V4.1-Flash-1017. Pair with the F16 mmproj entry for image input.",
+    "link": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00003-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 3/8; imatrix-calibrated Q4_K_M quantization of deepseek-ai/DeepSeek-V4.1-Flash-1017. Pair with the F16 mmproj entry for image input.",
+    "link": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00004-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 4/8; imatrix-calibrated Q4_K_M quantization of deepseek-ai/DeepSeek-V4.1-Flash-1017. Pair with the F16 mmproj entry for image input.",
+    "link": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00005-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 5/8; imatrix-calibrated Q4_K_M quantization of deepseek-ai/DeepSeek-V4.1-Flash-1017. Pair with the F16 mmproj entry for image input.",
+    "link": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00006-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 6/8; imatrix-calibrated Q4_K_M quantization of deepseek-ai/DeepSeek-V4.1-Flash-1017. Pair with the F16 mmproj entry for image input.",
+    "link": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00007-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 7/8; imatrix-calibrated Q4_K_M quantization of deepseek-ai/DeepSeek-V4.1-Flash-1017. Pair with the F16 mmproj entry for image input.",
+    "link": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00008-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4.1 Flash 1017 552B-A16B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "552B-A16B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
+    "notes": "shard 8/8; imatrix-calibrated Q4_K_M quantization of deepseek-ai/DeepSeek-V4.1-Flash-1017. Pair with the F16 mmproj entry for image input.",
+    "link": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017"
+  },
+  {
     "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00001-of-00009.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "DeepSeek V4.1 Flash 1017 552B-A16B UD-Q4_K_XL model",
@@ -10267,7 +10355,10 @@
     "licenseId": "MIT",
     "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
     "notes": "shard 1/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
-    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    "deprecationReason": "Outputs gibberish, a known upstream llama.cpp issue with these GGUFs (https://github.com/ggml-org/llama.cpp/issues/31385). Use the imatrix Q4_K_M build."
   },
   {
     "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00002-of-00009.gguf",
@@ -10278,7 +10369,10 @@
     "licenseId": "MIT",
     "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
     "notes": "shard 2/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
-    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    "deprecationReason": "Outputs gibberish, a known upstream llama.cpp issue with these GGUFs (https://github.com/ggml-org/llama.cpp/issues/31385). Use the imatrix Q4_K_M build."
   },
   {
     "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00003-of-00009.gguf",
@@ -10289,7 +10383,10 @@
     "licenseId": "MIT",
     "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
     "notes": "shard 3/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
-    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    "deprecationReason": "Outputs gibberish, a known upstream llama.cpp issue with these GGUFs (https://github.com/ggml-org/llama.cpp/issues/31385). Use the imatrix Q4_K_M build."
   },
   {
     "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00004-of-00009.gguf",
@@ -10300,7 +10397,10 @@
     "licenseId": "MIT",
     "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
     "notes": "shard 4/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
-    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    "deprecationReason": "Outputs gibberish, a known upstream llama.cpp issue with these GGUFs (https://github.com/ggml-org/llama.cpp/issues/31385). Use the imatrix Q4_K_M build."
   },
   {
     "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00005-of-00009.gguf",
@@ -10311,7 +10411,10 @@
     "licenseId": "MIT",
     "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
     "notes": "shard 5/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
-    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    "deprecationReason": "Outputs gibberish, a known upstream llama.cpp issue with these GGUFs (https://github.com/ggml-org/llama.cpp/issues/31385). Use the imatrix Q4_K_M build."
   },
   {
     "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00006-of-00009.gguf",
@@ -10322,7 +10425,10 @@
     "licenseId": "MIT",
     "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
     "notes": "shard 6/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
-    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    "deprecationReason": "Outputs gibberish, a known upstream llama.cpp issue with these GGUFs (https://github.com/ggml-org/llama.cpp/issues/31385). Use the imatrix Q4_K_M build."
   },
   {
     "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00007-of-00009.gguf",
@@ -10333,7 +10439,10 @@
     "licenseId": "MIT",
     "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
     "notes": "shard 7/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
-    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    "deprecationReason": "Outputs gibberish, a known upstream llama.cpp issue with these GGUFs (https://github.com/ggml-org/llama.cpp/issues/31385). Use the imatrix Q4_K_M build."
   },
   {
     "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00008-of-00009.gguf",
@@ -10344,7 +10453,10 @@
     "licenseId": "MIT",
     "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
     "notes": "shard 8/9; contains the stock MXFP8 Engram, which requires compatible Fabric tensor support; pair with the F16 mmproj entry for image input.",
-    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    "deprecationReason": "Outputs gibberish, a known upstream llama.cpp issue with these GGUFs (https://github.com/ggml-org/llama.cpp/issues/31385). Use the imatrix Q4_K_M build."
   },
   {
     "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/UD-Q4_K_XL/DeepSeek-V4.1-Flash-1017-UD-Q4_K_XL-00009-of-00009.gguf",
@@ -10355,7 +10467,10 @@
     "licenseId": "MIT",
     "tags": ["generation", "multimodal", "deepseek-v4.1", "instruct", "shard"],
     "notes": "shard 9/9; pair with the F16 mmproj entry for image input. The stock shard 8 MXFP8 Engram requires compatible Fabric tensor support.",
-    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF",
+    "deprecated": true,
+    "replacedBy": "s3:///qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    "deprecationReason": "Outputs gibberish, a known upstream llama.cpp issue with these GGUFs (https://github.com/ggml-org/llama.cpp/issues/31385). Use the imatrix Q4_K_M build."
   },
   {
     "source": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/dspark-DeepSeek-V4.1-Flash-1017-Q8_0.gguf",
