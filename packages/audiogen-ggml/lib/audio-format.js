@@ -230,7 +230,16 @@ function createWriteIO(ffmpeg) {
     }
   })
 
-  return { io, getData: () => Buffer.from(buf.subarray(0, size)) }
+  // OutputFormatContext takes the handle via transfer() before it can throw; track the new owner.
+  let owner = io
+  const transfer = io.transfer
+  io.transfer = () => (owner = transfer.call(io))
+
+  return {
+    io,
+    getData: () => Buffer.from(buf.subarray(0, size)),
+    destroy: () => owner.destroy()
+  }
 }
 
 // A read-only in-memory source for FFmpeg (feeds the decoder our WAV bytes).
@@ -307,109 +316,145 @@ function encodeWithFfmpeg(pcm, format, { sampleRate = 48000, channels = 2 } = {}
   const outRate = spec.rate || sampleRate
   const sampleFormat = C.sampleFormats[spec.sampleFormat]
 
-  // --- decode side: wrap PCM as WAV so ffmpeg produces clean input frames ---
-  const wav = pcmToWav(pcm, { sampleRate, channels })
-  const inFmt = new ffmpeg.InputFormatContext(createReadIO(ffmpeg, wav))
-  const inStream = inFmt.streams[0]
-  const decoder = inStream.decoder()
-  decoder.open()
+  // bare-ffmpeg handles have no GC finalizer: until destroyed, the IOContexts hold
+  // strong refs to their callbacks, which pin the input WAV and the output buffer.
+  let inFmt = null
+  let decoder = null
+  let cc = null
+  let sink = null
+  let ofc = null
+  let resampler = null
+  let fifo = null
+  let packet = null
+  let inPacket = null
+  let raw = null
 
-  // --- encoder ---
-  const encoder = new ffmpeg.Encoder(spec.encoder)
-  const cc = new ffmpeg.CodecContext(encoder)
-  cc.sampleRate = outRate
-  cc.sampleFormat = sampleFormat
-  cc.channelLayout = ffmpeg.ChannelLayout.from(layout)
-  cc.timeBase = new ffmpeg.Rational(1, outRate)
-  if (spec.experimental) {
-    try {
-      cc.setOption('strict', 'experimental')
-    } catch {
-      /* older bindings: option may already default to permissive */
+  try {
+    // --- decode side: wrap PCM as WAV so ffmpeg produces clean input frames ---
+    const wav = pcmToWav(pcm, { sampleRate, channels })
+    inFmt = new ffmpeg.InputFormatContext(createReadIO(ffmpeg, wav))
+    const inStream = inFmt.streams[0]
+    decoder = inStream.decoder()
+    decoder.open()
+
+    // --- encoder ---
+    const encoder = new ffmpeg.Encoder(spec.encoder)
+    cc = new ffmpeg.CodecContext(encoder)
+    cc.sampleRate = outRate
+    cc.sampleFormat = sampleFormat
+    cc.channelLayout = ffmpeg.ChannelLayout.from(layout)
+    cc.timeBase = new ffmpeg.Rational(1, outRate)
+    if (spec.experimental) {
+      try {
+        cc.setOption('strict', 'experimental')
+      } catch {
+        /* older bindings: option may already default to permissive */
+      }
     }
-  }
-  cc.open()
-  const frameSize = cc.frameSize > 0 ? cc.frameSize : 4096
+    cc.open()
+    const frameSize = cc.frameSize > 0 ? cc.frameSize : 4096
 
-  // --- muxer (seekable in-memory) ---
-  const sink = createWriteIO(ffmpeg)
-  const ofc = new ffmpeg.OutputFormatContext(spec.container, sink.io)
-  const ostream = ofc.createStream()
-  ostream.codecParameters.fromContext(cc)
-  ofc.writeHeader()
+    // --- muxer (seekable in-memory) ---
+    sink = createWriteIO(ffmpeg)
+    ofc = new ffmpeg.OutputFormatContext(spec.container, sink.io)
+    const ostream = ofc.createStream()
+    ostream.codecParameters.fromContext(cc)
+    ofc.writeHeader()
 
-  // --- resample (input format/rate -> encoder format/rate) + FIFO framing ---
-  const resampler = new ffmpeg.Resampler(
-    inStream.codecParameters.sampleRate,
-    inStream.codecParameters.channelLayout,
-    inStream.codecParameters.format,
-    outRate,
-    layout,
-    sampleFormat
-  )
-  const fifo = new ffmpeg.AudioFIFO(sampleFormat, channels, frameSize)
-  const packet = new ffmpeg.Packet()
-  let pts = 0
+    // --- resample (input format/rate -> encoder format/rate) + FIFO framing ---
+    resampler = new ffmpeg.Resampler(
+      inStream.codecParameters.sampleRate,
+      inStream.codecParameters.channelLayout,
+      inStream.codecParameters.format,
+      outRate,
+      layout,
+      sampleFormat
+    )
+    fifo = new ffmpeg.AudioFIFO(sampleFormat, channels, frameSize)
+    packet = new ffmpeg.Packet()
+    let pts = 0
 
-  const emit = (frame) => {
-    cc.sendFrame(frame)
-    while (cc.receivePacket(packet)) {
-      packet.streamIndex = ostream.index
-      packet.rescaleTimestamps(cc.timeBase, ostream.timeBase)
-      ofc.writeFrame(packet)
-      packet.unref()
+    const emit = (frame) => {
+      cc.sendFrame(frame)
+      while (cc.receivePacket(packet)) {
+        packet.streamIndex = ostream.index
+        packet.rescaleTimestamps(cc.timeBase, ostream.timeBase)
+        ofc.writeFrame(packet)
+        packet.unref()
+      }
     }
-  }
 
-  const drain = (flush) => {
-    while (fifo.size >= frameSize || (flush && fifo.size > 0)) {
-      const n = Math.min(frameSize, fifo.size)
-      const frame = new ffmpeg.Frame()
-      frame.format = sampleFormat
-      frame.channelLayout = ffmpeg.ChannelLayout.from(layout)
-      frame.sampleRate = outRate
-      frame.nbSamples = n
-      frame.alloc()
-      fifo.read(frame, n)
-      frame.pts = pts
-      pts += n
-      emit(frame)
+    const drain = (flush) => {
+      while (fifo.size >= frameSize || (flush && fifo.size > 0)) {
+        const n = Math.min(frameSize, fifo.size)
+        const frame = new ffmpeg.Frame()
+        try {
+          frame.format = sampleFormat
+          frame.channelLayout = ffmpeg.ChannelLayout.from(layout)
+          frame.sampleRate = outRate
+          frame.nbSamples = n
+          frame.alloc()
+          fifo.read(frame, n)
+          frame.pts = pts
+          pts += n
+          emit(frame)
+        } finally {
+          frame.destroy()
+        }
+      }
     }
-  }
 
-  const pushResampled = (rawFrame) => {
-    const out = new ffmpeg.Frame()
-    out.channelLayout = ffmpeg.ChannelLayout.from(layout)
-    out.format = sampleFormat
-    out.sampleRate = outRate
-    const inSamples = rawFrame ? rawFrame.nbSamples : 1024
-    out.nbSamples = Math.ceil((inSamples * outRate) / inStream.codecParameters.sampleRate) + 1024
-    const samples = new ffmpeg.Samples()
-    samples.fill(out)
-    const count = rawFrame ? resampler.convert(rawFrame, out) : resampler.flush(out)
-    if (count > 0) {
-      out.nbSamples = count
-      fifo.write(out)
+    const pushResampled = (rawFrame) => {
+      const out = new ffmpeg.Frame()
+      try {
+        out.channelLayout = ffmpeg.ChannelLayout.from(layout)
+        out.format = sampleFormat
+        out.sampleRate = outRate
+        const inSamples = rawFrame ? rawFrame.nbSamples : 1024
+        out.nbSamples =
+          Math.ceil((inSamples * outRate) / inStream.codecParameters.sampleRate) + 1024
+        const samples = new ffmpeg.Samples()
+        samples.fill(out)
+        const count = rawFrame ? resampler.convert(rawFrame, out) : resampler.flush(out)
+        if (count > 0) {
+          out.nbSamples = count
+          fifo.write(out)
+        }
+        return count
+      } finally {
+        out.destroy()
+      }
     }
-    return count
-  }
 
-  const inPacket = new ffmpeg.Packet()
-  const raw = new ffmpeg.Frame()
-  while (inFmt.readFrame(inPacket)) {
-    decoder.sendPacket(inPacket)
-    while (decoder.receiveFrame(raw)) pushResampled(raw)
-    inPacket.unref()
-    drain(false)
-  }
-  while (pushResampled(null) > 0) {
-    /* flush the resampler's internal buffer */
-  }
-  drain(true)
-  emit(null) // flush the encoder
-  ofc.writeTrailer()
+    inPacket = new ffmpeg.Packet()
+    raw = new ffmpeg.Frame()
+    while (inFmt.readFrame(inPacket)) {
+      decoder.sendPacket(inPacket)
+      while (decoder.receiveFrame(raw)) pushResampled(raw)
+      inPacket.unref()
+      drain(false)
+    }
+    while (pushResampled(null) > 0) {
+      /* flush the resampler's internal buffer */
+    }
+    drain(true)
+    emit(null) // flush the encoder
+    ofc.writeTrailer()
 
-  return sink.getData()
+    return sink.getData()
+  } finally {
+    raw?.destroy()
+    inPacket?.destroy()
+    packet?.destroy()
+    fifo?.destroy()
+    resampler?.destroy()
+    cc?.destroy()
+    decoder?.destroy()
+    ofc?.destroy()
+    // No-op once ofc owns the IO; releases it if OutputFormatContext was never created.
+    sink?.destroy()
+    inFmt?.destroy()
+  }
 }
 
 // Encode a single format. `pcm`/`wav` stay dependency-free; the rest go through
