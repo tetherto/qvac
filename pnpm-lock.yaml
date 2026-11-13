@@ -866,7 +866,7 @@ importers:
         version: link:../bci-whispercpp
       '@qvac/classification-ggml':
         specifier: ^0.36.0
-        version: 0.36.0(@qvac/fabric-android-arm64@0.28.0)(@qvac/fabric-ios@0.28.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
+        version: 0.36.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/decoder-audio':
         specifier: ^0.9.0
         version: link:../decoder-audio
@@ -1592,7 +1592,7 @@ importers:
         version: link:../bci-whispercpp
       '@qvac/classification-ggml':
         specifier: ^0.36.0
-        version: 0.36.0(@qvac/fabric-android-arm64@0.28.0)(@qvac/fabric-ios@0.28.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
+        version: 0.36.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/decoder-audio':
         specifier: ^0.9.0
         version: link:../decoder-audio
@@ -4845,12 +4845,12 @@ packages:
     resolution: {integrity: sha512-0z6FRBHpEsG4dSK+EhUuEA5YEKM2t5jGBooSH7dwoWeKR2KRHk/ChApoV+5Mjy5rLkoKNH1sJNiYmuT2bYKDXQ==}
     engines: {bare: '>=1.20.0'}
 
-  '@qvac/classification-ggml@0.36.0':
-    resolution: {integrity: sha512-MQtAsNyjBktIJvPWmR8cNzVXxCaVzGLQPbx91F6h7zclVAC9Rj0fZD6ZWDukQcl5ANUblXxXL4WjYJtYLtc+Pg==}
+  '@qvac/classification-ggml@0.36.1':
+    resolution: {integrity: sha512-2umQWF01CzwMjR8c0y5SRk7WMuLAXCypuxPrX/zzbKGr0nhcJ+ZvKNHbmd+qYGZl7UFYxQSEqeYzsw0aK3CajA==}
     engines: {bare: '>=1.24.0'}
     peerDependencies:
-      '@qvac/fabric-android-arm64': ^0.28.0
-      '@qvac/fabric-ios': ^0.28.0
+      '@qvac/fabric-android-arm64': ^0.29.0
+      '@qvac/fabric-ios': ^0.29.0
     peerDependenciesMeta:
       '@qvac/fabric-android-arm64':
         optional: true
@@ -4867,10 +4867,6 @@ packages:
     resolution: {integrity: sha512-+NYJyitqjfTL8p/AbSvwwwekO2+WvXb2vZd/BtL02e1+7GDmo7bu/oGkHGwsWBGSk49pZ158KDx2UFCsJbaJFw==}
     engines: {bare: '>=1.24.0'}
 
-  '@qvac/fabric-android-arm64@0.28.0':
-    resolution: {integrity: sha512-LKvOdlFKFe5R+kL7dDZ37g9zlmY/vX6QSVNzSftrgfqHxZD+X/OhU8GiBXTxGr3QcALPJIiKTuWap+NEL5GA4A==}
-    engines: {bare: '>=1.24.0'}
-
   '@qvac/fabric-android-arm64@0.29.0':
     resolution: {integrity: sha512-PJG8yMsxRP724fHGW2YO4tu/xheCVnVYLF4SCn82741ABML7Cotgrf27DI0pD7I/85vOTEdSH+lNtyyit2NgUg==}
     engines: {bare: '>=1.24.0'}
@@ -4881,14 +4877,14 @@ packages:
     cpu: [arm64]
     os: [darwin]
 
-  '@qvac/fabric-darwin-arm64@0.28.0':
-    resolution: {integrity: sha512-XjBsms8F0YsMC1jvLFuVRpbHpJt1ys38ggOb4l8N90SBdaBP+dIHL0qkmpZlokhHAyL2bHtfwpBnBu2QzmRC0w==}
+  '@qvac/fabric-darwin-arm64@0.29.0':
+    resolution: {integrity: sha512-hGl6f2OBiB2Ndf14GP8POlvhn7kL8y2xsk6QkLjE0kn5oqFiXwLl3qmvGAJik1vxzjNJrsjzDeoWggrlezfbrw==}
     engines: {bare: '>=1.24.0'}
     cpu: [arm64]
     os: [darwin]
 
-  '@qvac/fabric-darwin-arm64@0.29.0':
-    resolution: {integrity: sha512-hGl6f2OBiB2Ndf14GP8POlvhn7kL8y2xsk6QkLjE0kn5oqFiXwLl3qmvGAJik1vxzjNJrsjzDeoWggrlezfbrw==}
+  '@qvac/fabric-darwin-arm64@0.29.1':
+    resolution: {integrity: sha512-yTuAZkEtEKvLjRDyHgXWsLClM0v5wA31NrFw58JE/1ACQI4Q0MGQ0oSLRoom3zSp9VKjG67sIp7FuPD7t/dItA==}
     engines: {bare: '>=1.24.0'}
     cpu: [arm64]
     os: [darwin]
@@ -4899,24 +4895,20 @@ packages:
     cpu: [x64]
     os: [darwin]
 
-  '@qvac/fabric-darwin-x64@0.28.0':
-    resolution: {integrity: sha512-lKATXqTcEMGy5ixQje2Sm+CPWqbkdegalgidx/E548k6fq5+xP8GXSMOA8Lf9kg7zZnyyeirpH67Vwe0dmhz7w==}
-    engines: {bare: '>=1.24.0'}
-    cpu: [x64]
-    os: [darwin]
-
   '@qvac/fabric-darwin-x64@0.29.0':
     resolution: {integrity: sha512-k0dgKXFNhmCkDLVePzaPHXh6I0TxVKdaKwZtQMCqHcqbe9uzEKXPo2XlkoAYCP+c9LdJOwbN6Uf3bQMZDkydgQ==}
     engines: {bare: '>=1.24.0'}
     cpu: [x64]
     os: [darwin]
 
+  '@qvac/fabric-darwin-x64@0.29.1':
+    resolution: {integrity: sha512-w+2g6PHVDdhTEJumhe7uMeDQwQsbe811fXvfesFTpQ1H6fbrXMMp7IgnHjcX2+ymbJRIB7210EdoMMEgbnMJUQ==}
+    engines: {bare: '>=1.24.0'}
+    cpu: [x64]
+    os: [darwin]
+
   '@qvac/fabric-ios@0.24.0':
     resolution: {integrity: sha512-VV1Lh+k0SZgpJLzL+B9KEH45GS4eXNpPXEN179nBXqxBokzUEWDvIHWH6andVBK1RvZmFXTPz40EyBgJb6recQ==}
-    engines: {bare: '>=1.24.0'}
-
-  '@qvac/fabric-ios@0.28.0':
-    resolution: {integrity: sha512-Z3/w6o8rr5xUXX7DK8+lTopv9/VPa6fa46vGoPKDMWim54HvTpLCttU1PO7SpF9sqkCPj2f2M0rpZvZfy9wRbg==}
     engines: {bare: '>=1.24.0'}
 
   '@qvac/fabric-ios@0.29.0':
@@ -4930,15 +4922,15 @@ packages:
     os: [linux]
     libc: [glibc]
 
-  '@qvac/fabric-linux-arm64@0.28.0':
-    resolution: {integrity: sha512-S6U+cbMSWgZtxdjMs+4J4O53tNWvTZ4t5dmJdwNqhg5219Sp7ENrTruK/NlMBzK9XiPOZr/DuEeaJRzqvAPr5A==}
+  '@qvac/fabric-linux-arm64@0.29.0':
+    resolution: {integrity: sha512-KsMTvtlJ1sNZrG23vdJLYwq18uExfV7NxOWGs51qc9iTCSWSn6iXcwIrXZkMRlfGqU2Yf9ZupRNpQUVAyeMmzA==}
     engines: {bare: '>=1.24.0'}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@qvac/fabric-linux-arm64@0.29.0':
-    resolution: {integrity: sha512-KsMTvtlJ1sNZrG23vdJLYwq18uExfV7NxOWGs51qc9iTCSWSn6iXcwIrXZkMRlfGqU2Yf9ZupRNpQUVAyeMmzA==}
+  '@qvac/fabric-linux-arm64@0.29.1':
+    resolution: {integrity: sha512-VWWfYrDlkREhp4KmyoiFn3TBulVyy+SgkCqCznoj3Pgna+iuz87ANDKhMQAfj8aEtZWvP0DIjCqB3In9OM003g==}
     engines: {bare: '>=1.24.0'}
     cpu: [arm64]
     os: [linux]
@@ -4951,15 +4943,15 @@ packages:
     os: [linux]
     libc: [glibc]
 
-  '@qvac/fabric-linux-x64@0.28.0':
-    resolution: {integrity: sha512-VTcH549abQwgGnAAJ19Qeqgbwy+/2JOYOBjxGSXjIY+Lw1mmT/vbTVsB5KEwTUlcAiz5AAOfz9EV+mKjtBIZ+A==}
+  '@qvac/fabric-linux-x64@0.29.0':
+    resolution: {integrity: sha512-VV6piu2eE1oi/RbTuVL1EwFLMLNX1C6nTYHd+3VzOPy9ls5f/vROG73WxlAGk6gauQQY/6jxw5+K11clMvuNEA==}
     engines: {bare: '>=1.24.0'}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@qvac/fabric-linux-x64@0.29.0':
-    resolution: {integrity: sha512-VV6piu2eE1oi/RbTuVL1EwFLMLNX1C6nTYHd+3VzOPy9ls5f/vROG73WxlAGk6gauQQY/6jxw5+K11clMvuNEA==}
+  '@qvac/fabric-linux-x64@0.29.1':
+    resolution: {integrity: sha512-Sh2axN0bWXb+m9nOeWVDSfC7q5SNMMn32KrQYHJcL5W2dZppVXJ/zpWUAtbB14mW7wqf4KkHYJUSNq4YHw4F3g==}
     engines: {bare: '>=1.24.0'}
     cpu: [x64]
     os: [linux]
@@ -4971,14 +4963,14 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@qvac/fabric-win32-x64@0.28.0':
-    resolution: {integrity: sha512-gv/IuuL7+6oMmxlZCalUjXnaV5JQOKDhOUbHe1u6DkCHTvsCJc5hmXzlc8Wz6qk8WvK7YQoAwuzr0DGLECFRCg==}
+  '@qvac/fabric-win32-x64@0.29.0':
+    resolution: {integrity: sha512-TjEdHksjt6bR8z4YnuRPo61QLTH7dZCqv3LQPSrTZ43HVNyQQf2ZVe/s+m9KLTs1/STWT6trULJqlHspkCC0DQ==}
     engines: {bare: '>=1.24.0'}
     cpu: [x64]
     os: [win32]
 
-  '@qvac/fabric-win32-x64@0.29.0':
-    resolution: {integrity: sha512-TjEdHksjt6bR8z4YnuRPo61QLTH7dZCqv3LQPSrTZ43HVNyQQf2ZVe/s+m9KLTs1/STWT6trULJqlHspkCC0DQ==}
+  '@qvac/fabric-win32-x64@0.29.1':
+    resolution: {integrity: sha512-bRWOZkgC81uEK/xWW7502Nn1+1m8PBSezXpxe9KWiT9eJ4SZadirFA1+7/o7o7wuFn491pOenY0oIEWDcqWfNA==}
     engines: {bare: '>=1.24.0'}
     cpu: [x64]
     os: [win32]
@@ -4995,12 +4987,12 @@ packages:
       '@qvac/fabric-ios':
         optional: true
 
-  '@qvac/fabric@0.28.0':
-    resolution: {integrity: sha512-tvLyy8vZMHdgZOeE4KC72YOd4WWmKDi0D+wTi5EdkLco4AEbG1awVOGCKiNS1ZYjffwQoE2t8VoiJVTgbDWfKQ==}
+  '@qvac/fabric@0.29.1':
+    resolution: {integrity: sha512-qmpt/D8pbNFzAvQN6SjuFXcR5j1N1Xgj3xN4hYts4WDgLSkMAQN0x2oDCfwJEgQqkmBQ2ZAJ1gr5rYgTDjz5pA==}
     engines: {bare: '>=1.24.0'}
     peerDependencies:
-      '@qvac/fabric-android-arm64': 0.28.0
-      '@qvac/fabric-ios': 0.28.0
+      '@qvac/fabric-android-arm64': 0.29.1
+      '@qvac/fabric-ios': 0.29.1
     peerDependenciesMeta:
       '@qvac/fabric-android-arm64':
         optional: true
@@ -14987,9 +14979,9 @@ snapshots:
       - bare-buffer
       - react-native-b4a
 
-  '@qvac/classification-ggml@0.36.0(@qvac/fabric-android-arm64@0.28.0)(@qvac/fabric-ios@0.28.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))':
+  '@qvac/classification-ggml@0.36.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))':
     dependencies:
-      '@qvac/fabric': 0.28.0(@qvac/fabric-android-arm64@0.28.0)(@qvac/fabric-ios@0.28.0)
+      '@qvac/fabric': 0.29.1
       '@qvac/infer-base': 0.8.0
       '@qvac/logging': 0.1.1
       bare-env: 3.0.1
@@ -15000,13 +14992,11 @@ snapshots:
       bare-url: 2.5.4
       brittle: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
     optionalDependencies:
-      '@qvac/fabric-android-arm64': 0.28.0
-      '@qvac/fabric-darwin-arm64': 0.28.0
-      '@qvac/fabric-darwin-x64': 0.28.0
-      '@qvac/fabric-ios': 0.28.0
-      '@qvac/fabric-linux-arm64': 0.28.0
-      '@qvac/fabric-linux-x64': 0.28.0
-      '@qvac/fabric-win32-x64': 0.28.0
+      '@qvac/fabric-darwin-arm64': 0.29.0
+      '@qvac/fabric-darwin-x64': 0.29.0
+      '@qvac/fabric-linux-arm64': 0.29.0
+      '@qvac/fabric-linux-x64': 0.29.0
+      '@qvac/fabric-win32-x64': 0.29.0
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
@@ -15025,61 +15015,55 @@ snapshots:
 
   '@qvac/fabric-android-arm64@0.24.0': {}
 
-  '@qvac/fabric-android-arm64@0.28.0':
-    optional: true
-
   '@qvac/fabric-android-arm64@0.29.0': {}
 
   '@qvac/fabric-darwin-arm64@0.24.0':
     optional: true
 
-  '@qvac/fabric-darwin-arm64@0.28.0':
+  '@qvac/fabric-darwin-arm64@0.29.0':
     optional: true
 
-  '@qvac/fabric-darwin-arm64@0.29.0':
+  '@qvac/fabric-darwin-arm64@0.29.1':
     optional: true
 
   '@qvac/fabric-darwin-x64@0.24.0':
     optional: true
 
-  '@qvac/fabric-darwin-x64@0.28.0':
-    optional: true
-
   '@qvac/fabric-darwin-x64@0.29.0':
     optional: true
 
-  '@qvac/fabric-ios@0.24.0': {}
-
-  '@qvac/fabric-ios@0.28.0':
+  '@qvac/fabric-darwin-x64@0.29.1':
     optional: true
+
+  '@qvac/fabric-ios@0.24.0': {}
 
   '@qvac/fabric-ios@0.29.0': {}
 
   '@qvac/fabric-linux-arm64@0.24.0':
     optional: true
 
-  '@qvac/fabric-linux-arm64@0.28.0':
+  '@qvac/fabric-linux-arm64@0.29.0':
     optional: true
 
-  '@qvac/fabric-linux-arm64@0.29.0':
+  '@qvac/fabric-linux-arm64@0.29.1':
     optional: true
 
   '@qvac/fabric-linux-x64@0.24.0':
     optional: true
 
-  '@qvac/fabric-linux-x64@0.28.0':
+  '@qvac/fabric-linux-x64@0.29.0':
     optional: true
 
-  '@qvac/fabric-linux-x64@0.29.0':
+  '@qvac/fabric-linux-x64@0.29.1':
     optional: true
 
   '@qvac/fabric-win32-x64@0.24.0':
     optional: true
 
-  '@qvac/fabric-win32-x64@0.28.0':
+  '@qvac/fabric-win32-x64@0.29.0':
     optional: true
 
-  '@qvac/fabric-win32-x64@0.29.0':
+  '@qvac/fabric-win32-x64@0.29.1':
     optional: true
 
   '@qvac/fabric@0.24.0(@qvac/fabric-android-arm64@0.24.0)(@qvac/fabric-ios@0.24.0)':
@@ -15092,15 +15076,13 @@ snapshots:
       '@qvac/fabric-linux-x64': 0.24.0
       '@qvac/fabric-win32-x64': 0.24.0
 
-  '@qvac/fabric@0.28.0(@qvac/fabric-android-arm64@0.28.0)(@qvac/fabric-ios@0.28.0)':
+  '@qvac/fabric@0.29.1':
     optionalDependencies:
-      '@qvac/fabric-android-arm64': 0.28.0
-      '@qvac/fabric-darwin-arm64': 0.28.0
-      '@qvac/fabric-darwin-x64': 0.28.0
-      '@qvac/fabric-ios': 0.28.0
-      '@qvac/fabric-linux-arm64': 0.28.0
-      '@qvac/fabric-linux-x64': 0.28.0
-      '@qvac/fabric-win32-x64': 0.28.0
+      '@qvac/fabric-darwin-arm64': 0.29.1
+      '@qvac/fabric-darwin-x64': 0.29.1
+      '@qvac/fabric-linux-arm64': 0.29.1
+      '@qvac/fabric-linux-x64': 0.29.1
+      '@qvac/fabric-win32-x64': 0.29.1
 
   '@qvac/infer-base@0.4.2(bare-abort-controller@1.1.2)':
     dependencies:

@@ -124,10 +124,10 @@ const { fitProbe } = await getLoadedModelInfo({ modelId })
 // @qvac/inference/model-resource-profiles is removed.
 ```
 
-**Remote RPC servers:** the SDK now depends on `@qvac/ggml-rpc-server` `^0.9.0`, and the RPC protocol changed since 0.23. Upgrade every remote RPC server together with the CLI.
+**Remote RPC servers:** the RPC protocol moves from 112 to 116, and a client must match the server. Remote RPC servers need `@qvac/ggml-rpc-server` 0.9.1 or newer; a server on 0.9.0 or earlier is refused. Upgrade every remote RPC server together with the CLI.
 
 ```bash
-npm install @qvac/ggml-rpc-server@^0.9.0
+npm install @qvac/ggml-rpc-server@^0.9.1
 ```
 
 ### `POST /qvac/v1/models/fit`

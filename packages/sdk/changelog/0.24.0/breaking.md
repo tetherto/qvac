@@ -183,10 +183,10 @@ const { fitProbe } = await getLoadedModelInfo({ modelId })
 // @qvac/inference/model-resource-profiles is removed.
 ```
 
-**Remote RPC servers:** the SDK now depends on `@qvac/ggml-rpc-server` `^0.9.0`, and the RPC protocol changed since 0.23. Upgrade every remote RPC server together with the SDK.
+**Remote RPC servers:** the RPC protocol moves from 112 to 116, and a client must match the server. Remote RPC servers need `@qvac/ggml-rpc-server` 0.9.1 or newer; a server on 0.9.0 or earlier is refused. Upgrade every remote RPC server together with the SDK.
 
 ```bash
-npm install @qvac/ggml-rpc-server@^0.9.0
+npm install @qvac/ggml-rpc-server@^0.9.1
 ```
 
 ---
@@ -325,7 +325,7 @@ These arrived in PRs that were not tagged breaking, or as side effects of the se
 
 ## Client libraries
 
-The sections above apply to the Python and Kotlin clients as well, since both drive the same worker: no default system message ([#5686](https://github.com/tetherto/qvac/pull/5686)), a prefill needs a message ([#5708](https://github.com/tetherto/qvac/pull/5708)), remote RPC servers need `@qvac/ggml-rpc-server` `^0.9.0` ([#5512](https://github.com/tetherto/qvac/pull/5512)), and `EMBEDDINGGEMMA_300M_F32` is removed from each client's model constants ([#5634](https://github.com/tetherto/qvac/pull/5634)). The entries below are specific to each client.
+The sections above apply to the Python and Kotlin clients as well, since both drive the same worker: no default system message ([#5686](https://github.com/tetherto/qvac/pull/5686)), a prefill needs a message ([#5708](https://github.com/tetherto/qvac/pull/5708)), remote RPC servers need `@qvac/ggml-rpc-server` 0.9.1 or newer ([#5512](https://github.com/tetherto/qvac/pull/5512)), and `EMBEDDINGGEMMA_300M_F32` is removed from each client's model constants ([#5634](https://github.com/tetherto/qvac/pull/5634)). The entries below are specific to each client.
 
 ### Python client
 
