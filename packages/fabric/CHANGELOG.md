@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.29.2] - 2026-11-13
+
+### Fixed
+
+- `qvac-fabric` dependency bumped `11739.2.0#1` -> `11739.2.1`, which adds one
+  CPU backend fix (tetherto/qvac#5537): on Linux and Android, a CPU threadpool
+  with a `cpumask` no longer pins the thread that calls into ggml. The worker
+  threads ggml creates are still pinned, OpenMP workers only for the duration
+  of a graph, and NUMA mode still pins every compute thread. The build recipe
+  from 0.29.1 (CUDA K/V quant pairs, NVRTC fusion) is unchanged, and there is
+  no API, ABI or RPC change.
+
 ## [0.29.1] - 2026-11-12
 
 ### Changed
