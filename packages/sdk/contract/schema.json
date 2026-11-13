@@ -29767,7 +29767,7 @@
                     }
                   },
                   "required": ["nLists", "nProbe"],
-                  "title": "VectorIndexRequestSetIvfIvf"
+                  "title": "VectorIndexIvfSettings"
                 },
                 {
                   "type": "null"
@@ -29877,7 +29877,7 @@
                   },
                   "required": ["nLists", "nProbe", "built"],
                   "additionalProperties": false,
-                  "title": "VectorIndexResponseCreateIvf"
+                  "title": "VectorIndexIvfState"
                 },
                 {
                   "type": "null"
@@ -29955,7 +29955,7 @@
                   },
                   "required": ["nLists", "nProbe", "built"],
                   "additionalProperties": false,
-                  "title": "VectorIndexResponseLoadIvf"
+                  "title": "VectorIndexIvfState"
                 },
                 {
                   "type": "null"
@@ -30033,7 +30033,7 @@
                   },
                   "required": ["nLists", "nProbe", "built"],
                   "additionalProperties": false,
-                  "title": "VectorIndexResponseAddIvf"
+                  "title": "VectorIndexIvfState"
                 },
                 {
                   "type": "null"
@@ -30137,7 +30137,7 @@
                   },
                   "required": ["nLists", "nProbe", "built"],
                   "additionalProperties": false,
-                  "title": "VectorIndexResponseRemoveIvf"
+                  "title": "VectorIndexIvfState"
                 },
                 {
                   "type": "null"
@@ -30277,7 +30277,7 @@
                   },
                   "required": ["nLists", "nProbe", "built"],
                   "additionalProperties": false,
-                  "title": "VectorIndexResponseSetIvfIvf"
+                  "title": "VectorIndexIvfState"
                 },
                 {
                   "type": "null"

@@ -84,10 +84,16 @@ export interface VectorIndex {
   /**
    * Turns IVF search on or off. With settings, it groups the entries into
    * `nLists` lists now, and `search()` scans only the `nProbe` lists nearest
-   * each query. That is faster but can miss true nearest entries. A higher
-   * `nProbe` misses fewer and costs more; `nProbe >= nLists` scans every
-   * entry. `nIter` sets the k-means passes of the build, and the default 0
-   * keeps the initial centroids. Null turns IVF off.
+   * each query. On a large F32 index that can be many times faster than a
+   * full scan. TurboVec storage scores vectors in blocks, so probing a few
+   * lists saves little work and IVF can be slower than a full scan. Either
+   * way it can miss true nearest entries. A higher `nProbe` misses fewer and costs more; `nProbe >= nLists` scans
+   * every entry. `nLists` is an upper bound: an index with fewer entries
+   * builds one list per entry, while `ivf.nLists` keeps the requested value.
+   * `nIter` sets the k-means passes of the build, and the default 0 keeps the
+   * initial centroids. Null turns IVF off. The build blocks the worker until
+   * it finishes, and its cost grows with `nIter`, `nLists`, the entry count
+   * and `dim`.
    *
    * Any later add or remove sets `ivf.built` to false, and searches scan every
    * entry until the next `setIvf()`. So does a build that fails; the handle

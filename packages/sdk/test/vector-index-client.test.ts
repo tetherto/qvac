@@ -386,7 +386,7 @@ test('vector index client: setIvf sends the settings and tracks the reported sta
   )
   await index.setIvf({ nLists: 4, nProbe: 2, nIter: 0 }, { timeout: 1000 })
   t.alike(sent[2]?.request['ivf'], { nLists: 4, nProbe: 2, nIter: 0 }, 'nIter 0 is sent')
-  t.alike(sent[2]?.options, { timeout: 1000 }, 'RPC options reach the transport')
+  t.alike(sent[2]?.options, {}, 'the timeout stays on the client')
 
   await index.add({ ids: ['1'], vectors: [[1, 0]] })
   t.alike(index.ivf, { nLists: 4, nProbe: 2, built: false }, 'add updates the IVF state')
@@ -396,6 +396,20 @@ test('vector index client: setIvf sends the settings and tracks the reported sta
   t.alike(await index.setIvf(null), { ivf: null })
   t.is(sent.at(-1)?.request['ivf'], null, 'null turns IVF off on the wire')
   t.is(index.ivf, null)
+})
+
+test('vector index client: a setIvf reply after a timeout still updates ivf', async (t) => {
+  let reply: (response: unknown) => void = () => {}
+  const { send } = fakeTransport({ setIvf: () => new Promise((resolve) => (reply = resolve)) })
+  const { createVectorIndex } = createVectorIndexClient(send)
+  const index = await createVectorIndex({ dim: 2 })
+
+  await t.exception(index.setIvf({ nLists: 4, nProbe: 2 }, { timeout: 100 }), /timeout/)
+  t.is(index.ivf, undefined, 'the timed-out call leaves ivf as it was')
+
+  reply({ type: 'vectorIndex', operation: 'setIvf', ivf: { nLists: 4, nProbe: 2, built: true } })
+  await new Promise((resolve) => setImmediate(resolve))
+  t.alike(index.ivf, { nLists: 4, nProbe: 2, built: true }, 'the late reply updates ivf')
 })
 
 test('vector index client: search sends nProbe only when given', async (t) => {

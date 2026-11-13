@@ -13703,7 +13703,7 @@ data class VectorIndexRequestSetStagedSearch(
 
 @Serializable
 data class VectorIndexRequestSetIvf(
-    @SerialName("ivf") val `ivf`: VectorIndexRequestSetIvfIvf?,
+    @SerialName("ivf") val `ivf`: VectorIndexIvfSettings?,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "vectorIndex",
     @SerialName("sessionId") val `sessionId`: String? = null,
@@ -13714,7 +13714,7 @@ data class VectorIndexRequestSetIvf(
 )
 
 @Serializable
-data class VectorIndexRequestSetIvfIvf(
+data class VectorIndexIvfSettings(
     @SerialName("nLists") val `nLists`: Long,
     @SerialName("nProbe") val `nProbe`: Long,
     @SerialName("nIter") val `nIter`: Long? = null,
@@ -20475,7 +20475,7 @@ data class VectorIndexResponseCreate(
     @SerialName("requestId") val `requestId`: String? = null,
     @SerialName("calibrated") val `calibrated`: Boolean? = null,
     @SerialName("stagedSearch") val `stagedSearch`: Boolean? = null,
-    @SerialName("ivf") val `ivf`: VectorIndexResponseCreateIvf? = null,
+    @SerialName("ivf") val `ivf`: VectorIndexIvfState? = null,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("operation") val `operation`: String = "create",
     @SerialName("indexId") val `indexId`: String,
@@ -20485,7 +20485,7 @@ data class VectorIndexResponseCreate(
 )
 
 @Serializable
-data class VectorIndexResponseCreateIvf(
+data class VectorIndexIvfState(
     @SerialName("nLists") val `nLists`: Long,
     @SerialName("nProbe") val `nProbe`: Long,
     @SerialName("nIter") val `nIter`: Long? = null,
@@ -20508,21 +20508,13 @@ data class VectorIndexResponseLoad(
     @SerialName("requestId") val `requestId`: String? = null,
     @SerialName("calibrated") val `calibrated`: Boolean? = null,
     @SerialName("stagedSearch") val `stagedSearch`: Boolean? = null,
-    @SerialName("ivf") val `ivf`: VectorIndexResponseLoadIvf? = null,
+    @SerialName("ivf") val `ivf`: VectorIndexIvfState? = null,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("operation") val `operation`: String = "load",
     @SerialName("indexId") val `indexId`: String,
     @SerialName("dim") val `dim`: Long,
     @SerialName("storage") val `storage`: VectorIndexResponseLoadStorage? = null,
     @SerialName("length") val `length`: Long,
-)
-
-@Serializable
-data class VectorIndexResponseLoadIvf(
-    @SerialName("nLists") val `nLists`: Long,
-    @SerialName("nProbe") val `nProbe`: Long,
-    @SerialName("nIter") val `nIter`: Long? = null,
-    @SerialName("built") val `built`: Boolean,
 )
 
 @Serializable
@@ -20541,18 +20533,10 @@ data class VectorIndexResponseAdd(
     @SerialName("requestId") val `requestId`: String? = null,
     @SerialName("calibrated") val `calibrated`: Boolean? = null,
     @SerialName("stagedSearch") val `stagedSearch`: Boolean? = null,
-    @SerialName("ivf") val `ivf`: VectorIndexResponseAddIvf? = null,
+    @SerialName("ivf") val `ivf`: VectorIndexIvfState? = null,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("operation") val `operation`: String = "add",
     @SerialName("length") val `length`: Long,
-)
-
-@Serializable
-data class VectorIndexResponseAddIvf(
-    @SerialName("nLists") val `nLists`: Long,
-    @SerialName("nProbe") val `nProbe`: Long,
-    @SerialName("nIter") val `nIter`: Long? = null,
-    @SerialName("built") val `built`: Boolean,
 )
 
 @Serializable
@@ -20578,19 +20562,11 @@ data class VectorIndexResponseRemove(
     @SerialName("requestId") val `requestId`: String? = null,
     @SerialName("calibrated") val `calibrated`: Boolean? = null,
     @SerialName("stagedSearch") val `stagedSearch`: Boolean? = null,
-    @SerialName("ivf") val `ivf`: VectorIndexResponseRemoveIvf? = null,
+    @SerialName("ivf") val `ivf`: VectorIndexIvfState? = null,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("operation") val `operation`: String = "remove",
     @SerialName("removed") val `removed`: List<Boolean>,
     @SerialName("length") val `length`: Long,
-)
-
-@Serializable
-data class VectorIndexResponseRemoveIvf(
-    @SerialName("nLists") val `nLists`: Long,
-    @SerialName("nProbe") val `nProbe`: Long,
-    @SerialName("nIter") val `nIter`: Long? = null,
-    @SerialName("built") val `built`: Boolean,
 )
 
 @Serializable
@@ -20630,15 +20606,7 @@ data class VectorIndexResponseSetIvf(
     @SerialName("requestId") val `requestId`: String? = null,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("operation") val `operation`: String = "setIvf",
-    @SerialName("ivf") val `ivf`: VectorIndexResponseSetIvfIvf?,
-)
-
-@Serializable
-data class VectorIndexResponseSetIvfIvf(
-    @SerialName("nLists") val `nLists`: Long,
-    @SerialName("nProbe") val `nProbe`: Long,
-    @SerialName("nIter") val `nIter`: Long? = null,
-    @SerialName("built") val `built`: Boolean,
+    @SerialName("ivf") val `ivf`: VectorIndexIvfState?,
 )
 
 @Serializable

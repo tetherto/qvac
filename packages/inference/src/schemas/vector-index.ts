@@ -79,16 +79,20 @@ export const vectorIndexAddParamsSchema = z.object({
   vectors: vectorRowsSchema
 })
 
-const IVF_COUNT_MAX = 2147483647
-const ivfCountSchema = z.number().int().positive().max(IVF_COUNT_MAX)
+const INT32_MAX = 2147483647
+const ivfCountSchema = z.number().int().positive().max(INT32_MAX)
 
-export const vectorIndexIvfSettingsSchema = z.object({
-  nLists: ivfCountSchema,
-  nProbe: ivfCountSchema,
-  nIter: z.number().int().min(0).max(IVF_COUNT_MAX).optional()
-})
+export const vectorIndexIvfSettingsSchema = z
+  .object({
+    nLists: ivfCountSchema,
+    nProbe: ivfCountSchema,
+    nIter: z.number().int().min(0).max(INT32_MAX).optional()
+  })
+  .meta({ title: 'VectorIndexIvfSettings' })
 
-const vectorIndexIvfStateSchema = vectorIndexIvfSettingsSchema.extend({ built: z.boolean() })
+const vectorIndexIvfStateSchema = vectorIndexIvfSettingsSchema
+  .extend({ built: z.boolean() })
+  .meta({ title: 'VectorIndexIvfState' })
 
 export const vectorIndexSearchParamsSchema = z.object({
   queries: vectorRowsSchema,
@@ -203,6 +207,7 @@ const vectorIndexResponseBaseSchema = z.object({
 
 // External providers may omit controls introduced after the original contract.
 // `ivf` is null while IVF is off, so only a missing field means unsupported.
+// The generated Python and Kotlin models read both as null.
 const vectorIndexStateFields = {
   calibrated: z.boolean().optional(),
   stagedSearch: z.boolean().optional(),

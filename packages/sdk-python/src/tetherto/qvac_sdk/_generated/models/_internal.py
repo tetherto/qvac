@@ -30813,14 +30813,14 @@ class VectorIndexRequestSetStagedSearch(GeneratedBaseModel):
     operation: Literal["setStagedSearch"] = "setStagedSearch"
 
 
-class VectorIndexRequestSetIvfIvf(GeneratedBaseModel):
+class VectorIndexIvfSettings(GeneratedBaseModel):
     n_lists: Annotated[int, Field(alias="nLists", gt=0, le=2147483647)]
     n_probe: Annotated[int, Field(alias="nProbe", gt=0, le=2147483647)]
     n_iter: Annotated[int | None, Field(alias="nIter", ge=0, le=2147483647)] = None
 
 
 class VectorIndexRequestSetIvf(GeneratedBaseModel):
-    ivf: VectorIndexRequestSetIvfIvf | None
+    ivf: VectorIndexIvfSettings | None
     type: Literal["vectorIndex"] = "vectorIndex"
     session_id: Annotated[
         str | None,
@@ -30864,7 +30864,7 @@ class VectorIndexRequestDispose(GeneratedBaseModel):
     operation: Literal["dispose"] = "dispose"
 
 
-class VectorIndexResponseCreateIvf(GeneratedBaseModel):
+class VectorIndexIvfState(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -30892,7 +30892,7 @@ class VectorIndexResponseCreate(GeneratedBaseModel):
     ] = None
     calibrated: bool | None = None
     staged_search: Annotated[bool | None, Field(alias="stagedSearch")] = None
-    ivf: VectorIndexResponseCreateIvf | None = None
+    ivf: VectorIndexIvfState | None = None
     operation: Literal["create"] = "create"
     index_id: Annotated[str, Field(alias="indexId", min_length=1)]
     dim: Annotated[int, Field(gt=0, le=9007199254740991)]
@@ -30901,16 +30901,6 @@ class VectorIndexResponseCreate(GeneratedBaseModel):
         Field(title="VectorIndexResponseCreateStorage"),
     ]
     length: Annotated[int, Field(ge=0, le=9007199254740991)]
-
-
-class VectorIndexResponseLoadIvf(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    n_lists: Annotated[int, Field(alias="nLists", gt=0, le=2147483647)]
-    n_probe: Annotated[int, Field(alias="nProbe", gt=0, le=2147483647)]
-    n_iter: Annotated[int | None, Field(alias="nIter", ge=0, le=2147483647)] = None
-    built: bool
 
 
 class VectorIndexResponseLoadStorage(Enum):
@@ -30931,7 +30921,7 @@ class VectorIndexResponseLoad(GeneratedBaseModel):
     ] = None
     calibrated: bool | None = None
     staged_search: Annotated[bool | None, Field(alias="stagedSearch")] = None
-    ivf: VectorIndexResponseLoadIvf | None = None
+    ivf: VectorIndexIvfState | None = None
     operation: Literal["load"] = "load"
     index_id: Annotated[str, Field(alias="indexId", min_length=1)]
     dim: Annotated[int, Field(gt=0, le=9007199254740991)]
@@ -30940,16 +30930,6 @@ class VectorIndexResponseLoad(GeneratedBaseModel):
         Field(title="VectorIndexResponseLoadStorage"),
     ] = None
     length: Annotated[int, Field(ge=0, le=9007199254740991)]
-
-
-class VectorIndexResponseAddIvf(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    n_lists: Annotated[int, Field(alias="nLists", gt=0, le=2147483647)]
-    n_probe: Annotated[int, Field(alias="nProbe", gt=0, le=2147483647)]
-    n_iter: Annotated[int | None, Field(alias="nIter", ge=0, le=2147483647)] = None
-    built: bool
 
 
 class VectorIndexResponseAdd(GeneratedBaseModel):
@@ -30962,7 +30942,7 @@ class VectorIndexResponseAdd(GeneratedBaseModel):
     ] = None
     calibrated: bool | None = None
     staged_search: Annotated[bool | None, Field(alias="stagedSearch")] = None
-    ivf: VectorIndexResponseAddIvf | None = None
+    ivf: VectorIndexIvfState | None = None
     operation: Literal["add"] = "add"
     length: Annotated[int, Field(ge=0, le=9007199254740991)]
 
@@ -30987,16 +30967,6 @@ class VectorIndexResponseSearch(GeneratedBaseModel):
     results: list[list[VectorIndexResponseSearchResultsItemItem]]
 
 
-class VectorIndexResponseRemoveIvf(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    n_lists: Annotated[int, Field(alias="nLists", gt=0, le=2147483647)]
-    n_probe: Annotated[int, Field(alias="nProbe", gt=0, le=2147483647)]
-    n_iter: Annotated[int | None, Field(alias="nIter", ge=0, le=2147483647)] = None
-    built: bool
-
-
 class VectorIndexResponseRemove(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -31007,7 +30977,7 @@ class VectorIndexResponseRemove(GeneratedBaseModel):
     ] = None
     calibrated: bool | None = None
     staged_search: Annotated[bool | None, Field(alias="stagedSearch")] = None
-    ivf: VectorIndexResponseRemoveIvf | None = None
+    ivf: VectorIndexIvfState | None = None
     operation: Literal["remove"] = "remove"
     removed: list[bool]
     length: Annotated[int, Field(ge=0, le=9007199254740991)]
@@ -31049,16 +31019,6 @@ class VectorIndexResponseSetStagedSearch(GeneratedBaseModel):
     staged_search: Annotated[bool, Field(alias="stagedSearch")]
 
 
-class VectorIndexResponseSetIvfIvf(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    n_lists: Annotated[int, Field(alias="nLists", gt=0, le=2147483647)]
-    n_probe: Annotated[int, Field(alias="nProbe", gt=0, le=2147483647)]
-    n_iter: Annotated[int | None, Field(alias="nIter", ge=0, le=2147483647)] = None
-    built: bool
-
-
 class VectorIndexResponseSetIvf(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -31068,7 +31028,7 @@ class VectorIndexResponseSetIvf(GeneratedBaseModel):
         str | None, Field(alias="requestId", description="Identity of the request.")
     ] = None
     operation: Literal["setIvf"] = "setIvf"
-    ivf: VectorIndexResponseSetIvfIvf | None
+    ivf: VectorIndexIvfState | None
 
 
 class VectorIndexResponseDispose(GeneratedBaseModel):

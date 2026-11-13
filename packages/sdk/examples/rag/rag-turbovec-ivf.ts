@@ -10,7 +10,9 @@ import {
 
 // IVF search over documents kept in your own store. setIvf() groups the
 // vectors into lists, and each search scans only the lists nearest the query.
-// That pays off on large indexes; this one stays small so it runs quickly.
+// On a large F32 index that can be many times faster than a full scan, while
+// on TurboVec storage it can be slower. This example uses F32 storage with 16
+// documents, so it shows the API rather than the speedup.
 try {
   const query = process.argv[2] || 'Which moon has methane rain and lakes?'
   console.log(`▸ Query: "${query}"`)
@@ -50,7 +52,7 @@ try {
   console.log('▸ Building the vector index...')
   const index = await createVectorIndex({
     dim: vectors[0]!.length,
-    storage: VectorIndexStorage.TURBOVEC_Q4
+    storage: VectorIndexStorage.F32
   })
   await index.add({ ids: [...documents.keys()], vectors })
   console.log(`▸ Indexed ${index.length} vectors of dimension ${index.dim}`)

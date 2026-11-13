@@ -125,3 +125,50 @@ test('vector index: native IVF settings round trip through the adapter', async (
     clearPlugins()
   }
 })
+
+test('vector index: native IVF builds with fewer entries than lists', async (t) => {
+  const { IdMapIndex } = await import('@qvac/turbovec-ggml')
+  clearPlugins()
+  registerProviderPlugin('test-native-vector-index-ivf-small', {
+    create: (options) => new IdMapIndex(options),
+    load: (snapshotPath) => IdMapIndex.load(snapshotPath)
+  })
+  let seed = 11
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+    return seed / 4294967296 - 0.5
+  }
+  const vectors = Array.from({ length: 5 }, () => Array.from({ length: 32 }, random))
+  const ids = vectors.map((_row, i) => String(i))
+  const idsOf = (rows: { id: string }[]) => rows.map((hit) => hit.id)
+  try {
+    for (const storage of ['f32', 'turbovec-q4'] as const) {
+      const empty = await createVectorIndex({ dim: 32, storage })
+      await empty.setIvf({ nLists: 8, nProbe: 2 })
+      t.is(empty.ivf?.built, true, `${storage}: an empty index builds`)
+      t.alike(
+        await empty.search({ queries: [vectors[0]!], k: 3 }),
+        [[]],
+        `${storage}: searching the empty lists finds nothing`
+      )
+      await empty.dispose()
+
+      // Native caps the list count at the entry count.
+      const index = await createVectorIndex({ dim: 32, storage })
+      await index.add({ ids, vectors })
+      const full = await index.search({ query: vectors[2]!, k: 10 })
+      await index.setIvf({ nLists: 8, nProbe: 8 })
+      t.is(index.ivf?.built, true, `${storage}: more lists than entries builds`)
+      t.alike(
+        idsOf(await index.search({ query: vectors[2]!, k: 10 })),
+        idsOf(full),
+        `${storage}: probing every list returns every entry`
+      )
+      await index.dispose()
+    }
+  } finally {
+    await disposeAllVectorIndexes()
+    await close()
+    clearPlugins()
+  }
+})
