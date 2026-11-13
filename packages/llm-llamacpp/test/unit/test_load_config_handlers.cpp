@@ -83,6 +83,22 @@ TEST(LoadConfigHandlers_ImageNoUpscale, RejectsUnknownValue) {
   EXPECT_THROW(applyLoadConfigHandlers(params, map), StatusError);
 }
 
+TEST(LoadConfigHandlers_ImageTileMode, RejectsHighBitByte) {
+  common_params params;
+  const std::string highBitValue(1, static_cast<char>(0x80));
+  std::unordered_map<std::string, std::string> map{
+      {"image-tile-mode", highBitValue}};
+  EXPECT_THROW(applyLoadConfigHandlers(params, map), StatusError);
+}
+
+TEST(LoadConfigHandlers_ImageNoUpscale, RejectsHighBitByte) {
+  common_params params;
+  const std::string highBitValue(1, static_cast<char>(0x80));
+  std::unordered_map<std::string, std::string> map{
+      {"image-no-upscale", highBitValue}};
+  EXPECT_THROW(applyLoadConfigHandlers(params, map), StatusError);
+}
+
 // Both spellings must be registered. The addon skips audio by default, so the
 // load-bearing case is "off": an alias missing from the table would leave the
 // caller unable to turn the audio encoder back on.
@@ -91,6 +107,12 @@ TEST(LoadConfigHandlers_MmprojNoAudio, BothAliasesParse) {
   EXPECT_TRUE(applyOne("mmproj_no_audio", "1").mmproj_no_audio);
   EXPECT_FALSE(applyOne("mmproj-no-audio", "off").mmproj_no_audio);
   EXPECT_FALSE(applyOne("mmproj_no_audio", "false").mmproj_no_audio);
+}
+
+TEST(LoadConfigHandlers_MmprojNoAudio, BothAliasesRejectHighBitByte) {
+  const std::string highBitValue(1, static_cast<char>(0x80));
+  EXPECT_THROW(applyOne("mmproj-no-audio", highBitValue), StatusError);
+  EXPECT_THROW(applyOne("mmproj_no_audio", highBitValue), StatusError);
 }
 
 TEST(LoadConfigHandlers_ImageTokens, ParsesMaxAndMin) {
