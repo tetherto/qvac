@@ -7,6 +7,7 @@
 //   bare scripts/bench-index.ts rebuild <dir>   # later phases reuse ingest's settings
 //   bare scripts/bench-index.ts cold    <dir>
 //   bare scripts/bench-index.ts scan    <dir>
+//   bare scripts/bench-index.ts replace <dir> [--rounds 20]   # rewrites the store
 import fs from 'bare-fs'
 import os from 'bare-os'
 import Corestore from 'corestore'
@@ -21,7 +22,9 @@ const K = 10
 
 const [phase, dir, ...rest] = Bare.argv.slice(2)
 if (!phase || !dir || phase === '--help') {
-  console.log('usage: bare scripts/bench-index.ts <ingest|rebuild|cold|scan> <dir> [options]')
+  console.log(
+    'usage: bare scripts/bench-index.ts <ingest|rebuild|cold|scan|replace> <dir> [options]'
+  )
   Bare.exit(phase === '--help' ? 0 : 1)
 }
 
@@ -117,13 +120,11 @@ async function searchLatency(
   return `p50 ${times[Math.floor(SEARCHES / 2)]} ms, p95 ${times[Math.floor(SEARCHES * 0.95)]} ms`
 }
 
-if (phase === 'ingest') {
-  fs.rmSync(dir, { recursive: true, force: true })
-  fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(settingsPath, JSON.stringify({ chunks, dims, storage }))
-  const { corestore, rag } = await open()
-  const { spaceId } = await rag.createNamespace({ name: 'bench', space, index: { storage } })
-  const start = Date.now()
+// Writes every document; on an existing store, with new vectors, so each one is replaced.
+async function ingestAll(
+  rag: Awaited<ReturnType<typeof open>>['rag'],
+  spaceId: string
+): Promise<void> {
   for (let next = 0; next < chunks;) {
     const documents = []
     for (let d = 0; d < DOCUMENTS_PER_INGEST && next < chunks; d++) {
@@ -136,7 +137,34 @@ if (phase === 'ingest') {
     }
     await rag.ingest({ namespace: 'bench', documents })
   }
+}
+
+if (phase === 'ingest') {
+  fs.rmSync(dir, { recursive: true, force: true })
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(settingsPath, JSON.stringify({ chunks, dims, storage }))
+  const { corestore, rag } = await open()
+  const { spaceId } = await rag.createNamespace({ name: 'bench', space, index: { storage } })
+  const start = Date.now()
+  await ingestAll(rag, spaceId)
   report('ingest', { chunks: String(chunks), dims: String(dims), storage, time: ms(start) })
+  await rag.close()
+  await corestore.close()
+} else if (phase === 'replace') {
+  // Replaces every document in one process with the index open.
+  const rounds = Number(option('rounds', '20'))
+  state = Date.now() >>> 0
+  const { corestore, rag } = await open()
+  const { spaceId } = await rag.createNamespace({ name: 'bench', space })
+  await rag.search({ scope: { namespace: 'bench' }, vector: vector(), spaceId, k: K })
+  report('replace open')
+  const start = Date.now()
+  for (let round = 1; round <= rounds; round++) await ingestAll(rag, spaceId)
+  report('replace', {
+    rounds: String(rounds),
+    time: ms(start),
+    search: await searchLatency(rag, spaceId)
+  })
   await rag.close()
   await corestore.close()
 } else {

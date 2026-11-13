@@ -210,6 +210,7 @@ export {
   RequestValidationFailedError,
   ModelNotLoadedError,
   ModelRegistryModelNotFoundError,
+  ModelRegistryBusyError,
   TranslationFailedError,
   InvalidSeedFromParamsError,
   KvCacheSeedSourceNotFoundError,

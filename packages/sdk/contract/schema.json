@@ -3139,7 +3139,7 @@
                           },
                           "backendDevice": {
                             "type": "string",
-                            "enum": ["cpu", "gpu"],
+                            "enum": ["cpu", "gpu", "npu"],
                             "title": "BatchCompletionStreamResponseEventsItemEventCompletionStatsStatsBackendDevice"
                           }
                         },
@@ -3273,7 +3273,7 @@
             },
             "backendDevice": {
               "type": "string",
-              "enum": ["cpu", "gpu"],
+              "enum": ["cpu", "gpu", "npu"],
               "title": "BatchCompletionStreamResponseStatsBackendDevice"
             }
           },
@@ -4418,6 +4418,7 @@
                 "finetune",
                 "loadModel",
                 "downloadAsset",
+                "modelRegistry",
                 "rpcServer",
                 "rpcDiscovery",
                 "rag"
@@ -5175,7 +5176,7 @@
                       },
                       "backendDevice": {
                         "type": "string",
-                        "enum": ["cpu", "gpu"],
+                        "enum": ["cpu", "gpu", "npu"],
                         "title": "CompletionOrchestrateResponseEventsItemCompletionStatsStatsBackendDevice"
                       }
                     },
@@ -5946,7 +5947,7 @@
                       },
                       "backendDevice": {
                         "type": "string",
-                        "enum": ["cpu", "gpu"],
+                        "enum": ["cpu", "gpu", "npu"],
                         "title": "CompletionStreamResponseEventsItemCompletionStatsStatsBackendDevice"
                       }
                     },
@@ -13946,7 +13947,7 @@
                       "type": "string"
                     },
                     "device": {
-                      "description": "Device to run inference on: `'gpu'` or `'cpu'`. Default `'gpu'`.",
+                      "description": "Device class to run inference on: `'gpu'`, `'cpu'` or `'npu'`. Default `'gpu'`. `'npu'` is the AMD XDNA2 NPU on Linux x64, which needs XRT 2.25 or newer and read/write access to its /dev/accel node; GPU selection never picks it. With no NPU listed, `'npu'` falls back to the GPU order, then the CPU. It cannot be combined with backend, devices, split-mode (beyond their defaults), main-gpu, rpc-servers or finetuning, and a listed NPU that fails to open runs the load on the CPU.",
                       "type": "string"
                     },
                     "predict": {
@@ -14074,12 +14075,12 @@
                       "minLength": 1
                     },
                     "devices": {
-                      "description": "Explicit ordered native device names, for example RPC0,RPC1. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order.",
+                      "description": "Explicit ordered native device names, for example RPC0,RPC1, or XDNA0 for the AMD XDNA NPU alone, which reports `backendDevice` `'npu'`; naming XDNA0 without a listed NPU fails the load, and a load with XDNA0 in devices, alone or with other devices, cannot finetune. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order.",
                       "type": "string",
                       "minLength": 1
                     },
                     "split-mode": {
-                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
+                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctx_size` explicitly). `'tensor'` is rejected with the XDNA0 NPU.",
                       "type": "string",
                       "enum": ["none", "layer", "tensor"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode"
@@ -14481,7 +14482,7 @@
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigImageNoUpscale"
                     },
                     "mmproj-use-gpu": {
-                      "description": "Run the multimodal projector (mmproj / vision encoder) on the GPU (multimodal models only). `true` forces GPU, `false` forces CPU. When unset, the backend is auto-selected per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on every other Android GPU (Arm Mali, Adreno <800, and undetectable Adreno tiers), with the LLM layers still on the GPU. Only honoured when the model itself runs on a GPU backend — ignored with a warning on CPU.",
+                      "description": "Run the multimodal projector (mmproj / vision encoder) on the GPU (multimodal models only). `true` forces GPU, `false` forces CPU. When unset, the backend is auto-selected per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on every other Android GPU (Arm Mali, Adreno <800, and undetectable Adreno tiers), with the LLM layers still on the GPU. On an NPU load (`device: 'npu'` or XDNA0 as the first local device in devices) it runs on a GPU beside the NPU, else the CPU; `true` with no GPU runs it on the NPU. Only honoured when the model itself runs on a GPU or NPU backend — ignored with a warning on CPU.",
                       "type": "boolean"
                     }
                   },
@@ -21212,7 +21213,7 @@
                   "properties": {
                     "mode": {
                       "default": "diffusion",
-                      "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX / Qwen-Image pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` selects MiniMax-H3 text/image-to-video (optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU. At 832x480, the default walk with resident weights needs at least 20 GB free VRAM. `world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can reduce that requirement.",
+                      "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX / Qwen-Image pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, external tokenizer, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` selects MiniMax-H3 text/image-to-video (optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU. At 832x480, the default walk with resident weights needs at least 20 GB free VRAM. `world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can reduce that requirement.",
                       "type": "string",
                       "enum": ["diffusion", "upscale", "video", "world"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigMode"
@@ -21228,7 +21229,7 @@
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigDevice"
                     },
                     "main-gpu": {
-                      "description": "GPU to pin when `device` is \"gpu\": a GPU-device index, \"integrated\", or \"dedicated\" (the discrete GPU with the most VRAM). Omit to let the backend choose the first enumerated device. Resolved against the addon's own ggml device enumeration, so it cannot desync from the device list the backend actually uses. If an explicit request cannot be satisfied (e.g. \"integrated\" with no integrated GPU, \"dedicated\" with no discrete GPU, or an out-of-range index) the addon falls back to CPU rather than substituting a different GPU. Stripped on mobile (single-GPU devices).",
+                      "description": "GPU to pin when `device` is \"gpu\": a GPU-device index, \"integrated\", or \"dedicated\" (the discrete GPU with the most VRAM). Omit to let automatic placement choose: a dedicated GPU first, then an integrated one, taking the largest available memory budget within each. Resolved against the addon's own ggml device enumeration, so it cannot desync from the device list the backend actually uses. If an explicit request cannot be satisfied (e.g. \"integrated\" with no integrated GPU, \"dedicated\" with no discrete GPU, or an out-of-range index) the addon falls back to CPU rather than substituting a different GPU. Stripped on mobile (single-GPU devices).",
                       "anyOf": [
                         {
                           "type": "integer",
@@ -21655,7 +21656,7 @@
                       ]
                     },
                     "llmModelSrc": {
-                      "description": "LLM text encoder model — required for FLUX.2 [klein] (Qwen3), FLUX.3 Image Klein, Qwen-Image-2.1 and Ideogram 4 (Qwen3-VL), LTX-2 video (Gemma), and MiniMax-H3 (H3-specific Qwen3-VL).",
+                      "description": "LLM text encoder model — required for FLUX.2 [klein] (Qwen3), FLUX.3 Image Klein, Qwen-Image-2.1 and Ideogram 4 (Qwen3-VL), MOSS-Image (Qwen3.5), LTX-2 video (Gemma), and MiniMax-H3 (H3-specific Qwen3-VL).",
                       "anyOf": [
                         {
                           "type": "string"
@@ -21853,7 +21854,7 @@
                       ]
                     },
                     "vaeModelSrc": {
-                      "description": "VAE decoder model, required for Qwen-Image-2.1, FLUX.2 [klein], FLUX.3 Image Klein, Ideogram 4, LTX-2 video, and MiniMax-H3 video; optional for SDXL.",
+                      "description": "VAE decoder model, required for Qwen-Image-2.1, FLUX.2 [klein], FLUX.3 Image Klein, Ideogram 4, MOSS-Image, LTX-2 video, and MiniMax-H3 video; optional for SDXL.",
                       "anyOf": [
                         {
                           "type": "string"
@@ -22146,6 +22147,105 @@
                           },
                           "required": ["src"],
                           "title": "LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc"
+                        }
+                      ]
+                    },
+                    "tokenizerSrc": {
+                      "description": "External `tokenizer.json` for the Qwen3.5 text encoder — MOSS-Image only. Requires diffusion mode, llmModelSrc (Qwen3.5) and vaeModelSrc. Layout prompts can be passed as a JSON string.",
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "src": {
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                            },
+                            "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
+                              "type": "string"
+                            },
+                            "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
+                              "type": "string"
+                            },
+                            "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
+                              "type": "string"
+                            },
+                            "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
+                              "type": "string"
+                            },
+                            "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
+                              "type": "string"
+                            },
+                            "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                              "type": "number"
+                            },
+                            "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                              "type": "string"
+                            },
+                            "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
+                              "type": "number"
+                            },
+                            "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
+                              "type": "string"
+                            },
+                            "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "llamacpp-completion",
+                                    "whispercpp-transcription",
+                                    "bci-whispercpp-transcription",
+                                    "llamacpp-embedding",
+                                    "llamacpp-decision",
+                                    "llamacpp-rerank",
+                                    "nmtcpp-translation",
+                                    "onnx-tts",
+                                    "tts-ggml",
+                                    "parakeet-transcription",
+                                    "moss-transcribe",
+                                    "ggml-ocr",
+                                    "sdcpp-generation",
+                                    "audiogen-ggml",
+                                    "ggml-vla",
+                                    "ggml-image-embedding",
+                                    "ggml-classification",
+                                    "llm",
+                                    "whisper",
+                                    "bci",
+                                    "embeddings",
+                                    "nmt",
+                                    "parakeet",
+                                    "tts",
+                                    "ocr",
+                                    "diffusion",
+                                    "audiogen",
+                                    "vla",
+                                    "classification"
+                                  ],
+                                  "title": "LoadModelSrcRequestSdcppGenerationModelConfigTokenizerSrcAddon"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "vad"
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["src"],
+                          "title": "LoadModelSrcRequestSdcppGenerationModelConfigTokenizerSrc"
                         }
                       ]
                     },
@@ -24515,6 +24615,11 @@
         },
         "registrySource": {
           "type": "string"
+        },
+        "requestId": {
+          "description": "Identifier for this in-flight query, generated by the caller. Exposed on the decorated promise so callers can stop a query that is waiting for the registry with `cancel({ requestId })`.",
+          "type": "string",
+          "minLength": 1
         }
       },
       "required": ["type", "registryPath", "registrySource"]
@@ -24662,6 +24767,11 @@
         "type": {
           "type": "string",
           "const": "modelRegistryList"
+        },
+        "requestId": {
+          "description": "Identifier for this in-flight query, generated by the caller. Exposed on the decorated promise so callers can stop a query that is waiting for the registry with `cancel({ requestId })`.",
+          "type": "string",
+          "minLength": 1
         }
       },
       "required": ["type"]
@@ -24842,6 +24952,11 @@
             "other"
           ],
           "title": "ModelRegistrySearchRequestAddon"
+        },
+        "requestId": {
+          "description": "Identifier for this in-flight query, generated by the caller. Exposed on the decorated promise so callers can stop a query that is waiting for the registry with `cancel({ requestId })`.",
+          "type": "string",
+          "minLength": 1
         }
       },
       "required": ["type"]

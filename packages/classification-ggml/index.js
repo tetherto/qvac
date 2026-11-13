@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ImageClassifier = exports.BridgeDepth = exports.MegaLoc = void 0;
+exports.ImageClassifier = exports.BridgeDepth = exports.assessFit = exports.MegaLoc = void 0;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 const fs = require("bare-fs");
 const env = require("bare-env");
@@ -11,6 +11,9 @@ const megaloc_1 = require("./megaloc");
 var megaloc_2 = require("./megaloc");
 Object.defineProperty(exports, "MegaLoc", { enumerable: true, get: function () { return megaloc_2.MegaLoc; } });
 const bridgedepth_1 = require("./bridgedepth");
+const fit_1 = require("./fit");
+var fit_2 = require("./fit");
+Object.defineProperty(exports, "assessFit", { enumerable: true, get: function () { return fit_2.assessFit; } });
 var bridgedepth_2 = require("./bridgedepth");
 Object.defineProperty(exports, "BridgeDepth", { enumerable: true, get: function () { return bridgedepth_2.BridgeDepth; } });
 const addon_1 = require("./addon");
@@ -219,4 +222,5 @@ const cjsExports = ImageClassifier;
 cjsExports.ImageClassifier = ImageClassifier;
 cjsExports.MegaLoc = megaloc_1.MegaLoc;
 cjsExports.BridgeDepth = bridgedepth_1.BridgeDepth;
+cjsExports.assessFit = fit_1.assessFit;
 module.exports = cjsExports;

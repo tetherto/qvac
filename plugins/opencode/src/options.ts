@@ -34,7 +34,7 @@ export interface ResolvedOptions {
   readonly listenTimeoutMs: number
   // Mirror host milestones onto OpenCode's stderr and enable per-request traces.
   readonly debug: boolean
-  // Force `qvac/<model>` as this project's default + small model so plain
+  // Force `qvac/<model>` as this project's default model so plain
   // `opencode` uses it. Off leaves any user-configured default untouched.
   readonly setDefaultModel: boolean
 }
@@ -54,7 +54,7 @@ export const DEFAULT_OPTIONS: ResolvedOptions = {
 }
 
 // A partial, unvalidated option set from any single source (qvac.json, the
-// opencode.json plugin tuple, or env). `unknown` values are validated by
+// opencode.json plugin entry options, or env). `unknown` values are validated by
 // `coerce*` before they reach `ResolvedOptions`.
 export type RawOptions = Partial<Record<keyof ResolvedOptions, unknown>>
 
@@ -202,7 +202,7 @@ export function resolveOptions(params: {
 }
 
 // The env subset the host needs to load + serve the model. The plugin resolves
-// options once (honouring qvac.json + plugin tuple) and passes the resolved
+// options once (honouring qvac.json + plugin entry options) and passes the resolved
 // values to the host so the host never re-reads config.
 export function hostEnv(options: ResolvedOptions): Record<string, string> {
   return {
