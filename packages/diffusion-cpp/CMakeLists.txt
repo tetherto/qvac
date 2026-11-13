@@ -138,6 +138,7 @@ add_bare_module(inference-addon-sd NAME ${module_name} EXPORTS ${BACKEND_DL_EXPO
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SdModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/WorldSessionModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendLoader.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/PerformanceProfiles.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/EsrganUpscaler.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ImageCodec.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/AviWriter.cpp

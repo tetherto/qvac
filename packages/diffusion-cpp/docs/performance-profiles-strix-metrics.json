@@ -1,0 +1,1423 @@
+{
+  "date": "2026-11-05",
+  "platform": "Linux x64",
+  "accelerator": "AMD Radeon 8060S, Ryzen AI MAX+ 395, gfx1151",
+  "apis": {
+    "HIP": "ROCm 7.2.2; host clang 20.1.8, HIP clang 22",
+    "Vulkan": "RADV Mesa 25.2.8, Vulkan 1.4.318"
+  },
+  "runtime": "Bare 1.28.4",
+  "candidate_native_revision": "4e027082eadc94819adfdcde8187d946e875cc56",
+  "final_native_revision": "def6a7c3bd3105b7e32d288ace674a78c7ead4c3",
+  "hip_module_sha256": "911513e6f35c3b1ae77da9577ac72b4b7085a2afdef8b4d0978c3cd6bba43d6f",
+  "backend_tests": {
+    "passed": 4,
+    "failed": 0
+  },
+  "timing": "Native generationMs; warmups excluded. Incomplete or contended cases are not accepted speed results.",
+  "cases": [
+    {
+      "name": "strix-final-flux2-hip-auto",
+      "native_revision": "def6a7c3bd3105b7e32d288ace674a78c7ead4c3",
+      "native_sha256": "47c13669b8991ef0542413c60a16d3437c5a76af00d7dfc1e422382d9ca4bb19",
+      "config": {
+        "device": "gpu",
+        "backend": "rocm0",
+        "threads": 8,
+        "diffusion_fa": true,
+        "verbosity": 2,
+        "params_backend": "rocm0",
+        "prediction": "flux2_flow",
+        "performance_profile": "auto",
+        "backendsDir": "backends/hip"
+      },
+      "requests": [
+        {
+          "name": "prompt-0",
+          "params": {
+            "prompt": "A red panda walking on a mossy log in a misty forest, natural daylight, realistic fur, detailed photograph.",
+            "width": 1024,
+            "height": 1024,
+            "steps": 10,
+            "cfg_scale": 1,
+            "guidance": 1,
+            "seed": 42
+          }
+        }
+      ],
+      "load_ms": 2433,
+      "generation_ms": [
+        67407
+      ],
+      "warmup_ms": [
+        67467
+      ],
+      "median_generation_ms": 67407,
+      "runs": [
+        {
+          "warmup": true,
+          "prompt_index": 0,
+          "stats": {
+            "modelLoadMs": 2431,
+            "generationMs": 67467,
+            "totalGenerationMs": 67467,
+            "totalWallMs": 67467,
+            "totalSteps": 10,
+            "totalGenerations": 1,
+            "totalImages": 1,
+            "totalPixels": 1048576,
+            "width": 1024,
+            "height": 1024,
+            "seed": 42,
+            "conditionerMs": 349.972328,
+            "denoiseMs": 27577.094575,
+            "vaeMs": 39437.675935,
+            "stepsPerSecond": 0.362619781166704,
+            "postProcessMs": 103.182376
+          }
+        },
+        {
+          "warmup": false,
+          "prompt_index": 0,
+          "stats": {
+            "modelLoadMs": 2431,
+            "generationMs": 67407,
+            "totalGenerationMs": 134874,
+            "totalWallMs": 134874,
+            "totalSteps": 20,
+            "totalGenerations": 2,
+            "totalImages": 2,
+            "totalPixels": 2097152,
+            "width": 1024,
+            "height": 1024,
+            "seed": 42,
+            "conditionerMs": 273.093489,
+            "denoiseMs": 27803.675824,
+            "vaeMs": 39228.412482,
+            "stepsPerSecond": 0.3596646739553785,
+            "postProcessMs": 102.778805
+          }
+        }
+      ],
+      "sampled_memory": {
+        "peak_process_group_rss_kib": 912580,
+        "peak_vram_bytes": 157433856,
+        "peak_gtt_bytes": 11518525440,
+        "sampling_interval_seconds": 3
+      },
+      "native_profile_events": [
+        "Performance profile: flash=0, h3_local_ops_candidate=0, vae_gemm_candidate=0, ltx_f16=0"
+      ],
+      "outputs": [
+        {
+          "file": "0-0-0.png",
+          "warmup": true,
+          "sha256": "50db19efae00d1514897ab57b973165fb3b9a14b33a55f572e084b2fdc6d97a7"
+        },
+        {
+          "file": "0-1-0.png",
+          "warmup": false,
+          "sha256": "50db19efae00d1514897ab57b973165fb3b9a14b33a55f572e084b2fdc6d97a7"
+        }
+      ]
+    },
+    {
+      "name": "strix-flux2-hip-auto",
+      "native_revision": "4e027082eadc94819adfdcde8187d946e875cc56",
+      "native_sha256": "e9f8f2016d3321f253400ca58bc4ffc61566b684287e9bfcde879ffce19c8b34",
+      "config": {
+        "device": "gpu",
+        "backend": "rocm0",
+        "threads": 8,
+        "diffusion_fa": true,
+        "verbosity": 2,
+        "params_backend": "rocm0",
+        "prediction": "flux2_flow",
+        "performance_profile": "auto",
+        "backendsDir": "backends/hip"
+      },
+      "requests": [
+        {
+          "name": "prompt-0",
+          "params": {
+            "prompt": "A red panda walking on a mossy log in a misty forest, natural daylight, realistic fur, detailed photograph.",
+            "width": 1024,
+            "height": 1024,
+            "steps": 10,
+            "cfg_scale": 1,
+            "guidance": 1,
+            "seed": 42
+          }
+        }
+      ],
+      "load_ms": 2431,
+      "generation_ms": [
+        34008,
+        34020
+      ],
+      "warmup_ms": [
+        34999
+      ],
+      "median_generation_ms": 34014.0,
+      "runs": [
+        {
+          "warmup": true,
+          "prompt_index": 0,
+          "stats": {
+            "modelLoadMs": 2428,
+            "generationMs": 34999,
+            "totalGenerationMs": 34999,
+            "totalWallMs": 34999,
+            "totalSteps": 10,
+            "totalGenerations": 1,
+            "totalImages": 1,
+            "totalPixels": 1048576,
+            "width": 1024,
+            "height": 1024,
+            "seed": 42,
+            "conditionerMs": 356.981373,
+            "denoiseMs": 29559.937577,
+            "vaeMs": 4973.241206,
+            "stepsPerSecond": 0.3382957076262841,
+            "postProcessMs": 109.269234
+          }
+        },
+        {
+          "warmup": false,
+          "prompt_index": 0,
+          "stats": {
+            "modelLoadMs": 2428,
+            "generationMs": 34008,
+            "totalGenerationMs": 69007,
+            "totalWallMs": 69007,
+            "totalSteps": 20,
+            "totalGenerations": 2,
+            "totalImages": 2,
+            "totalPixels": 2097152,
+            "width": 1024,
+            "height": 1024,
+            "seed": 42,
+            "conditionerMs": 287.727476,
+            "denoiseMs": 28669.906739,
+            "vaeMs": 4941.173319,
+            "stepsPerSecond": 0.348797786160807,
+            "postProcessMs": 109.618254
+          }
+        },
+        {
+          "warmup": false,
+          "prompt_index": 0,
+          "stats": {
+            "modelLoadMs": 2428,
+            "generationMs": 34020,
+            "totalGenerationMs": 103027,
+            "totalWallMs": 103027,
+            "totalSteps": 30,
+            "totalGenerations": 3,
+            "totalImages": 3,
+            "totalPixels": 3145728,
+            "width": 1024,
+            "height": 1024,
+            "seed": 42,
+            "conditionerMs": 299.131342,
+            "denoiseMs": 28663.331088,
+            "vaeMs": 4948.589432,
+            "stepsPerSecond": 0.3488778038148725,
+            "postProcessMs": 109.160483
+          }
+        }
+      ],
+      "sampled_memory": {
+        "peak_process_group_rss_kib": 916124,
+        "peak_vram_bytes": 159555584,
+        "peak_gtt_bytes": 16463622144,
+        "sampling_interval_seconds": 3
+      },
+      "native_profile_events": [
+        "Performance profile: flash=0, h3_local_ops_candidate=0, vae_gemm_candidate=1, ltx_f16=0"
+      ],
+      "outputs": [
+        {
+          "file": "0-0-0.png",
+          "warmup": true,
+          "sha256": "1fa6777ce265cbb5f36222bceff42302af3147c4b2067670dd426b2ce23204b2"
+        },
+        {
+          "file": "0-1-0.png",
+          "warmup": false,
+          "sha256": "71edbbc574e4cee0545208326ec43f29c50110dddf5a399ce5e7fb01ebce5a6f"
+        },
+        {
+          "file": "0-2-0.png",
+          "warmup": false,
+          "sha256": "1fa6777ce265cbb5f36222bceff42302af3147c4b2067670dd426b2ce23204b2"
+        }
+      ]
+    },
+    {
+      "name": "strix-flux2-hip-off",
+      "native_revision": "4e027082eadc94819adfdcde8187d946e875cc56",
+      "native_sha256": "e9f8f2016d3321f253400ca58bc4ffc61566b684287e9bfcde879ffce19c8b34",
+      "config": {
+        "device": "gpu",
+        "backend": "rocm0",
+        "threads": 8,
+        "diffusion_fa": true,
+        "verbosity": 2,
+        "params_backend": "rocm0",
+        "prediction": "flux2_flow",
+        "performance_profile": "off",
+        "backendsDir": "backends/hip"
+      },
+      "requests": [
+        {
+          "name": "prompt-0",
+          "params": {
+            "prompt": "A red panda walking on a mossy log in a misty forest, natural daylight, realistic fur, detailed photograph.",
+            "width": 1024,
+            "height": 1024,
+            "steps": 10,
+            "cfg_scale": 1,
+            "guidance": 1,
+            "seed": 42
+          }
+        }
+      ],
+      "load_ms": 3152,
+      "generation_ms": [
+        68411,
+        69173
+      ],
+      "warmup_ms": [
+        69782
+      ],
+      "median_generation_ms": 68792.0,
+      "runs": [
+        {
+          "warmup": true,
+          "prompt_index": 0,
+          "stats": {
+            "modelLoadMs": 3145,
+            "generationMs": 69782,
+            "totalGenerationMs": 69782,
+            "totalWallMs": 69782,
+            "totalSteps": 10,
+            "totalGenerations": 1,
+            "totalImages": 1,
+            "totalPixels": 1048576,
+            "width": 1024,
+            "height": 1024,
+            "seed": 42,
+            "conditionerMs": 371.424877,
+            "denoiseMs": 29747.933721,
+            "vaeMs": 39548.76032,
+            "stepsPerSecond": 0.3361578015396977,
+            "postProcessMs": 114.840825
+          }
+        },
+        {
+          "warmup": false,
+          "prompt_index": 0,
+          "stats": {
+            "modelLoadMs": 3145,
+            "generationMs": 68411,
+            "totalGenerationMs": 138193,
+            "totalWallMs": 138193,
+            "totalSteps": 20,
+            "totalGenerations": 2,
+            "totalImages": 2,
+            "totalPixels": 2097152,
+            "width": 1024,
+            "height": 1024,
+            "seed": 42,
+            "conditionerMs": 296.362458,
+            "denoiseMs": 28552.1585,
+            "vaeMs": 39444.543461,
+            "stepsPerSecond": 0.3502362176926133,
+            "postProcessMs": 118.373781
+          }
+        },
+        {
+          "warmup": false,
+          "prompt_index": 0,
+          "stats": {
+            "modelLoadMs": 3145,
+            "generationMs": 69173,
+            "totalGenerationMs": 207366,
+            "totalWallMs": 207366,
+            "totalSteps": 30,
+            "totalGenerations": 3,
+            "totalImages": 3,
+            "totalPixels": 3145728,
+            "width": 1024,
+            "height": 1024,
+            "seed": 42,
+            "conditionerMs": 294.870241,
+            "denoiseMs": 28838.380936,
+            "vaeMs": 39928.652107,
+            "stepsPerSecond": 0.3467601049515452,
+            "postProcessMs": 111.784195
+          }
+        }
+      ],
+      "sampled_memory": {
+        "peak_process_group_rss_kib": 2618692,
+        "peak_vram_bytes": 168341504,
+        "peak_gtt_bytes": 11518525440,
+        "sampling_interval_seconds": 3
+      },
+      "native_profile_events": [
+        "Performance profile: flash=0, h3_local_ops_candidate=0, vae_gemm_candidate=0, ltx_f16=0"
+      ],
+      "outputs": [
+        {
+          "file": "0-0-0.png",
+          "warmup": true,
+          "sha256": "50db19efae00d1514897ab57b973165fb3b9a14b33a55f572e084b2fdc6d97a7"
+        },
+        {
+          "file": "0-1-0.png",
+          "warmup": false,
+          "sha256": "50db19efae00d1514897ab57b973165fb3b9a14b33a55f572e084b2fdc6d97a7"
+        },
+        {
+          "file": "0-2-0.png",
+          "warmup": false,
+          "sha256": "50db19efae00d1514897ab57b973165fb3b9a14b33a55f572e084b2fdc6d97a7"
+        }
+      ]
+    },
+    {
+      "name": "strix-flux2-vulkan-auto",
+      "native_revision": "def6a7c3bd3105b7e32d288ace674a78c7ead4c3",
+      "native_sha256": "47c13669b8991ef0542413c60a16d3437c5a76af00d7dfc1e422382d9ca4bb19",
+      "config": {
+        "device": "gpu",
+        "backend": "vulkan0",
+        "threads": 8,
+        "diffusion_fa": true,
+        "verbosity": 2,
+        "params_backend": "vulkan0",
+        "prediction": "flux2_flow",
+        "performance_profile": "auto",
+        "backendsDir": "backends/vulkan"
+      },
+      "requests": [
+        {
+          "name": "prompt-0",
+          "params": {
+            "prompt": "A red panda walking on a mossy log in a misty forest, natural daylight, realistic fur, detailed photograph.",
+            "width": 1024,
+            "height": 1024,
+            "steps": 10,
+            "cfg_scale": 1,
+            "guidance": 1,
+            "seed": 42
+          }
+        }
+      ],
+      "load_ms": 1876,
+      "generation_ms": [
+        32154
+      ],
+      "warmup_ms": [
+        30905
+      ],
+      "median_generation_ms": 32154,
+      "runs": [
+        {
+          "warmup": true,
+          "prompt_index": 0,
+          "stats": {
+            "modelLoadMs": 1874,
+            "generationMs": 30905,
+            "totalGenerationMs": 30905,
+            "totalWallMs": 30905,
+            "totalSteps": 10,
+            "totalGenerations": 1,
+            "totalImages": 1,
+            "totalPixels": 1048576,
+            "width": 1024,
+            "height": 1024,
+            "seed": 42,
+            "conditionerMs": 378.633188,
+            "denoiseMs": 28489.459847,
+            "vaeMs": 1875.628928,
+            "stepsPerSecond": 0.35100700587880823,
+            "postProcessMs": 162.055605
+          }
+        },
+        {
+          "warmup": false,
+          "prompt_index": 0,
+          "stats": {
+            "modelLoadMs": 1874,
+            "generationMs": 32154,
+            "totalGenerationMs": 63059,
+            "totalWallMs": 63059,
+            "totalSteps": 20,
+            "totalGenerations": 2,
+            "totalImages": 2,
+            "totalPixels": 2097152,
+            "width": 1024,
+            "height": 1024,
+            "seed": 42,
+            "conditionerMs": 338.930341,
+            "denoiseMs": 29694.728158,
+            "vaeMs": 1958.035045,
+            "stepsPerSecond": 0.3367601126634971,
+            "postProcessMs": 162.307043
+          }
+        }
+      ],
+      "sampled_memory": {
+        "peak_process_group_rss_kib": 566020,
+        "peak_vram_bytes": 2079870976,
+        "peak_gtt_bytes": 9060470784,
+        "sampling_interval_seconds": 3
+      },
+      "native_profile_events": [
+        "Performance profile: flash=0, h3_local_ops_candidate=0, vae_gemm_candidate=0, ltx_f16=0"
+      ],
+      "outputs": [
+        {
+          "file": "0-0-0.png",
+          "warmup": true,
+          "sha256": "1d40eade5de51de80a703b313807179ba797fb497744cedea050e06b2a291c71"
+        },
+        {
+          "file": "0-1-0.png",
+          "warmup": false,
+          "sha256": "1d40eade5de51de80a703b313807179ba797fb497744cedea050e06b2a291c71"
+        }
+      ]
+    },
+    {
+      "name": "strix-flux2-vulkan-off",
+      "native_revision": "def6a7c3bd3105b7e32d288ace674a78c7ead4c3",
+      "native_sha256": "47c13669b8991ef0542413c60a16d3437c5a76af00d7dfc1e422382d9ca4bb19",
+      "config": {
+        "device": "gpu",
+        "backend": "vulkan0",
+        "threads": 8,
+        "diffusion_fa": true,
+        "verbosity": 2,
+        "params_backend": "vulkan0",
+        "prediction": "flux2_flow",
+        "performance_profile": "off",
+        "backendsDir": "backends/vulkan"
+      },
+      "requests": [
+        {
+          "name": "prompt-0",
+          "params": {
+            "prompt": "A red panda walking on a mossy log in a misty forest, natural daylight, realistic fur, detailed photograph.",
+            "width": 1024,
+            "height": 1024,
+            "steps": 10,
+            "cfg_scale": 1,
+            "guidance": 1,
+            "seed": 42
+          }
+        }
+      ],
+      "load_ms": 3207,
+      "generation_ms": [
+        31104
+      ],
+      "warmup_ms": [
+        30408
+      ],
+      "median_generation_ms": 31104,
+      "runs": [
+        {
+          "warmup": true,
+          "prompt_index": 0,
+          "stats": {
+            "modelLoadMs": 3205,
+            "generationMs": 30408,
+            "totalGenerationMs": 30408,
+            "totalWallMs": 30408,
+            "totalSteps": 10,
+            "totalGenerations": 1,
+            "totalImages": 1,
+            "totalPixels": 1048576,
+            "width": 1024,
+            "height": 1024,
+            "seed": 42,
+            "conditionerMs": 375.361438,
+            "denoiseMs": 28021.46204,
+            "vaeMs": 1886.578338,
+            "stepsPerSecond": 0.3568693163020983,
+            "postProcessMs": 125.424064
+          }
+        },
+        {
+          "warmup": false,
+          "prompt_index": 0,
+          "stats": {
+            "modelLoadMs": 3205,
+            "generationMs": 31104,
+            "totalGenerationMs": 61512,
+            "totalWallMs": 61512,
+            "totalSteps": 20,
+            "totalGenerations": 2,
+            "totalImages": 2,
+            "totalPixels": 2097152,
+            "width": 1024,
+            "height": 1024,
+            "seed": 42,
+            "conditionerMs": 334.211639,
+            "denoiseMs": 28763.566135,
+            "vaeMs": 1881.966873,
+            "stepsPerSecond": 0.3476620372128277,
+            "postProcessMs": 124.60484
+          }
+        }
+      ],
+      "sampled_memory": {
+        "peak_process_group_rss_kib": 2345356,
+        "peak_vram_bytes": 2079870976,
+        "peak_gtt_bytes": 9060470784,
+        "sampling_interval_seconds": 3
+      },
+      "native_profile_events": [
+        "Performance profile: flash=0, h3_local_ops_candidate=0, vae_gemm_candidate=0, ltx_f16=0"
+      ],
+      "outputs": [
+        {
+          "file": "0-0-0.png",
+          "warmup": true,
+          "sha256": "1d40eade5de51de80a703b313807179ba797fb497744cedea050e06b2a291c71"
+        },
+        {
+          "file": "0-1-0.png",
+          "warmup": false,
+          "sha256": "1d40eade5de51de80a703b313807179ba797fb497744cedea050e06b2a291c71"
+        }
+      ]
+    },
+    {
+      "name": "strix-h3-hip-auto",
+      "native_revision": "def6a7c3bd3105b7e32d288ace674a78c7ead4c3",
+      "native_sha256": "47c13669b8991ef0542413c60a16d3437c5a76af00d7dfc1e422382d9ca4bb19",
+      "config": {
+        "device": "gpu",
+        "backend": "rocm0",
+        "threads": 8,
+        "diffusion_fa": true,
+        "verbosity": 2,
+        "params_backend": "cpu",
+        "performance_profile": "auto",
+        "backendsDir": "backends/hip"
+      },
+      "requests": [
+        {
+          "name": "prompt-0",
+          "params": {
+            "mode": "txt2vid",
+            "prompt": "A red panda walks slowly along a mossy log in a misty green forest. The camera tracks smoothly beside it. Natural daylight, realistic fur and paws, gentle forest ambience with birds and soft footsteps, no music, no dialogue.",
+            "width": 512,
+            "height": 288,
+            "video_frames": 39,
+            "fps": 24,
+            "steps": 8,
+            "cfg_scale": 1,
+            "seed": 11,
+            "vae_tiling": true
+          }
+        }
+      ],
+      "load_ms": 11818,
+      "generation_ms": [
+        61067,
+        61039
+      ],
+      "warmup_ms": [
+        62254
+      ],
+      "median_generation_ms": 61053.0,
+      "runs": [
+        {
+          "warmup": true,
+          "prompt_index": 0,
+          "stats": {
+            "modelLoadMs": 11816,
+            "generationMs": 62254,
+            "totalGenerationMs": 62254,
+            "totalWallMs": 62254,
+            "totalSteps": 8,
+            "totalGenerations": 1,
+            "totalImages": 0,
+            "totalPixels": 5750784,
+            "totalVideos": 1,
+            "totalVideoFrames": 39,
+            "width": 512,
+            "height": 288,
+            "seed": 11,
+            "videoFrames": 39,
+            "fps": 24,
+            "hasAudio": 1,
+            "audioSampleRate": 32000,
+            "conditionerMs": 1783.133902,
+            "denoiseMs": 45439.313202,
+            "vaeMs": 14976.214589,
+            "stepsPerSecond": 0.17605899905300246,
+            "postProcessMs": 56.207807
+          }
+        },
+        {
+          "warmup": false,
+          "prompt_index": 0,
+          "stats": {
+            "modelLoadMs": 11816,
+            "generationMs": 61067,
+            "totalGenerationMs": 123321,
+            "totalWallMs": 123321,
+            "totalSteps": 16,
+            "totalGenerations": 2,
+            "totalImages": 0,
+            "totalPixels": 11501568,
+            "totalVideos": 2,
+            "totalVideoFrames": 78,
+            "width": 512,
+            "height": 288,
+            "seed": 11,
+            "videoFrames": 39,
+            "fps": 24,
+            "hasAudio": 1,
+            "audioSampleRate": 32000,
+            "conditionerMs": 1301.458909,
+            "denoiseMs": 45120.569373,
+            "vaeMs": 14589.013994,
+            "stepsPerSecond": 0.17730272714127526,
+            "postProcessMs": 56.04338
+          }
+        },
+        {
+          "warmup": false,
+          "prompt_index": 0,
+          "stats": {
+            "modelLoadMs": 11816,
+            "generationMs": 61039,
+            "totalGenerationMs": 184360,
+            "totalWallMs": 184360,
+            "totalSteps": 24,
+            "totalGenerations": 3,
+            "totalImages": 0,
+            "totalPixels": 17252352,
+            "totalVideos": 3,
+            "totalVideoFrames": 117,
+            "width": 512,
+            "height": 288,
+            "seed": 11,
+            "videoFrames": 39,
+            "fps": 24,
+            "hasAudio": 1,
+            "audioSampleRate": 32000,
+            "conditionerMs": 1284.904687,
+            "denoiseMs": 45123.123316,
+            "vaeMs": 14574.931643,
+            "stepsPerSecond": 0.17729269190821542,
+            "postProcessMs": 56.337198
+          }
+        }
+      ],
+      "sampled_memory": {
+        "peak_process_group_rss_kib": 38177752,
+        "peak_vram_bytes": 170864640,
+        "peak_gtt_bytes": 24100978688,
+        "sampling_interval_seconds": 3
+      },
+      "native_profile_events": [
+        "Performance profile: flash=1, h3_local_ops_candidate=0, vae_gemm_candidate=0, ltx_f16=0"
+      ],
+      "outputs": [
+        {
+          "file": "0-0-0.avi",
+          "warmup": true,
+          "sha256": "e901d2f39b5a4d752cfa3029cf947439e2e4c8253410b878b7fc964cf13db16d"
+        },
+        {
+          "file": "0-1-0.avi",
+          "warmup": false,
+          "sha256": "e901d2f39b5a4d752cfa3029cf947439e2e4c8253410b878b7fc964cf13db16d"
+        },
+        {
+          "file": "0-2-0.avi",
+          "warmup": false,
+          "sha256": "e901d2f39b5a4d752cfa3029cf947439e2e4c8253410b878b7fc964cf13db16d"
+        }
+      ]
+    },
+    {
+      "name": "strix-h3-hip-off",
+      "native_revision": "def6a7c3bd3105b7e32d288ace674a78c7ead4c3",
+      "native_sha256": "47c13669b8991ef0542413c60a16d3437c5a76af00d7dfc1e422382d9ca4bb19",
+      "config": {
+        "device": "gpu",
+        "backend": "rocm0",
+        "threads": 8,
+        "diffusion_fa": true,
+        "verbosity": 2,
+        "params_backend": "cpu",
+        "performance_profile": "off",
+        "backendsDir": "backends/hip"
+      },
+      "requests": [
+        {
+          "name": "prompt-0",
+          "params": {
+            "mode": "txt2vid",
+            "prompt": "A red panda walks slowly along a mossy log in a misty green forest. The camera tracks smoothly beside it. Natural daylight, realistic fur and paws, gentle forest ambience with birds and soft footsteps, no music, no dialogue.",
+            "width": 512,
+            "height": 288,
+            "video_frames": 39,
+            "fps": 24,
+            "steps": 8,
+            "cfg_scale": 1,
+            "seed": 11,
+            "vae_tiling": true
+          }
+        }
+      ],
+      "load_ms": 15499,
+      "generation_ms": [
+        70276,
+        69674
+      ],
+      "warmup_ms": [
+        72774
+      ],
+      "median_generation_ms": 69975.0,
+      "runs": [
+        {
+          "warmup": true,
+          "prompt_index": 0,
+          "stats": {
+            "modelLoadMs": 15497,
+            "generationMs": 72774,
+            "totalGenerationMs": 72774,
+            "totalWallMs": 72774,
+            "totalSteps": 8,
+            "totalGenerations": 1,
+            "totalImages": 0,
+            "totalPixels": 5750784,
+            "totalVideos": 1,
+            "totalVideoFrames": 39,
+            "width": 512,
+            "height": 288,
+            "seed": 11,
+            "videoFrames": 39,
+            "fps": 24,
+            "hasAudio": 1,
+            "audioSampleRate": 32000,
+            "conditionerMs": 2187.141459,
+            "denoiseMs": 46871.872181,
+            "vaeMs": 23659.175975,
+            "stepsPerSecond": 0.17067805546804857,
+            "postProcessMs": 55.947381
+          }
+        },
+        {
+          "warmup": false,
+          "prompt_index": 0,
+          "stats": {
+            "modelLoadMs": 15497,
+            "generationMs": 70276,
+            "totalGenerationMs": 143050,
+            "totalWallMs": 143050,
+            "totalSteps": 16,
+            "totalGenerations": 2,
+            "totalImages": 0,
+            "totalPixels": 11501568,
+            "totalVideos": 2,
+            "totalVideoFrames": 78,
+            "width": 512,
+            "height": 288,
+            "seed": 11,
+            "videoFrames": 39,
+            "fps": 24,
+            "hasAudio": 1,
+            "audioSampleRate": 32000,
+            "conditionerMs": 1747.270338,
+            "denoiseMs": 46189.025579,
+            "vaeMs": 22284.630725,
+            "stepsPerSecond": 0.17320131567437153,
+            "postProcessMs": 55.963431
+          }
+        },
+        {
+          "warmup": false,
+          "prompt_index": 0,
+          "stats": {
+            "modelLoadMs": 15497,
+            "generationMs": 69674,
+            "totalGenerationMs": 212724,
+            "totalWallMs": 212724,
+            "totalSteps": 24,
+            "totalGenerations": 3,
+            "totalImages": 0,
+            "totalPixels": 17252352,
+            "totalVideos": 3,
+            "totalVideoFrames": 117,
+            "width": 512,
+            "height": 288,
+            "seed": 11,
+            "videoFrames": 39,
+            "fps": 24,
+            "hasAudio": 1,
+            "audioSampleRate": 32000,
+            "conditionerMs": 1737.117812,
+            "denoiseMs": 45662.364097,
+            "vaeMs": 22219.001041,
+            "stepsPerSecond": 0.17519898844934306,
+            "postProcessMs": 56.166759
+          }
+        }
+      ],
+      "sampled_memory": {
+        "peak_process_group_rss_kib": 37047216,
+        "peak_vram_bytes": 169619456,
+        "peak_gtt_bytes": 24109899776,
+        "sampling_interval_seconds": 3
+      },
+      "native_profile_events": [
+        "Performance profile: flash=0, h3_local_ops_candidate=0, vae_gemm_candidate=0, ltx_f16=0"
+      ],
+      "outputs": [
+        {
+          "file": "0-0-0.avi",
+          "warmup": true,
+          "sha256": "bb1285798359323511442696b8d7eeb795e73ef587c1abf484a7d6cbde24e3f1"
+        },
+        {
+          "file": "0-1-0.avi",
+          "warmup": false,
+          "sha256": "bb1285798359323511442696b8d7eeb795e73ef587c1abf484a7d6cbde24e3f1"
+        },
+        {
+          "file": "0-2-0.avi",
+          "warmup": false,
+          "sha256": "bb1285798359323511442696b8d7eeb795e73ef587c1abf484a7d6cbde24e3f1"
+        }
+      ]
+    },
+    {
+      "name": "strix-h3-vulkan-auto",
+      "native_revision": "def6a7c3bd3105b7e32d288ace674a78c7ead4c3",
+      "native_sha256": "47c13669b8991ef0542413c60a16d3437c5a76af00d7dfc1e422382d9ca4bb19",
+      "config": {
+        "device": "gpu",
+        "backend": "vulkan0",
+        "threads": 8,
+        "diffusion_fa": true,
+        "verbosity": 2,
+        "params_backend": "cpu",
+        "performance_profile": "auto",
+        "backendsDir": "backends/vulkan"
+      },
+      "requests": [
+        {
+          "name": "prompt-0",
+          "params": {
+            "mode": "txt2vid",
+            "prompt": "A red panda walks slowly along a mossy log in a misty green forest. The camera tracks smoothly beside it. Natural daylight, realistic fur and paws, gentle forest ambience with birds and soft footsteps, no music, no dialogue.",
+            "width": 512,
+            "height": 288,
+            "video_frames": 39,
+            "fps": 24,
+            "steps": 8,
+            "cfg_scale": 1,
+            "seed": 11,
+            "vae_tiling": true
+          }
+        }
+      ],
+      "load_ms": 11541,
+      "generation_ms": [
+        101066
+      ],
+      "warmup_ms": [
+        99288
+      ],
+      "median_generation_ms": 101066,
+      "runs": [
+        {
+          "warmup": true,
+          "prompt_index": 0,
+          "stats": {
+            "modelLoadMs": 11540,
+            "generationMs": 99288,
+            "totalGenerationMs": 99288,
+            "totalWallMs": 99288,
+            "totalSteps": 8,
+            "totalGenerations": 1,
+            "totalImages": 0,
+            "totalPixels": 5750784,
+            "totalVideos": 1,
+            "totalVideoFrames": 39,
+            "width": 512,
+            "height": 288,
+            "seed": 11,
+            "videoFrames": 39,
+            "fps": 24,
+            "hasAudio": 1,
+            "audioSampleRate": 32000,
+            "conditionerMs": 3352.847829,
+            "denoiseMs": 65608.924897,
+            "vaeMs": 30270.476698,
+            "stepsPerSecond": 0.1219346302741474,
+            "postProcessMs": 56.587273
+          }
+        },
+        {
+          "warmup": false,
+          "prompt_index": 0,
+          "stats": {
+            "modelLoadMs": 11540,
+            "generationMs": 101066,
+            "totalGenerationMs": 200354,
+            "totalWallMs": 200354,
+            "totalSteps": 16,
+            "totalGenerations": 2,
+            "totalImages": 0,
+            "totalPixels": 11501568,
+            "totalVideos": 2,
+            "totalVideoFrames": 78,
+            "width": 512,
+            "height": 288,
+            "seed": 11,
+            "videoFrames": 39,
+            "fps": 24,
+            "hasAudio": 1,
+            "audioSampleRate": 32000,
+            "conditionerMs": 3378.58974,
+            "denoiseMs": 68398.472414,
+            "vaeMs": 29232.816904,
+            "stepsPerSecond": 0.11696167644765318,
+            "postProcessMs": 56.326908
+          }
+        }
+      ],
+      "sampled_memory": {
+        "peak_process_group_rss_kib": 1797192,
+        "peak_vram_bytes": 2053578752,
+        "peak_gtt_bytes": 59571724288,
+        "sampling_interval_seconds": 3
+      },
+      "native_profile_events": [
+        "Performance profile: flash=0, h3_local_ops_candidate=0, vae_gemm_candidate=0, ltx_f16=0"
+      ],
+      "outputs": [
+        {
+          "file": "0-0-0.avi",
+          "warmup": true,
+          "sha256": "e56bbaf1085651599c909c2f266d482ad574a0dd648de6983df7efa343365059"
+        },
+        {
+          "file": "0-1-0.avi",
+          "warmup": false,
+          "sha256": "e56bbaf1085651599c909c2f266d482ad574a0dd648de6983df7efa343365059"
+        }
+      ]
+    },
+    {
+      "name": "strix-h3-vulkan-off",
+      "native_revision": "def6a7c3bd3105b7e32d288ace674a78c7ead4c3",
+      "native_sha256": "47c13669b8991ef0542413c60a16d3437c5a76af00d7dfc1e422382d9ca4bb19",
+      "config": {
+        "device": "gpu",
+        "backend": "vulkan0",
+        "threads": 8,
+        "diffusion_fa": true,
+        "verbosity": 2,
+        "params_backend": "cpu",
+        "performance_profile": "off",
+        "backendsDir": "backends/vulkan"
+      },
+      "requests": [
+        {
+          "name": "prompt-0",
+          "params": {
+            "mode": "txt2vid",
+            "prompt": "A red panda walks slowly along a mossy log in a misty green forest. The camera tracks smoothly beside it. Natural daylight, realistic fur and paws, gentle forest ambience with birds and soft footsteps, no music, no dialogue.",
+            "width": 512,
+            "height": 288,
+            "video_frames": 39,
+            "fps": 24,
+            "steps": 8,
+            "cfg_scale": 1,
+            "seed": 11,
+            "vae_tiling": true
+          }
+        }
+      ],
+      "load_ms": 11982,
+      "generation_ms": [
+        101449
+      ],
+      "warmup_ms": [
+        99506
+      ],
+      "median_generation_ms": 101449,
+      "runs": [
+        {
+          "warmup": true,
+          "prompt_index": 0,
+          "stats": {
+            "modelLoadMs": 11980,
+            "generationMs": 99506,
+            "totalGenerationMs": 99506,
+            "totalWallMs": 99506,
+            "totalSteps": 8,
+            "totalGenerations": 1,
+            "totalImages": 0,
+            "totalPixels": 5750784,
+            "totalVideos": 1,
+            "totalVideoFrames": 39,
+            "width": 512,
+            "height": 288,
+            "seed": 11,
+            "videoFrames": 39,
+            "fps": 24,
+            "hasAudio": 1,
+            "audioSampleRate": 32000,
+            "conditionerMs": 3574.430227,
+            "denoiseMs": 65688.711558,
+            "vaeMs": 30186.987803,
+            "stepsPerSecond": 0.12178652633392546,
+            "postProcessMs": 56.317301
+          }
+        },
+        {
+          "warmup": false,
+          "prompt_index": 0,
+          "stats": {
+            "modelLoadMs": 11980,
+            "generationMs": 101449,
+            "totalGenerationMs": 200955,
+            "totalWallMs": 200955,
+            "totalSteps": 16,
+            "totalGenerations": 2,
+            "totalImages": 0,
+            "totalPixels": 11501568,
+            "totalVideos": 2,
+            "totalVideoFrames": 78,
+            "width": 512,
+            "height": 288,
+            "seed": 11,
+            "videoFrames": 39,
+            "fps": 24,
+            "hasAudio": 1,
+            "audioSampleRate": 32000,
+            "conditionerMs": 3364.94286,
+            "denoiseMs": 68911.546309,
+            "vaeMs": 29094.053921,
+            "stepsPerSecond": 0.11609085020568147,
+            "postProcessMs": 79.097069
+          }
+        }
+      ],
+      "sampled_memory": {
+        "peak_process_group_rss_kib": 1797360,
+        "peak_vram_bytes": 2053578752,
+        "peak_gtt_bytes": 54680522752,
+        "sampling_interval_seconds": 3
+      },
+      "native_profile_events": [
+        "Performance profile: flash=0, h3_local_ops_candidate=0, vae_gemm_candidate=0, ltx_f16=0"
+      ],
+      "outputs": [
+        {
+          "file": "0-0-0.avi",
+          "warmup": true,
+          "sha256": "e56bbaf1085651599c909c2f266d482ad574a0dd648de6983df7efa343365059"
+        },
+        {
+          "file": "0-1-0.avi",
+          "warmup": false,
+          "sha256": "e56bbaf1085651599c909c2f266d482ad574a0dd648de6983df7efa343365059"
+        }
+      ]
+    }
+  ],
+  "incomplete_cases": [
+    {
+      "name": "strix-flux2-hip-repeat-off",
+      "completed": false,
+      "reason": "foreign-workload",
+      "completed_requests": 0
+    },
+    {
+      "name": "strix-ltx-hip-off",
+      "completed": false,
+      "reason": "foreign-workload",
+      "completed_requests": 0
+    },
+    {
+      "name": "strix-ltx-vulkan-short-off",
+      "completed": false,
+      "reason": "Empty metrics after host reboot",
+      "completed_requests": 0
+    }
+  ],
+  "quality": [
+    {
+      "reference": "evidence\\strix\\results\\strix-flux2-hip-off\\0-0-0.png",
+      "candidate": "evidence\\strix\\results\\strix-final-flux2-hip-auto\\0-0-0.png",
+      "width": 1024,
+      "height": 1024,
+      "ssim": 1.0,
+      "psnr_db": "infinity",
+      "rmse_0_255": 0.0,
+      "mae_0_255": 0.0,
+      "max_absolute_difference_0_255": 0,
+      "different_channel_values_percent": 0.0,
+      "decoded_sha256": [
+        "b1891c1e4fee9e449ce5baaad41af2aee06b6411d5fad751d0377bd37fd804ce",
+        "b1891c1e4fee9e449ce5baaad41af2aee06b6411d5fad751d0377bd37fd804ce"
+      ]
+    },
+    {
+      "reference": "evidence\\strix\\results\\strix-flux2-hip-off\\0-1-0.png",
+      "candidate": "evidence\\strix\\results\\strix-final-flux2-hip-auto\\0-1-0.png",
+      "width": 1024,
+      "height": 1024,
+      "ssim": 1.0,
+      "psnr_db": "infinity",
+      "rmse_0_255": 0.0,
+      "mae_0_255": 0.0,
+      "max_absolute_difference_0_255": 0,
+      "different_channel_values_percent": 0.0,
+      "decoded_sha256": [
+        "b1891c1e4fee9e449ce5baaad41af2aee06b6411d5fad751d0377bd37fd804ce",
+        "b1891c1e4fee9e449ce5baaad41af2aee06b6411d5fad751d0377bd37fd804ce"
+      ]
+    },
+    {
+      "reference": "evidence\\strix\\results\\strix-flux2-hip-off\\0-0-0.png",
+      "candidate": "evidence\\strix\\results\\strix-flux2-hip-auto\\0-0-0.png",
+      "width": 1024,
+      "height": 1024,
+      "ssim": 0.998717,
+      "psnr_db": 54.593487087022154,
+      "rmse_0_255": 0.4751883952991889,
+      "mae_0_255": 0.22252209981282553,
+      "max_absolute_difference_0_255": 6,
+      "different_channel_values_percent": 22.102928161621094,
+      "decoded_sha256": [
+        "b1891c1e4fee9e449ce5baaad41af2aee06b6411d5fad751d0377bd37fd804ce",
+        "08c14c08efec5bac86c5ded61327ef3d36aa49f0ddb797b1974ba443ee35d4ab"
+      ]
+    },
+    {
+      "reference": "evidence\\strix\\results\\strix-flux2-hip-off\\0-1-0.png",
+      "candidate": "evidence\\strix\\results\\strix-flux2-hip-auto\\0-1-0.png",
+      "width": 1024,
+      "height": 1024,
+      "ssim": 0.990588,
+      "psnr_db": 32.81849000467731,
+      "rmse_0_255": 5.82929025136821,
+      "mae_0_255": 1.4516127904256184,
+      "max_absolute_difference_0_255": 212,
+      "different_channel_values_percent": 53.15434137980143,
+      "decoded_sha256": [
+        "b1891c1e4fee9e449ce5baaad41af2aee06b6411d5fad751d0377bd37fd804ce",
+        "9f0cbf8233a9e4f8e402887ada3cc1e5594fc4c175a3885ab1c01d49fd28ad7d"
+      ]
+    },
+    {
+      "reference": "evidence\\strix\\results\\strix-flux2-hip-off\\0-2-0.png",
+      "candidate": "evidence\\strix\\results\\strix-flux2-hip-auto\\0-2-0.png",
+      "width": 1024,
+      "height": 1024,
+      "ssim": 0.998717,
+      "psnr_db": 54.593487087022154,
+      "rmse_0_255": 0.4751883952991889,
+      "mae_0_255": 0.22252209981282553,
+      "max_absolute_difference_0_255": 6,
+      "different_channel_values_percent": 22.102928161621094,
+      "decoded_sha256": [
+        "b1891c1e4fee9e449ce5baaad41af2aee06b6411d5fad751d0377bd37fd804ce",
+        "08c14c08efec5bac86c5ded61327ef3d36aa49f0ddb797b1974ba443ee35d4ab"
+      ]
+    },
+    {
+      "reference": "evidence\\strix\\results\\strix-flux2-vulkan-off\\0-0-0.png",
+      "candidate": "evidence\\strix\\results\\strix-flux2-vulkan-auto\\0-0-0.png",
+      "width": 1024,
+      "height": 1024,
+      "ssim": 1.0,
+      "psnr_db": "infinity",
+      "rmse_0_255": 0.0,
+      "mae_0_255": 0.0,
+      "max_absolute_difference_0_255": 0,
+      "different_channel_values_percent": 0.0,
+      "decoded_sha256": [
+        "d15438c4369591ded544643e01d7fed9daf436e3601bcf382423af2474438144",
+        "d15438c4369591ded544643e01d7fed9daf436e3601bcf382423af2474438144"
+      ]
+    },
+    {
+      "reference": "evidence\\strix\\results\\strix-flux2-vulkan-off\\0-1-0.png",
+      "candidate": "evidence\\strix\\results\\strix-flux2-vulkan-auto\\0-1-0.png",
+      "width": 1024,
+      "height": 1024,
+      "ssim": 1.0,
+      "psnr_db": "infinity",
+      "rmse_0_255": 0.0,
+      "mae_0_255": 0.0,
+      "max_absolute_difference_0_255": 0,
+      "different_channel_values_percent": 0.0,
+      "decoded_sha256": [
+        "d15438c4369591ded544643e01d7fed9daf436e3601bcf382423af2474438144",
+        "d15438c4369591ded544643e01d7fed9daf436e3601bcf382423af2474438144"
+      ]
+    },
+    {
+      "metrics_schema": 2,
+      "reference": "evidence\\strix\\results\\strix-h3-hip-off\\0-0-0.avi",
+      "candidate": "evidence\\strix\\results\\strix-h3-hip-auto\\0-0-0.avi",
+      "video_frames": 39,
+      "video_mae_0_255": 0.5945706417304725,
+      "video_mse_0_255": 0.9972920793640194,
+      "video_psnr_db": 48.14257991042665,
+      "different_channel_values_percent": 44.84937474032526,
+      "decoded_video_sha256": [
+        "0c399a3aa4541dfba18dc2a3656bf9475ca8efc2a8f19555022b3e1005f36abb",
+        "af33ba59305326e68eb7b6741f31762357b7ae4e195cb7fb57af1f66503afe79"
+      ],
+      "video_max_absolute_difference_0_255": 15,
+      "video_worst_frame_index": 0,
+      "video_worst_frame_psnr_db": 47.08516148943986,
+      "video_ssim": 0.99647,
+      "audio_sample_values": 104000,
+      "audio_rmse_float": 0.0,
+      "audio_max_absolute_error_float": 0.0,
+      "audio_snr_db": "infinity",
+      "audio_sample_rate_hz": 32000,
+      "audio_channels": 2
+    },
+    {
+      "metrics_schema": 2,
+      "reference": "evidence\\strix\\results\\strix-h3-hip-off\\0-1-0.avi",
+      "candidate": "evidence\\strix\\results\\strix-h3-hip-auto\\0-1-0.avi",
+      "video_frames": 39,
+      "video_mae_0_255": 0.5945706417304725,
+      "video_mse_0_255": 0.9972920793640194,
+      "video_psnr_db": 48.14257991042665,
+      "different_channel_values_percent": 44.84937474032526,
+      "decoded_video_sha256": [
+        "0c399a3aa4541dfba18dc2a3656bf9475ca8efc2a8f19555022b3e1005f36abb",
+        "af33ba59305326e68eb7b6741f31762357b7ae4e195cb7fb57af1f66503afe79"
+      ],
+      "video_max_absolute_difference_0_255": 15,
+      "video_worst_frame_index": 0,
+      "video_worst_frame_psnr_db": 47.08516148943986,
+      "video_ssim": 0.99647,
+      "audio_sample_values": 104000,
+      "audio_rmse_float": 0.0,
+      "audio_max_absolute_error_float": 0.0,
+      "audio_snr_db": "infinity",
+      "audio_sample_rate_hz": 32000,
+      "audio_channels": 2
+    },
+    {
+      "metrics_schema": 2,
+      "reference": "evidence\\strix\\results\\strix-h3-hip-off\\0-2-0.avi",
+      "candidate": "evidence\\strix\\results\\strix-h3-hip-auto\\0-2-0.avi",
+      "video_frames": 39,
+      "video_mae_0_255": 0.5945706417304725,
+      "video_mse_0_255": 0.9972920793640194,
+      "video_psnr_db": 48.14257991042665,
+      "different_channel_values_percent": 44.84937474032526,
+      "decoded_video_sha256": [
+        "0c399a3aa4541dfba18dc2a3656bf9475ca8efc2a8f19555022b3e1005f36abb",
+        "af33ba59305326e68eb7b6741f31762357b7ae4e195cb7fb57af1f66503afe79"
+      ],
+      "video_max_absolute_difference_0_255": 15,
+      "video_worst_frame_index": 0,
+      "video_worst_frame_psnr_db": 47.08516148943986,
+      "video_ssim": 0.99647,
+      "audio_sample_values": 104000,
+      "audio_rmse_float": 0.0,
+      "audio_max_absolute_error_float": 0.0,
+      "audio_snr_db": "infinity",
+      "audio_sample_rate_hz": 32000,
+      "audio_channels": 2
+    },
+    {
+      "metrics_schema": 2,
+      "reference": "evidence\\strix\\results\\strix-h3-vulkan-off\\0-0-0.avi",
+      "candidate": "evidence\\strix\\results\\strix-h3-vulkan-auto\\0-0-0.avi",
+      "video_frames": 39,
+      "video_mae_0_255": 0.0,
+      "video_mse_0_255": 0.0,
+      "video_psnr_db": "infinity",
+      "different_channel_values_percent": 0.0,
+      "decoded_video_sha256": [
+        "4fe3222a16e25f1ccb182c8dd8fa23b3995b66468dd427b4209a4fd323a84243",
+        "4fe3222a16e25f1ccb182c8dd8fa23b3995b66468dd427b4209a4fd323a84243"
+      ],
+      "video_max_absolute_difference_0_255": 0,
+      "video_worst_frame_index": 0,
+      "video_worst_frame_psnr_db": "infinity",
+      "video_ssim": 1.0,
+      "audio_sample_values": 104000,
+      "audio_rmse_float": 0.0,
+      "audio_max_absolute_error_float": 0.0,
+      "audio_snr_db": "infinity",
+      "audio_sample_rate_hz": 32000,
+      "audio_channels": 2
+    },
+    {
+      "metrics_schema": 2,
+      "reference": "evidence\\strix\\results\\strix-h3-vulkan-off\\0-1-0.avi",
+      "candidate": "evidence\\strix\\results\\strix-h3-vulkan-auto\\0-1-0.avi",
+      "video_frames": 39,
+      "video_mae_0_255": 0.0,
+      "video_mse_0_255": 0.0,
+      "video_psnr_db": "infinity",
+      "different_channel_values_percent": 0.0,
+      "decoded_video_sha256": [
+        "4fe3222a16e25f1ccb182c8dd8fa23b3995b66468dd427b4209a4fd323a84243",
+        "4fe3222a16e25f1ccb182c8dd8fa23b3995b66468dd427b4209a4fd323a84243"
+      ],
+      "video_max_absolute_difference_0_255": 0,
+      "video_worst_frame_index": 0,
+      "video_worst_frame_psnr_db": "infinity",
+      "video_ssim": 1.0,
+      "audio_sample_values": 104000,
+      "audio_rmse_float": 0.0,
+      "audio_max_absolute_error_float": 0.0,
+      "audio_snr_db": "infinity",
+      "audio_sample_rate_hz": 32000,
+      "audio_channels": 2
+    }
+  ],
+  "release_decisions": {
+    "flux_hip": "Retain direct convolution; original automatic GEMM candidate failed repeated-output agreement.",
+    "h3_hip": "Enable existing global flash attention; 12.8% lower warm latency at 512x288x39, CPU-resident parameters, one prompt. Full-size repeat timing remains open.",
+    "ltx_strix": "No automatic performance change."
+  },
+  "not_completed": [
+    "strix-ltx-vulkan-short-auto",
+    "strix-ltx-hip-short-off",
+    "strix-ltx-hip-short-auto",
+    "strix-flux2-hip-explicit-gemm",
+    "strix-flux2-hip-repeat-auto"
+  ],
+  "limitations": [
+    "A host reboot ended the remaining queue. The cause is unknown; kernel logs were inaccessible. No successful LTX off/auto pair was recorded.",
+    "LTX HIP 512x320x97 baseline was interrupted by another workload; the 33-frame Vulkan fallback did not record a completed request.",
+    "Explicit FLUX HIP GEMM and further baseline repeats did not complete; the cause of the original inconsistent output remains unresolved.",
+    "FLUX and H3 Vulkan pairs each have one measured request after warmup; unchanged settings and exact output agreement do not prove latency equivalence.",
+    "HIP was source-built against matching ggml; no HIP release package is added."
+  ],
+  "cleanup": {
+    "project_removed": true,
+    "freed_gib": 70.39696502685547,
+    "scope": "Only the task test directory; completed before the booking ended."
+  }
+}
