@@ -33,6 +33,12 @@ npm i @qvac/sdk
 
 ### Expo
 
+QVAC supports Expo SDK and `react-native-bare-kit` versions below.
+
+| Expo SDK | `react-native-bare-kit` |
+|---|---|
+| `>= 58` | `^0.17.1` |
+
 <Steps>
 <Step>
 Install peer dependencies:
@@ -49,20 +55,19 @@ npx expo install expo-file-system expo-build-properties expo-device
 </Step>
 
 <Step>
-Configure `expo-build-properties` and add `@qvac/sdk/expo-plugin` to the `plugins` array in your `app.json`:
+Add `@qvac/sdk/expo-plugin` to the `plugins` array in your `app.json`:
 
 ```json title="app.json"
 {
   "expo": {
     "plugins": [
-      ["expo-build-properties", { // [!code ++]
-        "android": { "minSdkVersion": 29 } // [!code ++]
-      }], // [!code ++]
       "@qvac/sdk/expo-plugin" // [!code ++]
     ]
   }
 }
 ```
+
+The plugin configures `expo-build-properties` for you, so you don't need to add it to `plugins`. Don't configure `expo-bare-kit` alongside it: both add Bare Kit to the app, and prebuild fails.
 
 QVAC ships part of its Android and iOS binaries as separate packages that your app needs. Pass `installMissingPrebuilds` to the plugin to have `npx expo prebuild` add them, or add them yourself. See [Install QVAC](/resources/tutorials/expo#step-3-install-qvac) in the Expo tutorial.
 
