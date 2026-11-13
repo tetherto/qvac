@@ -21,7 +21,7 @@ import { profiler } from '@qvac/sdk'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { ResourceManager } from '../shared/resource-manager.js'
-import { collectTestDeps } from '../shared/collect-test-deps.js'
+import { resolveBootstrapDeps, resolveBootstrapModels } from '../shared/bootstrap-deps.js'
 import { ModelLoadingExecutor } from '../shared/executors/model-loading-executor.js'
 import { CompletionExecutor } from '../shared/executors/completion-executor.js'
 import { ToolsExecutor } from '../shared/executors/tools-executor.js'
@@ -58,6 +58,7 @@ import { SystemResourcesExecutor } from '../shared/executors/system-resources-ex
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
+import { SessionExecutor } from '../shared/executors/session-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
 import { SnapStorageExecutor } from '../shared/executors/node/snap-storage-executor.js'
 import { runSnapRefreshProbe as executeSnapRefreshProbe } from './snap-refresh-probe.js'
@@ -137,8 +138,12 @@ function ensureElectronE2EConfig() {
 export async function bootstrap(filteredTests?: TestDefinition[]) {
   ensureElectronE2EConfig()
 
-  const allowedDeps = filteredTests ? collectTestDeps(filteredTests) : undefined
-  await resources.downloadAllOnce(console.log, { allowedDeps })
+  const allowedDeps = resolveBootstrapDeps(filteredTests)
+  await resources.downloadAllOnce(console.log, {
+    allowedDeps,
+    // Standalone bootstrap only
+    onlyModels: filteredTests ? undefined : resolveBootstrapModels()
+  })
 }
 
 export async function runSnapRefreshProbe() {
@@ -205,6 +210,7 @@ export const executor = createExecutor({
     new SystemResourcesExecutor(),
     new ConfigExecutor(),
     new NodeCancellationExecutor(resources),
+    new SessionExecutor(resources),
     new PluginExecutor(resources)
   ],
   profiling: {

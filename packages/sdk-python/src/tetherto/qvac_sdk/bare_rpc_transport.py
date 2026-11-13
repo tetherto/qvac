@@ -15,16 +15,28 @@ caller (see `tetherto.qvac_sdk.client`).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import sys
-from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Callable
+import weakref
+from collections.abc import (
+    AsyncIterable,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Iterator,
+)
+from contextlib import contextmanager
 from typing import Any
 
 import bare_rpc
 from bare_stow_host import IPC, WorkerError
 
+from ._transport import held_model_change
 from .errors import (
+    OWNER_HANDLE_ID,
+    ModelHandleInvalidatedError,
     QvacError,
     SetConfigFailedError,
     WorkerCrashedError,
@@ -38,6 +50,11 @@ __all__ = ["BareRpcTransport", "WorkerStart"]
 WorkerStart = Callable[[float], Awaitable[IPC]]
 """Starts the worker and returns its IPC once it signals ready within the given
 number of seconds."""
+
+_REQUESTS_WITHOUT_MODEL_HANDLE = frozenset({"deleteCache", "cancel"})
+"""Owner requests whose `modelId` does not need the model loaded: `deleteCache`
+uses it only to locate cache files on disk, and a `cancel` by model on a
+runtime that no longer has the model finds nothing to cancel."""
 
 DEFAULT_START_TIMEOUT = 60.0
 """Seconds a worker gets to start, from launch until it has applied its
@@ -137,8 +154,73 @@ class BareRpcTransport:
             merged_config["cacheDirectory"] = cache_dir
         self._config: dict[str, Any] = merged_config
         self._closing = False
+        self._starting: asyncio.Future[IPC] | None = None
+        self._on_worker_lost: list[Callable[[], None]] = []
+        self._watcher: asyncio.Future[None] | None = None
+        # Model ids the owner loaded through this transport on the running
+        # runtime, and the ones it loaded on a runtime that has since stopped.
+        # An owner call naming a stopped one is refused locally until a load
+        # returns that id again.
+        self._owner_models: set[str] = set()
+        self._invalid_owner_models: set[str] = set()
+        # Sessions opened over this transport, however they were opened. They
+        # end with its close and with the loss of its worker.
+        self._sessions: weakref.WeakSet[Any] = weakref.WeakSet()
         self.ipc: IPC | None = None
         self.rpc: bare_rpc.RPC | None = None
+
+    def on_worker_lost(self, callback: Callable[[], None]) -> None:
+        """Registers `callback` to run each time a connected worker's RPC
+        session ends on its own: the worker exited, crashed or was killed. A
+        `close()` by this side does not count."""
+        self._on_worker_lost.append(callback)
+
+    def track_session(self, session: Any) -> None:
+        """Ends `session` (anything with `end(reason)`) when this transport
+        closes or loses its worker."""
+        self._sessions.add(session)
+
+    def _end_sessions(self, reason: str) -> None:
+        for session in list(self._sessions):
+            session.end(reason)
+        self._sessions.clear()
+
+    def record_held_model(self, model_id: str) -> None:
+        """An owner load through this transport resolved to `model_id`."""
+        self._invalid_owner_models.discard(model_id)
+        self._owner_models.add(model_id)
+
+    def release_held_model(self, model_id: str) -> None:
+        """An owner unload through this transport released `model_id`."""
+        self._owner_models.discard(model_id)
+
+    def _invalidate_owner_models(self) -> None:
+        self._invalid_owner_models |= self._owner_models
+        self._owner_models.clear()
+
+    def _track_owner_model(self, request: dict, response: Any) -> None:
+        # Session replies are tracked by their session transport.
+        if "sessionId" in request or not isinstance(response, dict):
+            return
+        change = held_model_change(request, response)
+        if change is None:
+            return
+        model_id, held = change
+        if held:
+            self.record_held_model(model_id)
+        else:
+            self.release_held_model(model_id)
+
+    def _check_owner_model(self, payload: dict) -> None:
+        # Session payloads carry their session id; their session transport
+        # tracks the models they load.
+        if "sessionId" in payload:
+            return
+        if payload.get("type") in _REQUESTS_WITHOUT_MODEL_HANDLE:
+            return
+        model_id = payload.get("modelId")
+        if isinstance(model_id, str) and model_id in self._invalid_owner_models:
+            raise ModelHandleInvalidatedError(model_id, OWNER_HANDLE_ID)
 
     async def connect(self, *, timeout: float | None = None) -> BareRpcTransport:
         """Starts the worker and hands it the home folder, config and runtime
@@ -148,7 +230,8 @@ class BareRpcTransport:
             timeout_ms = self._config.get("rpcInitTimeoutMs")
             timeout = (
                 timeout_ms / 1000
-                if isinstance(timeout_ms, int)
+                if isinstance(timeout_ms, (int, float))
+                and not isinstance(timeout_ms, bool)
                 else DEFAULT_START_TIMEOUT
             )
         self._closing = False
@@ -156,10 +239,23 @@ class BareRpcTransport:
         self.rpc = None
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout
+        # Held so close() can cancel a start that has not signalled ready;
+        # bare-stow-host closes the worker of a cancelled start.
+        starting = asyncio.ensure_future(self._start(timeout))
+        self._starting = starting
         try:
-            self.ipc = await self._start(timeout)
+            self.ipc = await starting
+        except asyncio.CancelledError as err:
+            if not (self._closing and starting.cancelled()):
+                raise
+            raise WorkerShutdownError(cause=err) from err
         except WorkerError as err:
             raise _startup_failed(err) from err
+        finally:
+            self._starting = None
+        if self._closing:
+            await self.ipc.close()
+            raise WorkerShutdownError()
         self.rpc = bare_rpc.RPC(self.ipc)
         try:
             init: dict[str, Any] = {
@@ -177,6 +273,7 @@ class BareRpcTransport:
             )
             if not reply.get("success"):
                 raise SetConfigFailedError(reply.get("error"))
+            self._watcher = asyncio.ensure_future(self._watch(self.rpc))
             return self
         except asyncio.TimeoutError as err:
             await self.close()
@@ -192,15 +289,54 @@ class BareRpcTransport:
 
     async def close(self) -> None:
         self._closing = True
+        if self._starting is not None:
+            self._starting.cancel()
+        self._end_sessions("shutdown")
+        self._invalidate_owner_models()
         if self.rpc is not None:
             await self.rpc.close()
         elif self.ipc is not None:
             await self.ipc.close()
 
+    async def _watch(self, rpc: bare_rpc.RPC) -> None:
+        # The session ends when the worker's IPC ends or fails, and when
+        # close() closes it; only the first two are a lost worker. A session
+        # replaced by a later connect() is no longer this transport's worker.
+        with contextlib.suppress(Exception):
+            await rpc.wait()
+        if rpc is self.rpc:
+            self._notify_worker_lost()
+
+    def _notify_worker_lost(self) -> None:
+        if self._closing:
+            return
+        self._end_sessions("crashed")
+        self._invalidate_owner_models()
+        for callback in list(self._on_worker_lost):
+            callback()
+
     def _worker_failed(self, err: WorkerError) -> QvacError:
         if self._closing:
             return WorkerShutdownError(cause=err)
         return WorkerCrashedError(err.exit_code, err.signal_code, cause=err)
+
+    @contextmanager
+    def _session_errors(self) -> Iterator[None]:
+        """Raises the SDK's error for a call that the end of the session cut
+        off. bare-rpc fails calls with `CHANNEL_CLOSED` when the session ends
+        without a worker fault: on `close()`, or when the worker reported its
+        exit and its IPC ended, as on SIGTERM."""
+        try:
+            yield
+        except WorkerError as err:
+            raise self._worker_failed(err) from err
+        except bare_rpc.RPCError as err:
+            if err.code != "CHANNEL_CLOSED" or isinstance(err, bare_rpc.RPCRemoteError):
+                raise
+            if self._closing:
+                raise WorkerShutdownError(cause=err) from err
+            exit_code = self.ipc.exit_code if self.ipc is not None else None
+            raise WorkerCrashedError(exit_code, cause=err) from err
 
     async def __aenter__(self) -> BareRpcTransport:
         return await self.connect()
@@ -217,24 +353,30 @@ class BareRpcTransport:
 
     async def call(self, payload: dict) -> dict:
         """Unary, via bare_rpc.RPC.request."""
-        try:
+        self._check_owner_model(payload)
+        with self._session_errors():
             data = await self._require_rpc().request(
                 command=0, data=json.dumps(payload).encode("utf-8")
             )
-        except WorkerError as err:
-            raise self._worker_failed(err) from err
-        return _json_or_raise(data)
+        response = _json_or_raise(data)
+        self._track_owner_model(payload, response)
+        return response
 
     async def call_stream(self, payload: dict) -> AsyncIterator[dict]:
         """Server-stream, via bare_rpc.RPC.request_with_response_stream."""
-        try:
+        self._check_owner_model(payload)
+        with self._session_errors():
             stream = await self._require_rpc().request_with_response_stream(
                 command=0, data=json.dumps(payload).encode("utf-8")
             )
-            async for value in _iter_json_lines(stream):
-                yield value
-        except WorkerError as err:
-            raise self._worker_failed(err) from err
+            try:
+                async for value in _iter_json_lines(stream):
+                    self._track_owner_model(payload, value)
+                    yield value
+            finally:
+                # A reader that stops early destroys the stream, and the
+                # worker stops the request. Does nothing once the stream ended.
+                stream.destroy()
 
     async def call_duplex(
         self, payload: dict, up: AsyncIterable[bytes]
@@ -245,13 +387,12 @@ class BareRpcTransport:
 
         When `up` raises, both directions are closed so the worker stops
         waiting for input, and the error is raised once the reply has ended."""
-        try:
+        self._check_owner_model(payload)
+        with self._session_errors():
             outgoing, incoming = await self._require_rpc().create_bidirectional_stream(
                 command=0
             )
             await outgoing.write(json.dumps(payload).encode("utf-8"))
-        except WorkerError as err:
-            raise self._worker_failed(err) from err
 
         async def _pump_up() -> None:
             try:
@@ -269,11 +410,12 @@ class BareRpcTransport:
 
         pump_task = asyncio.ensure_future(_pump_up())
         try:
-            async for value in _iter_json_lines(incoming):
-                yield value
-        except WorkerError as err:
-            raise self._worker_failed(err) from err
+            with self._session_errors():
+                async for value in _iter_json_lines(incoming):
+                    yield value
         finally:
+            # As in call_stream: a reader that stops early stops the request.
+            incoming.destroy()
             if not pump_task.done():
                 pump_task.cancel()
             try:

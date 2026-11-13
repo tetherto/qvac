@@ -168,7 +168,10 @@ async function ensureRPC(): Promise<RPC> {
     if (startGeneration !== generation) throw new WorkerShutdownError()
     const timeout = preloaded?.config?.rpcInitTimeoutMs ?? DEFAULT_WORKER_START_TIMEOUT_MS
     const launchedAt = Date.now()
-    const ipc = await startWorker(timeout)
+    const ipc = await startWorker(timeout).catch((error: unknown) => {
+      if (startGeneration !== generation) throw new WorkerShutdownError(error)
+      throw error
+    })
     let workerError: unknown
     let exitCode: number | undefined
     ipc.on('error', (error: unknown) => {
@@ -275,6 +278,10 @@ export async function createDuplexSession(payload: string, commandId: number) {
   const req = rpc.request(commandId)
   const requestStream = req.createRequestStream()
   const responseStream = req.createResponseStream({ encoding: 'utf-8' })
+  // bare-rpc cancels the request when the response stream closes first, which
+  // destroys this stream with CANCELLED. Consumers read errors from the
+  // response stream, so pass the error there instead of throwing it uncaught.
+  requestStream.on('error', (error: unknown) => responseStream.destroy(error as Error))
   // Pre-encode payload — RN/Hermes lacks a global `Buffer`, so `write(string, "utf-8")` would throw.
   requestStream.write(new TextEncoder().encode(payload))
   return { requestStream, responseStream }
