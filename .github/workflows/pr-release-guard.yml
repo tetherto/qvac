@@ -86,7 +86,8 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         if: steps.pkg.outputs.is_train == 'true'
         with:
-          node-version: "24.14.1"
+          node-version: lts/*
+          check-latest: true
 
       - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # 4.1.0
         if: steps.pkg.outputs.is_train == 'true'
