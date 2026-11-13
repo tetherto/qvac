@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -1808,9 +1809,8 @@ size_t countStatKey(const RuntimeStats& stats, const std::string& key) {
 double statValue(const RuntimeStats& stats, const std::string& key) {
   for (const auto& [name, value] : stats) {
     if (name == key) {
-      return std::holds_alternative<double>(value)
-                 ? std::get<double>(value)
-                 : static_cast<double>(std::get<int64_t>(value));
+      return numericValue(value).value_or(
+          std::numeric_limits<double>::quiet_NaN());
     }
   }
   return -1.0;

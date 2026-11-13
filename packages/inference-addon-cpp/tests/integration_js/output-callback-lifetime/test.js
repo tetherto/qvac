@@ -35,6 +35,26 @@ test('destroying addon with pending JS output callback does not crash', async (t
   t.pass(`completed ${iterations} create/run/destroy cycles (${callbacks} callbacks observed)`)
 })
 
+test('job-end runtime stats carry numeric and string values', async (t) => {
+  t.timeout(10000)
+  t.plan(3)
+
+  let handle = null
+  t.teardown(() => addon.destroyInstance(handle))
+
+  // Resolving on any object lets a missing stat fail the assertions below instead of timing out.
+  const stats = await new Promise((resolve) => {
+    handle = addon.createStatsInstance({ name: 'runtime-stats' }, (_handle, _event, data) => {
+      if (data !== null && typeof data === 'object') resolve(data)
+    })
+    addon.runJob(handle, 'stats')
+  })
+
+  t.is(stats.totalTime, 1.5, 'double stat arrives as a number')
+  t.is(stats.totalTokens, 7, 'int64 stat arrives as a number')
+  t.is(stats.backendName, 'cuda,vulkan', 'string stat arrives as a string')
+})
+
 test('teardown flush runs its JS output callbacks on the JS thread', async (t) => {
   t.timeout(10000)
   t.plan(2)

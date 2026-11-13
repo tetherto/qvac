@@ -68,6 +68,7 @@ if(BUILD_TESTING)
         tests/js_output_handler_test.cpp
         tests/helpers/stream_buffers.cpp
         tests/cpp_output_handler_test.cpp
+        tests/runtime_stats_test.cpp
         tests/simple_addon_test.cpp
         tests/batched_addon_test.cpp
         tests/job_runner_test.cpp
