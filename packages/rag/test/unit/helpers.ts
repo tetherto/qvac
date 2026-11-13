@@ -8,6 +8,7 @@ import { QvacErrorRAG } from '../../src/errors.js'
 import {
   loadNativeIndex,
   setNativeIndexLoader,
+  type NativeIndex,
   type NativeIndexModule
 } from '../../src/vector-index/native.js'
 import type {
@@ -15,7 +16,13 @@ import type {
   HyperDBReader,
   HyperDBTransaction
 } from '../../src/db/db-types.js'
-import type { EmbeddedDocumentInput, EmbeddingSpace, IndexOptions, Rag } from '../../src/types.js'
+import type {
+  EmbeddedDocumentInput,
+  EmbeddingSpace,
+  EmbeddingsPort,
+  IndexOptions,
+  Rag
+} from '../../src/types.js'
 
 // brittle's types don't export the test instance; the last overload returns it.
 export type Test = ReturnType<typeof import('brittle')>
@@ -29,6 +36,44 @@ export const SPACE: EmbeddingSpace = {
   documentEncoding: '',
   queryEncoding: '',
   preprocessing: 'none'
+}
+
+const WORDS = ['cat', 'dog', 'fish']
+
+// One dimension per keyword, so a query ranks the chunks that mention it.
+function embed(text: string): number[] {
+  const lower = text.toLowerCase()
+  return WORDS.map((word) => (lower.includes(word) ? 1 : 0))
+}
+
+export interface FakePort extends EmbeddingsPort {
+  batches: string[][]
+  queries: string[]
+}
+
+export function fakePort(
+  space: EmbeddingSpace = SPACE,
+  onBatch?: (batch: number, signal?: AbortSignal) => void
+): FakePort {
+  const port: FakePort = {
+    space,
+    batches: [],
+    queries: [],
+    embedDocuments(texts, options) {
+      port.batches.push(texts)
+      try {
+        onBatch?.(port.batches.length, options?.signal)
+      } catch (error) {
+        return Promise.reject(error)
+      }
+      return Promise.resolve(Float32Array.from(texts.flatMap(embed)))
+    },
+    embedQuery(text) {
+      port.queries.push(text)
+      return Promise.resolve(Float32Array.from(embed(text)))
+    }
+  }
+  return port
 }
 
 export interface Fixture {
@@ -127,6 +172,7 @@ export function useScan(t: Test): void {
 export interface NativeCalls {
   creates: number
   loads: number
+  compacts: number
 }
 
 // Counts how the index was opened: `create` is a rebuild, `load` a snapshot.
@@ -134,16 +180,24 @@ export async function countNativeCalls(t: Test): Promise<NativeCalls> {
   setNativeIndexLoader(null)
   const real = (await loadNativeIndex()) as NativeIndexModule
   if (!real) throw new Error('@qvac/turbovec-ggml is not loadable; index tests need it')
-  const calls: NativeCalls = { creates: 0, loads: 0 }
+  const calls: NativeCalls = { creates: 0, loads: 0, compacts: 0 }
+  function counted(native: NativeIndex): NativeIndex {
+    const compact = native.compact.bind(native)
+    native.compact = () => {
+      calls.compacts++
+      compact()
+    }
+    return native
+  }
   setNativeIndexLoader(() =>
     Promise.resolve({
       create(dim, storage) {
         calls.creates++
-        return real.create(dim, storage)
+        return counted(real.create(dim, storage))
       },
       load(path) {
         calls.loads++
-        return real.load(path)
+        return counted(real.load(path))
       }
     })
   )

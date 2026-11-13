@@ -30,6 +30,16 @@ void check(bool condition, const std::string& message) {
 using Context = std::unique_ptr<ggml_context, decltype(&ggml_free)>;
 using Gguf = std::unique_ptr<gguf_context, decltype(&gguf_free)>;
 
+// Tensor data is read and uploaded in chunks of this size.
+constexpr size_t READ_CHUNK_BYTES = 8ULL * 1024 * 1024;
+
+// The weight file after its tensors are declared, positioned for reading.
+struct WeightFile {
+  std::ifstream stream;
+  Gguf gguf{nullptr, gguf_free};
+  uint64_t dataStart = 0;
+};
+
 } // namespace
 
 struct MegaLocModel::Impl {
@@ -38,6 +48,8 @@ struct MegaLocModel::Impl {
   ggml_backend_t device = nullptr;
   ggml_backend_t cpu = nullptr;
   ggml_backend_buffer_t weightBuffer = nullptr;
+  // Measure mode: stands in for weightBuffer.
+  EmptyWeightBuffers emptyWeights;
   ggml_backend_sched_t scheduler = nullptr;
   Context weights{nullptr, ggml_free};
   Context context{nullptr, ggml_free};
@@ -147,16 +159,20 @@ struct MegaLocModel::Impl {
     return linear(ggml_reshape_2d(ctx(), values, 768, n), name + ".proj");
   }
 
-  void loadWeights(const std::string& path) {
-    std::ifstream stream(path, std::ios::binary | std::ios::ate);
+  // Validates the GGUF and declares every weight tensor in `weights` from its
+  // metadata. Nothing is allocated and no tensor data is read.
+  WeightFile declareWeights(const std::string& path) {
+    WeightFile file;
+    auto& stream = file.stream;
+    auto& gguf = file.gguf;
+    stream.open(path, std::ios::binary | std::ios::ate);
     check(stream.good(), "cannot open GGUF weights");
     const auto end = stream.tellg();
     check(end > 0, "empty GGUF file");
     const auto fileSize = static_cast<uint64_t>(end);
     ggml_context* metadataRaw = nullptr;
     Context metadata(nullptr, ggml_free);
-    Gguf gguf(
-        gguf_init_from_file(path.c_str(), {true, &metadataRaw}), gguf_free);
+    gguf.reset(gguf_init_from_file(path.c_str(), {true, &metadataRaw}));
     metadata.reset(metadataRaw);
     check(gguf && metadata, "invalid GGUF weights");
     const auto architecture = gguf_find_key(gguf.get(), "general.architecture");
@@ -260,13 +276,22 @@ struct MegaLocModel::Impl {
               ggml_nbytes(destination) <= fileSize - dataStart - offset,
           "truncated tensor " + name);
     }
+    file.dataStart = dataStart;
+    return file;
+  }
+
+  void loadWeights(const std::string& path) {
+    WeightFile file = declareWeights(path);
+    auto& stream = file.stream;
+    const auto& gguf = file.gguf;
+    const uint64_t dataStart = file.dataStart;
     weightBuffer = ggml_backend_alloc_ctx_tensors(weights.get(), device);
     if (!weightBuffer)
       throw StatusError(
           InternalError, "MegaLoc weight buffer allocation failed");
     ggml_backend_buffer_set_usage(
         weightBuffer, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
-    std::vector<char> chunk(8 * 1024 * 1024);
+    std::vector<char> chunk(READ_CHUNK_BYTES);
     for (const auto& [name, destination] : tensors) {
       stream.seekg(
           static_cast<std::streamoff>(
@@ -284,7 +309,8 @@ struct MegaLocModel::Impl {
     }
   }
 
-  void build() {
+  // Builds the graph and the scheduler. The graph is not allocated.
+  void buildGraph() {
     context.reset(ggml_init(
         {4096 * ggml_tensor_overhead() +
              ggml_graph_overhead_custom(8192, false),
@@ -370,13 +396,18 @@ struct MegaLocModel::Impl {
     ggml_backend_t backends[] = {device, cpu};
     scheduler = ggml_backend_sched_new(
         backends, nullptr, device == cpu ? 1 : 2, 8192, false, true);
-    if (!scheduler || !ggml_backend_sched_alloc_graph(scheduler, graph)) {
-      throw StatusError(InternalError, "MegaLoc graph allocation failed");
-    }
+    if (!scheduler)
+      throw StatusError(InternalError, "MegaLoc scheduler creation failed");
     const float value = -std::log(static_cast<float>(PATCH_COUNT + 64));
     a.fill(value);
     a.back() += std::log(static_cast<float>(PATCH_COUNT - 64));
     b.fill(value);
+  }
+
+  void build() {
+    buildGraph();
+    if (!ggml_backend_sched_alloc_graph(scheduler, graph))
+      throw StatusError(InternalError, "MegaLoc graph allocation failed");
     for (int i = 0; i < ggml_graph_n_nodes(graph); ++i) {
       if (device != cpu && ggml_backend_sched_get_tensor_backend(
                                scheduler, ggml_graph_node(graph, i)) == cpu)
@@ -411,7 +442,37 @@ struct MegaLocModel::Impl {
           InternalError, "MegaLoc produced an invalid descriptor norm");
     return result;
   }
+
+  // The buffers load() and run() would allocate, from metadata alone. The
+  // weights sit on empty buffers so the graph is the one build() allocates.
+  MeasuredBuffers measure(const std::string& path) {
+    declareWeights(path);
+    MeasuredBuffers result;
+    const uint64_t weightBytes = ctxBufferBytes(weights.get(), device);
+    emptyWeights = placeOnEmptyWeightBuffers(weights.get(), device);
+    buildGraph();
+    if (!measureSchedulerBuffers(scheduler, graph, device, cpu, result.buffers))
+      throw StatusError(InternalError, "MegaLoc graph measurement failed");
+    result.buffers.weightBytes = weightBytes;
+    const uint64_t inferenceBytes =
+        (static_cast<uint64_t>(PATCH_WIDTH) * PATCH_COUNT + DESCRIPTOR_LENGTH) *
+        sizeof(float);
+    result.hostStagingBytes =
+        std::max<uint64_t>(READ_CHUNK_BYTES, inferenceBytes);
+    return result;
+  }
 };
+
+namespace {
+std::unique_ptr<GgmlBackends> makeBackends(const Config& config) {
+  check(!config.modelPath.empty(), "modelPath is required");
+  check(
+      config.threads > 0 && config.threads <= 1024,
+      "threads must be between 1 and 1024");
+  return std::make_unique<GgmlBackends>(
+      config.backend, config.backendsDir, config.threads, "MegaLoc");
+}
+} // namespace
 
 MegaLocModel::MegaLocModel(Config config) : config_(std::move(config)) {}
 MegaLocModel::~MegaLocModel() = default;
@@ -420,18 +481,34 @@ void MegaLocModel::load() {
   std::scoped_lock lock(mutex_);
   if (impl_)
     return;
-  check(!config_.modelPath.empty(), "modelPath is required");
-  check(
-      config_.threads > 0 && config_.threads <= 1024,
-      "threads must be between 1 and 1024");
   auto state = std::make_unique<Impl>();
-  state->backends = std::make_unique<GgmlBackends>(
-      config_.backend, config_.backendsDir, config_.threads, "MegaLoc");
+  state->backends = makeBackends(config_);
   state->device = state->backends->device();
   state->cpu = state->backends->cpu();
   state->loadWeights(config_.modelPath);
   state->build();
   impl_ = std::move(state);
+}
+
+MeasuredBuffers MegaLocModel::measure(const Config& config) {
+  Impl state;
+  state.backends = makeBackends(config);
+  state.device = state.backends->device();
+  state.cpu = state.backends->cpu();
+  MeasuredBuffers result = state.measure(config.modelPath);
+  result.deviceName = deviceName(state.device);
+  result.deviceIsCpu = state.device == state.cpu;
+  return result;
+}
+
+BufferFootprint MegaLocModel::allocatedBuffers() const {
+  std::scoped_lock lock(mutex_);
+  if (!impl_)
+    throw StatusError(InternalError, "MegaLoc is not loaded");
+  BufferFootprint result =
+      schedulerBuffers(impl_->scheduler, impl_->device, impl_->cpu);
+  result.weightBytes = allocatedCtxBytes(impl_->weights.get());
+  return result;
 }
 
 std::string MegaLocModel::getName() const { return "megaloc-ggml"; }

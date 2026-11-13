@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { safePathComponent } from '@/schemas/path-validation'
+import { trackedRequestSchema } from '@/schemas/request-base'
 import type {
   Doc,
   EmbeddedDoc,
@@ -175,24 +176,16 @@ const ragDeleteWorkspaceOperationSchema = ragDeleteWorkspaceParamsSchema.extend(
 
 // ============== Unified Request Schema ==============
 
-// `requestId` is threaded onto every RAG operation as an optional field so
-// the request registry can correlate the in-flight context with the
-// caller's decorated promise (`op.requestId`). Optional — falls back
-// to a generated id when the field is missing.
-const ragRequestIdField = {
-  requestId: z.string().min(1).optional()
-}
-
 export const ragRequestSchema = z.discriminatedUnion('operation', [
-  ragChunkOperationSchema.extend(ragRequestIdField),
-  ragIngestOperationSchema.extend(ragRequestIdField),
-  ragSaveEmbeddingsOperationSchema.extend(ragRequestIdField),
-  ragSearchOperationSchema.extend(ragRequestIdField),
-  ragDeleteEmbeddingsOperationSchema.extend(ragRequestIdField),
-  ragReindexOperationSchema.extend(ragRequestIdField),
-  ragListWorkspacesOperationSchema.extend(ragRequestIdField),
-  ragCloseWorkspaceOperationSchema.extend(ragRequestIdField),
-  ragDeleteWorkspaceOperationSchema.extend(ragRequestIdField)
+  ragChunkOperationSchema.extend(trackedRequestSchema.shape),
+  ragIngestOperationSchema.extend(trackedRequestSchema.shape),
+  ragSaveEmbeddingsOperationSchema.extend(trackedRequestSchema.shape),
+  ragSearchOperationSchema.extend(trackedRequestSchema.shape),
+  ragDeleteEmbeddingsOperationSchema.extend(trackedRequestSchema.shape),
+  ragReindexOperationSchema.extend(trackedRequestSchema.shape),
+  ragListWorkspacesOperationSchema.extend(trackedRequestSchema.shape),
+  ragCloseWorkspaceOperationSchema.extend(trackedRequestSchema.shape),
+  ragDeleteWorkspaceOperationSchema.extend(trackedRequestSchema.shape)
 ])
 
 // ============== Response Schemas ==============

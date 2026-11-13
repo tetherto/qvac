@@ -13,6 +13,8 @@
 #include <ggml.h>
 #include <gguf.h>
 
+#include "model-interface/GgmlBackend.hpp"
+
 namespace classification_ggml::bridgedepth {
 
 namespace {
@@ -298,8 +300,18 @@ struct BridgeDepthGraph::Impl {
   ggml_backend_t backend = nullptr;
   ggml_backend_t cpu = nullptr;
   ggml_backend_buffer_t wbuf = nullptr;
+  // Measure mode: stands in for wbuf.
+  EmptyWeightBuffers emptyWeights;
   ggml_backend_sched_t sched = nullptr;
   int fallbackNodes = 0;
+  // Measure mode: the weights have no data, run() sizes the graph instead of
+  // computing it and records the result here.
+  bool measureOnly = false;
+  BufferFootprint measured;
+  // Compute buffers and CPU workspace after the last run.
+  BufferFootprint allocated;
+  uint64_t measuredRunHostBytes = 0; // host inputs and outputs of one run
+  uint64_t readBufferBytes = 0;      // largest tensor, the load read buffer
 
   int monoDepth = 12;
   int monoHeads = 6;
@@ -308,7 +320,13 @@ struct BridgeDepthGraph::Impl {
   std::vector<int> monoLayers;
   int posGrid = 37;
   std::vector<float> posEmbedHost; // [1 + M*M, D], torch layout
+  // Shape of pos_embed: D and 1 + M*M. Measure mode keeps no host copy.
+  int64_t posDim = 0;
+  int64_t posRows = 0;
   std::map<std::pair<int, int>, std::vector<float>> posCache;
+  // Measure mode: bytes of the pos_embed table the last run resized, which
+  // posCache keeps for the life of the model.
+  uint64_t measuredPosTableBytes = 0;
 
   ~Impl() {
     if (sched)
@@ -350,6 +368,9 @@ struct BridgeDepthGraph::Impl {
   }
 
   // Graph inputs registered with their host data, uploaded after allocation.
+  // In measure mode (shapesOnly) the host data is not built: an input takes
+  // its type and shape only, and its bytes are counted as host memory a run
+  // would hold.
   struct Inputs {
     struct Item {
       T* t;
@@ -357,12 +378,17 @@ struct BridgeDepthGraph::Impl {
       size_t bytes;
     };
     std::vector<Item> list;
+    bool shapesOnly = false;
     T* addRaw(
         ggml_context* ctx, const char* name, ggml_type type, const void* data,
         size_t bytes, int64_t n0, int64_t n1, int64_t n2, int64_t n3) {
       T* t = ggml_new_tensor_4d(ctx, type, n0, n1, n2, n3);
       ggml_set_name(t, name);
       ggml_set_input(t);
+      if (shapesOnly) {
+        list.push_back({t, nullptr, ggml_nbytes(t)});
+        return t;
+      }
       if (bytes != ggml_nbytes(t)) {
         throw std::runtime_error(
             std::string("BridgeDepth: input size mismatch ") + name);
@@ -414,11 +440,22 @@ struct BridgeDepthGraph::Impl {
     ggml_context* ctx = owned.get();
     ggml_cgraph* gf = ggml_new_graph_custom(ctx, GRAPH_SIZE, false);
     Inputs inputs;
+    inputs.shapesOnly = measureOnly;
     Outputs outs = build(ctx, inputs);
     for (auto& [name, t] : outs) {
       t = ggml_cont(ctx, t);
       ggml_set_output(t);
       ggml_build_forward_expand(gf, t);
+    }
+    if (measureOnly) {
+      if (!measureSchedulerBuffers(sched, gf, backend, cpu, measured))
+        throw ResourceError("BridgeDepth: graph measurement failed");
+      measuredRunHostBytes = 0;
+      for (const auto& item : inputs.list)
+        measuredRunHostBytes += item.bytes;
+      for (const auto& [name, t] : outs)
+        measuredRunHostBytes += ggml_nbytes(t);
+      return {};
     }
     ggml_backend_sched_reset(sched);
     if (!ggml_backend_sched_alloc_graph(sched, gf)) {
@@ -432,6 +469,7 @@ struct BridgeDepthGraph::Impl {
     if (ggml_backend_sched_graph_compute(sched, gf) != GGML_STATUS_SUCCESS) {
       throw std::runtime_error("BridgeDepth: graph compute failed");
     }
+    allocated = schedulerBuffers(sched, backend, cpu);
     fallbackNodes = 0;
     if (backend != cpu) {
       // Reshapes and views of host inputs sit on the CPU backend without
@@ -471,6 +509,12 @@ struct BridgeDepthGraph::Impl {
     return posCache.emplace(std::make_pair(ph, pw), std::move(out))
         .first->second;
   }
+
+  // The whole inference as one run(). In measure mode `left` and `right` are
+  // null, nothing is computed and the result is empty.
+  std::vector<float> forward(
+      const float* left, const float* right, int h, int w,
+      const std::vector<float>* seedsOverride);
 
   // ---- mono branch: DAv2 ViT-S + DPT head + depth_feature_down ----
 
@@ -1160,7 +1204,9 @@ struct BridgeDepthGraph::Impl {
   int windowSize = 6;
   int numInferLayers = 5;
   std::map<std::string, std::vector<int32_t>>
-      rpeIndexHost; // relative_position_index per block
+      rpeIndexHost; // relative_position_index per block, inference only
+  // Element count of each relative_position_index, in both modes.
+  std::map<std::string, int64_t> rpeIndexElems;
 
   struct AlignInputs {
     T* wIdx;     // [1, 1, W, 1] values 0..W-1
@@ -1798,11 +1844,13 @@ constexpr uint64_t EXPECTED_LAYOUT = 12314121931801583502ULL;
 } // namespace
 
 BridgeDepthGraph::BridgeDepthGraph(
-    const std::string& ggufPath, ggml_backend_t device, ggml_backend_t cpu)
+    const std::string& ggufPath, ggml_backend_t device, ggml_backend_t cpu,
+    Mode mode)
     : impl_(std::make_unique<Impl>()) {
   Impl& m = *impl_;
   m.backend = device;
   m.cpu = cpu;
+  m.measureOnly = mode == Mode::Measure;
   std::ifstream f(ggufPath, std::ios::binary | std::ios::ate);
   if (!f)
     throw std::runtime_error("BridgeDepth: cannot open " + ggufPath);
@@ -1881,30 +1929,42 @@ BridgeDepthGraph::BridgeDepthGraph(
           std::string("BridgeDepth: truncated tensor ") +
           gguf_get_tensor_name(m.gctx, i));
     }
+    m.readBufferBytes = std::max<uint64_t>(m.readBufferBytes, ggml_nbytes(t));
   }
 
-  m.wbuf = ggml_backend_alloc_ctx_tensors(m.wctx, m.backend);
-  if (!m.wbuf)
-    throw ResourceError("BridgeDepth: weight allocation failed");
-  ggml_backend_buffer_set_usage(m.wbuf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
-  std::vector<char> buf;
-  for (int64_t i = 0; i < gguf_get_n_tensors(m.gctx); ++i) {
-    T* t = ggml_get_tensor(m.wctx, gguf_get_tensor_name(m.gctx, i));
-    buf.resize(ggml_nbytes(t));
-    f.seekg(
-        static_cast<std::streamoff>(
-            dataOff + gguf_get_tensor_offset(m.gctx, i)));
-    f.read(buf.data(), static_cast<std::streamsize>(buf.size()));
-    if (!f)
-      throw std::runtime_error("BridgeDepth: short read on tensor data");
-    ggml_backend_tensor_set(t, buf.data(), 0, buf.size());
+  if (m.measureOnly) {
+    m.measured.weightBytes = ctxBufferBytes(m.wctx, m.backend);
+    m.emptyWeights = placeOnEmptyWeightBuffers(m.wctx, m.backend);
+  } else {
+    m.wbuf = ggml_backend_alloc_ctx_tensors(m.wctx, m.backend);
+    if (!m.wbuf)
+      throw ResourceError("BridgeDepth: weight allocation failed");
+    ggml_backend_buffer_set_usage(m.wbuf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
+    std::vector<char> buf;
+    for (int64_t i = 0; i < gguf_get_n_tensors(m.gctx); ++i) {
+      T* t = ggml_get_tensor(m.wctx, gguf_get_tensor_name(m.gctx, i));
+      buf.resize(ggml_nbytes(t));
+      f.seekg(
+          static_cast<std::streamoff>(
+              dataOff + gguf_get_tensor_offset(m.gctx, i)));
+      f.read(buf.data(), static_cast<std::streamsize>(buf.size()));
+      if (!f)
+        throw std::runtime_error("BridgeDepth: short read on tensor data");
+      ggml_backend_tensor_set(t, buf.data(), 0, buf.size());
+    }
   }
   T* pos = m.weight("mono.pretrained.pos_embed");
   // posEmbed() indexes this as [1 + pos_grid^2, D] on the host.
   if (pos->type != GGML_TYPE_F32 || pos->ne[1] != 1 + m.posGrid * m.posGrid)
     throw std::runtime_error("BridgeDepth: pos_embed does not match pos_grid");
-  m.posEmbedHost.resize(ggml_nelements(pos));
-  ggml_backend_tensor_get(pos, m.posEmbedHost.data(), 0, ggml_nbytes(pos));
+  m.posDim = pos->ne[0];
+  m.posRows = pos->ne[1];
+  // Measure mode reads no tensor data, so it keeps none of the host copies
+  // below; the graph takes only their shapes.
+  if (!m.measureOnly) {
+    m.posEmbedHost.resize(ggml_nelements(pos));
+    ggml_backend_tensor_get(pos, m.posEmbedHost.data(), 0, ggml_nbytes(pos));
+  }
   // relative_position_index buffers are expanded on the host per run (M, N
   // tokens per pixel depend on the stage), so keep them host-side.
   for (int64_t i = 0; i < gguf_get_n_tensors(m.gctx); ++i) {
@@ -1915,6 +1975,9 @@ BridgeDepthGraph::BridgeDepthGraph(
     T* t = ggml_get_tensor(m.wctx, name.c_str());
     if (t->type != GGML_TYPE_I32)
       throw std::runtime_error("BridgeDepth: " + name + " is not I32");
+    m.rpeIndexElems.emplace(name, ggml_nelements(t));
+    if (m.measureOnly)
+      continue;
     std::vector<int32_t> idx(ggml_nelements(t));
     ggml_backend_tensor_get(t, idx.data(), 0, ggml_nbytes(t));
     // The values become get_rows indices into the table. The layout
@@ -1949,6 +2012,13 @@ BridgeDepthGraph::~BridgeDepthGraph() = default;
 
 size_t BridgeDepthGraph::weightBytes() const {
   return ggml_backend_buffer_get_size(impl_->wbuf);
+}
+
+BufferFootprint BridgeDepthGraph::allocatedBuffers() const {
+  const Impl& m = *impl_;
+  BufferFootprint result = m.allocated;
+  result.weightBytes = allocatedCtxBytes(m.wctx);
+  return result;
 }
 
 int BridgeDepthGraph::cpuFallbackNodes() const { return impl_->fallbackNodes; }
@@ -2029,11 +2099,14 @@ std::vector<int32_t> expandRpeIndex(
 }
 
 // Per-run host inputs of one alignment stage: pixel index, row base for the
-// get_rows gather, the two masks and the expanded rpe indices per layer.
+// get_rows gather, the two masks and the expanded rpe indices per layer. The
+// shapes are always set; the vectors stay empty in measure mode.
 struct AlignHost {
   std::vector<float> wIdx, rowBase, maskEven, maskOdd;
   std::vector<std::vector<int32_t>> idxReadout, idxNmp, idxUpdate;
   int wPad = 0, hPad = 0, T = 0;
+  bool hasMaskEven = false;
+  int64_t readoutElems = 0, nmpElems = 0, updateElems = 0;
 };
 
 } // namespace
@@ -2041,20 +2114,76 @@ struct AlignHost {
 std::vector<float> BridgeDepthGraph::infer(
     const float* left, const float* right, int h, int w,
     const std::vector<float>* seedsOverride) {
+  if (impl_->measureOnly)
+    throw std::runtime_error("BridgeDepth: graph was opened to measure only");
+  return impl_->forward(left, right, h, w, seedsOverride);
+}
+
+MeasuredBuffers
+BridgeDepthGraph::measure(int h, int w, const CallerHostBytes& caller) {
   Impl& m = *impl_;
+  if (!m.measureOnly)
+    throw std::runtime_error("BridgeDepth: graph was not opened to measure");
+  m.forward(nullptr, nullptr, h, w, nullptr);
+  MeasuredBuffers result;
+  result.buffers = m.measured;
+  // The host copies inference keeps of pos_embed and the rpe indices, and the
+  // pos_embed table resized for this size, which posCache keeps after the run.
+  uint64_t persistentBytes =
+      static_cast<uint64_t>(m.posDim) * m.posRows * sizeof(float) +
+      m.measuredPosTableBytes;
+  for (const auto& [name, elements] : m.rpeIndexElems)
+    persistentBytes += static_cast<uint64_t>(elements) * sizeof(int32_t);
+  // The run: every graph input and output on the host, the resized pos_embed
+  // already counted above, plus both views as planar floats and the unpadded
+  // disparity forward() returns.
+  const uint64_t pixels = static_cast<uint64_t>(h) * w;
+  const uint64_t planarViewFloats = 2ULL * 3 * pixels;
+  const uint64_t disparityBytes = pixels * sizeof(float);
+  const uint64_t runBytes = m.measuredRunHostBytes - m.measuredPosTableBytes +
+                            planarViewFloats * sizeof(float) + disparityBytes;
+  const uint64_t jobPeak = std::max(
+      {caller.prepareBytes,
+       runBytes,
+       disparityBytes + caller.afterRunBytes,
+       caller.outputBytes});
+  result.hostStagingBytes =
+      persistentBytes + std::max(m.readBufferBytes, caller.jobBytes + jobPeak);
+  return result;
+}
+
+std::vector<float> BridgeDepthGraph::Impl::forward(
+    const float* left, const float* right, int h, int w,
+    const std::vector<float>* seedsOverride) {
+  Impl& m = *this;
   if (h < MIN_SIDE || w < MIN_SIDE)
     throw std::runtime_error(
         "BridgeDepth: image is smaller than the minimum size");
   const Padding pad = computePadding(h, w, PAD_DIVISOR);
   const int hDim = h + pad.top, wDim = w + pad.right;
   const size_t plane = static_cast<size_t>(3) * hDim * wDim;
-  std::vector<float> imgs(2 * plane);
-  padImageInto(left, h, w, pad, imgs.data());
-  padImageInto(right, h, w, pad, imgs.data() + plane);
+  // Host data of one graph input, built only when the run computes. Measure
+  // mode gets an empty value and the input takes only its shape.
+  auto hostOnly = [&](const auto& build) -> decltype(build()) {
+    if (m.measureOnly)
+      return {};
+    return build();
+  };
+  const std::vector<float> imgs = hostOnly([&] {
+    std::vector<float> both(2 * plane);
+    padImageInto(left, h, w, pad, both.data());
+    padImageInto(right, h, w, pad, both.data() + plane);
+    return both;
+  });
   const int ph = hDim / 8 * 7 / 14, pw = wDim / 8 * 7 / 14;
-  const std::vector<float>& pos = m.posEmbed(ph, pw);
-  const std::vector<float> mean = channelConst(MEAN_RGB),
-                           stdv = channelConst(STD_RGB);
+  const std::vector<float> noFloats;
+  const std::vector<float>& pos = m.measureOnly ? noFloats : m.posEmbed(ph, pw);
+  m.measuredPosTableBytes =
+      static_cast<uint64_t>(m.posDim) * (1 + ph * pw) * sizeof(float);
+  const std::vector<float> mean =
+      hostOnly([] { return channelConst(MEAN_RGB); });
+  const std::vector<float> stdv =
+      hostOnly([] { return channelConst(STD_RGB); });
   const int h8 = hDim / 8, w8 = wDim / 8, nDim = m.numProposals;
   if (seedsOverride &&
       seedsOverride->size() != static_cast<size_t>(nDim) * h8 * w8) {
@@ -2062,30 +2191,55 @@ std::vector<float> BridgeDepthGraph::infer(
         "BridgeDepth: seedsOverride must be [H/8 * W/8, N] after padding");
   }
   const int cDim = m.kvU32("bridgedepth.backbone.out_channels");
-  std::vector<float> avg(static_cast<size_t>(cDim) * m.costGroup, 0.0f);
   const int per = cDim / m.costGroup;
-  for (int g = 0; g < m.costGroup; ++g) {
-    for (int c = 0; c < per; ++c)
-      avg[static_cast<size_t>(g) * cDim + static_cast<size_t>(g) * per + c] =
-          1.0f / per;
-  }
-  std::vector<float> arange(m.numDisp), offsets(9), freqs(15);
-  for (int i = 0; i < m.numDisp; ++i)
-    arange[i] = static_cast<float>(i);
-  for (int i = 0; i < 9; ++i)
-    offsets[i] = static_cast<float>(i - 4);
-  for (int i = 0; i < 15; ++i)
-    freqs[i] = std::ldexp(1.0f, i);
-  const std::vector<float> maskCol = selfEdgeMask(h8, nDim),
-                           maskRow = selfEdgeMask(w8, nDim);
+  const std::vector<float> avg = hostOnly([&] {
+    std::vector<float> out(static_cast<size_t>(cDim) * m.costGroup, 0.0f);
+    for (int g = 0; g < m.costGroup; ++g) {
+      for (int c = 0; c < per; ++c)
+        out[static_cast<size_t>(g) * cDim + static_cast<size_t>(g) * per + c] =
+            1.0f / per;
+    }
+    return out;
+  });
+  const std::vector<float> arange = hostOnly([&] {
+    std::vector<float> out(m.numDisp);
+    for (int i = 0; i < m.numDisp; ++i)
+      out[i] = static_cast<float>(i);
+    return out;
+  });
+  const std::vector<float> offsets = hostOnly([] {
+    std::vector<float> out(9);
+    for (int i = 0; i < 9; ++i)
+      out[i] = static_cast<float>(i - 4);
+    return out;
+  });
+  const std::vector<float> freqs = hostOnly([] {
+    std::vector<float> out(15);
+    for (int i = 0; i < 15; ++i)
+      out[i] = std::ldexp(1.0f, i);
+    return out;
+  });
+  const std::vector<float> maskCol =
+      hostOnly([&] { return selfEdgeMask(h8, nDim); });
+  const std::vector<float> maskRow =
+      hostOnly([&] { return selfEdgeMask(w8, nDim); });
 
   // alignment host inputs, stage 0 at 1/8 with N proposals, stage 1 at 1/4 with
   // one
-  auto rpeBase = [&](const std::string& name) -> const std::vector<int32_t>& {
-    auto it = m.rpeIndexHost.find(name);
-    if (it == m.rpeIndexHost.end())
+  auto rpeIndex = [&](const std::string& name,
+                      int pixQ,
+                      int pixK,
+                      int queryTokens,
+                      int keyTokens) -> std::vector<int32_t> {
+    auto elems = m.rpeIndexElems.find(name);
+    if (elems == m.rpeIndexElems.end())
       throw std::runtime_error("BridgeDepth: missing " + name);
-    return it->second;
+    if (elems->second != static_cast<int64_t>(pixQ) * pixK)
+      throw std::runtime_error("BridgeDepth: unexpected rpe index size");
+    return hostOnly([&] {
+      return expandRpeIndex(
+          m.rpeIndexHost.at(name), pixQ, pixK, queryTokens, keyTokens);
+    });
   };
   auto alignHost = [&](int wGrid,
                        int hGrid,
@@ -2099,34 +2253,38 @@ std::vector<float> BridgeDepthGraph::infer(
     a.wPad = (wGrid + win - 1) / win * win;
     a.hPad = (hGrid + win - 1) / win * win;
     a.T = pix * n;
-    a.wIdx.resize(wGrid);
-    a.rowBase.resize(static_cast<size_t>(wGrid) * hGrid);
-    for (int x = 0; x < wGrid; ++x)
-      a.wIdx[x] = static_cast<float>(x);
-    for (int y = 0; y < hGrid; ++y) {
+    a.hasMaskEven = n > 1;
+    // Token counts of the expanded indices, see expandRpeIndex.
+    a.readoutElems = static_cast<int64_t>(pix) * n * pixK;
+    a.nmpElems = static_cast<int64_t>(pix) * n * pix * n;
+    a.updateElems = static_cast<int64_t>(pixK) * pix * n;
+    a.wIdx = hostOnly([&] {
+      std::vector<float> out(wGrid);
       for (int x = 0; x < wGrid; ++x)
-        a.rowBase[static_cast<size_t>(y) * wGrid + x] =
-            static_cast<float>(y) * wGrid;
-    }
-    if (n > 1)
-      a.maskEven = selfEdgeMask(pix, n);
-    a.maskOdd = shiftWindowMask(a.hPad, a.wPad, win, win / 2, n);
+        out[x] = static_cast<float>(x);
+      return out;
+    });
+    a.rowBase = hostOnly([&] {
+      std::vector<float> out(static_cast<size_t>(wGrid) * hGrid);
+      for (int y = 0; y < hGrid; ++y) {
+        for (int x = 0; x < wGrid; ++x)
+          out[static_cast<size_t>(y) * wGrid + x] =
+              static_cast<float>(y) * wGrid;
+      }
+      return out;
+    });
+    if (a.hasMaskEven)
+      a.maskEven = hostOnly([&] { return selfEdgeMask(pix, n); });
+    a.maskOdd = hostOnly(
+        [&] { return shiftWindowMask(a.hPad, a.wPad, win, win / 2, n); });
     for (int l = 0; l < layers; ++l) {
       const std::string p = prefix + std::to_string(l) + ".";
-      a.idxReadout.push_back(expandRpeIndex(
-          rpeBase(p + "readout.attn.relative_position_index"),
-          pix,
-          pixK,
-          n,
-          1));
-      a.idxNmp.push_back(expandRpeIndex(
-          rpeBase(p + "attn.nmp.attn.relative_position_index"),
-          pix,
-          pix,
-          n,
-          n));
-      a.idxUpdate.push_back(expandRpeIndex(
-          rpeBase(p + "update.attn.relative_position_index"), pixK, pix, 1, n));
+      a.idxReadout.push_back(rpeIndex(
+          p + "readout.attn.relative_position_index", pix, pixK, n, 1));
+      a.idxNmp.push_back(rpeIndex(
+          p + "attn.nmp.attn.relative_position_index", pix, pix, n, n));
+      a.idxUpdate.push_back(
+          rpeIndex(p + "update.attn.relative_position_index", pixK, pix, 1, n));
     }
     return a;
   };
@@ -2143,23 +2301,21 @@ std::vector<float> BridgeDepthGraph::infer(
       true);
   const int cGw = static_cast<int>(m.weight("stereo.gw.3.weight")->ne[3]),
             gCorr = 32, perG = cGw / gCorr;
-  std::vector<float> avg32(static_cast<size_t>(cGw) * gCorr, 0.0f);
-  for (int g = 0; g < gCorr; ++g) {
-    for (int c = 0; c < perG; ++c)
-      avg32[static_cast<size_t>(g) * cGw + g * perG + c] = 1.0f / perG;
-  }
+  const std::vector<float> avg32 = hostOnly([&] {
+    std::vector<float> out(static_cast<size_t>(cGw) * gCorr, 0.0f);
+    for (int g = 0; g < gCorr; ++g) {
+      for (int c = 0; c < perG; ++c)
+        out[static_cast<size_t>(g) * cGw + g * perG + c] = 1.0f / perG;
+    }
+    return out;
+  });
 
   std::map<std::string, HostTensor> outsHost = m.run([&](ggml_context* ctx,
                                                          Impl::Inputs& in) {
     T* ti = in.add(ctx, "imgs", imgs, wDim, hDim, 3, 2);
     T* tm = in.add(ctx, "mean", mean, 1, 1, 3, 1);
     T* ts = in.add(ctx, "std", stdv, 1, 1, 3, 1);
-    T* tp = in.add(
-        ctx,
-        "pos",
-        pos,
-        static_cast<int64_t>(pos.size()) / (1 + ph * pw),
-        1 + ph * pw);
+    T* tp = in.add(ctx, "pos", pos, m.posDim, 1 + ph * pw);
     Impl::DpnInputs di;
     di.avg = in.add(ctx, "avg", avg, cDim, m.costGroup);
     di.arange = in.add(ctx, "arange", arange, 1, m.numDisp);
@@ -2189,9 +2345,9 @@ std::vector<float> BridgeDepthGraph::infer(
       ai.avg32 = avg32T;
       ai.freqs = di.freqs;
       ai.maskEven =
-          a.maskEven.empty()
-              ? nullptr
-              : in.add(ctx, ("mask_even" + s).c_str(), a.maskEven, a.T, a.T);
+          a.hasMaskEven
+              ? in.add(ctx, ("mask_even" + s).c_str(), a.maskEven, a.T, a.T)
+              : nullptr;
       ai.maskOdd = in.add(
           ctx,
           ("mask_odd" + s).c_str(),
@@ -2206,14 +2362,11 @@ std::vector<float> BridgeDepthGraph::infer(
             ctx,
             ("idx_readout" + sl).c_str(),
             a.idxReadout[l],
-            a.idxReadout[l].size()));
-        ai.idxNmp.push_back(in.addI32(
-            ctx, ("idx_nmp" + sl).c_str(), a.idxNmp[l], a.idxNmp[l].size()));
+            a.readoutElems));
+        ai.idxNmp.push_back(
+            in.addI32(ctx, ("idx_nmp" + sl).c_str(), a.idxNmp[l], a.nmpElems));
         ai.idxUpdate.push_back(in.addI32(
-            ctx,
-            ("idx_update" + sl).c_str(),
-            a.idxUpdate[l],
-            a.idxUpdate[l].size()));
+            ctx, ("idx_update" + sl).c_str(), a.idxUpdate[l], a.updateElems));
       }
       return ai;
     };
@@ -2271,6 +2424,8 @@ std::vector<float> BridgeDepthGraph::infer(
              "disp_final_padded")}};
   });
 
+  if (m.measureOnly)
+    return {};
   // InputPadder.unpad: drop the top rows and the right columns.
   const HostTensor& padded = outsHost.at("disp_final_padded");
   std::vector<float> disparity(static_cast<size_t>(h) * w);

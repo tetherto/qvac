@@ -3,6 +3,7 @@ import type { AbortSignal } from 'bare-abort-controller'
 import Buffer from 'bare-buffer'
 import type { EmbedRunInput, EmbedMultimodalInput } from '@qvac/embed-llamacpp'
 import type { EmbedInputPart } from '@/schemas/embed'
+import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
 import { getModel } from '@/runtime/model-registry'
 import { type EmbedParams, type EmbedStats, embedParamsSchema } from '@/schemas/index'
 import { buildUnaryResult } from '@/profiling/model-execution'
@@ -27,15 +28,29 @@ export function markEmbeddingProjector(model: object) {
 // Overloaded functions for embedding
 export async function embed(
   params: { modelId: string; text: string },
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): Promise<EmbedResult>
 export async function embed(
   params: { modelId: string; text: string[] },
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): Promise<EmbedResult>
-export async function embed(params: EmbedParams, requestId?: string): Promise<EmbedResult>
+export async function embed(
+  params: EmbedParams,
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
+): Promise<EmbedResult>
 
-export async function embed(params: EmbedParams, requestId?: string): Promise<EmbedResult> {
+export async function embed(
+  params: EmbedParams,
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
+): Promise<EmbedResult> {
   const parsed = embedParamsSchema.parse(params)
   const inputs = parsed.input !== undefined ? [parsed.input] : parsed.inputs
   const mediaInputs = inputs?.map((input) => {
@@ -54,6 +69,8 @@ export async function embed(params: EmbedParams, requestId?: string): Promise<Em
   // id if the caller didn't send one.
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRandomRequestId(),
+    sessionId,
+    ...requestParent(context),
     kind: 'embeddings',
     modelId
   })

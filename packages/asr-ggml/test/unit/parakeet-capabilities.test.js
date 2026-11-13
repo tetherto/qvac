@@ -27,6 +27,39 @@ const ATTRIBUTED_SEGMENTS = [
   { text: 'Doing well, thanks.', speakerId: 1, start: 1.8, end: 3.5, toAppend: true, isFinal: true }
 ]
 
+class ProbabilityOptionsBinding extends MockedBinding {
+  runJob(handle, data) {
+    this.lastRequest = data
+    return super.runJob(handle, data)
+  }
+}
+
+test('Parakeet forwards probability options per request and rejects invalid values', async (t) => {
+  const binding = new ProbabilityOptionsBinding()
+  const { model } = createParakeetModel({ binding })
+  const audio = new Float32Array([0.1, 0.2])
+  await model.load()
+  try {
+    for (const options of [
+      { includeSpeakerProbabilities: true },
+      { includeSpeakerProbabilities: false },
+      undefined
+    ]) {
+      const response = await model.run(audio, options)
+      await response.await()
+      t.is(binding.lastRequest.includeSpeakerProbabilities, options?.includeSpeakerProbabilities)
+      t.is(Object.hasOwn(binding.lastRequest, 'includeSpeakerProbabilities'), options !== undefined)
+    }
+    const lastRequest = binding.lastRequest
+    for (const value of [null, 0, 'true', {}]) {
+      await t.exception(model.run(audio, { includeSpeakerProbabilities: value }), /boolean/)
+      t.is(binding.lastRequest, lastRequest, 'invalid options never reach the native binding')
+    }
+  } finally {
+    await model.unload()
+  }
+})
+
 class AttributedBinding extends MockedBinding {
   _callCallbacks(event, output, error) {
     super._callCallbacks(event, event === 'Output' ? ATTRIBUTED_SEGMENTS : output, error)
@@ -93,10 +126,8 @@ test('Parakeet selectors reach the native boundary without a whitelist or GPU co
     'vulkan',
     'opencl',
     'webgpu',
-    'hexagon',
     'CUDA1',
     'MTL0',
-    'HTP0',
     'future-device'
   ]) {
     for (const useGPU of [false, true]) {

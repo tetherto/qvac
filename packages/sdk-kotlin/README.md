@@ -206,7 +206,8 @@ Set `MAVEN_SIGNING_KEY` and `MAVEN_SIGNING_PASSWORD` to sign every publication
 with an in-memory PGP key. `./gradlew verifyMavenPublications` checks every current
 coordinate's documentation, sources, artifact presence and checksums.
 
-The SDK release (`publish-sdk.yml`) calls `publish-sdk-kotlin.yml` with the
+The SDK release (`publish-sdk.yml`, or `release-train.yml` for a train with the
+`sdk-kotlin` check) calls `publish-sdk-kotlin.yml` with the
 `release-assets` destination, which packages the Maven repository into the
 per-profile ZIPs and attaches them to the `sdk-v<version>` release. No Maven
 registry is published by default. Maven Central uses its dedicated deployment
@@ -513,7 +514,10 @@ several times over while it is decoded, so account for device RAM.
 ./gradlew :android-barekit:assemble
 ./gradlew :android-example:assembleDebug
 ./gradlew publishSdkToBuildRepository
+./gradlew -p examples check  # compile every example in isolation
 ```
+
+The runnable examples the docs embed live in [`examples/`](examples/README.md).
 
 Real-engine cross-client conformance uses the same corpus as JS/Python:
 
@@ -524,9 +528,9 @@ QVAC_RUN_CONFORMANCE=1 ./gradlew :jvm-barekit:test --tests '*WorkerConformanceTe
 This downloads small models and tests generation, translation, embeddings,
 load/unload, cancellation, the tool loop, and TTS. Without the opt-in variable
 this test is explicitly skipped; `:jvm-barekit:test` still starts the worker
-and checks a heartbeat. CI runs real inference on `test-e2e-smoke`-labelled PRs or manual
-dispatch. Publishing requires a release tag, explicit dispatch, or the SDK
-release workflow.
+and checks a heartbeat. CI runs real inference on `test-e2e-smoke`-labelled PRs,
+PRs into a `release-*` branch, or manual dispatch. Publishing requires a release
+tag, explicit dispatch, or an SDK release workflow.
 
 Central destinations require an in-memory signing key; local Maven
 verification does not.

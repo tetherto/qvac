@@ -38,7 +38,7 @@ const ALLOWED = [
     match: 'npm install --no-fund --no-audit',
     count: 1,
     reason:
-      "Installs published opencode-ai to test it; its postinstall.mjs is what the smoke measures. Job runs contents:read with persist-credentials:false and no token in .npmrc.",
+      "Installs published @opencode/cli to test it; its postinstall.mjs is what the smoke measures. Job runs contents:read with persist-credentials:false and no token in .npmrc.",
   },
   ...[
     ['.github/workflows/test-android-sdk.yml', 2],

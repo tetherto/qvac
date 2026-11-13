@@ -41,6 +41,9 @@ key. The run evaluates the history and tools, completes with stats and no answer
 and saves the prepared prefix. Await `run.final` before sending the question.
 Prefill cannot use a forced `generationParams.tool_choice` (`required` or a tool
 name, including `tool_search`). The default `auto` and `none` are supported.
+A prefill needs at least one message: a system message in the history, or the
+`modelConfig.system_prompt` set at load. Tools alone are rejected with
+`RequestValidationFailedError`.
 
 ```typescript
 const history = [{ role: 'system', content: 'You are a helpful assistant.' }]

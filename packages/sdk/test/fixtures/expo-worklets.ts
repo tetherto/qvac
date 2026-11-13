@@ -42,14 +42,24 @@ export class FakeWorklet extends Duplex {
  */
 export async function loadExpoClient() {
   const started: FakeWorklet[] = []
-  /** The error the next start rejects with, as bare-stow-host's `ready` does, instead of starting. */
-  const harness: { failNextStart: (Error & { code?: string }) | null } = { failNextStart: null }
+  const harness: {
+    /** The error the next start rejects with, as bare-stow-host's `ready` does, instead of starting. */
+    failNextStart: (Error & { code?: string }) | null
+    /** The next start waits for this promise before it finishes or fails. */
+    holdNextStart: Promise<void> | null
+    /** How many starts have begun. */
+    starts: number
+  } = { failNextStart: null, holdNextStart: null, starts: 0 }
 
   ;(globalThis as { require?: (id: string) => unknown }).require = (id: string) => {
     if (id !== '@qvac/sdk/worker.mobile') throw new Error(`unexpected require: ${id}`)
     return {
       default: {
         async start() {
+          harness.starts++
+          const hold = harness.holdNextStart
+          harness.holdNextStart = null
+          if (hold) await hold
           const failure = harness.failNextStart
           if (failure) {
             harness.failNextStart = null
