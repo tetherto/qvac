@@ -6,6 +6,7 @@ import {
   getCatalogCoremlSidecars,
   getCoremlSetKeySource,
   getCoremlSidecarSpec,
+  getRetiredCoremlSidecarSpec,
   type CoremlSidecarSpec
 } from '@/utils/cache/layout'
 import { getModelsCacheDir } from '@/utils/cache/paths'
@@ -156,8 +157,82 @@ export async function readCachedCoremlCompanionSet(
   cacheDir = getModelsCacheDir()
 ): Promise<CompanionSet | undefined> {
   const spec = getCoremlSidecarSpec(model.registryPath, model.registrySource, platform)
-  if (!spec) return undefined
+  return spec ? readCachedSet(model, spec, cacheDir) : undefined
+}
 
+/**
+ * The metadata of the set an earlier release staged for `model` and this one
+ * no longer stages (`getRetiredCoremlSidecarSpec`), when it is still cached.
+ */
+export async function readRetiredCoremlCompanionSet(
+  model: RegistryItem,
+  platform: string | undefined,
+  cacheDir = getModelsCacheDir()
+): Promise<CompanionSet | undefined> {
+  const spec = getRetiredCoremlSidecarSpec(model.registryPath, model.registrySource, platform)
+  return spec ? readCachedSet(model, spec, cacheDir) : undefined
+}
+
+/** The set directory an earlier release staged for `model`, if this one retired it. */
+export function getRetiredCoremlSetDir(
+  model: RegistryItem,
+  platform: string | undefined,
+  cacheDir = getModelsCacheDir()
+): string | undefined {
+  const spec = getRetiredCoremlSidecarSpec(model.registryPath, model.registrySource, platform)
+  return spec ? validateAndJoinPath(cacheDir, 'sets', getCoremlSetKey(model, spec)) : undefined
+}
+
+/**
+ * Clears the set an earlier release staged for `model` and this one no longer
+ * stages. Its GGUF moves to `singleFilePath`, where the loader now keeps the
+ * model, unless a file is already there, so the load that follows does not
+ * download it again (the loader still checks its size and checksum). The
+ * bundles and the set directory are removed. Returns whether a set was found.
+ */
+export async function clearRetiredCoremlSet(
+  model: RegistryItem,
+  platform: string | undefined,
+  singleFilePath: string,
+  cacheDir = getModelsCacheDir()
+): Promise<boolean> {
+  const setDir = getRetiredCoremlSetDir(model, platform, cacheDir)
+  if (setDir === undefined || !(await isDirectory(setDir))) return false
+
+  const filename = model.registryPath.split('/').pop() || model.registryPath
+  if (!(await exists(singleFilePath))) {
+    try {
+      await fsPromises.rename(validateAndJoinPath(setDir, filename), singleFilePath)
+    } catch {
+      // No GGUF in the set: the loader downloads it.
+    }
+  }
+  await fsPromises.rm(setDir, { recursive: true, force: true })
+  return true
+}
+
+async function isDirectory(target: string): Promise<boolean> {
+  try {
+    return (await fsPromises.stat(target)).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+async function exists(target: string): Promise<boolean> {
+  try {
+    await fsPromises.stat(target)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function readCachedSet(
+  model: RegistryItem,
+  spec: CoremlSidecarSpec,
+  cacheDir: string
+): Promise<CompanionSet | undefined> {
   try {
     const raw = await fsPromises.readFile(getCachedSetMetadataPath(model, spec, cacheDir), 'utf8')
     const parsed = cachedSetSchema.safeParse(JSON.parse(raw))

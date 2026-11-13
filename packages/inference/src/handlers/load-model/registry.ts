@@ -29,6 +29,7 @@ import {
 import { downloadCompanionSetFromRegistry } from '@/handlers/load-model/registry-companion-set'
 import {
   findCoremlCompanionSet,
+  clearRetiredCoremlSet,
   findLocallyCachedCoremlCompanionSet,
   getCoremlSidecarSpec,
   writeCachedCoremlCompanionSet
@@ -513,6 +514,21 @@ export async function downloadModelFromRegistry(
       }
 
       const modelPath = getSingleFileCachePath(registryPath)
+
+      // A Core ML set an earlier release staged for this GGUF, and this one
+      // no longer stages, would otherwise sit unused in the cache. Its GGUF
+      // becomes the single-file copy, so the load does not download it again.
+      if (modelMetadata) {
+        try {
+          if (await clearRetiredCoremlSet(modelMetadata, platform, modelPath)) {
+            logger.info('Cleared a retired Core ML set; the GGUF loads without it', {
+              registryPath
+            })
+          }
+        } catch (error) {
+          logger.warn('Unable to clear a retired Core ML set', { registryPath, error })
+        }
+      }
 
       const { expectedSize, checksum } = resolveRegistryDownloadMetadata(
         modelMetadata,

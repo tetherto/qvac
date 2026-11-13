@@ -45,6 +45,12 @@ type SidecarFamily = {
   /** Bundles the pinned addon actually uses, keyed by model stem. */
   bundlesByStem: Record<string, readonly BundleSpec[]>
   /**
+   * Bundles an earlier release staged and this one does not, keyed by model
+   * stem. Their set directory is cleared on the model's next load, keeping
+   * its GGUF, and deleting the model's cache removes it too.
+   */
+  retiredBundlesByStem?: Record<string, readonly BundleSpec[]>
+  /**
    * Set when the family's GGUF carries no encoder and loads only with its
    * bundles beside it: the model constant to load where the bundles cannot be
    * staged, which is every platform but macOS and iOS.
@@ -70,9 +76,8 @@ const SIDECAR_FAMILIES: readonly SidecarFamily[] = [
     pathPattern: /\/ggml\/parakeet\//,
     stemPattern: /^(.+)\.(?:f16|q4_0|q8_0)\.gguf$/,
     bundlesByStem: {
-      'parakeet-tdt-0.6b-v3': [
-        { sourceName: 'parakeet-tdt-0.6b-v3-encoder', targetSuffix: '-encoder' }
-      ],
+      // Unified takes the same 15 s windows as TDT v3 below on inputs longer
+      // than its encoder, but its transcripts match ggml on them.
       'parakeet-unified-en-0.6b': [
         { sourceName: 'parakeet-unified-en-0.6b-encoder', targetSuffix: '-encoder' }
       ],
@@ -85,6 +90,17 @@ const SIDECAR_FAMILIES: readonly SidecarFamily[] = [
           sourceName: 'diar_streaming_sortformer_4spk-v2.1-encoder-bypass-pre-encode',
           targetSuffix: '-encoder-bypass-pre-encode'
         }
+      ]
+    },
+    retiredBundlesByStem: {
+      // With this 15 s encoder beside the GGUF, the pinned addon cuts every
+      // input longer than 15 s into 15 s windows, and Parakeet TDT 0.6B v3
+      // drops whole sentences on them: 60 s of read speech decodes 108 of 318
+      // tokens. Without it the addon runs the ggml encoder in one pass (300 s
+      // windows beyond that) and keeps the text. Stage it again once the
+      // pinned addon sends inputs longer than the bundle to ggml.
+      'parakeet-tdt-0.6b-v3': [
+        { sourceName: 'parakeet-tdt-0.6b-v3-encoder', targetSuffix: '-encoder' }
       ]
     }
   },
@@ -137,10 +153,11 @@ function basename(registryPath: string): string {
   return registryPath.split('/').pop() || registryPath
 }
 
-export function getCoremlSidecarSpec(
+function matchCoremlSidecarSpec(
   registryPath: string,
   registrySource: string,
-  platform: string | undefined
+  platform: string | undefined,
+  bundlesOf: (family: SidecarFamily) => SidecarFamily['retiredBundlesByStem']
 ): CoremlSidecarSpec | undefined {
   if (platform !== 'darwin' && platform !== 'ios') return undefined
 
@@ -148,7 +165,7 @@ export function getCoremlSidecarSpec(
   for (const family of SIDECAR_FAMILIES) {
     if (family.source !== registrySource || !family.pathPattern.test(registryPath)) continue
     const modelStem = filename.match(family.stemPattern)?.[1]
-    const bundles = modelStem ? family.bundlesByStem[modelStem] : undefined
+    const bundles = modelStem ? bundlesOf(family)?.[modelStem] : undefined
     if (modelStem && bundles) {
       return {
         source: family.source,
@@ -162,6 +179,37 @@ export function getCoremlSidecarSpec(
     }
   }
   return undefined
+}
+
+export function getCoremlSidecarSpec(
+  registryPath: string,
+  registrySource: string,
+  platform: string | undefined
+): CoremlSidecarSpec | undefined {
+  return matchCoremlSidecarSpec(
+    registryPath,
+    registrySource,
+    platform,
+    (family) => family.bundlesByStem
+  )
+}
+
+/**
+ * The Core ML set an earlier release staged for this GGUF and this one no
+ * longer stages (`retiredBundlesByStem`), or `undefined`. Its set key is the
+ * one that release used.
+ */
+export function getRetiredCoremlSidecarSpec(
+  registryPath: string,
+  registrySource: string,
+  platform: string | undefined
+): CoremlSidecarSpec | undefined {
+  return matchCoremlSidecarSpec(
+    registryPath,
+    registrySource,
+    platform,
+    (family) => family.retiredBundlesByStem
+  )
 }
 
 /** The string a Core ML companion set's key is the short hash of. */
