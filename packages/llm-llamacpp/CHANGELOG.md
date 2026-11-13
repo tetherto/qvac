@@ -11,8 +11,8 @@
   value was passed on after fabric's valueless `--coreml-ffn` flag and the load
   failed with `invalid argument: true`. The sidecar needs an `@qvac/fabric`
   built with Core ML FFN; until then, and for other models, fabric logs a
-  warning and stays on Metal. `coreml-ffn-cache` and `coreml-ffn-split` pass
-  through to fabric ([#5761](https://github.com/tetherto/qvac/pull/5761)).
+  warning and the model loads without it. `coreml-ffn-cache` and
+  `coreml-ffn-split` pass through to fabric ([#5761](https://github.com/tetherto/qvac/pull/5761)).
 
 ### Fixed
 

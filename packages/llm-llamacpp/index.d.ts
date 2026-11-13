@@ -293,18 +293,26 @@ declare namespace LlmLlamacpp {
         /**
          * Core ML FFN sidecar for Qwen3.8-27B on Apple Silicon macOS: during prompt
          * processing, part of each FFN runs on the Neural Engine while Metal runs
-         * the rest. Accepts 'true'/'on'/'1'/'enabled' or 'false'/'off'/'0'/'disabled'.
-         * Default off. Needs an @qvac/fabric build with Core ML FFN; otherwise, and
-         * for other models, it logs a warning and runs on Metal. The first load
-         * compiles the Core ML programs (1-2 minutes). Also accepted as `coreml_ffn`.
+         * the rest, for ubatches of 256+ tokens. Accepts 'true'/'on'/'1'/'enabled'
+         * or 'false'/'off'/'0'/'disabled' (lower-case; an empty value turns it on).
+         * Default off. Needs an @qvac/fabric build with Core ML FFN and KV and op
+         * offload on; otherwise, and for other models, it logs a warning and the
+         * model loads without it. The first load compiles the Core ML programs
+         * (1-2 minutes). Also accepted as `coreml_ffn`.
          */
         "coreml-ffn"?: string;
         /**
          * Directory for the compiled Core ML FFN programs, 4.5-9 GB per model.
+         * Use an absolute directory that only this user can write: programs
+         * already in it are loaded without verification and are never removed.
          * Default: `$LLAMA_CACHE/coreml-ffn` or `~/Library/Caches/llama.cpp/coreml-ffn`.
          */
         "coreml-ffn-cache"?: string;
-        /** Metal channels and Core ML programs per FFN, e.g. '8192x2' or '11264x1'. Default: chosen by chip. */
+        /**
+         * Metal channels and Core ML programs per FFN: '8192x2', '5120x2',
+         * '11264x1' or '12800x1'; another value loads without the sidecar, with a
+         * warning. Default: chosen by chip.
+         */
         "coreml-ffn-split"?: string;
         /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
         openclCacheDir?: string;
