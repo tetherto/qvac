@@ -29,13 +29,28 @@ dispatch() {
 }
 
 wait_runs() {
-  local pending=("$@") next id status
+  local pending=("$@") next id status failed errors=0
   while [ "${#pending[@]}" -gt 0 ]; do
     next=()
+    failed=""
     for id in "${pending[@]}"; do
-      status=$(gh api "repos/$REPO/actions/runs/$id" --jq '.status') || status=""
+      if ! status=$(gh api "repos/$REPO/actions/runs/$id" --jq '.status'); then
+        failed="$failed $id"
+        next+=("$id")
+        continue
+      fi
       [ "$status" = "completed" ] || next+=("$id")
     done
+    # Fails after 10 rounds in a row with an unreadable run instead of polling to the job timeout.
+    if [ -n "$failed" ]; then
+      errors=$((errors + 1))
+      if [ "$errors" -ge 10 ]; then
+        echo "::error::run(s)$failed unreadable for $errors polls in a row" >&2
+        return 1
+      fi
+    else
+      errors=0
+    fi
     pending=("${next[@]+"${next[@]}"}")
     [ "${#pending[@]}" -eq 0 ] || sleep 120
   done

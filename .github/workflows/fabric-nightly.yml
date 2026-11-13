@@ -5,9 +5,9 @@ name: Fabric Nightly
 # only. The branch comes from .github/fabric-nightly.json, updated per rebase.
 # Results are in this run's summary; there is no notification.
 #
-# Only a head that landed through a merged PR approved by someone other than
-# its author is built: temp-* in the fabric repo has no branch protection, and
-# the build runs with this repo's release secrets.
+# The build runs with this repo's release secrets, so a head is built only when
+# the branch has a ruleset requiring approved PRs and the head is the merge of
+# a PR whose final commit an org member other than its author approved.
 #
 # To retry a red night, dispatch this workflow with force: true. Re-running
 # failed jobs only re-reports the same child runs.
@@ -61,17 +61,24 @@ jobs:
           fi
           read -r sha committed < <(gh api "repos/$FABRIC_REPO/commits/$branch" --jq '"\(.sha) \(.commit.committer.date)"')
 
+          # Without a PR-required rule, a direct push can sit under an approved merge.
+          reviews=$(gh api "repos/$FABRIC_REPO/rules/branches/$branch" \
+            --jq '[.[] | select(.type == "pull_request") | .parameters.required_approving_review_count] | max // 0')
+          if [ "$reviews" -lt 1 ]; then
+            echo "::error::$FABRIC_REPO $branch has no ruleset requiring an approved PR; not building it"
+            exit 1
+          fi
           pr=$(gh api "repos/$FABRIC_REPO/commits/$sha/pulls" \
-            --jq "[.[] | select(.merged_at != null and .base.ref == \"$branch\" and .merge_commit_sha == \"$sha\")][0] | if . == null then empty else \"\(.number) \(.user.login)\" end")
+            --jq "[.[] | select(.merged_at != null and .base.ref == \"$branch\" and .merge_commit_sha == \"$sha\")][0] | if . == null then empty else \"\(.number) \(.user.login) \(.head.sha)\" end")
           if [ -z "$pr" ]; then
             echo "::error::$branch head ${sha:0:9} is not the merge commit of a merged PR into $branch; not building it"
             exit 1
           fi
-          read -r pr_number pr_author <<<"$pr"
+          read -r pr_number pr_author pr_head <<<"$pr"
           approver=$(gh api --paginate "repos/$FABRIC_REPO/pulls/$pr_number/reviews" \
-            --jq ".[] | select(.state == \"APPROVED\" and .user.login != \"$pr_author\") | .user.login" | sed -n 1p)
+            --jq ".[] | select(.state == \"APPROVED\" and .user.login != \"$pr_author\" and .commit_id == \"$pr_head\" and (.author_association == \"MEMBER\" or .author_association == \"OWNER\")) | .user.login" | sed -n 1p)
           if [ -z "$approver" ]; then
-            echo "::error::$FABRIC_REPO#$pr_number has no approval from someone other than its author; not building ${sha:0:9}"
+            echo "::error::$FABRIC_REPO#$pr_number has no org-member approval of its final commit from someone other than its author; not building ${sha:0:9}"
             exit 1
           fi
           echo "${sha:0:9} is $FABRIC_REPO#$pr_number by $pr_author, approved by $approver"
@@ -186,6 +193,7 @@ jobs:
   build-fabric:
     needs: prepare
     runs-on: ubuntu-latest
+    # Fabric prebuild jobs cap at 120 min each; the rest is runner queueing (~1h total when tested).
     timeout-minutes: 300
     permissions:
       contents: read
@@ -205,14 +213,24 @@ jobs:
           RUN_ID: ${{ needs.prepare.outputs.fabric_run_id }}
         run: |
           set -uo pipefail
+          errors=0
           while :; do
-            count=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts?name=fabric-prebuilds" --jq '.total_count') || count=0
-            if [ "${count:-0}" -gt 0 ]; then
-              exit 0
-            fi
-            if [ "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" --jq '.status')" = "completed" ]; then
-              echo "::error::on-pr-fabric run $RUN_ID completed without a fabric-prebuilds artifact"
-              exit 1
+            if count=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts?name=fabric-prebuilds" --jq '.total_count') \
+              && status=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" --jq '.status'); then
+              errors=0
+              if [ "${count:-0}" -gt 0 ]; then
+                exit 0
+              fi
+              if [ "$status" = "completed" ]; then
+                echo "::error::on-pr-fabric run $RUN_ID completed without a fabric-prebuilds artifact"
+                exit 1
+              fi
+            else
+              errors=$((errors + 1))
+              if [ "$errors" -ge 10 ]; then
+                echo "::error::on-pr-fabric run $RUN_ID unreadable after $errors attempts"
+                exit 1
+              fi
             fi
             sleep 60
           done
@@ -223,6 +241,7 @@ jobs:
   test:
     needs: [prepare, build-fabric]
     runs-on: ubuntu-latest
+    # Covers consumer prebuilds then 130-min integration jobs, plus runner queueing.
     timeout-minutes: 350
     permissions:
       contents: read
