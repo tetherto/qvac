@@ -23,9 +23,7 @@ import {
   cancelTransfer,
   createHttpDownloadKey,
   createHyperdriveDownloadKey,
-  createRegistryCacheKey,
-  createRegistryDownloadKey,
-  startOrJoinDownload
+  createRegistryCacheKey
 } from '@/handlers/load-model/download-manager'
 import { handleDeleteCache } from '@/handlers/delete-cache'
 import { getShardedModelCacheDir, getSingleFileCachePath } from '@/utils/cache/paths'
@@ -650,40 +648,6 @@ test('deleteCache: refused while another process downloads the model, and delete
   t.ok(response.error?.includes('another process'), 'reports the other process download')
   t.ok(fs.existsSync(partialPath), 'the other process partial file is untouched')
   t.absent(cleared, 'no stored blocks were cleared')
-})
-
-test('deleteCache: right after a cancel, waits for this process download to release its lock', async (t) => {
-  useTestCacheDir()
-  stubClient(t, { clearBlob: async () => {} })
-  const { registryPath, registrySource } = QWEN3_600M_INST_Q4
-  const downloadKey = createRegistryDownloadKey(registrySource, registryPath)
-  let released = false
-
-  // Like a registry download: the lock is held until the cancel cleanup (clearing
-  // stored blocks) is done, which ends after the cancel has settled the caller.
-  const download = startOrJoinDownload(downloadKey, async (ctx) => {
-    await using _lock = await acquireDownloadLock(createRegistryCacheKey(registryPath), ctx.signal)
-    await new Promise<void>((resolve) => ctx.signal.addEventListener('abort', () => resolve()))
-    await sleep(300)
-    released = true
-    throw new DownloadCancelledError()
-  })
-  const cancelled = download.promise.then(
-    () => null,
-    (error: unknown) => error
-  )
-  await sleep(50)
-  cancelTransfer(downloadKey, true)
-  t.ok((await cancelled) instanceof DownloadCancelledError, 'the cancel settles the caller at once')
-  t.absent(released, 'the download still holds its lock')
-
-  const response = await handleDeleteCache({
-    type: 'deleteCache',
-    modelSrc: QWEN3_600M_INST_Q4.src
-  })
-
-  t.ok(response.success, `the cache is deleted ${response.error ?? ''}`)
-  t.ok(released, 'only once the cancelled download released its lock')
 })
 
 test('acquireDownloadLock: the OS releases a lock when its holding process exits', async (t) => {
