@@ -241,10 +241,18 @@ function parseGGUFHeader(buffer: Buffer): string[] {
   return tensorNames
 }
 
+// Smallest prefix worth parsing: magic, version, tensor and KV counts.
+const MIN_HEADER_BYTES = 24
+
 async function extractTensorNamesFromHeader(filePath: string): Promise<string[]> {
   const stream = createReadStream(filePath)
-  const chunks: Buffer[] = []
-  let totalRead = 0
+  // One growing buffer instead of a chunk list re-concatenated per chunk.
+  let buffer = Buffer.allocUnsafe(64 * 1024)
+  let filled = 0
+  // A failed parse is retried only once the buffer has grown by half (or holds
+  // the bytes the parser asked for), so the parses re-scan O(header) bytes in
+  // total instead of once per chunk, without reading far past a small header.
+  let nextAttempt = MIN_HEADER_BYTES
   let streamDestroyed = false
 
   function destroyStream(): void {
@@ -254,31 +262,43 @@ async function extractTensorNamesFromHeader(filePath: string): Promise<string[]>
     }
   }
 
-  try {
-    for await (const chunk of stream) {
-      chunks.push(chunk as Buffer)
-      totalRead += (chunk as Buffer).length
-
-      // Only attempt parsing once we have enough data for the basic header
-      if (totalRead >= 24) {
-        try {
-          const buffer = Buffer.concat(chunks)
-          const result = parseGGUFHeader(buffer)
-          destroyStream()
-          return result
-        } catch (error) {
-          if (error instanceof NeedMoreDataError) {
-            // Keep reading
-            if (totalRead >= LIMITS.MAX_HEADER_SIZE) {
-              throw new ModelLoadFailedError(
-                `GGUF header exceeds ${LIMITS.MAX_HEADER_SIZE / (1024 * 1024 * 1024)}GB limit`
-              )
-            }
-            continue
-          }
-          throw error
-        }
+  // Parse what has been read. Returns null when the header continues past it.
+  function tryParse(): string[] | null {
+    try {
+      // bare-buffer types subarray() as Uint8Array; at runtime it is a Buffer.
+      return parseGGUFHeader(buffer.subarray(0, filled) as Buffer)
+    } catch (error) {
+      if (!(error instanceof NeedMoreDataError)) throw error
+      if (filled >= LIMITS.MAX_HEADER_SIZE) {
+        throw new ModelLoadFailedError(
+          `GGUF header exceeds ${LIMITS.MAX_HEADER_SIZE / (1024 * 1024 * 1024)}GB limit`
+        )
       }
+      nextAttempt = Math.max(error.currentOffset + error.bytesNeeded, Math.ceil(filled * 1.5))
+      return null
+    }
+  }
+
+  try {
+    for await (const data of stream) {
+      const chunk = data as Buffer
+      if (filled + chunk.length > buffer.length) {
+        const grown = Buffer.allocUnsafe(Math.max(buffer.length * 2, filled + chunk.length))
+        buffer.copy(grown, 0, 0, filled)
+        buffer = grown
+      }
+      chunk.copy(buffer, filled)
+      filled += chunk.length
+
+      if (filled < nextAttempt && filled < LIMITS.MAX_HEADER_SIZE) continue
+      const result = tryParse()
+      if (result) return result
+    }
+
+    // The file ended between attempts: parse the full read once more.
+    if (filled >= MIN_HEADER_BYTES) {
+      const result = tryParse()
+      if (result) return result
     }
 
     throw new ModelLoadFailedError('File ended before GGUF header could be parsed')
