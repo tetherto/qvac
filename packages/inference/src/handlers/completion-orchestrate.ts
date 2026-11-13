@@ -274,21 +274,25 @@ export async function* orchestrateCompletion(
 /**
  * Waits for a tool result as a request of its own, under the completion's
  * `(sessionId, requestId)`, so the registry sees the completion between its
- * turns: a cancel by id, the transport signal and a session close stop the
- * wait, and a session close waits for the completion to end.
+ * turns: a cancel by id or by model, the transport signal and a session close
+ * stop the wait, and a session close waits for the completion to end.
  */
 export function registeredToolWaits(
   reader: Pick<ToolResultReader, 'waitFor'>,
-  request: Pick<CompletionOrchestrateRequest, 'requestId' | 'sessionId'>
+  request: Pick<CompletionOrchestrateRequest, 'requestId' | 'sessionId' | 'modelId'>
 ): Pick<ToolResultReader, 'waitFor'> {
   const requestId = request.requestId ?? generateRandomRequestId()
   return {
     async waitFor(callId) {
-      // No `modelId`: the wait holds none of the model's completion slots.
+      // The model id lets `cancel({ modelId })` and an unload reach the wait.
+      // An unbounded cap skips slot admission, so the wait holds none of the
+      // model's completion slots while the client runs its tool.
       await using ctx = await getRequestRegistry().begin({
         requestId,
         sessionId: request.sessionId,
-        kind: 'completion'
+        kind: 'completion',
+        modelId: request.modelId,
+        maxConcurrentPerModel: Infinity
       })
       return await reader.waitFor(callId, undefined, ctx.signal)
     }

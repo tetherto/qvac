@@ -445,6 +445,29 @@ test('orchestrateCompletion: a cancel between turns wins over a tool result alre
   t.is(frames.at(-1)?.done, true)
 })
 
+test('orchestrateCompletion: a model-wide completion cancel reaches a tool wait', async (t) => {
+  openTestSessions(t, 'A')
+  async function* silentClient(): AsyncGenerator<Buffer> {
+    await new Promise<void>(() => {})
+  }
+  const reader = new ToolResultReader(silentClient())
+  t.teardown(() => reader.close())
+  async function* runTurn() {
+    yield toolTurn('call-1', 'get_weather', { city: 'Tokyo' })
+  }
+  const request = baseRequest({ requestId: 'r-1', sessionId: 'A' })
+  const completion = collect(
+    orchestrateCompletion(request, runTurn, registeredToolWaits(reader, request))
+  )
+  const registry = getRequestRegistry()
+  while (!registry.get('r-1', 'A')) await new Promise<void>((resolve) => setTimeout(resolve, 1))
+
+  t.is(registry.cancel({ modelId: 'm-1', kind: 'completion', sessionId: 'A' }), 1)
+  const frames = await completion
+  t.alike(frames.at(-2)?.events, [{ type: 'completionDone', seq: 0, stopReason: 'cancelled' }])
+  t.is(frames.at(-1)?.done, true, 'the completion ends as cancelled')
+})
+
 test('orchestrateCompletion: runs tool_search itself and never asks the client', async (t) => {
   const deferredTool = {
     type: 'function' as const,
