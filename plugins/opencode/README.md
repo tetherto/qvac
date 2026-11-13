@@ -3,7 +3,9 @@
 Run [OpenCode](https://opencode.ai) against a **local, on-device** QVAC model
 with no second terminal and no manual server. Add the plugin to a project's
 `opencode.json` and `opencode` brings up a managed `qvac serve` by itself,
-points OpenCode at it, and tears it down on exit.
+points OpenCode at it, and stops it when OpenCode unloads the project: after
+60 minutes without session activity (`experimental.location_idle_timeout`), or
+when the OpenCode service stops.
 
 Requires OpenCode 2.x. For OpenCode 1.x, use `@qvac/opencode-plugin@0.3`, the
 V1 plugin line.
@@ -173,8 +175,9 @@ an alias in your `serve.models` config:
 ```
 
 Connect QVAC in OpenCode with any API key, or the key you started the server
-with. Set `baseURL` explicitly: the QVAC entry OpenCode reads from its model
-catalog assumes port 11434. You manage the server's lifetime and model yourself;
+with. The QVAC entry in OpenCode's model catalog defaults to port 11435, the
+`qvac serve` default; `@qvac/cli` 0.18 and earlier listen on 11434, so set
+`baseURL` to match your server. You manage the server's lifetime and model yourself;
 nothing is torn down when OpenCode exits.
 
 ## Requirements
