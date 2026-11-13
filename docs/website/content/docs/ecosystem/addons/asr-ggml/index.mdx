@@ -20,6 +20,7 @@ Parakeet supports multiple model variants:
 - **TranscribePsy EU-sub** — 8 European languages; distilled from TDT v3.
 - **EOU** — English streaming with a native end-of-turn token.
 - **Indic Conformer CTC** — Indic languages; set `parakeetConfig.language` (for example, `"hi"`).
+- **Nemotron 3.5 ASR Streaming** — multilingual batch and cache-aware streaming transcription; `parakeetConfig.language` takes a locale (for example, `"en-US"`) or `"auto"` (default). Streaming chunks must be one of `ASRGgml.NEMOTRON_STREAMING_CHUNK_MS`: 80, 160, 320 (default), 560, or 1120 ms.
 - **Sortformer v1** — speaker diarization (up to 4 speakers); default for offline diarization.
 - **Sortformer v2.1 + AOSC** — speaker diarization (up to 4 speakers); default for streaming diarization.
 - **Nemotron 3 Diarization** — speaker diarization (up to 8 speakers), offline and streaming.
