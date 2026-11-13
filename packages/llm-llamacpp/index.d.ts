@@ -303,6 +303,8 @@ declare namespace LlmLlamacpp {
         "coreml-ffn"?: string;
         /**
          * Directory for the compiled Core ML FFN programs, 4.5-9 GB per model.
+         * Passed unchanged: a relative path resolves against the working
+         * directory and `~` is not expanded.
          * Use an absolute directory that only this user can write: programs
          * already in it are loaded without verification and are never removed.
          * Default: `$LLAMA_CACHE/coreml-ffn` or `~/Library/Caches/llama.cpp/coreml-ffn`.
