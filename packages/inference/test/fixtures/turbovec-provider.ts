@@ -38,6 +38,13 @@ export function observableIndexProvider() {
   // than the whole batch; that is what exposes partial application.
   const failRemoveId: { id: bigint | null } = { id: null }
 
+  // Promises an open waits on before it returns, so a test can act while the
+  // native open is in flight.
+  const gates: { create: Promise<void> | null; load: Promise<void> | null } = {
+    create: null,
+    load: null
+  }
+
   function fail(call: string): never {
     throw new Error(`native ${call} failed`)
   }
@@ -102,18 +109,20 @@ export function observableIndexProvider() {
   }
 
   const provider: TurboVecIndexProvider = {
-    create(options) {
+    async create(options) {
       calls.create++
       if (failures.create) fail('create')
+      if (gates.create) await gates.create
       return createIndex(options.dim)
     },
-    load() {
+    async load() {
       calls.load++
       if (failures.load) fail('load')
+      if (gates.load) await gates.load
       return createIndex(8, 8)
     }
   }
-  return { provider, calls, failures, failRemoveId }
+  return { provider, calls, failures, failRemoveId, gates }
 }
 
 export function registerProviderPlugin(modelType: string, provider: TurboVecIndexProvider) {

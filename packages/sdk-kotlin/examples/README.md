@@ -104,6 +104,7 @@ database drivers to those two examples only. `Finetune` trains on
 | `RagTurbovec.kt` | `packages/sdk/examples/rag/rag-turbovec.ts` |
 | `RegistryQuery.kt` | `packages/sdk/examples/registry-query.ts` |
 | `Rerank.kt` | `packages/sdk/examples/rerank.ts` |
+| `Sessions.kt` | `packages/sdk/examples/sessions.ts` |
 | `ShardedModels.kt` | `packages/sdk/examples/llamacpp-sharded.ts` |
 | `SuspendResume.kt` | `packages/sdk/examples/suspend-resume.ts` |
 | `TextToSpeech.kt` | `packages/sdk/examples/tts/supertonic.ts` |

@@ -13,7 +13,13 @@ import {
   AudioEncodeFailedError,
   InvalidSeedFromParamsError,
   KvCacheSeedSourceNotFoundError,
-  KvCacheSeedSharingDisabledError
+  KvCacheSeedSharingDisabledError,
+  SessionIdConflictError,
+  SessionNotOpenError,
+  ModelLeasedError,
+  ModelReconfiguredError,
+  OwnerOnlyError,
+  RAGWorkspaceBusyError
 } from '@/utils/errors-server'
 
 export class RPCError extends Error {
@@ -225,7 +231,36 @@ const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
       readOptionalStringField(response.typedFields, 'details'),
       response.cause
     )
-  }
+  },
+  SESSION_ID_CONFLICT: (response) =>
+    new SessionIdConflictError(
+      readStringField(response.typedFields, 'sessionId', ''),
+      response.cause
+    ),
+  SESSION_NOT_OPEN: (response) =>
+    new SessionNotOpenError(readStringField(response.typedFields, 'sessionId', ''), response.cause),
+  MODEL_LEASED: (response) =>
+    new ModelLeasedError(
+      readStringField(response.typedFields, 'modelId', ''),
+      readOptionalNumberField(response.typedFields, 'leaseCount') ?? 0,
+      response.cause
+    ),
+  OWNER_ONLY: (response) =>
+    new OwnerOnlyError(
+      readStringField(response.typedFields, 'operation', ''),
+      readStringField(response.typedFields, 'sessionId', ''),
+      response.cause
+    ),
+  MODEL_RECONFIGURED: (response) =>
+    new ModelReconfiguredError(
+      readStringField(response.typedFields, 'modelId', ''),
+      response.cause
+    ),
+  RAG_WORKSPACE_BUSY: (response) =>
+    new RAGWorkspaceBusyError(
+      readStringField(response.typedFields, 'workspace', ''),
+      response.cause
+    )
 }
 
 /**

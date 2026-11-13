@@ -40,20 +40,21 @@ import kotlinx.serialization.json.JsonObject
  * These wrappers provide the common model, completion, system, and raw paths
  * without hiding the complete contract.
  */
-val QvacClient.models: QvacModels
+val QvacCaller.models: QvacModels
     get() = QvacModels(this)
 
-val QvacClient.completion: QvacCompletion
+val QvacCaller.completion: QvacCompletion
     get() = QvacCompletion(this)
 
+/** Pausing and resuming change the runtime for every session, so only the owner has them. */
 val QvacClient.system: QvacSystem
     get() = QvacSystem(this)
 
-val QvacClient.raw: QvacRaw
+val QvacCaller.raw: QvacRaw
     get() = QvacRaw(this)
 
 class QvacModels internal constructor(
-    private val client: QvacClient,
+    private val client: QvacCaller,
 ) {
     /** Fully typed load configuration, including engine-specific union arms. */
     suspend fun load(request: LoadModelRequest): LoadModelResponse = client.loadModel(request)
@@ -170,7 +171,7 @@ private fun sourceLoadRequest(
 )
 
 class QvacCompletion internal constructor(
-    internal val client: QvacClient,
+    internal val client: QvacCaller,
 ) {
     fun batch(request: BatchCompletionStreamRequest): Flow<BatchCompletionStreamResponse> =
         client.batchCompletionStream(request)
@@ -204,7 +205,7 @@ class QvacSystem internal constructor(
 }
 
 class QvacRaw internal constructor(
-    private val client: QvacClient,
+    private val client: QvacCaller,
 ) {
     suspend fun call(payload: JsonObject): JsonObject = client.call(payload)
 

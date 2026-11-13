@@ -52,6 +52,11 @@ test('vectorIndexRequestSchema: every operation is a member of the global reques
   for (const request of requests) {
     t.ok(vectorIndexRequestSchema.safeParse(request).success, `${request.operation} parses`)
     t.ok(requestSchema.safeParse(request).success, `${request.operation} is in the request union`)
+    // The handler registers the parsed request, so a stripped id would run a
+    // session's call as the owner and out of reach of cancel by id.
+    const parsed = vectorIndexRequestSchema.parse({ ...request, sessionId: 's', requestId: 'r' })
+    t.is(parsed.sessionId, 's', `${request.operation} keeps its session`)
+    t.is(parsed.requestId, 'r', `${request.operation} keeps its request id`)
   }
 })
 

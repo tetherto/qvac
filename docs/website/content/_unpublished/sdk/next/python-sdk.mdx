@@ -175,7 +175,7 @@ Everything you normally need is imported flat from `tetherto.qvac_sdk`; model co
 
 | Group | Names |
 | --- | --- |
-| Client | `Client` (`client.transport` is passed to every call) |
+| Client | `Client` (`client.transport` is passed to every call); `await client.open_session(name=...)` returns a `Session`, whose `session.transport` runs calls as that [session](/sdk/runtime/sessions) |
 | Ergonomic wrappers | `load_model`, `assess_model_fit`, `unload_model`, `completion`, `translate`, `cancel`, `delete_cache`, `invoke_plugin`, `invoke_plugin_stream`, `model_registry_list` / `_search` / `_get_model` |
 | Result types | `CompletionRun` (`.events`, `.final`), `CompletionFinal`, `ToolCall`, `TranslateRun` |
 | Generated methods | `embed`, `embed_batch`, `transcribe`, `text_to_speech`, `ocr_stream`, `diffusion_stream`, `classify`, `get_model_info`, `download_asset`, … (each takes a typed request model) |
