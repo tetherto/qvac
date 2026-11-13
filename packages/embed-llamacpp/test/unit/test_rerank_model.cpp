@@ -7,6 +7,7 @@
 #include <iterator>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -76,13 +77,30 @@ std::string rerankModelPath() {
   return findModel("models/unit-test/rerank-test.gguf");
 }
 
+/// Numeric stats by key. String stats such as backendName are left out.
 std::unordered_map<std::string, double> statsOf(const RerankModel& model) {
   std::unordered_map<std::string, double> stats;
   for (const auto& [key, value] : model.runtimeStats()) {
-    stats[key] =
-        std::visit([](auto v) { return static_cast<double>(v); }, value);
+    std::visit(
+        [&stats, &key](const auto& v) {
+          using Value = std::decay_t<decltype(v)>;
+          if constexpr (!std::is_same_v<Value, std::string>) {
+            stats[key] = static_cast<double>(v);
+          }
+        },
+        value);
   }
   return stats;
+}
+
+std::string backendNameOf(const RerankModel& model) {
+  for (const auto& [key, value] : model.runtimeStats()) {
+    if (key == "backendName") {
+      const auto* name = std::get_if<std::string>(&value);
+      return name != nullptr ? *name : std::string();
+    }
+  }
+  return {};
 }
 
 // llama-server's rerank test: document 2 answers the query, document 3 is in
@@ -346,4 +364,7 @@ TEST_F(RerankModelTest, RuntimeStatsDescribeTheLastRequest) {
   EXPECT_GT(stats["total_tokens"], 0);
   EXPECT_GT(stats["batch_size"], 0);
   EXPECT_GT(stats["context_size"], 0);
+  const std::string backendName = backendNameOf(*model);
+  EXPECT_FALSE(backendName.empty());
+  EXPECT_EQ(backendName == "cpu", stats["backendDevice"] == 0);
 }
