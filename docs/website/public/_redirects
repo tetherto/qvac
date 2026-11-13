@@ -429,6 +429,12 @@
 /about/vision.md          /ecosystem.md    301
 /about/public-launch.md   /ecosystem.md    301
 
+# Renamed add-on page: Parakeet moved from @qvac/transcription-parakeet to
+# @qvac/asr-ggml. The /addons/ rules above still land on the old URL, so these
+# two lines resolve both the old and the pre-collections URLs.
+/ecosystem/addons/transcription-parakeet/    /ecosystem/addons/asr-ggml/     301
+/ecosystem/addons/transcription-parakeet.md  /ecosystem/addons/asr-ggml.md   301
+
 # Section rename: /about-qvac/* → the collection that now holds each page.
 # Welcome and flagship-apps were folded into the collection overview when the
 # section was renamed; vision and public-launch join them there now that both
