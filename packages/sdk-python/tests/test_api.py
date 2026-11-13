@@ -98,14 +98,25 @@ async def test_unload_model_raises_on_failure():
 
 async def test_invoke_plugin_unwraps_result():
     transport = FakeTransport({"type": "pluginInvoke", "result": {"ok": True}})
-    result = await api.invoke_plugin(transport, "model-1", "vlaRun", params={"x": 1})
+    result = await api.invoke_plugin(
+        transport, "model-1", "vlaRun", params={"x": 1}, request_id="req-vla"
+    )
     assert result == {"ok": True}
     assert transport.sent == {
         "type": "pluginInvoke",
         "modelId": "model-1",
         "handler": "vlaRun",
         "params": {"x": 1},
+        "requestId": "req-vla",
     }
+
+
+async def test_invoke_plugin_mints_a_request_id_when_omitted():
+    transport = FakeTransport({"type": "pluginInvoke", "result": None})
+    await api.invoke_plugin(transport, "model-1", "vlaHparams")
+    assert transport.sent is not None
+    assert isinstance(transport.sent["requestId"], str)
+    assert transport.sent["requestId"]
 
 
 async def test_invoke_plugin_stream_skips_done_chunk():

@@ -1,5 +1,10 @@
 import { getModel } from '@/runtime/model-registry'
-import { type VlaRunRequest, type VlaRunResponse, type VlaStats } from '@/schemas/index'
+import {
+  type PluginHandlerContext,
+  type VlaRunRequest,
+  type VlaRunResponse,
+  type VlaStats
+} from '@/schemas/index'
 import { decodeBase64, encodeBase64 } from '@/utils/encoding'
 
 interface VlaRunNative {
@@ -67,7 +72,11 @@ function pickStats(raw: unknown): VlaStats | undefined {
   return Object.keys(out).length > 0 ? out : undefined
 }
 
-export async function vlaRun(request: VlaRunRequest): Promise<VlaRunResponse> {
+export async function vlaRun(
+  request: VlaRunRequest,
+  _inputStream?: AsyncIterable<unknown>,
+  context?: PluginHandlerContext
+): Promise<VlaRunResponse> {
   const model = getModel(request.modelId) as unknown as VlaModelLike
 
   const images = request.images.map(f32FromBase64)
@@ -86,7 +95,21 @@ export async function vlaRun(request: VlaRunRequest): Promise<VlaRunResponse> {
     ...(noise && { noise })
   })
 
-  const result = await response.await()
+  // The addon exposes a model-wide hard cancel; the engine registers the
+  // invoke, so the abort arrives on the context signal.
+  const signal = context?.signal
+  const onAbort = () => {
+    response.cancel().catch(() => {})
+  }
+  if (signal?.aborted) onAbort()
+  else signal?.addEventListener('abort', onAbort, { once: true })
+
+  let result: Awaited<ReturnType<VlaRunNative['await']>>
+  try {
+    result = await response.await()
+  } finally {
+    signal?.removeEventListener('abort', onAbort)
+  }
   const hp = model.hparams
   if (!hp) {
     throw new Error('VLA model hparams unavailable after run')

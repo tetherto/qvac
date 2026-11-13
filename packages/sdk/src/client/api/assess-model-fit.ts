@@ -3,7 +3,8 @@ import {
   inferModelTypeFromModelSrc,
   type AssessModelFitInput,
   type AssessModelFitRequest,
-  type AssessModelFitResult
+  type AssessModelFitResult,
+  type RPCOptions
 } from '@qvac/inference/surface'
 import { send } from '@/client/rpc/rpc-client'
 import { InvalidResponseError, ModelTypeRequiredError } from '@/utils/errors-client'
@@ -42,7 +43,10 @@ function withModelType(candidate: AssessModelFitInput['models'][number]) {
  *   for the model type, a config the plugin refuses, or a model the fitter
  *   cannot read.
  */
-export async function assessModelFit(input: AssessModelFitInput): Promise<AssessModelFitResult> {
+export async function assessModelFit(
+  input: AssessModelFitInput,
+  options?: RPCOptions
+): Promise<AssessModelFitResult> {
   const parsed = assessModelFitInputSchema.parse({
     ...input,
     models: input.models.map(withModelType)
@@ -50,7 +54,7 @@ export async function assessModelFit(input: AssessModelFitInput): Promise<Assess
 
   const request: AssessModelFitRequest = { type: 'assessModelFit', ...parsed }
 
-  const response = await send(request)
+  const response = await send(request, options)
   if (response.type !== 'assessModelFit') {
     throw new InvalidResponseError('assessModelFit')
   }

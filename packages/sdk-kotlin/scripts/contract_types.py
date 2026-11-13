@@ -324,24 +324,27 @@ def render_schema_methods(graph, manifest):
         response = "io.tether.qvac.sdk.generated.schema." + graph.roots[method["responseSchema"].split("/$defs/")[-1]]
         methodname = method["name"]
         shape = method["callShape"]
+        # Owner-only methods extend the owner client alone, so a session handle
+        # does not offer them.
+        receiver = "QvacClient" if method.get("ownerOnly") else "QvacCaller"
         if shape == "request-reply":
-            out += [f"suspend fun QvacClient.`{methodname}`(request: {request}): {response} = callTyped(request)"]
+            out += [f"suspend fun {receiver}.`{methodname}`(request: {request}): {response} = callTyped(request)"]
         elif shape == "server-stream":
             normalizer = RESPONSE_NORMALIZERS.get(methodname)
             if normalizer:
-                out += [f"fun QvacClient.`{methodname}`(request: {request}): Flow<{response}> = streamTyped<{request}, {response}>(request).map {{ it.{normalizer}() }}"]
+                out += [f"fun {receiver}.`{methodname}`(request: {request}): Flow<{response}> = streamTyped<{request}, {response}>(request).map {{ it.{normalizer}() }}"]
             else:
-                out += [f"fun QvacClient.`{methodname}`(request: {request}): Flow<{response}> = streamTyped(request)"]
+                out += [f"fun {receiver}.`{methodname}`(request: {request}): Flow<{response}> = streamTyped(request)"]
         else:
             normalizer = RESPONSE_NORMALIZERS.get(methodname)
             if normalizer:
-                out += [f"fun QvacClient.`{methodname}`(request: {request}, input: Flow<ByteArray>): Flow<{response}> = duplexTyped<{request}, {response}>(request, input).map {{ it.{normalizer}() }}"]
+                out += [f"fun {receiver}.`{methodname}`(request: {request}, input: Flow<ByteArray>): Flow<{response}> = duplexTyped<{request}, {response}>(request, input).map {{ it.{normalizer}() }}"]
             else:
-                out += [f"fun QvacClient.`{methodname}`(request: {request}, input: Flow<ByteArray>): Flow<{response}> = duplexTyped(request, input)"]
+                out += [f"fun {receiver}.`{methodname}`(request: {request}, input: Flow<ByteArray>): Flow<{response}> = duplexTyped(request, input)"]
         if "progress" in method:
             progress = "io.tether.qvac.sdk.generated.schema." + graph.roots[method["progress"]["responseSchema"].split("/$defs/")[-1]]
             definition = graph.defs[method["progress"]["responseSchema"].split("/$defs/")[-1]]
             discriminator = definition["properties"]["type"]["const"]
-            out += [f'fun QvacClient.{methodname}WithProgress(request: {request}): Flow<QvacProgressEvent<{progress}, {response}>> = progressTyped(request, progressType = {literal(discriminator)})']
+            out += [f'fun {receiver}.{methodname}WithProgress(request: {request}): Flow<QvacProgressEvent<{progress}, {response}>> = progressTyped(request, progressType = {literal(discriminator)})']
         out += [""]
     return "\n".join(out)
