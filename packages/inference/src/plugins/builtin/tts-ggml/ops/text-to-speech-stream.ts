@@ -1,3 +1,4 @@
+import type { PluginHandlerContext } from '@/schemas/plugin'
 import type { AbortSignal } from 'bare-abort-controller'
 import { getModel } from '@/runtime/model-registry'
 import { textToSpeechStreamRequestSchema, type TextToSpeechStreamRequest } from '@/schemas/index'
@@ -151,7 +152,8 @@ function buildRunStreamingOptions(
 
 export async function* textToSpeechStream(
   params: TextToSpeechStreamRequest,
-  inputStream: AsyncIterable<Buffer>
+  inputStream: AsyncIterable<Buffer>,
+  context?: PluginHandlerContext
 ): AsyncGenerator<TtsOpYield, TtsOpResult, unknown> {
   const request = textToSpeechStreamRequestSchema.parse(params)
 
@@ -163,7 +165,13 @@ export async function* textToSpeechStream(
   assertParlerJobOptionsSupported(model, parlerJobOptions, 'textToSpeechStream')
   assertVoiceJobOptionsSupported(model, request, 'textToSpeechStream')
 
-  await using ctx = await bindTtsCancel(model, request.modelId, request.requestId)
+  await using ctx = await bindTtsCancel(
+    model,
+    request.modelId,
+    request.requestId,
+    request.sessionId,
+    context
+  )
   if (ctx.signal.aborted) return { ...buildStreamResult(0), cancelled: true }
 
   // Resolved inside the request context: an uncached remote reference
@@ -171,7 +179,8 @@ export async function* textToSpeechStream(
   const voiceJobOptions = await resolveVoiceJobOptions(request, {
     signal: ctx.signal,
     scope: ctx.scope,
-    requestId: ctx.requestId
+    requestId: ctx.requestId,
+    sessionId: ctx.sessionId
   })
   if (voiceJobOptions === null) return { ...buildStreamResult(0), cancelled: true }
 

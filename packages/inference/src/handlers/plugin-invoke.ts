@@ -6,8 +6,14 @@ import type {
 } from '@/schemas/plugin'
 import { getModelEntry } from '@/runtime/model-registry'
 import { getPlugin, getPluginHandler } from '@/plugins/index'
+import { getRequestRegistry } from '@/runtime/index'
+import type { RequestContext } from '@/runtime/request-context'
+import { OWNER_SESSION_ID } from '@/runtime/session-id'
+import type { PluginHandlerContext } from '@/schemas/plugin'
+import { generateRandomRequestId } from '@/runtime/request-id'
 import { profileReplyHandler, profileStreamHandler } from '@/profiling/index'
 import {
+  InferenceCancelledError,
   PluginNotFoundError,
   PluginHandlerNotFoundError,
   PluginHandlerTypeMismatchError,
@@ -41,6 +47,28 @@ function resolvePluginHandler(modelId: string, handlerName: string) {
   return { modelType, plugin, handlerDef }
 }
 
+// Every invoke is a registry request of kind `plugin` on the model, so a
+// caller can cancel it by id and a session close or model unload sweeps it.
+// The handler receives the abort signal through its context argument.
+function beginInvoke(request: PluginInvokeRequest | PluginInvokeStreamRequest) {
+  return getRequestRegistry().begin({
+    requestId: request.requestId ?? generateRandomRequestId(),
+    sessionId: request.sessionId,
+    kind: 'plugin',
+    modelId: request.modelId
+  })
+}
+
+// The owner's session is passed as undefined, the way the wire names it, so
+// an inner request begun from the context registers like a direct one.
+function invokeContext(ctx: RequestContext): PluginHandlerContext {
+  return {
+    signal: ctx.signal,
+    requestId: ctx.requestId,
+    sessionId: ctx.sessionId === OWNER_SESSION_ID ? undefined : ctx.sessionId
+  }
+}
+
 export async function handlePluginInvoke(
   request: PluginInvokeRequest
 ): Promise<PluginInvokeResponse> {
@@ -60,7 +88,11 @@ export async function handlePluginInvoke(
       throw new PluginRequestValidationFailedError(handlerName, formatZodError(parseResult.error))
     }
 
-    const result = await handlerDef.handler(parseResult.data)
+    await using ctx = await beginInvoke(request)
+    if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
+
+    const result = await handlerDef.handler(parseResult.data, undefined, invokeContext(ctx))
+    if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
 
     const responseParseResult = handlerDef.responseSchema.safeParse(result)
     if (!responseParseResult.success) {
@@ -72,6 +104,7 @@ export async function handlePluginInvoke(
 
     return {
       type: 'pluginInvoke' as const,
+      requestId: ctx.requestId,
       result: responseParseResult.data
     }
   })
@@ -96,9 +129,17 @@ export async function* handlePluginInvokeStream(
       throw new PluginRequestValidationFailedError(handlerName, formatZodError(parseResult.error))
     }
 
-    const generator = handlerDef.handler(parseResult.data) as AsyncGenerator<unknown>
+    await using ctx = await beginInvoke(request)
+    if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
+
+    const generator = handlerDef.handler(
+      parseResult.data,
+      undefined,
+      invokeContext(ctx)
+    ) as AsyncGenerator<unknown>
 
     for await (const chunk of generator) {
+      if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
       const responseParseResult = handlerDef.responseSchema.safeParse(chunk)
       if (!responseParseResult.success) {
         throw new PluginResponseValidationFailedError(
@@ -113,9 +154,11 @@ export async function* handlePluginInvokeStream(
         done: false
       }
     }
+    if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
 
     yield {
       type: 'pluginInvokeStream' as const,
+      requestId: ctx.requestId,
       result: null,
       done: true
     }

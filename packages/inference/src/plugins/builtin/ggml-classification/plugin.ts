@@ -1,3 +1,4 @@
+import { requestParent } from '@/schemas/plugin'
 import ImageClassifier from '@qvac/classification-ggml'
 import {
   definePlugin,
@@ -13,6 +14,9 @@ import {
 } from '@/schemas/index'
 import { createStreamLogger, registerAddonLogger } from '@/logging/index'
 import { classify } from '@/plugins/builtin/ggml-classification/ops/classify'
+import { InferenceCancelledError } from '@/errors/index'
+import { getRequestRegistry } from '@/runtime/index'
+import { generateRandomRequestId } from '@/runtime/request-id'
 
 export const classificationPlugin = definePlugin({
   modelType: ModelType.ggmlClassification,
@@ -65,10 +69,20 @@ export const classificationPlugin = definePlugin({
       // can't be interrupted partway, so we declare scope:"none".
       cancel: { scope: 'none' },
 
-      handler: async function* (request) {
+      handler: async function* (request, _inputStream, context) {
+        await using ctx = await getRequestRegistry().begin({
+          requestId: request.requestId ?? generateRandomRequestId(),
+          sessionId: request.sessionId,
+          ...requestParent(context),
+          kind: 'classification',
+          modelId: request.modelId
+        })
+        if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
         const { results, modelExecutionMs } = await classify(request)
+        if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
         yield {
           type: 'classify' as const,
+          requestId: ctx.requestId,
           results,
           done: true,
           modelExecutionMs

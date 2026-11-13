@@ -1,3 +1,4 @@
+import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
 import { getModel } from '@/runtime/model-registry'
 import Buffer from 'bare-buffer'
 import type ImgStableDiffusion from '@qvac/diffusion-cpp'
@@ -10,18 +11,22 @@ import type {
   DiffusionStreamResponse,
   DiffusionStats
 } from '@/schemas/sdcpp-config'
+import type { TrackedRequest } from '@/schemas/request-base'
 
 interface ResponseWithStats {
   stats?: DiffusionStats
 }
 
-export type DiffusionOpResult = { stats: DiffusionStats | undefined }
+export type DiffusionOpResult = { requestId: string; stats: DiffusionStats | undefined }
 
 export async function* diffusion(
-  request: DiffusionRequest
+  request: DiffusionRequest & TrackedRequest,
+  context?: PluginHandlerContext
 ): AsyncGenerator<DiffusionStreamResponse, DiffusionOpResult> {
   await using ctx = await getRequestRegistry().begin({
-    requestId: generateRandomRequestId(),
+    requestId: request.requestId ?? generateRandomRequestId(),
+    sessionId: request.sessionId,
+    ...requestParent(context),
     kind: 'diffusion',
     modelId: request.modelId
   })
@@ -119,7 +124,7 @@ export async function* diffusion(
     if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
 
     const responseWithStats = response as typeof response & ResponseWithStats
-    return { stats: responseWithStats.stats ?? undefined }
+    return { requestId: ctx.requestId, stats: responseWithStats.stats ?? undefined }
   } catch (error) {
     if (ctx.signal.aborted) {
       if (error instanceof InferenceCancelledError) throw error

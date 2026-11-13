@@ -4,6 +4,7 @@ import {
   imageEmbeddingClientInputSchema,
   imageEmbeddingStatsSchema
 } from './image-embedding'
+import { trackedRequestSchema } from '@/schemas/request-base'
 
 const mediaSourceSchema = z
   .discriminatedUnion('type', [
@@ -129,30 +130,33 @@ export const embedClientParamsSchema = z.union([
   inputsEmbedParamsSchema,
   clientSingleEmbedParamsSchema
 ])
-const requestId = z
-  .string()
-  .min(1)
-  .optional()
-  .describe('Caller-generated identifier for cancellation with cancel({ requestId }).')
-const requestFields = { type: z.literal('embed'), requestId }
+const requestFields = { type: z.literal('embed') }
 export const embedRequestSchema = z.union([
-  textEmbedParamsSchema.extend(requestFields).meta({ title: 'EmbedTextRequest' }),
-  inputsEmbedParamsSchema.extend(requestFields).meta({ title: 'EmbedInputsRequest' }),
+  textEmbedParamsSchema
+    .extend(requestFields)
+    .extend(trackedRequestSchema.shape)
+    .meta({ title: 'EmbedTextRequest' }),
+  inputsEmbedParamsSchema
+    .extend(requestFields)
+    .extend(trackedRequestSchema.shape)
+    .meta({ title: 'EmbedInputsRequest' }),
   singleEmbedParamsSchema
     .extend({
       ...requestFields,
       input: titledInputSchema('EmbedSingleInput').describe(singleInputDescription)
     })
+    .extend(trackedRequestSchema.shape)
     .meta({ title: 'EmbedSingleRequest' })
 ])
-export const embedBatchRequestSchema = embedBatchParamsSchema.extend({
-  type: z.literal('embedBatch'),
-  requestId,
-  inputs: z
-    .array(titledInputSchema('EmbedBatchInput'))
-    .min(1, 'Inputs cannot be empty')
-    .describe(batchInputsDescription)
-})
+export const embedBatchRequestSchema = embedBatchParamsSchema
+  .extend({
+    type: z.literal('embedBatch'),
+    inputs: z
+      .array(titledInputSchema('EmbedBatchInput'))
+      .min(1, 'Inputs cannot be empty')
+      .describe(batchInputsDescription)
+  })
+  .extend(trackedRequestSchema.shape)
 
 // embed() is model-agnostic, so its stats cover both engines. Each model fills only its own fields.
 const imageStats = imageEmbeddingStatsSchema.shape

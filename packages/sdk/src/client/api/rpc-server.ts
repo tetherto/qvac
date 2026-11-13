@@ -3,7 +3,8 @@ import {
   type StopRpcServerOptions,
   type DiscoverRpcServersOptions,
   type RpcServerInfo,
-  type RpcServerCandidate
+  type RpcServerCandidate,
+  type RPCOptions
 } from '@qvac/inference/surface'
 import { send } from '@/client/rpc/rpc-client'
 import { InvalidResponseError } from '@/utils/errors-client'
@@ -15,14 +16,19 @@ import { generateClientRequestId } from '@/client/api/client-request-id'
  * Cancel a pending start with its promise.requestId.
  */
 export function startRpcServer(
-  options: StartRpcServerOptions = {}
+  options: StartRpcServerOptions = {},
+  rpcOptions?: RPCOptions
 ): Promise<RpcServerInfo> & { requestId: string } {
   const requestId = generateClientRequestId()
-  return decoratePromise(runStartRpcServer(options, requestId), { requestId })
+  return decoratePromise(runStartRpcServer(options, requestId, rpcOptions), { requestId })
 }
 
-async function runStartRpcServer(options: StartRpcServerOptions, requestId: string) {
-  const response = await send({ ...options, type: 'startRpcServer', requestId })
+async function runStartRpcServer(
+  options: StartRpcServerOptions,
+  requestId: string,
+  rpcOptions?: RPCOptions
+) {
+  const response = await send({ ...options, type: 'startRpcServer', requestId }, rpcOptions)
   if (response.type !== 'startRpcServer') throw new InvalidResponseError('startRpcServer')
   return {
     serverId: response.serverId,
@@ -32,8 +38,11 @@ async function runStartRpcServer(options: StartRpcServerOptions, requestId: stri
 }
 
 /** Withdraw the announcement and await native stop. Bare stop has no deadline. */
-export async function stopRpcServer(options: StopRpcServerOptions): Promise<void> {
-  const response = await send({ ...options, type: 'stopRpcServer' })
+export async function stopRpcServer(
+  options: StopRpcServerOptions,
+  rpcOptions?: RPCOptions
+): Promise<void> {
+  const response = await send({ ...options, type: 'stopRpcServer' }, rpcOptions)
   if (response.type !== 'stopRpcServer') throw new InvalidResponseError('stopRpcServer')
 }
 
@@ -44,14 +53,19 @@ export async function stopRpcServer(options: StopRpcServerOptions): Promise<void
  * Cancel a pending search with its promise.requestId.
  */
 export function discoverRpcServers(
-  options: DiscoverRpcServersOptions
+  options: DiscoverRpcServersOptions,
+  rpcOptions?: RPCOptions
 ): Promise<RpcServerCandidate[]> & { requestId: string } {
   const requestId = generateClientRequestId()
-  return decoratePromise(runDiscoverRpcServers(options, requestId), { requestId })
+  return decoratePromise(runDiscoverRpcServers(options, requestId, rpcOptions), { requestId })
 }
 
-async function runDiscoverRpcServers(options: DiscoverRpcServersOptions, requestId: string) {
-  const response = await send({ ...options, type: 'discoverRpcServers', requestId })
+async function runDiscoverRpcServers(
+  options: DiscoverRpcServersOptions,
+  requestId: string,
+  rpcOptions?: RPCOptions
+) {
+  const response = await send({ ...options, type: 'discoverRpcServers', requestId }, rpcOptions)
   if (response.type !== 'discoverRpcServers') throw new InvalidResponseError('discoverRpcServers')
   return response.servers
 }

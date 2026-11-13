@@ -7,6 +7,7 @@ import {
 } from '@qvac/inference/surface'
 import { send, stream, duplex, dispatchTransport } from '@qvac/inference/engine'
 import type RPC from 'bare-rpc'
+import type { AbortSignal } from 'bare-abort-controller'
 import { sendErrorResponse, sendStreamErrorResponse } from '@/server/error-handlers'
 import { PluginHandlerTypeMismatchError } from '@/utils/errors-server'
 import { handleInitConfig, isInitConfigMessage } from './handler-utils'
@@ -14,7 +15,7 @@ import { createServerProfiler, type ServerProfiler } from '@/server/rpc/profilin
 import {
   createResponseStreamLoggingErrors,
   isTerminalChunk,
-  signalOnStreamClose
+  signalOnCancelOrStreamClose
 } from '@/server/rpc/rpc-utils'
 import { createProgressThrottle } from '@/server/rpc/progress-throttle'
 
@@ -62,7 +63,7 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
       throw new PluginHandlerTypeMismatchError(request.type, 'reply or stream', 'duplex')
     } else {
       profiler.startHandler()
-      const response = await send(request)
+      const response = await send(request, transportOptions(req))
       profiler.endHandler()
       req.reply(profiler.serialize(response, true), 'utf-8')
     }
@@ -85,9 +86,6 @@ async function streamToResponse(
   profiler.startHandler()
   let sentFinalChunk = false
 
-  // Lets an `endsOnAbort` handler (log stream) release its source when the client aborts.
-  const signal = signalOnStreamClose(responseStream)
-
   // A progress stream (a reply op that streams because of `withProgress`) can
   // emit hundreds of updates, so batch them on a time window before writing to
   // keep IPC and UI churn down. Native data streams like completion tokens pass
@@ -102,6 +100,7 @@ async function streamToResponse(
     : undefined
 
   try {
+    const signal = signalOnCancelOrStreamClose(req, responseStream)
     for await (const response of stream(request, { signal })) {
       if (isTerminalChunk(response)) {
         throttle?.flush()
@@ -163,7 +162,7 @@ async function handleDuplexRequest(req: RPC.IncomingRequest): Promise<void> {
     const request = cleanData as Request
     attachProfilingMetaToRequest(request, profilingMeta)
 
-    const session = await duplex(request)
+    const session = await duplex(request, { signal: signalOnCancelOrStreamClose(req, rpcOutput) })
 
     // Feed the remaining RPC input into the engine's input stream, and forward
     // the engine's newline-framed responses back out to the response stream.
@@ -190,6 +189,15 @@ async function handleDuplexRequest(req: RPC.IncomingRequest): Promise<void> {
     rpcInput.destroy()
     sendStreamErrorResponse(rpcOutput, error, profiler)
   }
+}
+
+/**
+ * `req.signal` aborts when the client cancels the request, as a call that
+ * times out does, and when the client goes away. The engine cancels the
+ * request's work when it aborts.
+ */
+function transportOptions(req: RPC.IncomingRequest): { signal?: AbortSignal } {
+  return req.signal ? { signal: req.signal } : {}
 }
 
 function attachProfilingMetaToRequest(
