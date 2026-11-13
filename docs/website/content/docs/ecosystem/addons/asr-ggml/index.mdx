@@ -73,7 +73,14 @@ npm i @qvac/asr-ggml bare-fs bare-process
 </Step>
 
 <Step>
-Place the TDT checkpoint at `models/parakeet-tdt-0.6b-v3.q8_0.gguf`, and a 16 kHz mono 16-bit WAV file at `my-audio.wav`.
+Download the TDT checkpoint from the QVAC registry. The download script ships with the repository, not with the npm package, so run it from a checkout of [`tetherto/qvac`](https://github.com/tetherto/qvac), in `packages/asr-ggml`:
+
+```bash
+npm install
+npm run download-models:parakeet:registry -- -t tdt
+```
+
+The script saves `parakeet-tdt-0.6b-v3.q8_0.gguf` to `packages/asr-ggml/models/`. Copy it to `models/parakeet-tdt-0.6b-v3.q8_0.gguf` in your project, and place a 16 kHz mono 16-bit WAV file at `my-audio.wav`.
 </Step>
 
 <Step>
