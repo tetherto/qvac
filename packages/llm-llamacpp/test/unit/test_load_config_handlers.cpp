@@ -83,6 +83,26 @@ TEST(LoadConfigHandlers_ImageNoUpscale, RejectsUnknownValue) {
   EXPECT_THROW(applyLoadConfigHandlers(params, map), StatusError);
 }
 
+TEST(
+    LoadConfigHandlers_ImageTileMode,
+    RejectsHighBitByteWithoutUndefinedBehavior) {
+  common_params params;
+  const std::string highBitValue(1, static_cast<char>(0xFF));
+  std::unordered_map<std::string, std::string> map{
+      {"image-tile-mode", highBitValue}};
+  EXPECT_THROW(applyLoadConfigHandlers(params, map), StatusError);
+}
+
+TEST(
+    LoadConfigHandlers_ImageNoUpscale,
+    RejectsHighBitByteWithoutUndefinedBehavior) {
+  common_params params;
+  const std::string highBitValue(1, static_cast<char>(0xFF));
+  std::unordered_map<std::string, std::string> map{
+      {"image-no-upscale", highBitValue}};
+  EXPECT_THROW(applyLoadConfigHandlers(params, map), StatusError);
+}
+
 // Both spellings must be registered. The addon skips audio by default, so the
 // load-bearing case is "off": an alias missing from the table would leave the
 // caller unable to turn the audio encoder back on.
