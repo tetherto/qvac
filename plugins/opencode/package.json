@@ -1,6 +1,6 @@
 {
   "name": "@qvac/opencode-plugin",
-  "version": "0.3.6",
+  "version": "0.4.0",
   "description": "OpenCode plugin that runs a local, managed QVAC serve so `opencode` works against on-device models with no second terminal",
   "author": "Tether",
   "license": "Apache-2.0",
