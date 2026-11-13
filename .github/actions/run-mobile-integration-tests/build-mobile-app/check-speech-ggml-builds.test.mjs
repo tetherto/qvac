@@ -30,9 +30,9 @@ function speechAddon(name, version, ggmlSpeech) {
 
 test('finds hoisted and nested speech addons with their recorded builds', (t) => {
   const modules = path.join(tempDir(t), 'node_modules');
-  writePackage(path.join(modules, '@qvac/tts-ggml'), speechAddon('@qvac/tts-ggml', '0.12.0', '2026-10-07#1'));
+  writePackage(path.join(modules, '@qvac/audiogen-ggml'), speechAddon('@qvac/audiogen-ggml', '0.12.0', '2026-10-07#1'));
   writePackage(
-    path.join(modules, '@qvac/tts-ggml/node_modules/@qvac/asr-ggml'),
+    path.join(modules, '@qvac/audiogen-ggml/node_modules/@qvac/asr-ggml'),
     speechAddon('@qvac/asr-ggml', '0.3.3', null),
   );
   writePackage(path.join(modules, '@qvac/llm-llamacpp'), { name: '@qvac/llm-llamacpp', version: '0.58.0' });
@@ -42,7 +42,7 @@ test('finds hoisted and nested speech addons with their recorded builds', (t) =>
 
   assert.deepEqual(addons, [
     { id: '@qvac/asr-ggml@0.3.3', ggmlSpeech: null },
-    { id: '@qvac/tts-ggml@0.12.0', ggmlSpeech: '2026-10-07#1' },
+    { id: '@qvac/audiogen-ggml@0.12.0', ggmlSpeech: '2026-10-07#1' },
   ]);
 });
 
@@ -53,29 +53,29 @@ test('finds nothing in a missing node_modules', (t) => {
 test('accepts speech addons that record one build', () => {
   const addons = [
     { id: '@qvac/asr-ggml@0.9.0', ggmlSpeech: '2026-10-07#1' },
-    { id: '@qvac/tts-ggml@0.12.0', ggmlSpeech: '2026-10-07#1' },
+    { id: '@qvac/audiogen-ggml@0.12.0', ggmlSpeech: '2026-10-07#1' },
   ];
   assert.deepEqual(checkSpeechAddons(addons), { errors: [], warnings: [] });
   assert.equal(
     summarizeSpeechAddons(addons),
-    'ggml-speech: 2026-10-07#1 (@qvac/asr-ggml@0.9.0, @qvac/tts-ggml@0.12.0)',
+    'ggml-speech: 2026-10-07#1 (@qvac/asr-ggml@0.9.0, @qvac/audiogen-ggml@0.12.0)',
   );
 });
 
 test('rejects speech addons that record different builds', () => {
   const addons = [
     { id: '@qvac/asr-ggml@0.9.0', ggmlSpeech: '2026-08-07' },
-    { id: '@qvac/tts-ggml@0.12.0', ggmlSpeech: '2026-10-07#1' },
+    { id: '@qvac/audiogen-ggml@0.12.0', ggmlSpeech: '2026-10-07#1' },
   ];
   assert.deepEqual(checkSpeechAddons(addons).errors, [
     'speech addons built from 2 ggml-speech versions: ' +
-      '2026-08-07 (@qvac/asr-ggml@0.9.0); 2026-10-07#1 (@qvac/tts-ggml@0.12.0)',
+      '2026-08-07 (@qvac/asr-ggml@0.9.0); 2026-10-07#1 (@qvac/audiogen-ggml@0.12.0)',
   ]);
 });
 
 test('warns about an unrecorded speech addon only next to another one', () => {
   const unrecorded = { id: '@qvac/asr-ggml@0.3.3', ggmlSpeech: null };
-  const recorded = { id: '@qvac/tts-ggml@0.12.0', ggmlSpeech: '2026-10-07#1' };
+  const recorded = { id: '@qvac/audiogen-ggml@0.12.0', ggmlSpeech: '2026-10-07#1' };
   assert.deepEqual(checkSpeechAddons([recorded, unrecorded]), {
     errors: [],
     warnings: ['@qvac/asr-ggml@0.3.3 does not record the ggml-speech build it ships, so it cannot be checked'],
@@ -83,7 +83,7 @@ test('warns about an unrecorded speech addon only next to another one', () => {
   assert.deepEqual(checkSpeechAddons([unrecorded]), { errors: [], warnings: [] });
   assert.equal(
     summarizeSpeechAddons([recorded, unrecorded]),
-    'ggml-speech: 2026-10-07#1 (@qvac/tts-ggml@0.12.0); not recorded (@qvac/asr-ggml@0.3.3)',
+    'ggml-speech: 2026-10-07#1 (@qvac/audiogen-ggml@0.12.0); not recorded (@qvac/asr-ggml@0.3.3)',
   );
   assert.equal(summarizeSpeechAddons([]), 'ggml-speech: no speech addons installed');
 });

@@ -8,6 +8,7 @@
     "embed-llamacpp",
     "llm-llamacpp",
     "ggml-rpc-server",
-    "turbovec-ggml"
+    "turbovec-ggml",
+    "tts-ggml"
   ]
 }

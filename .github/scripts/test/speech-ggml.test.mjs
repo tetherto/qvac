@@ -4,7 +4,9 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
+  FABRIC_RUNTIME,
   GGML_SPEECH_PORT,
+  GGML_SPEECH_RUNTIME,
   SPEECH_ADDONS,
   checkAddonList,
   checkPins,
@@ -27,14 +29,23 @@ const SPEECH_CPP_PIN = { name: 'speech-cpp', version: '2026-10-09' }
 function addon(name, { overrides = [GGML_SPEECH_PIN, SPEECH_CPP_PIN], dependencies = [], recorded = '2026-10-07#1' } = {}) {
   return {
     name,
+    runtime: GGML_SPEECH_RUNTIME,
     vcpkg: { dependencies, overrides },
     manifest: recorded === null ? { name } : { name, qvac: { 'ggml-speech': recorded } },
   }
 }
 
-function readAddon({ name, dir }) {
+const FABRIC_SPEECH_CPP_PIN = { name: 'speech-cpp', version: '2026-10-29', 'port-version': 1 }
+
+function fabricAddon(name, { overrides = [FABRIC_SPEECH_CPP_PIN], fabric = '^0.25.0', recorded = null } = {}) {
+  const manifest = { name, dependencies: fabric === null ? {} : { '@qvac/fabric': fabric } }
+  if (recorded !== null) manifest.qvac = { 'ggml-speech': recorded }
+  return { name, runtime: FABRIC_RUNTIME, vcpkg: { dependencies: [], overrides }, manifest }
+}
+
+function readAddon({ name, dir, runtime }) {
   const read = (file) => JSON.parse(readFileSync(join(repoRoot, dir, file), 'utf8'))
-  return { name, vcpkg: read('vcpkg.json'), manifest: read('package.json') }
+  return { name, runtime, vcpkg: read('vcpkg.json'), manifest: read('package.json') }
 }
 
 const ANDROID_PLAN = `The following packages will be built and installed:
@@ -49,6 +60,31 @@ function plan(addonName, triplet, features, version = '2026-10-07#1') {
 
 test('the speech addons in the repo pin one ggml-speech and speech-cpp and record that ggml-speech', () => {
   assert.deepEqual(checkPins(SPEECH_ADDONS.map(readAddon)), [])
+})
+
+test('a fabric addon needs one speech-cpp pin and the @qvac/fabric dependency, and no ggml-speech', () => {
+  assert.deepEqual(checkPins([addon('@qvac/a'), fabricAddon('@qvac/f')]), [])
+  assert.deepEqual(checkPins([fabricAddon('@qvac/f', { overrides: [] })]), [
+    '@qvac/f: vcpkg.json needs exactly one overrides entry for speech-cpp',
+  ])
+  assert.deepEqual(checkPins([fabricAddon('@qvac/f', { overrides: [GGML_SPEECH_PIN, FABRIC_SPEECH_CPP_PIN] })]), [
+    '@qvac/f: ships no ggml of its own; remove the ggml-speech overrides entry',
+  ])
+  assert.deepEqual(checkPins([fabricAddon('@qvac/f', { fabric: null })]), [
+    '@qvac/f: package.json must depend on @qvac/fabric, the runtime it links',
+  ])
+  assert.deepEqual(checkPins([fabricAddon('@qvac/f', { recorded: '2026-10-07#1' })]), [
+    '@qvac/f: package.json must not record a ggml-speech build; the runtime is @qvac/fabric',
+  ])
+})
+
+test('fabric addons pin speech-cpp in lockstep with each other, apart from the ggml-speech addons', () => {
+  const older = { name: 'speech-cpp', version: '2026-10-28' }
+  assert.deepEqual(checkPins([addon('@qvac/a'), fabricAddon('@qvac/f'), fabricAddon('@qvac/g')]), [])
+  assert.deepEqual(
+    checkPins([fabricAddon('@qvac/f'), fabricAddon('@qvac/g', { overrides: [older] })]),
+    ['speech-cpp is pinned to 2 versions: 2026-10-29#1 (@qvac/f); 2026-10-28 (@qvac/g)'],
+  )
 })
 
 test('formats override versions the way vcpkg prints them', () => {

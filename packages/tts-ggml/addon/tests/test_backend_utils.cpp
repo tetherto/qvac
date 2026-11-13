@@ -2,6 +2,7 @@
 #include <string>
 
 #include <gtest/gtest.h>
+#include <qvac-fabric.h>
 
 #include "addon/TTSErrors.hpp"
 #include "model-interface/BackendUtils.hpp"
@@ -10,7 +11,6 @@
 
 using qvac::ttsggml::backendDeviceCode;
 using qvac::ttsggml::backendIdFromName;
-using qvac::ttsggml::defaultBackendsDir;
 using qvac::ttsggml::resolveBackendsDir;
 using qvac_errors::createTTSError;
 using qvac_errors::tts_error::toString;
@@ -22,13 +22,13 @@ TEST(BackendUtils, ResolveBackendsDirUsesAConfiguredDirAsGiven) {
   EXPECT_EQ(resolveBackendsDir(dir).string(), dir);
 }
 
-TEST(BackendUtils, ResolveBackendsDirDefaultsToTheModulesDirectory) {
-  // The test binary is the module here and has no <name>/ subdirectory.
+TEST(BackendUtils, ResolveBackendsDirDefaultsToTheFabricBackendsDirectory) {
+  // The fabric runtime is staged next to the test binary, so its backends
+  // directory resolves to a real directory here too.
   const std::filesystem::path resolved = resolveBackendsDir("");
-  EXPECT_EQ(resolved, defaultBackendsDir());
+  EXPECT_EQ(resolved.string(), std::string(qvac_fabric_backends_dir()));
   ASSERT_FALSE(resolved.empty());
   EXPECT_TRUE(std::filesystem::is_directory(resolved));
-  EXPECT_NE(resolved.filename().string(), QVAC_ADDON_MODULE_NAME);
 }
 
 TEST(BackendUtils, BackendIdCpu) {
