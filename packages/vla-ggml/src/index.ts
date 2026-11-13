@@ -484,6 +484,7 @@ class VlaModel {
   private _job: JobHandler;
   private _run: RunExclusive;
   private _handle: object | null;
+  private _instanceGeneration = 0;
   private _hparams: VlaModel.VlaHparams | null;
   private _backendName: string | null;
   private _hasActiveResponse: boolean;
@@ -670,6 +671,7 @@ class VlaModel {
     // error rather than a native throw. Nothing named = the GGUF's own default
     // embodiment, which is also a no-op on single-embodiment / non-GR00T GGUFs.
     const embodimentSel = normalizeEmbodiment(this._config.embodiment, false);
+    const generation = ++this._instanceGeneration;
     try {
       // Canonical instance lifecycle (mirrors LLM/embed/NMT):
       // createInstance(jsHandle, params, outputCb) — the framework's
@@ -690,6 +692,10 @@ class VlaModel {
               : "",
         },
         (jsHandle, eventTypeName, outputData, errorData) => {
+          // A destroyed instance can still deliver queued events, e.g. when a
+          // cancel task outlives destroyInstance() and drops the last native
+          // owner later. _job is shared across instances, so drop them.
+          if (generation !== this._instanceGeneration) return;
           this._onAddonEvent(jsHandle, eventTypeName, outputData, errorData);
         },
       );
@@ -699,6 +705,7 @@ class VlaModel {
       this._hparams = binding.getVlaHparams(this._handle);
       this._backendName = binding.getVlaBackendName(this._handle);
     } catch (loadError) {
+      ++this._instanceGeneration;
       this.logger.error("Error during model load:", loadError);
       if (this._handle) {
         try {
@@ -904,6 +911,7 @@ class VlaModel {
   async unload(): Promise<void> {
     return this._run(async () => {
       await this.cancel();
+      ++this._instanceGeneration;
       if (this._job.active) {
         this._job.fail(
           new QvacErrorAddonVla({ code: ERR_CODES.MODEL_UNLOADED }),
@@ -1083,6 +1091,11 @@ namespace VlaModel {
     total_ms: number;
     /** 0 = CPU backend, 1 = GPU backend (Vulkan / Metal / OpenCL). */
     backendDevice: number;
+    /**
+     * Backend family, such as `cpu`, `cuda`, `metal`, or `vulkan`. Absent when
+     * the native side cannot name the backend.
+     */
+    backendName?: string;
   }
 
   export interface VlaRunResult {
