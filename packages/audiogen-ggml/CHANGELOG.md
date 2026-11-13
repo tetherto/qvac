@@ -21,6 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `@qvac/fabric` runtime provides it
   ([#5482](https://github.com/tetherto/qvac/pull/5482)).
 
+### Fixed
+
+- `encode()` / `encodePcm()` release every bare-ffmpeg object they create for
+  compressed formats, including when an encode fails. Before this, each encode
+  kept the input PCM, the encoded output and the native FFmpeg state in memory
+  for the life of the process
+  ([#5610](https://github.com/tetherto/qvac/pull/5610)).
+
 ## [0.10.1] - 2026-11-10
 
 ### Added
