@@ -325,7 +325,7 @@ class Calls(
         var sampleRate: Any? = null
         var text: Any? = null
         for (frame in frames(request, "textToSpeech")) {
-            pcm.addAll(asList(frame["buffer"]))
+            pcm.addAll(Wire.ttsSamples(frame))
             if (frame["text"] != null) text = frame["text"]
             if (sampleRate == null && frame["sampleRate"] != null) sampleRate = frame["sampleRate"]
             if (frame["done"] == true) done = true
