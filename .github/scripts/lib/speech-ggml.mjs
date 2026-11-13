@@ -4,7 +4,7 @@
 export const GGML_SPEECH_RUNTIME = 'ggml-speech'
 export const FABRIC_RUNTIME = 'fabric'
 export const SPEECH_ADDONS = [
-  { name: '@qvac/asr-ggml', dir: 'packages/asr-ggml', runtime: GGML_SPEECH_RUNTIME },
+  { name: '@qvac/asr-ggml', dir: 'packages/asr-ggml', runtime: FABRIC_RUNTIME },
   { name: '@qvac/audiogen-ggml', dir: 'packages/audiogen-ggml', runtime: FABRIC_RUNTIME },
   { name: '@qvac/bci-whispercpp', dir: 'packages/bci-whispercpp', runtime: FABRIC_RUNTIME },
   { name: '@qvac/tts-ggml', dir: 'packages/tts-ggml', runtime: FABRIC_RUNTIME },
@@ -141,7 +141,7 @@ export function checkAddonList(packages) {
     .map(
       (pkg) =>
         `${pkg.dir} depends on ${PINNED_PORTS.join(' or ')} but is not a listed speech addon; add it to ` +
-        'SPEECH_ADDONS in .github/scripts/lib/speech-ggml.mjs and in build-mobile-app/check-speech-ggml-builds.mjs',
+        'SPEECH_ADDONS in .github/scripts/lib/speech-ggml.mjs',
     )
 }
 

@@ -11,6 +11,7 @@
     "turbovec-ggml",
     "tts-ggml",
     "audiogen-ggml",
+    "asr-ggml",
     "bci-whispercpp"
   ]
 }

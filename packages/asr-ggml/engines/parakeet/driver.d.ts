@@ -117,7 +117,7 @@ export interface ParakeetConfig {
     longFormContextFrames?: number;
     /**
      * Directory containing dynamically-loaded ggml backend libraries. Defaults
-     * to the package's own `prebuilds/` folder.
+     * to the backends the `@qvac/fabric` runtime ships.
      */
     backendsDir?: string;
     /**

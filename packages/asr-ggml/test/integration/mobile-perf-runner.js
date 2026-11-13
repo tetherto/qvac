@@ -280,11 +280,9 @@ async function runMobilePerfCase(t, opts) {
       )
     } else if (useGPU && platform.startsWith('ios')) {
       // On iOS with use_gpu=true we expect ggml to have registered the
-      // Metal backend (backendId 1). Metal ships inside the statically
-      // linked `ggml-speech` (metal is a default-feature of that port on
-      // osx | ios and is re-asserted by whisper-cpp[metal] in vcpkg.json),
-      // so unlike Android there is no loose dynamic-backend `.so` to stage
-      // — the backend is present in the .bare module itself. This is the
+      // Metal backend (backendId 1). Metal is linked into the @qvac/fabric
+      // runtime on Apple hosts, so unlike Android there is no loose
+      // dynamic-backend `.so` to stage. This is the
       // device-farm guard that iOS actually offloads to Metal (and that
       // the historical MTLCompiler XPC init crash has not regressed)
       // rather than silently falling back to CPU.

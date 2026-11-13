@@ -270,8 +270,8 @@ test('rejects an unlisted package that depends on a pinned port', () => {
   ]
   assert.deepEqual(checkAddonList(packages), [
     'packages/diarize-ggml depends on ggml-speech or speech-cpp but is not a listed speech addon; add it to ' +
-      'SPEECH_ADDONS in .github/scripts/lib/speech-ggml.mjs and in build-mobile-app/check-speech-ggml-builds.mjs',
+      'SPEECH_ADDONS in .github/scripts/lib/speech-ggml.mjs',
     'packages/music-ggml depends on ggml-speech or speech-cpp but is not a listed speech addon; add it to ' +
-      'SPEECH_ADDONS in .github/scripts/lib/speech-ggml.mjs and in build-mobile-app/check-speech-ggml-builds.mjs',
+      'SPEECH_ADDONS in .github/scripts/lib/speech-ggml.mjs',
   ])
 })

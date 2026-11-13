@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 /**
- * Fail unless the speech addons that still link ggml-speech (asr-ggml) build
- * their ggml backends from one ggml-speech: the same ggml-speech and
- * speech-cpp overrides in every vcpkg.json, that ggml-speech recorded in every
+ * Fail unless the speech addons (asr-ggml, audiogen-ggml, bci-whispercpp,
+ * tts-ggml) pin one speech-cpp and depend on @qvac/fabric: they link the
+ * shared @qvac/fabric runtime and ship no ggml. A speech addon listed with the
+ * ggml-speech runtime is held to more: the same ggml-speech and speech-cpp
+ * overrides in every vcpkg.json, that ggml-speech recorded in every
  * package.json, and the same ggml-speech version and features in every addon's
- * vcpkg install plan for each prebuild triplet. Addons on the @qvac/fabric
- * runtime (audiogen-ggml, bci-whispercpp, tts-ggml) ship no ggml; they only
- * need one speech-cpp override and the @qvac/fabric dependency. Any other
- * package that depends on ggml-speech or speech-cpp fails it until it is
- * listed as a speech addon.
+ * vcpkg install plan for each prebuild triplet. Any other package that depends
+ * on ggml-speech or speech-cpp fails it until it is listed as a speech addon.
  *
  * The plans come from `vcpkg install --dry-run` with compiler tracking off, so
  * no toolchain or build is needed.
