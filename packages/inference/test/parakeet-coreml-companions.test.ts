@@ -69,21 +69,21 @@ function client(entries: QVACModelEntry[]): Pick<QVACRegistryClient, 'findModels
   } as Pick<QVACRegistryClient, 'findModels'>
 }
 
-test('Core ML companions: Apple TDT uses one GGUF constant and a colocated encoder bundle', async (t) => {
-  const model = primary('parakeet-tdt-0.6b-v3.q8_0.gguf')
+test('Core ML companions: Apple Unified uses one GGUF constant and a colocated encoder bundle', async (t) => {
+  const model = primary('parakeet-unified-en-0.6b.q8_0.gguf')
   const set = await findCoremlCompanionSet(
-    client(bundle('parakeet-tdt-0.6b-v3-encoder')),
+    client(bundle('parakeet-unified-en-0.6b-encoder')),
     model,
     'darwin'
   )
 
   t.ok(set)
   t.is(set!.files.length, 6)
-  t.is(set!.files[0]!.targetName, 'parakeet-tdt-0.6b-v3.q8_0.gguf')
-  t.is(set!.files[5]!.targetName, 'parakeet-tdt-0.6b-v3-encoder.mlmodelc/weights/weight.bin')
+  t.is(set!.files[0]!.targetName, 'parakeet-unified-en-0.6b.q8_0.gguf')
+  t.is(set!.files[5]!.targetName, 'parakeet-unified-en-0.6b-encoder.mlmodelc/weights/weight.bin')
   t.is(
     set!.files[5]!.registryPath,
-    `${ROOT}parakeet-tdt-0.6b-v3-encoder.mlmodelc/weights/weight.bin`
+    `${ROOT}parakeet-unified-en-0.6b-encoder.mlmodelc/weights/weight.bin`
   )
 })
 
@@ -116,21 +116,21 @@ test('Core ML companions: Sortformer stages both batch and AOSC bundles', async 
 })
 
 test('Core ML companions: incomplete bundles and non-Apple platforms keep GGUF-only loading', async (t) => {
-  const model = primary('parakeet-tdt-0.6b-v3.q8_0.gguf')
-  const incomplete = bundle('parakeet-tdt-0.6b-v3-encoder').slice(0, 4)
+  const model = primary('parakeet-unified-en-0.6b.q8_0.gguf')
+  const incomplete = bundle('parakeet-unified-en-0.6b-encoder').slice(0, 4)
 
   t.absent(await findCoremlCompanionSet(client(incomplete), model, 'darwin'))
   t.absent(
-    await findCoremlCompanionSet(client(bundle('parakeet-tdt-0.6b-v3-encoder')), model, 'linux')
+    await findCoremlCompanionSet(client(bundle('parakeet-unified-en-0.6b-encoder')), model, 'linux')
   )
   t.absent(getCoremlSidecarSpec(model.registryPath, 's3', 'android'))
-  t.absent(getCoremlSidecarSpec('other/parakeet-tdt-0.6b-v3.q8_0.gguf', 's3', 'ios'))
+  t.absent(getCoremlSidecarSpec('other/parakeet-unified-en-0.6b.q8_0.gguf', 's3', 'ios'))
 })
 
 test('Core ML companions: a complete cached set is available without registry discovery', async (t) => {
-  const model = primary('parakeet-tdt-0.6b-v3.q8_0.gguf')
+  const model = primary('parakeet-unified-en-0.6b.q8_0.gguf')
   const set = await findCoremlCompanionSet(
-    client(bundle('parakeet-tdt-0.6b-v3-encoder')),
+    client(bundle('parakeet-unified-en-0.6b-encoder')),
     model,
     'darwin'
   )
