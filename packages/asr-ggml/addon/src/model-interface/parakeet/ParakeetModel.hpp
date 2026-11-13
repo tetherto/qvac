@@ -476,6 +476,9 @@ private:
   int64_t totalEncodedFrames_ = 0;
   int64_t jobEncoderCalls_ = 0;
   int64_t jobCoremlEncoderCalls_ = 0;
+  // Offline transcriptions only: diarization has no TDT decoder.
+  int64_t jobTranscriptionCalls_ = 0;
+  int64_t jobCoremlDecoderCalls_ = 0;
   // Sortformer streaming: 1 once the v2.1 AOSC speaker cache drove a
   // session, 0 for the v1 sliding window.
   int64_t aoscActive_ = 0;

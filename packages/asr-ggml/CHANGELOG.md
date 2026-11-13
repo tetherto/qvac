@@ -14,12 +14,32 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-13
+
 ### Added
 
 - Opt-in WebGPU source builds with backend identity reporting.
 - Whisper Core ML encoder activation with missing-sidecar fallback and native state reporting.
 - Optional MOSS token progress callbacks, typed runtime statistics and per-transcription encoder routing.
 - Optional batch diarization probability matrices, batch ASR token IDs and native Parakeet stage timings.
+- Core ML for the full TranscribePsy-250M-EU model on macOS and iOS. With its
+  English, adapter and gate encoder sidecars next to the GGUF, both language
+  routes and the gate run on Core ML in `run()` and `runStreaming()`; without
+  them the model runs on ggml as before
+  ([Fabric #432](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/432)).
+- `RuntimeStats.decoderUsedCoreml` after Parakeet jobs with offline
+  transcription: `1` when every transcription decoded on the Core ML TDT
+  decoder sidecar, `0` when any decoded on ggml.
+- `examples/parakeet-transcribepsy-transcribe.js` takes `--language` for the
+  full TranscribePsy EU model and reports whether the decoder ran on Core ML.
+
+### Changed
+
+- Update the shared `speech-cpp` native dependency to `2026-11-11`.
+- Full TranscribePsy EU streaming applies `parakeetConfig.language`. With
+  `"auto"`, a session buffers its first 20 s for the language gate before it
+  emits text, and a shorter one routes when the stream ends; `"en"` and
+  `"other"` emit without that delay.
 
 ## [0.12.1] - 2026-11-10
 
