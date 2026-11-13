@@ -100,6 +100,8 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("MODEL_FILE_NOT_FOUND_IN_DIR", reportedCode, message, payload)
     class ServerModelFitRefused(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("MODEL_FIT_REFUSED", reportedCode, message, payload)
+    class ServerModelLeased(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("MODEL_LEASED", reportedCode, message, payload)
     class ServerModelLoadFailed(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("MODEL_LOAD_FAILED", reportedCode, message, payload)
     class ServerModelNotFound(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -108,6 +110,8 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("MODEL_NOT_LOADED", reportedCode, message, payload)
     class ServerModelOperationNotSupported(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("MODEL_OPERATION_NOT_SUPPORTED", reportedCode, message, payload)
+    class ServerModelReconfigured(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("MODEL_RECONFIGURED", reportedCode, message, payload)
     class ServerModelTypeMismatch(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("MODEL_TYPE_MISMATCH", reportedCode, message, payload)
     class ServerModelUnloadFailed(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -118,6 +122,8 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("NO_RESPONSE_BODY", reportedCode, message, payload)
     class ServerOcrFailed(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("OCR_FAILED", reportedCode, message, payload)
+    class ServerOwnerOnly(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("OWNER_ONLY", reportedCode, message, payload)
     class ServerPartialDownloadOffline(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("PARTIAL_DOWNLOAD_OFFLINE", reportedCode, message, payload)
     class ServerPathTraversal(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -164,6 +170,8 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("RAG_SEARCH_FAILED", reportedCode, message, payload)
     class ServerRagUnknownOperation(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("RAG_UNKNOWN_OPERATION", reportedCode, message, payload)
+    class ServerRagWorkspaceBusy(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("RAG_WORKSPACE_BUSY", reportedCode, message, payload)
     class ServerRagWorkspaceCloseFailed(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("RAG_WORKSPACE_CLOSE_FAILED", reportedCode, message, payload)
     class ServerRagWorkspaceInUse(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -192,6 +200,10 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("RPC_UNKNOWN_REQUEST_TYPE", reportedCode, message, payload)
     class ServerSeedingNotSupported(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("SEEDING_NOT_SUPPORTED", reportedCode, message, payload)
+    class ServerSessionIdConflict(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("SESSION_ID_CONFLICT", reportedCode, message, payload)
+    class ServerSessionNotOpen(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("SESSION_NOT_OPEN", reportedCode, message, payload)
     class ServerSetConfigFailed(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("SET_CONFIG_FAILED", reportedCode, message, payload)
     class ServerTextToSpeechFailed(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -256,6 +268,8 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("INVALID_TOOLS_ARRAY", reportedCode, message, payload)
     class ClientInvalidToolSchema(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("INVALID_TOOL_SCHEMA", reportedCode, message, payload)
+    class ClientModelHandleInvalidated(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("MODEL_HANDLE_INVALIDATED", reportedCode, message, payload)
     class ClientModelSrcTypeMismatch(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("MODEL_SRC_TYPE_MISMATCH", reportedCode, message, payload)
     class ClientModelTypeRequired(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -280,6 +294,8 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("RPC_RESPONSE_STREAM_NOT_CREATED", reportedCode, message, payload)
     class ClientSdkNotFoundInNodeModules(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("SDK_NOT_FOUND_IN_NODE_MODULES", reportedCode, message, payload)
+    class ClientSessionInvalidated(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("SESSION_INVALIDATED", reportedCode, message, payload)
     class ClientStreamEndedWithoutResponse(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("STREAM_ENDED_WITHOUT_RESPONSE", reportedCode, message, payload)
     class ClientWorkerCrashed(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -346,15 +362,18 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "MODEL_FILE_NOT_FOUND" && (code == null || code == 52201) -> QvacKnownException.ServerModelFileNotFound(message, payload, code)
     name == "MODEL_FILE_NOT_FOUND_IN_DIR" && (code == null || code == 52202) -> QvacKnownException.ServerModelFileNotFoundInDir(message, payload, code)
     name == "MODEL_FIT_REFUSED" && (code == null || code == 52212) -> QvacKnownException.ServerModelFitRefused(message, payload, code)
+    name == "MODEL_LEASED" && (code == null || code == 53622) -> QvacKnownException.ServerModelLeased(message, payload, code)
     name == "MODEL_LOAD_FAILED" && (code == null || code == 52200) -> QvacKnownException.ServerModelLoadFailed(message, payload, code)
     name == "MODEL_NOT_FOUND" && code == 52002 -> QvacKnownException.ServerModelNotFound(message, payload, code)
     name == "MODEL_NOT_LOADED" && (code == null || code == 52003) -> QvacKnownException.ServerModelNotLoaded(message, payload, code)
     name == "MODEL_OPERATION_NOT_SUPPORTED" && (code == null || code == 52416) -> QvacKnownException.ServerModelOperationNotSupported(message, payload, code)
+    name == "MODEL_RECONFIGURED" && (code == null || code == 53624) -> QvacKnownException.ServerModelReconfigured(message, payload, code)
     name == "MODEL_TYPE_MISMATCH" && (code == null || code == 52411) -> QvacKnownException.ServerModelTypeMismatch(message, payload, code)
     name == "MODEL_UNLOAD_FAILED" && (code == null || code == 52400) -> QvacKnownException.ServerModelUnloadFailed(message, payload, code)
     name == "NO_BLOB_FOUND" && (code == null || code == 53006) -> QvacKnownException.ServerNoBlobFound(message, payload, code)
     name == "NO_RESPONSE_BODY" && (code == null || code == 53004) -> QvacKnownException.ServerNoResponseBody(message, payload, code)
     name == "OCR_FAILED" && code == 52412 -> QvacKnownException.ServerOcrFailed(message, payload, code)
+    name == "OWNER_ONLY" && (code == null || code == 53623) -> QvacKnownException.ServerOwnerOnly(message, payload, code)
     name == "PARTIAL_DOWNLOAD_OFFLINE" && (code == null || code == 53014) -> QvacKnownException.ServerPartialDownloadOffline(message, payload, code)
     name == "PATH_TRAVERSAL" && (code == null || code == 53900) -> QvacKnownException.ServerPathTraversal(message, payload, code)
     name == "PLUGIN_ALREADY_REGISTERED" && (code == null || code == 53854) -> QvacKnownException.ServerPluginAlreadyRegistered(message, payload, code)
@@ -378,6 +397,7 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "RAG_SAVE_FAILED" && (code == null || code == 52800) -> QvacKnownException.ServerRagSaveFailed(message, payload, code)
     name == "RAG_SEARCH_FAILED" && (code == null || code == 52801) -> QvacKnownException.ServerRagSearchFailed(message, payload, code)
     name == "RAG_UNKNOWN_OPERATION" && (code == null || code == 52803) -> QvacKnownException.ServerRagUnknownOperation(message, payload, code)
+    name == "RAG_WORKSPACE_BUSY" && (code == null || code == 52812) -> QvacKnownException.ServerRagWorkspaceBusy(message, payload, code)
     name == "RAG_WORKSPACE_CLOSE_FAILED" && (code == null || code == 52808) -> QvacKnownException.ServerRagWorkspaceCloseFailed(message, payload, code)
     name == "RAG_WORKSPACE_IN_USE" && (code == null || code == 52807) -> QvacKnownException.ServerRagWorkspaceInUse(message, payload, code)
     name == "RAG_WORKSPACE_MODEL_MISMATCH" && (code == null || code == 52805) -> QvacKnownException.ServerRagWorkspaceModelMismatch(message, payload, code)
@@ -392,6 +412,8 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "RPC_SERVER_OPERATION_FAILED" && (code == null || code == 52423) -> QvacKnownException.ServerRpcServerOperationFailed(message, payload, code)
     name == "RPC_UNKNOWN_REQUEST_TYPE" && (code == null || code == 53704) -> QvacKnownException.ServerRpcUnknownRequestType(message, payload, code)
     name == "SEEDING_NOT_SUPPORTED" && (code == null || code == 53008) -> QvacKnownException.ServerSeedingNotSupported(message, payload, code)
+    name == "SESSION_ID_CONFLICT" && (code == null || code == 53620) -> QvacKnownException.ServerSessionIdConflict(message, payload, code)
+    name == "SESSION_NOT_OPEN" && (code == null || code == 53621) -> QvacKnownException.ServerSessionNotOpen(message, payload, code)
     name == "SET_CONFIG_FAILED" && (code == null || code == 53350) -> QvacKnownException.ServerSetConfigFailed(message, payload, code)
     name == "TEXT_TO_SPEECH_FAILED" && (code == null || code == 52409) -> QvacKnownException.ServerTextToSpeechFailed(message, payload, code)
     name == "TEXT_TO_SPEECH_STREAM_FAILED" && (code == null || code == 52415) -> QvacKnownException.ServerTextToSpeechStreamFailed(message, payload, code)
@@ -424,6 +446,7 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "INVALID_RESPONSE_TYPE" && (code == null || code == 50001) -> QvacKnownException.ClientInvalidResponseType(message, payload, code)
     name == "INVALID_TOOLS_ARRAY" && (code == null || code == 50005) -> QvacKnownException.ClientInvalidToolsArray(message, payload, code)
     name == "INVALID_TOOL_SCHEMA" && (code == null || code == 50006) -> QvacKnownException.ClientInvalidToolSchema(message, payload, code)
+    name == "MODEL_HANDLE_INVALIDATED" && (code == null || code == 50209) -> QvacKnownException.ClientModelHandleInvalidated(message, payload, code)
     name == "MODEL_SRC_TYPE_MISMATCH" && (code == null || code == 50009) -> QvacKnownException.ClientModelSrcTypeMismatch(message, payload, code)
     name == "MODEL_TYPE_REQUIRED" && (code == null || code == 50008) -> QvacKnownException.ClientModelTypeRequired(message, payload, code)
     name == "MULTIPLE_SDK_INSTALLATIONS" && (code == null || code == 50607) -> QvacKnownException.ClientMultipleSdkInstallations(message, payload, code)
@@ -436,6 +459,7 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "RPC_REQUEST_NOT_SENT" && (code == null || code == 50201) -> QvacKnownException.ClientRpcRequestNotSent(message, payload, code)
     name == "RPC_RESPONSE_STREAM_NOT_CREATED" && (code == null || code == 50202) -> QvacKnownException.ClientRpcResponseStreamNotCreated(message, payload, code)
     name == "SDK_NOT_FOUND_IN_NODE_MODULES" && (code == null || code == 50600) -> QvacKnownException.ClientSdkNotFoundInNodeModules(message, payload, code)
+    name == "SESSION_INVALIDATED" && (code == null || code == 50208) -> QvacKnownException.ClientSessionInvalidated(message, payload, code)
     name == "STREAM_ENDED_WITHOUT_RESPONSE" && (code == null || code == 50003) -> QvacKnownException.ClientStreamEndedWithoutResponse(message, payload, code)
     name == "WORKER_CRASHED" && (code == null || code == 50205) -> QvacKnownException.ClientWorkerCrashed(message, payload, code)
     name == "WORKER_FILE_NOT_FOUND" && (code == null || code == 50601) -> QvacKnownException.ClientWorkerFileNotFound(message, payload, code)

@@ -20,7 +20,7 @@ import kotlinx.serialization.json.put
 
 const val QVAC_VLA_DEFAULT_IMAGE_SIZE = 512
 
-val QvacClient.vla: QvacVla get() = QvacVla(this)
+val QvacCaller.vla: QvacVla get() = QvacVla(this)
 
 data class QvacVlaHparams(
     val chunkSize: Int,
@@ -75,7 +75,7 @@ sealed interface QvacVlaEmbodiment {
     }
 }
 
-class QvacVla internal constructor(private val client: QvacClient) {
+class QvacVla internal constructor(private val client: QvacCaller) {
     suspend fun hparams(modelId: String): QvacVlaHparamsResult {
         val result = invoke(
             modelId = modelId,

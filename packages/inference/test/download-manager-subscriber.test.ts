@@ -7,6 +7,7 @@ import {
   type DownloadContext
 } from '@/handlers/load-model/download-manager'
 import { createDisposableScope } from '@/runtime/disposable-scope'
+import { OWNER_SESSION_ID } from '@/runtime/session-id'
 import { DownloadCancelledError, InferenceCancelledError } from '@/errors'
 
 // -----------------------------------------------------------------------------
@@ -72,11 +73,13 @@ function bindingFromAbortController(
   signal: AbortController['signal']
   scope: ReturnType<typeof createDisposableScope>
   requestId: string
+  sessionId: string
 } {
   return {
     signal: ac.signal,
     scope: createDisposableScope(),
-    requestId
+    requestId,
+    sessionId: OWNER_SESSION_ID
   }
 }
 
