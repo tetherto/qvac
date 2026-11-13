@@ -1,6 +1,7 @@
 import test from 'brittle'
 import configPlugins from '@expo/config-plugins'
 import withBareKit, {
+  addV8Entitlement,
   addFolderResource,
   addJitPack,
   addModuleDependency,
@@ -109,4 +110,13 @@ test('withBareKit: refuses an app that also uses expo-bare-kit', (t) => {
     () => withBareKit({ name: 'app', slug: 'app', plugins: [['expo-bare-kit', {}]] }),
     /cannot be used with expo-bare-kit/
   )
+})
+
+test('addV8Entitlement: adds the extended virtual addressing entitlement', (t) => {
+  const entitlements: Record<string, unknown> = { 'aps-environment': 'development' }
+  addV8Entitlement(entitlements)
+  t.alike(entitlements, {
+    'aps-environment': 'development',
+    'com.apple.developer.kernel.extended-virtual-addressing': true
+  })
 })

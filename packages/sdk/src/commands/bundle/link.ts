@@ -1,6 +1,8 @@
+import { execFile } from 'node:child_process'
 import { promises as fsp } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { promisify } from 'node:util'
 import stow from 'bare-stow'
 import semver from 'semver'
 import {
@@ -9,6 +11,7 @@ import {
   scratchFolderFor,
   type Staged
 } from '@/commands/bundle/scratch'
+import { DEFAULT_IOS_ENGINE, type IosEngine } from '@/commands/bundle/ios-engine'
 import { findInAncestorNodeModules } from '@/expo/plugins/find-in-ancestor-node-modules'
 import { AddonLinkFailedError, ReactNativeBareKitUnsupportedError } from '@/utils/errors-client'
 import type { Logger } from '@/logging/types'
@@ -16,6 +19,8 @@ import type { Logger } from '@/logging/types'
 const REACT_NATIVE_BARE_KIT = 'react-native-bare-kit'
 
 const { link, resources } = stow
+
+const execFileAsync = promisify(execFile)
 
 /** The folder of the app's assets in a linked module, which an iOS app copies into its bundle. */
 export const BARE_KIT_RESOURCES = resources
@@ -58,18 +63,43 @@ export const NATIVE_MODULES = {
     prefix: 'android-',
     dir: path.join('android', 'qvac-bare-kit'),
     language: 'kotlin',
-    languageOptions: { package: 'io.tether.qvac.sdk.addons' },
-    targetOptions: {}
+    languageOptions: { package: 'io.tether.qvac.sdk.addons' }
   },
   ios: {
     prefix: 'ios-',
     dir: path.join('ios', 'QvacBareKit'),
     language: 'swift',
-    languageOptions: {},
-    // V8 needs an entitlement that free Apple developer accounts cannot sign with.
-    targetOptions: { engine: 'javascriptcore' }
+    languageOptions: {}
   }
 } as const
+
+/** bare-kit-swift selects its engine with package traits, which need these Swift tools. */
+export const MIN_SWIFT_TOOLS = '6.1'
+
+/** The Swift version in the output of `swift --version`, or null. */
+export function parseSwiftVersion(output: string): string | null {
+  return /Swift version (\d+\.\d+(?:\.\d+)?)/.exec(output)?.[1] ?? null
+}
+
+/** Whether the Swift that printed `output` is known to be too old to build bare-kit-swift. */
+export function isSwiftTooOld(output: string): boolean {
+  const version = semver.coerce(parseSwiftVersion(output))
+  return version !== null && semver.lt(version, semver.coerce(MIN_SWIFT_TOOLS)!)
+}
+
+async function warnIfSwiftTooOld(logger: Logger) {
+  let output: string
+  try {
+    output = (await execFileAsync('xcrun', ['swift', '--version'])).stdout
+  } catch {
+    return
+  }
+  if (!isSwiftTooOld(output)) return
+  logger.warn(
+    `Bare Kit for iOS needs Swift ${MIN_SWIFT_TOOLS} or newer (Xcode 16.3), and this machine has ` +
+      `Swift ${parseSwiftVersion(output)}. The iOS build will fail to resolve QvacBareKit.`
+  )
+}
 
 export interface StageAddonsOptions {
   projectRoot: string
@@ -78,6 +108,8 @@ export interface StageAddonsOptions {
   hosts: string[]
   imports: stow.LinkOptions['imports']
   defer: string[]
+  /** Defaults to `DEFAULT_IOS_ENGINE`. */
+  iosEngine?: IosEngine | undefined
   logger: Logger
 }
 
@@ -91,6 +123,7 @@ export async function stageAddons(
   options: StageAddonsOptions
 ): Promise<{ written: string[]; staged: Staged[] }> {
   const { projectRoot, entryPath, hosts, imports, defer, logger } = options
+  const iosEngine = options.iosEngine ?? DEFAULT_IOS_ENGINE
 
   const staged: Staged[] = []
   const written: string[] = []
@@ -103,6 +136,8 @@ export async function stageAddons(
         logger.warn(`Linking iOS addons needs macOS; skipped ${platformHosts.join(', ')}.`)
         continue
       }
+
+      if (module.language === 'swift') await warnIfSwiftTooOld(logger)
 
       const out = path.join(projectRoot, module.dir)
       await removeStaleScratch(out)
@@ -117,7 +152,7 @@ export async function stageAddons(
           {
             language: module.language,
             languageOptions: module.languageOptions,
-            targetOptions: module.targetOptions,
+            ...(module.language === 'swift' && { targetOptions: { engine: iosEngine } }),
             hosts: platformHosts,
             ...(imports !== undefined && { imports }),
             defer
@@ -159,3 +194,6 @@ export function warnOverwritten(written: string[], out: string, logger: Logger) 
   const files = [...overwritten].map((file) => path.relative(out, file)).sort()
   logger.warn(`Several native addons ship ${files.join(', ')}; only the copy linked last is kept.`)
 }
+
+export { DEFAULT_IOS_ENGINE, IOS_ENGINES, IOS_V8_ENTITLEMENT } from '@/commands/bundle/ios-engine'
+export type { IosEngine } from '@/commands/bundle/ios-engine'

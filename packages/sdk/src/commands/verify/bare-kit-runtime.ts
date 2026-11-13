@@ -10,6 +10,7 @@ import {
   BARE_KIT_SWIFT_WITHOUT_BARE_KIT,
   BARE_KIT_WITHOUT_BARE
 } from '@/commands/verify/bare-kit-runtimes'
+import { DEFAULT_IOS_ENGINE, type IosEngine } from '@/commands/bundle/ios-engine'
 import { findInAncestorNodeModules } from '@/expo/plugins/find-in-ancestor-node-modules'
 import type { BareKitBinding, BareRuntimeResolution } from '@/commands/verify/abi'
 
@@ -18,6 +19,8 @@ export const REACT_NATIVE_BARE_KIT = 'react-native-bare-kit'
 export const NETWORK_TIMEOUT_MS = 5000
 
 const RAW_GITHUB_BASE = 'https://raw.githubusercontent.com/holepunchto'
+
+const GITHUB_BASE = 'https://github.com/holepunchto'
 
 /** The bare-stow file that pins the Bare Kit bindings phone apps link. */
 const BARE_KIT_TARGET = path.join('lib', 'target', 'bare-kit.js')
@@ -46,9 +49,13 @@ const BINDINGS: Record<BareKitPlatform, BindingInfo> = {
     name: 'bare-kit-swift',
     bareKits: BARE_KIT_SWIFT_BARE_KITS,
     withoutBareKit: BARE_KIT_SWIFT_WITHOUT_BARE_KIT,
-    pin: /['"]https:\/\/github\.com\/holepunchto\/bare-kit-swift(?:\.git)?['"]\s*,\s*from\s*:\s*['"]v?(\d+\.\d+\.\d+[^'"\s]*)['"]/
+    // One entry per engine; the rest of the entry names the traits of the engine.
+    pin: /['"]https:\/\/github\.com\/holepunchto\/bare-kit-swift(?:\.git)?['"]\s*,\s*from\s*:\s*['"]v?(\d+\.\d+\.\d+[^'"\s]*)['"]([^}]*)/g
   }
 }
+
+/** The trait bare-stow enables on bare-kit-swift for each engine other than its default. */
+const IOS_ENGINE_TRAITS: Partial<Record<IosEngine, string>> = { javascriptcore: 'JavaScriptCore' }
 
 export type FetchText = (url: string) => Promise<string>
 
@@ -61,6 +68,8 @@ export interface ResolveBareKitRuntimeOptions {
   /** Directory of the bare-stow package whose pins are read, instead of the project's. */
   bareStowDir?: string | undefined
   network?: boolean | undefined
+  /** The engine the iOS worker runs with, which decides the bare-kit-swift entry read. */
+  iosEngine?: IosEngine | undefined
   onProgress?: ProgressFn | undefined
   fetchText?: FetchText | undefined
 }
@@ -95,6 +104,7 @@ export function parseBareKitVersion(cmakeLists: string) {
   return match?.[1] ?? null
 }
 
+/** Whether Gradle resolves `pin` at the newest matching release, as for `0.2.+`. */
 export function isDynamicPin(pin: string) {
   return pin.endsWith('+')
 }
@@ -108,12 +118,41 @@ export function newestMatchingPin(pin: string, versions: string[]) {
   return matching.sort(semver.rcompare)[0] ?? null
 }
 
+/**
+ * Newest version Swift Package Manager resolves `from: minimum` at: below the
+ * next major, or the next minor before 1.0.0. Null when none matches.
+ */
+export function newestFromMinimum(minimum: string, versions: string[]) {
+  const matching = versions.filter(
+    (version) => semver.valid(version) !== null && semver.satisfies(version, `^${minimum}`)
+  )
+  return matching.sort(semver.rcompare)[0] ?? null
+}
+
 /** The binding version bare-stow pins for each platform, or null where none is found. */
-export function parseBareKitPins(source: string): Record<BareKitPlatform, string | null> {
+export function parseBareKitPins(
+  source: string,
+  iosEngine: IosEngine = DEFAULT_IOS_ENGINE
+): Record<BareKitPlatform, string | null> {
+  const swift = [...source.matchAll(BINDINGS.ios.pin)]
+  const trait = IOS_ENGINE_TRAITS[iosEngine]
+  const entry =
+    swift.find(([, , rest]) =>
+      trait === undefined ? !rest!.includes('traits') : rest!.includes(trait)
+    ) ?? swift[0]
   return {
     android: BINDINGS.android.pin.exec(source)?.[1] ?? null,
-    ios: BINDINGS.ios.pin.exec(source)?.[1] ?? null
+    ios: entry?.[1] ?? null
   }
+}
+
+/** Released versions of a Bare Kit binding, from the tags of its repository. */
+export async function fetchBindingReleasesFromGitHub(
+  binding: BareKitBinding,
+  fetch: FetchText = fetchText
+) {
+  const refs = await fetch(`${GITHUB_BASE}/${binding}/info/refs?service=git-upload-pack`)
+  return [...refs.matchAll(/refs\/tags\/v?(\d+\.\d+\.\d+)$/gm)].map((match) => match[1]!)
 }
 
 export async function fetchBindingBareKitFromGitHub(
@@ -145,21 +184,29 @@ function unresolved(reason: string, triedPaths: string[]): BareRuntimeResolution
   return { resolved: false, error: { reason, triedPaths } }
 }
 
+interface PinnedRelease {
+  /** The version bare-stow names: an exact one, a Gradle range or a Swift minimum. */
+  pin: string
+  version: string
+  /** Whether the app's build tool picks the newest release matching `pin`. */
+  floating: boolean
+  /** Whether `version` is the newest among the releases on GitHub, not only the built-in table. */
+  latestChecked: boolean
+}
+
 function resolved(
   platform: BareKitPlatform,
   bare: string,
-  version: string,
+  release: PinnedRelease,
   bareKit: string,
-  viaGitHub: boolean,
-  pin: string = version
+  viaGitHub: boolean
 ): BareRuntimeResolution {
   const binding = BINDINGS[platform].name
-  const pinned =
-    platform === 'ios'
-      ? `${version} or newer`
-      : pin === version
-        ? version
-        : `${pin} (newest known release ${version})`
+  const { pin, version } = release
+  const range = platform === 'ios' ? `${pin} or newer` : pin
+  const pinned = release.floating
+    ? `${range} (${release.latestChecked ? 'newest release' : 'newest known release'} ${version})`
+    : version
   return {
     resolved: true,
     runtime: {
@@ -176,11 +223,13 @@ function resolved(
 /**
  * Bare version a phone platform runs: the one in the bare-kit that the Bare
  * Kit binding pinned by the SDK's bare-stow is built from. Android pins
- * bare-kit-kotlin exactly or as a Gradle range like `0.2.+`, read as the
- * newest matching release in the table. iOS pins a minimum bare-kit-swift
- * version, read at that minimum.
+ * bare-kit-kotlin exactly or as a Gradle range like `0.2.+`, and iOS pins a
+ * minimum bare-kit-swift version. The app's build resolves a range or a
+ * minimum at the newest matching release, so this does too: among the
+ * releases on GitHub, or among those in the built-in table without the network.
  *
- * Checks the built-in tables, and only then GitHub.
+ * The Bare version of a release comes from the built-in tables, and only then
+ * from GitHub.
  */
 export async function resolveBareKitRuntime(
   options: ResolveBareKitRuntimeOptions
@@ -209,7 +258,7 @@ export async function resolveBareKitRuntime(
     ])
   }
 
-  const pin = parseBareKitPins(source)[platform]
+  const pin = parseBareKitPins(source, options.iosEngine)[platform]
   if (pin === null) {
     return unresolved(
       `${targetPath} pins no ${binding.name} version, so the ${platform} Bare version is unknown`,
@@ -217,19 +266,41 @@ export async function resolveBareKitRuntime(
     )
   }
 
-  const version = isDynamicPin(pin) ? newestMatchingPin(pin, Object.keys(binding.bareKits)) : pin
+  const floating = platform === 'ios' || isDynamicPin(pin)
+  const newest = (versions: string[]) =>
+    platform === 'ios' ? newestFromMinimum(pin, versions) : newestMatchingPin(pin, versions)
+
+  let version: string | null = pin
+  let latestChecked = false
+  if (floating) {
+    const known = Object.keys(binding.bareKits)
+    version = newest(known)
+    if (network) {
+      onProgress?.(`Checking the newest ${binding.name} release on github.com...`)
+      try {
+        version = newest([...known, ...(await fetchBindingReleasesFromGitHub(binding.name, fetch))])
+        latestChecked = true
+      } catch {
+        // The newest release in the built-in table stands in.
+      }
+    }
+    // A minimum names a release, which is the one linked when no newer one is known.
+    if (version === null && platform === 'ios') version = pin
+  }
   if (version === null) {
     return unresolved(
-      `${targetPath} pins ${binding.name} ${pin}, and no release matching it is in the built-in ` +
-        `runtime table, so the ${platform} Bare version is unknown`,
+      `${targetPath} pins ${binding.name} ${pin}, and no release matching it ` +
+        `${latestChecked ? 'was found' : 'is in the built-in runtime table'}, ` +
+        `so the ${platform} Bare version is unknown`,
       [targetPath]
     )
   }
+  const release: PinnedRelease = { pin, version, floating, latestChecked }
 
   const tableBareKit = binding.bareKits[version] ?? null
   const tableBare = tableBareKit === null ? null : (BARE_KIT_BARE_VERSIONS[tableBareKit] ?? null)
   if (tableBareKit !== null && tableBare !== null) {
-    return resolved(platform, tableBare, version, tableBareKit, false, pin)
+    return resolved(platform, tableBare, release, tableBareKit, false)
   }
 
   const checkedWithoutVersion =
@@ -267,7 +338,7 @@ export async function resolveBareKitRuntime(
         ? null
         : (BARE_KIT_BARE_VERSIONS[bareKit] ?? (await fetchBareVersionFromGitHub(bareKit, fetch)))
     if (bareKit !== null && bare !== null) {
-      return resolved(platform, bare, version, bareKit, true, pin)
+      return resolved(platform, bare, release, bareKit, true)
     }
     return unresolved(
       `Could not find the bare-kit or Bare version in the CMakeLists.txt of ${binding.name}@${version}`,
