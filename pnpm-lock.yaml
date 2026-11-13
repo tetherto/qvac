@@ -166,6 +166,9 @@ importers:
       prettier-config-holepunch:
         specifier: ^2.0.0
         version: 2.0.0(prettier@3.9.6)
+      react-native-bare-kit:
+        specifier: ^0.17.1
+        version: 0.17.1(bare-abort-controller@1.1.2)(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)
       tsc-alias:
         specifier: ^1.8.17
         version: 1.9.1

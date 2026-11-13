@@ -78,6 +78,7 @@
     "openai": "^6.48.0",
     "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
+    "react-native-bare-kit": "^0.17.1",
     "tsc-alias": "^1.8.17",
     "typescript": "^5.9.3"
   }
