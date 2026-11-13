@@ -357,6 +357,37 @@ export async function withDownloadBlocked<T>(
   }
 }
 
+/**
+ * Waits for this process's cancelled transfers writing `resourceKeys` to unwind.
+ * A cancel settles its callers at once, but the transfer keeps its download lock
+ * until its own cleanup (such as clearing stored blocks) is done; a cache deletion
+ * in that window would find the lock held. Resolves `false` if one is still
+ * stopping after `timeoutMs`.
+ */
+export async function waitForStoppingTransfers(
+  resourceKeys: string[],
+  timeoutMs = 30_000
+): Promise<boolean> {
+  const stopping = Array.from(activeTransfers.values())
+    .filter(
+      (transfer) =>
+        transfer.abortController.signal.aborted &&
+        resourceKeys.includes(getCacheResourceKey(transfer.downloadKey))
+    )
+    .flatMap((transfer) => (transfer.downloadPromise ? [transfer.downloadPromise] : []))
+  if (stopping.length === 0) return true
+
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timedOut = new Promise<false>((resolve) => {
+    timer = setTimeout(() => resolve(false), timeoutMs)
+  })
+  try {
+    return await Promise.race([Promise.allSettled(stopping).then(() => true), timedOut])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export function hasActiveTransfer(resourceKey: string): boolean {
   for (const [downloadKey, transfer] of activeTransfers) {
     if (getCacheResourceKey(downloadKey) !== resourceKey) continue

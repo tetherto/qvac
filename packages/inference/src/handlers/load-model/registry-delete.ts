@@ -26,6 +26,7 @@ import { findModelShards } from '@/handlers/load-model/registry'
 import {
   createRegistryCacheKey,
   hasActiveTransfer,
+  waitForStoppingTransfers,
   withDownloadBlocked
 } from '@/handlers/load-model/download-manager'
 import { DeleteCacheFailedError, InvalidDeleteCacheParamsError } from '@/errors/index'
@@ -94,6 +95,12 @@ async function lockOutOtherProcesses(
   modelSrc: string,
   cacheKeys: string[]
 ): Promise<AsyncDisposable> {
+  // A download this process just cancelled still holds its lock while it cleans up.
+  if (!(await waitForStoppingTransfers(cacheKeys))) {
+    throw new DeleteCacheFailedError(
+      `${modelSrc} is still stopping a cancelled download; try again once it finishes`
+    )
+  }
   const lock = await tryAcquireDownloadLocks(cacheKeys)
   if (!lock) {
     throw new DeleteCacheFailedError(
