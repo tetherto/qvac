@@ -25,9 +25,11 @@ import {
 } from '@/commands/bundle/addons'
 import {
   assertReactNativeBareKitSupported,
+  DEFAULT_IOS_ENGINE,
   stageAddons,
   type IosEngine
 } from '@/commands/bundle/link'
+import { commonJSStowOptions } from '@/commands/bundle/commonjs'
 import { assertNodeCanBundle } from '@/commands/bundle/node-support'
 import { readBundle } from '@/commands/bundle/read-bundle'
 import {
@@ -299,6 +301,8 @@ interface StowBundleOptions {
   hosts: string[]
   imports: ImportsMap
   deferModules: string[]
+  /** Convert the ES modules to CommonJS, for a worklet that JavaScriptCore runs. */
+  commonJS: boolean
 }
 
 /** Writes bare-stow's harness package for the target to `outputDir`, and returns the bundle's path. */
@@ -316,7 +320,8 @@ async function stowBundle(options: StowBundleOptions): Promise<string> {
     defer: deferModules,
     hosts,
     language,
-    languageOptions: options.languageOptions
+    languageOptions: options.languageOptions,
+    ...(options.commonJS && commonJSStowOptions())
   }
 
   let bundlePath: string | undefined
@@ -537,6 +542,13 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   await removeStaleScratch(outputDir)
   await removeStaleScratch(scanOutputDir)
 
+  // Bare Kit runs iOS worklets with JavaScriptCore, which has no ES modules. The
+  // phones share one bundle, so Android loads the converted modules as well.
+  const commonJS =
+    target === 'react-native' &&
+    (options.iosEngine ?? DEFAULT_IOS_ENGINE) === 'javascriptcore' &&
+    hosts.some((host) => host.startsWith('ios-'))
+
   const stowOptions = {
     projectRoot,
     entryPath,
@@ -546,7 +558,8 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     outputDir,
     hosts,
     imports,
-    deferModules
+    deferModules,
+    commonJS
   }
 
   const addonsMissingPlatformPackages = () =>
@@ -657,6 +670,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
         imports,
         defer: deferModules,
         iosEngine: options.iosEngine,
+        commonJS,
         logger
       })
       staged.push(...nativeModules.staged)

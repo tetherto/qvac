@@ -70,6 +70,10 @@ async function linkAddons(options: StageAddonsOptions) {
   return written
 }
 
+async function discardAll({ staged }: { staged: Staged[] }) {
+  for (const { next } of staged) await discardScratch(next)
+}
+
 /** A project whose worker entry loads no native addon. */
 function createWorkerProject(t: { teardown: (fn: () => void) => void }) {
   const projectRoot = createProject(t)
@@ -120,6 +124,23 @@ test('stageAddons: writes the Android module and replaces what it had', async (t
   const manifest = readFileSync(gradle, 'utf8')
   t.ok(manifest.includes('io.tether.qvac.sdk.addons'))
   t.ok(manifest.includes('bare-kit-kotlin'))
+})
+
+test('stageAddons: links the graph converted to CommonJS, as the bundle holds it', async (t) => {
+  const { projectRoot, entryPath } = createWorkerProject(t)
+  const options = { projectRoot, hosts: ['android-arm64'], imports: {}, defer: [], logger }
+
+  const linked = await linkAddons({ ...options, entryPath, commonJS: true })
+  t.ok(linked.includes(join(projectRoot, 'android', 'qvac-bare-kit', 'build.gradle')))
+
+  // CommonJS can't hold a top-level await, so only a converted graph rejects it.
+  const awaiting = join(projectRoot, 'qvac', 'awaiting.entry.mjs')
+  writeFile(awaiting, 'await null\nexport default function start() {}\n')
+  await t.execution(stageAddons({ ...options, entryPath: awaiting }).then(discardAll))
+  await t.exception(
+    stageAddons({ ...options, entryPath: awaiting, commonJS: true }),
+    /to CommonJS for JavaScriptCore: Top-level await/
+  )
 })
 
 test('stageAddons: removes scratch folders an interrupted link left beside the module', async (t) => {
