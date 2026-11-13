@@ -1,6 +1,7 @@
 // measureFootprint reads GGUF metadata only. These tests load each model for
 // real, run one inference and require the measured sizes to equal the buffers
-// the loaded model holds, byte for byte.
+// the loaded model holds, byte for byte. For BridgeDepth that includes the
+// host bytes the input size's slot keeps after the run.
 //
 // Models: MobileNet from weights/ or QVAC_CLASSIFICATION_MODEL_PATH, MegaLoc
 // from QVAC_MEGALOC_F16_MODEL_PATH and QVAC_MEGALOC_MIXED_MODEL_PATH,
@@ -148,10 +149,23 @@ void checkMegaLoc(const char* env) {
   expectEqual(env, measured, model.allocatedBuffers());
 }
 
+bd::Config bridgeDepthConfig(const std::string& path) {
+  return {path, "", backendName(), TEST_THREADS};
+}
+
+// What measure() says one size's slot holds, through the same downsampling
+// and padding a real call takes.
+uint64_t
+measuredSlotBytes(const std::string& path, uint32_t width, uint32_t height) {
+  return bd::BridgeDepthModel::measure(bridgeDepthConfig(path), width, height)
+      .sizeSlotBytes;
+}
+
 void checkBridgeDepth(uint32_t width, uint32_t height) {
   const std::string path = envOr("QVAC_BRIDGEDEPTH_MODEL_PATH", "");
   if (path.empty())
     GTEST_SKIP() << "QVAC_BRIDGEDEPTH_MODEL_PATH is not set";
+  const uint64_t slotBytes = measuredSlotBytes(path, width, height);
   const auto measured = qcc::measureFootprint(
       path,
       backendName(),
@@ -170,10 +184,20 @@ void checkBridgeDepth(uint32_t width, uint32_t height) {
               syntheticRgb(width, height, rightViewShift)})));
   EXPECT_EQ(output.width, width);
   EXPECT_EQ(output.height, height);
-  expectEqual(
-      "bridgedepth " + std::to_string(width) + "x" + std::to_string(height),
-      measured,
-      model.allocatedBuffers());
+  const std::string label =
+      "bridgedepth " + std::to_string(width) + "x" + std::to_string(height);
+  expectEqual(label, measured, model.allocatedBuffers());
+  // One size ran, so the model holds exactly the one slot measure() counts.
+  const uint64_t heldBytes = model.heldSizeSlotBytes();
+  std::printf(
+      "SIZESLOT  %-22s %-5s %llu/%llu (measured/real)\n",
+      label.c_str(),
+      measured.deviceName.c_str(),
+      static_cast<unsigned long long>(slotBytes),
+      static_cast<unsigned long long>(heldBytes));
+  EXPECT_GT(slotBytes, 0U) << label;
+  EXPECT_EQ(slotBytes, heldBytes) << label;
+  EXPECT_LE(slotBytes, measured.hostStagingBytes) << label;
 }
 
 } // namespace
@@ -226,6 +250,44 @@ TEST(ModelFootprint, BridgeDepthMaxSideEqualsLoadedBuffers) {
 // input can outweigh the graph run on the host.
 TEST(ModelFootprint, BridgeDepthMaxSquareEqualsLoadedBuffers) {
   checkBridgeDepth(bd::MAX_SIDE, bd::MAX_SIDE);
+}
+
+// A caller that cycles through sizes holds one slot per size, up to
+// SIZE_SLOT_LIMIT, the least recently used size giving its slot up first.
+// Each size here pads to a different grid, so each takes a slot.
+TEST(ModelFootprint, BridgeDepthHoldsOneSlotPerSizeUpToTheLimit) {
+  const std::string path = envOr("QVAC_BRIDGEDEPTH_MODEL_PATH", "");
+  if (path.empty())
+    GTEST_SKIP() << "QVAC_BRIDGEDEPTH_MODEL_PATH is not set";
+  constexpr uint32_t side = 2 * bd::MIN_SIDE;
+  constexpr size_t sizeCount = bd::SIZE_SLOT_LIMIT + 1;
+  std::vector<uint32_t> widths;
+  std::vector<uint64_t> slotBytes;
+  for (size_t i = 0; i < sizeCount; ++i) {
+    widths.push_back(side + static_cast<uint32_t>(i * bd::PAD_DIVISOR));
+    slotBytes.push_back(measuredSlotBytes(path, widths.back(), side));
+  }
+  bd::BridgeDepthModel model(bridgeDepthConfig(path));
+  model.load();
+  uint64_t expected = 0;
+  for (size_t i = 0; i < sizeCount; ++i) {
+    const uint32_t width = widths[i];
+    model.process(
+        std::any(
+            bd::StereoInput{
+                syntheticRgb(width, side, 0), syntheticRgb(width, side, 1)}));
+    expected += slotBytes[i];
+    if (i >= bd::SIZE_SLOT_LIMIT)
+      expected -= slotBytes[i - bd::SIZE_SLOT_LIMIT];
+    EXPECT_EQ(model.heldSizeSlotBytes(), expected) << "width " << width;
+  }
+  // A size that keeps its slot does not take another one.
+  model.process(
+      std::any(
+          bd::StereoInput{
+              syntheticRgb(widths.back(), side, 0),
+              syntheticRgb(widths.back(), side, 1)}));
+  EXPECT_EQ(model.heldSizeSlotBytes(), expected);
 }
 
 TEST(ModelFootprint, BridgeDepthAboveTheBoxIsSizedAtTheModelSize) {

@@ -9,6 +9,21 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- BridgeDepth runs faster and takes less GPU memory on GPU backends. The ViT
+  attention runs fused, linear weights are held as F16 on the device, the
+  convs run as F16 direct convs on CUDA and Vulkan and through an F16 im2col
+  on other GPUs, and the graph copies less between layouts. Each padded input
+  size keeps its graph memory and host inputs between calls, up to 4 sizes,
+  so a CUDA graph is captured once per size and replayed. The CPU output does
+  not change. GPU output moves within the tests' 0.2 px gate.
+- `assessFit` counts the host memory a BridgeDepth input size keeps between
+  calls, about 29 MB at 1280x720. The host row grows by the graph memory,
+  about 15 MB, since the masks and indices were already counted for the run.
+  The verdict counts the slot of one size; a caller that cycles through sizes
+  holds one per size, up to 4.
+
 ## [0.39.0] - 2026-11-12
 
 ### Changed

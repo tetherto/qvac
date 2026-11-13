@@ -5,6 +5,7 @@
 // graph only depends on ggml; backend selection and input decoding live in
 // BridgeDepthModel.
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <stdexcept>
@@ -21,6 +22,11 @@ namespace classification_ggml::bridgedepth {
 inline constexpr int PAD_DIVISOR = 16;
 // Smallest side accepted; the mono patch grid is H/16 x W/16 after padding.
 inline constexpr int MIN_SIDE = 32;
+// Padded input sizes that keep a slot between infer() calls, least recently
+// used out. Four covers a few cameras of different sizes. A slot holds the
+// memory the size's graph is built in and the size's host inputs (masks and
+// indices), see BridgeDepthGraph::heldSizeSlotBytes.
+inline constexpr size_t SIZE_SLOT_LIMIT = 4;
 
 // InputPadder(mode="nmrf"): replicate padding on the top and the right only.
 struct Padding {
@@ -80,11 +86,18 @@ public:
 
   // Mode::Measure only. The buffers the load plus one infer() of an h x w
   // pair on a fresh graph would allocate, sized from the same graph infer()
-  // builds, with `caller` added to the host phases it falls in.
+  // builds, with `caller` added to the host phases it falls in. The host
+  // bytes include the slot this size keeps after the run (sizeSlotBytes),
+  // one slot only: a caller that cycles through k padded sizes holds
+  // min(k, SIZE_SLOT_LIMIT) slots, one per size.
   MeasuredBuffers measure(int h, int w, const CallerHostBytes& caller = {});
   // The buffers held after the last infer(). The scheduler buffers only grow,
   // so after several sizes this is the largest need of each buffer.
   [[nodiscard]] BufferFootprint allocatedBuffers() const;
+  // Host bytes the live size slots hold: per slot, the graph memory reserved
+  // whole and the size's host inputs. measure() reports one slot as
+  // sizeSlotBytes.
+  [[nodiscard]] uint64_t heldSizeSlotBytes() const;
 
   [[nodiscard]] size_t weightBytes() const;
   // Compute nodes the scheduler put on the CPU in the last run while a non-CPU
