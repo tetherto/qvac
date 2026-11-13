@@ -2318,7 +2318,12 @@ test("mobile scheduler preserves automatic sharding and supports explicit multi-
   assert.match(action, /APP_UPLOAD_ID="\$\{APP_ARN##\*\/\}"/);
   assert.match(
     action,
-    /RUN_NAME_BASE="\$\{RUN_NAME_BASE\}-\$\{\{ github\.run_id \}\}\.\$\{\{ github\.run_attempt \}\}-\$\{APP_UPLOAD_ID\}"/,
+    /RUN_NAME_BASE="\$\{RUN_NAME_BASE\}-\$\{GH_RUN_ID\}\.\$\{GH_RUN_ATTEMPT\}-\$\{APP_UPLOAD_ID\}"/,
+  );
+  assert.match(action, /GH_RUN_ID: \$\{\{ github\.run_id \}\}/);
+  assert.match(
+    action,
+    /GH_RUN_ATTEMPT: \$\{\{ github\.run_attempt \}\}/,
   );
   // Automatic sharding is preserved, but the manual on-demand path
   // (manual-devices) is deliberately excluded from the sharded branch so a
@@ -2334,11 +2339,11 @@ test("mobile scheduler preserves automatic sharding and supports explicit multi-
   );
   assert.match(
     action,
-    /RUN_ARNS_JSON=\$\(echo "\$RUN_ARNS_JSON" \| jq --arg a "\$RUN_ARN_1" --arg b "\$RUN_ARN_2" '\. \+ \[\$a,\$b\]'\)/,
+    /schedule_run filter "\$SAMSUNG_FILTER" "\$\{RUN_NAME_PREFIX\}-Samsung" "\$SPEC_ARN"\n\s+schedule_run filter "\$PIXEL_FILTER" "\$\{RUN_NAME_PREFIX\}-Pixel" "\$SPEC_ARN"/,
   );
   assert.match(action, /S25 Ultra/);
   assert.match(action, /Pixel 9/);
-  assert.match(action, /schedule_run_with_pool "\$IOS_POOL_ARN"/);
+  assert.match(action, /schedule_run pool "\$IOS_POOL_ARN"/);
   assert.match(action, /iPhone 17/);
   assert.doesNotMatch(llmWorkflow, /multi-spec-dual-flagship:/);
 

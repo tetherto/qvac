@@ -42,6 +42,11 @@ description: |
        device(s). Never used by workflow_call callers (their behaviour is
        unchanged); a manual run with no device-models fails fast.
 
+  Billing: every run is scheduled UNMETERED first. A run that has not reached
+  PREPARING/RUNNING within unmetered-check-seconds (all unmetered slots busy)
+  is stopped and rescheduled METERED on the same target, so the number of runs
+  at once is unchanged.
+
 inputs:
   platform:
     description: "Android | iOS"
@@ -97,6 +102,18 @@ inputs:
     description: "Per-run Device Farm jobTimeoutMinutes. Default 120 gives headroom for slower devices (Pixel 9 Pro VLM ~56 min). The crash monitor kills hung tests early so the extra ceiling doesn't waste time on crashes."
     required: false
     default: "120"
+  billing-method:
+    description: "UNMETERED (default): use a free unmetered slot, and reschedule a run as METERED when no slot is free. METERED: pay-as-you-go only."
+    required: false
+    default: "UNMETERED"
+  unmetered-check-seconds:
+    description: "Seconds an UNMETERED run has to reach PREPARING/RUNNING before it is moved to METERED."
+    required: false
+    default: "180"
+  poll-interval-seconds:
+    description: "Seconds between status checks during the unmetered slot check."
+    required: false
+    default: "10"
 
 outputs:
   run-arns:
@@ -105,6 +122,9 @@ outputs:
   run-count:
     description: "Number of scheduled runs"
     value: ${{ steps.schedule.outputs.run_count }}
+  metered-count:
+    description: "Number of runs billed METERED (all of them when billing-method is METERED)"
+    value: ${{ steps.schedule.outputs.metered_count }}
 
 runs:
   using: composite
@@ -127,25 +147,41 @@ runs:
         DEVICE_MANUFACTURER: ${{ inputs.device-manufacturer }}
         DEVICE_MODELS: ${{ inputs.device-models }}
         JOB_TIMEOUT_MINUTES: ${{ inputs.job-timeout-minutes }}
+        BILLING_METHOD_INPUT: ${{ inputs.billing-method }}
+        UNMETERED_CHECK_SECONDS: ${{ inputs.unmetered-check-seconds }}
+        POLL_INTERVAL_SECONDS: ${{ inputs.poll-interval-seconds }}
+        EVENT_NAME: ${{ github.event_name }}
+        RUN_NUMBER: ${{ github.run_number }}
+        PR_OR_RUN_NUMBER: ${{ github.event.pull_request.number || github.run_number }}
+        GH_RUN_ID: ${{ github.run_id }}
+        GH_RUN_ATTEMPT: ${{ github.run_attempt }}
+        AWS_RETRY_MODE: standard
+        AWS_MAX_ATTEMPTS: "6"
       run: |
         set -euo pipefail
+
+        BILLING_METHOD=$(printf '%s' "${BILLING_METHOD_INPUT:-UNMETERED}" | tr '[:lower:]' '[:upper:]')
+        case "$BILLING_METHOD" in
+          UNMETERED|METERED) ;;
+          *) echo "ERROR: billing-method must be UNMETERED or METERED (got '$BILLING_METHOD_INPUT')" >&2; exit 1 ;;
+        esac
 
         # The run-id/attempt suffix makes the name UNIQUE to this workflow attempt.
         # That is what lets the rollback below safely stop runs by name: a re-run of
         # the same PR gets a different base, so the sweep can never touch another
         # attempt's runs. Names are display-only elsewhere (monitor / log collection
         # read run.name purely for labels), so the longer form is safe.
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          RUN_NAME_BASE="Manual-${{ github.run_number }}-${PLATFORM}"
+        if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+          RUN_NAME_BASE="Manual-${RUN_NUMBER}-${PLATFORM}"
         else
-          RUN_NAME_BASE="PR-${{ github.event.pull_request.number || github.run_number }}-${PLATFORM}"
+          RUN_NAME_BASE="PR-${PR_OR_RUN_NUMBER}-${PLATFORM}"
         fi
         APP_UPLOAD_ID="${APP_ARN##*/}"
         if [ -z "$APP_UPLOAD_ID" ]; then
           echo "ERROR: app-upload-arn must end with an upload identifier" >&2
           exit 1
         fi
-        RUN_NAME_BASE="${RUN_NAME_BASE}-${{ github.run_id }}.${{ github.run_attempt }}-${APP_UPLOAD_ID}"
+        RUN_NAME_BASE="${RUN_NAME_BASE}-${GH_RUN_ID}.${GH_RUN_ATTEMPT}-${APP_UPLOAD_ID}"
 
         # Partial-scheduling rollback.
         #
@@ -218,32 +254,95 @@ runs:
           CREATED_RUN_ARNS="$CREATED_RUN_ARNS $1"
         }
 
-        schedule_run_with_pool() {
-          local pool_arn="$1"
-          local name="$2"
-          local spec_arn="$3"
+        # Per-run details in schedule order, so a run can be rescheduled METERED in place.
+        RUN_KINDS=()
+        RUN_TARGETS=()
+        RUN_NAMES=()
+        RUN_SPECS=()
+        RUN_LIST=()
+        RUN_BILLING=()
+
+        aws_schedule_run() {
+          local kind="$1" target="$2" name="$3" spec_arn="$4" billing="$5"
+          local selection
+          if [ "$kind" = "pool" ]; then
+            selection=(--device-pool-arn "$target")
+          else
+            selection=(--device-selection-configuration "$target")
+          fi
           aws devicefarm schedule-run \
             --project-arn "$PROJECT_ARN" \
-            --device-pool-arn "$pool_arn" \
+            "${selection[@]}" \
             --app-arn "$APP_ARN" \
             --name "$name" \
             --test "type=APPIUM_NODE,testPackageArn=$TEST_PACKAGE_ARN,testSpecArn=$spec_arn" \
             --execution-configuration jobTimeoutMinutes="$JOB_TIMEOUT_MINUTES" \
+            --configuration "billingMethod=$billing" \
             --query 'run.arn' --output text
         }
 
-        schedule_run_with_filter() {
-          local name="$1"
-          local filter="$2"
-          local spec_arn="$3"
-          aws devicefarm schedule-run \
-            --project-arn "$PROJECT_ARN" \
-            --device-selection-configuration "$filter" \
-            --app-arn "$APP_ARN" \
-            --name "$name" \
-            --test "type=APPIUM_NODE,testPackageArn=$TEST_PACKAGE_ARN,testSpecArn=$spec_arn" \
-            --execution-configuration jobTimeoutMinutes="$JOB_TIMEOUT_MINUTES" \
-            --query 'run.arn' --output text
+        # schedule_run <pool|filter> <pool ARN or filter JSON> <name> <spec ARN>
+        schedule_run() {
+          local arn
+          arn=$(aws_schedule_run "$1" "$2" "$3" "$4" "$BILLING_METHOD")
+          record_created_run "$arn"
+          RUN_KINDS+=("$1")
+          RUN_TARGETS+=("$2")
+          RUN_NAMES+=("$3")
+          RUN_SPECS+=("$4")
+          RUN_LIST+=("$arn")
+          RUN_BILLING+=("$BILLING_METHOD")
+          echo "  $3 -> $arn ($BILLING_METHOD)"
+        }
+
+        switch_to_metered() {
+          local i="$1" arn
+          if ! aws devicefarm stop-run --arn "${RUN_LIST[$i]}" >/dev/null; then
+            echo "::warning::Could not stop queued UNMETERED run ${RUN_NAMES[$i]}; keeping it."
+            return 0
+          fi
+          arn=$(aws_schedule_run "${RUN_KINDS[$i]}" "${RUN_TARGETS[$i]}" "${RUN_NAMES[$i]}" "${RUN_SPECS[$i]}" METERED)
+          record_created_run "$arn"
+          RUN_LIST[$i]="$arn"
+          RUN_BILLING[$i]="METERED"
+          echo "  ${RUN_NAMES[$i]}: no free unmetered slot, rescheduled METERED -> $arn"
+        }
+
+        # A queued UNMETERED run reports SCHEDULING, the same as one that got a slot, so only
+        # PREPARING/RUNNING prove a slot. Still waiting at the deadline means no free slot.
+        move_queued_runs_to_metered() {
+          local deadline=$((SECONDS + UNMETERED_CHECK_SECONDS))
+          local pending=() still=() last=() i status
+          for i in "${!RUN_LIST[@]}"; do pending+=("$i"); last[$i]="UNKNOWN"; done
+          echo "Checking unmetered slots for ${#pending[@]} run(s)..."
+          while [ "${#pending[@]}" -gt 0 ]; do
+            still=()
+            for i in "${pending[@]}"; do
+              status=$(aws devicefarm get-run --arn "${RUN_LIST[$i]}" --query 'run.status' --output text 2>/dev/null) || status="UNKNOWN"
+              case "$status" in
+                PREPARING|RUNNING|COMPLETED|STOPPING) echo "  ${RUN_NAMES[$i]}: unmetered slot taken ($status)" ;;
+                PENDING_CONCURRENCY) switch_to_metered "$i" ;;
+                *)
+                  still+=("$i")
+                  if [ "$status" != "UNKNOWN" ]; then last[$i]="$status"; fi
+                  ;;
+              esac
+            done
+            pending=(${still[@]+"${still[@]}"})
+            [ "${#pending[@]}" -eq 0 ] && break
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              for i in "${pending[@]}"; do
+                if [ "${last[$i]}" = "UNKNOWN" ]; then
+                  echo "::warning::Could not read the status of ${RUN_NAMES[$i]}; keeping it UNMETERED."
+                else
+                  echo "  ${RUN_NAMES[$i]}: still ${last[$i]} after ${UNMETERED_CHECK_SECONDS}s"
+                  switch_to_metered "$i"
+                fi
+              done
+              break
+            fi
+            sleep "$POLL_INTERVAL_SECONDS"
+          done
         }
 
         if ! echo "$TEST_SPECS_JSON" | jq -e '
@@ -260,8 +359,6 @@ runs:
         SPEC_COUNT=$(echo "$TEST_SPECS_JSON" | jq 'length')
         echo "Test spec count: $SPEC_COUNT"
         echo "Scheduling mode hint: ${SCHEDULING_MODE:-automatic}"
-
-        RUN_ARNS_JSON='[]'
 
         # From here on a run may exist remotely, so the rollback (including the
         # by-name sweep) becomes relevant. Before this point there is nothing to
@@ -286,11 +383,7 @@ runs:
           for IDX in $(seq 0 $((SPEC_COUNT - 1))); do
             GROUP_NAME=$(echo "$TEST_SPECS_JSON" | jq -r ".[$IDX].name")
             SPEC_ARN=$(echo "$TEST_SPECS_JSON" | jq -r ".[$IDX].arn")
-            RUN_NAME="${RUN_NAME_BASE}-${GROUP_NAME}"
-            RUN_ARN=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME" "$SPEC_ARN")
-            record_created_run "$RUN_ARN"
-            echo "  $RUN_NAME -> $RUN_ARN"
-            RUN_ARNS_JSON=$(echo "$RUN_ARNS_JSON" | jq --arg arn "$RUN_ARN" '. + [$arn]')
+            schedule_run pool "$POOL_ARN" "${RUN_NAME_BASE}-${GROUP_NAME}" "$SPEC_ARN"
           done
         elif [ "$SCHEDULING_MODE" = "single-pool" ]; then
           # Embed-style: single run against a single pool (no Samsung+Pixel split).
@@ -304,10 +397,7 @@ runs:
             exit 1
           fi
           SPEC_ARN=$(echo "$TEST_SPECS_JSON" | jq -r '.[0].arn')
-          RUN_ARN=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME_BASE" "$SPEC_ARN")
-          record_created_run "$RUN_ARN"
-          echo "  $RUN_NAME_BASE -> $RUN_ARN"
-          RUN_ARNS_JSON=$(echo "$RUN_ARNS_JSON" | jq --arg arn "$RUN_ARN" '. + [$arn]')
+          schedule_run pool "$POOL_ARN" "$RUN_NAME_BASE" "$SPEC_ARN"
         elif [ "$SCHEDULING_MODE" = "single-device" ]; then
           # One run on one device picked by the caller's model filter.
           if [ -z "$DEVICE_MODEL" ]; then
@@ -334,10 +424,7 @@ runs:
             maxDevices: 1
           }')
           SAFE_MODEL=$(printf '%s' "$DEVICE_MODEL" | tr -c '[:alnum:]' '_')
-          RUN_ARN=$(schedule_run_with_filter "${RUN_NAME_BASE}-${SAFE_MODEL}" "$FILTER" "$SPEC_ARN")
-          record_created_run "$RUN_ARN"
-          echo "  ${RUN_NAME_BASE}-${SAFE_MODEL} -> $RUN_ARN"
-          RUN_ARNS_JSON=$(echo "$RUN_ARNS_JSON" | jq --arg arn "$RUN_ARN" '. + [$arn]')
+          schedule_run filter "$FILTER" "${RUN_NAME_BASE}-${SAFE_MODEL}" "$SPEC_ARN"
         elif [ "$SCHEDULING_MODE" = "manual-devices" ]; then
           # Manual on-demand fan-out: one run per (spec × model),
           # each pinned to a single device. Never falls back to the pool.
@@ -392,11 +479,7 @@ runs:
                 maxDevices: 1
               }')
               SAFE_MODEL=$(printf '%s' "$MODEL" | tr -c '[:alnum:]' '_')
-              RUN_NAME="${RUN_NAME_BASE}-${GROUP_NAME}-${SAFE_MODEL}"
-              RUN_ARN=$(schedule_run_with_filter "$RUN_NAME" "$FILTER" "$SPEC_ARN")
-              record_created_run "$RUN_ARN"
-              echo "  $RUN_NAME -> $RUN_ARN"
-              RUN_ARNS_JSON=$(echo "$RUN_ARNS_JSON" | jq --arg arn "$RUN_ARN" '. + [$arn]')
+              schedule_run filter "$FILTER" "${RUN_NAME_BASE}-${GROUP_NAME}-${SAFE_MODEL}" "$SPEC_ARN"
             done
           done
         else
@@ -420,34 +503,45 @@ runs:
             fi
 
             if [ "$PLATFORM" = "Android" ]; then
-              RUN_NAME_1="${RUN_NAME_PREFIX}-Samsung"
-              RUN_NAME_2="${RUN_NAME_PREFIX}-Pixel"
-              RUN_ARN_1=$(schedule_run_with_filter "$RUN_NAME_1" "$SAMSUNG_FILTER" "$SPEC_ARN")
-              record_created_run "$RUN_ARN_1"
-              RUN_ARN_2=$(schedule_run_with_filter "$RUN_NAME_2" "$PIXEL_FILTER" "$SPEC_ARN")
-              record_created_run "$RUN_ARN_2"
+              schedule_run filter "$SAMSUNG_FILTER" "${RUN_NAME_PREFIX}-Samsung" "$SPEC_ARN"
+              schedule_run filter "$PIXEL_FILTER" "${RUN_NAME_PREFIX}-Pixel" "$SPEC_ARN"
             else
-              RUN_NAME_1="$RUN_NAME_PREFIX"
-              RUN_NAME_2="${RUN_NAME_PREFIX}-iPhone17"
-              RUN_ARN_1=$(schedule_run_with_pool "$IOS_POOL_ARN" "$RUN_NAME_1" "$SPEC_ARN")
-              record_created_run "$RUN_ARN_1"
-              RUN_ARN_2=$(schedule_run_with_filter "$RUN_NAME_2" "$IPHONE17_FILTER" "$SPEC_ARN")
-              record_created_run "$RUN_ARN_2"
+              schedule_run pool "$IOS_POOL_ARN" "$RUN_NAME_PREFIX" "$SPEC_ARN"
+              schedule_run filter "$IPHONE17_FILTER" "${RUN_NAME_PREFIX}-iPhone17" "$SPEC_ARN"
             fi
-
-            echo "  $RUN_NAME_1 -> $RUN_ARN_1"
-            echo "  $RUN_NAME_2 -> $RUN_ARN_2"
-            RUN_ARNS_JSON=$(echo "$RUN_ARNS_JSON" | jq --arg a "$RUN_ARN_1" --arg b "$RUN_ARN_2" '. + [$a,$b]')
           done
         fi
 
-        RUN_COUNT=$(echo "$RUN_ARNS_JSON" | jq 'length')
-        echo ""
-        echo "Scheduled $RUN_COUNT run(s):"
-        echo "$RUN_ARNS_JSON" | jq .
+        if [ "$BILLING_METHOD" = "UNMETERED" ]; then
+          move_queued_runs_to_metered
+        fi
 
-        echo "run_arns=$(echo "$RUN_ARNS_JSON" | jq -c .)" >> "$GITHUB_OUTPUT"
+        RUN_ARNS_JSON=$(printf '%s\n' "${RUN_LIST[@]}" | jq -R . | jq -sc .)
+        RUN_COUNT=${#RUN_LIST[@]}
+        METERED_COUNT=0
+        for billing in "${RUN_BILLING[@]}"; do
+          [ "$billing" = "METERED" ] && METERED_COUNT=$((METERED_COUNT + 1))
+        done
+        UNMETERED_COUNT=$((RUN_COUNT - METERED_COUNT))
+        echo ""
+        echo "Scheduled $RUN_COUNT run(s): $UNMETERED_COUNT UNMETERED, $METERED_COUNT METERED"
+        echo "$RUN_ARNS_JSON" | jq .
+        if [ "$BILLING_METHOD" = "UNMETERED" ] && [ "$METERED_COUNT" -gt 0 ]; then
+          echo "::notice title=Device Farm billing::$METERED_COUNT of $RUN_COUNT $PLATFORM run(s) moved to METERED: no free unmetered slot"
+        fi
+        {
+          echo "### Device Farm billing ($PLATFORM)"
+          echo ""
+          echo "| Billing | Runs |"
+          echo "| --- | --- |"
+          echo "| UNMETERED | $UNMETERED_COUNT |"
+          echo "| METERED | $METERED_COUNT |"
+          echo ""
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        echo "run_arns=$RUN_ARNS_JSON" >> "$GITHUB_OUTPUT"
         echo "run_count=$RUN_COUNT" >> "$GITHUB_OUTPUT"
+        echo "metered_count=$METERED_COUNT" >> "$GITHUB_OUTPUT"
 
         # Outputs are published: the caller now has the ARNs and owns cleanup (its
         # cancel step covers cancellation and failure from here). Disarm so the EXIT

@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 const ACTIONS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 export const COLLECT_ACTION = join(ACTIONS_DIR, 'collect-and-upload-logs/action.yml')
 export const PERF_ACTION = join(ACTIONS_DIR, 'extract-addon-perf/action.yml')
+export const SCHEDULE_ACTION = join(ACTIONS_DIR, 'schedule-test-run/action.yml')
 
 const STEP_PREFIX = '    - name: '
 const STEP_KEY_INDENT = '      '
@@ -71,9 +72,15 @@ export function writeFixture(workspace, relativePath, content = '') {
   writeFileSync(file, content)
 }
 
-export function runStep(action, name, { workspace, output, summary, env = {}, expressions = {} }) {
+export function runStep(action, name, options) {
+  const result = spawnStep(action, name, options)
+  assert.equal(result.status, 0, `step "${name}" failed:\n${result.stderr}`)
+  return existsSync(options.output) ? readFileSync(options.output, 'utf8') : ''
+}
+
+export function spawnStep(action, name, { workspace, output, summary, env = {}, expressions = {} }) {
   const script = renderExpressions(stepScript(readLines(action), name), expressions)
-  const result = spawnSync('bash', [...BASH_ARGS, script], {
+  return spawnSync('bash', [...BASH_ARGS, script], {
     cwd: workspace,
     encoding: 'utf8',
     env: {
@@ -84,6 +91,4 @@ export function runStep(action, name, { workspace, output, summary, env = {}, ex
       ...env,
     },
   })
-  assert.equal(result.status, 0, `step "${name}" failed:\n${result.stderr}`)
-  return existsSync(output) ? readFileSync(output, 'utf8') : ''
 }
