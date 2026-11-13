@@ -310,8 +310,9 @@ declare namespace LlmLlamacpp {
         "coreml-ffn-cache"?: string;
         /**
          * Metal channels and Core ML programs per FFN: '8192x2', '5120x2',
-         * '11264x1' or '12800x1'; another value loads without the sidecar, with a
-         * warning. Default: chosen by chip.
+         * '11264x1' or '12800x1'. Another well-formed value loads without the
+         * sidecar, with a warning; a malformed one fails the load. Default: chosen
+         * by chip.
          */
         "coreml-ffn-split"?: string;
         /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
