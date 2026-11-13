@@ -429,9 +429,34 @@ const STREAMS: Record<string, Fold> = {
         fullText: final.raw?.fullText
       }
     }
-    if (collect === 'events') return { events: await drain(run.events) }
+    if (collect === 'events') {
+      // The final's tool calls ride along so a test can check the stream against the
+      // aggregate of the same run, which is the claim a streaming client relies on.
+      const [events, final] = await Promise.all([drain(run.events), run.final])
+      return { events, toolCalls: final.toolCalls }
+    }
     if (collect === 'all') return { all: await drain(run.tokenStream) }
     throw unsupported('completion', collect)
+  },
+
+  /**
+   * A completion that may legitimately fail: binds the error instead of failing the step.
+   * For requests whose contract is "a tool call or an explicit error", where only a prose
+   * answer with no call is wrong.
+   */
+  completionOrError: async (params, collect) => {
+    if (collect !== 'text') throw unsupported('completionOrError', collect)
+    const run = completion(params)
+    try {
+      const final = await run.final
+      return { text: final.contentText, toolCalls: final.toolCalls }
+    } catch (error) {
+      return {
+        text: '',
+        toolCalls: [],
+        error: { message: error instanceof Error ? error.message : String(error) }
+      }
+    }
   },
 
   translate: async (params, collect) => {
@@ -1846,6 +1871,16 @@ const ASSERTIONS: Record<
       }
     }
 
+    // `exclusive`: every call must be to a declared tool, as a forced `tool_choice` demands.
+    if (args.exclusive === true && valid.length !== calls.length) {
+      return {
+        passed: false,
+        output:
+          `a tool call is outside the declared tools. Got: [${calls.map((c) => c.name ?? '<unnamed>').join(', ')}], ` +
+          `declared: [${[...declared].join(', ')}]`
+      }
+    }
+
     const match = valid.find((call) => call.name === args.name)
     if (match) {
       const callArgs = match.arguments ?? {}
@@ -1860,6 +1895,78 @@ const ASSERTIONS: Record<
     }
 
     return { passed: true, output: `tool call(s): ${valid.map((call) => call.name).join(', ')}` }
+  },
+
+  /**
+   * The request either made a structured call to a declared tool or failed with an error. A
+   * prose answer with no call is the one wrong outcome: it means the tools were silently dropped.
+   */
+  toolCallOrError(value, args) {
+    const run = (value ?? {}) as {
+      text?: string
+      toolCalls?: Array<{ name?: string }>
+      error?: { message?: string }
+    }
+    if (run.error) return { passed: true, output: `explicit error: ${run.error.message ?? ''}` }
+    const declared = new Set((args.declared ?? []) as string[])
+    const calls = run.toolCalls ?? []
+    const valid = calls.filter((call) => typeof call.name === 'string' && declared.has(call.name))
+    if (valid.length > 0) {
+      return { passed: true, output: `tool call(s): ${valid.map((call) => call.name).join(', ')}` }
+    }
+    return {
+      passed: false,
+      output:
+        `no call to a declared tool and no error (got ${calls.length} call(s): ` +
+        `[${calls.map((call) => call.name ?? '<unnamed>').join(', ')}]); ` +
+        `text: ${String(run.text ?? '').slice(0, 200)}`
+    }
+  },
+
+  /**
+   * A streamed run's `toolCall` events are the final's tool calls, in order and field for field,
+   * and the streamed visible content carries none of the raw tool-call markup.
+   */
+  streamedToolCallsMatchFinal(value, args) {
+    const run = (value ?? {}) as {
+      events?: Array<{ type?: string; text?: string; call?: Record<string, unknown> }>
+      toolCalls?: Array<Record<string, unknown>>
+    }
+    const events = run.events ?? []
+    const streamed = events.filter((event) => event.type === 'toolCall').map((e) => e.call ?? {})
+    const final = run.toolCalls ?? []
+    if (final.length === 0) {
+      return { passed: false, output: 'the final carries no tool call' }
+    }
+    if (streamed.length !== final.length) {
+      return {
+        passed: false,
+        output: `${streamed.length} toolCall event(s) but ${final.length} final tool call(s)`
+      }
+    }
+    for (const [index, call] of final.entries()) {
+      const event = streamed[index]!
+      for (const field of ['id', 'name', 'arguments']) {
+        if (JSON.stringify(event[field]) !== JSON.stringify(call[field])) {
+          return {
+            passed: false,
+            output: `call[${index}].${field}: event ${JSON.stringify(event[field])} != final ${JSON.stringify(call[field])}`
+          }
+        }
+      }
+    }
+    const content = events
+      .filter((event) => event.type === 'contentDelta')
+      .map((event) => event.text ?? '')
+      .join('')
+    const leaked = ((args.forbidden ?? []) as string[]).filter((marker) => content.includes(marker))
+    if (leaked.length > 0) {
+      return {
+        passed: false,
+        output: `visible content carries tool markup ${JSON.stringify(leaked)}: ${content.slice(0, 200)}`
+      }
+    }
+    return { passed: true, output: `${final.length} call(s) streamed as in the final` }
   },
 
   /** Every block carries the geometry a caller needs to place it. */
