@@ -235,7 +235,7 @@ Relevant options are summarized below; run `qvac serve --help` for the exact gen
 | `--cors-origin <origin>` | Add a trusted CORS origin (repeatable; no wildcard) |
 | `--allowed-host <host>` | Accept this `Host` header besides loopback, IP addresses and the bind host (repeatable) |
 | `--allow-any-host` | Accept any `Host` header (turns off DNS-rebinding protection) |
-| `--enable-admin` | Allow the admin-only routes (runtime suspend/resume); needs a key off loopback |
+| `--enable-admin` | Allow the admin-only routes (runtime suspend/resume, plugin invoke); needs a key off loopback |
 | `--public-base-url <url>` | Externally reachable origin required for image `response_format=url` |
 | `--docs` | Mount Swagger UI at `/docs` and add same-port loopback CORS origins (requires a fixed `--port`) |
 | `--ready-fd <fd>` | Write `QVAC_SERVE_READY {"port":…,"pid":…}` to this inherited descriptor once listening |
@@ -1323,6 +1323,84 @@ curl -sS http://localhost:11435/qvac/v1/world/scenes/scene_3f1c.../steps \
   }
 }
 ```
+
+### Plugins: `POST /qvac/v1/plugins/:name/invoke`
+
+Call a handler of a custom plugin, backed by the SDK's `invokePlugin()`, or
+`invokePluginStream()` with `stream: true`. It runs whatever the plugin does, so it is
+**admin-only**: it answers `403 admin_disabled` unless the server was started with
+`--enable-admin`, and refuses browser origins outside the CORS allowlist like the
+[runtime routes](#runtime-qvacv1runtime).
+
+The plugin must be registered in the worker that serve runs. List it under `plugins` in
+`qvac.config.*` and run `qvac bundle sdk`, which writes `qvac/worker.entry.mjs`; serve uses
+that entry when started from the project directory, or the file `QVAC_WORKER_PATH` names.
+Then give the plugin an alias whose `type` is its model type:
+
+```json title="qvac.config.json"
+{
+  "serve": {
+    "models": {
+      "echo": { "src": "./models/echo.bin", "type": "echo-plugin" }
+    }
+  }
+}
+```
+
+`:name` is that model type. Built-in plugins answer `400 builtin_plugin`: use their own
+endpoints.
+
+| Field     | Type      | Required | Meaning                                                      |
+| --------- | --------- | -------- | ------------------------------------------------------------ |
+| `model`   | `string`  | Yes      | A `serve.models` alias whose `type` is `:name`               |
+| `handler` | `string`  | Yes      | The plugin handler to call                                   |
+| `params`  | any JSON  | No       | Passed to the handler as-is; the plugin validates it (`{}`)  |
+| `stream`  | `boolean` | No       | Call a streaming handler and answer with SSE (default false) |
+
+```bash
+curl -sS http://localhost:11435/qvac/v1/plugins/echo-plugin/invoke \
+  -H "Authorization: Bearer $QVAC_API_KEY" -H "Content-Type: application/json" \
+  -d '{"model": "echo", "handler": "echo", "params": {"text": "hi"}}'
+```
+
+```json
+{ "object": "plugin.invocation", "model": "echo", "handler": "echo", "result": { "text": "hi" } }
+```
+
+With `stream: true`, a streaming handler answers with Server-Sent Events: a
+`plugin.invocation.chunk` per result, one `plugin.invocation.done`, then `data: [DONE]`.
+
+```text
+data: {"object":"plugin.invocation.chunk","model":"echo","handler":"count","index":0,"result":{"n":1}}
+
+data: {"object":"plugin.invocation.done","model":"echo","handler":"count"}
+
+data: [DONE]
+```
+
+Plugin calls cannot be cancelled: a client disconnect stops the stream, but the handler runs
+to the end.
+
+#### Errors
+
+| HTTP | `error.code`              | When                                                           |
+| ---- | ------------------------- | -------------------------------------------------------------- |
+| 400  | `missing_model`           | `model` is missing                                             |
+| 400  | `missing_handler`         | `handler` is missing                                           |
+| 400  | `builtin_plugin`          | `:name` is a built-in model type                               |
+| 400  | `invalid_model_type`      | The alias's `type` is not `:name`                              |
+| 400  | `invalid_plugin_params`   | The plugin rejected `params`                                   |
+| 400  | `handler_type_mismatch`   | `stream` does not match whether the handler streams            |
+| 400  | `invalid_request`         | The body carries an unknown field                              |
+| 403  | `admin_disabled`          | The server was started without `--enable-admin`                |
+| 403  | `origin_not_allowed`      | A browser request from an origin outside the CORS allowlist    |
+| 404  | `model_not_found`         | Unknown alias                                                  |
+| 404  | `handler_not_found`       | The plugin has no such handler                                 |
+| 502  | `plugin_response_invalid` | The handler's result failed the plugin's own response schema   |
+| 503  | `model_not_loaded`        | Model not loaded and lazy loading is disabled                  |
+| 503  | `runtime_suspended`       | The runtime is suspended                                       |
+
+A failure mid-stream arrives as an SSE `error` frame with the same codes.
 
 ## OpenAI-compatible API
 
