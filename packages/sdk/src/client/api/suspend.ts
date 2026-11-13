@@ -1,3 +1,4 @@
+import type { RPCOptions } from '@qvac/inference/surface'
 import { send } from '@/client/rpc/rpc-client'
 import { InvalidResponseError } from '@/utils/errors-client'
 
@@ -11,7 +12,8 @@ import { InvalidResponseError } from '@/utils/errors-client'
  *
  * After `suspend()` resolves, runtime state is `"suspended"` and any non-
  * lifecycle SDK operation throws `LifecycleOperationBlockedError` until
- * `resume()` is called.
+ * `resume()` is called. `session.close()` is the exception: a session can
+ * still end and release its leases while the runtime is suspended.
  *
  * In-flight operations started before suspend:
  *   - P2P / Hyperdrive downloads: stall cleanly, continue after `resume()`
@@ -26,8 +28,8 @@ import { InvalidResponseError } from '@/utils/errors-client'
  * await suspend();
  * console.log(await state()); // "suspended"
  */
-export async function suspend(): Promise<void> {
-  const response = await send({ type: 'suspend' })
+export async function suspend(options?: RPCOptions): Promise<void> {
+  const response = await send({ type: 'suspend' }, options)
   if (response.type !== 'suspend') {
     throw new InvalidResponseError('suspend')
   }

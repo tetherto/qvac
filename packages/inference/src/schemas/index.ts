@@ -1,5 +1,7 @@
 // Re-export all schemas and types
 export * from '@/schemas/model-file'
+export * from '@/schemas/request-base'
+export * from '@/schemas/session'
 export * from '@/schemas/cancel'
 export * from '@/schemas/batch-completion-stream'
 export * from '@/schemas/completion-stream'

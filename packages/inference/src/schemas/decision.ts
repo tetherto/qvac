@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { trackedRequestSchema } from '@/schemas/request-base'
 
 // Nested JSON stays inline in the wire contract. The refinement rejects values
 // that JSON serialization would discard or change before reaching the model.
@@ -98,7 +99,7 @@ export const decideParamsSchema = z.union([
 const wireEnvelope = {
   ...envelope,
   type: z.literal('decide'),
-  requestId: z.string().min(1).optional()
+  ...trackedRequestSchema.shape
 }
 export const decideRequestSchema = z.union([
   decisionSingleRequestSchema.extend(wireEnvelope).meta({ title: 'DecideSingleRequest' }),

@@ -6,11 +6,15 @@ import type {
   RPCOptions
 } from '@qvac/inference/surface'
 import { InvalidResponseError } from '@/utils/errors-client'
+import { decoratePromise } from '@/utils/decorate-promise'
+import { generateClientRequestId } from '@/client/api/client-request-id'
 
 export interface InvokePluginOptions<TParams = unknown> {
   modelId: string
   handler: string
   params: TParams
+  /** Caller-minted id for `cancel({ requestId })`; generated when omitted. */
+  requestId?: string
 }
 
 /**
@@ -24,12 +28,24 @@ export interface InvokePluginOptions<TParams = unknown> {
  * @returns A promise resolving to the handler's result payload (typed via the `TResponse` generic).
  * @throws {QvacErrorBase} When the response type is invalid (`InvalidResponseError`) or the RPC layer fails.
  */
-export async function invokePlugin<TResponse = unknown, TParams = unknown>(
+export function invokePlugin<TResponse = unknown, TParams = unknown>(
   options: InvokePluginOptions<TParams>,
+  rpcOptions?: RPCOptions
+): Promise<TResponse> & { requestId: string } {
+  const requestId = options.requestId ?? generateClientRequestId()
+  return decoratePromise(runInvokePlugin<TResponse, TParams>(options, requestId, rpcOptions), {
+    requestId
+  })
+}
+
+async function runInvokePlugin<TResponse, TParams>(
+  options: InvokePluginOptions<TParams>,
+  requestId: string,
   rpcOptions?: RPCOptions
 ): Promise<TResponse> {
   const request: PluginInvokeRequest = {
     type: 'pluginInvoke',
+    requestId,
     modelId: options.modelId,
     handler: options.handler,
     params: options.params
@@ -55,12 +71,23 @@ export async function invokePlugin<TResponse = unknown, TParams = unknown>(
  * @returns An async generator yielding chunk payloads (typed via the `TResponse` generic) until the stream completes.
  * @throws {QvacErrorBase} When an intermediate response has the wrong type (`InvalidResponseError`) or the RPC layer fails.
  */
-export async function* invokePluginStream<TResponse = unknown, TParams = unknown>(
+export function invokePluginStream<TResponse = unknown, TParams = unknown>(
   options: InvokePluginOptions<TParams>,
+  rpcOptions?: RPCOptions
+): AsyncGenerator<TResponse> & { requestId: string } {
+  const requestId = options.requestId ?? generateClientRequestId()
+  const generator = runInvokePluginStream<TResponse, TParams>(options, requestId, rpcOptions)
+  return Object.assign(generator, { requestId })
+}
+
+async function* runInvokePluginStream<TResponse, TParams>(
+  options: InvokePluginOptions<TParams>,
+  requestId: string,
   rpcOptions?: RPCOptions
 ): AsyncGenerator<TResponse> {
   const request: PluginInvokeStreamRequest = {
     type: 'pluginInvokeStream',
+    requestId,
     modelId: options.modelId,
     handler: options.handler,
     params: options.params

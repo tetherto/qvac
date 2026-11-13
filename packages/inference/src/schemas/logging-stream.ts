@@ -1,5 +1,6 @@
 import type { LogLevel } from '@qvac/logging'
 import { z } from 'zod'
+import { sessionScopedRequestSchema } from '@/schemas/request-base'
 
 const logLevelValues: LogLevel[] = ['error', 'warn', 'info', 'debug', 'off'] as const
 export const logLevelSchema = z.enum(logLevelValues)
@@ -8,9 +9,11 @@ const loggingParamsSchema = z.object({
   id: z.string()
 })
 
-export const loggingStreamRequestSchema = loggingParamsSchema.extend({
-  type: z.literal('loggingStream')
-})
+export const loggingStreamRequestSchema = loggingParamsSchema
+  .extend({
+    type: z.literal('loggingStream')
+  })
+  .extend(sessionScopedRequestSchema.shape)
 
 export const loggingStreamResponseSchema = z.object({
   type: z.literal('loggingStream'),

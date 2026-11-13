@@ -76,6 +76,7 @@ def render_methods(manifest: dict, schema: dict) -> str:
         "    val responseType: String,",
         "    val progressResponseType: String? = null,",
         "    val progressCondition: String? = null,",
+        "    val ownerOnly: Boolean = false,",
         ")",
         "",
         "object QvacMethods {",
@@ -106,6 +107,7 @@ def render_methods(manifest: dict, schema: dict) -> str:
             f"        responseType = {json.dumps(response_type)},",
             f"        progressResponseType = {progress_type},",
             f"        progressCondition = {condition},",
+            f"        ownerOnly = {'true' if method.get('ownerOnly') else 'false'},",
             "    )",
         ])
     lines.extend(["", "    val all: List<QvacMethodDescriptor> = listOf("])

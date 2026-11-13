@@ -1,4 +1,8 @@
-import type { WorldSceneClientParams, WorldStepClientParams } from '@qvac/inference/surface'
+import type {
+  RPCOptions,
+  WorldSceneClientParams,
+  WorldStepClientParams
+} from '@qvac/inference/surface'
 import { stream as streamRpc } from '@/client/rpc/rpc-client'
 import {
   createWorldSceneResult,
@@ -79,18 +83,22 @@ import {
  * ```
  */
 export function worldCreateScene(
-  params: WorldSceneClientParams & { returnPack: true }
+  params: WorldSceneClientParams & { returnPack: true },
+  options?: RPCOptions
 ): WorldSceneResultWithPack
 export function worldCreateScene(
-  params: WorldSceneClientParams & { returnPack?: false | undefined }
+  params: WorldSceneClientParams & { returnPack?: false | undefined },
+  options?: RPCOptions
 ): WorldSceneResult
 export function worldCreateScene(
-  params: WorldSceneClientParams
+  params: WorldSceneClientParams,
+  options?: RPCOptions
 ): WorldSceneResult | WorldSceneResultWithPack
 export function worldCreateScene(
-  params: WorldSceneClientParams
+  params: WorldSceneClientParams,
+  options?: RPCOptions
 ): WorldSceneResult | WorldSceneResultWithPack {
-  return createWorldSceneResult(params, streamRpc)
+  return createWorldSceneResult(params, (request) => streamRpc(request, options))
 }
 
 /**
@@ -156,6 +164,6 @@ export function worldCreateScene(
  * }
  * ```
  */
-export function worldStep(params: WorldStepClientParams): WorldStepResult {
-  return createWorldStepResult(params, streamRpc)
+export function worldStep(params: WorldStepClientParams, options?: RPCOptions): WorldStepResult {
+  return createWorldStepResult(params, (request) => streamRpc(request, options))
 }
