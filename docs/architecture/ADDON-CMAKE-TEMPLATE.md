@@ -83,8 +83,7 @@ Present, in the same order, in essentially every addon:
 - `find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS …)`.
 - ELF symbol hygiene: Linux `-Wl,--exclude-libs,ALL`, plus a version script
   narrowing the module's exports to the bare entry points
-  (`cmake/qvac-addon/addon-symbols.map`, generalizing what `asr-ggml` applies by
-  hand).
+  (`cmake/qvac-addon/addon-symbols.map`).
 - `JS_LOGGER` compile definition.
 
 New shared blocks introduced by the fabric form (also extract):
@@ -125,7 +124,7 @@ New shared blocks introduced by the fabric form (also extract):
   the choice now applies to the one shared runtime rather than per consumer.
 - Mobile static-link fallback where applicable.
 - Genuinely exotic per-package logic (nmt's sentencepiece fallback chain,
-  parakeet's Android strip + `symbols.map`, etc.) — handled by adding CMake
+  asr-ggml's Android strip, etc.) — handled by adding CMake
   after the shared calls, never hidden.
 
 ### Accidental drift the template eliminates

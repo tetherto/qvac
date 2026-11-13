@@ -12,11 +12,11 @@
 // index.d.ts (RuntimeStats + BackendId enum). A use_gpu=true request that falls
 // back to CPU surfaces as backendDevice=0, which fails the GPU assertion.
 //
-// Per vcpkg.json the expected GPU backend is Metal on darwin/ios, CUDA or
-// Vulkan on linux/win32, and Vulkan or OpenCL on android. Linux/Windows accept
-// either because the opt-in `cuda` feature (ASR_CUDA=ON) compiles CUDA in
-// alongside Vulkan, and ggml registers CUDA first, so a CUDA-enabled build on
-// NVIDIA hardware reports backendId=2 where a default build reports 3.
+// The expected GPU backend is Metal on darwin/ios, CUDA or Vulkan on
+// linux/win32, and Vulkan or OpenCL on android. Linux/Windows accept either
+// because the @qvac/fabric runtime ships CUDA alongside Vulkan, and ggml
+// registers CUDA first, so NVIDIA hardware with the CUDA runtime reports
+// backendId=2 where any other host reports 3.
 //
 // CI runners without a real GPU export NO_GPU=true to skip the GPU half; the CPU
 // half always runs. QVAC_WHISPER_GPU_RELAX=1 downgrades the GPU assertion to a

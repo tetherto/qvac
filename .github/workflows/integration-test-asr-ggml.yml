@@ -195,9 +195,10 @@ jobs:
             no_gpu: 'true'
             benchmark_matrix_json: >-
               [{"engine":"whisper","modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"engine":"whisper","modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"engine":"parakeet","modelType":"tdt","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"tdt","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"ctc","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"eou","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer","quant":"q4_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"f16","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q8_0","useGPU":false},{"engine":"parakeet","modelType":"sortformer-streaming","quant":"q4_0","useGPU":false}]
-          # The linux-x64 prebuild bundles the CUDA and Vulkan backend modules
-          # and ggml registers CUDA first, so the GPU backend is decided by
-          # whether the CUDA module's cudart/cuBLAS DT_NEEDED entries resolve.
+          # The @qvac/fabric runtime ships the CUDA and Vulkan backend modules
+          # on linux-x64 and ggml registers CUDA first, so the GPU backend is
+          # decided by whether the CUDA module's cudart/cuBLAS DT_NEEDED
+          # entries resolve.
           # cuda_libs points this row's test steps at the runner's CUDA
           # toolkit (kept outside ldconfig), giving it end-to-end CUDA
           # coverage; qvac-ubuntu2404-x64-gpu leaves the CUDA module

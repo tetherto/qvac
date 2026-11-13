@@ -16,10 +16,29 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Added
 
-- Opt-in WebGPU source builds with backend identity reporting.
+- WebGPU backend identity reporting.
 - Whisper Core ML encoder activation with missing-sidecar fallback and native state reporting.
 - Optional MOSS token progress callbacks, typed runtime statistics and per-transcription encoder routing.
 - Optional batch diarization probability matrices, batch ASR token IDs and native Parakeet stage timings.
+
+### Changed
+
+- Run on the shared `@qvac/fabric` runtime: the module links the ggml that
+  `@qvac/fabric` ships instead of bundling its own, loads GPU backends from
+  the fabric platform package, and the native build takes ggml from the
+  `qvac-fabric` vcpkg port through `speech-cpp` `2026-11-11`
+  ([#PR_NUMBER](https://github.com/tetherto/qvac/pull/PR_NUMBER)).
+- An unset `backendsDir` uses the backends `@qvac/fabric` ships; the package
+  no longer carries a backends directory of its own
+  ([#PR_NUMBER](https://github.com/tetherto/qvac/pull/PR_NUMBER)).
+- Requires Bare 1.24 or newer
+  ([#PR_NUMBER](https://github.com/tetherto/qvac/pull/PR_NUMBER)).
+
+### Removed
+
+- The `ASR_CUDA` source-build option and the `build:cuda` scripts: CUDA comes
+  with the `@qvac/fabric` runtime on linux-x64, linux-arm64 and win32-x64
+  ([#PR_NUMBER](https://github.com/tetherto/qvac/pull/PR_NUMBER)).
 
 ## [0.12.1] - 2026-11-10
 
