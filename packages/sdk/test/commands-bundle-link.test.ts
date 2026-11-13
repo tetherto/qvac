@@ -16,7 +16,6 @@ import { fileURLToPath } from 'node:url'
 import { createCommandLogger } from '@/commands/command-logger'
 import {
   assertReactNativeBareKitSupported,
-  linkBareKitSwiftWithJavaScriptCore,
   stageAddons,
   type StageAddonsOptions,
   warnOverwritten
@@ -330,36 +329,11 @@ test(
     const source = readFileSync(manifest, 'utf8')
     t.ok(source.includes('bare-kit-swift'))
     t.ok(
-      source.includes('bare-kit-swift", exact: "2.4.0", traits: ["JavaScriptCore"])'),
-      'bare-kit-swift is linked at an exact version with JavaScriptCore'
+      source.includes('traits: ["JavaScriptCore"]'),
+      'Bare Kit runs worklets with JavaScriptCore'
     )
-    t.ok(source.startsWith('// swift-tools-version: 6.1\n'))
   }
 )
-
-test('linkBareKitSwiftWithJavaScriptCore: pins the release and selects the engine', (t) => {
-  const manifest = [
-    '// swift-tools-version: 5.10',
-    '    .package(url: "https://github.com/holepunchto/bare-kit-swift", from: "2.2.0"),',
-    '    .package(url: "https://github.com/holepunchto/other", from: "1.0.0"),'
-  ].join('\n')
-
-  t.is(
-    linkBareKitSwiftWithJavaScriptCore(manifest),
-    [
-      '// swift-tools-version: 6.1',
-      '    .package(url: "https://github.com/holepunchto/bare-kit-swift", exact: "2.4.0", traits: ["JavaScriptCore"]),',
-      '    .package(url: "https://github.com/holepunchto/other", from: "1.0.0"),'
-    ].join('\n')
-  )
-})
-
-test('linkBareKitSwiftWithJavaScriptCore: fails on a manifest without bare-kit-swift', (t) => {
-  t.exception(
-    () => linkBareKitSwiftWithJavaScriptCore('// swift-tools-version: 5.10\n'),
-    /does not depend on bare-kit-swift/
-  )
-})
 
 test('warnOverwritten: names the libraries several addons wrote to the same path', (t) => {
   const warnings: string[] = []
