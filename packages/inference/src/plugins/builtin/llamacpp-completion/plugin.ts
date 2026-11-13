@@ -51,6 +51,7 @@ import { stoppedByLength } from '@/plugins/builtin/llamacpp-completion/ops/compl
 import { isMobile } from '@/runtime/state'
 import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
 import { resolveDeferredTools, toWireTool } from '@/utils/tools/defer'
+import { parseToolCalls } from '@/utils/tools/index'
 
 function createLlmModel(
   modelId: string,
@@ -283,6 +284,15 @@ export const llmPlugin = definePlugin({
                 ...wrapBatchEvents(batchResult.id, normalizer.push(batchResult.output))
               )
             }
+            // Calls the stream had no frames for (the json dialect, or unframed
+            // output) are only recovered by parsing the whole output, as the
+            // single-prompt path does; finish() skips ones already streamed.
+            const promptTools = toolsById.get(batchResult.id) ?? []
+            const toolCalls =
+              toolsActive && promptTools.length > 0
+                ? parseToolCalls(normalizer.getAccumulated().rawText, promptTools, dialect)
+                    .toolCalls
+                : []
             // Stats are batch-level (the addon reports one aggregate
             // snapshot, not per prompt), so they ride the top-level `stats`
             // field on the done frame below — NOT each prompt's terminal.
@@ -290,6 +300,7 @@ export const llmPlugin = definePlugin({
               ...wrapBatchEvents(
                 batchResult.id,
                 normalizer.finish({
+                  ...(toolCalls.length > 0 && { toolCalls }),
                   ...(ctx.signal.aborted && {
                     stopReason: 'cancelled' as const
                   })
