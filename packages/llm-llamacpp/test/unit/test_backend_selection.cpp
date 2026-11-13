@@ -13,6 +13,7 @@
 
 #include "test_common.hpp"
 #include "utils/BackendSelection.hpp"
+#include "utils/LlamaRuntimeBackend.hpp"
 
 using namespace backend_selection;
 using test_common::MockModelMetaData;
@@ -118,6 +119,9 @@ private:
     // One registry per device unless the device aliases another's, resolved
     // through the live vector so a reallocation cannot leave a stale pointer.
     MockDevice* mockDev = reinterpret_cast<MockDevice*>(dev);
+    if (mockDev != nullptr && mockDev->regName.empty()) {
+      return nullptr;
+    }
     if (g_currentInstance != nullptr && mockDev != nullptr &&
         mockDev->regAliasIndex.has_value() &&
         mockDev->regAliasIndex.value() < g_currentInstance->devices.size()) {
@@ -2440,4 +2444,53 @@ TEST_F(BackendSelectionTest, JitCache_DisabledBeatsWritableDir_Warns) {
   env.haveCacheDir = true;
   env.cacheDirWritable = true;
   EXPECT_TRUE(backend_selection::shouldWarnAboutJitCache(env));
+}
+
+TEST_F(BackendSelectionTest, RuntimeBackendNameUsesRegistryFamily) {
+  mockBackend.addDevice(
+      {"Apple GPU", "Metal", GGML_BACKEND_DEVICE_TYPE_GPU, "MTL"});
+  mockBackend.addDevice(
+      {"NVIDIA GPU", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"});
+  mockBackend.addDevice(
+      {"Vulkan GPU", "Vulkan0", GGML_BACKEND_DEVICE_TYPE_GPU, "Vulkan"});
+  const auto bckI = mockBackend.toBackendInterface();
+  using qvac_lib_inference_addon_llama::backend_reporting::
+      runtimeDeviceBackendName;
+
+  EXPECT_EQ(
+      runtimeDeviceBackendName(bckI.ggml_backend_dev_get(0), bckI), "metal");
+  EXPECT_EQ(
+      runtimeDeviceBackendName(bckI.ggml_backend_dev_get(1), bckI), "cuda");
+  EXPECT_EQ(
+      runtimeDeviceBackendName(bckI.ggml_backend_dev_get(2), bckI), "vulkan");
+  EXPECT_TRUE(runtimeDeviceBackendName(nullptr, bckI).empty());
+}
+
+TEST_F(BackendSelectionTest, RuntimeBackendNameResolvesTensorSplitMembers) {
+  mockBackend.addDevice(
+      {"NVIDIA GPU", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"});
+  mockBackend.addDevice(
+      {"NVIDIA GPU", "CUDA1", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"});
+  mockBackend.addDevice(
+      {"Vulkan GPU", "Vulkan0", GGML_BACKEND_DEVICE_TYPE_GPU, "Vulkan"});
+  const auto bckI = mockBackend.toBackendInterface();
+  using qvac_lib_inference_addon_llama::backend_reporting::
+      runtimeDeviceBackendName;
+
+  for (const auto& [name, expected] :
+       std::vector<std::pair<std::string, std::string>>{
+           {"Meta(CUDA0,CUDA1)", "cuda"},
+           {"Meta(Vulkan0,CUDA1,CUDA0)", "cuda,vulkan"},
+           {"Meta(CUDA0,missing)", ""},
+           {"Meta(CUDA0,CUDA1", ""},
+           {"Meta()", ""},
+           {"CUDA0", ""}}) {
+    MockDevice meta{
+        "Tensor split", std::string(name), GGML_BACKEND_DEVICE_TYPE_GPU, ""};
+    EXPECT_EQ(
+        runtimeDeviceBackendName(
+            reinterpret_cast<ggml_backend_dev_t>(&meta), bckI),
+        expected)
+        << name;
+  }
 }

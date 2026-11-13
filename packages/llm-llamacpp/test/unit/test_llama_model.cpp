@@ -18,6 +18,7 @@
 
 namespace fs = std::filesystem;
 
+using test_common::getStatString;
 using test_common::getStatValue;
 
 class LlamaModelTest : public ::testing::Test {
@@ -393,6 +394,18 @@ TEST_F(LlamaModelTest, IsLoadedAfterProcessing) {
     auto stats = model.runtimeStats();
     EXPECT_GE(stats.size(), 0);
   });
+}
+
+TEST_F(LlamaModelTest, RuntimeBackendNameReportsCpuWithZeroGpuLayers) {
+  config_files["device"] = "gpu";
+  config_files["gpu_layers"] = "0";
+  auto model = createModel();
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  const auto stats = model.runtimeStats();
+  EXPECT_EQ(getStatString(stats, "backendName"), "cpu");
+  EXPECT_EQ(getStatValue(stats, "backendDevice"), 0.0);
 }
 
 TEST_F(LlamaModelTest, RuntimeStatsAfterProcessing) {
