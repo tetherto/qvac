@@ -161,7 +161,7 @@
     "typescript-eslint": "^8.64.0",
     "cmake-npm": "^1.1.0",
     "b4a": "^1.6.7",
-    "bare-https": "^3.0.0"
+    "bare-https": "^4.0.0"
   },
   "dependencies": {
     "@qvac/infer-base": "^0.8.0",
