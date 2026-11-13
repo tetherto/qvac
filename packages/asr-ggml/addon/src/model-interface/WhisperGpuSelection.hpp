@@ -75,7 +75,7 @@ std::vector<Device> registryDevices(const Registry& registry = {}) {
     device.adrenoOpencl = backend == "opencl" && adreno;
     device.integrated =
         type == GGML_BACKEND_DEVICE_TYPE_IGPU || device.adrenoOpencl;
-    // Families provided by the pinned ggml-speech port features. Metal
+    // Families the @qvac/fabric runtime can ship a backend for. Metal
     // registers as MTL; retain Metal as a compatibility spelling. Every other
     // family (HIP/ROCm, SYCL, MUSA, RPC, unknown) is refused with its identity
     // captured for the CPU-fallback warning.

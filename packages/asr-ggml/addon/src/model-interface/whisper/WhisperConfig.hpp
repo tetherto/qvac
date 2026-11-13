@@ -38,7 +38,8 @@ struct WhisperConfig {
   std::map<std::string, JSValueVariant> whisperContextCfg;
 
   // Directory scanned, as given, for the ggml `.so` / `.dll` modules
-  // (`configurationParams.backendsDir` from JS). Empty scans the addon's own.
+  // (`configurationParams.backendsDir` from JS). Empty loads the backends
+  // @qvac/fabric ships.
   std::string backendsDir;
 };
 

@@ -27,8 +27,9 @@ struct BCIConfig {
   std::map<std::string, JSValueVariant> whisperContextCfg;
   std::map<std::string, JSValueVariant> bciConfig;
 
-  // Directory scanned, as given, for the ggml `.so` modules
-  // (`configurationParams.backendsDir` from JS). Empty scans the addon's own.
+  // Directory scanned, as given, for the ggml backend modules
+  // (`configurationParams.backendsDir` from JS). Empty loads the ones the
+  // @qvac/fabric runtime ships.
   std::string backendsDir;
 
   // Explicit path to the BCI embedder weights file

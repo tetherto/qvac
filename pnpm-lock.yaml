@@ -102,6 +102,9 @@ importers:
       '@qvac/error':
         specifier: ^0.1.1
         version: 0.1.1
+      '@qvac/fabric':
+        specifier: ^0.29.0
+        version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -124,6 +127,12 @@ importers:
         specifier: ^4.2.2
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     devDependencies:
+      '@qvac/fabric-android-arm64':
+        specifier: ^0.29.0
+        version: 0.29.0
+      '@qvac/fabric-ios':
+        specifier: ^0.29.0
+        version: 0.29.0
       '@qvac/registry-client':
         specifier: ^0.6.1
         version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
@@ -166,12 +175,31 @@ importers:
       typescript-eslint:
         specifier: ^8.63.0
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3)
+    optionalDependencies:
+      '@qvac/fabric-darwin-arm64':
+        specifier: ^0.29.0
+        version: 0.29.0
+      '@qvac/fabric-darwin-x64':
+        specifier: ^0.29.0
+        version: 0.29.0
+      '@qvac/fabric-linux-arm64':
+        specifier: ^0.29.0
+        version: 0.29.0
+      '@qvac/fabric-linux-x64':
+        specifier: ^0.29.0
+        version: 0.29.0
+      '@qvac/fabric-win32-x64':
+        specifier: ^0.29.0
+        version: 0.29.0
 
   packages/bci-whispercpp:
     dependencies:
       '@qvac/error':
         specifier: ^0.1.0
         version: 0.1.1
+      '@qvac/fabric':
+        specifier: ^0.29.0
+        version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -185,6 +213,12 @@ importers:
         specifier: ^3.0.0
         version: 3.1.1
     devDependencies:
+      '@qvac/fabric-android-arm64':
+        specifier: ^0.29.0
+        version: 0.29.0
+      '@qvac/fabric-ios':
+        specifier: ^0.29.0
+        version: 0.29.0
       '@qvac/registry-client':
         specifier: ^0.6.0
         version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
@@ -236,6 +270,22 @@ importers:
       typescript-eslint:
         specifier: ^8.63.0
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
+    optionalDependencies:
+      '@qvac/fabric-darwin-arm64':
+        specifier: ^0.29.0
+        version: 0.29.0
+      '@qvac/fabric-darwin-x64':
+        specifier: ^0.29.0
+        version: 0.29.0
+      '@qvac/fabric-linux-arm64':
+        specifier: ^0.29.0
+        version: 0.29.0
+      '@qvac/fabric-linux-x64':
+        specifier: ^0.29.0
+        version: 0.29.0
+      '@qvac/fabric-win32-x64':
+        specifier: ^0.29.0
+        version: 0.29.0
 
   packages/classification-ggml:
     dependencies:
@@ -1981,6 +2031,9 @@ importers:
       '@qvac/error':
         specifier: ^0.1.0
         version: 0.1.1
+      '@qvac/fabric':
+        specifier: ^0.29.0
+        version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -2015,6 +2068,12 @@ importers:
       '@qvac/asr-ggml':
         specifier: 0.8.1
         version: 0.8.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      '@qvac/fabric-android-arm64':
+        specifier: ^0.29.0
+        version: 0.29.0
+      '@qvac/fabric-ios':
+        specifier: ^0.29.0
+        version: 0.29.0
       '@qvac/registry-client':
         specifier: ^0.6.1
         version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
@@ -2063,6 +2122,22 @@ importers:
       typescript-eslint:
         specifier: ^8.63.0
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3)
+    optionalDependencies:
+      '@qvac/fabric-darwin-arm64':
+        specifier: ^0.29.0
+        version: 0.29.0
+      '@qvac/fabric-darwin-x64':
+        specifier: ^0.29.0
+        version: 0.29.0
+      '@qvac/fabric-linux-arm64':
+        specifier: ^0.29.0
+        version: 0.29.0
+      '@qvac/fabric-linux-x64':
+        specifier: ^0.29.0
+        version: 0.29.0
+      '@qvac/fabric-win32-x64':
+        specifier: ^0.29.0
+        version: 0.29.0
 
   packages/turbovec-ggml:
     dependencies:
@@ -9948,6 +10023,7 @@ packages:
   postcss-selector-parser@7.2.0:
     resolution: {integrity: sha512-Khh/tERVBn0I1499dvBSHY0pWJloMJWUxDsOBM0CCDPAcVZ10Jl2L1qy1f19uEX22spa8Mv7DCdEQJc0cGwBhQ==}
     engines: {node: '>=4'}
+    deprecated: Double-escapes CSS Modules class names (#362). Use 7.2.1.
 
   postcss@8.5.32:
     resolution: {integrity: sha512-LJlKCCAUFKOuZxipUdYw1NzIITEsPcgyOG9LkvRJvuKj/bRzbuRY0ARXvL0pWGpsZvn8jku+LMep2eU0seHp8g==}

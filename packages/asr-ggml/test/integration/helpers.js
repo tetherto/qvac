@@ -764,17 +764,15 @@ function getTestPaths(modelsDir = null) {
 }
 
 /**
- * Absolute path to the host's ggml backends in a source build:
- * prebuilds/<host>/qvac__asr-ggml-<suffix>/, the directory the addon finds on
- * its own when backendsDir is unset. Tests that pass it exercise an explicit
- * backendsDir, which the addon scans as given.
+ * Absolute path to the host's ggml backends: the directory @qvac/fabric ships
+ * them in, which the addon loads from on its own when backendsDir is unset.
+ * Tests that pass it exercise an explicit backendsDir, which the addon scans
+ * as given.
  *
  * @returns {string} Absolute path to the host's backends directory
  */
 function getBackendsDir() {
-  const host = require.addon.host
-  const suffix = host.startsWith('ios-') ? 'ios' : host
-  return path.resolve(__dirname, '../../prebuilds', host, 'qvac__asr-ggml-' + suffix)
+  return require('@qvac/fabric').backendsDir()
 }
 
 /**

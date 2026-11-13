@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <qvac-fabric.h>
 
 #include "model-interface/ModuleBackendsDir.hpp"
 #include "model-interface/bci/BCIConfig.hpp"
@@ -417,17 +418,14 @@ TEST(ModuleBackendsDir, ConfiguredDirIsScannedAsGiven) {
       std::filesystem::path("/tmp/some/backends"));
 }
 
-#if defined(__linux__)
-// This binary has no <module name>/ subdirectory next to it, which is the
-// flat layout of the SDK worker bundle: the backends sit beside the module.
-TEST(ModuleBackendsDir, UnconfiguredDirIsTheLoadedModulesOwn) {
+// The fabric runtime is staged next to the test binary, so its backends
+// directory resolves to a real directory here too.
+TEST(ModuleBackendsDir, UnconfiguredDirIsTheFabricBackendsDirectory) {
   const std::filesystem::path dir = resolveBackendsDir("");
+  EXPECT_EQ(dir.string(), std::string(qvac_fabric_backends_dir()));
   ASSERT_FALSE(dir.empty());
-  EXPECT_TRUE(
-      std::filesystem::equivalent(
-          dir, std::filesystem::canonical("/proc/self/exe").parent_path()));
+  EXPECT_TRUE(std::filesystem::is_directory(dir));
 }
-#endif
 
 namespace {
 

@@ -82,42 +82,30 @@ npm install
 VCPKG_ROOT=/path/to/vcpkg npm run build
 ```
 
-`ggml-speech` and `speech-cpp` are pinned with vcpkg `overrides` to the
-same versions in every speech addon (`@qvac/asr-ggml`,
-`@qvac/audiogen-ggml`, `@qvac/bci-whispercpp`, `@qvac/tts-ggml`), and
-`package.json` records the `ggml-speech` build as `qvac["ggml-speech"]`.
-The speech addons ship their ggml backends under the same file names, so
-an app that bundles several of them keeps one copy of each: use releases
-that record the same `ggml-speech`.
+The ggml runtime is the shared `@qvac/fabric` prebuild, a dependency of this
+package: the addon links it dynamically (`DT_NEEDED qvac__fabric-<host>@0.bare`),
+ships no ggml of its own, and shares one runtime in memory with every other
+fabric addon in the process. `vcpkg.json` builds only the whisper engine from
+the `speech-cpp[whisper]` port, pinned with a vcpkg `override` and compiled
+against the ggml headers the runtime was built from (`qvac-fabric` port,
+headers only). See [`packages/fabric/INTEGRATION.md`](../fabric/INTEGRATION.md).
 
-**CUDA (Linux / Windows on NVIDIA)** needs `nvcc` on the build host, so it is
-gated behind the `ENABLE_CUDA` CMake option. The published linux-x64 prebuild
-does not enable it; build it yourself with `npm run build:cuda` (or
-`bare-make generate -D ENABLE_CUDA=ON`), which adds the `cuda` feature to
-the `speech-cpp` dependency. On linux-x64 that
-flips ggml into hybrid dynamically-loaded backend mode: the CPU-variant,
-Vulkan, and CUDA backends ship as `.so` modules next to the addon, only the
-CUDA module depends on the CUDA runtime, and hosts that cannot resolve it
-skip the module and fall back to Vulkan or CPU. The NVIDIA driver plus the
-CUDA 13 runtime libraries (cudart, cuBLAS — from a CUDA toolkit install) are
-needed at runtime; ggml registers CUDA ahead of Vulkan, so `use_gpu: true`
-prefers CUDA when a supported device is present.
-
-A CUDA build's module targets **compute capability 7.5 and newer**, with
-native code for Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6),
-Ada (8.9), Hopper (9.0) and Blackwell (12.0, 12.1). Anything newer JIT-compiles
-from the bundled 8.0 PTX on first use, a one-off compile the driver caches.
-Volta and Pascal fall outside CUDA 13's support entirely, so they have no code
-path here: the backend skips such devices at registration and the addon falls
-back to Vulkan or CPU.
+The runtime ships Metal inside itself on macOS and iOS, and per-platform
+runtime-loaded modules elsewhere (CPU variants, Vulkan, CUDA on linux-x64,
+linux-arm64 and win32-x64, OpenCL on Android), so no backend is chosen at this
+package's build time and there is no CUDA build of the addon. Engaging CUDA
+needs the NVIDIA driver plus the CUDA 13 runtime libraries (cudart and cuBLAS)
+resolvable at load time; hosts that cannot resolve them skip the module and
+fall back to Vulkan or CPU. ggml registers CUDA ahead of Vulkan, so
+`use_gpu: true` prefers CUDA when a supported device is present. The CUDA
+module's device coverage (compute capability 7.5 and newer, Volta and Pascal
+excluded) is the runtime's; see the `@qvac/fabric` README.
 
 ### Prerequisites
 
 - **Bare runtime** >= 1.24.0
 - **CMake** >= 3.25
 - **vcpkg** with `VCPKG_ROOT` environment variable set
-- Optional: the [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads)
-  (`nvcc`) for the opt-in `build:cuda` build on Linux/Windows
 
 ## Quickstart
 
@@ -355,7 +343,7 @@ The projection covers the whisper model and the embedder. The embedder's share o
 | `gpuDevice` | As the load takes it. |
 | `decoders` | Worst-case resident decoders, the `best_of` or `beam_size` the run will use. The KV cache and decode graph grow with it. |
 | `marginBytes` | Free memory that must remain for the projection to count as fitting. Defaults to whisper's own headroom. |
-| `backendsDir` | Directory scanned as given for the dynamically-loaded ggml backends. Unset scans next to the loaded module, the directory a real load uses, since the native side registers backends once per process. |
+| `backendsDir` | Directory scanned as given for the dynamically-loaded ggml backends. Unset uses the backends the `@qvac/fabric` runtime ships, as a real load does, since the native side registers backends once per process. |
 
 `assessFit` returns a Promise. Concurrent calls run one at a time.
 
@@ -437,7 +425,7 @@ These keys back the `whisper_context`. Changing any of them between jobs forces 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `model` | string | Optional override; usually set via `args.files.model`. |
-| `use_gpu` | boolean | Enable GPU acceleration. Enabled by default (whisper.cpp default); set `false` to force CPU. The GPU backend is chosen per platform at build time: Metal on macOS/iOS, Vulkan on Linux/Windows (plus CUDA on `build:cuda` builds, preferred when an NVIDIA device and the CUDA runtime are present), OpenCL/Vulkan on Android. |
+| `use_gpu` | boolean | Enable GPU acceleration. Enabled by default (whisper.cpp default); set `false` to force CPU. The GPU backends are the ones the `@qvac/fabric` runtime ships for the host: Metal on macOS/iOS, Vulkan on Linux/Windows (plus CUDA where the runtime ships it, preferred when an NVIDIA device and the CUDA runtime are present), OpenCL/Vulkan on Android. |
 | `flash_attn` | boolean | Enable flash attention. |
 | `gpu_device` | number | Legacy index in Whisper’s GPU/IGPU-only list; cannot be combined with `main-gpu` or `main_gpu`. |
 | `main-gpu` / `main_gpu` | number or string | Raw registry index (integer number/string), or strict `dedicated` / `integrated` class. See [GPU selection](#gpu-selection). |
@@ -452,7 +440,7 @@ These keys back the `whisper_context`. Changing any of them between jobs forces 
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `backendsDir` | string | next to the loaded module | **Android and Linux.** Directory scanned as given for the dynamically-loaded ggml backend `.so` modules; a no-op on static builds and other platforms. Unset, the addon scans the directory its native module was loaded from: `prebuilds/<host>/qvac__bci-whispercpp/` in an npm install, or the module's own directory where bare-link or the SDK worker bundle put the backends beside it. |
+| `backendsDir` | string | the `@qvac/fabric` backends | Directory scanned as given for dynamically-loaded ggml backend modules. Unset, the `@qvac/fabric` runtime loads the backends it ships: from its platform package in an npm install, or from next to the runtime where bare-link or the SDK worker bundle put them. The first load or `assessFit` in a process decides; later values are ignored. |
 
 ### streamOpts (passed to `transcribeStream()`)
 

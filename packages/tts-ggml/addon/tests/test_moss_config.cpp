@@ -328,7 +328,7 @@ TEST(MossEngineOptions, UnsetDirectableFieldsKeepEngineDefaults) {
   const auto opts = MossModel::toEngineOptions(minimallyValidStubConfig());
   EXPECT_TRUE(opts.dialogue_reference_paths.empty());
   EXPECT_EQ(opts.duration_tokens, defaults.duration_tokens);
-  EXPECT_EQ(opts.backends_dir, qvac::ttsggml::defaultBackendsDir().string());
+  EXPECT_EQ(opts.backends_dir, qvac::ttsggml::resolveBackendsDir("").string());
 }
 
 TEST(MossEngineOptions, ZeroThreadsKeepsTheEngineDefault) {
