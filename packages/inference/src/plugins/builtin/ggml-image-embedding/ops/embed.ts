@@ -7,6 +7,7 @@ import { EmbedFailedError, InferenceCancelledError, InvalidResponseError } from 
 import { decodeBase64 } from '@/utils/encoding'
 import { nowMs } from '@/profiling/index'
 import { attachModelExecutionMs, forwardModelExecution } from '@/profiling/model-execution'
+import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
 import {
   embedRequestSchema,
   embedBatchRequestSchema,
@@ -18,11 +19,11 @@ import {
   type ImageEmbeddingStats
 } from '@/schemas/index'
 
-export async function embed(request: EmbedRequest) {
+export async function embed(request: EmbedRequest, context?: PluginHandlerContext) {
   const parsed = embedRequestSchema.parse(request)
   const inputs = parsed.input !== undefined ? [parsed.input] : parsed.inputs
   if (inputs === undefined) throw new EmbedFailedError('MegaLoc accepts images, not text')
-  const result = await runImages(parsed, inputs)
+  const result = await runImages(parsed, inputs, context)
   return forwardModelExecution(
     {
       type: 'embed' as const,
@@ -34,9 +35,9 @@ export async function embed(request: EmbedRequest) {
   )
 }
 
-export async function embedBatch(request: EmbedBatchRequest) {
+export async function embedBatch(request: EmbedBatchRequest, context?: PluginHandlerContext) {
   const parsed = embedBatchRequestSchema.parse(request)
-  const result = await runImages(parsed, parsed.inputs)
+  const result = await runImages(parsed, parsed.inputs, context)
   return forwardModelExecution(
     {
       type: 'embedBatch' as const,
@@ -87,13 +88,16 @@ async function loadImage(source: ImageSource) {
 }
 
 async function runImages(
-  request: { modelId: string; requestId?: string | undefined },
-  inputs: EmbedWireInput[]
+  request: { modelId: string; requestId?: string | undefined; sessionId?: string | undefined },
+  inputs: EmbedWireInput[],
+  context: PluginHandlerContext | undefined
 ) {
-  const { modelId, requestId } = request
+  const { modelId, requestId, sessionId } = request
   const sources = inputs.map(toImageSource)
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRandomRequestId(),
+    sessionId,
+    ...requestParent(context),
     kind: 'imageEmbedding',
     modelId
   })

@@ -11,10 +11,12 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -27,6 +29,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import to.holepunch.bare.kit.Worklet
 import to.holepunch.bare.stow.host.Ipc
+import to.holepunch.bare.stow.host.WorkerError
 
 /** The worker started in this JVM by bare-stow's `bare-kit` harness, with bare-rpc over its `ipc`. */
 class JvmBareKitTransport private constructor(
@@ -37,6 +40,12 @@ class JvmBareKitTransport private constructor(
 ) : QvacTransport {
     private val closeMutex = Mutex()
     private var closed = false
+
+    // Ends with the worker's ipc: the worker exited, crashed or was killed, or close() stopped it.
+    override val lost: Deferred<Unit> = exitWatch.async {
+        runCatching { ipc.wait() }
+        Unit
+    }
 
     override suspend fun call(payload: JsonObject): JsonObject = rpc.call(payload)
 
@@ -77,6 +86,26 @@ class JvmBareKitTransport private constructor(
             }
 
         /**
+         * Runs [start]. A start that fails hands back no `Ipc` for [watchExit], so the
+         * bare-stow-host error code is the only sign of whether the worker reported its
+         * exit; one that did not may have loaded addons before it was killed.
+         */
+        internal suspend fun <T> startWorker(
+            onUncleanStop: () -> Unit = { uncleanStop = true },
+            start: suspend () -> T,
+        ): T =
+            try {
+                start()
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                if (error is WorkerError && error.code in UNREPORTED_EXIT_CODES) onUncleanStop()
+                throw QvacWorkerStartException("Failed to start QVAC BareKit worker", error)
+            }
+
+        /** bare-stow-host codes for a worker that ended before ready without reporting its exit. */
+        private val UNREPORTED_EXIT_CODES = setOf("WORKER_TIMEOUT", "WORKER_CLOSED", "WORKER_KILLED", "TRANSPORT_ERROR")
+
+        /**
          * Starts the worker in this JVM. Refused once a worker in this process was
          * killed or died before its cleanup finished, since a new worker could crash
          * on the addon state it left behind; restart the process to start one.
@@ -96,15 +125,12 @@ class JvmBareKitTransport private constructor(
             }
             val profile = loadProfile()
             val launched = TimeSource.Monotonic.markNow()
-            val started = try {
+            val started = startWorker {
                 start(
                     Worklet.Options(memoryLimit = memoryLimitBytes.toLong()),
                     timeout = START_TIMEOUT,
                     grace = SHUTDOWN_GRACE,
                 )
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                throw QvacWorkerStartException("Failed to start QVAC BareKit worker", error)
             }
             watchExit(started.ipc)
             val rpc = WorkerRpc(data = started.ipc.data, send = started.ipc::write, limits = rpcLimits)

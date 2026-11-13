@@ -190,7 +190,7 @@ JavaScript Dependencies
     https://github.com/chrisguttandin/worker-timers-worker
   ws@3.3.3
     https://github.com/websockets/ws
-  ws@8.22.1
+  ws@8.22.2
     https://github.com/websockets/ws
   xtend@4.0.2
     https://github.com/Raynos/xtend

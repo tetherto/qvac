@@ -1,0 +1,2 @@
+# ncc bundle: byte-identical to the build (it copies CRLF lines from deps), collapsed in PR diffs.
+dist/** -text linguist-generated=true

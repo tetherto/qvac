@@ -164,6 +164,8 @@ test('published files declare every external runtime module', () => {
   assert.ok(packedPaths.has('scripts/convert-bridgedepth.py'))
   assert.ok(packedPaths.has('LICENSE-BridgeDepth'))
   assert.ok(!packedFiles.some((file) => /bridgedepth.*\.gguf(?:\.bin)?$/i.test(file.path)))
+  assert.ok(packedPaths.has('fit.js'))
+  assert.ok(packedPaths.has('fit.d.ts'))
 })
 
 test('production tarball install includes promoted runtime modules', () => {

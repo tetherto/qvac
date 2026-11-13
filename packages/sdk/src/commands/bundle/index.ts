@@ -28,6 +28,8 @@ import { assertNodeCanBundle } from '@/commands/bundle/node-support'
 import { readBundle } from '@/commands/bundle/read-bundle'
 import {
   discardScratch,
+  discardStaged,
+  removeStaleScratch,
   replaceAll,
   scratchFolderFor,
   type Staged
@@ -48,15 +50,19 @@ import { findInAncestorNodeModules } from '@/expo/plugins/find-in-ancestor-node-
 import type { NativeAddon } from '@/commands/verify/addon-source'
 import { isMobileHost } from '@/commands/verify/prebuilds'
 import {
+  DESKTOP_RUNTIMES,
   formatVerifyBundleResult,
   hasErrors,
   verifyBundle,
-  type VerifyBundleOptions,
   type VerifyBundleResult
 } from '@/commands/verify/index'
 import { formatRuntimeSource } from '@/commands/verify/abi'
 import { formatEnginesAdvice } from '@/commands/verify/engines-advice'
-import { BUNDLED_SDK_VERSION_FIELD, BUNDLED_TARGET_FIELD } from '@/client/rpc/bundle-stamp'
+import {
+  BUNDLE_RECORD_FILE,
+  BUNDLED_SDK_VERSION_FIELD,
+  BUNDLED_TARGET_FIELD
+} from '@/client/rpc/bundle-stamp'
 import type { Logger } from '@/logging/types'
 
 export interface BundleSdkOptions {
@@ -76,7 +82,8 @@ export interface BundleSdkOptions {
   languageOptions?: Record<string, string> | undefined
   /**
    * The folder bare-stow writes the harness package to, which must be empty or
-   * not exist yet. Defaults to `qvac/worker/`, which each bundle replaces.
+   * not exist yet. A relative path resolves against `projectRoot`. Defaults to
+   * `qvac/worker/`, which each bundle replaces.
    */
   outputDir?: string | undefined
   /**
@@ -205,14 +212,6 @@ function audioPluginsIn(pluginSpecifiers: string[], sdkName: string): string[] {
     const builtin = parseBuiltinSpecifier(specifier, sdkName)
     return builtin !== null && AUDIO_PLUGINS.has(builtin.suffix)
   })
-}
-
-/** The Bare that each target runs a bundle on for desktop hosts. */
-const DESKTOP_RUNTIMES: Record<BundleTarget, NonNullable<VerifyBundleOptions['desktopRuntime']>> = {
-  'bare-sidecar': 'bare-sidecar',
-  'react-native': 'bare-sidecar',
-  'pear-runtime': 'pear-runtime',
-  'bare-kit': 'bare-kit-kotlin'
 }
 
 /**
@@ -356,20 +355,52 @@ export function describeMissingAddonBuild(error: unknown, hosts: string[]): Erro
   )
 }
 
-/** Records the bundling SDK's version in the harness package.json, where the desktop client checks it. */
+/**
+ * Packages every importer gets from the SDK's own dependencies. Their newer
+ * releases need a newer Bare than the Bare Kit this SDK links, and a project
+ * may install one through another package's range.
+ */
+const SDK_PINNED_MODULES = ['bare-type']
+
+function pinSdkModules(imports: ImportsMap, sdkPath: string, logger: Logger) {
+  const sdkRequire = createRequire(path.join(sdkPath, 'package.json'))
+  for (const name of SDK_PINNED_MODULES) {
+    try {
+      imports[name] = pathToFileURL(sdkRequire.resolve(name)).href
+    } catch {
+      logger.debug(`   ${name} is not among the SDK's dependencies; bundling the project's`)
+    }
+  }
+}
+
 /** Files an older `@qvac/sdk` wrote into `qvac/`, which nothing reads now. */
 const STALE_QVAC_FILES = ['worker.bundle.js', 'addons.manifest.json']
 
-/** Records the SDK version and the target in the harness package.json, for the client to check. */
-async function stampBundle(harnessDir: string, sdkPath: string, target: BundleTarget) {
+/**
+ * Records the SDK version and the target in the harness package.json, for the
+ * client and `verifyBundle` to check. A Kotlin or Python harness has no
+ * package.json, so they go in a record file at its root.
+ */
+async function stampBundle(
+  harnessDir: string,
+  sdkPath: string,
+  target: BundleTarget,
+  language: BundleLanguage
+) {
   const sdk = JSON.parse(await fsp.readFile(path.join(sdkPath, 'package.json'), 'utf8')) as {
     version?: unknown
   }
-  const manifestPath = path.join(harnessDir, 'package.json')
-  const manifest = JSON.parse(await fsp.readFile(manifestPath, 'utf8')) as Record<string, unknown>
-  if (typeof sdk.version === 'string') manifest[BUNDLED_SDK_VERSION_FIELD] = sdk.version
-  manifest[BUNDLED_TARGET_FIELD] = target
-  await fsp.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+  const stampPath = path.join(
+    harnessDir,
+    language === 'javascript' ? 'package.json' : BUNDLE_RECORD_FILE
+  )
+  const stamp =
+    language === 'javascript'
+      ? (JSON.parse(await fsp.readFile(stampPath, 'utf8')) as Record<string, unknown>)
+      : {}
+  if (typeof sdk.version === 'string') stamp[BUNDLED_SDK_VERSION_FIELD] = sdk.version
+  stamp[BUNDLED_TARGET_FIELD] = target
+  await fsp.writeFile(stampPath, `${JSON.stringify(stamp, null, 2)}\n`)
 }
 
 /**
@@ -387,6 +418,21 @@ async function assertHarnessDependenciesResolve(entryPath: string, outputDir: st
       new Error(`${HARNESS_FILE} imports '${name}', which the project cannot resolve`)
     )
   }
+}
+
+async function readFileIfExists(filePath: string): Promise<Buffer | null> {
+  try {
+    return await fsp.readFile(filePath)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
+  }
+}
+
+/** Puts back `filePath`'s earlier content, or removes it when it had none. */
+async function restoreFile(filePath: string, content: Buffer | null) {
+  if (content === null) await fsp.rm(filePath, { force: true })
+  else await fsp.writeFile(filePath, content)
 }
 
 async function assertOutputDirEmpty(outputDir: string, entryPath: string) {
@@ -410,7 +456,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
 
   const projectRoot = path.resolve(options.projectRoot ?? process.cwd())
   const qvacDir = path.join(projectRoot, 'qvac')
-  const outputDir = path.resolve(options.outputDir ?? path.join(qvacDir, 'worker'))
+  const outputDir = path.resolve(projectRoot, options.outputDir ?? path.join(qvacDir, 'worker'))
   const entryPath = path.join(qvacDir, 'worker.entry.mjs')
   if (options.outputDir !== undefined) await assertOutputDirEmpty(outputDir, entryPath)
   const entryFromOutput = path.relative(outputDir, entryPath)
@@ -464,6 +510,8 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     }
   }
 
+  pinSdkModules(imports, sdkPath, logger)
+
   const pluginSpecifiers = resolvePluginSpecifiers(config, sdkName, logger)
   logger.info(`\n📦 Plugins to include (${pluginSpecifiers.length}):`)
   for (const spec of pluginSpecifiers) {
@@ -492,20 +540,9 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   if (target === 'react-native') await assertReactNativeBareKitSupported(projectRoot, sdkPath)
 
   await fsp.mkdir(qvacDir, { recursive: true })
-
-  logger.info('\n📝 Generating worker entry...')
-  await fsp.writeFile(
-    entryPath,
-    generateWorkerEntry(pluginSpecifiers, sdkName, config.rpcServerProvider, resolveImport),
-    'utf8'
-  )
-  logger.info(`   Created: ${path.relative(projectRoot, entryPath)}`)
-
-  logger.info(`\n🔨 Bundling for ${target}...`)
-  logger.debug(`   Hosts: ${hosts.join(', ')}`)
-  if (deferModules.length > 0) {
-    logger.debug(`   Deferred: ${deferModules.join(', ')}`)
-  }
+  const scanOutputDir = path.join(qvacDir, 'worker-scan')
+  await removeStaleScratch(outputDir)
+  await removeStaleScratch(scanOutputDir)
 
   const stowOptions = {
     projectRoot,
@@ -527,7 +564,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
         ),
       hosts,
       scan: async (extraDefer) => {
-        const scanDir = await scratchFolderFor(path.join(qvacDir, 'worker-scan'))
+        const scanDir = await scratchFolderFor(scanOutputDir)
         try {
           const bundlePath = await stowBundle({
             ...stowOptions,
@@ -542,39 +579,57 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
       logger
     })
 
-  let installedPrebuilds: HostPrebuildPackage[] = []
-  const missingPlatformAddons = await addonsMissingPlatformPackages()
-  if (options.installMissingPrebuilds === true) {
-    // Desktop packages are never installed, so a missing one is reported
-    // before package.json changes.
-    await throwIfPlatformPackagesMissing(
-      missingPlatformAddons,
-      hosts.filter((host) => !isMobileHost(host))
-    )
-    const { installed } = await installMissingHostPrebuilds({
-      projectRoot,
-      hosts,
-      addons: missingPlatformAddons,
-      quiet: options.quiet === true,
-      logger
-    })
-    installedPrebuilds = installed
-  } else {
-    await throwIfPlatformPackagesMissing(missingPlatformAddons, hosts)
-  }
-
   // The bundle and the app's native modules are built in scratch folders and
   // replace the old ones together, so a failure leaves the working ones in place.
+  // bare-stow names the bundle's main after the entry's folder, so the entry is
+  // bundled from its own path and its previous content is restored on failure.
+  const previousEntry = await readFileIfExists(entryPath)
   const scratch = await scratchFolderFor(outputDir)
   const staged: Staged[] = [{ dir: outputDir, next: scratch }]
+  let installedPrebuilds: HostPrebuildPackage[] = []
   let addons: string[]
   let addonModules: string[]
   let linked: string[] = []
   let verification: VerifyBundleResult | null = null
   let bundlePath: string
+  let replaced = false
   try {
+    logger.info('\n📝 Generating worker entry...')
+    await fsp.writeFile(
+      entryPath,
+      generateWorkerEntry(pluginSpecifiers, sdkName, config.rpcServerProvider, resolveImport),
+      'utf8'
+    )
+    logger.info(`   Created: ${path.relative(projectRoot, entryPath)}`)
+
+    logger.info(`\n🔨 Bundling for ${target}...`)
+    logger.debug(`   Hosts: ${hosts.join(', ')}`)
+    if (deferModules.length > 0) {
+      logger.debug(`   Deferred: ${deferModules.join(', ')}`)
+    }
+
+    const missingPlatformAddons = await addonsMissingPlatformPackages()
+    if (options.installMissingPrebuilds === true) {
+      // Desktop packages are never installed, so a missing one is reported
+      // before package.json changes.
+      await throwIfPlatformPackagesMissing(
+        missingPlatformAddons,
+        hosts.filter((host) => !isMobileHost(host))
+      )
+      const { installed } = await installMissingHostPrebuilds({
+        projectRoot,
+        hosts,
+        addons: missingPlatformAddons,
+        quiet: options.quiet === true,
+        logger
+      })
+      installedPrebuilds = installed
+    } else {
+      await throwIfPlatformPackagesMissing(missingPlatformAddons, hosts)
+    }
+
     const scratchBundlePath = await stowBundle({ ...stowOptions, outputDir: scratch })
-    if (language === 'javascript') await stampBundle(scratch, sdkPath, target)
+    await stampBundle(scratch, sdkPath, target, language)
     bundlePath = path.join(outputDir, path.relative(scratch, scratchBundlePath))
 
     const stats = await fsp.stat(scratchBundlePath)
@@ -615,9 +670,13 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     }
 
     await replaceAll(staged)
+    replaced = true
     for (const stale of STALE_QVAC_FILES) await fsp.rm(path.join(qvacDir, stale), { force: true })
+  } catch (error) {
+    if (!replaced) await restoreFile(entryPath, previousEntry)
+    throw error
   } finally {
-    for (const { next } of staged) await discardScratch(next)
+    await discardStaged(staged)
   }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2)

@@ -758,17 +758,23 @@ jobs:
       test-suite-provenance: ${{ needs.prepare-test-suite.outputs.provenance }}
     secrets: inherit
 
-  # Same Device Farm pools as android-tests. Builds its own Android runtime, so
-  # no shared-runtime-libs dependency.
+  # Same Device Farm pools as android-tests, so when both run it starts after
+  # android-tests ends, whatever that leg's result: run together, the two can
+  # select the same private device. Builds its own Android runtime, so no
+  # shared-runtime-libs dependency.
   kotlin-android-tests:
-    needs: [resolve, prepare-inference, prepare-test-suite]
+    needs: [resolve, prepare-inference, prepare-test-suite, android-tests]
     permissions:
       actions: read
       id-token: write
       contents: read
       pull-requests: write
       packages: read
-    if: needs.resolve.outputs.run-kotlin-android == 'true'
+    if: >-
+      !cancelled()
+      && needs.resolve.outputs.run-kotlin-android == 'true'
+      && needs.prepare-inference.result == 'success'
+      && needs.prepare-test-suite.result == 'success'
     uses: ./.github/workflows/test-android-sdk.yml
     with:
       project-directory: "packages/sdk"

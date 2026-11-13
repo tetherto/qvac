@@ -9,6 +9,11 @@ export const DEFAULT_WORKER_START_TIMEOUT_MS = 60_000
 /** How long a stopping worker gets to unload its engines before it is killed. */
 export const WORKER_SHUTDOWN_GRACE_MS = 10_000
 
+/** A worker process the client spawned. */
+export interface WorkerProcess {
+  kill(signal: 'SIGKILL'): unknown
+}
+
 /** The fields bare-stow-host sets on a worker's failure. */
 type ExitReport =
   { code?: string; exitCode?: number | null; signalCode?: string | null } | undefined
