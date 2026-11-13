@@ -1,6 +1,8 @@
 import type { LoggingStreamRequest, LoggingStreamResponse } from '@/schemas/index'
 import type { StreamHandlerContext } from '@/handlers/types'
 import { registerLoggingStream, unregisterLoggingStream } from '@/runtime/logging-stream-registry'
+import { isOwnerSession, isSessionOpen, onSessionClose } from '@/runtime/session-registry'
+import { resolveSessionId } from '@/runtime/session-id'
 import type { LogLevel } from '@qvac/logging'
 
 export async function* handleLoggingStream(
@@ -10,6 +12,12 @@ export async function* handleLoggingStream(
   const { id } = request
   const { signal } = context
   if (signal?.aborted) return
+  // A subscription is not a registered request, so the session close that
+  // drains requests would not reach it; it ends on its own close listener.
+  const sessionId = resolveSessionId(request)
+  const scoped = !isOwnerSession(sessionId)
+  if (scoped && !isSessionOpen(sessionId)) return
+  let stopped = false
 
   const logQueue: LoggingStreamResponse[] = []
   let pendingResolve: (() => void) | null = null
@@ -39,14 +47,16 @@ export async function* handleLoggingStream(
   }
 
   // Release at once, even if nobody is reading; a quiet id would wait forever.
-  const onAbort = () => {
+  const stop = () => {
+    stopped = true
     unregisterLoggingStream(id, streamHandler)
     logQueue.length = 0
     wake()
   }
 
   registerLoggingStream(id, streamHandler)
-  signal?.addEventListener('abort', onAbort, { once: true })
+  signal?.addEventListener('abort', stop, { once: true })
+  const removeCloseListener = scoped ? onSessionClose(sessionId, stop) : undefined
 
   try {
     while (true) {
@@ -54,15 +64,16 @@ export async function* handleLoggingStream(
         yield logQueue.shift()!
       }
 
-      // Aborted during a read: nothing to wake, so end here.
-      if (signal?.aborted) return
+      // Stopped during a read: nothing to wake, so end here.
+      if (stopped || signal?.aborted) return
 
       await new Promise<void>((resolve) => {
         pendingResolve = resolve
       })
     }
   } finally {
-    signal?.removeEventListener('abort', onAbort)
+    signal?.removeEventListener('abort', stop)
+    removeCloseListener?.()
     unregisterLoggingStream(id, streamHandler)
   }
 }

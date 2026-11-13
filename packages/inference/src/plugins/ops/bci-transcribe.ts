@@ -1,3 +1,4 @@
+import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
 import { getModel } from '@/runtime/model-registry'
 import {
   type BciStreamOpts,
@@ -8,7 +9,7 @@ import {
 } from '@/schemas/index'
 import Buffer from 'bare-buffer'
 import { getEngineLogger } from '@/logging/index'
-import { TranscriptionFailedError } from '@/errors/index'
+import { InferenceCancelledError, TranscriptionFailedError } from '@/errors/index'
 import { nowMs } from '@/profiling/index'
 import { buildStreamResult, type StreamResult } from '@/profiling/model-execution'
 import { buildAsrBackendDiagnostics } from '@/utils/asr-diagnostics'
@@ -87,15 +88,21 @@ type BciTranscribeReturn = {
 
 export function bciTranscribe(
   params: BciTranscribeParams & { metadata: true },
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<TranscribeSegment, BciTranscribeReturn, void>
 export function bciTranscribe(
   params: BciTranscribeParams,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<string, BciTranscribeReturn, void>
 export async function* bciTranscribe(
   params: BciTranscribeParams,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<string | TranscribeSegment, BciTranscribeReturn, void> {
   const { modelId, metadata } = params
 
@@ -105,9 +112,14 @@ export async function* bciTranscribe(
   // caller didn't send one.
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRandomRequestId(),
+    sessionId,
+    ...requestParent(context),
     kind: 'transcribe',
     modelId
   })
+  // Cancelled while queued for the model: it holds no slot, so wiring the
+  // model-wide cancel below would stop the job of whoever runs now.
+  if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
   const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
   const model = getModel(modelId) as unknown as BciTranscribableModel
@@ -214,21 +226,27 @@ export function bciTranscribeStream(
   neuralStream: AsyncIterable<Buffer>,
   metadata: true,
   opts?: BciStreamOpts,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<TranscribeSegment, BciStreamReturn, void>
 export function bciTranscribeStream(
   modelId: string,
   neuralStream: AsyncIterable<Buffer>,
   metadata?: boolean,
   opts?: BciStreamOpts,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<string, BciStreamReturn, void>
 export async function* bciTranscribeStream(
   modelId: string,
   neuralStream: AsyncIterable<Buffer>,
   metadata?: boolean,
   opts?: BciStreamOpts,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<string | TranscribeSegment, BciStreamReturn, void> {
   // Same `kind: "transcribe"` as the unary BCI variant — the registry
   // doesn't distinguish streaming vs non-streaming variants of the same
@@ -236,9 +254,12 @@ export async function* bciTranscribeStream(
   // either shape.
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRandomRequestId(),
+    sessionId,
+    ...requestParent(context),
     kind: 'transcribe',
     modelId
   })
+  if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
   const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
   const model = getModel(modelId) as unknown as BciStreamableModel

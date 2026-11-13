@@ -9,6 +9,7 @@ export {
   downloadAsset,
   heartbeat,
   unloadModel,
+  type UnloadModelResult,
   transcribe,
   transcribeStream,
   bciTranscribe,
@@ -30,6 +31,7 @@ export {
   createVectorIndex,
   loadVectorIndex,
   type VectorIndex,
+  type VectorIndexOperation,
   textToSpeech,
   textToSpeechStream,
   getModelInfo,
@@ -78,6 +80,7 @@ export {
   type FinetuneHandle
 } from './client/api'
 export { close } from './client'
+export { openSession, type QvacSession, type OpenSessionOptions } from './client/session'
 export { plugins } from './client/plugins-factory'
 export {
   type LifecycleState,
@@ -330,6 +333,8 @@ export {
   definePlugin,
   defineHandler,
   defineDuplexHandler,
+  requestParent,
+  type PluginHandlerContext,
   PluginDefinitionInvalidError,
   type QvacPlugin,
   type CreateModelParams,
@@ -419,7 +424,13 @@ export {
   AudioEncodeFailedError,
   InvalidSeedFromParamsError,
   KvCacheSeedSourceNotFoundError,
-  KvCacheSeedSharingDisabledError
+  KvCacheSeedSharingDisabledError,
+  SessionIdConflictError,
+  SessionNotOpenError,
+  ModelLeasedError,
+  ModelReconfiguredError,
+  OwnerOnlyError,
+  RAGWorkspaceBusyError
 } from './utils/errors-server'
 
 // `WorkerCrashedError` and `WorkerShutdownError` are thrown by the
@@ -441,7 +452,9 @@ export {
   WorkerStartupError,
   RequestValidationFailedError,
   StreamEndedError,
-  TextToSpeechStreamFailedError
+  TextToSpeechStreamFailedError,
+  SessionInvalidatedError,
+  ModelHandleInvalidatedError
 } from './utils/errors-client'
 
 // Logging exports

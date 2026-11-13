@@ -709,6 +709,20 @@ export class RAGWorkspaceInUseError extends QvacErrorBase {
   }
 }
 
+/** A RAG operation on a workspace that another session's operation is using. */
+export class RAGWorkspaceBusyError extends QvacErrorBase {
+  readonly workspace: string
+
+  constructor(workspace: string, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.RAG_WORKSPACE_BUSY, [workspace], cause))
+    this.workspace = workspace
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { workspace: this.workspace }
+  }
+}
+
 export class RAGWorkspaceNotOpenError extends QvacErrorBase {
   constructor(workspace: string, cause?: unknown) {
     super(createErrorOptions(ERROR_CODES.RAG_WORKSPACE_NOT_OPEN, [workspace], cause))
@@ -1091,6 +1105,82 @@ export class LifecycleOperationBlockedError extends QvacErrorBase {
     super(
       createErrorOptions(ERROR_CODES.LIFECYCLE_OPERATION_BLOCKED, [requestType, lifecycleState])
     )
+  }
+}
+
+// ============== Caller sessions and model leases ==============
+
+export class SessionIdConflictError extends QvacErrorBase {
+  readonly sessionId: string
+
+  constructor(sessionId: string, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.SESSION_ID_CONFLICT, [sessionId], cause))
+    this.sessionId = sessionId
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { sessionId: this.sessionId }
+  }
+}
+
+export class SessionNotOpenError extends QvacErrorBase {
+  readonly sessionId: string
+
+  constructor(sessionId: string, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.SESSION_NOT_OPEN, [sessionId], cause))
+    this.sessionId = sessionId
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { sessionId: this.sessionId }
+  }
+}
+
+/** A `reloadConfig` on a model another session holds a lease on. */
+export class ModelLeasedError extends QvacErrorBase {
+  readonly modelId: string
+  readonly leaseCount: number
+
+  constructor(modelId: string, leaseCount: number, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.MODEL_LEASED, [modelId, String(leaseCount)], cause))
+    this.modelId = modelId
+    this.leaseCount = leaseCount
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { modelId: this.modelId, leaseCount: this.leaseCount }
+  }
+}
+
+/**
+ * A load whose configuration hash names a model that a reload has since
+ * reconfigured, from a session that holds no lease on it.
+ */
+export class ModelReconfiguredError extends QvacErrorBase {
+  readonly modelId: string
+
+  constructor(modelId: string, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.MODEL_RECONFIGURED, [modelId], cause))
+    this.modelId = modelId
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { modelId: this.modelId }
+  }
+}
+
+export class OwnerOnlyError extends QvacErrorBase {
+  readonly operation: string
+  readonly sessionId: string
+
+  constructor(operation: string, sessionId: string, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.OWNER_ONLY, [operation, sessionId], cause))
+    this.operation = operation
+    this.sessionId = sessionId
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { operation: this.operation, sessionId: this.sessionId }
   }
 }
 

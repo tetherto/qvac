@@ -61,10 +61,17 @@ class FakeTransport:
     blocks forever (a live log stream never ends on its own), so tests can
     assert the pump keeps running until explicitly stopped."""
 
-    def __init__(self, response=None, stream_items=None, hang: bool = True):
+    def __init__(
+        self,
+        response=None,
+        stream_items=None,
+        hang: bool = True,
+        session_id: str | None = None,
+    ):
         self.response = response
         self.stream_items = stream_items or []
         self.hang = hang
+        self.session_id = session_id
         self.sent: Any = None
         self.stream_sent: Any = None
 
@@ -132,6 +139,23 @@ async def test_duplicate_start_is_a_noop():
     # The second transport was never subscribed.
     assert second.stream_sent is None
     stop_logging_stream_for_model("m-2")
+    await _drain()
+
+
+async def test_callers_sharing_a_model_keep_separate_log_streams():
+    a = FakeTransport(stream_items=[], session_id="A")
+    b = FakeTransport(stream_items=[], session_id="B")
+    start_logging_stream_for_model(a, "m-5", RecordingLogger())
+    start_logging_stream_for_model(b, "m-5", RecordingLogger())
+    await _drain()
+    assert b.stream_sent is not None, "B's logger gets its own stream"
+
+    # B releases its lease; A still holds the model and keeps its logs.
+    b.response = {"type": "unloadModel", "success": True, "released": True}
+    await api.unload_model(b, "m-5")
+    assert not has_active_stream_for_model("m-5", b)
+    assert has_active_stream_for_model("m-5", a)
+    stop_logging_stream_for_model("m-5", a)
     await _drain()
 
 
