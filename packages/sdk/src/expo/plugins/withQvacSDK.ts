@@ -4,7 +4,7 @@ import withAndroidArchitecture from './withAndroidArchitecture'
 import withAndroidNdkVersion from './withAndroidNdkVersion'
 import withBareKit from './withBareKit'
 import withDeviceInfo from './withDeviceInfo'
-import withMobileBundle, { type MobileBundleOptions } from './withMobileBundle'
+import withMobileBundle, { iosEngineOf, type MobileBundleOptions } from './withMobileBundle'
 import withOpenCL from './withOpenCL'
 
 const { withPlugins } = configPlugins
@@ -27,7 +27,7 @@ type QvacSDKPluginOptions = MobileBundleOptions
 function withQvacSDK(config: ExpoConfig, options: QvacSDKPluginOptions = {}): ExpoConfig {
   return withPlugins(config, [
     [withMobileBundle, options],
-    withBareKit,
+    [withBareKit, { iosEngine: iosEngineOf(options) }],
     withDeviceInfo,
     [
       'expo-build-properties',

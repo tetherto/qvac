@@ -3,8 +3,16 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import semver from 'semver'
 import { createLimiter } from '@/commands/verify/addon-source'
 import {
+  BARE_KIT_BARE_VERSIONS,
+  BARE_KIT_SWIFT_BARE_KITS
+} from '@/commands/verify/bare-kit-runtimes'
+import {
+  fetchBindingReleasesFromGitHub,
+  newestFromMinimum,
+  newestMatchingPin,
   parseBareKitPins,
   parseBareKitVersion,
   parseBareVersion,
@@ -76,6 +84,14 @@ function writeBareStow(dir: string, pins: { kotlin?: string; swift?: string }): 
 
 /** bare-kit-kotlin 0.2.2 and bare-kit-swift 2.2.0 are both built from bare-kit 3.0.1, Bare 1.36.2. */
 const CURRENT_PINS = { kotlin: '0.2.2', swift: '2.2.0' }
+
+/**
+ * iOS links the newest bare-kit-swift from the pinned minimum, so the Bare it
+ * runs follows the built-in tables.
+ */
+const IOS_RELEASE = newestFromMinimum('2.2.0', Object.keys(BARE_KIT_SWIFT_BARE_KITS))!
+const IOS_BARE = BARE_KIT_BARE_VERSIONS[BARE_KIT_SWIFT_BARE_KITS[IOS_RELEASE]!]!
+const literal = (text: string) => text.replaceAll('.', '\\.')
 
 function failingFetch(): (url: string) => Promise<string> {
   return () => Promise.reject(new Error('unexpected network request'))
@@ -199,6 +215,51 @@ describe('Bare Kit CMakeLists and bare-stow pin parsing', () => {
     })
     assert.deepEqual(parseBareKitPins("exports.name = 'bare-kit'"), { android: null, ios: null })
   })
+
+  it('reads a Gradle dynamic bare-kit-kotlin pin', () => {
+    assert.deepEqual(parseBareKitPins(bareKitTarget({ kotlin: '0.2.+', swift: '2.3.0' })), {
+      android: '0.2.+',
+      ios: '2.3.0'
+    })
+  })
+
+  it('reads the bare-kit-swift entry of the engine', () => {
+    const source =
+      "v8: { url: 'https://github.com/holepunchto/bare-kit-swift', from: '2.4.0', products: ['BareKit'] },\n" +
+      "javascriptcore: { url: 'https://github.com/holepunchto/bare-kit-swift', from: '2.5.0', " +
+      "products: ['BareKit'], traits: ['JavaScriptCore'] }"
+    assert.equal(parseBareKitPins(source).ios, '2.5.0')
+    assert.equal(parseBareKitPins(source, 'javascriptcore').ios, '2.5.0')
+    assert.equal(parseBareKitPins(source, 'v8').ios, '2.4.0')
+  })
+
+  it('matches a Swift minimum to the newest release below the next major', () => {
+    const versions = ['2.2.0', '2.4.0', '2.10.1', '3.0.0', 'nightly']
+    assert.equal(newestFromMinimum('2.3.0', versions), '2.10.1')
+    assert.equal(newestFromMinimum('3.0.1', versions), null)
+    assert.equal(newestFromMinimum('0.2.0', ['0.2.5', '0.3.0']), '0.2.5')
+  })
+
+  it('reads the released versions from the tags of the repository', async () => {
+    const refs =
+      '003f0123 refs/tags/v2.3.0\n003f4567 refs/tags/v2.4.0\n00414567 refs/tags/v2.4.0^{}\n'
+    const urls: string[] = []
+    const versions = await fetchBindingReleasesFromGitHub('bare-kit-swift', async (url) => {
+      urls.push(url)
+      return refs
+    })
+    assert.deepEqual(versions, ['2.3.0', '2.4.0'])
+    assert.deepEqual(urls, [
+      'https://github.com/holepunchto/bare-kit-swift/info/refs?service=git-upload-pack'
+    ])
+  })
+
+  it('matches a dynamic pin to the newest release with its prefix', () => {
+    const versions = ['0.1.2', '0.2.0', '0.2.10', '0.2.3', '0.3.0']
+    assert.equal(newestMatchingPin('0.2.+', versions), '0.2.10')
+    assert.equal(newestMatchingPin('0.+', versions), '0.3.0')
+    assert.equal(newestMatchingPin('1.+', versions), null)
+  })
 })
 
 describe('resolveBareKitRuntime', () => {
@@ -223,7 +284,31 @@ describe('resolveBareKitRuntime', () => {
     })
   })
 
-  it('resolves iOS from the built-in tables at the pinned Swift version', async () => {
+  it('resolves iOS at a newer release found on GitHub than the built-in tables know', async () => {
+    await withTempDir(async (dir) => {
+      const progress: string[] = []
+      const resolution = await resolveBareKitRuntime({
+        platform: 'ios',
+        bareStowDir: writeBareStow(dir, CURRENT_PINS),
+        fetchText: fakeGitHub({
+          '/bare-kit-swift/info/refs': '003f0123 refs/tags/v2.2.0\n003f4567 refs/tags/v2.99.0\n',
+          '/bare-kit-swift/v2.99.0/': 'fetch_package("github:holepunchto/bare-kit@9.2.0")',
+          '/bare-kit/v9.2.0/': 'fetch_package("github:holepunchto/bare@1.99.0")'
+        }),
+        onProgress: (message) => progress.push(message)
+      })
+      assert.ok(resolution.resolved)
+      assert.equal(resolution.runtime.version, '1.99.0')
+      assert.equal(resolution.runtime.packageVersion, '2.99.0')
+      assert.match(
+        resolution.runtime.detail,
+        /bare-kit-swift 2\.2\.0 or newer \(newest release 2\.99\.0\)/
+      )
+      assert.match(progress[0]!, /Checking the newest bare-kit-swift release on github\.com/)
+    })
+  })
+
+  it('resolves iOS at the newest release in the built-in tables from the Swift minimum', async () => {
     await withTempDir(async (dir) => {
       const resolution = await resolveBareKitRuntime({
         platform: 'ios',
@@ -231,10 +316,46 @@ describe('resolveBareKitRuntime', () => {
         fetchText: failingFetch()
       })
       assert.ok(resolution.resolved)
-      assert.equal(resolution.runtime.version, '1.36.2')
+      assert.equal(resolution.runtime.version, IOS_BARE)
       assert.equal(resolution.runtime.source, 'bare-kit-swift')
-      assert.equal(resolution.runtime.packageVersion, '2.2.0')
-      assert.match(resolution.runtime.detail, /bare-kit-swift 2\.2\.0, built from/)
+      assert.equal(resolution.runtime.packageVersion, IOS_RELEASE)
+      assert.match(
+        resolution.runtime.detail,
+        new RegExp(
+          `bare-kit-swift 2\\.2\\.0 or newer \\(newest known release ${literal(IOS_RELEASE)}\\)`
+        )
+      )
+    })
+  })
+
+  it('resolves a dynamic Android pin at the newest matching release in the tables', async () => {
+    await withTempDir(async (dir) => {
+      const resolution = await resolveBareKitRuntime({
+        platform: 'android',
+        bareStowDir: writeBareStow(dir, { kotlin: '0.1.+' }),
+        fetchText: failingFetch()
+      })
+      assert.ok(resolution.resolved)
+      assert.equal(resolution.runtime.version, '1.36.2')
+      assert.equal(resolution.runtime.packageVersion, '0.1.2')
+      assert.match(
+        resolution.runtime.detail,
+        /bare-kit-kotlin 0\.1\.\+ \(newest known release 0\.1\.2\), built from bare-kit 3\.0\.1/
+      )
+    })
+  })
+
+  it('leaves a dynamic Android pin with no matching release unresolved', async () => {
+    await withTempDir(async (dir) => {
+      const resolution = await resolveBareKitRuntime({
+        platform: 'android',
+        bareStowDir: writeBareStow(dir, { kotlin: '9.+' }),
+        fetchText: failingFetch()
+      })
+      assert.equal(resolution.resolved, false)
+      if (!resolution.resolved) {
+        assert.match(resolution.error.reason, /pins bare-kit-kotlin 9\.\+, and no release matching/)
+      }
     })
   })
 
@@ -549,7 +670,10 @@ describe('verifyBundle engines.bare against the phone runtimes', () => {
       const mismatches = result.issues.filter((issue) => issue.code === 'abi-mismatch')
       assert.equal(mismatches.length, 1)
       assert.deepEqual(mismatches[0]!.hosts, ['ios-arm64'])
-      assert.match(mismatches[0]!.message, /runtime is 1\.36\.2 \(from bare-kit-swift/)
+      assert.match(
+        mismatches[0]!.message,
+        new RegExp(`runtime is ${literal(IOS_BARE)} \\(from bare-kit-swift`)
+      )
     })
   })
 
@@ -597,6 +721,36 @@ describe('verifyBundle engines.bare against the phone runtimes', () => {
       })
       assert.equal(hasErrors(result), false)
       assert.deepEqual(result.advice, [])
+    })
+  })
+
+  it('passes an addon needing Bare 1.37 on the Bare Kit that bare-stow 0.3.7 pins', async () => {
+    await withTempDir(async (dir) => {
+      writeMobileProject(dir, { hosts: ['android-arm64', 'ios-arm64'], enginesBare: '>=1.37.0' })
+      // The pins bare-stow 0.3.7 uses.
+      const bareStowDir = writeBareStow(dir, { kotlin: '0.2.+', swift: '2.3.0' })
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: path.join(dir, 'node_modules'),
+        hosts: ['android-arm64', 'ios-arm64'],
+        bareStowDir,
+        fetchText: failingFetch(),
+        fetchPackageMetadata: () => Promise.reject(new Error('unexpected registry request'))
+      })
+      assert.equal(hasErrors(result), false)
+      assert.deepEqual(result.advice, [])
+
+      const runtime = (platform: string) => {
+        const resolution = result.runtimes.find((entry) => entry.platform === platform)?.resolution
+        assert.ok(resolution?.resolved === true)
+        return resolution.runtime
+      }
+      // bare-kit-swift 2.3.0 ships Bare 1.37.1.
+      assert.equal(runtime('ios').version, '1.37.1')
+      // `0.2.+` tracks the newest 0.2.x, so its Bare can only go up.
+      const android = runtime('android')
+      assert.match(android.packageVersion, /^0\.2\.\d+$/)
+      assert.ok(semver.gte(android.version, '1.37.1'), android.version)
     })
   })
 
@@ -679,7 +833,10 @@ describe('verifyBundle engines.bare against the phone runtimes', () => {
       })
       const mismatches = result.issues.filter((issue) => issue.code === 'abi-mismatch')
       assert.equal(mismatches.length, 1)
-      assert.match(mismatches[0]!.message, /runtime is 1\.36\.2 \(from bare-kit-swift/)
+      assert.match(
+        mismatches[0]!.message,
+        new RegExp(`runtime is ${literal(IOS_BARE)} \\(from bare-kit-swift`)
+      )
     })
   })
 
