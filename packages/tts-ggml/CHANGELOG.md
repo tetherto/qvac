@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Run on the shared `@qvac/fabric` runtime: the module links the ggml that
+  `@qvac/fabric` ships instead of bundling its own, loads GPU backends from
+  the fabric platform package, and the native build takes ggml from the
+  `qvac-fabric` vcpkg port through `speech-cpp` `2026-11-11`
+  ([#5481](https://github.com/tetherto/qvac/pull/5481)).
+
+### Removed
+
+- The opt-in WebGPU build: WebGPU returns once the `@qvac/fabric` runtime
+  provides it ([#5481](https://github.com/tetherto/qvac/pull/5481)).
+
 ## [0.15.1] - 2026-11-10
 
 ## [0.15.0] - 2026-11-05

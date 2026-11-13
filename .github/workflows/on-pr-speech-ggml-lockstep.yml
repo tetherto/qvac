@@ -1,11 +1,13 @@
 name: On PR Trigger (Speech ggml lockstep)
 
-# Fails unless asr-ggml, audiogen-ggml, bci-whispercpp and tts-ggml pin the
-# same ggml-speech and speech-cpp, record that ggml-speech in package.json, and
-# plan the same ggml-speech version and features for every prebuild triplet, or
-# when another package depends on either port without being listed with them.
-# They ship their ggml backends under the same file names, so an app with two
-# of them keeps one copy of each for both.
+# Fails unless the speech addons that still link ggml-speech (bci-whispercpp)
+# pin the same ggml-speech and speech-cpp, record that ggml-speech in
+# package.json, and plan the same ggml-speech version and features for every
+# prebuild triplet, or when another package depends on either port without
+# being listed with them. They ship their ggml backends under the same file
+# names, so an app with two of them keeps one copy of each for both. The
+# addons on the @qvac/fabric runtime (asr-ggml, audiogen-ggml, tts-ggml) ship
+# no ggml: they pin one speech-cpp and depend on @qvac/fabric.
 
 on:
   pull_request:

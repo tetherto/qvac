@@ -2,11 +2,8 @@
   "name": "@qvac/asr-ggml",
   "version": "0.12.1",
   "description": "Multi-engine ASR (Whisper + NVIDIA Parakeet + MOSS-Transcribe-Diarize) inference addon for qvac on the Bare runtime",
-  "qvac": {
-    "ggml-speech": "2026-10-27#1"
-  },
   "engines": {
-    "bare": ">=1.20.0"
+    "bare": ">=1.24.0"
   },
   "imports": {
     "#host-addon": {
@@ -40,9 +37,7 @@
     "format": "prettier --write \"examples/**/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" \"binding.js\" \"addon-unavailable.js\"",
     "build": "npm run build:ts && npm run build:native",
     "build:native": "bare-make generate -D BUILD_FUZZING=OFF && bare-make build && bare-make install && npm run link:platform",
-    "build:native:cuda": "bare-make generate -D ASR_CUDA=ON -D BUILD_FUZZING=OFF && bare-make build && bare-make install && npm run link:platform",
     "link:platform": "node ../../scripts/ci/slice-platform-packages.mjs --link-local --workdir .",
-    "build:cuda": "npm run build:ts && npm run build:native:cuda",
     "build:ts": "tsc -p tsconfig.build.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "clean": "rm -rf build/ prebuilds/",
@@ -201,10 +196,13 @@
     "prettier-config-holepunch": "^2.0.0",
     "streamx": "^2.25.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.63.0"
+    "typescript-eslint": "^8.63.0",
+    "@qvac/fabric-android-arm64": "^0.29.0",
+    "@qvac/fabric-ios": "^0.29.0"
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
+    "@qvac/fabric": "^0.29.0",
     "@qvac/infer-base": "^0.8.0",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.7.1",
@@ -217,7 +215,24 @@
     "@qvac/asr-ggml-linux-arm64": "0.8.0",
     "@qvac/asr-ggml-darwin-arm64": "0.8.0",
     "@qvac/asr-ggml-darwin-x64": "0.8.0",
-    "@qvac/asr-ggml-win32-x64": "0.8.0"
+    "@qvac/asr-ggml-win32-x64": "0.8.0",
+    "@qvac/fabric-linux-x64": "^0.29.0",
+    "@qvac/fabric-linux-arm64": "^0.29.0",
+    "@qvac/fabric-darwin-arm64": "^0.29.0",
+    "@qvac/fabric-darwin-x64": "^0.29.0",
+    "@qvac/fabric-win32-x64": "^0.29.0"
+  },
+  "peerDependencies": {
+    "@qvac/fabric-android-arm64": "^0.29.0",
+    "@qvac/fabric-ios": "^0.29.0"
+  },
+  "peerDependenciesMeta": {
+    "@qvac/fabric-android-arm64": {
+      "optional": true
+    },
+    "@qvac/fabric-ios": {
+      "optional": true
+    }
   },
   "exports": {
     "./package": "./package.json",
