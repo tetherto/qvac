@@ -66,23 +66,33 @@ export function ocr(
 
   let ocrStats: OCRStats | undefined
   let statsResolver: (value: OCRStats | undefined) => void = () => {}
-  const statsPromise = new Promise<OCRStats | undefined>((resolve) => {
+  let statsRejecter: (error: unknown) => void = () => {}
+  const statsPromise = new Promise<OCRStats | undefined>((resolve, reject) => {
     statsResolver = resolve
+    statsRejecter = reject
   })
+  // A failed stream (a cancel, a timeout, a worker error) sends no `done`
+  // frame, so it rejects `stats` too instead of leaving it pending.
+  statsPromise.catch(() => {})
 
   if (params.stream) {
     const blockStream = (async function* () {
-      for await (const response of streamRpc(request, options)) {
-        if (response.type === 'ocrStream') {
-          const streamResponse = ocrStreamResponseSchema.parse(response)
-          if (streamResponse.blocks && streamResponse.blocks.length > 0) {
-            yield streamResponse.blocks
-          }
-          if (streamResponse.done) {
-            ocrStats = streamResponse.stats
-            statsResolver(ocrStats)
+      try {
+        for await (const response of streamRpc(request, options)) {
+          if (response.type === 'ocrStream') {
+            const streamResponse = ocrStreamResponseSchema.parse(response)
+            if (streamResponse.blocks && streamResponse.blocks.length > 0) {
+              yield streamResponse.blocks
+            }
+            if (streamResponse.done) {
+              ocrStats = streamResponse.stats
+              statsResolver(ocrStats)
+            }
           }
         }
+      } catch (error) {
+        statsRejecter(error)
+        throw error
       }
     })()
 
@@ -99,17 +109,22 @@ export function ocr(
 
     const blocksPromise = (async () => {
       let allBlocks: OCRTextBlock[] = []
-      for await (const response of streamRpc(request, options)) {
-        if (response.type === 'ocrStream') {
-          const streamResponse = ocrStreamResponseSchema.parse(response)
-          if (streamResponse.blocks) {
-            allBlocks = allBlocks.concat(streamResponse.blocks)
-          }
-          if (streamResponse.done) {
-            ocrStats = streamResponse.stats
-            statsResolver(ocrStats)
+      try {
+        for await (const response of streamRpc(request, options)) {
+          if (response.type === 'ocrStream') {
+            const streamResponse = ocrStreamResponseSchema.parse(response)
+            if (streamResponse.blocks) {
+              allBlocks = allBlocks.concat(streamResponse.blocks)
+            }
+            if (streamResponse.done) {
+              ocrStats = streamResponse.stats
+              statsResolver(ocrStats)
+            }
           }
         }
+      } catch (error) {
+        statsRejecter(error)
+        throw error
       }
       return allBlocks
     })()
