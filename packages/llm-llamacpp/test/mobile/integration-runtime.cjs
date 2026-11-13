@@ -160,13 +160,102 @@ global.__shouldRunTest = function shouldRunTest(testName) {
   // guarantees os.getEnv() inside the test's module init sees the
   // dispatched value.
   loadPerfConfigOnce()
+  initNativeTail()
 
   if (!__filterRe) return true
   return __filterRe.test(testName)
 }
 
+// Mirrors console to native-tail.log with sync writes so C++ lines survive an addon abort().
+// Capped well under iOS's 4 GiB/day per-app write limit; a full run is ~90 KB.
+const NATIVE_TAIL_MAX_BYTES = 8 * 1024 * 1024
+let _nativeTailPath = null
+let _nativeTailBytes = 0
+let _nativeTailStopped = false
+let _nativeTailWarnedNoDir = false
+let _nativeTailWarnedWrite = false
+
+function _nativeTailWrite(level, args) {
+  if (!_nativeTailPath || _nativeTailStopped) return
+  let line
+  try {
+    line =
+      '[' +
+      new Date().toISOString() +
+      '] [' +
+      level +
+      '] ' +
+      args
+        .map((a) => {
+          if (typeof a === 'string') return a
+          if (a instanceof Error) return a.stack || a.message
+          try {
+            return JSON.stringify(a)
+          } catch (_) {
+            return String(a)
+          }
+        })
+        .join(' ') +
+      '\n'
+  } catch (_) {
+    return
+  }
+
+  if (_nativeTailBytes + line.length > NATIVE_TAIL_MAX_BYTES) {
+    _nativeTailStopped = true
+    try {
+      fs.appendFileSync(_nativeTailPath, '[native-tail] cap reached; further lines omitted\n')
+    } catch (_) {}
+    return
+  }
+
+  try {
+    fs.appendFileSync(_nativeTailPath, line)
+    _nativeTailBytes += line.length
+  } catch (_) {
+    // A broken tail must never take the run with it, nor be re-armed (that would truncate it).
+    _nativeTailStopped = true
+  }
+}
+
+function initNativeTail() {
+  if (_nativeTailPath || _nativeTailStopped) return
+  const dir = global.testDir
+  // Say why on every bail-out, so a run never looks instrumented when it isn't.
+  if (!dir) {
+    if (!_nativeTailWarnedNoDir) {
+      _nativeTailWarnedNoDir = true
+      console.log('[native-tail] not started: global.testDir is not set')
+    }
+    return
+  }
+  const target = path.join(dir, 'native-tail.log')
+  try {
+    fs.writeFileSync(target, '')
+  } catch (err) {
+    if (!_nativeTailWarnedWrite) {
+      _nativeTailWarnedWrite = true
+      console.log('[native-tail] not started: cannot write ' + target + ': ' + err.message)
+    }
+    return
+  }
+  _nativeTailPath = target
+
+  for (const level of ['log', 'info', 'warn', 'error', 'debug']) {
+    const original = console[level]
+    if (typeof original !== 'function') continue
+    console[level] = function (...args) {
+      original.apply(console, args)
+      _nativeTailWrite(level.toUpperCase(), args)
+    }
+  }
+  console.log('[native-tail] mirroring console to ' + target)
+}
+
 async function runIntegrationModule(relativeModulePath) {
   const modulePath = path.join(__dirname, relativeModulePath)
+
+  initNativeTail()
 
   if (!fs.existsSync(modulePath)) {
     console.warn(`[integration-runner] Missing module: ${relativeModulePath}`)
