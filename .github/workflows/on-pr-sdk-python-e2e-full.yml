@@ -121,3 +121,22 @@ jobs:
           path: ${{ github.workspace }}/.qvac-cache
           key: qvac-py-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
           enableCrossOsArchive: true
+
+      # Same step as in test-node-sdk.yml; see the reason there.
+      - name: Stop processes left in the workspace
+        if: always() && runner.os == 'Windows'
+        continue-on-error: true
+        timeout-minutes: 2
+        shell: powershell
+        working-directory: .
+        run: |
+          $ws = [IO.Path]::GetFullPath($env:GITHUB_WORKSPACE).TrimEnd('\') + '\'
+          Get-CimInstance Win32_Process | Where-Object {
+            $_.ProcessId -ne $PID -and (
+              ("$($_.ExecutablePath)" -replace '/', '\').StartsWith($ws, [StringComparison]::OrdinalIgnoreCase) -or
+              ("$($_.CommandLine)" -replace '/', '\').IndexOf($ws, [StringComparison]::OrdinalIgnoreCase) -ge 0
+            )
+          } | ForEach-Object {
+            Write-Host "::warning::Stopping leftover $($_.Name) (PID $($_.ProcessId)): $($_.CommandLine)"
+            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+          }
