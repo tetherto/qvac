@@ -25,7 +25,9 @@ import { getLegacyCompanionSetPaths } from '@/handlers/load-model/registry-compa
 import {
   findLocallyCachedCoremlCompanionSet,
   getCoremlSetKey,
-  getCoremlSidecarSpec
+  getCoremlSidecarSpec,
+  getRetiredCoremlSetDir,
+  readRetiredCoremlCompanionSet
 } from '@/handlers/load-model/coreml-sidecars'
 import { findModelShards } from '@/handlers/load-model/registry'
 import {
@@ -178,6 +180,18 @@ async function planCatalogued(entry: RegistryItem): Promise<DeletePlan> {
     )
     const coremlSet = await findLocallyCachedCoremlCompanionSet(entry, platform)
     for (const file of coremlSet?.files ?? []) {
+      if (file.registryPath === entry.registryPath) continue
+      plan.bindings.push(buildBlobBinding(file))
+      plan.registryPaths.push(file.registryPath)
+    }
+  }
+
+  // The set an earlier release staged, if the model has not loaded since.
+  const retiredDir = getRetiredCoremlSetDir(entry, platform)
+  if (retiredDir !== undefined) {
+    plan.targets.push(retiredDir)
+    const retiredSet = await readRetiredCoremlCompanionSet(entry, platform)
+    for (const file of retiredSet?.files ?? []) {
       if (file.registryPath === entry.registryPath) continue
       plan.bindings.push(buildBlobBinding(file))
       plan.registryPaths.push(file.registryPath)

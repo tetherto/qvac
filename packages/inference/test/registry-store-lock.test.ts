@@ -19,6 +19,7 @@ import { models, type RegistryItem } from '@/models/registry/models'
 import { getRequestRegistry } from '@/runtime/index'
 import { getRuntimeContext } from '@/runtime/state'
 import { getSingleFileCachePath } from '@/utils/cache/paths'
+import { getCoremlSidecarSpec } from '@/utils/cache/layout'
 import { measureChecksum } from '@/utils/checksum'
 import { getLifecycleState, resumeRuntime, suspendRuntime } from '@/runtime/runtime-lifecycle'
 import {
@@ -468,8 +469,14 @@ test('a cached GGUF loads when the optional Core ML lookup finds the registry bu
   })
 
   // A Core ML model whose GGUF an earlier load cached without the sidecars.
+  // It must have an active sidecar spec, or the loader skips the Core ML
+  // lookup and this test no longer reaches the busy-registry fallback.
   const registryPath =
-    'qvac_models_compiled/ggml/parakeet/registry-lock-test/parakeet-tdt-0.6b-v3.q8_0.gguf'
+    'qvac_models_compiled/ggml/parakeet/registry-lock-test/parakeet-unified-en-0.6b.q8_0.gguf'
+  t.ok(
+    getCoremlSidecarSpec(registryPath, 's3', 'darwin'),
+    'the model has a Core ML sidecar spec, so the lookup runs'
+  )
   const ggufPath = getSingleFileCachePath(registryPath)
   fs.mkdirSync(path.dirname(ggufPath), { recursive: true })
   fs.writeFileSync(ggufPath, 'gguf')
@@ -477,7 +484,7 @@ test('a cached GGUF loads when the optional Core ML lookup finds the registry bu
     name: 'TEST_PARAKEET_COREML',
     registryPath,
     registrySource: 's3',
-    modelId: 'parakeet-tdt-0.6b-v3.q8_0.gguf',
+    modelId: 'parakeet-unified-en-0.6b.q8_0.gguf',
     addon: 'parakeet',
     engine: 'parakeet-transcription',
     quantization: 'q8_0',

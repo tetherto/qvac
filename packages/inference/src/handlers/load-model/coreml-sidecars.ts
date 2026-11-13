@@ -6,12 +6,16 @@ import {
   getCatalogCoremlSidecars,
   getCoremlSetKeySource,
   getCoremlSidecarSpec,
+  getRetiredCoremlSidecarSpec,
   type CoremlSidecarSpec
 } from '@/utils/cache/layout'
 import { getModelsCacheDir } from '@/utils/cache/paths'
+import { calculateCachedFileChecksum, renameWithCachedChecksum } from '@/utils/checksum'
 import { validateAndJoinPath } from '@/utils/path-security'
 import { modelInputToSrcSchema, registryUrlSchema } from '@/schemas/index'
 import { promises as fsPromises } from 'bare-fs'
+import os from 'bare-os'
+import path from 'bare-path'
 import { z } from 'zod'
 
 // Family table and catalog lookups: utils/cache/layout.ts.
@@ -156,8 +160,140 @@ export async function readCachedCoremlCompanionSet(
   cacheDir = getModelsCacheDir()
 ): Promise<CompanionSet | undefined> {
   const spec = getCoremlSidecarSpec(model.registryPath, model.registrySource, platform)
-  if (!spec) return undefined
+  return spec ? readCachedSet(model, spec, cacheDir) : undefined
+}
 
+/**
+ * The metadata of the set an earlier release staged for `model` and this one
+ * no longer stages (`getRetiredCoremlSidecarSpec`), when it is still cached.
+ */
+export async function readRetiredCoremlCompanionSet(
+  model: RegistryItem,
+  platform: string | undefined,
+  cacheDir = getModelsCacheDir()
+): Promise<CompanionSet | undefined> {
+  const spec = getRetiredCoremlSidecarSpec(model.registryPath, model.registrySource, platform)
+  return spec ? readCachedSet(model, spec, cacheDir) : undefined
+}
+
+/** The set directory an earlier release staged for `model`, if this one retired it. */
+export function getRetiredCoremlSetDir(
+  model: RegistryItem,
+  platform: string | undefined,
+  cacheDir = getModelsCacheDir()
+): string | undefined {
+  const spec = getRetiredCoremlSidecarSpec(model.registryPath, model.registrySource, platform)
+  return spec ? validateAndJoinPath(cacheDir, 'sets', getCoremlSetKey(model, spec)) : undefined
+}
+
+export type RetiredCoremlSetResult =
+  /** No retired set is cached. */
+  | { status: 'none' }
+  /** The set is gone. `singleFilePath` holds a valid GGUF, or the loader downloads one. */
+  | { status: 'cleared' }
+  /**
+   * The set's GGUF is the only valid copy and could not be moved, for example
+   * in a read-only cache, so the set is left as it was. Load `ggufPath`
+   * through `linkAwayFromCoremlBundles`, never from beside its bundle.
+   */
+  | { status: 'kept'; ggufPath: string; error: unknown }
+
+/**
+ * Clears the set an earlier release staged for `model` and this one no longer
+ * stages. The loader now keeps the model at `singleFilePath`. A file there
+ * that passes the loader's size and checksum checks stays. Otherwise the set's
+ * GGUF replaces it when that one passes them, so the load that follows does
+ * not download it again. The set directory, bundles included, is removed only
+ * after that, and not at all when its valid GGUF cannot be moved.
+ */
+export async function clearRetiredCoremlSet(
+  model: RegistryItem,
+  platform: string | undefined,
+  singleFilePath: string,
+  cacheDir = getModelsCacheDir()
+): Promise<RetiredCoremlSetResult> {
+  const setDir = getRetiredCoremlSetDir(model, platform, cacheDir)
+  if (setDir === undefined || !(await isDirectory(setDir))) return { status: 'none' }
+
+  const filename = model.registryPath.split('/').pop() || model.registryPath
+  const setGguf = validateAndJoinPath(setDir, filename)
+  if (!(await holdsModel(singleFilePath, model)) && (await holdsModel(setGguf, model))) {
+    try {
+      await renameWithCachedChecksum(setGguf, singleFilePath)
+    } catch (error) {
+      return { status: 'kept', ggufPath: setGguf, error }
+    }
+  }
+  await fsPromises.rm(setDir, { recursive: true, force: true })
+  return { status: 'cleared' }
+}
+
+/**
+ * A path to `ggufPath` under `tempDir`, with no Core ML bundle beside it: the
+ * engine looks for a bundle only next to the path it loads. Nothing is written
+ * beside `ggufPath`. The directory is named after `ggufPath`, so every load of
+ * the same file reuses one link instead of leaving a new directory behind.
+ */
+export async function linkAwayFromCoremlBundles(
+  ggufPath: string,
+  tempDir = os.tmpdir()
+): Promise<string> {
+  const dir = path.join(tempDir, `qvac-gguf-${generateShortHash(ggufPath)}`)
+  await fsPromises.mkdir(dir, { recursive: true })
+  const link = path.join(dir, path.basename(ggufPath))
+  try {
+    await fsPromises.symlink(ggufPath, link)
+    return link
+  } catch {
+    // The link exists already, possibly from a concurrent load of this file.
+    if ((await readLink(link)) === ggufPath) return link
+  }
+  // Something else sits at the link path. Replace it in one rename so that a
+  // load which already returned this path never sees it missing.
+  const staged = `${link}.${generateShortHash(`${link}:${Date.now()}:${Math.random()}`)}`
+  await fsPromises.symlink(ggufPath, staged)
+  try {
+    await fsPromises.rename(staged, link)
+  } catch (error) {
+    await fsPromises.rm(staged, { force: true })
+    throw error
+  }
+  return link
+}
+
+async function readLink(linkPath: string): Promise<string | undefined> {
+  try {
+    return await fsPromises.readlink(linkPath)
+  } catch {
+    return undefined
+  }
+}
+
+// The size and checksum checks the loader runs on a cached file.
+async function holdsModel(filePath: string, model: RegistryItem): Promise<boolean> {
+  try {
+    const stats = await fsPromises.stat(filePath)
+    if (!stats.isFile() || stats.size !== model.expectedSize) return false
+    if (model.sha256Checksum.length !== 64) return true
+    return (await calculateCachedFileChecksum(filePath)) === model.sha256Checksum
+  } catch {
+    return false
+  }
+}
+
+async function isDirectory(target: string): Promise<boolean> {
+  try {
+    return (await fsPromises.stat(target)).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+async function readCachedSet(
+  model: RegistryItem,
+  spec: CoremlSidecarSpec,
+  cacheDir: string
+): Promise<CompanionSet | undefined> {
   try {
     const raw = await fsPromises.readFile(getCachedSetMetadataPath(model, spec, cacheDir), 'utf8')
     const parsed = cachedSetSchema.safeParse(JSON.parse(raw))
