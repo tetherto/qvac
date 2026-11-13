@@ -83,10 +83,10 @@ const { fitProbe } = await getLoadedModelInfo({ modelId })
 
 A custom plugin with a fitter must return the new per-model shape from `assessFit`.
 
-**Remote RPC servers.** The engine now depends on `@qvac/ggml-rpc-server` `^0.9.0`, and the RPC protocol changed since 0.23. Upgrade every remote RPC server together with this release.
+**Remote RPC servers.** the RPC protocol moves from 112 to 116, and a client must match the server. Remote RPC servers need `@qvac/ggml-rpc-server` 0.9.1 or newer; a server on 0.9.0 or earlier is refused. Upgrade every remote RPC server together with this release.
 
 ```bash
-npm install @qvac/ggml-rpc-server@^0.9.0
+npm install @qvac/ggml-rpc-server@^0.9.1
 ```
 
 ### EmbeddingGemma-300M constants point at the Dense-layer models

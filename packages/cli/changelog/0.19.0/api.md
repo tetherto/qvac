@@ -181,7 +181,7 @@ const { fitProbe } = await getLoadedModelInfo({ modelId })
 ```
 
 ```bash
-npm install @qvac/ggml-rpc-server@^0.9.0
+npm install @qvac/ggml-rpc-server@^0.9.1
 ```
 
 ```typescript

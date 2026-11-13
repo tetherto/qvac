@@ -96,7 +96,7 @@ The classifier weights are no longer bundled. An alias with `type` and no `src` 
 - **No default system message.** A chat request with no system message reaches the model without one. Set `system_prompt` in the alias's `config` to keep "You are a helpful assistant.".
 - **Text and media keep their order.** A user turn that mixes text and images reaches the model in the order sent, instead of images first.
 - **EmbeddingGemma-300M constants changed files.** `EMBEDDINGGEMMA_300M_F32` is removed, and the other three constants resolve to the Dense-layer models. Re-ingest RAG workspaces built with the earlier files.
-- **Remote RPC servers.** An alias with `rpc-servers` needs `@qvac/ggml-rpc-server` `^0.9.0` on the remote hosts.
+- **Remote RPC servers.** An alias with `rpc-servers` needs `@qvac/ggml-rpc-server` 0.9.1 or newer (protocol 116) on the remote hosts.
 
 ## New APIs
 
