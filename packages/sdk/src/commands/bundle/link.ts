@@ -58,44 +58,18 @@ export const NATIVE_MODULES = {
     prefix: 'android-',
     dir: path.join('android', 'qvac-bare-kit'),
     language: 'kotlin',
-    languageOptions: { package: 'io.tether.qvac.sdk.addons' }
+    languageOptions: { package: 'io.tether.qvac.sdk.addons' },
+    targetOptions: {}
   },
   ios: {
     prefix: 'ios-',
     dir: path.join('ios', 'QvacBareKit'),
     language: 'swift',
-    languageOptions: {}
+    languageOptions: {},
+    // V8 needs an entitlement that free Apple developer accounts cannot sign with.
+    targetOptions: { engine: 'javascriptcore' }
   }
 } as const
-
-/** The bare-kit-swift release an iOS app links, the first with JavaScriptCore. */
-export const BARE_KIT_SWIFT_VERSION = '2.4.0'
-
-/** Package traits, which select the engine of bare-kit-swift, need these tools. */
-const SWIFT_TOOLS_WITH_TRAITS = '6.1'
-
-const SWIFT_TOOLS_VERSION = /^\/\/ swift-tools-version: .+$/m
-
-const BARE_KIT_SWIFT_PACKAGE =
-  /(\.package\(url: "https:\/\/github\.com\/holepunchto\/bare-kit-swift(?:\.git)?", )from: "[^"]+"\)/
-
-/**
- * Links bare-kit-swift at one exact release, running worklets with the
- * JavaScriptCore of the system. Its V8 needs an entitlement that free Apple
- * developer accounts cannot sign with. bare-stow writes a minimum version,
- * which Swift Package Manager resolves at the newest release.
- */
-export function linkBareKitSwiftWithJavaScriptCore(manifest: string): string {
-  if (!SWIFT_TOOLS_VERSION.test(manifest) || !BARE_KIT_SWIFT_PACKAGE.test(manifest)) {
-    throw new Error('The linked Package.swift does not depend on bare-kit-swift as expected')
-  }
-  return manifest
-    .replace(SWIFT_TOOLS_VERSION, `// swift-tools-version: ${SWIFT_TOOLS_WITH_TRAITS}`)
-    .replace(
-      BARE_KIT_SWIFT_PACKAGE,
-      `$1exact: "${BARE_KIT_SWIFT_VERSION}", traits: ["JavaScriptCore"])`
-    )
-}
 
 export interface StageAddonsOptions {
   projectRoot: string
@@ -143,6 +117,7 @@ export async function stageAddons(
           {
             language: module.language,
             languageOptions: module.languageOptions,
+            targetOptions: module.targetOptions,
             hosts: platformHosts,
             ...(imports !== undefined && { imports }),
             defer
@@ -155,14 +130,9 @@ export async function stageAddons(
       } catch (error) {
         throw new AddonLinkFailedError(platformHosts, error)
       }
+      // Xcode requires the folder of the assets, even when there are none.
       if (module.language === 'swift') {
-        // Xcode requires the folder of the assets, even when there are none.
         await fsp.mkdir(path.join(scratch, BARE_KIT_RESOURCES), { recursive: true })
-        const manifest = path.join(scratch, 'Package.swift')
-        await fsp.writeFile(
-          manifest,
-          linkBareKitSwiftWithJavaScriptCore(await fsp.readFile(manifest, 'utf8'))
-        )
       }
       warnOverwritten(platformWritten, out, logger)
       written.push(...platformWritten)
