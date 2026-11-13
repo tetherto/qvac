@@ -22,6 +22,9 @@ defaults are intentionally not duplicated here.
 required plugins explicitly. `audiogen-ggml` can also produce PCM or WAV without
 FFmpeg. Compressed audio file decoding and compressed audiogen output formats
 require `bare-ffmpeg` to be bundled.
+If an encoded audio file is passed to a bundle without `bare-ffmpeg`, decoding
+rejects with `ConfigValidationFailedError` and preserves the loader error as its
+cause. Enable `includeAudioDecoder` and rebuild, or supply raw PCM audio instead.
 
 Decoded audio input streams consume PCM updates without retaining a second
 history in the decoder response. The decoder still buffers the encoded input,
