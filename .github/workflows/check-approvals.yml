@@ -3,7 +3,10 @@ name: Check Approvals
 on:
   issue_comment:
     types: [created]
-  pull_request_target:
+  # Fork and Dependabot runs get no APP_* secrets and a read-only token, so the
+  # comment upsert fails; continue-on-error keeps the check green, as the
+  # ruleset (not this job) enforces approvals.
+  pull_request:
     types: [opened, labeled, synchronize, ready_for_review, reopened, edited]
     branches: [main, master, release-*]
 
@@ -28,7 +31,7 @@ jobs:
         contains(github.event.comment.body, 'review') &&
         github.event.issue.pull_request != null
       ) || (
-        github.event_name == 'pull_request_target' &&
+        github.event_name == 'pull_request' &&
         !github.event.pull_request.draft
       )
     steps:

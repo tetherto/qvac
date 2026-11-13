@@ -1,5 +1,9 @@
 * @tetherto/qvac-internal-merge @tetherto/qvac-internal-mgmt
 
+# Merge gates load from the PR merge ref, so a PR can edit the workflows,
+# actions and scripts that gate it. Code-owner review here must come from DevOps.
+/.github/ @tetherto/qvac-internal-devops
+
 # License compliance exception allowlist — edits require a Tier-1 reviewer so
 # license exceptions are never self-served by the PR author (QVAC-21554).
 /.github/license-allowlist.yml @tetherto/qvac-internal-merge

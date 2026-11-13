@@ -1629,6 +1629,7 @@ test("merge guards accept intentionally skipped optional prebuilds", () => {
 // --- fork-ci environment gating (QVAC-22799) --------------------------------
 // Every pull_request_target workflow that gates any job on authorize.outputs.allowed
 // must call reusable-fork-approval.yml, and every trust-gated job must depend on it.
+// pull_request workflows that run the authorize-pr gate are held to the same rules.
 
 const FORK_CI_GATE_JOBS = new Set(["authorize", "ci-router", "fork-approval"]);
 
@@ -1696,12 +1697,6 @@ function pullRequestTargetWorkflows() {
  */
 const FORK_CI_EXEMPT = new Map([
   [
-    ".github/workflows/check-approvals.yml",
-    "No checkout: runs the published @qvac/ci against PR metadata over the API. " +
-      "Also a required status check on main/release — gating it on fork-ci would " +
-      "deadlock fork PRs, since approval cannot complete until the check reports.",
-  ],
-  [
     ".github/workflows/on-pr-community-label.yml",
     "No checkout: actions/github-script applies a label via the API only.",
   ],
@@ -1712,9 +1707,46 @@ const FORK_CI_EXEMPT = new Map([
   ],
 ]);
 
-function forkCiTargets() {
-  return pullRequestTargetWorkflows().filter((p) => !FORK_CI_EXEMPT.has(p));
+function authorizedPullRequestWorkflows() {
+  const dir = join(root, ".github/workflows");
+  return readdirSync(dir)
+    .filter((n) => /\.ya?ml$/.test(n))
+    .map((n) => `.github/workflows/${n}`)
+    .filter((p) => /^\s{2}pull_request:/m.test(onBlock(read(p))))
+    .filter((p) => /uses:\s*\.\/\.github\/actions\/authorize-pr\b/.test(read(p)));
 }
+
+// The merge gates moved from pull_request_target to pull_request. Listed by
+// name so deleting their authorize-pr or fork-approval jobs cannot drop them
+// out of every assertion below.
+const PULL_REQUEST_FORK_CI_GATES = [
+  ".github/workflows/on-pr-nx.yml",
+  ".github/workflows/pr-gate-merge.yml",
+];
+
+function forkCiTargets() {
+  return [
+    ...new Set([
+      ...pullRequestTargetWorkflows().filter((p) => !FORK_CI_EXEMPT.has(p)),
+      ...authorizedPullRequestWorkflows(),
+      ...PULL_REQUEST_FORK_CI_GATES,
+    ]),
+  ];
+}
+
+test("fork-ci: pull_request merge gates deny fork PRs in the authorize output", () => {
+  for (const path of PULL_REQUEST_FORK_CI_GATES) {
+    const authorize = eachJob(read(path)).find((j) => j.name === "authorize");
+    assert.ok(authorize, `${path}: must define an authorize job`);
+    // A fork can carry qvac/fork-verified from an earlier pull_request_target
+    // run, so authorize-pr alone would let it through to jobs with no secrets.
+    assert.match(
+      authorize.text,
+      /allowed:\s*\$\{\{\s*\(github\.event_name != 'pull_request' \|\| github\.event\.pull_request\.head\.repo\.id == github\.event\.repository\.id\) && steps\.auth\.outputs\.allowed \|\| 'false'\s*\}\}/,
+      `${path}: authorize.outputs.allowed must be 'false' for fork PRs on pull_request`,
+    );
+  }
+});
 
 test("fork-ci: every pull_request_target workflow is either gated or explicitly exempt", () => {
   const unclassified = pullRequestTargetWorkflows().filter((p) => {
@@ -1924,7 +1956,7 @@ test('ggml-rpc-server npm Fabric triggers activate with the server package layer
 
   assert.match(
     rpcPr,
-    /pull_request_target:[\s\S]*?paths:\n(?:\s+- .+\n)*?\s+- "packages\/\*\*"\n/,
+    /^ {2}pull_request:[\s\S]*?paths:\n(?:\s+- .+\n)*?\s+- "packages\/\*\*"\n/m,
     'fabric changes must run RPC server PR checks once the package exists',
   )
   const rpcMergeTrigger = rpcMerge.match(/^on:\n[\s\S]*?^permissions:/m)?.[0];

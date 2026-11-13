@@ -1,7 +1,13 @@
 name: Merge Guard
 
 on:
-  pull_request_target:
+  # Not pull_request_target (banned org-wide): this YAML loads from the PR merge
+  # ref, so a PR can edit its own gate, including on-pr-nx.yml, whose statuses
+  # verify-prebuilds trusts. CODEOWNERS gives .github/ to qvac-internal-devops,
+  # and the ruleset requires code-owner review, so such an edit needs DevOps
+  # approval. authorize denies every fork PR on pull_request, so forks fail
+  # closed here.
+  pull_request:
     types:
       - opened
       - synchronize
@@ -25,7 +31,9 @@ concurrency:
   # could otherwise trust a pre-label "skipped = success" while the newer
   # labeled build is still running. Killing the older run leaves only the newer
   # run, which waits for the real build.
-  group: pr-gate-merge-${{ github.event.pull_request.number || github.ref }}
+  # event_name: while main still triggers on pull_request_target, its run and
+  # this PR's pull_request run would otherwise cancel each other.
+  group: pr-gate-merge-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -36,12 +44,16 @@ jobs:
   authorize:
     needs: [fork-approval]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: write
       statuses: read
     outputs:
-      allowed: ${{ steps.auth.outputs.allowed }}
+      # A fork can still carry qvac/fork-verified from an earlier
+      # pull_request_target run. Under pull_request it gets no secrets and would
+      # fail late, so deny it here.
+      allowed: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.id == github.event.repository.id) && steps.auth.outputs.allowed || 'false' }}
     steps:
       - name: Checkout authorize-pr (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -58,8 +70,9 @@ jobs:
           github-token: ${{ github.token }}
 
   changes:
-    if: github.event_name == 'pull_request_target'
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       packages: ${{ steps.pkglist.outputs.packages }}
       packages-with-path: ${{ steps.pkglist.outputs.packages-with-path }}
@@ -181,6 +194,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.changes.outputs.packages-with-path || '[]') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     name: sanity-checks (${{ matrix.package }})
     steps:
       - name: Checkout code

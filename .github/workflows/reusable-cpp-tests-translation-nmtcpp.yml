@@ -262,7 +262,7 @@ jobs:
           retention-days: 30
 
       - name: Comment Coverage on PR
-        if: github.event_name == 'pull_request_target' && always()
+        if: always() && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
         with:
           script: |

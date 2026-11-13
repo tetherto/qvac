@@ -1,7 +1,8 @@
 # Consolidates the per-package PR-head TypeScript check producers.
 #
-# These run PR-head code, so they stay on pull_request (unprivileged, no
-# secrets) rather than moving into on-pr-nx, which is pull_request_target.
+# These run PR-head code, so they stay in their own unprivileged workflow (no
+# secrets, read-only token) rather than moving into on-pr-nx, whose jobs hold
+# secrets and AWS OIDC.
 #
 # The bug this fixes: on-pr-nx awaits a ts-check for every nx-affected package,
 # but the old producers triggered on their own package's paths. nx selects a
