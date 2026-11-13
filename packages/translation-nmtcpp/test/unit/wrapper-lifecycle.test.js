@@ -196,6 +196,11 @@ test('en→pt runs prepend the >>por<< target token and strip it from output', a
   emitStats()
   await response.await()
   t.alike(updates, ['ola mundo'], 'echoed target token is stripped from output')
+  t.alike(await response.await(), ['ola mundo'], 'await() result is stripped too')
+  t.is(response.getLatest(), 'ola mundo', 'getLatest() is stripped too')
+  const iterated = []
+  for await (const data of response.iterate()) iterated.push(data)
+  t.alike(iterated, ['ola mundo'], 'iterate() is stripped too')
 
   const batchPromise = model.runBatch(['a', 'b'])
   await tick()
