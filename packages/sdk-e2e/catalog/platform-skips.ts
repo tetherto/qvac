@@ -463,6 +463,16 @@ const RULES: Rule[] = [
     // the footprint down, so listing ids individually only moved where the leg died.
     match: /^(ocr-|addon-logging-ocr$)/,
     skip: { reason: 'OCR disabled on iOS (ONNX/CoreML OOM)', platforms: ['mobile-ios'] }
+  },
+  {
+    // ocr-large-image peaks near 7 GB (a lower canvasSize does not lower it), and a 12 GB
+    // Device Farm phone kills the app; the rest of the run then fails with it.
+    match: /^(ocr-|addon-logging-ocr$)/,
+    skip: {
+      reason:
+        'OCR disabled on Android: ocr-large-image peaks near 7 GB and 12 GB phones kill the app',
+      platforms: ['mobile-android']
+    }
   }
 ]
 

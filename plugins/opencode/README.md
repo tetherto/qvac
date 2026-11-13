@@ -5,10 +5,12 @@ with no second terminal and no manual server. Add the plugin to a project's
 `opencode.json` and `opencode` brings up a managed `qvac serve` by itself,
 points OpenCode at it, and tears it down on exit.
 
+Requires OpenCode 2.x. For OpenCode 1.x, use `@qvac/opencode-plugin@0.3`, the
+V1 plugin line.
+
 ```json
 {
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": ["@qvac/opencode-plugin"]
+  "plugins": ["@qvac/opencode-plugin"]
 }
 ```
 
@@ -29,7 +31,7 @@ as the project model by default.
    and means the serve is reaped even if OpenCode is killed hard.)
 2. The host starts a small local proxy and immediately reports it is listening —
    **before** the model downloads — handing the plugin the proxy's URL and a
-   freshly generated access token over a dedicated pipe. The plugin injects an
+   freshly generated access token over a dedicated pipe. The plugin registers an
    OpenAI-compatible `qvac` provider pointed at the proxy and returns, so
    `opencode run` never trips OpenCode's startup timeout. The model loads in the
    background; the first turn waits on it (a slow cold turn, not a failure).
@@ -90,10 +92,10 @@ you access to other SDK chat models that are not yet in the friendly catalog.
 ## Options
 
 Set from any of these sources (lowest to highest precedence): built-in defaults,
-a `qvac.json` in the project dir, the `opencode.json` plugin-tuple options, and
-`QVAC_*` environment variables.
+a `qvac.json` in the project dir, the plugin entry's `options` in
+`opencode.json`, and `QVAC_*` environment variables.
 
-| Option (`qvac.json` / plugin tuple) | Env                      | Default      | Meaning                                                                                    |
+| Option (`qvac.json` / plugin entry) | Env                      | Default      | Meaning                                                                                    |
 | ----------------------------------- | ------------------------ | ------------ | ------------------------------------------------------------------------------------------ |
 | `model`                             | `QVAC_MODEL`             | `qwen3.5-9b` | friendly id or a raw QVAC constant                                                         |
 | `ctxSize`                           | `QVAC_CTX_SIZE`          | `32768`      | serve context window (an agent's prompt + tool schemas need ≥ 32768)                       |
@@ -104,15 +106,14 @@ a `qvac.json` in the project dir, the `opencode.json` plugin-tuple options, and
 | `serveBinPath`                      | `QVAC_SERVE_BIN_PATH`    | auto         | absolute path to the `qvac` executable for the serve (unset or empty: bundled `@qvac/cli`) |
 | `readyTimeoutMs`                    | `QVAC_READY_TIMEOUT_MS`  | `1800000`    | budget for the serve to become healthy, incl. a cold model download                        |
 | `listenTimeoutMs`                   | `QVAC_LISTEN_TIMEOUT_MS` | `30000`      | budget for the host proxy to listen and hand over its handshake                            |
-| `setDefaultModel`                   | `QVAC_SET_DEFAULT_MODEL` | `true`       | force `qvac/<model>` as the project default + small model                                  |
+| `setDefaultModel`                   | `QVAC_SET_DEFAULT_MODEL` | `true`       | force `qvac/<model>` as the project default model                                          |
 | `debug`                             | `QVAC_DEBUG`             | `false`      | mirror host milestones + per-request traces to stderr                                      |
 
-Via the plugin tuple in `opencode.json`:
+Via the plugin entry in `opencode.json`:
 
 ```json
 {
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": [["@qvac/opencode-plugin", { "model": "qwen3.5-2b" }]]
+  "plugins": [{ "package": "@qvac/opencode-plugin", "options": { "model": "qwen3.5-2b" } }]
 }
 ```
 
@@ -147,8 +148,39 @@ work. Only one QVAC worker runs machine-wide; if the OpenCode **desktop app** is
 running it can hold locks the CLI needs — quit it (or isolate `XDG_*` dirs) when
 running `opencode` from the terminal.
 
+## Without the plugin
+
+To run the server yourself instead, start it with an explicit port:
+
+```bash
+qvac serve --openai --port 11435
+```
+
+Then point OpenCode's `qvac` provider at it. Each key under `models` must match
+an alias in your `serve.models` config:
+
+```json
+{
+  "model": "qvac/qwen3.5-9b",
+  "providers": {
+    "qvac": {
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": { "baseURL": "http://127.0.0.1:11435/v1" },
+      "models": { "qwen3.5-9b": { "name": "Qwen3.5 9B" } }
+    }
+  }
+}
+```
+
+Connect QVAC in OpenCode with any API key, or the key you started the server
+with. Set `baseURL` explicitly: the QVAC entry OpenCode reads from its model
+catalog assumes port 11434. You manage the server's lifetime and model yourself;
+nothing is torn down when OpenCode exits.
+
 ## Requirements
 
+- OpenCode 2.x. The plugin uses the V2 plugin API (`@opencode/plugin`) and does
+  not load in OpenCode 1.x.
 - [`@qvac/ai-sdk-provider@^0.11.0`](https://www.npmjs.com/package/@qvac/ai-sdk-provider)
   for managed mode (AI SDK 7). The host proxies on behalf of the managed serve,
   so it needs the provider's `ManagedQvacProvider.apiKey` getter — see
