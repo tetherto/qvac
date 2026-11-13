@@ -39,10 +39,8 @@ async function project(t: TestContext): Promise<string> {
   const destScope = join(dir, 'node_modules', '@qvac')
   await mkdir(destScope, { recursive: true })
   await linkInstalledQvacScope(INSTALLED_SDK, destScope)
-  // The SDK depends on the bare-stow packages, so they resolve from it.
-  // react-native-bare-kit is an optional peer the app installs itself: a
-  // workspace SDK has it as a dev dependency, a packed or published one does
-  // not, so fall back to this package's own copy.
+  // react-native-bare-kit is an optional peer: only a workspace SDK has it
+  // installed, so fall back to this package's copy for a packed or published one.
   const sdkRequire = createRequire(join(INSTALLED_SDK, 'package.json'))
   const ownRequire = createRequire(import.meta.url)
   for (const name of HOISTED) {
