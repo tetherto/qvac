@@ -9,6 +9,7 @@ import {
   findCatalogCoremlCompanionSet,
   getCoremlSetKey,
   getRetiredCoremlSetDir,
+  linkAwayFromCoremlBundles,
   readRetiredCoremlCompanionSet
 } from '@/handlers/load-model/coreml-sidecars'
 import {
@@ -16,7 +17,14 @@ import {
   getModelCacheLayout,
   getRetiredCoremlSidecarSpec
 } from '@/utils/cache/layout'
+import { downloadModelFromRegistry } from '@/handlers/load-model/registry'
+import { getRuntimeContext } from '@/runtime/state'
+import { getSingleFileCachePath } from '@/utils/cache/paths'
+import { measureChecksum } from '@/utils/checksum'
 import { generateShortHash } from '@/utils/formatting'
+import { isPathWithinBase } from '@/utils/path-security'
+import { holdStore, makeTempHome, useRegistryHome } from './fixtures/registry-store'
+import { useTestCacheDir } from './fixtures/test-cache'
 
 const TDT_V3 = 'parakeet-tdt-0.6b-v3'
 const UNIFIED = 'parakeet-unified-en-0.6b'
@@ -42,6 +50,104 @@ function tempCache(t: { teardown: (fn: () => void) => void }): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-retired-coreml-'))
   t.teardown(() => fs.rmSync(dir, { recursive: true, force: true }))
   return dir
+}
+
+// The bytes `stageRetiredSet` writes as the GGUF, and their SHA-256.
+const GGUF = 'gguf'
+let ggufChecksum: string | undefined
+async function stagedGgufChecksum(): Promise<string> {
+  if (ggufChecksum === undefined) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-retired-sum-'))
+    try {
+      fs.writeFileSync(path.join(dir, 'model.gguf'), GGUF)
+      ggufChecksum = await measureChecksum(path.join(dir, 'model.gguf'))
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }
+  return ggufChecksum
+}
+
+/** The catalog TDT v3 entry, expecting the size and checksum of the staged GGUF. */
+async function stagedModel(filename: string, registryPath?: string): Promise<RegistryItem> {
+  const model = catalogModel(filename)
+  return {
+    ...model,
+    registryPath: registryPath ?? model.registryPath,
+    expectedSize: GGUF.length,
+    sha256Checksum: await stagedGgufChecksum()
+  }
+}
+
+// Makes each path read-only until `restore()`. `effective` is false when that
+// has no effect, for example when running as root.
+function makeReadOnly(paths: string[]): { effective: boolean; restore: () => void } {
+  const modes = paths.map((target) => fs.statSync(target).mode & 0o777)
+  paths.forEach((target, i) => fs.chmodSync(target, modes[i]! & 0o555))
+  const effective = paths.every((target) => {
+    try {
+      fs.accessSync(target, fs.constants.W_OK)
+      return false
+    } catch {
+      return true
+    }
+  })
+  return {
+    effective,
+    restore: () => paths.forEach((target, i) => fs.chmodSync(target, modes[i]!))
+  }
+}
+
+// `root` and everything under it.
+function treeOf(root: string): string[] {
+  const entries = fs.readdirSync(root, { withFileTypes: true }) as unknown as Array<{
+    name: string
+    isDirectory(): boolean
+  }>
+  return [
+    root,
+    ...entries.flatMap((entry) => {
+      const entryPath = path.join(root, entry.name)
+      return entry.isDirectory() ? treeOf(entryPath) : [entryPath]
+    })
+  ]
+}
+
+/**
+ * Loads `model` through the registry loader on macOS, with the model in the
+ * catalog and the registry store held, so a download fails fast instead of
+ * reaching the network.
+ */
+async function loadOnMac(
+  t: { teardown: (fn: () => Promise<void>) => void },
+  model: RegistryItem,
+  prepare: () => (() => void) | void = () => {}
+): Promise<unknown> {
+  const home = makeTempHome('retired-coreml')
+  const restoreHome = useRegistryHome(home)
+  const context = getRuntimeContext()
+  const platform = context.platform
+  context.platform = 'darwin'
+  const catalog = models as unknown as RegistryItem[]
+  catalog.push(model)
+  const holder = await holdStore()
+  const restore = prepare()
+  t.teardown(async () => {
+    restore?.()
+    await holder.release()
+    catalog.splice(catalog.indexOf(model), 1)
+    context.platform = platform
+    await restoreHome()
+    fs.rmSync(home, { recursive: true, force: true })
+  })
+  return downloadModelFromRegistry(model.registryPath, model.registrySource).catch(
+    (error: unknown) => error
+  )
+}
+
+function loaderRegistryPath(label: string): string {
+  const unique = `${label}-${Math.random().toString(16).slice(2)}`
+  return `qvac_models_compiled/ggml/parakeet/${unique}/${TDT_V3}.q8_0.gguf`
 }
 
 test('TDT v3 GGUFs load without the Core ML encoder on macOS and iOS', (t) => {
@@ -82,39 +188,95 @@ test('the retired TDT v3 set keeps the key the earlier release staged it under',
 
 test('clearing a retired set keeps its GGUF as the single-file copy', async (t) => {
   const cacheDir = tempCache(t)
-  const model = catalogModel(`${TDT_V3}.q8_0.gguf`)
+  const model = await stagedModel(`${TDT_V3}.q8_0.gguf`)
   const setDir = stageRetiredSet(cacheDir, model)
   const single = path.join(cacheDir, 'single.gguf')
 
-  t.is(await clearRetiredCoremlSet(model, 'darwin', single, cacheDir), true)
-  t.is(fs.readFileSync(single, 'utf8'), 'gguf', 'the GGUF moved')
+  t.alike(await clearRetiredCoremlSet(model, 'darwin', single, cacheDir), { status: 'cleared' })
+  t.is(fs.readFileSync(single, 'utf8'), GGUF, 'the GGUF moved')
   t.absent(fs.existsSync(setDir), 'the set and its bundle are gone')
 
-  t.is(await clearRetiredCoremlSet(model, 'darwin', single, cacheDir), false, 'nothing left')
+  t.alike(
+    await clearRetiredCoremlSet(model, 'darwin', single, cacheDir),
+    { status: 'none' },
+    'nothing left'
+  )
 })
 
-test('clearing a retired set leaves an existing single-file copy alone', async (t) => {
+test('clearing a retired set keeps a valid single-file copy', async (t) => {
   const cacheDir = tempCache(t)
+  const model = await stagedModel(`${TDT_V3}.f16.gguf`)
+  const setDir = stageRetiredSet(cacheDir, model)
+  const single = path.join(cacheDir, 'single.gguf')
+  fs.writeFileSync(single, GGUF)
+  const inode = fs.statSync(single).ino
+
+  t.alike(await clearRetiredCoremlSet(model, 'ios', single, cacheDir), { status: 'cleared' })
+  t.is(fs.statSync(single).ino, inode, 'the single-file copy stays')
+  t.absent(fs.existsSync(setDir))
+})
+
+test('a set GGUF that fails the checks does not replace the single-file copy', async (t) => {
+  const cacheDir = tempCache(t)
+  // The catalog size and checksum: the staged bytes match neither.
   const model = catalogModel(`${TDT_V3}.f16.gguf`)
   const setDir = stageRetiredSet(cacheDir, model)
   const single = path.join(cacheDir, 'single.gguf')
   fs.writeFileSync(single, 'already here')
 
-  t.is(await clearRetiredCoremlSet(model, 'ios', single, cacheDir), true)
-  t.is(fs.readFileSync(single, 'utf8'), 'already here')
+  t.alike(await clearRetiredCoremlSet(model, 'ios', single, cacheDir), { status: 'cleared' })
+  t.is(fs.readFileSync(single, 'utf8'), 'already here', 'the loader replaces it by downloading')
   t.absent(fs.existsSync(setDir))
 })
 
 test('a retired set without its GGUF is still removed', async (t) => {
   const cacheDir = tempCache(t)
-  const model = catalogModel(`${TDT_V3}.q4_0.gguf`)
+  const model = await stagedModel(`${TDT_V3}.q4_0.gguf`)
   const setDir = stageRetiredSet(cacheDir, model)
   fs.rmSync(path.join(setDir, `${TDT_V3}.q4_0.gguf`))
   const single = path.join(cacheDir, 'single.gguf')
 
-  t.is(await clearRetiredCoremlSet(model, 'darwin', single, cacheDir), true)
+  t.alike(await clearRetiredCoremlSet(model, 'darwin', single, cacheDir), { status: 'cleared' })
   t.absent(fs.existsSync(single), 'the loader downloads the GGUF')
   t.absent(fs.existsSync(setDir))
+})
+
+test('a valid set GGUF that cannot be moved keeps its set', async (t) => {
+  const cacheDir = tempCache(t)
+  const model = await stagedModel(`${TDT_V3}.q8_0.gguf`)
+  const setDir = stageRetiredSet(cacheDir, model)
+  const single = path.join(cacheDir, 'single.gguf')
+  const readOnly = makeReadOnly([setDir])
+  // Before the temp cache is removed.
+  t.teardown(() => readOnly.restore(), { order: -1 })
+  if (!readOnly.effective) {
+    t.comment('directories stay writable for this user, so the case cannot be set up')
+    return
+  }
+
+  const result = await clearRetiredCoremlSet(model, 'darwin', single, cacheDir)
+  t.is(result.status, 'kept')
+  t.is(result.status === 'kept' && result.ggufPath, path.join(setDir, `${TDT_V3}.q8_0.gguf`))
+  t.is(fs.readFileSync(path.join(setDir, `${TDT_V3}.q8_0.gguf`), 'utf8'), GGUF, 'the GGUF stays')
+  t.ok(fs.existsSync(path.join(setDir, `${TDT_V3}-encoder.mlmodelc`)), 'the set stays')
+  t.absent(fs.existsSync(single))
+})
+
+test('a linked GGUF has no Core ML bundle beside it', async (t) => {
+  const cacheDir = tempCache(t)
+  const linkRoot = tempCache(t)
+  const model = await stagedModel(`${TDT_V3}.q8_0.gguf`)
+  const setDir = stageRetiredSet(cacheDir, model)
+  const gguf = path.join(setDir, `${TDT_V3}.q8_0.gguf`)
+  const before = treeOf(cacheDir)
+
+  const link = await linkAwayFromCoremlBundles(gguf, linkRoot)
+  t.ok(isPathWithinBase(linkRoot, link), 'the link is under the given directory')
+  t.is(path.basename(link), `${TDT_V3}.q8_0.gguf`, 'it keeps the file name')
+  t.is(fs.readFileSync(link, 'utf8'), GGUF, 'it reads the GGUF')
+  t.absent(fs.existsSync(path.join(path.dirname(link), `${TDT_V3}-encoder.mlmodelc`)))
+  t.alike(treeOf(cacheDir), before, 'nothing is written beside the GGUF')
+  t.not(await linkAwayFromCoremlBundles(gguf, linkRoot), link, 'each load gets its own directory')
 })
 
 test('clearing touches nothing off Apple or for a model whose set is current', async (t) => {
@@ -123,7 +285,11 @@ test('clearing touches nothing off Apple or for a model whose set is current', a
   const setDir = stageRetiredSet(cacheDir, tdt)
   const single = path.join(cacheDir, 'single.gguf')
   for (const platform of ['linux', 'android', 'win32', undefined]) {
-    t.is(await clearRetiredCoremlSet(tdt, platform, single, cacheDir), false, String(platform))
+    t.alike(
+      await clearRetiredCoremlSet(tdt, platform, single, cacheDir),
+      { status: 'none' },
+      String(platform)
+    )
   }
   t.ok(fs.existsSync(setDir))
 
@@ -131,7 +297,7 @@ test('clearing touches nothing off Apple or for a model whose set is current', a
   const spec = getCoremlSidecarSpec(unified.registryPath, unified.registrySource, 'darwin')!
   const unifiedSet = path.join(cacheDir, 'sets', getCoremlSetKey(unified, spec))
   fs.mkdirSync(unifiedSet, { recursive: true })
-  t.is(await clearRetiredCoremlSet(unified, 'darwin', single, cacheDir), false)
+  t.alike(await clearRetiredCoremlSet(unified, 'darwin', single, cacheDir), { status: 'none' })
   t.ok(fs.existsSync(unifiedSet), "Unified's set is kept")
 })
 
@@ -185,4 +351,78 @@ test("a retired set's metadata is read with the bundles that release staged", as
   const read = await readRetiredCoremlCompanionSet(model, 'darwin', cacheDir)
   t.is(read?.files.length, 6)
   t.absent(await readRetiredCoremlCompanionSet(model, 'linux', cacheDir))
+})
+
+test('a valid set GGUF replaces a truncated or corrupt single-file copy', async (t) => {
+  for (const [label, content] of [
+    ['truncated', 'gg'],
+    ['corrupt', 'GGUF']
+  ] as const) {
+    const cacheDir = tempCache(t)
+    const model = await stagedModel(`${TDT_V3}.q8_0.gguf`)
+    const setDir = stageRetiredSet(cacheDir, model)
+    const single = path.join(cacheDir, 'single.gguf')
+    fs.writeFileSync(single, content)
+
+    await clearRetiredCoremlSet(model, 'darwin', single, cacheDir)
+    t.is(fs.readFileSync(single, 'utf8'), GGUF, `the set's GGUF replaced the ${label} copy`)
+    t.absent(fs.existsSync(setDir), 'the set and its bundle are gone')
+  }
+})
+
+test('loading replaces a corrupt single-file copy with the retired set GGUF, offline', async (t) => {
+  const cacheDir = useTestCacheDir()
+  const model = await stagedModel(`${TDT_V3}.q8_0.gguf`, loaderRegistryPath('corrupt'))
+  const setDir = stageRetiredSet(cacheDir, model)
+  const single = getSingleFileCachePath(model.registryPath)
+  fs.writeFileSync(single, 'GGUF')
+  t.teardown(() => {
+    fs.rmSync(setDir, { recursive: true, force: true })
+    fs.rmSync(single, { force: true })
+  })
+
+  const loaded = await loadOnMac(t, model)
+  t.is(
+    loaded,
+    single,
+    `the single-file copy loads ${loaded instanceof Error ? loaded.message : ''}`
+  )
+  t.is(fs.readFileSync(single, 'utf8'), GGUF, "it holds the set's GGUF")
+  t.absent(fs.existsSync(setDir), 'the set and its bundle are gone')
+})
+
+test("a read-only cache loads a retired set's GGUF without its bundle and changes nothing", async (t) => {
+  const cacheDir = useTestCacheDir()
+  const model = await stagedModel(`${TDT_V3}.q8_0.gguf`, loaderRegistryPath('read-only'))
+  const setDir = stageRetiredSet(cacheDir, model)
+  const before = treeOf(cacheDir)
+  let readOnly = { effective: false, restore: () => {} }
+  let loadDir: string | undefined
+  t.teardown(() => {
+    readOnly.restore()
+    fs.rmSync(setDir, { recursive: true, force: true })
+    if (loadDir && !isPathWithinBase(cacheDir, loadDir)) {
+      fs.rmSync(loadDir, { recursive: true, force: true })
+    }
+  })
+
+  const loaded = await loadOnMac(t, model, () => {
+    readOnly = makeReadOnly(treeOf(cacheDir))
+  })
+  if (!readOnly.effective) {
+    t.comment('directories stay writable for this user, so the case cannot be set up')
+    return
+  }
+  if (typeof loaded !== 'string') {
+    t.fail(`the model loads: ${loaded instanceof Error ? loaded.message : String(loaded)}`)
+    return
+  }
+  loadDir = path.dirname(loaded)
+  t.is(fs.readFileSync(loaded, 'utf8'), GGUF, "the set's GGUF loads")
+  t.absent(
+    fs.existsSync(path.join(path.dirname(loaded), `${TDT_V3}-encoder.mlmodelc`)),
+    'no Core ML bundle sits beside the loaded path'
+  )
+  t.alike(treeOf(cacheDir), before, 'nothing in the cache changed')
+  t.ok(fs.existsSync(path.join(setDir, `${TDT_V3}-encoder.mlmodelc`)), 'the set is intact')
 })

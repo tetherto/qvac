@@ -32,6 +32,7 @@ import {
   clearRetiredCoremlSet,
   findLocallyCachedCoremlCompanionSet,
   getCoremlSidecarSpec,
+  linkAwayFromCoremlBundles,
   writeCachedCoremlCompanionSet
 } from '@/handlers/load-model/coreml-sidecars'
 import {
@@ -297,6 +298,35 @@ async function downloadShardedFilesFromRegistry(
   return getShardPath(cacheKey, shards[0]!.filename)
 }
 
+// Clears the Core ML set an earlier release staged for `model` and this one no
+// longer stages. Returns the path to load when that set holds the only valid
+// GGUF and the cache cannot be changed, for example a prefilled read-only
+// cache: a link elsewhere, so the engine does not find the bundle beside it.
+async function clearRetiredCoremlSetBeforeLoad(
+  model: RegistryItem,
+  platform: string | undefined,
+  modelPath: string
+): Promise<string | null> {
+  const { registryPath } = model
+  try {
+    const retired = await clearRetiredCoremlSet(model, platform, modelPath)
+    if (retired.status === 'cleared') {
+      logger.info('Cleared a retired Core ML set; the GGUF loads without it', { registryPath })
+    } else if (retired.status === 'kept') {
+      const linkPath = await linkAwayFromCoremlBundles(retired.ggufPath)
+      logger.warn('Unable to clear a retired Core ML set; loading its GGUF without the bundle', {
+        registryPath,
+        linkPath,
+        error: retired.error
+      })
+      return linkPath
+    }
+  } catch (error) {
+    logger.warn('Unable to clear a retired Core ML set', { registryPath, error })
+  }
+  return null
+}
+
 // A size check only: the single-file path validates the file before using it.
 async function hasFileOfSize(path: string, expectedSize: number): Promise<boolean> {
   if (expectedSize <= 0) return false
@@ -516,19 +546,11 @@ export async function downloadModelFromRegistry(
       const modelPath = getSingleFileCachePath(registryPath)
 
       // A Core ML set an earlier release staged for this GGUF, and this one
-      // no longer stages, would otherwise sit unused in the cache. Its GGUF
-      // becomes the single-file copy, so the load does not download it again.
-      if (modelMetadata) {
-        try {
-          if (await clearRetiredCoremlSet(modelMetadata, platform, modelPath)) {
-            logger.info('Cleared a retired Core ML set; the GGUF loads without it', {
-              registryPath
-            })
-          }
-        } catch (error) {
-          logger.warn('Unable to clear a retired Core ML set', { registryPath, error })
-        }
-      }
+      // no longer stages, is cleared first. Its GGUF becomes the single-file
+      // copy, so the load does not download it again.
+      const retiredSetPath = modelMetadata
+        ? await clearRetiredCoremlSetBeforeLoad(modelMetadata, platform, modelPath)
+        : null
 
       const { expectedSize, checksum } = resolveRegistryDownloadMetadata(
         modelMetadata,
@@ -536,13 +558,9 @@ export async function downloadModelFromRegistry(
         expectedChecksum
       )
 
-      const cachedPath = await validateCachedFile(
-        modelPath,
-        filename,
-        expectedSize,
-        checksum,
-        hooks
-      )
+      const cachedPath =
+        retiredSetPath ??
+        (await validateCachedFile(modelPath, filename, expectedSize, checksum, hooks))
 
       if (cachedPath) {
         logger.info(`✅ Using cached model: ${cachedPath}`)
