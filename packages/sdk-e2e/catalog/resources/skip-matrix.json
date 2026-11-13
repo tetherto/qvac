@@ -1,5 +1,6 @@
 {
   "desktop-macos": [
+    "diffusion-moss-image-layout",
     "parakeet-unified-coreml-ios",
     "snap-storage-common-root",
     "tools-simple-function-gemma4",
@@ -22,6 +23,7 @@
     "tts-audio8-coreml"
   ],
   "desktop-windows": [
+    "diffusion-moss-image-layout",
     "parakeet-transcribepsy-coreml-wav",
     "parakeet-unified-coreml-ios",
     "snap-storage-common-root",
@@ -66,6 +68,7 @@
     "diffusion-img2img-img-cfg-scale",
     "diffusion-img2img-invalid-strength",
     "diffusion-img2img-vs-txt2img-baseline",
+    "diffusion-moss-image-layout",
     "diffusion-negative-prompt",
     "diffusion-sampler-euler-a",
     "diffusion-sampler-heun",
@@ -151,6 +154,7 @@
     "diffusion-img2img-img-cfg-scale",
     "diffusion-img2img-invalid-strength",
     "diffusion-img2img-vs-txt2img-baseline",
+    "diffusion-moss-image-layout",
     "diffusion-negative-prompt",
     "diffusion-sampler-euler-a",
     "diffusion-sampler-heun",
@@ -238,6 +242,7 @@
     "diffusion-img2img-img-cfg-scale",
     "diffusion-img2img-invalid-strength",
     "diffusion-img2img-vs-txt2img-baseline",
+    "diffusion-moss-image-layout",
     "diffusion-negative-prompt",
     "diffusion-sampler-euler-a",
     "diffusion-sampler-heun",
@@ -325,6 +330,7 @@
     "diffusion-img2img-img-cfg-scale",
     "diffusion-img2img-invalid-strength",
     "diffusion-img2img-vs-txt2img-baseline",
+    "diffusion-moss-image-layout",
     "diffusion-negative-prompt",
     "diffusion-sampler-euler-a",
     "diffusion-sampler-heun",
@@ -433,6 +439,7 @@
     "diffusion-img2img-img-cfg-scale",
     "diffusion-img2img-invalid-strength",
     "diffusion-img2img-vs-txt2img-baseline",
+    "diffusion-moss-image-layout",
     "diffusion-negative-prompt",
     "diffusion-sampler-euler-a",
     "diffusion-sampler-heun",
@@ -636,6 +643,7 @@
     "diffusion-img2img-img-cfg-scale",
     "diffusion-img2img-invalid-strength",
     "diffusion-img2img-vs-txt2img-baseline",
+    "diffusion-moss-image-layout",
     "diffusion-negative-prompt",
     "diffusion-sampler-euler-a",
     "diffusion-sampler-heun",
@@ -801,6 +809,7 @@
     "world-step-before-scene-fails"
   ],
   "desktop-python": [
+    "diffusion-moss-image-layout",
     "error-invalid-response-type",
     "error-structured-error-code",
     "image-embedding-megaloc-mixed",
@@ -868,6 +877,7 @@
     "diffusion-img2img-img-cfg-scale",
     "diffusion-img2img-invalid-strength",
     "diffusion-img2img-vs-txt2img-baseline",
+    "diffusion-moss-image-layout",
     "diffusion-negative-prompt",
     "diffusion-sampler-euler-a",
     "diffusion-sampler-heun",

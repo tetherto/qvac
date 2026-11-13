@@ -396,6 +396,10 @@ function generateDiffusionName({
     return `${name}_VAE`
   }
 
+  // A tokenizer (tagged 'tokenizer') is named after its model like a VAE,
+  // since its filename is generic
+  if (tags.includes('tokenizer')) return `${cleanPart(modelName)}_TOKENIZER`
+
   let family = filename
     .replace(/\.\w+$/, '')
     .replace(/^stable-diffusion-xl/i, 'SDXL')

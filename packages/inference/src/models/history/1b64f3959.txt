@@ -1,0 +1,10 @@
+commit=1b64f395995522fc49de443a4ebe40a0cac1f866
+timestamp=2026-11-12T13:46:45.125Z
+previous_count=865
+new_count=868
+
+[added]
+MOSS_IMAGE_SFT_5B_BF16
+MOSS_IMAGE_VAE
+MOSS_IMAGE_SFT_TOKENIZER
+

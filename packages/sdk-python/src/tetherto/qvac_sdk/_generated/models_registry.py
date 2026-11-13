@@ -4439,6 +4439,60 @@ MOE_35B_INST_Q8_0 = ModelConstant(
     params="35B",
 )
 
+MOSS_IMAGE_SFT_5B_BF16 = ModelConstant(
+    name="MOSS_IMAGE_SFT_5B_BF16",
+    src="registry://hf/Comfy-Org/MOSS-Image/resolve/530a4c94f92c35ef6818b1b035a983fe9dcf5f54/diffusion_models/moss_image_sft_bf16.safetensors",
+    registry_path="Comfy-Org/MOSS-Image/resolve/530a4c94f92c35ef6818b1b035a983fe9dcf5f54/diffusion_models/moss_image_sft_bf16.safetensors",
+    registry_source="hf",
+    blob_core_key="e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+    blob_block_offset=3190846,
+    blob_block_length=155101,
+    blob_byte_offset=209112888048,
+    model_id="moss_image_sft_bf16.safetensors",
+    expected_size=10164655808,
+    sha256_checksum="f96738d8116d78b7316b57c663d8c98591ddafab7488f48e3099b7655e34ab6f",
+    addon="diffusion",
+    engine="sdcpp-generation",
+    quantization="BF16",
+    params="5B",
+)
+
+MOSS_IMAGE_SFT_TOKENIZER = ModelConstant(
+    name="MOSS_IMAGE_SFT_TOKENIZER",
+    src="registry://hf/OpenMOSS-Team/MOSS-Image-SFT/resolve/f972bd4b4b9e3852133cc5da954d87bc32cd8fb9/tokenizer/tokenizer.json",
+    registry_path="OpenMOSS-Team/MOSS-Image-SFT/resolve/f972bd4b4b9e3852133cc5da954d87bc32cd8fb9/tokenizer/tokenizer.json",
+    registry_source="hf",
+    blob_core_key="e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+    blob_block_offset=3349757,
+    blob_block_length=306,
+    blob_byte_offset=219527131668,
+    model_id="tokenizer.json",
+    expected_size=19989325,
+    sha256_checksum="06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+    addon="diffusion",
+    engine="sdcpp-generation",
+    quantization="",
+    params="",
+)
+
+MOSS_IMAGE_VAE = ModelConstant(
+    name="MOSS_IMAGE_VAE",
+    src="registry://hf/Comfy-Org/MOSS-Image/resolve/530a4c94f92c35ef6818b1b035a983fe9dcf5f54/vae/flux2-vae_small.safetensors",
+    registry_path="Comfy-Org/MOSS-Image/resolve/530a4c94f92c35ef6818b1b035a983fe9dcf5f54/vae/flux2-vae_small.safetensors",
+    registry_source="hf",
+    blob_core_key="e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+    blob_block_offset=3345948,
+    blob_block_length=3808,
+    blob_byte_offset=219277582384,
+    model_id="flux2-vae_small.safetensors",
+    expected_size=249521340,
+    sha256_checksum="d8d52ba036475f5fb07c8b435e176d3d97ebfa82f0d1a1c317f9cc1e25bd013b",
+    addon="diffusion",
+    engine="sdcpp-generation",
+    quantization="",
+    params="",
+)
+
 MOSS_TRANSCRIBE_DIARIZE_F16 = ModelConstant(
     name="MOSS_TRANSCRIBE_DIARIZE_F16",
     src="registry://s3/qvac_models_compiled/ggml/openmoss/2026-10-01/moss-transcribe-diarize-f16.gguf",
@@ -8880,6 +8934,9 @@ __all__ = [
     "MOE_35B_INST_IQ2_XXS",
     "MOE_35B_INST_Q4_K_M",
     "MOE_35B_INST_Q8_0",
+    "MOSS_IMAGE_SFT_5B_BF16",
+    "MOSS_IMAGE_SFT_TOKENIZER",
+    "MOSS_IMAGE_VAE",
     "MOSS_TRANSCRIBE_DIARIZE_F16",
     "MOSS_TRANSCRIBE_DIARIZE_Q5_0",
     "MOSS_TRANSCRIBE_DIARIZE_Q8_0",
