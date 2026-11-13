@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url'
 import { createCommandLogger } from '@/commands/command-logger'
 import {
   assertReactNativeBareKitSupported,
+  isSwiftTooOld,
   stageAddons,
   type StageAddonsOptions,
   warnOverwritten
@@ -335,6 +336,28 @@ test(
   }
 )
 
+test(
+  'stageAddons: links the iOS Swift package with V8 when asked',
+  { skip: process.platform !== 'darwin' },
+  async (t) => {
+    const { projectRoot, entryPath } = createWorkerProject(t)
+
+    await linkAddons({
+      projectRoot,
+      entryPath,
+      hosts: ['ios-arm64'],
+      imports: {},
+      defer: [],
+      iosEngine: 'v8',
+      logger
+    })
+
+    const source = readFileSync(join(projectRoot, 'ios', 'QvacBareKit', 'Package.swift'), 'utf8')
+    t.ok(source.includes('bare-kit-swift'))
+    t.absent(source.includes('traits'), 'V8 is the default engine of bare-kit-swift')
+  }
+)
+
 test('warnOverwritten: names the libraries several addons wrote to the same path', (t) => {
   const warnings: string[] = []
   const recorder = { warn: (message: string) => warnings.push(message) } as unknown as Logger
@@ -355,4 +378,13 @@ test('warnOverwritten: stays quiet when every file is written once', (t) => {
   warnOverwritten([join('addons', 'a.so'), join('addons', 'b.so')], 'addons', recorder)
 
   t.alike(warnings, [])
+})
+
+test('isSwiftTooOld: flags a Swift older than bare-kit-swift needs', (t) => {
+  t.ok(
+    isSwiftTooOld('swift-driver version: 1.115 Apple Swift version 6.0.3 (swiftlang-6.0.3.1.10)')
+  )
+  t.absent(isSwiftTooOld('Apple Swift version 6.1 (swiftlang-6.1.0.110.21)'))
+  t.absent(isSwiftTooOld('Apple Swift version 6.3.2 (swiftlang-6.3.2.1.108)'))
+  t.absent(isSwiftTooOld('no version here'), 'an unreadable version is not flagged')
 })

@@ -9,6 +9,7 @@ import {
   MOBILE_HOSTS,
   MOBILE_HOSTS_BY_PLATFORM,
   buildMobileBundle,
+  iosEngineOf,
   mobileHostsForPlatform
 } from '@/expo/plugins/withMobileBundle'
 import { HostPrebuildsMissingError } from '@/utils/errors-client'
@@ -220,3 +221,13 @@ function hostAddonMap(metaName: string) {
     default: './addon-unavailable.js'
   }
 }
+
+test('iosEngineOf: passes a known engine through and refuses an unknown one', (t) => {
+  t.is(iosEngineOf({}), undefined)
+  t.is(iosEngineOf({ iosEngine: 'v8' }), 'v8')
+  t.is(iosEngineOf({ iosEngine: 'javascriptcore' }), 'javascriptcore')
+  t.exception(
+    () => iosEngineOf({ iosEngine: 'hermes' as never }),
+    /iosEngine must be "javascriptcore" or "v8", got "hermes"/
+  )
+})

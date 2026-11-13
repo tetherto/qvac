@@ -3,6 +3,7 @@ import type { ExpoConfig } from 'expo/config'
 import * as fs from 'fs'
 import * as path from 'path'
 import { bundleSdk } from '@/commands'
+import { IOS_ENGINES, type IosEngine } from '@/commands/bundle/link'
 import { discardStaged, replaceAll, scratchFolderFor } from '@/commands/bundle/scratch'
 import { CONFIG_CANDIDATES } from '@/client/config-loader/resolve-config.node'
 import { resolveSDKPackageDir } from '@/expo/plugins/resolve-sdk-package-dir'
@@ -34,6 +35,12 @@ type MobileBundleOptions = {
    * `expo prebuild` then fails and names each package to add.
    */
   installMissingPrebuilds?: boolean
+  /**
+   * The JavaScript engine the worker runs with on iOS: `'javascriptcore'`, the
+   * default, or `'v8'`. V8 needs an entitlement that free Apple developer
+   * accounts cannot sign with; the plugin adds it to the app.
+   */
+  iosEngine?: IosEngine
 }
 
 /**
@@ -76,7 +83,8 @@ async function buildMobileBundle<T extends configPlugins.ExportedConfigWithProps
     defer: deferredModules,
     quiet: true,
     installMissingPrebuilds: options.installMissingPrebuilds === true,
-    link: platformHosts
+    link: platformHosts,
+    iosEngine: iosEngineOf(options)
   })
   if (result.installedPrebuilds.length > 0) {
     const names = result.installedPrebuilds.map((pkg) => `${pkg.name}@${pkg.version}`).join(', ')
@@ -90,6 +98,15 @@ async function buildMobileBundle<T extends configPlugins.ExportedConfigWithProps
 
   console.log('🫡 QVAC: Mobile bundle generated, verified and linked')
   return config
+}
+
+/** The engine the options select, or undefined for the default. */
+function iosEngineOf(options: MobileBundleOptions): IosEngine | undefined {
+  const { iosEngine } = options
+  if (iosEngine === undefined || IOS_ENGINES.includes(iosEngine)) return iosEngine
+  throw new Error(
+    `QVAC: iosEngine must be ${IOS_ENGINES.map((name) => `"${name}"`).join(' or ')}, got "${String(iosEngine)}"`
+  )
 }
 
 function mobileHostsForPlatform(platform: string) {
@@ -127,7 +144,13 @@ async function copyWorker(workerDir: string, outDir: string) {
   }
 }
 
-export { MOBILE_HOSTS, MOBILE_HOSTS_BY_PLATFORM, buildMobileBundle, mobileHostsForPlatform }
+export {
+  MOBILE_HOSTS,
+  MOBILE_HOSTS_BY_PLATFORM,
+  buildMobileBundle,
+  iosEngineOf,
+  mobileHostsForPlatform
+}
 export type { MobileBundleOptions, MobilePlatform }
 
 export default withMobileBundle

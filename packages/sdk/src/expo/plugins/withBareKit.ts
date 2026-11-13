@@ -1,12 +1,18 @@
 import configPlugins from '@expo/config-plugins'
 import type { ExpoConfig } from 'expo/config'
 import path from 'path'
-import { BARE_KIT_RESOURCES, NATIVE_MODULES } from '@/commands/bundle/link'
+import {
+  BARE_KIT_RESOURCES,
+  IOS_V8_ENTITLEMENT,
+  NATIVE_MODULES,
+  type IosEngine
+} from '@/commands/bundle/link'
 
 const {
   IOSConfig,
   WarningAggregator,
   withAppBuildGradle,
+  withEntitlementsPlist,
   withGradleProperties,
   withPlugins,
   withProjectBuildGradle,
@@ -24,6 +30,11 @@ const JITPACK = 'https://www.jitpack.io'
 /** bare-kit-kotlin is built with Kotlin 2.4, which Expo builds from SDK 58. */
 const MIN_KOTLIN_VERSION = '2.4.20'
 
+interface BareKitOptions {
+  /** The engine `withMobileBundle` links Bare Kit with on iOS. */
+  iosEngine?: IosEngine | undefined
+}
+
 /**
  * Expo plugin: adds the Bare Kit module that `withMobileBundle` writes to the
  * app, as a Gradle module on Android and a local Swift package on iOS, and
@@ -31,7 +42,7 @@ const MIN_KOTLIN_VERSION = '2.4.20'
  * expo-bare-kit is also configured, since both write Bare Kit and the native
  * addons into the app.
  */
-function withBareKit(config: ExpoConfig): ExpoConfig {
+function withBareKit(config: ExpoConfig, options: BareKitOptions = {}): ExpoConfig {
   if (hasPlugin(config, 'expo-bare-kit')) {
     throw new Error(
       `QVAC: ${PLUGIN} cannot be used with expo-bare-kit, since both add Bare Kit and its native ` +
@@ -39,7 +50,20 @@ function withBareKit(config: ExpoConfig): ExpoConfig {
     )
   }
 
-  return withPlugins(config, [withAndroidModule, withJitPack, withKotlinVersion, withIosPackage])
+  config = withPlugins(config, [withAndroidModule, withJitPack, withKotlinVersion, withIosPackage])
+  return options.iosEngine === 'v8' ? withV8Entitlement(config) : config
+}
+
+/** Bare Kit's V8 reserves more address space than iOS gives an app without this entitlement. */
+function withV8Entitlement(config: ExpoConfig): ExpoConfig {
+  return withEntitlementsPlist(config, (config) => {
+    addV8Entitlement(config.modResults)
+    return config
+  })
+}
+
+export function addV8Entitlement(entitlements: Record<string, unknown>): void {
+  entitlements[IOS_V8_ENTITLEMENT] = true
 }
 
 function hasPlugin(config: ExpoConfig, name: string): boolean {

@@ -54,8 +54,9 @@ function writePrebuild(packageRoot: string, host: string, filename = 'native.bar
 }
 
 /**
- * A bare-stow whose Bare Kit pins are read. bare-kit-kotlin 0.2.2 and
- * bare-kit-swift 2.2.0 run Bare 1.36.2, per the built-in tables.
+ * A bare-stow whose Bare Kit pins are read. bare-kit-kotlin 0.2.2 runs Bare
+ * 1.36.2, and iOS the Bare of the newest bare-kit-swift from 2.2.0, per the
+ * built-in tables.
  */
 function writeBareStow(projectRoot: string, kotlin = '0.2.2', swift = '2.2.0'): string {
   const bareStowDir = path.join(projectRoot, 'bare-stow')
@@ -1823,7 +1824,7 @@ describe('formatVerifyBundleResult', () => {
       assert.match(out, /Missing prebuild/)
       assert.match(out, /ABI mismatch/)
       assert.match(out, /bare-os@3\.9\.0 for ios-arm64-simulator/)
-      assert.match(out, /requires bare >=1\.40\.0, runtime is 1\.36\.2 on ios-arm64-simulator/)
+      assert.match(out, /requires bare >=1\.40\.0, runtime is \d+\.\d+\.\d+ on ios-arm64-simulator/)
     })
   })
 
