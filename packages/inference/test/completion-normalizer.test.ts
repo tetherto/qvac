@@ -618,6 +618,40 @@ test('harmony content frame: inner emitted as contentDelta with markers stripped
   t.is(n.getAccumulated().contentText, 'Hello, world!')
 })
 
+test('harmony commentary preamble: inner emitted as content without the channel name', (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({
+      capabilities: TEXT_PARSE_CAPS,
+      tools: [GET_WEATHER_TOOL],
+      toolDialect: 'harmony'
+    })
+  )
+  const text =
+    `<|channel|>commentary<|message|>Checking the weather.<|end|>` +
+    `<|start|>assistant<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"city":"Tokyo","country":"JP"}<|call|>`
+  const events = [...pushAll(n, [text]), ...n.finish()]
+
+  t.is(texts(events, 'contentDelta').join(''), 'Checking the weather.')
+  const toolEvents = events.filter((e) => e.type === 'toolCall')
+  t.is(toolEvents.length, 1, 'the call after the preamble still parses')
+  t.is((toolEvents[0] as { call: { name: string } }).call.name, 'get_weather')
+})
+
+test('harmony commentary preamble: open marker split across pushes', (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({
+      capabilities: NONE_CAPS,
+      toolDialect: 'harmony'
+    })
+  )
+  const events = [
+    ...pushAll(n, ['<|channel|>comment', 'ary<|mess', 'age|>On it.', '<|end|>']),
+    ...n.finish()
+  ]
+
+  t.is(texts(events, 'contentDelta').join(''), 'On it.')
+})
+
 // Final-frame inner streams as it arrives — long GPT-OSS responses must
 // not stall waiting for `<|return|>`.
 test('harmony content frame: inner is emitted incrementally across token chunks', (t) => {
