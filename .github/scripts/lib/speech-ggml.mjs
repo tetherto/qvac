@@ -6,7 +6,7 @@ export const FABRIC_RUNTIME = 'fabric'
 export const SPEECH_ADDONS = [
   { name: '@qvac/asr-ggml', dir: 'packages/asr-ggml', runtime: GGML_SPEECH_RUNTIME },
   { name: '@qvac/audiogen-ggml', dir: 'packages/audiogen-ggml', runtime: FABRIC_RUNTIME },
-  { name: '@qvac/bci-whispercpp', dir: 'packages/bci-whispercpp', runtime: GGML_SPEECH_RUNTIME },
+  { name: '@qvac/bci-whispercpp', dir: 'packages/bci-whispercpp', runtime: FABRIC_RUNTIME },
   { name: '@qvac/tts-ggml', dir: 'packages/tts-ggml', runtime: FABRIC_RUNTIME },
 ]
 

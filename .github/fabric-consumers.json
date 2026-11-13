@@ -10,6 +10,7 @@
     "ggml-rpc-server",
     "turbovec-ggml",
     "tts-ggml",
-    "audiogen-ggml"
+    "audiogen-ggml",
+    "bci-whispercpp"
   ]
 }

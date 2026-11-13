@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Run on the shared `@qvac/fabric` runtime: the module links the ggml that
+  `@qvac/fabric` ships instead of bundling its own, loads GPU backends from
+  the fabric platform package on every host, and the native build takes ggml
+  from the `qvac-fabric` vcpkg port through `speech-cpp` `2026-11-11`. CUDA is
+  used wherever the runtime ships it and the NVIDIA driver and CUDA 13
+  libraries resolve ([#PR_NUMBER](https://github.com/tetherto/qvac/pull/PR_NUMBER)).
+- An unset `backendsDir` loads the backends `@qvac/fabric` ships rather than
+  scanning next to the addon's module
+  ([#PR_NUMBER](https://github.com/tetherto/qvac/pull/PR_NUMBER)).
+
+### Removed
+
+- The opt-in CUDA source build (`ENABLE_CUDA`, `npm run build:cuda`,
+  `npm run build:native:cuda`): CUDA comes with the `@qvac/fabric` runtime
+  ([#PR_NUMBER](https://github.com/tetherto/qvac/pull/PR_NUMBER)).
+
 ## [0.15.1] - 2026-11-10
 
 ## [0.15.0] - 2026-11-05
