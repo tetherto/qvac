@@ -1,5 +1,5 @@
 ---
-title: API Summary — v0.23.x (latest)
+title: API Summary — v0.24.x (latest)
 sidebarTitle: API
 icon: BookA
 description: One-page reference of all public functions and objects exported by @qvac/sdk
@@ -14,7 +14,7 @@ description: One-page reference of all public functions and objects exported by 
 > **Fields intentionally omitted**: parameter descriptions, return field descriptions
 > (covered by IDE hover and `.d.ts` declarations).
 >
-> **Scope**: 62 functions in `packages/sdk/client/api/` plus the `profiler` object.
+> **Scope**: 64 functions in `packages/sdk/client/api/` plus the `profiler` object.
 
 ---
 
@@ -22,25 +22,29 @@ description: One-page reference of all public functions and objects exported by 
 
 ### `assessModelFit`
 
-Assesses, before anything is downloaded, whether the given models are likely
-to fit in this device's memory.
+Whether a set of models fits in this device's memory when loaded together,
+without downloading them.
 
-Advisory only: it does not download weights, block `loadModel`, reserve
-memory, or make a performance claim. `unknown` is a real answer — it means
-the available evidence does not support a verdict either way, and callers
-should treat it as "cannot say", not "no".
+Each model's engine fitter runs against the registry's weightless description
+of the model, or the model itself when it is on disk. The memory each load
+takes is summed per device and compared against what is free.
 
-For each candidate it fetches the registry's weightless description of every
-source that load names — tens of KB each, never the weights — and runs the
-engine's own fitter against them, reported as `native-fit` evidence. Where
-that is unavailable the computed floor stands, which can refuse a model but
-never confirm one.
+`unknown` is the answer for a load that would start but cannot be sized: an
+engine with no fitter, a load the fitter cannot project, a model with no
+registry description that is not on disk, or a device that reported no free
+memory.
 
 **Signature**:
 
 ```ts
-function assessModelFit(input: AssessModelFitInput): Promise<AssessModelFitResult>;
+function assessModelFit(input: AssessModelFitInput, options?: RPCOptions): Promise<AssessModelFitResult>;
 ```
+
+**Throws**:
+
+- The error `loadModel` would throw for a load it refuses: no plugin
+  for the model type, a config the plugin refuses, or a model the fitter
+  cannot read.
 
 ---
 
@@ -52,7 +56,7 @@ pipeline of `flow-edit` and `repaint` operations, executed in array order.
 **Signature**:
 
 ```ts
-function audioEdit(params: AudioEditClientParams): AudioGenResult;
+function audioEdit(params: AudioEditClientParams, options?: RPCOptions): AudioGenResult;
 ```
 
 **Example**:
@@ -86,7 +90,7 @@ Generates PCM audio using a loaded AudioGen model.
 **Signature**:
 
 ```ts
-function audioGen(params: AudioGenClientParams): AudioGenResult;
+function audioGen(params: AudioGenClientParams, options?: RPCOptions): AudioGenResult;
 ```
 
 **Example**:
@@ -108,6 +112,14 @@ for await (const progress of run.progressStream) {
 const { pcm, sampleRate, channels, bitsPerSample } = await run.audio;
 const stats = await run.stats;
 
+// Ask for a file next to the PCM, and read the samples as Int16Array chunks:
+const flacRun = audioGen({ modelId, caption: "ambient electronic music", outputFormat: "flac" });
+for await (const samples of flacRun.chunkStream) {
+  console.log(samples.length, "interleaved int16 samples");
+}
+const file = await flacRun.encoded;
+if (file) await fs.writeFile(`track.${file.extension}`, file.data);
+
 // MiniMax-Music3 uses a local LM and synthesis GGUF pair:
 const minimaxId = await loadModel({
   modelType: "audiogen",
@@ -116,6 +128,31 @@ const minimaxId = await loadModel({
     lmModelSrc: "/models/mm3-lm-q8.gguf",
     synthModelSrc: "/models/mm3-synth-q8.gguf",
     device: "gpu", // fail the load instead of falling back to the CPU
+  },
+});
+
+// On macOS 15+, run MiniMax through a compiled full Core ML profile instead:
+const coremlId = await loadModel({
+  modelType: "audiogen",
+  modelConfig: {
+    engine: "minimax",
+    lmModelSrc: "/models/mm3-lm-f16.gguf",
+    synthModelSrc: "/models/mm3-synth-f16.gguf",
+    coremlProfileDir: "/models/minimax-coreml",
+    coremlComputeUnits: "CPU_AND_NE",
+  },
+});
+
+// ACE-Step can name the backend of its pipeline and of its LM independently:
+const placedId = await loadModel({
+  modelType: "audiogen",
+  modelConfig: {
+    textEncModelSrc,
+    lmModelSrc,
+    ditModelSrc,
+    vaeModelSrc,
+    backend: "CUDA0", // the load fails when the host cannot provide it
+    lmBackend: "cpu",
   },
 });
 const minimaxRun = audioGen({
@@ -171,7 +208,7 @@ recovered, and the LM reports a caption and the clip's metadata.
 **Signature**:
 
 ```ts
-function audioUnderstand(params: AudioUnderstandClientParams): AudioUnderstandResult;
+function audioUnderstand(params: AudioUnderstandClientParams, options?: RPCOptions): AudioUnderstandResult;
 ```
 
 **Example**:
@@ -214,7 +251,7 @@ complete text. Accepts either a `.bin` file path or a raw neural buffer.
 **Signature**:
 
 ```ts
-function bciTranscribe(params: BciTranscribeClientParams & { metadata: true }, options?: RPCOptions): Promise<{ append: boolean; endMs: number; id: number; isEndOfTurn?: boolean; speaker?: string; speakerId?: number; speakerSegments?: { endMs: number; speakerId: number; startMs: number }[]; startMs: number; startsWord?: boolean; text: string }[]> & { requestId: string };
+function bciTranscribe(params: any, options?: RPCOptions): Promise<TranscribeSegment[]> & { requestId: string };
 ```
 
 #### Overload 2
@@ -244,7 +281,7 @@ will throw a `TranscriptionFailedError`.
 **Signature**:
 
 ```ts
-function bciTranscribeStream(params: BciTranscribeStreamClientParams & { metadata: true }, options?: RPCOptions): Promise<BciTranscribeStreamMetadataSession>;
+function bciTranscribeStream(params: any, options?: RPCOptions): Promise<BciTranscribeStreamMetadataSession>;
 ```
 
 #### Overload 2
@@ -260,6 +297,36 @@ will throw a `TranscriptionFailedError`.
 ```ts
 function bciTranscribeStream(params: BciTranscribeStreamClientParams, options?: RPCOptions): Promise<BciTranscribeStreamSession>;
 ```
+
+---
+
+### `calcTokens`
+
+Counts tokens with a loaded language model without running generation.
+
+When neither `history` nor enabled tools are supplied, `text` is counted raw.
+Otherwise, the conversation is rendered with the model's chat template and
+`text`, when present, becomes its final user turn. Tools are counted only when
+the model was loaded with `modelConfig.tools: true`.
+`toolSearch` controls the limits rendered for deferred-tool search, matching
+`completion()`.
+Media content and attachments are not supported.
+The count uses every supplied tool and the load-time reasoning setting. A named
+`generationParams.tool_choice` or `generationParams.reasoning_budget` override on
+`completion()` can render a different prompt.
+
+**Signature**:
+
+```ts
+function calcTokens(params: CalcTokensClientParams, options?: RPCOptions): Promise<number>;
+```
+
+**Throws**:
+
+- `RequestValidationFailedError` — If the request is invalid.
+- `ModelNotFoundError` — If `modelId` is not loaded.
+- `ModelOperationNotSupportedError` — If the loaded model is not a language model.
+- `InvalidResponseError` — If the worker returns a malformed result.
 
 ---
 
@@ -287,7 +354,7 @@ the 0.11.0 changelog / release notes.
 **Signature**:
 
 ```ts
-function cancel(params: CancelClientInput): Promise<void>;
+function cancel(params: CancelClientInput, options?: RPCOptions): Promise<void>;
 ```
 
 **Throws**:
@@ -318,7 +385,7 @@ Custom models may emit different labels sourced from the GGUF metadata.
 **Signature**:
 
 ```ts
-function classify(params: ClassifyClientParams): Promise<ClassificationResult[]>;
+function classify(params: ClassifyClientParams, options?: RPCOptions): Promise<ClassificationResult[]> & { requestId: string };
 ```
 
 **Example**:
@@ -408,7 +475,7 @@ documents.
 **Signature**:
 
 ```ts
-function createVectorIndex(params: CreateVectorIndexParams, options?: RPCOptions): Promise<VectorIndex>;
+function createVectorIndex(params: CreateVectorIndexParams, options?: RPCOptions): VectorIndexOperation<VectorIndex>;
 ```
 
 **Throws**:
@@ -422,7 +489,7 @@ const documents = new Map([
   ['1', 'Saturn moon Titan has lakes of liquid methane.'],
   ['2', 'Solar panels turn sunlight into electricity.']
 ])
-const { embedding } = await embed({ modelId, text: [...documents.values()] })
+const { embedding } = await embedBatch({ modelId, inputs: [...documents.values()] })
 
 await using index = await createVectorIndex({ dim: embedding[0].length })
 await index.add({ ids: [...documents.keys()], vectors: embedding })
@@ -444,7 +511,7 @@ Answers typed decision questions about one state or a batch of states.
 **Signature**:
 
 ```ts
-function decide(params: Extract<DecideParams, { state: unknown }>, options?: RPCOptions): Promise<{ answers: z.ZodRecord<z.ZodString, z.ZodDiscriminatedUnion<[z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; choice: z.ZodUnion<readonly [(...), (...), (...)]>; confidence: z.ZodNumber; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; type: z.ZodLiteral<"choice"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; legend: z.ZodRecord<z.ZodString, z.ZodString>; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; score: z.ZodNumber; type: z.ZodLiteral<"score"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; noul: z.ZodNumber; type: z.ZodLiteral<"noul"> }, z.core.$strip>], "type">>; model: string; usage: { inputTokens: number; options?: Record<string, { distinct: number; tokensPerOption: number | null; total: number }>; outputTokens: number; stateTokens: number; stateTokensDropped: number; truncated: boolean; truncatedQuestions: string[] } }> & { requestId: string };
+function decide(params: Extract<DecideParams, { state: unknown }>, options?: RPCOptions): Promise<DecisionResult> & { requestId: string };
 ```
 
 **Throws**:
@@ -460,7 +527,7 @@ Answers typed decision questions about one state or a batch of states.
 **Signature**:
 
 ```ts
-function decide(params: Extract<DecideParams, { states: unknown }>, options?: RPCOptions): Promise<{ answers: z.ZodRecord<z.ZodString, z.ZodDiscriminatedUnion<[z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; choice: z.ZodUnion<readonly (...)>; confidence: z.ZodNumber; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; type: z.ZodLiteral<"choice"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; legend: z.ZodRecord<z.ZodString, z.ZodString>; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; score: z.ZodNumber; type: z.ZodLiteral<"score"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; noul: z.ZodNumber; type: z.ZodLiteral<"noul"> }, z.core.$strip>], "type">>; model: string; usage: { inputTokens: number; options?: Record<string, { distinct: number; tokensPerOption: number | null; total: number }>; outputTokens: number; stateTokens: number; stateTokensDropped: number; truncated: boolean; truncatedQuestions: string[] } }[]> & { requestId: string };
+function decide(params: Extract<DecideParams, { states: unknown }>, options?: RPCOptions): Promise<DecisionResult[]> & { requestId: string };
 ```
 
 **Throws**:
@@ -476,7 +543,7 @@ Answers typed decision questions about one state or a batch of states.
 **Signature**:
 
 ```ts
-function decide(params: DecideParams, options?: RPCOptions): Promise<{ answers: z.ZodRecord<z.ZodString, z.ZodDiscriminatedUnion<[z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; choice: z.ZodUnion<readonly (...)>; confidence: z.ZodNumber; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; type: z.ZodLiteral<"choice"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; legend: z.ZodRecord<z.ZodString, z.ZodString>; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; score: z.ZodNumber; type: z.ZodLiteral<"score"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; noul: z.ZodNumber; type: z.ZodLiteral<"noul"> }, z.core.$strip>], "type">>; model: string; usage: { inputTokens: number; options?: Record<string, { distinct: number; tokensPerOption: number | null; total: number }>; outputTokens: number; stateTokens: number; stateTokensDropped: number; truncated: boolean; truncatedQuestions: string[] } } | { answers: z.ZodRecord<z.ZodString, z.ZodDiscriminatedUnion<[z.ZodObject<{ action: z.ZodObject<(...), (...)>; answerConfidence: z.ZodNumber; choice: z.ZodUnion<(...)>; confidence: z.ZodNumber; probabilities: z.ZodRecord<(...), (...)>; type: z.ZodLiteral<(...)> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<(...), (...)>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; legend: z.ZodRecord<(...), (...)>; probabilities: z.ZodRecord<(...), (...)>; score: z.ZodNumber; type: z.ZodLiteral<(...)> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<(...), (...)>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; noul: z.ZodNumber; type: z.ZodLiteral<(...)> }, z.core.$strip>], "type">>; model: string; usage: { inputTokens: number; options?: Record<string, { distinct: number; tokensPerOption: number | null; total: number }>; outputTokens: number; stateTokens: number; stateTokensDropped: number; truncated: boolean; truncatedQuestions: string[] } }[]> & { requestId: string };
+function decide(params: DecideParams, options?: RPCOptions): Promise<DecisionResponse> & { requestId: string };
 ```
 
 **Throws**:
@@ -490,12 +557,12 @@ function decide(params: DecideParams, options?: RPCOptions): Promise<{ answers: 
 
 ### `deleteCache`
 
-Deletes KV cache files.
+Deletes KV cache files, or a registry model's cached download.
 
 **Signature**:
 
 ```ts
-function deleteCache(params: { all: true } | { auto: true } | { kvCacheKey: string; modelId?: string }): Promise<{ success: boolean }>;
+function deleteCache(params: { all: true } | { auto: true } | { kvCacheKey: string; modelId?: string } | { modelSrc: string }, options?: RPCOptions): Promise<{ success: any }>;
 ```
 
 **Throws**:
@@ -515,6 +582,9 @@ await deleteCache({ kvCacheKey: "my-session" });
 
 // Delete only specific model within cache key
 await deleteCache({ kvCacheKey: "my-session", modelId: "model-abc123" });
+
+// Discard a paused registry download, or a cached registry model
+await deleteCache({ modelSrc: QWEN3_600M_INST_Q4.src });
 ```
 
 ---
@@ -526,7 +596,7 @@ Generates images using a loaded diffusion model.
 **Signature**:
 
 ```ts
-function diffusion(params: DiffusionClientParams): DiffusionResult;
+function diffusion(params: DiffusionClientParams, options?: RPCOptions): DiffusionResult;
 ```
 
 **Throws**:
@@ -549,7 +619,7 @@ const initImage = fs.readFileSync("input.png");
 const { outputs } = diffusion({ modelId, prompt: "oil painting style", init_image: initImage, strength: 0.7 });
 
 // img2img (FLUX.2 — in-context conditioning)
-// IMPORTANT: FLUX img2img requires `prediction: "flux2_flow"` to be set on the
+// IMPORTANT: FLUX.2 img2img requires `prediction: "flux2_flow"` to be set on the
 // model config at loadModel time (e.g. `loadModel(src, { modelType: "diffusion",
 // modelConfig: { prediction: "flux2_flow" } })`).
 const { outputs } = diffusion({ modelId, prompt: "turn into watercolor", init_image: initImage });
@@ -567,6 +637,19 @@ const { outputs } = diffusion({
   init_images: [refA, refB],
   width: 768,
   height: 768,
+});
+
+// FLUX.3 Image Klein reference editing. Load the Qwen3-VL 4B encoder and the
+// FLUX.2 VAE; the engine detects FLUX.3 from the weights, so leave `prediction` unset.
+const { outputs: flux3Edit } = diffusion({
+  modelId,
+  prompt: "Place the subject in a lush garden, preserving its appearance.",
+  init_images: [refA],
+  width: 512,
+  height: 512,
+  steps: 16,
+  cfg_scale: 1,
+  sampling_method: "euler",
 });
 
 // Qwen-Image-2.1 reference editing. Load the matching Qwen3-VL encoder,
@@ -634,7 +717,7 @@ Cancel a pending search with its promise.requestId.
 **Signature**:
 
 ```ts
-function discoverRpcServers(options: DiscoverRpcServersOptions): Promise<{ devices: { freeMemory: number; index: number; totalMemory: number }[]; rdmaAvailable: boolean; url: string }[]> & { requestId: string };
+function discoverRpcServers(options: DiscoverRpcServersOptions, rpcOptions?: RPCOptions): Promise<RpcServerCandidate[]> & { requestId: string };
 ```
 
 ---
@@ -686,33 +769,94 @@ await op; // rejects with `InferenceCancelledError`
 
 ### `embed`
 
-Has 2 overloads.
+Has 5 overloads.
 
-#### Overload 1 — Single text
-Generates embeddings for a single text using a specified model.
-
-**Signature**:
-
-```ts
-function embed(params: { modelId: string; text: string }, options?: RPCOptions): Promise<{ embedding: number[]; stats?: { backendDevice?: "cpu" | "gpu"; contextSize?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }> & { requestId: string };
-```
-
-**Throws**:
-
-- `QvacErrorBase` — When the response type is invalid or when the embedding fails
-
-#### Overload 2 — Multiple texts
-Generates embeddings for multiple texts using a specified model.
+#### Overload 1 — Single input
+Embeds one input supported by the loaded model.
 
 **Signature**:
 
 ```ts
-function embed(params: { modelId: string; text: string[] }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: { backendDevice?: "cpu" | "gpu"; contextSize?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }> & { requestId: string };
+function embed(params: { input: EmbedClientInput; inputs?: undefined; modelId: string; text?: undefined }, options?: RPCOptions): EmbedResult<number[]>;
 ```
 
 **Throws**:
 
-- `QvacErrorBase` — When the response type is invalid or when the embedding fails
+- `QvacErrorBase` — When validation or inference fails.
+
+#### Overload 2 — Single text
+Embeds one text string.
+
+**Signature**:
+
+```ts
+function embed(params: { input?: undefined; inputs?: undefined; modelId: string; text: string }, options?: RPCOptions): EmbedResult<number[]>;
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When validation or inference fails.
+
+#### Overload 3 — Legacy text batch (deprecated)
+> ⚠️ **Deprecated**: Use `embedBatch({ modelId, inputs })` instead. This overload will be
+removed in the next major version.
+
+Embeds each string in a text array.
+
+**Signature**:
+
+```ts
+function embed(params: { input?: undefined; inputs?: undefined; modelId: string; text: string[] }, options?: RPCOptions): EmbedResult<number[][]>;
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When validation or inference fails.
+
+#### Overload 4 — Legacy inputs batch (deprecated)
+> ⚠️ **Deprecated**: Use `embedBatch({ modelId, inputs })` instead. This overload will be
+removed in the next major version.
+
+Embeds each text or ordered text/media input.
+
+**Signature**:
+
+```ts
+function embed(params: { input?: undefined; inputs: EmbedInput[]; modelId: string; text?: undefined }, options?: RPCOptions): EmbedResult<number[][]>;
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When validation or inference fails.
+
+#### Overload 5
+Embeds a single input or a legacy batch supported by the loaded model.
+
+**Signature**:
+
+```ts
+function embed(params: EmbedClientParams, options?: RPCOptions): EmbedResult<number[] | number[][]>;
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When validation or inference fails.
+
+---
+
+### `embedBatch`
+
+Embeds a batch of inputs supported by the loaded model, in input order.
+
+**Signature**:
+
+```ts
+function embedBatch(params: EmbedBatchClientParams, options?: RPCOptions): EmbedResult<number[][]>;
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When validation or inference fails.
 
 ---
 
@@ -779,7 +923,7 @@ Returns status information for a catalog model, including cache state and loaded
 **Signature**:
 
 ```ts
-function getModelInfo(params: GetModelInfoParams): Promise<ModelInfo>;
+function getModelInfo(params: GetModelInfoParams, options?: RPCOptions): Promise<ModelInfo>;
 ```
 
 **Throws**:
@@ -795,7 +939,7 @@ Read the worker's system capabilities and optional resource sample.
 **Signature**:
 
 ```ts
-function getSystemResources(input?: GetSystemResourcesInput): Promise<SystemResources>;
+function getSystemResources(input?: GetSystemResourcesInput, options?: RPCOptions): Promise<SystemResources>;
 ```
 
 **Throws**:
@@ -813,7 +957,7 @@ round-trip.
 **Signature**:
 
 ```ts
-function heartbeat(): Promise<HeartbeatResponse>;
+function heartbeat(options?: RPCOptions): Promise<HeartbeatResponse>;
 ```
 
 **Throws**:
@@ -834,7 +978,7 @@ Invoke a non-streaming plugin handler.
 **Signature**:
 
 ```ts
-function invokePlugin(options: InvokePluginOptions<TParams>, rpcOptions?: RPCOptions): Promise<TResponse>;
+function invokePlugin(options: InvokePluginOptions<TParams>, rpcOptions?: RPCOptions): Promise<TResponse> & { requestId: string };
 ```
 
 **Throws**:
@@ -850,7 +994,7 @@ Invoke a streaming plugin handler.
 **Signature**:
 
 ```ts
-function invokePluginStream(options: InvokePluginOptions<TParams>, rpcOptions?: RPCOptions): AsyncGenerator<TResponse>;
+function invokePluginStream(options: InvokePluginOptions<TParams>, rpcOptions?: RPCOptions): AsyncGenerator<TResponse, any, any> & { requestId: string };
 ```
 
 **Throws**:
@@ -1039,7 +1183,7 @@ changes are not written back until `write()` is called again.
 **Signature**:
 
 ```ts
-function loadVectorIndex(params: LoadVectorIndexParams, options?: RPCOptions): Promise<VectorIndex>;
+function loadVectorIndex(params: LoadVectorIndexParams, options?: RPCOptions): VectorIndexOperation<VectorIndex>;
 ```
 
 **Throws**:
@@ -1098,12 +1242,13 @@ Fetches a single model entry from the registry by its path and source.
 **Signature**:
 
 ```ts
-function modelRegistryGetModel(registryPath: string, registrySource: string): Promise<ModelRegistryEntry>;
+function modelRegistryGetModel(registryPath: string, registrySource: string, options?: RPCOptions): RegistryQuery<ModelRegistryEntry>;
 ```
 
 **Throws**:
 
 - `ModelRegistryModelNotFoundError` — When the registry has no model at this source and path.
+- `ModelRegistryBusyError` — When another QVAC process kept the registry for longer than the query waits.
 - `ModelRegistryQueryFailedError` — When the registry query fails.
 
 ---
@@ -1115,11 +1260,12 @@ Returns all available models from the QVAC distributed model registry.
 **Signature**:
 
 ```ts
-function modelRegistryList(): Promise<ModelRegistryEntry[]>;
+function modelRegistryList(options?: RPCOptions): RegistryQuery<ModelRegistryEntry[]>;
 ```
 
 **Throws**:
 
+- `ModelRegistryBusyError` — When another QVAC process kept the registry for longer than the query waits.
 - `ModelRegistryQueryFailedError` — When the registry query fails.
 
 ---
@@ -1131,11 +1277,12 @@ Searches the model registry with optional filters for model type, engine, and qu
 **Signature**:
 
 ```ts
-function modelRegistrySearch(params: ModelRegistrySearchParams): Promise<ModelRegistryEntry[]>;
+function modelRegistrySearch(params: ModelRegistrySearchParams, options?: RPCOptions): RegistryQuery<ModelRegistryEntry[]>;
 ```
 
 **Throws**:
 
+- `ModelRegistryBusyError` — When another QVAC process kept the registry for longer than the query waits.
 - `ModelRegistryQueryFailedError` — When the registry query fails.
 
 ---
@@ -1147,7 +1294,7 @@ Performs Optical Character Recognition (OCR) on an image to extract text.
 **Signature**:
 
 ```ts
-function ocr(params: OCRClientParams): { blocks: Promise<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; blockStream: AsyncGenerator<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; stats: Promise<{ detectionTime?: number; recognitionTime?: number; totalTime?: number } | undefined> };
+function ocr(params: OCRClientParams, options?: RPCOptions): { blocks: Promise<OCRTextBlock[]>; blockStream: AsyncGenerator<OCRTextBlock[]>; requestId: string; stats: Promise<any> };
 ```
 
 **Example**:
@@ -1374,7 +1521,7 @@ For HyperDB, this is 16 documents by default. If there are insufficient document
 **Signature**:
 
 ```ts
-function ragReindex(params: RagReindexParams, options?: RPCOptions): Promise<ReindexResult> & { requestId: string };
+function ragReindex(params: RagReindexParams, options?: RPCOptions): Promise<RagReindexResult> & { requestId: string };
 ```
 
 **Throws**:
@@ -1418,7 +1565,7 @@ The workspace remains open until closed.
 **Signature**:
 
 ```ts
-function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: RPCOptions): Promise<SaveEmbeddingsResult[]> & { requestId: string };
+function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: RPCOptions): Promise<RagSaveEmbeddingsResult[]> & { requestId: string };
 ```
 
 **Throws**:
@@ -1430,7 +1577,7 @@ function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: RPCOptions
 ```ts
 // Segregated flow
 const chunks = await ragChunk({ documents: ["text1", "text2"] });
-const { embedding: embeddings } = await embed({ modelId, text: chunks.map(c => c.content) });
+const { embedding: embeddings } = await embedBatch({ modelId, inputs: chunks.map(c => c.content) });
 const embeddedDocs = chunks.map((chunk, i) => ({
   ...chunk,
   embedding: embeddings[i],
@@ -1482,7 +1629,7 @@ Scores documents by relevance to a query with a reranker model.
 **Signature**:
 
 ```ts
-function rerank(params: RerankParams, options?: RPCOptions): Promise<number[]> & { requestId: string };
+function rerank(params: RerankParams, options?: RPCOptions): Promise<RerankScores> & { requestId: string };
 ```
 
 **Throws**:
@@ -1514,7 +1661,7 @@ Behavior of in-flight operations from before the previous `suspend()`:
 **Signature**:
 
 ```ts
-function resume(): Promise<void>;
+function resume(options?: RPCOptions): Promise<void>;
 ```
 
 **Throws**:
@@ -1540,7 +1687,7 @@ Cancel a pending start with its promise.requestId.
 **Signature**:
 
 ```ts
-function startRpcServer(options: StartRpcServerOptions): Promise<{ rdmaCapable: boolean; serverId: string; url: string }> & { requestId: string };
+function startRpcServer(options: StartRpcServerOptions, rpcOptions?: RPCOptions): Promise<RpcServerInfo> & { requestId: string };
 ```
 
 ---
@@ -1555,7 +1702,7 @@ lifecycle gate (along with `suspend()` and `resume()`).
 **Signature**:
 
 ```ts
-function state(): Promise<LifecycleState>;
+function state(options?: RPCOptions): Promise<LifecycleState>;
 ```
 
 **Throws**:
@@ -1580,7 +1727,7 @@ Withdraw the announcement and await native stop. Bare stop has no deadline.
 **Signature**:
 
 ```ts
-function stopRpcServer(options: StopRpcServerOptions): Promise<void>;
+function stopRpcServer(options: StopRpcServerOptions, rpcOptions?: RPCOptions): Promise<void>;
 ```
 
 ---
@@ -1601,7 +1748,7 @@ stream that the worker fans every log into.
 **Signature**:
 
 ```ts
-function subscribeServerLogs(handler: ServerLogHandler): () => void;
+function subscribeServerLogs(handler: ServerLogHandler, options?: RPCOptions): () => void;
 ```
 
 **Example**:
@@ -1626,7 +1773,8 @@ lifecycle gate (along with `resume()` and `state()`). Idempotent.
 
 After `suspend()` resolves, runtime state is `"suspended"` and any non-
 lifecycle SDK operation throws `LifecycleOperationBlockedError` until
-`resume()` is called.
+`resume()` is called. `session.close()` is the exception: a session can
+still end and release its leases while the runtime is suspended.
 
 In-flight operations started before suspend:
   - P2P / Hyperdrive downloads: stall cleanly, continue after `resume()`
@@ -1636,7 +1784,7 @@ In-flight operations started before suspend:
 **Signature**:
 
 ```ts
-function suspend(): Promise<void>;
+function suspend(options?: RPCOptions): Promise<void>;
 ```
 
 **Throws**:
@@ -1661,9 +1809,10 @@ Three modes selected by `params.stream` and `params.sentenceStream`:
 
 - `stream: false` — collect all PCM samples and resolve once via
   `result.buffer` (`Promise<number[]>`). `bufferStream` is empty.
-- `stream: true` (default) — yield PCM samples through `result.bufferStream`
-  (`AsyncGenerator<number>`) as they arrive. `buffer` resolves to an empty
-  array.
+- `stream: true` (default) — yield PCM through `result.chunkStream`
+  (`AsyncGenerator<Int16Array>`, one chunk per frame) or
+  `result.bufferStream` (`AsyncGenerator<number>`, one sample at a time).
+  `buffer` resolves to an empty array.
 - `stream: true, sentenceStream: true` — also exposes `result.chunkUpdates`
   (`AsyncGenerator<TtsSentenceChunkUpdate>`) so callers can mux per-sentence
   metadata with the audio. Multiple consumers can iterate the response
@@ -1686,7 +1835,8 @@ pipeline error. Awaiting `done` is safe even when no stream is iterated.
 before draining the audio); `result.stats` and `result.stopReason` resolve
 from the terminal frame. All three resolve — with `undefined` when the run
 produced none — rather than reject. In `stream: true` mode (the default) the
-run starts lazily: nothing is sent until `bufferStream` is first iterated, so
+run starts lazily: nothing is sent until `chunkStream` or `bufferStream` is
+first iterated, so
 `done`, `sampleRate`, `stats` and `stopReason` stay pending until then. In
 `stream: false` and `sentenceStream: true` modes the run starts immediately.
 Read `sampleRate` rather than assuming the engine default: `outputSampleRate`
@@ -1733,7 +1883,7 @@ Has 2 overloads.
 **Signature**:
 
 ```ts
-function transcribe(params: TranscribeClientParams & { metadata: true }, options?: RPCOptions): TranscribeCall<TranscribeSegment[]>;
+function transcribe(params: any, options?: RPCOptions): TranscribeCall<TranscribeSegment[]>;
 ```
 
 #### Overload 2
@@ -1753,7 +1903,7 @@ removed in the next major version.
 Streaming transcription with upfront audio: sends full audio, yields text
 chunks as they arrive.
 
-Has 6 overloads.
+Has 5 overloads.
 
 #### Overload 1 — Upfront audio (deprecated)
 > ⚠️ **Deprecated**: Pass audio via `transcribe()` instead. This overload will be
@@ -1765,7 +1915,7 @@ chunks as they arrive.
 **Signature**:
 
 ```ts
-function transcribeStream(params: TranscribeClientParams & { metadata: true }, options?: RPCOptions): AsyncGenerator<TranscribeSegment>;
+function transcribeStream(params: any, options?: RPCOptions): AsyncGenerator<TranscribeSegment>;
 ```
 
 #### Overload 2 — Upfront audio (deprecated)
@@ -1792,7 +1942,7 @@ time will throw a `TranscriptionFailedError`.
 **Signature**:
 
 ```ts
-function transcribeStream(params: TranscribeStreamClientParams & { emitVadEvents: true }, options?: RPCOptions): Promise<TranscribeStreamConversationSession>;
+function transcribeStream(params: any, options?: RPCOptions): Promise<TranscribeStreamConversationSession>;
 ```
 
 #### Overload 4 — Upfront audio (deprecated)
@@ -1805,23 +1955,10 @@ chunks as they arrive.
 **Signature**:
 
 ```ts
-function transcribeStream(params: TranscribeStreamClientParams & { parakeetStreamingConfig: { chunkLeftContextMs?: number; chunkMs?: number; chunkRightContextMs?: number; diarizationMinSegmentMs?: number; diarizationThreshold?: number; emitEnergyVad?: boolean; emitPartials?: boolean; emitSpeakerVad?: boolean; fifoLen?: number; historyMs?: number; leftContextMs?: number; rightLookaheadMs?: number; spkCacheEnable?: boolean; spkCacheLen?: number; spkCacheUpdatePeriod?: number } }, options?: RPCOptions): Promise<TranscribeStreamConversationSession>;
+function transcribeStream(params: any, options?: RPCOptions): Promise<TranscribeStreamMetadataSession>;
 ```
 
 #### Overload 5 — Upfront audio (deprecated)
-> ⚠️ **Deprecated**: Pass audio via `transcribe()` instead. This overload will be
-removed in the next major version.
-
-Streaming transcription with upfront audio: sends full audio, yields text
-chunks as they arrive.
-
-**Signature**:
-
-```ts
-function transcribeStream(params: TranscribeStreamClientParams & { metadata: true }, options?: RPCOptions): Promise<TranscribeStreamMetadataSession>;
-```
-
-#### Overload 6 — Upfront audio (deprecated)
 > ⚠️ **Deprecated**: Pass audio via `transcribe()` instead. This overload will be
 removed in the next major version.
 
@@ -1844,7 +1981,7 @@ Supports both NMT (Neural Machine Translation) and LLM models.
 **Signature**:
 
 ```ts
-function translate(params: TranslateClientParams, options?: RPCOptions): { requestId: string; stats: Promise<{ cacheTokens?: number; decodeTime?: number; encodeTime?: number; timeToFirstToken?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } | undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string>; translations: Promise<string[]> };
+function translate(params: TranslateClientParams, options?: RPCOptions): { requestId: string; stats: Promise<any>; text: Promise<string>; tokenStream: AsyncGenerator<string>; translations: Promise<string[]> };
 ```
 
 **Throws**:
@@ -1883,18 +2020,21 @@ console.log(await response.text);
 
 ### `unloadModel`
 
-Unloads a previously loaded model from the server.
+Releases the caller's hold on a loaded model. The model leaves memory once
+no caller session holds it; a session that shares the model with another
+only drops its own lease.
 
-When the last model is unloaded (no more models remain), this function
-automatically closes the RPC connection on Node/Electron, allowing the
-process to exit naturally without requiring manual cleanup. On Bare the
+When the owner unloads the last model and no caller session is open, this
+function automatically closes the RPC connection on Node/Electron, allowing
+the process to exit naturally without requiring manual cleanup. On Bare the
 connection is left open by default so long-lived workers survive a routine
-unload; pass `autoClose: true` to opt in to closing.
+unload; pass `autoClose: true` to opt in to closing. A session never closes
+the runtime.
 
 **Signature**:
 
 ```ts
-function unloadModel(params: UnloadModelParams): Promise<void>;
+function unloadModel(params: UnloadModelParams, options?: RPCOptions): Promise<UnloadModelResult>;
 ```
 
 **Throws**:
@@ -1920,7 +2060,7 @@ multi-output variants.
 **Signature**:
 
 ```ts
-function upscale(params: UpscaleClientParams): UpscaleResult;
+function upscale(params: UpscaleClientParams, options?: RPCOptions): UpscaleResult;
 ```
 
 **Throws**:
@@ -1952,7 +2092,7 @@ Generates a video using a loaded video diffusion model.
 **Signature**:
 
 ```ts
-function video(params: VideoClientParams): VideoResult;
+function video(params: VideoClientParams, options?: RPCOptions): VideoResult;
 ```
 
 **Examples**:
@@ -2055,7 +2195,7 @@ produced action chunk plus per-stage timings.
 **Signature**:
 
 ```ts
-function vla(params: VlaClientRunParams): Promise<VlaClientRunResult>;
+function vla(params: VlaClientRunParams, options?: RPCOptions): Promise<VlaClientRunResult> & { requestId: string };
 ```
 
 **Example**:
@@ -2087,7 +2227,7 @@ name. Useful to size token / state / noise buffers before calling `vla()`.
 **Signature**:
 
 ```ts
-function vlaHparams(params: { modelId: string }): Promise<{ hparams: VlaHparams; backendName: string | null }>;
+function vlaHparams(params: { modelId: string }, options?: RPCOptions): Promise<{ hparams: VlaHparams; backendName: string | null }>;
 ```
 
 ---
@@ -2153,7 +2293,7 @@ in-flight `vla()` call first.
 **Signature**:
 
 ```ts
-function vlaSetEmbodiment(params: { embodiment: VlaEmbodimentSelection; modelId: string }): Promise<{ hparams: VlaHparams }>;
+function vlaSetEmbodiment(params: { embodiment: VlaEmbodimentSelection; modelId: string }, options?: RPCOptions): Promise<{ hparams: VlaHparams }>;
 ```
 
 **Example**:
@@ -2196,7 +2336,7 @@ runs to completion. Await the result before unloading the model.
 **Signature**:
 
 ```ts
-function worldCreateScene(params: Omit<{ height?: number; image: string; modelId: string; prompt: string; requestId?: string; returnPack?: boolean; width?: number }, "requestId" | "image"> & { image: Uint8Array } & { returnPack: true }): WorldSceneResultWithPack;
+function worldCreateScene(params: any, options?: RPCOptions): WorldSceneResultWithPack;
 ```
 
 **Throws**:
@@ -2272,7 +2412,7 @@ runs to completion. Await the result before unloading the model.
 **Signature**:
 
 ```ts
-function worldCreateScene(params: Omit<{ height?: number; image: string; modelId: string; prompt: string; requestId?: string; returnPack?: boolean; width?: number }, "requestId" | "image"> & { image: Uint8Array } & { returnPack?: false }): WorldSceneResult;
+function worldCreateScene(params: any, options?: RPCOptions): WorldSceneResult;
 ```
 
 **Throws**:
@@ -2348,7 +2488,7 @@ runs to completion. Await the result before unloading the model.
 **Signature**:
 
 ```ts
-function worldCreateScene(params: WorldSceneClientParams): WorldSceneResultWithPack | WorldSceneResult;
+function worldCreateScene(params: WorldSceneClientParams, options?: RPCOptions): WorldSceneResultWithPack | WorldSceneResult;
 ```
 
 **Throws**:
@@ -2432,7 +2572,7 @@ mid-block liveness — one tick per `worldStep` call.
 **Signature**:
 
 ```ts
-function worldStep(params: WorldStepClientParams): WorldStepResult;
+function worldStep(params: WorldStepClientParams, options?: RPCOptions): WorldStepResult;
 ```
 
 **Throws**:
@@ -2492,7 +2632,7 @@ const profiler: {
   exportSummary(): string;
   exportTable(): string;
   getAggregates(): Record<string, AggregatedStats>;
-  getConfig(): controller.ResolvedProfilerConfig;
+  getConfig(): ResolvedProfilerConfig;
   isEnabled(): boolean;
   onRecord(callback: (event: ProfilingEvent) => void): () => void;
 };
@@ -2547,30 +2687,29 @@ and read `error.code` / `error.cause`. Code ranges:
 | `RPC_REQUEST_NOT_SENT` | 50201 | Cannot perform operation - request has not been sent yet |
 | `RPC_RESPONSE_STREAM_NOT_CREATED` | 50202 | Cannot perform operation - response stream not created |
 | `RPC_CONNECTION_FAILED` | 50203 | RPC connection failed: … |
-| `RPC_INIT_TIMEOUT` | 50204 | RPC initialization timed out after …ms — the worker process may have failed to start |
 | `WORKER_CRASHED` | 50205 | Bare worker exited mid-request (code=…, signal=…) — in-flight calls were aborted |
 | `WORKER_SHUTDOWN` | 50206 | SDK is shutting down — in-flight RPC call aborted |
-| `WORKER_STARTUP_FAILED` | 50207 | …\\n\\nWorker stderr:\\n… |
+| `WORKER_STARTUP_FAILED` | 50207 | Worker startup failed |
+| `SESSION_INVALIDATED` | 50208 | Session "…" is no longer usable (…); open a new session |
+| `MODEL_HANDLE_INVALIDATED` | 50209 | Model "…" is no longer loaded: the runtime or session that held it ("…") is gone; load it again |
 | `SDK_NOT_FOUND_IN_NODE_MODULES` | 50600 | QVAC SDK not found in node_modules. Checked: @qvac/sdk, @tetherto/sdk-mono, @tetherto/sdk-dev |
 | `WORKER_FILE_NOT_FOUND` | 50601 | Worker file not found at … |
 | `CONFIG_FILE_NOT_FOUND` | 50602 | Config file not found. Searched: …. Create qvac.config.json, qvac.config.js, or qvac.config.ts in your project root. |
 | `CONFIG_FILE_INVALID` | 50603 | Config file at … is invalid: … |
 | `CONFIG_FILE_PARSE_FAILED` | 50604 | Failed to parse config file at …: … |
 | `CONFIG_VALIDATION_FAILED` | 50605 | Config validation failed: … |
-| `PEAR_WORKER_ENTRY_REQUIRED` | 50606 | No plugins registered. Pear apps must spawn … as the worker entry. Run \\ |
 | `MULTIPLE_SDK_INSTALLATIONS` | 50607 | Multiple QVAC SDK installations found: …. Remove all but one to avoid conflicts. |
-| `WORKER_PLUGINS_NOT_REGISTERED` | 50608 | @qvac/inference |
-| `BUNDLE_VERIFICATION_FAILED` | 50609 | qvac verify bundle reported error-level issues for …. See the CLI output above for the failing addons/hosts; resolve them before shipping. |
-| `BARE_PACK_NOT_INSTALLED` | 50610 | bare-pack binary not found. Install bare-pack as a peer dependency: npm install bare-pack |
-| `BARE_PACK_ERROR` | 50611 | bare-pack exited with code …\\n\\n Entry file: …\\n Output file: …\\n\\n Run bare-pack manually for more details. |
+| `BUNDLE_VERIFICATION_FAILED` | 50609 | Native addon verification failed for …. The cause lists the failing addons and hosts; resolve them before shipping. |
 | `INVALID_PLUGIN_SPECIFIER` | 50612 | Invalid plugin specifiers (must end with /plugin):\\n… |
 | `BARE_IMPORTS_MAP_NOT_FOUND` | 50613 | bare-imports.json not found.\\n\\n Expected at: …\\n\\n Make sure … is installed in your project. |
-| `BARE_RUNTIME_BINARY_NOT_FOUND` | 50614 | Could not load the Bare runtime binary for …-…. The platform package "bare-runtime-…-…" (or one of its dependencies) is missing from node_modules — commonly seen with pnpm, which does not always install nested optional dependencies. Fix it by installing the platform package directly (e.g. \\ |
 | `HOST_PREBUILDS_INSTALL_REFUSED` | 50615 | Cannot install the addon platform packages automatically: …. |
 | `HOST_PREBUILDS_INSTALL_FAILED` | 50616 | Installing the addon platform packages failed: … |
 | `ADDON_LINK_FAILED` | 50617 | Linking the native addons failed\\n\\n Hosts: …\\n Reason: … |
-| `BARE_PACK_NODE_UNSUPPORTED` | 50618 | bare-pack needs Node …; found Node v…. Upgrade Node and run the bundle again. |
+| `BARE_PACK_NODE_UNSUPPORTED` | 50618 | Bundling needs Node …; found Node v…. Upgrade Node and run the bundle again. |
 | `HOST_PREBUILDS_MISSING` | 50619 | #host-addon |
+| `REACT_NATIVE_BARE_KIT_UNSUPPORTED` | 50620 | The react-native worker bundle needs react-native-bare-kit …; found …. |
+| `BUNDLE_FAILED` | 50621 | Bundling the worker failed\\n\\n Entry file: …\\n Reason: … |
+| `BUNDLE_TARGET_NOT_INSTALLED` | 50622 | The … target needs …, which the project does not have. Install it and run the bundle again. |
 | `PROFILER_INVALID_CAPACITY` | 50800 | Profiler invalid capacity |
 
 ### Server errors
@@ -2616,6 +2755,7 @@ and read `error.code` / `error.cause`. Code ranges:
 | `REQUEST_REJECTED_BY_POLICY` | 52420 | Request "…" (kind: …, modelId: …) was rejected by registry concurrency policy: … |
 | `CONTEXT_OVERFLOW` | 52421 | for model "…" |
 | `INVALID_AUDIO_INPUT` | 52422 | Invalid audio input… |
+| `AUDIO_ENCODE_FAILED` | 52424 | Failed to encode audio as …… |
 | `RAG_SAVE_FAILED` | 52800 | Failed to save embeddings… |
 | `RAG_SEARCH_FAILED` | 52801 | Failed to search embeddings… |
 | `RAG_DELETE_FAILED` | 52802 | Failed to delete embeddings… |
@@ -2628,6 +2768,7 @@ and read `error.code` / `error.cause`. Code ranges:
 | `RAG_LIST_WORKSPACES_FAILED` | 52809 | Failed to list RAG workspaces… |
 | `RAG_CHUNK_FAILED` | 52810 | Failed to chunk documents… |
 | `RAG_WORKSPACE_NOT_OPEN` | 52811 | RAG workspace '…' is not open |
+| `RAG_WORKSPACE_BUSY` | 52812 | RAG workspace '…' is running another session's operation; retry when it finishes |
 | `VECTOR_INDEX_PROVIDER_UNAVAILABLE` | 52850 | Vector index provider unavailable |
 | `VECTOR_INDEX_NOT_FOUND` | 52851 | Vector index '…' is not open. It was disposed or the worker restarted; create a new index or load a snapshot |
 | `VECTOR_INDEX_INVALID_VECTORS` | 52852 | Invalid vector input: … |
@@ -2654,6 +2795,9 @@ and read `error.code` / `error.cause`. Code ranges:
 | `INVALID_DELETE_CACHE_PARAMS` | 53201 | Invalid deleteCache parameters - provide either modelId or cacheKey |
 | `CACHE_DIR_NOT_ABSOLUTE` | 53202 | Cache directory must be an absolute path |
 | `CACHE_DIR_NOT_WRITABLE` | 53203 | Cache directory is not writable: …… |
+| `INVALID_SEED_FROM_PARAMS` | 53204 | seedFrom needs a caller-managed kvCache key other than itself |
+| `KV_CACHE_SEED_SOURCE_NOT_FOUND` | 53205 | No cache named "…" exists for model "…" with this system prompt |
+| `KV_CACHE_SEED_SHARING_DISABLED` | 53206 | seedFrom has no effect on model "…": it was not loaded with cache_share_across_keys true |
 | `SET_CONFIG_FAILED` | 53350 | Failed to set config… |
 | `CONFIG_ALREADY_SET` | 53351 | Config has already been set and is immutable. Config can only be set once during SDK initialization. |
 | `FFMPEG_NOT_AVAILABLE` | 53500 | FFmpeg is not available on this system |
@@ -2675,6 +2819,12 @@ and read `error.code` / `error.cause`. Code ranges:
 | `LIFECYCLE_SUSPEND_FAILED` | 53600 | Runtime suspend failed… |
 | `LIFECYCLE_RESUME_FAILED` | 53601 | Runtime resume failed… |
 | `LIFECYCLE_OPERATION_BLOCKED` | 53602 | Operation "…" is blocked while runtime state is "…" |
+| `SESSION_ID_CONFLICT` | 53620 | Session id "…" is already open |
+| `SESSION_NOT_OPEN` | 53621 | Session "…" is not open |
+| `MODEL_LEASED` | 53622 | Model "…" is held by … other session(s); it cannot be reconfigured while another session uses it |
+| `OWNER_ONLY` | 53623 | Operation "…" is reserved for the runtime owner; session "…" cannot call it |
+| `MODEL_RECONFIGURED` | 53624 | Model "…" was reconfigured after it was loaded and no longer has the configuration this load asks for; load it again once it is unloaded |
 | `PATH_TRAVERSAL` | 53900 | Path traversal detected: "…" escapes base directory "…" |
 | `QVAC_MODEL_REGISTRY_QUERY_FAILED` | 53950 | QVAC model registry query failed… |
-| `QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND` | 53951 | Qvac model registry model not found |
+| `QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND` | 53951 | QVAC model registry has no model at …/… |
+| `QVAC_MODEL_REGISTRY_BUSY` | 53952 | Qvac model registry busy |

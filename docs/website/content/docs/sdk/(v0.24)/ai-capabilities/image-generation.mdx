@@ -1,0 +1,439 @@
+---
+title: Image generation
+icon: Image
+description: Text-to-image and image-to-image generation using a customized Diffusion engine.
+schemaType: HowTo
+---
+
+## Overview
+
+Image generation runs on a **customized Diffusion engine** ([`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp)). Load a supported model using `modelType: "diffusion"`. Then, provide a text `prompt` describing the image to generate.
+
+For image-to-image, pass `init_image` as PNG or JPEG bytes in a `Uint8Array`. SD models denoise the source image; reference-editing models such as Qwen-Image-2.1 generate a new target from noise conditioned on your references. Pass `init_images` for ordered references on supported models. The two fields are mutually exclusive. `diffusion()` returns PNG images as `Uint8Array` buffers and preserves alpha when the model produces RGBA. Use `progressStream` to track generation progress.
+
+For higher-resolution outputs, you can chain a Real-ESRGAN upscaler. Either attach it as a post-processing step at load time and trigger it per generation via `diffusion({ upscale })`, or load an ESRGAN model standalone with `modelConfig.mode: "upscale"` and call `upscale()` on any PNG/JPEG buffer — generated or not. Both paths return PNG `Uint8Array` buffers and accept a `repeats` option that compounds the scale factor across sequential passes.
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/sdk/reference/api#loadmodel)
+2. [`diffusion()`](/sdk/reference/api#diffusion) or `upscale()`
+3. [`unloadModel()`](/sdk/reference/api#unloadmodel)
+
+For how to use each function, see [SDK — API reference](/sdk/reference/api/).
+
+## Models
+
+Supported model families and their file layouts:
+
+- **FLUX.2-klein**: split layout — diffusion model `*.gguf` + LLM text encoder `*.gguf` (via `llmModelSrc`) + VAE `*.safetensors` (via `vaeModelSrc`).
+- **FLUX.3 Image Klein**: split layout — diffusion model `*.gguf` + Qwen3-VL 4B text encoder `*.gguf` (via `llmModelSrc`) + FLUX.2 VAE `*.safetensors` (via `vaeModelSrc`). Leave `prediction` unset; the engine detects FLUX.3 from the weights. QVAC provides no registry entry or model constant for these weights.
+- **Qwen-Image-2.1 and Qwen-Image-2.1-Turbo** use local diffusion weights as `modelSrc`, the matching Qwen3-VL encoder as `llmModelSrc`, and the 2.1 VAE as `vaeModelSrc`. Reference editing with the GGUF encoder also needs its vision projector as `projectionModelSrc`. QVAC provides no registry entry or model constant for these weights.
+- **Ideogram 4**: split layout — diffusion model `*.gguf` + unconditional diffusion model `*.gguf` (via `uncondModelSrc`) + LLM text encoder `*.gguf` (via `llmModelSrc`) + VAE `*.safetensors` (via `vaeModelSrc`).
+- **MOSS-Image**: split layout — diffusion model `*.safetensors` + Qwen3.5 LLM text encoder `*.gguf` (via `llmModelSrc`) + VAE `*.safetensors` (via `vaeModelSrc`) + the encoder's external `tokenizer.json` (via `tokenizerSrc`). QVAC provides no registry entry or model constant for these weights.
+- **SD1.x, SD2.x**: single all-in-one `*.gguf` file. No companion files needed.
+- **SDXL, SD3**: may require separate CLIP/T5 text encoder files (`clipLModelSrc`, `clipGModelSrc`, `t5XxlModelSrc`) in `modelConfig` depending on the model variant.
+- **ESRGAN**: post-generation upscaler, `*.pth` format. Two ways to load:
+  - **Paired with a diffusion model** — set `modelConfig.upscaler.model_src` at `loadModel()` time alongside the diffusion `modelSrc`.
+  - **Standalone** — pass the ESRGAN model as the top-level `modelSrc` with `modelConfig.mode: "upscale"`.
+
+For models available as constants, see [SDK — Models](/sdk#models).
+
+<Callout type="info">
+**On upscaling:** ESRGAN can be used standalone via `modelConfig.mode: "upscale"` + `upscale()`, or paired with an RGB-output diffusion model via `diffusion({ upscale })`. ESRGAN accepts RGB only. Qwen-Image-2.1 produces RGBA and rejects post-generation upscaling; keep `upscale` omitted or `false`. Available constants: `REALESRGAN_X4PLUS_ANIME_6B`, `REALESRGAN_X4PLUS`.
+</Callout>
+
+## Examples
+
+### FLUX.2-klein
+
+The following script shows text-to-image generation using FLUX.2-klein with its split-layout model (separate diffusion model, LLM text encoder, and VAE):
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-flux2-klein.js title="diffusion-flux2-klein.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-flux2-klein.ts title="diffusion-flux2-klein.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_flux2_klein.py title="diffusion_flux2_klein.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionFlux2Klein.kt title="DiffusionFlux2Klein.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### FLUX.3 Image Klein
+
+FLUX.3 Image Klein uses the same split layout as FLUX.2-klein: the FLUX.3 diffusion model as `modelSrc`, a Qwen3-VL 4B text encoder as `llmModelSrc`, and the FLUX.2 VAE as `vaeModelSrc`. The examples use the recommended 16 Euler steps at `cfg_scale: 1` for the distilled model. A reference image passed through `init_image`, or up to 10 through `init_images`, switches generation to editing; no `@imageN` tags or `prediction` override are needed. More than 10 references fail in the native engine.
+
+The FLUX.3 diffusion weights are under the [FLUX Kommunity License](https://huggingface.co/black-forest-labs/flux-3-image-klein/blob/09561231f44e41381c461caf53d5452005a60ac9/LICENSE.md). The example downloads pinned weights by default; the model, encoder and VAE arguments accept local paths or URLs.
+
+The following script generates from text, or edits when reference image paths follow the model arguments. Pass empty strings to keep the default output directory and weights:
+
+```sh
+node --import tsx examples/diffusion-flux3-klein.ts
+node --import tsx examples/diffusion-flux3-klein.ts "Put the cat in a garden" "" "" "" "" cat.png
+```
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-flux3-klein.js title="diffusion-flux3-klein.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-flux3-klein.ts title="diffusion-flux3-klein.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_flux3_klein.py title="diffusion_flux3_klein.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionFlux3Klein.kt title="DiffusionFlux3Klein.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Qwen-Image-2.1
+
+Qwen-Image-2.1 uses a split layout with a Qwen3-VL LLM text encoder (`llmModelSrc`), its vision projector (`projectionModelSrc`), and the 2.1 VAE (`vaeModelSrc`). Reference images are passed in order through `init_images`.
+
+Qwen-Image-2.1-Turbo reuses the same encoder, projector and VAE. Supply Turbo diffusion weights as `modelSrc`. Use Euler, `cfg_scale: 1`, and the fixed schedule through [`diffusion()`](/sdk/reference/api#diffusion):
+
+```ts
+diffusion({
+  modelId,
+  prompt: "A red ceramic teapot on a wooden table.",
+  width: 512,
+  height: 512,
+  sampling_method: "euler",
+  cfg_scale: 1,
+  custom_sigmas: [1, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0],
+  seed: 42,
+});
+```
+
+`custom_sigmas` includes the terminal zero and overrides `scheduler` and `steps`. The schedule above runs eight denoising steps, which `progressStream` reports. `stats.totalSteps` counts steps across all completed requests on the loaded model. Custom schedules need at least two finite, non-negative values that remain strictly decreasing at float precision and end in zero. Omitting the field preserves ordinary sampling.
+
+For Qwen outputs at 2048×2048 or larger, pass `vae_tiling: true` and `vae_tile_size: 64` to `diffusion()`. Tile sizes are in latent units. For Qwen-Image-2.1, 64 corresponds to 1024 output pixels; enabling tiling alone leaves the native default tile too large to split a 2K image.
+
+The following script combines two references into an RGBA image, with optional Qwen-Image-2.1-Turbo sampling. Pass the two reference image paths as the first two arguments and an optional prompt as the third:
+
+```sh
+QWEN_TURBO=1 node --import tsx examples/diffusion-qwen-image-21.ts \
+  reference-a.png reference-b.png "" . /absolute/path/to/qwen-image-2.1-turbo.gguf
+```
+
+The Python example uses the same arguments and `QWEN_TURBO` flag. Turbo mode requires the model argument, which accepts a local path or URL. Leave `QWEN_TURBO` unset to run the base model with 30 steps and CFG 6.
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-qwen-image-21.js title="diffusion-qwen-image-21.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-qwen-image-21.ts title="diffusion-qwen-image-21.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_qwen_image_21.py title="diffusion_qwen_image_21.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionQwenImage21.kt title="DiffusionQwenImage21.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Ideogram 4
+
+Ideogram 4 uses a split layout with an extra **unconditional diffusion model** (`uncondModelSrc`) alongside the Qwen3-VL LLM text encoder (`llmModelSrc`) and VAE (`vaeModelSrc`). Unlike the other families, its `prompt` must be a **JSON-serialized structured caption** — an object with a `high_level_description`, a `style_description`, and a `compositional_deconstruction` that lays out each element with an explicit bounding box (`bbox`) and, for text elements, the literal `text` to render. Plain-text prompts produce degenerate or placeholder output.
+
+<Callout type="warn">
+Pass the structured caption serialized, not as an object: `JSON.stringify(...)` in JavaScript and TypeScript, or `json.dumps(..., separators=(",", ":"))` in Python, whose default spacing the model does not expect. The bounding boxes are expressed in the target canvas coordinate space (`[x0, y0, x1, y1]`), so keep them consistent with the requested `width`/`height`. Failure to abide by the JSON format specified within the examples, or adding NSFW prompts, will result in censored image output.
+</Callout>
+
+The following script loads Ideogram 4 in split-layout (diffusion model + unconditional model + LLM text encoder + VAE) and generates from a structured caption:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-ideogram.js title="diffusion-ideogram.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-ideogram.ts title="diffusion-ideogram.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_ideogram.py title="diffusion_ideogram.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionIdeogram.kt title="DiffusionIdeogram.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+The Kotlin example serializes the caption with `buildJsonObject { ... }.toString()`, which already produces the compact form.
+
+### MOSS-Image
+
+MOSS-Image uses a split layout with a Qwen3.5 LLM text encoder (`llmModelSrc`), a VAE (`vaeModelSrc`), and the encoder's external tokenizer (`tokenizerSrc`), which is only valid in diffusion mode. It accepts plain-text prompts, and for layout control a **JSON-serialized layout**: a `summary` with an overall `caption`, and `items` that each set a `label` (`"text"` or `"object"`), a `caption`, a bounding box (`bbox`) and, for text, the literal `text` to render. Start from Euler sampling, the `discrete` scheduler, `cfg_scale: 3` and 50 steps.
+
+<Callout type="warn">
+Pass the layout serialized, not as an object: `JSON.stringify(...)` in JavaScript and TypeScript, or `json.dumps(..., ensure_ascii=False)` in Python so non-ASCII text reaches the model as characters rather than `\uXXXX` escapes. Set `bbox_coord_space: "abs_centralized"` and `bbox_format: "yxyx"`: boxes are `[y_min, x_min, y_max, x_max]` in pixels with the canvas centre as the origin, so keep them consistent with the requested `width`/`height`.
+</Callout>
+
+The following script loads MOSS-Image in split layout (diffusion model + LLM text encoder + VAE + tokenizer) and generates a poster from a JSON layout:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-moss-image.js title="diffusion-moss-image.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-moss-image.ts title="diffusion-moss-image.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_moss_image.py title="diffusion_moss_image.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionMossImage.kt title="DiffusionMossImage.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Stable Diffusion
+
+The following script shows a minimal text-to-image generation example using a single all-in-one SD 2.1 model:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-simple.js title="diffusion-simple.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-simple.ts title="diffusion-simple.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_simple.py title="diffusion_simple.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionSimple.kt title="DiffusionSimple.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Image-to-image
+
+Pass `init_image` to transform an existing image guided by a text prompt. Behavior depends on the model family:
+
+- **FLUX.2**: in-context conditioning. Requires `prediction: "flux2_flow"` in `modelConfig` at `loadModel()` time; `strength` is ignored on this path.
+- **FLUX.3 Image Klein** uses reference conditioning with automatic model detection. Leave `prediction` unset; `strength` does not apply.
+- **Qwen-Image-2.1** uses reference conditioning with automatic model detection. Supply `projectionModelSrc` at load time for editing with the GGUF encoder. Use `init_image` or ordered `init_images`; `strength` does not control reference fidelity.
+- **SD / SDXL / SD3**: SDEdit-style. Use `strength` to control how much the source is preserved (`0` = keep source, `1` = ignore source).
+
+The following script loads FLUX.2-klein in split-layout and transforms an input image using in-context conditioning (`prediction: "flux2_flow"`):
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-flux2-klein-img2img.js title="diffusion-flux2-klein-img2img.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-flux2-klein-img2img.ts title="diffusion-flux2-klein-img2img.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_flux2_klein_img2img.py title="diffusion_flux2_klein_img2img.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionFlux2KleinImg2img.kt title="DiffusionFlux2KleinImg2img.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Upscaling
+
+#### Post-processing
+
+Pass `upscale` to `diffusion()` to upscale generated images in the same call. Requires `modelConfig.upscaler = { type: "esrgan", model_src, tile_size? }` at `loadModel()` time. Behavior depends on the value passed:
+
+- `true` (or `{}` / `{ repeats: 1 }`): single pass at the model's native scale factor (e.g. `x4` for RealESRGAN_x4plus).
+- `{ repeats: N }`: N sequential passes — each pass multiplies the output dimensions by the model's scale factor (e.g. `repeats: 2` with an `x4` model → `x16`).
+- When `batch_count > 1`, every output image is upscaled independently.
+
+<Callout type="info">
+Qwen-Image-2.1 produces RGBA and rejects this option; leave `upscale` omitted or `false`.
+</Callout>
+
+The following script loads SD 2.1 with an ESRGAN upscaler and generates both a single-pass (`x4`) and a two-pass (`x16`) upscale from the same prompt:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-esrgan-upscale.js title="diffusion-esrgan-upscale.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-esrgan-upscale.ts title="diffusion-esrgan-upscale.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_esrgan_upscale.py title="diffusion_esrgan_upscale.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/DiffusionEsrganUpscale.kt title="DiffusionEsrganUpscale.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+#### Standalone
+
+The SDK also exposes `upscale()` — a standalone path that upscales any PNG/JPEG image without running diffusion. Load the ESRGAN model directly with `modelConfig.mode: "upscale"`:
+
+```ts
+const modelId = await loadModel(REALESRGAN_X4PLUS_ANIME_6B, {
+  modelType: "diffusion",
+  modelConfig: { mode: "upscale", upscaler: { tile_size: 128 } },
+});
+const { outputs } = upscale({ modelId, image: pngBytes, repeats: 2 });
+const [upscaledPng] = await outputs;
+```
+
+`tile_size` defaults to 128. Increase it to reduce tile seams on large inputs, at the cost of more memory per pass.
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart), the [Python quickstart](/sdk/python-sdk#quickstart), or the [Kotlin quickstart](/sdk/kotlin-sdk#quickstart).
+</Callout>
