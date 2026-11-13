@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+
+- `coreml-ffn` (also `coreml_ffn`) is a boolean load option: true/on/1/enabled
+  or false/off/0/disabled, with an empty value as the flag form. It turns on
+  fabric's Core ML FFN sidecar for Qwen3.8-27B on Apple Silicon macOS, which
+  runs part of each prompt-processing FFN on the Neural Engine. Before, any
+  value was passed on after fabric's valueless `--coreml-ffn` flag and the load
+  failed with `invalid argument: true`. The sidecar needs an `@qvac/fabric`
+  built with Core ML FFN; until then, and for other models, fabric logs a
+  warning and stays on Metal. `coreml-ffn-cache` and `coreml-ffn-split` pass
+  through to fabric.
+
 ### Fixed
 
 - A cancel that landed after a token was streamed but before it was decoded

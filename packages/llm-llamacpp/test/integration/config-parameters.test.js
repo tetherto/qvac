@@ -111,6 +111,23 @@ const scenarios = [
     expectLoadFailure: /load-mode must be one of/
   },
   {
+    // The Core ML FFN sidecar supports only Qwen3.8-27B on macOS, so this
+    // model falls back: the load and generation must still succeed.
+    name: 'coreml-ffn on an unsupported model falls back and generates',
+    overrides: {
+      'coreml-ffn': 'true',
+      n_predict: '16'
+    },
+    expectSuccess: true
+  },
+  {
+    name: 'coreml-ffn rejects unknown values with a clear error',
+    overrides: {
+      'coreml-ffn': 'maybe'
+    },
+    expectLoadFailure: /unknown value for coreml-ffn/
+  },
+  {
     name: 'Zero temperature produces deterministic output',
     overrides: {
       temp: '0',

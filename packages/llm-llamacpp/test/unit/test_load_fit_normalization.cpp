@@ -2186,6 +2186,115 @@ TEST_F(LoadFitNormalizationTest, DeprecatedAliasUnknownValueIsRejected) {
       qvac_errors::StatusError);
 }
 
+TEST_F(LoadFitNormalizationTest, CoreMlFfnIsOffByDefault) {
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      baseConfig(),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_FALSE(result.params.coreml_ffn);
+}
+
+TEST_F(LoadFitNormalizationTest, CoreMlFfnAcceptsTruthyValuesAndTheFlagForm) {
+  for (const char* value : {"true", "on", "1", "enabled", ""}) {
+    SCOPED_TRACE(value);
+    auto config = baseConfig();
+    config["coreml-ffn"] = value;
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "none"}));
+    EXPECT_TRUE(result.params.coreml_ffn);
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, CoreMlFfnAcceptsFalseyValues) {
+  for (const char* value : {"false", "off", "0", "disabled"}) {
+    SCOPED_TRACE(value);
+    auto config = baseConfig();
+    config["coreml-ffn"] = value;
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "none"}));
+    EXPECT_FALSE(result.params.coreml_ffn);
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, CoreMlFfnAcceptsTheUnderscoreSpelling) {
+  auto config = baseConfig();
+  config["coreml_ffn"] = "true";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_TRUE(result.params.coreml_ffn);
+}
+
+TEST_F(LoadFitNormalizationTest, CoreMlFfnUnknownValueIsRejected) {
+  auto config = baseConfig();
+  config["coreml-ffn"] = "maybe";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, CoreMlFfnBothSpellingsAreRejected) {
+  auto config = baseConfig();
+  config["coreml-ffn"] = "true";
+  config["coreml_ffn"] = "true";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, CoreMlFfnCacheAndSplitReachCommonParams) {
+  auto config = baseConfig();
+  config["coreml-ffn"] = "true";
+  config["coreml-ffn-cache"] = "/tmp/coreml-ffn-cache";
+  config["coreml_ffn_split"] = "8192x2";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_TRUE(result.params.coreml_ffn);
+  EXPECT_EQ(result.params.coreml_ffn_cache, "/tmp/coreml-ffn-cache");
+  EXPECT_EQ(result.params.coreml_ffn_metal, 8192);
+  EXPECT_EQ(result.params.coreml_ffn_packages, 2);
+}
+
+TEST_F(LoadFitNormalizationTest, CoreMlFfnInvalidSplitIsRejected) {
+  auto config = baseConfig();
+  config["coreml-ffn-split"] = "8192";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
 TEST(DeprecatedLoadFlagModeTest, MapsEachFlagAndPolarity) {
   EXPECT_EQ(lfn::deprecatedLoadFlagMode("mmap", ""), LLAMA_LOAD_MODE_MMAP);
   EXPECT_EQ(lfn::deprecatedLoadFlagMode("mmap", "off"), LLAMA_LOAD_MODE_NONE);

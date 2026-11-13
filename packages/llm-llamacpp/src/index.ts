@@ -1371,6 +1371,22 @@ namespace LlmLlamacpp {
      * selected (ignored with a warning on CPU).
      */
     "mmproj-use-gpu"?: string;
+    /**
+     * Core ML FFN sidecar for Qwen3.8-27B on Apple Silicon macOS: during prompt
+     * processing, part of each FFN runs on the Neural Engine while Metal runs
+     * the rest. Accepts 'true'/'on'/'1'/'enabled' or 'false'/'off'/'0'/'disabled'.
+     * Default off. Needs an @qvac/fabric build with Core ML FFN; otherwise, and
+     * for other models, it logs a warning and runs on Metal. The first load
+     * compiles the Core ML programs (1-2 minutes). Also accepted as `coreml_ffn`.
+     */
+    "coreml-ffn"?: string;
+    /**
+     * Directory for the compiled Core ML FFN programs, 4.5-9 GB per model.
+     * Default: `$LLAMA_CACHE/coreml-ffn` or `~/Library/Caches/llama.cpp/coreml-ffn`.
+     */
+    "coreml-ffn-cache"?: string;
+    /** Metal channels and Core ML programs per FFN, e.g. '8192x2' or '11264x1'. Default: chosen by chip. */
+    "coreml-ffn-split"?: string;
     /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
     openclCacheDir?: string;
     /**
