@@ -92,6 +92,22 @@
       "bytes": 1256787360,
       "warm": false
     },
+    "LFM2.5-1.2B-Instruct-Q4_K_M.gguf": {
+      "urls": [
+        "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF/resolve/8ed288026e23958ad9dfa92d53ed773a8eee7125/LFM2.5-1.2B-Instruct-Q4_K_M.gguf"
+      ],
+      "sha256": "b1b3de114215d9507409a662a501a631095a479a419584e8a2ded6304b19b4f5",
+      "bytes": 730895168,
+      "warm": false
+    },
+    "LFM2.5-1.2B-Instruct-DSpark-Q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-DSpark-GGUF/resolve/9235d674d3bbda8a775ca42a4275d11a8c0ab008/LFM2.5-1.2B-Instruct-DSpark-Q8_0.gguf"
+      ],
+      "sha256": "9f2fd36f4ea26e66b2732cefead2586d90220d829d70e63de8030e3878d49ef5",
+      "bytes": 316669472,
+      "warm": false
+    },
     "Qwen3.5-0.8B-Q4_0.gguf": {
       "urls": [
         "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q4_0.gguf"

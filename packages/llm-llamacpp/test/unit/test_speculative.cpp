@@ -1,5 +1,6 @@
 #include <array>
 #include <filesystem>
+#include <functional>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -99,6 +100,34 @@ TEST(SpeculativeConfigTest, ParsesDraftDflashWithItsDraftModel) {
   EXPECT_TRUE(config.empty());
 }
 
+TEST(SpeculativeConfigTest, ParsesDraftDsparkWithItsDraftModel) {
+  const std::string draftPath = absoluteModelPath("dspark.gguf");
+  ConfigMap config{
+      {"spec-type", "draft-dspark"},
+      {"spec_draft_model", draftPath},
+      {"spec-draft-n-max", "9"},
+      {"spec-draft-p-min", "0.5"}};
+  const SpeculativeConfig parsed = parseSpeculativeConfig(config);
+  EXPECT_TRUE(parsed.enabled());
+  EXPECT_EQ(parsed.type, COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK);
+  EXPECT_EQ(parsed.draftModelPath, draftPath);
+  EXPECT_EQ(parsed.draftNMax, 9);
+  ASSERT_TRUE(parsed.draftPMin.has_value());
+  EXPECT_FLOAT_EQ(*parsed.draftPMin, 0.5F);
+  EXPECT_TRUE(config.empty());
+}
+
+TEST(SpeculativeConfigTest, DsparkNeedsAnAbsoluteDraftModel) {
+  EXPECT_THROW(parse({{"spec-type", "draft-dspark"}}), std::invalid_argument);
+  EXPECT_THROW(
+      parse(
+          {{"spec-type", "draft-dspark"}, {"spec-draft-model", "dspark.gguf"}}),
+      std::invalid_argument);
+  EXPECT_THROW(
+      parse({{"spec-type", "draft-dspark"}, {"spec_draft_model", ""}}),
+      std::invalid_argument);
+}
+
 TEST(SpeculativeConfigTest, ParsesDraftMtpWithAnExternalHead) {
   const std::string headPath = absoluteModelPath("mtp-head.gguf");
   ConfigMap config{{"spec-type", "draft-mtp"}, {"spec_draft_model", headPath}};
@@ -114,56 +143,49 @@ TEST(SpeculativeConfigTest, ParsesDraftMtpWithAnExternalHead) {
       std::invalid_argument);
 }
 
-TEST(SpeculativeConfigTest, AnMtpHeadMustMatchTheModel) {
-  EXPECT_EQ(mtpHeadMismatch(5120, 5120, 248320, 248320), "");
-  // A head for another model of the family: fabric would abort on the width.
-  EXPECT_EQ(
-      mtpHeadMismatch(1024, 2048, 248320, 248320),
-      "hidden width 1024, the model's 2048");
-  EXPECT_EQ(
-      mtpHeadMismatch(1024, 1024, 248320, 151936),
-      "248320 tokens, the model's 151936");
-  EXPECT_EQ(
-      mtpHeadMismatch(1024, 2048, 248320, 151936),
-      "hidden width 1024, the model's 2048; 248320 tokens, the model's 151936");
-  // A value missing from the head's header is not compared.
-  EXPECT_EQ(mtpHeadMismatch(0, 2048, 0, 151936), "");
+// Fabric's header check, which the load and `assessFit` run before fabric
+// fits or loads the head next to the model.
+std::string
+mtpHeadMismatch(const std::string& head, const std::string& target) {
+  common_params params;
+  params.speculative.types = {COMMON_SPECULATIVE_TYPE_DRAFT_MTP};
+  params.speculative.draft.mparams.path = head;
+  return common_speculative_draft_mismatch(params, target);
 }
 
-TEST(SpeculativeConfigTest, AnMtpHeadIsReadAtTheWidthItDraftsFrom) {
+TEST(SpeculativeConfigTest, AnMtpHeadIsComparedAtTheWidthItDraftsFrom) {
+  const std::string target2048 =
+      writeHeadHeader("qwen35-target-2048.gguf", "qwen35", 2048, 0, 8);
+  const std::string target1024 =
+      writeHeadHeader("qwen35-target-1024.gguf", "qwen35", 1024, 0, 8);
   // A Qwen MTP head has no `embedding_length_out`; its own width is read.
   const std::string qwen =
       writeHeadHeader("qwen35-head.gguf", "qwen35", 1024, 0, 8, 1);
-  const GgufShape qwenShape = readGgufShape(qwen);
-  EXPECT_EQ(qwenShape.width, 1024);
-  EXPECT_EQ(qwenShape.vocab, 8);
-  EXPECT_EQ(qwenShape.mtpLayers, 1);
+  EXPECT_EQ(mtpHeadMismatch(qwen, target1024), "");
   EXPECT_EQ(
-      mtpHeadMismatch(qwenShape.width, 2048, qwenShape.vocab, 8),
-      "hidden width 1024, the model's 2048");
+      mtpHeadMismatch(qwen, target2048), "hidden width 1024, the model's 2048");
+  const std::string otherVocab =
+      writeHeadHeader("qwen35-head-vocab.gguf", "qwen35", 1024, 0, 16, 1);
+  EXPECT_EQ(
+      mtpHeadMismatch(otherVocab, target2048),
+      "16 tokens, the model's 8; hidden width 1024, the model's 2048");
 
   // A Gemma 4 assistant runs at its own width and reads the target's hidden
   // states, whose width is in `embedding_length_out`.
   const std::string gemma = writeHeadHeader(
-      "gemma4-assistant.gguf", "gemma4-assistant", 1024, 5376, 8, 4);
-  const GgufShape gemmaShape = readGgufShape(gemma);
-  EXPECT_EQ(gemmaShape.arch, "gemma4-assistant");
-  EXPECT_EQ(gemmaShape.width, 5376);
-  EXPECT_EQ(gemmaShape.mtpLayers, 4);
-  EXPECT_EQ(mtpHeadMismatch(gemmaShape.width, 5376, gemmaShape.vocab, 8), "");
+      "gemma4-assistant.gguf", "gemma4-assistant", 1024, 2048, 8, 4);
+  EXPECT_EQ(mtpHeadMismatch(gemma, target2048), "");
   EXPECT_EQ(
-      mtpHeadMismatch(gemmaShape.width, 2816, gemmaShape.vocab, 8),
-      "hidden width 5376, the model's 2816");
+      mtpHeadMismatch(gemma, target1024),
+      "hidden width 2048, the model's 1024");
 
-  // An unreadable file has no shape, so nothing is compared.
-  const GgufShape missing =
-      readGgufShape(absoluteModelPath("no-such-head.gguf"));
-  EXPECT_EQ(missing.width, 0);
-  EXPECT_EQ(missing.vocab, 0);
-  EXPECT_EQ(missing.mtpLayers, 0);
+  // An unreadable head is left to the load, which reports it.
+  EXPECT_EQ(
+      mtpHeadMismatch(absoluteModelPath("no-such-head.gguf"), target1024), "");
 
-  std::filesystem::remove(qwen);
-  std::filesystem::remove(gemma);
+  for (const auto& path : {target2048, target1024, qwen, otherVocab, gemma}) {
+    std::filesystem::remove(path);
+  }
 }
 
 TEST(SpeculativeConfigTest, DflashNeedsAnAbsoluteDraftModel) {
@@ -411,6 +433,27 @@ TEST(SpeculativeConfigTest, FitCountsTheDflashModelOnItsOwn) {
   EXPECT_EQ(extra->cparams->n_rs_seq, 0u);
 }
 
+TEST(SpeculativeConfigTest, FitCountsTheDsparkModelOnItsOwn) {
+  common_params params;
+  params.model.path = "/models/target.gguf";
+  params.n_gpu_layers = 12;
+  applySpeculativeConfig(
+      SpeculativeConfig{
+          .type = COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK,
+          .draftModelPath = "/models/dspark.gguf"},
+      params);
+  EXPECT_EQ(params.speculative.types[0], COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK);
+  // Placed like the target, as llama-server's -md.
+  EXPECT_EQ(params.speculative.draft.mparams.path, "/models/dspark.gguf");
+  EXPECT_EQ(params.speculative.draft.n_gpu_layers, 12);
+  const auto fit = SpeculativeFitModel::create(params);
+  ASSERT_NE(fit, nullptr);
+  const common_fit_extra_model* extra = fit->extra();
+  EXPECT_FALSE(extra->shares_model);
+  EXPECT_STREQ(extra->path_model, "/models/dspark.gguf");
+  EXPECT_FALSE(fit->isMtp());
+}
+
 TEST(SpeculativeConfigTest, FitCountsAnExternalMtpHeadOnItsOwn) {
   common_params params;
   params.model.path = "/models/target.gguf";
@@ -461,6 +504,130 @@ void expectRow(
 }
 
 } // namespace
+
+namespace {
+
+// A header-only GGUF built by `fill`, which sets keys on the gguf context and
+// creates tensors (metadata only) in the ggml context.
+using GgufFill = std::function<void(gguf_context*, ggml_context*)>;
+
+void addTensor(gguf_context* ctx, ggml_context* meta, const char* name) {
+  ggml_tensor* tensor = ggml_new_tensor_1d(meta, GGML_TYPE_F32, 4);
+  ggml_set_name(tensor, name);
+  gguf_add_tensor(ctx, tensor);
+}
+
+std::string writeGguf(const char* name, const GgufFill& fill) {
+  gguf_context* ctx = gguf_init_empty();
+  ggml_init_params init{
+      .mem_size = 8 * ggml_tensor_overhead(),
+      .mem_buffer = nullptr,
+      .no_alloc = true};
+  ggml_context* meta = ggml_init(init);
+  fill(ctx, meta);
+  const std::string path = absoluteModelPath(name);
+  EXPECT_TRUE(gguf_write_to_file(ctx, path.c_str(), true)) << path;
+  gguf_free(ctx);
+  ggml_free(meta);
+  return path;
+}
+
+// The type `auto` resolves for the file `fill` writes, or NONE when the
+// load would fail with InvalidArgument.
+common_speculative_type autoType(const char* name, const GgufFill& fill) {
+  const std::string path = writeGguf(name, fill);
+  common_params params;
+  common_speculative_type type = COMMON_SPECULATIVE_TYPE_NONE;
+  try {
+    applySpeculativeConfig(
+        SpeculativeConfig{.autoDetect = true, .draftModelPath = path}, params);
+    type = params.speculative.types[0];
+  } catch (const std::invalid_argument&) {
+  }
+  std::filesystem::remove(path);
+  return type;
+}
+
+} // namespace
+
+TEST(SpeculativeAutoTest, ResolvesTheTypeBeforeTheLoad) {
+  EXPECT_EQ(
+      autoType(
+          "auto-dspark.gguf",
+          [](gguf_context* ctx, ggml_context* m) {
+            gguf_set_val_str(ctx, "general.architecture", "dflash");
+            addTensor(ctx, m, "markov_w1.weight");
+          }),
+      COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK);
+  EXPECT_EQ(
+      autoType(
+          "auto-dflash.gguf",
+          [](gguf_context* ctx, ggml_context*) {
+            gguf_set_val_str(ctx, "general.architecture", "dflash");
+          }),
+      COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH);
+  EXPECT_EQ(
+      autoType(
+          "auto-mtp.gguf",
+          [](gguf_context* ctx, ggml_context* m) {
+            gguf_set_val_str(ctx, "general.architecture", "qwen35");
+            gguf_set_val_u32(ctx, "qwen35.block_count", 3);
+            addTensor(ctx, m, "blk.2.nextn.eh_proj.weight");
+          }),
+      COMMON_SPECULATIVE_TYPE_DRAFT_MTP);
+}
+
+TEST(SpeculativeAutoTest, NoTypeFailsTheLoadInsteadOfAborting) {
+  // A plain model has nothing to draft with.
+  EXPECT_EQ(
+      autoType(
+          "auto-plain.gguf",
+          [](gguf_context* ctx, ggml_context*) {
+            gguf_set_val_str(ctx, "general.architecture", "llama");
+            gguf_set_val_u32(ctx, "llama.block_count", 2);
+          }),
+      COMMON_SPECULATIVE_TYPE_NONE);
+  // fabric's detection asserted on a missing or non-u32 block_count.
+  EXPECT_EQ(
+      autoType(
+          "auto-no-block-count.gguf",
+          [](gguf_context* ctx, ggml_context*) {
+            gguf_set_val_str(ctx, "general.architecture", "qwen35");
+          }),
+      COMMON_SPECULATIVE_TYPE_NONE);
+  EXPECT_EQ(
+      autoType(
+          "auto-block-count-u16.gguf",
+          [](gguf_context* ctx, ggml_context*) {
+            gguf_set_val_str(ctx, "general.architecture", "qwen35");
+            gguf_set_val_u16(ctx, "qwen35.block_count", 3);
+          }),
+      COMMON_SPECULATIVE_TYPE_NONE);
+  common_params params;
+  EXPECT_THROW(
+      applySpeculativeConfig(
+          SpeculativeConfig{
+              .autoDetect = true,
+              .draftModelPath = absoluteModelPath("auto-missing.gguf")},
+          params),
+      std::invalid_argument);
+  // Speculation stays off in the params it could not resolve for.
+  EXPECT_EQ(params.speculative.types[0], COMMON_SPECULATIVE_TYPE_NONE);
+}
+
+TEST(SpeculativeAutoTest, AutoNeedsADraftModel) {
+  EXPECT_THROW(parse({{"spec-type", "auto"}}), std::invalid_argument);
+  EXPECT_THROW(
+      parse({{"spec-type", "auto"}, {"spec-draft-model", "d.gguf"}}),
+      std::invalid_argument);
+  const SpeculativeConfig parsed = parse(
+      {{"spec-type", "auto"},
+       {"spec-draft-model", absoluteModelPath("d.gguf")},
+       {"spec-draft-p-min", "0.5"}});
+  EXPECT_TRUE(parsed.autoDetect);
+  EXPECT_TRUE(parsed.enabled());
+  EXPECT_EQ(parsed.type, COMMON_SPECULATIVE_TYPE_NONE);
+}
 
 TEST(SpeculativeFitMemoryTest, DraftRowsAddToTheTargetRowOfTheirDevice) {
   const std::vector<ggml_backend_dev_t> devices{fakeDevice(0), fakeDevice(1)};

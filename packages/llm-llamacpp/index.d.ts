@@ -405,18 +405,26 @@ declare namespace LlmLlamacpp {
          * or with the external MTP head given as `spec_draft_model`; the model or
          * the head must ship MTP layers (`blk.N.nextn.*`), or the load fails.
          * `'draft-dflash'` drafts with the DFlash model given as
-         * `spec_draft_model`. Either way the model verifies the draft, so the
-         * output keeps the distribution of plain decoding. `'none'` (default)
-         * decodes one token per step. Works on single prompts, multimodal
-         * prompts and continuous batching. Also accepted as `spec-type`.
+         * `spec_draft_model`, and `'draft-dspark'` with the DSpark model (a
+         * DFlash model with a Markov head) given as `spec_draft_model`. `'auto'`
+         * reads which of the three from the `spec_draft_model` header, as
+         * llama-server does for `-md` without `--spec-type`: a `dflash` model is
+         * DSpark with a Markov head and DFlash without, and MTP is detected only
+         * by the last block's `blk.N.nextn.eh_proj` tensor, so a Gemma 4
+         * assistant needs `'draft-mtp'` given explicitly. It fails the load for
+         * a model none of them fits. Either way the
+         * model verifies the draft, so the output keeps the distribution of plain
+         * decoding. `'none'` (default) decodes one token per step. Works on single
+         * prompts, multimodal prompts and continuous batching. Also accepted as
+         * `spec-type`.
          */
-        spec_type?: "none" | "draft-mtp" | "draft-dflash";
+        spec_type?: "none" | "draft-mtp" | "draft-dflash" | "draft-dspark" | "auto";
         /**
          * Absolute path of the draft model, as llama-server's
-         * `--spec-draft-model` (`-md`): the DFlash model, required by
-         * `spec_type: 'draft-dflash'`, or an external MTP head for
-         * `spec_type: 'draft-mtp'`. The draft model is placed like the model
-         * (`device`, `gpu_layers`). Also accepted as `spec-draft-model`.
+         * `--spec-draft-model` (`-md`): the DFlash or DSpark model, required by
+         * `spec_type: 'draft-dflash'` and `'draft-dspark'`, or an external MTP
+         * head for `spec_type: 'draft-mtp'`. The draft model is placed like the
+         * model (`device`, `gpu_layers`). Also accepted as `spec-draft-model`.
          */
         spec_draft_model?: string;
         /**
@@ -432,8 +440,12 @@ declare namespace LlmLlamacpp {
         spec_draft_n_min?: NumericLike;
         /**
          * Minimum draft-head probability for a token to extend the draft
-         * (default 0, between 0 and 1), as `--spec-draft-p-min`. Also accepted
-         * as `spec-draft-p-min`.
+         * (default 0, between 0 and 1), as `--spec-draft-p-min`. With
+         * `'draft-dspark'` it is the confidence head's threshold: the draft stops
+         * at the first token below it. With a DSpark model that has no confidence
+         * head, a value above 0 makes fabric refuse to draft, and the model
+         * decodes without speculation, as llama-server does. Also accepted as
+         * `spec-draft-p-min`.
          */
         spec_draft_p_min?: NumericLike;
         [key: string]: string | number | boolean | string[] | undefined;

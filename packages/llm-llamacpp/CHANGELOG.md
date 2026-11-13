@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- DSpark speculative decoding (`spec-type: 'draft-dspark'` with
+  `spec-draft-model`) and `spec-type: 'auto'`, which reads the type from the
+  draft model's header, as llama-server's `--spec-type draft-dspark -md` and
+  `-md` without `--spec-type`
+  ([#5694](https://github.com/tetherto/qvac/pull/5694)). A draft model or MTP
+  head for another model now fails the load and `assessFit` with fabric's
+  header check instead of aborting.
+
 ## [0.70.1] - 2026-11-11
 
 ### Changed

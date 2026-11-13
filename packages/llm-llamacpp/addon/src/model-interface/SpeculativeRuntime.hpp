@@ -36,27 +36,35 @@ inline constexpr unsigned MAX_SPEC_DRAFT_N_MAX = 64;
 /// Speculative-decoding options from the load config. Absent keys keep
 /// llama.cpp's `common_params_speculative` defaults.
 struct SpeculativeConfig {
-  /// `COMMON_SPECULATIVE_TYPE_NONE` when `spec-type` is absent or "none".
+  /// `COMMON_SPECULATIVE_TYPE_NONE` when `spec-type` is absent, "none" or
+  /// "auto" (until `applySpeculativeConfig` detects it).
   common_speculative_type type = COMMON_SPECULATIVE_TYPE_NONE;
+  /// `spec-type: "auto"`: the type is read from the draft model's header, as
+  /// llama-server does for `-md` without `--spec-type`.
+  bool autoDetect = false;
   std::optional<int32_t> draftNMax;
   std::optional<int32_t> draftNMin;
   std::optional<float> draftPMin;
   /// The draft model file (`spec-draft-model`, llama-server's `-md`): the
-  /// DFlash model, or an external MTP head for `draft-mtp`.
+  /// DFlash or DSpark model, or an external MTP head for `draft-mtp`.
   std::string draftModelPath;
 
+  /// True for a resolved type and for an unresolved `auto`.
   [[nodiscard]] bool enabled() const {
-    return type != COMMON_SPECULATIVE_TYPE_NONE;
+    return autoDetect || type != COMMON_SPECULATIVE_TYPE_NONE;
   }
 };
 
 /// Consumes the speculative keys from the load config. `spec-type` accepts
 /// `none`, `draft-mtp`, which drafts with the target model's own
 /// next-token heads or with the external MTP head given as
-/// `spec-draft-model`, and `draft-dflash`, which drafts with the DFlash model
-/// given as `spec-draft-model`. Throws std::invalid_argument for an unknown
-/// type, a malformed or out-of-range value, both spellings of one key, draft
-/// options without a type, `draft-dflash` without `spec-draft-model`, a
+/// `spec-draft-model`, `draft-dflash`, which drafts with the DFlash model
+/// given as `spec-draft-model`, `draft-dspark`, which drafts with the DSpark
+/// model given as `spec-draft-model`, and `auto`, which reads the type from
+/// the `spec-draft-model` header (see `detectSpeculativeType`). Throws
+/// std::invalid_argument for an unknown type, a malformed or out-of-range
+/// value, both spellings of one key, draft options without a type,
+/// `draft-dflash`, `draft-dspark` or `auto` without `spec-draft-model`, a
 /// `spec-draft-model` that is not an absolute local path, or one without a
 /// type.
 SpeculativeConfig
@@ -66,26 +74,16 @@ parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config);
 /// regular file. Separate from parsing, which only checks the path's form.
 void requireDraftModelFile(const SpeculativeConfig& config);
 
-struct GgufShape {
-  std::string arch;
-  int64_t width = 0;
-  int64_t vocab = 0;
-  int64_t mtpLayers = 0;
-};
+/// The speculative type of the draft model at `path`, read by fabric's
+/// `common_speculative_types_from_gguf` as llama-server does for `-md`
+/// without `--spec-type`: `draft-dspark` for a `dflash` model with a Markov
+/// head, `draft-dflash` for one without, `draft-mtp` for a model whose last
+/// block has an MTP projection. Throws std::invalid_argument when it detects
+/// none, as for an unreadable file or a Gemma 4 assistant.
+common_speculative_type detectSpeculativeType(const std::string& path);
 
-/// The architecture, the hidden-state width an MTP head reads, its vocabulary
-/// size and its MTP layers (`nextn_predict_layers`), from a GGUF's header,
-/// empty or 0 when absent. The width is `embedding_length_out` when set, as
-/// fabric's `n_embd_out()`, else `embedding_length`.
-GgufShape readGgufShape(const std::string& path);
-
-/// Why an external MTP head cannot draft for the target, or empty. Fabric
-/// aborts on a width mismatch. A value of 0 is unknown and not compared.
-std::string mtpHeadMismatch(
-    int64_t headWidth, int64_t targetWidth, int64_t headVocab,
-    int64_t targetVocab);
-
-/// Copies `config` into `params.speculative` and sizes the target context's
+/// Resolves `spec-type: "auto"` with `detectSpeculativeType`, then copies
+/// `config` into `params.speculative` and sizes the target context's
 /// output buffers for a verification batch, exactly as llama-server does
 /// before it creates the target context (`server_output_limits`). A draft
 /// model (DFlash or an external MTP head) is placed like the target model

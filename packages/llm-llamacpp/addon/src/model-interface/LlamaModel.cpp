@@ -323,6 +323,19 @@ void LlamaModel::init(bool acquireLock) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument, e.what());
   }
+  // Fabric's load refuses a draft model or MTP head for another model with
+  // this check and only logs the reason; it is run here too so the load
+  // error carries it, as `assessFit`'s does.
+  if (const std::string mismatch =
+          common_speculative_draft_mismatch(params, modelPath);
+      !mismatch.empty()) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(qvac_lib_inference_addon_llama::errors::UnableToLoadModel),
+        "[Speculative] the draft model '" +
+            params.speculative.draft.mparams.path +
+            "' does not match the model: " + mismatch);
+  }
 
   snap.demoteToRead();
   common_init_result_ptr llamaInit = common_init_from_params(params);
