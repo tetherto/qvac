@@ -547,9 +547,11 @@ jobs:
           DIST_TAG: ${{ steps.dist-tag.outputs.tag }}
           OUT_DIR: ${{ runner.temp }}/platform-packages
           WORKDIR: ${{ matrix.workdir }}
-          # npm rejects an oversized tarball with E413: 200.4 MB went through,
-          # 201.9 MB did not.
-          MAX_TARBALL_BYTES: "200400000"
+          # Packed tarball bytes. npm's limit is undocumented: the largest known
+          # to go through is @qvac/fabric-linux-x64@0.29.2 at 200417383 bytes;
+          # 0.30.0 at ~201.9 MB got E413. Checked here, not in the slicer, so
+          # slices already on npm are not packed.
+          MAX_TARBALL_BYTES: "200417383"
         run: |
           set -euo pipefail
           # Prints "hit" or "miss"; any npm view failure other than E404 is a
@@ -581,8 +583,14 @@ jobs:
             if [ "$SLICE_STATE" = miss ]; then
               SIZE=$(cd "$dir" && npm pack --dry-run --json --ignore-scripts | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8"))[0].size')
               echo "${NAME}@${VERSION}: ${SIZE} byte tarball"
+              # A non-number would make the -gt test error, which set -e ignores
+              # inside an if, and let the slice through.
+              if ! [[ "$SIZE" =~ ^[0-9]+$ ]]; then
+                echo "::error title=npm pack size unreadable::${NAME}@${VERSION}: npm pack reported '${SIZE}' as its size." >&2
+                exit 1
+              fi
               if [ "$SIZE" -gt "$MAX_TARBALL_BYTES" ]; then
-                echo "::error title=npm tarball too large::${NAME}@${VERSION} packs to ${SIZE} bytes, over the ${MAX_TARBALL_BYTES}-byte budget (npm rejects oversized tarballs with E413). Nothing was published." >&2
+                echo "::error title=npm tarball too large::${NAME}@${VERSION} packs to ${SIZE} bytes, over the ${MAX_TARBALL_BYTES}-byte budget (npm rejects oversized tarballs with E413). No slice was published by this run." >&2
                 OVERSIZED+=("$NAME")
               fi
               TO_PUBLISH+=("$dir")
