@@ -31,6 +31,11 @@ import {
   applyJoinedDownloadStats
 } from '@/handlers/load-model/download-manager'
 import {
+  acquireDownloadLock,
+  partialDownloadPath,
+  publishDownload
+} from '@/handlers/load-model/download-lock'
+import {
   ChecksumUnavailableError,
   ChecksumValidationFailedError,
   DownloadCancelledError,
@@ -91,6 +96,9 @@ function extractFilenameFromUrl(url: string): string {
 // cache entry from before this shipped, or one written down the warn-and-proceed
 // path, is served as-is: tightening requireHttpChecksum does not retroactively
 // verify the cache — clear it to force a fresh, verified download.
+//
+// Downloads land here only once verified (see `publishDownload`), but a partial
+// an older SDK wrote in place can still pass the offline header check.
 async function validateCachedFile(
   modelPath: string,
   url: string,
@@ -99,7 +107,12 @@ async function validateCachedFile(
 ): Promise<string | null> {
   try {
     await fsPromises.access(modelPath)
+  } catch {
+    await assertPartialCanResume(modelPath, url, requireSecureTransport, signal)
+    return null
+  }
 
+  try {
     const localStats = await fsPromises.stat(modelPath)
     const localSize = localStats.size
 
@@ -156,6 +169,36 @@ async function validateCachedFile(
       throw error
     }
     return null
+  }
+}
+
+// Only the `.part` of an interrupted download is on disk. Resuming it needs the
+// network, so offline this fails as an offline partial instead of retrying.
+async function assertPartialCanResume(
+  modelPath: string,
+  url: string,
+  requireSecureTransport: boolean,
+  signal?: AbortSignal
+): Promise<void> {
+  const partialSize = await fsPromises.stat(partialDownloadPath(modelPath)).then(
+    (stats) => stats.size,
+    () => 0
+  )
+  if (partialSize === 0) return
+  try {
+    const response = await safeFetch(url, {
+      method: 'HEAD',
+      timeoutMs: getConfig().httpConnectionTimeoutMs ?? DEFAULT_HTTP_CONNECTION_TIMEOUT_MS,
+      enforceSecureTransport: shouldEnforceSecureTransport(url, requireSecureTransport),
+      ...(signal && { signal })
+    })
+    response.body.resume()
+  } catch (error) {
+    if (signal?.aborted || error instanceof InsecureModelSourceError) throw error
+    logger.error(
+      `❌ Offline with partial download (${partialSize} bytes). Cannot resume without network.`
+    )
+    throw new PartialDownloadOfflineError(url, partialSize)
   }
 }
 
@@ -292,6 +335,7 @@ async function performHttpDownload(
   const writeStreamOptions =
     startOffset > 0 && response.status === 206 ? { flags: 'a' as const } : {}
   const writeStream = fs.createWriteStream(modelPath, writeStreamOptions)
+  const writeStreamClosed = new Promise<void>((resolve) => writeStream.once('close', resolve))
 
   // Get the response body
   const body = response.body
@@ -383,7 +427,9 @@ async function performHttpDownload(
       throw new ResponseBodyNotReadableError()
     }
   } catch (error) {
+    // Let an in-flight write land before the caller can release its lock.
     writeStream.destroy()
+    await writeStreamClosed
     logger.error('Error during download:', error instanceof Error ? error.message : String(error))
     throw error instanceof Error ? error : new Error(String(error))
   }
@@ -504,6 +550,30 @@ async function performHttpDownloadWithResume(
   }
 }
 
+/** Download to the partial path, resuming it, then verify and publish. Callers hold the lock. */
+async function downloadVerifyAndPublish(
+  url: string,
+  finalPath: string,
+  downloadKey: string,
+  requireSecureTransport: boolean,
+  requireChecksum: boolean,
+  progressCallback: ((progress: ModelProgressUpdate) => void) | undefined,
+  signal: AbortSignal,
+  hooks?: DownloadHooks
+): Promise<void> {
+  const partialPath = partialDownloadPath(finalPath)
+  const meta = await performHttpDownloadWithResume(
+    url,
+    partialPath,
+    downloadKey,
+    requireSecureTransport,
+    progressCallback,
+    signal
+  )
+  await verifyHttpModelFile(url, partialPath, meta.hubSha256, requireChecksum, hooks)
+  await publishDownload(finalPath)
+}
+
 export async function downloadModelFromHttp(
   url: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
@@ -532,6 +602,7 @@ export async function downloadModelFromHttp(
   const result = startOrJoinDownload(
     downloadKey,
     async (ctx) => {
+      await using _downloadLock = await acquireDownloadLock(downloadKey, ctx.signal)
       try {
         // Check if already cached
         const cached = await validateCachedFile(modelPath, url, requireSecureTransport, ctx.signal)
@@ -559,16 +630,16 @@ export async function downloadModelFromHttp(
         // Download the file
         hooks?.markCacheMiss?.()
         ctx.setCacheHit(false)
-        const meta = await performHttpDownloadWithResume(
+        await downloadVerifyAndPublish(
           url,
           modelPath,
           downloadKey,
           requireSecureTransport,
+          requireChecksum,
           ctx.broadcastProgress,
-          ctx.signal
+          ctx.signal,
+          hooks
         )
-
-        await verifyHttpModelFile(url, modelPath, meta.hubSha256, requireChecksum, hooks)
 
         try {
           const stats = await fsPromises.stat(modelPath)
@@ -597,12 +668,13 @@ export async function downloadModelFromHttp(
         if (error instanceof DownloadCancelledError) {
           if (ctx.shouldClearCache()) {
             logger.info('🗑️ Clearing cache - deleting partial file')
+            const partialPath = partialDownloadPath(modelPath)
             try {
-              await fsPromises.unlink(modelPath)
-              logger.info(`✅ Deleted partial file: ${modelPath}`)
+              await fsPromises.unlink(partialPath)
+              logger.info(`✅ Deleted partial file: ${partialPath}`)
             } catch (error) {
               logger.debug('Failed to delete partial file during cleanup', {
-                path: modelPath,
+                path: partialPath,
                 error
               })
             }
@@ -643,7 +715,10 @@ async function downloadShardedModelFromHttp(
   const result = startOrJoinDownload(
     downloadKey,
     async (ctx) => {
+      await using _downloadLock = await acquireDownloadLock(downloadKey, ctx.signal)
       try {
+        // The previous holder may have cleared the cache while this one waited.
+        await fsPromises.mkdir(shardDir, { recursive: true })
         const shardStates: ShardDownloadState[] = await Promise.all(
           shardInfos.map(async (shard, index) => {
             const shardPath = path.join(shardDir, shard.filename)
@@ -786,6 +861,7 @@ async function downloadShardedModelFromArchive(
   const result = startOrJoinDownload(
     downloadKey,
     async (ctx) => {
+      await using _downloadLock = await acquireDownloadLock(downloadKey, ctx.signal)
       try {
         await fsPromises.mkdir(extractDir, { recursive: true })
 
@@ -795,7 +871,7 @@ async function downloadShardedModelFromArchive(
         if (!shardedFile) {
           hooks?.markCacheMiss?.()
           ctx.setCacheHit(false)
-          return downloadAndExtractArchive()
+          return await downloadAndExtractArchive()
         }
 
         const shardFilename = String(shardedFile)
@@ -803,7 +879,7 @@ async function downloadShardedModelFromArchive(
           logger.warn(`⚠️ Incomplete extraction found, re-downloading archive`)
           hooks?.markCacheMiss?.()
           ctx.setCacheHit(false)
-          return downloadAndExtractArchive()
+          return await downloadAndExtractArchive()
         }
 
         const shardFilenames = generateShardFilenames(shardFilename)
@@ -843,18 +919,18 @@ async function downloadShardedModelFromArchive(
       }
 
       async function downloadAndExtractArchive() {
-        const meta = await performHttpDownloadWithResume(
+        // Verify the downloaded archive before extraction so tampered bytes
+        // never reach the extractor.
+        await downloadVerifyAndPublish(
           archiveUrl,
           archivePath,
           downloadKey,
           requireSecureTransport,
+          requireChecksum,
           ctx.broadcastProgress,
-          ctx.signal
+          ctx.signal,
+          hooks
         )
-
-        // Verify the downloaded archive before extraction so tampered bytes
-        // never reach the extractor.
-        await verifyHttpModelFile(archiveUrl, archivePath, meta.hubSha256, requireChecksum, hooks)
 
         logger.info(`✅ Archive downloaded, extracting to: ${extractDir}`)
 
@@ -898,9 +974,20 @@ async function downloadShardsWithConcurrency(
 ) {
   const queue = [...shardsToDownload]
   const inFlight = new Set<Promise<void>>()
+  // A failed or cancelled shard stops the rest, and all settle before this
+  // returns, so nothing writes after the caller releases its lock.
+  const shardsController = new AbortController()
+  const stopShards = () => shardsController.abort(undefined)
+  signal.addEventListener('abort', stopShards, { once: true })
+  const stopAndSettle = async () => {
+    stopShards()
+    signal.removeEventListener('abort', stopShards)
+    await Promise.allSettled([...inFlight])
+  }
 
   while (queue.length > 0 || inFlight.size > 0) {
     if (signal.aborted) {
+      await stopAndSettle()
       throw new DownloadCancelledError()
     }
 
@@ -910,11 +997,12 @@ async function downloadShardsWithConcurrency(
       const downloadPromise = (async () => {
         logger.info(`📥 Downloading shard ${state.index + 1}: ${state.shard.filename}`)
 
-        const meta = await performHttpDownloadWithResume(
+        await downloadVerifyAndPublish(
           state.shard.url,
           state.shardPath,
           downloadKey,
           requireSecureTransport,
+          requireChecksum,
           (progress) => {
             state.downloadedBytes = progress.downloaded
 
@@ -938,14 +1026,7 @@ async function downloadShardsWithConcurrency(
               })
             }
           },
-          signal
-        )
-
-        await verifyHttpModelFile(
-          state.shard.url,
-          state.shardPath,
-          meta.hubSha256,
-          requireChecksum,
+          shardsController.signal,
           hooks
         )
 
@@ -958,9 +1039,15 @@ async function downloadShardsWithConcurrency(
     }
 
     if (inFlight.size > 0) {
-      await Promise.race(inFlight)
+      try {
+        await Promise.race(inFlight)
+      } catch (error) {
+        await stopAndSettle()
+        throw error
+      }
     }
   }
+  signal.removeEventListener('abort', stopShards)
 
   // Mark all downloaded shards as complete
   for (const state of shardsToDownload) {

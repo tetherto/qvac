@@ -7,7 +7,7 @@ schemaType: TechArticle
 
 ## Overview
 
-Minimum host requirements for running the SDK and CLI. These are worker-level — all SDK clients (JS/TS and Python) drive the same worker, so the requirements below apply regardless of which client you use.
+Minimum host requirements for running the SDK and CLI. These are worker-level — all SDK clients (JS/TS, Python, and Kotlin) drive the same worker, so the requirements below apply regardless of which client you use.
 
 You can validate your environment against the machine-checkable subset with:
 
@@ -23,7 +23,7 @@ Use `--json` for machine-readable output and `--quiet` to set the exit code only
 |----------|-------------|-----|-----|-------|
 | macOS | 14.0+ | arm64 | Metal | Arch x64 supports CPU inference only; Intel iGPU acceleration not supported |
 | iOS | 17.0+ | arm64 | Metal | Requires Expo |
-| Linux | Ubuntu 22+ | arm64, x64 | Vulkan `>= 1.4` | Vulkan is required for GPU inference. If not available, it falls back to CPU. |
+| Linux | Ubuntu 22+ | arm64, x64 | Vulkan `>= 1.4`; AMD XDNA2 NPU (x64, opt-in) | Vulkan is required for GPU inference. If not available, it falls back to CPU. The AMD NPU needs XRT 2.25 or newer and is used only on request; see [Text generation](/sdk/ai-capabilities/text-generation#amd-npu). |
 | Android | 12+ | arm64 | Vulkan, OpenCL (Adreno 700+) | Requires Expo |
 | Windows | 10+ | x64 | Vulkan `>= 1.4` | Vulkan is required even for CPU-only inference |
 

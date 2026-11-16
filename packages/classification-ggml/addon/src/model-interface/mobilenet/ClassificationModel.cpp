@@ -23,6 +23,7 @@
 #include <qvac-fabric.h>
 
 #include "MobileNetGraph.hpp"
+#include "model-interface/GgmlBackend.hpp"
 #include "model-interface/ImagePreprocessor.hpp"
 
 namespace classification_ggml {
@@ -115,6 +116,68 @@ bool traceEnabled() {
 
 } // namespace
 
+namespace {
+ggml_backend_t initCpuBackend(const std::string& backendsDir) {
+  ggml_backend_dev_t cpuDev = nullptr;
+  {
+    // Only the registry is guarded; device init runs outside the lock.
+    const std::lock_guard<std::mutex> lock(backendRegistryMutex());
+#if defined(GGML_BACKEND_DL)
+    // Under GGML_BACKEND_DL @qvac/fabric ships CPU variants and GPU backends
+    // as modules, which must be opened before the registry can hand out a
+    // device. Fabric finds the ones it ships itself; config.backendsDir only
+    // overrides that with a directory holding the modules.
+    if (!backendsDir.empty()) {
+      ggml_backend_load_all_from_path(backendsDir.c_str());
+    } else {
+      qvac_fabric_load_backends();
+    }
+#else
+    (void)backendsDir;
+#endif
+    cpuDev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+  }
+
+  // Acquire the CPU backend through the generic registry API on every platform.
+  // We deliberately do NOT call
+  // ggml_backend_cpu_init() directly: @qvac/fabric only implicitly exports that
+  // symbol on ELF/Mach-O. Its Windows DLL export set exposes just the generic
+  // registry API (ggml_backend_dev_by_type / ggml_backend_dev_init), so a
+  // direct ggml_backend_cpu_init() call fails to link with lld-link on
+  // win32-x64.
+  if (cpuDev == nullptr) {
+    throw StatusError(InternalError, "No CPU backend device registered");
+  }
+  ggml_backend_t backend = ggml_backend_dev_init(cpuDev, /*params=*/nullptr);
+  if (backend == nullptr) {
+    throw StatusError(InternalError, "Failed to initialize ggml CPU backend");
+  }
+  return backend;
+}
+} // namespace
+
+MeasuredBuffers ClassificationModel::measure(
+    const std::string& modelPath, const std::string& backendsDir) {
+  if (modelPath.empty()) {
+    throw StatusError(
+        InvalidArgument,
+        "ClassificationModel requires a path to mobilenetv3 FP16 GGUF weights");
+  }
+  const std::unique_ptr<ggml_backend, decltype(&ggml_backend_free)> backend(
+      initCpuBackend(backendsDir), ggml_backend_free);
+  MeasuredBuffers result = graph::measureBuffers(modelPath, backend.get());
+  result.deviceName = deviceName(backend.get());
+  return result;
+}
+
+BufferFootprint ClassificationModel::allocatedBuffers() const {
+  std::scoped_lock lock(mutex_);
+  if (!loaded_) {
+    throw StatusError(InternalError, "ClassificationModel is not loaded");
+  }
+  return graph::allocatedBuffers(weights_, compute_, backend_);
+}
+
 void ClassificationModel::load() {
   std::scoped_lock lock(mutex_);
   if (loaded_) {
@@ -126,34 +189,7 @@ void ClassificationModel::load() {
         "ClassificationModel requires a path to mobilenetv3 FP16 GGUF weights");
   }
 
-#if defined(GGML_BACKEND_DL)
-  // Under GGML_BACKEND_DL @qvac/fabric ships CPU variants and GPU backends as
-  // modules, which must be opened before the registry can hand out a device.
-  // Fabric finds the ones it ships itself; config.backendsDir only overrides
-  // that with a directory holding the modules.
-  if (!backendsDir_.empty()) {
-    ggml_backend_load_all_from_path(backendsDir_.c_str());
-  } else {
-    qvac_fabric_load_backends();
-  }
-#endif
-
-  // Acquire the CPU backend through the generic registry API on every platform.
-  // We deliberately do NOT call
-  // ggml_backend_cpu_init() directly: @qvac/fabric only implicitly exports that
-  // symbol on ELF/Mach-O. Its Windows DLL export set exposes just the generic
-  // registry API (ggml_backend_dev_by_type / ggml_backend_dev_init), so a
-  // direct ggml_backend_cpu_init() call fails to link with lld-link on
-  // win32-x64.
-  ggml_backend_dev_t cpuDev =
-      ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-  if (cpuDev == nullptr) {
-    throw StatusError(InternalError, "No CPU backend device registered");
-  }
-  backend_ = ggml_backend_dev_init(cpuDev, /*params=*/nullptr);
-  if (backend_ == nullptr) {
-    throw StatusError(InternalError, "Failed to initialize ggml CPU backend");
-  }
+  backend_ = initCpuBackend(backendsDir_);
 
   labels_.clear();
   weights_ = graph::loadWeights(modelPath_, backend_, labels_);

@@ -3,7 +3,7 @@ import type { ExpoConfig } from 'expo/config'
 import * as fs from 'fs'
 import * as path from 'path'
 import { bundleSdk } from '@/commands'
-import { discardScratch, replaceAll, scratchFolderFor } from '@/commands/bundle/scratch'
+import { discardStaged, replaceAll, scratchFolderFor } from '@/commands/bundle/scratch'
 import { CONFIG_CANDIDATES } from '@/client/config-loader/resolve-config.node'
 import { resolveSDKPackageDir } from '@/expo/plugins/resolve-sdk-package-dir'
 import { getProjectRootFromMod } from '@/expo/plugins/get-project-root'
@@ -115,14 +115,15 @@ function findConfigFile(projectRoot: string): string | null {
 /** Copies the worker into `outDir`, which keeps its previous files until every copy is done. */
 async function copyWorker(workerDir: string, outDir: string) {
   const scratch = await scratchFolderFor(outDir)
+  const staged = [{ dir: outDir, next: scratch }]
   try {
     fs.mkdirSync(scratch, { recursive: true })
     for (const file of WORKER_MOBILE_FILES) {
       fs.copyFileSync(path.join(workerDir, file), path.join(scratch, file))
     }
-    await replaceAll([{ dir: outDir, next: scratch }])
+    await replaceAll(staged)
   } finally {
-    await discardScratch(scratch)
+    await discardStaged(staged)
   }
 }
 

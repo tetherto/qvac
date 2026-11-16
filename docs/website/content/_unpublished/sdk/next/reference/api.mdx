@@ -1129,12 +1129,13 @@ Fetches a single model entry from the registry by its path and source.
 **Signature**:
 
 ```ts
-function modelRegistryGetModel(registryPath: string, registrySource: string): Promise<ModelRegistryEntry>;
+function modelRegistryGetModel(registryPath: string, registrySource: string): Promise<ModelRegistryEntry> & { requestId: string };
 ```
 
 **Throws**:
 
 - `ModelRegistryModelNotFoundError` — When the registry has no model at this source and path.
+- `ModelRegistryBusyError` — When another QVAC process kept the registry for longer than the query waits.
 - `ModelRegistryQueryFailedError` — When the registry query fails.
 
 ---
@@ -1146,11 +1147,12 @@ Returns all available models from the QVAC distributed model registry.
 **Signature**:
 
 ```ts
-function modelRegistryList(): Promise<ModelRegistryEntry[]>;
+function modelRegistryList(): Promise<ModelRegistryEntry[]> & { requestId: string };
 ```
 
 **Throws**:
 
+- `ModelRegistryBusyError` — When another QVAC process kept the registry for longer than the query waits.
 - `ModelRegistryQueryFailedError` — When the registry query fails.
 
 ---
@@ -1162,12 +1164,21 @@ Searches the model registry with optional filters for model type, engine, and qu
 **Signature**:
 
 ```ts
-function modelRegistrySearch(params: ModelRegistrySearchParams): Promise<ModelRegistryEntry[]>;
+function modelRegistrySearch(params: ModelRegistrySearchParams): Promise<ModelRegistryEntry[]> & { requestId: string };
 ```
 
 **Throws**:
 
+- `ModelRegistryBusyError` — When another QVAC process kept the registry for longer than the query waits.
 - `ModelRegistryQueryFailedError` — When the registry query fails.
+
+**Example**:
+```ts
+// Another QVAC process may hold the registry; the query waits up to 60 s for it.
+const search = modelRegistrySearch({ addon: 'llm' });
+stopButton.onclick = () => cancel({ requestId: search.requestId });
+const models = await search;
+```
 
 ---
 

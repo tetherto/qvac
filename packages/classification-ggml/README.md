@@ -35,6 +35,77 @@ await model.destroy()
 BridgeDepth weights are supplied separately; the package includes a local
 conversion script and does not download or redistribute the GGUF.
 
+## Check model fit
+
+`assessFit` checks whether a MobileNet, MegaLoc or BridgeDepth GGUF fits in the
+memory that is free now. It reads only GGUF metadata: it builds the same
+graphs the load and one inference build and sizes their buffers without
+reading weight data or allocating them. The model kind comes from the file.
+
+```js
+const { assessFit } = require('@qvac/classification-ggml')
+
+const fit = await assessFit({
+  modelPath: '/abs/path/bridgedepth-vits-f32.gguf',
+  backend: 'MTL0', // optional, as MegaLoc and BridgeDepth take it
+  threads: 8, // optional, the CPU threads the model will use
+  marginBytes: 512 * 1024 * 1024, // optional, 256 MiB when omitted
+  workload: { width: 1280, height: 720 } // BridgeDepth input size, optional
+})
+
+fit.status // 'fits' | 'does-not-fit' | 'unknown'
+fit.devices // [{ id, name, unified, usedBytes, freeBytes, totalBytes }]
+fit.stats // {}
+```
+
+`devices` holds the selected device, then the host CPU. The device row carries
+the weights and the compute buffer; the CPU row carries the compute buffer and
+workspace of graph parts that fall back to the CPU, plus the host memory the
+addon stages while loading and running. A load on the CPU, which is every
+MobileNet load, is one row, and `unknown` has none. `id` is the PCI bus ID when
+the backend reports one, the device name otherwise. `unified` is true for
+memory the host owns: the CPU, an integrated GPU, a GPU that shares the host's
+memory, Android's OpenCL GPU, and a device that reports no memory of its own,
+which takes the host's figures.
+
+The sizes are measured, so the verdict is direct: `fits` when every memory pool
+holds what the load takes with `marginBytes` left free, `does-not-fit`
+otherwise. Unified rows and the host row are one pool, judged against the
+lowest free figure among them; a GPU with its own memory is a pool alone.
+`unknown` means a device's memory could not be read or there is no CPU device.
+`marginBytes` defaults to 256 MiB. On
+iOS every unified row is first capped at the app's memory limit,
+`os_proc_available_memory()`.
+
+`workload` only matters for BridgeDepth, whose compute buffers grow with the
+input. It defaults to 1280x720, the largest size the model runs at (720x1280
+for a portrait pair, which measures the same): a larger input is downsampled
+to fit inside it, so the graph is sized as the downsampled run. The host row
+also counts the buffers at the input size: both views copied from JS, counted
+as raw RGB, decoding one view at the stb_image worst case, 16 B/px, the
+disparity resized back and its copy to JS. A PNG input larger than its raw
+RGB is not covered. `threads` defaults to 8, as `MegaLoc`
+and `BridgeDepth` do.
+
+Tensor data is not read, so a file whose weights `load()` rejects can still be
+reported as fitting. The verdict covers one input size: BridgeDepth keeps the
+resized position embedding of up to 8 input sizes, so a caller that cycles
+through sizes holds a little more host memory per size. Each call initializes the selected backend, so it costs
+about what a backend init costs.
+
+`assessFit` returns a Promise and concurrent calls run one at a time. A request
+with a relative `modelPath`, an option of the wrong type, a string holding a
+NUL character or an out-of-range number rejects with a
+`TypeError` or `RangeError` before the addon is called. A model that cannot be
+read, a GGUF of another model, an unavailable backend, a BridgeDepth size
+inference would reject, or an otherwise invalid request rejects with an
+`InvalidArgument` error, and a backend that fails to initialize or a graph that
+cannot be sized rejects with an `InternalError`.
+
+`backendsDir` overrides where the dynamic ggml backends are loaded from. Every
+library in it is loaded as native code, so pass only a trusted directory, as
+for `createInstance`.
+
 ## MobileNet classification
 
 

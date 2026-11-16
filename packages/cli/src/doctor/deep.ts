@@ -62,7 +62,7 @@ interface FailureRule extends SdkRuntimeFailureClassification {
 function sdkStartupTimedOut(result: SdkRuntimeProbeResult): boolean {
   const message = result.probeMessage
   if (message === undefined || message.ok) return false
-  return message.error.name === 'WORKER_STARTUP_FAILED' && / in time$/.test(message.error.message)
+  return message.error.name === 'WORKER_STARTUP_FAILED' && message.error.timedOut === true
 }
 
 function appendBounded(current: string, chunk: string, limit: number): string {

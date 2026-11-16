@@ -19,6 +19,7 @@ on:
       - ".github/actions/run-mobile-integration-tests/test/**"
       - ".github/actions/select-prebuild-symbols-verifier/**"
       - ".github/actions/sdk-device-farm-wait-for-running/**"
+      - ".github/actions/sdk-e2e-model-cache/**"
       # Holds one verify step per selector id, which the selector tests check.
       - ".github/workflows/reusable-prebuilds.yml"
       - "scripts/perf-report/**"
@@ -78,6 +79,20 @@ jobs:
       # The SDK e2e mobile workflows that use it run only on label or dispatch.
       - name: Run SDK Device Farm wait action unit tests
         run: node --test .github/actions/sdk-device-farm-wait-for-running/test/*.test.mjs
+      - name: Run SDK e2e model cache action unit tests
+        run: node --test .github/actions/sdk-e2e-model-cache/test/*.test.mjs
+      # The runner executes the committed dist/, not src/.
+      - name: Check SDK e2e model cache action bundle is current
+        working-directory: .github/actions/sdk-e2e-model-cache
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+          # --porcelain also catches untracked chunk files.
+          if [ -n "$(git status --porcelain -- dist)" ]; then
+            git status --short -- dist
+            echo "::error::dist/ is stale. Run 'npm ci && npm run build' in .github/actions/sdk-e2e-model-cache and commit dist/."
+            exit 1
+          fi
 
   # The per-addon benchmark aggregators are plain Node scripts shared by the
   # benchmark-performance-*.yml workflows, which only run on demand — so without

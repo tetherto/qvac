@@ -40,7 +40,8 @@ import {
   AttachmentNotFoundError,
   InvalidSeedFromParamsError,
   KvCacheSeedSharingDisabledError,
-  KvCacheSeedSourceNotFoundError
+  KvCacheSeedSourceNotFoundError,
+  RequestValidationFailedError
 } from '@/errors/index'
 import { nowMs } from '@/profiling/index'
 import { buildStreamResult } from '@/profiling/model-execution'
@@ -378,6 +379,12 @@ export async function* completion(
 
   const modelConfig = getModelConfig(modelId)
   const history = seedConfiguredSystemPrompt(requestHistory, modelConfig)
+  // The addon cannot render a prompt without messages; tools alone are not enough.
+  if (prefill && history.length === 0) {
+    throw new RequestValidationFailedError(
+      'prefill needs at least one message: add a system message to history or set modelConfig.system_prompt'
+    )
+  }
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true
   // With deferred tools the prompt carries the always-loaded ones, `tool_search`
   // and its catalog, and whatever earlier searches loaded. `null` when nothing

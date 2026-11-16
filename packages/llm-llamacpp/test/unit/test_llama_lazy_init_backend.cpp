@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include <filesystem>
 #include <string>
 
@@ -7,6 +8,38 @@
 #include "test_common.hpp"
 
 namespace fs = std::filesystem;
+
+namespace {
+void setRaggedEnv(const char* value) {
+#ifdef _WIN32
+  _putenv_s("LLAMA_RS_RAGGED", value == nullptr ? "" : value);
+#else
+  if (value == nullptr) {
+    unsetenv("LLAMA_RS_RAGGED");
+  } else {
+    setenv("LLAMA_RS_RAGGED", value, /*overwrite=*/1);
+  }
+#endif
+}
+
+std::string raggedEnv() {
+  const char* value = std::getenv("LLAMA_RS_RAGGED");
+  return value == nullptr ? std::string() : std::string(value);
+}
+} // namespace
+
+TEST(LlamaRaggedUbatchesDefault, SetsZeroWhenUnset) {
+  setRaggedEnv(nullptr);
+  LlamaLazyInitializeBackend::defaultRaggedUbatchesOff();
+  EXPECT_EQ(raggedEnv(), "0");
+}
+
+TEST(LlamaRaggedUbatchesDefault, KeepsCallerValue) {
+  setRaggedEnv("1");
+  LlamaLazyInitializeBackend::defaultRaggedUbatchesOff();
+  EXPECT_EQ(raggedEnv(), "1");
+  setRaggedEnv(nullptr);
+}
 
 class LlamaLazyInitializeBackendTest : public ::testing::Test {
 protected:

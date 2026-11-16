@@ -3,6 +3,8 @@ import { type CancelInferenceBaseParams, cancelInferenceBaseSchema } from '@/sch
 import { ModelNotLoadedError } from '@/errors/index'
 import { getRequestRegistry } from '@/runtime/index'
 import type { RequestKind } from '@/runtime/index'
+import { OWNER_SESSION_ID } from '@/runtime/session-id'
+import { isOwnerSession } from '@/runtime/session-registry'
 import { getEngineLogger } from '@/logging/index'
 
 const logger = getEngineLogger()
@@ -27,7 +29,10 @@ const logger = getEngineLogger()
  *
  * The function does exactly one thing — a registry walk.
  */
-export function cancel(params: CancelInferenceBaseParams, opts?: { kind?: RequestKind }): number {
+export function cancel(
+  params: CancelInferenceBaseParams,
+  opts?: { kind?: RequestKind; sessionId?: string }
+): number {
   const { modelId } = cancelInferenceBaseSchema.parse(params)
   const model = getModel(modelId)
 
@@ -35,9 +40,16 @@ export function cancel(params: CancelInferenceBaseParams, opts?: { kind?: Reques
     throw new ModelNotLoadedError(modelId)
   }
 
+  // The owner sweeps every session's requests on the model; a session only
+  // reaches its own.
+  const sessionId = opts?.sessionId ?? OWNER_SESSION_ID
   const registry = getRequestRegistry()
-  const target = opts?.kind ? { modelId, kind: opts.kind } : { modelId }
-  const cancelled = registry.cancel(target)
+  const cancelled = registry.cancel({
+    modelId,
+    ...(opts?.kind && { kind: opts.kind }),
+    sessionId,
+    allSessions: isOwnerSession(sessionId)
+  })
 
   if (cancelled === 0) {
     // Callers (workbench "Stop" button, app shutdown sweeps) often

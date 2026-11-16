@@ -139,29 +139,21 @@ TEST(BridgeDepthInput, RejectsSizesOutsideTheSupportedRange) {
         bd::toPlanarRgb(large, width, height);
       }).find("at most"),
       std::string::npos);
-  // 1080p pads to 1088 rows: 136 * 240 = 32640 cells, the largest common
-  // size under the limit. 2048x1088 is 34816 and aborts on Metal.
-  EXPECT_EQ(bd::gridCells(1920, 1080), 32640);
-  ImageInput fullHd;
-  fullHd.rawRgb = RawRgbDims{1920, 1080, 3};
-  fullHd.data.resize(static_cast<size_t>(1920) * 1080 * 3);
+  // The largest side at a 4K height is accepted, well past the old 2 MP
+  // limit: the model only sees it downsampled.
+  constexpr uint32_t uhdHeight = 2160;
+  ImageInput maxSize;
+  maxSize.rawRgb = RawRgbDims{bd::MAX_SIDE, uhdHeight, 3};
+  maxSize.data.resize(static_cast<size_t>(bd::MAX_SIDE) * uhdHeight * 3);
   EXPECT_EQ(
-      bd::toPlanarRgb(fullHd, width, height).size(),
-      static_cast<size_t>(1920) * 1080 * 3);
-  ImageInput wide;
-  wide.rawRgb = RawRgbDims{2048, 1088, 3};
-  wide.data.resize(static_cast<size_t>(2048) * 1088 * 3);
-  EXPECT_NE(
-      expectThrows([&] {
-        bd::toPlanarRgb(wide, width, height);
-      }).find("too large"),
-      std::string::npos);
-  // A PNG signature, an IHDR claiming 4096x4096 and an empty IDAT, which is
+      bd::toPlanarRgb(maxSize, width, height).size(),
+      static_cast<size_t>(bd::MAX_SIDE) * uhdHeight * 3);
+  // A PNG signature, an IHDR claiming 8192x8192 and an empty IDAT, which is
   // enough for stbi_info but not for a decode. The size error proves the
   // header is checked before the full decode.
   ImageInput hugePng;
   hugePng.data = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, 0, 0,    13,
-                  'I',  'H', 'D', 'R', 0,    0,    0x10, 0,    0, 0, 0x10, 0,
+                  'I',  'H', 'D', 'R', 0,    0,    0x20, 0,    0, 0, 0x20, 0,
                   8,    2,   0,   0,   0,    0,    0,    0,    0, 0, 0,    0,
                   0,    'I', 'D', 'A', 'T',  0,    0,    0,    0};
   const std::string hugeError =
@@ -174,6 +166,82 @@ TEST(BridgeDepthInput, RejectsSizesOutsideTheSupportedRange) {
         bd::toPlanarRgb(garbage, width, height);
       }).find("JPEG/PNG"),
       std::string::npos);
+}
+
+TEST(BridgeDepthResize, ModelSizeFitsInsideTheBoxKeepingTheAspect) {
+  using Size = bd::ImageSize;
+  constexpr uint32_t boxW = bd::MAX_MODEL_WIDTH;
+  constexpr uint32_t boxH = bd::MAX_MODEL_HEIGHT;
+  constexpr auto minSide = static_cast<uint32_t>(bd::MIN_SIDE);
+  // At or inside the box: untouched. 640x480 is a VGA frame.
+  EXPECT_EQ(bd::modelInputSize(boxW, boxH), (Size{boxW, boxH}));
+  EXPECT_EQ(bd::modelInputSize(640, 480), (Size{640, 480}));
+  EXPECT_EQ(bd::modelInputSize(boxW, minSide), (Size{boxW, minSide}));
+  // 16:9 lands exactly on the box.
+  EXPECT_EQ(bd::modelInputSize(1920, 1080), (Size{boxW, boxH}));
+  // One pixel over on one side scales both: 720 * 1280 / 1281 = 719.4.
+  EXPECT_EQ(bd::modelInputSize(boxW + 1, boxH), (Size{boxW, 719}));
+  // A portrait pair fits inside the swapped box: 720p upright is untouched,
+  // 1080p upright lands on it, and 1440 * 720 / 1080 = 960, width-limited.
+  EXPECT_EQ(bd::modelInputSize(boxH, boxW), (Size{boxH, boxW}));
+  EXPECT_EQ(bd::modelInputSize(1080, 1920), (Size{boxH, boxW}));
+  EXPECT_EQ(bd::modelInputSize(1080, 1440), (Size{boxH, 960}));
+  // Square is not portrait, so the landscape box's height limits it.
+  EXPECT_EQ(bd::modelInputSize(1000, 1000), (Size{boxH, boxH}));
+  // 32 * 1280 / 4096 = 10 would be below the smallest side.
+  EXPECT_EQ(bd::modelInputSize(bd::MAX_SIDE, minSide), (Size{boxW, minSide}));
+  EXPECT_EQ(bd::modelInputSize(minSide, bd::MAX_SIDE), (Size{minSide, boxW}));
+}
+
+// Per pixel: 2 views x 3 B raw RGB for the job, 16 B for the stb_image decode
+// peak plus 12 B per model pixel for the other planar view, 4 B for the
+// disparity resized back, and 2 x 4 B for the disparity and its JS copy.
+TEST(BridgeDepthResize, CallerHostBytesAreSizedAtTheInputAndModelSizes) {
+  // 1280 x 720 = 921600 pixels, run at its own size, so no resize back.
+  const auto hd = bd::callerHostBytes(1280, 720);
+  EXPECT_EQ(hd.jobBytes, 5'529'600U);
+  EXPECT_EQ(hd.prepareBytes, 14'745'600U + 11'059'200U);
+  EXPECT_EQ(hd.afterRunBytes, 0U);
+  EXPECT_EQ(hd.outputBytes, 7'372'800U);
+  // 1920 x 1080 = 2073600 pixels, run at 1280 x 720.
+  const auto fullHd = bd::callerHostBytes(1920, 1080);
+  EXPECT_EQ(fullHd.jobBytes, 12'441'600U);
+  EXPECT_EQ(fullHd.prepareBytes, 33'177'600U + 11'059'200U);
+  EXPECT_EQ(fullHd.afterRunBytes, 8'294'400U);
+  EXPECT_EQ(fullHd.outputBytes, 16'588'800U);
+}
+
+TEST(BridgeDepthResize, DownsampleIsBilinearWithAlignedCentres) {
+  // Halving samples between each pair of pixels, so every output is the mean
+  // of a 2 x 2 block. Channels are R, R + 1 and 2 * R + 3.
+  const std::vector<uint8_t> red = {0, 10, 20, 30, 40, 50, 60, 70};
+  std::vector<uint8_t> rgb;
+  for (const uint8_t value : red) {
+    rgb.push_back(value);
+    rgb.push_back(static_cast<uint8_t>(value + 1));
+    rgb.push_back(static_cast<uint8_t>(2 * value + 3));
+  }
+  const auto chw = bd::resizeToPlanar(rgb, {4, 2}, {2, 1});
+  const std::vector<float> expected = {25, 45, 26, 46, 53, 93};
+  EXPECT_EQ(chw, expected);
+  // A third of the way between 0 and 10, rounded to a whole value.
+  const std::vector<uint8_t> ramp = {
+      0, 0, 0, 10, 10, 10, 20, 20, 20, 30, 30, 30, 40, 40, 40};
+  const auto thirds = bd::resizeToPlanar(ramp, {5, 1}, {3, 1});
+  // Output x samples (x + 0.5) * 5 / 3 - 0.5: 0.33, 2 and 3.67.
+  EXPECT_EQ(thirds[0], 3.0F);
+  EXPECT_EQ(thirds[1], 20.0F);
+  EXPECT_EQ(thirds[2], 37.0F);
+}
+
+TEST(BridgeDepthResize, DisparityIsResizedAndScaledToTheTargetWidth) {
+  const std::vector<float> constant(2, 3.0F);
+  const auto doubled = bd::resizeDisparity(constant, {2, 1}, {4, 2});
+  EXPECT_EQ(doubled, std::vector<float>(8, 6.0F));
+  // Samples at -0.25 (clamped), 0.25, 0.75 and 1.25 (clamped) of [0, 8],
+  // then times 4 / 2.
+  const auto ramp = bd::resizeDisparity({0.0F, 8.0F}, {2, 1}, {4, 1});
+  EXPECT_EQ(ramp, (std::vector<float>{0, 4, 12, 16}));
 }
 
 TEST(BridgeDepthModel, RejectsInvalidConfigurationAndUnloadedInference) {
@@ -436,6 +504,115 @@ TEST_F(BridgeDepthReference, RepeatedAndMixedSizesGiveTheSameResult) {
 
   const auto last = graph.infer(left.data(), right.data(), 100, 200, &seeds_);
   EXPECT_LT(maxDiff(first, last), 1e-4f);
+}
+
+namespace {
+
+// A textured raw RGB view; the right one is the left shifted by `shift`
+// pixels, so the pair has a disparity to find. The periods are coprime primes
+// so the pattern does not repeat in a small window, and `level` spreads the
+// values over 0..255.
+ImageInput stereoView(uint32_t width, uint32_t height, uint32_t shift) {
+  ImageInput image;
+  image.rawRgb = RawRgbDims{width, height, 3};
+  image.data.resize(static_cast<size_t>(width) * height * 3);
+  constexpr uint32_t xPeriod = 37;
+  constexpr uint32_t yPeriod = 23;
+  constexpr uint32_t level = 7;
+  for (uint32_t y = 0; y < height; ++y) {
+    for (uint32_t x = 0; x < width; ++x) {
+      const uint32_t u = x + shift;
+      for (uint32_t c = 0; c < 3; ++c)
+        image.data[(static_cast<size_t>(y) * width + x) * 3 + c] =
+            static_cast<uint8_t>(
+                ((u % xPeriod) * level + (y % yPeriod) * level + c * level) %
+                256);
+    }
+  }
+  return image;
+}
+
+float maxAbsDiff(const std::vector<float>& a, const std::vector<float>& b) {
+  float max = 0.0F;
+  for (size_t i = 0; i < a.size(); ++i)
+    max = std::max(max, std::fabs(a[i] - b[i]));
+  return max;
+}
+
+} // namespace
+
+// A pair inside the box runs as before: the model output equals the graph run
+// on the plain planar views. A pair above it runs downsampled and the
+// disparity comes back at the input size, scaled to input pixels. Narrow
+// sides keep every run cheap.
+TEST_F(BridgeDepthReference, ResizesOnlyAboveTheBox) {
+  // Two grid rows of 32 after the 8x downsample inside the graph.
+  constexpr uint32_t height = 64;
+  // A few pixels of disparity, well inside what the model resolves.
+  constexpr uint32_t shift = 4;
+  constexpr float sameRun = 1e-4F;
+  classification_ggml::GgmlBackends backends(backend_, "", 4, "test");
+  bd::BridgeDepthGraph graph(modelPath_, backends.device(), backends.cpu());
+  bd::BridgeDepthModel model({modelPath_, "", backend_, 4});
+  model.load();
+  uint32_t width = 0;
+  uint32_t viewHeight = 0;
+
+  const bd::StereoInput inside{
+      stereoView(bd::MAX_MODEL_WIDTH, height, 0),
+      stereoView(bd::MAX_MODEL_WIDTH, height, shift)};
+  const auto inLeft = bd::toPlanarRgb(inside.left, width, viewHeight);
+  const auto inRight = bd::toPlanarRgb(inside.right, width, viewHeight);
+  const auto direct =
+      graph.infer(inLeft.data(), inRight.data(), height, bd::MAX_MODEL_WIDTH);
+  const auto unchanged =
+      std::any_cast<bd::DisparityOutput>(model.process(std::any(inside)));
+  EXPECT_EQ(unchanged.width, bd::MAX_MODEL_WIDTH);
+  ASSERT_EQ(unchanged.disparity.size(), direct.size());
+  EXPECT_LT(maxAbsDiff(unchanged.disparity, direct), sameRun);
+
+  auto checkAbove = [&](bd::ImageSize input, bd::ImageSize expectedModel) {
+    SCOPED_TRACE(
+        std::to_string(input.width) + "x" + std::to_string(input.height));
+    const bd::ImageSize downsized =
+        bd::modelInputSize(input.width, input.height);
+    ASSERT_EQ(downsized, expectedModel);
+    const bd::StereoInput above{
+        stereoView(input.width, input.height, 0),
+        stereoView(input.width, input.height, shift)};
+    const auto smallLeft =
+        bd::resizeToPlanar(above.left.data, input, downsized);
+    const auto smallRight =
+        bd::resizeToPlanar(above.right.data, input, downsized);
+    const auto expected = bd::resizeDisparity(
+        graph.infer(
+            smallLeft.data(),
+            smallRight.data(),
+            static_cast<int>(downsized.height),
+            static_cast<int>(downsized.width)),
+        downsized,
+        input);
+    const auto resized =
+        std::any_cast<bd::DisparityOutput>(model.process(std::any(above)));
+    EXPECT_EQ(resized.width, input.width);
+    EXPECT_EQ(resized.height, input.height);
+    ASSERT_EQ(
+        resized.disparity.size(),
+        static_cast<size_t>(input.width) * input.height);
+    EXPECT_LT(maxAbsDiff(resized.disparity, expected), sameRun);
+  };
+  constexpr auto minSide = static_cast<uint32_t>(bd::MIN_SIDE);
+  // Wide: 1600 fits as 1280 x 51.2, rounded to 51.
+  checkAbove({1600, height}, {bd::MAX_MODEL_WIDTH, 51});
+  // One pixel over the box width: 64 * 1280 / 1281 rounds back to 64, so only
+  // the width is resampled.
+  checkAbove({bd::MAX_MODEL_WIDTH + 1, height}, {bd::MAX_MODEL_WIDTH, height});
+  // Tall: twice the portrait box height halves it, and the width 48 / 2 = 24
+  // is held at the smallest side, so the two axes resample by different
+  // factors.
+  constexpr uint32_t tallWidth = 48;
+  checkAbove(
+      {tallWidth, 2 * bd::MAX_MODEL_WIDTH}, {minSide, bd::MAX_MODEL_WIDTH});
 }
 
 // An index outside the rpe table would make GPU get_rows read past it, and the

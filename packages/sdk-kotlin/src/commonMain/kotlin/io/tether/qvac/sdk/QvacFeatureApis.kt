@@ -71,12 +71,12 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
-val QvacClient.speech: QvacSpeech get() = QvacSpeech(this)
-val QvacClient.vision: QvacVision get() = QvacVision(this)
-val QvacClient.translation: QvacTranslation get() = QvacTranslation(this)
-val QvacClient.embeddings: QvacEmbeddings get() = QvacEmbeddings(this)
-val QvacClient.media: QvacMedia get() = QvacMedia(this)
-val QvacClient.bci: QvacBci get() = QvacBci(this)
+val QvacCaller.speech: QvacSpeech get() = QvacSpeech(this)
+val QvacCaller.vision: QvacVision get() = QvacVision(this)
+val QvacCaller.translation: QvacTranslation get() = QvacTranslation(this)
+val QvacCaller.embeddings: QvacEmbeddings get() = QvacEmbeddings(this)
+val QvacCaller.media: QvacMedia get() = QvacMedia(this)
+val QvacCaller.bci: QvacBci get() = QvacBci(this)
 
 sealed interface QvacDataInput {
     data class FilePath(val path: String) : QvacDataInput
@@ -118,7 +118,7 @@ data class QvacSpeechResult(
     val stats: JsonObject? = null,
 )
 
-class QvacSpeech internal constructor(private val client: QvacClient) {
+class QvacSpeech internal constructor(private val client: QvacCaller) {
     /** Audio bytes follow the worker's format. Flow completion finishes input; cancellation closes both directions. */
     fun transcribeStream(
         request: TranscribeStreamRequest,
@@ -127,7 +127,7 @@ class QvacSpeech internal constructor(private val client: QvacClient) {
 
     /**
      * Text chunks are UTF-8 bytes. Collect concurrently with producing input. No result aggregation.
-     * Frames arrive with their samples in `buffer`: `QvacClient.textToSpeechStream` decodes the `pcm` the worker sent.
+     * Frames arrive with their samples in `buffer`: `QvacCaller.textToSpeechStream` decodes the `pcm` the worker sent.
      */
     fun synthesizeStream(
         request: TextToSpeechStreamRequest,
@@ -214,7 +214,7 @@ data class QvacBciStreamOptions(
     }
 }
 
-class QvacBci internal constructor(private val client: QvacClient) {
+class QvacBci internal constructor(private val client: QvacCaller) {
     suspend fun transcribe(
         modelId: String,
         neuralData: QvacDataInput,
@@ -285,11 +285,12 @@ data class QvacClassification(
     val confidence: Double,
 )
 
-class QvacVision internal constructor(private val client: QvacClient) {
+class QvacVision internal constructor(private val client: QvacCaller) {
     suspend fun ocr(
         modelId: String,
         image: QvacDataInput,
         paragraph: Boolean = true,
+        requestId: String = qvacRequestId(),
     ): QvacOcrResult {
         val blocks = mutableListOf<QvacOcrBlock>()
         var stats: JsonObject? = null
@@ -298,6 +299,7 @@ class QvacVision internal constructor(private val client: QvacClient) {
                 image = image.toOcrImage(),
                 modelId = modelId,
                 options = OcrStreamRequestOptions(paragraph = paragraph),
+                requestId = requestId,
             ),
         ).collect { (response, frame) ->
             response.error?.let { throw QvacFeatureException("OCR failed: $it") }
@@ -314,6 +316,7 @@ class QvacVision internal constructor(private val client: QvacClient) {
         height: Int? = null,
         channels: Int? = null,
         topK: Int? = null,
+        requestId: String = qvacRequestId(),
     ): List<QvacClassification> {
         val results = mutableListOf<QvacClassification>()
         client.classify(
@@ -322,6 +325,7 @@ class QvacVision internal constructor(private val client: QvacClient) {
                 height = height?.toLong(),
                 image = imageBase64,
                 modelId = modelId,
+                requestId = requestId,
                 topK = topK?.toLong(),
                 width = width?.toLong(),
             ),
@@ -338,7 +342,7 @@ class QvacTranslationRun internal constructor(
     val requestId: String,
     val tokens: Flow<String>,
     val final: Deferred<QvacTranslationFinal>,
-    private val client: QvacClient,
+    private val client: QvacCaller,
 ) {
     suspend fun text() = final.await().text
 
@@ -348,7 +352,7 @@ class QvacTranslationRun internal constructor(
     }
 }
 
-class QvacTranslation internal constructor(private val client: QvacClient) {
+class QvacTranslation internal constructor(private val client: QvacCaller) {
     /**
      * [modelType] selects the engine: "nmt"/"nmtcpp-translation" models translate in the
      * direction fixed at load time, while "llm"/"llamacpp-completion" models need [to].
@@ -427,7 +431,7 @@ private fun translateRequest(
     )
 }
 
-class QvacEmbeddings internal constructor(private val client: QvacClient) {
+class QvacEmbeddings internal constructor(private val client: QvacCaller) {
     suspend fun embed(modelId: String, text: String, requestId: String = qvacRequestId()): List<Double> {
         val response = client.embed(
             EmbedRequest.EmbedTextRequest(
@@ -471,29 +475,39 @@ data class QvacMediaResult(
 )
 
 class QvacMediaRun<Event> internal constructor(
+    /** Stable id of this run; pass to `cancel` to stop it. */
+    val requestId: String,
     val events: Flow<Event>,
     val final: Deferred<QvacMediaResult>,
 )
 
-class QvacMedia internal constructor(private val client: QvacClient) {
+class QvacMedia internal constructor(private val client: QvacCaller) {
     fun audio(
         modelId: String,
         caption: String,
         durationSeconds: Double? = null,
         seed: Long? = null,
+        requestId: String = qvacRequestId(),
     ) = audio(
         AudioGenStreamRequest(
             caption = caption,
             duration = durationSeconds,
             modelId = modelId,
+            requestId = requestId,
             seed = seed,
         ),
     )
 
-    fun audio(request: AudioGenStreamRequest): QvacMediaRun<AudioGenStreamResponse> =
-        mediaRun(client.streamWithRaw<AudioGenStreamRequest, AudioGenStreamResponse>(request)) { event ->
+    /** A request without `requestId` gets one minted here, so the run is always cancellable. */
+    fun audio(request: AudioGenStreamRequest): QvacMediaRun<AudioGenStreamResponse> {
+        val tracked = request.requestId?.let { request } ?: request.copy(requestId = qvacRequestId())
+        return mediaRun(
+            tracked.requestId!!,
+            client.streamWithRaw<AudioGenStreamRequest, AudioGenStreamResponse>(tracked),
+        ) { event ->
             MediaFrame(event.data, event.stopReason?.let { client.json.wireName(it) })
         }
+    }
 
     fun diffusion(
         modelId: String,
@@ -502,21 +516,28 @@ class QvacMedia internal constructor(private val client: QvacClient) {
         height: Int? = null,
         steps: Int? = null,
         seed: Long? = null,
+        requestId: String = qvacRequestId(),
     ) = diffusion(
         DiffusionStreamRequest(
             height = height?.toLong(),
             modelId = modelId,
             prompt = prompt,
+            requestId = requestId,
             seed = seed,
             steps = steps?.toLong(),
             width = width?.toLong(),
         ),
     )
 
-    fun diffusion(request: DiffusionStreamRequest): QvacMediaRun<DiffusionStreamResponse> =
-        mediaRun(client.streamWithRaw<DiffusionStreamRequest, DiffusionStreamResponse>(request)) { event ->
+    fun diffusion(request: DiffusionStreamRequest): QvacMediaRun<DiffusionStreamResponse> {
+        val tracked = request.requestId?.let { request } ?: request.copy(requestId = qvacRequestId())
+        return mediaRun(
+            tracked.requestId!!,
+            client.streamWithRaw<DiffusionStreamRequest, DiffusionStreamResponse>(tracked),
+        ) { event ->
             MediaFrame(event.data)
         }
+    }
 
     /** [mode] is "txt2vid" or "img2vid". */
     fun video(
@@ -526,34 +547,52 @@ class QvacMedia internal constructor(private val client: QvacClient) {
         width: Int? = null,
         height: Int? = null,
         frames: Int? = null,
+        requestId: String = qvacRequestId(),
     ) = video(
         VideoStreamRequest(
             height = height?.toLong(),
             mode = wireEnum<VideoStreamRequestMode>("mode", mode),
             modelId = modelId,
             prompt = prompt,
+            requestId = requestId,
             video_frames = frames?.toLong(),
             width = width?.toLong(),
         ),
     )
 
-    fun video(request: VideoStreamRequest): QvacMediaRun<VideoStreamResponse> =
-        mediaRun(client.streamWithRaw<VideoStreamRequest, VideoStreamResponse>(request)) { event ->
+    fun video(request: VideoStreamRequest): QvacMediaRun<VideoStreamResponse> {
+        val tracked = request.requestId?.let { request } ?: request.copy(requestId = qvacRequestId())
+        return mediaRun(
+            tracked.requestId!!,
+            client.streamWithRaw<VideoStreamRequest, VideoStreamResponse>(tracked),
+        ) { event ->
             MediaFrame(event.data)
         }
+    }
 
-    fun upscale(modelId: String, imageBase64: String, repeats: Int? = null) = upscale(
+    fun upscale(
+        modelId: String,
+        imageBase64: String,
+        repeats: Int? = null,
+        requestId: String = qvacRequestId(),
+    ) = upscale(
         UpscaleStreamRequest(
             image = imageBase64,
             modelId = modelId,
             repeats = repeats?.toLong(),
+            requestId = requestId,
         ),
     )
 
-    fun upscale(request: UpscaleStreamRequest): QvacMediaRun<UpscaleStreamResponse> =
-        mediaRun(client.streamWithRaw<UpscaleStreamRequest, UpscaleStreamResponse>(request)) { event ->
+    fun upscale(request: UpscaleStreamRequest): QvacMediaRun<UpscaleStreamResponse> {
+        val tracked = request.requestId?.let { request } ?: request.copy(requestId = qvacRequestId())
+        return mediaRun(
+            tracked.requestId!!,
+            client.streamWithRaw<UpscaleStreamRequest, UpscaleStreamResponse>(tracked),
+        ) { event ->
             MediaFrame(event.data)
         }
+    }
 
     fun worldScene(
         modelId: String,
@@ -575,10 +614,15 @@ class QvacMedia internal constructor(private val client: QvacClient) {
         ),
     )
 
-    fun worldScene(request: WorldSceneStreamRequest): QvacMediaRun<WorldSceneStreamResponse> =
-        mediaRun(client.streamWithRaw<WorldSceneStreamRequest, WorldSceneStreamResponse>(request)) { event ->
+    fun worldScene(request: WorldSceneStreamRequest): QvacMediaRun<WorldSceneStreamResponse> {
+        val tracked = request.requestId?.let { request } ?: request.copy(requestId = qvacRequestId())
+        return mediaRun(
+            tracked.requestId!!,
+            client.streamWithRaw<WorldSceneStreamRequest, WorldSceneStreamResponse>(tracked),
+        ) { event ->
             MediaFrame(event.data)
         }
+    }
 
     /** [keys] are the held movement keys: W, A, S, D, I, J, K or L. */
     fun worldStep(
@@ -593,12 +637,18 @@ class QvacMedia internal constructor(private val client: QvacClient) {
         ),
     )
 
-    fun worldStep(request: WorldStepStreamRequest): QvacMediaRun<WorldStepStreamResponse> =
-        mediaRun(client.streamWithRaw<WorldStepStreamRequest, WorldStepStreamResponse>(request)) { event ->
+    fun worldStep(request: WorldStepStreamRequest): QvacMediaRun<WorldStepStreamResponse> {
+        val tracked = request.requestId?.let { request } ?: request.copy(requestId = qvacRequestId())
+        return mediaRun(
+            tracked.requestId!!,
+            client.streamWithRaw<WorldStepStreamRequest, WorldStepStreamResponse>(tracked),
+        ) { event ->
             MediaFrame(event.data)
         }
+    }
 
     private fun <Event> mediaRun(
+        requestId: String,
         source: Flow<Pair<Event, JsonObject>>,
         frame: (Event) -> MediaFrame,
     ): QvacMediaRun<Event> {
@@ -623,7 +673,7 @@ class QvacMedia internal constructor(private val client: QvacClient) {
                 events.close(error)
             }
         }
-        return QvacMediaRun(events.receiveAsFlow(), result)
+        return QvacMediaRun(requestId, events.receiveAsFlow(), result)
     }
 }
 
@@ -659,7 +709,7 @@ private fun OcrStreamResponseBlocksItem.toOcrBlock() = QvacOcrBlock(
 
 /**
  * The frame with its samples in `buffer` whatever the wire carried. Applied by
- * the generated `QvacClient.textToSpeech` / `textToSpeechStream` methods, so
+ * the generated `QvacCaller.textToSpeech` / `textToSpeechStream` methods, so
  * every public typed path returns decoded audio.
  */
 internal fun TextToSpeechResponse.withDecodedPcm(): TextToSpeechResponse =
