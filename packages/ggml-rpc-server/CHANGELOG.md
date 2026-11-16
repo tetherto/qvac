@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.9.2] - 2026-11-16
+## [0.10.0] - 2026-11-16
 
 ### Changed
 
@@ -20,8 +20,8 @@
   Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
   `@qvac/fabric-ios` to `0.30.1` together.
 - The RPC protocol moves from 116 to 117, and a client must match the
-  server's major version, so a 0.9.2 server only accepts clients on
-  `@qvac/fabric` 0.30 (`@qvac/llm-llamacpp` 0.70.2 or newer).
+  server's major version, so a 0.10.0 server only accepts clients on
+  `@qvac/fabric` 0.30 (`@qvac/llm-llamacpp` 0.71.0 or newer).
 - This package needed no code change for the new fabric.
 
 ## [0.9.1] - 2026-11-11

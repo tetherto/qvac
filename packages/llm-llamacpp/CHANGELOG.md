@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.70.2] - 2026-11-16
+## [0.71.0] - 2026-11-16
 
 ### Changed
 
@@ -24,8 +24,13 @@
   fabric's `common_speculative_draft_mismatch`. Fabric 0.30 refuses the
   mismatch inside its own load, before the addon's MTP-head check runs, so the
   error no longer reads `the MTP head '<path>' does not match the model`.
-- RPC peers must match the new protocol: use `@qvac/ggml-rpc-server` 0.9.2 or
+- RPC peers must match the new protocol: use `@qvac/ggml-rpc-server` 0.10.0 or
   newer.
+- The addon no longer sets `LLAMA_RS_RAGGED=0` at backend init. Fabric 0.30
+  checks each layer's device and falls back to the equal ubatch split when any
+  of them lacks the ragged ops, an RPC server included, so qwen35 recurrent
+  layers use ragged ubatches only where every device supports them. Set
+  `LLAMA_RS_RAGGED=0` to keep the equal split everywhere.
 
 ### Fixed
 

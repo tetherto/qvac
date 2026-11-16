@@ -52,8 +52,6 @@ bool LlamaLazyInitializeBackend::initializeLocked(
 
   llama_log_set(LlamaModel::llamaLogCallback, nullptr);
 
-  defaultRaggedUbatchesOff();
-
 #ifdef __ANDROID__
   if (!openclCacheDir.empty()) {
     auto oclCachePath =
@@ -77,16 +75,6 @@ bool LlamaLazyInitializeBackend::initializeLocked(
   llama_backend_init();
   g_initialized = true;
   return true;
-}
-
-void LlamaLazyInitializeBackend::defaultRaggedUbatchesOff() {
-#ifdef _WIN32
-  if (std::getenv("LLAMA_RS_RAGGED") == nullptr) {
-    _putenv_s("LLAMA_RS_RAGGED", "0");
-  }
-#else
-  setenv("LLAMA_RS_RAGGED", "0", /*overwrite=*/0);
-#endif
 }
 
 void LlamaLazyInitializeBackend::incrementRefCount() {
