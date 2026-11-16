@@ -13,30 +13,22 @@ Secret-bearing CI on **external fork PRs** is gated by the GitHub Actions **`for
 | | |
 |---|---|
 | **Mechanism** | The `fork-approval` job in each privileged `pull_request_target` workflow pauses until a member of `@tetherto/qvac-internal-merge` or `@tetherto/qvac-internal-release` approves the run in the GitHub Actions UI. |
-| **Per-commit** | Each new push starts a fresh workflow run that must be re-approved. After approval, the run records a `qvac/fork-verified` commit status on the PR head SHA (used by unprivileged `pull_request` self-hosted jobs such as `pr-test-inference-addon-cpp*`). |
+| **Per-commit** | Each new push starts a fresh workflow run that must be re-approved. After approval, the run records a `qvac/fork-verified` commit status on the PR head SHA (read by unprivileged `pull_request` jobs before they run fork code). |
 | **Internal PRs** | Same-repo PRs skip the environment gate (empty environment) and run without an approval prompt. |
 | **Implementation** | `fork-approval` job calls [`.github/workflows/reusable-fork-approval.yml`](../../.github/workflows/reusable-fork-approval.yml) from each privileged workflow. The `authorize` / `resolve-config` job runs **after** `fork-approval`, checks out `authorize-pr` from the **default branch only**, and `authorize-pr` reads the `qvac/fork-verified` status on the current head SHA as belt-and-suspenders. |
 | **Ops verification** | Run `node .github/scripts/verify-fork-ci-environment.mjs` (requires `gh` auth with environments read) to confirm required reviewers are configured on the `fork-ci` environment. |
 
 There is **no self-service path** for external contributors — a merge/release team member must approve the workflow run.
 
-### Ordering matters: approve `fork-ci` **before** applying stage labels
+### Native stages on a fork PR
 
-Two different workflow families react to a fork PR, and only one of them waits for you:
+The native stages (`prebuilds`, `run-cpp-addon-tests`, `run-desktop-addon-tests`) run in [`pr-build-test.yml`](../../.github/workflows/pr-build-test.yml), a `pull_request_target` workflow that loads from the default branch and checks out the PR head. Every run goes through the same three gates before a stage job starts:
 
-- **`pull_request_target`** workflows (`on-pr-*`) contain the `fork-approval` job. They pause on the `fork-ci` environment and resume the moment you approve.
-- **`pull_request`** workflows that run on self-hosted runners (`pr-test-inference-addon-cpp*`) never see the environment prompt. Their `authorize` job reads the `qvac/fork-verified` commit status at run time, and that status does not exist until `fork-approval` has been approved.
+1. `fork-approval` pauses on the `fork-ci` environment for a fork PR, and records `qvac/fork-verified` on the head SHA once a merge or release team member approves.
+2. `trust` ([`pr-check-trust`](../../.github/actions/pr-check-trust)) allows a same-repo PR, blocks a draft, and allows a fork PR only with that SHA-bound approval.
+3. `route` ([`ci-route-stages`](../../.github/actions/ci-route-stages)) reads the PR's labels and turns each stage on or off.
 
-Writing a commit status is not a `pull_request` event, so approving `fork-ci` does **not** wake up a `pull_request` run that already finished. If you apply `run-cpp-addon-tests` first and approve second, the native tests report skipped and stay skipped — the PR looks green without ever having run them.
-
-Do this instead, in order:
-
-1. Approve the `fork-ci` deployment on the pending `on-pr-*` run and wait for `fork-approval` to go green (this is what writes `qvac/fork-verified` on the head SHA).
-2. Then apply the stage label (`run-cpp-addon-tests`, `run-desktop-addon-tests`, …). The `labeled` event starts a fresh `pull_request` run that now finds the status.
-
-If the label was already applied, re-run the `pull_request` workflow instead of toggling the label — `authorize` re-queries the status API on every run.
-
-Each new push invalidates all of this: `qvac/fork-verified` is bound to a single head SHA, so the next commit needs a fresh approval and a fresh label/re-run cycle.
+A label event starts a new `pr-build-test` run, and that run waits on `fork-approval` itself, so the label and the approval can come in either order. A new push needs a new approval: `qvac/fork-verified` is bound to one head SHA. The checks in [`pr-checks.yml`](../../.github/workflows/pr-checks.yml) (lint, typecheck, unit tests) run on `pull_request`, with no secrets, so they need no approval.
 
 ---
 
@@ -50,18 +42,17 @@ The `verified` label is **no longer used to authorize CI**. It may still appear 
 
 | Label | Purpose | Triggered by | Notes |
 |---|---|---|---|
-| `safe-to-test` | SDK pod security gate — reviewer has audited `packages/sdk/` package + workflow changes from a fork PR. | `pr-checks-sdk-pod.yml`, SDK e2e workflows (`authorize-pr` with `label: safe-to-test`) | Org-wide fork secret access is handled by `fork-ci`; this label remains for SDK-pod-specific checks. |
 | `staging` | Deploys the PR to the staging environment for smoke testing. | Staging deploy workflows | Apply when a PR needs out-of-band testing on real infrastructure. |
 | `publish` | Triggers a GitHub Packages publish from the PR (pre-release / dev build). | Publish workflows | Use sparingly; consumes a published version slot. |
 | `docs-deploy` | Marks docs as ready for production deploy. | Docs deploy workflows | Set when the docs changes are ready to go live alongside PR merge. |
 | `tier1`, `tier2` | Approval-bot review-tier groupings. | `approval-check-worker.yml` | The bot uses these to compute whether a PR has met its required approval tier. |
-| `test-e2e-smoke` | Runs the smoke E2E suite **plus the tests the pull request touched** (currently SDK-only), and separately the `sdk-python` package's own real-worker suite (`on-pr-sdk-python-e2e.yml`). | E2E test workflows | Faster subset; prefer for PR feedback. The `sdk-python` run is that package's pytest suite against a real worker — the catalog on the Python client is `test-e2e-python`. See [Smoke runs cover the tests a PR touched](#smoke-runs-cover-the-tests-a-pr-touched). |
-| `test-e2e-full` | Runs the full E2E suite (currently SDK-only). | E2E workflows | Long-running; use for release branches and major changes. |
-| `test-e2e-python` | Runs the smoke suite on the **Python client only**. | `on-pr-test-sdk.yml` | The shared catalog on the Python leg, not the `sdk-python` package suite that `test-e2e-smoke` starts. Apply it alongside `test-e2e-smoke` when you want the JS legs to answer the same tests — they are separate runs by design, since the producer hands the queue to the first registrant, and they sit in separate concurrency groups so neither cancels the other. A probe run, so it never sets `e2e-tested` and never replaces what `test-e2e-rerun-failed` re-runs from. Not a required check while its coverage is still settling. |
-| `test-e2e-rerun-failed` | Re-runs only the tests that failed on the last smoke/full run, on the platforms where they failed. | `on-pr-test-sdk.yml` | Self-clearing — removed as soon as the run consumes it, so it can be applied again for each attempt. See [Re-running failed SDK e2e tests](#re-running-failed-sdk-e2e-tests). |
-| `e2e-tested` | Set automatically once a **base** E2E run has completed against the PR. | E2E workflows | Status indicator only; does not pass/fail by itself — see linked run. A `test-e2e-rerun-failed` or `test-e2e-python` run never sets it: neither covers the whole matrix. |
+| `test-e2e-smoke` | Runs the sdk's smoke suite on its three desktop GPU hosts and its Android and iOS apps on Device Farm, the `sdk-python` package's fast real-worker suite and the Kotlin SDK's worker conformance run. | `sdk-e2e.yml`, through the `test:integration` configurations that name it in `ci.labels` | Faster subset; prefer for PR feedback. The catalog on the Python client is `test-e2e-python`. |
+| `test-e2e-full` | Runs the sdk's full suite on its three desktop GPU hosts and its Android and iOS apps, and `sdk-python`'s GPU suite. | `sdk-e2e.yml` (`ci.labels`) | Long-running; use for major changes. A PR into `release-*` that changes the sdk runs the sdk's full suite without the label. |
+| `test-e2e-rerun-failed` | Reruns only the tests that failed on the last `test-e2e-smoke` or `test-e2e-full` run, on the legs where they failed. | `sdk-e2e.yml`'s `plan` job | Removes itself, so add it again for each attempt. A green base run, or one still running, starts nothing; the PR comment says why. |
+| `e2e-tested` | Set by `sdk-e2e.yml` when a `test-e2e-smoke` or `test-e2e-full` run passes on every leg. | `sdk-e2e.yml`'s `report` job | A rerun or `test-e2e-python` never sets it. |
+| `test-e2e-python` | Runs the smoke suite on the **Python client only**, on the sdk's three desktop GPU hosts. | `sdk-e2e.yml` (`ci.labels`) | The shared catalog on the Python leg, not the `sdk-python` package suite that `test-e2e-smoke` starts. Apply it alongside `test-e2e-smoke` when you want the JS legs to answer the same tests: the producer hands the queue to the first registrant, so each client is its own run. |
 | `NLP` | Marks PRs touching `packages/llm-llamacpp/` or `packages/embed-llamacpp/`. | Routing in approval workflows | Casing matters: it's `NLP`, not `nlp`. |
-| `prebuilds`, `run-cpp-addon-tests`, `run-desktop-addon-tests`, `run-mobile-addon-tests` | Select expensive CI stages on addon PR workflows. | `ci-router` composite in `on-pr-*` workflows | External forks can use these after `fork-ci` approval; internal same-repo PRs skip the fork-ci gate. A package can opt its C++ tests out of the label by setting `cppTestsBaseline: true` on its `on-pr` target (`docs/ci/nx-ci-consolidation.md`); `on-pr-nx` then runs that lane on every PR that affects it, and `run-cpp-addon-tests` widens the run to every affected package. |
+| `prebuilds`, `run-cpp-addon-tests`, `run-desktop-addon-tests`, `run-mobile-addon-tests` | Select expensive CI stages on addon PR workflows. | `ci-route-stages` composite in `pr-build-test.yml` | External forks can use these after `fork-ci` approval; internal same-repo PRs skip the fork-ci gate. A package can opt its C++ tests out of the label with `metadata.baseline: true` on its `cpp:tests` target (`docs/ci/workflow-standard.md`); `pr-build-test.yml` then runs them on every PR that affects it, and `run-cpp-addon-tests` widens the run to every affected package. |
 
 > **`run-mobile-addon-tests` no longer starts a standalone mobile suite.** Per-addon
 > mobile (AWS Device Farm) tests are now **on-demand only** — run them from
@@ -91,7 +82,7 @@ Standard GitHub labels (`bug`, `documentation`, `enhancement`, `good first issue
 | **Base run cancelled or died** | The previously recorded base is kept, not wiped, and the "in flight" mark is ignored once the run is no longer running. |
 | **Test renamed or deleted since the base** | Warned in the job summary. If that leaves a platform with zero tests to run, the rerun **fails** rather than reporting a green summary that verified nothing. |
 
-Implementation: [`on-pr-test-sdk.yml`](../../.github/workflows/on-pr-test-sdk.yml) plus the `sdk-e2e-base-state`, `sdk-e2e-resolve-rerun`, and `sdk-e2e-verify-rerun` actions.
+Implementation: [`sdk-e2e.yml`](../../.github/workflows/sdk-e2e.yml) and its `plan`/`report` steps in [`e2e-report.mjs`](../../packages/sdk/ci/e2e-report.mjs).
 
 ---
 
@@ -130,7 +121,7 @@ Deliberate limits:
 - **The impact set is never truncated.** It is bounded by the catalog, so extending a smoke run can never cost more than `test-e2e-full` would; capping it would only reduce coverage while pushing the author to the more expensive option. The comment states the added runtime so a broad change is visible.
 - **The mapper never blocks e2e.** If it fails, the smoke run proceeds unchanged and the comment says the analysis was unavailable.
 
-Implementation: [`impacted-tests.mjs`](../../packages/sdk-e2e/scripts/impacted-tests.mjs), the `sdk-e2e-report-impacted` action, and `--include-file` in `@qvac/test-suite`, which takes the ids from a file because a list this long exceeds the Windows command-line limit.
+Implementation: [`impacted-tests.mjs`](../../packages/sdk-e2e/scripts/impacted-tests.mjs), `sdk-e2e.yml`'s `impacted` job, and `--include-file` in `@qvac/test-suite`, which takes the ids from a file because a list this long exceeds the Windows command-line limit.
 
 ---
 
