@@ -72,6 +72,13 @@ on:
 permissions:
   contents: read
 
+env:
+  # Packed tarball bytes for a fabric platform package. npm's limit is
+  # undocumented: the largest known to go through is
+  # @qvac/fabric-linux-x64@0.29.2 at 200417383 bytes; 0.30.0 at ~201.9 MB got
+  # E413. Over it is a warning, not an error.
+  MAX_TARBALL_BYTES: "200417383"
+
 jobs:
   detect:
     name: Detect changed packages
@@ -432,6 +439,79 @@ jobs:
           workdir: ${{ matrix.workdir }}
           name-suffix: "-mono"
 
+  # Reports fabric's platform tarball sizes before the npm environment asks for
+  # approval, so the approver sees an over-budget warning first. Advisory:
+  # publish-npm's always() runs it whatever this job's result.
+  npm-tarball-size:
+    name: npm tarball size (${{ matrix.package }})
+    needs:
+      - detect
+      - publish-logic
+      - prebuild
+    if: >-
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      contains(fromJSON(needs.detect.outputs.matrix).*.package, 'fabric')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        if: matrix.package == 'fabric'
+        with:
+          persist-credentials: false
+
+      - name: Materialize prebuilds
+        if: matrix.package == 'fabric'
+        uses: ./.github/actions/prebuild-artifact-materialize
+        with:
+          workdir: ${{ matrix.workdir }}
+          package: ${{ matrix.package }}
+          extra-dirs: ${{ matrix.prebuildExtraDirs && join(matrix.prebuildExtraDirs, ' ') || '' }}
+
+      - name: Slice platform packages
+        if: matrix.package == 'fabric'
+        env:
+          WORKDIR: ${{ matrix.workdir }}
+          KEEP_DIRS: ${{ matrix.prebuildExtraDirs && join(matrix.prebuildExtraDirs, ' ') || '' }}
+        run: node scripts/ci/slice-platform-packages.mjs --workdir "$WORKDIR" --out-dir "${{ runner.temp }}/platform-packages" --keep-dirs "$KEEP_DIRS"
+
+      # Same Node and npm as publish-npm, so the packed size matches.
+      - name: Set up Node.js
+        if: matrix.package == 'fabric'
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: "24.14.1"
+
+      - name: Report tarball sizes
+        if: matrix.package == 'fabric'
+        shell: bash
+        env:
+          OUT_DIR: ${{ runner.temp }}/platform-packages
+        run: |
+          set -euo pipefail
+          SUMMARY="### npm tarball sizes"$'\n\n'"Budget: ${MAX_TARBALL_BYTES} bytes."$'\n\n'"| Package | Bytes | Status |"$'\n'"|---|---:|---|"$'\n'
+          for dir in "$OUT_DIR"/*/; do
+            NAME=$(node -p "require('${dir}package.json').name")
+            VERSION=$(node -p "require('${dir}package.json').version")
+            SIZE=$(cd "$dir" && npm pack --dry-run --json --ignore-scripts | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8"))[0].size')
+            STATUS=ok
+            if ! [[ "$SIZE" =~ ^[0-9]+$ ]]; then
+              STATUS=unreadable
+              echo "::warning title=npm tarball size check::${NAME}@${VERSION} has an unreadable packed size ('${SIZE}'). Check it before approving the npm publish."
+            elif [ "$SIZE" -gt "$MAX_TARBALL_BYTES" ]; then
+              STATUS="over budget"
+              echo "::warning title=npm tarball size check::${NAME}@${VERSION} packs to ${SIZE} bytes, over the ${MAX_TARBALL_BYTES}-byte budget; npm may reject it with E413. Check it before approving the npm publish."
+            fi
+            echo "${NAME}@${VERSION}: ${SIZE} bytes (${STATUS})"
+            SUMMARY+="| ${NAME}@${VERSION} | ${SIZE} | ${STATUS} |"$'\n'
+          done
+          printf '%s' "$SUMMARY" >> "$GITHUB_STEP_SUMMARY"
+
   publish-npm:
     name: Publish NPM (${{ matrix.package }})
     needs:
@@ -441,6 +521,7 @@ jobs:
       - prebuild
       - pre-publish-integration
       - verify-generated
+      - npm-tarball-size
     # Gates as in publish-gpr. merge-guard stays job-level: detect's identity
     # gate makes the aggregate equal the one package.
     if: >-
@@ -547,12 +628,9 @@ jobs:
           DIST_TAG: ${{ steps.dist-tag.outputs.tag }}
           OUT_DIR: ${{ runner.temp }}/platform-packages
           WORKDIR: ${{ matrix.workdir }}
-          # Packed tarball bytes. npm's limit is undocumented: the largest known
-          # to go through is @qvac/fabric-linux-x64@0.29.2 at 200417383 bytes;
-          # 0.30.0 at ~201.9 MB got E413. Over it is a warning, not an error.
-          # Checked here, not in the slicer, so slices already on npm are not
-          # packed.
-          MAX_TARBALL_BYTES: "200417383"
+          # Fabric only, against MAX_TARBALL_BYTES. Checked here, not in the
+          # slicer, so slices already on npm are not packed.
+          CHECK_TARBALL_SIZE: ${{ matrix.package == 'fabric' }}
         run: |
           set -euo pipefail
           # Prints "hit" or "miss"; any npm view failure other than E404 is a
@@ -581,20 +659,22 @@ jobs:
             VERSION=$(node -p "require('${dir}package.json').version")
             SLICE_STATE=$(on_npm "$NAME" "$VERSION")
             if [ "$SLICE_STATE" = miss ]; then
-              SIZE=$(cd "$dir" && npm pack --dry-run --json --ignore-scripts | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8"))[0].size')
-              echo "${NAME}@${VERSION}: ${SIZE} byte tarball"
-              # Test the format first: a non-number makes -gt error, which set -e
-              # ignores inside an if.
-              REASON=""
-              if ! [[ "$SIZE" =~ ^[0-9]+$ ]]; then
-                REASON="has an unreadable packed size ('${SIZE}')"
-              elif [ "$SIZE" -gt "$MAX_TARBALL_BYTES" ]; then
-                REASON="packs to ${SIZE} bytes, over the ${MAX_TARBALL_BYTES}-byte budget, and npm may reject it with E413"
-              fi
-              if [ -n "$REASON" ]; then
-                echo "::warning title=npm tarball size check::${NAME}@${VERSION} ${REASON}. Publishing it first, so an E413 stops the run before the other slices." >&2
-                TO_PUBLISH=("$dir" "${TO_PUBLISH[@]}")
-                continue
+              if [ "$CHECK_TARBALL_SIZE" = true ]; then
+                SIZE=$(cd "$dir" && npm pack --dry-run --json --ignore-scripts | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8"))[0].size')
+                echo "${NAME}@${VERSION}: ${SIZE} byte tarball"
+                # Test the format first: a non-number makes -gt error, which set -e
+                # ignores inside an if.
+                REASON=""
+                if ! [[ "$SIZE" =~ ^[0-9]+$ ]]; then
+                  REASON="has an unreadable packed size ('${SIZE}')"
+                elif [ "$SIZE" -gt "$MAX_TARBALL_BYTES" ]; then
+                  REASON="packs to ${SIZE} bytes, over the ${MAX_TARBALL_BYTES}-byte budget, and npm may reject it with E413"
+                fi
+                if [ -n "$REASON" ]; then
+                  echo "::warning title=npm tarball size check::${NAME}@${VERSION} ${REASON}. Publishing it first, so an E413 stops the run before the other slices." >&2
+                  TO_PUBLISH=("$dir" "${TO_PUBLISH[@]}")
+                  continue
+                fi
               fi
               TO_PUBLISH+=("$dir")
               continue
