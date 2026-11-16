@@ -6,7 +6,9 @@
 
 - `qvac-fabric` dependency bumped `11739.2.1` -> `11739.3.0`.
   `GGML_OP_ROPE_FLUX` is appended to `ggml_op`, so existing op and type
-  numbers do not move.
+  numbers do not move. `common_params_speculative_draft` gains `n_short` and
+  `long_cost` mid-struct, which shifts the `common_params` layout, so native
+  consumers that use the `common` library must rebuild against these headers.
 - The RPC protocol moves from 116 to 117, so RPC clients and
   `ggml-rpc-server` must move to this version together.
 
@@ -17,7 +19,12 @@
 - Logical buffer-capacity queries `ggml_backend_buft_get_max_capacity` and
   `ggml_backend_get_max_buffer_capacity`, with a Vulkan provider. Without a
   provider they return the existing maximum buffer size.
-- DSpine draft models, run with `--spec-type draft-dflash`.
+- DSpine draft models, run with `--spec-type draft-dflash`. The draft ubatch
+  must hold `-np * (--spec-draft-n-max + 1)` tokens, and the target head
+  must not be repacked or row-split (`--no-repack`, no `-sm row`).
+- `--spec-draft-n-short N` and `--spec-draft-long-cost R` for lattice
+  drafters (DFlash2, DSpine, LiliCorr). N must be 0 or at least
+  `--spec-draft-n-min`, and other drafters reject it.
 - Metal `IM2COL_3D`, used by the Wan video models.
 - OpenCL (Adreno) ops for the speech engines: `LEAKY_RELU`, `SIN`, `COS`,
   `ARGMAX`, `COL2IM_1D`, and BF16 and Q8_0 rows in `GET_ROWS`. Chatterbox,
@@ -30,13 +37,16 @@
   the model is now rejected before the fit with the reason (vocabulary, width,
   target layer or block size), instead of aborting on a ggml assert. The error
   text consumers see for a mismatched draft model changes.
+- Vulkan caps each buffer at the smaller of `maxBufferSize` and
+  `maxMemoryAllocationSize`: an op with a larger tensor goes to another
+  backend, and a larger allocation fails with a warning.
 
 ### Fixed
 
 - The RPC device no longer offers the ragged and deferred gated delta net ops.
   A Metal, Vulkan or OpenCL RPC server running qwen35 or qwen35moe layers no
-  longer aborts on `SSM_CONV_RAGGED`, and llama.cpp uses the equal split for
-  those layers.
+  longer aborts on `SSM_CONV_RAGGED`, and a model with any RPC layer uses the
+  equal split and ignores `LLAMA_GDN_DEFERRED`.
 - The CPU AMX matmul no longer writes out of bounds with a batched `src1`.
 - The CPU backend declines the `IM2COL_3D` inputs its kernel asserts on.
 
