@@ -7,7 +7,7 @@ import { getConfiguredCacheDir } from '@/runtime/state'
 import { generateRandomRequestId } from '@/runtime/request-id'
 import { resolveSessionId } from '@/runtime/session-id'
 import { getEngineLogger } from '@/logging/index'
-import type { VectorIdWire, VectorIndexStorage } from '@/schemas/index'
+import type { VectorIdWire, VectorIndexIvfSettings, VectorIndexStorage } from '@/schemas/index'
 import {
   VectorIndexFailedError,
   VectorIndexInvalidVectorsError,
@@ -113,11 +113,13 @@ function track(index: OpenVectorIndex, sessionId: string) {
   return indexId
 }
 
-// A provider without the controls reports neither field.
+// Omit a control the provider lacks so clients read it as unknown, not off.
 function indexState(index: OpenVectorIndex) {
+  const { ivf } = index
   return {
     ...(index.calibrated !== undefined && { calibrated: index.calibrated }),
-    ...(index.stagedSearch !== undefined && { stagedSearch: index.stagedSearch })
+    ...(index.stagedSearch !== undefined && { stagedSearch: index.stagedSearch }),
+    ...(ivf !== undefined && { ivf })
   }
 }
 
@@ -171,10 +173,20 @@ export function setVectorIndexStagedSearch(params: { indexId: string; enabled: b
   return runBackend(() => ({ stagedSearch: index.setStagedSearch(params.enabled) }))
 }
 
-export function searchVectors(params: { indexId: string; queries: number[][]; k: number }) {
+export function setVectorIndexIvf(params: { indexId: string; ivf: VectorIndexIvfSettings | null }) {
+  const index = getIndex(params.indexId)
+  return runBackend(() => ({ ivf: index.setIvf(params.ivf) }))
+}
+
+export function searchVectors(params: {
+  indexId: string
+  queries: number[][]
+  k: number
+  nProbe?: number | undefined
+}) {
   const index = getIndex(params.indexId)
   const queries = flattenRows(params.queries, index.dim, 'queries')
-  const results = runBackend(() => index.search(queries, params.k))
+  const results = runBackend(() => index.search(queries, params.k, params.nProbe))
   return { results }
 }
 
@@ -198,7 +210,7 @@ export function removeVectors(params: { indexId: string; ids: VectorIdWire[] }) 
       )
     )
   }
-  return { removed, length: index.length }
+  return { removed, length: index.length, ...indexState(index) }
 }
 
 export function containsVectors(params: { indexId: string; ids: VectorIdWire[] }) {
