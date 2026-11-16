@@ -105,12 +105,16 @@ struct JsRuntimeStatsOutputHandler : JsBaseOutputHandler<RuntimeStats> {
             [this](const RuntimeStats& stats) -> js_value_t* {
               js::Object runtimeStats = js::Object::create(this->env_);
               for (const auto& p : stats) {
-                visit(
-                    [env = this->env_, &runtimeStats, &p](auto&& val) {
-                      runtimeStats.setProperty(
-                          env, p.first.c_str(), js::Number::create(env, val));
+                js_value_t* jsValue = visit(
+                    [env = this->env_](const auto& val) -> js_value_t* {
+                      if constexpr (is_same_v<decay_t<decltype(val)>, string>) {
+                        return js::String::create(env, val);
+                      } else {
+                        return js::Number::create(env, val);
+                      }
                     },
                     p.second);
+                runtimeStats.setProperty(this->env_, p.first.c_str(), jsValue);
               }
               return runtimeStats;
             }) {}
