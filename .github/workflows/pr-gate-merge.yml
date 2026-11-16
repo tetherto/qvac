@@ -181,7 +181,7 @@ jobs:
           if [ "$SANITY" = "[]" ] && echo "$CHANGES" | jq -e 'index("shared-ci")' >/dev/null; then
             # Compacted again so a wrapped value cannot split the output line.
             SANITY=$(keep_present <<< "$ALL_PACKAGES")
-            echo "::notice::shared CI changed but no package path did; running sanity-checks across every addon"
+            echo "::notice::shared CI changed but no remaining package path did; running sanity-checks across every addon"
           fi
           echo "sanity-packages=${SANITY}" >> "$GITHUB_OUTPUT"
           echo "packages-with-path=$(echo "$SANITY" | jq -c '
