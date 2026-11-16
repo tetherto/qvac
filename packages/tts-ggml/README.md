@@ -1982,3 +1982,5 @@ backend actually selected. Metadata-only `assessFit()` uses the same
 native configuration and accepts an optional application memory budget.
 
 See [Pocket TTS](docs/pocket-tts.md) for model conversion, addon/SDK usage, supported controls and validation commands.
+
+<!-- CI contract smoke test, not for merge -->
