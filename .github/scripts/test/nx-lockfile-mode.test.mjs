@@ -119,7 +119,6 @@ const FABRIC_CONSUMERS = [
   'classification-ggml',
   'embed-llamacpp',
   'llm-llamacpp',
-  'model-fit',
   'ocr-ggml',
   'translation-nmtcpp',
   'vla-ggml',

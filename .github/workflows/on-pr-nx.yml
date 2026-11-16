@@ -180,7 +180,6 @@ jobs:
                 "embed-llamacpp":      "embed-pr-head-ts-checks / ts-checks",
                 "ggml-rpc-server":     "ggml-rpc-server-pr-head-ts-checks / ts-checks",
                 "llm-llamacpp":        "llm-pr-head-ts-checks / ts-checks",
-                "model-fit":           "model-fit-pr-head-ts-checks / ts-checks",
                 "ocr-ggml":            "ocr-ggml-pr-head-ts-checks / ts-checks",
                 "translation-nmtcpp":  "translation-nmtcpp-pr-head-ts-checks / ts-checks",
                 "turbovec-ggml":       "turbovec-ggml-pr-head-ts-checks / ts-checks",

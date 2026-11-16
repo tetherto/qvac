@@ -98,8 +98,7 @@ in the script) are left to it.
 
 Carve-outs keep their own vcpkg caches and warm them separately. `audiogen-ggml`
 and `translation-nmtcpp` warm theirs on pushes and on their own 2-day schedules;
-`llm-llamacpp` and `model-fit` are warmed by their `on-merge-vcpkg-cache-*.yml`
-dispatchers. `cpp-tests-warm-roster.test.mjs` fails for a carve-out with neither.
+`llm-llamacpp` is warmed by its `on-merge-vcpkg-cache-llm.yml` dispatcher. `cpp-tests-warm-roster.test.mjs` fails for a carve-out with neither.
 
 The warm run after a cache key change builds cold and saves the new entry. A
 manual `CPP Tests (nx)` dispatch on `main` with explicit packages also warms the

@@ -22,7 +22,6 @@ on:
       - "packages/embed-llamacpp/**"
       - "packages/fabric/**"
       - "packages/llm-llamacpp/**"
-      - "packages/model-fit/**"
       - "packages/ocr-ggml/**"
       - "packages/translation-nmtcpp/**"
       - "packages/tts-ggml/**"
@@ -44,7 +43,6 @@ on:
           - embed-llamacpp
           - fabric
           - llm-llamacpp
-          - model-fit
           - ocr-ggml
           - translation-nmtcpp
           - tts-ggml
@@ -109,7 +107,6 @@ jobs:
             embed-llamacpp: packages/embed-llamacpp/**
             fabric: packages/fabric/**
             llm-llamacpp: packages/llm-llamacpp/**
-            model-fit: packages/model-fit/**
             ocr-ggml: packages/ocr-ggml/**
             translation-nmtcpp: packages/translation-nmtcpp/**
             tts-ggml: packages/tts-ggml/**

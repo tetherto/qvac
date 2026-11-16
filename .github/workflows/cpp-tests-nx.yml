@@ -771,21 +771,6 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
 
-  # Added on main in #3930; its only caller there is deleted by the cleanup PR.
-  cpp-tests-model-fit:
-    needs: matrix
-    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'model-fit')
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write
-    uses: ./.github/workflows/cpp-tests-model-fit.yml
-    secrets: inherit
-    with:
-      repository: ${{ inputs.repository }}
-      ref: ${{ inputs.ref }}
-      fabric-overlay-artifact: ${{ contains(fromJSON(inputs.fabric-consumers || '[]'), 'model-fit') && inputs.fabric-overlay-artifact || '' }}
-
   cpp-tests-translation:
     needs: matrix
     if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'translation-nmtcpp')

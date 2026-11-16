@@ -117,7 +117,6 @@ const PENDING = [
     ['.github/workflows/cpp-test-coverage-bci-whispercpp.yml', 1],
     ['.github/workflows/cpp-test-coverage-tts-ggml.yml', 1],
     ['.github/workflows/cpp-tests-llm.yml', 1],
-    ['.github/workflows/cpp-tests-model-fit.yml', 1],
     ['.github/workflows/cpp-tests-nx.yml', 2],
     ['.github/workflows/cpp-tests-vla.yml', 1],
     ['.github/workflows/integration-mobile-test-inference-addon-cpp.yml', 3],

@@ -10,7 +10,7 @@ Use it when refactoring an addon's build, migrating an addon to the shared
 > Status: **Phase 1 complete**. The shared module
 > (`cmake/qvac-addon/qvac-addon.cmake`) exists and every Phase 1 addon is
 > migrated to it — `classification-ggml`, `vla-ggml`, `ocr-ggml`,
-> `translation-nmtcpp`, `model-fit`, `embed-llamacpp` and `llm-llamacpp`. The CI
+> `translation-nmtcpp`, `embed-llamacpp` and `llm-llamacpp`. The CI
 > drift guard described in "Keeping addons in sync" is not built yet.
 
 ## Background
@@ -325,7 +325,6 @@ any more, and each is listed under `npm_runtime` in
 - `packages/vla-ggml`
 - `packages/ocr-ggml`
 - `packages/translation-nmtcpp`
-- `packages/model-fit`
 - `packages/embed-llamacpp`
 - `packages/llm-llamacpp`
 
