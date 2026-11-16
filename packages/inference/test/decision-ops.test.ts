@@ -40,7 +40,7 @@ const questions = { refund: { type: 'noul' as const, instructions: 'Refund reque
 
 type TestContext = { teardown(cleanup: () => void): void }
 
-/** Registers a DecisionModel stand-in whose engine runs `run` for each state. */
+/** Registers a DecisionModel stand-in whose engine runs `run` for each engine run. */
 function fixture(
   t: TestContext,
   id: string,
@@ -58,11 +58,17 @@ function fixture(
   })
 }
 
+/** The engine's output for a request: one result, or one per state. */
+function answer(request: unknown) {
+  const states = (request as { states?: unknown[] }).states
+  return states ? [states.map(() => nativeResult)] : [nativeResult]
+}
+
 test('decisions unwrap each engine response and preserve single and batch results', async (t) => {
   const inputs: unknown[] = []
   fixture(t, 'decision-result', async (request) => {
     inputs.push(request)
-    return { await: async () => [nativeResult] }
+    return { await: async () => answer(request) }
   })
   const single = await decide({
     type: 'decide',
@@ -80,10 +86,7 @@ test('decisions unwrap each engine response and preserve single and batch result
     questions
   })
   t.alike(batch.result, [result, result])
-  t.alike(inputs.slice(1), [
-    { state: 'a', questions },
-    { state: 'b', questions }
-  ], 'one engine run per state, in input order')
+  t.alike(inputs.slice(1), [{ states: ['a', 'b'], questions }], 'one engine run for the batch')
   t.absent(getRequestRegistry().get('decide-single'))
 })
 
@@ -108,7 +111,7 @@ test('decisions pass criteria through and omit undefined values', async (t) => {
   const inputs: unknown[] = []
   fixture(t, 'decision-criteria', async (request) => {
     inputs.push(request)
-    return { await: async () => [nativeResult] }
+    return { await: async () => answer(request) }
   })
   const requestQuestions = {
     choice: { type: 'choice' as const, instructions: 'Which?', criteria: { a: null, b: false } },
@@ -144,8 +147,7 @@ test('decisions pass criteria through and omit undefined values', async (t) => {
   })
   t.alike(inputs, [
     { state, questions: expectedQuestions },
-    { state: 'a', questions: expectedQuestions },
-    { state: 'b', questions: expectedQuestions }
+    { states: ['a', 'b'], questions: expectedQuestions }
   ])
 })
 
@@ -163,6 +165,24 @@ test('decisions reject malformed engine responses and release the model slot aft
   await t.exception(() => decide(request), InvalidResponseError as unknown as new () => Error)
   output = [nativeResult]
   t.alike((await decide(request)).result, result)
+
+  // A batch needs exactly one result per state.
+  const batch = {
+    type: 'decide' as const,
+    modelId: 'decision-invalid',
+    states: ['a', 'b'],
+    questions
+  }
+  for (const bad of [
+    [nativeResult],
+    [[nativeResult]],
+    [[nativeResult, nativeResult, nativeResult]]
+  ]) {
+    output = bad
+    await t.exception(() => decide(batch), InvalidResponseError as unknown as new () => Error)
+  }
+  output = [[nativeResult, nativeResult]]
+  t.alike((await decide(batch)).result, [result, result])
 })
 
 function settle(): Promise<void> {

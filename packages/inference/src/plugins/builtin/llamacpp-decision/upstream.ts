@@ -50,6 +50,9 @@ export interface UpstreamRequest {
   >
 }
 
+/** Several states with the same questions, answered in one engine run. */
+export type UpstreamBatchRequest = Omit<UpstreamRequest, 'state'> & { states: DecisionState[] }
+
 type UpstreamAnswer =
   | { type: 'choice'; choice: string; probabilities: Record<string, number>; confidence: number }
   | {
@@ -80,6 +83,7 @@ interface UpstreamEngine {
   unload(): Promise<void>
   cancel(): Promise<void>
   run(request: UpstreamRequest): Promise<ResponseLike<UpstreamResult>>
+  run(request: UpstreamBatchRequest): Promise<ResponseLike<UpstreamResult[]>>
   info(): UpstreamDecisionInfo
 }
 

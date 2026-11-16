@@ -277,8 +277,16 @@ function upstreamFixture(
   run: (body: unknown) => Promise<UpstreamResult>,
   cancel = async () => {}
 ) {
+  // As the addon: a batch runs every state (here in order) and returns them
+  // as one output.
   const engine = {
-    run: async (body: unknown) => ({ await: async () => [await run(body)] }),
+    run: async (body: unknown) => {
+      const { states, ...rest } = body as { states?: unknown[] }
+      if (!states) return { await: async () => [await run(body)] }
+      const results: UpstreamResult[] = []
+      for (const state of states) results.push(await run({ ...rest, state }))
+      return { await: async () => [results] }
+    },
     cancel,
     unload: async () => {},
     load: async () => {},

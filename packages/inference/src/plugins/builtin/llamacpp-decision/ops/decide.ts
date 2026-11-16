@@ -14,19 +14,23 @@ import {
   fromUpstreamResult,
   isInvalidRequestError,
   toUpstreamRequest,
-  type DecisionModel
+  type DecisionModel,
+  type UpstreamResult
 } from '@/plugins/builtin/llamacpp-decision/upstream'
 
-// The engine answers one state per run. States run in input order; the first
-// failure or a cancel fails the whole call.
+// One engine run per call. A batch goes as `states`: the engine sends them to
+// upstream concurrently, so its slots batch them, and returns the results in
+// input order. The first failing state or a cancel fails the whole call.
 export async function decide(request: DecideRequest) {
   const { modelId, requestId } = request
   const model = getModel(modelId) as unknown as DecisionModel
   const info = model.info
   if (!info) throw new InvalidResponseError('decide')
-  const states = 'states' in request ? request.states : [request.state]
-  // Validate and convert every state before any runs.
-  const runs = states.map((state) => toUpstreamRequest(request, state, info))
+  const batch = 'states' in request
+  const states = batch ? request.states : [request.state]
+  // Validate and convert before the run. The questions, and so the key maps,
+  // are the same for every state.
+  const { body: single, keyMaps } = toUpstreamRequest(request, states[0]!, info)
 
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRandomRequestId(),
@@ -51,27 +55,38 @@ export async function decide(request: DecideRequest) {
 
   const started = nowMs()
   try {
-    const results = []
-    for (const { body, keyMaps } of runs) {
-      if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
-      let outputs
-      try {
-        outputs = await (await model.engine.run(body)).await()
-      } catch (error) {
-        if (isInvalidRequestError(error)) {
-          throw new RequestValidationFailedError(error.message, error)
-        }
-        throw error
+    let native: unknown
+    try {
+      if (batch) {
+        const outputs = await (
+          await model.engine.run({ states, questions: single.questions })
+        ).await()
+        if (outputs.length !== 1) throw new InvalidResponseError('decide')
+        native = outputs[0]
+      } else {
+        const outputs = await (await model.engine.run(single)).await()
+        if (outputs.length !== 1) throw new InvalidResponseError('decide')
+        native = [outputs[0]]
       }
-      if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
-      if (outputs.length !== 1) throw new InvalidResponseError('decide')
-      try {
-        results.push(decisionResultSchema.parse(fromUpstreamResult(outputs[0]!, keyMaps)))
-      } catch (error) {
-        throw new InvalidResponseError('decide', error)
+    } catch (error) {
+      if (isInvalidRequestError(error)) {
+        throw new RequestValidationFailedError(error.message, error)
       }
+      throw error
     }
-    const result: DecisionResponse = 'states' in request ? results : results[0]!
+    if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
+    if (!Array.isArray(native) || native.length !== states.length) {
+      throw new InvalidResponseError('decide')
+    }
+    let results
+    try {
+      results = native.map((output: UpstreamResult) =>
+        decisionResultSchema.parse(fromUpstreamResult(output, keyMaps))
+      )
+    } catch (error) {
+      throw new InvalidResponseError('decide', error)
+    }
+    const result: DecisionResponse = batch ? results : results[0]!
     return attachModelExecutionMs({ type: 'decide' as const, result }, nowMs() - started)
   } catch (error) {
     if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
