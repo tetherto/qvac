@@ -95,8 +95,8 @@ and indices, about 13 MB at 1280x720. The host row counts the slot of the
 `workload` size only, so a caller that cycles through k sizes should add one
 slot for each size past the first, up to 3 more, about 29 MB each at 1280x720.
 BridgeDepth also keeps the resized position embedding of up to 8 input sizes,
-a little more host memory per size. Each call initializes the selected backend, so it costs
-about what a backend init costs.
+a little more host memory per size. Each call initializes the selected backend,
+so it costs about what a backend init costs.
 
 `assessFit` returns a Promise and concurrent calls run one at a time. A request
 with a relative `modelPath`, an option of the wrong type, a string holding a

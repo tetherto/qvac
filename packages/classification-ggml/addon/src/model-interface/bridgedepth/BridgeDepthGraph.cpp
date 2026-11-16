@@ -51,8 +51,10 @@ constexpr std::string_view TRANSPOSED_CONV_1 =
 constexpr int64_t PROBE_TOKENS = 64;
 // Most convs of the graph are 3x3.
 constexpr int64_t PROBE_KERNEL = 3;
-// Tensors the probe context holds: the probes make fewer than 20.
-constexpr size_t PROBE_NODES = 32;
+// Tensors the probes in chooseGpuPath create, inputs included: attention 4,
+// linear 3, im2col conv 6, direct conv 3, nmp logits 5. A probe added there
+// adds its tensors here; the probe context aborts when it runs out.
+constexpr size_t PROBE_TENSORS = 4 + 3 + 6 + 3 + 5;
 
 using T = ggml_tensor;
 
@@ -145,7 +147,7 @@ GpuPath chooseGpuPath(
     return path;
   // Probe nodes only carry shapes and types, nothing is allocated or run.
   ggml_init_params ip{};
-  ip.mem_size = ggml_tensor_overhead() * PROBE_NODES;
+  ip.mem_size = ggml_tensor_overhead() * PROBE_TENSORS;
   ip.no_alloc = true;
   std::unique_ptr<ggml_context, decltype(&ggml_free)> owned(
       ggml_init(ip), ggml_free);
@@ -559,7 +561,6 @@ struct BridgeDepthGraph::Impl {
   struct SizeSlot {
     int h = 0;
     int w = 0;
-    bool seeds = false;
     int id = 0; // unique among the live slots, below SIZE_SLOT_LIMIT
     std::unique_ptr<std::byte[]> arena; // graphArenaBytes()
     std::shared_ptr<const HostConstants> constants;
@@ -656,6 +657,7 @@ struct BridgeDepthGraph::Impl {
     }
     // An F32 input `fill` writes straight into the tensor when its buffer is
     // host memory, which saves building it on the side and copying it over.
+    // `fill` must write every element: a staging buffer is not zeroed.
     T* addFilled(
         ggml_context* ctx, const char* name, std::function<void(float*)> fill,
         int64_t n0, int64_t n1, int64_t n2, int64_t n3) {
@@ -755,9 +757,11 @@ struct BridgeDepthGraph::Impl {
       } else if (ggml_backend_buffer_is_host(item.t->buffer)) {
         item.fill(static_cast<float*>(item.t->data));
       } else {
-        std::vector<float> staged(item.bytes / sizeof(float));
-        item.fill(staged.data());
-        ggml_backend_tensor_set(item.t, staged.data(), 0, item.bytes);
+        // new[] without (): fill writes every element, so no zeroing pass
+        // over a buffer of up to tens of MB per run.
+        std::unique_ptr<float[]> staged(new float[item.bytes / sizeof(float)]);
+        item.fill(staged.get());
+        ggml_backend_tensor_set(item.t, staged.get(), 0, item.bytes);
       }
     }
     if (ggml_backend_sched_graph_compute(sched, gf) != GGML_STATUS_SUCCESS) {
@@ -806,10 +810,13 @@ struct BridgeDepthGraph::Impl {
   // thrown away by the next one, about 30 ms each on a T4. The backend keys
   // its captures by the first node, so each size needs its own memory.
   // And the host inputs that depend only on the size (masks, indices).
-  SizeSlot& sizeSlot(int hDim, int wDim, bool seeds) {
+  // Keyed by the padded size alone: a run with seedsOverride (test only)
+  // builds a slightly different graph in the same slot, so one size never
+  // holds two slots.
+  SizeSlot& sizeSlot(int hDim, int wDim) {
     auto it = std::find_if(
         sizeSlots.begin(), sizeSlots.end(), [&](const SizeSlot& s) {
-          return s.h == hDim && s.w == wDim && s.seeds == seeds;
+          return s.h == hDim && s.w == wDim;
         });
     if (it == sizeSlots.end()) {
       if (sizeSlots.size() >= SIZE_SLOT_LIMIT)
@@ -817,7 +824,6 @@ struct BridgeDepthGraph::Impl {
       SizeSlot slot;
       slot.h = hDim;
       slot.w = wDim;
-      slot.seeds = seeds;
       const auto idTaken = [&](const SizeSlot& s) { return s.id == slot.id; };
       while (std::any_of(sizeSlots.begin(), sizeSlots.end(), idTaken))
         ++slot.id;
@@ -2316,13 +2322,15 @@ BridgeDepthGraph::BridgeDepthGraph(
         "; convert with scripts/convert-bridgedepth.py");
   }
 
-  // The layout check above pins this tensor: ggml [D, 3 * D].
-  m.gpu = chooseGpuPath(
-      m.backend,
-      m.cpu,
-      ggml_get_tensor(fileCtx.get(), "mono.pretrained.blocks.0.attn.qkv.weight")
-          ->ne[0],
-      m.monoHeads);
+  // The layout check above pins this tensor as ggml [D, 3 * D], but the
+  // fingerprint can be forged, so it is checked before it is read.
+  constexpr const char* vitQkvName = "mono.pretrained.blocks.0.attn.qkv.weight";
+  const T* vitQkv = ggml_get_tensor(fileCtx.get(), vitQkvName);
+  if (vitQkv == nullptr || ggml_n_dims(vitQkv) != 2) {
+    throw std::runtime_error(
+        std::string("BridgeDepth: missing or malformed tensor ") + vitQkvName);
+  }
+  m.gpu = chooseGpuPath(m.backend, m.cpu, vitQkv->ne[0], m.monoHeads);
 
   // Device-side tensors, in file order: the file's type and shape, except
   // the linear weights and conv kernels when the device takes them as F16.
@@ -2660,13 +2668,13 @@ BridgeDepthGraph::measure(int h, int w, const CallerHostBytes& caller) {
       Impl::graphArenaBytes() + m.measuredSlotConstantBytes;
   // The run: every graph input and output on the host, the resized pos_embed
   // and the slot's inputs already counted above, plus both views as planar
-  // floats and the unpadded disparity forward() returns.
+  // floats. The output is the [h, w] disparity forward() returns.
   const uint64_t pixels = static_cast<uint64_t>(h) * w;
   const uint64_t planarViewFloats = 2ULL * 3 * pixels;
   const uint64_t disparityBytes = pixels * sizeof(float);
   const uint64_t runBytes = m.measuredRunHostBytes - m.measuredPosTableBytes -
                             m.measuredSlotConstantBytes +
-                            planarViewFloats * sizeof(float) + disparityBytes;
+                            planarViewFloats * sizeof(float);
   const uint64_t jobPeak = std::max(
       {caller.prepareBytes,
        runBytes,
@@ -2713,9 +2721,7 @@ std::vector<float> BridgeDepthGraph::Impl::forward(
   const int cGw = static_cast<int>(m.weight("stereo.gw.3.weight")->ne[3]),
             gCorr = 32, perG = cGw / gCorr;
   // Measure mode builds each size once and keeps nothing.
-  Impl::SizeSlot* slot =
-      m.measureOnly ? nullptr
-                    : &m.sizeSlot(hDim, wDim, seedsOverride != nullptr);
+  Impl::SizeSlot* slot = m.measureOnly ? nullptr : &m.sizeSlot(hDim, wDim);
   HostConstants built;
   const HostConstants* constants = slot ? slot->constants.get() : nullptr;
   if (constants == nullptr) {
@@ -2993,13 +2999,24 @@ std::vector<float> BridgeDepthGraph::Impl::forward(
             ai1);
         T* mono1 =
             ggml_reshape_4d(ctx, find(al, "align0.mono"), 128, 1, w8, h8);
-        // Only the final map is a graph output, so the allocator can reuse the
-        // memory of every intermediate.
+        T* padded = find(
+            m.buildAlign1(ctx, embed1, mono1, hpos1, dispEst, ai1),
+            "disp_final_padded"); // [wDim, hDim]
+        if (padded->ne[0] != wDim || padded->ne[1] != hDim)
+          throw std::runtime_error("BridgeDepth: unexpected disparity shape");
+        // InputPadder.unpad on the device: drop the top rows and the right
+        // columns, so the read back is the returned disparity itself. Only
+        // this map is a graph output, so the allocator can reuse the memory
+        // of every intermediate.
         return Impl::Outputs{
-            {"disp_final_padded",
-             find(
-                 m.buildAlign1(ctx, embed1, mono1, hpos1, dispEst, ai1),
-                 "disp_final_padded")}};
+            {"disparity",
+             ggml_view_2d(
+                 ctx,
+                 padded,
+                 w,
+                 h,
+                 padded->nb[1],
+                 static_cast<size_t>(pad.top) * padded->nb[1])}};
       });
 
   if (m.measureOnly) {
@@ -3010,16 +3027,7 @@ std::vector<float> BridgeDepthGraph::Impl::forward(
         m.measuredInputBytes - viewsBytes - m.measuredPosTableBytes;
     return {};
   }
-  // InputPadder.unpad: drop the top rows and the right columns.
-  const HostTensor& padded = outsHost.at("disp_final_padded");
-  std::vector<float> disparity(static_cast<size_t>(h) * w);
-  for (int y = 0; y < h; ++y) {
-    std::copy_n(
-        padded.data.data() + static_cast<size_t>(y + pad.top) * wDim,
-        w,
-        disparity.data() + static_cast<size_t>(y) * w);
-  }
-  return disparity;
+  return std::move(outsHost.at("disparity").data);
 }
 
 } // namespace classification_ggml::bridgedepth
