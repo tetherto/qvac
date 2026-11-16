@@ -35,7 +35,7 @@ test('decisions are a typed unary method in the generated client contract', (t) 
     type: 'decide',
     modelId: 'laya',
     state: 'Refund',
-    questions: { refund: { type: 'noul', instructions: 'Refund requested.', requireProbability: true } },
+    questions: { refund: { type: 'noul', instructions: 'Refund requested.', allowRating: true } },
     requestId: 'decision-id'
   }
   t.is(decideRequestSchema.parse(single).requestId, 'decision-id')
@@ -44,6 +44,13 @@ test('decisions are a typed unary method in the generated client contract', (t) 
   t.ok(contractValidate('decide.request', { ...base, states: [state] }).valid)
   t.absent(contractValidate('decide.request', { ...single, states: [state] }).valid)
   t.absent(contractValidate('decide.request', { ...single, max_len: 512 }).valid)
+  // The opt-in replaced requireProbability: noul is a probability by default.
+  t.absent(
+    contractValidate('decide.request', {
+      ...single,
+      questions: { refund: { type: 'noul', instructions: 'Refund?', requireProbability: true } }
+    }).valid
+  )
   // Controls only fabric-format Laya took are gone from the contract.
   t.absent(contractValidate('decide.request', { ...single, maxLen: 512 }).valid)
   t.absent(contractValidate('decide.request', { ...single, headMaxLen: 128 }).valid)

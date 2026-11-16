@@ -79,11 +79,11 @@ export const decisionQuestionSchema = z.discriminatedUnion('type', [
         .strict()
         .nullable()
         .optional(),
-      requireProbability: z
+      allowRating: z
         .boolean()
         .optional()
         .describe(
-          'Require the answer to be the probability that the statement holds. A model whose noul answer means something else (for example an expected rating) rejects the request.'
+          'Accept a model that answers noul with an expected rating (lev, 0 to 1) instead of the probability that the statement holds. Without it, such a model rejects the request, as does a model whose noul meaning is unknown.'
         )
     })
     .strict()

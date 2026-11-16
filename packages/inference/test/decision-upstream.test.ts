@@ -50,9 +50,11 @@ const openjev: UpstreamDecisionInfo = {
   score_levels: { min: 2, max: 10 },
   max_json_depth: 128,
   n_ctx: 1024,
+  max_input_tokens: 1023,
   model: 'tinyopenjev'
 }
 const lev: UpstreamDecisionInfo = { ...openjev, decision_type: 'lev', noul: 'expected_rating' }
+const unlisted: UpstreamDecisionInfo = { ...openjev, decision_type: 'future', noul: 'unknown' }
 
 // Recorded from DecisionEngine on tinyopenjev (route, urgency, refund).
 const recorded: UpstreamResult = {
@@ -206,16 +208,31 @@ test('score levels outside the model range are rejected', (t) => {
   }
 })
 
-test('requireProbability: lev is rejected, openjev passes and the flag stays in QVAC', (t) => {
-  const request = {
-    questions: { q: { type: 'noul' as const, instructions: '?', requireProbability: true } }
+test('noul is a probability unless allowRating accepts lev; unknown meanings are rejected', (t) => {
+  const plain = { questions: { q: { type: 'noul' as const, instructions: '?' } } }
+  const rating = {
+    questions: { q: { type: 'noul' as const, instructions: '?', allowRating: true } }
   }
-  t.exception(() => toUpstreamRequest(request, 's', lev), /expected rating, not a probability/)
-  const { body } = toUpstreamRequest(request, 's', openjev)
-  t.alike(body.questions.q, { type: 'noul', instructions: '?' })
-  // Without the flag, lev's noul is still available.
+  // A probability model answers either way; the flag stays in QVAC.
+  t.alike(toUpstreamRequest(plain, 's', openjev).body.questions.q, { type: 'noul', instructions: '?' })
+  t.alike(toUpstreamRequest(rating, 's', openjev).body.questions.q, { type: 'noul', instructions: '?' })
+  // lev's expected rating only when the caller accepts it.
+  t.exception(
+    () => toUpstreamRequest(plain, 's', lev),
+    /expected rating, not a probability; set allowRating/
+  )
+  t.alike(toUpstreamRequest(rating, 's', lev).body.questions.q, { type: 'noul', instructions: '?' })
+  // A meaning the addon does not know is never taken for either.
+  for (const request of [plain, rating]) {
+    t.exception(() => toUpstreamRequest(request, 's', unlisted), /no known meaning \('unknown'\)/)
+  }
+  // Other question types are unaffected on those models.
   t.execution(() =>
-    toUpstreamRequest({ questions: { q: { type: 'noul', instructions: '?' } } }, 's', lev)
+    toUpstreamRequest(
+      { questions: { c: { type: 'choice', instructions: '?', criteria: ['a', 'b'] } } },
+      's',
+      unlisted
+    )
   )
 })
 
@@ -363,7 +380,7 @@ test('decide (mocked engine): validation runs before any state', async (t) => {
       type: 'decide',
       modelId: 'up-validate',
       states: ['a', 'b'],
-      questions: { q: { type: 'noul', instructions: '?', requireProbability: true } }
+      questions: { q: { type: 'noul', instructions: '?' } }
     }),
     RequestValidationFailedError
   )

@@ -33,6 +33,7 @@ const info: UpstreamDecisionInfo = {
   score_levels: { min: 2, max: 10 },
   max_json_depth: 128,
   n_ctx: 512,
+  max_input_tokens: 512,
   model: 'laya'
 }
 // A noul question without criteria converts to itself.

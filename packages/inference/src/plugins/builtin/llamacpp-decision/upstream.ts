@@ -22,7 +22,8 @@ import { readGgufArchitecture } from '@/utils/gguf-architecture'
 /** The engine's capabilities, as DecisionEngine.info() reports them. */
 export interface UpstreamDecisionInfo {
   decision_type: string
-  noul: 'probability' | 'expected_rating'
+  /** "unknown" for a decision type the addon does not list. */
+  noul: 'probability' | 'expected_rating' | 'unknown'
   joint: boolean
   shared_prefix: boolean
   images: boolean
@@ -30,6 +31,8 @@ export interface UpstreamDecisionInfo {
   score_levels: { min: number; max: number }
   max_json_depth: number
   n_ctx: number
+  /** The longest input (a state with one question and its options), in tokens. */
+  max_input_tokens: number
   model: string
 }
 
@@ -265,9 +268,17 @@ function convertQuestion(
     }
     return { type: 'score', instructions: question.instructions, criteria: question.criteria }
   }
-  if (question.requireProbability === true && info.noul !== 'probability') {
+  // noul is the probability that the statement holds unless the caller
+  // accepts lev's expected rating; a meaning the addon does not know is never
+  // taken for either.
+  if (info.noul === 'expected_rating' && question.allowRating !== true) {
     reject(
-      `questions.${id}: this ${info.decision_type} model answers noul with an ${info.noul.replace('_', ' ')}, not a probability`
+      `questions.${id}: this ${info.decision_type} model answers noul with an expected rating, not a probability; set allowRating to accept it`
+    )
+  }
+  if (info.noul !== 'probability' && info.noul !== 'expected_rating') {
+    reject(
+      `questions.${id}: this ${info.decision_type} model's noul answer has no known meaning ('${info.noul}')`
     )
   }
   const criteria = question.criteria

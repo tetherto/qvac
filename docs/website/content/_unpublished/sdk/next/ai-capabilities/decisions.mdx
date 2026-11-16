@@ -35,9 +35,11 @@ Each entry in `questions` has a `type` and `instructions`:
 
 - `choice` selects a label from `criteria`, which can be an array of labels or an object mapping labels to descriptions. The answer contains `choice`, a probability per label, and `confidence`. Array values must stay distinct as text: `[true, 'true']` or `[1, '1']` is rejected; use an object with distinct keys. Answers return the original value.
 - `score` estimates an ordinal level from `criteria`, 2 to 10 descriptions ordered from lowest to highest. The answer contains the expected `score`, a `legend`, probabilities, and `confidence`.
-- `noul` answers a statement. The answer contains `noul`; optional `criteria` describe the true and false options. A model may answer `noul` with something other than a probability: lev returns an expected rating from 0 to 1. Set `requireProbability: true` to have such a model reject the request instead. Only some models report a `confidence` for `noul` answers.
+- `noul` answers a statement. The answer contains `noul`, the probability that the statement holds; optional `criteria` describe the true and false options. lev answers with an expected rating from 0 to 1 instead, so on lev a `noul` question fails validation unless it sets `allowRating: true`. A model whose `noul` meaning is unknown rejects `noul` questions. Only some models report a `confidence` for `noul` answers.
 
-States, instructions and descriptions may nest at most 128 levels deep.
+States, instructions and descriptions may nest at most 128 levels deep. A state with one question and its options must fit the model's input limit; a longer one fails validation.
+
+`getLoadedModelInfo()` reports, under `decision`, what a loaded decision model supports: its `decisionType`, what `noul` means (`probability`, `expectedRating` or `unknown`), the `scoreLevels` range, and `maxInputTokens`. For Laya, the input limit is `batch_size` (2048 tokens unless set).
 
 The load options are `device`, `gpu_layers`, `batch_size`, `threads`, `verbosity`, and `openclCacheDir` (Android).
 

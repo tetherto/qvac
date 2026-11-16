@@ -203,11 +203,7 @@ describe('OpenAI Decisions HTTP API', () => {
             criteria: { billing: 'Payments', technical: 'Bugs' }
           },
           question_1: { type: 'score', instructions: 'How severe?', criteria: ['Minor', 'Major'] },
-          question_2: {
-            type: 'noul',
-            instructions: 'Does this need a human now?',
-            requireProbability: true
-          }
+          question_2: { type: 'noul', instructions: 'Does this need a human now?' }
         }
       })
     }
@@ -450,7 +446,7 @@ describe('OpenAI Decisions HTTP API', () => {
         modelId: 'sdk-laya-id',
         state: 'Help!',
         questions: {
-          question_0: { type: 'noul', instructions: 'Urgent?', requireProbability: true }
+          question_0: { type: 'noul', instructions: 'Urgent?' }
         }
       }
     ])

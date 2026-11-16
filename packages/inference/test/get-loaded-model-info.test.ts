@@ -1,8 +1,16 @@
 import test from 'brittle'
 import { handleGetLoadedModelInfo } from '@/handlers/get-loaded-model-info'
 import { ModelNotFoundError } from '@/errors'
-import { ERROR_CODES, ModelType, type NativeProbeFit } from '@/schemas'
+import {
+  ERROR_CODES,
+  ModelType,
+  loadedModelInfoSchema,
+  type CanonicalModelType,
+  type NativeProbeFit
+} from '@/schemas'
 import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
+import { getPlugin, registerPlugin, unregisterPlugin } from '@/plugins/registry'
+import { decisionPlugin } from '@/plugins/builtin/llamacpp-decision/plugin'
 
 let idCounter = 0
 function makeId(prefix: string) {
@@ -10,13 +18,18 @@ function makeId(prefix: string) {
   return `${prefix}-${idCounter}`
 }
 
-function register(t: { teardown(fn: () => void): void }, fitProbe?: NativeProbeFit) {
+function register(
+  t: { teardown(fn: () => void): void },
+  fitProbe?: NativeProbeFit,
+  modelType: CanonicalModelType = ModelType.llamacppCompletion,
+  model: unknown = {}
+) {
   const modelId = makeId('loaded-info')
   registerModel(modelId, {
-    model: {} as unknown as AnyModel,
+    model: model as AnyModel,
     path: '/models/model.gguf',
     config: {},
-    modelType: ModelType.llamacppCompletion,
+    modelType,
     ...(fitProbe && { fitProbe })
   })
   t.teardown(() => {
@@ -66,4 +79,48 @@ test('getLoadedModelInfo: omits the fit outcome when no probe ran', function (t)
   const { info } = handleGetLoadedModelInfo({ type: 'getLoadedModelInfo', modelId })
 
   t.is(info.fitProbe, undefined)
+  t.is(info.decision, undefined, 'only decision models report decision info')
+})
+
+test('getLoadedModelInfo: reports what a decision model supports', function (t) {
+  // The field follows the plugin's decide handler.
+  if (!getPlugin(ModelType.llamacppDecision)) {
+    registerPlugin(decisionPlugin)
+    t.teardown(() => {
+      unregisterPlugin(ModelType.llamacppDecision)
+    })
+  }
+  const addonInfo = {
+    decision_type: 'lev',
+    noul: 'expected_rating',
+    joint: false,
+    shared_prefix: true,
+    images: false,
+    audio: false,
+    score_levels: { min: 2, max: 10 },
+    max_json_depth: 128,
+    n_ctx: 4096,
+    max_input_tokens: 4095,
+    model: 'lev'
+  }
+  const levId = register(t, undefined, ModelType.llamacppDecision, { info: addonInfo })
+  t.alike(handleGetLoadedModelInfo({ type: 'getLoadedModelInfo', modelId: levId }).info.decision, {
+    decisionType: 'lev',
+    noul: 'expectedRating',
+    scoreLevels: { min: 2, max: 10 },
+    maxInputTokens: 4095
+  })
+
+  // A meaning this SDK does not know is reported as unknown.
+  const futureId = register(t, undefined, ModelType.llamacppDecision, {
+    info: { ...addonInfo, decision_type: 'future', noul: 'something-new' }
+  })
+  t.is(
+    handleGetLoadedModelInfo({ type: 'getLoadedModelInfo', modelId: futureId }).info.decision?.noul,
+    'unknown'
+  )
+  const loadedSchema = loadedModelInfoSchema.safeParse(
+    handleGetLoadedModelInfo({ type: 'getLoadedModelInfo', modelId: levId }).info
+  )
+  t.ok(loadedSchema.success, 'the response matches the contract')
 })

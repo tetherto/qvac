@@ -6,6 +6,7 @@ import type {
 import { getModelEntry } from '@/runtime/model-registry'
 import { getPlugin } from '@/plugins/registry'
 import { detectToolDialect } from '@/utils/tool-integration'
+import { describeDecisionModel } from '@/utils/decision-info'
 import { ModelNotFoundError } from '@/errors/index'
 import { getEngineLogger } from '@/logging/index'
 
@@ -31,6 +32,7 @@ export function handleGetLoadedModelInfo(
   const handlers = plugin ? Object.keys(plugin.handlers) : []
 
   const fitProbe = entry.local.fitProbe
+  const decision = handlers.includes('decide') ? describeDecisionModel(entry.local.model) : undefined
 
   const info: LoadedModelInfo = {
     modelId: entry.id,
@@ -44,7 +46,8 @@ export function handleGetLoadedModelInfo(
     ...(handlers.includes('completionStream') && {
       toolDialect: detectToolDialect(modelId)
     }),
-    ...(fitProbe !== undefined && { fitProbe })
+    ...(fitProbe !== undefined && { fitProbe }),
+    ...(decision !== undefined && { decision })
   }
 
   return { type: 'getLoadedModelInfo', info }
