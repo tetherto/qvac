@@ -96152,7 +96152,7 @@ async function saveEntry(entry) {
   const mismatch = await firstChecksumMismatch(entry)
   if (mismatch) {
     core.warning(`Not saving ${label(entry)}: ${mismatch} does not match its checksum`)
-    return 'skipped'
+    return 'mismatch'
   }
   // On cache service v1, saveCache returns an id even when the upload fails.
   const id = await cache.saveCache(cachePaths(entry), cacheKey(entry), {}, true)
@@ -96169,11 +96169,12 @@ async function perModel(plan) {
     })
   )
   const count = (outcome) => outcomes.filter((value) => value === outcome).length
-  core.info(`💾 saved ${count('saved')}, already cached ${count('present')}, not saved ${count('skipped')}, failed ${count('failed')}`)
+  core.info(`💾 saved ${count('saved')}, already cached ${count('present')}, not on disk ${count('skipped')}, mismatched ${count('mismatch')}, failed ${count('failed')}`)
   const drift = plan.checkDrift ? unplannedPaths(plan) : []
   if (drift.length)
     core.warning(`The cache directory holds ${drift.length} item(s) no plan entry covers, so they download every run: ${drift.slice(0, 20).join(', ')}`)
-  const unsaved = count('skipped') + count('failed')
+  // A planned model this run never downloaded is skipped; a checksum mismatch or a failed upload fails the warm.
+  const unsaved = count('mismatch') + count('failed')
   if (unsaved) core.setFailed(`${unsaved} model cache entr(ies) could not be saved`)
 }
 

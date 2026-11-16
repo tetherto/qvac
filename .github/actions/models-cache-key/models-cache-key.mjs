@@ -65,7 +65,9 @@ function main(env) {
   const cache = meta?.path ? meta : null
   let r
   let plan = ''
+  let root = env.WORKDIR
   if (cache) {
+    root = posix.normalize(posix.join(env.WORKDIR, cache.path)).replace(/\/+$/, '')
     const keyText = cache.keyFiles.map((f) => readFileSync(join(env.WORKDIR, f), 'utf8')).join('\0')
     r = resolveDirectory({
       cache,
@@ -92,7 +94,7 @@ function main(env) {
   }
   appendFileSync(
     env.GITHUB_OUTPUT,
-    `key=${r.key}\nrestore-prefix=${r.prefix}\nfill=${Boolean(cache)}\nmode=${mode}\nplan=${plan}\npaths<<EOF\n${r.paths.join('\n')}\nEOF\n`
+    `key=${r.key}\nrestore-prefix=${r.prefix}\nfill=${Boolean(cache)}\nmode=${mode}\nplan=${plan}\ncache-root=${root}\npaths<<EOF\n${r.paths.join('\n')}\nEOF\n`
   )
 }
 

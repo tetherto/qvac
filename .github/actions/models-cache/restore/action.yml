@@ -16,6 +16,9 @@ inputs:
   plan:
     description: "per-model: path to the plan JSON"
     default: ""
+  cache-root:
+    description: "per-model: the directory the plan must cache under, from models-cache-key"
+    default: ""
   lookup-only:
     description: "per-model: check which entries exist without downloading them"
     default: "false"

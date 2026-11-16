@@ -31,6 +31,9 @@ outputs:
   plan:
     description: "per-model on a manifest package: the plan JSON it wrote"
     value: ${{ steps.resolve.outputs.plan }}
+  cache-root:
+    description: The directory every per-model plan entry must sit in, which models-cache/restore checks
+    value: ${{ steps.resolve.outputs.cache-root }}
   fill:
     description: true when the target's metadata.modelCache names the directory, which the package's cache:models fills
     value: ${{ steps.resolve.outputs.fill }}

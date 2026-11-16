@@ -34,6 +34,8 @@ export const TARGETS = [
   'test:backend',
   'test:mobile',
   'cache:models',
+  // Writes the per-model cache plan of a leg whose models only its own code can list, to $MODELS_CACHE_PLAN.
+  'cache:models:plan',
   'benchmark',
   'publish:pre',
   'publish',
@@ -62,7 +64,7 @@ const METADATA = {
   publish: ['publish'],
   // Prebuild directories besides the platform ones that the meta package ships, such as fabric's include and share.
   prebuildExtraDirs: ['publish'],
-  secrets: ['test:integration', 'test:backend', 'benchmark', 'test:mobile', 'cpp:tests', 'cache:models'],
+  secrets: ['test:integration', 'test:backend', 'benchmark', 'test:mobile', 'cpp:tests', 'cache:models', 'cache:models:plan'],
   // How the target's models are cached: mode all (default) or per-model, and for a model directory no manifest lists,
   // { path, keyFiles } relative to the package, which cache:models fills.
   modelCache: ['test:integration', 'test:backend', 'cpp:tests'],

@@ -43,7 +43,13 @@ async function all(paths, key, restoreKeys) {
 
 async function main() {
   const mode = core.getInput('mode') || 'all'
-  if (mode === 'per-model') await perModel(readPlan(core.getInput('plan', { required: true })), core.getBooleanInput('lookup-only'))
+  if (mode === 'per-model') {
+    // A plan a package's own code wrote names only what to restore, and only under the root the trusted step set.
+    const plan = readPlan(core.getInput('plan', { required: true }))
+    const root = core.getInput('cache-root')
+    if (root && plan.cacheRoot !== root) throw new Error(`plan cacheRoot ${plan.cacheRoot} is not ${root}`)
+    await perModel(plan, core.getBooleanInput('lookup-only'))
+  }
   else if (mode === 'all')
     await all(lines(core.getInput('paths', { required: true })), core.getInput('key', { required: true }), lines(core.getInput('restore-keys')))
   else throw new Error(`mode must be all or per-model, got "${mode}"`)

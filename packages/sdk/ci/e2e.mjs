@@ -105,6 +105,9 @@ export function mqttCerts(env) {
 // built, then the sdk-e2e consumer installed against it and built. pnpm's node_modules go first.
 export function prepare(env) {
   if (!env.GITHUB_TOKEN) throw new Error('GITHUB_TOKEN is empty; the @tetherto registry needs it')
+  // cache:models:plan prepared this job's tree already; the leg reuses it.
+  const done = join(env.RUNNER_TEMP || tmpdir(), 'sdk-e2e-prepared')
+  if (existsSync(done)) return mqttCerts(env)
   for (const dir of ['sdk', 'sdk-e2e', 'inference', 'test-suite']) {
     rmSync(join(ROOT, 'packages', dir, 'node_modules'), { recursive: true, force: true })
   }
@@ -147,6 +150,7 @@ export function prepare(env) {
   writeFileSync(join(E2E, '.npmrc'), npmrc)
   run('npm', ['install', '--install-links'], { cwd: E2E, env })
   run('npm', ['run', 'build'], { cwd: E2E, env })
+  writeFileSync(done, '')
   return mqttCerts(env)
 }
 
@@ -412,7 +416,31 @@ function modelCache(env) {
   return { ...env, QVAC_CONFIG_PATH: config }
 }
 
+// cache:models:plan: the models this leg's tests use and where each lands, main's model-cache-plan, for the per-model
+// restore. The leg's family is its test:integration configuration's args; without one (cache-warm) the desktop set.
+function plan(env) {
+  const configs = JSON.parse(readFileSync(join(SDK, 'project.json'), 'utf8')).targets['test:integration'].configurations
+  const family = (env.CONFIG && configs[env.CONFIG]?.args) || 'desktop'
+  const options = runOptions(env.CI_SUITE)
+  prepare(env)
+  run(
+    'node',
+    [
+      'scripts/model-cache-plan.mjs',
+      `--family=${family}`,
+      `--suite=${options.suite || ''}`,
+      `--exclude-suite=${options.exclude || ''}`,
+      `--include=${options.include || ''}`,
+      `--filter=${list('tests', env.CI_TESTS) || ''}`,
+      `--cache-root=${env.MODELS_CACHE_ROOT}`,
+      `--out=${env.MODELS_CACHE_PLAN}`
+    ],
+    { cwd: E2E, env: { ...env, GITHUB_OUTPUT: '' } }
+  )
+}
+
 async function main(family, env) {
+  if (family === 'plan') return plan(env)
   // cache:models: the desktop bootstrap alone, the model set the desktop and python legs restore.
   if (family === 'cache') {
     const e = modelCache(prepare(env))
@@ -449,6 +477,8 @@ async function main(family, env) {
       )
     } else {
       e = modelCache(e)
+      // per-model: the bootstrap downloads only what the restore did not provide.
+      if (env.MODELS_MISSING) e = { ...e, QVAC_E2E_BOOTSTRAP_MODELS: env.MODELS_MISSING }
       // As main: an exact hit already holds the desktop bootstrap's models.
       if (env.MODELS_CACHE_HIT === 'true' && (family === 'desktop' || family === 'python')) {
         console.log('Models restored from the cache; skipping the bootstrap')

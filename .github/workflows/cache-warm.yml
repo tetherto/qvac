@@ -105,7 +105,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
       # A real restore, not a lookup: it resets the cache server's prune clock.
-      - if: steps.models.outputs.paths != ''
+      - if: steps.models.outputs.paths != '' && (steps.models.outputs.mode == 'all' || steps.models.outputs.plan != '')
         id: cache
         uses: ./.github/actions/models-cache/restore
         with:
@@ -124,7 +124,28 @@ jobs:
         uses: tetherto/qvac-actions/setup-pnpm@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           package-json-file: src/package.json
-      - if: steps.models.outputs.fill == 'true' && steps.cache.outputs.cache-hit != 'true'
+      # A per-model directory: its cache:models:plan lists the models (the desktop set) this run restores and saves.
+      - if: steps.models.outputs.fill == 'true' && steps.models.outputs.mode == 'per-model'
+        id: plan
+        shell: bash
+        working-directory: src
+        env:
+          PROJECT: ${{ matrix.row.project }}
+          GH: ${{ contains(matrix.row.meta.secrets, 'GITHUB_TOKEN') && github.token || '' }}
+          MODELS_CACHE_ROOT: ${{ steps.models.outputs.cache-root }}
+        run: |
+          export MODELS_CACHE_PLAN="$RUNNER_TEMP/models-plan.json" GITHUB_TOKEN="$GH"
+          pnpm install --frozen-lockfile --ignore-scripts --filter .
+          pnpm exec nx run "$PROJECT:cache:models:plan" --exclude-task-dependencies --outputStyle=stream
+          echo "plan=$MODELS_CACHE_PLAN" >> "$GITHUB_OUTPUT"
+      - if: steps.plan.outputs.plan != ''
+        id: plan-cache
+        uses: ./.github/actions/models-cache/restore
+        with:
+          mode: per-model
+          plan: ${{ steps.plan.outputs.plan }}
+          cache-root: ${{ steps.models.outputs.cache-root }}
+      - if: steps.models.outputs.fill == 'true' && steps.cache.outputs.cache-hit != 'true' && steps.plan-cache.outputs.cache-hit != 'true'
         name: cache:models
         shell: bash
         working-directory: src
@@ -135,13 +156,13 @@ jobs:
           if [ -n "$GH" ]; then export GITHUB_TOKEN="$GH"; fi
           pnpm install --frozen-lockfile --ignore-scripts --filter .
           pnpm exec nx run "$PROJECT:cache:models" --exclude-task-dependencies --outputStyle=stream
-      - if: steps.models.outputs.paths != '' && steps.cache.outputs.cache-hit != 'true'
+      - if: steps.models.outputs.paths != '' && steps.cache.outputs.cache-hit != 'true' && steps.plan-cache.outputs.cache-hit != 'true'
         uses: ./.github/actions/models-cache/save
         with:
           mode: ${{ steps.models.outputs.mode }}
           key: ${{ steps.models.outputs.key }}
           paths: ${{ steps.models.outputs.paths }}
-          plan: ${{ steps.models.outputs.plan }}
+          plan: ${{ steps.models.outputs.plan || steps.plan.outputs.plan }}
 
   # Providers first, once per configuration; a pull request's build legs may reuse these from main (Q1).
   providers:

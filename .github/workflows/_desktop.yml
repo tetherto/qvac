@@ -111,7 +111,7 @@ jobs:
           workdir: ${{ env.WORKDIR }}
           target: ${{ matrix.row.target }}
       # Restores only: a pull_request_target run shares main's cache scope, so only cache-warm.yml saves.
-      - if: steps.models.outputs.paths != '' && runner.environment != 'github-hosted'
+      - if: steps.models.outputs.paths != '' && runner.environment != 'github-hosted' && (steps.models.outputs.mode == 'all' || steps.models.outputs.plan != '')
         id: models-restore
         uses: ./.github/actions/models-cache/restore
         with:
@@ -120,6 +120,7 @@ jobs:
           restore-keys: ${{ steps.models.outputs.restore-prefix }}
           paths: ${{ steps.models.outputs.paths }}
           plan: ${{ steps.models.outputs.plan }}
+          cache-root: ${{ steps.models.outputs.cache-root }}
       - uses: ./.github/actions/models-download
         with:
           workdir: ${{ env.WORKDIR }}
@@ -158,6 +159,30 @@ jobs:
         run: |
           dirs=$(printf "%s\n" packages/*/prebuilds | sed "s|/prebuilds$||" | paste -sd, -)
           pnpm exec nx run-many -t link:platform -p "$dirs" --exclude-task-dependencies --outputStyle=stream
+      # A per-model package whose models only its own code can list writes the leg's plan after the install, then this
+      # restores it. It holds no AWS and only reads, under the cache root models-cache-key set.
+      - if: steps.models.outputs.mode == 'per-model' && steps.models.outputs.plan == '' && runner.environment != 'github-hosted'
+        id: models-plan
+        shell: bash
+        working-directory: src
+        env:
+          PROJECT: ${{ matrix.row.project }}
+          CONFIG: ${{ matrix.row.config }}
+          CI_SUITE: ${{ matrix.row.suite }}
+          CI_TESTS: ${{ matrix.row.tests }}
+          GH: ${{ contains(matrix.row.meta.secrets, 'GITHUB_TOKEN') && github.token || '' }}
+          MODELS_CACHE_ROOT: ${{ steps.models.outputs.cache-root }}
+        run: |
+          export MODELS_CACHE_PLAN="$RUNNER_TEMP/models-plan.json" GITHUB_TOKEN="$GH"
+          pnpm exec nx run "$PROJECT:cache:models:plan" --exclude-task-dependencies --outputStyle=stream
+          echo "plan=$MODELS_CACHE_PLAN" >> "$GITHUB_OUTPUT"
+      - if: steps.models-plan.outputs.plan != ''
+        id: models-plan-restore
+        uses: ./.github/actions/models-cache/restore
+        with:
+          mode: per-model
+          plan: ${{ steps.models-plan.outputs.plan }}
+          cache-root: ${{ steps.models.outputs.cache-root }}
       - name: ${{ matrix.row.target }}
         shell: bash
         working-directory: src
@@ -188,7 +213,9 @@ jobs:
           # The tests a row names, such as a rerun's previously failed ones; empty runs the suite.
           CI_TESTS: ${{ matrix.row.tests }}
           # true when the model restore hit its exact key, so a package that downloads its own models can skip it.
-          MODELS_CACHE_HIT: ${{ steps.models-restore.outputs.cache-hit }}
+          MODELS_CACHE_HIT: ${{ steps.models-restore.outputs.cache-hit || steps.models-plan-restore.outputs.cache-hit }}
+          # per-model: the models the restore did not provide, a JSON array, for a package that downloads its own.
+          MODELS_MISSING: ${{ steps.models-plan-restore.outputs.missing-models }}
           PERF_RUNS: ${{ inputs.perf_runs }}
           PERF_WARMUP_RUNS: ${{ inputs.perf_warmup_runs }}
           ARGS: ${{ inputs.args }}
