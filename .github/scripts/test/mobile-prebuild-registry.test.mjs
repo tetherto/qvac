@@ -1165,7 +1165,8 @@ test('ggml-rpc-server skips same-run prebuilds for a pinned run and verifies the
 })
 
 // The dispatch inputs are what people copy from, and the action rejects the
-// combination, so the descriptions must say so.
+// combination, so the descriptions must say so. Matched from the
+// workflow_dispatch block: a workflow_call input of the same name can come first.
 test('the run-id input documents its precedence and the mutual exclusion', () => {
   const workflows = spawnSync(
     'git',
@@ -1175,7 +1176,10 @@ test('the run-id input documents its precedence and the mutual exclusion', () =>
 
   for (const relativePath of workflows) {
     const source = read(relativePath)
-    const match = source.match(/^      prebuild_run_id:\n        description: "([^"]*)"/m)
+    const dispatch = source.indexOf('\n  workflow_dispatch:\n')
+    const match = dispatch === -1
+      ? null
+      : source.slice(dispatch).match(/^      prebuild_run_id:\n        description: "([^"]*)"/m)
     if (!match) continue
 
     const description = match[1]
