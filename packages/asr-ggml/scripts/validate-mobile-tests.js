@@ -22,8 +22,8 @@ function toFunctionName(fileName) {
 
 // test/mobile/perf-tests.json is the on-device benchmark registry. It is read
 // by two consumers, both of which fail hard (not warn) when a name is wrong:
-//   - .github/workflows/integration-mobile-test-asr-ggml.yml derives the Mocha
-//     grep for a benchmark matrix row from it, and
+//   - ci/prepare-mobile.mjs derives the Mocha grep for a benchmark run's
+//     row from it, and
 //   - .github/actions/run-mobile-integration-tests/upload-to-devicefarm uses it
 //     as the perf-only filter.
 // Keep it in exact sync with the mobile-perf runners: every mobile-perf test

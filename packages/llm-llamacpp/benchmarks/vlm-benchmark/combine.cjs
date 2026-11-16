@@ -171,7 +171,7 @@ function main () {
   } else {
     const { rows, vision, meta } = parseLog(inputs)
     // Two-models Highlights compare a base cell vs a candidate cell by LABEL.
-    // With launch-time models (matrix_models) the labels can be anything, so
+    // With launch-time models (models=) the labels can be anything, so
     // derive them from the rows: the committed config pair when both actually
     // ran, else the first two distinct cells in marker order.
     let base, candidate

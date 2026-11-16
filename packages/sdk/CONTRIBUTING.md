@@ -89,7 +89,7 @@ npm i path/to/qvac-sdk-0.21.0.tgz
 
 ## 📝 Commit messages and PR titles
 
-Commit messages and PR titles are structured so changelogs can be generated from them. [`scripts/sdk/validator.cjs`](../../scripts/sdk/validator.cjs) is the source of truth for the allowed values; the Husky `commit-msg` hook validates commits, and CI validates PR titles and descriptions.
+Commit messages and PR titles are structured so changelogs can be generated from them. [`ci/validator.cjs`](ci/validator.cjs) is the source of truth for the allowed values; the Husky `commit-msg` hook validates commits, and CI validates PR titles and descriptions.
 
 ```
 prefix[tags]?: subject          # commit message

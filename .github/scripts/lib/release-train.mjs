@@ -67,9 +67,6 @@ export function loadTrain (name, catalog, nxJson) {
   if (unknown.length) {
     throw new Error(`Train '${name}': unknown checks ${unknown.join(', ')}; known: ${CHECK_KINDS.join(', ')}`)
   }
-  if (checks.includes('package-checks') && !train.packageChecks) {
-    throw new Error(`Train '${name}': package-checks needs packageChecks, the per-package check config`)
-  }
   // The Kotlin Maven zips attach to the sdk-v<version> release.
   if (checks.includes('sdk-kotlin') && train.githubRelease?.project !== '@qvac/sdk') {
     throw new Error(`Train '${name}': sdk-kotlin needs the @qvac/sdk GitHub release, which its Maven zips attach to`)
@@ -80,7 +77,6 @@ export function loadTrain (name, catalog, nxJson) {
     anchorProjects,
     githubRelease: train.githubRelease ?? null,
     checks,
-    packageChecks: train.packageChecks ?? null,
   }
 }
 
