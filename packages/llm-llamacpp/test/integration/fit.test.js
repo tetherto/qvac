@@ -98,7 +98,9 @@ const EVERY_SETTING = {
   'n-cpu-ffn': '1',
   'override-tensor': 'ffn_.*=CPU',
   'prefetch-weights': 'auto',
-  'fit-ctx': '2048'
+  'fit-ctx': '2048',
+  'image-max-megapixels': '8',
+  'audio-max-seconds': '120'
 }
 
 const MOBILE_REFUSED = ['main-gpu', 'split-mode', 'tensor-split']
@@ -130,6 +132,13 @@ test('a context floor that is not a count rejects', { timeout: 600_000 }, async 
 
 test('a load the engine cannot parse rejects', { timeout: 600_000 }, async (t) => {
   await t.exception(assess(await modelPath(), { 'ctx-size': 'not-a-number' }))
+})
+
+test('a media limit a load would refuse rejects', { timeout: 600_000 }, async (t) => {
+  const file = await modelPath()
+
+  await t.exception(assess(file, { 'audio-max-seconds': '0' }))
+  await t.exception(assess(file, { 'image-max-megapixels': 'many' }))
 })
 
 test('a cpu load is unknown', { timeout: 600_000 }, async (t) => {

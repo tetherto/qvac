@@ -713,7 +713,10 @@ inline FitResult runFit(FitRequest request) {
 
   common_params loadParams;
   try {
-    // Addon-only key, consumed before llama.cpp's parser sees it, as at load.
+    // Addon-only keys, consumed before llama.cpp's parser sees them, as at
+    // load. The media limits only bound decoding, so the fit just validates
+    // them.
+    static_cast<void>(takeMediaLimits(configFilemap));
     const auto speculativeConfig =
         qvac_lib_inference_addon_llama::speculative::parseSpeculativeConfig(
             configFilemap);
