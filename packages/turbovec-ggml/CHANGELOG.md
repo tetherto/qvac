@@ -1,5 +1,33 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Async variants of every operation that can run long: `addWithIdsAsync()`,
+  `addLoggedAsync()`, `removeAsync()`, `removeLoggedAsync()`,
+  `compactAsync()`, `compactDeltaAsync()`, `searchAsync()`,
+  `searchFilteredAsync()`, `prepareFilterAsync()`, `buildIvfAsync()`,
+  `searchIvfAsync()`, `prepareAsync()`, `writeAsync()`,
+  `IdMapIndexFilter#searchAsync()`, the static `loadAsync()`,
+  `loadMmapAsync()` and `loadWithDeltaAsync()`, and `disposeAsync()`. They run
+  the native work on two worker threads owned by the addon instead of the JS
+  thread, so a large IVF build or search no longer stalls every other request
+  in the process. Calls on one index run one at a time in call order. Across
+  indexes, long work (adds, builds, loads, writes, compaction) runs on one
+  thread and searches on the other, so a build never holds up a search. Input
+  arrays are copied when the call is made.
+- `benchmarks:async` measures the per-call cost of `searchAsync()` against
+  `search()`.
+
+### Changed
+
+- While an async call on an index is queued or running, its sync methods and
+  the `length`, `calibrated` and `stagedSearch` getters throw, and `dispose()`
+  frees the native index only after the running call finishes. Code that uses
+  only the sync API is not affected.
+- `dim` and `bitWidth` are read once when the index is created or loaded.
+
 ## [0.6.0] - 2026-11-16
 
 ### Changed

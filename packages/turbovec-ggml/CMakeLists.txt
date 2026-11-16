@@ -17,8 +17,10 @@ add_bare_module(turbovec-ggml EXPORTS)
 target_sources(
   ${turbovec-ggml}
   PRIVATE
+    ${PROJECT_SOURCE_DIR}/addon/AsyncJob.cpp
     ${PROJECT_SOURCE_DIR}/addon/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/VectorIndex.cpp
+    ${PROJECT_SOURCE_DIR}/addon/WorkerPool.cpp
 )
 
 qvac_addon_link_fabric(${turbovec-ggml} ${qvac_fabric_target})

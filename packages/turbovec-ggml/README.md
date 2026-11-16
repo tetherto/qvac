@@ -1,6 +1,6 @@
 # @qvac/turbovec-ggml
 
-`IdMapIndex` is a synchronous CPU vector index with stable unsigned 64-bit IDs.
+`IdMapIndex` is a CPU vector index with stable unsigned 64-bit IDs.
 It stores vectors as full `f32`, generic `q8`/`q4` quantized codes, or
 TurboVec `q4`/`q2` codes searched directly in their quantized form.
 
@@ -55,7 +55,9 @@ Staged search is off for every new or loaded TurboVec index, so a search scores 
 - `write()` and `load()` persist all storage modes. Generic `f32`, `q8`, and `q4` additionally support `loadMmap()`, `loadWithDelta()`, `addLogged()`, `removeLogged()`, and `compactDelta()`.
 - Mutations invalidate prepared filters and IVF state.
 - Call `dispose()` on indexes and prepared filters when finished. Disposal is idempotent.
-- Every call runs synchronously on the calling thread.
+- Every method above runs synchronously on the calling thread. The ones that
+  can run long also have async variants that run off the JS thread: see
+  [Async API](#async-api).
 
 Errors thrown by the native index carry the fabric error category as their
 message: `InvalidArgument`, `DuplicateId`, `NotFound`, `IOError`, `BadMagic`,
@@ -66,6 +68,57 @@ For retrieval over text, index embeddings from `GGMLBert` in
 embedding, add the rows with their chunk IDs, and search with the normalized
 query embedding.
 
+## Async API
+
+A large build, search or load blocks the JS thread for as long as it runs,
+and with it every other request the process is serving. The async variants run
+the same native work on worker threads owned by this addon and return a
+promise that resolves with the same value, or rejects with the same error, as
+the sync method:
+
+`addWithIdsAsync()`, `addLoggedAsync()`, `removeAsync()`,
+`removeLoggedAsync()`, `compactAsync()`, `compactDeltaAsync()`,
+`searchAsync()`, `searchFilteredAsync()`, `prepareFilterAsync()`,
+`buildIvfAsync()`, `searchIvfAsync()`, `prepareAsync()`, `writeAsync()`,
+`IdMapIndexFilter#searchAsync()`, and the static `loadAsync()`,
+`loadMmapAsync()` and `loadWithDeltaAsync()`.
+
+```javascript
+const index = await IdMapIndex.loadAsync(snapshotPath)
+try {
+  await index.buildIvfAsync(256, 10)
+  const { ids, scores } = await index.searchIvfAsync(query, 10, 16)
+} finally {
+  await index.disposeAsync()
+}
+```
+
+- Async calls on one index run one at a time, in call order, so a search
+  started after an add sees it.
+- Across all indexes in the process, long work (adds, IVF builds, loads,
+  writes, compaction, `prepareAsync()`, logged removes) runs on one worker
+  thread and the rest (searches, `prepareFilterAsync()`, `removeAsync()`) on
+  another. A long build therefore never holds up a search, but two builds take
+  turns, and an add waits behind a build on another index. Each call runs on a
+  single thread, as the sync calls do.
+- While an async call on an index is queued or running, its sync methods and
+  the `length`, `calibrated` and `stagedSearch` getters throw. `dim`,
+  `bitWidth` and `dispose()` still work. Await the async work first, or use the
+  async variants throughout.
+- Input arrays are copied when the call is made, so they can be changed or
+  transferred straight away. A large add briefly holds two copies of its
+  vectors.
+- `dispose()` during async work rejects the calls that have not started. A call
+  that is running finishes, and the native index is freed after it.
+  `disposeAsync()` resolves once it has been freed. A `prepareFilterAsync()`
+  that was running when the index was disposed rejects.
+- If the Bare environment shuts down, jobs that have not started are skipped.
+  A running job still finishes before the environment is released.
+- A started call cannot be cancelled. `buildIvfAsync()` runs to the end even
+  when nothing awaits it any more.
+- Each async call adds a few microseconds over the sync call; see
+  `npm run benchmarks:async`.
+
 ## Development
 
 ```bash
@@ -75,6 +128,7 @@ npm run test:integration  # IdMapIndex suite under Bare
 npm run test:cpp          # C++ unit tests for the native wrapper
 npm run lint
 npm run benchmarks:cpu    # CPU benchmark across every storage mode
+npm run benchmarks:async  # per-call latency of searchAsync() against search()
 ```
 
 ## License

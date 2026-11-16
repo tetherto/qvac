@@ -4,6 +4,10 @@ declare const FILTER_OWNER: unique symbol;
 declare const FILTER_REF: unique symbol;
 declare const FILTERS: unique symbol;
 declare const FILTERS_PRUNE_AT: unique symbol;
+declare const QUEUE: unique symbol;
+declare const PENDING: unique symbol;
+declare const DIM: unique symbol;
+declare const BIT_WIDTH: unique symbol;
 declare const BIT_WIDTH_BY_STORAGE: {
     readonly f32: 32;
     readonly q8: 8;
@@ -47,7 +51,16 @@ export declare class IdMapIndexFilter {
     private constructor();
     /** Search with this prepared allowlist. Mutating the owner invalidates the filter. */
     search(queries: Float32Array, k: number): IdMapIndexSearchResult;
-    /** Release the prepared native filter. This operation is idempotent. */
+    /**
+     * `search()` run off the JS thread, queued behind the owner's other async
+     * operations. Rejects when a mutation queued before it disposed the filter.
+     */
+    searchAsync(queries: Float32Array, k: number): Promise<IdMapIndexSearchResult>;
+    /**
+     * Release the prepared native filter. This operation is idempotent. While
+     * the owner has async operations queued, the native filter is freed after
+     * they settle.
+     */
     dispose(): void;
 }
 type IdMapIndexClass<T extends IdMapIndex> = (abstract new (...args: never[]) => T) & {
@@ -68,6 +81,10 @@ export default class IdMapIndex {
     [HANDLE]: NativeHandle | null;
     [FILTERS]: Set<WeakRef<IdMapIndexFilter>>;
     [FILTERS_PRUNE_AT]: number;
+    [QUEUE]: Promise<unknown>;
+    [PENDING]: number;
+    [DIM]: number;
+    [BIT_WIDTH]: IdMapIndexBitWidth;
     constructor(options: IdMapIndexOptions);
     /**
      * Load a v2/v3/v8 snapshot or migrate legacy v1 storage. Legacy bit-width 8
@@ -102,6 +119,18 @@ export default class IdMapIndex {
     /** Detached call, e.g. `const { loadWithDelta } = IdMapIndex`. Returns an IdMapIndex. */
     static loadWithDelta(snapshotPath: string, deltaPath: string): IdMapIndex;
     private static fromHandle;
+    /** `load()` run off the JS thread. */
+    static loadAsync<T extends IdMapIndex>(this: IdMapIndexClass<T>, path: string): Promise<T>;
+    /** Detached call, e.g. `const { loadAsync } = IdMapIndex`. Resolves to an IdMapIndex. */
+    static loadAsync(path: string): Promise<IdMapIndex>;
+    /** `loadMmap()` run off the JS thread. */
+    static loadMmapAsync<T extends IdMapIndex>(this: IdMapIndexClass<T>, path: string): Promise<T>;
+    /** Detached call, e.g. `const { loadMmapAsync } = IdMapIndex`. Resolves to an IdMapIndex. */
+    static loadMmapAsync(path: string): Promise<IdMapIndex>;
+    /** `loadWithDelta()` run off the JS thread. */
+    static loadWithDeltaAsync<T extends IdMapIndex>(this: IdMapIndexClass<T>, snapshotPath: string, deltaPath: string): Promise<T>;
+    /** Detached call, e.g. `const { loadWithDeltaAsync } = IdMapIndex`. Resolves to an IdMapIndex. */
+    static loadWithDeltaAsync(snapshotPath: string, deltaPath: string): Promise<IdMapIndex>;
     /**
      * Atomically add vectors with stable uint64 IDs. `vectors` is row-major and
      * must contain `ids.length * dim` finite components. TurboVec additionally
@@ -176,6 +205,35 @@ export default class IdMapIndex {
      * compaction and is rejected with `InvalidArgument`.
      */
     compactDelta(snapshotPath: string, deltaPath: string): void;
+    /** `addWithIds()` run off the JS thread. */
+    addWithIdsAsync(vectors: Float32Array, ids: BigUint64Array): Promise<void>;
+    /** `addLogged()` run off the JS thread. */
+    addLoggedAsync(vectors: Float32Array, ids: BigUint64Array, deltaPath: string): Promise<void>;
+    /** `search()` run off the JS thread. */
+    searchAsync(queries: Float32Array, k: number): Promise<IdMapIndexSearchResult>;
+    /** `searchFiltered()` run off the JS thread. */
+    searchFilteredAsync(queries: Float32Array, k: number, allowedIds: BigUint64Array): Promise<IdMapIndexSearchResult>;
+    /** `prepareFilter()` run off the JS thread. */
+    prepareFilterAsync(allowedIds: BigUint64Array): Promise<IdMapIndexFilter>;
+    /**
+     * `buildIvf()` run off the JS thread. The build cannot be cancelled: once
+     * it starts, it runs to the end.
+     */
+    buildIvfAsync(nLists: number, nIter?: number): Promise<void>;
+    /** `searchIvf()` run off the JS thread. */
+    searchIvfAsync(queries: Float32Array, k: number, nProbe: number): Promise<IdMapIndexSearchResult>;
+    /** `remove()` run off the JS thread. */
+    removeAsync(id: bigint): Promise<boolean>;
+    /** `removeLogged()` run off the JS thread. */
+    removeLoggedAsync(id: bigint, deltaPath: string): Promise<boolean>;
+    /** `compact()` run off the JS thread. */
+    compactAsync(): Promise<void>;
+    /** `prepare()` run off the JS thread. */
+    prepareAsync(): Promise<void>;
+    /** `write()` run off the JS thread. */
+    writeAsync(path: string): Promise<void>;
+    /** `compactDelta()` run off the JS thread. */
+    compactDeltaAsync(snapshotPath: string, deltaPath: string): Promise<void>;
     /** Number of live entries. */
     get length(): number;
     /** Vector dimensionality. */
@@ -204,9 +262,17 @@ export default class IdMapIndex {
      * non-TurboVec storage. Not saved in snapshots.
      */
     setStagedSearch(enabled: boolean): void;
-    /** Release filters and native index resources. This operation is idempotent. */
+    /**
+     * Release filters and native index resources. This operation is
+     * idempotent. Async operations that have not started yet reject; one that
+     * is running finishes first, and the native index is freed after it.
+     */
     dispose(): void;
+    /** `dispose()`, resolving once the native index has been freed. */
+    disposeAsync(): Promise<void>;
     private disposeFilters;
+    private mutate;
+    private registerFilter;
     private pruneFilters;
     private validateBatch;
     private validateSearch;

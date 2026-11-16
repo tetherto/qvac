@@ -4,6 +4,10 @@ const FILTER_OWNER = Symbol('IdMapIndexFilter.owner')
 const FILTER_REF = Symbol('IdMapIndexFilter.ref')
 const FILTERS = Symbol('IdMapIndex.filters')
 const FILTERS_PRUNE_AT = Symbol('IdMapIndex.filtersPruneAt')
+const QUEUE = Symbol('IdMapIndex.queue')
+const PENDING = Symbol('IdMapIndex.pending')
+const DIM = Symbol('IdMapIndex.dim')
+const BIT_WIDTH = Symbol('IdMapIndex.bitWidth')
 const INT32_MAX = 0x7fffffff
 // Dropped filters leave dead WeakRefs behind. Pruning once the set doubles
 // keeps prepareFilter amortized O(1) instead of rescanning on every call.
@@ -74,6 +78,51 @@ interface IdMapIndexBinding {
   idx_calibrated(handle: NativeHandle): boolean
   idx_set_staged(handle: NativeHandle, enabled: boolean): void
   idx_staged(handle: NativeHandle): boolean
+  idx_load_async(path: string): Promise<NativeHandle>
+  idx_load_mmap_async(path: string): Promise<NativeHandle>
+  idx_load_with_delta_async(snapshotPath: string, deltaPath: string): Promise<NativeHandle>
+  idx_add_async(handle: NativeHandle, vectors: Float32Array, ids: BigUint64Array): Promise<void>
+  idx_add_logged_async(
+    handle: NativeHandle,
+    vectors: Float32Array,
+    ids: BigUint64Array,
+    deltaPath: string
+  ): Promise<void>
+  idx_remove_async(handle: NativeHandle, id: bigint): Promise<boolean>
+  idx_remove_logged_async(handle: NativeHandle, id: bigint, deltaPath: string): Promise<boolean>
+  idx_search_async(
+    handle: NativeHandle,
+    queries: Float32Array,
+    k: number
+  ): Promise<IdMapIndexSearchResult>
+  idx_search_filtered_async(
+    handle: NativeHandle,
+    queries: Float32Array,
+    k: number,
+    allowedIds: BigUint64Array
+  ): Promise<IdMapIndexSearchResult>
+  idx_filter_create_async(handle: NativeHandle, allowedIds: BigUint64Array): Promise<NativeHandle>
+  idx_search_prepared_filtered_async(
+    handle: NativeHandle,
+    filterHandle: NativeHandle,
+    queries: Float32Array,
+    k: number
+  ): Promise<IdMapIndexSearchResult>
+  idx_build_ivf_async(handle: NativeHandle, nLists: number, nIter: number): Promise<void>
+  idx_search_ivf_async(
+    handle: NativeHandle,
+    queries: Float32Array,
+    k: number,
+    nProbe: number
+  ): Promise<IdMapIndexSearchResult>
+  idx_compact_async(handle: NativeHandle): Promise<void>
+  idx_prepare_async(handle: NativeHandle): Promise<void>
+  idx_write_async(handle: NativeHandle, path: string): Promise<void>
+  idx_compact_delta_async(
+    handle: NativeHandle,
+    snapshotPath: string,
+    deltaPath: string
+  ): Promise<void>
 }
 
 let binding: IdMapIndexBinding | undefined
@@ -144,6 +193,55 @@ function ensureHandle(index: IdMapIndex) {
   return handle
 }
 
+// Sync calls are rejected while async work is queued or running: fabric
+// would block the JS thread on the index lock until that work finished, and
+// the call would run out of order with it.
+function ensureIdleHandle(index: IdMapIndex) {
+  const handle = ensureHandle(index)
+  if (index[PENDING] > 0) {
+    throw new Error(
+      'IdMapIndex has async operations in progress; await them before calling a sync method'
+    )
+  }
+  return handle
+}
+
+function swallow() {}
+
+// Calls `run` now; a synchronous throw becomes a rejection.
+function startNow<T>(run: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve) => {
+    resolve(run())
+  })
+}
+
+// Runs async operations on one index one at a time, in call order. On an
+// idle index `run` starts now, so the native job holds the index before the
+// caller's next statement (a `dispose()` right after lets it finish);
+// otherwise it starts when every earlier operation has settled. The pending
+// count drops before the caller's own continuation runs, so code that
+// awaited the last operation can use the sync API straight away.
+function enqueue<T>(index: IdMapIndex, run: () => Promise<T>): Promise<T> {
+  ensureHandle(index)
+  const result = index[PENDING] === 0 ? startNow(run) : index[QUEUE].then(run)
+  index[PENDING] += 1
+  const settled = () => {
+    index[PENDING] -= 1
+  }
+  index[QUEUE] = result.then(settled, settled)
+  return result
+}
+
+// Frees a native handle once the operations queued on `owner` have settled,
+// or now when none are. An operation that is running holds the handle.
+function releaseAfterQueue(owner: IdMapIndex, release: () => void) {
+  if (owner[PENDING] === 0) {
+    release()
+    return
+  }
+  owner[QUEUE] = owner[QUEUE].then(release).then(swallow, swallow)
+}
+
 function normalizeStorageOptions(options: IdMapIndexOptions): IdMapIndexStorage {
   const { bitWidth, storage } = options
 
@@ -184,21 +282,49 @@ export class IdMapIndexFilter {
 
   /** Search with this prepared allowlist. Mutating the owner invalidates the filter. */
   search(queries: Float32Array, k: number) {
-    if (!(queries instanceof Float32Array)) {
-      throw new TypeError('IdMapIndexFilter.search: queries must be a Float32Array')
-    }
-    if (!isPositiveInt32(k)) {
-      throw new TypeError('IdMapIndexFilter.search: k must be a positive int32')
-    }
+    validateFilterSearch('IdMapIndexFilter.search', queries, k)
     const owner = this[FILTER_OWNER]
     const filterHandle = this[FILTER_HANDLE]
     if (owner === null || filterHandle === null) {
       throw new Error('IdMapIndexFilter has been disposed')
     }
-    return loadBinding().idx_search_prepared_filtered(ensureHandle(owner), filterHandle, queries, k)
+    return loadBinding().idx_search_prepared_filtered(
+      ensureIdleHandle(owner),
+      filterHandle,
+      queries,
+      k
+    )
   }
 
-  /** Release the prepared native filter. This operation is idempotent. */
+  /**
+   * `search()` run off the JS thread, queued behind the owner's other async
+   * operations. Rejects when a mutation queued before it disposed the filter.
+   */
+  async searchAsync(queries: Float32Array, k: number) {
+    validateFilterSearch('IdMapIndexFilter.searchAsync', queries, k)
+    const owner = this[FILTER_OWNER]
+    if (owner === null || this[FILTER_HANDLE] === null) {
+      throw new Error('IdMapIndexFilter has been disposed')
+    }
+    return enqueue(owner, () => {
+      const filterHandle = this[FILTER_HANDLE]
+      if (this[FILTER_OWNER] === null || filterHandle === null) {
+        throw new Error('IdMapIndexFilter has been disposed')
+      }
+      return loadBinding().idx_search_prepared_filtered_async(
+        ensureHandle(owner),
+        filterHandle,
+        queries,
+        k
+      )
+    })
+  }
+
+  /**
+   * Release the prepared native filter. This operation is idempotent. While
+   * the owner has async operations queued, the native filter is freed after
+   * they settle.
+   */
   dispose() {
     const filterHandle = this[FILTER_HANDLE]
     if (filterHandle === null) {
@@ -206,13 +332,24 @@ export class IdMapIndexFilter {
     }
 
     const owner = this[FILTER_OWNER]
-    loadBinding().idx_filter_dispose(filterHandle)
     this[FILTER_HANDLE] = null
     this[FILTER_OWNER] = null
     if (owner !== null) {
       releaseFilter(owner, this)
+      releaseAfterQueue(owner, () => loadBinding().idx_filter_dispose(filterHandle))
+    } else {
+      loadBinding().idx_filter_dispose(filterHandle)
     }
     this[FILTER_REF] = null
+  }
+}
+
+function validateFilterSearch(name: string, queries: Float32Array, k: number) {
+  if (!(queries instanceof Float32Array)) {
+    throw new TypeError(`${name}: queries must be a Float32Array`)
+  }
+  if (!isPositiveInt32(k)) {
+    throw new TypeError(`${name}: k must be a positive int32`)
   }
 }
 
@@ -245,7 +382,13 @@ export default class IdMapIndex {
 
   [HANDLE]: NativeHandle | null = null;
   [FILTERS] = new Set<WeakRef<IdMapIndexFilter>>();
-  [FILTERS_PRUNE_AT] = MIN_FILTERS_PRUNE_AT
+  [FILTERS_PRUNE_AT] = MIN_FILTERS_PRUNE_AT;
+  [QUEUE]: Promise<unknown> = Promise.resolve();
+  [PENDING] = 0;
+  // Fixed for the life of the index. Kept in JS so validating an async call
+  // never has to reach the native index while another call holds it.
+  [DIM] = 0;
+  [BIT_WIDTH]: IdMapIndexBitWidth = 8
 
   constructor(options: IdMapIndexOptions) {
     const { dim } = options ?? ({} as IdMapIndexOptions)
@@ -258,7 +401,10 @@ export default class IdMapIndex {
         'IdMapIndex: TurboVec dim must be divisible by 8 and no greater than 16384'
       )
     }
-    this[HANDLE] = loadBinding().idx_create({ dim, storage })
+    const handle = loadBinding().idx_create({ dim, storage })
+    this[HANDLE] = handle
+    this[DIM] = dim
+    this[BIT_WIDTH] = loadBinding().idx_bit_width(handle)
   }
 
   /**
@@ -323,7 +469,50 @@ export default class IdMapIndex {
     instance[HANDLE] = handle
     instance[FILTERS] = new Set()
     instance[FILTERS_PRUNE_AT] = MIN_FILTERS_PRUNE_AT
+    instance[QUEUE] = Promise.resolve()
+    instance[PENDING] = 0
+    instance[DIM] = loadBinding().idx_dim(handle)
+    instance[BIT_WIDTH] = loadBinding().idx_bit_width(handle)
     return instance
+  }
+
+  /** `load()` run off the JS thread. */
+  static loadAsync<T extends IdMapIndex>(this: IdMapIndexClass<T>, path: string): Promise<T>
+  /** Detached call, e.g. `const { loadAsync } = IdMapIndex`. Resolves to an IdMapIndex. */
+  static loadAsync(path: string): Promise<IdMapIndex>
+  static async loadAsync(this: unknown, path: string): Promise<IdMapIndex> {
+    requireNonEmptyPath(path, 'IdMapIndex.loadAsync: path')
+    return IdMapIndex.fromHandle(this, await loadBinding().idx_load_async(path))
+  }
+
+  /** `loadMmap()` run off the JS thread. */
+  static loadMmapAsync<T extends IdMapIndex>(this: IdMapIndexClass<T>, path: string): Promise<T>
+  /** Detached call, e.g. `const { loadMmapAsync } = IdMapIndex`. Resolves to an IdMapIndex. */
+  static loadMmapAsync(path: string): Promise<IdMapIndex>
+  static async loadMmapAsync(this: unknown, path: string): Promise<IdMapIndex> {
+    requireNonEmptyPath(path, 'IdMapIndex.loadMmapAsync: path')
+    return IdMapIndex.fromHandle(this, await loadBinding().idx_load_mmap_async(path))
+  }
+
+  /** `loadWithDelta()` run off the JS thread. */
+  static loadWithDeltaAsync<T extends IdMapIndex>(
+    this: IdMapIndexClass<T>,
+    snapshotPath: string,
+    deltaPath: string
+  ): Promise<T>
+  /** Detached call, e.g. `const { loadWithDeltaAsync } = IdMapIndex`. Resolves to an IdMapIndex. */
+  static loadWithDeltaAsync(snapshotPath: string, deltaPath: string): Promise<IdMapIndex>
+  static async loadWithDeltaAsync(
+    this: unknown,
+    snapshotPath: string,
+    deltaPath: string
+  ): Promise<IdMapIndex> {
+    requireNonEmptyPath(snapshotPath, 'IdMapIndex.loadWithDeltaAsync: snapshotPath')
+    requireNonEmptyPath(deltaPath, 'IdMapIndex.loadWithDeltaAsync: deltaPath')
+    return IdMapIndex.fromHandle(
+      this,
+      await loadBinding().idx_load_with_delta_async(snapshotPath, deltaPath)
+    )
   }
 
   /**
@@ -333,8 +522,9 @@ export default class IdMapIndex {
    */
   addWithIds(vectors: Float32Array, ids: BigUint64Array) {
     this.validateBatch('addWithIds', vectors, ids)
+    const handle = ensureIdleHandle(this)
     try {
-      loadBinding().idx_add(ensureHandle(this), vectors, ids)
+      loadBinding().idx_add(handle, vectors, ids)
     } finally {
       this.disposeFilters()
     }
@@ -353,8 +543,9 @@ export default class IdMapIndex {
   addLogged(vectors: Float32Array, ids: BigUint64Array, deltaPath: string) {
     this.validateBatch('addLogged', vectors, ids)
     requireNonEmptyPath(deltaPath, 'addLogged: deltaPath')
+    const handle = ensureIdleHandle(this)
     try {
-      loadBinding().idx_add_logged(ensureHandle(this), vectors, ids, deltaPath)
+      loadBinding().idx_add_logged(handle, vectors, ids, deltaPath)
     } finally {
       this.disposeFilters()
     }
@@ -369,7 +560,7 @@ export default class IdMapIndex {
    */
   search(queries: Float32Array, k: number) {
     this.validateSearch('search', queries, k)
-    return loadBinding().idx_search(ensureHandle(this), queries, k)
+    return loadBinding().idx_search(ensureIdleHandle(this), queries, k)
   }
 
   /** Exact search restricted to the supplied external IDs. */
@@ -378,7 +569,7 @@ export default class IdMapIndex {
     if (!(allowedIds instanceof BigUint64Array)) {
       throw new TypeError('searchFiltered: allowedIds must be a BigUint64Array')
     }
-    return loadBinding().idx_search_filtered(ensureHandle(this), queries, k, allowedIds)
+    return loadBinding().idx_search_filtered(ensureIdleHandle(this), queries, k, allowedIds)
   }
 
   /**
@@ -391,16 +582,7 @@ export default class IdMapIndex {
     if (!(allowedIds instanceof BigUint64Array)) {
       throw new TypeError('prepareFilter: allowedIds must be a BigUint64Array')
     }
-    const filter = createFilter(
-      this,
-      loadBinding().idx_filter_create(ensureHandle(this), allowedIds)
-    )
-    this[FILTERS].add(filter[FILTER_REF] as WeakRef<IdMapIndexFilter>)
-    if (this[FILTERS].size >= this[FILTERS_PRUNE_AT]) {
-      this.pruneFilters()
-      this[FILTERS_PRUNE_AT] = Math.max(MIN_FILTERS_PRUNE_AT, this[FILTERS].size * 2)
-    }
-    return filter
+    return this.registerFilter(loadBinding().idx_filter_create(ensureIdleHandle(this), allowedIds))
   }
 
   /**
@@ -414,7 +596,7 @@ export default class IdMapIndex {
     if (!isNonNegativeInt32(nIter)) {
       throw new TypeError('buildIvf: nIter must be a non-negative int32')
     }
-    loadBinding().idx_build_ivf(ensureHandle(this), nLists, nIter)
+    loadBinding().idx_build_ivf(ensureIdleHandle(this), nLists, nIter)
   }
 
   /**
@@ -426,13 +608,13 @@ export default class IdMapIndex {
     if (!isPositiveInt32(nProbe)) {
       throw new TypeError('searchIvf: nProbe must be a positive int32')
     }
-    return loadBinding().idx_search_ivf(ensureHandle(this), queries, k, nProbe)
+    return loadBinding().idx_search_ivf(ensureIdleHandle(this), queries, k, nProbe)
   }
 
   /** Remove an ID, returning false when it is not present. */
   remove(id: bigint) {
     this.validateId('remove', id)
-    const removed = loadBinding().idx_remove(ensureHandle(this), id)
+    const removed = loadBinding().idx_remove(ensureIdleHandle(this), id)
     if (removed) {
       this.disposeFilters()
     }
@@ -449,8 +631,9 @@ export default class IdMapIndex {
   removeLogged(id: bigint, deltaPath: string) {
     this.validateId('removeLogged', id)
     requireNonEmptyPath(deltaPath, 'removeLogged: deltaPath')
+    const handle = ensureIdleHandle(this)
     try {
-      return loadBinding().idx_remove_logged(ensureHandle(this), id, deltaPath)
+      return loadBinding().idx_remove_logged(handle, id, deltaPath)
     } finally {
       this.disposeFilters()
     }
@@ -458,8 +641,9 @@ export default class IdMapIndex {
 
   /** Physically reclaim tombstoned slots. Rejected on delta-bound handles. */
   compact() {
+    const handle = ensureIdleHandle(this)
     try {
-      loadBinding().idx_compact(ensureHandle(this))
+      loadBinding().idx_compact(handle)
     } finally {
       this.disposeFilters()
     }
@@ -468,12 +652,12 @@ export default class IdMapIndex {
   /** Return whether the index contains an external ID. */
   contains(id: bigint) {
     this.validateId('contains', id)
-    return loadBinding().idx_contains(ensureHandle(this), id)
+    return loadBinding().idx_contains(ensureIdleHandle(this), id)
   }
 
   /** Best-effort warmup of TurboVec rotation and codebook state. */
   prepare() {
-    loadBinding().idx_prepare(ensureHandle(this))
+    loadBinding().idx_prepare(ensureIdleHandle(this))
   }
 
   /**
@@ -484,7 +668,7 @@ export default class IdMapIndex {
    */
   write(path: string) {
     requireNonEmptyPath(path, 'write: path')
-    loadBinding().idx_write(ensureHandle(this), path)
+    loadBinding().idx_write(ensureIdleHandle(this), path)
   }
 
   /**
@@ -496,26 +680,175 @@ export default class IdMapIndex {
   compactDelta(snapshotPath: string, deltaPath: string) {
     requireNonEmptyPath(snapshotPath, 'compactDelta: snapshotPath')
     requireNonEmptyPath(deltaPath, 'compactDelta: deltaPath')
+    const handle = ensureIdleHandle(this)
     try {
-      loadBinding().idx_compact_delta(ensureHandle(this), snapshotPath, deltaPath)
+      loadBinding().idx_compact_delta(handle, snapshotPath, deltaPath)
     } finally {
       this.disposeFilters()
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Async API
+  //
+  // Each method runs its sync twin's native work off the JS thread and
+  // resolves with the same value, or rejects with the same error. Async
+  // operations on one index run one at a time, in call order, so a search
+  // queued after an add sees that add. Across indexes, long work (adds,
+  // builds, loads, writes, compaction) and searches run on two separate
+  // native worker threads, so a long build never holds up a search. While any
+  // async operation is queued or running, sync methods and the `length`,
+  // `calibrated` and `stagedSearch` getters throw; `dim`, `bitWidth` and
+  // `dispose()` still work. Input arrays are copied when the call is made.
+  // -------------------------------------------------------------------------
+
+  /** `addWithIds()` run off the JS thread. */
+  async addWithIdsAsync(vectors: Float32Array, ids: BigUint64Array) {
+    this.validateBatch('addWithIdsAsync', vectors, ids)
+    return enqueue(this, () =>
+      this.mutate(() => loadBinding().idx_add_async(ensureHandle(this), vectors, ids))
+    )
+  }
+
+  /** `addLogged()` run off the JS thread. */
+  async addLoggedAsync(vectors: Float32Array, ids: BigUint64Array, deltaPath: string) {
+    this.validateBatch('addLoggedAsync', vectors, ids)
+    requireNonEmptyPath(deltaPath, 'addLoggedAsync: deltaPath')
+    return enqueue(this, () =>
+      this.mutate(() =>
+        loadBinding().idx_add_logged_async(ensureHandle(this), vectors, ids, deltaPath)
+      )
+    )
+  }
+
+  /** `search()` run off the JS thread. */
+  async searchAsync(queries: Float32Array, k: number) {
+    this.validateSearch('searchAsync', queries, k)
+    return enqueue(this, () => loadBinding().idx_search_async(ensureHandle(this), queries, k))
+  }
+
+  /** `searchFiltered()` run off the JS thread. */
+  async searchFilteredAsync(queries: Float32Array, k: number, allowedIds: BigUint64Array) {
+    this.validateSearch('searchFilteredAsync', queries, k)
+    if (!(allowedIds instanceof BigUint64Array)) {
+      throw new TypeError('searchFilteredAsync: allowedIds must be a BigUint64Array')
+    }
+    return enqueue(this, () =>
+      loadBinding().idx_search_filtered_async(ensureHandle(this), queries, k, allowedIds)
+    )
+  }
+
+  /** `prepareFilter()` run off the JS thread. */
+  async prepareFilterAsync(allowedIds: BigUint64Array) {
+    if (!(allowedIds instanceof BigUint64Array)) {
+      throw new TypeError('prepareFilterAsync: allowedIds must be a BigUint64Array')
+    }
+    return enqueue(this, async () => {
+      const filterHandle = await loadBinding().idx_filter_create_async(
+        ensureHandle(this),
+        allowedIds
+      )
+      // dispose() ran while the filter was being built. Free the filter now,
+      // while the index is still alive: fabric requires the index to outlive
+      // its filters, and the index is freed once this operation settles.
+      if (this[HANDLE] === null) {
+        loadBinding().idx_filter_dispose(filterHandle)
+        throw new Error('IdMapIndex has been disposed')
+      }
+      return this.registerFilter(filterHandle)
+    })
+  }
+
+  /**
+   * `buildIvf()` run off the JS thread. The build cannot be cancelled: once
+   * it starts, it runs to the end.
+   */
+  async buildIvfAsync(nLists: number, nIter = 0) {
+    if (!isPositiveInt32(nLists)) {
+      throw new TypeError('buildIvfAsync: nLists must be a positive int32')
+    }
+    if (!isNonNegativeInt32(nIter)) {
+      throw new TypeError('buildIvfAsync: nIter must be a non-negative int32')
+    }
+    return enqueue(this, () => loadBinding().idx_build_ivf_async(ensureHandle(this), nLists, nIter))
+  }
+
+  /** `searchIvf()` run off the JS thread. */
+  async searchIvfAsync(queries: Float32Array, k: number, nProbe: number) {
+    this.validateSearch('searchIvfAsync', queries, k)
+    if (!isPositiveInt32(nProbe)) {
+      throw new TypeError('searchIvfAsync: nProbe must be a positive int32')
+    }
+    return enqueue(this, () =>
+      loadBinding().idx_search_ivf_async(ensureHandle(this), queries, k, nProbe)
+    )
+  }
+
+  /** `remove()` run off the JS thread. */
+  async removeAsync(id: bigint) {
+    this.validateId('removeAsync', id)
+    return enqueue(this, async () => {
+      const removed = await loadBinding().idx_remove_async(ensureHandle(this), id)
+      if (removed) {
+        this.disposeFilters()
+      }
+      return removed
+    })
+  }
+
+  /** `removeLogged()` run off the JS thread. */
+  async removeLoggedAsync(id: bigint, deltaPath: string) {
+    this.validateId('removeLoggedAsync', id)
+    requireNonEmptyPath(deltaPath, 'removeLoggedAsync: deltaPath')
+    return enqueue(this, () =>
+      this.mutate(() => loadBinding().idx_remove_logged_async(ensureHandle(this), id, deltaPath))
+    )
+  }
+
+  /** `compact()` run off the JS thread. */
+  async compactAsync() {
+    return enqueue(this, () =>
+      this.mutate(() => loadBinding().idx_compact_async(ensureHandle(this)))
+    )
+  }
+
+  /** `prepare()` run off the JS thread. */
+  async prepareAsync() {
+    return enqueue(this, () => loadBinding().idx_prepare_async(ensureHandle(this)))
+  }
+
+  /** `write()` run off the JS thread. */
+  async writeAsync(path: string) {
+    requireNonEmptyPath(path, 'writeAsync: path')
+    return enqueue(this, () => loadBinding().idx_write_async(ensureHandle(this), path))
+  }
+
+  /** `compactDelta()` run off the JS thread. */
+  async compactDeltaAsync(snapshotPath: string, deltaPath: string) {
+    requireNonEmptyPath(snapshotPath, 'compactDeltaAsync: snapshotPath')
+    requireNonEmptyPath(deltaPath, 'compactDeltaAsync: deltaPath')
+    return enqueue(this, () =>
+      this.mutate(() =>
+        loadBinding().idx_compact_delta_async(ensureHandle(this), snapshotPath, deltaPath)
+      )
+    )
+  }
+
   /** Number of live entries. */
   get length() {
-    return loadBinding().idx_len(ensureHandle(this))
+    return loadBinding().idx_len(ensureIdleHandle(this))
   }
 
   /** Vector dimensionality. */
   get dim() {
-    return loadBinding().idx_dim(ensureHandle(this))
+    ensureHandle(this)
+    return this[DIM]
   }
 
   /** Effective storage bit width. */
   get bitWidth() {
-    return loadBinding().idx_bit_width(ensureHandle(this))
+    ensureHandle(this)
+    return this[BIT_WIDTH]
   }
 
   /**
@@ -524,7 +857,7 @@ export default class IdMapIndex {
    * least 1,000 rows; other storages are never calibrated.
    */
   get calibrated() {
-    return loadBinding().idx_calibrated(ensureHandle(this))
+    return loadBinding().idx_calibrated(ensureIdleHandle(this))
   }
 
   /**
@@ -533,7 +866,7 @@ export default class IdMapIndex {
    * `setStagedSearch()`.
    */
   get stagedSearch() {
-    return loadBinding().idx_staged(ensureHandle(this))
+    return loadBinding().idx_staged(ensureIdleHandle(this))
   }
 
   /**
@@ -549,10 +882,14 @@ export default class IdMapIndex {
     if (typeof enabled !== 'boolean') {
       throw new TypeError('setStagedSearch: enabled must be a boolean')
     }
-    loadBinding().idx_set_staged(ensureHandle(this), enabled)
+    loadBinding().idx_set_staged(ensureIdleHandle(this), enabled)
   }
 
-  /** Release filters and native index resources. This operation is idempotent. */
+  /**
+   * Release filters and native index resources. This operation is
+   * idempotent. Async operations that have not started yet reject; one that
+   * is running finishes first, and the native index is freed after it.
+   */
   dispose() {
     const handle = this[HANDLE]
     if (handle === null) {
@@ -560,8 +897,14 @@ export default class IdMapIndex {
     }
 
     this.disposeFilters()
-    loadBinding().idx_dispose(handle)
     this[HANDLE] = null
+    releaseAfterQueue(this, () => loadBinding().idx_dispose(handle))
+  }
+
+  /** `dispose()`, resolving once the native index has been freed. */
+  async disposeAsync() {
+    this.dispose()
+    await this[QUEUE]
   }
 
   private disposeFilters() {
@@ -569,6 +912,26 @@ export default class IdMapIndex {
       ref.deref()?.dispose()
     }
     this[FILTERS].clear()
+  }
+
+  // Runs a native mutation, then invalidates prepared filters whether or not
+  // it succeeded, as the sync mutations do.
+  private async mutate<T>(start: () => Promise<T>) {
+    try {
+      return await start()
+    } finally {
+      this.disposeFilters()
+    }
+  }
+
+  private registerFilter(handle: NativeHandle) {
+    const filter = createFilter(this, handle)
+    this[FILTERS].add(filter[FILTER_REF] as WeakRef<IdMapIndexFilter>)
+    if (this[FILTERS].size >= this[FILTERS_PRUNE_AT]) {
+      this.pruneFilters()
+      this[FILTERS_PRUNE_AT] = Math.max(MIN_FILTERS_PRUNE_AT, this[FILTERS].size * 2)
+    }
+    return filter
   }
 
   private pruneFilters() {

@@ -6,7 +6,10 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <initializer_list>
 #include <limits>
+#include <memory>
 #include <new>
 #include <stdexcept>
 #include <string>
@@ -16,6 +19,7 @@
 #include <bare.h>
 #include <qvac-addon/fabric-bind.h>
 
+#include "AsyncJob.hpp"
 #include "VectorIndex.hpp"
 #include "VectorIndexErrors.hpp"
 
@@ -51,6 +55,10 @@ struct VectorIndexExternal {
 
   ExternalHeader header;
   VectorIndex* idx;
+  // JS thread only. True while an async job runs on this index. Every other
+  // call, including dispose and the getters, is rejected meanwhile: fabric
+  // would block the JS thread on the index lock until the job finished.
+  bool busy = false;
 };
 
 struct SearchOutput {
@@ -76,6 +84,8 @@ struct VectorIndexFilterExternal {
 
   ExternalHeader header;
   VectorIndexFilter* filter;
+  // JS thread only. True while an async search uses this filter.
+  bool busy = false;
 };
 
 // Finalizer: invoked by the JS engine when the external handle is GC'd.
@@ -155,9 +165,14 @@ VectorIndexExternal* unwrapExternal(js_env_t* env, js_value_t* handle) {
   return static_cast<VectorIndexExternal*>(data);
 }
 
-// Get a borrowed pointer out of a JS external handle. Throws and returns
-// null on failure.
-VectorIndex* unwrap(js_env_t* env, js_value_t* handle) {
+void throwBusy(js_env_t* env, const char* what) {
+  const std::string message =
+      std::string(what) + " has an async operation in progress";
+  js_throw_error(env, "Busy", message.c_str());
+}
+
+// Like unwrap(), but returns the external of a live, idle index.
+VectorIndexExternal* unwrapLiveExternal(js_env_t* env, js_value_t* handle) {
   VectorIndexExternal* external = unwrapExternal(env, handle);
   if (external == nullptr) {
     return nullptr;
@@ -166,7 +181,18 @@ VectorIndex* unwrap(js_env_t* env, js_value_t* handle) {
     js_throw_error(env, "InvalidArgument", "IdMapIndex has been disposed");
     return nullptr;
   }
-  return external->idx;
+  if (external->busy) {
+    throwBusy(env, "IdMapIndex");
+    return nullptr;
+  }
+  return external;
+}
+
+// Get a borrowed pointer out of a JS external handle. Throws and returns
+// null on failure, or while an async job runs on the index.
+VectorIndex* unwrap(js_env_t* env, js_value_t* handle) {
+  VectorIndexExternal* external = unwrapLiveExternal(env, handle);
+  return external == nullptr ? nullptr : external->idx;
 }
 
 VectorIndexFilterExternal*
@@ -393,6 +419,24 @@ bool readId(js_env_t* env, js_value_t* value, uint64_t* out) {
         "id must be an unsigned BigInt fitting in 64 bits");
     return false;
   }
+  return true;
+}
+
+// Reads an allow-list. An empty list comes back as (nullptr, 0), which is
+// what fabric expects.
+bool readAllowedIds(
+    js_env_t* env, js_value_t* value, const uint64_t** outIds, int* outCount) {
+  const uint64_t* ids = nullptr;
+  size_t len = 0;
+  if (!readBigUint64Array(env, value, "allowed_ids", &ids, &len)) {
+    return false;
+  }
+  if (len > static_cast<size_t>(INT32_MAX)) {
+    js_throw_range_error(env, "InvalidArgument", "too many allowed ids");
+    return false;
+  }
+  *outIds = len == 0 ? nullptr : ids;
+  *outCount = static_cast<int>(len);
   return true;
 }
 
@@ -908,12 +952,8 @@ js_value_t* idxSearchFiltered(js_env_t* env, js_callback_info_t* info) {
   }
 
   const uint64_t* allowedIds = nullptr;
-  size_t alen = 0;
-  if (!readBigUint64Array(env, argv[3], "allowed_ids", &allowedIds, &alen)) {
-    return nullptr;
-  }
-  if (alen > static_cast<size_t>(INT32_MAX)) {
-    js_throw_range_error(env, "InvalidArgument", "too many allowed ids");
+  int nAllowed = 0;
+  if (!readAllowedIds(env, argv[3], &allowedIds, &nAllowed)) {
     return nullptr;
   }
 
@@ -921,8 +961,8 @@ js_value_t* idxSearchFiltered(js_env_t* env, js_callback_info_t* info) {
       input.queries,
       input.m,
       input.k,
-      alen == 0 ? nullptr : allowedIds,
-      static_cast<int>(alen),
+      allowedIds,
+      nAllowed,
       static_cast<float*>(input.output.scoresData),
       static_cast<uint64_t*>(input.output.idsData));
   if (rc != 0) {
@@ -951,17 +991,12 @@ js_value_t* idxFilterCreate(js_env_t* env, js_callback_info_t* info) {
   }
 
   const uint64_t* allowedIds = nullptr;
-  size_t alen = 0;
-  if (!readBigUint64Array(env, argv[1], "allowed_ids", &allowedIds, &alen)) {
-    return nullptr;
-  }
-  if (alen > static_cast<size_t>(INT32_MAX)) {
-    js_throw_range_error(env, "InvalidArgument", "too many allowed ids");
+  int nAllowed = 0;
+  if (!readAllowedIds(env, argv[1], &allowedIds, &nAllowed)) {
     return nullptr;
   }
 
-  VectorIndexFilter filter = idx->createFilter(
-      alen == 0 ? nullptr : allowedIds, static_cast<int>(alen));
+  VectorIndexFilter filter = idx->createFilter(allowedIds, nAllowed);
   if (!filter.valid()) {
     js_throw_error(
         env, "InvalidArgument", "ggml_vec_index_filter_create returned null");
@@ -1332,6 +1367,10 @@ js_value_t* idxDispose(js_env_t* env, js_callback_info_t* info) {
   if (external == nullptr) {
     return nullptr;
   }
+  if (external->busy) {
+    throwBusy(env, "IdMapIndex");
+    return nullptr;
+  }
 
   delete external->idx;
   external->idx = nullptr;
@@ -1352,6 +1391,10 @@ js_value_t* idxFilterDispose(js_env_t* env, js_callback_info_t* info) {
   }
   VectorIndexFilterExternal* external = unwrapFilterExternal(env, argv[0]);
   if (external == nullptr) {
+    return nullptr;
+  }
+  if (external->busy) {
+    throwBusy(env, "IdMapIndexFilter");
     return nullptr;
   }
 
@@ -1431,6 +1474,845 @@ js_value_t* idxStaged(js_env_t* env, js_callback_info_t* info) {
   return makeBoolean(env, idx->staged());
 }
 
+// ---------------------------------------------------------------------------
+// Async bindings
+// ---------------------------------------------------------------------------
+//
+// Each reads and checks its arguments on the JS thread exactly as its sync
+// twin does, copies the input arrays, then runs the native call on a job
+// lane and returns a promise that settles with the same value or error. The
+// copies matter: JS can change or detach an array (`buffer.transfer()`) while
+// a worker thread runs, so a job never reads JS memory. The index, and the
+// filter for a prepared search, is busy until the promise settles: one job
+// runs on an index at a time and every other call on it is rejected, so the
+// JS thread never waits on fabric's index lock. The JS wrapper queues calls
+// per index to keep their order.
+
+namespace async_job = turbovec_ggml::async_job;
+using async_job::Lane;
+
+using JobKept = std::vector<js_value_t*>;
+using JobSettle = std::function<js_value_t*(js_env_t*, int, const JobKept&)>;
+
+template <typename T> using Owned = std::shared_ptr<const std::vector<T>>;
+
+// Copies `len` elements for a job. Throws OutOfMemory and returns false on
+// allocation failure.
+template <typename T>
+bool copyInput(js_env_t* env, const T* data, size_t len, Owned<T>* out) {
+  try {
+    *out = len == 0 ? std::make_shared<const std::vector<T>>()
+                    : std::make_shared<const std::vector<T>>(data, data + len);
+  } catch (const std::bad_alloc&) {
+    js_throw_error(env, "OutOfMemory", "allocation failure");
+    return false;
+  }
+  return true;
+}
+
+// The copy's data, or nullptr for an empty one, as fabric expects for an
+// empty allow-list.
+template <typename T> const T* dataOrNull(const Owned<T>& owned) {
+  return owned->empty() ? nullptr : owned->data();
+}
+
+js_value_t*
+settleUndefined(js_env_t* env, int status, const JobKept& /*kept*/) {
+  if (status != GGML_VEC_INDEX_OK) {
+    throwStatus(env, status);
+    return nullptr;
+  }
+  return makeUndefined(env);
+}
+
+js_value_t* settleRemoved(js_env_t* env, int status, const JobKept& /*kept*/) {
+  if (status == GGML_VEC_INDEX_E_NOT_FOUND) {
+    return makeBoolean(env, false);
+  }
+  if (status != GGML_VEC_INDEX_OK) {
+    throwStatus(env, status);
+    return nullptr;
+  }
+  return makeBoolean(env, true);
+}
+
+// Starts a job on a live, idle index. `keepAlive` must hold the index handle,
+// and the filter handle when `filter` is set, so neither external can be
+// collected before the job settles and clears its busy flag.
+js_value_t* startIndexJob(
+    js_env_t* env, Lane lane, VectorIndexExternal* external,
+    VectorIndexFilterExternal* filter,
+    std::initializer_list<js_value_t*> keepAlive, async_job::Work work,
+    JobSettle settle) {
+  external->busy = true;
+  if (filter != nullptr) {
+    filter->busy = true;
+  }
+  js_value_t* promise = nullptr;
+  try {
+    promise = async_job::start(
+        env,
+        lane,
+        keepAlive,
+        std::move(work),
+        [external, filter, settle = std::move(settle)](
+            js_env_t* jobEnv, int status, const JobKept& kept) {
+          external->busy = false;
+          if (filter != nullptr) {
+            filter->busy = false;
+          }
+          return settle(jobEnv, status, kept);
+        });
+  } catch (const std::bad_alloc&) {
+    js_throw_error(env, "OutOfMemory", "allocation failure");
+  }
+  if (promise == nullptr) {
+    external->busy = false;
+    if (filter != nullptr) {
+      filter->busy = false;
+    }
+  }
+  return promise;
+}
+
+// Search jobs keep (handle, scores buffer, ids buffer, filter handle) alive.
+// The result buffers are created here and handed to JS only on success, so
+// no JS code can reach them while the job writes them.
+constexpr size_t SEARCH_KEPT_SCORES = 1;
+constexpr size_t SEARCH_KEPT_IDS = 2;
+
+struct SearchJob {
+  Owned<float> queries;
+  int m = 0;
+  int32_t k = 0;
+  SearchOutput output;
+};
+
+using SearchCall = std::function<int(const SearchJob&)>;
+
+// Reads queries and k like readSearchInput(), but copies the queries.
+bool readSearchJob(
+    js_env_t* env, const VectorIndex* idx, js_value_t* queriesValue,
+    js_value_t* kValue, SearchJob* out) {
+  SearchInput input;
+  if (!readSearchInput(env, idx, queriesValue, kValue, &input)) {
+    return false;
+  }
+  const size_t qlen =
+      static_cast<size_t>(input.m) * static_cast<size_t>(idx->dim());
+  if (!copyInput(env, input.queries, qlen, &out->queries)) {
+    return false;
+  }
+  out->m = input.m;
+  out->k = input.k;
+  out->output = input.output;
+  return true;
+}
+
+js_value_t* startSearchJob(
+    js_env_t* env, VectorIndexExternal* external,
+    VectorIndexFilterExternal* filter, js_value_t* handle,
+    js_value_t* filterHandle, const SearchJob& job, SearchCall call) {
+  return startIndexJob(
+      env,
+      Lane::Search,
+      external,
+      filter,
+      {handle, job.output.scoresBuffer, job.output.idsBuffer, filterHandle},
+      [job, call = std::move(call)]() { return call(job); },
+      [job](js_env_t* jobEnv, int status, const JobKept& kept) {
+        if (status != GGML_VEC_INDEX_OK) {
+          throwStatus(jobEnv, status);
+          return static_cast<js_value_t*>(nullptr);
+        }
+        SearchOutput output = job.output;
+        output.scoresBuffer = kept[SEARCH_KEPT_SCORES];
+        output.idsBuffer = kept[SEARCH_KEPT_IDS];
+        return finishSearchResult(jobEnv, output, job.m, job.k);
+      });
+}
+
+// Runs a load on the bulk lane and resolves with a new index handle.
+js_value_t* startLoadJob(js_env_t* env, std::function<VectorIndex(int*)> load) {
+  std::shared_ptr<std::unique_ptr<VectorIndex>> loaded;
+  try {
+    loaded = std::make_shared<std::unique_ptr<VectorIndex>>();
+    return async_job::start(
+        env,
+        Lane::Bulk,
+        {},
+        [loaded, load = std::move(load)]() {
+          int status = GGML_VEC_INDEX_OK;
+          VectorIndex index = load(&status);
+          if (status != GGML_VEC_INDEX_OK) {
+            return status;
+          }
+          if (!index.valid()) {
+            return static_cast<int>(GGML_VEC_INDEX_E_INTERNAL);
+          }
+          *loaded = std::make_unique<VectorIndex>(std::move(index));
+          return static_cast<int>(GGML_VEC_INDEX_OK);
+        },
+        [loaded](js_env_t* jobEnv, int status, const JobKept& /*kept*/) {
+          if (status != GGML_VEC_INDEX_OK) {
+            throwStatus(jobEnv, status);
+            return static_cast<js_value_t*>(nullptr);
+          }
+          // wrap() takes ownership, and frees the index if it fails.
+          return wrap(jobEnv, loaded->release());
+        });
+  } catch (const std::bad_alloc&) {
+    js_throw_error(env, "OutOfMemory", "allocation failure");
+    return nullptr;
+  }
+}
+
+// Reads one UTF-8 string argument per name, starting at argv[first].
+bool readPathArgs(
+    js_env_t* env, js_value_t* const* argv, size_t first,
+    std::initializer_list<const char*> names, std::vector<std::string>* out) {
+  size_t i = first;
+  for (const char* name : names) {
+    std::string value;
+    const std::string typeError = std::string(name) + " must be a string";
+    const std::string readError = std::string("failed to read ") + name;
+    if (!readUtf8String(
+            env, argv[i], typeError.c_str(), readError.c_str(), &value)) {
+      return false;
+    }
+    out->push_back(std::move(value));
+    ++i;
+  }
+  return true;
+}
+
+// Reads and copies an add batch, checked as the sync add checks it.
+struct BatchJob {
+  Owned<float> vectors;
+  Owned<uint64_t> ids;
+  int n = 0;
+};
+
+bool readBatchJob(
+    js_env_t* env, const VectorIndex* idx, js_value_t* vectorsValue,
+    js_value_t* idsValue, BatchJob* out) {
+  VectorBatchInput batch;
+  if (!readVectorBatch(env, idx, vectorsValue, idsValue, &batch)) {
+    return false;
+  }
+  const size_t n = static_cast<size_t>(batch.n);
+  const size_t dim = static_cast<size_t>(idx->dim());
+  if (!copyInput(env, batch.vectors, n * dim, &out->vectors) ||
+      !copyInput(env, batch.ids, n, &out->ids)) {
+    return false;
+  }
+  out->n = batch.n;
+  return true;
+}
+
+// idxLoadAsync(path) -> Promise<handle>
+js_value_t* idxLoadAsync(js_env_t* env, js_callback_info_t* info) {
+  size_t argc = 1;
+  js_value_t* argv[1] = {nullptr};
+  if (js_get_callback_info(env, info, &argc, argv, nullptr, nullptr) != 0) {
+    return nullptr;
+  }
+  if (argc < 1) {
+    js_throw_type_error(env, "InvalidArgument", "expected path string");
+    return nullptr;
+  }
+  std::vector<std::string> paths;
+  if (!readPathArgs(env, argv, 0, {"path"}, &paths)) {
+    return nullptr;
+  }
+  return startLoadJob(env, [path = paths[0]](int* status) {
+    return VectorIndex::load(path, status);
+  });
+}
+
+// idxLoadMmapAsync(path) -> Promise<handle>
+js_value_t* idxLoadMmapAsync(js_env_t* env, js_callback_info_t* info) {
+  size_t argc = 1;
+  js_value_t* argv[1] = {nullptr};
+  if (js_get_callback_info(env, info, &argc, argv, nullptr, nullptr) != 0) {
+    return nullptr;
+  }
+  if (argc < 1) {
+    js_throw_type_error(env, "InvalidArgument", "expected path string");
+    return nullptr;
+  }
+  std::vector<std::string> paths;
+  if (!readPathArgs(env, argv, 0, {"path"}, &paths)) {
+    return nullptr;
+  }
+  return startLoadJob(env, [path = paths[0]](int* status) {
+    return VectorIndex::loadMmap(path, status);
+  });
+}
+
+// idxLoadWithDeltaAsync(snapshotPath, deltaPath) -> Promise<handle>
+js_value_t* idxLoadWithDeltaAsync(js_env_t* env, js_callback_info_t* info) {
+  size_t argc = 2;
+  js_value_t* argv[2] = {nullptr, nullptr};
+  if (js_get_callback_info(env, info, &argc, argv, nullptr, nullptr) != 0) {
+    return nullptr;
+  }
+  if (argc < 2) {
+    js_throw_type_error(
+        env, "InvalidArgument", "expected (snapshotPath, deltaPath)");
+    return nullptr;
+  }
+  std::vector<std::string> paths;
+  if (!readPathArgs(env, argv, 0, {"snapshotPath", "deltaPath"}, &paths)) {
+    return nullptr;
+  }
+  return startLoadJob(
+      env, [snapshot = paths[0], delta = paths[1]](int* status) {
+        return VectorIndex::loadWithDelta(snapshot, delta, status);
+      });
+}
+
+// idxAddAsync(handle, vectors, ids) -> Promise<undefined>
+js_value_t* idxAddAsync(js_env_t* env, js_callback_info_t* info) {
+  size_t argc = 3;
+  js_value_t* argv[3] = {nullptr, nullptr, nullptr};
+  if (js_get_callback_info(env, info, &argc, argv, nullptr, nullptr) != 0) {
+    return nullptr;
+  }
+  if (argc < 3) {
+    js_throw_type_error(
+        env,
+        "InvalidArgument",
+        "expected (handle, vectors:Float32Array, ids:BigUint64Array)");
+    return nullptr;
+  }
+  VectorIndexExternal* external = unwrapLiveExternal(env, argv[0]);
+  if (external == nullptr) {
+    return nullptr;
+  }
+  VectorIndex* idx = external->idx;
+  BatchJob batch;
+  if (!readBatchJob(env, idx, argv[1], argv[2], &batch)) {
+    return nullptr;
+  }
+  return startIndexJob(
+      env,
+      Lane::Bulk,
+      external,
+      nullptr,
+      {argv[0]},
+      [idx, batch]() {
+        return idx->add(batch.vectors->data(), batch.n, batch.ids->data());
+      },
+      settleUndefined);
+}
+
+// idxAddLoggedAsync(handle, vectors, ids, deltaPath) -> Promise<undefined>
+js_value_t* idxAddLoggedAsync(js_env_t* env, js_callback_info_t* info) {
+  size_t argc = 4;
+  js_value_t* argv[4] = {nullptr, nullptr, nullptr, nullptr};
+  if (js_get_callback_info(env, info, &argc, argv, nullptr, nullptr) != 0) {
+    return nullptr;
+  }
+  if (argc < 4) {
+    js_throw_type_error(
+        env,
+        "InvalidArgument",
+        "expected (handle, vectors:Float32Array, ids:BigUint64Array, "
+        "deltaPath)");
+    return nullptr;
+  }
+  VectorIndexExternal* external = unwrapLiveExternal(env, argv[0]);
+  if (external == nullptr) {
+    return nullptr;
+  }
+  VectorIndex* idx = external->idx;
+  BatchJob batch;
+  if (!readBatchJob(env, idx, argv[1], argv[2], &batch)) {
+    return nullptr;
+  }
+  std::vector<std::string> paths;
+  if (!readPathArgs(env, argv, 3, {"deltaPath"}, &paths)) {
+    return nullptr;
+  }
+  return startIndexJob(
+      env,
+      Lane::Bulk,
+      external,
+      nullptr,
+      {argv[0]},
+      [idx, batch, deltaPath = paths[0]]() {
+        return idx->addLogged(
+            batch.vectors->data(), batch.n, batch.ids->data(), deltaPath);
+      },
+      settleUndefined);
+}
+
+// idxRemoveAsync(handle, id) -> Promise<boolean>
+js_value_t* idxRemoveAsync(js_env_t* env, js_callback_info_t* info) {
+  size_t argc = 2;
+  js_value_t* argv[2] = {nullptr, nullptr};
+  if (js_get_callback_info(env, info, &argc, argv, nullptr, nullptr) != 0) {
+    return nullptr;
+  }
+  if (argc < 2) {
+    js_throw_type_error(env, "InvalidArgument", "expected (handle, id:bigint)");
+    return nullptr;
+  }
+  VectorIndexExternal* external = unwrapLiveExternal(env, argv[0]);
+  if (external == nullptr) {
+    return nullptr;
+  }
+  uint64_t id = 0;
+  if (!readId(env, argv[1], &id)) {
+    return nullptr;
+  }
+  VectorIndex* idx = external->idx;
+  return startIndexJob(
+      env,
+      Lane::Search,
+      external,
+      nullptr,
+      {argv[0]},
+      [idx, id]() { return idx->remove(id); },
+      settleRemoved);
+}
+
+// idxRemoveLoggedAsync(handle, id, deltaPath) -> Promise<boolean>
+js_value_t* idxRemoveLoggedAsync(js_env_t* env, js_callback_info_t* info) {
+  size_t argc = 3;
+  js_value_t* argv[3] = {nullptr, nullptr, nullptr};
+  if (js_get_callback_info(env, info, &argc, argv, nullptr, nullptr) != 0) {
+    return nullptr;
+  }
+  if (argc < 3) {
+    js_throw_type_error(
+        env, "InvalidArgument", "expected (handle, id:bigint, deltaPath)");
+    return nullptr;
+  }
+  VectorIndexExternal* external = unwrapLiveExternal(env, argv[0]);
+  if (external == nullptr) {
+    return nullptr;
+  }
+  uint64_t id = 0;
+  if (!readId(env, argv[1], &id)) {
+    return nullptr;
+  }
+  std::vector<std::string> paths;
+  if (!readPathArgs(env, argv, 2, {"deltaPath"}, &paths)) {
+    return nullptr;
+  }
+  VectorIndex* idx = external->idx;
+  return startIndexJob(
+      env,
+      Lane::Bulk,
+      external,
+      nullptr,
+      {argv[0]},
+      [idx, id, deltaPath = paths[0]]() {
+        return idx->removeLogged(id, deltaPath);
+      },
+      settleRemoved);
+}
+
+// idxSearchAsync(handle, queries, k) -> Promise<result>
+js_value_t* idxSearchAsync(js_env_t* env, js_callback_info_t* info) {
+  size_t argc = 3;
+  js_value_t* argv[3] = {nullptr, nullptr, nullptr};
+  if (js_get_callback_info(env, info, &argc, argv, nullptr, nullptr) != 0) {
+    return nullptr;
+  }
+  if (argc < 3) {
+    js_throw_type_error(
+        env,
+        "InvalidArgument",
+        "expected (handle, queries:Float32Array, k:number)");
+    return nullptr;
+  }
+  VectorIndexExternal* external = unwrapLiveExternal(env, argv[0]);
+  if (external == nullptr) {
+    return nullptr;
+  }
+  VectorIndex* idx = external->idx;
+  SearchJob job;
+  if (!readSearchJob(env, idx, argv[1], argv[2], &job)) {
+    return nullptr;
+  }
+  return startSearchJob(
+      env,
+      external,
+      nullptr,
+      argv[0],
+      nullptr,
+      job,
+      [idx](const SearchJob& in) {
+        return idx->search(
+            in.queries->data(),
+            in.m,
+            in.k,
+            static_cast<float*>(in.output.scoresData),
+            static_cast<uint64_t*>(in.output.idsData));
+      });
+}
+
+// idxSearchFilteredAsync(handle, queries, k, allowedIds) -> Promise<result>
+js_value_t* idxSearchFilteredAsync(js_env_t* env, js_callback_info_t* info) {
+  size_t argc = 4;
+  js_value_t* argv[4] = {nullptr, nullptr, nullptr, nullptr};
+  if (js_get_callback_info(env, info, &argc, argv, nullptr, nullptr) != 0) {
+    return nullptr;
+  }
+  if (argc < 4) {
+    js_throw_type_error(
+        env,
+        "InvalidArgument",
+        "expected (handle, queries:Float32Array, k:number, "
+        "allowedIds:BigUint64Array)");
+    return nullptr;
+  }
+  VectorIndexExternal* external = unwrapLiveExternal(env, argv[0]);
+  if (external == nullptr) {
+    return nullptr;
+  }
+  VectorIndex* idx = external->idx;
+  SearchJob job;
+  if (!readSearchJob(env, idx, argv[1], argv[2], &job)) {
+    return nullptr;
+  }
+  const uint64_t* allowedIds = nullptr;
+  int nAllowed = 0;
+  Owned<uint64_t> allowed;
+  if (!readAllowedIds(env, argv[3], &allowedIds, &nAllowed) ||
+      !copyInput(env, allowedIds, static_cast<size_t>(nAllowed), &allowed)) {
+    return nullptr;
+  }
+  return startSearchJob(
+      env,
+      external,
+      nullptr,
+      argv[0],
+      nullptr,
+      job,
+      [idx, allowed, nAllowed](const SearchJob& in) {
+        return idx->searchFiltered(
+            in.queries->data(),
+            in.m,
+            in.k,
+            dataOrNull(allowed),
+            nAllowed,
+            static_cast<float*>(in.output.scoresData),
+            static_cast<uint64_t*>(in.output.idsData));
+      });
+}
+
+// idxFilterCreateAsync(handle, allowedIds) -> Promise<filter handle>
+js_value_t* idxFilterCreateAsync(js_env_t* env, js_callback_info_t* info) {
+  size_t argc = 2;
+  js_value_t* argv[2] = {nullptr, nullptr};
+  if (js_get_callback_info(env, info, &argc, argv, nullptr, nullptr) != 0) {
+    return nullptr;
+  }
+  if (argc < 2) {
+    js_throw_type_error(
+        env, "InvalidArgument", "expected (handle, allowedIds:BigUint64Array)");
+    return nullptr;
+  }
+  VectorIndexExternal* external = unwrapLiveExternal(env, argv[0]);
+  if (external == nullptr) {
+    return nullptr;
+  }
+  const uint64_t* allowedIds = nullptr;
+  int nAllowed = 0;
+  Owned<uint64_t> allowed;
+  if (!readAllowedIds(env, argv[1], &allowedIds, &nAllowed) ||
+      !copyInput(env, allowedIds, static_cast<size_t>(nAllowed), &allowed)) {
+    return nullptr;
+  }
+
+  std::shared_ptr<std::unique_ptr<VectorIndexFilter>> created;
+  try {
+    created = std::make_shared<std::unique_ptr<VectorIndexFilter>>();
+  } catch (const std::bad_alloc&) {
+    js_throw_error(env, "OutOfMemory", "allocation failure");
+    return nullptr;
+  }
+  VectorIndex* idx = external->idx;
+  return startIndexJob(
+      env,
+      Lane::Search,
+      external,
+      nullptr,
+      {argv[0]},
+      [idx, allowed, nAllowed, created]() {
+        VectorIndexFilter filter =
+            idx->createFilter(dataOrNull(allowed), nAllowed);
+        if (filter.valid()) {
+          *created = std::make_unique<VectorIndexFilter>(std::move(filter));
+        }
+        return static_cast<int>(GGML_VEC_INDEX_OK);
+      },
+      [created](js_env_t* jobEnv, int status, const JobKept& /*kept*/) {
+        if (status != GGML_VEC_INDEX_OK) {
+          throwStatus(jobEnv, status);
+          return static_cast<js_value_t*>(nullptr);
+        }
+        if (!*created) {
+          js_throw_error(
+              jobEnv,
+              "InvalidArgument",
+              "ggml_vec_index_filter_create returned null");
+          return static_cast<js_value_t*>(nullptr);
+        }
+        // wrapFilter() takes ownership, and frees the filter if it fails.
+        return wrapFilter(jobEnv, created->release());
+      });
+}
+
+// idxSearchPreparedFilteredAsync(handle, filter, queries, k)
+//   -> Promise<result>
+js_value_t*
+idxSearchPreparedFilteredAsync(js_env_t* env, js_callback_info_t* info) {
+  size_t argc = 4;
+  js_value_t* argv[4] = {nullptr, nullptr, nullptr, nullptr};
+  if (js_get_callback_info(env, info, &argc, argv, nullptr, nullptr) != 0) {
+    return nullptr;
+  }
+  if (argc < 4) {
+    js_throw_type_error(
+        env,
+        "InvalidArgument",
+        "expected (handle, filter, queries:Float32Array, k:number)");
+    return nullptr;
+  }
+  VectorIndexExternal* external = unwrapLiveExternal(env, argv[0]);
+  if (external == nullptr) {
+    return nullptr;
+  }
+  VectorIndexFilterExternal* filterExternal =
+      unwrapFilterExternal(env, argv[1]);
+  if (filterExternal == nullptr) {
+    return nullptr;
+  }
+  if (filterExternal->filter == nullptr) {
+    js_throw_error(
+        env, "InvalidArgument", "IdMapIndexFilter has been disposed");
+    return nullptr;
+  }
+  if (filterExternal->busy) {
+    throwBusy(env, "IdMapIndexFilter");
+    return nullptr;
+  }
+  VectorIndex* idx = external->idx;
+  SearchJob job;
+  if (!readSearchJob(env, idx, argv[2], argv[3], &job)) {
+    return nullptr;
+  }
+  const VectorIndexFilter* filter = filterExternal->filter;
+  return startSearchJob(
+      env,
+      external,
+      filterExternal,
+      argv[0],
+      argv[1],
+      job,
+      [idx, filter](const SearchJob& in) {
+        return idx->searchPreparedFiltered(
+            *filter,
+            in.queries->data(),
+            in.m,
+            in.k,
+            static_cast<float*>(in.output.scoresData),
+            static_cast<uint64_t*>(in.output.idsData));
+      });
+}
+
+// idxBuildIvfAsync(handle, nLists, nIter) -> Promise<undefined>
+js_value_t* idxBuildIvfAsync(js_env_t* env, js_callback_info_t* info) {
+  size_t argc = 3;
+  js_value_t* argv[3] = {nullptr, nullptr, nullptr};
+  if (js_get_callback_info(env, info, &argc, argv, nullptr, nullptr) != 0) {
+    return nullptr;
+  }
+  if (argc < 3) {
+    js_throw_type_error(
+        env,
+        "InvalidArgument",
+        "expected (handle, nLists:number, nIter:number)");
+    return nullptr;
+  }
+  VectorIndexExternal* external = unwrapLiveExternal(env, argv[0]);
+  if (external == nullptr) {
+    return nullptr;
+  }
+  int32_t nLists = 0;
+  if (!readPositiveInt32(env, argv[1], "n_lists", &nLists)) {
+    return nullptr;
+  }
+  int32_t nIter = 0;
+  if (!readNonnegativeInt32(env, argv[2], "n_iter", &nIter)) {
+    return nullptr;
+  }
+  VectorIndex* idx = external->idx;
+  return startIndexJob(
+      env,
+      Lane::Bulk,
+      external,
+      nullptr,
+      {argv[0]},
+      [idx, nLists, nIter]() { return idx->buildIvf(nLists, nIter); },
+      settleUndefined);
+}
+
+// idxSearchIvfAsync(handle, queries, k, nProbe) -> Promise<result>
+js_value_t* idxSearchIvfAsync(js_env_t* env, js_callback_info_t* info) {
+  size_t argc = 4;
+  js_value_t* argv[4] = {nullptr, nullptr, nullptr, nullptr};
+  if (js_get_callback_info(env, info, &argc, argv, nullptr, nullptr) != 0) {
+    return nullptr;
+  }
+  if (argc < 4) {
+    js_throw_type_error(
+        env,
+        "InvalidArgument",
+        "expected (handle, queries:Float32Array, k:number, nProbe:number)");
+    return nullptr;
+  }
+  VectorIndexExternal* external = unwrapLiveExternal(env, argv[0]);
+  if (external == nullptr) {
+    return nullptr;
+  }
+  VectorIndex* idx = external->idx;
+  SearchJob job;
+  if (!readSearchJob(env, idx, argv[1], argv[2], &job)) {
+    return nullptr;
+  }
+  int32_t nProbe = 0;
+  if (!readPositiveInt32(env, argv[3], "n_probe", &nProbe)) {
+    return nullptr;
+  }
+  return startSearchJob(
+      env,
+      external,
+      nullptr,
+      argv[0],
+      nullptr,
+      job,
+      [idx, nProbe](const SearchJob& in) {
+        return idx->searchIvf(
+            in.queries->data(),
+            in.m,
+            in.k,
+            nProbe,
+            static_cast<float*>(in.output.scoresData),
+            static_cast<uint64_t*>(in.output.idsData));
+      });
+}
+
+// Shared shape of the async calls that take only the handle.
+js_value_t* startHandleOnlyJob(
+    js_env_t* env, js_callback_info_t* info, Lane lane,
+    const std::function<int(VectorIndex*)>& call) {
+  size_t argc = 1;
+  js_value_t* argv[1] = {nullptr};
+  if (js_get_callback_info(env, info, &argc, argv, nullptr, nullptr) != 0) {
+    return nullptr;
+  }
+  if (argc < 1) {
+    js_throw_type_error(env, "InvalidArgument", "expected handle");
+    return nullptr;
+  }
+  VectorIndexExternal* external = unwrapLiveExternal(env, argv[0]);
+  if (external == nullptr) {
+    return nullptr;
+  }
+  VectorIndex* idx = external->idx;
+  return startIndexJob(
+      env,
+      lane,
+      external,
+      nullptr,
+      {argv[0]},
+      [idx, call]() { return call(idx); },
+      settleUndefined);
+}
+
+// idxCompactAsync(handle) -> Promise<undefined>
+js_value_t* idxCompactAsync(js_env_t* env, js_callback_info_t* info) {
+  return startHandleOnlyJob(
+      env, info, Lane::Bulk, [](VectorIndex* idx) { return idx->compact(); });
+}
+
+// idxPrepareAsync(handle) -> Promise<undefined>
+js_value_t* idxPrepareAsync(js_env_t* env, js_callback_info_t* info) {
+  return startHandleOnlyJob(env, info, Lane::Bulk, [](VectorIndex* idx) {
+    idx->prepare();
+    return static_cast<int>(GGML_VEC_INDEX_OK);
+  });
+}
+
+// idxWriteAsync(handle, path) -> Promise<undefined>
+js_value_t* idxWriteAsync(js_env_t* env, js_callback_info_t* info) {
+  size_t argc = 2;
+  js_value_t* argv[2] = {nullptr, nullptr};
+  if (js_get_callback_info(env, info, &argc, argv, nullptr, nullptr) != 0) {
+    return nullptr;
+  }
+  if (argc < 2) {
+    js_throw_type_error(env, "InvalidArgument", "expected (handle, path)");
+    return nullptr;
+  }
+  VectorIndexExternal* external = unwrapLiveExternal(env, argv[0]);
+  if (external == nullptr) {
+    return nullptr;
+  }
+  std::vector<std::string> paths;
+  if (!readPathArgs(env, argv, 1, {"path"}, &paths)) {
+    return nullptr;
+  }
+  VectorIndex* idx = external->idx;
+  return startIndexJob(
+      env,
+      Lane::Bulk,
+      external,
+      nullptr,
+      {argv[0]},
+      [idx, path = paths[0]]() { return idx->write(path); },
+      settleUndefined);
+}
+
+// idxCompactDeltaAsync(handle, snapshotPath, deltaPath) -> Promise<undefined>
+js_value_t* idxCompactDeltaAsync(js_env_t* env, js_callback_info_t* info) {
+  size_t argc = 3;
+  js_value_t* argv[3] = {nullptr, nullptr, nullptr};
+  if (js_get_callback_info(env, info, &argc, argv, nullptr, nullptr) != 0) {
+    return nullptr;
+  }
+  if (argc < 3) {
+    js_throw_type_error(
+        env, "InvalidArgument", "expected (handle, snapshotPath, deltaPath)");
+    return nullptr;
+  }
+  VectorIndexExternal* external = unwrapLiveExternal(env, argv[0]);
+  if (external == nullptr) {
+    return nullptr;
+  }
+  std::vector<std::string> paths;
+  if (!readPathArgs(env, argv, 1, {"snapshotPath", "deltaPath"}, &paths)) {
+    return nullptr;
+  }
+  VectorIndex* idx = external->idx;
+  return startIndexJob(
+      env,
+      Lane::Bulk,
+      external,
+      nullptr,
+      {argv[0]},
+      [idx, snapshot = paths[0], delta = paths[1]]() {
+        return idx->compactDelta(snapshot, delta);
+      },
+      settleUndefined);
+}
+
 js_value_t* turbovecGgmlExports(js_env_t* env, js_value_t* exports) {
   if (!qvacAddonBindFabric()) {
     js_throw_error(env, nullptr, "failed to bind " QVAC_FABRIC_MODULE_NAME);
@@ -1475,6 +2357,23 @@ js_value_t* turbovecGgmlExports(js_env_t* env, js_value_t* exports) {
   V("idx_calibrated", idxCalibrated);
   V("idx_set_staged", idxSetStaged);
   V("idx_staged", idxStaged);
+  V("idx_load_async", idxLoadAsync);
+  V("idx_load_mmap_async", idxLoadMmapAsync);
+  V("idx_load_with_delta_async", idxLoadWithDeltaAsync);
+  V("idx_add_async", idxAddAsync);
+  V("idx_add_logged_async", idxAddLoggedAsync);
+  V("idx_remove_async", idxRemoveAsync);
+  V("idx_remove_logged_async", idxRemoveLoggedAsync);
+  V("idx_search_async", idxSearchAsync);
+  V("idx_search_filtered_async", idxSearchFilteredAsync);
+  V("idx_filter_create_async", idxFilterCreateAsync);
+  V("idx_search_prepared_filtered_async", idxSearchPreparedFilteredAsync);
+  V("idx_build_ivf_async", idxBuildIvfAsync);
+  V("idx_search_ivf_async", idxSearchIvfAsync);
+  V("idx_compact_async", idxCompactAsync);
+  V("idx_prepare_async", idxPrepareAsync);
+  V("idx_write_async", idxWriteAsync);
+  V("idx_compact_delta_async", idxCompactDeltaAsync);
 #undef V
   // NOLINTEND(cppcoreguidelines-macro-usage)
   return exports;
