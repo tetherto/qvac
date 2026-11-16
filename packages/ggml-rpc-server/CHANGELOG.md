@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.9.2] - 2026-11-16
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.29.0` -> `^0.30.1`, which carries
+  `qvac-fabric` `11739.2.1` -> `11739.3.0#1`
+  ([#5781](https://github.com/tetherto/qvac/pull/5781),
+  [#5787](https://github.com/tetherto/qvac/pull/5787)): the fused Flux RoPE,
+  logical buffer-capacity queries with a Vulkan provider, DSpine draft models,
+  Metal `IM2COL_3D`, OpenCL (Adreno) ops for the speech engines, and fixes for
+  the RPC device's ragged ops, the CPU AMX matmul and CPU `IM2COL_3D`. 0.30.0
+  was not published for every platform, so the range starts at `0.30.1`. The
+  mobile dev and peer dependencies `@qvac/fabric-android-arm64` /
+  `@qvac/fabric-ios` move to `^0.30.1` with it.
+- `@qvac/fabric` 0.30 shifts the `common_params` layout and moves the RPC
+  protocol from 116 to 117, so it is not ABI-compatible with 0.29.x. Every
+  addon loaded in one process must resolve the same `@qvac/fabric` minor.
+  Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.30.1` together.
+- The RPC protocol moves from 116 to 117, and a client must match the
+  server's major version, so a 0.9.2 server only accepts clients on
+  `@qvac/fabric` 0.30 (`@qvac/llm-llamacpp` 0.70.2 or newer).
+- This package needed no code change for the new fabric.
+
 ## [0.9.1] - 2026-11-11
 
 ### Changed
