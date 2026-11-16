@@ -459,12 +459,6 @@
 /sdk/getting-started/installation/   /sdk/js-ts-sdk/     301
 /sdk/getting-started/configuration/  /sdk/configuration/ 301
 
-# Page rename in SDK v0.25: System requirements → Platform support. No `!`:
-# while a published line still serves /sdk/system-requirements/, that static
-# page wins and these rules stay dormant; they fire once the current line drops it.
-/sdk/system-requirements/     /sdk/platform-support/     301
-/sdk/system-requirements.md   /sdk/platform-support.md   301
-
 # Section rename: /sdk/examples/ai-tasks/* → /sdk/ai-capabilities/*
 /sdk/examples/ai-tasks/completion/         /sdk/ai-capabilities/text-generation/    301
 /sdk/examples/ai-tasks/fine-tuning/        /sdk/ai-capabilities/fine-tuning/        301
