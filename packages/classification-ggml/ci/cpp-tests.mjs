@@ -16,4 +16,8 @@ for (const [file, name] of [
   const model = fileURLToPath(new URL(`../test/fixtures/${file}`, import.meta.url))
   if (existsSync(model)) env[name] = model
 }
-execFileSync('pnpm', ['run', script], { stdio: 'inherit', env, shell: process.platform === 'win32' })
+execFileSync('pnpm', ['run', script], {
+  stdio: 'inherit',
+  env,
+  shell: process.platform === 'win32'
+})

@@ -60,7 +60,9 @@ const sdkTgz = pack(sdk, work)
   manifest.dependencies['@qvac/inference'] = `file:${inferenceTgz}`
   // A release train's staged manifest also overrides @qvac/inference; npm rejects an override that differs from the
   // direct dependency (EOVERRIDE), so it follows the dependency.
-  if (manifest.overrides?.['@qvac/inference']) manifest.overrides['@qvac/inference'] = `file:${inferenceTgz}`
+  if (manifest.overrides?.['@qvac/inference']) {
+    manifest.overrides['@qvac/inference'] = `file:${inferenceTgz}`
+  }
   writeFileSync(join(dir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`)
   const { ok, log } = npm(
     [

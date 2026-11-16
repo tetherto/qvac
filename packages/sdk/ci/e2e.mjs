@@ -74,7 +74,10 @@ export const selection = ({ suite, exclude, include }, filter) => [
 ]
 
 function includeFile(include) {
-  const file = join(mkdtempSync(join(process.env.RUNNER_TEMP || tmpdir(), 'sdk-include-')), 'include-tests.txt')
+  const file = join(
+    mkdtempSync(join(process.env.RUNNER_TEMP || tmpdir(), 'sdk-include-')),
+    'include-tests.txt'
+  )
   writeFileSync(file, `${include.split(',').join('\n')}\n`)
   return file
 }
