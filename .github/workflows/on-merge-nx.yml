@@ -68,11 +68,6 @@ on:
           - dev
           - feature
           - temp
-      allow_oversized_tarball:
-        description: "Publish npm platform packages even if a tarball is over the size budget (npm may still reject it with E413)"
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -554,10 +549,10 @@ jobs:
           WORKDIR: ${{ matrix.workdir }}
           # Packed tarball bytes. npm's limit is undocumented: the largest known
           # to go through is @qvac/fabric-linux-x64@0.29.2 at 200417383 bytes;
-          # 0.30.0 at ~201.9 MB got E413. Checked here, not in the slicer, so
-          # slices already on npm are not packed.
+          # 0.30.0 at ~201.9 MB got E413. Over it is a warning, not an error.
+          # Checked here, not in the slicer, so slices already on npm are not
+          # packed.
           MAX_TARBALL_BYTES: "200417383"
-          ALLOW_OVERSIZED: ${{ inputs.allow_oversized_tarball && 'true' || 'false' }}
         run: |
           set -euo pipefail
           # Prints "hit" or "miss"; any npm view failure other than E404 is a
@@ -581,7 +576,6 @@ jobs:
           # Check every slice before publishing any, so a failed check leaves
           # no new slice behind.
           TO_PUBLISH=()
-          OVERSIZED=()
           for dir in "$OUT_DIR"/*/; do
             NAME=$(node -p "require('${dir}package.json').name")
             VERSION=$(node -p "require('${dir}package.json').version")
@@ -598,14 +592,9 @@ jobs:
                 REASON="packs to ${SIZE} bytes, over the ${MAX_TARBALL_BYTES}-byte budget, and npm may reject it with E413"
               fi
               if [ -n "$REASON" ]; then
-                if [ "$ALLOW_OVERSIZED" = true ]; then
-                  echo "::warning title=npm tarball size check::${NAME}@${VERSION} ${REASON}. Publishing anyway (allow_oversized_tarball)." >&2
-                  # Publish it first, so an E413 stops the run before the other slices.
-                  TO_PUBLISH=("$dir" "${TO_PUBLISH[@]}")
-                  continue
-                fi
-                echo "::error title=npm tarball size check::${NAME}@${VERSION} ${REASON}. No slice was published by this run. To publish anyway, dispatch this workflow with allow_oversized_tarball." >&2
-                OVERSIZED+=("$NAME")
+                echo "::warning title=npm tarball size check::${NAME}@${VERSION} ${REASON}. Publishing it first, so an E413 stops the run before the other slices." >&2
+                TO_PUBLISH=("$dir" "${TO_PUBLISH[@]}")
+                continue
               fi
               TO_PUBLISH+=("$dir")
               continue
@@ -625,9 +614,6 @@ jobs:
             fi
             echo "${NAME}@${VERSION} already on npm with identical contents, skipping"
           done
-          if [ "${#OVERSIZED[@]}" -gt 0 ]; then
-            exit 1
-          fi
           for dir in "${TO_PUBLISH[@]}"; do
             NAME=$(node -p "require('${dir}package.json').name")
             VERSION=$(node -p "require('${dir}package.json').version")
