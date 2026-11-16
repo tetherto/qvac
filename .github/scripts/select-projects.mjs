@@ -63,8 +63,9 @@ const METADATA = {
   // Prebuild directories besides the platform ones that the meta package ships, such as fabric's include and share.
   prebuildExtraDirs: ['publish'],
   secrets: ['test:integration', 'test:backend', 'benchmark', 'test:mobile', 'cpp:tests', 'cache:models'],
-  // A model directory no manifest lists: { path, keyFiles }, relative to the package; cache:models fills it.
-  modelCache: ['test:integration'],
+  // How the target's models are cached: mode all (default) or per-model, and for a model directory no manifest lists,
+  // { path, keyFiles } relative to the package, which cache:models fills.
+  modelCache: ['test:integration', 'test:backend', 'cpp:tests'],
   baseline: ['cpp:tests'],
   perfReport: ['test:integration'],
   // Toolkits a check target needs on pr-checks' runner, from CHECK_SETUP.
@@ -214,9 +215,16 @@ export function checkMetadata(project, target) {
       `${project.name} ${target}: metadata.secrets takes ${SECRETS.join(', ')}, found ${unknownSecrets.join(', ')}`
     )
   if (meta.modelCache) {
-    const { path, keyFiles, ...extra } = meta.modelCache
-    if (typeof path !== 'string' || !Array.isArray(keyFiles) || !keyFiles.length || Object.keys(extra).length)
-      throw new Error(`${project.name} ${target}: metadata.modelCache takes path and a non-empty keyFiles`)
+    const { path, keyFiles, mode = 'all', ...extra } = meta.modelCache
+    const directory = path !== undefined || keyFiles !== undefined
+    if (
+      !['all', 'per-model'].includes(mode) ||
+      Object.keys(extra).length ||
+      (directory && (typeof path !== 'string' || !Array.isArray(keyFiles) || !keyFiles.length))
+    )
+      throw new Error(
+        `${project.name} ${target}: metadata.modelCache takes mode (all or per-model) and, for a directory, path and a non-empty keyFiles`
+      )
   }
   if (meta.publish) {
     const extra = Object.keys(meta.publish).filter((k) => !PUBLISH_KEYS.includes(k))

@@ -1,0 +1,18 @@
+name: Save models
+description: Saves a package's model cache from a trusted run on main; cache-warm.yml is its only caller. mode all saves the one entry models-cache-key named; per-model saves each planned entry the cache lacks, if its files match their checksums. Run `npm ci && npm run build` in .github/actions/models-cache after editing src/.
+inputs:
+  mode:
+    description: all or per-model, from models-cache-key
+    default: all
+  key:
+    description: "all: exact cache key"
+    default: ""
+  paths:
+    description: "all: newline-separated directories"
+    default: ""
+  plan:
+    description: "per-model: path to the plan JSON"
+    default: ""
+runs:
+  using: node24
+  main: dist/index.mjs

@@ -17,6 +17,7 @@ on:
       - ".github/actions/vcpkg-toolchain-hash/**"
       - ".github/actions/vcpkg-cache-setup/**"
       - ".github/actions/models-cache-key/**"
+      - ".github/actions/models-cache/**"
       - ".github/actions/models-download/**"
   # Every 2 days: the cache server prunes an entry after 5 days without an upload or a download.
   schedule:
@@ -103,13 +104,15 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
+      # A real restore, not a lookup: it resets the cache server's prune clock.
       - if: steps.models.outputs.paths != ''
         id: cache
-        uses: tetherto/qvac-actions/cache@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: ./.github/actions/models-cache/restore
         with:
+          mode: ${{ steps.models.outputs.mode }}
           key: ${{ steps.models.outputs.key }}
-          path: ${{ steps.models.outputs.paths }}
-          enable-cross-os-archive: "true"
+          paths: ${{ steps.models.outputs.paths }}
+          plan: ${{ steps.models.outputs.plan }}
       - if: steps.models.outputs.paths != ''
         uses: ./.github/actions/models-download
         with:
@@ -132,6 +135,13 @@ jobs:
           if [ -n "$GH" ]; then export GITHUB_TOKEN="$GH"; fi
           pnpm install --frozen-lockfile --ignore-scripts --filter .
           pnpm exec nx run "$PROJECT:cache:models" --exclude-task-dependencies --outputStyle=stream
+      - if: steps.models.outputs.paths != '' && steps.cache.outputs.cache-hit != 'true'
+        uses: ./.github/actions/models-cache/save
+        with:
+          mode: ${{ steps.models.outputs.mode }}
+          key: ${{ steps.models.outputs.key }}
+          paths: ${{ steps.models.outputs.paths }}
+          plan: ${{ steps.models.outputs.plan }}
 
   # Providers first, once per configuration; a pull request's build legs may reuse these from main (Q1).
   providers:

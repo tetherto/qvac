@@ -20,7 +20,7 @@ on:
       - ".github/actions/select-prebuild-symbols-verifier/**"
       - ".github/scripts/devicefarm-pool-run.mjs"
       - ".github/scripts/test/devicefarm-slot-wait.test.mjs"
-      - ".github/actions/sdk-e2e-model-cache/**"
+      - ".github/actions/models-cache/**"
       - "scripts/perf-report/**"
       - "scripts/ci/**"
       - "packages/ocr-ggml/.agent/setup.sh"
@@ -76,18 +76,18 @@ jobs:
       # sdk-e2e, the script's only caller, runs only on label or dispatch.
       - name: Run Device Farm slot wait unit tests
         run: node --test .github/scripts/test/devicefarm-slot-wait.test.mjs
-      - name: Run SDK e2e model cache action unit tests
-        run: node --test .github/actions/sdk-e2e-model-cache/test/*.test.mjs
+      - name: Run model cache action unit tests
+        run: node --test .github/actions/models-cache/test/*.test.mjs
       # The runner executes the committed dist/, not src/.
-      - name: Check SDK e2e model cache action bundle is current
-        working-directory: .github/actions/sdk-e2e-model-cache
+      - name: Check model cache action bundles are current
+        working-directory: .github/actions/models-cache
         run: |
           npm ci --ignore-scripts
           npm run build
           # --porcelain also catches untracked chunk files.
-          if [ -n "$(git status --porcelain -- dist)" ]; then
-            git status --short -- dist
-            echo "::error::dist/ is stale. Run 'npm ci && npm run build' in .github/actions/sdk-e2e-model-cache and commit dist/."
+          if [ -n "$(git status --porcelain -- restore/dist save/dist)" ]; then
+            git status --short -- restore/dist save/dist
+            echo "::error::restore/dist or save/dist is stale. Run 'npm ci && npm run build' in .github/actions/models-cache and commit both dist/."
             exit 1
           fi
 

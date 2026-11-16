@@ -25,6 +25,12 @@ outputs:
   paths:
     description: Newline-separated directories the models land in
     value: ${{ steps.resolve.outputs.paths }}
+  mode:
+    description: The target's metadata.modelCache.mode, all or per-model
+    value: ${{ steps.resolve.outputs.mode }}
+  plan:
+    description: "per-model on a manifest package: the plan JSON it wrote"
+    value: ${{ steps.resolve.outputs.plan }}
   fill:
     description: true when the target's metadata.modelCache names the directory, which the package's cache:models fills
     value: ${{ steps.resolve.outputs.fill }}

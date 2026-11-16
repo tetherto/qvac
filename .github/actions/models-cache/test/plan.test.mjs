@@ -14,7 +14,7 @@ import {
   shortHash,
   unplannedPaths,
   validatePlan
-} from '../src/entries.mjs'
+} from '../src/plan.mjs'
 
 function workspace(files) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'model-cache-'))
@@ -46,7 +46,7 @@ const set = {
 }
 
 test('the key is the content id; the archive is the exact file list', () => {
-  assert.equal(cacheKey(single), `sdk-e2e-model-v1-${sha('abcd')}`)
+  assert.equal(cacheKey(single), `model-v1-${sha('abcd')}`)
   assert.deepEqual(cachePaths(single), ['c/0123_m.gguf'])
   assert.deepEqual(cachePaths(set), ['c/sets/s1/a.bin', 'c/sets/s1/b.mlmodelc/weight.bin'])
 })
@@ -73,13 +73,13 @@ test('planned keys and file lists stay stable', () => {
     entries.map((entry) => [cacheKey(entry), cachePaths(entry), entry.models, entry.size]),
     [
       [
-        'sdk-e2e-model-v1-88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589',
+        'model-v1-88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589',
         ['c/0123_m.gguf'],
         ['M', 'M2'],
         4
       ],
       [
-        'sdk-e2e-model-v1-5b142a4a34bec46ecd2d0deff02254995ea3a77d53c2f68f506e12886b268f0d',
+        'model-v1-5b142a4a34bec46ecd2d0deff02254995ea3a77d53c2f68f506e12886b268f0d',
         ['c/sets/s1/a.bin', 'c/sets/s1/b.mlmodelc/weight.bin'],
         ['S'],
         5

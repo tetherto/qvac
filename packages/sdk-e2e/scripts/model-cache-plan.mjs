@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Plan the models a CI leg's tests need and where the SDK keeps each one, for
- * .github/actions/sdk-e2e-model-cache.
+ * .github/actions/models-cache.
  *
  *   node scripts/model-cache-plan.mjs --family desktop --suite smoke --out plan.json
  *   node scripts/model-cache-plan.mjs --family desktop,python,electron --out plan.json   # seed
@@ -23,7 +23,7 @@ import { parseArgs } from 'node:util'
 import {
   planEntries,
   shortHash
-} from '../../../.github/actions/sdk-e2e-model-cache/src/entries.mjs'
+} from '../../../.github/actions/models-cache/src/plan.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const projectDir = resolve(here, '..')

@@ -2156,3 +2156,15 @@ test("RPC server prebuilds smoke-test without the Linux RDMA runtime", () => {
   const script = read("packages/ggml-rpc-server/scripts/smoke-packaged.cjs");
   assert.match(script, /process\.env\.GGML_RPC_NO_RDMA/, "the smoke test honours GGML_RPC_NO_RDMA");
 });
+
+// A pull_request_target run shares main's cache scope, so model caches are saved only by cache-warm.yml and by
+// _cpp-tests.yml on the trusted run cache-warm.yml makes; models-cache/save also refuses any run but main's.
+test("only trusted runs save the model cache", () => {
+  const callers = readdirSync(join(root, ".github/workflows"))
+    .filter((f) => read(`.github/workflows/${f}`).includes("uses: ./.github/actions/models-cache/save"))
+    .sort();
+  assert.deepEqual(callers, ["_cpp-tests.yml", "cache-warm.yml"]);
+  const step = read(".github/workflows/_cpp-tests.yml").split("\n      - ").find((s) => s.includes("uses: ./.github/actions/models-cache/save"));
+  assert.match(step, /env\.TRUSTED == 'true'/);
+  assert.match(read(".github/actions/models-cache/src/save.mjs"), /ref !== 'refs\/heads\/main'/);
+});

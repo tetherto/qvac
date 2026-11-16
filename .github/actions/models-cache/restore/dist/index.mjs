@@ -95936,21 +95936,20 @@ var __webpack_exports__ = {};
 var cache = __nccwpck_require__(5116);
 // EXTERNAL MODULE: ./node_modules/@actions/core/lib/core.js
 var core = __nccwpck_require__(37484);
-// EXTERNAL MODULE: external "node:fs"
-var external_node_fs_ = __nccwpck_require__(73024);
-;// CONCATENATED MODULE: external "node:timers/promises"
-const promises_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:timers/promises");
 // EXTERNAL MODULE: external "node:crypto"
 var external_node_crypto_ = __nccwpck_require__(77598);
+// EXTERNAL MODULE: external "node:fs"
+var external_node_fs_ = __nccwpck_require__(73024);
 ;// CONCATENATED MODULE: external "node:path"
 const external_node_path_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:path");
-;// CONCATENATED MODULE: ./src/entries.mjs
-// No @actions/* imports: also used by scripts/model-cache-plan.mjs and the tests.
+;// CONCATENATED MODULE: ./src/plan.mjs
+// The per-model cache's plan: one entry per cached path, keyed by its content. No @actions/* imports: models-cache-key
+// and packages/sdk-e2e/scripts/model-cache-plan.mjs build plans with it too.
 
 
 
 
-const KEY_PREFIX = 'sdk-e2e-model-v1'
+const KEY_PREFIX = 'model-v1'
 
 const sha256 = (text) => createHash('sha256').update(text, 'utf8').digest('hex')
 
@@ -95994,12 +95993,12 @@ function cachePaths(entry) {
   return entry.files.map((file) => file.path).sort()
 }
 
-/** Exact sizes: a truncated restore is not a hit. */
+/** Exact sizes where the plan knows them: a truncated restore is not a hit. */
 function isComplete(entry, cwd = process.cwd()) {
   return entry.files.every((file) => {
     try {
       const stat = external_node_fs_.statSync(external_node_path_namespaceObject.resolve(cwd, file.path))
-      return stat.isFile() && stat.size === file.size
+      return stat.isFile() && (file.size === undefined || stat.size === file.size)
     } catch {
       return false
     }
@@ -96008,8 +96007,8 @@ function isComplete(entry, cwd = process.cwd()) {
 
 function sha256File(file) {
   return new Promise((resolve, reject) => {
-    const hash = (0,external_node_crypto_.createHash)('sha256')
-    external_node_fs_.createReadStream(file)
+    const hash = createHash('sha256')
+    fs.createReadStream(file)
       .on('data', (chunk) => hash.update(chunk))
       .on('error', reject)
       .on('end', () => resolve(hash.digest('hex')))
@@ -96018,9 +96017,26 @@ function sha256File(file) {
 
 async function firstChecksumMismatch(entry, cwd = process.cwd()) {
   for (const file of entry.files) {
-    if ((await sha256File(external_node_path_namespaceObject.resolve(cwd, file.path))) !== file.sha256) return file.path
+    if ((await sha256File(path.resolve(cwd, file.path))) !== file.sha256) return file.path
   }
   return undefined
+}
+
+// A package's models.manifest.json entries, selected as models-download selects them: each with a sha256 is one entry
+// under the package directory; one without (an S3 directory or a URL) is left to models-download every run.
+function manifestPlan(workdir, entries) {
+  const cached = entries.filter((e) => typeof e.sha256 === 'string' && !e.s3Prefix)
+  return {
+    version: 1,
+    cacheRoot: workdir,
+    entries: cached
+      .map((e) => {
+        const file = { path: `${workdir}/${e.dest}`, sha256: e.sha256, size: e.size }
+        return { contentId: e.sha256, path: file.path, files: [file], size: e.size ?? 0, models: [e.name] }
+      })
+      .sort((a, b) => (a.path < b.path ? -1 : 1)),
+    unresolved: entries.filter((e) => !cached.includes(e)).map((e) => e.name)
+  }
 }
 
 function validatePlan(plan) {
@@ -96050,7 +96066,7 @@ function unplannedPaths(plan, cwd = process.cwd()) {
   const found = []
   const list = (relative) => {
     try {
-      return external_node_fs_.readdirSync(external_node_path_namespaceObject.resolve(cwd, relative)).sort()
+      return fs.readdirSync(path.resolve(cwd, relative)).sort()
     } catch {
       return []
     }
@@ -96082,24 +96098,30 @@ async function mapWithConcurrency(items, limit, worker) {
   return results
 }
 
-;// CONCATENATED MODULE: ./src/index.mjs
+;// CONCATENATED MODULE: external "node:timers/promises"
+const promises_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:timers/promises");
+;// CONCATENATED MODULE: ./src/common.mjs
+// What restore and save share: reading the plan, and looking an entry up without downloading it.
 
 
 
 
 
-
-// A13: only main saves. pull_request_target also runs on refs/heads/main, hence the event check.
-const TRUSTED_EVENTS = new Set(['push', 'schedule', 'workflow_dispatch', 'merge_group'])
 const CONCURRENCY = 4
-
-// A seed waits for a parallel save to finalize; a test leg looks once.
-const SEED_LOOKUP_ATTEMPTS = 3
 const LOOKUP_DELAY_MS = 20_000
 
 const label = (entry) => entry.models.join(',')
 const message = (error) => (error instanceof Error ? error.message : String(error))
 const gigabytes = (bytes) => `${(bytes / 1e9).toFixed(1)} GB`
+const lines = (text) => text.split('\n').map((l) => l.trim()).filter(Boolean)
+
+function readPlan(file) {
+  try {
+    return validatePlan(JSON.parse(external_node_fs_.readFileSync(file, 'utf8')))
+  } catch (error) {
+    throw new Error(`${file}: ${message(error)}`)
+  }
+}
 
 async function exists(entry, attempts = 1) {
   const [paths, key] = [cachePaths(entry), cacheKey(entry)]
@@ -96110,6 +96132,14 @@ async function exists(entry, attempts = 1) {
   return false
 }
 
+;// CONCATENATED MODULE: ./src/restore.mjs
+// Restores a package's models, never saves them: every PR leg runs this, and only cache-warm.yml saves.
+// mode all restores the package's one entry; per-model restores each entry the plan lists, by its content.
+
+
+
+
+
 async function restoreEntry(entry, lookupOnly) {
   if (lookupOnly) return exists(entry)
   const key = cacheKey(entry)
@@ -96119,7 +96149,7 @@ async function restoreEntry(entry, lookupOnly) {
   return false
 }
 
-async function restore(plan, lookupOnly) {
+async function perModel(plan, lookupOnly) {
   const started = Date.now()
   const hits = await mapWithConcurrency(plan.entries, CONCURRENCY, (entry) =>
     restoreEntry(entry, lookupOnly).catch((error) => {
@@ -96127,89 +96157,31 @@ async function restore(plan, lookupOnly) {
       return false
     })
   )
-  const restored = plan.entries.filter((_, index) => hits[index])
-  const toDownload = [
-    ...plan.entries.filter((_, index) => !hits[index]).flatMap((entry) => entry.models),
-    ...plan.unresolved
-  ]
-  const bytes = restored.reduce((sum, entry) => sum + entry.size, 0)
+  const restored = plan.entries.filter((_, i) => hits[i])
+  const missing = [...plan.entries.filter((_, i) => !hits[i]).flatMap((e) => e.models), ...plan.unresolved]
   core.info(
     `📦 ${restored.length}/${plan.entries.length} model(s) ${lookupOnly ? 'present' : 'restored'} ` +
-      `(${gigabytes(bytes)}) in ${Math.round((Date.now() - started) / 1000)}s; ` +
-      `${toDownload.length} to download`
+      `(${gigabytes(restored.reduce((sum, e) => sum + e.size, 0))}) in ` +
+      `${Math.round((Date.now() - started) / 1000)}s; ${missing.length} to download`
   )
-  for (const name of toDownload) core.info(`   to download: ${name}`)
-
-  core.setOutput('hits', String(restored.length))
-  core.setOutput('complete', String(toDownload.length === 0))
-  core.setOutput('missing-models', JSON.stringify(toDownload))
+  for (const name of missing) core.info(`   to download: ${name}`)
+  core.setOutput('cache-hit', String(missing.length === 0))
+  core.setOutput('missing-models', JSON.stringify(missing))
 }
 
-async function saveEntry(entry, lookupAttempts) {
-  if (await exists(entry)) return 'present'
-  if (!isComplete(entry)) {
-    core.warning(`Not saving ${label(entry)}: not on disk at ${entry.path}`)
-    return 'skipped'
-  }
-  const mismatch = await firstChecksumMismatch(entry)
-  if (mismatch) {
-    core.warning(`Not saving ${label(entry)}: ${mismatch} does not match its registry checksum`)
-    return 'skipped'
-  }
-  // On cache service v1, saveCache returns an id even when the upload fails.
-  const id = await cache.saveCache(cachePaths(entry), cacheKey(entry), {}, true)
-  if (await exists(entry, lookupAttempts)) return id === -1 ? 'present' : 'saved'
-  core.warning(`Save of ${label(entry)} under ${cacheKey(entry)} did not create an entry`)
-  return 'failed'
-}
-
-async function save(plan, failOnError) {
-  const event = process.env.GITHUB_EVENT_NAME ?? ''
-  const ref = process.env.GITHUB_REF ?? ''
-  if (!TRUSTED_EVENTS.has(event) || ref !== 'refs/heads/main') {
-    core.warning(`Not saving model cache entries from a ${event || 'unknown'} run on ${ref}`)
-    return
-  }
-  const outcomes = await mapWithConcurrency(plan.entries, CONCURRENCY, (entry) =>
-    saveEntry(entry, failOnError ? SEED_LOOKUP_ATTEMPTS : 1).catch((error) => {
-      core.warning(`Save of ${label(entry)} failed: ${message(error)}`)
-      return 'failed'
-    })
-  )
-  const count = (outcome) => outcomes.filter((value) => value === outcome).length
-  core.info(
-    `💾 saved ${count('saved')}, already cached ${count('present')}, ` +
-      `not saved ${count('skipped')}, failed ${count('failed')}`
-  )
-
-  const drift = unplannedPaths(plan)
-  if (drift.length > 0) {
-    core.warning(
-      `The SDK cache holds ${drift.length} item(s) no plan entry covers, so they are downloaded ` +
-        'on every run. packages/inference/src/utils/cache/layout.ts may no longer match the ' +
-        `loader: ${drift.slice(0, 20).join(', ')}${drift.length > 20 ? ', ...' : ''}`
-    )
-  }
-
-  const unsaved = count('skipped') + count('failed')
-  if (failOnError && unsaved > 0) {
-    core.setFailed(`${unsaved} model cache entr(ies) could not be saved`)
-  }
+async function restore_all(paths, key, restoreKeys) {
+  const hit = await cache.restoreCache(paths, key, restoreKeys, {}, true)
+  core.info(hit ? `Restored ${hit}` : `No entry for ${key}`)
+  core.setOutput('cache-hit', String(hit === key))
+  core.setOutput('missing-models', '[]')
 }
 
 async function main() {
-  const mode = core.getInput('mode', { required: true })
-  const planPath = core.getInput('plan', { required: true })
-  let plan
-  try {
-    plan = validatePlan(JSON.parse(external_node_fs_.readFileSync(planPath, 'utf8')))
-  } catch (error) {
-    throw new Error(`${planPath}: ${message(error)}`)
-  }
-
-  if (mode === 'restore') await restore(plan, core.getBooleanInput('lookup-only'))
-  else if (mode === 'save') await save(plan, core.getBooleanInput('fail-on-save-error'))
-  else throw new Error(`mode must be restore or save, got "${mode}"`)
+  const mode = core.getInput('mode') || 'all'
+  if (mode === 'per-model') await perModel(readPlan(core.getInput('plan', { required: true })), core.getBooleanInput('lookup-only'))
+  else if (mode === 'all')
+    await restore_all(lines(core.getInput('paths', { required: true })), core.getInput('key', { required: true }), lines(core.getInput('restore-keys')))
+  else throw new Error(`mode must be all or per-model, got "${mode}"`)
 }
 
 main().catch((error) => core.setFailed(message(error)))

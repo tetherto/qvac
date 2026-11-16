@@ -110,14 +110,16 @@ jobs:
         with:
           workdir: ${{ env.WORKDIR }}
           target: ${{ matrix.row.target }}
+      # Restores only: a pull_request_target run shares main's cache scope, so only cache-warm.yml saves.
       - if: steps.models.outputs.paths != '' && runner.environment != 'github-hosted'
         id: models-restore
-        uses: tetherto/qvac-actions/cache-restore@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        uses: ./.github/actions/models-cache/restore
         with:
+          mode: ${{ steps.models.outputs.mode }}
           key: ${{ steps.models.outputs.key }}
           restore-keys: ${{ steps.models.outputs.restore-prefix }}
-          path: ${{ steps.models.outputs.paths }}
-          enable-cross-os-archive: "true"
+          paths: ${{ steps.models.outputs.paths }}
+          plan: ${{ steps.models.outputs.plan }}
       - uses: ./.github/actions/models-download
         with:
           workdir: ${{ env.WORKDIR }}
