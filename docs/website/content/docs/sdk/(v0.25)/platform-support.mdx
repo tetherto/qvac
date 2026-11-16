@@ -23,7 +23,7 @@ These requirements apply to every QVAC SDK client (JS/TS, Python, and Kotlin), b
 | iOS | 17.0+ | arm64 | Metal | JS/TS (Expo) | Devices and simulators. |
 | Linux | Ubuntu 22+ | arm64, x64 | Vulkan `>= 1.4`, CUDA | JS/TS, Python, CLI | x64 also supports the AMD XDNA2 NPU. |
 | Android | 10+ (API 29) | arm64 | Vulkan, OpenCL (Adreno 700+) | JS/TS (Expo), Kotlin | Physical devices only. |
-| Windows | 10+ | x64 | Vulkan `>= 1.4`, CUDA | JS/TS, Python, CLI | Transcription and text-to-speech need Vulkan even for CPU-only inference. |
+| Windows | 10+ | x64 | Vulkan `>= 1.4`, CUDA | JS/TS, Python, CLI | Transcription, text-to-speech and audio generation need Vulkan even for CPU-only inference. |
 
 ## Hardware
 
@@ -184,7 +184,7 @@ Missing libibverbs disables RDMA while RPC continues over TCP, unless `expectRdm
 
 #### Windows
 
-Transcription and text-to-speech need Vulkan `>= 1.4`, even for CPU-only inference. Other capabilities run on the CPU without it. See [Vulkan](#vulkan).
+Transcription, text-to-speech and audio generation need Vulkan `>= 1.4`, even for CPU-only inference. Other capabilities run on the CPU without it. See [Vulkan](#vulkan).
 
 ### Clients and runtimes
 
@@ -209,7 +209,7 @@ QVAC's native runtime ships as one package per host, such as `@qvac/fabric-linux
 - **No Android emulators.** QVAC runs on physical Android devices only.
 - **The CLI runs on desktops only.** See [Clients and runtimes](#clients-and-runtimes).
 - **Intel Macs are not supported.** See [Compatibility matrix](#compatibility-matrix).
-- **On Windows, transcription and text-to-speech need Vulkan even for CPU-only inference.** See [Windows](#windows).
+- **On Windows, transcription, text-to-speech and audio generation need Vulkan even for CPU-only inference.** See [Windows](#windows).
 - **Minimal Linux images may lack `libatomic.so.1`.** See [Linux](#linux).
 - **`--omit=optional` installs break the app.** See [Native packages and installers](#native-packages-and-installers).
 
