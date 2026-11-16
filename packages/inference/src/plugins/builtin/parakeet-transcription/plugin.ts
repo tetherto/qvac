@@ -27,8 +27,6 @@ import {
   SPEAKER_ATTRIBUTION_MODEL_PATH
 } from '@/plugins/builtin/asr-ggml/config'
 import { parakeetFitRequest } from '@/plugins/builtin/asr-ggml/fit'
-import { withCoremlLongFormDefault } from '@/plugins/builtin/asr-ggml/coreml-long-form'
-import { getRuntimeContext } from '@/runtime/state'
 import { createAsrModelLogger } from '@/plugins/builtin/asr-ggml/logging'
 
 /**
@@ -58,23 +56,8 @@ async function resolveParakeetConfig(
   }
 }
 
-/**
- * The addon config a load runs with: the stored load config, plus the Core ML
- * long-form default (`withCoremlLongFormDefault`) for the GGUF at `modelPath`.
- */
-export function parakeetLoadEngineConfig(
-  params: Pick<CreateModelParams, 'modelPath' | 'modelConfig' | 'artifacts'>,
-  platform: string | undefined = getRuntimeContext().platform
-) {
-  const config = withCoremlLongFormDefault(
-    (params.modelConfig ?? {}) as ParakeetConfig,
-    params.modelPath,
-    platform
-  )
-  return buildParakeetEngineConfig(config, params.artifacts)
-}
-
 function createParakeetModel(params: CreateModelParams): PluginModelResult {
+  const config = (params.modelConfig ?? {}) as ParakeetConfig
   const modelPath = params.modelPath
 
   if (!modelPath) {
@@ -85,7 +68,7 @@ function createParakeetModel(params: CreateModelParams): PluginModelResult {
 
   const model = new ASRGgml({
     files: { model: modelPath },
-    config: parakeetLoadEngineConfig(params),
+    config: buildParakeetEngineConfig(config, params.artifacts),
     enableStats: true,
     logger
   })
