@@ -190,6 +190,13 @@ decodeOptions(const mtmd_context* mctx, const MediaLimits& limits) {
   return opt;
 }
 
+/// A media part over a size limit: logged at WARN, as the header checks do,
+/// then thrown as UnsupportedMedia.
+[[noreturn]] void throwOverLimit(const std::string& message) {
+  llamaLogCallback(GGML_LOG_LEVEL_WARN, (message + "\n").c_str(), nullptr);
+  throw qvac_errors::StatusError(ADDON_ID, toString(UnsupportedMedia), message);
+}
+
 mtmd::bitmap decodeMedia(
     const mtmd_context* mctx, const MultimodalPart& part, std::size_t index,
     const MediaLimits& limits) {
@@ -228,25 +235,18 @@ mtmd::bitmap decodeMedia(
       /* placeholder = */ false,
       decodeOptions(mctx, limits));
   if (wrapper.status == MTMD_HELPER_BITMAP_AUDIO_TOO_LONG) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnsupportedMedia),
-        string_format(
-            "media part %zu: audio exceeds the %llu s limit. Increase "
-            "audio-max-seconds to allow longer audio.",
-            index,
-            static_cast<unsigned long long>(limits.maxAudioSeconds)));
+    throwOverLimit(string_format(
+        "media part %zu: audio exceeds the %llu s limit. Increase "
+        "audio-max-seconds to allow longer audio.",
+        index,
+        static_cast<unsigned long long>(limits.maxAudioSeconds)));
   }
   if (wrapper.status == MTMD_HELPER_BITMAP_IMAGE_TOO_LARGE) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnsupportedMedia),
-        string_format(
-            "media part %zu: image exceeds the %llu MP limit. Increase "
-            "image-max-megapixels to allow larger images.",
-            index,
-            static_cast<unsigned long long>(
-                limits.maxImagePixels / 1'000'000)));
+    throwOverLimit(string_format(
+        "media part %zu: image exceeds the %llu MP limit. Increase "
+        "image-max-megapixels to allow larger images.",
+        index,
+        static_cast<unsigned long long>(limits.maxImagePixels / 1'000'000)));
   }
   // A video container never gets here (the pixel check above rejects what
   // stb_image cannot read); free one anyway rather than leak it.
