@@ -11,53 +11,19 @@
       "version>=": "1.4.4#3"
     },
     {
-      "name": "ggml-speech",
-      "default-features": false
+      "name": "qvac-fabric",
+      "default-features": false,
+      "version>=": "11739.2.0#1"
     },
     {
       "name": "speech-cpp",
       "default-features": false,
       "features": [
-        "whisper",
-        "opencl",
-        "vulkan"
-      ],
-      "platform": "android"
-    },
-    {
-      "name": "speech-cpp",
-      "default-features": false,
-      "features": [
-        "whisper",
-        "vulkan"
-      ],
-      "platform": "!(osx | ios | android)"
-    },
-    {
-      "name": "speech-cpp",
-      "default-features": false,
-      "features": [
-        "whisper",
-        "metal"
-      ],
-      "platform": "osx | ios"
+        "whisper"
+      ]
     }
   ],
   "features": {
-    "cuda": {
-      "description": "Enable the CUDA GPU backend (Linux / Windows on NVIDIA). Off by default; building it needs nvcc on the build host, so opt in with `bare-make generate -D ENABLE_CUDA=ON`. At runtime CUDA engages only where the NVIDIA driver and the CUDA 13 runtime libraries (cudart, cuBLAS) both resolve; hosts without them skip the CUDA backend and fall back to Vulkan or CPU.",
-      "supports": "!(osx | ios | android)",
-      "dependencies": [
-        {
-          "name": "speech-cpp",
-          "default-features": false,
-          "features": [
-            "cuda"
-          ],
-          "platform": "!(osx | ios | android)"
-        }
-      ]
-    },
     "fuzz": {
       "description": "Build fuzz targets (Google FuzzTest dependencies)",
       "dependencies": [
@@ -95,13 +61,8 @@
   },
   "overrides": [
     {
-      "name": "ggml-speech",
-      "version": "2026-10-27",
-      "port-version": 1
-    },
-    {
       "name": "speech-cpp",
-      "version": "2026-11-06",
+      "version": "2026-11-11",
       "port-version": 0
     }
   ]

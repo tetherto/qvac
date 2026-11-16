@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
- * Fail unless asr-ggml, audiogen-ggml, bci-whispercpp and tts-ggml build their
- * ggml backends from one ggml-speech: the same ggml-speech and speech-cpp
+ * Fail unless the speech addons (asr-ggml, audiogen-ggml, bci-whispercpp,
+ * tts-ggml) pin one speech-cpp and depend on @qvac/fabric: they link the
+ * shared @qvac/fabric runtime and ship no ggml. A speech addon listed with the
+ * ggml-speech runtime is held to more: the same ggml-speech and speech-cpp
  * overrides in every vcpkg.json, that ggml-speech recorded in every
  * package.json, and the same ggml-speech version and features in every addon's
  * vcpkg install plan for each prebuild triplet. Any other package that depends
@@ -28,6 +30,7 @@ import {
   checkPins,
   checkPlans,
   findPin,
+  ggmlSpeechAddons,
   parsePlannedPort,
   summarizePlans,
 } from './lib/speech-ggml.mjs'
@@ -179,12 +182,15 @@ function main() {
   const pinErrors = [...checkAddonList(loadVcpkgPackages()), ...checkPins(addons)]
   if (pinErrors.length > 0) return fail(pinErrors)
 
-  const pins = PINNED_PORTS.map((port) => `${port} ${findPin(addons[0].vcpkg, port)}`)
-  console.log(`${addons.map((addon) => addon.name).join(', ')} pin ${pins.join(' and ')}.`)
+  const ggmlAddons = ggmlSpeechAddons(addons)
+  if (ggmlAddons.length === 0) return console.log('every speech addon links @qvac/fabric; no ggml-speech plan to check')
 
-  const plans = planAddons(args.vcpkg, addons)
+  const pins = PINNED_PORTS.map((port) => `${port} ${findPin(ggmlAddons[0].vcpkg, port)}`)
+  console.log(`${ggmlAddons.map((addon) => addon.name).join(', ')} pin ${pins.join(' and ')}.`)
+
+  const plans = planAddons(args.vcpkg, ggmlAddons)
   summarizePlans(plans).forEach((line) => console.log(`  ${line}`))
-  const planErrors = checkPlans(plans, findPin(addons[0].vcpkg, GGML_SPEECH_PORT))
+  const planErrors = checkPlans(plans, findPin(ggmlAddons[0].vcpkg, GGML_SPEECH_PORT))
   if (planErrors.length > 0) fail(planErrors)
 }
 

@@ -33,6 +33,15 @@ struct LoadState {
 
 LoadState g_loadState;
 
+// Backends load once per process, so these counts outlive each test's state.
+struct BackendLoads {
+  int fromFabric = 0;
+  int fromPath = 0;
+};
+
+BackendLoads g_backendLoads;
+constexpr int K_REPEATED_LOADS = 2;
+
 TestDevice* testDevice(ggml_backend_dev_t device) {
   return reinterpret_cast<TestDevice*>(device);
 }
@@ -79,8 +88,13 @@ void __wrap_ggml_backend_dev_memory(
   *free = 1024U * 1024U;
   *total = 2U * 1024U * 1024U;
 }
-void __wrap_ggml_backend_load_all() {}
-void __wrap_ggml_backend_load_all_from_path(const char*) {}
+size_t __wrap_qvac_fabric_load_backends() {
+  ++g_backendLoads.fromFabric;
+  return 0;
+}
+void __wrap_ggml_backend_load_all_from_path(const char*) {
+  ++g_backendLoads.fromPath;
+}
 
 whisper_context* __wrap_whisper_init_from_file_with_params(
     const char*, whisper_context_params params) {
@@ -233,6 +247,15 @@ TEST_P(BCIModelLoadTest, SelectorTransitionsRecreateContextOnlyWhenChanged) {
   EXPECT_EQ(g_loadState.loads.back().gpu_device, 0);
   EXPECT_EQ(g_loadState.warmups, 4);
   EXPECT_TRUE(model.isLoaded());
+}
+
+TEST_P(BCIModelLoadTest, UnconfiguredBackendsComeFromFabricOncePerProcess) {
+  for (int load = 0; load < K_REPEATED_LOADS; ++load) {
+    BCIModel model(config_);
+    ASSERT_NO_THROW(model.load());
+  }
+  EXPECT_EQ(g_backendLoads.fromFabric, 1);
+  EXPECT_EQ(g_backendLoads.fromPath, 0);
 }
 
 INSTANTIATE_TEST_SUITE_P(

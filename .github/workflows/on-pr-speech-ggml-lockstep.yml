@@ -1,11 +1,11 @@
 name: On PR Trigger (Speech ggml lockstep)
 
-# Fails unless asr-ggml, audiogen-ggml, bci-whispercpp and tts-ggml pin the
-# same ggml-speech and speech-cpp, record that ggml-speech in package.json, and
-# plan the same ggml-speech version and features for every prebuild triplet, or
-# when another package depends on either port without being listed with them.
-# They ship their ggml backends under the same file names, so an app with two
-# of them keeps one copy of each for both.
+# Fails unless the speech addons (asr-ggml, audiogen-ggml, bci-whispercpp,
+# tts-ggml) pin one speech-cpp and depend on @qvac/fabric, or when another
+# package depends on ggml-speech or speech-cpp without being listed with them.
+# They link the shared @qvac/fabric runtime and ship no ggml. A speech addon
+# listed with the ggml-speech runtime must also pin, record and plan the same
+# ggml-speech as every other one.
 
 on:
   pull_request:
@@ -27,8 +27,6 @@ on:
       - ".github/scripts/check-speech-ggml-lockstep.mjs"
       - ".github/scripts/lib/speech-ggml.mjs"
       - ".github/scripts/test/speech-ggml.test.mjs"
-      - ".github/actions/run-mobile-integration-tests/build-mobile-app/check-speech-ggml-builds.mjs"
-      - ".github/actions/run-mobile-integration-tests/build-mobile-app/check-speech-ggml-builds.test.mjs"
   workflow_dispatch:
 
 permissions:
@@ -40,7 +38,7 @@ concurrency:
 
 jobs:
   speech-ggml-lockstep:
-    name: Speech addons share one ggml-speech build
+    name: Speech addons share one speech-cpp on @qvac/fabric
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -53,10 +51,7 @@ jobs:
           node-version: lts/*
 
       - name: Run unit tests
-        run: >-
-          node --test
-          .github/scripts/test/speech-ggml.test.mjs
-          .github/actions/run-mobile-integration-tests/build-mobile-app/check-speech-ggml-builds.test.mjs
+        run: node --test .github/scripts/test/speech-ggml.test.mjs
 
       # The runner image's vcpkg is enough: the plans are dry runs with
       # compiler tracking off, so nothing is built.

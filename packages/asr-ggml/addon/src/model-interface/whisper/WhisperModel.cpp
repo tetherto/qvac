@@ -5,7 +5,6 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
-#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -17,6 +16,7 @@
 #include <utility>
 
 #include <ggml-backend.h>
+#include <qvac-fabric.h>
 
 #include "WhisperConfig.hpp"
 #include "WhisperHandlers.hpp"
@@ -24,7 +24,6 @@
 #include "inference-addon-cpp/Errors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 #include "model-interface/BackendIdentity.hpp"
-#include "model-interface/ModuleBackendsDir.hpp"
 #include "model-interface/WhisperGpuSelection.hpp"
 #include "model-interface/WhisperTypes.hpp"
 
@@ -125,30 +124,26 @@ auto WhisperModel::formatCaptionOutput(Transcript& transcript) -> void {
 }
 
 #if defined(__ANDROID__) || defined(__linux__) || defined(_WIN32)
-// Android, desktop linux-arm64, and CUDA-enabled linux-x64 / win32-x64
-// builds ship ggml with `GGML_BACKEND_DL=ON`, so no backend is statically
-// registered. Load the per-arch CPU + GPU modules once per process before
-// whisper_init; otherwise it aborts on a NULL CPU device. On static builds
-// the scan finds no modules and the statically registered backends stay in
-// charge, so calling this unconditionally is safe. A configured backendsDir
-// is scanned as given; otherwise the addon's own backends directory.
+// On these hosts the @qvac/fabric runtime ships its ggml backends as modules,
+// so none is registered until they are loaded. Load them once per process
+// before whisper_init; otherwise it aborts on a NULL CPU device. A configured
+// backendsDir is scanned as given; otherwise fabric loads the backends it
+// ships.
 void ensureBackendsLoaded(const std::string& backendsDir) {
   static std::once_flag flag;
   std::call_once(flag, [&]() {
-    const std::filesystem::path dir = resolveBackendsDir(backendsDir);
-    if (dir.empty()) {
+    if (backendsDir.empty()) {
       QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-          "the addon could not locate itself; falling back to "
-          "ggml_backend_load_all() (default search path), which misses the "
-          "renamed qvac-speech-ggml-* modules.");
-      ggml_backend_load_all();
+          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+          std::string("loading ggml backends from: ") +
+              qvac_fabric_backends_dir());
+      qvac_fabric_load_backends();
       return;
     }
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-        std::string("loading ggml backends from: ") + dir.string());
-    ggml_backend_load_all_from_path(dir.string().c_str());
+        std::string("loading ggml backends from: ") + backendsDir);
+    ggml_backend_load_all_from_path(backendsDir.c_str());
   });
 }
 #endif // __ANDROID__ || __linux__ || _WIN32

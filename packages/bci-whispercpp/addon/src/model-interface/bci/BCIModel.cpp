@@ -5,13 +5,13 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
-#include <filesystem>
 #include <mutex>
 #include <ranges>
 #include <string>
 #include <utility>
 
 #include <ggml-backend.h>
+#include <qvac-fabric.h>
 
 #include "BCIConfig.hpp"
 #include "EmbedderFit.hpp"
@@ -52,35 +52,31 @@ static bool shouldAbortWhisper(void* userData) {
          cancelRequested->load(std::memory_order_relaxed);
 }
 
-#if defined(__ANDROID__) || defined(__linux__)
-// Android, desktop linux-arm64, and linux-x64-with-CUDA builds ship ggml
-// with `GGML_BACKEND_DL=ON`, so no backend is statically registered. dlopen
-// the per-arch CPU + GPU `.so` modules once per process; otherwise
-// whisper_init aborts on a NULL CPU device. On static linux-x64 builds the
-// scan finds no modules and the statically registered backends stay in
-// charge, so calling this unconditionally on Linux is safe. A configured
-// backendsDir is scanned as given; otherwise the addon's own backends
-// directory.
+namespace {
+// A configured directory is scanned as given. Otherwise @qvac/fabric loads the
+// backends it ships, once for every fabric addon in the process.
+void loadBackends(const std::string& configuredDir) {
+  if (configuredDir.empty()) {
+    qvac_fabric_load_backends();
+    return;
+  }
+  ggml_backend_load_all_from_path(configuredDir.c_str());
+}
+} // namespace
+
+// The @qvac/fabric runtime registers no backend until asked to (its Linux,
+// Android and Windows backends are separate modules), and whisper_init aborts
+// on a NULL CPU device, so every load and fit comes through here first.
 void ensureBackendsLoaded(const std::string& backendsDir) {
   static std::once_flag flag;
   std::call_once(flag, [&]() {
-    const std::filesystem::path dir = resolveBackendsDir(backendsDir);
-    if (dir.empty()) {
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-          "the addon could not locate itself; falling back to "
-          "ggml_backend_load_all() (default search path), which misses the "
-          "renamed qvac-speech-ggml-* modules.");
-      ggml_backend_load_all();
-      return;
-    }
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-        std::string("loading ggml backends from: ") + dir.string());
-    ggml_backend_load_all_from_path(dir.string().c_str());
+        std::string("loading ggml backends from: ") +
+            resolveBackendsDir(backendsDir).string());
+    loadBackends(backendsDir);
   });
 }
-#endif // __ANDROID__ || __linux__
 
 BCIModel::BCIModel(BCIConfig config)
     : cfg_(std::move(config)), neuralProcessor_() {}
@@ -190,9 +186,7 @@ void BCIModel::load() {
   if (ctx_)
     return;
 
-#if defined(__ANDROID__) || defined(__linux__)
   ensureBackendsLoaded(cfg_.backendsDir);
-#endif
 
   whisper_context_params contextParams = toWhisperContextParams(cfg_);
 
@@ -391,12 +385,12 @@ void logSilentCpuFallbackWarning() {
       qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
       "BCI: use_gpu=true was requested but no GGML GPU/IGPU device is "
       "registered (silent CPU fallback). Likely causes: the GPU backend "
-      "library wasn't loaded (Android: ggml_backend_load_all_from_path "
-      "failed for the backendsDir), the device was rejected by the "
+      "library wasn't loaded (no backend module in the backendsDir or next "
+      "to the @qvac/fabric runtime), the device was rejected by the "
       "backend (Adreno pre-700 OpenCL policy, missing OpenCL ICD, Vulkan "
       "driver without storageBuffer16BitAccess, iOS/Android simulator "
-      "without GPU support), or no GPU backend was compiled into "
-      "ggml-speech for this triplet.");
+      "without GPU support), or the @qvac/fabric runtime ships no GPU "
+      "backend for this host.");
 }
 
 void logActiveGpuBackend(const GpuBackendInfo& info) {

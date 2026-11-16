@@ -3,9 +3,6 @@
   "version": "0.15.1",
   "description": "Brain-Computer Interface (BCI) neural signal transcription addon for qvac, powered by whisper.cpp",
   "addon": true,
-  "qvac": {
-    "ggml-speech": "2026-10-27#1"
-  },
   "engines": {
     "bare": ">=1.24.0"
   },
@@ -18,8 +15,6 @@
     "lint-cpp": "clang-tidy -p build addon/src/js-interface/JSAdapter.cpp addon/src/js-interface/binding.cpp addon/src/model-interface/bci/BCIConfig.cpp addon/src/model-interface/bci/BCIModel.cpp addon/src/model-interface/bci/EmbedderFit.cpp addon/src/model-interface/bci/NeuralProcessor.cpp addon/src/addon/AddonJs.hpp addon/src/js-interface/JSAdapter.hpp addon/src/addon/BCIErrors.hpp addon/src/model-interface/BCITypes.hpp addon/src/model-interface/bci/BCIConfig.hpp addon/src/model-interface/bci/BCIModel.hpp addon/src/model-interface/bci/EmbedderFit.hpp addon/src/model-interface/bci/NeuralProcessor.hpp",
     "build": "npm run build:ts && npm run build:native",
     "build:native": "bare-make generate -D BUILD_FUZZING=OFF && bare-make build && bare-make install",
-    "build:native:cuda": "bare-make generate -D ENABLE_CUDA=ON -D BUILD_FUZZING=OFF && bare-make build && bare-make install",
-    "build:cuda": "npm run build:ts && npm run build:native:cuda",
     "build:ts": "tsc -p tsconfig.build.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "check:generated": "npm run build:ts && out=$(git status --porcelain --untracked-files=all -- index.js bci.js configChecker.js addonLogging.js index.d.ts bci.d.ts configChecker.d.ts addonLogging.d.ts lib) && { [ -z \"$out\" ] || { echo \"$out\"; exit 1; }; }",
@@ -103,14 +98,36 @@
     "typescript-eslint": "^8.63.0",
     "cmake-npm": "^1.1.0",
     "bare-os": "^3.6.2",
-    "bare-process": "^4.2.2"
+    "bare-process": "^4.2.2",
+    "@qvac/fabric-android-arm64": "^0.29.0",
+    "@qvac/fabric-ios": "^0.29.0"
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
+    "@qvac/fabric": "^0.29.0",
     "@qvac/infer-base": "^0.8.0",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0"
+  },
+  "optionalDependencies": {
+    "@qvac/fabric-linux-x64": "^0.29.0",
+    "@qvac/fabric-linux-arm64": "^0.29.0",
+    "@qvac/fabric-darwin-arm64": "^0.29.0",
+    "@qvac/fabric-darwin-x64": "^0.29.0",
+    "@qvac/fabric-win32-x64": "^0.29.0"
+  },
+  "peerDependencies": {
+    "@qvac/fabric-android-arm64": "^0.29.0",
+    "@qvac/fabric-ios": "^0.29.0"
+  },
+  "peerDependenciesMeta": {
+    "@qvac/fabric-android-arm64": {
+      "optional": true
+    },
+    "@qvac/fabric-ios": {
+      "optional": true
+    }
   },
   "exports": {
     "./package": "./package.json",
