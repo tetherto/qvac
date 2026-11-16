@@ -85,8 +85,7 @@
   "androidWeekly": {
     "ocr": [
       "runOcrLightonTest",
-      "runOcrUnlimitedTest",
-      "runOcrPaddleTest"
+      "runOcrUnlimitedTest"
     ],
     "imageHeavy": [
       "runImageElephantTest",
@@ -112,8 +111,7 @@
   "iosWeekly": {
     "ocr": [
       "runOcrLightonTest",
-      "runOcrUnlimitedTest",
-      "runOcrPaddleTest"
+      "runOcrUnlimitedTest"
     ],
     "imageHeavy": [
       "runImageElephantTest",

@@ -180,7 +180,7 @@ jobs:
             echo ""
             echo "Full per-test tables and Device Farm run links are on the [workflow run summary]($RUN_URL)."
             echo ""
-            echo "Weekly coverage: OCR (LightOn + Paddle), Elephant + HighResAurora image functional, and vlmPerf{Gemma4,Qwen35}."
+            echo "Weekly coverage: OCR (LightOn + Unlimited), Elephant + HighResAurora image functional, and vlmPerf{Gemma4,Qwen35}."
           } > "$BODY_FILE"
 
           # Idempotent label so the report issues are filterable.

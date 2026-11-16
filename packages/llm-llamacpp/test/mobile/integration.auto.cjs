@@ -516,11 +516,6 @@ async function runOcrLightonTest (options = {}) { // eslint-disable-line no-unus
   return runIntegrationModule('../integration/ocr-lighton.test.js', options)
 }
 
-async function runOcrPaddleTest (options = {}) { // eslint-disable-line no-unused-vars
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runOcrPaddleTest')) return __FILTERED
-  return runIntegrationModule('../integration/ocr-paddle.test.js', options)
-}
-
 async function runOcrUnlimitedTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runOcrUnlimitedTest')) return __FILTERED
   return runIntegrationModule('../integration/ocr-unlimited.test.js', options)
