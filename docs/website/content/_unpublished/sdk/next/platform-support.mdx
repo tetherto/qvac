@@ -17,12 +17,14 @@ These requirements apply to every QVAC SDK client (JS/TS, Python, and Kotlin), b
 
 ## Compatibility matrix
 
+{/* TODO(addons review): confirm that API 29 is the build floor and Android 12+ the supported floor. */}
+
 | Platform | Min version | Architecture | GPU backends | Clients | Notes |
 |----------|-------------|--------------|--------------|---------|-------|
 | macOS | 14.0+ | arm64, x64 | Metal (arm64) | JS/TS, Python, CLI | x64 (Intel Macs) runs on the CPU only. |
 | iOS | 17.0+ | arm64 | Metal | JS/TS (Expo) | Physical devices only. |
 | Linux | Ubuntu 22+ | arm64, x64 | Vulkan `>= 1.4`, CUDA | JS/TS, Python, CLI | x64 also supports the AMD XDNA2 NPU. |
-| Android | 12+ | arm64 | Vulkan, OpenCL (Adreno 700+) | JS/TS (Expo), Kotlin | Physical devices only. |
+| Android | 12+ | arm64 | Vulkan, OpenCL (Adreno 700+) | JS/TS (Expo), Kotlin | Physical devices only. Apps build with API 29 (Android 10), but QVAC supports Android 12+. |
 | Windows | 10+ | x64 | Vulkan `>= 1.4`, CUDA | JS/TS, Python, CLI | Needs Vulkan even for CPU-only inference. |
 
 ## Hardware
