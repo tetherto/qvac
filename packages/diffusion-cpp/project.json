@@ -105,7 +105,7 @@
               "forwardAllArgs": false
             },
             {
-              "command": "node scripts/verify-prebuild-linking.mjs prebuilds",
+              "command": "node ci/verify-linking.mjs linux",
               "forwardAllArgs": false
             }
           ],
@@ -133,7 +133,7 @@
               "forwardAllArgs": false
             },
             {
-              "command": "node scripts/verify-prebuild-linking.mjs prebuilds",
+              "command": "node ci/verify-linking.mjs linux",
               "forwardAllArgs": false
             }
           ],
@@ -197,7 +197,7 @@
               "forwardAllArgs": false
             },
             {
-              "command": "node scripts/verify-prebuild-linking.mjs prebuilds",
+              "command": "node ci/verify-linking.mjs win32",
               "forwardAllArgs": false
             }
           ],
