@@ -13,6 +13,7 @@ lives in the stack's top pull request.
 | `requests.json` | The fixed `/v1/systemone` request set. Each request declares its expected outcome (`expect`): `"answer"`, or the rejection's status, code and message. |
 | `tolerances.json` | Declared tolerances. **Proposed until the decision owners agree them.** |
 | `qvac.config.json` | Plugin list for a decision-only SDK worker (`qvac bundle sdk`). |
+| `throughput/` | Batch throughput of `DecisionEngine` against embed's `LayaDecisions` on the same Laya checkpoint (`old.js`, `new.js`, the shared `workload.js`: 32 states, three questions). |
 | `../../packages/decision-ggml/scripts/decision-parity-collect.js` | Runs the request set through `DecisionEngine` (Bare); `parity.mjs` starts it. |
 
 ## Reproduce from a clean checkout (macOS or Linux)
@@ -113,3 +114,18 @@ works without a global install).
    `llama-server` runs on a free port (`--port` must be free if given). The
    script fails if the server exits before or during the run, or if `/props`
    reports a different model, so results can't come from another process.
+
+8. Batch throughput against Fabric's own Laya. The old path is the published
+   embed `LayaDecisions` on the Fabric-format file, installed outside this
+   checkout (one Fabric runtime per process: each script runs in its own):
+
+   ```sh
+   (mkdir -p /tmp/laya-old && cd /tmp/laya-old && npm init -y >/dev/null && npm i @qvac/embed-llamacpp@0.56.1 bare@1.37.1)
+   cd scripts/decision-prototype/throughput
+   /tmp/laya-old/node_modules/.bin/bare old.js /tmp/laya-old/node_modules/@qvac/embed-llamacpp /models/fabric-format/laya-Q8_0.gguf gpu 5
+   /tmp/laya-old/node_modules/.bin/bare new.js ../../../packages/decision-ggml /models/laya-Q8_0.gguf gpu 5 batch
+   ```
+
+   Each prints the median of the runs for the 32 states and for one state.
+   `new.js` also takes `seq` (one run per state) and extra load options as
+   JSON (for example `'{"parallel":"1"}'`).
