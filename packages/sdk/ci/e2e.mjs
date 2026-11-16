@@ -105,9 +105,6 @@ export function mqttCerts(env) {
 // built, then the sdk-e2e consumer installed against it and built. pnpm's node_modules go first.
 export function prepare(env) {
   if (!env.GITHUB_TOKEN) throw new Error('GITHUB_TOKEN is empty; the @tetherto registry needs it')
-  // cache:models:plan prepared this job's tree already; the leg reuses it.
-  const done = join(env.RUNNER_TEMP || tmpdir(), 'sdk-e2e-prepared')
-  if (existsSync(done)) return mqttCerts(env)
   for (const dir of ['sdk', 'sdk-e2e', 'inference', 'test-suite']) {
     rmSync(join(ROOT, 'packages', dir, 'node_modules'), { recursive: true, force: true })
   }
@@ -150,7 +147,6 @@ export function prepare(env) {
   writeFileSync(join(E2E, '.npmrc'), npmrc)
   run('npm', ['install', '--install-links'], { cwd: E2E, env })
   run('npm', ['run', 'build'], { cwd: E2E, env })
-  writeFileSync(done, '')
   return mqttCerts(env)
 }
 
@@ -437,6 +433,9 @@ function plan(env) {
     ],
     { cwd: E2E, env: { ...env, GITHUB_OUTPUT: '' } }
   )
+  // prepare() pointed the manifests at this run's tarballs; put them back, so the job's next pnpm command still matches
+  // the lockfile and the leg prepares from a clean tree.
+  run('git', ['checkout', '--', 'packages/sdk', 'packages/sdk-e2e'])
 }
 
 async function main(family, env) {
