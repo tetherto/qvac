@@ -5310,31 +5310,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:2de56c225962341a9397b90b746b5f1788633d42d3412c504852ad69743c2354",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/model-fit/src/process-internal.ts",
-        "symbol": "parseFitLlamaProcessConfig#1"
-      },
-      "summary": "parseFitLlamaProcessConfig#1 in packages/model-fit/src/process-internal.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/model-fit/src/process-internal.ts",
-        "line": 30,
-        "column": 1
-      },
-      "measurement": {
-        "value": 55,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:2ea47c43a88473434448fb1e161b7aadbe5d8d99cf2af692e69680b8fc26aeec",
       "detector": "structure",
       "rule": "function-lines",
@@ -7476,31 +7451,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:3e91c4d4f22209ca146e5091feab4440308eb84c50e2e4b98a0f5988933d3ba3",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/model-fit/test/desktop/process.test.js",
-        "symbol": "test \"response parser accepts, omits, and rejects projections\" callback#1"
-      },
-      "summary": "test \"response parser accepts, omits, and rejects projections\" callback#1 in packages/model-fit/test/desktop/process.test.js exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/model-fit/test/desktop/process.test.js",
-        "line": 183,
-        "column": 65
-      },
-      "measurement": {
-        "value": 121,
-        "unit": "code lines",
-        "advisoryThreshold": 100,
-        "highThreshold": 200
-      }
-    },
-    {
       "fingerprint": "quality-v1:3e9b9944a60afea8105cfb0895b07c1deda7ab601dcbed6d6274873d5dbaa4c9",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -8063,31 +8013,6 @@
       "remediation": "Choose a dependency direction and move the shared contract or behavior behind that boundary.",
       "primaryLocation": {
         "path": "packages/inference/src/api/get-model-info.ts"
-      }
-    },
-    {
-      "fingerprint": "quality-v1:44bfaaa71775a254cfeded4fa9beb6d78387f9ae1a72082b45404e922a3e83b3",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/model-fit/src/process.ts",
-        "symbol": "assertFitLlamaProcessConfig#1"
-      },
-      "summary": "assertFitLlamaProcessConfig#1 in packages/model-fit/src/process.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/model-fit/src/process.ts",
-        "line": 228,
-        "column": 1
-      },
-      "measurement": {
-        "value": 23,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
       }
     },
     {
@@ -9788,31 +9713,6 @@
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
-      }
-    },
-    {
-      "fingerprint": "quality-v1:54a2c3e3d7d2405667fd39634a5dcb953cb56347d306808c7f175a2ed8c37354",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/model-fit/src/process.ts",
-        "symbol": "assertFitLlamaProcessConfig#1"
-      },
-      "summary": "assertFitLlamaProcessConfig#1 in packages/model-fit/src/process.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/model-fit/src/process.ts",
-        "line": 228,
-        "column": 1
-      },
-      "measurement": {
-        "value": 51,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
       }
     },
     {
@@ -22902,31 +22802,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:cb80cefbf7e0ef5303490a96d8585e83efa53c4a0afa93613c00bd7eec0090f2",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/model-fit/src/process-internal.ts",
-        "symbol": "parseFitLlamaProcessConfig#1"
-      },
-      "summary": "parseFitLlamaProcessConfig#1 in packages/model-fit/src/process-internal.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/model-fit/src/process-internal.ts",
-        "line": 30,
-        "column": 1
-      },
-      "measurement": {
-        "value": 23,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
-      }
-    },
-    {
       "fingerprint": "quality-v1:cba7353087f859e63acbe198fe8f29a12584cce718e9c108f1aed5d8442a074e",
       "detector": "structure",
       "rule": "function-lines",
@@ -23665,31 +23540,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:d1ba2a69664cc9c0cef5a9ec43b41fdfcf34d6d795a95f7b2d1d02a78f840dbf",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/model-fit/src/process-internal.ts",
-        "symbol": "parseFitProcessRequest#1"
-      },
-      "summary": "parseFitProcessRequest#1 in packages/model-fit/src/process-internal.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/model-fit/src/process-internal.ts",
-        "line": 86,
-        "column": 8
-      },
-      "measurement": {
-        "value": 16,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
-      }
-    },
-    {
       "fingerprint": "quality-v1:d1c483a23c01a800bd903fe8b4dfdc9d1c7b9266d232560897b3ba89c90d7ce9",
       "detector": "structure",
       "rule": "function-lines",
@@ -24205,31 +24055,6 @@
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
-      }
-    },
-    {
-      "fingerprint": "quality-v1:d72c2febdc5712c32a2e177ac5b71312ff247cb19cc8e685ddb2f8940189ebec",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/model-fit/src/index.ts",
-        "symbol": "prepareFitConfig#1"
-      },
-      "summary": "prepareFitConfig#1 in packages/model-fit/src/index.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/model-fit/src/index.ts",
-        "line": 346,
-        "column": 1
-      },
-      "measurement": {
-        "value": 16,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
       }
     },
     {

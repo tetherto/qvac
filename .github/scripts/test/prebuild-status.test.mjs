@@ -280,7 +280,7 @@ test('evaluatePackage: a status without a parseable producing run stays pending'
 })
 
 test('PREBUILD_KEYS covers the merge-guard allowlist', () => {
-  assert.equal(PREBUILD_KEYS.length, 14)
+  assert.equal(PREBUILD_KEYS.length, 13)
   assert.ok(PREBUILD_KEYS.includes('ggml-rpc-server'))
   assert.ok(PREBUILD_KEYS.includes('tts-ggml'))
   assert.ok(PREBUILD_KEYS.includes('turbovec-ggml'))
@@ -288,7 +288,7 @@ test('PREBUILD_KEYS covers the merge-guard allowlist', () => {
 })
 
 test('CPP_TEST_KEYS covers C++-test packages and uses the vla merge-guard key', () => {
-  assert.equal(CPP_TEST_KEYS.length, 14)
+  assert.equal(CPP_TEST_KEYS.length, 13)
   assert.ok(CPP_TEST_KEYS.includes('asr-ggml'))
   assert.ok(CPP_TEST_KEYS.includes('bci-whispercpp'))
   assert.ok(CPP_TEST_KEYS.includes('audiogen-ggml'))

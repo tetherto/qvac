@@ -5,13 +5,12 @@ To cut that cost, they **no longer run automatically on PRs**. Instead you start
 them by hand, choosing exactly one platform, the device(s) to run on, and,
 where supported, a subset of tests.
 
-This applies to all 16 mobile addons: `asr-ggml`, `audiogen-ggml`,
+This applies to all 15 mobile addons: `asr-ggml`, `audiogen-ggml`,
 `bci-whispercpp`, `classification-ggml`, `decoder-audio`, `diffusion-cpp`,
 `embed-llamacpp`, `ggml-rpc-server`, `inference-addon-cpp`, `llm-llamacpp`,
-`model-fit`, `ocr-ggml`, `translation-nmtcpp`, `tts-ggml`, `turbovec-ggml`,
-`vla`.
+`ocr-ggml`, `translation-nmtcpp`, `tts-ggml`, `turbovec-ggml`, `vla`.
 
-Except for its dedicated section, the guidance below applies to the other 15
+Except for its dedicated section, the guidance below applies to the other 14
 addons. `ggml-rpc-server` has per-platform device dropdowns and no test filter
 or package input; use its [dispatch example](#ggml-rpc-server-dispatch) instead.
 
@@ -505,7 +504,7 @@ the prebuilds and publishes
 BRANCH=tmp-QVAC-1234
 PKG=llm-llamacpp   # package directory name; `package` is a required input
 git push origin HEAD:refs/heads/$BRANCH
-# Native addons, including model-fit, publish from on-merge-nx.yml.
+# Native addons publish from on-merge-nx.yml.
 # ggml-rpc-server likewise: on-merge-ggml-rpc-server.yml, no package input.
 gh workflow run on-merge-nx.yml --repo tetherto/qvac --ref $BRANCH -f package=$PKG
 ```
@@ -549,7 +548,7 @@ PKG=$(gh api "orgs/tetherto/packages/npm/$GPR_NAME/versions?per_page=50" \
 echo "$PKG"   # @tetherto/llm-llamacpp-mono@0.47.0-tmp.runid-33179656677
 ```
 
-The native addons, including `model-fit`, publish from `on-merge-nx.yml`, so the run is
+The native addons publish from `on-merge-nx.yml`, so the run is
 found by branch rather than by a per-addon workflow name.
 
 For every addon except one, `GPR_NAME` is just `$WF-mono`. **`vla` is the
@@ -608,7 +607,7 @@ the pin did not arrive and you are testing the published release.
 
 | input | addons |
 |---|---|
-| `-f package=` | `bci-whispercpp`, `classification-ggml`, `decoder-audio`, `diffusion-cpp`, `embed-llamacpp`, `llm-llamacpp`, `model-fit`, `ocr-ggml`, `translation-nmtcpp`, `turbovec-ggml`, `vla` |
+| `-f package=` | `bci-whispercpp`, `classification-ggml`, `decoder-audio`, `diffusion-cpp`, `embed-llamacpp`, `llm-llamacpp`, `ocr-ggml`, `translation-nmtcpp`, `turbovec-ggml`, `vla` |
 | `-f package_spec=` | `asr-ggml`, `audiogen-ggml`, `tts-ggml` |
 | *(no such input)* | `inference-addon-cpp` |
 | `-f prebuild_run_id=` | every addon above **except** `decoder-audio` and `inference-addon-cpp` (see *Addons that need none of this*) |
