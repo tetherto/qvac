@@ -25,7 +25,7 @@
 //      Two co-loaded addons that each export their own ggml copy can interpose
 //      on one another and corrupt the backend registry. Default: report only.
 //      Pass `--enforce-exports` to turn leaked engine exports into a hard fail
-//      (see packages/asr-ggml/symbols.map for the fix template).
+//      (see cmake/qvac-addon/addon-symbols.map for the fix template).
 //
 // A DT_NEEDED provider does not have to sit in the scanned prebuilds/ tree. A shared
 // runtime like @qvac/fabric (`qvac__fabric-<host>@0.bare`) ships in node_modules, not beside

@@ -175,23 +175,24 @@ SDK code — see [Engine Selection](#engine-selection).
 |----------|-------------|-------------|--------|-------------|
 | macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | Metal |
 | iOS | arm64 | 17.0+ | ✅ Tier 1 | Metal |
-| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan; CUDA (x64 prebuild; arm64 via `build:cuda` / `ASR_CUDA=ON`) |
+| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan; CUDA |
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno) |
-| Windows | x64 | 10+ | ✅ Tier 1 | Vulkan; CUDA via `build:cuda` / `ASR_CUDA=ON` |
+| Windows | x64 | 10+ | ✅ Tier 1 | Vulkan; CUDA |
 
 **Dependencies:**
 
 - `qvac-lib-inference-addon-cpp` — C++ addon framework (vcpkg port; version pinned in `vcpkg.json`)
-- `speech-cpp` — umbrella vcpkg port enabling the `whisper` and `parakeet` engine features plus each platform's GPU features
+- `@qvac/fabric` — the shared ggml runtime the addon links, with every GPU backend it ships (npm dependency)
+- `speech-cpp` — umbrella vcpkg port enabling the `whisper` and `parakeet` engine features, built against the same ggml headers through the `qvac-fabric` port
 - Bare runtime — see `engines.bare` in `package.json`
 - Linux requires Clang/LLVM 22 with libc++
 
-`ggml-speech` and `speech-cpp` are pinned with vcpkg `overrides` to the same
-versions in every speech addon (`@qvac/asr-ggml`, `@qvac/audiogen-ggml`,
-`@qvac/bci-whispercpp`, `@qvac/tts-ggml`), and `package.json` records the
-`ggml-speech` build as `qvac["ggml-speech"]`. The speech addons ship their ggml
-backends under the same file names, so an app that bundles several of them
-keeps one copy of each: use releases that record the same `ggml-speech`.
+The ggml runtime is the shared `@qvac/fabric` prebuild: the addon links it
+dynamically (`DT_NEEDED qvac__fabric-<host>@0.bare`), ships no ggml of its
+own, and shares one runtime in memory with every other fabric addon in the
+process. `speech-cpp` is pinned with a vcpkg `override` and compiles both
+engines against the same ggml headers the runtime was built from. See
+[`packages/fabric/INTEGRATION.md`](../fabric/INTEGRATION.md).
 
 ## Installation
 
@@ -227,9 +228,10 @@ Do not depend on desktop platform packages directly. Supported installers are
 npm 7+, pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip
 the platform package and fail at require time, and at `bare-pack` time, naming
 the missing package. Each platform package is an ordinary Bare addon whose
-`prebuilds/<host>/` holds the native module and, next to it, the dynamically
-loaded ggml backends the module finds on its own. A source build becomes
-loadable once `npm run link:platform` (run by `npm run build:native`) stages it
+`prebuilds/<host>/` holds the native module. The ggml runtime it links and the
+dynamically loaded ggml backends ship in the matching `@qvac/fabric-<host>`
+platform package, which `@qvac/fabric` installs the same way. A source build
+becomes loadable once `npm run link:platform` (run by `npm run build:native`) stages it
 as the host's platform package in `node_modules/`.
 
 Mobile targets are cross-built, so no install host ever matches their `os`,
@@ -250,6 +252,10 @@ dependency, pinned to the exact `@qvac/asr-ggml` version:
   }
 }
 ```
+
+The runtime follows the same rule: Android and iOS apps also add
+`@qvac/fabric` and `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` as
+direct dependencies at the same exact version.
 
 ## Quickstart
 
@@ -709,7 +715,7 @@ On an iOS device every unified row shares the app's own memory limit, `os_proc_a
 | `gpuLayers` | Greater than 0 requests the GPU stack, with the fallbacks a real load applies. Omitted, parakeet and MOSS project on the CPU and whisper on the GPU, matching what each load does. |
 | `backend` | Parakeet and MOSS: native backend selector, matching the load configuration. Explicit selection overrides `gpuLayers`. The projection covers one model; assess both models separately for speaker-attributed transcription. |
 | `marginBytes` | Free memory that must remain for the projection to count as fitting. Defaults to the engine's own headroom, which is 256 MiB for parakeet and MOSS. |
-| `backendsDir` | Directory scanned as given for the ggml backends, the same path a load reads. Unset scans next to the loaded module. |
+| `backendsDir` | Directory scanned as given for the ggml backends, the same path a load reads. Unset uses the backends the `@qvac/fabric` runtime ships. |
 | `vadModelPath` | Whisper: projected alongside the model; the VAD model or its weightless copy. Omitted means no VAD. |
 | `decoders` | Whisper: worst-case resident decoders, the `best_of` or `beam_size` the run will use. The KV cache and decode graph grow with it. |
 | `flashAttn`, `gpuDevice` | Whisper: as the load takes them. |
@@ -896,7 +902,7 @@ and one streaming chunk.
 | `maxThreads` | `0` | CPU threads (0 lets the engine pick). |
 | `useGPU` | `false` | Select a GPU automatically when `backend` is `auto`. |
 | `backend` | `auto` | Native selector: `cpu`, `cuda`, `vulkan`, `metal`, or an exact ggml device name such as `CUDA0`, `Vulkan0` or `MTL0`. Explicit selection overrides `useGPU` and fails at load if unavailable. |
-| `backendsDir` | next to the loaded module | Directory scanned as given for the dynamically loaded ggml backends. |
+| `backendsDir` | fabric's own | Directory scanned as given for the dynamically loaded ggml backends. Unset uses the directory the `@qvac/fabric` runtime loads its own backends from. |
 
 For example, `mossTranscribeConfig: { backend: 'cuda' }` requests CUDA even
 with the default `useGPU: false`; `{ backend: 'cpu', useGPU: true }` selects
@@ -947,35 +953,28 @@ device. Use the same `backend` in
 the Parakeet `assessFit` request. Core ML sidecars retain their existing
 native routing; selecting a ggml device does not control Core ML placement.
 
-GPU backends are selected per platform via `vcpkg.json` features; no
-`bare-make generate` flag is needed:
+GPU backends come with the `@qvac/fabric` runtime; the addon has no backend
+build option of its own and `speech-cpp` is built without backend features:
 
-- **Linux / Windows** — Vulkan (needs the [Vulkan SDK](https://vulkan.lunarg.com/) on the build host); the linux-x64 prebuild additionally bundles CUDA, see below
-- **Android** — Vulkan + OpenCL (Adreno) as dynamically-loaded `.so` backends shipped beside the prebuild
-- **macOS / iOS** — Metal, statically linked, plus the optional Parakeet
+- **Linux / Windows** — Vulkan, plus CUDA on linux-x64, linux-arm64 and win32-x64, as runtime-loaded modules next to the runtime
+- **Android** — Vulkan + OpenCL (Adreno) as dynamically-loaded `.so` backends shipped with `@qvac/fabric-android-arm64`
+- **macOS / iOS** — Metal, linked into the runtime, plus the optional Parakeet
   [Core ML encoder sidecars](#core-ml-encoder-sidecars-apple)
 
-**CUDA (Linux / Windows on NVIDIA)** needs `nvcc` on the build host, so it is
-gated behind the `ASR_CUDA` CMake option — supported on linux-x64,
-linux-arm64 and win32-x64. The published linux-x64 prebuild turns it on (the
-prebuild workflow installs the CUDA toolkit); elsewhere build it yourself
-with `npm run build:cuda` (or `bare-make generate -D ASR_CUDA=ON`). The
-option adds the `cuda` feature to the `speech-cpp` dependency and turns on
-`GGML_CUDA`. Every linux-x64 and linux-arm64 build, and win32-x64 with the
-cuda feature, uses ggml's hybrid dynamically-loaded backend mode: the
-per-arch CPU-variant and Vulkan backends ship as runtime-loaded modules
-(`.so` on Linux, `.dll` on Windows) next to the addon, the cuda builds add
-the CUDA module, and only that module depends on the CUDA runtime. Engaging
-CUDA requires the NVIDIA driver plus the CUDA 13 runtime libraries (cudart
-and cuBLAS) resolvable at load time; hosts that cannot resolve them —
-including CPU-only and non-NVIDIA machines — skip the module and fall back
-to Vulkan or CPU instead of failing to load the addon. CUDA is compiled
+**CUDA (Linux / Windows on NVIDIA)** comes with the `@qvac/fabric` runtime on
+linux-x64, linux-arm64 and win32-x64 as a runtime-loaded module (`.so` on
+Linux, `.dll` on Windows), next to the per-arch CPU-variant and Vulkan
+modules; only the CUDA module depends on the CUDA runtime. Engaging CUDA
+requires the NVIDIA driver plus the CUDA 13 runtime libraries (cudart and
+cuBLAS) resolvable at load time; hosts that cannot resolve them — including
+CPU-only and non-NVIDIA machines — skip the module and fall back to Vulkan or
+CPU instead of failing to load the addon. CUDA ships
 *alongside* Vulkan rather than replacing it; ggml registers CUDA ahead of
 Vulkan, so a `use_gpu` / `useGPU` request lands on CUDA when a supported
 device is present and falls back to Vulkan otherwise. Every engine reports
 the winner through `getBackendInfo()` as `backendId: 2` (`BackendId.CUDA`).
 
-On x64 a CUDA build's module targets **compute capability 7.5 and newer**,
+On x64 the CUDA module targets **compute capability 7.5 and newer**,
 with native code for Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6),
 Ada (8.9), Hopper (9.0) and Blackwell (12.0, 12.1). Anything newer JIT-compiles
 from the bundled 8.0 PTX on first use, a one-off compile the driver caches. On
@@ -986,10 +985,7 @@ entirely, so they have no code path here: the backend skips such devices at
 registration and the addon falls back to Vulkan or CPU.
 
 The addon takes no direct CUDA linkage — the CUDA module carries its own CUDA
-`DT_NEEDED` entries, which is what makes the graceful fallback possible — and
-nvcc's clang host-compiler setup lives in
-`vcpkg-overlays/toolchains/linux-clang.cmake`, shared by every addon that
-compiles the CUDA backend.
+`DT_NEEDED` entries, which is what makes the graceful fallback possible.
 
 Every engine defaults to CPU: whisper needs `contextParams.use_gpu: true`,
 parakeet needs `parakeetConfig.useGPU: true` and moss-transcribe needs
@@ -1026,9 +1022,10 @@ additionally reports
 `gpuMemTotalMb` / `gpuMemFreeMb`. This differs from
 `RuntimeStats.backendDevice`, which is the native numeric device-class code.
 
-Optional source builds accept `-D ASR_WEBGPU=ON`. The manifest pins a compatible
-Dawn version and avoids its default X11/GL dependencies. `BackendId.WebGPU` is
-`5`. An unavailable explicit Parakeet/MOSS backend fails instead of silently
+The addon has no WebGPU build option of its own, and the `@qvac/fabric`
+runtime does not ship the Dawn WebGPU backend yet, so an explicit
+`backend: 'webgpu'` is rejected as an unavailable backend. `BackendId.WebGPU`
+is `5`. An unavailable explicit Parakeet/MOSS backend fails instead of silently
 falling back. Hexagon is not included in JavaScript package builds.
 
 The Apple `coreml` feature also enables Whisper's encoder, retaining native
@@ -1040,12 +1037,12 @@ Two paths matter on Android and Linux:
 
 - **`backendsDir`** (in `whisperConfig` / `parakeetConfig`) — directory
   scanned, as given, for dynamically-loaded ggml backend libraries (CUDA,
-  Vulkan, OpenCL, per-arch CPU variants). Unset scans the addon's own: the
-  directory its native module was loaded from
-  (`prebuilds/<host>/qvac__asr-ggml-<suffix>/` in a platform package, the
-  app's native library directory after `bare-link`). Pass a path only when
-  backend libraries ship somewhere else.
-  No-op on Apple, where backends are statically linked.
+  Vulkan, OpenCL, per-arch CPU variants). Unset uses the directory the
+  `@qvac/fabric` runtime loads its own backends from
+  (`prebuilds/<host>/qvac__fabric-<suffix>/` of the installed platform
+  package, or next to the runtime in a `bare-link`ed app). Pass a path only
+  when backend libraries ship somewhere else.
+  No-op on Apple, where backends are linked into the runtime.
 - **`openclCacheDir`** (parakeet) — persistent directory for ggml-opencl's
   compiled program-binary cache. Android-only; pass the host app's cache
   directory to avoid a cold `clBuildProgram` on every process start.
@@ -1230,12 +1227,8 @@ rationale.
   - Windows: Visual Studio 2019+ or Build Tools
 - **vcpkg** — clone it, run `bootstrap-vcpkg.sh`/`.bat`, and export
   `VCPKG_ROOT=/path/to/vcpkg`
-- Optional GPU SDKs: [Vulkan SDK](https://vulkan.lunarg.com/) on
-  Linux/Windows (`vulkan-tools libvulkan-dev vulkan-utility-libraries-dev
-  spirv-tools` on Ubuntu/Debian); Metal needs nothing on macOS/iOS; the
-  opt-in CUDA build additionally needs the
-  [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) (`nvcc`) on
-  Linux/Windows
+- No GPU SDK is needed to build: the backends are prebuilt in the
+  `@qvac/fabric` runtime that `npm install` fetches
 
 ### Build
 
@@ -1245,14 +1238,12 @@ cd qvac/packages/asr-ggml
 git submodule update --init --recursive
 npm install
 npm run build          # build:ts (TypeScript) + build:native (bare-make)
-npm run build:cuda     # same, with the CUDA backend compiled in (needs nvcc)
 ```
 
 `build:native` runs `bare-make generate`, `bare-make build`,
 `bare-make install` and `npm run link:platform`, which stages
 `prebuilds/<host>/` as `node_modules/@qvac/asr-ggml-<host>`: `#host-addon`
-only ever loads a platform package. `build:native:cuda` is the same chain with
-`-D ASR_CUDA=ON` on the generate step.
+only ever loads a platform package.
 
 ### Test
 
@@ -1318,7 +1309,7 @@ memory, and package development dependencies installed, run from this package:
 # Bound both dependency compilation and addon compilation.
 export VCPKG_MAX_CONCURRENCY=2 CMAKE_BUILD_PARALLEL_LEVEL=2
 npm run build:ts
-bare-make generate --build build-moss -D ASR_CUDA=ON -D BUILD_TESTING=OFF
+bare-make generate --build build-moss -D BUILD_TESTING=OFF
 bare-make build --build build-moss --parallel 2
 bare-make install --build build-moss
 npm run link:platform
@@ -1333,8 +1324,7 @@ QVAC_TEST_MOSS_TRANSCRIBE_BACKEND=vulkan INTEGRATION_TEST_TIMEOUT=1800 \
   bash test/integration/parakeet-run-tests.sh
 ```
 
-For a Vulkan-only Linux host, generate with `-D ASR_CUDA=OFF` and run only the
-Vulkan command. These checks must execute both default-prompt and hotword
+On a Vulkan-only Linux host run only the Vulkan command. These checks must execute both default-prompt and hotword
 transcription and assert the selected backend; an explicit backend run fails
 when a fixture is missing. Registry dry-runs, forwarding tests, and compilation
 alone do not validate packaged addon GPU inference. Run packaged validation on

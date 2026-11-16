@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Run on the shared `@qvac/fabric` runtime: the module links the ggml that
+  `@qvac/fabric` ships instead of bundling its own, loads GPU backends from
+  the fabric platform package, and the native build takes ggml from the
+  `qvac-fabric` vcpkg port through `speech-cpp` `2026-11-11`
+  ([#5482](https://github.com/tetherto/qvac/pull/5482)).
+
+### Removed
+
+- The opt-in WebGPU source build (`AUDIOGEN_WEBGPU`): WebGPU returns once the
+  `@qvac/fabric` runtime provides it
+  ([#5482](https://github.com/tetherto/qvac/pull/5482)).
+
 ### Fixed
 
 - `encode()` / `encodePcm()` release every bare-ffmpeg object they create for
@@ -14,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   kept the input PCM, the encoded output and the native FFmpeg state in memory
   for the life of the process
   ([#5610](https://github.com/tetherto/qvac/pull/5610)).
+
 ## [0.10.1] - 2026-11-10
 
 ### Added
