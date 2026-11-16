@@ -1,6 +1,6 @@
 {
   "name": "@qvac/cli",
-  "version": "0.18.0",
+  "version": "0.19.0",
   "description": "Command-line interface for the QVAC ecosystem",
   "author": "Tether",
   "license": "Apache-2.0",
@@ -59,7 +59,7 @@
     "@fastify/swagger": "^9.0.0",
     "@fastify/swagger-ui": "^6.1.1",
     "@inquirer/prompts": "8.5.2",
-    "@qvac/sdk": "^0.23.0",
+    "@qvac/sdk": "^0.24.0",
     "close-with-grace": "^2.1.0",
     "commander": "^14.0.3",
     "fastify": "^5.0.0",
@@ -78,6 +78,7 @@
     "openai": "^6.48.0",
     "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
+    "react-native-bare-kit": "^0.17.1",
     "tsc-alias": "^1.8.17",
     "typescript": "^5.9.3"
   }
