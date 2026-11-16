@@ -74,9 +74,8 @@ permissions:
 
 env:
   # Packed tarball bytes for a fabric platform package. npm's limit is
-  # undocumented: the largest known to go through is
-  # @qvac/fabric-linux-x64@0.29.2 at 200417383 bytes; 0.30.0 at ~201.9 MB got
-  # E413. Over it is a warning, not an error.
+  # undocumented; 200417383 is @qvac/fabric-linux-x64@0.29.2, the largest known
+  # to publish. Over it is a warning, not an error.
   MAX_TARBALL_BYTES: "200417383"
 
 jobs:
@@ -441,7 +440,8 @@ jobs:
 
   # Reports fabric's platform tarball sizes before the npm environment asks for
   # approval, so the approver sees an over-budget warning first. Advisory:
-  # publish-npm's always() runs it whatever this job's result.
+  # publish-npm's always() runs publish-npm whatever this job's result. Same
+  # check as the fabric branch of "Publish platform packages to npm".
   npm-tarball-size:
     name: npm tarball size (${{ matrix.package }})
     needs:
@@ -494,11 +494,19 @@ jobs:
           OUT_DIR: ${{ runner.temp }}/platform-packages
         run: |
           set -euo pipefail
-          SUMMARY="### npm tarball sizes"$'\n\n'"Budget: ${MAX_TARBALL_BYTES} bytes."$'\n\n'"| Package | Bytes | Status |"$'\n'"|---|---:|---|"$'\n'
+          {
+            echo "## npm tarball sizes"
+            echo
+            echo "Budget: ${MAX_TARBALL_BYTES} bytes."
+            echo
+            echo "| Package | Bytes | Status |"
+            echo "|---|---:|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
           for dir in "$OUT_DIR"/*/; do
             NAME=$(node -p "require('${dir}package.json').name")
             VERSION=$(node -p "require('${dir}package.json').version")
-            SIZE=$(cd "$dir" && npm pack --dry-run --json --ignore-scripts | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8"))[0].size')
+            # A failed pack or unparsable output falls to the unreadable warning.
+            SIZE=$(cd "$dir" && npm pack --dry-run --json --ignore-scripts | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8"))[0].size') || SIZE=error
             STATUS=ok
             if ! [[ "$SIZE" =~ ^[0-9]+$ ]]; then
               STATUS=unreadable
@@ -508,9 +516,8 @@ jobs:
               echo "::warning title=npm tarball size check::${NAME}@${VERSION} packs to ${SIZE} bytes, over the ${MAX_TARBALL_BYTES}-byte budget; npm may reject it with E413. Check it before approving the npm publish."
             fi
             echo "${NAME}@${VERSION}: ${SIZE} bytes (${STATUS})"
-            SUMMARY+="| ${NAME}@${VERSION} | ${SIZE} | ${STATUS} |"$'\n'
+            echo "| \`${NAME}@${VERSION}\` | ${SIZE} | ${STATUS} |" >> "$GITHUB_STEP_SUMMARY"
           done
-          printf '%s' "$SUMMARY" >> "$GITHUB_STEP_SUMMARY"
 
   publish-npm:
     name: Publish NPM (${{ matrix.package }})
@@ -654,25 +661,30 @@ jobs:
           # Check every slice before publishing any, so a failed check leaves
           # no new slice behind.
           TO_PUBLISH=()
+          # "<sort key><TAB><dir>" for fabric slices over budget or of unknown size.
+          OVER_BUDGET=()
           for dir in "$OUT_DIR"/*/; do
             NAME=$(node -p "require('${dir}package.json').name")
             VERSION=$(node -p "require('${dir}package.json').version")
             SLICE_STATE=$(on_npm "$NAME" "$VERSION")
             if [ "$SLICE_STATE" = miss ]; then
               if [ "$CHECK_TARBALL_SIZE" = true ]; then
-                SIZE=$(cd "$dir" && npm pack --dry-run --json --ignore-scripts | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8"))[0].size')
+                # A failed pack or unparsable output falls to the unreadable warning.
+                SIZE=$(cd "$dir" && npm pack --dry-run --json --ignore-scripts | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8"))[0].size') || SIZE=error
                 echo "${NAME}@${VERSION}: ${SIZE} byte tarball"
                 # Test the format first: a non-number makes -gt error, which set -e
-                # ignores inside an if.
-                REASON=""
+                # ignores inside an if. An unknown size sorts as the largest.
+                KEY=""
                 if ! [[ "$SIZE" =~ ^[0-9]+$ ]]; then
+                  KEY=999999999999
                   REASON="has an unreadable packed size ('${SIZE}')"
                 elif [ "$SIZE" -gt "$MAX_TARBALL_BYTES" ]; then
+                  KEY="$SIZE"
                   REASON="packs to ${SIZE} bytes, over the ${MAX_TARBALL_BYTES}-byte budget, and npm may reject it with E413"
                 fi
-                if [ -n "$REASON" ]; then
-                  echo "::warning title=npm tarball size check::${NAME}@${VERSION} ${REASON}. Publishing it first, so an E413 stops the run before the other slices." >&2
-                  TO_PUBLISH=("$dir" "${TO_PUBLISH[@]}")
+                if [ -n "$KEY" ]; then
+                  echo "::warning title=npm tarball size check::${NAME}@${VERSION} ${REASON}. Over-budget slices publish first, largest first, so an E413 stops the run before the others." >&2
+                  OVER_BUDGET+=("${KEY}"$'\t'"${dir}")
                   continue
                 fi
               fi
@@ -694,6 +706,10 @@ jobs:
             fi
             echo "${NAME}@${VERSION} already on npm with identical contents, skipping"
           done
+          if [ "${#OVER_BUDGET[@]}" -gt 0 ]; then
+            mapfile -t FIRST < <(printf '%s\n' "${OVER_BUDGET[@]}" | sort -t $'\t' -k1,1nr | cut -f2-)
+            TO_PUBLISH=("${FIRST[@]}" "${TO_PUBLISH[@]}")
+          fi
           for dir in "${TO_PUBLISH[@]}"; do
             NAME=$(node -p "require('${dir}package.json').name")
             VERSION=$(node -p "require('${dir}package.json').version")
