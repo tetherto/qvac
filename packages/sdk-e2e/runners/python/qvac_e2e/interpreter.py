@@ -241,7 +241,9 @@ async def _logging_stream_open(transport: Any, params: dict[str, Any]) -> Any:
 async def _logging_stream_mark(transport: Any, params: dict[str, Any]) -> Any:
     """Marks the point the logs are counted from."""
     state = _logging_state(params["streamId"])
-    state["cutoffMs"] = time.time() * 1000
+    # Whole ms, as the server stamps entries with Date.now(): a fractional cutoff
+    # drops every entry delivered in the same millisecond as the mark.
+    state["cutoffMs"] = time.time_ns() // 1_000_000
     return {"markedAt": state["cutoffMs"]}
 
 
@@ -500,6 +502,7 @@ async def _vector_index_search(transport: Any, params: dict[str, Any]) -> Any:
             "indexId": params["indexId"],
             "queries": [params["query"]],
             "k": params["k"],
+            **({"nProbe": params["nProbe"]} if "nProbe" in params else {}),
         }
     )
     response = await vector_index(transport, request)
@@ -679,6 +682,9 @@ CALLS: dict[str, Callable[[Any, dict[str, Any]], Any]] = {
     ),
     "vectorIndexSetStagedSearch": _request(
         VectorIndexRequest, "vectorIndex", vector_index, operation="setStagedSearch"
+    ),
+    "vectorIndexSetIvf": _request(
+        VectorIndexRequest, "vectorIndex", vector_index, operation="setIvf"
     ),
     "vectorIndexRemove": _request(
         VectorIndexRequest, "vectorIndex", vector_index, operation="remove"

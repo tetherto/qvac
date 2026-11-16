@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { modelSrcInputSchema, type ModelSrcInput } from './model-src-utils'
+import { trackedRequestSchema } from './request-base'
 
 // Chatterbox multilingual supported languages (23). The engines support
 // different language sets, so the language enum is validated per engine.
@@ -1874,6 +1875,7 @@ export const ttsRequestSchema = z
     ...ttsClientParamsShape,
     type: z.literal('textToSpeech')
   })
+  .extend(trackedRequestSchema.shape)
   .superRefine(refineTtsRequest)
 
 // Mirrors @qvac/tts-ggml's `RuntimeStats`, using the same field names as the
@@ -2101,6 +2103,7 @@ export const textToSpeechStreamRequestSchema = z
     ...textToSpeechStreamRequestBaseShape,
     type: z.literal('textToSpeechStream')
   })
+  .extend(trackedRequestSchema.shape)
   .superRefine(refineTextToSpeechStreamRequest)
 
 export const textToSpeechStreamResponseSchema = z.object({

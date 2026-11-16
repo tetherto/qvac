@@ -207,6 +207,7 @@
     "compact-encoding": "^3.3.0",
     "corestore": "^7.11.0",
     "fast-safe-stringify": "2.1.1",
+    "fs-native-extensions": "^1.5.0",
     "hyperdrive": "^13.3.3",
     "hyperswarm": "^4.17.0",
     "semver": "^7.8.5",

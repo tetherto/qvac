@@ -223,7 +223,7 @@ describe('resolveBareKitRuntime', () => {
     })
   })
 
-  it('resolves iOS from the built-in tables and calls the Swift pin a minimum', async () => {
+  it('resolves iOS from the built-in tables at the pinned Swift version', async () => {
     await withTempDir(async (dir) => {
       const resolution = await resolveBareKitRuntime({
         platform: 'ios',
@@ -234,7 +234,7 @@ describe('resolveBareKitRuntime', () => {
       assert.equal(resolution.runtime.version, '1.36.2')
       assert.equal(resolution.runtime.source, 'bare-kit-swift')
       assert.equal(resolution.runtime.packageVersion, '2.2.0')
-      assert.match(resolution.runtime.detail, /bare-kit-swift 2\.2\.0 or newer/)
+      assert.match(resolution.runtime.detail, /bare-kit-swift 2\.2\.0, built from/)
     })
   })
 

@@ -7,11 +7,15 @@ schemaType: HowTo
 
 ## Overview
 
-OCR uses **ONNX runtime** as the inference engine. It runs a two-stage pipeline and requires compatible models for both stages:
+OCR uses **GGML** as the inference engine, through the [`@qvac/ocr-ggml`](https://github.com/tetherto/qvac/tree/main/packages/ocr-ggml) add-on. It runs a two-stage pipeline and requires compatible models for both stages:
 * **Text detection**: locate text regions in an image
 * **Text recognition**: decode characters in detected regions
 
-Load supported models using `modelType: "ocr"`. Then, provide an image as either a file path (string) or an in-memory buffer. Each OCR block contains extracted text and may include `bbox` (bounding box coordinates) and `confidence` (recognition score).
+Two pipelines are available:
+* **EasyOCR** (default): CRAFT detector + CRNN recognizer (English / Latin).
+* **DocTR**: DBNet detector + CRNN recognizer.
+
+Load supported models using `modelType: "ggml-ocr"` (alias: `"ocr"`). Then, provide an image as either a file path (string) or an in-memory buffer. Each OCR block contains extracted text and may include `bbox` (bounding box coordinates) and `confidence` (recognition score).
 
 ## Functions
 
@@ -24,7 +28,11 @@ For how to use each function, see [SDK — API reference](/sdk/reference/api/).
 
 ## Models
 
-You can load any ONNX Runtime-compatible OCR pipeline. Required files: `detector_craft.onnx` + `recognizer_<lang>.onnx` (file format: `*.onnx`).
+Both stages use GGUF weights (file format: `*.gguf`). The SDK provides a model constant for each pipeline:
+* `OCR_LATIN`: EasyOCR.
+* `OCR_DOCTR`: DocTR.
+
+Pass the recognizer constant as `modelSrc`, and the SDK resolves the matching detector automatically: CRAFT for EasyOCR, DBNet for DocTR.
 
 For models available as constants, see [SDK — Models](/sdk#models).
 

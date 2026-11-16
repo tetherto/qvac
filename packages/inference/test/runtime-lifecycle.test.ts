@@ -366,7 +366,7 @@ test('gate allows representative requests when active', function (t) {
   t.execution(() => assertLifecycleAllowed(fakeRequest('state')))
 })
 
-test('gate allows only lifecycle ops and blocks others when suspended', async function (t) {
+test('gate allows only lifecycle ops and session close, and blocks others when suspended', async function (t) {
   t.teardown(resetLifecycleState)
   const log: string[] = []
   setup(log)
@@ -376,6 +376,10 @@ test('gate allows only lifecycle ops and blocks others when suspended', async fu
   t.execution(() => assertLifecycleAllowed(fakeRequest('suspend')))
   t.execution(() => assertLifecycleAllowed(fakeRequest('resume')))
   t.execution(() => assertLifecycleAllowed(fakeRequest('state')))
+  t.execution(
+    () => assertLifecycleAllowed(fakeRequest('closeSession')),
+    'a session can still release its resources'
+  )
 
   // reply, stream, duplex blocked
   t.exception(() => assertLifecycleAllowed(fakeRequest('getModelInfo')))

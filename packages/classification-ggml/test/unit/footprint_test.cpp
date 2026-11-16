@@ -7,6 +7,7 @@
 // BridgeDepth from QVAC_BRIDGEDEPTH_MODEL_PATH; a test without its model is
 // skipped. QVAC_FOOTPRINT_BACKEND picks the device (default CPU).
 
+#include <algorithm>
 #include <any>
 #include <cstdint>
 #include <cstdio>
@@ -46,6 +47,11 @@ constexpr auto HD_WIDTH =
     static_cast<uint32_t>(classification_ggml::fit::DEFAULT_FIT_WIDTH);
 constexpr auto HD_HEIGHT =
     static_cast<uint32_t>(classification_ggml::fit::DEFAULT_FIT_HEIGHT);
+// A 16:9 size above the box, downsampled to exactly HD_WIDTH x HD_HEIGHT.
+constexpr uint32_t FULL_HD_WIDTH = 1920;
+constexpr uint32_t FULL_HD_HEIGHT = 1080;
+// 4K height, paired with bd::MAX_SIDE for the widest accepted input.
+constexpr uint32_t UHD_HEIGHT = 2160;
 constexpr uint32_t RGB_CHANNELS = 3;
 
 std::string envOr(const char* name, const std::string& fallback) {
@@ -157,11 +163,13 @@ void checkBridgeDepth(uint32_t width, uint32_t height) {
   bd::BridgeDepthModel model({path, "", backendName(), TEST_THREADS});
   model.load();
   constexpr uint32_t rightViewShift = 5;
-  model.process(
+  const auto output = std::any_cast<bd::DisparityOutput>(model.process(
       std::any(
           bd::StereoInput{
               syntheticRgb(width, height, 0),
-              syntheticRgb(width, height, rightViewShift)}));
+              syntheticRgb(width, height, rightViewShift)})));
+  EXPECT_EQ(output.width, width);
+  EXPECT_EQ(output.height, height);
   expectEqual(
       "bridgedepth " + std::to_string(width) + "x" + std::to_string(height),
       measured,
@@ -203,16 +211,116 @@ TEST(ModelFootprint, BridgeDepthHdEqualsLoadedBuffers) {
   checkBridgeDepth(HD_WIDTH, HD_HEIGHT);
 }
 
+// Above 1280x720 the pair is downsampled, so the loaded buffers equal the
+// measure at this size and at 1280x720 alike.
+TEST(ModelFootprint, BridgeDepthFullHdEqualsLoadedBuffers) {
+  checkBridgeDepth(FULL_HD_WIDTH, FULL_HD_HEIGHT);
+}
+
+// A 4K-wide pair, accepted since the model runs it at 1280x675.
+TEST(ModelFootprint, BridgeDepthMaxSideEqualsLoadedBuffers) {
+  checkBridgeDepth(bd::MAX_SIDE, UHD_HEIGHT);
+}
+
+// The largest input, run at 720x720: the case where the resize back to the
+// input can outweigh the graph run on the host.
+TEST(ModelFootprint, BridgeDepthMaxSquareEqualsLoadedBuffers) {
+  checkBridgeDepth(bd::MAX_SIDE, bd::MAX_SIDE);
+}
+
+TEST(ModelFootprint, BridgeDepthAboveTheBoxIsSizedAtTheModelSize) {
+  const std::string path = envOr("QVAC_BRIDGEDEPTH_MODEL_PATH", "");
+  if (path.empty())
+    GTEST_SKIP() << "QVAC_BRIDGEDEPTH_MODEL_PATH is not set";
+  auto measure = [&](uint32_t width, uint32_t height) {
+    return qcc::measureFootprint(
+        path,
+        backendName(),
+        "",
+        static_cast<int>(width),
+        static_cast<int>(height),
+        TEST_THREADS);
+  };
+  const auto hd = measure(HD_WIDTH, HD_HEIGHT);
+  const auto fullHd = measure(FULL_HD_WIDTH, FULL_HD_HEIGHT);
+  EXPECT_EQ(fullHd.deviceWeightBytes, hd.deviceWeightBytes);
+  EXPECT_EQ(fullHd.deviceComputeBytes, hd.deviceComputeBytes);
+  EXPECT_EQ(fullHd.hostWeightBytes, hd.hostWeightBytes);
+  EXPECT_EQ(fullHd.hostComputeBytes, hd.hostComputeBytes);
+  EXPECT_EQ(fullHd.hostWorkBytes, hd.hostWorkBytes);
+}
+
+// The host total is the graph's own host bytes plus the caller phases of
+// callerHostBytes, combined as BridgeDepthGraph::measure documents. A fresh
+// measure-mode graph per call gives the graph's terms: an empty caller gives
+// persistent + run, and a prepare phase larger than any other gives
+// persistent + that phase alone.
+TEST(ModelFootprint, BridgeDepthHostStagingAddsTheCallerPhases) {
+  const std::string path = envOr("QVAC_BRIDGEDEPTH_MODEL_PATH", "");
+  if (path.empty())
+    GTEST_SKIP() << "QVAC_BRIDGEDEPTH_MODEL_PATH is not set";
+  qcc::GgmlBackends backends(backendName(), "", TEST_THREADS, "test");
+  auto graphStaging = [&](bd::ImageSize model,
+                          const bd::CallerHostBytes& caller) {
+    bd::BridgeDepthGraph graph(
+        path,
+        backends.device(),
+        backends.cpu(),
+        bd::BridgeDepthGraph::Mode::Measure);
+    return graph
+        .measure(
+            static_cast<int>(model.height),
+            static_cast<int>(model.width),
+            caller)
+        .hostStagingBytes;
+  };
+  // Larger than any host phase of these sizes, 1 TiB.
+  constexpr uint64_t probeBytes = 1ULL << 40;
+  const std::vector<bd::ImageSize> inputs = {
+      {HD_WIDTH, HD_HEIGHT},
+      {FULL_HD_WIDTH, FULL_HD_HEIGHT},
+      {HD_HEIGHT, HD_WIDTH},
+      {bd::MAX_SIDE, UHD_HEIGHT},
+      {bd::MAX_SIDE, bd::MAX_SIDE}};
+  for (const bd::ImageSize input : inputs) {
+    const std::string label =
+        std::to_string(input.width) + "x" + std::to_string(input.height);
+    const bd::ImageSize model = bd::modelInputSize(input.width, input.height);
+    const uint64_t withRun = graphStaging(model, {});
+    const uint64_t persistent =
+        graphStaging(model, {.prepareBytes = probeBytes}) - probeBytes;
+    const uint64_t run = withRun - persistent;
+    // The run outweighs the load's read buffer, so a job byte adds one byte.
+    ASSERT_EQ(graphStaging(model, {.jobBytes = 1}), withRun + 1) << label;
+    const auto caller = bd::callerHostBytes(input.width, input.height);
+    const uint64_t modelDisparityBytes =
+        static_cast<uint64_t>(model.width) * model.height * sizeof(float);
+    const uint64_t expected = persistent + caller.jobBytes +
+                              std::max(
+                                  {caller.prepareBytes,
+                                   run,
+                                   modelDisparityBytes + caller.afterRunBytes,
+                                   caller.outputBytes});
+    const auto measured = qcc::measureFootprint(
+        path,
+        backendName(),
+        "",
+        static_cast<int>(input.width),
+        static_cast<int>(input.height),
+        TEST_THREADS);
+    EXPECT_EQ(measured.hostStagingBytes, expected) << label;
+  }
+}
+
 TEST(ModelFootprint, BridgeDepthRejectsSizesInferenceRejects) {
   const std::string path = envOr("QVAC_BRIDGEDEPTH_MODEL_PATH", "");
   if (path.empty())
     GTEST_SKIP() << "QVAC_BRIDGEDEPTH_MODEL_PATH is not set";
   const int tooSmall = bd::MIN_SIDE - 1;
-  const int tooLarge = static_cast<int>(bd::MAX_SIDE);
+  const int tooLarge = static_cast<int>(bd::MAX_SIDE) + 1;
   EXPECT_THROW(
       qcc::measureFootprint(path, "CPU", "", tooSmall, bd::MIN_SIDE),
       std::exception);
-  // MAX_SIDE x MAX_SIDE passes the side limit and exceeds MAX_GRID_CELLS.
   EXPECT_THROW(
       qcc::measureFootprint(path, "CPU", "", tooLarge, tooLarge),
       std::exception);

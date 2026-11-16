@@ -17,6 +17,12 @@ const { isMobile, TEST_TIMEOUT, resolveModelPath } = require('./utils')
 // BridgeDepth sizes for the workload test: the fixture size and twice it.
 const SMALL = { width: 200, height: 100 }
 const LARGE = { width: 400, height: 200 }
+// The default BridgeDepth workload, and a size above the box downsampled to
+// exactly it, so the graph takes the same bytes.
+const DEFAULT_WORKLOAD = { width: 1280, height: 720 }
+const FULL_HD = { width: 1920, height: 1080 }
+// Each input view is counted as packed RGB, one byte per channel.
+const RGB_BYTES_PER_PIXEL = 3
 
 // GGUF header layout (ggml docs/gguf.md): magic "GGUF" read as a little-endian
 // uint32, uint32 version, uint64 tensor count, uint64 metadata count.
@@ -127,6 +133,23 @@ test('assessFit: BridgeDepth grows with the workload', { skip: !models.bridgedep
     large.devices.map((row) => row.name),
     'the workload does not change the placement'
   )
+
+  const fullHd = await assessFit(request(models.bridgedepth, backend, { workload: FULL_HD }))
+  checkRows(t, fullHd, `${label} ${FULL_HD.width}x${FULL_HD.height}`)
+  if (fullHd.devices.length === 2) {
+    t.is(fullHd.devices[0].usedBytes, fit.devices[0].usedBytes, 'the device sizes the 1280x720 run')
+  }
+  // The 1280x720 graph run stays the largest host phase at both sizes (the
+  // phases are pinned in test/unit/footprint_test.cpp), so the host row adds
+  // only the larger raw RGB copies of the two input views held through the job.
+  const fullHdPixels = FULL_HD.width * FULL_HD.height
+  const hdPixels = DEFAULT_WORKLOAD.width * DEFAULT_WORKLOAD.height
+  t.is(
+    fullHd.devices[fullHd.devices.length - 1].usedBytes,
+    fit.devices[fit.devices.length - 1].usedBytes +
+      2 * RGB_BYTES_PER_PIXEL * (fullHdPixels - hdPixels),
+    'the host adds the larger input copies'
+  )
 })
 
 test('assessFit rejects invalid requests and files that are not models', async (t) => {
@@ -139,9 +162,9 @@ test('assessFit rejects invalid requests and files that are not models', async (
       assessFit({ modelPath: models.bridgedepth, workload: { width: 0 } }),
       /workload.width must be a positive safe integer/
     )
-    // Past the input BridgeDepth inference accepts, which it rejects.
+    // One pixel past the 4096 side BridgeDepth inference accepts, which it rejects.
     await t.exception(
-      assessFit({ modelPath: models.bridgedepth, workload: { width: 4096, height: 4096 } }),
+      assessFit({ modelPath: models.bridgedepth, workload: { width: 4097, height: 4096 } }),
       /BridgeDepth: image/
     )
   }

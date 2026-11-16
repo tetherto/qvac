@@ -1,6 +1,6 @@
 import { getClientLogger, SDK_ALL_LOG_ID } from '@/logging'
 import { loggingStream } from './logging-stream'
-import type { LoggingStreamResponse } from '@qvac/inference/surface'
+import type { LoggingStreamResponse, RPCOptions } from '@qvac/inference/surface'
 
 const logger = getClientLogger()
 
@@ -30,9 +30,12 @@ export type ServerLogHandler = (log: LoggingStreamResponse) => void
  * unsubscribe();
  * ```
  */
-export function subscribeServerLogs(handler: ServerLogHandler) {
+export function subscribeServerLogs(handler: ServerLogHandler, options?: RPCOptions) {
   const controller = new AbortController()
-  const streamIterator = loggingStream({ id: SDK_ALL_LOG_ID }, { signal: controller.signal })
+  const streamIterator = loggingStream(
+    { id: SDK_ALL_LOG_ID },
+    { ...options, signal: controller.signal }
+  )
 
   void (async () => {
     try {

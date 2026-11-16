@@ -10149,6 +10149,17 @@
     "link": "https://huggingface.co/AtomicChat/Qwen3.5-4B-DFlash-GGUF"
   },
   {
+    "source": "https://huggingface.co/AtomicChat/Qwen3.5-9B-DFlash-GGUF/resolve/de44b8556576637d1049951f8fdbd98bcb2462f3/Qwen3.5-9B-DFlash.Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DFlash draft model for Qwen 3.5 9B",
+    "quantization": "q8_0",
+    "params": "9B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "dflash", "qwen3.5", "draft"],
+    "notes": "Speculative-decoding drafter, not a standalone model. Load a Qwen 3.5 9B entry with spec_type draft-dflash and this file as the draft model (draftModelSrc in the SDK). params is the target's size. Requires @qvac/llm-llamacpp >= 0.63.0.",
+    "link": "https://huggingface.co/AtomicChat/Qwen3.5-9B-DFlash-GGUF"
+  },
+  {
     "source": "https://huggingface.co/incoai/Qwen3.8-27B-DFlash2-GGUF/resolve/144eb06583b4fb0b6e54bc814b16a206a240f4d2/Qwen3.8-27B-DFlash2-Q8_0.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "DFlash2 draft model for Qwen 3.8 27B",
@@ -10400,5 +10411,33 @@
     "tags": ["image-embedding", "visual-place-recognition", "megaloc"],
     "notes": "Converted from the supported MegaLoc checkpoint. JPEG/PNG and packed RGB input. Requires the ggml-image-embedding plugin.",
     "link": "https://huggingface.co/gberton/MegaLoc"
+  },
+  {
+    "source": "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/530a4c94f92c35ef6818b1b035a983fe9dcf5f54/diffusion_models/moss_image_sft_bf16.safetensors",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "MOSS-Image SFT 5B JSON-layout text-to-image model",
+    "notes": "BF16 repackage of https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT. Loads with the Qwen3.5 9B Q4_K_M text encoder as llmModelSrc, the MOSS-Image VAE as vaeModelSrc and the MOSS-Image tokenizer as tokenizerSrc.",
+    "licenseId": "Apache-2.0",
+    "quantization": "BF16",
+    "params": "5B",
+    "tags": ["generation", "diffusion"],
+    "link": "https://huggingface.co/Comfy-Org/MOSS-Image"
+  },
+  {
+    "source": "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/530a4c94f92c35ef6818b1b035a983fe9dcf5f54/vae/flux2-vae_small.safetensors",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "MOSS-Image Variational Autoencoder model",
+    "notes": "The FLUX.2 small decoder, Apache-2.0 (https://huggingface.co/black-forest-labs/FLUX.2-small-decoder).",
+    "licenseId": "Apache-2.0",
+    "tags": ["vae"],
+    "link": "https://huggingface.co/Comfy-Org/MOSS-Image"
+  },
+  {
+    "source": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT/resolve/f972bd4b4b9e3852133cc5da954d87bc32cd8fb9/tokenizer/tokenizer.json",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "MOSS-Image tokenizer (tokenizer.json) for the Qwen3.5 text encoder",
+    "licenseId": "Apache-2.0",
+    "tags": ["tokenizer"],
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT"
   }
 ]

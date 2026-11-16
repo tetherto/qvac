@@ -78,9 +78,14 @@ iOS every unified row is first capped at the app's memory limit,
 `os_proc_available_memory()`.
 
 `workload` only matters for BridgeDepth, whose compute buffers grow with the
-input. It defaults to 1280x720, the largest input the model authors
-recommend; the addon does not downsample. `threads` defaults to 8, as
-`MegaLoc` and `BridgeDepth` do.
+input. It defaults to 1280x720, the largest size the model runs at (720x1280
+for a portrait pair, which measures the same): a larger input is downsampled
+to fit inside it, so the graph is sized as the downsampled run. The host row
+also counts the buffers at the input size: both views copied from JS, counted
+as raw RGB, decoding one view at the stb_image worst case, 16 B/px, the
+disparity resized back and its copy to JS. A PNG input larger than its raw
+RGB is not covered. `threads` defaults to 8, as `MegaLoc`
+and `BridgeDepth` do.
 
 Tensor data is not read, so a file whose weights `load()` rejects can still be
 reported as fitting. The verdict covers one input size: BridgeDepth keeps the
