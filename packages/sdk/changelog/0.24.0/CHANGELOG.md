@@ -71,6 +71,8 @@ Release Date: 2026-11-13
   Removed: EMBEDDINGGEMMA_300M_F32
 - Add TranscribePsy-250M-EU support to the SDK. (see PR [#5683](https://github.com/tetherto/qvac/pull/5683)) - See [API changes](./api.md), [model changes](./models.md)
   Added: PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0
+- Add the Qwen3.5 9B DFlash drafter constant. (see PR [#5772](https://github.com/tetherto/qvac/pull/5772)) - See [model changes](./models.md)
+  Added: QWEN3_5_9B_DFLASH_Q8_0
 
 ## 📘 Docs
 
