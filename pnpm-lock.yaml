@@ -135,7 +135,7 @@ importers:
         version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       bare:
         specifier: ^1.36.0
-        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
       bare-make:
         specifier: ^2.1.0
         version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
@@ -144,7 +144,7 @@ importers:
         version: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
       bare-runtime:
         specifier: ^1.36.0
-        version: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       brittle:
         specifier: ^3.17.0
         version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
@@ -159,7 +159,7 @@ importers:
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       cmake-toolchains:
         specifier: ^2.1.0
-        version: 2.2.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
+        version: 2.4.0(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -223,7 +223,7 @@ importers:
         version: 22.20.1
       bare:
         specifier: ^1.36.0
-        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
       bare-buffer:
         specifier: ^3.4.2
         version: 3.6.2
@@ -238,7 +238,7 @@ importers:
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-runtime:
         specifier: ^1.36.0
-        version: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       brittle:
         specifier: ^3.17.0
         version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
@@ -253,7 +253,7 @@ importers:
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       cmake-toolchains:
         specifier: ^2.1.0
-        version: 2.2.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
+        version: 2.4.0(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -335,13 +335,13 @@ importers:
         version: 24.13.3
       bare:
         specifier: ^1.36.0
-        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-make:
         specifier: ^2.1.0
         version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       bare-runtime:
         specifier: ^1.36.0
-        version: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       cmake-bare:
         specifier: ^1.9.0
         version: 1.10.1
@@ -353,7 +353,7 @@ importers:
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       cmake-toolchains:
         specifier: ^2.1.0
-        version: 2.2.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
+        version: 2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -469,7 +469,7 @@ importers:
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       openai:
         specifier: ^6.48.0
-        version: 6.49.0(@aws-sdk/credential-provider-node@3.972.72)(@smithy/signature-v4@5.7.5)(ws@8.22.2)(zod@4.4.3)
+        version: 6.49.0(@aws-sdk/credential-provider-node@3.972.72)(@smithy/signature-v4@5.6.10)(ws@8.21.3)(zod@4.4.3)
       prettier:
         specifier: ^3.9.4
         version: 3.9.6
@@ -512,7 +512,7 @@ importers:
         version: 22.20.1
       bare:
         specifier: ^1.36.0
-        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-abort-controller:
         specifier: ^1.1.2
         version: 1.1.2
@@ -524,7 +524,7 @@ importers:
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-runtime:
         specifier: ^1.36.0
-        version: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       brittle:
         specifier: ^3.13.1
         version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
@@ -579,7 +579,7 @@ importers:
         version: 1.8.1
       bare:
         specifier: ^1.36.0
-        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-crypto:
         specifier: ^1.15.3
         version: 1.15.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -600,7 +600,7 @@ importers:
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-runtime:
         specifier: ^1.36.0
-        version: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare-subprocess:
         specifier: ^6.1.0
         version: 6.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -624,7 +624,7 @@ importers:
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       cmake-toolchains:
         specifier: ^2.1.0
-        version: 2.2.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
+        version: 2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -688,7 +688,7 @@ importers:
         version: 24.13.3
       bare:
         specifier: ^1.36.0
-        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-crypto:
         specifier: ^1.15.3
         version: 1.15.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -709,7 +709,7 @@ importers:
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-runtime:
         specifier: ^1.36.0
-        version: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare-url:
         specifier: ^2.1.6
         version: 2.4.6
@@ -727,7 +727,7 @@ importers:
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       cmake-toolchains:
         specifier: ^2.1.0
-        version: 2.2.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
+        version: 2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -818,7 +818,7 @@ importers:
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       cmake-toolchains:
         specifier: ^2.1.0
-        version: 2.2.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
+        version: 2.4.0(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -864,13 +864,13 @@ importers:
         version: 24.13.3
       bare:
         specifier: ^1.36.0
-        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
       bare-make:
         specifier: ^2.1.0
         version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
       bare-runtime:
         specifier: ^1.36.0
-        version: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       brittle:
         specifier: ^3.17.0
         version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
@@ -885,7 +885,7 @@ importers:
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       cmake-toolchains:
         specifier: ^2.1.0
-        version: 2.2.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
+        version: 2.4.0(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -1079,7 +1079,7 @@ importers:
         version: 3.5.0
       bare:
         specifier: 1.34.1 || >=1.35.1
-        version: 1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+        version: 1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-console:
         specifier: '*'
         version: 6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -1174,7 +1174,7 @@ importers:
         version: 24.13.3
       bare:
         specifier: ^1.36.0
-        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-crypto:
         specifier: ^1.15.3
         version: 1.15.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -1192,7 +1192,7 @@ importers:
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-runtime:
         specifier: ^1.36.0
-        version: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare-subprocess:
         specifier: ^6.1.0
         version: 6.2.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1213,7 +1213,7 @@ importers:
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       cmake-toolchains:
         specifier: ^2.1.0
-        version: 2.2.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
+        version: 2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -1324,13 +1324,13 @@ importers:
         version: 24.13.3
       bare:
         specifier: ^1.36.0
-        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-make:
         specifier: ^2.1.0
         version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       bare-runtime:
         specifier: ^1.36.0
-        version: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare-subprocess:
         specifier: ^6.1.0
         version: 6.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1351,7 +1351,7 @@ importers:
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       cmake-toolchains:
         specifier: ^2.1.0
-        version: 2.2.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
+        version: 2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -1455,13 +1455,13 @@ importers:
         version: 24.13.3
       bare:
         specifier: ^1.36.0
-        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-make:
         specifier: ^2.1.0
         version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       bare-runtime:
         specifier: ^1.36.0
-        version: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare-stream:
         specifier: ^2.7.0
         version: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -1479,7 +1479,7 @@ importers:
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       cmake-toolchains:
         specifier: ^2.1.0
-        version: 2.2.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
+        version: 2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -1587,7 +1587,7 @@ importers:
         version: 3.5.0
       bare:
         specifier: 1.34.1 || >=1.35.1
-        version: 1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+        version: 1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
       bare-abort-controller:
         specifier: ^1.1.2
         version: 1.1.2
@@ -2168,7 +2168,7 @@ importers:
         version: 24.13.3
       bare:
         specifier: ^1.36.0
-        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-fetch:
         specifier: ^3.0.1
         version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
@@ -2177,7 +2177,7 @@ importers:
         version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       bare-runtime:
         specifier: ^1.36.0
-        version: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare-stream:
         specifier: ^2.7.0
         version: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -2195,7 +2195,7 @@ importers:
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       cmake-toolchains:
         specifier: ^2.1.0
-        version: 2.2.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
+        version: 2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -2293,13 +2293,13 @@ importers:
         version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare:
         specifier: ^1.36.0
-        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-make:
         specifier: ^2.1.0
         version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       bare-runtime:
         specifier: ^1.36.0
-        version: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare-subprocess:
         specifier: ^6.2.1
         version: 6.2.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -2317,7 +2317,7 @@ importers:
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       cmake-toolchains:
         specifier: ^2.1.0
-        version: 2.2.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
+        version: 2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -2378,7 +2378,7 @@ importers:
         version: 24.13.3
       bare:
         specifier: ^1.36.0
-        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
       bare-fs:
         specifier: ^4.5.1
         version: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -2396,7 +2396,7 @@ importers:
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-runtime:
         specifier: ^1.36.0
-        version: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       bare-url:
         specifier: ^2.1.6
         version: 2.5.4
@@ -2414,7 +2414,7 @@ importers:
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       cmake-toolchains:
         specifier: ^2.1.0
-        version: 2.2.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
+        version: 2.4.0(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -2500,7 +2500,7 @@ importers:
         version: 24.13.3
       bare:
         specifier: ^1.36.0
-        version: 1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-crypto:
         specifier: ^1.15.3
         version: 1.15.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -2533,7 +2533,7 @@ importers:
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       cmake-toolchains:
         specifier: ^2.1.0
-        version: 2.2.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
+        version: 2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -2604,7 +2604,7 @@ importers:
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       openclaw:
         specifier: 2026.8.1
-        version: 2026.8.1(@aws-sdk/credential-provider-node@3.972.72)(@opentelemetry/api@1.9.1)(@smithy/signature-v4@5.7.5)(encoding@0.1.13)(supports-color@8.1.1)
+        version: 2026.8.1(@aws-sdk/credential-provider-node@3.972.72)(@opentelemetry/api@1.9.1)(@smithy/signature-v4@5.6.10)(encoding@0.1.13)(supports-color@8.1.1)
       prettier:
         specifier: ^3.9.4
         version: 3.9.6
@@ -2622,7 +2622,7 @@ importers:
     dependencies:
       '@ai-sdk/openai-compatible':
         specifier: ^3.0.0
-        version: 3.0.71(zod@4.6.5)
+        version: 3.0.71(zod@4.4.3)
       '@qvac/ai-sdk-provider':
         specifier: ^0.11.0
         version: link:../../packages/ai-sdk-provider
@@ -2631,7 +2631,7 @@ importers:
         version: link:../../packages/cli
       ai:
         specifier: ^7.0.0
-        version: 7.0.143(zod@4.6.5)
+        version: 7.0.143(zod@4.4.3)
     devDependencies:
       '@opencode/plugin':
         specifier: ^2.2.0
@@ -2659,6 +2659,7 @@ packages:
 
   2g@1.0.1:
     resolution: {integrity: sha512-+uViadKOS/wwR4pFu5g8TPn3QHpKqoX19JHCnp8k/3cLpImdcXozwvZA6Q/5PeW3AcU8neL8faaMidBcv7o8CA==}
+    hasBin: true
     peerDependencies:
       typescript: '>=5.8.0'
     peerDependenciesMeta:
@@ -2750,6 +2751,7 @@ packages:
 
   '@anthropic-ai/sdk@0.120.0':
     resolution: {integrity: sha512-ZlvmNFT/iIF6JD13rxbbMWD8nvGR0RaUp6yMQnoc+4Af0YjVVe/bIdW1XSQQsoxXAtg1NaT6Vak0LKFlJ4d37Q==}
+    hasBin: true
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
     peerDependenciesMeta:
@@ -2788,6 +2790,9 @@ packages:
   '@aws-sdk/core@3.977.1':
     resolution: {integrity: sha512-KVtQRtc00ES/y+Sc3vYXeP6pCIcNlBJCZOwvqSy8ZpVGmbM5+IG+AfhuTKQ2oXmIVqZJewaGMMpzPkywC6xg0w==}
     engines: {node: '>=20.0.0'}
+    deprecated: |-
+      Deprecated due to Document number parsing bug in JSON, see
+        https://github.com/aws/aws-sdk-js-v3/issues/8246. Newer version available.
 
   '@aws-sdk/core@3.980.1':
     resolution: {integrity: sha512-W7jDWUPucezIUjFZpr8MudQQtz/m6yPMyAFrOyyQcHjuF4UrZdcCdP8eV1js06U9sH3dxp0AbhN+s9uHwQyXzQ==}
@@ -2991,10 +2996,12 @@ packages:
   '@babel/parser@7.29.7':
     resolution: {integrity: sha512-hnORnjP/1P/zFEndoeX+n+t1RwWRJiJpM/jO7FW32Kn9r5+sJB2JWOdYo4L6k78j15eCwY3Gm/7364B1EMwtNg==}
     engines: {node: '>=6.0.0'}
+    hasBin: true
 
   '@babel/parser@7.29.9':
     resolution: {integrity: sha512-CjXrNHTnvqBVqHgdBysY3vk2T8tpJHb5/RMeHJBTyVa9xgugCB0CJTx/3oO8RV2QRQP391RWpB7D6hLjm8V9uA==}
     engines: {node: '>=6.0.0'}
+    hasBin: true
 
   '@babel/plugin-bugfix-firefox-class-in-computed-class-key@7.29.7':
     resolution: {integrity: sha512-j8SrR0zLZrRsC09DlszEx8FpMiwukKffYXMK0d5LmOglO7vGG6sz/BR/20yHqWH+Lnn31JTt2PE3hIWNgM2J6w==}
@@ -3581,6 +3588,7 @@ packages:
   '@electron/asar@4.3.1':
     resolution: {integrity: sha512-6pI64z/tMSBkUTZLQFYhs2YiB7fS9sKA6gy7/2nH1Ju7GGwT32UPsj4Mxsws5NMmtR6C0zYdXVxEU/rGqJRCJA==}
     engines: {node: '>=22.12.0'}
+    hasBin: true
 
   '@electron/get@5.1.0':
     resolution: {integrity: sha512-3kSBtG8ObcTVfXanm5vVJ6UnBLEVmVsRk1M+vGqCuMBV+XLCbJYuWQful+yIy0GQDsSlK0kHEriEHn7SPk4EnA==}
@@ -3593,14 +3601,17 @@ packages:
   '@electron/osx-sign@2.7.1':
     resolution: {integrity: sha512-VZ7Ei2PpqBxPU0Kf1evYSiQKCaluIy6t/DSlNpYZQX0z27KwNNHuJR1bz3Pqj1DIL5EySD8RlH2PRrsrfLEdKg==}
     engines: {node: '>=22.12.0'}
+    hasBin: true
 
   '@electron/packager@20.3.0':
     resolution: {integrity: sha512-3MvgJgy6YJ5ti0oGGBKrWKdYwpTaoRrhranMDgHSQ6i5t56yZV9IRDyoXTuqBp97LiKqnZeAMe2wTcF/9+fP5g==}
     engines: {node: '>= 22.12.0'}
+    hasBin: true
 
   '@electron/rebuild@4.2.1':
     resolution: {integrity: sha512-IS4pG3BysRrCLJ8xTAfvg+IQDbiUoAzdJy2SfjcYKnLDy5DpCdjnPdhS5Zf5UMfrkB24xu0KC+TqcOxg+eG+6w==}
     engines: {node: '>=22.12.0'}
+    hasBin: true
 
   '@electron/universal@3.0.6':
     resolution: {integrity: sha512-MonS1kfkZdSEkLZI0pdR/TCx8ecxwRSFm7sORfwIkDI9UaIbHnk4Mgeqq+Ob9qDQRV8LZ9+hHCmimpA9BRcNxw==}
@@ -3609,6 +3620,7 @@ packages:
   '@electron/windows-sign@2.1.0':
     resolution: {integrity: sha512-hyRE175pWNxU3R0k7B7Zwm4KpSgK/Ql+7yqUPRfnYc9K06uVPJDLvXH6oXpl/RAKbLu0Y114xuH6BdjDhF/pKA==}
     engines: {node: '>=22.12.0'}
+    hasBin: true
 
   '@emnapi/core@1.10.0':
     resolution: {integrity: sha512-yq6OkJ4p82CAfPl0u9mQebQHKPJkY7WrIuk205cTYnYe+k2Z8YBh11FrbRG/H6ihirqcacOgl2BIO8oyMQLeXw==}
@@ -3980,6 +3992,7 @@ packages:
 
   '@expo/cli@58.1.19':
     resolution: {integrity: sha512-zoLhSlFnln0xn1fiW0+kb1J0lNv06HAy+FQ27HHwEEWoAClCE13FnTQBOW5bOVYc3c7hsGM8ypKcZGS7RGqjQA==}
+    hasBin: true
     peerDependencies:
       expo: '*'
       expo-mcp: '*'
@@ -4036,6 +4049,7 @@ packages:
 
   '@expo/fingerprint@0.21.9':
     resolution: {integrity: sha512-Z2xIFc/lvZZnDamAyd9uWUUctoT6uzAYOLAUqiZ2pT6mkDFistVsLd/5XCrD5/W3pUY65GLxmOal6+vyyzo0Dg==}
+    hasBin: true
 
   '@expo/image-utils@0.12.6':
     resolution: {integrity: sha512-AWzD/c3mM/a+sDbRgOSNzBpkUW8sUVUFcwnZ7xqkkhc5Hi9Fms0pDGw24JLxccgA6cC6bbJ8sZiQbnXBf75onA==}
@@ -4165,6 +4179,7 @@ packages:
 
   '@expo/xcpretty@4.4.7':
     resolution: {integrity: sha512-EbxYllZ7/ozONVZd425cm4XnolfW+AmSFT5aP7Jdno6oc3WrYQcHz2CO20z/2rwWwYgztmV2PXvYH+BQ8YFjqg==}
+    hasBin: true
 
   '@fastify/accept-negotiator@2.0.1':
     resolution: {integrity: sha512-/c/TW2bO/v9JeEgoD/g1G5GxGeCF1Hafdf79WPmUlgYiBXummY0oX3VVq4yFkKKVBKDNlaDUYoab7g38RpPqCQ==}
@@ -4241,6 +4256,7 @@ packages:
 
   '@homebridge/ciao@1.3.12':
     resolution: {integrity: sha512-84/0u0kqKy4qcKupIDaTtbkmk+3qFDuMzxTC0NPfVlHcUT+jHGdP+QCqwEw94/GJxRezDeBLwxaclkBZgCdeUg==}
+    hasBin: true
 
   '@hono/node-server@1.19.17':
     resolution: {integrity: sha512-dSneS5qhiauZWGDCeK4o695Xd9nUNjviSZCMQrj10eetr8Uln1ucn6bbphOM6UynAMMtNIzZNSpL9vnASJwrPQ==}
@@ -4254,10 +4270,12 @@ packages:
   '@huggingface/gguf@0.3.8':
     resolution: {integrity: sha512-UEgSE7q6NfQcJHfGA18RejPU/5UOA+LTt/xx0Xybc8n7BSbgRE4jPLnTuK9bK+5MSCiF9VuFC1B/S6CmLeGFhQ==}
     engines: {node: '>=20'}
+    hasBin: true
 
   '@huggingface/hub@2.13.3':
     resolution: {integrity: sha512-qAEbZ0x1vUQIUSComJ5EPgII+eI3nJB3gTPNTzjir6Kk/aCHHvPfCNMreS4iUg6gT17YDkvt7XBTndzh7617KQ==}
     engines: {node: '>=18'}
+    hasBin: true
 
   '@huggingface/tasks@0.19.90':
     resolution: {integrity: sha512-nfV9luJbvwGQ/5oKXkKhCV9h4X7mwh1YaGG3ORd6UMLDSwr1OFSSatcBX0O9OtBtmNK19aGSjbLFqqgcIR6+IA==}
@@ -4775,6 +4793,7 @@ packages:
   '@npmcli/arborist@9.4.0':
     resolution: {integrity: sha512-4Bm8hNixJG/sii1PMnag0V9i/sGOX9VRzFrUiZMSBJpGlLR38f+Btl85d07G9GL56xO0l0OZjvrGNYsDYp0xKA==}
     engines: {node: ^20.17.0 || >=22.9.0}
+    hasBin: true
 
   '@npmcli/config@10.8.1':
     resolution: {integrity: sha512-MAYk9IlIGiyC0c9fnjdBSQfIFPZT0g1MfeSiD1UXTq2zJOLX55jS9/sETJHqw/7LN18JjITrhYfgCfapbmZHiQ==}
@@ -4791,6 +4810,7 @@ packages:
   '@npmcli/installed-package-contents@4.0.0':
     resolution: {integrity: sha512-yNyAdkBxB72gtZ4GrwXCM0ZUedo9nIbOMKfGjt6Cu6DXf0p8y1PViZAKDC8q8kv/fufx0WTjRBdSlyrvnP7hmA==}
     engines: {node: ^20.17.0 || >=22.9.0}
+    hasBin: true
 
   '@npmcli/map-workspaces@5.0.3':
     resolution: {integrity: sha512-o2grssXo1e774E5OtEwwrgoszYRh0lqkJH+Pb9r78UcqdGJRDRfhpM8DvZPjzNLLNYeD/rNbjOKM3Ss5UABROw==}
@@ -5349,9 +5369,11 @@ packages:
 
   '@qvac/registry-client@0.4.1':
     resolution: {integrity: sha512-BZz/7HASD1Wth/r8f7NpWF1bAihND04xKaRjJ2s31ujnQPHO0m04daM/PEiffzPPKYDHQTSGkecOh13451imlw==}
+    hasBin: true
 
   '@qvac/registry-client@0.5.0':
     resolution: {integrity: sha512-E+mM8+DPu9oh0qEEvpDIAN/1yncgSD1NP2ZOv9lSdb2pH6YF40wOO/nwUb1T3SVEpzfQVo06xRHHuyZIeSmIkg==}
+    hasBin: true
     peerDependencies:
       corestore: ^7.4.5
       hyperblobs: ^2.8.0
@@ -5360,6 +5382,7 @@ packages:
 
   '@qvac/registry-client@0.6.1':
     resolution: {integrity: sha512-7bpiHGCYCZEomWXFy9Q8xjVT0Rzh3x32ioD8gRexlVkpw2kpBtOeRnzOahbfRJa/cig1qrzrJYzsKd7Rb70KEg==}
+    hasBin: true
 
   '@qvac/registry-schema@0.1.2':
     resolution: {integrity: sha512-Dc+unexganrAr86y3vWLejpr0a+DyByBclSS53S4TEIpQjn70pZQ8kKGRtXhlAg1oqGqsgcxR2BYKc/w9isT8A==}
@@ -5543,6 +5566,7 @@ packages:
   '@smithy/core@3.30.0':
     resolution: {integrity: sha512-dl2yRglDxfzH9uJ4fSo4zTaAHa0zH7+V7BZMRWy8hEYIKT1BiqMUK/CN6T3ADQ3kbA5N1tmUulroJ2UtONS7Kw==}
     engines: {node: '>=18.0.0'}
+    deprecated: Deprecated due to a bug in custom logger data redaction. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
 
   '@smithy/core@3.39.0':
     resolution: {integrity: sha512-JJ/46AWQ4ipS1N2eZmUj7yzIhH8NhQIfAE+dce7NSB6dmFh+7hvD4pbofcoT4I0Xzfy/LNhZx3V2QhwYyAiqdg==}
@@ -6000,16 +6024,19 @@ packages:
   '@xmldom/xmldom@0.8.13':
     resolution: {integrity: sha512-KRYzxepc14G/CEpEGc3Yn+JKaAeT63smlDr+vjB8jRfgTBBI9wRj/nkQEO+ucV8p8I9bfKLWp37uHgFrbntPvw==}
     engines: {node: '>=10.0.0'}
+    deprecated: this version has critical issues, please update to the latest version
 
   '@xmldom/xmldom@0.9.10':
     resolution: {integrity: sha512-A9gOqLdi6cV4ibazAjcQufGj0B1y/vDqYrcuP6d/6x8P27gRS8643Dj9o1dEKtB6O7fwxb2FgBmJS2mX7gpvdw==}
     engines: {node: '>=14.6'}
+    deprecated: this version has critical issues, please update to the latest version
 
   '@yarnpkg/lockfile@1.1.0':
     resolution: {integrity: sha512-GpSwvyXOcOOlV70vbnzjj4fW5xW/FdUF6nQEt1ENy7m4ZCczi1+/buVUPAqmGfqznsORNFzUMjctTIp8a9tuCQ==}
 
   '@zkochan/js-yaml@0.0.7':
     resolution: {integrity: sha512-nrUSn7hzt7J6JWgWGz78ZYI8wj+gdIJdk0Ynjpp8l+trkn58Uqsf6RYrYkEK+3X18EX+TNdtJI0WxAtc+L84SQ==}
+    hasBin: true
 
   abbrev@4.0.0:
     resolution: {integrity: sha512-a1wflyaL0tHtJSmLSOVybYhy22vRih4eduhhrkcjgrWGnRfrZtovJ2FRjxuTtkkj47O/baf0R86QU5OuYpz8fA==}
@@ -6049,6 +6076,7 @@ packages:
   acorn@8.18.0:
     resolution: {integrity: sha512-lGq+9yr1/GuAWaVYIHRjvvySG5/4VfKIvC8EWxStPdcDh/Ka7FG3twP6v4d5BkravUilhIAsG4Qj83t02LWUPQ==}
     engines: {node: '>=0.4.0'}
+    hasBin: true
 
   adaptive-timeout@1.0.1:
     resolution: {integrity: sha512-+seGiBtHqbnyZ0Quq/ZGxxwP66153WBABawa07/QeyuPFzbduPBjiGQAyCiriiLDzt3dkbMBskSlfqtRwblK8Q==}
@@ -6080,6 +6108,7 @@ packages:
   agent-cli-detector@0.1.7:
     resolution: {integrity: sha512-d8OWDVdZMgjhLUT9ZPgSv/BdFFF9pVuscC0JdUSz3bjwE15gcp6u/o0/JooM2yyAWC49KThFhXlgTXRa9B7yng==}
     engines: {node: '>=18.18'}
+    hasBin: true
 
   aggregate-error@3.1.0:
     resolution: {integrity: sha512-4I7Td01quW/RpocfNayFdFVk1qSuoh0E7JrbRJ16nH01HhKFQ88INq9Sd+nd72zqRySlr9BmDA8xlEJ6vJMrYA==}
@@ -6154,6 +6183,7 @@ packages:
 
   apache-arrow@18.1.0:
     resolution: {integrity: sha512-v/ShMp57iBnBp4lDgV8Jx3d3Q5/Hac25FWmQ98eMahUiHPXcvwIMKJD0hBIgclm/FCG+LwPkAKtkRO1O/W0YGg==}
+    hasBin: true
 
   append-transform@2.0.0:
     resolution: {integrity: sha512-7yeyCEurROLQJFv5Xj4lEGTy0borxepjFv1g22oAdqFu//SrAlDl1O1Nxx15SH1RoliUml6p8dwJW9jvZughhg==}
@@ -6232,6 +6262,7 @@ packages:
 
   autobase-discovery@1.3.2:
     resolution: {integrity: sha512-z+t+eAUVlZ2rK/d8ew9pnXOUbrRoFutq+ist/185170pGl3vKXQH+cZjP4ID/vSSxogyUB5lEw/stoZDaAvGMA==}
+    hasBin: true
 
   autobase@7.28.1:
     resolution: {integrity: sha512-I8SHcJE/ru5Nun6NpqwRjenB8aK01b9z1qNeyx4XuG+BxeFUpXk0ZT2u3/nG+GZnObUTFMCKOo2fbAv7ipcaLw==}
@@ -6527,12 +6558,14 @@ packages:
 
   bare-link@4.2.0:
     resolution: {integrity: sha512-WTthpoAT2Vw0I7msghpZSewEpTF4bsHWLnYbJWfJV7HNWcZvO1fLcB3NqwX51CcJoyR/vBqHdGdiPGpIfHWIzw==}
+    hasBin: true
 
   bare-logger@2.0.3:
     resolution: {integrity: sha512-U6K7NxHdeAHxEgHFDV8zXvgjgDZKQO6LlCrxQvUvlrZEVTnoezSImMWizi85rbZpVsbeI1ZWcLCRGnoIf5EV8Q==}
 
   bare-make@2.1.2:
     resolution: {integrity: sha512-d7gKVTKdHRS8cKMtawktY/vxbfXY9uaf3zGimPz4M7Okx12JlaYDrslhkUFZ5hmFO4iN3Kh1Ayo4kvNzLAZkFA==}
+    hasBin: true
     peerDependencies:
       bare-pipe: '*'
     peerDependenciesMeta:
@@ -6653,6 +6686,7 @@ packages:
 
   bare-pack@3.0.0:
     resolution: {integrity: sha512-OaARWXWwJq3FcdlQ3H2UeqwFyNXf+cAL7yGLnECnZtuwk5GftYs+zY3FreAN6bNR31ft4PZgR6lfZ3M/2A2q+Q==}
+    hasBin: true
     peerDependencies:
       bare-buffer: ^3.6.0
       bare-url: ^2.4.0
@@ -6664,6 +6698,7 @@ packages:
 
   bare-pack@3.0.2:
     resolution: {integrity: sha512-wGwpPaXRuu5zE2SrEV4nZReh36q0Ul3C0JdMR/M7Du2Vc4IrgHr6/ok84bpeAGmB6iCAcDPztiPu5N8f9LeKaw==}
+    hasBin: true
     peerDependencies:
       bare-buffer: ^3.6.0
       bare-url: ^2.4.0
@@ -6711,73 +6746,87 @@ packages:
       bare-buffer:
         optional: true
 
-  bare-runtime-android-arm64@1.37.0:
-    resolution: {integrity: sha512-0uPxgE/4r96zd2mZjHw5H6hAoMPtzcCd/IqubeGAzMmUubx5vz5k5wkCA8vpTl3J2gtFneB/MrtInyC8SsD0mA==}
+  bare-runtime-android-arm64@1.37.1:
+    resolution: {integrity: sha512-lYF8/A5gnVy7dHKhNinbFIkCOdhiB7wYrs+xsVKAGd6UaUOYjkJY4FhEHsTsmI04Aux8Yt6E3exAFel3g46P3Q==}
     cpu: [arm64]
     os: [android]
+    hasBin: true
 
-  bare-runtime-android-arm@1.37.0:
-    resolution: {integrity: sha512-T/iIlGl3DWRKVgpWHbiEZfDPQ9TkuqG20+j1V0bzOxEVAtiSYB7lEugDZyYCW3h0/pLjYaGBO18EFDmleo1IEw==}
+  bare-runtime-android-arm@1.37.1:
+    resolution: {integrity: sha512-97HUboxQpHJEarS+4UyaJPzdJ+tSoG3jP03xJYS4apYx6QNbEVVOKqOuDB5YwcKAiOyTmMvQob7KMeCIi1f46g==}
     cpu: [arm]
     os: [android]
+    hasBin: true
 
-  bare-runtime-android-ia32@1.37.0:
-    resolution: {integrity: sha512-VDPHJi1FYS9DGShjhBICIEpZXJJT2KzCT/cwB7PKJjwRXkkSA5eW/OKsH+Z8T7e98vQGsKe8mdj1J8uh0ifoSA==}
+  bare-runtime-android-ia32@1.37.1:
+    resolution: {integrity: sha512-oufGFNmHeHDoKLC81U6Ak5PU4DpwKqKRYCPTyoFNPEhPwb+oqmTdfZZY18Ly+JA8F+MJa3tuoPePVScv5/lmlQ==}
     cpu: [ia32]
     os: [android]
+    hasBin: true
 
-  bare-runtime-android-x64@1.37.0:
-    resolution: {integrity: sha512-McJEd1ssRBMbpqz+xncM9U9EBfYJlwVxl3mXKgIgg223eTnnv5l/v0cpVOwKwKjPGwevQwGN+dD6/+93E4hKvA==}
+  bare-runtime-android-x64@1.37.1:
+    resolution: {integrity: sha512-umAvRb19tZO/0lFx1fRcvm1//DJOZIdU8xbl+D2giVbeVqldv5vjzCfKZMpLzKXImyLHpVDgZM3wE0QSFDuyCA==}
     cpu: [x64]
     os: [android]
+    hasBin: true
 
-  bare-runtime-darwin-arm64@1.37.0:
-    resolution: {integrity: sha512-Duf7EkPq6WdcaRRGhJYNARqALtqvg9QoRK6EjXI3LHSgZc72RjkRarus+XOY7bKbEB3EcKxmfJEQ4136OZJllg==}
+  bare-runtime-darwin-arm64@1.37.1:
+    resolution: {integrity: sha512-ShyZ8qc7jnbvfUTBB8x2wl1kITVR15ha9czK3dbipilXySv0YaEejpWmcQXy8b44Sutr4HtDBhnMMeVvP8uABA==}
     cpu: [arm64]
     os: [darwin]
+    hasBin: true
 
-  bare-runtime-darwin-x64@1.37.0:
-    resolution: {integrity: sha512-YmtrKpQb19osKs6O6PQjxIUzhj9VcoxHpUwXF/praE78l1azXDsrnAk3kJtv2C4ihCt5HDgVVlpRYMiuiwUwOQ==}
+  bare-runtime-darwin-x64@1.37.1:
+    resolution: {integrity: sha512-ZdxsrtLst52fwv3H7mX2BdBUAiTD8aTuuzMx3CS/5ZM6kYZQ0n4arnz2b3YgIkrYg4WjJprfcGwyVolTVSdxhA==}
     cpu: [x64]
     os: [darwin]
+    hasBin: true
 
-  bare-runtime-ios-arm64-simulator@1.37.0:
-    resolution: {integrity: sha512-fz6F5s7Egkb7CpHFT7tvP5RqIHUeCitfZZc3Xq4wgJ+E7qRbns1667sGuwYuO+hLZyYo/C1LwcQsI/vrVGLXcg==}
+  bare-runtime-ios-arm64-simulator@1.37.1:
+    resolution: {integrity: sha512-dD1rW7DYfTVNvlGVSpnVE2x++3Dwy/RqDDA3I9y34j28Z5rps4UH9aiZt5mqCtKZjeTuRhfI7TSh4QpoioBcuw==}
     cpu: [arm64]
     os: [ios]
+    hasBin: true
 
-  bare-runtime-ios-arm64@1.37.0:
-    resolution: {integrity: sha512-p8Viv8WKZCzby9ykg9SWlObyKn9mmDrznxE5dkKWww6FVGrVDEr+nX0W3mzHRdZoZ+2sEbdE7o+NmAk9T+Z8ww==}
+  bare-runtime-ios-arm64@1.37.1:
+    resolution: {integrity: sha512-GBSbH0KPOrwLGXWdwYCNop4tF265L8GUI7LMgysJZLpp2yjBAwpKpWh0kQeo5XPOfoQEC9awht/7U8I3MzuGvg==}
     cpu: [arm64]
     os: [ios]
+    hasBin: true
 
-  bare-runtime-ios-x64-simulator@1.37.0:
-    resolution: {integrity: sha512-XZUSm0qmvA8xBP5rC9ub7mY4dryY/3MC1IMmwVHhLjB0yPw80EPdZEffhvMzafXAeqcNKiNpj5CBTS74yB6p9Q==}
+  bare-runtime-ios-x64-simulator@1.37.1:
+    resolution: {integrity: sha512-52P4CA06cfHFVULABUR+Q1D5M2ZZ+FftfmhO0u+wUy4xdHp5xqxEWfcfzbDcl3LQ5BI2o3AjcXUMJjRR2jsaXA==}
     cpu: [x64]
     os: [ios]
+    hasBin: true
 
-  bare-runtime-linux-arm64@1.37.0:
-    resolution: {integrity: sha512-RUrXLjc4b+2hLqdPGAdmAUkqmLc8KKHbPtMFiyqDWtdm00CO9+ayevkh6uiLb7As9Rj31e5WCMEa9JsT3bY9UQ==}
+  bare-runtime-linux-arm64@1.37.1:
+    resolution: {integrity: sha512-cGBpkHalNxpiz9xAvyDqkIiGLIxTxhpqLtsUIBVChWHQyossFSAN4/xT8vGs9FTVBvLGoYEiYzdwFKPUf6qzrA==}
     cpu: [arm64]
     os: [linux]
+    hasBin: true
 
-  bare-runtime-linux-x64@1.37.0:
-    resolution: {integrity: sha512-ZeatW/Ar1820+2N/ACDtjcoK5fUmYH3iIdiUQRyveiNXIrtYlqyrAKqBDihLdp7BiuVi1l8m5woSMLHurm2hcw==}
+  bare-runtime-linux-x64@1.37.1:
+    resolution: {integrity: sha512-+pur/j1xN8TL0fbEn/1b5VEtXyRPPYss41qnpd8mTk0aqlFLXYKuV5DXVHcV1OpP4ZRhBPEpxXJVonAx/CslMw==}
     cpu: [x64]
     os: [linux]
+    hasBin: true
 
-  bare-runtime-win32-arm64@1.37.0:
-    resolution: {integrity: sha512-c8gnsORvkWnTVHNhFci2qLRXnlwsRq0kfzZr1sWwbUsnTbrWFuA/P/Fc/TEim5cdlF2Ud9jvKYW8zExClSCh0A==}
+  bare-runtime-win32-arm64@1.37.1:
+    resolution: {integrity: sha512-TtrkZcH3U1Aviu2PsfOB8oej+ntZ89pOjkifm3nwoHDenMGvb+Q4SdDkl5W3ngqXNE43Sl3JoRRkgR/qhO2E6A==}
     cpu: [arm64]
     os: [win32]
+    hasBin: true
 
-  bare-runtime-win32-x64@1.37.0:
-    resolution: {integrity: sha512-DrT5nW9mNrcaP9m7kEi1MzcohwJ3WWK1GKn6xncsZ991xq5+mIpFSQ+IiuitcreJ8kcspI8ZLVpPq6TnHoIMKg==}
+  bare-runtime-win32-x64@1.37.1:
+    resolution: {integrity: sha512-O1Y3aegJtBnPIQpIsV0TkS5+Hvukv3yIxx0e2zxddvrAUuTyLBbPJVslCGNHxl4Nr84d3nUu9SsGx68zP6KL+g==}
     cpu: [x64]
     os: [win32]
+    hasBin: true
 
-  bare-runtime@1.37.0:
-    resolution: {integrity: sha512-WLZMrYj5sxJVWzjYBwPpEYBYgIlodIeS260yfv1SJ9nJ3Agz5rcatZZJwFpxL0CsRQfsKn8fhapgzs87NMwNiA==}
+  bare-runtime@1.37.1:
+    resolution: {integrity: sha512-IU6x9XqBBx2VnXtdxxPhyGWM8tCxKrM36FgwkydYC3fF7wzzSXUFTh5Fg73iyQmcBLxIIRG75XWug6DVQwj/2w==}
+    hasBin: true
 
   bare-semver@1.1.0:
     resolution: {integrity: sha512-1Hw5qJ7hXdVt3uPUqjeFTuxyvBUJauvz5A1I2jk8gzjZMHp04n//6nV9MDbG9CMw78JHY2lGV0w6s//LrASm2w==}
@@ -6821,6 +6870,7 @@ packages:
 
   bare-stow@0.3.6:
     resolution: {integrity: sha512-oDPY3Wv8YSiBv8cAG0MW0hqXEhGfKaBwvYagiiaX6BRRU4VqFJ3UXUujHzGkt2ZJH769pyk5UH1nlBNntTt4ug==}
+    hasBin: true
     peerDependencies:
       bare-url: ^2.4.0
     peerDependenciesMeta:
@@ -6952,6 +7002,7 @@ packages:
 
   bare-unpack@1.1.4:
     resolution: {integrity: sha512-AfRyzP59Bsm1tJWRt5be2ffmvOkagu2zJPvQKwoxmM9hLQWHWUUd+95VOSEWCUMrkEsL8GSlMTJ/LxuUI2/71A==}
+    hasBin: true
 
   bare-url@2.4.6:
     resolution: {integrity: sha512-iQxPClE07hETVpbRoX7JXX3v/ZQViCxe/SYCxylRLzdEx1xJAufPptfiOqR8tqiCtmbtMDANKWszzjLu1PMAZQ==}
@@ -7006,6 +7057,7 @@ packages:
 
   bare@1.34.1:
     resolution: {integrity: sha512-4FPK16k78577uX5pwa3bNSxKQECHnd173hG/Ln6lgQP4s6BYpBKVAFtDdBv+l3X3IlOlGJZ5YlFxIDqrtA+Clw==}
+    hasBin: true
     peerDependencies:
       bare-buffer: '*'
       bare-console: '*'
@@ -7031,8 +7083,9 @@ packages:
       bare-url:
         optional: true
 
-  bare@1.37.0:
-    resolution: {integrity: sha512-6wPGjIqCqJUtpVyWVQ734Uaoj27bgtjmjO/TdmAdw8Bt2HyMMl/+p3th/ihwAwD6pCxl7HPNjU1Rj4UvE0PMtw==}
+  bare@1.37.1:
+    resolution: {integrity: sha512-mrxHrreHg30ufuPtU6f6hXEDeWmf15bT9v310rCfjKcaVSnmGm27CifQf6HCZxF8yw0xRJQqwgV40vr+qA1Bdg==}
+    hasBin: true
     peerDependencies:
       bare-buffer: '*'
       bare-console: '*'
@@ -7067,6 +7120,7 @@ packages:
   baseline-browser-mapping@2.11.4:
     resolution: {integrity: sha512-s4+sLr9mZ/CyqeRritFeYV/Zx73OAtmaHn6kkBS1XRoJn1hrg3xIDUcpicAEX68tkcIN0iBCgti31C8zxtkhsQ==}
     engines: {node: '>=6.0.0'}
+    hasBin: true
 
   before-after-hook@4.0.0:
     resolution: {integrity: sha512-q6tR3RPqIB1pMiTRMFcZwuG5T8vwp+vUvEG0vuI6B+Rikh5BfPp2fQ82c925FOs+b0lcFQ8CFrL+KbilfZFhOQ==}
@@ -7109,6 +7163,7 @@ packages:
 
   blind-peer@2.9.5:
     resolution: {integrity: sha512-lxam9Wemwcwjo0zXfHIfSN+IFiAJUrue7q795SVyQjVUdT9bk/ulSbsvcPp9h87DI66gGFNE4soDDxgkPI0ELQ==}
+    hasBin: true
 
   blind-peering@1.15.0:
     resolution: {integrity: sha512-/Bx2EElemEnN9fKMJ8pUjGkb4q2qiV14rvGzd8/8xn6VjLq58y389vivKGQUKG5cJh/tyfn86m/GU0cyZltnqA==}
@@ -7164,12 +7219,15 @@ packages:
 
   brittle@3.10.0:
     resolution: {integrity: sha512-eyV+bJMg9cPZ5Rq8K12wVuE7lPsSjrOEz29QC88SXTMhyvtPLAxxKrtv6oKwGKdt3KhqNYDazsQzW2BEqpf+8A==}
+    hasBin: true
 
   brittle@3.19.1:
     resolution: {integrity: sha512-4Ted1Mt9o9B6oIA6ImJJCtB/Fv++ZO3IDNQgRcHOXWSYGRUidgxchaGrUBaRn+4mlneXrgInPkCPzi0jO8qKbA==}
+    hasBin: true
 
   brittle@4.1.0:
     resolution: {integrity: sha512-STR0drn9ir69D7Zj5ImS6ZY9sRQIscM5r7N3lAhU9VQ+f3D/4688z5wkDRqkxeM9iuKCdSKnn+WzI6TvwqAfMg==}
+    hasBin: true
 
   broker-factory@3.1.15:
     resolution: {integrity: sha512-ko+aWvgNuP49meGrdjUu7rC+Y+Wai3cCPxP3xWwHsHfehFjOh5ZQM2yC4gEB2UddeZ/YXhm0K1eG/L6fxym2Og==}
@@ -7177,6 +7235,7 @@ packages:
   browserslist@4.28.7:
     resolution: {integrity: sha512-JxV13hNrFxqjOc8alRbq9dK1MM79NEXYpma2B2J4wAtpWS5zIEIKqWPGCl7N4o7Uc7B7itylh7SuDujATRyyTw==}
     engines: {node: ^6 || ^7 || ^8 || ^9 || ^10 || ^11 || ^12 || >=13.7}
+    hasBin: true
 
   bser@2.1.1:
     resolution: {integrity: sha512-gQxTNE/GAfIIrmHLUE3oJyp5FO6HRBfhjnw4/wMmA63ZGDJnWBmgY/lyQBpnDUkGmAhbSe39tx2d/iTOAfglwQ==}
@@ -7306,6 +7365,7 @@ packages:
   chromadb@3.5.0:
     resolution: {integrity: sha512-A68f2RQjY3R95Pzy0j3ykOu6fi+WWCN1tjbvzrZXZoYQ1d7ZjgWr1FyzitZCeaz/0qmc8y2LEK7QmlxloOAs9Q==}
     engines: {node: '>=20'}
+    hasBin: true
 
   chrome-launcher@0.15.2:
     resolution: {integrity: sha512-zdLEwNo3aUVzIhKhTtXfxhdvZhUghrnmkvcAq2NoDd+LeOHKf03H5jwZ8T/STsAlzyALkBVK552iaG1fGf1xVQ==}
@@ -7333,6 +7393,7 @@ packages:
   clawpdf@0.3.1:
     resolution: {integrity: sha512-HZ8gz3cm8arzT/V2CnMZlHlRJbsrUYQ71u+A4nymeyvNnYzpZ8RQwkr2EIZiXCOzRkzFy8sOiHBXBuSUDDcXqQ==}
     engines: {node: '>=22'}
+    hasBin: true
 
   clean-stack@2.2.0:
     resolution: {integrity: sha512-4diC9HaTE+KRAMWhDhrGOECgWZxoevMc5TlkObMqNSsVU62PYzXZ/SMTjzyGAFF1YusgxGcSWTEXBhp0CPwQ1A==}
@@ -7397,45 +7458,55 @@ packages:
     resolution: {integrity: sha512-pBdTo2f7DL4GLFLmhotvKNVi+9ULy1d6CBM9Q1IxP/lbYzkF+ny1JnVGGzNX7SN65frkpUMLm2doSNYdCOqCng==}
     cpu: [arm64]
     os: [darwin]
+    hasBin: true
 
   cmake-runtime-darwin-x64@4.3.1:
     resolution: {integrity: sha512-d31IY4SJlT2WZ4M+V744x8QqK34eRnk5xXEKSljZgtJLu/SHotiRevtN6zwGo63LgJH2+B1NNAgQDmbklbGOdw==}
     cpu: [x64]
     os: [darwin]
+    hasBin: true
 
   cmake-runtime-linux-arm64@4.3.1:
     resolution: {integrity: sha512-Z9foV9sHZX/2VrEPPKGcZVmLeG4afL8hCMhPdsMBU0fJ4lZ7BXQI+uJl4MX97g5VC6yXsnvdl9z7+AWAb8wFhw==}
     cpu: [arm64]
     os: [linux]
+    hasBin: true
 
   cmake-runtime-linux-x64@4.3.1:
     resolution: {integrity: sha512-Gh00tH0h4fXNHJmorfG43pKbHaCoTAdq3JmStJ5QZAKoJG2Sx1KxQs7vKwun13fqTdbRyed7NLJ7WsfQAlQYZQ==}
     cpu: [x64]
     os: [linux]
+    hasBin: true
 
   cmake-runtime-win32-arm64@4.3.1:
     resolution: {integrity: sha512-2QT63uJzbtoNgwjvz2UY5M3VWBf+Mu4Jm9XltF3gec3IgH6dXhrYVs4FvIhcAtrSKqI5Ilh+LA6HGl3hlJEo/w==}
     cpu: [arm64]
     os: [win32]
+    hasBin: true
 
   cmake-runtime-win32-x64@4.3.1:
     resolution: {integrity: sha512-EP0ng/GKbcHrKw5hpdOMsKucC2OKyd0SP/jHKkCfeJIOe+nze+tFeHudKgWVwpOAehXxiLGmjzs6sBOJEJd0Gw==}
     cpu: [x64]
     os: [win32]
+    hasBin: true
 
   cmake-runtime@4.3.1:
     resolution: {integrity: sha512-EH5OO3OmCa676Y1OdLT6Q+Kg+SWYfkZQMjG1PFsdFbgn0Vxhs5UZGpXTgF9HnDMDgv9DEiUAzYEAB12z3768Pw==}
+    hasBin: true
 
-  cmake-toolchains@2.2.2:
-    resolution: {integrity: sha512-qb2CLxZmJ3oyYv2I/UfCkD7/y7ZS2nEbDAf+iA9KGykSNVYoiVoAtuJN0LDaXyUMw2VfrIUIZ0CGB2YCH3IM8Q==}
+  cmake-toolchains@2.4.0:
+    resolution: {integrity: sha512-GbyIkP0ifh7K6+CK/ZNMj5U4BbaUSp5LcDx+7SGO1dL/a1nr+CUH35j0DnUgvKsCj2I/RlWBniomlDbW3lgHyg==}
     peerDependencies:
       cmake-runtime: ^3.29.1 || ^4
       llvm-runtime: ^23.1.5 || ^23.1.6-0
       musl-sysroot: ^0.1.1
       nasm-runtime: ^2.16.3 || ^3.2.0
+      picolibc-sysroot: ^0.1.0
       wasi-sysroot: ^0.1.1
     peerDependenciesMeta:
       musl-sysroot:
+        optional: true
+      picolibc-sysroot:
         optional: true
       wasi-sysroot:
         optional: true
@@ -7718,6 +7789,7 @@ packages:
   dependency-cruiser@18.4.0:
     resolution: {integrity: sha512-LLBYQ2XYmOCMG+liUWI2ReRYnnFXIbnzvCGHTohXAViSkawXr3T35fF/FV2cxpmB661pfkJ3ZXn95jhcEQ9GqA==}
     engines: {node: ^22||^24||>=26}
+    hasBin: true
 
   dequal@2.0.3:
     resolution: {integrity: sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==}
@@ -7734,6 +7806,7 @@ packages:
   detect-port@2.1.0:
     resolution: {integrity: sha512-epZuWb/6Q62L+nDHJc/hQAqf8pylsqgk3BpZXVBx1CDnr3nkrVNn73Uu1rXcFzkNcc+hkP3whuOg7JZYaQB65Q==}
     engines: {node: '>= 16.0.0'}
+    hasBin: true
 
   device-file@2.3.1:
     resolution: {integrity: sha512-bmON44lwxJPle9N2OcH4tqM44pMGZKT8G6OkzXkz0urvqQ9LKkoQdTS6w0ztYfmLdUE27R4UUmx0+y2gEz4Jug==}
@@ -7825,6 +7898,7 @@ packages:
   ejs@5.0.1:
     resolution: {integrity: sha512-COqBPFMxuPTPspXl2DkVYaDS3HtrD1GpzOGkNTJ1IYkifq/r9h8SVEFrjA3D9/VJGOEoMQcrlhpntcSUrM8k6A==}
     engines: {node: '>=0.12.18'}
+    hasBin: true
 
   electron-to-chromium@1.5.396:
     resolution: {integrity: sha512-yHiw2Y3C3H9U6TMbOfoWK/BPreiOPXRfTWPBwQBoZG6/8TB6eOPnsy5oaRYuatR7Fw2SJ4kKforgufeo7fq0EQ==}
@@ -7932,10 +8006,12 @@ packages:
   esbuild@0.27.7:
     resolution: {integrity: sha512-IxpibTjyVnmrIQo5aqNpCgoACA/dTKLTlhMHihVHhdkxKyPO1uBBthumT0rdHmcsk9uMonIWS0m4FljWzILh3w==}
     engines: {node: '>=18'}
+    hasBin: true
 
   esbuild@0.28.1:
     resolution: {integrity: sha512-HrJrvZv5ayxBzPfwphOoNzkzOIIlifzk0KJrGK2c8R4+LKpMtpYLQeUdjnwjWv/LZlkH2laZk+4w78pi99D4Vw==}
     engines: {node: '>=18'}
+    hasBin: true
 
   escalade@3.2.0:
     resolution: {integrity: sha512-WUj2qlxaQtO4g6Pq5c29GTcWGDyd8itL8zTlipgECz3JesAiiOKotd8JU6otB3PACgG6xkJUyVhboMS+bje/jA==}
@@ -7954,6 +8030,7 @@ packages:
 
   eslint-config-prettier@10.1.8:
     resolution: {integrity: sha512-82GZUjRS0p/jganf6q1rEO25VSoHH0hKPCTrgillPjdI/3bgBhAE1QzHrHTizjpRvy6pGAvKjDJtk2pF9NDq8w==}
+    hasBin: true
     peerDependencies:
       eslint: '>=7.0.0'
 
@@ -8032,6 +8109,8 @@ packages:
   eslint@9.39.5:
     resolution: {integrity: sha512-DgZS62aPLXKlnxILS/AYCoRvHaZeXceIzlXPkkGGzJWSow1aEk0lbTlxUSlyjC8jcaKxAdOnTDz+o1JFSBsyjw==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+    hasBin: true
     peerDependencies:
       jiti: '*'
     peerDependenciesMeta:
@@ -8045,6 +8124,7 @@ packages:
   esprima@4.0.1:
     resolution: {integrity: sha512-eGuFFw7Upda+g4p+QHvnW0RyTX/SVeJBDM/gCtMARO0cLuT2HcEKnTPvhjV6aGeqrCB/sbNop0Kszm0jsaWU4A==}
     engines: {node: '>=4'}
+    hasBin: true
 
   esquery@1.7.0:
     resolution: {integrity: sha512-Ap6G0WQwcU/LHsvLwON1fAQX9Zp0A2Y6Y/cJBl9r/JbW90Zyg4/zbG6zzKa2OTALELarYHmKu0GhpM5EO+7T0g==}
@@ -8133,10 +8213,12 @@ packages:
 
   expo-modules-autolinking@58.0.17:
     resolution: {integrity: sha512-mZRVuUCOsYK4+n9U8972bQBqXn21ncMd9BBx0/iepKH49tdMB8ADj3O9bb+huA80XckyorFLVfi6nJcImYtUyg==}
+    hasBin: true
 
   expo-modules-cli@0.4.0:
     resolution: {integrity: sha512-NuvnnEFL+UMuQSjykg5ZhV0oxkOww8exJbZh+75pFF7DJhE3kQtfnOd4Yq4G6PrkVnqbeuKsqf6zX8V9p65ZYw==}
     engines: {node: ^22.13.0 || ^24.3.0 || ^26.0.0 || >=27.0.0}
+    hasBin: true
 
   expo-modules-core@58.0.30:
     resolution: {integrity: sha512-uIyFJHouaiHwIoDjWSjb1Zg5LMGmkUs7CEp0rzpXvC+SStP/sr+dcjclUYD1ImmngMYuxRcs9soHEuWbcZWr/w==}
@@ -8163,6 +8245,7 @@ packages:
   expo@58.0.23:
     resolution: {integrity: sha512-FRpmfd1mdjWS9bRSMoZkwpF8ugbN+w6BDtNs+DYEio7rdSguTJ6fs/gaeWSeN60AJAbz80Uj36AMWtpHkShG0g==}
     engines: {node: ^22.13.0 || ^24.3.0 || ^26.0.0 || >=27.0.0}
+    hasBin: true
     peerDependencies:
       '@expo/metro-runtime': '*'
       react: '*'
@@ -8286,6 +8369,7 @@ packages:
   fb-dotslash@0.5.8:
     resolution: {integrity: sha512-XHYLKk9J4BupDxi9bSEhkfss0m+Vr9ChTrjhf9l2iw3jB5C7BnY4GVPoMcqbrTutsKJso6yj2nAB6BI/F2oZaA==}
     engines: {node: '>=20'}
+    hasBin: true
 
   fb-watchman@2.0.2:
     resolution: {integrity: sha512-p5161BqbuCaSnB8jIbzQHOlpgsPmK5rJVDfDKO91Axs5NC1uu3HRQm6wt9cd9/+GtQQIO53JdGXXoyDpTAsgYA==}
@@ -8377,6 +8461,7 @@ packages:
 
   flat@5.0.2:
     resolution: {integrity: sha512-b6suED+5/3rTpUBdG1gupIl8MPFCAMA0QXwmljLhvCUKcUvdE4gWky9zpuGCcXHOsz4J9wPGNWq6OKpmIzz3hQ==}
+    hasBin: true
 
   flatbuffers@24.12.23:
     resolution: {integrity: sha512-dLVCAISd5mhls514keQzmEG6QHmUUsNuWsb4tFafIUwvvgDjXhtfAYSKOzt5SWOy+qByV5pbsDZ+Vb7HUOBEdA==}
@@ -8561,6 +8646,7 @@ packages:
 
   glob@7.2.3:
     resolution: {integrity: sha512-nFR0zLpU2YCaRxwoCJvL6UvCH2JFyFVIvwTLsIf21AuHlMskA1hhTdk+LlYJtOlYt9v6dvszD2BGRqBL+iQK9Q==}
+    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
   global-directory@4.0.1:
     resolution: {integrity: sha512-wHTUcDUoZ1H5/0iVqEudYW4/kAlN5cZ3j/bXn0Dpbizl9iaUVeWSHqiOjsgk6OW2bkLclbBjzewBz6weQ1zA2Q==}
@@ -8723,9 +8809,11 @@ packages:
   husky@9.1.7:
     resolution: {integrity: sha512-5gs5ytaNjBrh5Ow3zrvdUUY+0VxIuWVL4i9irt6friV+BqdCfmV11CQTWMiBYWHbXhco+J1kHfTOUkePhCDvMA==}
     engines: {node: '>=18'}
+    hasBin: true
 
   hyper-health-check@1.3.0:
     resolution: {integrity: sha512-msLfLdUCZvfmk0yAKZXqFDZVycqqTDz53TTGyyOiuTQ5eMeE1zQbIAk+ktcBlm2dTOgxDWC6pOfBpvL3DHD+pQ==}
+    hasBin: true
 
   hyper-instrument@2.3.2:
     resolution: {integrity: sha512-Wi59txbroOAdWTPThCC5TlSQcnSe8GJuPRY65/byZDzpVsnn1cWbZRPvMmKV8xHjIkwuhSQdosqF7vX2IUEt4A==}
@@ -8771,6 +8859,7 @@ packages:
 
   hyperdht@6.33.0:
     resolution: {integrity: sha512-veSvVKptjPTu2di3q5IWI62ZDFzEmTj1QSTAkiXW/cg0+lgMUlwfVWB4dX+WI14xNb54vogVIjA/Ph3KiVuRJQ==}
+    hasBin: true
 
   hyperdispatch@1.6.0:
     resolution: {integrity: sha512-9+kz137Ora0NSnMzQY82CbApOh3NzpjtxZ1uqlLuOnBvfJyPuC0q5J4dGS6AoGSF7eguwGWRjjPkd6sBvn9WEA==}
@@ -8849,6 +8938,7 @@ packages:
 
   inflight@1.0.6:
     resolution: {integrity: sha512-k92I/b08q4wvFscXCLvqfsHCrjrF7yiXsQuIVvVE7N82W3+aqpzuUdBbfhWcy/FZR3/4IgflMgKLOsvPDrGCJA==}
+    deprecated: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
 
   inherits@2.0.4:
     resolution: {integrity: sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==}
@@ -8929,10 +9019,12 @@ packages:
   is-docker@2.2.1:
     resolution: {integrity: sha512-F+i2BKsFrH66iaUFc0woD8sLy8getkwTwtOBjvs56Cx4CgJDeKQeqfz8wAYiSb8JOprWhHH5p77PbmYCvvUuXQ==}
     engines: {node: '>=8'}
+    hasBin: true
 
   is-docker@3.0.0:
     resolution: {integrity: sha512-eljcgEDlEns/7AXFosB5K/2nCM4P7FQPkGc/DWLy5rmFEWvZayGrik1d9/QIY5nJ4f9YsVvBkA6kJpHn9rISdQ==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+    hasBin: true
 
   is-document.all@1.0.0:
     resolution: {integrity: sha512-+XSoyS05OdBbhFuELhgTCpFNHkpBOJqtsZfUFFpe5QTw+9Sjbh8zitxhQkYAo6wV7e1Vb8cAPvpCk9jGam/82g==}
@@ -8969,6 +9061,7 @@ packages:
   is-inside-container@1.0.0:
     resolution: {integrity: sha512-KIYLCCJghfHZxqjYBE7rEy0OBuTd5xCHS7tHVgvCLkx7StIoaxwNW3hCALgEUjFfeRk+MG/Qxmp/vtETEF3tRA==}
     engines: {node: '>=14.16'}
+    hasBin: true
 
   is-installed-globally@1.0.0:
     resolution: {integrity: sha512-K55T22lfpQ63N4KEN57jZUAaAYqYHEe8veb/TycJRk9DdSCLLcovXz/mL6mOnhQaZsQGwPhuFopdQIlqGSEjiQ==}
@@ -9144,6 +9237,7 @@ packages:
 
   jiti@2.7.0:
     resolution: {integrity: sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==}
+    hasBin: true
 
   jose@6.2.4:
     resolution: {integrity: sha512-N8acGzVsQy6M/fjFcxtysNc4Q379TcM5dM/qKkNtsHFji88yANnXTr7BLeP75iPnFwBfQzM/jg2BZ9+HZrHCZA==}
@@ -9160,9 +9254,11 @@ packages:
 
   js-yaml@3.15.0:
     resolution: {integrity: sha512-ttBQIIQPDeLjpPOohtUdXuXUVoA2uIB6fEH9HyJ7234s5mBJ5wTx20njxplLZQgLaOfpmPQA7X2t5AX6tIPbog==}
+    hasBin: true
 
   js-yaml@4.3.0:
     resolution: {integrity: sha512-1td788aAnnZ5qs7V2QIRl1owjtYpbKt749Y3xauqQgwIIGF/xXWz1wMTEBx5O3LK3lXLVuqXPdPxj2BoFHaW9Q==}
+    hasBin: true
 
   jsc-safe-url@0.2.4:
     resolution: {integrity: sha512-0wM3YBWtYePOjfyXQH5MWQ8H7sdk5EXSwZvmSLKk2RboVQ2Bu239jycHDz5J/8Blf3K0Qnoy2b6xD+z10MFB+Q==}
@@ -9170,6 +9266,7 @@ packages:
   jsesc@3.1.0:
     resolution: {integrity: sha512-/sM3dO2FOzXjKQhJuo0Q173wf2KOo8t4I8vHy6lF9poUp7bKT0/NHE8fPX23PwfhnykfqnC2xRxOnVw5XuGIaA==}
     engines: {node: '>=6'}
+    hasBin: true
 
   json-bigint@1.0.0:
     resolution: {integrity: sha512-SiPv/8VpZuWbvLSMtTDU8hEfrZWg/mH/nV/b4o0CYbSxu1UIQPLdwKOCIyLQX+VIPO5vrLX3i8qtqFyhdPSUSQ==}
@@ -9222,10 +9319,12 @@ packages:
 
   json5@1.0.2:
     resolution: {integrity: sha512-g1MWMLBiz8FKi1e4w0UyVL3w+iJceWAFBAaBnnGKOpNa5f8TLktkbre1+s6oICydWAm+HRUGTmI+//xv2hvXYA==}
+    hasBin: true
 
   json5@2.2.3:
     resolution: {integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==}
     engines: {node: '>=6'}
+    hasBin: true
 
   jsonc-parser@3.3.1:
     resolution: {integrity: sha512-HUgH65KyejrUFPvHFPbqOY0rsFip3Bo5wb4ngvdi1EpCYWUQDC5V+Y7mZws+DLkr4M//zQJoanu1SP+87Dv1oQ==}
@@ -9272,6 +9371,7 @@ packages:
 
   lan-network@0.2.1:
     resolution: {integrity: sha512-ONPnazC96VKDntab9j9JKwIWhZ4ZUceB4A9Epu4Ssg0hYFmtHZSeQ+n15nIwTFmcBUKtExOer8WTJ4GF9MO64A==}
+    hasBin: true
 
   leven@3.1.0:
     resolution: {integrity: sha512-qsda+H8jTaUaN/x5vzW2rzc+8Rw4TAQ/4KjB46IwK5VH+IlVeeeje/EoZRpiXvIqjFgK84QffqPztGI3VBLG1A==}
@@ -9394,121 +9494,145 @@ packages:
     resolution: {integrity: sha512-r5nFpFJYrwRXeWBwPCeGC3M6v+Nw2tutv9RHjhGi10JUDV5vmQchWbN2CdgNjbNtBtRzWsRXbGN9RsUBMrlXng==}
     cpu: [arm64]
     os: [darwin]
+    hasBin: true
 
   llvm-runtime-clang-darwin-arm64@23.1.6-1:
     resolution: {integrity: sha512-0c6tt08CLjq3jeweglH9UmkHciJSU1Sj4fe30Xg/RVK6phh0Nm6Bqk7xcGAAnM5eMRF6tDfRqWodbKppsk8H4A==}
     cpu: [arm64]
     os: [darwin]
+    hasBin: true
 
   llvm-runtime-clang-darwin-x64@23.1.5:
     resolution: {integrity: sha512-FS9cwPlch3efc7sLbV6faVHp/u3W1HHXQyvvjedrquqesDcgSSj7tFYRkrA7zglRJeAGEOfZoUv/3OVpVlXmZg==}
     cpu: [x64]
     os: [darwin]
+    hasBin: true
 
   llvm-runtime-clang-darwin-x64@23.1.6-1:
     resolution: {integrity: sha512-5TLp97gRAiNPCjGD37Ph23VjBhiSgyBh1otx51B7VYlo6KdyU6riy73MRaqr6+fYHOudAGcqWx98Y2NI1phuQg==}
     cpu: [x64]
     os: [darwin]
+    hasBin: true
 
   llvm-runtime-clang-linux-arm64@23.1.5:
     resolution: {integrity: sha512-Z/uCQeeNfLkgE3eq3HOAVue0VnNN9GxhqE2y35xZz8hWSrg9lv7iiCk94IFFG35qNkA5o3Xhwl1G5zVRFQhTPg==}
     cpu: [arm64]
     os: [linux]
+    hasBin: true
 
   llvm-runtime-clang-linux-arm64@23.1.6-1:
     resolution: {integrity: sha512-wDeBaXq0mP7LkQ70w0Fa3RBFacuRJpTShx2LXQ3g0WS50HrkxNQbp6+uk9Hls3Jq5lYC2ltnBoRF29BvC1JLCA==}
     cpu: [arm64]
     os: [linux]
+    hasBin: true
 
   llvm-runtime-clang-linux-x64@23.1.5:
     resolution: {integrity: sha512-xM57ebgHulP0N1kzchyiYzY9lWkJ4c3+xLUqXD7QRV2OAfvbRfHlTHnnV8cAk4Kplid1QCMJBvcH1UJdd0yphg==}
     cpu: [x64]
     os: [linux]
+    hasBin: true
 
   llvm-runtime-clang-linux-x64@23.1.6-1:
     resolution: {integrity: sha512-4kAOP+OymAVBf1mM11y8dN+b002cbXOalms0RETHGGimfq8xDK6Qtq/grHgwbO7GIVZWTiCC7ckwyIC61trvDA==}
     cpu: [x64]
     os: [linux]
+    hasBin: true
 
   llvm-runtime-clang-win32-arm64@23.1.5:
     resolution: {integrity: sha512-uOzr3DP7o/FTPwiUUw9Gk/ryWP0D7oEBcnGA5Ux5qDQg8Axuf9AkoRf4T7hXf07h4+1bP3DgENKBxKcQlC3X/A==}
     cpu: [arm64]
     os: [win32]
+    hasBin: true
 
   llvm-runtime-clang-win32-arm64@23.1.6-1:
     resolution: {integrity: sha512-n5JLauG3UAQn1PPE+zGKmGRyoH7mw5bFE91Izoa19HHHzG3dcGGj/YvpMxkyRV//1lfofrQyn68MAmua1H+x8w==}
     cpu: [arm64]
     os: [win32]
+    hasBin: true
 
   llvm-runtime-clang-win32-x64@23.1.5:
     resolution: {integrity: sha512-CJp0nBratsbHJTe6eFr25gkt1kZ+6wonA7rjkJZe0ogPpoXUwGSdDxz/oXQmlLEQmlkh5GYwcC4rhnWHSJjmoA==}
     cpu: [x64]
     os: [win32]
+    hasBin: true
 
   llvm-runtime-clang-win32-x64@23.1.6-1:
     resolution: {integrity: sha512-SasD6VRYYZ+A5O7rTFS/WnTMwgw4znsB0UyN3pYKEY7CTG7fuQlfcebuKBGed3OBVd2i8RL76Z4QrlELQxwBEQ==}
     cpu: [x64]
     os: [win32]
+    hasBin: true
 
   llvm-runtime-lld-darwin-arm64@23.1.5:
     resolution: {integrity: sha512-N/C5hEkreOgNfl5shsnZ23y7CSTrgSpv3I+ZuPz7lJYcfynnyCUNLJC5nezNuRDu3XPFmI6ULBoD7jbEDRoaDw==}
     cpu: [arm64]
     os: [darwin]
+    hasBin: true
 
   llvm-runtime-lld-darwin-arm64@23.1.6-1:
     resolution: {integrity: sha512-OfLRSRTJGNdQ0XxyVJ60qWunCdYOnz7XTK8FT/bbN7eQ50Q9yIZU5uDkRoHHjZMlxfKtXyoeVYdUW/nocrTmeg==}
     cpu: [arm64]
     os: [darwin]
+    hasBin: true
 
   llvm-runtime-lld-darwin-x64@23.1.5:
     resolution: {integrity: sha512-4qvAoHrpNLLBaDO++sWjTKUxzqUn7pD1vjzwTGTKT2vXlPP9W9b3NXV7VG68nqppopzzMdEZW+i+gtRI+fO+Yw==}
     cpu: [x64]
     os: [darwin]
+    hasBin: true
 
   llvm-runtime-lld-darwin-x64@23.1.6-1:
     resolution: {integrity: sha512-XARovnCSApVxrh/N3IxtCbrbf2xRus/OYoMsXrUtRxDaUiqm6j4iKEBCCS38JRlj/NQBiCm1dD/JiXjLchmh4g==}
     cpu: [x64]
     os: [darwin]
+    hasBin: true
 
   llvm-runtime-lld-linux-arm64@23.1.5:
     resolution: {integrity: sha512-G0d0BucNHWYh2EGglcvsNX5usA0tBfMA+ngJH/D60CGzlXFb0GGbaD0HE5HSYPxMKcSgkLKHQc1DscqieOZhQQ==}
     cpu: [arm64]
     os: [linux]
+    hasBin: true
 
   llvm-runtime-lld-linux-arm64@23.1.6-1:
     resolution: {integrity: sha512-MYFX9oxy5OEc2ff6r33Y6hkSvPyxpx+H12T+E/p3LHhe9Jacu4eMEYa4qz/VzRAnJ1UbfWNu3kv4yIRjzb5Vow==}
     cpu: [arm64]
     os: [linux]
+    hasBin: true
 
   llvm-runtime-lld-linux-x64@23.1.5:
     resolution: {integrity: sha512-o2ATHERhEw7M2qAoPcgg5n0bVpJVihOja96bb5ZqO82iCA9IQmsUEu3EYrTKFIRXoVSQ1FupK8SHCh+zEQhkFQ==}
     cpu: [x64]
     os: [linux]
+    hasBin: true
 
   llvm-runtime-lld-linux-x64@23.1.6-1:
     resolution: {integrity: sha512-pU+82dECAUHGi/Nf4yHhkMxHPSGOrei8NL5ahNjGGbxfHlYLjb6LIBDAQ67NtcJ7mqmOkLcukOWRRUlc1Tr2kg==}
     cpu: [x64]
     os: [linux]
+    hasBin: true
 
   llvm-runtime-lld-win32-arm64@23.1.5:
     resolution: {integrity: sha512-8jr2ZR2Gw9tAb6PKiw2+X8YW0Iw5w411hCikj4uhh+zNrtm5tBxCgnupMnOdFlpnuurU503gvHqujblcBI4KNg==}
     cpu: [arm64]
     os: [win32]
+    hasBin: true
 
   llvm-runtime-lld-win32-arm64@23.1.6-1:
     resolution: {integrity: sha512-Dn2BI8miPRXq6xuoh4OkGMVjbgz2RzO3F5OaS6X0jOPXIZlUxgXhk7J833fgiLjR1JMLhP1+ky3e8VhPzOuaTQ==}
     cpu: [arm64]
     os: [win32]
+    hasBin: true
 
   llvm-runtime-lld-win32-x64@23.1.5:
     resolution: {integrity: sha512-eO76ckLOk0albJct3AFV0l84kjKdF2CTJv0pOaSc1aJD7XQ1MKVr2xBjZZJctpuCT7PGuMB+0ZEbaw6dxRkUIw==}
     cpu: [x64]
     os: [win32]
+    hasBin: true
 
   llvm-runtime-lld-win32-x64@23.1.6-1:
     resolution: {integrity: sha512-F9rbZalVIoJfDPTJ1fyiBlrCDfstlbYVLOzLycs4mCL/8X+zH1FL2aZGoQ2XIajkw5S1y6t8f4590OYYvNkqGg==}
     cpu: [x64]
     os: [win32]
+    hasBin: true
 
   llvm-runtime-resources-darwin@23.1.5:
     resolution: {integrity: sha512-YQbf6qpCs2XB24dC76JWkJSNWBayXQWY7XNEZAVZ0vklb0/Vj0mLQM8QT2xwuik/kBBJhGPWveHmVIG/vOQTjA==}
@@ -9536,9 +9660,11 @@ packages:
 
   llvm-runtime@23.1.5:
     resolution: {integrity: sha512-l+bVFeyTy5/cPQ3ZoZ62Ow5bv6hdIreXxmbDHre97BZB09rJKFXIGTfmUn9rho6Eu6e9r5a3w5YN8J0vlL74Sw==}
+    hasBin: true
 
   llvm-runtime@23.1.6-1:
     resolution: {integrity: sha512-tW/a8GNpm1kKJGxVyqAqVXMo98djz5nAFxFqzqVmN/vKzMTjPTF/rEqB+T1vr9fFyaNgDTlYYX3pxxth3q5OQA==}
+    hasBin: true
 
   locate-path@5.0.0:
     resolution: {integrity: sha512-t7hw9pI+WvuwNJXwk5zVHpyhIqzg2qTlklJOf0mVxGSbe3Fp2VieZcduNYjaLDoy6p9uGpQEGWG87WpMKlNq8g==}
@@ -9580,6 +9706,7 @@ packages:
 
   loose-envify@1.4.0:
     resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
+    hasBin: true
 
   lru-cache@10.4.3:
     resolution: {integrity: sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ==}
@@ -9593,6 +9720,7 @@ packages:
 
   lunte@1.8.4:
     resolution: {integrity: sha512-u6cjFWSDbPB8Qm/fM/9uIXLcNf+wa91t02uHjqwVGPFdP3VAU2g345iTeI1Sv6XY4PxpwvcV0HkhG/St3dNfAQ==}
+    hasBin: true
 
   make-dir@3.1.0:
     resolution: {integrity: sha512-g3FeP20LNwhALb/6Cz6Dd4F2ngze0jz7tbzrD2wAV+o9FeNHe4rL+yK2md0J/fiSf1sa1ADhXqi5+oVwOM/eGw==}
@@ -9612,6 +9740,7 @@ packages:
   marked@18.0.5:
     resolution: {integrity: sha512-S6GcvALHg6K4ohtu4E7x0a1AqhAjp6cV8KhLSyN9qVapnzJkusVBxZRcIU9AeYsbe6P1hKDusSbEOzGyyuce6w==}
     engines: {node: '>= 20'}
+    hasBin: true
 
   marky@1.3.0:
     resolution: {integrity: sha512-ocnPZQLNpvbedwTy9kNrQEsknEfgvcLMvOtz3sFeWApDq1MXH1TqkCIx58xlpESsfwQOnuBO9beyQuNGzVvuhQ==}
@@ -9729,6 +9858,7 @@ packages:
   metro-symbolicate@0.87.1:
     resolution: {integrity: sha512-rcGvwabrg0lbXGRGRKl14PY3My3+dkno2jZYhdJEuH2DmjTtTkV5bYwgto4JtV/Lbe+sXE6GO1UGg654430uow==}
     engines: {node: ^22.13.0 || ^24.3.0 || >= 26.0.0}
+    hasBin: true
 
   metro-transform-plugins@0.84.4:
     resolution: {integrity: sha512-kehr6HbAecqD0/a3xLXobELdPaAmRAl8bel0qagPF4vhZtux93nS8S4eq2kgKt6J2GnQpVjSoW1PXdst04mwow==}
@@ -9754,6 +9884,7 @@ packages:
   metro@0.87.1:
     resolution: {integrity: sha512-1oyLU9elM7hPAsKIqKooEekwxiuWr27+MZBhUROPhzcbXhMDxK64GPF/hCXwBZVp1F89ODavCrBmJtLx9WtBoQ==}
     engines: {node: ^22.13.0 || ^24.3.0 || >= 26.0.0}
+    hasBin: true
 
   micromatch@4.0.8:
     resolution: {integrity: sha512-PXwfBhYu0hBCPw8Dn0E+WDYb7af3dSLVWKi3HGv84IdF4TyFoC0ysxFd0Goxw7nSv4T/PzEJQxsYsEiFCKo2BA==}
@@ -9778,10 +9909,12 @@ packages:
   mime@1.6.0:
     resolution: {integrity: sha512-x0Vn8spI+wuJ1O6S7gnbaQg8Pxh4NNHb7KSINmEWKiPE4RKOplvijn+NkmYmmRgP68mc70j2EbeTFRsrswaQeg==}
     engines: {node: '>=4'}
+    hasBin: true
 
   mime@3.0.0:
     resolution: {integrity: sha512-jSCU7/VB1loIWBZe14aEYHU/+1UMEHoaO7qxCOVJOw9GgH72VAWppxNcjU+x9a2k3GSIBXNKxXQFqRvvZ7vr3A==}
     engines: {node: '>=10.0.0'}
+    hasBin: true
 
   mimic-fn@1.2.0:
     resolution: {integrity: sha512-jf84uxzwiuiIVKiOLpfYk7N46TSy8ubTonmneY9vrpHNAnp0QBt2BxWV9dO3/j+BoVAb+a5G6YDPW3M5HOdMWQ==}
@@ -9896,6 +10029,7 @@ packages:
   mqtt@5.15.2:
     resolution: {integrity: sha512-VWZU2CSUY3U3oN0PSBRDE5SNsFi4zqqNeQ/uv3pZWqY3CrBXD/dhd0ZLjlsk5YnebGlrapi4lRVNJPUNQ5aZ3w==}
     engines: {node: '>=16.0.0'}
+    hasBin: true
 
   ms@2.0.0:
     resolution: {integrity: sha512-Tpp60P6IUJDTuOq/5Z8cdskzJujfwqfOTkrwIwj7IRISpnkJnT6SyJ4PCPnGMoFjC9ddhal5KVIYtAt97ix05A==}
@@ -9923,43 +10057,52 @@ packages:
   nanoid@3.3.20:
     resolution: {integrity: sha512-uKdg2G3GNCKQn9byYOpxbGqrT2fGO5KRt5J/8b3pok8rT6qxGWF6hxMyJiEYtAf+FVyYuD9hRaDqX5uPFYJ4ZQ==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
+    hasBin: true
 
   napi-postinstall@0.3.4:
     resolution: {integrity: sha512-PHI5f1O0EP5xJ9gQmFGMS6IZcrVvTjpXjz7Na41gTE7eE2hK11lg04CECCYEEjdc17EV4DO+fkGEtt7TpTaTiQ==}
     engines: {node: ^12.20.0 || ^14.18.0 || >=16.0.0}
+    hasBin: true
 
   nasm-runtime-darwin-arm64@3.2.0:
     resolution: {integrity: sha512-5EdtIVe8+96sQQtHDDYp8dbQvfE0euu1rl7roFa/lqW1j6TAoAJJmXQ6hR8Gvajw84Up6mjqLYbZ41pDEeMAmA==}
     cpu: [arm64]
     os: [darwin]
+    hasBin: true
 
   nasm-runtime-darwin-x64@3.2.0:
     resolution: {integrity: sha512-qL+eLx1e1hfDpTqwAP+gO+J0Rv+NLjPTF5TjQ9NKLnV0MVZZPeSTcrkmA1HKf87nW7r7obCI2/eiFM+x6M/kLg==}
     cpu: [x64]
     os: [darwin]
+    hasBin: true
 
   nasm-runtime-linux-arm64@3.2.0:
     resolution: {integrity: sha512-j6uYtO+ILT49IcDHlcWRGQNSkWomBTahwtvUxnBZ7Lqfxlbbn81vcthtyDFX/TviFV/XNNHki6Z7n0utcs1j1g==}
     cpu: [arm64]
     os: [linux]
+    hasBin: true
 
   nasm-runtime-linux-x64@3.2.0:
     resolution: {integrity: sha512-xtZGaGmn8sOq6Qalh5/wjYw9Z0nDZHwk+shBwemnFzpJtV1+4Eci/6cG3VPLZEn2xMWH+K5EHEJ7nyVWVzLSiA==}
     cpu: [x64]
     os: [linux]
+    hasBin: true
 
   nasm-runtime-win32-arm64@3.2.0:
     resolution: {integrity: sha512-RfDpc9yasJhYvgCAU8fVgk02GXXeYA2fKxFNXDzbhkoOcPldL1rAu5UTuL6BFkH5VvE8i+7Sbu4IasnF62Zjmw==}
     cpu: [arm64]
     os: [win32]
+    hasBin: true
 
   nasm-runtime-win32-x64@3.2.0:
     resolution: {integrity: sha512-h6MY/7IipcVvitA88wR7KS3gd1dcW6WTVFIylqiZLJDySuvUKzlhHiGBb3BdDHCWq/ylox4NvsXt3oD+5uve7Q==}
     cpu: [x64]
     os: [win32]
+    hasBin: true
 
   nasm-runtime@3.2.0:
     resolution: {integrity: sha512-Jue51Ju2dlfZ2PtutWuSU6Dj3+T9NVO7tggRR20psdIK3+rC7nRs7EfRXNKo1PB7JMFZT70VU5XtnOZixNaH6w==}
+    hasBin: true
 
   nat-sampler@1.0.1:
     resolution: {integrity: sha512-yQvyNN7xbqR8crTKk3U8gRgpcV1Az+vfCEijiHu9oHHsnIl8n3x+yXNHl42M6L3czGynAVoOT9TqBfS87gDdcw==}
@@ -9983,34 +10126,41 @@ packages:
     resolution: {integrity: sha512-oBtZXETijX09q6EtAgRrgiAPjPCuMpsBBwuSrq36WSrejixnOHznYrNEkZWUvdsKxmsAiRAXBB+ufJ+veKpQqA==}
     cpu: [arm64]
     os: [darwin]
+    hasBin: true
 
   ninja-runtime-darwin-x64@1.13.2:
     resolution: {integrity: sha512-LAXEEIVYNnWph3Vt6NZah9L2HlwNUvBJHshmQz+aq3fDm4zzB7XsMLheKmdBvKBVWFCZyhXWdT5MKcbEtsbGMQ==}
     cpu: [x64]
     os: [darwin]
+    hasBin: true
 
   ninja-runtime-linux-arm64@1.13.2:
     resolution: {integrity: sha512-lcyUu9/dltnqsSQnSt5bkEz85HZ8O3g9S/B9ovVuPk2OyuteBq1FVdj8rF14sCvjEC9+pkELYNEes+mYx35kww==}
     cpu: [arm64]
     os: [linux]
+    hasBin: true
 
   ninja-runtime-linux-x64@1.13.2:
     resolution: {integrity: sha512-bePoCSInA3QyvuJ/4/H6F9aLpThfve8D5vzt1G4HFPBIWE5l3umzazZUliWxWy2Z/pnTDBsQpvBUBOSB4P8f5A==}
     cpu: [x64]
     os: [linux]
+    hasBin: true
 
   ninja-runtime-win32-arm64@1.13.2:
     resolution: {integrity: sha512-YG+pUNPjXKgaeWBcjKzY0/4f2NTX2ORjLB2+bKB5XdDEtWxFUsIKlFVmKloSE75jVj1QG1zqYB6KnYNKTduQfw==}
     cpu: [arm64]
     os: [win32]
+    hasBin: true
 
   ninja-runtime-win32-x64@1.13.2:
     resolution: {integrity: sha512-e+HNsEW9I2PS7hqYfNO3P0YDDGWa90oZxQ67WOR5RXKPFUFHktS9kzs4aHd2w3zJRYPsM+vQsWCHg2CKpyzJYA==}
     cpu: [x64]
     os: [win32]
+    hasBin: true
 
   ninja-runtime@1.13.2:
     resolution: {integrity: sha512-HLUFoYSUPeKppVr2Ao7eZnTIwg+4U72cHUsBfSCTRddlTc9AgrcmjMYe9pOnQgNwuSuKdqDdXkE70GioBR2HkA==}
+    hasBin: true
 
   node-abi@4.37.0:
     resolution: {integrity: sha512-O9XXMXLeRHQtvh43NCah3y9N1K69tecOmu8Y5p2ay4iXvtpbQr0VaroJF9EmRVp3vkdoj3qn4IFfX+ZYtC94fw==}
@@ -10026,9 +10176,11 @@ packages:
   node-domexception@1.0.0:
     resolution: {integrity: sha512-/jKZoMpw0F8GRwl4/eLROPA3cfcXtLApP0QzLmUT/HuPCZWyB7IY9ZrMeKw2O/nFIqPQB3PVM9aYm0F312AXDQ==}
     engines: {node: '>=10.5.0'}
+    deprecated: Use your platform's native DOMException instead
 
   node-edge-tts@1.2.10:
     resolution: {integrity: sha512-bV2i4XU54D45+US0Zm1HcJRkifuB3W438dWyuJEHLQdKxnuqlI1kim2MOvR6Q3XUQZvfF9PoDyR1Rt7aeXhPdQ==}
+    hasBin: true
 
   node-exports-info@1.6.2:
     resolution: {integrity: sha512-kXs9Go0cah0qHVV2v389IXQLdLCeE1xfFtjOAF+iobu0OIoG1pje8At2vMHyaPMiPMnG/LWP50twML21eMcAag==}
@@ -10053,10 +10205,12 @@ packages:
 
   node-gyp-build@4.8.4:
     resolution: {integrity: sha512-LA4ZjwlnUblHVgq0oBF3Jl/6h/Nvs5fzBLwdEF4nuxnFdsfajde4WfxtJr3CaiH+F6ewcIB/q4jQ4UzPyid+CQ==}
+    hasBin: true
 
   node-gyp@12.4.0:
     resolution: {integrity: sha512-OMcPNvqTCFUnNaBlmdgq+lfNqY7gTiSmNRDjY3uAXRyudeKZEZxu3CLtjMQrx4zZxCX2b/mpNqTtwuCJgXhHkw==}
     engines: {node: ^20.17.0 || >=22.9.0}
+    hasBin: true
 
   node-int64@0.4.0:
     resolution: {integrity: sha512-O5lz91xSOeoXP6DulyHfllpq+Eg00MWitZIbtPfoSEvqIHdl5gfcY6hYzDWnj0qD5tz52PI08u9qUvSVeUBeHw==}
@@ -10078,6 +10232,7 @@ packages:
   nopt@9.0.0:
     resolution: {integrity: sha512-Zhq3a+yFKrYwSBluL4H9XP3m3y5uvQkB/09CwDruCiRmR/UJYnn9W4R48ry0uGC70aeTPKLynBtscP9efFFcPw==}
     engines: {node: ^20.17.0 || >=22.9.0}
+    hasBin: true
 
   normalize-path@3.0.0:
     resolution: {integrity: sha512-6eZs5Ls3WtCisHWp9S2GUy8dqkpGi4BVSz3GaqiE6ezub0512ESztXUwUB6C6IKbQkY2Pnb/mD4WYojCRwcwLA==}
@@ -10139,6 +10294,7 @@ packages:
 
   nx@23.1.0:
     resolution: {integrity: sha512-Z4hzIdRF6naDDpOTOazrJODmbU5D7slq94FR5q/dySW+evGxiOSFLO981VqDVvtNEvHPnEDh/C1wvFseWyvSrQ==}
+    hasBin: true
     peerDependencies:
       '@swc-node/register': ^1.11.1
       '@swc/core': ^1.15.8
@@ -10151,6 +10307,7 @@ packages:
   nyc@17.1.0:
     resolution: {integrity: sha512-U42vQ4czpKa0QdI1hu950XuNhYqgoM+ZF1HT+VuUHL9hPfDPVvNQyltmMqdE9bUHMVa+8yNbc3QKTj8zQhlVxQ==}
     engines: {node: '>=18'}
+    hasBin: true
 
   ob1@0.84.4:
     resolution: {integrity: sha512-eJXMpz4aQHXF/YBB9ddqZDIS+ooO91hObo9FoW/xBkr54/zCwYYCDqT/O54vNo8kOkWs5Ou/y28NgdrV0edQNA==}
@@ -10282,6 +10439,7 @@ packages:
   openclaw@2026.8.1:
     resolution: {integrity: sha512-bSaFeaDFnQH/bU1vgKMac6eHkHHPHG0C/uwduXGI3eIS3lyiYSwmDU5ehhBUUhlPeV85tL5/KVwmoH48nX1tWw==}
     engines: {node: '>=22.22.3 <23 || >=24.15.0 <25 || >=25.9.0'}
+    hasBin: true
 
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
@@ -10342,6 +10500,7 @@ packages:
   pacote@21.5.1:
     resolution: {integrity: sha512-KvcJ9iy3crysCsgqc4+PknH/w6jkrp8JN36mpZBPwNaDRwTfMZD37YzRazNstiZUOhuF5pno9f78n9mEJBavwg==}
     engines: {node: ^20.17.0 || >=22.9.0}
+    hasBin: true
 
   pako@1.0.11:
     resolution: {integrity: sha512-4hLB8Py4zZce5s4yd9XzopqwVv/yGNhV1Bl8NTmCq1763HeK2+EwVTv+leGeL13Dnh2wfbqowVPXCIO0z4taYw==}
@@ -10446,12 +10605,14 @@ packages:
 
   pino-pretty@13.1.3:
     resolution: {integrity: sha512-ttXRkkOz6WWC95KeY9+xxWL6AtImwbyMHrL1mSwqwW9u+vLp/WIElvHvCSDg0xO/Dzrggz1zv3rN5ovTRVowKg==}
+    hasBin: true
 
   pino-std-serializers@7.1.0:
     resolution: {integrity: sha512-BndPH67/JxGExRgiX1dX0w1FvZck5Wa4aal9198SrRhZjH3GxKQUKIBnYJTdj2HDN3UQAS06HlfcSbQj2OHmaw==}
 
   pino@9.14.0:
     resolution: {integrity: sha512-8OEwKp5juEvb/MjpIc4hjqfgCNysrS94RIOMXYvpYCdm/jglrKEiAYmiumbmGhCvs+IcInsphYDFwqrjr7398w==}
+    hasBin: true
 
   pkce-challenge@5.0.1:
     resolution: {integrity: sha512-wQ0b/W4Fr01qtpHlqSqspcj3EhBvimsdh0KlHhH8HRZnMsEa0ea2fTULOXOS9ccQr3om+GcGRk4e+isrZWV8qQ==}
@@ -10464,6 +10625,7 @@ packages:
   playwright-core@1.62.1:
     resolution: {integrity: sha512-wPYSwEBJY9GHraISXqyqtx0na0LpO3XEX7jNDhntbex7tzUS7kLnZsOlFruFJB4Hi/rhDMjXGqHewDZ68nYZVw==}
     engines: {node: '>=20'}
+    hasBin: true
 
   plimit-lit@1.6.1:
     resolution: {integrity: sha512-B7+VDyb8Tl6oMJT9oSO2CW8XC/T4UcJGrwOVoNGwOQsQYhlpfajmrMj5xeejqaASq3V/EqThyOeATEOMuSEXiA==}
@@ -10497,6 +10659,7 @@ packages:
   postject@1.0.0-alpha.6:
     resolution: {integrity: sha512-b9Eb8h2eVqNE8edvKdwqkrY6O7kAwmI8kcnBv1NScolYJbo59XUF0noFq+lxbC1yN20bmC0WBEbDC5H/7ASb0A==}
     engines: {node: '>=14.0.0'}
+    hasBin: true
 
   powershell-utils@0.2.1:
     resolution: {integrity: sha512-C+y9x90UElAddDZmV4qOx9W53B61PO7cIqWz2dQsWlwswuq4mr8NEwytdGKboYbQlGZ3awrkTeNvcZiZNHnQ8A==}
@@ -10514,6 +10677,7 @@ packages:
   prettier@3.9.6:
     resolution: {integrity: sha512-OpN0zzVdiaiAhxpuuj5efpIS4sY9j7bY6uR5mnj5yPzGkdkjNKSJeUThPb60Jw29QuAZgA4o+/iB49kFiaBX6g==}
     engines: {node: '>=14'}
+    hasBin: true
 
   pretty-format@29.7.0:
     resolution: {integrity: sha512-Pdlw/oPxN+aXdmM9R00JVC9WVFoCLTKJvDVLgmJ+qAffBMxsV85l/Lu7sNx4zSzPyoL2euImuEwHhOXdEgNFZQ==}
@@ -10559,6 +10723,7 @@ packages:
   prom-client@15.1.3:
     resolution: {integrity: sha512-6ZiOBfCywsD4k1BN9IX0uZhF+tJkV8q8llP64G5Hajs4JOeVLPCwpPVcpXy3BwYiUGgyJzsJJQeOIv7+hDSq8g==}
     engines: {node: ^16 || ^18 || >=20}
+    deprecated: prom-client has been replaced by @prometheus-io/client
 
   promaphore@1.0.0:
     resolution: {integrity: sha512-Eg8401+KJddVvDULkpy8bR964GMX8xMPegL6NdxTeBH2Wa3L86cZlEHizbkFJikr5u+E3wFoR5dLWJ+1OPyEfw==}
@@ -10625,6 +10790,7 @@ packages:
   qrcode@1.5.4:
     resolution: {integrity: sha512-1ca71Zgiu6ORjHqFBDpnSMTR2ReToX4l1Au1VFLyVeBTFavzQnv5JxMFr3ukHVKpSrSA2MCk0lNJSykjUfz7Zg==}
     engines: {node: '>=10.13.0'}
+    hasBin: true
 
   qs@6.15.3:
     resolution: {integrity: sha512-O9gl3zCl5h5blw1KGUzQKhA5oUXSl8rwUIM5o0S3nCXMliSvy5Dzx7/DJcI+SwgICv+IneSZwhBh1oSyEHA71A==}
@@ -10722,6 +10888,7 @@ packages:
 
   read-binary-file-arch@1.0.6:
     resolution: {integrity: sha512-BNg9EN3DD3GsDXX7Aa8O4p92sryjkmzYYgmgTAc6CA4uGLEDzFfxOxugu21akOxpcXHiEgsYkC6nPsQvLLLmEg==}
+    hasBin: true
 
   read-cmd-shim@6.0.0:
     resolution: {integrity: sha512-1zM5HuOfagXCBWMN83fuFI/x+T/UhZ7k+KIzhrHXcQoeX5+7gmaDYjELQHmmzIodumBHeByBJT4QYS7ufAgs7A==}
@@ -10786,6 +10953,7 @@ packages:
 
   regexp-tree@0.1.27:
     resolution: {integrity: sha512-iETxpjK6YoRWJG5o6hXLwvjYAoW+FEZn9os0PD/b6AP6xQwsa/Y7lCVgIixBbUPMfhu+i2LtdeAqVTgGlQarfA==}
+    hasBin: true
 
   regexp.prototype.flags@1.5.4:
     resolution: {integrity: sha512-dYqgNSZbDwkaJ2ceRd9ojCGjBq+mOm9LmtXnAnEGyHhN/5R7iDW2TRw3h+o/jCFxus3P2LfWIIiwowAjANm7IA==}
@@ -10800,6 +10968,7 @@ packages:
 
   regjsparser@0.13.2:
     resolution: {integrity: sha512-NgRBy2Nx/bE+9F27nVHnqcN5HjyLmecqsqx2PJHu3/IEtADD4WuxuXIVExD5PoSDFVrl78dOonfcOe5O+5nbzQ==}
+    hasBin: true
 
   release-zalgo@1.0.0:
     resolution: {integrity: sha512-gUAyHVHPPC5wdqX/LG4LWtRYtgjxyX78oanFNTMMyFEfOqdC54s3eE82imuWKbOeqYht2CrNf64Qb8vgmmtZGA==}
@@ -10807,6 +10976,7 @@ packages:
 
   repl-swarm@2.3.0:
     resolution: {integrity: sha512-NTH1yudkgNJqIOUPUrbT90IeCCYQV0ZkukSfJjnXwt/l7Y2CIl1Ki839meh7z9QfPslpUihKpk9pjhWw5w8qOw==}
+    hasBin: true
 
   require-addon@1.2.0:
     resolution: {integrity: sha512-VNPDZlYgIYQwWp9jMTzljx+k0ZtatKlcvOhktZ/anNPI3dQ9NXk7cq2U4iJ1wd9IrytRnYhyEocFWbkdPb+MYA==}
@@ -10859,10 +11029,12 @@ packages:
   resolve@1.22.12:
     resolution: {integrity: sha512-TyeJ1zif53BPfHootBGwPRYT1RUt6oGWsaQr8UyZW/eAm9bKoijtvruSDEmZHm92CwS9nj7/fWttqPCgzep8CA==}
     engines: {node: '>= 0.4'}
+    hasBin: true
 
   resolve@2.0.0-next.7:
     resolution: {integrity: sha512-tqt+NBWwyaMgw3zDsnygx4CByWjQEJHOPMdslYhppaQSJUtL/D4JO9CcBBlhPoI8lz9oJIDXkwXfhF4aWqP8xQ==}
     engines: {node: '>= 0.4'}
+    hasBin: true
 
   resource-on-exit@1.0.0:
     resolution: {integrity: sha512-ViJwJAknCkLRJRPR+9SISQQ7R5eRgtdIHLJsM2hHx1MweAJbJxJ5XnMjjq0Lc7ZGv44ufzAqds1nKxiVkdy4ag==}
@@ -10903,6 +11075,8 @@ packages:
 
   rimraf@3.0.2:
     resolution: {integrity: sha512-JZkJMZkAGFFPP2YqXZXPbMlMBgsxzE8ILs4lMIX/2o0L9UBw9O/Y3o6wFw/i9YLapcUJWwqbi3kdxIPdC62TIA==}
+    deprecated: Rimraf versions prior to v4 are no longer supported
+    hasBin: true
 
   rocksdb-native@3.17.2:
     resolution: {integrity: sha512-6kijLkb7NrUFCyWQsIxKIU/iQASxdqLDWrteAeXVEq1MJWrJUcXP6MDPRh8Ux7im2sBereDiI/D4vxYV2ia90A==}
@@ -10939,6 +11113,7 @@ packages:
 
   safe-regex2@5.1.1:
     resolution: {integrity: sha512-mOSBvHGDZMuIEZMdOz/aCEYDCv0E7nfcNsIhUF+/P+xC7Hyf3FkvymqgPbg9D1EdSGu+uKbJgy09K/RKKc7kJA==}
+    hasBin: true
 
   safe-regex@2.1.1:
     resolution: {integrity: sha512-rx+x8AMzKb5Q5lQ95Zoi6ZbJqwCLkqi3XuJXp5P3rT8OEc6sZCJG5AE5dU3lsgRr/F4Bs31jSlVN+j5KrsGu9A==}
@@ -10962,6 +11137,7 @@ packages:
   sandbox-cli-detector@0.2.0:
     resolution: {integrity: sha512-4lyHX0ZU0AZKwjgZ1InxZAa3PNpyEb8rOQ+Zss1ReYmhNzW0Q+h1zE5nvniXN0HaAWZaZE1zgVNEirb0R7LmNg==}
     engines: {node: '>=18.18'}
+    hasBin: true
 
   sax@1.6.1:
     resolution: {integrity: sha512-42tBVwLWnaQvW5zc4HbZrTuWccECCZfBi92FDuwtqxasH+JbPB3/FOKb1m222K42R4WxuxzzMsTswfzgtSu64Q==}
@@ -10978,14 +11154,17 @@ packages:
 
   semver@6.3.1:
     resolution: {integrity: sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==}
+    hasBin: true
 
   semver@7.8.4:
     resolution: {integrity: sha512-rUCObTnP32Q08R2uuIrt7r9PlEonuTmtuXYcW6s5kjdlj3xbnwe+21yXptAUYcMAABLkYYTtnmzb3w3EDZfueA==}
     engines: {node: '>=10'}
+    hasBin: true
 
   semver@7.8.5:
     resolution: {integrity: sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==}
     engines: {node: '>=10'}
+    hasBin: true
 
   send@0.19.2:
     resolution: {integrity: sha512-VMbMxbDeehAxpOtWJXlcUS5E8iXh6QmN+BkRX1GARS3wRaXEEgzCcB10gTQazO42tpNIya8xIyNx8fll1OFPrg==}
@@ -11376,6 +11555,7 @@ packages:
   terser@5.49.0:
     resolution: {integrity: sha512-SNiDnXyHSrxVcIOtVbULzcTmniUiwcV7Nwdyj1twVubeTmbjoa8p69KKDpfkdoOavuM4/GRm1+ykI8qqnavHoA==}
     engines: {node: '>=10'}
+    hasBin: true
 
   test-exclude@6.0.0:
     resolution: {integrity: sha512-cAGWPIyOHU6zlmg88jwm7VRyXnMN7iV68OGAbYDk/Mh/xC/pzVPlQtY6ngoIH/5/tciuhGfvESU8GrHrcxD56w==}
@@ -11412,6 +11592,7 @@ packages:
   tinyld@1.3.4:
     resolution: {integrity: sha512-u26CNoaInA4XpDU+8s/6Cq8xHc2T5M4fXB3ICfXPokUQoLzmPgSZU02TAkFwFMJCWTjk53gtkS8pETTreZwCqw==}
     engines: {node: '>= 12.10.0', npm: '>= 6.12.0', yarn: '>= 1.20.0'}
+    hasBin: true
 
   tmatch@5.0.0:
     resolution: {integrity: sha512-Ib9OtBkpHn07tXP04SlN1SYRxFgTk6wSM2EBmjjxug4u5RXPRVLkdFJSS1PmrQidaSB8Lru9nRtViQBsbxzE5Q==}
@@ -11474,6 +11655,7 @@ packages:
   tsc-alias@1.9.1:
     resolution: {integrity: sha512-sFZdVFthH8uvdplPJrOYGOHcxu6UPtcAcY678JPwEQiMzgLZYFO7Qc/rzELp7ingTc+OxtzH6n+8Pn2eVQep6w==}
     engines: {node: '>=16.20.2'}
+    hasBin: true
 
   tsconfig-paths-webpack-plugin@4.2.0:
     resolution: {integrity: sha512-zbem3rfRS8BgeNK50Zz5SIQgXzLafiHjOwUAvk/38/o1jHn/V5QAgVUcz884or7WYcPaH3N2CIfUc2u0ul7UcA==}
@@ -11496,6 +11678,7 @@ packages:
   tsx@4.23.1:
     resolution: {integrity: sha512-GQHnkIfxyx1wYCOS/wonik5MVRZU9hi1TEZmzGZSCJB1y9YgoZ8H6itNE/u4suE+yLmOzuE4E5S4TZ/ZX2wcWQ==}
     engines: {node: '>=18.0.0'}
+    hasBin: true
 
   tuf-js@4.1.0:
     resolution: {integrity: sha512-50QV99kCKH5P/Vs4E2Gzp7BopNV+KzTXqWeaxrfu5IQJBOULRsTIS9seSsOVT8ZnGXzCyx55nYWAi4qJzpZKEQ==}
@@ -11556,10 +11739,12 @@ packages:
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
     engines: {node: '>=14.17'}
+    hasBin: true
 
   typescript@6.0.3:
     resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
     engines: {node: '>=14.17'}
+    hasBin: true
 
   typical@4.0.0:
     resolution: {integrity: sha512-VAH4IvQ7BDFYglMd7BPRDfLgxZZX4O4TFcRDA6EN5X7erNJJq+McIEp8np9aVtxrCJ6qx4GTYVfOWNjcqwZgRw==}
@@ -11571,6 +11756,7 @@ packages:
 
   ua-parser-js@0.7.41:
     resolution: {integrity: sha512-O3oYyCMPYgNNHuO7Jjk3uacJWZF8loBgwrfd/5LE/HyZ3lUIOdniQ7DNXJcIgZbwioZxk0fLfI4EVnetdiX5jg==}
+    hasBin: true
 
   udx-native@1.20.7:
     resolution: {integrity: sha512-FNG0QpnSt0us2xbLP5mmG5Q0UKdLYjKHuh2eR9VrJSFmoZMzeszYLLhK12+iq5x3eq/rgoGG/lLwPn7IDAr6pg==}
@@ -11674,6 +11860,7 @@ packages:
 
   update-browserslist-db@1.2.3:
     resolution: {integrity: sha512-Js0m9cx+qOgDxo0eMiFGEueWztz+d4+M3rGlmKPT+T4IS/jP4ylw3Nwpu6cpTTP8R1MAC1kF4VbdLt3ARf209w==}
+    hasBin: true
     peerDependencies:
       browserslist: '>= 4.21.0'
 
@@ -11692,9 +11879,13 @@ packages:
 
   uuid@10.0.0:
     resolution: {integrity: sha512-8XkAphELsDnEGrDxUOHB3RGvXz6TeuYSGEZBOjtTtPm2lwhGBjLgOzLHB63IUWfBpNucQjND6d3AOudO+H3RWQ==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
+    hasBin: true
 
   uuid@8.3.2:
     resolution: {integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
+    hasBin: true
 
   v8-to-istanbul@9.3.0:
     resolution: {integrity: sha512-kiGUalWN+rgBJ/1OHZsBtU4rXZOfj/7rKQxULKlIzwzQSvMJUUNgPwJEEh7gU6xEVxC0ahoOBvN2YI8GH6FNgA==}
@@ -11728,6 +11919,7 @@ packages:
   watskeburt@6.0.0:
     resolution: {integrity: sha512-jfiuDABaxSkC71T6oZ3vCS99roYkSHm/+As+G0Dz8taAHQb+SJBvLEm5RlsgG71XdfAj3rv7eudUBTgwcQUPlQ==}
     engines: {node: ^22.13||^24||>=26}
+    hasBin: true
 
   wcwidth@1.0.1:
     resolution: {integrity: sha512-XHPEwS0q6TaxcvG85+8EYkbiCux2XtWG2mkc47Ng2A77BQu9+DqIOJldST4HgPkuea7dvKSj5VgX3P1d4rW8Tg==}
@@ -11735,6 +11927,7 @@ packages:
   web-push@3.6.7:
     resolution: {integrity: sha512-OpiIUe8cuGjrj3mMBFWY+e4MMIkW3SVT+7vEIjvD9kejGUypv8GPDf84JdPWskK8zMRIJ6xYGm+Kxr8YkPyA0A==}
     engines: {node: '>= 16'}
+    hasBin: true
 
   web-streams-polyfill@3.3.3:
     resolution: {integrity: sha512-d2JWLCivmZYTSIoge9MsgFCZrt571BikcWGYkjC1khllbTeDlGqZ2D8vD8E/lJa8WGWbb7Plm8/XJYV7IJHZZw==}
@@ -11781,6 +11974,7 @@ packages:
   which-command@0.1.0:
     resolution: {integrity: sha512-XZyoF5/5hZtXitIwzrU4NKK+Wtbb9aB9CezUEw2Q0wlYK8NUYQxC1rRXgNueYLtBAJwXIb+/tFVk4dozciNJMA==}
     engines: {node: '>=22'}
+    hasBin: true
 
   which-module@2.0.1:
     resolution: {integrity: sha512-iBdZ57RDvnOR9AGBhML2vFZf7h8vmBjhoaZqODJBFWHVtKkDmKuHai3cx5PgVMrX5YDNp27AofYbAwctSS+vhQ==}
@@ -11795,14 +11989,17 @@ packages:
   which@2.0.2:
     resolution: {integrity: sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==}
     engines: {node: '>= 8'}
+    hasBin: true
 
   which@3.0.1:
     resolution: {integrity: sha512-XA1b62dzQzLfaEOSQFTCOd5KFf/1VSzZo7/7TUjnya6u0vGGKzU96UQBZTAThCb2j4/xjBAyii1OhRLJEivHvg==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
+    hasBin: true
 
   which@6.0.1:
     resolution: {integrity: sha512-oGLe46MIrCRqX7ytPUf66EAYvdeMIZYn3WaocqqKZAxrBpkqHfL/qvTyJ/bTk5+AqHCjXmrv3CEWgy368zhRUg==}
     engines: {node: ^20.17.0 || >=22.9.0}
+    hasBin: true
 
   word-wrap@1.2.5:
     resolution: {integrity: sha512-BN22B5eaMMI9UMtjrGd5g5eCYPpCPDUy0FJXbYsaT5zYxjFOckS53SQDE3pWkVoWpHXVb3BrYcEN4Twa55B5cA==}
@@ -11956,6 +12153,7 @@ packages:
   yaml@2.9.0:
     resolution: {integrity: sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA==}
     engines: {node: '>= 14.6'}
+    hasBin: true
 
   yargs-parser@18.1.3:
     resolution: {integrity: sha512-o50j0JeToy/4K6OZcaQmW6lyXXKhq7csREXcDwk2omFPJEwUNOVtJKvmDr9EI1fAJZUyZcRF7kxGBWmRXudrCQ==}
@@ -12020,6 +12218,13 @@ snapshots:
     dependencies:
       zod: 4.4.3
 
+  '@ai-sdk/gateway@4.0.116(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.29
+      '@ai-sdk/provider-utils': 5.0.62(zod@4.4.3)
+      '@vercel/oidc': 3.2.0
+      zod: 4.4.3
+
   '@ai-sdk/gateway@4.0.116(zod@4.6.5)':
     dependencies:
       '@ai-sdk/provider': 4.0.29
@@ -12027,11 +12232,26 @@ snapshots:
       '@vercel/oidc': 3.2.0
       zod: 4.6.5
 
+  '@ai-sdk/openai-compatible@3.0.71(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.29
+      '@ai-sdk/provider-utils': 5.0.62(zod@4.4.3)
+      zod: 4.4.3
+
   '@ai-sdk/openai-compatible@3.0.71(zod@4.6.5)':
     dependencies:
       '@ai-sdk/provider': 4.0.29
       '@ai-sdk/provider-utils': 5.0.62(zod@4.6.5)
       zod: 4.6.5
+
+  '@ai-sdk/provider-utils@5.0.62(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.29
+      '@standard-schema/spec': 1.1.0
+      '@workflow/serde': 4.1.0
+      eventsource-parser: 3.1.0
+      undici: 7.29.0
+      zod: 4.4.3
 
   '@ai-sdk/provider-utils@5.0.62(zod@4.6.5)':
     dependencies:
@@ -15234,12 +15454,12 @@ snapshots:
     dependencies:
       '@octokit/openapi-types': 27.0.0
 
-  '@openclaw/ai@2026.8.1(@aws-sdk/credential-provider-node@3.972.72)(@modelcontextprotocol/sdk@1.30.0(supports-color@8.1.1)(zod@4.4.3))(@opentelemetry/api@1.9.1)(@smithy/signature-v4@5.7.5)(supports-color@8.1.1)(ws@8.21.3)(zod@4.4.3)':
+  '@openclaw/ai@2026.8.1(@aws-sdk/credential-provider-node@3.972.72)(@modelcontextprotocol/sdk@1.30.0(supports-color@8.1.1)(zod@4.4.3))(@opentelemetry/api@1.9.1)(@smithy/signature-v4@5.6.10)(supports-color@8.1.1)(ws@8.21.3)(zod@4.4.3)':
     dependencies:
       '@anthropic-ai/sdk': 0.120.0(zod@4.4.3)
       '@google/genai': 2.18.0(@modelcontextprotocol/sdk@1.30.0(supports-color@8.1.1)(zod@4.4.3))(supports-color@8.1.1)
       '@mistralai/mistralai': 2.6.4(@opentelemetry/api@1.9.1)
-      openai: 7.5.0(@aws-sdk/credential-provider-node@3.972.72)(@smithy/signature-v4@5.7.5)(ws@8.21.3)(zod@4.4.3)
+      openai: 7.5.0(@aws-sdk/credential-provider-node@3.972.72)(@smithy/signature-v4@5.6.10)(ws@8.21.3)(zod@4.4.3)
       partial-json: 0.1.7
       typebox: 1.3.16
     transitivePeerDependencies:
@@ -16635,6 +16855,13 @@ snapshots:
       clean-stack: 2.2.0
       indent-string: 4.0.0
 
+  ai@7.0.143(zod@4.4.3):
+    dependencies:
+      '@ai-sdk/gateway': 4.0.116(zod@4.4.3)
+      '@ai-sdk/provider': 4.0.29
+      '@ai-sdk/provider-utils': 5.0.62(zod@4.4.3)
+      zod: 4.4.3
+
   ai@7.0.143(zod@4.6.5):
     dependencies:
       '@ai-sdk/gateway': 4.0.116(zod@4.6.5)
@@ -17417,9 +17644,9 @@ snapshots:
       bare-env: 3.0.1
       bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-os: 3.9.3
-      bare-path: 3.1.2
+      bare-path: 3.1.1
       cmake-runtime: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
-      cmake-toolchains: 2.2.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
+      cmake-toolchains: 2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       llvm-runtime: 23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       nasm-runtime: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       ninja-runtime: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
@@ -17431,6 +17658,7 @@ snapshots:
       - bare-buffer
       - bare-url
       - musl-sysroot
+      - picolibc-sysroot
       - react-native-b4a
       - wasi-sysroot
 
@@ -17439,9 +17667,9 @@ snapshots:
       bare-env: 3.0.1
       bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-os: 3.9.3
-      bare-path: 3.1.2
+      bare-path: 3.1.1
       cmake-runtime: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      cmake-toolchains: 2.2.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
+      cmake-toolchains: 2.4.0(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
       llvm-runtime: 23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       nasm-runtime: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       ninja-runtime: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
@@ -17453,6 +17681,7 @@ snapshots:
       - bare-buffer
       - bare-url
       - musl-sysroot
+      - picolibc-sysroot
       - react-native-b4a
       - wasi-sysroot
 
@@ -17562,9 +17791,9 @@ snapshots:
 
   bare-module@5.0.3(bare-buffer@3.6.2):
     dependencies:
-      bare-bundle: 1.11.0(bare-buffer@3.6.2)(bare-url@2.5.4)
+      bare-bundle: 1.11.0(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare-module-lexer: 1.6.3(bare-buffer@3.6.2)(bare-url@2.5.4)
-      bare-module-resolve: 1.12.4(bare-url@2.5.4)
+      bare-module-resolve: 1.12.4(bare-url@2.4.6)
       bare-path: 3.1.1
       bare-url: 2.5.4
     optionalDependencies:
@@ -17736,189 +17965,189 @@ snapshots:
       - bare-events
       - react-native-b4a
 
-  bare-runtime-android-arm64@1.37.0(bare-url@2.4.6):
+  bare-runtime-android-arm64@1.37.1(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.4.6)
+      require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-android-arm64@1.37.0(bare-url@2.5.4):
+  bare-runtime-android-arm64@1.37.1(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.5.4)
+      require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-android-arm@1.37.0(bare-url@2.4.6):
+  bare-runtime-android-arm@1.37.1(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.4.6)
+      require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-android-arm@1.37.0(bare-url@2.5.4):
+  bare-runtime-android-arm@1.37.1(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.5.4)
+      require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-android-ia32@1.37.0(bare-url@2.4.6):
+  bare-runtime-android-ia32@1.37.1(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.4.6)
+      require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-android-ia32@1.37.0(bare-url@2.5.4):
+  bare-runtime-android-ia32@1.37.1(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.5.4)
+      require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-android-x64@1.37.0(bare-url@2.4.6):
+  bare-runtime-android-x64@1.37.1(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.4.6)
+      require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-android-x64@1.37.0(bare-url@2.5.4):
+  bare-runtime-android-x64@1.37.1(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.5.4)
+      require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-darwin-arm64@1.37.0(bare-url@2.4.6):
+  bare-runtime-darwin-arm64@1.37.1(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.4.6)
+      require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-darwin-arm64@1.37.0(bare-url@2.5.4):
+  bare-runtime-darwin-arm64@1.37.1(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.5.4)
+      require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-darwin-x64@1.37.0(bare-url@2.4.6):
+  bare-runtime-darwin-x64@1.37.1(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.4.6)
+      require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-darwin-x64@1.37.0(bare-url@2.5.4):
+  bare-runtime-darwin-x64@1.37.1(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.5.4)
+      require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-ios-arm64-simulator@1.37.0(bare-url@2.4.6):
+  bare-runtime-ios-arm64-simulator@1.37.1(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.4.6)
+      require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-ios-arm64-simulator@1.37.0(bare-url@2.5.4):
+  bare-runtime-ios-arm64-simulator@1.37.1(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.5.4)
+      require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-ios-arm64@1.37.0(bare-url@2.4.6):
+  bare-runtime-ios-arm64@1.37.1(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.4.6)
+      require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-ios-arm64@1.37.0(bare-url@2.5.4):
+  bare-runtime-ios-arm64@1.37.1(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.5.4)
+      require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-ios-x64-simulator@1.37.0(bare-url@2.4.6):
+  bare-runtime-ios-x64-simulator@1.37.1(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.4.6)
+      require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-ios-x64-simulator@1.37.0(bare-url@2.5.4):
+  bare-runtime-ios-x64-simulator@1.37.1(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.5.4)
+      require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-linux-arm64@1.37.0(bare-url@2.4.6):
+  bare-runtime-linux-arm64@1.37.1(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.4.6)
+      require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-linux-arm64@1.37.0(bare-url@2.5.4):
+  bare-runtime-linux-arm64@1.37.1(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.5.4)
+      require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-linux-x64@1.37.0(bare-url@2.4.6):
+  bare-runtime-linux-x64@1.37.1(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.4.6)
+      require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-linux-x64@1.37.0(bare-url@2.5.4):
+  bare-runtime-linux-x64@1.37.1(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.5.4)
+      require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-win32-arm64@1.37.0(bare-url@2.4.6):
+  bare-runtime-win32-arm64@1.37.1(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.4.6)
+      require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-win32-arm64@1.37.0(bare-url@2.5.4):
+  bare-runtime-win32-arm64@1.37.1(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.5.4)
+      require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-win32-x64@1.37.0(bare-url@2.4.6):
+  bare-runtime-win32-x64@1.37.1(bare-url@2.4.6):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.4.6)
+      require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-win32-x64@1.37.0(bare-url@2.5.4):
+  bare-runtime-win32-x64@1.37.1(bare-url@2.5.4):
     dependencies:
-      require-asset: 1.2.4(bare-url@2.5.4)
+      require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6):
+  bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6):
     dependencies:
       bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-os: 3.9.3
@@ -17926,26 +18155,26 @@ snapshots:
       bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-subprocess: 6.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     optionalDependencies:
-      bare-runtime-android-arm: 1.37.0(bare-url@2.4.6)
-      bare-runtime-android-arm64: 1.37.0(bare-url@2.4.6)
-      bare-runtime-android-ia32: 1.37.0(bare-url@2.4.6)
-      bare-runtime-android-x64: 1.37.0(bare-url@2.4.6)
-      bare-runtime-darwin-arm64: 1.37.0(bare-url@2.4.6)
-      bare-runtime-darwin-x64: 1.37.0(bare-url@2.4.6)
-      bare-runtime-ios-arm64: 1.37.0(bare-url@2.4.6)
-      bare-runtime-ios-arm64-simulator: 1.37.0(bare-url@2.4.6)
-      bare-runtime-ios-x64-simulator: 1.37.0(bare-url@2.4.6)
-      bare-runtime-linux-arm64: 1.37.0(bare-url@2.4.6)
-      bare-runtime-linux-x64: 1.37.0(bare-url@2.4.6)
-      bare-runtime-win32-arm64: 1.37.0(bare-url@2.4.6)
-      bare-runtime-win32-x64: 1.37.0(bare-url@2.4.6)
+      bare-runtime-android-arm: 1.37.1(bare-url@2.4.6)
+      bare-runtime-android-arm64: 1.37.1(bare-url@2.4.6)
+      bare-runtime-android-ia32: 1.37.1(bare-url@2.4.6)
+      bare-runtime-android-x64: 1.37.1(bare-url@2.4.6)
+      bare-runtime-darwin-arm64: 1.37.1(bare-url@2.4.6)
+      bare-runtime-darwin-x64: 1.37.1(bare-url@2.4.6)
+      bare-runtime-ios-arm64: 1.37.1(bare-url@2.4.6)
+      bare-runtime-ios-arm64-simulator: 1.37.1(bare-url@2.4.6)
+      bare-runtime-ios-x64-simulator: 1.37.1(bare-url@2.4.6)
+      bare-runtime-linux-arm64: 1.37.1(bare-url@2.4.6)
+      bare-runtime-linux-x64: 1.37.1(bare-url@2.4.6)
+      bare-runtime-win32-arm64: 1.37.1(bare-url@2.4.6)
+      bare-runtime-win32-x64: 1.37.1(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
       - bare-url
       - react-native-b4a
 
-  bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4):
+  bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4):
     dependencies:
       bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-os: 3.9.3
@@ -17953,19 +18182,19 @@ snapshots:
       bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-subprocess: 6.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     optionalDependencies:
-      bare-runtime-android-arm: 1.37.0(bare-url@2.5.4)
-      bare-runtime-android-arm64: 1.37.0(bare-url@2.5.4)
-      bare-runtime-android-ia32: 1.37.0(bare-url@2.5.4)
-      bare-runtime-android-x64: 1.37.0(bare-url@2.5.4)
-      bare-runtime-darwin-arm64: 1.37.0(bare-url@2.5.4)
-      bare-runtime-darwin-x64: 1.37.0(bare-url@2.5.4)
-      bare-runtime-ios-arm64: 1.37.0(bare-url@2.5.4)
-      bare-runtime-ios-arm64-simulator: 1.37.0(bare-url@2.5.4)
-      bare-runtime-ios-x64-simulator: 1.37.0(bare-url@2.5.4)
-      bare-runtime-linux-arm64: 1.37.0(bare-url@2.5.4)
-      bare-runtime-linux-x64: 1.37.0(bare-url@2.5.4)
-      bare-runtime-win32-arm64: 1.37.0(bare-url@2.5.4)
-      bare-runtime-win32-x64: 1.37.0(bare-url@2.5.4)
+      bare-runtime-android-arm: 1.37.1(bare-url@2.5.4)
+      bare-runtime-android-arm64: 1.37.1(bare-url@2.5.4)
+      bare-runtime-android-ia32: 1.37.1(bare-url@2.5.4)
+      bare-runtime-android-x64: 1.37.1(bare-url@2.5.4)
+      bare-runtime-darwin-arm64: 1.37.1(bare-url@2.5.4)
+      bare-runtime-darwin-x64: 1.37.1(bare-url@2.5.4)
+      bare-runtime-ios-arm64: 1.37.1(bare-url@2.5.4)
+      bare-runtime-ios-arm64-simulator: 1.37.1(bare-url@2.5.4)
+      bare-runtime-ios-x64-simulator: 1.37.1(bare-url@2.5.4)
+      bare-runtime-linux-arm64: 1.37.1(bare-url@2.5.4)
+      bare-runtime-linux-x64: 1.37.1(bare-url@2.5.4)
+      bare-runtime-win32-arm64: 1.37.1(bare-url@2.5.4)
+      bare-runtime-win32-x64: 1.37.1(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
@@ -18359,9 +18588,9 @@ snapshots:
       - bare-events
       - react-native-b4a
 
-  bare@1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6):
+  bare@1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6):
     dependencies:
-      bare-runtime: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      bare-runtime: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
     optionalDependencies:
       bare-buffer: 3.6.2
       bare-console: 6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -18370,9 +18599,9 @@ snapshots:
       bare-timers: 3.2.1(bare-abort-controller@1.1.2)
       bare-url: 2.4.6
 
-  bare@1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4):
+  bare@1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4):
     dependencies:
-      bare-runtime: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      bare-runtime: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
     optionalDependencies:
       bare-buffer: 3.6.2
       bare-console: 6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -18381,9 +18610,9 @@ snapshots:
       bare-timers: 3.2.1(bare-abort-controller@1.1.2)
       bare-url: 2.5.4
 
-  bare@1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6):
+  bare@1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6):
     dependencies:
-      bare-runtime: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      bare-runtime: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
     optionalDependencies:
       bare-buffer: 3.6.2
       bare-console: 6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -18393,9 +18622,9 @@ snapshots:
       bare-timers: 3.2.1(bare-abort-controller@1.1.2)
       bare-url: 2.4.6
 
-  bare@1.37.0(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4):
+  bare@1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4):
     dependencies:
-      bare-runtime: 1.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      bare-runtime: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
     optionalDependencies:
       bare-buffer: 3.6.2
       bare-console: 6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -19004,7 +19233,7 @@ snapshots:
     dependencies:
       bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-os: 3.9.3
-      bare-path: 3.1.2
+      bare-path: 3.1.1
       bare-subprocess: 5.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     optionalDependencies:
       cmake-runtime-darwin-arm64: 4.3.1(bare-url@2.4.6)
@@ -19023,7 +19252,7 @@ snapshots:
     dependencies:
       bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-os: 3.9.3
-      bare-path: 3.1.2
+      bare-path: 3.1.1
       bare-subprocess: 5.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     optionalDependencies:
       cmake-runtime-darwin-arm64: 4.3.1(bare-url@2.5.4)
@@ -19038,7 +19267,7 @@ snapshots:
       - bare-url
       - react-native-b4a
 
-  cmake-toolchains@2.2.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)):
+  cmake-toolchains@2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)):
     dependencies:
       cmake-runtime: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       llvm-runtime: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
@@ -19047,7 +19276,7 @@ snapshots:
     transitivePeerDependencies:
       - bare-url
 
-  cmake-toolchains@2.2.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)):
+  cmake-toolchains@2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)):
     dependencies:
       cmake-runtime: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       llvm-runtime: 23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
@@ -19056,7 +19285,7 @@ snapshots:
     transitivePeerDependencies:
       - bare-url
 
-  cmake-toolchains@2.2.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)):
+  cmake-toolchains@2.4.0(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)):
     dependencies:
       cmake-runtime: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       llvm-runtime: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
@@ -19065,7 +19294,7 @@ snapshots:
     transitivePeerDependencies:
       - bare-url
 
-  cmake-toolchains@2.2.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)):
+  cmake-toolchains@2.4.0(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)):
     dependencies:
       cmake-runtime: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       llvm-runtime: 23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
@@ -22517,7 +22746,7 @@ snapshots:
     dependencies:
       bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-os: 3.9.3
-      bare-path: 3.1.2
+      bare-path: 3.1.1
       bare-subprocess: 6.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     optionalDependencies:
       llvm-runtime-clang-darwin-arm64: 23.1.5(bare-url@2.4.6)
@@ -22545,7 +22774,7 @@ snapshots:
     dependencies:
       bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-os: 3.9.3
-      bare-path: 3.1.2
+      bare-path: 3.1.1
       bare-subprocess: 6.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     optionalDependencies:
       llvm-runtime-clang-darwin-arm64: 23.1.5(bare-url@2.5.4)
@@ -22573,7 +22802,7 @@ snapshots:
     dependencies:
       bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-os: 3.9.3
-      bare-path: 3.1.2
+      bare-path: 3.1.1
       bare-subprocess: 6.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     optionalDependencies:
       llvm-runtime-clang-darwin-arm64: 23.1.6-1(bare-url@2.4.6)
@@ -22601,7 +22830,7 @@ snapshots:
     dependencies:
       bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-os: 3.9.3
-      bare-path: 3.1.2
+      bare-path: 3.1.1
       bare-subprocess: 6.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     optionalDependencies:
       llvm-runtime-clang-darwin-arm64: 23.1.6-1(bare-url@2.5.4)
@@ -23357,7 +23586,7 @@ snapshots:
     dependencies:
       bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-os: 3.9.3
-      bare-path: 3.1.2
+      bare-path: 3.1.1
       bare-subprocess: 6.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     optionalDependencies:
       nasm-runtime-darwin-arm64: 3.2.0(bare-url@2.4.6)
@@ -23376,7 +23605,7 @@ snapshots:
     dependencies:
       bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-os: 3.9.3
-      bare-path: 3.1.2
+      bare-path: 3.1.1
       bare-subprocess: 6.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     optionalDependencies:
       nasm-runtime-darwin-arm64: 3.2.0(bare-url@2.5.4)
@@ -23489,7 +23718,7 @@ snapshots:
     dependencies:
       bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-os: 3.9.3
-      bare-path: 3.1.2
+      bare-path: 3.1.1
       bare-subprocess: 5.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     optionalDependencies:
       ninja-runtime-darwin-arm64: 1.13.2(bare-url@2.4.6)
@@ -23508,7 +23737,7 @@ snapshots:
     dependencies:
       bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-os: 3.9.3
-      bare-path: 3.1.2
+      bare-path: 3.1.1
       bare-subprocess: 5.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     optionalDependencies:
       ninja-runtime-darwin-arm64: 1.13.2(bare-url@2.5.4)
@@ -23991,23 +24220,23 @@ snapshots:
       is-docker: 2.2.1
       is-wsl: 2.2.0
 
-  openai@6.49.0(@aws-sdk/credential-provider-node@3.972.72)(@smithy/signature-v4@5.7.5)(ws@8.22.2)(zod@4.4.3):
+  openai@6.49.0(@aws-sdk/credential-provider-node@3.972.72)(@smithy/signature-v4@5.6.10)(ws@8.21.3)(zod@4.4.3):
     optionalDependencies:
       '@aws-sdk/credential-provider-node': 3.972.72
-      '@smithy/signature-v4': 5.7.5
-      ws: 8.22.2
+      '@smithy/signature-v4': 5.6.10
+      ws: 8.21.3
       zod: 4.4.3
 
-  openai@7.5.0(@aws-sdk/credential-provider-node@3.972.72)(@smithy/signature-v4@5.7.5)(ws@8.21.3)(zod@4.4.3):
+  openai@7.5.0(@aws-sdk/credential-provider-node@3.972.72)(@smithy/signature-v4@5.6.10)(ws@8.21.3)(zod@4.4.3):
     optionalDependencies:
       '@aws-sdk/credential-provider-node': 3.972.72
-      '@smithy/signature-v4': 5.7.5
+      '@smithy/signature-v4': 5.6.10
       ws: 8.21.3
       zod: 4.4.3
 
   openapi-types@12.1.3: {}
 
-  openclaw@2026.8.1(@aws-sdk/credential-provider-node@3.972.72)(@opentelemetry/api@1.9.1)(@smithy/signature-v4@5.7.5)(encoding@0.1.13)(supports-color@8.1.1):
+  openclaw@2026.8.1(@aws-sdk/credential-provider-node@3.972.72)(@opentelemetry/api@1.9.1)(@smithy/signature-v4@5.6.10)(encoding@0.1.13)(supports-color@8.1.1):
     dependencies:
       '@agentclientprotocol/sdk': 1.4.0(zod@4.4.3)
       '@anthropic-ai/claude-agent-sdk': 0.3.239(@anthropic-ai/sdk@0.120.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(supports-color@8.1.1)(zod@4.4.3))(zod@4.4.3)
@@ -24023,7 +24252,7 @@ snapshots:
       '@mistralai/mistralai': 2.6.4(@opentelemetry/api@1.9.1)
       '@modelcontextprotocol/sdk': 1.30.0(supports-color@8.1.1)(zod@4.4.3)
       '@mozilla/readability': 0.6.0
-      '@openclaw/ai': 2026.8.1(@aws-sdk/credential-provider-node@3.972.72)(@modelcontextprotocol/sdk@1.30.0(supports-color@8.1.1)(zod@4.4.3))(@opentelemetry/api@1.9.1)(@smithy/signature-v4@5.7.5)(supports-color@8.1.1)(ws@8.21.3)(zod@4.4.3)
+      '@openclaw/ai': 2026.8.1(@aws-sdk/credential-provider-node@3.972.72)(@modelcontextprotocol/sdk@1.30.0(supports-color@8.1.1)(zod@4.4.3))(@opentelemetry/api@1.9.1)(@smithy/signature-v4@5.6.10)(supports-color@8.1.1)(ws@8.21.3)(zod@4.4.3)
       '@openclaw/fs-safe': 0.5.6
       '@openclaw/proxyline': 0.3.7(undici@8.10.0)
       '@silvia-odwyer/photon-node': 0.3.4
@@ -24054,7 +24283,7 @@ snapshots:
       minimatch: 10.2.6
       ms: 2.1.3
       node-edge-tts: 1.2.10(supports-color@8.1.1)
-      openai: 7.5.0(@aws-sdk/credential-provider-node@3.972.72)(@smithy/signature-v4@5.7.5)(ws@8.21.3)(zod@4.4.3)
+      openai: 7.5.0(@aws-sdk/credential-provider-node@3.972.72)(@smithy/signature-v4@5.6.10)(ws@8.21.3)(zod@4.4.3)
       p-limit: 7.3.1
       p-map: 7.0.6
       partial-json: 0.1.7
