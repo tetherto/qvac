@@ -25,7 +25,8 @@ import {
   stderrTail,
   WORKER_SHUTDOWN_GRACE_MS,
   workerCrashed,
-  workerStartupFailed
+  workerStartupFailed,
+  type WorkerProcess
 } from './worker-failure'
 
 interface Harness {
@@ -58,6 +59,8 @@ let closePromise: Promise<void> | null = null
 let generation = 0
 // Aborted when the worker dies (crash) or close() runs (planned).
 let workerLifeController: AbortController | null = null
+// Set while a worker is launching and not yet ready; close() aborts it.
+let launchController: AbortController | null = null
 const workerErrors = new WeakMap<WorkerIPC, unknown>()
 
 function findProjectRootSync(): string | undefined {
@@ -244,7 +247,8 @@ async function startBundled(
   harnessFile: string,
   harness: Harness,
   options: { timeout: number; grace: number },
-  onStderr: (chunk: unknown) => void
+  onStderr: (chunk: unknown) => void,
+  onSpawn: (sidecar: WorkerProcess) => void
 ): Promise<{ ipc: WorkerIPC }> {
   const sidecarDir = findInAncestorNodeModules(path.dirname(harnessFile), 'bare-sidecar')
   if (sidecarDir === null || harness.connect === undefined) return harness.start(options)
@@ -254,26 +258,57 @@ async function startBundled(
   const bundle = path.join(path.dirname(harnessFile), STOWED_BUNDLE)
   const sidecar = new Sidecar(bundle, { stdio: ['inherit', 'inherit', 'pipe'] })
   sidecar.stderr?.on('data', onStderr)
+  onSpawn(sidecar)
   return harness.connect(sidecar, options)
+}
+
+/** `pear` with each process it runs passed to `onSpawn`. */
+function pearReporting(pear: PearRuntime, onSpawn: (child: WorkerProcess) => void): PearRuntime {
+  return {
+    run(...args) {
+      const child = pear.run(...args)
+      onSpawn(child as WorkerProcess)
+      return child
+    }
+  }
+}
+
+/** Kills each spawned worker process once `signal` aborts. */
+function killOnAbort(signal: AbortSignal): (child: WorkerProcess) => void {
+  return (child) => {
+    const kill = () => child.kill('SIGKILL')
+    if (signal.aborted) kill()
+    else signal.addEventListener('abort', kill, { once: true })
+  }
 }
 
 async function launchWorker(
   source: WorkerSource,
   timeout: number,
-  onStderr: (chunk: unknown) => void
+  onStderr: (chunk: unknown) => void,
+  onSpawn: (child: WorkerProcess) => void
 ): Promise<WorkerIPC> {
   const options = { timeout, grace: WORKER_SHUTDOWN_GRACE_MS }
-  if ('entry' in source) return (await startUnbundled(source.entry, { ...options, onStderr })).ipc
+  if ('entry' in source) {
+    return (await startUnbundled(source.entry, { ...options, onStderr, onSpawn })).ipc
+  }
   const harness = await importHarness(source.harness)
-  if ('pear' in source) return (await harness.start(source.pear, options)).ipc
-  return (await startBundled(source.harness, harness, options, onStderr)).ipc
+  if ('pear' in source) {
+    return (await harness.start(pearReporting(source.pear, onSpawn), options)).ipc
+  }
+  return (await startBundled(source.harness, harness, options, onStderr, onSpawn)).ipc
 }
 
-async function startWorker(source: WorkerSource, timeout: number): Promise<WorkerIPC> {
+/** Starts the worker; aborting `signal` before it is ready kills the worker process. */
+async function startWorker(
+  source: WorkerSource,
+  timeout: number,
+  signal: AbortSignal
+): Promise<WorkerIPC> {
   const stderr = stderrTail((text) => logger.debug(`[worker] ${text}`))
   let ipc: WorkerIPC
   try {
-    ipc = await launchWorker(source, timeout, stderr.write)
+    ipc = await launchWorker(source, timeout, stderr.write, killOnAbort(signal))
   } catch (error) {
     throw workerStartupFailed(error, stderr.read())
   }
@@ -329,7 +364,17 @@ async function ensureRPC(): Promise<RPC> {
     if (startGeneration !== generation) throw new WorkerShutdownError()
     const timeout = preloaded?.config?.rpcInitTimeoutMs ?? DEFAULT_WORKER_START_TIMEOUT_MS
     const launchedAt = Date.now()
-    const started = await startWorker(resolveWorkerSource(), timeout)
+    const launch = new AbortController()
+    launchController = launch
+    let started: WorkerIPC
+    try {
+      started = await startWorker(resolveWorkerSource(), timeout, launch.signal)
+    } catch (error) {
+      if (startGeneration !== generation) throw new WorkerShutdownError(error)
+      throw error
+    } finally {
+      if (launchController === launch) launchController = null
+    }
     if (startGeneration !== generation) {
       await started.terminate()
       throw new WorkerShutdownError()
@@ -411,6 +456,10 @@ export async function createDuplexSession(payload: string, commandId: number) {
   const req = rpc.request(commandId)
   const requestStream = req.createRequestStream()
   const responseStream = req.createResponseStream({ encoding: 'utf-8' })
+  // bare-rpc cancels the request when the response stream closes first, which
+  // destroys this stream with CANCELLED. Consumers read errors from the
+  // response stream, so pass the error there instead of throwing it uncaught.
+  requestStream.on('error', (error: unknown) => responseStream.destroy(error as Error))
   requestStream.write(payload, 'utf-8')
 
   // Destroy on worker death so consumers' for-await throws instead of hangs.
@@ -441,6 +490,8 @@ export async function close() {
     if (!closing) {
       const pending = rpcPromise
       rpcPromise = null
+      launchController?.abort()
+      launchController = null
       await pending?.catch(() => {})
       return
     }

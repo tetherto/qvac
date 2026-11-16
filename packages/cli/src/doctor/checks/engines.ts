@@ -38,7 +38,7 @@ function indent(lines: string[]) {
  * Compares every package's engines.bare with the Bare the worker runs on: in
  * a phone project, the Bare that Bare Kit runs on Android and iOS, as pinned
  * by the project's bare-stow; otherwise the Bare of the project's bare-sidecar
- * on this machine.
+ * on this machine, or of pear-runtime's for a bundle written for pear-runtime.
  * Reads the generated worker bundle when there is one, since it names exactly
  * what ships; otherwise scans node_modules, which also includes build tools.
  */

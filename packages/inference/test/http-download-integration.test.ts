@@ -3,11 +3,13 @@ import http from 'bare-http1'
 import fs from 'bare-fs'
 import Buffer from 'bare-buffer'
 import { downloadModelFromHttp, isResumableTransferError } from '@/handlers/load-model/http'
+import { partialDownloadPath } from '@/handlers/load-model/download-lock'
 import {
   ChecksumUnavailableError,
   ChecksumValidationFailedError,
   HTTPError,
-  InsecureModelSourceError
+  InsecureModelSourceError,
+  PartialDownloadOfflineError
 } from '@/errors/index'
 import { useTestCacheDir } from './fixtures/test-cache'
 
@@ -98,15 +100,69 @@ test('downloadModelFromHttp: resumes a partial download via a Range/206 request'
   const url = `${server.base}/range-model.gguf`
   const modelPath = await downloadModelFromHttp(url)
 
-  // Truncate the cached file to a partial, then re-download: the size mismatch
-  // forces a Range request the server answers with 206, appending the remainder.
-  fs.writeFileSync(modelPath, CONTENT.subarray(0, CONTENT.length / 2))
+  // An interrupted download's partial forces a Range request answered with 206.
+  fs.rmSync(modelPath)
+  fs.writeFileSync(partialDownloadPath(modelPath), CONTENT.subarray(0, CONTENT.length / 2))
   const resumedPath = await downloadModelFromHttp(url)
 
   t.ok(server.served206(), 'server answered a Range request with 206')
   t.ok(
     bytesEqual(fs.readFileSync(resumedPath) as Buffer, CONTENT),
     'resumed file is complete and correct'
+  )
+  t.absent(fs.existsSync(partialDownloadPath(modelPath)), 'the partial file was moved into place')
+})
+
+test('downloadModelFromHttp: offline with only a partial download fails as an offline partial', async (t) => {
+  const cacheDir = useTestCacheDir()
+  fs.rmSync(cacheDir, { recursive: true, force: true })
+  t.teardown(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
+
+  const server = await startServer()
+  const url = `${server.base}/offline-model.gguf`
+  const modelPath = await downloadModelFromHttp(url)
+  await server.close()
+
+  // An interrupted download left only its partial, and the server is gone.
+  fs.rmSync(modelPath)
+  const partial = CONTENT.subarray(0, CONTENT.length / 2)
+  fs.writeFileSync(partialDownloadPath(modelPath), partial)
+
+  let error: unknown
+  try {
+    await downloadModelFromHttp(url)
+  } catch (caught) {
+    error = caught
+  }
+  t.ok(error instanceof PartialDownloadOfflineError, 'fails as an offline partial download')
+  t.is(
+    fs.statSync(partialDownloadPath(modelPath)).size,
+    partial.length,
+    'the partial is kept for a later resume'
+  )
+})
+
+test('downloadModelFromHttp: replaces an incomplete file at the model path instead of appending', async (t) => {
+  const cacheDir = useTestCacheDir()
+  fs.rmSync(cacheDir, { recursive: true, force: true })
+  const server = await startServer()
+  t.teardown(async () => {
+    await server.close()
+    fs.rmSync(cacheDir, { recursive: true, force: true })
+  })
+
+  const url = `${server.base}/in-place-model.gguf`
+  const modelPath = await downloadModelFromHttp(url)
+
+  // A half file at the model path may be an older SDK's download in progress;
+  // appending to it corrupted shared caches, so it is replaced instead.
+  fs.writeFileSync(modelPath, CONTENT.subarray(0, CONTENT.length / 2))
+  const replacedPath = await downloadModelFromHttp(url)
+
+  t.absent(server.served206(), 'no Range request was made against the in-place file')
+  t.ok(
+    bytesEqual(fs.readFileSync(replacedPath) as Buffer, CONTENT),
+    'the model path now holds the complete file'
   )
 })
 

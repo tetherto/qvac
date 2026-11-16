@@ -1,8 +1,8 @@
 name: QVAC Node Consumer Tests
 # Reusable workflow for the runner-hosted SDK consumers that share one job
 # shape: desktop, electron, and python. Strict Snap needs LXD, snapd and its own
-# model cache, so it runs from test-snap-sdk.yml; both build their legs from the
-# same sdk-e2e-node-* actions.
+# model directory, so it runs from test-snap-sdk.yml; both build their legs from
+# the same sdk-e2e-node-* actions and share the per-model cache entries.
 
 on:
   workflow_call:
@@ -185,6 +185,8 @@ jobs:
 
   test-node:
     name: "[${{ inputs.consumer }}] test (${{ matrix.os }})"
+    # Only on-merge-sdk-e2e-model-cache.yml writes the model cache.
+    cache-mode: read
     strategy:
       matrix:
         os: ${{ fromJSON(inputs.platforms) }}
@@ -216,6 +218,7 @@ jobs:
             packages/inference
             ${{ inputs.consumer == 'python' && 'packages/sdk-python' || '' }}
             .github/actions/sdk-e2e-fail-on-failures
+            .github/actions/sdk-e2e-model-cache/src
             .github/actions/sdk-e2e-prepare-inference
             .github/actions/sdk-e2e-prepare-test-suite
             .github/actions/sdk-python-venv
@@ -232,6 +235,7 @@ jobs:
           persist-credentials: false
           path: .sdk-e2e-workflow
           sparse-checkout: |
+            .github/actions/sdk-e2e-model-cache
             .github/actions/sdk-e2e-node-leg
             .github/actions/sdk-e2e-node-prepare
             .github/actions/sdk-e2e-node-results
@@ -239,7 +243,7 @@ jobs:
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: 22
+          node-version: 24
 
       - name: Resolve leg
         id: leg
@@ -296,32 +300,57 @@ jobs:
           console.log(`SDK cache dir: ${cacheDir}`);
           console.log(`Config written to: ${configPath}`);
 
+      # Per-model cache: plan the models this leg's tests use, restore those, bootstrap the rest.
+      # No plan (older checkout or planner failure) bootstraps everything uncached.
+      - name: Plan models cache
+        id: models-plan
+        continue-on-error: true
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          FAMILY: ${{ inputs.consumer }}
+          TEST_FILTER: ${{ steps.leg.outputs.filter }}
+          SUITE: ${{ inputs.suite }}
+          EXCLUDE_SUITE: ${{ inputs.exclude-suite }}
+          INCLUDE_TESTS: ${{ inputs.include }}
+          CACHE_ROOT: ${{ inputs.working-directory }}/.qvac-cache
+        run: |
+          if [ ! -f scripts/model-cache-plan.mjs ]; then
+            echo "::warning::This checkout predates the per-model cache, so every model is downloaded uncached. Rebase onto main."
+            exit 0
+          fi
+          node scripts/model-cache-plan.mjs \
+            "--family=$FAMILY" \
+            "--suite=$SUITE" \
+            "--exclude-suite=$EXCLUDE_SUITE" \
+            "--filter=$TEST_FILTER" \
+            "--include=$INCLUDE_TESTS" \
+            "--cache-root=$CACHE_ROOT" \
+            "--out=$RUNNER_TEMP/sdk-e2e-model-cache-plan.json"
+
       - name: Restore models cache
         id: models-cache
-        if: inputs.cache-models != false
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        if: inputs.cache-models != false && steps.models-plan.outputs.plan != ''
+        continue-on-error: true
+        uses: ./.sdk-e2e-workflow/.github/actions/sdk-e2e-model-cache
         with:
-          path: ${{ inputs.working-directory }}/.qvac-cache
-          key: qvac-models-${{ inputs.consumer == 'python' && 'desktop' || inputs.consumer }}-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
-          enableCrossOsArchive: true
+          mode: restore
+          plan: ${{ steps.models-plan.outputs.plan }}
 
-      # The Python leg resolves the same resource table against the same
-      # registry, so it bootstraps and caches as `desktop` rather than paying
-      # for a second copy of every model.
-      - name: Bootstrap (download models)
-        if: steps.models-cache.outputs.cache-hit != 'true'
+      - name: Bootstrap (download missing models)
+        if: steps.models-cache.outputs.complete != 'true'
+        shell: bash
         working-directory: ${{ inputs.working-directory }}
-        run: npx qvac-test run:bootstrap:${{ inputs.consumer == 'python' && 'desktop' || inputs.consumer }} --config=.
-
-      # Save right after bootstrap. On parallel runners, first to finish reserves the key;
-      # others get a non-fatal "unable to reserve" warning which is expected.
-      - name: Save models cache
-        if: steps.models-cache.outputs.cache-hit != 'true' && inputs.cache-models != false
-        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          path: ${{ inputs.working-directory }}/.qvac-cache
-          key: qvac-models-${{ inputs.consumer == 'python' && 'desktop' || inputs.consumer }}-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
-          enableCrossOsArchive: true
+        env:
+          PLAN: ${{ steps.models-plan.outputs.plan }}
+          CONSUMER: ${{ inputs.consumer == 'python' && 'desktop' || inputs.consumer }}
+          QVAC_E2E_BOOTSTRAP_MODELS: ${{ steps.models-cache.outputs.missing-models }}
+        run: |
+          if [ -n "$PLAN" ]; then
+            node scripts/model-cache-bootstrap.mjs --plan "$PLAN"
+          else
+            npx qvac-test "run:bootstrap:$CONSUMER" --config=.
+          fi
 
       - name: Build Electron package
         if: inputs.consumer == 'electron'

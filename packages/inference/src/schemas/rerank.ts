@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { trackedRequestSchema } from '@/schemas/request-base'
 
 const rerankFields = {
   query: z.string().min(1).describe('Query to score each document against.'),
@@ -12,11 +13,12 @@ export const rerankRequestBodySchema = z.object(rerankFields).strict()
 
 const envelope = { modelId: z.string().min(1) }
 export const rerankParamsSchema = rerankRequestBodySchema.extend(envelope)
-export const rerankRequestSchema = rerankRequestBodySchema.extend({
-  ...envelope,
-  type: z.literal('rerank'),
-  requestId: z.string().min(1).optional()
-})
+export const rerankRequestSchema = rerankRequestBodySchema
+  .extend({
+    ...envelope,
+    type: z.literal('rerank')
+  })
+  .extend(trackedRequestSchema.shape)
 
 export const rerankScoresSchema = z
   .array(z.number())

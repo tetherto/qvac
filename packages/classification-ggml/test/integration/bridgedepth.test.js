@@ -48,6 +48,30 @@ function floats(name) {
   return new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength))
 }
 
+// A pair wider than the 1280x720 box the model runs at, see docs/bridgedepth.md.
+// A narrow height keeps the run cheap; the shift is a few pixels of disparity.
+const WIDE_WIDTH = 1600
+const WIDE_HEIGHT = 64
+const WIDE_SHIFT = 4
+
+// Packed RGB stripes; the right view is the left shifted by `shift` pixels.
+// The periods are coprime primes so the pattern does not repeat in a small
+// window, and `level` spreads the values over the 0..255 range.
+function texture(width, height, shift) {
+  const xPeriod = 37
+  const yPeriod = 23
+  const level = 7
+  const rgb = new Uint8Array(width * height * 3)
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      for (let c = 0; c < 3; c++) {
+        rgb[(y * width + x) * 3 + c] = ((((x + shift) % xPeriod) + (y % yPeriod) + c) * level) % 256
+      }
+    }
+  }
+  return rgb
+}
+
 function maxAbsDiff(a, b) {
   let max = 0
   for (let i = 0; i < a.length; i++) max = Math.max(max, Math.abs(a[i] - b[i]))
@@ -122,6 +146,17 @@ async function checkParity(t, selected, check) {
     const raw = await model.infer(small, small, { width: 64, height: 48, channels: 3 })
     t.is(raw.disparity.length, 64 * 48)
     t.ok(raw.disparity.every(Number.isFinite), 'raw RGB input gives a finite map')
+
+    // Wider than 1280, so it runs downsampled to 1280x51 and the disparity
+    // comes back at the input size. A short pair keeps the run cheap on mobile.
+    const wide = { width: WIDE_WIDTH, height: WIDE_HEIGHT, channels: 3 }
+    const wideLeft = texture(wide.width, wide.height, 0)
+    const wideRight = texture(wide.width, wide.height, WIDE_SHIFT)
+    const resized = await model.infer(wideLeft, wideRight, wide)
+    t.is(resized.width, wide.width, 'downsampled run returns the input width')
+    t.is(resized.height, wide.height, 'downsampled run returns the input height')
+    t.is(resized.disparity.length, wide.width * wide.height)
+    t.ok(resized.disparity.every(Number.isFinite), 'downsampled run gives a finite map')
 
     // Calls at other sizes in between must not change the fixture result.
     const again = await model.infer(left, right)

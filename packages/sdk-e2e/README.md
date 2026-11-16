@@ -338,8 +338,8 @@ in the form.
 `test-sdk.yml` fans out one reusable workflow per family, and each family gets one job per runner:
 
 - `test-node-sdk.yml` runs desktop, Electron, and Python. Their job is the same apart from a few steps.
-- `test-snap-sdk.yml` runs strict Snap. The LXD build, the snapd install, and the in-snap model cache are
-  its own steps, so none of them show up as skipped steps on the other families' jobs.
+- `test-snap-sdk.yml` runs strict Snap. The LXD build, the snapd install, and staging the cached models
+  into the Snap are its own steps, so none of them show up as skipped steps on the other families' jobs.
 - `test-android-sdk.yml` and `test-ios-sdk.yml` run the mobile consumers on Device Farm. The Android
   workflow runs either app (`app: js | kotlin`); the Kotlin one reports as its own family, `kotlin-android`.
 
@@ -352,8 +352,30 @@ workflow was loaded from, not from `test-version`, so a PR branch or tag that pr
 
 Desktop, Electron, and Python stay separate jobs on the same runner label. Merging them into one job per
 OS would run the three in sequence, end every other client's results when one fails, and change the
-`results-<family>-<platform>` contract that reports and reruns read. Electron would not share the desktop
-model cache either, because it bootstraps a different set of models.
+`results-<family>-<platform>` contract that reports and reruns read. They would not save model downloads
+either: the model cache below is shared per model, not per job.
+
+### Model cache in CI
+
+Each model is its own cache entry, keyed by its registry `sha256Checksum`, so a leg restores only the
+models its run uses, a registry change invalidates only the models it changed, and every family shares
+one copy of a model:
+
+1. `scripts/model-cache-plan.mjs` resolves the leg's tests as the run will (`selectRunTests` from
+   `@qvac/test-suite`) and lists the files of every model they use, with paths from
+   `@qvac/inference/model-cache-layout`.
+2. `.github/actions/sdk-e2e-model-cache` restores those entries, and `scripts/model-cache-bootstrap.mjs`
+   downloads only what the restore did not provide.
+3. Only `on-merge-sdk-e2e-model-cache.yml` on `main` saves (push, every two days, dispatch), and only
+   files whose sha256 matches the registry. Test jobs run with `cache-mode: read`. Every PR and branch
+   reads those entries. A model a PR adds is downloaded on that PR's runs until it reaches `main`.
+
+To see what a selection would restore, with `@qvac/inference` built from the branch:
+
+```bash
+npm run build
+node scripts/model-cache-plan.mjs --family=desktop --suite=smoke --out=plan.json
+```
 
 ## Developing new tests
 

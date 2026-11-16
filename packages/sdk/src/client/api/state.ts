@@ -1,5 +1,5 @@
 import { send } from '@/client/rpc/rpc-client'
-import type { LifecycleState } from '@qvac/inference/surface'
+import type { LifecycleState, RPCOptions } from '@qvac/inference/surface'
 import { InvalidResponseError } from '@/utils/errors-client'
 
 /**
@@ -22,8 +22,8 @@ import { InvalidResponseError } from '@/utils/errors-client'
  *   await resume();
  * }
  */
-export async function state(): Promise<LifecycleState> {
-  const response = await send({ type: 'state' })
+export async function state(options?: RPCOptions): Promise<LifecycleState> {
+  const response = await send({ type: 'state' }, options)
   if (response.type !== 'state') {
     throw new InvalidResponseError('state')
   }

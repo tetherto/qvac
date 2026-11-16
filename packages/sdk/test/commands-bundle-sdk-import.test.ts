@@ -5,8 +5,9 @@ import os from 'node:os'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { bundleSdk, describeMissingAddonBuild } from '@/commands/bundle'
+import { SCRATCH_OWNER_FILE, scratchFolderFor } from '@/commands/bundle/scratch'
 import {
   BARE_PACK_NODE_ENGINES,
   assertNodeCanBundle,
@@ -27,6 +28,7 @@ import {
 } from '@/utils/errors-client'
 import { loadTargetPackage } from '@/commands/bundle/targets'
 import { parseBareKitPins } from '@/commands/verify/bare-kit-runtime'
+import { bundleTargetOf } from '@/client/rpc/bundle-stamp'
 import { linkDependency } from './fixtures/link-dependency'
 
 const SDK_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -246,7 +248,9 @@ describe('inference native dependency boundary', () => {
     )
     const bundlePath = path.join(projectRoot, 'index.bundle')
     const base = path.parse(fs.realpathSync(projectRoot)).root
-    const packBin = path.join(path.dirname(require.resolve('bare-pack/package')), 'bin.js')
+    // The SDK reaches bare-pack only through bare-stow, which declares it.
+    const bareStowRequire = createRequire(require.resolve('bare-stow/package'))
+    const packBin = path.join(path.dirname(bareStowRequire.resolve('bare-pack/package')), 'bin.js')
     execFileSync(
       packBin,
       ['--host', HOST, '--linked', '--base', base, '--out', bundlePath, entryPath],
@@ -353,6 +357,7 @@ describe('bundleSdk', () => {
     const harness = path.join(outputDir, 'src', 'main', 'kotlin', 'com', 'example', 'worker')
     assert.match(fs.readFileSync(path.join(harness, 'Harness.kt'), 'utf8'), /suspend fun start/)
     assert.match(fs.readFileSync(path.join(outputDir, 'build.gradle'), 'utf8'), /bare-kit-kotlin/)
+    assert.equal(bundleTargetOf(result.bundlePath), 'bare-kit')
   })
 
   it('bundles for pear-runtime with the target package the SDK installs', async (t) => {
@@ -468,6 +473,34 @@ describe('bundleSdk', () => {
 
     assert.ok(fs.existsSync(path.join(outputDir, 'index.js')))
     assert.equal(result.bundlePath, path.join(outputDir, 'index.bundle'))
+  })
+
+  it('bundles into an empty output folder named previous', async (t) => {
+    const { projectRoot, configPath } = fakeBundleSdkProject(t)
+    const outputDir = path.join(projectRoot, 'out', 'previous')
+    fs.mkdirSync(outputDir, { recursive: true })
+
+    const result = await bundleSdk({ projectRoot, configPath, outputDir, quiet: true })
+
+    assert.ok(fs.existsSync(path.join(outputDir, 'index.js')))
+    assert.equal(result.bundlePath, path.join(outputDir, 'index.bundle'))
+  })
+
+  it('resolves a relative output folder against the project root', async (t) => {
+    const { projectRoot, configPath } = fakeBundleSdkProject(t)
+    const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-bundle-cwd-')))
+    const originalCwd = process.cwd()
+    process.chdir(cwd)
+    t.after(() => {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    })
+
+    const result = await bundleSdk({ projectRoot, configPath, outputDir: 'out', quiet: true })
+
+    assert.equal(result.outputDir, path.join(projectRoot, 'out'))
+    assert.ok(fs.existsSync(path.join(projectRoot, 'out', 'index.js')))
+    assert.deepEqual(fs.readdirSync(cwd), [])
   })
 
   it('bundles a PCM-only audio plugin without linking bare-ffmpeg', async (t) => {
@@ -776,9 +809,22 @@ describe('bundleSdk', () => {
       link: false,
       quiet: true
     }
-    await bundleSdk(options)
+    const result = await bundleSdk(options)
     const files = fs.readdirSync(workerDir)
     const contents = files.map((file) => fs.readFileSync(path.join(workerDir, file)))
+    const entry = fs.readFileSync(result.entryPath, 'utf8')
+    writeFile(
+      path.join(projectRoot, 'node_modules', 'extra-plugin', 'package.json'),
+      JSON.stringify({ name: 'extra-plugin', exports: { './plugin': './plugin.js' } })
+    )
+    writeFile(
+      path.join(projectRoot, 'node_modules', 'extra-plugin', 'plugin.js'),
+      'module.exports = {}\n'
+    )
+    writeFile(
+      configPath,
+      JSON.stringify({ plugins: ['@qvac/sdk/llamacpp-completion/plugin', 'extra-plugin/plugin'] })
+    )
     addAddon(path.join(sdkPath, 'node_modules', 'phone-addon'), 'phone-addon')
     writeFile(
       path.join(sdkPath, 'node_modules', 'phone-addon', 'index.js'),
@@ -800,10 +846,55 @@ describe('bundleSdk', () => {
     files.forEach((file, index) => {
       assert.ok(fs.readFileSync(path.join(workerDir, file)).equals(contents[index]!))
     })
+    assert.equal(fs.readFileSync(result.entryPath, 'utf8'), entry)
     assert.deepEqual(
       fs.readdirSync(path.dirname(workerDir)).filter((name) => name.startsWith('.')),
       []
     )
+  })
+
+  it("bundles the SDK's bare-type in place of a newer one the project installs", async (t) => {
+    const { projectRoot, sdkPath, configPath } = fakeBundleSdkProject(t)
+    linkDependency(projectRoot, 'react-native-bare-kit', SDK_DIR)
+    linkDependency(projectRoot, 'bare-stow-target-react-native', SDK_DIR)
+    linkDependency(projectRoot, 'bare-stow', SDK_DIR)
+    const writeBareType = (dir: string, version: string, bare: string) => {
+      // bare-stow's dependencies are linked into the project, bare-type among them.
+      fs.rmSync(dir, { recursive: true, force: true })
+      writeFile(
+        path.join(dir, 'package.json'),
+        JSON.stringify({ name: 'bare-type', version, main: 'index.js', engines: { bare } })
+      )
+      writeFile(path.join(dir, 'index.js'), `module.exports = ${JSON.stringify(version)}\n`)
+    }
+    writeBareType(path.join(projectRoot, 'node_modules', 'bare-type'), '99.0.0', '>=99.0.0')
+    writeBareType(path.join(sdkPath, 'node_modules', 'bare-type'), '1.4.0', '>=1.32.0')
+    const importer = path.join(projectRoot, 'node_modules', 'uses-bare-type')
+    writeFile(
+      path.join(importer, 'package.json'),
+      JSON.stringify({ name: 'uses-bare-type', version: '1.0.0', main: 'index.js' })
+    )
+    writeFile(path.join(importer, 'index.js'), "module.exports = require('bare-type')\n")
+    addPlugin(
+      sdkPath,
+      'llamacpp-completion',
+      'llm-plugin.js',
+      "import type from 'uses-bare-type'\nexport const llmPlugin = { type }\n"
+    )
+
+    const result = await bundleSdk({
+      projectRoot,
+      configPath,
+      target: 'react-native',
+      hosts: ['android-arm64'],
+      link: false,
+      quiet: true
+    })
+
+    const files = Object.keys((await readBundle(result.bundlePath)).files)
+    const bareTypes = files.filter((file) => file.endsWith('/bare-type/index.js'))
+    assert.deepEqual(bareTypes.length, 1, files.join('\n'))
+    assert.match(bareTypes[0]!, /@qvac\/sdk\/node_modules\/bare-type\/index\.js$/)
   })
 
   it('keeps the last good bundle when the native module cannot be written', async (t) => {
@@ -827,6 +918,64 @@ describe('bundleSdk', () => {
     )
 
     assert.ok(fs.existsSync(path.join(workerDir, 'first-bundle')))
+  })
+
+  it('keeps the last good bundle in its scratch folder when it cannot be moved back', async (t) => {
+    const { projectRoot, configPath, workerDir } = fakeBundleSdkProject(t)
+    await bundleSdk({ projectRoot, configPath, quiet: true })
+    const harness = fs.readFileSync(path.join(workerDir, 'index.js'), 'utf8')
+    const rename = fs.promises.rename
+    t.mock.method(fs.promises, 'rename', async (from: string, to: string) => {
+      if (to === workerDir) throw new Error('EACCES: permission denied')
+      return rename(from, to)
+    })
+
+    const error = await bundleSdk({ projectRoot, configPath, quiet: true }).then(
+      () => assert.fail('the bundle replaced the output folder'),
+      (error: unknown) => error as Error
+    )
+
+    const qvacDir = path.dirname(workerDir)
+    const scratch = fs.readdirSync(qvacDir).filter((name) => name.startsWith('.worker-'))
+    assert.equal(scratch.length, 1)
+    const backups = fs
+      .readdirSync(path.join(qvacDir, scratch[0]!))
+      .filter((name) => name !== path.basename(workerDir) && name !== SCRATCH_OWNER_FILE)
+    assert.equal(backups.length, 1)
+    const backup = path.join(qvacDir, scratch[0]!, backups[0]!)
+    assert.equal(fs.readFileSync(path.join(backup, 'index.js'), 'utf8'), harness)
+    assert.ok(error.message.includes(backup), error.message)
+  })
+
+  it('removes scratch folders an interrupted bundle left behind', async (t) => {
+    const { projectRoot, configPath, workerDir } = fakeBundleSdkProject(t)
+    const qvacDir = path.dirname(workerDir)
+    const uuid = '0f8e6c2a-3b1d-4e5f-9a7b-1c2d3e4f5a6b'
+    const stale = [`.worker-${uuid}`, `.worker-scan-${uuid}`]
+    writeFile(path.join(qvacDir, stale[0]!, 'worker', 'index.js'), 'half-written bundle')
+    writeFile(path.join(qvacDir, stale[1]!, 'worker-scan', 'index.js'), 'half-written scan')
+    const holdingBackup = `.worker-1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d`
+    writeFile(path.join(qvacDir, holdingBackup, 'worker.previous', 'index.js'), 'last good bundle')
+
+    await bundleSdk({ projectRoot, configPath, quiet: true })
+
+    const left = fs.readdirSync(qvacDir).filter((name) => name.startsWith('.'))
+    assert.deepEqual(left, [holdingBackup])
+  })
+
+  it('keeps the scratch folders of a bundle that is still running', async (t) => {
+    const { projectRoot, configPath, workerDir } = fakeBundleSdkProject(t)
+    const running = await scratchFolderFor(workerDir)
+    writeFile(path.join(running, 'index.js'), 'bundle being written')
+    const exited = `.worker-0f8e6c2a-3b1d-4e5f-9a7b-1c2d3e4f5a6b`
+    writeFile(path.join(path.dirname(workerDir), exited, 'worker', 'index.js'), 'half-written')
+    const { pid } = spawnSync(process.execPath, ['-e', ''])
+    writeFile(path.join(path.dirname(workerDir), exited, SCRATCH_OWNER_FILE), String(pid))
+
+    await bundleSdk({ projectRoot, configPath, quiet: true })
+
+    assert.equal(fs.readFileSync(path.join(running, 'index.js'), 'utf8'), 'bundle being written')
+    assert.equal(fs.existsSync(path.join(path.dirname(workerDir), exited)), false)
   })
 
   it('leaves folders next to the output folder alone', async (t) => {

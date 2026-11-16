@@ -313,7 +313,7 @@ node examples/profile-download.js "model/path"
 
 ## Configuration
 
-- `storage`: Path for local storage (defaults to temporary directory in `os.tmpdir()`, or `REGISTRY_STORAGE` env var if set).
+- `storage`: Path for local storage (defaults to temporary directory in `os.tmpdir()`, removed on `close()`, or `REGISTRY_STORAGE` env var if set).
 - `registryCoreKey`: z-base-32 or hex string of the hypercore key (defaults to `QVAC_REGISTRY_CORE_KEY` env var).
 - `logger`: Logger configuration object
   - `level`: Log level ('debug', 'info', 'warn', 'error')

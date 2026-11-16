@@ -4,6 +4,7 @@ import {
   type CompletionClientParams
 } from '@/schemas/completion-stream'
 import { toolSchema, toolSearchOptionsSchema } from '@/schemas/tools'
+import { sessionScopedRequestSchema } from '@/schemas/request-base'
 
 const modelId = z.string().min(1).describe('Loaded language model to tokenize with.')
 const text = z
@@ -49,7 +50,11 @@ export const calcTokensParamsSchema = z
   .refine(hasPrompt, promptRequired)
 
 export const calcTokensRequestSchema = z
-  .object({ ...promptFields, type: z.literal('calcTokens') })
+  .object({
+    ...promptFields,
+    type: z.literal('calcTokens'),
+    ...sessionScopedRequestSchema.shape
+  })
   .strict()
   .meta(promptRequiredJsonSchema)
   .refine(hasPrompt, promptRequired)

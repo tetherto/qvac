@@ -126,13 +126,21 @@ The following script implements the full loop with VAD tuning, mic gating during
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/VoiceAssistant.kt title="VoiceAssistant.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 Speak into the mic; transcriptions and the assistant's spoken responses will follow. Press `Ctrl+C` to quit. Models are downloaded on first run (~1 GB total) and cached locally; subsequent runs work fully offline.
 
 ### Helpers
 
-The JS and TS versions import two helpers: `mic-input` from `../audio/` and `utils` from `../tts/`, relative to the script. The Python example includes them inline.
+The JS and TS versions import two helpers: `mic-input` from `../audio/` and `utils` from `../tts/`, relative to the script. The Python and Kotlin examples include them inline.
 
 #### mic-input
 
@@ -220,5 +228,5 @@ If you're running with headphones (mic cannot hear the speaker), you can loosen 
 - **System prompt:** edit `SYSTEM_PROMPT` at the top of the script. The default instructs the LLM to be concise and avoid markdown so responses are pleasant to listen to.
 
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart), the [Python quickstart](/sdk/python-sdk#quickstart), or the [Kotlin quickstart](/sdk/kotlin-sdk#quickstart).
 </Callout>

@@ -22,6 +22,9 @@ import type { IndexStorage } from '../types.js'
 export const REBUILD_BATCH_SIZE = 1024
 export const DEFAULT_SNAPSHOT_EVERY = 256
 export const DEFAULT_INDEX_STORAGE: IndexStorage = 'q8'
+// TurboVec's remove() only tombstones a row; compact once removed rows reach
+// this share of the live ones, so replacing documents doesn't grow memory.
+export const COMPACT_SHARE = 0.25
 
 export interface IndexConfig {
   // Where snapshots go. Without it the index lives in memory and is rebuilt
@@ -51,6 +54,8 @@ interface Entry {
   normalize: boolean
   revision: number
   persistedRevision: number
+  // Rows removed since the index was built, loaded or last compacted.
+  tombstones: number
   // Set while the index is loading, replaying or rebuilding; commits skip the
   // entry then and the next search replays them from `mutations`.
   syncing: Promise<void> | null
@@ -102,6 +107,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
         normalize: false,
         revision: 0,
         persistedRevision: 0,
+        tombstones: 0,
         syncing: null,
         broken: false,
         persisting: Promise.resolve(),
@@ -248,8 +254,9 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
           vectors.push(vector)
         }
       }
-      for (const id of unpackNativeIds(mutation.removed)) native.remove(id)
+      removeRows(entry, native, unpackNativeIds(mutation.removed))
       addRows(entry, native, ids, concat(vectors, native.dim))
+      compactIfNeeded(entry, native)
       entry.revision = mutation.revision
       expected++
     }
@@ -305,9 +312,10 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       if (entry.namespace !== namespace || !entry.native || entry.syncing) continue
       if (entry.revision !== revision - 1) continue
       try {
-        for (const id of removed) entry.native.remove(id)
+        removeRows(entry, entry.native, removed)
         rows ??= vectors()
         addRows(entry, entry.native, added, entry.normalize ? rows.slice() : rows)
+        compactIfNeeded(entry, entry.native)
         entry.revision = revision
       } catch {
         // The commit is durable; the next search rebuilds from HyperDB.
@@ -393,6 +401,7 @@ function install(entry: Entry, native: NativeIndex, revision: number): void {
   if (entry.native && entry.native !== native) entry.native.dispose()
   entry.native = native
   entry.revision = revision
+  entry.tombstones = 0
   entry.needsPrepare = true
 }
 
@@ -401,6 +410,20 @@ function discard(entry: Entry): void {
   entry.native = null
   entry.revision = 0
   entry.persistedRevision = 0
+  entry.tombstones = 0
+}
+
+function removeRows(entry: Entry, native: NativeIndex, ids: bigint[]): void {
+  for (const id of ids) {
+    if (native.remove(id)) entry.tombstones++
+  }
+}
+
+function compactIfNeeded(entry: Entry, native: NativeIndex): void {
+  if (entry.tombstones === 0 || entry.tombstones < native.length * COMPACT_SHARE) return
+  native.compact()
+  entry.tombstones = 0
+  entry.needsPrepare = true
 }
 
 function addRows(entry: Entry, native: NativeIndex, ids: bigint[], vectors: Float32Array): void {

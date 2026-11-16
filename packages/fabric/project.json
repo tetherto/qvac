@@ -66,10 +66,7 @@
         "linux-x64": {
           "args": "--platform=linux --arch=x64",
           "ci": {
-            "runner": "linux_ubuntu2204_x64",
-            "setup": [
-              "xdna"
-            ]
+            "runner": "linux_ubuntu2204_x64"
           },
           "commands": [
             {
@@ -227,10 +224,7 @@
       "configurations": {
         "linux-x64": {
           "ci": {
-            "runner": "linux_ubuntu2204_x64",
-            "setup": [
-              "xdna"
-            ]
+            "runner": "linux_ubuntu2204_x64"
           }
         }
       },

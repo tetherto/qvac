@@ -6,6 +6,7 @@ import type { ShardFileMetadata } from '@/schemas/index'
 import { calculateCachedFileChecksum } from '@/utils/checksum'
 import { validateAndJoinPath, joinWithinBase } from '@/utils/path-security'
 import { generateShortHash } from '@/utils/formatting'
+import { getSingleFileCacheName } from '@/utils/cache/layout'
 import { getEngineLogger } from '@/logging/index'
 import { nowMs } from '@/profiling/index'
 import { resolveClearStorageTarget } from '@/utils/clear-storage'
@@ -98,10 +99,10 @@ export function getCompanionSetPath(setKey: string, targetName: string): string 
  * Get cache path for a single (non-sharded, non-companion) registry model.
  */
 export function getSingleFileCachePath(registryPath: string): string {
-  // A path ending in "/" falls back to the whole path, separators included.
-  const filename = registryPath.split('/').pop() || registryPath
-  const sourceHash = generateShortHash(registryPath)
-  return joinWithinBase(getModelsCacheDir(), `${sourceHash}_${filename}`)
+  return joinWithinBase(
+    getModelsCacheDir(),
+    getSingleFileCacheName(registryPath, generateShortHash)
+  )
 }
 
 /**

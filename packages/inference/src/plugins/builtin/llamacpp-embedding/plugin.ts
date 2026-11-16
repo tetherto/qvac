@@ -115,8 +115,8 @@ export const embeddingsPlugin = definePlugin({
       responseSchema: embedBatchResponseSchema,
       streaming: false,
       cancel: { scope: 'model', hard: true },
-      handler: async (request) => {
-        const result = await embed(request, request.requestId)
+      handler: async (request, _inputStream, context) => {
+        const result = await embed(request, request.requestId, request.sessionId, context)
         return forwardModelExecution(
           {
             type: 'embedBatch' as const,
@@ -136,8 +136,8 @@ export const embeddingsPlugin = definePlugin({
       // embedding addon. Compute is interrupted when fired.
       cancel: { scope: 'model', hard: true },
 
-      handler: async function (request) {
-        const embedResult = await embed(request, request.requestId)
+      handler: async function (request, _inputStream, context) {
+        const embedResult = await embed(request, request.requestId, request.sessionId, context)
 
         return forwardModelExecution(
           {

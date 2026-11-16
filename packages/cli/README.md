@@ -264,7 +264,11 @@ an installed `node_modules` tree has prebuilds for the requested host(s). For
 Android and iOS hosts, it also checks every declared `engines.bare` range
 against the Bare that Bare Kit runs on that platform, as pinned by the SDK's
 bare-stow. Desktop hosts are checked against the Bare of the project's
-`bare-sidecar`.
+`bare-sidecar`. For a bundle that `qvac bundle sdk` wrote for the
+`pear-runtime` target, they are checked against the `bare-sidecar` that
+`pear-runtime` resolves, and for the `bare-kit` target, against
+`bare-kit-kotlin` as bare-stow pins it. The target is read from the
+`package.json` next to the bundle.
 
 ```bash
 qvac verify bundle --addons-source <path> --host <target> [--host <target>...] [options]
@@ -281,7 +285,7 @@ parsed as bare-pack bundles, directories are walked as `node_modules` trees.
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--addons-source <path>` | Required. Path to a worker bundle in `qvac/worker/` or a `node_modules` directory.                                                                                    |
 | `--host <target>`        | Repeatable. At least one host required. Examples: `android-arm64`, `ios-arm64`, `ios-arm64-simulator`, `ios-x64-simulator`, `darwin-arm64`, `linux-x64`, `win32-x64`. |
-| `--offline`              | Optional. Make no network requests: no GitHub lookup for a Bare Kit release newer than the built-in tables, and no npm registry lookup for override suggestions.      |
+| `--offline`              | Optional. Make no network requests: no GitHub lookup for a Bare Kit release missing from the built-in tables, and no npm registry lookup for override suggestions.    |
 | `--project-root <path>`  | Optional. Project root used to resolve bundle resolutions and detect the package manager for override suggestions (default: cwd).                                     |
 | `--json`                 | Optional. Output the verification result as JSON instead of the human-readable summary. Useful for CI scripts and downstream tooling.                                 |
 | `--quiet, -q`            | Suppress the success summary; failures and warnings are always printed. Ignored when `--json` is set.                                                                 |
@@ -322,9 +326,9 @@ qvac verify bundle --addons-source qvac/worker/index.bundle \
 | Code                       | Level   | Meaning                                                                                                                                                                                                                                                                                          |
 | -------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `missing-prebuild`         | error   | No `.bare` for the host. For an ordinary addon, `<packageRoot>/prebuilds/<host>/` is missing or empty; for a split addon (one with a `#host-addon` map), its per-platform package `<addon>-<host>` (iOS hosts grouped under `<addon>-ios`) is not installed or has no `prebuilds/<host>/*.bare`. |
-| `abi-mismatch`             | error   | The addon's declared `engines.bare` range does not include the Bare that Bare Kit runs on a requested Android or iOS host. The issue lists those hosts.                                                                                                                                          |
-| `engines-mismatch`         | warning | A package that is not an addon declares an `engines.bare` range that does not include the Bare that Bare Kit runs on a requested Android or iOS host.                                                                                                                                            |
-| `unknown-runtime-version`  | warning | A package declares `engines.bare` and an Android or iOS host was requested, but the Bare version of that platform's Bare Kit could not be determined, for example because the binding is newer than the built-in tables and `--offline` is set.                                                  |
+| `abi-mismatch`             | error   | The addon's declared `engines.bare` range does not include the Bare that a requested host runs: Bare Kit's on Android and iOS, and on desktop the `bare-sidecar`'s described above. The issue lists those hosts.                                                                                 |
+| `engines-mismatch`         | warning | A package that is not an addon declares an `engines.bare` range that does not include the Bare that a requested Android, iOS or desktop host runs.                                                                                                                                               |
+| `unknown-runtime-version`  | warning | A package declares `engines.bare`, but the Bare version of a requested host could not be determined, for example because the Bare Kit binding is missing from the built-in tables and `--offline` is set, or because no `bare-sidecar` is installed for a desktop host.                          |
 | `malformed-engines-bare`   | warning | An addon's `package.json` declares an `engines.bare` value that is not a valid semver range. ABI check is skipped for that addon and warning is surfaced for escalation to the addon maintainer.                                                                                                 |
 | `invalid-package-json`     | warning | An addon `package.json` could not be parsed (malformed JSON, non-object root, missing `name` on an `addon: true` package). The package is treated as a non-addon and its prebuilds/ABI cannot be verified.                                                                                       |
 | `empty-bundle-resolutions` | warning | The `--addons-source` bundle has an empty bare-pack resolutions table. The verifier cannot inspect any addons; a "passed" summary would be vacuous. Regenerate the bundle or check for corruption.                                                                                               |
@@ -346,15 +350,18 @@ the project's own `@qvac/sdk`, then finds the Bare version in this order, and
 says so before any step that uses the network:
 
 1. Built-in tables of binding → bare-kit versions and bare-kit → Bare
-   versions, read from each release's `CMakeLists.txt`.
-2. For a release newer than its table's newest entry: the binding's
-   `CMakeLists.txt` and the matching bare-kit `CMakeLists.txt` on
-   `raw.githubusercontent.com` (up to two requests, 5 s timeout each). Skipped
-   with `--offline`.
+   versions, read from each release's `CMakeLists.txt`. The tables also list
+   the releases whose `CMakeLists.txt` names no version; those are reported
+   as unknown without a lookup.
+2. For a release missing from the tables: the binding's `CMakeLists.txt` and
+   the matching bare-kit `CMakeLists.txt` on `raw.githubusercontent.com` (up
+   to two requests, 5 s timeout each). Skipped with `--offline`.
 
 The tables are regenerated with `npm run bare-kit-runtimes:generate` in
-`packages/sdk`, which only probes releases newer than their newest entries
-(`npm run bare-kit-runtimes:generate -- --full` rebuilds them).
+`packages/sdk`, which reads every tag of each repository and probes the
+releases the tables do not list yet. A failed request stops the run without
+writing the tables. `npm run bare-kit-runtimes:generate -- --full` rebuilds
+them from every release.
 
 **Fix suggestions:** on an `abi-mismatch` or `engines-mismatch`, the summary
 prints one fix per affected platform. For each failing package it fetches the

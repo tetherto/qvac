@@ -19,6 +19,7 @@ from tetherto.qvac_sdk.client import UnbundledWorker
 from tetherto.qvac_sdk.errors import (
     SetConfigFailedError,
     WorkerCrashedError,
+    WorkerShutdownError,
     WorkerStartupError,
 )
 
@@ -187,6 +188,61 @@ async def _collect(values) -> list:
     return [value async for value in values]
 
 
+async def test_a_call_in_flight_during_close_raises_shutdown(fake_worker) -> None:
+    received = asyncio.Event()
+
+    async def on_request(req) -> None:
+        if await answer_init_config(req):
+            return
+        received.set()
+        await asyncio.Event().wait()
+
+    worker = fake_worker(on_request)
+    transport = BareRpcTransport(worker.start)
+    await asyncio.wait_for(transport.connect(), timeout=5)
+    call = asyncio.ensure_future(transport.call({"type": "heartbeat"}))
+    await asyncio.wait_for(received.wait(), timeout=5)
+
+    await asyncio.wait_for(transport.close(), timeout=5)
+
+    with pytest.raises(WorkerShutdownError):
+        await asyncio.wait_for(call, timeout=5)
+
+
+async def test_a_call_after_close_raises_shutdown(fake_worker) -> None:
+    worker = fake_worker(answer_init_config)
+    transport = BareRpcTransport(worker.start)
+    await asyncio.wait_for(transport.connect(), timeout=5)
+    await asyncio.wait_for(transport.close(), timeout=5)
+
+    with pytest.raises(WorkerShutdownError):
+        await asyncio.wait_for(transport.call({"type": "heartbeat"}), timeout=5)
+
+
+async def test_a_worker_that_exits_on_its_own_fails_calls_as_crashed(
+    fake_worker,
+) -> None:
+    async def on_request(req) -> None:
+        if await answer_init_config(req):
+            return
+        worker.control("exit", code=3)
+        worker.to_host.end()
+
+    worker = fake_worker(on_request)
+    transport = BareRpcTransport(worker.start)
+    await asyncio.wait_for(transport.connect(), timeout=5)
+    try:
+        with pytest.raises(WorkerCrashedError) as in_flight:
+            await asyncio.wait_for(transport.call({"type": "heartbeat"}), timeout=5)
+        assert in_flight.value.exit_code == 3
+
+        with pytest.raises(WorkerCrashedError) as later:
+            await asyncio.wait_for(transport.call({"type": "heartbeat"}), timeout=5)
+        assert later.value.exit_code == 3
+    finally:
+        await transport.close()
+
+
 async def test_close_terminates_the_worker(fake_worker) -> None:
     worker = fake_worker(answer_init_config)
     transport = BareRpcTransport(worker.start)
@@ -230,6 +286,30 @@ async def test_cancelling_connect_terminates_a_worker_that_is_not_ready(
     await asyncio.wait_for(worker.terminated.wait(), timeout=2)
 
 
+async def test_close_during_start_stops_the_worker_and_fails_connect_as_shutdown(
+    fake_worker, monkeypatch, tmp_path
+) -> None:
+    worker = fake_worker(answer_init_config)
+    spawned = asyncio.Event()
+
+    async def spawn(*args: object, **kwargs: object) -> _Sidecar:
+        spawned.set()
+        return _Sidecar(worker)
+
+    monkeypatch.setattr(client_module, "spawn", spawn)
+    start = UnbundledWorker(tmp_path / "shim.js", tmp_path / "worker.js").start
+    transport = BareRpcTransport(start)
+    connecting = asyncio.ensure_future(transport.connect(timeout=30))
+    await asyncio.wait_for(spawned.wait(), timeout=2)
+
+    await asyncio.wait_for(transport.close(), timeout=2)
+
+    with pytest.raises(WorkerShutdownError):
+        await asyncio.wait_for(connecting, timeout=2)
+    # bare-stow-host closes a cancelled start in a background task.
+    await asyncio.wait_for(worker.terminated.wait(), timeout=2)
+
+
 async def test_connect_terminates_the_worker_when_init_config_fails(
     fake_worker,
 ) -> None:
@@ -243,6 +323,27 @@ async def test_connect_terminates_the_worker_when_init_config_fails(
         await asyncio.wait_for(transport.connect(), timeout=5)
 
     assert worker.terminated.is_set()
+
+
+@pytest.mark.parametrize(
+    ("timeout_ms", "expected"),
+    [(2000, 2.0), (1500.5, 1.5005), (True, 60.0), ("2000", 60.0)],
+)
+async def test_connect_starts_the_worker_with_the_configured_init_timeout(
+    fake_worker, timeout_ms: object, expected: float
+) -> None:
+    worker = fake_worker(answer_init_config)
+    timeouts: list[float] = []
+
+    async def start(timeout: float):
+        timeouts.append(timeout)
+        return await worker.start(timeout)
+
+    transport = BareRpcTransport(start, config={"rpcInitTimeoutMs": timeout_ms})
+    await asyncio.wait_for(transport.connect(), timeout=5)
+    await transport.close()
+
+    assert timeouts == [expected]
 
 
 async def test_connect_fails_when_the_worker_does_not_apply_its_config_in_time(

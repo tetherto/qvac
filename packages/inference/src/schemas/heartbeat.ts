@@ -1,8 +1,11 @@
 import { z } from 'zod'
+import { sessionScopedRequestSchema } from '@/schemas/request-base'
 
-export const heartbeatRequestSchema = z.object({
-  type: z.literal('heartbeat')
-})
+export const heartbeatRequestSchema = z
+  .object({
+    type: z.literal('heartbeat')
+  })
+  .extend(sessionScopedRequestSchema.shape)
 
 export const heartbeatResponseSchema = z.object({
   type: z.literal('heartbeat'),

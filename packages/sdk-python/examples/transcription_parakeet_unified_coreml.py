@@ -16,6 +16,7 @@ RUN: python examples/transcription_parakeet_unified_coreml.py <regenerated-unifi
 from __future__ import annotations
 
 import asyncio
+import errno
 import os
 import re
 import shutil
@@ -98,7 +99,14 @@ async def stage_model(t, path: Path) -> tuple[str, Path]:
 
             target_path = bundle_dir / relative_path
             target_path.parent.mkdir(parents=True, exist_ok=True)
-            os.link(source_path, target_path)
+            try:
+                os.link(source_path, target_path)
+            except OSError as error:
+                # A hard link cannot cross filesystems, e.g. a QVAC_HOME_DIR on
+                # another drive.
+                if error.errno != errno.EXDEV:
+                    raise
+                shutil.copyfile(source_path, target_path)
 
         return str(model_src), staging_dir
     except BaseException:
