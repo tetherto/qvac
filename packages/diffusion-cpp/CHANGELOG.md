@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Package the CPU backend as a runtime module on Linux, Android and Windows; CPU fallback requires that module alongside the addon.
+
+
 ## [0.35.2] - 2026-11-13
 
 ### Fixes

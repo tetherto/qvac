@@ -276,7 +276,7 @@ The response comes back as a single JSON payload with the model's answer. Add `"
 | **RAG** | Out-of-the-box retrieval-augmented generation workflow. |
 | **Fine-tuning** | Adapting LLMs to domain-specific tasks via LoRA. |
 | **Multimodal** | LLM inference over text, images, and other media in one context. |
-| **Image generation** | Text-to-image and image-to-image generation via a Diffusion backend. |
+| **Image generation** | Text-to-image and image-to-image generation via a Diffusion backend. Linux, Android and Windows packages load CPU and GPU backends dynamically. |
 | **Video generation** | Text-to-video and image-to-video generation via a Diffusion backend. |
 | **Music generation** | Generate music from text, lyrics, and musical controls via [ACE-Step](https://github.com/ace-step/ACE-Step-1.5) or [MiniMax-Music3](https://huggingface.co/MiniMaxAI/MiniMax-Music3) (desktop). The [AudioGen addon](packages/audiogen-ggml/README.md) exposes independent ACE-Step backend selection, opt-in WebGPU, Apple Core ML sidecars, and memory preflight for the selected placement. Native dependency versions are declared in the [AudioGen manifest](packages/audiogen-ggml/vcpkg.json). |
 | **Transcription** | Speech-to-text via a [Whisper backend](https://github.com/tetherto/qvac/tree/main/packages/asr-ggml), [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3), [TranscribePsy EU and EU-sub](packages/asr-ggml/README.md#parakeet-engine-parakeet) (full 25-language EU with CAFE adapters and language routing, or the eight-language EU-sub), or [MOSS-Transcribe-Diarize](https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize) (speaker-labelled transcripts with hotwords, fused CPU encoder attention and metadata-only memory fit via `assessFit`). |

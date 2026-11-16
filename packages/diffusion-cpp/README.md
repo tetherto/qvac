@@ -174,7 +174,9 @@ npm run build:cuda
 Linux ARM64/x64 and Windows x64 platform packages include dynamically loaded CUDA modules.
 Installing `@qvac/diffusion-cpp` selects `@qvac/diffusion-cpp-linux-arm64`
 on DGX Spark or `@qvac/diffusion-cpp-linux-x64` on an x64 PC. Each platform
-package carries its host addon and the CUDA and Vulkan backend modules.
+package carries its host addon and the CPU, CUDA and Vulkan backend modules.
+Linux, Android and Windows builds load CPU dynamically too. Keep the CPU module
+next to the GPU modules, including in a custom `backendsDir`; GPU fallback requires it.
 CUDA execution requires the NVIDIA driver and CUDA 13 runtime/cuBLAS
 libraries on the host; the addon itself retains CPU-only load compatibility.
 Windows uses `@qvac/diffusion-cpp-win32-x64`, with

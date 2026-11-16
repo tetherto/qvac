@@ -1,0 +1,22 @@
+cmake_minimum_required(VERSION 3.25)
+project(diffusion_backend_loader_test LANGUAGES CXX)
+if(NOT TARGET ggml::ggml)
+  find_package(ggml CONFIG REQUIRED)
+endif()
+find_package(Threads REQUIRED)
+if(NOT GGML_BACKEND_DL OR GGML_CPU_STATIC)
+  message(FATAL_ERROR "This test requires dynamic CPU GGML")
+endif()
+add_executable(backend-loader-test main.cpp ../../addon/src/utils/BackendLoader.cpp)
+target_compile_features(backend-loader-test PRIVATE cxx_std_20)
+target_include_directories(backend-loader-test PRIVATE stubs ../../addon/src)
+target_compile_definitions(backend-loader-test PRIVATE QVAC_ADDON_MODULE_NAME="loader-test")
+target_link_libraries(backend-loader-test PRIVATE ggml::ggml Threads::Threads ${CMAKE_DL_LIBS})
+set(cpu_only_dir "${CMAKE_CURRENT_BINARY_DIR}/cpu-only")
+add_custom_command(TARGET backend-loader-test POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${cpu_only_dir}"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:ggml::ggml-cpu>" "${cpu_only_dir}/")
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/empty")
+enable_testing()
+add_test(NAME dynamic-cpu-loader COMMAND ${CMAKE_COMMAND} -E env --unset=GGML_BACKEND_PATH
+  $<TARGET_FILE:backend-loader-test> "${cpu_only_dir}" "${CMAKE_CURRENT_BINARY_DIR}/empty")

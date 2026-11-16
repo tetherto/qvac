@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <mutex>
 #include <sstream>
+#include <stdexcept>
 #include <system_error>
 #include <vector>
 
@@ -193,12 +194,17 @@ void loadBackendModulesOnce(const std::string& backendsDir) {
     if (!backendsDirPath.empty()) {
       QLOG_IF(
           Priority::INFO,
-          "Loading GPU backends from: " + utf8(backendsDirPath));
+          "Loading CPU and GPU backends from: " + utf8(backendsDirPath));
       logBackendModulePathSnapshot(backendsDirPath);
       ggml_backend_load_all_from_path(utf8(backendsDirPath).c_str());
     } else {
-      QLOG_IF(Priority::INFO, "Loading GPU backends from default path");
+      QLOG_IF(Priority::INFO, "Loading CPU and GPU backends from default path");
       ggml_backend_load_all();
+    }
+    if (ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU) == nullptr) {
+      throw std::runtime_error(
+          "Diffusion CPU backend module is missing or could not be loaded from: " +
+          utf8(backendsDirPath));
     }
     logBackendRegistrySnapshot();
   });

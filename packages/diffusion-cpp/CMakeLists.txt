@@ -87,14 +87,15 @@ else()
 endif()
 message("Building inference-addon-sd module '${module_name}'")
 
-# With GGML_BACKEND_DL, install GPU backend modules alongside the addon on
-# Android, Linux and Windows. CPU backends are statically linked
-# (GGML_CPU_STATIC) and excluded from this loop.
 set(BACKEND_DL_EXPORTS "")
+set(CPU_BACKEND_EXPORTED OFF)
+set(GPU_BACKEND_EXPORTED OFF)
 if(GGML_BACKEND_DL AND (ANDROID OR WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
     if("${_backend}" MATCHES "^ggml-cpu")
-      continue()
+      set(CPU_BACKEND_EXPORTED ON)
+    else()
+      set(GPU_BACKEND_EXPORTED ON)
     endif()
     if(TARGET ggml::${_backend})
       list(APPEND BACKEND_DL_EXPORTS INSTALL TARGET ggml::${_backend})
@@ -118,9 +119,13 @@ if(GGML_BACKEND_DL AND (ANDROID OR WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
   endforeach()
 endif()
 
+if(GGML_BACKEND_DL AND (ANDROID OR WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux") AND (GGML_CPU_STATIC OR NOT CPU_BACKEND_EXPORTED))
+  message(FATAL_ERROR "inference-addon-sd: dynamic CPU backend is required; use ggml 2026-11-01#2 or later")
+endif()
+
 # Every Windows build loads its GPU backends from DLLs, so fail the configure
 # rather than ship a CPU-only Windows prebuild when none were packaged.
-if(GGML_BACKEND_DL AND WIN32 AND NOT BACKEND_DL_EXPORTS)
+if(GGML_BACKEND_DL AND WIN32 AND NOT GPU_BACKEND_EXPORTED)
   message(FATAL_ERROR "inference-addon-sd: GGML_BACKEND_DL is on but ggml "
     "exports no GPU backend module; the prebuild would ship without GPU "
     "backends")
@@ -226,6 +231,10 @@ if(BUILD_TESTING)
   add_test(NAME cuda-options
     COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/cuda-options.cmake)
   add_subdirectory(test/unit)
+  if(GGML_BACKEND_DL AND NOT GGML_CPU_STATIC)
+    add_subdirectory(test/backend-loader)
+    add_dependencies(addon-test backend-loader-test)
+  endif()
 endif()
 
 # Symbol-export hygiene: hide this addon's statically linked ggml /

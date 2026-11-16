@@ -84,9 +84,21 @@ function elf(dependencies, symbols = []) {
   return buffer
 }
 
+function writeCpuFixture(backends) {
+  const windows = backends.includes('win32')
+  const name = windows ? 'qvac-diffusion-ggml-cpu.dll' : 'libqvac-diffusion-ggml-cpu.so'
+  fs.writeFileSync(path.join(backends, name), windows ? pe(['kernel32.dll']) : elf(['libc.so.6']))
+}
+
 function fixture(
   t,
-  { arch = 'arm64', cuda = ['libcudart.so.13'], addon = ['libc.so.6'], symbols = [] } = {}
+  {
+    arch = 'arm64',
+    cuda = ['libcudart.so.13'],
+    addon = ['libc.so.6'],
+    symbols = [],
+    cpu = ['libc.so.6']
+  } = {}
 ) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'diffusion-prebuild-'))
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }))
@@ -94,10 +106,15 @@ function fixture(
   const target = path.join(directory, `linux-${arch}`)
   const backends = path.join(target, moduleName)
   fs.mkdirSync(backends, { recursive: true })
+  writeCpuFixture(backends)
   fs.writeFileSync(path.join(target, `${moduleName}.bare`), elf(addon))
   fs.writeFileSync(path.join(backends, 'libqvac-diffusion-ggml-vulkan.so'), elf(['libvulkan.so.1']))
-  if (cuda)
+  if (cuda) {
     fs.writeFileSync(path.join(backends, 'libqvac-diffusion-ggml-cuda.so'), elf(cuda, symbols))
+  }
+  const cpuPath = path.join(backends, 'libqvac-diffusion-ggml-cpu.so')
+  if (cpu) fs.writeFileSync(cpuPath, elf(cpu))
+  else fs.unlinkSync(cpuPath)
   const result = spawnSync(process.execPath, [checker, directory], {
     encoding: 'utf8',
     env: { ...process.env, BUILD_PLATFORM: 'linux' }
@@ -150,6 +167,7 @@ test('split publication retains CUDA and Vulkan in Linux and Windows platform pa
       if (host === 'win32-x64') {
         const backends = path.join(hostDir, addonName.replace(/\.bare$/, ''))
         fs.mkdirSync(backends)
+        writeCpuFixture(backends)
         fs.writeFileSync(path.join(hostDir, addonName), pe(['kernel32.dll']))
         fs.writeFileSync(
           path.join(backends, 'qvac-diffusion-ggml-vulkan.dll'),
@@ -163,6 +181,7 @@ test('split publication retains CUDA and Vulkan in Linux and Windows platform pa
       if (!host.startsWith('linux-')) continue
       const backends = path.join(hostDir, addonName.replace(/\.bare$/, ''))
       fs.mkdirSync(backends)
+      writeCpuFixture(backends)
       fs.writeFileSync(
         path.join(backends, 'libqvac-diffusion-ggml-vulkan.so'),
         elf(['libvulkan.so.1'])
@@ -400,7 +419,8 @@ function mergedFixture(
     linux = ['x64', 'arm64'],
     win32 = true,
     addonImports,
-    cudaImports = ['cublas64_13.dll', 'kernel32.dll']
+    cudaImports = ['cublas64_13.dll', 'kernel32.dll'],
+    cpuImports = ['kernel32.dll']
   } = {}
 ) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'diffusion-merged-'))
@@ -409,6 +429,7 @@ function mergedFixture(
     const moduleName = `qvac__diffusion-cpp-linux-${arch}`
     const backends = path.join(directory, `linux-${arch}`, moduleName)
     fs.mkdirSync(backends, { recursive: true })
+    writeCpuFixture(backends)
     fs.writeFileSync(
       path.join(directory, `linux-${arch}`, `${moduleName}.bare`),
       elf(['libc.so.6'])
@@ -426,6 +447,7 @@ function mergedFixture(
     const moduleName = 'qvac__diffusion-cpp-win32-x64'
     const backends = path.join(directory, 'win32-x64', moduleName)
     fs.mkdirSync(backends, { recursive: true })
+    writeCpuFixture(backends)
     fs.writeFileSync(
       path.join(directory, 'win32-x64', `${moduleName}.bare`),
       pe(addonImports ?? ['kernel32.dll'])
@@ -434,8 +456,12 @@ function mergedFixture(
       path.join(backends, 'qvac-diffusion-ggml-vulkan.dll'),
       pe(['vulkan-1.dll', 'kernel32.dll'])
     )
-    if (cudaImports)
+    const cpuPath = path.join(backends, 'qvac-diffusion-ggml-cpu.dll')
+    if (cpuImports) fs.writeFileSync(cpuPath, pe(cpuImports))
+    else fs.unlinkSync(cpuPath)
+    if (cudaImports) {
       fs.writeFileSync(path.join(backends, 'qvac-diffusion-ggml-cuda.dll'), pe(cudaImports))
+    }
   }
   return (buildPlatform) => {
     const env = { ...process.env, BUILD_PLATFORM: buildPlatform ?? '' }
@@ -537,3 +563,27 @@ for (const cudaImports of [
     assert.equal(result.status, 0, result.output)
   })
 }
+
+test('rejects a prebuild without its CPU module', (t) => {
+  const result = fixture(t, { cpu: null })
+  assert.notEqual(result.status, 0)
+  assert.match(result.output, /CPU DL backend module missing/)
+})
+
+test('rejects a CPU module that needs a GPU loader', (t) => {
+  const result = fixture(t, { cpu: ['libOpenCL.so.1'] })
+  assert.notEqual(result.status, 0)
+  assert.match(result.output, /CPU module depends on libOpenCL/)
+})
+
+test('rejects a Windows prebuild without its CPU module', (t) => {
+  const result = mergedFixture(t, { linux: [], cpuImports: null })('win32')
+  assert.notEqual(result.status, 0)
+  assert.match(result.output, /CPU DL backend module missing/)
+})
+
+test('rejects a Windows CPU module that imports a GPU loader', (t) => {
+  const result = mergedFixture(t, { linux: [], cpuImports: ['vulkan-1.dll'] })('win32')
+  assert.notEqual(result.status, 0)
+  assert.match(result.output, /CPU module imports vulkan-1/)
+})

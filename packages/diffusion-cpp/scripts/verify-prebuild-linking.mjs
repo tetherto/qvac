@@ -208,6 +208,31 @@ const fail = (msg) => {
   console.error(`FAIL: ${msg}`)
 }
 
+function verifyCpuModule(prebuildsDir, target, moduleName, windows = false) {
+  const name = windows ? 'qvac-diffusion-ggml-cpu.dll' : 'libqvac-diffusion-ggml-cpu.so'
+  const modulePath = path.join(prebuildsDir, target, moduleName, name)
+  if (!fs.existsSync(modulePath)) {
+    fail(`${target}: CPU DL backend module missing at ${modulePath}`)
+    return
+  }
+  if (windows) {
+    const imports = peImports(fs.readFileSync(modulePath))
+    for (const dependency of [...FORBIDDEN_WIN_IMPORTS, ...FORBIDDEN_WIN_RUNTIME]) {
+      if (imports.some((name) => name.startsWith(dependency))) {
+        fail(`${target}: CPU module imports ${dependency}*`)
+      }
+    }
+    return
+  }
+  const { needed, unresolvedCxx } = elfInfo(fs.readFileSync(modulePath))
+  if (unresolvedCxx.length) fail(`${target}: CPU module has unresolved C++ runtime symbols`)
+  for (const dependency of [...FORBIDDEN_NEEDED, ...FORBIDDEN_RUNTIME]) {
+    if (needed.some((name) => name.startsWith(dependency))) {
+      fail(`${target}: CPU module depends on ${dependency}*`)
+    }
+  }
+}
+
 for (const target of TARGETS) {
   const moduleName = moduleNameForHost(target)
   const addonPath = path.join(prebuildsDir, target, `${moduleName}.bare`)
@@ -217,6 +242,7 @@ for (const target of TARGETS) {
   }
   checkedTargets++
   linuxCheckedTargets++
+  verifyCpuModule(prebuildsDir, target, moduleName)
 
   const { needed: addonNeeded, unresolvedCxx: addonUnresolvedCxx } = elfInfo(
     fs.readFileSync(addonPath)
@@ -296,6 +322,7 @@ for (const target of WIN_TARGETS) {
     continue
   }
   checkedTargets++
+  verifyCpuModule(prebuildsDir, target, moduleName, true)
 
   const addonImports = peImports(fs.readFileSync(addonPath))
   console.log(`${target}/${moduleName}.bare imports: ${addonImports.join(', ')}`)
