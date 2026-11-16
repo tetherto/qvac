@@ -152,3 +152,4 @@ jobs:
           workdir: ${{ env.WORKDIR }}
           tag: ${{ needs.logic.outputs.tag }}
           token: ${{ github.token }}
+          name-transform: ${{ matrix.row.meta.publish.nameTransform }}

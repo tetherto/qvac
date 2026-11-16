@@ -12,15 +12,15 @@ const projectJson = JSON.parse(fs.readFileSync(path.join(packageRoot, 'project.j
 const CUDA_OPTION = 'ENABLE_CUDA'
 const PUBLISHED_CUDA_HOST = 'linux-x64'
 
-function publishBuildCi() {
-  return projectJson.targets.build.options.ci
+// The CI contract: each platform's build configuration args, and the hosts nx.json sets CUDA up on.
+function buildArgs(host) {
+  return projectJson.targets.build.configurations[host]?.args ?? ''
 }
 
-function platformDefines(host) {
-  const entry = (publishBuildCi().platformCmakeDefines ?? '')
-    .split('\n')
-    .find((line) => line.trim().startsWith(`${host}:`))
-  return entry === undefined ? '' : entry.slice(entry.indexOf(':') + 1).trim()
+function cudaHosts() {
+  const nxJson = JSON.parse(fs.readFileSync(path.join(packageRoot, '..', '..', 'nx.json'), 'utf8'))
+  const { hostSetup } = nxJson.targetDefaults.build.metadata.toolchain
+  return Object.keys(hostSetup).filter((h) => hostSetup[h].includes('cuda'))
 }
 
 test('the CUDA build stays an opt-in CMake option', () => {
@@ -28,6 +28,6 @@ test('the CUDA build stays an opt-in CMake option', () => {
 })
 
 test('the published linux-x64 prebuild builds the CUDA backend', () => {
-  assert.equal(publishBuildCi().includeCuda, true)
-  assert.match(platformDefines(PUBLISHED_CUDA_HOST), new RegExp(`-D ${CUDA_OPTION}=ON`))
+  assert.ok(cudaHosts().includes(PUBLISHED_CUDA_HOST))
+  assert.match(buildArgs(PUBLISHED_CUDA_HOST), new RegExp(`-D ${CUDA_OPTION}=ON`))
 })

@@ -17,7 +17,6 @@ const TEST_SCRIPT_ENV = `TEST_SCRIPT: \${{ matrix.testScript || '${DEFAULT_TEST_
 const HARDCODED_DEFAULT_RUN = /npm run test:integration(?!:)/
 const SCRIPT_FIELDS = ['testScript', 'modelDownloadScript']
 const DARWIN_X64_SMOKE_PACKAGES = ['bci-whispercpp', 'tts-ggml']
-const PREBUILD_LIBRARY_PATH = '{workspace}/{workdir}/prebuilds/{platform}-{arch}'
 const CUDA_LIBRARY_PATH = '/usr/local/cuda/lib64'
 
 const workflow = readFileSync(join(root, WORKFLOW), 'utf8')
@@ -90,12 +89,13 @@ function missingScriptsOf(pkg) {
     .map((name) => `${pkg}: ${name}`)
 }
 
+// On the CI contract a configuration picks its suite with `--script <name>` in its args.
 function darwinX64TestScriptOf(pkg) {
-  const row = rowsOf(pkg).find(
-    (candidate) => candidate.platform === 'darwin' && candidate.arch === 'x64'
-  )
-  assert.ok(row, `${pkg} has no darwin-x64 integration row`)
-  return row.testScript ?? DEFAULT_TEST_SCRIPT
+  const config = readJson(join(PACKAGES_DIR, pkg, 'project.json')).targets[TARGET].configurations?.[
+    'darwin-x64'
+  ]
+  assert.ok(config, `${pkg} has no darwin-x64 integration configuration`)
+  return config.args?.match(/--script (\S+)/)?.[1] ?? DEFAULT_TEST_SCRIPT
 }
 
 function packagesRunningFullSuiteOnDarwinX64() {
@@ -132,25 +132,26 @@ test('bci-whispercpp and tts-ggml run a smoke script on darwin-x64, not the full
   assert.deepEqual(packagesRunningFullSuiteOnDarwinX64(), [])
 })
 
-test('TTS Linux GPU integration rows pin both CUDA and Vulkan', () => {
-  const gpuRows = rowsOf('tts-ggml').filter(
-    (row) => row.platform === 'linux' && row.arch === 'x64' && !row.noGpu
-  )
+test('TTS Linux GPU integration rows pin both CUDA and Vulkan', async () => {
+  const configs = readJson(join(PACKAGES_DIR, 'tts-ggml', 'project.json')).targets[TARGET].configurations
+  const gpuRows = Object.entries(configs)
+    .filter(([name, config]) => name.startsWith('linux-x64') && !/NO_GPU=true/.test(config.args ?? ''))
+    .map(([, config]) => config.args ?? '')
   assert.ok(gpuRows.length > 0, 'TTS has no Linux GPU integration coverage')
-  const backends = gpuRows.map((row) => row.testEnv?.TTS_CPP_GPU_BACKEND)
+  const backends = gpuRows.map((args) => args.match(/--set TTS_CPP_GPU_BACKEND=(\S+)/)?.[1])
   assert.ok(
     backends.every((backend) => ['cuda', 'vulkan'].includes(backend)),
     'each GPU row must pin its backend'
   )
   assert.deepEqual([...new Set(backends)].sort(), ['cuda', 'vulkan'])
-  const cudaRow = gpuRows.find((row) => row.testEnv.TTS_CPP_GPU_BACKEND === 'cuda')
-  assert.equal(cudaRow.modelEnv.LD_LIBRARY_PATH, `${PREBUILD_LIBRARY_PATH}:${CUDA_LIBRARY_PATH}`)
-  assert.equal(cudaRow.modelEnv.DYLD_LIBRARY_PATH, PREBUILD_LIBRARY_PATH)
-  assert.equal(
-    cudaRow.modelEnv.INTEGRATION_TEST_TIMEOUT,
-    integrationCiOf('tts-ggml').modelEnv.INTEGRATION_TEST_TIMEOUT
-  )
-  assert.equal(cudaRow.testEnv.LD_LIBRARY_PATH, undefined)
+  const cudaArgs = gpuRows.find((args) => args.includes('TTS_CPP_GPU_BACKEND=cuda')).split(/\s+/)
+  const { options } = await import(join(root, PACKAGES_DIR, 'tts-ggml', 'ci', 'integration.mjs'))
+  const prebuilds = join(root, PACKAGES_DIR, 'tts-ggml', 'prebuilds', `${process.platform}-${process.arch}`)
+  const cuda = options(cudaArgs, {}).env
+  assert.equal(cuda.LD_LIBRARY_PATH, `${prebuilds}:${CUDA_LIBRARY_PATH}`)
+  assert.equal(cuda.DYLD_LIBRARY_PATH, prebuilds)
+  assert.equal(cuda.INTEGRATION_TEST_TIMEOUT, options([], {}).env.INTEGRATION_TEST_TIMEOUT)
+  assert.ok(!cudaArgs.some((arg) => arg.startsWith('LD_LIBRARY_PATH=')))
 })
 
 test('manual integration dispatch forwards the trusted config override', () => {

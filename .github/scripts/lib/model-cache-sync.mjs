@@ -288,10 +288,10 @@ const versionOf = (f) =>
 // workflows were consolidated into integration-test-nx.yml, which reads its
 // cache blocks from each package's project.json instead. The nxConsumers floor
 // is what guards that path, so a blind parser still cannot slip through. Seeds
-// and consumers dropped to 10 and 51 when vla moved to the CI contract, then to
-// 7 and 37 when the fabric consumers followed; its cache-warm seeds the keys
-// models-cache-key computes from each manifest.
-export const FLOOR = { seeds: 7, consumers: 37, nxConsumers: 10 };
+// and consumers dropped to 10 and 51 when vla moved to the CI contract, to 7 and
+// 37 when the fabric consumers followed, and to 3 and 11 (8 nx blocks) when the
+// speech packages did; its cache-warm seeds the keys models-cache-key computes.
+export const FLOOR = { seeds: 3, consumers: 11, nxConsumers: 8 };
 
 export function findParserGaps(files = listWorkflows()) {
   const gaps = [];
@@ -350,44 +350,15 @@ export function findOrphanedSeeds(files) {
  * moved onto project.json as their single model definition -- all three
  * consumers now share one key, so there is nothing left to collide.
  *
- * Each remaining entry is a real hazard: the
- * shorter leg can prefix-match the other's entry, find its files present, skip
- * its own download and save the union under its own key. None is introduced by
- * the model-cache seeding work, and fixing them changes what other lanes
- * resolve, so they are recorded here rather than silently tolerated.
+ * The asr pairs left with its workflows when asr moved to the CI contract. An
+ * entry here is a real hazard: the shorter leg can prefix-match the other's
+ * entry, find its files present, skip its own download and save the union
+ * under its own key.
  *
  * Anything NOT on this list fails the build. Remove entries as they are fixed;
  * do not add without a ticket.
  */
-export const KNOWN_COLLISIONS = [
-  {
-    a: "integration-test-asr-ggml.yml",
-    aSuffix: "",
-    aGlob: "",
-    b: "cpp-test-coverage-asr-ggml.yml",
-    bSuffix: "cpp-tests",
-    bGlob: ".github/workflows/cpp-test-coverage-asr-ggml.yml",
-    why: "asr's C++ coverage lane caches packages/asr-ggml/models under suffix cpp-tests; the pin-model-manifest job's empty suffix (legacy default glob) reaches it",
-  },
-  {
-    a: "integration-test-asr-ggml.yml",
-    aSuffix: "",
-    aGlob: "packages/asr-ggml/test/integration/*.manifest.json",
-    b: "cpp-test-coverage-asr-ggml.yml",
-    bSuffix: "cpp-tests",
-    bGlob: ".github/workflows/cpp-test-coverage-asr-ggml.yml",
-    why: "same, from the integration job",
-  },
-  {
-    a: "integration-test-asr-ggml.yml",
-    aSuffix: "",
-    aGlob: "packages/asr-ggml/test/integration/*.manifest.json",
-    b: "integration-test-asr-ggml.yml",
-    bSuffix: "",
-    bGlob: "",
-    why: "pin-model-manifest and the integration job share a path list and suffix but hash different globs, so one prefix covers both keys",
-  },
-];
+export const KNOWN_COLLISIONS = [];
 
 const sig = (c) =>
   [

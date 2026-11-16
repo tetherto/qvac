@@ -135,6 +135,11 @@ jobs:
         || matrix.row.meta.mobile.devicefarmProject == 'LLM' && secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN
         || matrix.row.meta.mobile.devicefarmProject == 'OCR_FASTTEXT' && secrets.AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT
         || matrix.row.meta.mobile.devicefarmProject == 'NMTCPP' && secrets.AWS_DEVICE_FARM_PROJECT_ARN_NMTCPP
+        || matrix.row.meta.mobile.devicefarmProject == 'ASR_GGML' && (secrets.AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_PARAKEET)
+        || matrix.row.meta.mobile.devicefarmProject == 'TTS_GGML' && (secrets.AWS_DEVICE_FARM_PROJECT_ARN_TTS_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS)
+        || matrix.row.meta.mobile.devicefarmProject == 'AUDIOGEN_GGML' && (secrets.AWS_DEVICE_FARM_PROJECT_ARN_AUDIOGEN_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS)
+        || matrix.row.meta.mobile.devicefarmProject == 'WHISPERCPP' && secrets.AWS_DEVICE_FARM_PROJECT_ARN_WHISPERCPP
+        || matrix.row.meta.mobile.devicefarmProject == 'DECODER_AUDIO' && secrets.AWS_DEVICE_FARM_PROJECT_ARN_DECODER_AUDIO
         || '' }}
       GITHUB_TOKEN: ${{ github.token }}
       NPM: ${{ matrix.row.npm }}
@@ -186,20 +191,20 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts --filter .
       # Prebuilds: a named run's, else a published build's; prepare-mobile-prebuilds checks either is this package's.
       - id: run
-        if: inputs.prebuild_run_id != ''
+        if: matrix.row.hasBuild && inputs.prebuild_run_id != ''
         uses: ./.github/actions/prebuilds-find-in-run
         with:
           run-id: ${{ inputs.prebuild_run_id }}
           workdir: ${{ matrix.row.dir }}
           platform: ${{ inputs.platform }}
           github-token: ${{ github.token }}
-      - if: inputs.prebuild_run_id != ''
+      - if: matrix.row.hasBuild && inputs.prebuild_run_id != ''
         uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           artifact-ids: ${{ steps.run.outputs.artifact-id }}
           run-id: ${{ steps.run.outputs.source-run-id }}
           path: ${{ env.WORKDIR }}/prebuilds
-      - if: inputs.prebuild_run_id == ''
+      - if: matrix.row.hasBuild && inputs.prebuild_run_id == ''
         uses: ./.github/actions/prebuilds-from-registry
         with:
           workdir: ${{ env.WORKDIR }}
@@ -208,7 +213,8 @@ jobs:
           package: ${{ inputs.package }}
           pinned: ${{ inputs.package != '' }}
           gpr-token: ${{ github.token }}
-      - uses: ./.github/actions/prebuilds-prepare-mobile
+      - if: matrix.row.hasBuild
+        uses: ./.github/actions/prebuilds-prepare-mobile
         with:
           workdir: ${{ env.WORKDIR }}
           expected-dirs: ${{ steps.run.outputs.expected-dirs }}
@@ -241,6 +247,7 @@ jobs:
           # The registry bucket S3-only manifest entries are mirrored from into the US bucket.
           SOURCE_S3_BUCKET: ${{ contains(matrix.row.meta.secrets, 'MODEL_S3_BUCKET') && secrets.MODEL_S3_BUCKET || '' }}
           HF_TOKEN: ${{ contains(matrix.row.meta.secrets, 'HF_TOKEN') && secrets.HF_TOKEN || '' }}
+          GITHUB_TOKEN: ${{ contains(matrix.row.meta.secrets, 'GITHUB_TOKEN') && github.token || '' }}
           BENCHMARK_ARGS: ${{ inputs.args }}
         run: pnpm exec nx run-many -t test:mobile -p "$PROJECT" -c "$CONFIG" --outputStyle=stream
       - if: inputs.dependency_prebuild_run_id != ''
@@ -301,8 +308,9 @@ jobs:
           workdir: ${{ env.WORKDIR }}
           tests: ${{ inputs.tests }}
           app-dir: test-framework
-          enables-perf: ${{ matrix.row.meta.mobile.enablesPerf == true }}
+          enables-perf: ${{ matrix.row.meta.mobile.enablesPerf == true || steps.prepare.outputs.enables-perf == 'true' }}
           mocha-timeout-ms: ${{ steps.prepare.outputs.mocha-timeout-ms || matrix.row.meta.mobile.mochaTimeoutMs || '1800000' }}
+          waitfor-timeout-ms: ${{ matrix.row.meta.mobile.waitforTimeoutMs || '120000' }}
           extra-pre-test-commands: ${{ steps.prepare.outputs.pre-test-commands }}
           test-groups: ${{ steps.prepare.outputs.test-groups }}
           device-env: ${{ steps.prepare.outputs.device-env }}
@@ -397,7 +405,9 @@ jobs:
           retention-days: "30"
           if-no-files-found: ignore
       - id: perf
-        if: always() && steps.logs.outcome == 'success' && matrix.row.meta.mobile.perfReport
+        if: >-
+          always() && steps.logs.outcome == 'success' && matrix.row.meta.mobile.perfReport &&
+          (matrix.row.meta.mobile.enablesPerf == true || steps.prepare.outputs.enables-perf == 'true')
         uses: ./.github/actions/devicefarm-perf-report
         with:
           log-dir: ${{ steps.logs.outputs.log-dir }}

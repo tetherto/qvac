@@ -55,8 +55,7 @@ operating procedure, that doc is the source of truth.
 `prebuild_run_id` and `package` are **mutually exclusive** — setting both fails
 with a message telling you to clear one.
 
-The input is named `package` on most addons but **`package_spec`** on
-`asr-ggml`, `audiogen-ggml`, `tts-ggml`. `prebuild_run_id` is the same everywhere.
+The input is named `package` everywhere, and `prebuild_run_id` too.
 
 ## Step 2 — get a run id (only for the `prebuild_run_id` route)
 
@@ -262,10 +261,9 @@ failure is still reproducing, and when a leg was cancelled rather than run.
 | addon | note |
 |---|---|
 | `llm-llamacpp` | sharded — always pass `tests` |
-| `asr-ggml`, `audiogen-ggml`, `tts-ggml` | split addons: an empty input or `@qvac` pin installs the matching `-android-arm64` / `-ios` package from npm at the same version. `@tetherto` `-mono` builds carry prebuilds inline. |
-| `audiogen-ggml` | pins its composite actions to the default branch, so `prebuild_run_id` only works once that support is on `main`; it fails loudly with instructions until then |
-| `classification-ggml`, `embed-llamacpp`, `ggml-rpc-server`, `llm-llamacpp`, `model-fit`, `ocr-ggml`, `translation-nmtcpp`, `turbovec-ggml`, `vla-ggml` | on the CI contract: one workflow, `mobile-tests.yml`, with `-f packages=<dir>`. `prebuild_run_id` is a `pr-build-test.yml` run; Route B dev builds come from dispatching `publish-gpr.yml` with `-f packages=<dir>` |
-| `decoder-audio` | no native prebuild of its own (rides `bare-ffmpeg` from npm). `package` has no effect; use `ref`. |
+| `asr-ggml`, `audiogen-ggml`, `tts-ggml` | split addons: an empty input or `@qvac` pin installs the matching `-android-arm64` / `-ios` package from npm at the same version. `@tetherto` `-mono` builds carry prebuilds inline. A mobile benchmark run is a `benchmarks.yml` dispatch whose `args` pick one matrix row (see `docs/ci/MOBILE-ON-DEMAND.md`). |
+| `asr-ggml`, `audiogen-ggml`, `bci-whispercpp`, `classification-ggml`, `decoder-audio`, `embed-llamacpp`, `ggml-rpc-server`, `llm-llamacpp`, `model-fit`, `ocr-ggml`, `translation-nmtcpp`, `tts-ggml`, `turbovec-ggml`, `vla-ggml` | on the CI contract: one workflow, `mobile-tests.yml`, with `-f packages=<dir>`. `prebuild_run_id` is a `pr-build-test.yml` run; Route B dev builds come from dispatching `publish-gpr.yml` with `-f packages=<dir>` |
+| `decoder-audio` | no native prebuild of its own (rides `bare-ffmpeg` from npm), so it takes no prebuild source; the dispatched `ref` is what gets tested. |
 | `inference-addon-cpp` | compiles its own prebuilds in-run from the dispatched `ref`, so no prebuild input is needed or offered |
 
 ## Reading a failure — where the logs are

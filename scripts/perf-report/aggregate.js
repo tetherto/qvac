@@ -180,7 +180,7 @@ function downloadAndCollect (workflow, runs, addon, repo, pattern) {
  * Restricts each report's `results` to rows whose `test` name contains one
  * of the pipe-separated, case-insensitive substrings in `pattern`. Reports
  * left with no matching rows are dropped. Returns input unchanged when
- * `pattern` is falsy. Lets perf-report.yml carve a focused section out of
+ * `pattern` is falsy. Lets the perf report carve a focused section out of
  * a shared addon's artifacts.
  */
 function filterReports (reports, pattern) {
