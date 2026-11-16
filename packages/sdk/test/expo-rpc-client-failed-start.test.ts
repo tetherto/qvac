@@ -4,7 +4,21 @@ import { loadExpoClient, workerFailure } from './fixtures/expo-worklets'
 
 const { client, started, harness } = await loadExpoClient()
 
-// The second test leaves addon state behind for the rest of this process.
+// The last test leaves addon state behind for the rest of this process.
+
+test('a worklet that throws before ready names its exception in the startup error', async () => {
+  harness.failNextStart = Object.assign(
+    new Error('Host runtime does not expose Symbol.asyncDispose'),
+    { code: 'WORKER_ERROR' }
+  )
+  await assert.rejects(
+    client.getRPC(),
+    (error: { name?: string; message?: string }) =>
+      error.name === 'WORKER_STARTUP_FAILED' &&
+      error.message ===
+        'Worker failed before signalling ready: Host runtime does not expose Symbol.asyncDispose'
+  )
+})
 
 test('a worklet that reports its exit before ready lets the next call start a new one', async () => {
   harness.failNextStart = workerFailure('WORKER_EXITED', 1)
