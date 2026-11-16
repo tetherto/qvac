@@ -62,8 +62,15 @@ await engine.unload()
 ```
 
 Requests and results use upstream's `/v1/systemone` shapes. `info()` reports
-what the loaded model supports; check it before building requests (for
-example, lev's `noul` is an expected rating, not a probability).
+what the loaded model supports; check it before building requests:
+
+- `noul`: what a `noul` answer means: `probability` (of "true"),
+  `expected_rating` (lev, normalized to 0..1), or `unknown` for a decision
+  type this addon does not list. Treat an `unknown` one as neither.
+- `max_input_tokens`: the longest input a request can have, a state with one
+  question and its options. A longer one is rejected with
+  `DECISION_INVALID_REQUEST`.
+- `score_levels`, `images`, `audio` and the other capabilities.
 
 ### Several states
 
@@ -88,7 +95,7 @@ example.
 | --- | --- |
 | `device` | Required: `gpu` or `cpu`. `cpu` keeps every layer and the projector on the CPU. |
 | `gpu_layers` | Layers to offload on `gpu`. |
-| `ctx_size`, `batch_size`, `ubatch_size` | Context and batch sizes. Unset values are left to upstream (the context fits free device memory). |
+| `ctx_size`, `batch_size`, `ubatch_size` | Context and batch sizes. Unset values are left to upstream (the context fits free device memory), except for a non-causal model (Laya): it reads each question's whole input in one pass, so its micro-batch follows `batch_size`, which is then the longest input (2048 tokens unless set). |
 | `threads` | CPU threads, at most the device's CPU count; `0` uses every CPU. |
 | `parallel` | Upstream slots, at least 1. Upstream runs a request's questions, option variants and a batch's states over them together; it does not change how many requests the engine accepts at once. Unset, it is llama-server's own default: 4 slots sharing one KV cache, so memory does not grow with them. Set, each slot has its own KV cache, as with llama-server's `-np`. |
 | `mmproj` | Projector GGUF, for models that take images or audio. |
@@ -117,8 +124,9 @@ Any other key fails the load. Multi-word keys take either spelling
 | `[ Decision :: UnableToLoadModel ]` | The file is missing or cannot be loaded |
 
 `run()` rejects a request the model does not accept (bad JSON, too many
-options, an unsupported question type, nesting deeper than 128 levels, ...)
-with `err.code === DECISION_INVALID_REQUEST`; other failures do not carry that
+options, an unsupported question type, nesting deeper than 128 levels, an
+input longer than `max_input_tokens`, ...) with
+`err.code === DECISION_INVALID_REQUEST`; other failures do not carry that
 code. A cancelled run fails with `Job cancelled`.
 
 ## Laya models

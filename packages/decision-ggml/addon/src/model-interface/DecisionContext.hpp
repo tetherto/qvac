@@ -16,6 +16,12 @@ namespace qvac_lib_inference_addon_decision {
 /// and catching an exception cannot recover from a stack overflow.
 constexpr int DECISION_MAX_JSON_DEPTH = 128;
 
+/// What a `noul` answer means for a decision type: "probability" (of the
+/// "true" option), "expected_rating" (lev, normalized to 0..1), or "unknown"
+/// for a type this addon does not list, which callers must not treat as
+/// either.
+std::string noulSemantics(common_decision_type type);
+
 /// @brief DecisionEngineModel's context: upstream llama.cpp's decision
 /// execution (tools/server server-context), run in-process without an HTTP
 /// server. The decision counterpart of llm-llamacpp's LlmContext.
@@ -46,7 +52,10 @@ public:
   ///   {"decision_type": "openjev", "noul": "probability" | "expected_rating",
   ///    "joint": bool, "shared_prefix": bool, "images": bool, "audio": bool,
   ///    "score_levels": {"min": 2, "max": 10}, "max_json_depth": 128,
-  ///    "n_ctx": int, "model": string}
+  ///    "n_ctx": int, "max_input_tokens": int, "model": string}
+  /// "noul" is "unknown" for a type this addon does not list.
+  /// "max_input_tokens" is the longest input (a state with one question and
+  /// its options) a request can have.
   [[nodiscard]] const std::string& info() const noexcept;
 
   /// Runs one /v1/systemone request, blocks until it finishes and returns
@@ -64,7 +73,8 @@ public:
   /// context's destruction) stopped the run, even if upstream returned a
   /// response; StatusError InvalidRequest for a request the model rejects
   /// (bad JSON, nesting deeper than DECISION_MAX_JSON_DEPTH, upstream
-  /// validation), whose message starts with "invalid request: "; StatusError
+  /// validation, an input longer than the model reads in one pass), whose
+  /// message starts with "invalid request: "; StatusError
   /// DecodeFailed for an execution failure.
   std::string
   run(const std::string& requestJson, const std::function<bool()>& shouldStop);

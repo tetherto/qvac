@@ -98,6 +98,14 @@ for (const [name, mmproj, expectType] of [
       t.is(info.noul, 'probability')
       t.alike(info.score_levels, { min: 2, max: 10 })
       t.is(info.max_json_depth, 128)
+      if (expectType === 'laya') {
+        t.ok(
+          info.max_input_tokens > 0 && info.max_input_tokens <= 2048,
+          `one pass of at most 2048 tokens: ${info.max_input_tokens}`
+        )
+      } else {
+        t.is(info.max_input_tokens, info.n_ctx - 1, 'causal: the context but one token')
+      }
       if (mmproj) t.ok(info.images, 'openjev with its projector takes images')
 
       const { result, stats } = await decide(engine, { state: STATE, questions: QUESTIONS })

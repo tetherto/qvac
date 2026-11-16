@@ -15,6 +15,11 @@
     so its slots batch them; results keep the input order.
   - Unset, `parallel` is llama-server's own default: 4 slots sharing one KV
     cache.
+  - `info()` reports `noul` as `probability`, `expected_rating` (lev) or
+    `unknown` for a type this addon does not list, and `max_input_tokens`.
+  - A non-causal model (Laya) reads up to `batch_size` tokens (2048 by
+    default) in one pass; a longer input is rejected with
+    `DECISION_INVALID_REQUEST`, not reported as an execution failure.
   - One request runs at a time and a second is rejected while it does;
     cancellation reaches a job even before its run starts.
   - A model without decision metadata is rejected from its GGUF header before

@@ -111,8 +111,12 @@ export interface DecisionEngineResult {
 export interface DecisionEngineInfo {
   /** Upstream decision type, e.g. "openjev", "lev", "laya", "clef". */
   decision_type: string;
-  /** What a `noul` answer means for this model. */
-  noul: "probability" | "expected_rating";
+  /**
+   * What a `noul` answer means for this model: the probability of "true", or
+   * lev's expected rating normalized to 0..1. "unknown" for a decision type
+   * this addon does not list; treat its `noul` as neither.
+   */
+  noul: "probability" | "expected_rating" | "unknown";
   /** All questions answered in one prompt (clef). */
   joint: boolean;
   shared_prefix: boolean;
@@ -122,6 +126,13 @@ export interface DecisionEngineInfo {
   /** Maximum nesting of a value inside the request. */
   max_json_depth: number;
   n_ctx: number;
+  /**
+   * The longest input a request can have, in tokens: a state with one
+   * question and its options. For a non-causal model (Laya) it is the batch
+   * size (`batch_size`, 2048 unless set); a longer one is rejected with
+   * {@link DECISION_INVALID_REQUEST}.
+   */
+  max_input_tokens: number;
   model: string;
 }
 

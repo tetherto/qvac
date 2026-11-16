@@ -17,6 +17,7 @@
 #include <exception>
 #include <filesystem>
 #include <mutex>
+#include <regex>
 #include <stdexcept>
 #include <thread>
 #include <utility>
@@ -66,6 +67,22 @@ using State = DecisionContext::State;
   // "invalid request: " is the marker the JS side turns into err.code
   // DECISION_INVALID_REQUEST (job errors reach JS as their message only).
   fail(InvalidRequest, "invalid request: " + message);
+}
+
+// Upstream reports an input that a non-causal model cannot read in one pass
+// as a server error ("input (N tokens) is too large to process. increase the
+// physical batch size (current batch size: M)"). It is a property of the
+// request: returns the addon's message for it, or "" for any other error.
+std::string tooLargeForOnePass(const std::string& message) {
+  static const std::regex pattern(
+      R"(^input \((\d+) tokens\) is too large to process\..*current batch size: (\d+))");
+  std::smatch match;
+  if (!std::regex_search(message, match, pattern)) {
+    return "";
+  }
+  return "the input is " + match[1].str() +
+         " tokens, more than this model reads in one pass (" + match[2].str() +
+         "); shorten the state, or load the model with a larger batch_size";
 }
 
 // Prefix of a failure inside a batch ("states[3]: "), empty for one state.
@@ -158,6 +175,35 @@ const char* decisionTypeName(common_decision_type type) {
   }
 }
 
+} // namespace
+
+std::string noulSemantics(common_decision_type type) {
+  switch (type) {
+  // upstream format_answer: lev reads noul from its rating scale and answers
+  // the expected rating, normalized to 0..1.
+  case COMMON_DECISION_TYPE_LEV:
+    return "expected_rating";
+  // Every other type answers the probability of the "true" option.
+  case COMMON_DECISION_TYPE_OPENJEV:
+  case COMMON_DECISION_TYPE_KEV:
+  case COMMON_DECISION_TYPE_NIMBLE:
+  case COMMON_DECISION_TYPE_LAYA:
+  case COMMON_DECISION_TYPE_CLEF:
+  case COMMON_DECISION_TYPE_PPLX_DECIDER:
+  case COMMON_DECISION_TYPE_VLLM_DECISION2:
+  case COMMON_DECISION_TYPE_VLLM_D3:
+  case COMMON_DECISION_TYPE_LFM2_D1:
+  case COMMON_DECISION_TYPE_LFM2_D1_OMNI:
+  case COMMON_DECISION_TYPE_GRANITE_SWITCH:
+    return "probability";
+  // A type a rebase adds is not assumed to be either until it is listed here.
+  default:
+    return "unknown";
+  }
+}
+
+namespace {
+
 std::string buildInfo(State& d) {
   llama_context* lctx = d.ctx->get_llama_context();
   const llama_model* model = lctx != nullptr ? llama_get_model(lctx) : nullptr;
@@ -179,11 +225,7 @@ std::string buildInfo(State& d) {
 
   common_json info = common_json::object();
   info["decision_type"] = std::string(decisionTypeName(decision.type));
-  // lev answers noul with an expected rating, every other type with the
-  // probability of "true" (upstream format_answer).
-  info["noul"] = std::string(
-      decision.type == COMMON_DECISION_TYPE_LEV ? "expected_rating"
-                                                : "probability");
+  info["noul"] = noulSemantics(decision.type);
   info["joint"] = decision.is_joint();
   info["shared_prefix"] = decision.can_share_prompt();
   info["images"] = decision.can_use_images() && meta.has_inp_image;
@@ -191,6 +233,14 @@ std::string buildInfo(State& d) {
   info["score_levels"] = levels;
   info["max_json_depth"] = DECISION_MAX_JSON_DEPTH;
   info["n_ctx"] = meta.slot_n_ctx;
+  // The longest input (a state with one question and its options, in
+  // tokens) a request can have. A non-causal model reads it in one pass of at
+  // most n_ubatch tokens; a causal one splits it but needs a token of the
+  // context left.
+  info["max_input_tokens"] =
+      llama_get_causal_attn(lctx)
+          ? meta.slot_n_ctx - 1
+          : std::min(static_cast<int>(llama_n_ubatch(lctx)), meta.slot_n_ctx);
   info["model"] = meta.model_name;
   return info.dump();
 }
@@ -356,6 +406,10 @@ std::string runOne(
     // model without image input), also a property of the request.
     if (res->status == 400 || res->status == 501) {
       failRequest(at(where) + message);
+    }
+    if (const std::string tooLarge = tooLargeForOnePass(message);
+        !tooLarge.empty()) {
+      failRequest(at(where) + tooLarge);
     }
     fail(DecodeFailed, at(where) + message);
   }

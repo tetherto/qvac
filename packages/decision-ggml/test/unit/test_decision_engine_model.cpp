@@ -149,6 +149,33 @@ TEST(DecisionEngineConfigTest, UnsetParallelIsLlamaServersAutoDefault) {
   EXPECT_TRUE(p.kv_unified);
 }
 
+TEST(DecisionEngineConfigTest, AnEncoderModelReadsBatchSizeTokensInOnePass) {
+  const std::string laya = fixture("tinylaya-for-testing-Q8_0.gguf");
+  const std::string openjev = fixture("tinyopenjev-for-testing-Q8_0.gguf");
+  if (laya.empty() || openjev.empty()) {
+    GTEST_SKIP() << "decision fixtures not found (set DECISION_TEST_MODELS)";
+  }
+  const common_params defaults{};
+  // tinylaya is non-causal: the micro-batch follows the batch.
+  EXPECT_EQ(
+      DecisionEngineModel::loadParams(laya, {{"device", "cpu"}}).n_ubatch,
+      defaults.n_batch);
+  const common_params larger = DecisionEngineModel::loadParams(
+      laya, {{"device", "cpu"}, {"batch_size", "4096"}});
+  EXPECT_EQ(larger.n_batch, 4096);
+  EXPECT_EQ(larger.n_ubatch, 4096);
+  EXPECT_EQ(
+      DecisionEngineModel::loadParams(
+          laya, {{"device", "cpu"}, {"ubatch_size", "256"}})
+          .n_ubatch,
+      256)
+      << "an explicit micro-batch is kept";
+  // tinyopenjev is causal: upstream's default micro-batch stays.
+  EXPECT_EQ(
+      DecisionEngineModel::loadParams(openjev, {{"device", "cpu"}}).n_ubatch,
+      defaults.n_ubatch);
+}
+
 TEST(DecisionEngineConfigTest, ExplicitParallelKeepsUpstreamsMeaning) {
   // As with llama-server's -np: one KV cache per slot unless unified.
   const common_params defaults{};
@@ -364,9 +391,38 @@ TEST_F(
   EXPECT_TRUE(next.contains("answers"));
 }
 
+TEST(NoulSemanticsTest, ListsEveryKnownTypeAndNothingElse) {
+  EXPECT_EQ(
+      qdecision::noulSemantics(COMMON_DECISION_TYPE_LEV), "expected_rating");
+  for (const auto type :
+       {COMMON_DECISION_TYPE_OPENJEV,
+        COMMON_DECISION_TYPE_KEV,
+        COMMON_DECISION_TYPE_NIMBLE,
+        COMMON_DECISION_TYPE_LAYA,
+        COMMON_DECISION_TYPE_CLEF,
+        COMMON_DECISION_TYPE_PPLX_DECIDER,
+        COMMON_DECISION_TYPE_VLLM_DECISION2,
+        COMMON_DECISION_TYPE_VLLM_D3,
+        COMMON_DECISION_TYPE_LFM2_D1,
+        COMMON_DECISION_TYPE_LFM2_D1_OMNI,
+        COMMON_DECISION_TYPE_GRANITE_SWITCH}) {
+    EXPECT_EQ(qdecision::noulSemantics(type), "probability") << type;
+  }
+  // Not a type this addon lists: never assumed to be a probability.
+  for (const auto type :
+       {COMMON_DECISION_TYPE_NONE,
+        COMMON_DECISION_TYPE_UNKNOWN,
+        static_cast<common_decision_type>(COMMON_DECISION_TYPE_UNKNOWN + 1)}) {
+    EXPECT_EQ(qdecision::noulSemantics(type), "unknown") << type;
+  }
+}
+
 TEST_F(DecisionContextModelTest, ReportsInfoAndMapsUpstreamRejections) {
   const json info = json::parse(context_->info());
   EXPECT_EQ(info["decision_type"], "openjev");
+  EXPECT_EQ(info["noul"], "probability");
+  // Causal: the input may fill the context but one token.
+  EXPECT_EQ(info["max_input_tokens"], info["n_ctx"].get<int>() - 1);
   EXPECT_EQ(info["max_json_depth"], qdecision::DECISION_MAX_JSON_DEPTH);
 
   const auto rejected = runOutcome(
@@ -378,6 +434,55 @@ TEST_F(DecisionContextModelTest, ReportsInfoAndMapsUpstreamRejections) {
   // The JS side keys err.code DECISION_INVALID_REQUEST on this prefix.
   EXPECT_EQ(rejected.second.rfind("invalid request: ", 0), 0U)
       << rejected.second;
+}
+
+TEST(DecisionContextLayaTest, AnInputLongerThanOnePassIsARejectedRequest) {
+  const std::string laya = fixture("tinylaya-for-testing-Q8_0.gguf");
+  if (laya.empty()) {
+    GTEST_SKIP() << "decision fixtures not found (set DECISION_TEST_MODELS)";
+  }
+  // A non-causal model with a 64-token pass: the limit info() reports, and
+  // the error for a longer input.
+  qdecision::DecisionContext context(
+      DecisionEngineModel::loadParams(
+          laya, {{"device", "cpu"}, {"batch_size", "64"}}));
+  const json info = json::parse(context.info());
+  EXPECT_EQ(info["decision_type"], "laya");
+  EXPECT_EQ(info["noul"], "probability");
+  EXPECT_EQ(info["max_input_tokens"], 64);
+
+  const json shortRequest = {
+      {"state", "Refund please."},
+      {"questions", {{"q", {{"type", "noul"}, {"instructions", "Refund?"}}}}}};
+  EXPECT_TRUE(
+      json::parse(context.run(shortRequest.dump(), kNeverStop))
+          .contains("answers"));
+
+  std::string longState;
+  for (int i = 0; i < 80; ++i) {
+    longState += "My payment failed and I was charged twice. ";
+  }
+  json longRequest = shortRequest;
+  longRequest["state"] = longState;
+  const auto rejected = runOutcome(context, longRequest.dump(), kNeverStop);
+  EXPECT_EQ(rejected.first, "[ Decision :: InvalidRequest ]");
+  EXPECT_EQ(rejected.second.rfind("invalid request: the input is ", 0), 0U)
+      << rejected.second;
+  EXPECT_NE(
+      rejected.second.find("more than this model reads in one pass (64)"),
+      std::string::npos)
+      << rejected.second;
+
+  // In a batch, the state is named.
+  const json batch = {
+      {"states", json::array({"Refund please.", longState})},
+      {"questions", shortRequest["questions"]}};
+  const auto batchRejected = runOutcome(context, batch.dump(), kNeverStop);
+  EXPECT_EQ(
+      batchRejected.second.rfind(
+          "invalid request: states[1]: the input is ", 0),
+      0U)
+      << batchRejected.second;
 }
 
 namespace {

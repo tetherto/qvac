@@ -7,6 +7,7 @@
 #include <unordered_set>
 #include <utility>
 
+#include <gguf.h>
 #include <inference-addon-cpp/Errors.hpp>
 #include <nlohmann/json.hpp>
 
@@ -73,6 +74,31 @@ int toInt(const std::string& key, const std::string& value, int min) {
   return n;
 }
 
+// Whether the GGUF names a non-causal (encoder) architecture:
+// <arch>.attention.causal is false. Read from the header only; a file that
+// cannot be read counts as causal, and the load reports it.
+bool isEncoderModel(const std::string& path) {
+  gguf_init_params init{};
+  init.no_alloc = true;
+  init.ctx = nullptr;
+  gguf_context* gguf = gguf_init_from_file(path.c_str(), init);
+  if (gguf == nullptr) {
+    return false;
+  }
+  bool encoder = false;
+  const int64_t archKey = gguf_find_key(gguf, "general.architecture");
+  if (archKey >= 0 && gguf_get_kv_type(gguf, archKey) == GGUF_TYPE_STRING) {
+    const std::string key =
+        std::string(gguf_get_val_str(gguf, archKey)) + ".attention.causal";
+    const int64_t causalKey = gguf_find_key(gguf, key.c_str());
+    encoder = causalKey >= 0 &&
+              gguf_get_kv_type(gguf, causalKey) == GGUF_TYPE_BOOL &&
+              !gguf_get_val_bool(gguf, causalKey);
+  }
+  gguf_free(gguf);
+  return encoder;
+}
+
 const std::string& requestOf(const std::any& input) {
   if (input.type() != typeid(std::string)) {
     throw qvac_errors::StatusError(
@@ -132,6 +158,14 @@ common_params DecisionEngineModel::loadParams(
   if (const std::string v = firstOf(config, {"ubatch_size", "ubatch-size"});
       !v.empty()) {
     params.n_ubatch = toInt("ubatch_size", v, 1);
+  } else if (isEncoderModel(modelGgufPath)) {
+    // A non-causal (encoder) decision model, Laya for one, reads each
+    // question's whole input in one pass, and upstream caps the batch at the
+    // micro-batch for it: an unset micro-batch (512) would reject longer
+    // states than the checkpoints were trained on (1024 for laya-multilingual).
+    // batch_size is then the longest input, 2048 by default, as embed's
+    // LayaDecisions.
+    params.n_ubatch = params.n_batch;
   }
   // 0 or below leaves upstream's default, every CPU (checkLoadOptions has
   // already checked the value).
