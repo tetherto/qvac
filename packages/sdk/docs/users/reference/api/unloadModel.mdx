@@ -1,17 +1,17 @@
 ---
 title: unloadModel
 titleStyle: code
-description: Unloads a loaded model and frees its memory, optionally deleting its files from disk.
+description: Releases the caller's hold on a loaded model, freeing its memory once no session holds it, and optionally deletes its files from disk.
 binds:
   - fn:unloadModel
 ---
 
-Unloads a model that [`loadModel()`](/sdk/reference/api/loadModel) loaded and frees its memory. Requests still running on the model are cancelled and drained before it is freed, and the model's log stream to the `logger` passed at load stops. When the last loaded model is unloaded, the call can also close the RPC connection so the process can exit.
+Releases the caller's lease on a model that [`loadModel()`](/sdk/reference/api/loadModel) loaded. The model leaves memory once no caller session holds it: a [session](/sdk/runtime/sessions#model-leases) that shares the model with another only drops its own lease, and the model stays loaded for the others. When the model leaves memory, requests still running on it are cancelled and drained before it is freed. When the caller's lease is released, the model's log stream to the `logger` passed at load stops for the caller. When the runtime owner unloads the last loaded model and no caller session is open, the call can also close the RPC connection so the process can exit. A session never closes the runtime.
 
 ## Signature
 
 ```ts
-function unloadModel(params: UnloadModelParams): Promise<void>;
+function unloadModel(params: UnloadModelParams, options?: RPCOptions): Promise<UnloadModelResult>;
 ```
 
 ## Parameters
@@ -19,28 +19,54 @@ function unloadModel(params: UnloadModelParams): Promise<void>;
 | Parameter | Description | Type | Required |
 | --- | --- | --- | --- |
 | `params` | Which model to unload and how. | [`UnloadModelParams`](#unloadmodelparams) | Yes |
+| `options` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
 
 ### `UnloadModelParams`
 
 | Option | Description | Type | Required | Default |
 | --- | --- | --- | --- | --- |
 | `modelId` | ID of the loaded model, as `loadModel()` returned it. | `string` | Yes | — |
-| `clearStorage` | Also delete the model's files from disk after unloading: the model file, the directory of a multi-file model in the cache, or the whole directory that holds a [sharded model](/sdk/models/sharded-models)'s shards. | `boolean` | No | `false` |
-| `autoClose` | Close the RPC connection when no loaded model remains after this unload. | `boolean` | No | `true`, or `false` on the Bare runtime |
+| `clearStorage` | Also delete the model's files from disk after unloading, when this call makes the model leave memory: the model file, the directory of a multi-file model in the cache, or the whole directory that holds a [sharded model](/sdk/models/sharded-models)'s shards. | `boolean` | No | `false` |
+| `autoClose` | Close the RPC connection when no loaded model remains after this unload and no caller session is open. Applies only to a call from the runtime owner: a call with `options.sessionId` never closes the connection. | `boolean` | No | `true`, or `false` on the Bare runtime |
 
 <Callout type="warn">
 `clearStorage: true` also deletes a model loaded from a local path outside the cache. For a sharded model, it deletes the directory that holds the shards.
 </Callout>
 
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
+
 ## Returns
 
-A promise that resolves with no value once the model is unloaded.
+A promise that resolves with an `UnloadModelResult`:
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `released` | Whether the caller's lease on the model was released. `false` when the caller held no lease on it, in which case nothing changes. | `boolean` |
+| `unloaded` | Whether the model left memory. `false` while another session still holds a lease on it. | `boolean` |
 
 ## Throws
 
 | Error | When |
 | --- | --- |
 | `ModelUnloadFailedError` | The unload fails, including when no loaded model has this `modelId`. |
+| `SessionNotOpenError` | `options.sessionId` names a session that is not open. |
 | `InvalidResponseError` | The worker answers with an unexpected response type. |
 
 ## Examples
@@ -51,7 +77,7 @@ import { loadModel, unloadModel, LLAMA_3_2_1B_INST_Q4_0 } from "@qvac/sdk";
 const modelId = await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0 });
 
 // Free the memory and keep the cached files.
-await unloadModel({ modelId });
+const { unloaded } = await unloadModel({ modelId }); // false while another session holds the model
 
 // Or: free the memory and delete the model's files from disk.
 // await unloadModel({ modelId, clearStorage: true });

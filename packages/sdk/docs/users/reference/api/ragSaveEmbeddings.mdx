@@ -6,7 +6,7 @@ binds:
   - fn:ragSaveEmbeddings
 ---
 
-Saves pre-embedded documents into a built-in RAG workspace and resolves with one result per document. It opens the workspace, creating it if it does not exist, and leaves it open until [`ragCloseWorkspace()`](/sdk/reference/api/ragCloseWorkspace). Use it as the last step of the segregated flow — [`ragChunk()`](/sdk/reference/api/ragChunk) → [`embed()`](/sdk/reference/api/embed) → `ragSaveEmbeddings()`. See [RAG](/sdk/ai-capabilities/rag).
+Saves pre-embedded documents into a built-in RAG workspace and resolves with one result per document. It opens the workspace, creating it if it does not exist, and leaves it open until [`ragCloseWorkspace()`](/sdk/reference/api/ragCloseWorkspace). Use it as the last step of the segregated flow — [`ragChunk()`](/sdk/reference/api/ragChunk) → [`embedBatch()`](/sdk/reference/api/embedBatch) → `ragSaveEmbeddings()`. See [RAG](/sdk/ai-capabilities/rag).
 
 <Callout type="warn">
 **Prototype only:** the built-in RAG vector store is not production grade. For production, use an external vector DB, as shown in the [RAG guide](/sdk/ai-capabilities/rag).
@@ -14,7 +14,7 @@ Saves pre-embedded documents into a built-in RAG workspace and resolves with one
 
 A new workspace stores its vectors in HyperDB, or in a TurboVec index when [`ragTurbovec`](/sdk/configuration#options) is set in the configuration. The choice is fixed for the life of the workspace. The first save also fixes the workspace's embedding model ID and vector dimension; later saves with a different one fail.
 
-Starting `ragIngest()`, `ragSaveEmbeddings()`, or `ragReindex()` on a workspace cancels the one of these already running on that workspace.
+Starting `ragIngest()`, `ragSaveEmbeddings()`, or `ragReindex()` on a workspace cancels the one of these already running on that workspace, when the same caller started it. A [session](/sdk/runtime/sessions) that finds another session's operation running there is refused with `RAGWorkspaceBusyError`; the owner cancels any session's operation.
 
 ## Signature
 
@@ -45,7 +45,7 @@ function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: RPCOptions
 | --- | --- | --- | --- |
 | `id` | Document ID. [`ragSearch()`](/sdk/reference/api/ragSearch) returns it, and [`ragDeleteEmbeddings()`](/sdk/reference/api/ragDeleteEmbeddings) takes it. | `string` | Yes |
 | `content` | Text of the document. A document whose content is already stored, or repeats an earlier document in the call, is rejected as a duplicate. | `string` | Yes |
-| `embedding` | The document's vector, such as one returned by `embed()`. All documents in a call must have the same dimension. | `number[]` | Yes |
+| `embedding` | The document's vector, such as one of the vectors `embedBatch()` returns. All documents in a call must have the same dimension. | `number[]` | Yes |
 | `embeddingModelId` | ID of the model that produced `embedding`. All documents in a call must share it. | `string` | Yes |
 | `metadata` | Arbitrary data stored with the document. | `Record<string, unknown>` | No |
 
@@ -67,6 +67,7 @@ The `stage` passed to `onProgress`, in order. `current` and `total` count docume
 | `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
 | `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
 | `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
 
 #### `PerCallProfiling`
 
@@ -97,13 +98,14 @@ An error written as a code, such as `MODEL_NOT_FOUND`, is not exported as a clas
 | --- | --- |
 | `RequestValidationFailedError` | `params` fails validation, for example a document without `embeddingModelId` or an invalid `workspace` name. |
 | `RAG_SAVE_FAILED` | The worker reports that the save failed. |
+| `RAGWorkspaceBusyError` | Another session's `ragIngest()`, `ragSaveEmbeddings()`, or `ragReindex()` is running on the workspace, and this call is made through a session. Retry when it finishes. |
 | `StreamEndedError` | The progress stream ends without a final result (only with `onProgress`). |
 
 ## Examples
 
 ```ts
 const chunks = await ragChunk({ documents: articles });
-const { embedding } = await embed({ modelId, text: chunks.map((c) => c.content) });
+const { embedding } = await embedBatch({ modelId, inputs: chunks.map((c) => c.content) });
 
 const results = await ragSaveEmbeddings({
   workspace: "articles",

@@ -11,9 +11,9 @@ Encodes a prompt and a first frame into a scene pack, and makes it the live worl
 ## Signature
 
 ```ts
-function worldCreateScene(params: WorldSceneClientParams & { returnPack: true }): WorldSceneResultWithPack;
-function worldCreateScene(params: WorldSceneClientParams & { returnPack?: false | undefined }): WorldSceneResult;
-function worldCreateScene(params: WorldSceneClientParams): WorldSceneResult | WorldSceneResultWithPack;
+function worldCreateScene(params: WorldSceneClientParams & { returnPack: true }, options?: RPCOptions): WorldSceneResultWithPack;
+function worldCreateScene(params: WorldSceneClientParams & { returnPack?: false | undefined }, options?: RPCOptions): WorldSceneResult;
+function worldCreateScene(params: WorldSceneClientParams, options?: RPCOptions): WorldSceneResult | WorldSceneResultWithPack;
 ```
 
 `returnPack` selects the result type:
@@ -29,6 +29,7 @@ function worldCreateScene(params: WorldSceneClientParams): WorldSceneResult | Wo
 | Parameter | Description | Type | Required |
 | --- | --- | --- | --- |
 | `params` | The model, the prompt, the first frame, and the scene size. | [`WorldSceneClientParams`](#worldsceneclientparams) | Yes |
+| `options` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
 
 ### `WorldSceneClientParams`
 
@@ -40,6 +41,25 @@ function worldCreateScene(params: WorldSceneClientParams): WorldSceneResult | Wo
 | `width` | Scene width in pixels: a positive multiple of 32, at most 4096. `width * height` must not exceed 2,088,960 pixels (1920×1088). | `number` | No | `832` |
 | `height` | Scene height in pixels: a positive multiple of 32, at most 4096. Bounded by the same pixel ceiling as `width`. | `number` | No | `480` |
 | `returnPack` | Return the scene pack in `scene`. The pack is 10 MB or more, and the world is live on the session without it. Turn it on to persist a world: save the bytes, then pass the file as `modelConfig.sceneSrc` to a later [`loadModel()`](/sdk/reference/api/loadModel) to walk the same world again. | `boolean` | No | `false` |
+
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
 
 ## Returns
 
@@ -82,6 +102,8 @@ Every field is optional.
 | `RequestRejectedByPolicyError` | A world job is already running on the model. World refuses rather than queues. |
 | `InferenceCancelledError` | A `cancel({ requestId })` is accepted. The encode still runs to completion. |
 | `StreamEndedError` | The RPC stream closes without a terminal `done` chunk. |
+| `SessionNotOpenError` | `options.sessionId` names a session that is not open in the worker. |
+| `SessionInvalidatedError` | The call was made through a session handle whose session has ended. |
 
 ## Examples
 

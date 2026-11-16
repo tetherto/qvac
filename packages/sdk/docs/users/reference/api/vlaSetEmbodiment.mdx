@@ -11,7 +11,7 @@ Switches a loaded multi-embodiment GR00T model to another embodiment shipped in 
 ## Signature
 
 ```ts
-function vlaSetEmbodiment(params: { modelId: string; embodiment: VlaEmbodimentSelection }): Promise<{ hparams: VlaHparams }>;
+function vlaSetEmbodiment(params: { modelId: string; embodiment: VlaEmbodimentSelection }, options?: RPCOptions): Promise<{ hparams: VlaHparams }>;
 ```
 
 ## Parameters
@@ -20,6 +20,7 @@ function vlaSetEmbodiment(params: { modelId: string; embodiment: VlaEmbodimentSe
 | --- | --- | --- | --- |
 | `params.modelId` | ID of a GR00T model loaded with `modelType: "vla"` (`"ggml-vla"`). | `string` | Yes |
 | `params.embodiment` | The embodiment to activate. | [`VlaEmbodimentSelection`](#vlaembodimentselection) | Yes |
+| `options` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
 
 ### `VlaEmbodimentSelection`
 
@@ -33,6 +34,25 @@ One of:
 
 `numCameras` overrides the camera count stored in the GGUF for the selected embodiment, as an integer from 1 to 64. It is required to select an embodiment whose camera count the GGUF does not store.
 
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
+
 ## Returns
 
 A promise that resolves with `{ hparams }`: the model's [`VlaHparams`](/sdk/reference/api/vlaHparams#vlahparams) after the switch. `numCameras`, `actionDim`, `selectedEmbodimentTag`, and `selectedEmbodimentCatId` follow the newly active embodiment. Selecting by `catId` reports that ID's canonical tag, which may differ from an alias used to select it; the ID is the stable identity.
@@ -45,6 +65,13 @@ The promise rejects, and the current embodiment stays active, when:
 - the tag or `cat_id` is unknown, or not stored in the GGUF;
 - the embodiment has no known camera count and `numCameras` is not given;
 - a `vla()` call on the model is still pending. Await it first.
+
+It also rejects with:
+
+| Error | When |
+| --- | --- |
+| `SessionNotOpenError` | `options.sessionId` names a session that is not open in the worker. |
+| `SessionInvalidatedError` | The call was made through a session handle whose session has ended. |
 
 ## Examples
 

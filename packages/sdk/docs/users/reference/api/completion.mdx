@@ -29,10 +29,12 @@ function completion(params: CompletionParams): CompletionRun;
 | `stream` | `true` delivers events as the model produces them. `false` delivers every event at once when generation ends, and leaves `tokenStream` and `toolCallStream` empty. | `boolean` | Yes | — |
 | `tools` | Tools the model can call: all full [`Tool`](#tool) objects, or all [`ToolInput`](#toolinput) objects with Zod schemas. Load the model with `modelConfig.tools: true` to enable tool calling. Cannot be combined with a `json_object` or `json_schema` `responseFormat`. | [`Tool`](#tool)`[] \| ` [`ToolInput`](#toolinput)`[]` | No | — |
 | `mcp` | MCP clients whose tools are added to the request, listed before `tools`. Their tool calls get an `invoke()` that calls the MCP server. See [MCP](/sdk/ai-capabilities/text-generation#mcp). | [`McpClientInput`](#mcpclientinput)`[]` | No | — |
+| `toolSearch` | Limits on what the built-in `tool_search` loads per call. Used only when a tool sets `deferLoading`. The limits are stated in the `tool_search` definition at the front of the prompt, so set them once per conversation: changing them re-prefills from there. When you run the search yourself, pass the same params to `executeToolSearch`. | [`ToolSearchOptions`](#toolsearchoptions) | No | — |
 | `generationParams` | Sampling and tool-choice parameters for this request. | [`GenerationParams`](#generationparams) | No | — |
 | `responseFormat` | Structured-output constraint on the answer. Cannot be combined with `tools`. | [`ResponseFormat`](#responseformat) | No | `{ type: "text" }` |
-| `kvCache` | KV cache for follow-up turns: `true` lets the SDK derive the cache key from the history, a non-empty string is a cache key you manage, `false` disables caching. See [KV cache](/sdk/ai-capabilities/text-generation#kv-cache). | `boolean \| string` | No | No cache |
-| `prefill` | Evaluate the prompt and tools without generating an answer. The run ends with stats, no content, and no tool calls. Requires `kvCache` to be `true` or a non-empty key, and rejects a forced `generationParams.tool_choice` (`"required"` or a tool name). | `boolean` | No | `false` |
+| `kvCache` | KV cache for follow-up turns: `true` lets the SDK derive the cache key from the history, a non-empty string is a cache key you manage, `false` keeps no persistent cache key. A request without a key reuses a prefix shared across the model only when the model was loaded with `cache_share_across_keys: true`. See [KV cache](/sdk/ai-capabilities/text-generation#kv-cache). | `boolean \| string` | No | No cache key |
+| `prefill` | Evaluate the prompt and tools without generating an answer. The run ends with stats, no content, and no tool calls. Requires `kvCache` to be `true` or a non-empty key, and at least one message, from `history` or `modelConfig.system_prompt`: tools alone are not enough. Rejects a forced `generationParams.tool_choice` (`"required"` or a tool name). | `boolean` | No | `false` |
+| `seedFrom` | Name of another cache you manage to start this chat from, such as a system prompt and tools primed with `prefill`. On the first turn of a chat whose `kvCache` key has no cache yet, the model reads that cache and reuses the prefix it shares with the prompt, so only the rest is processed. The source is never written. Ignored once the chat has a cache. Requires a string `kvCache` other than `seedFrom`, and a model loaded with `cache_share_across_keys: true`. Non-empty. See [Start a chat from a primed cache](/sdk/ai-capabilities/text-generation#start-a-chat-from-a-primed-cache). | `string` | No | — |
 | `captureThinking` | Emit the model's reasoning as `thinkingDelta` events, separate from `contentDelta`. Requires a model that frames its thinking output, such as `<think>` blocks. | `boolean` | No | `false` |
 | `emitRawDeltas` | Also emit every raw model token as a `rawDelta` event, in addition to the normalized events. | `boolean` | No | `false` |
 | `toolDialect` | Tool-call output format to parse. Overrides the dialect detected at load from the model name, then the GGUF `general.architecture`, then `"hermes"`. Set it when detection picks the wrong parser for your model. | `"hermes" \| "pythonic" \| "json" \| "harmony" \| "qwen35" \| "gemma4" \| "dsml"` | No | Detected at load |
@@ -43,8 +45,8 @@ function completion(params: CompletionParams): CompletionRun;
 | Field | Description | Type | Required |
 | --- | --- | --- | --- |
 | `role` | Message role: `"system"`, `"user"`, `"assistant"`, or `"tool"`. | `string` | Yes |
-| `content` | Message text. Required, except on an `assistant` message that carries `toolCalls`, where it may be `null` or omitted and reads as an empty string. | `string \| null` | Yes |
-| `attachments` | Media files for a multimodal model, such as images. The model must be loaded with its matching `modelConfig.projectionModelSrc`. See [Multimodal](/sdk/ai-capabilities/multimodal). | [`Attachment`](#attachment)`[]` | No |
+| `content` | Message text. Required, except on an `assistant` message that carries `toolCalls`, where it may be `null` or omitted and reads as an empty string. On a `user` message, it may instead be an ordered array of text and media parts, so each image keeps its place in the turn. | `string \| ` [`HistoryContentPart`](#historycontentpart)`[] \| null` | Yes |
+| `attachments` | Media files for a multimodal model, such as images. Every attachment is sent before the message text. Cannot be combined with `content` parts. The model must be loaded with its matching `modelConfig.projectionModelSrc`. See [Multimodal](/sdk/ai-capabilities/multimodal). | [`Attachment`](#attachment)`[]` | No |
 | `toolCalls` | On an `assistant` message only: the tool calls that turn made. llama.cpp-backed models render them with their chat template's own tool-call format. | [`HistoryToolCall`](#historytoolcall)`[]` | No |
 | `toolCallId` | On a `tool` message only: the `id` of the call this result answers. | `string` | No |
 | `toolName` | On a `tool` message only: the name of the tool that produced the result. | `string` | No |
@@ -54,6 +56,15 @@ function completion(params: CompletionParams): CompletionRun;
 | Field | Description | Type | Required |
 | --- | --- | --- | --- |
 | `path` | Absolute or resolvable path to the file. The file must exist on disk. Images larger than 50 megapixels are rejected before decoding unless the model was loaded with a higher `modelConfig['image-max-megapixels']`. | `string` | Yes |
+
+#### `HistoryContentPart`
+
+One ordered piece of a `user` message's `content`. A media part keeps its position in the turn, so text that refers to "this image" sits next to it. See [Ordered text and media](/sdk/ai-capabilities/multimodal#ordered-text-and-media).
+
+| `type` | Other fields | Description |
+| --- | --- | --- |
+| `"text"` | `text: string` | Text rendered at this position in the turn. |
+| `"media"` | `path: string`, non-empty | Absolute or resolvable path to the media file, such as an image for a multimodal model. The file must exist on disk. |
 
 #### `HistoryToolCall`
 
@@ -88,6 +99,13 @@ A tool definition with a Zod schema. The SDK converts `parameters` to JSON Schem
 | `handler` | Runs the tool. When set, the matching calls in `toolCalls` carry an `invoke()` that calls it with the parsed arguments. | `(args: Record<string, unknown>) => Promise<unknown>` | No |
 | `deferLoading` | As in [`Tool`](#tool). | `boolean` | No |
 | `group` | As in [`Tool`](#tool). | `string` | No |
+
+#### `ToolSearchOptions`
+
+| Field | Description | Type | Required | Default |
+| --- | --- | --- | --- | --- |
+| `defaultLimit` | How many tool definitions one `tool_search` call loads when the model does not ask for a number with its `limit` argument. Positive integer. Must not exceed `maxLimit`. | `number` | No | `3`, or `maxLimit` when that is lower |
+| `maxLimit` | The most tool definitions one `tool_search` call can load. A larger `limit` from the model is lowered to it. Positive integer. | `number` | No | `8` |
 
 #### `McpClientInput`
 
@@ -141,6 +159,7 @@ The constraint applies to this request only.
 | `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
 | `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
 | `profiling` | Profiler settings for this call; override the global profiler settings. See [Profiler](/sdk/runtime/profiler). | `PerCallProfiling` | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
 
 ## Returns
 
@@ -231,7 +250,7 @@ Every field is optional and present only when the backend reports it.
 | `toolDefinitionsDropped` | Prompt renders that left the tool definitions out. Non-zero means the model did not see them; `0` does not prove it saw them all. | `number` |
 | `draftTokens` | Tokens drafted by speculative decoding. Present when the model was loaded with `modelConfig.spec_type`. | `number` |
 | `draftAcceptedTokens` | Drafted tokens the model accepted. | `number` |
-| `backendDevice` | Device that ran inference. | `"cpu" \| "gpu"` |
+| `backendDevice` | Device that ran inference. | `"cpu" \| "gpu" \| "npu"` |
 
 ## Throws
 
@@ -245,6 +264,12 @@ Every field is optional and present only when the backend reports it.
 | `RequestRejectedByPolicyError` | The model's wait queue is full. `events`, `tokenStream`, and `toolCallStream` throw it too. |
 | `InvalidToolSchemaError` | `tools` starts with a full `Tool` object and a later entry is not a valid `Tool`. `events`, `tokenStream`, and `toolCallStream` throw it too. |
 | `InvalidToolsArrayError` | The first entry of `tools` is empty. `events`, `tokenStream`, and `toolCallStream` throw it too. |
+| `InvalidSeedFromParamsError` | `seedFrom` is set without a string `kvCache`, or equals `kvCache`. `events`, `tokenStream`, and `toolCallStream` throw it too. |
+| `KvCacheSeedSourceNotFoundError` | On a chat that has no cache yet, no cache named `seedFrom` exists for this model and system prompt. `events`, `tokenStream`, and `toolCallStream` throw it too. |
+| `KvCacheSeedSharingDisabledError` | On a chat that has no cache yet, `seedFrom` is set on a model not loaded with `cache_share_across_keys: true`. `events`, `tokenStream`, and `toolCallStream` throw it too. |
+| `REQUEST_VALIDATION_FAILED` | The worker rejects the request, such as `prefill` with no message in `history` and no `modelConfig.system_prompt`. `events`, `tokenStream`, and `toolCallStream` throw it too. |
+
+An error written as a code, such as `REQUEST_VALIDATION_FAILED`, is not exported as a class: it reaches the caller as an `Error` whose `name` is that code.
 
 ## Examples
 

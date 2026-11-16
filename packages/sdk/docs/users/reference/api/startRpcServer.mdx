@@ -17,7 +17,7 @@ Native RPC traffic is unencrypted and unauthenticated, and a discovery topic doe
 ## Signature
 
 ```ts
-function startRpcServer(options?: StartRpcServerOptions): Promise<RpcServerInfo> & { requestId: string };
+function startRpcServer(options?: StartRpcServerOptions, rpcOptions?: RPCOptions): Promise<RpcServerInfo> & { requestId: string };
 ```
 
 ## Parameters
@@ -25,6 +25,7 @@ function startRpcServer(options?: StartRpcServerOptions): Promise<RpcServerInfo>
 | Parameter | Description | Type | Required |
 | --- | --- | --- | --- |
 | `options` | Where to bind, which devices to serve, and whether to advertise. | [`StartRpcServerOptions`](#startrpcserveroptions) | No |
+| `rpcOptions` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
 
 ### `StartRpcServerOptions`
 
@@ -38,6 +39,25 @@ function startRpcServer(options?: StartRpcServerOptions): Promise<RpcServerInfo>
 | `expectRdma` | Require runtime RDMA availability, and reject before startup when it is unavailable. On Linux, RDMA needs a capable native backend, libibverbs, an RDMA device, and `GGML_RPC_NO_RDMA` unset. | `boolean` | No | `false` |
 | `allowNonLoopbackHost` | Allow binding a non-loopback `host` on a trusted private network. This does not authenticate clients. | `boolean` | No | `false` |
 | `discoveryTopic` | Advertise the ready endpoint under this shared topic. Requires `host` set to a private IPv4 address (`10.0.0.0/8`, `172.16.0.0/12`, or `192.168.0.0/16`) and `allowNonLoopbackHost: true`. Trimmed; 1 to 256 characters. The topic does not authenticate peers. | `string` | No | — (not advertised) |
+
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. Non-empty. When omitted, the call runs as the owner. Only the owner may start an RPC server ([owner-only operations](/sdk/runtime/sessions#owner-only-operations)): the worker refuses a call that names a session, and a [session handle](/sdk/runtime/sessions) has no method for it. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
 
 ## Returns
 
@@ -57,7 +77,9 @@ The worker stops servers still running when the SDK shuts down, after unloading 
 
 | Error | When |
 | --- | --- |
-| `RequestValidationFailedError` | An option fails validation, such as a `port` out of range or an empty `discoveryTopic`. |
+| `RequestValidationFailedError` | An option fails validation, such as a `port` out of range, an empty `discoveryTopic`, or an empty `rpcOptions.sessionId`. |
+| `SessionNotOpenError` | `rpcOptions.sessionId` names a session that is not open in the worker. |
+| `OwnerOnlyError` | `rpcOptions.sessionId` names an open session. |
 | `RpcServerOperationError` | The worker has no RPC server provider registered. |
 | `RpcServerOperationError` | `host` is not an IPv4 address or `localhost`, or is non-loopback without `allowNonLoopbackHost: true`. |
 | `RpcServerOperationError` | `discoveryTopic` is set without a private IPv4 `host` and `allowNonLoopbackHost: true`. |

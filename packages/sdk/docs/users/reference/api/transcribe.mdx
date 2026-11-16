@@ -48,6 +48,7 @@ function transcribe(params: TranscribeClientParams, options?: RPCOptions): Trans
 | `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
 | `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
 | `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](/sdk/reference/api/loadModel#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
 
 ## Returns
 
@@ -67,7 +68,7 @@ A promise that resolves when the engine sends its terminal frame. With `metadata
 | `endMs` | Segment end, in milliseconds. | `number` |
 | `append` | Parakeet: the segment continues the previous one instead of replacing it. `false` when the engine does not report it. | `boolean` |
 | `id` | Segment ID. `0` when the engine does not report one. | `number` |
-| `speakerId` | Zero-based speaker ID for diarized transcription. | `number` |
+| `speakerId` | Zero-based speaker ID for diarized transcription, including a Parakeet model loaded with `speakerAttribution`. | `number` |
 | `speaker` | MOSS speaker label, such as `S01`. | `string` |
 | `speakerSegments` | Offline Sortformer / Nemotron diarization turns, each `{ speakerId, startMs, endMs }` with a zero-based speaker ID and millisecond timestamps. Turns may overlap. | `{ speakerId: number; startMs: number; endMs: number }[]` |
 | `isEndOfTurn` | Parakeet (EOU-capable checkpoints): the segment ends on a recognized end-of-utterance boundary. | `boolean` |
@@ -76,6 +77,10 @@ A promise that resolves when the engine sends its terminal frame. With `metadata
 | `noSpeechProb` | Whisper: probability (0–1) that the segment's window holds no speech, the value `no_speech_thold` is compared against. | `number` |
 | `speakerTurnNext` | Whisper, with `tdrz_enable` on a tinydiarize model: a speaker turn follows this segment. | `boolean` |
 | `tokens` | Whisper, with `token_timestamps`: decoded text tokens, each `{ text, startMs, endMs, probability }`, with millisecond timing and a decoder probability from 0 to 1. Special tokens are left out. | `{ text: string; startMs: number; endMs: number; probability: number }[]` |
+| `tokenIds` | Parakeet streaming: native token IDs of the segment. | `number[]` |
+| `isFinal` | Parakeet streaming: native finality of the segment. A segment with empty text and `isFinal: true` is a final marker that closes a chunk; prefer this field over non-empty text to detect a finalized chunk. | `boolean` |
+| `chunkIndex` | Parakeet streaming: native streaming chunk the segment belongs to. `-1` when unknown. | `number` |
+| `eotConfidence` | Parakeet EOU streaming: native end-of-turn confidence of the segment. May be `0` when the model reports none. | `number` |
 
 ### `TranscribeStats`
 

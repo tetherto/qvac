@@ -11,7 +11,7 @@ Runs a loaded VLA policy (SmolVLA, π₀.₅, or GR00T) on preprocessed camera f
 ## Signature
 
 ```ts
-function vla(params: VlaClientRunParams): Promise<VlaClientRunResult>;
+function vla(params: VlaClientRunParams, options?: RPCOptions): Promise<VlaClientRunResult> & { requestId: string };
 ```
 
 ## Parameters
@@ -19,6 +19,7 @@ function vla(params: VlaClientRunParams): Promise<VlaClientRunResult>;
 | Parameter | Description | Type | Required |
 | --- | --- | --- | --- |
 | `params` | The model and the input tensors. | [`VlaClientRunParams`](#vlaclientrunparams) | Yes |
+| `options` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
 
 ### `VlaClientRunParams`
 
@@ -35,9 +36,28 @@ function vla(params: VlaClientRunParams): Promise<VlaClientRunResult>;
 | `mask` | Token attention mask, matching `tokens`. | `Uint8Array` | Yes |
 | `noise` | Noise prior of length `hparams.chunkSize * hparams.maxActionDim`. When omitted, the addon samples its own prior. π₀.₅ and GR00T require it. | `Float32Array` | No |
 
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
+
 ## Returns
 
-A promise that resolves with a [`VlaClientRunResult`](#vlaclientrunresult).
+A promise that resolves with a [`VlaClientRunResult`](#vlaclientrunresult). The promise also carries `requestId`, available synchronously, so the call can be cancelled with [`cancel({ requestId })`](/sdk/reference/api/cancel) before it resolves.
 
 ### `VlaClientRunResult`
 
@@ -62,6 +82,14 @@ Every field is optional.
 | `ode_ms` | ODE stage time, in milliseconds. | `number` |
 | `total_ms` | Total inference time, in milliseconds. | `number` |
 | `backendDevice` | `0` for the CPU backend, `1` for a GPU backend (CUDA, ROCm, Vulkan, Metal, or OpenCL). | `number` |
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `InferenceCancelledError` | The call was cancelled, for example by [`cancel({ requestId })`](/sdk/reference/api/cancel). |
+| `SessionNotOpenError` | `options.sessionId` names a session that is not open in the worker. |
+| `SessionInvalidatedError` | The call was made through a session handle whose session has ended. |
 
 ## Examples
 

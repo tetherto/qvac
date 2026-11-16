@@ -39,13 +39,16 @@ function textToSpeechStream(params: TextToSpeechStreamClientParams, options?: RP
 | `voice` | Parler voice-template speaker name. | `string` | No | — |
 | `emotion` | Speaking style. Parler accepts every value; CosyVoice3 accepts `"anger"`, `"happy"`, `"neutral"`, and `"sad"`. | [`TtsParlerEmotion`](/sdk/reference/api/textToSpeech#ttsparleremotion) | No | — |
 | `pitch` | Parler voice-template pitch descriptor. | `string` | No | — |
-| `pace` | Speaking rate. Parler and CosyVoice3. | `"slow" \| "moderate" \| "fast"` | No | — |
+| `pace` | Speaking rate. Parler and CosyVoice3. On CosyVoice3, a non-`"moderate"` pace cannot be combined with `emotion` or `instruct`. | `"slow" \| "moderate" \| "fast"` | No | — |
 | `expressivity` | Parler voice-template expressivity descriptor. | `string` | No | — |
 | `noise` | Parler voice-template background-noise descriptor. | `string` | No | — |
 | `reverb` | Parler voice-template reverb descriptor. | `string` | No | — |
 | `quality` | Parler voice-template audio-quality descriptor. | `string` | No | — |
+| `instruct` | CosyVoice3 only: natural-language control for the session's syntheses, replacing the loaded `instruct`, `emotion`, or `pace`. A non-empty instruction string, or an object with at least one of `dialect`, `volume`, and `style`. Cannot be combined with `emotion` or with a `pace` other than `"moderate"`. | `string \|` [`instruct`](/sdk/reference/api/loadModel#cosyvoice3-instruct) | No | The loaded control |
+| `referenceAudioSrc` | Audio8 only: reference recording to clone for this session, replacing the loaded voice. Requires `referenceText` and a model loaded with `audio8CodecEncoderModelSrc`. A remote source that is not cached yet downloads inside the request, which holds the model until it finishes: pre-fetch it with [`downloadAsset()`](/sdk/reference/api/downloadAsset) or pass a local path. | `string \| ModelDescriptor` | No | The loaded voice |
+| `referenceText` | Audio8 only: transcript of the reference recording. With `referenceAudioSrc`, what that recording says; alone, it corrects the transcript of the loaded recording. Must not be empty or whitespace-only. | `string` | No | — |
 
-The conditioning fields follow the same engine rules as on [`textToSpeech()`](/sdk/reference/api/textToSpeech#ttsclientparamsinput).
+The conditioning and per-request voice fields follow the same engine rules as on [`textToSpeech()`](/sdk/reference/api/textToSpeech#ttsclientparamsinput).
 
 ## Returns
 
@@ -74,6 +77,7 @@ Iteration yields one frame per synthesized chunk and ends after the frame whose 
 | `chunkIndex` | Index of the sentence chunk. | `number` |
 | `sentenceChunk` | Text of the sentence chunk. | `string` |
 | `isLast` | Absent in a session: the chunk count is not known up front. | `boolean` |
+| `speechTokenIds` | CosyVoice3: the speech tokens of the native synthesis this frame belongs to. With native chunk streaming they arrive on a final frame with no audio. Pass one array back as the load config's `forceSpeechTokens` to replay that synthesis. | `number[]` |
 | `stats` | Runtime statistics, aggregated across the session's sentences. | [`TtsStats`](/sdk/reference/api/textToSpeech#ttsstats) |
 | `stopReason` | On the terminal frame: `"cancelled"` when [`cancel()`](/sdk/reference/api/cancel) stopped the session, `"completed"` otherwise. | `"completed" \| "cancelled"` |
 
@@ -81,10 +85,10 @@ Iteration yields one frame per synthesized chunk and ends after the frame whose 
 
 | Error | When |
 | --- | --- |
-| `RequestValidationFailedError` | `params` fails validation, for example `description` combined with a voice-template field. The returned promise rejects. |
+| `RequestValidationFailedError` | `params` fails validation, for example `description` combined with a voice-template field, `referenceAudioSrc` without `referenceText`, or `instruct` combined with `emotion` or a non-`"moderate"` `pace`. The returned promise rejects. |
 | `TextToSpeechStreamFailedError` | `write()` is called after `end()` or `destroy()`. Thrown synchronously. |
 | `TextToSpeechStreamFailedError` | The session is iterated a second time; the first `next()` rejects. |
-| `TextToSpeechStreamFailedError` | The server sends an error during iteration, for example because the model is a MOSS-SoundEffect or MOSS-Speech model. |
+| `TextToSpeechStreamFailedError` | The server sends an error during iteration, for example because the model is a MOSS-SoundEffect or MOSS-Speech model, or because `instruct` was sent to a model other than CosyVoice3, or `referenceAudioSrc` / `referenceText` to a model other than Audio8. |
 
 ## Examples
 

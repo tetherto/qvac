@@ -11,7 +11,7 @@ Fetches a single model entry from the QVAC distributed model registry. Both argu
 ## Signature
 
 ```ts
-function modelRegistryGetModel(registryPath: string, registrySource: string): Promise<ModelRegistryEntry>;
+function modelRegistryGetModel(registryPath: string, registrySource: string, options?: RPCOptions): Promise<ModelRegistryEntry> & { requestId: string };
 ```
 
 ## Parameters
@@ -20,10 +20,30 @@ function modelRegistryGetModel(registryPath: string, registrySource: string): Pr
 | --- | --- | --- | --- |
 | `registryPath` | Registry-relative path to the model. | `string` | Yes |
 | `registrySource` | Registry source identifier, such as `hf`. | `string` | Yes |
+| `options` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
+
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
 
 ## Returns
 
-A promise that resolves with the model's [`ModelRegistryEntry`](#modelregistryentry).
+A promise that resolves with the model's [`ModelRegistryEntry`](#modelregistryentry). The promise also carries `requestId`, available synchronously, so the query can be cancelled with [`cancel({ requestId })`](/sdk/reference/api/cancel) while it waits for another QVAC process to release the registry.
 
 #### `ModelRegistryEntry`
 
@@ -54,6 +74,9 @@ An error written as a code, such as `MODEL_NOT_FOUND`, is not exported as a clas
 | --- | --- |
 | `ModelRegistryModelNotFoundError` | The registry has no model at this source and path. |
 | `QVAC_MODEL_REGISTRY_QUERY_FAILED` | The registry query fails, or the model's engine is not recognized. |
+| `ModelRegistryBusyError` | Another QVAC process holds the model registry for longer than the query waits: 60 seconds, or 30 seconds when the holder runs an older SDK, which keeps the registry until it exits. |
+| `InferenceCancelledError` | The query is cancelled with [`cancel({ requestId })`](/sdk/reference/api/cancel) while it waits for the registry. |
+| `SessionNotOpenError` | `options.sessionId` names a session that is not open. |
 
 ## Examples
 

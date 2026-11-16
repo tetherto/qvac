@@ -11,7 +11,7 @@ Generates a video with a model loaded with `modelType: "diffusion"` and `modelCo
 ## Signature
 
 ```ts
-function video(params: VideoClientParams): VideoResult;
+function video(params: VideoClientParams, options?: RPCOptions): VideoResult;
 ```
 
 `mode` selects the shape of `params`:
@@ -27,6 +27,7 @@ function video(params: VideoClientParams): VideoResult;
 | Parameter | Description | Type | Required |
 | --- | --- | --- | --- |
 | `params` | The model, the mode, the prompt, and the generation settings. | [`VideoClientParams`](#videoclientparams) | Yes |
+| `options` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
 
 ### `VideoClientParams`
 
@@ -73,6 +74,25 @@ function video(params: VideoClientParams): VideoResult;
 
 The Wan 2.2 A14B fields require a model loaded with `modelConfig.highNoiseDiffusionModelSrc`; single-expert layouts (Wan 2.1, Wan 2.2 TI2V-5B, LTX-2) reject them.
 
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
+
 ## Returns
 
 An object, returned synchronously. Generation starts when `video()` is called; consuming `progressStream` is optional.
@@ -114,6 +134,8 @@ Every field is optional. The fields of [`DiffusionStats`](/sdk/reference/api/dif
 | `ModelOperationNotSupportedError` | The model was not loaded with `modelConfig.mode: "video"`. |
 | `PluginRequestValidationFailedError` | The request breaks a rule of the loaded model family: a size or frame count off its grid, an LTX-2-only or Wan 2.2 A14B-only field, or a relative `lora` path. The class is not exported from `@qvac/sdk`; match it on the message. |
 | `RequestRejectedByPolicyError` | Another image or video generation already owns the model. |
+| `SessionNotOpenError` | `options.sessionId` names a session that is not open in the worker. |
+| `SessionInvalidatedError` | The call was made through a session handle whose session has ended. |
 
 ## Examples
 

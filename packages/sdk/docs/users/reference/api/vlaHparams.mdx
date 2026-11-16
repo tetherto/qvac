@@ -11,7 +11,7 @@ Resolves with the hyperparameters of a loaded VLA model and the name of the back
 ## Signature
 
 ```ts
-function vlaHparams(params: { modelId: string }): Promise<{ hparams: VlaHparams; backendName: string | null }>;
+function vlaHparams(params: { modelId: string }, options?: RPCOptions): Promise<{ hparams: VlaHparams; backendName: string | null }>;
 ```
 
 ## Parameters
@@ -19,6 +19,26 @@ function vlaHparams(params: { modelId: string }): Promise<{ hparams: VlaHparams;
 | Parameter | Description | Type | Required |
 | --- | --- | --- | --- |
 | `params.modelId` | ID of a model loaded with `modelType: "vla"` (`"ggml-vla"`). | `string` | Yes |
+| `options` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
+
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
 
 ## Returns
 
@@ -45,6 +65,13 @@ A promise that resolves with:
 | `imagePatchElems` | For patch-input models, the exact length of each `images` entry. Absent for pixel-input models. | `number` |
 | `selectedEmbodimentTag` | GR00T only: the embodiment tag resolved at load or after `vlaSetEmbodiment()`. Absent for SmolVLA and π₀.₅. A single-embodiment GGUF also reports its baked tag and still rejects `vlaSetEmbodiment()`. | `string` |
 | `selectedEmbodimentCatId` | The resolved embodiment's numeric `cat_id`, from 0 to 31: pass it back to select the same embodiment by ID. Absent when no embodiment was resolved (SmolVLA, π₀.₅). | `number` |
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `SessionNotOpenError` | `options.sessionId` names a session that is not open in the worker. |
+| `SessionInvalidatedError` | The call was made through a session handle whose session has ended. |
 
 ## Examples
 

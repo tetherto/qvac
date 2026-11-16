@@ -11,7 +11,7 @@ Subscribes to every server-side log through one stream: the SDK server's logs, t
 ## Signature
 
 ```ts
-function subscribeServerLogs(handler: ServerLogHandler): () => void;
+function subscribeServerLogs(handler: ServerLogHandler, options?: RPCOptions): () => void;
 ```
 
 ## Parameters
@@ -19,6 +19,7 @@ function subscribeServerLogs(handler: ServerLogHandler): () => void;
 | Parameter | Description | Type | Required |
 | --- | --- | --- | --- |
 | `handler` | Called with each log line, in order. | [`ServerLogHandler`](#serverloghandler) | Yes |
+| `options` | Transport options for the underlying stream. | [`RPCOptions`](#rpcoptions) | No |
 
 ### `ServerLogHandler`
 
@@ -37,9 +38,28 @@ type ServerLogHandler = (log: LoggingStreamResponse) => void;
 | `message` | The log message. | `string` |
 | `timestamp` | Worker time in milliseconds since the Unix epoch. | `number` |
 
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
+
 ## Returns
 
-An `unsubscribe` function, `() => void`. Call it to stop receiving logs; the worker releases the subscription at once.
+An `unsubscribe` function, `() => void`. Call it to stop receiving logs; the worker releases the subscription at once. A subscription opened as a session also ends when that session closes.
 
 The call itself does not throw. When the stream fails or `handler` throws, the error is written to the SDK client logger and the subscription ends.
 

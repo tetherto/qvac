@@ -48,6 +48,7 @@ A stream on a model ID opened up to 5 seconds after its load ends first receives
 | `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
 | `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
 | `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
 
 #### `PerCallProfiling`
 
@@ -60,7 +61,7 @@ A stream on a model ID opened up to 5 seconds after its load ends first receives
 
 ## Returns
 
-An `AsyncGenerator<LoggingStreamResponse>` that yields one item per log line, in order.
+An `AsyncGenerator<LoggingStreamResponse>` that yields one item per log line, in order. A stream opened as a session also ends, without an error, when that session closes.
 
 ### `LoggingStreamResponse`
 
@@ -79,6 +80,9 @@ The generator throws while you iterate it.
 
 | Error | When |
 | --- | --- |
+| `RequestValidationFailedError` | `options.sessionId` is empty. |
+| `SessionNotOpenError` | `options.sessionId` names a session that is not open in the worker. |
+| `SessionInvalidatedError` | The stream was opened through a session handle whose session has ended. |
 | `QvacErrorBase` | A response has the wrong type, or the stream fails. |
 
 ## Examples

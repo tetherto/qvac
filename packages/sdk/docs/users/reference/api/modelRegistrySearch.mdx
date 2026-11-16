@@ -11,7 +11,7 @@ Queries the QVAC distributed model registry and returns the models that match ev
 ## Signature
 
 ```ts
-function modelRegistrySearch(params?: ModelRegistrySearchParams): Promise<ModelRegistryEntry[]>;
+function modelRegistrySearch(params?: ModelRegistrySearchParams, options?: RPCOptions): Promise<ModelRegistryEntry[]> & { requestId: string };
 ```
 
 ## Parameters
@@ -19,6 +19,7 @@ function modelRegistrySearch(params?: ModelRegistrySearchParams): Promise<ModelR
 | Parameter | Description | Type | Required |
 | --- | --- | --- | --- |
 | `params` | The filters. All filters given must match. | [`ModelRegistrySearchParams`](#modelregistrysearchparams) | No |
+| `options` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
 
 ### `ModelRegistrySearchParams`
 
@@ -34,9 +35,28 @@ function modelRegistrySearch(params?: ModelRegistrySearchParams): Promise<ModelR
 
 `"llm" | "whisper" | "bci" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "moss-transcribe" | "diffusion" | "audiogen" | "vla" | "classification" | "other"`
 
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
+
 ## Returns
 
-A promise that resolves with one [`ModelRegistryEntry`](#modelregistryentry) per matching model. Deprecated models, and models whose engine the SDK does not recognize, are left out.
+A promise that resolves with one [`ModelRegistryEntry`](#modelregistryentry) per matching model. Deprecated models, and models whose engine the SDK does not recognize, are left out. The promise also carries `requestId`, available synchronously, so the query can be cancelled with [`cancel({ requestId })`](/sdk/reference/api/cancel) while it waits for another QVAC process to release the registry.
 
 #### `ModelRegistryEntry`
 
@@ -66,6 +86,9 @@ An error written as a code, such as `MODEL_NOT_FOUND`, is not exported as a clas
 | Error | When |
 | --- | --- |
 | `QVAC_MODEL_REGISTRY_QUERY_FAILED` | The registry query fails. |
+| `ModelRegistryBusyError` | Another QVAC process holds the model registry for longer than the query waits: 60 seconds, or 30 seconds when the holder runs an older SDK, which keeps the registry until it exits. |
+| `InferenceCancelledError` | The query is cancelled with [`cancel({ requestId })`](/sdk/reference/api/cancel) while it waits for the registry. |
+| `SessionNotOpenError` | `options.sessionId` names a session that is not open. |
 
 ## Examples
 

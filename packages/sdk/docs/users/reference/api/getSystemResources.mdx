@@ -11,7 +11,7 @@ Reads the CPU, memory, and GPU capabilities of the machine the SDK worker runs o
 ## Signature
 
 ```ts
-function getSystemResources(input?: GetSystemResourcesInput): Promise<SystemResources>;
+function getSystemResources(input?: GetSystemResourcesInput, options?: RPCOptions): Promise<SystemResources>;
 ```
 
 ## Parameters
@@ -19,12 +19,32 @@ function getSystemResources(input?: GetSystemResourcesInput): Promise<SystemReso
 | Parameter | Description | Type | Required |
 | --- | --- | --- | --- |
 | `input` | What to read. | [`GetSystemResourcesInput`](#getsystemresourcesinput) | No |
+| `options` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
 
 ### `GetSystemResourcesInput`
 
 | Option | Description | Type | Required | Default |
 | --- | --- | --- | --- | --- |
 | `sample` | Also take a sample of current usage. Sampling performs fresh usage queries, so request it only when current usage is needed. | `boolean` | No | `false` |
+
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
 
 ## Returns
 
@@ -83,6 +103,7 @@ Each field is a `ResourceMetric` of the type shown.
 | `drivers` | Which graphics APIs the GPU supports, one `ResourceMetric<boolean>` per API: `vulkan`, `opencl`, `opengl`, `webgpu`, `metal`, `direct3d11`, `direct3d12`, `cuda`, `levelZero`, `rocm`. | `Record<GraphicsDriver, ResourceMetric<boolean>>` |
 | `unifiedMemory` | Whether the GPU shares the host's memory. | `ResourceMetric<boolean>` |
 | `memoryTotalBytes` | Total GPU memory, in bytes. | `ResourceMetric<number>` |
+| `dedicatedMemoryTotalBytes` | Memory reserved for this GPU alone, in bytes: all of a discrete GPU's memory, or for an integrated GPU the carve-out the firmware sets aside for it, which the OS does not count as system memory. `0` when there is none, as on Apple silicon. | `ResourceMetric<number>` |
 
 #### `SystemResourceSample`
 
@@ -108,6 +129,7 @@ Each field except `id` is a `ResourceMetric` of the type shown.
 | `decode` | Decoder utilization, from `0` to `1`. | `number` |
 | `memoryUsedBytes` | GPU memory in use, in bytes. | `number` |
 | `memoryTotalBytes` | Total GPU memory, in bytes. | `number` |
+| `dedicatedMemoryUsedBytes` | The part of `memoryUsedBytes` held in dedicated memory (`dedicatedMemoryTotalBytes`), in bytes. | `number` |
 | `powerWatts` | Power draw, in watts. | `number` |
 | `temperatureCelsius` | Temperature, in degrees Celsius. | `number` |
 
@@ -115,6 +137,7 @@ Each field except `id` is a `ResourceMetric` of the type shown.
 
 | Error | When |
 | --- | --- |
+| `SessionNotOpenError` | `options.sessionId` names a session that is not open. |
 | `InvalidResponseError` | The worker answers with an unexpected response type. |
 
 ## Examples

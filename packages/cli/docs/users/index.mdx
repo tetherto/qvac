@@ -217,32 +217,40 @@ Run a preflight check of host system requirements.
 
 ### `qvac verify bundle`
 
-Verify that every native Bare addon reachable from a worker bundle or an installed `node_modules` tree has prebuilds for each requested host, and a declared `engines.bare` range compatible with the installed Bare runtime. `--addons-source` takes either a `qvac/worker.bundle.js` written by `qvac bundle sdk` or a `node_modules` directory; the kind is detected from the path.
+Verify that every native Bare addon reachable from a worker bundle or an installed `node_modules` tree has prebuilds for each requested host, and a declared `engines.bare` range compatible with the Bare it will run on. `--addons-source` takes either the bundle `qvac bundle sdk` writes to `qvac/worker/` (`index.bundle`, or `index.bundle.mjs` for the `react-native` target) or a `node_modules` directory; a file is read as a bundle and a directory as a `node_modules` tree.
 
 <CliReference command="qvac verify bundle" tablesOnly />
 
-The Bare runtime of a mobile host is read from the installed `react-native-bare-kit`. `--bare-runtime-version`, or `bareRuntimeVersion` in `qvac.config.*`, replaces it for every host, so set it for desktop builds only, such as an Electron app that ships its own Bare.
+The Bare each host is checked against depends on where the bundle runs:
+
+- **Android and iOS hosts:** the Bare that Bare Kit runs on that platform, as the SDK's bare-stow pins it.
+- **Desktop hosts:** the Bare of the project's `bare-sidecar`. For a bundle written for the `pear-runtime` target, the `bare-sidecar` that `pear-runtime` resolves; for the `bare-kit` target, `bare-kit-kotlin` as bare-stow pins it. The target is read from the `package.json` next to the bundle.
 
 Examples:
 
 ```bash
-# Mobile bundle, after `qvac bundle sdk` writes qvac/worker.bundle.js
-qvac verify bundle --addons-source qvac/worker.bundle.js \
+# Mobile bundle, after `qvac bundle sdk --target react-native`
+qvac verify bundle --addons-source qvac/worker/index.bundle.mjs \
   --host android-arm64 --host ios-arm64 --host ios-arm64-simulator
 
 # Desktop or Electron development tree
 qvac verify bundle --addons-source ./node_modules \
   --host darwin-arm64 --host linux-x64 --host win32-x64
 
+# Packaged Electron app's bundle
+qvac verify bundle \
+  --addons-source out/MyApp-darwin-arm64/MyApp.app/Contents/Resources/app/qvac/worker/index.bundle \
+  --host darwin-arm64
+
 # Structured output for CI
-qvac verify bundle --addons-source qvac/worker.bundle.js \
+qvac verify bundle --addons-source qvac/worker/index.bundle \
   --host darwin-arm64 --json | jq '.issues[] | select(.level == "error")'
 ```
 
 | Exit | Meaning |
 | --- | --- |
 | `0` | No error-level issue. Warnings may report a check that was skipped or metadata that could not be read. |
-| `1` | At least one error-level issue: a missing prebuild, an ABI mismatch, an invalid runtime version, or an invalid source. Prebuild checks always run, so a malformed runtime version cannot hide a missing prebuild. |
+| `1` | At least one error-level issue: a missing prebuild, an ABI mismatch, or an invalid source. |
 
 ### `qvac verify deps`
 

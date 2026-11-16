@@ -11,7 +11,9 @@ Creates an empty vector index in the SDK worker's memory and resolves with a [`V
 ## Signature
 
 ```ts
-function createVectorIndex(params: CreateVectorIndexParams, options?: RPCOptions): Promise<VectorIndex>;
+function createVectorIndex(params: CreateVectorIndexParams, options?: RPCOptions): VectorIndexOperation<VectorIndex>;
+
+type VectorIndexOperation<T> = Promise<T> & { requestId: string };
 ```
 
 ## Parameters
@@ -25,7 +27,7 @@ function createVectorIndex(params: CreateVectorIndexParams, options?: RPCOptions
 
 | Option | Description | Type | Required | Default |
 | --- | --- | --- | --- | --- |
-| `dim` | Dimension every added vector and query must have. A positive integer; the TurboVec modes also require it to be divisible by 8 and no greater than 1024. | `number` | Yes | — |
+| `dim` | Dimension every added vector and query must have. A positive integer; the TurboVec modes also require it to be divisible by 8 and no greater than 16384. | `number` | Yes | — |
 | `storage` | How vectors are stored. | [`VectorIndexStorage`](#vectorindexstorage) | No | `"turbovec-q4"` |
 
 #### `VectorIndexStorage`
@@ -34,8 +36,8 @@ Pass the value, or the `VectorIndexStorage` constant exported by `@qvac/sdk`.
 
 | Constant | Value | Dimension |
 | --- | --- | --- |
-| `VectorIndexStorage.TURBOVEC_Q4` | `"turbovec-q4"` | Divisible by 8, at most 1024 |
-| `VectorIndexStorage.TURBOVEC_Q2` | `"turbovec-q2"` — half the memory of `turbovec-q4` | Divisible by 8, at most 1024 |
+| `VectorIndexStorage.TURBOVEC_Q4` | `"turbovec-q4"` | Divisible by 8, at most 16384 |
+| `VectorIndexStorage.TURBOVEC_Q2` | `"turbovec-q2"` — half the memory of `turbovec-q4` | Divisible by 8, at most 16384 |
 | `VectorIndexStorage.F32` | `"f32"` | Any |
 | `VectorIndexStorage.Q8` | `"q8"` | Any |
 | `VectorIndexStorage.Q4` | `"q4"` | Any |
@@ -50,6 +52,7 @@ The `turbovec-*` modes are the quantized TurboVec formats; `f32`, `q8`, and `q4`
 | `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
 | `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
 | `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
 
 #### `PerCallProfiling`
 
@@ -62,11 +65,13 @@ The `turbovec-*` modes are the quantized TurboVec formats; `f32`, `q8`, and `q4`
 
 ## Returns
 
-A promise that resolves with a `VectorIndex` handle to the new, empty index.
+A promise that resolves with a `VectorIndex` handle to the new, empty index. The promise also carries `requestId`, available synchronously, so the call can be cancelled with [`cancel({ requestId })`](/sdk/reference/api/cancel) before it resolves. See [Cancellation](/sdk/runtime/cancellation).
 
 ### `VectorIndex`
 
 The index lives in worker memory until `dispose()` (or `await using`) or worker shutdown. After a worker crash or restart, every method rejects with `VECTOR_INDEX_NOT_FOUND`; recover by creating a new index or loading a snapshot written earlier with `write()`.
+
+A handle opened through a [session](/sdk/runtime/sessions) keeps that session: every call it makes runs as the session, the session's `close()` releases the index, and calls are refused once the session has ended.
 
 | Property | Description | Type |
 | --- | --- | --- |
@@ -74,19 +79,61 @@ The index lives in worker memory until `dispose()` (or `await using`) or worker 
 | `dim` | Dimension every added vector and query must match. | `number` |
 | `storage` | Storage mode. After `loadVectorIndex()` it is derived from the snapshot's bit width, so 4-bit snapshots (`q4` or `turbovec-q4`) report `undefined`. | [`VectorIndexStorage`](#vectorindexstorage) `\| undefined` |
 | `length` | Number of live entries as of the last call that changed or reported it. | `number` |
+| `calibrated` | TQ+ calibration state as of the create, the load, or the last successful `add()`. `undefined` when an external provider does not report calibration. | `boolean \| undefined` |
+| `stagedSearch` | Staged search setting as of the last successful call that reported it. `undefined` when an external provider does not report the setting. | `boolean \| undefined` |
+| `ivf` | IVF settings from the last call that reported them; `built` says whether searches use the IVF lists. `null` while IVF is off, as on every new or loaded index. `undefined` when an external provider has no IVF search. | [`VectorIndexIvfState`](#vectorindexivfstate) `\| null \| undefined` |
 
 | Method | Description | Returns |
 | --- | --- | --- |
-| `add(params: ` [`VectorIndexAddParams`](#vectorindexaddparams)`, options?: RPCOptions)` | Adds vectors under the given IDs in one atomic batch. Rejects duplicate IDs, the reserved ID 2^64 − 1, an `ids` and `vectors` of different lengths, and rows whose length differs from `dim`. | `Promise<{ length: number }>` — the number of live entries after the add |
-| `search(params: { query: number[]; k: number }, options?: RPCOptions)` | Finds the `k` nearest entries to one query. | `Promise<` [`VectorIndexHit`](#vectorindexhit)`[]>` |
-| `search(params: { queries: number[][]; k: number }, options?: RPCOptions)` | Finds the `k` nearest entries to each query row. | `Promise<` [`VectorIndexHit`](#vectorindexhit)`[][]>` — one hit list per row |
-| `remove(params: { ids: VectorId[] }, options?: RPCOptions)` | Removes IDs, in order. A failure leaves the IDs before it removed, and `length` as of the last successful call. | `Promise<boolean[]>` — per ID, whether it was present |
-| `contains(params: { ids: VectorId[] }, options?: RPCOptions)` | Reports, per ID, whether the index holds it. | `Promise<boolean[]>` |
-| `write(params: { path: string }, options?: RPCOptions)` | Writes a checksummed snapshot to `path`, replacing any existing file and creating missing directories. An absolute path is used as given; a relative path resolves under the QVAC data directory. | `Promise<{ path: string }>` — the resolved absolute path |
-| `dispose(options?: RPCOptions)` | Releases the worker memory. Safe to call more than once; a failed dispose can be retried. | `Promise<void>` |
+| `add(params: ` [`VectorIndexAddParams`](#vectorindexaddparams)`, options?: RPCOptions)` | Adds vectors under the given IDs in one atomic batch. Rejects duplicate IDs, the reserved ID 2^64 − 1, an `ids` and `vectors` of different lengths, and rows whose length differs from `dim`. A fresh TurboVec index attempts calibration from a first batch of at least 1,000 vectors; a smaller first batch leaves it uncalibrated. Any add sets `ivf.built` to `false`. | `VectorIndexOperation<{ length: number }>` — the number of live entries after the add |
+| `search(params: { query: number[]; k: number; nProbe?: number }, options?: RPCOptions)` | Finds the `k` nearest entries to one query. With built IVF lists, scans only the nearest ones; `nProbe` overrides the IVF setting for this call and rejects while IVF is off. | `VectorIndexOperation<` [`VectorIndexHit`](#vectorindexhit)`[]>` |
+| `search(params: { queries: number[][]; k: number; nProbe?: number }, options?: RPCOptions)` | Finds the `k` nearest entries to each query row. | `VectorIndexOperation<` [`VectorIndexHit`](#vectorindexhit)`[][]>` — one hit list per row |
+| `remove(params: { ids: VectorId[] }, options?: RPCOptions)` | Removes IDs, in order. A failure leaves the IDs before it removed, and `length` as of the last successful call. Any remove sets `ivf.built` to `false`. | `VectorIndexOperation<boolean[]>` — per ID, whether it was present |
+| `contains(params: { ids: VectorId[] }, options?: RPCOptions)` | Reports, per ID, whether the index holds it. | `VectorIndexOperation<boolean[]>` |
+| `write(params: { path: string }, options?: RPCOptions)` | Writes a checksummed snapshot to `path`, replacing any existing file and creating missing directories. An absolute path is used as given; a relative path resolves under the QVAC data directory. Snapshots save neither the staged search nor the IVF setting. | `VectorIndexOperation<{ path: string }>` — the resolved absolute path |
+| `setStagedSearch(params: ` [`VectorIndexSetStagedSearchParams`](#vectorindexsetstagedsearchparams)`, options?: RPCOptions)` | Turns TurboVec staged search on or off. See [Staged search](#staged-search). Rejects non-TurboVec storage and providers without staged search controls. | `VectorIndexOperation<{ stagedSearch: boolean }>` — the setting as the index reports it |
+| `setIvf(settings: ` [`VectorIndexIvfSettings`](#vectorindexivfsettings)` \| null, options?: RPCOptions)` | Turns IVF search on with `settings`, building its lists now, or off with `null`. See [IVF search](#ivf-search). Rejects providers without IVF support. | `VectorIndexOperation<{ ivf: ` [`VectorIndexIvfState`](#vectorindexivfstate)` \| null }>` |
+| `dispose(options?: RPCOptions)` | Releases the worker memory. Safe to call more than once; a failed dispose can be retried. | `VectorIndexOperation<void>` |
 | `[Symbol.asyncDispose]()` | Calls `dispose()`, for `await using`. Absent on runtimes without explicit resource management. | `Promise<void>` |
 
-Search hits are ordered by descending score, then ascending ID. Fewer than `k` come back when the index holds fewer entries. `k` must be a positive integer, and every query row must have `dim` components.
+Search hits are ordered by descending score, then ascending ID. Fewer than `k` come back when the index holds fewer entries. `k` must be a positive integer, `nProbe` a positive integer no greater than 2147483647, and every query row must have `dim` components.
+
+Every method except `[Symbol.asyncDispose]()` returns a `VectorIndexOperation`: a promise that also carries `requestId`, available synchronously, for [`cancel({ requestId })`](/sdk/reference/api/cancel).
+
+#### Staged search
+
+Staged search is off on every new or loaded index. On supported hosts, an index whose dimension is divisible by 32 and that holds at least 32,768 entries searches a shortlist, for faster searches at lower recall. Other dimensions and v3 snapshots keep the setting but scan every entry. When IVF is on, staged search also applies within the probed lists.
+
+#### IVF search
+
+`setIvf(settings)` groups the entries into `nLists` lists now, and `search()` then scans only the `nProbe` lists nearest each query. On a large `f32` index that can be many times faster than a full scan. TurboVec storage scores vectors in blocks, so probing a few lists saves little work and IVF can be slower than a full scan. Either way, IVF search can miss true nearest entries: a higher `nProbe` misses fewer and costs more, and `nProbe >= nLists` scans every entry.
+
+- The build blocks the worker until it finishes. Its cost grows with `nIter`, `nLists`, the entry count, and `dim`.
+- A `timeout` in `options` only stops the wait, rejecting with an `Error` whose `name` is `OperationTimeoutError`: the build still finishes, and `ivf` updates when its reply arrives. To see whether a build is still running, race the returned promise instead of passing a timeout.
+- Any later `add()` or `remove()` sets `ivf.built` to `false`, and searches scan every entry until the next `setIvf()`. So does a build that fails; the handle keeps its last reported state until another call reports one.
+- Repeating the call with the same `nLists` and `nIter` on a built index changes only `nProbe`.
+
+#### `VectorIndexIvfSettings`
+
+| Field | Description | Type | Required | Default |
+| --- | --- | --- | --- | --- |
+| `nLists` | Number of lists to group the entries into. An upper bound: an index with fewer entries builds one list per entry, while `ivf.nLists` keeps the requested value. A positive integer no greater than 2147483647. | `number` | Yes | — |
+| `nProbe` | Number of lists nearest each query that `search()` scans. A positive integer no greater than 2147483647. | `number` | Yes | — |
+| `nIter` | k-means passes of the build. `0` keeps the initial centroids. An integer from `0` to 2147483647. | `number` | No | `0` |
+
+#### `VectorIndexIvfState`
+
+The fields of [`VectorIndexIvfSettings`](#vectorindexivfsettings), plus:
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `built` | Whether searches use the IVF lists. | `boolean` |
+
+#### `VectorIndexSetStagedSearchParams`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | `true` turns staged search on; `false` turns it off. | `boolean` | Yes |
 
 #### `VectorIndexAddParams`
 
@@ -117,8 +164,9 @@ An error written as a code, such as `MODEL_NOT_FOUND`, is not exported as a clas
 | `RequestValidationFailedError` | `dim` is not a positive integer, or `storage` is not a known mode. |
 | `VECTOR_INDEX_PROVIDER_UNAVAILABLE` | No registered plugin exposes a vector index provider, such as the built-in `llamacpp-embedding` plugin. |
 | `VECTOR_INDEX_FAILED` | The native index rejects the dimension or storage mode. |
+| `InferenceCancelledError` | The call is cancelled with `cancel({ requestId })` before it resolves. An index created for a cancelled call is released. |
 
-The handle's methods throw `RequestValidationFailedError` for a row whose length differs from `dim` (before anything is sent), `VectorIndexNotFoundError` (`VECTOR_INDEX_NOT_FOUND`) when the index is gone, `VectorIndexInvalidVectorsError` (`VECTOR_INDEX_INVALID_VECTORS`) when `ids` and `vectors` differ in length, and `VectorIndexFailedError` (`VECTOR_INDEX_FAILED`) when the native index rejects an operation.
+The handle's methods throw `RequestValidationFailedError` for a row whose length differs from `dim` (before anything is sent), `VECTOR_INDEX_NOT_FOUND` when the index is gone, `VECTOR_INDEX_INVALID_VECTORS` when `ids` and `vectors` differ in length, and `VECTOR_INDEX_FAILED` when the native index rejects an operation, including `setStagedSearch()` on non-TurboVec storage, `setIvf()` or `nProbe` on a provider without IVF support, and `nProbe` while IVF is off. A cancelled call rejects with `InferenceCancelledError`.
 
 ## Examples
 
@@ -128,7 +176,7 @@ const documents = new Map([
   ["2", "Solar panels turn sunlight into electricity."],
 ]);
 
-const { embedding: vectors } = await embed({ modelId, text: [...documents.values()] });
+const { embedding: vectors } = await embedBatch({ modelId, inputs: [...documents.values()] });
 
 const index = await createVectorIndex({ dim: vectors[0].length });
 await index.add({ ids: [...documents.keys()], vectors });

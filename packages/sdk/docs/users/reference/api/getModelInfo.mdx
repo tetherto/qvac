@@ -11,7 +11,7 @@ Looks up a model in QVAC's built-in catalog by name and returns its metadata, wh
 ## Signature
 
 ```ts
-function getModelInfo(params: GetModelInfoParams): Promise<ModelInfo>;
+function getModelInfo(params: GetModelInfoParams, options?: RPCOptions): Promise<ModelInfo>;
 ```
 
 ## Parameters
@@ -19,12 +19,32 @@ function getModelInfo(params: GetModelInfoParams): Promise<ModelInfo>;
 | Parameter | Description | Type | Required |
 | --- | --- | --- | --- |
 | `params` | The model to look up. | [`GetModelInfoParams`](#getmodelinfoparams) | Yes |
+| `options` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
 
 ### `GetModelInfoParams`
 
 | Option | Description | Type | Required |
 | --- | --- | --- | --- |
 | `name` | The model's name in QVAC's built-in catalog, such as `"WHISPER_TINY"`: the name of its model constant. | `string` | Yes |
+
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
 
 ## Returns
 
@@ -80,6 +100,7 @@ An error written as a code, such as `MODEL_NOT_FOUND`, is not exported as a clas
 | Error | When |
 | --- | --- |
 | `MODEL_NOT_FOUND` | `name` is not in the catalog. |
+| `SessionNotOpenError` | `options.sessionId` names a session that is not open. |
 | `InvalidResponseError` | The worker answers with an unexpected response type. |
 
 ## Examples

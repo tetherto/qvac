@@ -6,7 +6,7 @@ binds:
   - fn:ragIngest
 ---
 
-Runs the full ingestion pipeline — chunk, embed with a loaded embedding model, save — into a built-in RAG workspace, and resolves with one result per saved item. It opens the workspace, creating it if it does not exist, and leaves it open until [`ragCloseWorkspace()`](/sdk/reference/api/ragCloseWorkspace). To embed or chunk on your own terms, use [`ragChunk()`](/sdk/reference/api/ragChunk), [`embed()`](/sdk/reference/api/embed), and [`ragSaveEmbeddings()`](/sdk/reference/api/ragSaveEmbeddings) instead. See [RAG](/sdk/ai-capabilities/rag).
+Runs the full ingestion pipeline — chunk, embed with a loaded embedding model, save — into a built-in RAG workspace, and resolves with one result per saved item. It opens the workspace, creating it if it does not exist, and leaves it open until [`ragCloseWorkspace()`](/sdk/reference/api/ragCloseWorkspace). To embed or chunk on your own terms, use [`ragChunk()`](/sdk/reference/api/ragChunk), [`embedBatch()`](/sdk/reference/api/embedBatch), and [`ragSaveEmbeddings()`](/sdk/reference/api/ragSaveEmbeddings) instead. See [RAG](/sdk/ai-capabilities/rag).
 
 <Callout type="warn">
 **Prototype only:** the built-in RAG vector store is not production grade. For production, use an external vector DB, as shown in the [RAG guide](/sdk/ai-capabilities/rag).
@@ -14,7 +14,7 @@ Runs the full ingestion pipeline — chunk, embed with a loaded embedding model,
 
 A new workspace stores its vectors in HyperDB, or in a TurboVec index when [`ragTurbovec`](/sdk/configuration#options) is set in the configuration. The choice is fixed for the life of the workspace.
 
-Starting `ragIngest()`, `ragSaveEmbeddings()`, or `ragReindex()` on a workspace cancels the one of these already running on that workspace.
+Starting `ragIngest()`, `ragSaveEmbeddings()`, or `ragReindex()` on a workspace cancels the one of these already running on that workspace, when the same caller started it. A [session](/sdk/runtime/sessions) that finds another session's operation running there is refused with `RAGWorkspaceBusyError`; the owner cancels any session's operation.
 
 ## Signature
 
@@ -70,6 +70,7 @@ The `stage` passed to `onProgress`, in pipeline order. `current` and `total` cou
 | `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
 | `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
 | `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
 
 #### `PerCallProfiling`
 
@@ -108,6 +109,7 @@ An error written as a code, such as `MODEL_NOT_FOUND`, is not exported as a clas
 | `RequestValidationFailedError` | `params` fails validation, for example a missing `modelId` or an invalid `workspace` name. |
 | `RAG_WORKSPACE_MODEL_MISMATCH` | The workspace is open with a different embedding model than `modelId`. |
 | `RAG_SAVE_FAILED` | The worker reports that the ingest failed. |
+| `RAGWorkspaceBusyError` | Another session's `ragIngest()`, `ragSaveEmbeddings()`, or `ragReindex()` is running on the workspace, and this call is made through a session. Retry when it finishes. |
 | `StreamEndedError` | The progress stream ends without a final result (only with `onProgress`). |
 
 ## Examples

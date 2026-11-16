@@ -11,7 +11,7 @@ Runs each engine's own fitter against a set of candidate loads and reports wheth
 ## Signature
 
 ```ts
-function assessModelFit(input: AssessModelFitInput): Promise<AssessModelFitResult>;
+function assessModelFit(input: AssessModelFitInput, options?: RPCOptions): Promise<AssessModelFitResult>;
 ```
 
 ## Parameters
@@ -19,6 +19,7 @@ function assessModelFit(input: AssessModelFitInput): Promise<AssessModelFitResul
 | Parameter | Description | Type | Required |
 | --- | --- | --- | --- |
 | `input` | The loads to assess. | [`AssessModelFitInput`](#assessmodelfitinput) | Yes |
+| `options` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
 
 ### `AssessModelFitInput`
 
@@ -67,6 +68,25 @@ MOSS-SoundEffect workload:
 | --- | --- | --- | --- |
 | `prompt` | Sound-effect description. Not empty. | `string` | Yes |
 | `seconds` | Sound-effect duration in seconds, greater than `0` and up to `30`. | `number` | Yes |
+
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
 
 ## Returns
 
@@ -124,6 +144,7 @@ The engine addon's own fit result for one model.
 | `ModelTypeRequiredError` | A candidate has no `modelType` and none can be inferred from its `modelSrc`. |
 | `ZodError` | `input` fails validation, such as an empty `models` array or a workload with unknown fields. |
 | The error `loadModel()` would throw | A load `loadModel()` would refuse: no plugin for the model type, a config the plugin refuses, or a model the fitter cannot read. |
+| `SessionNotOpenError` | `options.sessionId` names a session that is not open. |
 | `InvalidResponseError` | The worker answers with an unexpected response type. |
 
 ## Examples

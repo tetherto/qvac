@@ -11,7 +11,7 @@ Runs optical character recognition on an image and returns the recognized text b
 ## Signature
 
 ```ts
-function ocr(params: OCRClientParams): { blockStream: AsyncGenerator<OCRTextBlock[]>; blocks: Promise<OCRTextBlock[]>; stats: Promise<OCRStats | undefined> };
+function ocr(params: OCRClientParams, options?: RPCOptions): { requestId: string; blockStream: AsyncGenerator<OCRTextBlock[]>; blocks: Promise<OCRTextBlock[]>; stats: Promise<OCRStats | undefined> };
 ```
 
 ## Parameters
@@ -19,6 +19,7 @@ function ocr(params: OCRClientParams): { blockStream: AsyncGenerator<OCRTextBloc
 | Parameter | Description | Type | Required |
 | --- | --- | --- | --- |
 | `params` | The model, the image, and how to deliver the result. | [`OCRClientParams`](#ocrclientparams) | Yes |
+| `options` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
 
 ### `OCRClientParams`
 
@@ -35,19 +36,39 @@ function ocr(params: OCRClientParams): { blockStream: AsyncGenerator<OCRTextBloc
 | --- | --- | --- | --- |
 | `paragraph` | Merge nearby text boxes into one block. | `boolean` | No |
 
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
+
 ## Returns
 
 An object, returned synchronously:
 
 | Field | Description | Type |
 | --- | --- | --- |
+| `requestId` | Identifies this run. Pass it to [`cancel({ requestId })`](/sdk/reference/api/cancel) to stop it. | `string` |
 | `blocks` | Without `stream`: resolves with every recognized block once the run completes. With `stream: true`: resolves immediately with `[]`. | `Promise<`[`OCRTextBlock`](#ocrtextblock)`[]>` |
 | `blockStream` | With `stream: true`: yields each batch of blocks the worker sends, and ends when the run completes. Without `stream`: yields nothing. | `AsyncGenerator<`[`OCRTextBlock`](#ocrtextblock)`[]>` |
 | `stats` | Resolves with the run's timings when it completes, or `undefined` when the engine reports none. | `Promise<`[`OCRStats`](#ocrstats)` \| undefined>` |
 
 Without `stream`, the request starts when `ocr()` is called. With `stream: true`, it starts when you begin iterating `blockStream`, and `stats` resolves only after the stream is consumed to the end. The worker sends all blocks in one batch once recognition finishes, so `blockStream` typically yields once.
 
-`stats` never rejects. When the run fails, the error rejects `blocks` (or is thrown by `blockStream`), and `stats` stays pending.
+When the run fails, for example on a cancel, a timeout, or a worker error, the error rejects `blocks` (or is thrown by `blockStream`) and also rejects `stats`. Leaving `stats` unread does not raise an unhandled rejection.
 
 #### `OCRTextBlock`
 
@@ -72,6 +93,8 @@ Every field is optional.
 | Error | When |
 | --- | --- |
 | `ImageFileNotFoundError` | `image` is a file path the worker cannot access. |
+| `SessionNotOpenError` | `options.sessionId` names a session that is not open in the worker. |
+| `SessionInvalidatedError` | The call was made through a session handle whose session has ended. |
 
 ## Examples
 

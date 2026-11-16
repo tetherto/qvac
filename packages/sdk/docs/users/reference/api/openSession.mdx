@@ -1,0 +1,118 @@
+---
+title: openSession
+titleStyle: code
+description: Opens a caller session on the shared SDK runtime and returns its handle at once.
+binds:
+  - fn:openSession
+---
+
+Opens a caller session, so several callers can share one SDK runtime, each with its own requests, cancellation scope, and model leases. It returns a [`QvacSession`](#returns) handle synchronously: the open round trip runs in the background, and calls made on the handle wait for it, so the handle is usable immediately. The handle has the same model-work methods as the module-level SDK, and every call made through it runs as the session. Calls made without a session run as the owner. See [Sessions](/sdk/runtime/sessions).
+
+## Signature
+
+```ts
+function openSession(options?: OpenSessionOptions): QvacSession;
+```
+
+## Parameters
+
+| Parameter | Description | Type | Required |
+| --- | --- | --- | --- |
+| `options` | How to label the session. | [`OpenSessionOptions`](#opensessionoptions) | No |
+
+### `OpenSessionOptions`
+
+| Option | Description | Type | Required | Default |
+| --- | --- | --- | --- | --- |
+| `name` | Label for the session in worker logs and diagnostics. From 1 to 128 characters. | `string` | No | — |
+
+## Returns
+
+The session handle, a `QvacSession`.
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `sessionId` | ID the client generated for the session. Every call made through the handle carries it. | `string` |
+| `name` | The `name` passed in `options`. | `string \| undefined` |
+| `opened` | Resolves once the worker has registered the session. Calls on the handle wait for it on their own, so awaiting it is optional. | `Promise<void>` |
+| `isModelHeld` | Whether this session loaded `modelId` and has not unloaded it. Stays `true` after the session ends. | `(modelId: string) => boolean` |
+| `close` | Ends the session: cancels its requests, waits for them to end, disposes the vector indexes it opened, and releases its model leases. A model whose last lease it releases is unloaded. It does not stop the runtime. | `(options?: ` [`RPCOptions`](#rpcoptions)`) => Promise<void>` |
+
+### Session methods
+
+Each method has the signature of the module-level function of the same name, and runs as the session:
+
+- Models: [`loadModel`](/sdk/reference/api/loadModel), [`unloadModel`](/sdk/reference/api/unloadModel), [`downloadAsset`](/sdk/reference/api/downloadAsset), [`getModelInfo`](/sdk/reference/api/getModelInfo), [`getLoadedModelInfo`](/sdk/reference/api/getLoadedModelInfo), [`assessModelFit`](/sdk/reference/api/assessModelFit), [`modelRegistryList`](/sdk/reference/api/modelRegistryList), [`modelRegistrySearch`](/sdk/reference/api/modelRegistrySearch), [`modelRegistryGetModel`](/sdk/reference/api/modelRegistryGetModel).
+- Text: [`completion`](/sdk/reference/api/completion), [`batchCompletion`](/sdk/reference/api/batchCompletion), [`calcTokens`](/sdk/reference/api/calcTokens), [`decide`](/sdk/reference/api/decide), [`rerank`](/sdk/reference/api/rerank), [`translate`](/sdk/reference/api/translate), [`finetune`](/sdk/reference/api/finetune).
+- Embeddings and retrieval: [`embed`](/sdk/reference/api/embed), [`embedBatch`](/sdk/reference/api/embedBatch), [`createVectorIndex`](/sdk/reference/api/createVectorIndex), [`loadVectorIndex`](/sdk/reference/api/loadVectorIndex), [`ragChunk`](/sdk/reference/api/ragChunk), [`ragIngest`](/sdk/reference/api/ragIngest), [`ragSaveEmbeddings`](/sdk/reference/api/ragSaveEmbeddings), [`ragSearch`](/sdk/reference/api/ragSearch), [`ragDeleteEmbeddings`](/sdk/reference/api/ragDeleteEmbeddings), [`ragReindex`](/sdk/reference/api/ragReindex), [`ragListWorkspaces`](/sdk/reference/api/ragListWorkspaces), [`ragCloseWorkspace`](/sdk/reference/api/ragCloseWorkspace), [`ragDeleteWorkspace`](/sdk/reference/api/ragDeleteWorkspace).
+- Speech and audio: [`transcribe`](/sdk/reference/api/transcribe), [`transcribeStream`](/sdk/reference/api/transcribeStream), [`bciTranscribe`](/sdk/reference/api/bciTranscribe), [`bciTranscribeStream`](/sdk/reference/api/bciTranscribeStream), [`textToSpeech`](/sdk/reference/api/textToSpeech), [`textToSpeechStream`](/sdk/reference/api/textToSpeechStream), [`audioGen`](/sdk/reference/api/audioGen), [`audioEdit`](/sdk/reference/api/audioEdit), [`audioUnderstand`](/sdk/reference/api/audioUnderstand).
+- Vision and generation: [`ocr`](/sdk/reference/api/ocr), [`classify`](/sdk/reference/api/classify), [`diffusion`](/sdk/reference/api/diffusion), [`upscale`](/sdk/reference/api/upscale), [`video`](/sdk/reference/api/video), [`worldCreateScene`](/sdk/reference/api/worldCreateScene), [`worldStep`](/sdk/reference/api/worldStep), [`vla`](/sdk/reference/api/vla), [`vlaHparams`](/sdk/reference/api/vlaHparams), [`vlaSetEmbodiment`](/sdk/reference/api/vlaSetEmbodiment).
+- Plugins: [`invokePlugin`](/sdk/reference/api/invokePlugin), [`invokePluginStream`](/sdk/reference/api/invokePluginStream).
+- Runtime: [`cancel`](/sdk/reference/api/cancel), [`heartbeat`](/sdk/reference/api/heartbeat), [`state`](/sdk/reference/api/state), [`getSystemResources`](/sdk/reference/api/getSystemResources), [`loggingStream`](/sdk/reference/api/loggingStream), [`subscribeServerLogs`](/sdk/reference/api/subscribeServerLogs), [`discoverRpcServers`](/sdk/reference/api/discoverRpcServers).
+
+Through a session, these methods differ from the owner's calls:
+
+| Method | Through the session |
+| --- | --- |
+| `loadModel` | Takes a lease on the model. Loading a configuration that is already loaded adds a lease and returns the same model ID; concurrent loads of one configuration share one load. |
+| `unloadModel` | Releases only this session's lease, and resolves with `{ released, unloaded }`. `unloaded` is `true` only when that release was the model's last lease. |
+| `cancel` | Reaches only this session's requests. `{ requestId }` of another session's request cancels nothing; `{ modelId }` cancels only this session's requests on the model. See [Cancellation](/sdk/runtime/cancellation#cancelling-from-a-session). |
+| `createVectorIndex`, `loadVectorIndex` | Every later call on the returned index handle also runs as the session. |
+
+The operations that change the runtime for every session, [`suspend()`](/sdk/reference/api/suspend), [`resume()`](/sdk/reference/api/resume), [`deleteCache()`](/sdk/reference/api/deleteCache), [`startRpcServer()`](/sdk/reference/api/startRpcServer), and [`stopRpcServer()`](/sdk/reference/api/stopRpcServer), are not on the handle. A session cannot open another session. Only the module-level `close()`, the owner's call, stops the runtime, and it ends every session.
+
+### `RPCOptions`
+
+The transport options of `close()`.
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. See [Profiler](/sdk/runtime/profiler). | `PerCallProfiling` | No |
+
+A `close()` whose reply is lost, such as on a timeout, still ends the session.
+
+## Throws
+
+`openSession()` returns synchronously and does not throw. A failed open rejects `opened` and every later call on the handle. Calls on the handle throw:
+
+| Error | When |
+| --- | --- |
+| `SessionIdConflictError` | The worker already has a session with the ID the client generated. |
+| `SessionInvalidatedError` | A call on the handle, `close()` included, after the session ended: its own `close()`, the owner's `close()`, or the loss of the worker. Raised locally, before anything is sent. |
+| `ModelHandleInvalidatedError` | A call that names a model this session loaded, after the session ended. Load the model again. |
+| `SessionNotOpenError` | The worker receives a call for a session it does not have, such as one that already closed. |
+| `ModelLeasedError` | `loadModel()` reloads a model's configuration while another session holds a lease on it. |
+| `ModelReconfiguredError` | `loadModel()`, from a session that holds no lease, names a configuration whose model was since reloaded with another configuration. |
+| `OwnerOnlyError` | A session calls an owner-only operation. |
+| `WorkerCrashedError` | The worker exits while a call is in flight. The SDK does not reconnect a session or restart the worker. |
+| `InvalidResponseError` | The worker answers the open or close with an unexpected response type. |
+
+## Examples
+
+```ts
+import { close, getLoadedModelInfo, openSession, QWEN3_600M_INST_Q4 } from "@qvac/sdk";
+
+const harness = openSession({ name: "harness" });
+const skillRunner = openSession({ name: "skill-runner" });
+
+// Same configuration, same model ID: the second load adds a lease.
+const modelId = await harness.loadModel({ modelSrc: QWEN3_600M_INST_Q4, modelConfig: { ctx_size: 4096 } });
+await skillRunner.loadModel({ modelSrc: QWEN3_600M_INST_Q4, modelConfig: { ctx_size: 4096 } });
+const { leaseCount } = await getLoadedModelInfo({ modelId }); // 2
+
+// Only the session that started a request can cancel it.
+const run = harness.completion({ modelId, history: [{ role: "user", content: "Hello" }], stream: true });
+await skillRunner.cancel({ requestId: run.requestId }); // cancels nothing
+await harness.cancel({ requestId: run.requestId }); // stops the run
+
+// Release the leases; the model unloads with the last one.
+const { released, unloaded } = await harness.unloadModel({ modelId }); // unloaded: false
+await skillRunner.close();
+await harness.close();
+
+// The owner stops the runtime.
+await close();
+```

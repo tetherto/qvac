@@ -11,7 +11,7 @@ Generates images with a model loaded with `modelType: "diffusion"` in the defaul
 ## Signature
 
 ```ts
-function diffusion(params: DiffusionClientParams): DiffusionResult;
+function diffusion(params: DiffusionClientParams, options?: RPCOptions): DiffusionResult;
 ```
 
 ## Parameters
@@ -19,13 +19,14 @@ function diffusion(params: DiffusionClientParams): DiffusionResult;
 | Parameter | Description | Type | Required |
 | --- | --- | --- | --- |
 | `params` | The model, the prompt, and the generation settings. | [`DiffusionClientParams`](#diffusionclientparams) | Yes |
+| `options` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
 
 ### `DiffusionClientParams`
 
 | Option | Description | Type | Required | Default |
 | --- | --- | --- | --- | --- |
 | `modelId` | ID of the loaded diffusion model. | `string` | Yes | — |
-| `prompt` | Positive prompt describing the image to generate. | `string` | Yes | — |
+| `prompt` | Positive prompt describing the image to generate. MOSS-Image also accepts a JSON-serialized layout; see [MOSS-Image](/sdk/ai-capabilities/image-generation#moss-image). | `string` | Yes | — |
 | `negative_prompt` | What to avoid in the image. | `string` | No | — |
 | `width` | Image width in pixels: a positive multiple of 8. Qwen-Image-2.1 requires a multiple of 32. | `number` | No | — |
 | `height` | Image height in pixels: a positive multiple of 8. Qwen-Image-2.1 requires a multiple of 32. | `number` | No | — |
@@ -42,12 +43,31 @@ function diffusion(params: DiffusionClientParams): DiffusionResult;
 | `vae_tile_size` | VAE tile size in latent units: a positive integer, or a `"WxH"` string such as `"64x32"`. Each dimension is from 1 to 2147483647. For Qwen-Image-2.1 outputs at 2048×2048 or larger, use `vae_tiling: true` with `vae_tile_size: 64` to bound decode memory. | `number \| string` | No | — |
 | `cache_preset` | Name of a cached sampler preset to reuse. | `string` | No | — |
 | `init_image` | Source image as PNG or JPEG bytes, for img2img or reference editing. Qwen-Image-2.1 requires `projectionModelSrc` at load for editing, and preserves the reference's alpha. Cannot be combined with `init_images`. | `Uint8Array` | No | — |
-| `init_images` | Ordered reference images as PNG or JPEG bytes, at least one, for models with reference editing such as FLUX.2 and Qwen-Image-2.1. Native model detection validates support. Qwen-Image-2.1 requires `projectionModelSrc` at load, and preserves alpha. Cannot be combined with `init_image`. | `Uint8Array[]` | No | — |
+| `init_images` | Ordered reference images as PNG or JPEG bytes, at least one, for models with reference editing such as FLUX.2, FLUX.3, and Qwen-Image-2.1. Native model detection validates support. FLUX.3 and Qwen-Image-2.1 need no FLUX.2 `@imageN` tags and no `prediction` override. Qwen-Image-2.1 requires `projectionModelSrc` at load, and preserves alpha. Cannot be combined with `init_image`. | `Uint8Array[]` | No | — |
 | `increase_ref_index` | FLUX.2 fusion only. When `false`, all reference latents share one RoPE index slot and blend through attention, as recommended for FLUX.2-klein. When `true`, each reference gets its own slot; use it only with text encoders that receive per-image vision tokens. | `boolean` | No | Addon default (`false`) |
 | `auto_resize_ref_image` | FLUX.2 only. Resize every reference image to the target `width` × `height` before VAE encoding. Disable it only when the buffers already have the exact target dimensions. | `boolean` | No | Addon default (`true`) |
 | `lora` | Absolute path to a local LoRA adapter applied to this generation. Whether it persists across later `diffusion()` calls depends on `modelConfig.lora_apply_mode`, set at load. | `string` | No | — |
-| `strength` | img2img denoising strength for SD and SDXL (SDEdit), from 0 to 1. It does not control reference-editing strength for FLUX.2 or Qwen-Image-2.1, which start the target from noise. | `number` | No | — |
+| `strength` | img2img denoising strength for SD and SDXL (SDEdit), from 0 to 1. It does not control reference-editing strength for FLUX.2, FLUX.3, or Qwen-Image-2.1, which start the target from noise. | `number` | No | — |
 | `upscale` | Post-generation ESRGAN upscale. Requires a model loaded with `modelConfig.upscaler.model_src`. `true`, `{}`, and `{ repeats: 1 }` run one pass at the upscaler's native scale factor; `{ repeats: N }` runs N passes, each multiplying the dimensions by that factor; `false` does nothing. With `batch_count` above 1, every image is upscaled independently. ESRGAN accepts RGB only, so Qwen-Image-2.1 RGBA output rejects it. | `boolean \| { repeats?: number }` | No | — |
+
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
 
 ## Returns
 
@@ -55,6 +75,7 @@ An object, returned synchronously. Generation starts when `diffusion()` is calle
 
 | Field | Description | Type |
 | --- | --- | --- |
+| `requestId` | Identifies this generation. Pass it to [`cancel({ requestId })`](/sdk/reference/api/cancel) to stop it. | `string` |
 | `progressStream` | Yields a progress tick each time the worker reports one. Ends when the generation finishes; throws the run's error when it fails. | `AsyncGenerator<`[`DiffusionProgressTick`](#diffusionprogresstick)`>` |
 | `outputs` | Resolves with the generated images, one PNG per buffer, when the generation completes. | `Promise<Uint8Array[]>` |
 | `stats` | Resolves with the run statistics when the generation completes, or `undefined` when the engine reports none. | `Promise<`[`DiffusionStats`](#diffusionstats)` \| undefined>` |
@@ -96,8 +117,10 @@ Every field is optional.
 
 | Error | When |
 | --- | --- |
-| `InferenceCancelledError` | The active generation is cancelled, for example with `cancel({ modelId, kind: "diffusion" })`. See [Cancellation](/sdk/runtime/cancellation). |
+| `InferenceCancelledError` | The active generation is cancelled, for example with `cancel({ requestId })` or `cancel({ modelId, kind: "diffusion" })`. See [Cancellation](/sdk/runtime/cancellation). |
 | `RequestRejectedByPolicyError` | Another image or video generation already owns the model. |
+| `SessionNotOpenError` | `options.sessionId` names a session that is not open in the worker. |
+| `SessionInvalidatedError` | The call was made through a session handle whose session has ended. |
 
 ## Examples
 

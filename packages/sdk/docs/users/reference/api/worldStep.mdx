@@ -13,7 +13,7 @@ At the default `modelConfig.world.numFramePerBlock`, the first block after the s
 ## Signature
 
 ```ts
-function worldStep(params: WorldStepClientParams): WorldStepResult;
+function worldStep(params: WorldStepClientParams, options?: RPCOptions): WorldStepResult;
 ```
 
 ## Parameters
@@ -21,6 +21,7 @@ function worldStep(params: WorldStepClientParams): WorldStepResult;
 | Parameter | Description | Type | Required |
 | --- | --- | --- | --- |
 | `params` | The model and the keys held for this block. | [`WorldStepClientParams`](#worldstepclientparams) | Yes |
+| `options` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
 
 ### `WorldStepClientParams`
 
@@ -40,6 +41,25 @@ Three equivalent forms:
 | 8-bit mask: bits 0 to 7 are W, A, S, D, I, J, K, L | `0b10000001` | `number` |
 
 Key names are case-insensitive, and duplicates collapse. The mask must be an integer from 0 to 255.
+
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
 
 ## Returns
 
@@ -92,6 +112,8 @@ Every field is optional.
 | `RequestRejectedByPolicyError` | A block is already in flight on the model. |
 | `InferenceCancelledError` | A `cancel({ requestId })` is accepted. Cancelling is block-granular: the current block finishes internally, delivery stops, and the step rejects instead of resolving with a truncated block. The session is rebuilt on the next call. |
 | `StreamEndedError` | The RPC stream closes without a terminal `done` chunk. |
+| `SessionNotOpenError` | `options.sessionId` names a session that is not open in the worker. |
+| `SessionInvalidatedError` | The call was made through a session handle whose session has ended. |
 
 ## Examples
 

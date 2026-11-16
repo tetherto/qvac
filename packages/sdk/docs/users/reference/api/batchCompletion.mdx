@@ -42,6 +42,7 @@ function batchCompletion(params: BatchCompletionParams): BatchCompletionRun;
 | `responseFormat` | Structured-output constraint for this prompt. A `json_object` or `json_schema` format cannot be combined with `tools` or `mcp`. | [`ResponseFormat`](/sdk/reference/api/completion#responseformat) | No |
 | `tools` | Tools for this prompt. Handlers attach only to tool calls this prompt produces. Requires a model loaded with `modelConfig.tools: true`. | [`Tool`](/sdk/reference/api/completion#tool)`[] \| ` [`ToolInput`](/sdk/reference/api/completion#toolinput)`[]` | No |
 | `mcp` | MCP clients whose tools are added to this prompt. Their tools are discovered on the client before the batch is submitted. | [`McpClientInput`](/sdk/reference/api/completion#mcpclientinput)`[]` | No |
+| `toolSearch` | Limits on what the built-in `tool_search` loads per call for this prompt. Used only when a tool sets `deferLoading`. | [`ToolSearchOptions`](/sdk/reference/api/completion#toolsearchoptions) | No |
 
 #### `RPCOptions`
 
@@ -51,6 +52,7 @@ function batchCompletion(params: BatchCompletionParams): BatchCompletionRun;
 | `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
 | `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
 | `profiling` | Profiler settings for this call; override the global profiler settings. See [Profiler](/sdk/runtime/profiler). | `PerCallProfiling` | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
 
 ## Returns
 

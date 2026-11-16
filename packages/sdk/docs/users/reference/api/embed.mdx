@@ -1,44 +1,55 @@
 ---
 title: embed
 titleStyle: code
-description: Generates embedding vectors for text, or for ordered text and media inputs, with a loaded embedding model.
+description: Generates an embedding vector for one text, ordered text and media input, or image with a loaded embedding model.
 binds:
   - fn:embed
 ---
 
-Turns text, images, or audio into embedding vectors with a loaded `llamacpp-embedding` (`embeddings`) model, for semantic search, clustering, and retrieval. Pass `text` for text only, or `inputs` for a batch of items that mix text and media; media needs a model loaded with a projector. See [Text embeddings](/sdk/ai-capabilities/text-embeddings) and [Multimodal embeddings](/sdk/ai-capabilities/multimodal-embeddings).
+Turns text, images, or audio into an embedding vector with a loaded embedding model, for semantic search, clustering, and retrieval. Pass `input` for one text, one ordered text and media input, or one image, or `text` for one string. A `llamacpp-embedding` (`embeddings`) model takes text and media; media needs a model loaded with a projector. A `ggml-image-embedding` model, such as MegaLoc, takes images. To embed several inputs in one call, use [`embedBatch()`](/sdk/reference/api/embedBatch). See [Text embeddings](/sdk/ai-capabilities/text-embeddings), [Multimodal embeddings](/sdk/ai-capabilities/multimodal-embeddings), and [Image embeddings](/sdk/ai-capabilities/image-embeddings).
 
 ## Signature
 
 ```ts
-function embed(params: { modelId: string; text: string; inputs?: never }, options?: RPCOptions): Promise<{ embedding: number[]; stats?: EmbedStats }> & { requestId: string };
-function embed(params: { modelId: string; text: string[]; inputs?: never }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: EmbedStats }> & { requestId: string };
-function embed(params: { modelId: string; inputs: EmbedInput[]; text?: never }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: EmbedStats }> & { requestId: string };
-function embed(params: EmbedParams, options?: RPCOptions): Promise<{ embedding: number[] | number[][]; stats?: EmbedStats }> & { requestId: string };
+function embed(params: { modelId: string; input: EmbedClientInput; text?: never; inputs?: never }, options?: RPCOptions): Promise<{ embedding: number[]; stats?: EmbedStats }> & { requestId: string };
+function embed(params: { modelId: string; text: string; inputs?: never; input?: never }, options?: RPCOptions): Promise<{ embedding: number[]; stats?: EmbedStats }> & { requestId: string };
+/** @deprecated Use embedBatch({ modelId, inputs }). */
+function embed(params: { modelId: string; text: string[]; inputs?: never; input?: never }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: EmbedStats }> & { requestId: string };
+/** @deprecated Use embedBatch({ modelId, inputs }). */
+function embed(params: { modelId: string; inputs: EmbedInput[]; text?: never; input?: never }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: EmbedStats }> & { requestId: string };
+function embed(params: EmbedClientParams, options?: RPCOptions): Promise<{ embedding: number[] | number[][]; stats?: EmbedStats }> & { requestId: string };
 ```
 
 | Form | `params` | `embedding` |
 | --- | --- | --- |
+| Single input | `input: EmbedClientInput` | One vector, `number[]` |
 | Single text | `text: string` | One vector, `number[]` |
-| Multiple texts | `text: string[]` | One vector per string, `number[][]` |
-| Text and media batch | `inputs: EmbedInput[]` | One vector per input, `number[][]`, even for a single input |
+| Legacy text batch (deprecated) | `text: string[]` | One vector per string, `number[][]` |
+| Legacy inputs batch (deprecated) | `inputs: EmbedInput[]` | One vector per input, `number[][]`, even for a single input |
+
+The two legacy forms will be removed in the next major version, and the SDK logs a deprecation warning when they are used. Use [`embedBatch()`](/sdk/reference/api/embedBatch) instead; it also takes images.
 
 ## Parameters
 
 | Parameter | Description | Type | Required |
 | --- | --- | --- | --- |
-| `params` | The model and what to embed. | [`EmbedParams`](#embedparams) | Yes |
+| `params` | The model and what to embed. | [`EmbedClientParams`](#embedclientparams) | Yes |
 | `options` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
 
-### `EmbedParams`
+### `EmbedClientParams`
 
-Pass exactly one of `text` and `inputs`.
+Pass exactly one of `input`, `text`, and `inputs`.
 
 | Option | Description | Type | Required |
 | --- | --- | --- | --- |
 | `modelId` | ID of a loaded embedding model, as [`loadModel()`](/sdk/reference/api/loadModel) returned it. | `string` | Yes |
-| `text` | Text to embed. A string returns one vector; an array returns one vector per string. Strings and the array must not be empty. | `string \| string[]` | One of `text`, `inputs` |
-| `inputs` | Items to embed, one vector each. At least one. Media parts require a model loaded with `modelConfig.projectionModelSrc`. | [`EmbedInput`](#embedinput)`[]` | One of `text`, `inputs` |
+| `input` | One input the model supports: a text, ordered text and media parts, or an image. Returns one vector. | [`EmbedClientInput`](#embedclientinput) | One of `input`, `text`, `inputs` |
+| `text` | Text to embed. A string returns one vector. An array returns one vector per string, and is deprecated. Strings and the array must not be empty. | `string \| string[]` | One of `input`, `text`, `inputs` |
+| `inputs` | Deprecated. Items to embed, one vector each. At least one. Takes text and ordered text and media parts, not images. Media parts require a model loaded with `modelConfig.projectionModelSrc`. | [`EmbedInput`](#embedinput)`[]` | One of `input`, `text`, `inputs` |
+
+#### `EmbedClientInput`
+
+An [`EmbedInput`](#embedinput), or an [`EmbedImageInput`](#embedimageinput).
 
 #### `EmbedInput`
 
@@ -53,6 +64,17 @@ A non-empty string, or a non-empty array of parts in order: strings and `{ media
 
 Images: JPEG, PNG, and BMP. Audio: WAV, MP3, and FLAC. WebP, AAC/M4A, Ogg, and video are not supported.
 
+#### `EmbedImageInput`
+
+An image for a `ggml-image-embedding` model. A `llamacpp-embedding` model rejects it.
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `image` | JPEG or PNG bytes, or packed RGB bytes. Not empty. For packed RGB, the length must equal `width` × `height` × `channels`. | `Uint8Array` | Yes |
+| `width` | Packed RGB width in pixels, from `1` to `16384`. Pass `width`, `height`, and `channels` together, or none of them for JPEG or PNG. | `number` | No |
+| `height` | Packed RGB height in pixels, from `1` to `16384`. | `number` | No |
+| `channels` | Packed RGB channel count. Must be `3`. | `3` | No |
+
 #### `RPCOptions`
 
 | Option | Description | Type | Required |
@@ -61,6 +83,7 @@ Images: JPEG, PNG, and BMP. Audio: WAV, MP3, and FLAC. WebP, AAC/M4A, Ogg, and v
 | `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
 | `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
 | `profiling` | Profiler settings for this call; override the global profiler settings. See [Profiler](/sdk/runtime/profiler). | `PerCallProfiling` | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
 
 ## Returns
 
@@ -73,27 +96,35 @@ A promise that resolves with an object. The promise also carries `requestId`, av
 
 ### `EmbedStats`
 
+Every field is optional. Each model fills only its own fields.
+
 | Field | Description | Type |
 | --- | --- | --- |
-| `totalTime` | Total embedding time, in milliseconds. | `number` |
-| `tokensPerSecond` | Tokens processed per second. | `number` |
-| `totalTokens` | Total tokens processed. | `number` |
-| `backendDevice` | Device that ran inference. | `"cpu" \| "gpu"` |
-| `contextSize` | Context size, in tokens. | `number` |
-
-Every field is optional.
+| `totalTime` | Total embedding time, in milliseconds. For a MegaLoc batch, the sum of native times. | `number` |
+| `tokensPerSecond` | Tokens processed per second. llama.cpp embedding models only. | `number` |
+| `totalTokens` | Total tokens processed. llama.cpp embedding models only. | `number` |
+| `backendDevice` | Device that ran inference. llama.cpp embedding models only. | `"cpu" \| "gpu"` |
+| `contextSize` | Context size, in tokens. llama.cpp embedding models only. | `number` |
+| `backendId` | Native backend ID: CPU `0`, Metal `1`, CUDA `2`, Vulkan `3`, OpenCL `4`, other `99`. MegaLoc only. | `number` |
+| `cpuFallbackNodes` | Number of graph nodes scheduled on CPU fallback. MegaLoc only. | `number` |
+| `weightBytes` | Allocated model weight bytes. MegaLoc only. | `number` |
 
 ## Throws
 
 | Error | When |
 | --- | --- |
-| `InvalidResponseError` | The worker answers with an unexpected response type. |
+| `RequestValidationFailedError` | `params` is invalid, checked on the client before the request is sent. |
+| `InvalidResponseError` | The worker answers with an unexpected response type or a malformed result. |
+| `EMBED_FAILED` | The model cannot embed the input: an image passed to a `llamacpp-embedding` model, or, for MegaLoc, text or an input other than one image or one media part. |
 | `QvacErrorBase` | Validation or embedding fails; the message carries the details. |
+
+An error written as a code, such as `EMBED_FAILED`, is not exported as a class: it reaches the caller as an `Error` whose `name` is that code.
 
 ## Examples
 
 ```ts
-import { embed, loadModel, GTE_LARGE_FP16, EMBEDDINGGEMMA_2_Q8_0, MMPROJ_EMBEDDINGGEMMA_2_Q8_0 } from "@qvac/sdk";
+import fs from "node:fs";
+import { embed, embedBatch, loadModel, GTE_LARGE_FP16, EMBEDDINGGEMMA_2_Q8_0, MMPROJ_EMBEDDINGGEMMA_2_Q8_0, MEGALOC_F16 } from "@qvac/sdk";
 
 const modelId = await loadModel({ modelSrc: GTE_LARGE_FP16, modelType: "embeddings" });
 
@@ -101,21 +132,21 @@ const modelId = await loadModel({ modelSrc: GTE_LARGE_FP16, modelType: "embeddin
 const { embedding } = await embed({ modelId, text: "Hello, world!" });
 
 // Several texts, one vector each.
-const { embedding: vectors } = await embed({ modelId, text: ["first document", "second document"] });
+const { embedding: vectors } = await embedBatch({ modelId, inputs: ["first document", "second document"] });
 
-// Text, an image, and audio in one shared vector space.
+// Text and an image in one ordered input, in a shared vector space.
 const multimodalId = await loadModel({
   modelSrc: EMBEDDINGGEMMA_2_Q8_0,
   modelType: "llamacpp-embedding",
   modelConfig: { projectionModelSrc: MMPROJ_EMBEDDINGGEMMA_2_Q8_0, ctxSize: 2048, batchSize: 2048 },
 });
 
-const { embedding: [query, image, audio] } = await embed({
+const { embedding: document } = await embed({
   modelId: multimodalId,
-  inputs: [
-    "task: search result | query: a newspaper report about the Titanic",
-    ["title: none | text: ", { media: { type: "filePath", value: "/home/user/scan.jpg" } }],
-    [{ media: { type: "filePath", value: "/home/user/clip.wav" } }],
-  ],
+  input: ["title: none | text: ", { media: { type: "filePath", value: "/home/user/scan.jpg" } }],
 });
+
+// An image descriptor from MegaLoc.
+const megalocId = await loadModel({ modelSrc: MEGALOC_F16 });
+const { embedding: descriptor } = await embed({ modelId: megalocId, input: { image: fs.readFileSync("place.jpg") } });
 ```

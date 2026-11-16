@@ -11,7 +11,7 @@ Edits one source recording with a loaded ACE-Step AudioGen model. The edit is an
 ## Signature
 
 ```ts
-function audioEdit(params: AudioEditClientParams): AudioGenResult;
+function audioEdit(params: AudioEditClientParams, options?: RPCOptions): AudioGenResult;
 ```
 
 ## Parameters
@@ -19,6 +19,7 @@ function audioEdit(params: AudioEditClientParams): AudioGenResult;
 | Parameter | Description | Type | Required |
 | --- | --- | --- | --- |
 | `params` | The source recording and the edit pipeline. Unknown keys are rejected. | [`AudioEditClientParams`](#audioeditclientparams) | Yes |
+| `options` | Transport options for this call only. | [`RPCOptions`](/sdk/reference/api/transcribe#rpcoptions) | No |
 
 ### `AudioEditClientParams`
 
@@ -41,6 +42,7 @@ The fields after `operations` apply to every operation in the pipeline.
 | `dcwHighScaler` | Repaint only: DCW high-frequency correction strength, non-negative. | `number` | No | `0.02` |
 | `inferenceSteps` | DiT steps for every operation, an integer from 0 to 1000. | `number` | No | Load-time `inferenceSteps` |
 | `shift` | DiT timestep shift for every operation, `0` or a positive float32 value. | `number` | No | Load-time `shift` |
+| `outputFormat` | Also deliver the edited audio as a file in this container, on `encoded`, as on a generation. Availability is as for [`audioGen()`](/sdk/reference/api/audioGen#audiogenclientparams). | [`AudioGenOutputFormat`](/sdk/reference/api/audioGen#audiogenoutputformat) | No | PCM only |
 
 #### `AudioEditOperation`
 
@@ -78,16 +80,17 @@ One of two shapes, selected by `type`.
 
 ## Returns
 
-An [`AudioGenResult`](/sdk/reference/api/audioGen#returns), returned synchronously, with the same fields and cancellation behavior as for `audioGen()`. `audio` resolves with the edited recording; edits are never loudness-normalized. `stats.metadata` reports the base seed and the prompt metadata, with an empty `caption` and `codeFrames` `0`.
+An [`AudioGenResult`](/sdk/reference/api/audioGen#returns), returned synchronously, with the same fields and cancellation behavior as for `audioGen()`. `audio` and `chunkStream` deliver the edited recording, and `encoded` the file for `outputFormat`; edits are never loudness-normalized. `stats.metadata` reports the base seed and the prompt metadata, with an empty `caption` and `codeFrames` `0`.
 
 ## Throws
 
 | Error | When |
 | --- | --- |
 | `RequestValidationFailedError` | `params` fails validation — for example an unknown key, an empty `operations`, a `flow-edit` with `nMin` greater than `nMax`, or a `repaint` with `end` not greater than `start`. Thrown synchronously. |
-| `InferenceCancelledError` | The run was cancelled. Rejects `audio`, `stats`, and `diagnostics`. |
-| `InvalidResponseError` | The stream ends without a terminal frame, or without the audio format. |
-| `QvacErrorBase` | The edit fails on the server. Rejects `audio`, `stats`, `diagnostics`, and `progressStream`. |
+| `AudioEncodeFailedError` | `outputFormat` names a format whose FFmpeg encoder the inference host lacks: the request fails before the edit starts and rejects `audio`, `encoded`, `stats`, `diagnostics`, `progressStream`, and `chunkStream`. When only the encode of the finished PCM fails, it rejects `encoded` alone. |
+| `InferenceCancelledError` | The run was cancelled. Rejects `audio`, `encoded`, `stats`, and `diagnostics`. |
+| `InvalidResponseError` | The stream ends without a terminal frame, without the audio format, or, with `outputFormat` set, without the encoded file or its encode error. |
+| `QvacErrorBase` | The edit fails on the server. Rejects `audio`, `encoded`, `stats`, `diagnostics`, `progressStream`, and `chunkStream`. |
 
 ## Examples
 

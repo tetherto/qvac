@@ -11,7 +11,7 @@ Generates audio from a caption and optional lyrics and musical controls with a l
 ## Signature
 
 ```ts
-function audioGen(params: AudioGenClientParams): AudioGenResult;
+function audioGen(params: AudioGenClientParams, options?: RPCOptions): AudioGenResult;
 ```
 
 ## Parameters
@@ -19,6 +19,7 @@ function audioGen(params: AudioGenClientParams): AudioGenResult;
 | Parameter | Description | Type | Required |
 | --- | --- | --- | --- |
 | `params` | What to generate and how. Unknown keys are rejected. | [`AudioGenClientParams`](#audiogenclientparams) | Yes |
+| `options` | Transport options for this call only. | [`RPCOptions`](/sdk/reference/api/transcribe#rpcoptions) | No |
 
 ### `AudioGenClientParams`
 
@@ -61,8 +62,13 @@ Most controls apply to one engine. MiniMax-Music3 rejects the ACE-Step-only fiel
 | `coverNoiseStrength` | ACE-Step: blend of the initial DiT noise toward the clean source latent, from 0 (pure noise) to 1 (≈ source latent). | `number` | No | `0` |
 | `maxFrames` | MiniMax: semantic-frame cap, a positive integer. Cannot be combined with `duration`. | `number` | No | — |
 | `cfgScale` | MiniMax: flow classifier-free guidance scale, `0` or a positive float32 value. `0` uses the model default. | `number` | No | Model default |
+| `outputFormat` | Also encode the finished audio into this container and deliver it on `encoded`, next to the PCM. `"wav"` is always available; the other formats need the matching FFmpeg encoder on the inference host, and the request fails with `AudioEncodeFailedError` before generation starts when it is missing. `"opus"` is resampled to 48 kHz. There is no MP3. | [`AudioGenOutputFormat`](#audiogenoutputformat) | No | PCM only |
 
 `sourceAudio` and `referenceAudio` take a file path or raw PCM. A path is read on the server: `.wav`, `.mp3`, `.m4a`, `.ogg`, `.flac`, and `.aac` are decoded, and any other extension is read as raw PCM. Raw PCM — in a file or a `Uint8Array` — is interleaved stereo 48 kHz Float32 LE (`AUDIOGEN_INPUT_SAMPLE_RATE`, `AUDIOGEN_INPUT_CHANNELS`). Clips are capped at 600 s.
+
+#### `AudioGenOutputFormat`
+
+`"wav" | "flac" | "alac" | "aiff" | "caf" | "m4a" | "aac" | "opus" | "ogg" | "ac3" | "wma" | "mp2"`, exported as `AUDIOGEN_OUTPUT_FORMATS`.
 
 #### `AudioGenTrack`
 
@@ -77,10 +83,12 @@ An `AudioGenResult`, returned synchronously. The request is sent at once.
 | `requestId` | ID of this run, available synchronously. Pass it to [`cancel({ requestId })`](/sdk/reference/api/cancel); cancellation interrupts the active generation. | `string` |
 | `progressStream` | Stage and step updates while the run executes. Ends when the run ends; throws the run's error when it fails. | `AsyncGenerator<` [`AudioGenProgress`](#audiogenprogress) `>` |
 | `audio` | The generated audio, resolved from the terminal frame. | `Promise<` [`AudioGenAudio`](#audiogenaudio) `>` |
+| `chunkStream` | The same PCM as the engine delivers it: one `Int16Array` of interleaved signed 16-bit samples per engine chunk. The engines emit the whole track as one chunk when generation finishes, so this is not incremental synthesis. Shares the run with `audio`, which still resolves with every chunk concatenated. Chunks read after `audio` resolved are copied out of `audio.pcm`, so read them before editing that buffer in place. Throws the run's error when it fails. | `AsyncGenerator<Int16Array>` |
+| `encoded` | The run as a file in the `outputFormat` container. Resolves `undefined` when the request named no `outputFormat`. Rejects with `AudioEncodeFailedError` when the finished PCM could not be encoded; the run itself completes, and `audio`, `chunkStream`, `stats`, and `diagnostics` still deliver it. | `Promise<` [`AudioGenEncodedAudio`](#audiogenencodedaudio) ` \| undefined>` |
 | `stats` | Timing statistics and what the run rendered. | `Promise<` [`AudioGenStats`](#audiogenstats) ` \| undefined>` |
 | `diagnostics` | Backend selection detail for the completed run. | `Promise<` [`InferenceBackendDiagnostics`](/sdk/reference/api/transcribeStream#inferencebackenddiagnostics) ` \| undefined>` |
 
-A cancelled run ends with `stopReason: "cancelled"`: `progressStream` ends, and `audio`, `stats`, and `diagnostics` reject with `InferenceCancelledError`.
+A cancelled run ends with `stopReason: "cancelled"`: `progressStream` and `chunkStream` end, and `audio`, `encoded`, `stats`, and `diagnostics` reject with `InferenceCancelledError`.
 
 ### `AudioGenProgress`
 
@@ -99,6 +107,15 @@ A cancelled run ends with `stopReason: "cancelled"`: `progressStream` ends, and 
 | `channels` | Channel count. | `number` |
 | `bitsPerSample` | Sample width, in bits. Use it to count samples or build a WAV header. | `number` |
 
+### `AudioGenEncodedAudio`
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `data` | The complete file: container and payload. | `Uint8Array` |
+| `format` | The `outputFormat` the request named. | [`AudioGenOutputFormat`](#audiogenoutputformat) |
+| `mimeType` | MIME type of the file, for example `audio/wav` or `audio/mp4`. | `string` |
+| `extension` | File extension, without the dot. `alac` is delivered as `m4a`. | `string` |
+
 ### `AudioGenStats`
 
 Every field is optional.
@@ -108,8 +125,8 @@ Every field is optional.
 | `audioDurationMs` | Duration of the generated audio, in milliseconds. | `number` |
 | `totalTimeMs` | Total generation time, in milliseconds. | `number` |
 | `realTimeFactor` | Real-time factor of the run. | `number` |
-| `backendDevice` | Device the engine used: `0` CPU, `1` GPU. | `number` |
-| `backendId` | Backend the engine used: `0` CPU, `1` Metal, `2` CUDA, `3` Vulkan, `4` OpenCL. | `number` |
+| `backendDevice` | The primary backend the run used: `0` CPU, `1` GPU. The device an ACE-Step `lmBackend` names is not reported here. | `number` |
+| `backendId` | The primary backend the run used: `0` CPU, `1` Metal, `2` CUDA, `3` Vulkan, `4` OpenCL, `99` other. | `number` |
 | `gpuFallbackReason` | Why a run that asked for a GPU resolved to the CPU: `0` none, `1` not requested, `2` no devices, `3` init failed. | `number` |
 | `emittedFrames` | MiniMax: semantic frames the autoregressive stage emitted (25 per second). Below the frame cap when the song ended on its own. | `number` |
 | `arMs` | MiniMax: time in the autoregressive semantic stage, in milliseconds. | `number` |
@@ -141,9 +158,10 @@ Every field is optional.
 | Error | When |
 | --- | --- |
 | `RequestValidationFailedError` | `params` fails validation — for example an unknown key, `duration` with `maxFrames`, `"lego"` without `track`, or `simpleMode` with `rewriteQuery`. Thrown synchronously. |
-| `InferenceCancelledError` | The run was cancelled. Rejects `audio`, `stats`, and `diagnostics`. |
-| `InvalidResponseError` | The stream ends without a terminal frame, or without the audio format. Rejects `audio`, `stats`, `diagnostics`, and `progressStream`. |
-| `QvacErrorBase` | Generation fails on the server. Rejects `audio`, `stats`, `diagnostics`, and `progressStream`. |
+| `AudioEncodeFailedError` | `outputFormat` names a format whose FFmpeg encoder the inference host lacks: the request fails before generation starts and rejects `audio`, `encoded`, `stats`, `diagnostics`, `progressStream`, and `chunkStream`. When only the encode of the finished PCM fails, it rejects `encoded` alone. |
+| `InferenceCancelledError` | The run was cancelled. Rejects `audio`, `encoded`, `stats`, and `diagnostics`. |
+| `InvalidResponseError` | The stream ends without a terminal frame, without the audio format, or, with `outputFormat` set, without the encoded file or its encode error. Rejects `audio`, `encoded`, `stats`, `diagnostics`, `progressStream`, and `chunkStream`. |
+| `QvacErrorBase` | Generation fails on the server. Rejects `audio`, `encoded`, `stats`, `diagnostics`, `progressStream`, and `chunkStream`. |
 
 ## Examples
 
@@ -166,6 +184,14 @@ for await (const progress of run.progressStream) {
 }
 const { pcm, sampleRate, channels, bitsPerSample } = await run.audio;
 const rendered = (await run.stats)?.metadata;
+
+// Ask for a FLAC file next to the PCM, and read the samples as Int16Array chunks.
+const flacRun = audioGen({ modelId, caption: "ambient electronic music", outputFormat: "flac" });
+for await (const samples of flacRun.chunkStream) {
+  console.log(samples.length, "interleaved int16 samples");
+}
+const file = await flacRun.encoded;
+if (file) await fs.writeFile(`track.${file.extension}`, file.data);
 
 // Cover: keep the structure of a source song, change the arrangement.
 const cover = audioGen({

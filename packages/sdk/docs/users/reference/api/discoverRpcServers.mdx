@@ -15,7 +15,7 @@ A discovery topic does not authenticate peers. Use discovery only with trusted p
 ## Signature
 
 ```ts
-function discoverRpcServers(options: DiscoverRpcServersOptions): Promise<RpcServerCandidate[]> & { requestId: string };
+function discoverRpcServers(options: DiscoverRpcServersOptions, rpcOptions?: RPCOptions): Promise<RpcServerCandidate[]> & { requestId: string };
 ```
 
 ## Parameters
@@ -23,6 +23,7 @@ function discoverRpcServers(options: DiscoverRpcServersOptions): Promise<RpcServ
 | Parameter | Description | Type | Required |
 | --- | --- | --- | --- |
 | `options` | The topic to search and the search budget. | [`DiscoverRpcServersOptions`](#discoverrpcserversoptions) | Yes |
+| `rpcOptions` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
 
 ### `DiscoverRpcServersOptions`
 
@@ -30,6 +31,25 @@ function discoverRpcServers(options: DiscoverRpcServersOptions): Promise<RpcServ
 | --- | --- | --- | --- | --- |
 | `topic` | Shared discovery topic, as the servers set it in `discoveryTopic`. Trimmed; 1 to 256 characters. | `string` | Yes | — |
 | `timeoutMs` | Search budget in milliseconds, including TCP probes. An integer from `100` to `30000`. The call resolves when it elapses. | `number` | No | `5000` |
+
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
 
 ## Returns
 
@@ -57,9 +77,11 @@ The promise also carries `requestId`, available synchronously, so a pending sear
 
 | Error | When |
 | --- | --- |
-| `RequestValidationFailedError` | `topic` is empty or longer than 256 characters, or `timeoutMs` is out of range. |
+| `RequestValidationFailedError` | `topic` is empty or longer than 256 characters, `timeoutMs` is out of range, or `rpcOptions.sessionId` is empty. |
 | `InferenceCancelledError` | The search was cancelled with [`cancel({ requestId })`](/sdk/reference/api/cancel). |
 | `RpcServerOperationError` | The search fails in the worker. The `details` field carries the reason. |
+| `SessionNotOpenError` | `rpcOptions.sessionId` names a session that is not open in the worker. |
+| `SessionInvalidatedError` | The call was made through a session handle whose session has ended. |
 | `QvacErrorBase` | The worker answers with an invalid response type. |
 
 ## Examples

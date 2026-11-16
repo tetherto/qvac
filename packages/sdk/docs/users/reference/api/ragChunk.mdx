@@ -6,7 +6,7 @@ binds:
   - fn:ragChunk
 ---
 
-Splits one or more documents into chunks and resolves with them, each under a generated ID. It stores nothing and needs no model. Use it as the first step of the segregated flow — `ragChunk()` → [`embed()`](/sdk/reference/api/embed) → [`ragSaveEmbeddings()`](/sdk/reference/api/ragSaveEmbeddings) — when you want to control embedding yourself. [`ragIngest()`](/sdk/reference/api/ragIngest) runs the same chunking for you. See [RAG](/sdk/ai-capabilities/rag).
+Splits one or more documents into chunks and resolves with them, each under a generated ID. It stores nothing and needs no model. Use it as the first step of the segregated flow — `ragChunk()` → [`embedBatch()`](/sdk/reference/api/embedBatch) → [`ragSaveEmbeddings()`](/sdk/reference/api/ragSaveEmbeddings) — when you want to control embedding yourself. [`ragIngest()`](/sdk/reference/api/ragIngest) runs the same chunking for you. See [RAG](/sdk/ai-capabilities/rag).
 
 ## Signature
 
@@ -45,6 +45,7 @@ function ragChunk(params: RagChunkParams, options?: RPCOptions): Promise<RagDoc[
 | `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
 | `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
 | `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
 
 #### `PerCallProfiling`
 
@@ -82,7 +83,7 @@ const chunks = await ragChunk({
 });
 
 // Embed the chunks, then save them to a workspace.
-const { embedding } = await embed({ modelId, text: chunks.map((c) => c.content) });
+const { embedding } = await embedBatch({ modelId, inputs: chunks.map((c) => c.content) });
 await ragSaveEmbeddings({
   workspace: "docs",
   documents: chunks.map((chunk, i) => ({

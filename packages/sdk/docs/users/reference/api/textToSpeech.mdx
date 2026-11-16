@@ -46,11 +46,14 @@ function textToSpeech(params: TtsClientParamsInput, options?: RPCOptions): TextT
 | `voice` | Parler voice-template speaker name. | `string` | No | — |
 | `emotion` | Speaking style. Parler accepts every value; CosyVoice3 accepts `"anger"`, `"happy"`, `"neutral"`, and `"sad"`. | [`TtsParlerEmotion`](#ttsparleremotion) | No | — |
 | `pitch` | Parler voice-template pitch descriptor. | `string` | No | — |
-| `pace` | Speaking rate. Parler and CosyVoice3. On CosyVoice3, a non-`"moderate"` pace cannot be combined with `emotion`. | `"slow" \| "moderate" \| "fast"` | No | — |
+| `pace` | Speaking rate. Parler and CosyVoice3. On CosyVoice3, a non-`"moderate"` pace cannot be combined with `emotion` or `instruct`. | `"slow" \| "moderate" \| "fast"` | No | — |
 | `expressivity` | Parler voice-template expressivity descriptor. | `string` | No | — |
 | `noise` | Parler voice-template background-noise descriptor. | `string` | No | — |
 | `reverb` | Parler voice-template reverb descriptor. | `string` | No | — |
 | `quality` | Parler voice-template audio-quality descriptor. | `string` | No | — |
+| `instruct` | CosyVoice3 only: natural-language control for this synthesis, replacing the loaded `instruct`, `emotion`, or `pace`. A non-empty instruction string, or an object with at least one of `dialect`, `volume`, and `style`. Cannot be combined with `emotion` or with a `pace` other than `"moderate"`. | `string \|` [`instruct`](/sdk/reference/api/loadModel#cosyvoice3-instruct) | No | The loaded control |
+| `referenceAudioSrc` | Audio8 only: reference recording to clone for this request, replacing the loaded voice. Requires `referenceText` and a model loaded with `audio8CodecEncoderModelSrc`. A remote source that is not cached yet downloads inside the request, which holds the model until it finishes: pre-fetch it with [`downloadAsset()`](/sdk/reference/api/downloadAsset) or pass a local path. | `string \| ModelDescriptor` | No | The loaded voice |
+| `referenceText` | Audio8 only: transcript of the reference recording. With `referenceAudioSrc`, what that recording says; alone, it corrects the transcript of the loaded recording. Must not be empty or whitespace-only. | `string` | No | — |
 | `seconds` | MOSS-SoundEffect: effect duration in seconds, greater than 0 and at most 30. | `number` | No | — |
 | `negativePrompt` | MOSS-SoundEffect: description of sounds to avoid. | `string` | No | — |
 | `steps` | MOSS-SoundEffect: diffusion denoising steps, an integer from 1 to 1000. | `number` | No | `100` |
@@ -70,7 +73,7 @@ function textToSpeech(params: TtsClientParamsInput, options?: RPCOptions): TextT
 | `topP` | MOSS-Speech: nucleus sampling, greater than 0 and at most 1. | `number` | No | `0.95` |
 | `topK` | MOSS-Speech: top-k sampling, a non-negative integer. | `number` | No | `20` |
 
-The voice-template fields are `voice`, `emotion`, `pitch`, `pace`, `expressivity`, `noise`, `reverb`, and `quality`. Sending any of `description`, `voiceDescription`, or a voice-template field to an engine other than Parler — or anything but `emotion` and `pace` to CosyVoice3 — is rejected by the server.
+The voice-template fields are `voice`, `emotion`, `pitch`, `pace`, `expressivity`, `noise`, `reverb`, and `quality`. Sending any of `description`, `voiceDescription`, or a voice-template field to an engine other than Parler — or anything but `emotion` and `pace` to CosyVoice3 — is rejected by the server. So is `instruct` on an engine other than CosyVoice3, and `referenceAudioSrc` or `referenceText` on an engine other than Audio8.
 
 #### `TtsParlerEmotion`
 
@@ -97,14 +100,15 @@ A `TextToSpeechStreamResult`, returned synchronously. In the default streamed mo
 | `buffer` | The complete audio, as signed 16-bit mono PCM samples, when `stream: false`. Resolves `[]` in the streamed modes. | `Promise<number[]>` |
 | `bufferStream` | The audio one sample at a time. Empty when `stream: false`. | `AsyncGenerator<number>` |
 | `chunkStream` | The same audio as one `Int16Array` per response frame: signed 16-bit mono samples. Empty when `stream: false`. Shares the run with `bufferStream`, so iterate one of the two. | `AsyncGenerator<Int16Array>` |
-| `chunkUpdates` | Present only with `sentenceStream: true`: one update per frame that carries audio or chunk metadata. | `AsyncGenerator<` [`TtsSentenceChunkUpdate`](#ttssentencechunkupdate) `>` |
+| `chunkUpdates` | Present only with `sentenceStream: true`: one update per frame that carries audio, chunk metadata, or speech tokens. | `AsyncGenerator<` [`TtsSentenceChunkUpdate`](#ttssentencechunkupdate) `>` |
 | `done` | Resolves `true` when the run ends. In the default streamed mode it resolves `false` when you stop iterating before the end. Rejects when the run fails. | `Promise<boolean>` |
 | `sampleRate` | Sample rate of the PCM, in Hz, resolved from the first audio frame. `undefined` when the run produced no audio. Read it rather than assuming the engine default. | `Promise<number \| undefined>` |
 | `text` | MOSS-Speech reply text, resolved when the run finishes. | `Promise<string \| undefined>` |
 | `stats` | Runtime statistics from the final frame. `undefined` when the run ended before the engine reported any. | `Promise<` [`TtsStats`](#ttsstats) ` \| undefined>` |
 | `stopReason` | `"cancelled"` when [`cancel()`](/sdk/reference/api/cancel) stopped the run, `"completed"` otherwise; `undefined` when no terminal frame was seen. | `Promise<"completed" \| "cancelled" \| undefined>` |
+| `speechTokenIds` | CosyVoice3: every speech token the run emitted, in order; `undefined` when no frame carried any. A batch run or a native chunk stream is one native synthesis, and its array replays through the load config's `forceSpeechTokens`. The sentence-streamed path runs one synthesis per sentence and concatenates their arrays, so this concatenation does not replay the run; replay a single sentence's array from `chunkUpdates` instead. | `Promise<number[] \| undefined>` |
 
-`sampleRate`, `text`, `stats`, and `stopReason` always resolve; they never reject. A cancelled run ends cleanly: `done` resolves `true` and the audio stops at what was delivered.
+`sampleRate`, `text`, `stats`, `stopReason`, and `speechTokenIds` always resolve; they never reject. A cancelled run ends cleanly: `done` resolves `true` and the audio stops at what was delivered.
 
 ### `TtsSentenceChunkUpdate`
 
@@ -115,6 +119,7 @@ A `TextToSpeechStreamResult`, returned synchronously. In the default streamed mo
 | `chunkIndex` | Index of the sentence chunk. | `number` |
 | `sentenceChunk` | Text of the sentence chunk. | `string` |
 | `isLast` | `true` on the final audio-bearing chunk of the synthesis. | `boolean` |
+| `speechTokenIds` | CosyVoice3: the speech tokens of this sentence's synthesis, when the frame carried them. Each array replays its own sentence through `forceSpeechTokens`. | `number[]` |
 
 ### `TtsStats`
 
@@ -125,11 +130,12 @@ Every field is optional. The streamed modes run one native job per sentence: the
 | `audioDuration` | Length of the synthesized audio, in milliseconds. | `number` |
 | `totalTime` | Synthesis time, in seconds. | `number` |
 | `realTimeFactor` | `totalTime × 1000 / audioDuration`; below 1.0 is faster than real time. | `number` |
+| `firstAudioMs` | Milliseconds from the start of the run to the first audio, where the engine reports it. A chunked run keeps the first sentence's value. | `number` |
 | `tokensPerSecond` | Input characters synthesized per second; codec frames per second on Audio8 and MOSS. | `number` |
 | `totalSamples` | PCM sample count. | `number` |
 | `generatedFrames` | Audio8 and MOSS: codec frames generated. | `number` |
 | `backendDevice` | Device chosen at load: `0` CPU, `1` GPU. | `number` |
-| `backendId` | Backend family: `0` CPU, `1` Metal, `2` CUDA, `3` Vulkan, `4` OpenCL, `99` other GPU. | `number` |
+| `backendId` | Backend family: `0` CPU, `1` Metal, `2` CUDA, `3` Vulkan, `4` OpenCL, `5` WebGPU, `99` other. | `number` |
 | `gpuUnsupported` | `1` when a GPU is present but unusable by engine policy, so the run fell back to CPU. | `number` |
 | `enhancerBackendDevice` | LavaSR enhancer device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed. | `number` |
 | `enhancerBackendId` | LavaSR enhancer backend family, same codes as `backendId`. | `number` |
@@ -137,14 +143,33 @@ Every field is optional. The streamed modes run one native job per sentence: the
 | `denoiserBackendId` | LavaSR denoiser backend family, same codes as `backendId`. | `number` |
 | `codecSidecarLoaded` | Audio8 on macOS / iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired. | `number` |
 | `codecOnCoreml` | Audio8: `1` when this synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` reports. | `number` |
+| `decoderSidecarLoaded` | Parler on macOS / iOS: `1` while the Core ML decoder sidecar is attached, `0` once a fallback retired it. | `number` |
+| `dacSidecarLoaded` | Parler on macOS / iOS: `1` while the Core ML DAC sidecar is attached, `0` once a fallback retired it. | `number` |
+| `decoderOnCoreml` | Parler: `1` when this synthesis ran its decoder steps on Core ML, `0` for ggml or a mixed run. | `number` |
+| `dacOnCoreml` | Parler: `1` when this synthesis ran its DAC on Core ML, `0` for ggml or a mixed run. | `number` |
+| `t3Ms` | Chatterbox: T3 decode wall time of the last synthesis, in milliseconds. | `number` |
+| `s3genMs` | Chatterbox: S3Gen + HiFT wall time of the last synthesis, in milliseconds. | `number` |
+| `t3Tokens` | Chatterbox: speech tokens T3 emitted in the last synthesis. | `number` |
+| `stageTotalMs` | CosyVoice3 and Audio8: the engine's own wall time for the last synthesis, in milliseconds — the sum of its stages, excluding post-processing. | `number` |
+| `lmPrefillMs`, `lmDecodeMs`, `flowFrontendMs`, `ditEulerMs`, `hiftF0Ms`, `hiftSourceMs`, `hiftStftMs`, `hiftDecodeMs` | CosyVoice3: wall time of each stage (LM prefill, LM decode, flow front-end, DiT Euler, HiFT F0, HiFT source, HiFT STFT, HiFT decode) in the last synthesis, in milliseconds. | `number` |
+| `decodeSteps` | CosyVoice3: LM decode steps of the last synthesis. | `number` |
+| `speechTokens` | CosyVoice3: speech tokens generated in the last synthesis. | `number` |
+| `flowFrames` | CosyVoice3: flow frames in (prompt + generated) of the last synthesis. | `number` |
+| `melFrames` | CosyVoice3: mel frames out of the last synthesis. | `number` |
+| `textIds` | CosyVoice3: text IDs in the LM prefill of the last synthesis. | `number` |
+| `promptSpeechTokens` | CosyVoice3: prompt speech tokens the LM continued from. | `number` |
+| `voiceEncodeMs`, `promptMs`, `prefillMs`, `sampleMs`, `fastDecodeMs`, `slowDecodeMs`, `codecLatentMs`, `codecSynthMs`, `resampleMs` | Audio8: wall time of each stage (reference-voice encode, prompt build, prefill, sampling, fast (local) decoder, slow (global) decoder, codec latent, codec synthesis, resample) in the last synthesis, in milliseconds. | `number` |
 
 ## Throws
 
 | Error | When |
 | --- | --- |
-| `RequestValidationFailedError` | `params` fails validation — for example `text` is empty, both or neither of `text` and `audio` are set, `audio` comes without `sampleRate`, or `description` is combined with a voice-template field. Thrown synchronously. |
+| `RequestValidationFailedError` | `params` fails validation — for example `text` is empty, both or neither of `text` and `audio` are set, `audio` comes without `sampleRate`, `description` is combined with a voice-template field, `referenceAudioSrc` comes without `referenceText`, or `instruct` is combined with `emotion` or a non-`"moderate"` `pace`. Thrown synchronously. |
 | `TextToSpeechStreamFailedError` | `sentenceStream: true` is paired with `stream: false`. Thrown synchronously. |
+| `PLUGIN_REQUEST_VALIDATION_FAILED` | `instruct` is sent to a model other than CosyVoice3, or `referenceAudioSrc` / `referenceText` to a model other than Audio8. Surfaces like a server failure. |
 | `QvacErrorBase` | Synthesis fails on the server. Surfaces when iterating the streams, and rejects `done` (and `buffer` when `stream: false`). |
+
+An error written as a code, such as `MODEL_NOT_FOUND`, is not exported as a class: it reaches the caller as an `Error` whose `name` is that code.
 
 ## Examples
 

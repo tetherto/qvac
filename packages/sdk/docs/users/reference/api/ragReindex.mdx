@@ -12,7 +12,7 @@ Rebuilds the search index of an existing built-in RAG workspace and resolves wit
 **Prototype only:** the built-in RAG vector store is not production grade. For production, use an external vector DB, as shown in the [RAG guide](/sdk/ai-capabilities/rag).
 </Callout>
 
-Starting `ragIngest()`, `ragSaveEmbeddings()`, or `ragReindex()` on a workspace cancels the one of these already running on that workspace.
+Starting `ragIngest()`, `ragSaveEmbeddings()`, or `ragReindex()` on a workspace cancels the one of these already running on that workspace, when the same caller started it. A [session](/sdk/runtime/sessions) that finds another session's operation running there is refused with `RAGWorkspaceBusyError`; the owner cancels any session's operation.
 
 ## Signature
 
@@ -54,6 +54,7 @@ The `stage` passed to `onProgress`, in order. A TurboVec workspace reports only 
 | `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
 | `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
 | `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
 
 #### `PerCallProfiling`
 
@@ -84,6 +85,7 @@ An error written as a code, such as `MODEL_NOT_FOUND`, is not exported as a clas
 | `RequestValidationFailedError` | `params` fails validation, for example an invalid `workspace` name. |
 | `RAG_HYPERDB_FAILED` | The workspace does not exist. |
 | `RAG_SAVE_FAILED` | The worker reports that the reindex failed. |
+| `RAGWorkspaceBusyError` | Another session's `ragIngest()`, `ragSaveEmbeddings()`, or `ragReindex()` is running on the workspace, and this call is made through a session. Retry when it finishes. |
 | `StreamEndedError` | The progress stream ends without a final result (only with `onProgress`). |
 
 ## Examples

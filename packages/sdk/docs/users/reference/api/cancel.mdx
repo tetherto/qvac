@@ -11,7 +11,7 @@ Cancels in-flight work. The targeted form stops one call by the `requestId` that
 ## Signature
 
 ```ts
-function cancel(params: CancelClientInput): Promise<void>;
+function cancel(params: CancelClientInput, options?: RPCOptions): Promise<void>;
 ```
 
 The shape of `params` selects what is cancelled:
@@ -29,6 +29,7 @@ The shape of `params` selects what is cancelled:
 | Parameter | Description | Type | Required |
 | --- | --- | --- | --- |
 | `params` | What to cancel. One of the forms above. | See [forms](#signature) | Yes |
+| `options` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
 
 ### By request
 
@@ -37,7 +38,7 @@ The shape of `params` selects what is cancelled:
 | `requestId` | Identifier of the in-flight request to cancel, as exposed by the long-running call. Not empty. | `string` | Yes | — |
 | `clearCache` | Download only: delete the partial download file instead of keeping it for resume. Ignored for other kinds of request. | `boolean` | No | — |
 
-A `requestId` that matches no in-flight request resolves without error. A cancel that arrives just before its request begins is still applied when the request begins.
+A `requestId` is resolved within the caller's own session: another session's `requestId` matches nothing, and that request keeps running. A `requestId` that matches no in-flight request resolves without error. A cancel that arrives just before its request begins is still applied when the request begins.
 
 ### Broad
 
@@ -46,11 +47,32 @@ A `requestId` that matches no in-flight request resolves without error. A cancel
 | `modelId` | ID of the loaded model whose in-flight requests to cancel. | `string` | Yes |
 | `kind` | Cancel only requests of this kind. Omitting it cancels every in-flight request on the model. | [`CancelKind`](#cancelkind) | No |
 
+From a session, a broad cancel reaches only that session's requests on the model. From the runtime owner, it reaches the requests of every session on the model. See [Cancelling from a session](/sdk/runtime/cancellation#cancelling-from-a-session).
+
 A broad cancel does not reach an in-progress `loadModel()` or `downloadAsset()`: cancel those by `requestId`.
 
 #### `CancelKind`
 
-`"completion" | "batchCompletion" | "embeddings" | "decision" | "rerank" | "transcribe" | "translate" | "diffusion" | "world" | "audiogen" | "tts" | "ocr" | "vla" | "finetune" | "loadModel" | "downloadAsset" | "rpcServer" | "rpcDiscovery" | "rag"`
+`"completion" | "batchCompletion" | "embeddings" | "imageEmbedding" | "decision" | "rerank" | "transcribe" | "translate" | "diffusion" | "world" | "audiogen" | "tts" | "ocr" | "classification" | "vla" | "plugin" | "vectorIndex" | "finetune" | "loadModel" | "downloadAsset" | "modelRegistry" | "rpcServer" | "rpcDiscovery" | "rag"`
+
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
 
 ## Returns
 
@@ -61,6 +83,7 @@ A promise that resolves with no value once the cancel is signalled. It does not 
 | Error | When |
 | --- | --- |
 | `CancelFailedError` | The worker reports a failed cancel, such as a broad cancel for a `modelId` that is not loaded. The message carries the details. |
+| `SessionNotOpenError` | `options.sessionId` names a session that is not open. |
 | `InvalidResponseError` | The worker answers with an unexpected response type. |
 
 ## Examples

@@ -11,7 +11,7 @@ Sends `params` to a named streaming handler of the plugin that serves a loaded m
 ## Signature
 
 ```ts
-function invokePluginStream<TResponse = unknown, TParams = unknown>(options: InvokePluginOptions<TParams>, rpcOptions?: RPCOptions): AsyncGenerator<TResponse>;
+function invokePluginStream<TResponse = unknown, TParams = unknown>(options: InvokePluginOptions<TParams>, rpcOptions?: RPCOptions): AsyncGenerator<TResponse> & { requestId: string };
 ```
 
 `TParams` types `params` and `TResponse` types each chunk. Both are compile-time annotations only: the worker validates the payloads against the handler's own schemas.
@@ -30,6 +30,7 @@ function invokePluginStream<TResponse = unknown, TParams = unknown>(options: Inv
 | `modelId` | ID of the loaded model, as [`loadModel`](/sdk/reference/api/loadModel) returned it. Its model type selects the plugin. | `string` | Yes |
 | `handler` | Name of the handler, as declared in the plugin's `handlers`. Must be a streaming handler. | `string` | Yes |
 | `params` | The handler's request payload. Sent as JSON and validated in the worker against the handler's `requestSchema`. | `TParams` | Yes |
+| `requestId` | ID that [`cancel({ requestId })`](/sdk/reference/api/cancel) targets. Non-empty, and unique within the caller session. Generated when omitted. | `string` | No |
 
 ### `RPCOptions`
 
@@ -39,6 +40,7 @@ function invokePluginStream<TResponse = unknown, TParams = unknown>(options: Inv
 | `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
 | `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
 | `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
 
 #### `PerCallProfiling`
 
@@ -53,6 +55,8 @@ function invokePluginStream<TResponse = unknown, TParams = unknown>(options: Inv
 
 An `AsyncGenerator<TResponse>` that yields each chunk of the handler's output, in order. The worker validates every chunk against the handler's `responseSchema` before sending it. The generator ends when the handler finishes; the worker's end-of-stream marker is not yielded.
 
+The generator also carries `requestId`, available synchronously, so a running stream can be cancelled with [`cancel({ requestId })`](/sdk/reference/api/cancel). Closing the caller's session or unloading the model also cancels it. See [Cancellation](/sdk/runtime/cancellation).
+
 ## Throws
 
 The generator throws while you iterate it. An error written as a code, such as `MODEL_NOT_FOUND`, is not exported as a class: it reaches the caller as an `Error` whose `name` is that code.
@@ -65,6 +69,10 @@ The generator throws while you iterate it. An error written as a code, such as `
 | `PLUGIN_HANDLER_TYPE_MISMATCH` | The handler is a reply handler. Call it with [`invokePlugin`](/sdk/reference/api/invokePlugin). |
 | `PLUGIN_REQUEST_VALIDATION_FAILED` | `params` does not match the handler's `requestSchema`. |
 | `PLUGIN_RESPONSE_VALIDATION_FAILED` | A chunk does not match the handler's `responseSchema`. |
+| `RequestValidationFailedError` | `requestId` or `rpcOptions.sessionId` is empty. |
+| `InferenceCancelledError` | The stream was cancelled: by [`cancel({ requestId })`](/sdk/reference/api/cancel), by closing its session, or by unloading the model. |
+| `SessionNotOpenError` | `rpcOptions.sessionId` names a session that is not open in the worker. |
+| `SessionInvalidatedError` | The call was made through a session handle whose session has ended. |
 | `QvacErrorBase` | A response has the wrong type, or the RPC layer fails. |
 
 ## Examples

@@ -1,0 +1,168 @@
+---
+title: embedBatch
+titleStyle: code
+description: Generates one embedding vector per input, in input order, with a loaded embedding model.
+binds:
+  - fn:embedBatch
+---
+
+Turns a batch of inputs into embedding vectors with a loaded embedding model, one vector per input in input order, even for a one-item batch. A `llamacpp-embedding` (`embeddings`) model embeds text, and ordered text and media when it is loaded with a projector. A `ggml-image-embedding` (MegaLoc) model embeds images. To embed one input as a single vector, use [`embed()`](/sdk/reference/api/embed). See [Text embeddings](/sdk/ai-capabilities/text-embeddings), [Multimodal embeddings](/sdk/ai-capabilities/multimodal-embeddings), and [Image embeddings](/sdk/ai-capabilities/image-embeddings).
+
+## Signature
+
+```ts
+function embedBatch(params: EmbedBatchClientParams, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: EmbedStats }> & { requestId: string };
+```
+
+## Parameters
+
+| Parameter | Description | Type | Required |
+| --- | --- | --- | --- |
+| `params` | The model and the inputs to embed. | [`EmbedBatchClientParams`](#embedbatchclientparams) | Yes |
+| `options` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
+
+### `EmbedBatchClientParams`
+
+| Option | Description | Type | Required | Default |
+| --- | --- | --- | --- | --- |
+| `modelId` | ID of a loaded embedding model, as [`loadModel()`](/sdk/reference/api/loadModel) returned it. | `string` | Yes | — |
+| `inputs` | Items to embed, one vector each, in order. At least one. Which kinds of item a model accepts: see [`EmbedBatchInput`](#embedbatchinput). | [`EmbedBatchInput`](#embedbatchinput)`[]` | Yes | — |
+
+`text` and `input`, the fields of `embed()`, are rejected.
+
+#### `EmbedBatchInput`
+
+One of three forms:
+
+| Form | Value | Accepted by |
+| --- | --- | --- |
+| Text | A non-empty string. | `llamacpp-embedding` |
+| Ordered parts | A non-empty array of parts in order: strings and `{ media: EmbedMediaSource }` objects. An array made only of empty strings is rejected. | `llamacpp-embedding`; media parts need a model loaded with `modelConfig.projectionModelSrc`. `ggml-image-embedding`, only as one image media part and nothing else. |
+| Image | An [`EmbedImageInput`](#embedimageinput) object. | `ggml-image-embedding` |
+
+A `llamacpp-embedding` model rejects an image object. A `ggml-image-embedding` model rejects text, audio, and inputs with more than one part. For a mixed input on a `llamacpp-embedding` model, the text and media tokens must fit together in the model's `batchSize` and `ctxSize`.
+
+#### `EmbedMediaSource`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `type` | `"base64"` for encoded bytes, `"filePath"` for a path. | `"base64" \| "filePath"` | Yes |
+| `value` | The base64-encoded image or audio bytes, or a file path the inference worker can read. Not empty; a `"base64"` value must be valid base64. | `string` | Yes |
+
+On a `llamacpp-embedding` model: images in JPEG, PNG, and BMP; audio in WAV, MP3, and FLAC. WebP, AAC/M4A, Ogg, and video are not supported.
+
+#### `EmbedImageInput`
+
+An image for a `ggml-image-embedding` model. The model converts it to RGB and resizes it to 322 by 322 pixels, without cropping or padding.
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `image` | JPEG or PNG bytes, or packed RGB bytes. Not empty. For packed RGB, exactly `width * height * channels` bytes. | `Uint8Array` | Yes |
+| `width` | Packed RGB width in pixels, an integer from `1` to `16384`. | `number` | With packed RGB |
+| `height` | Packed RGB height in pixels, an integer from `1` to `16384`. | `number` | With packed RGB |
+| `channels` | Packed RGB channel count. Must be `3`. | `3` | With packed RGB |
+
+Supply `width`, `height`, and `channels` together for packed RGB bytes, or omit all three for JPEG or PNG.
+
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. A call whose timeout expires is cancelled on the worker too. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. See [Profiler](/sdk/runtime/profiler). | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
+
+## Returns
+
+A promise that resolves with an object. The promise also carries `requestId`, available synchronously, so the call can be cancelled with [`cancel({ requestId })`](/sdk/reference/api/cancel) before it resolves. On a `llamacpp-embedding` model, that cancel also stops every other in-flight call on the model. On a `ggml-image-embedding` model, calls queue one at a time per model: cancelling a queued call removes it before native work starts, and cancelling the active call discards its result once native work finishes, stopping a batch before its next image. See [Cancellation](/sdk/runtime/cancellation).
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `embedding` | One vector per input, in input order, including for a one-item batch. A `ggml-image-embedding` (MegaLoc) vector is an L2-normalized descriptor of 8448 values: the dot product of two is their cosine similarity. | `number[][]` |
+| `stats` | Performance figures, when the model reported them. | [`EmbedStats`](#embedstats) |
+
+### `EmbedStats`
+
+Each model fills only its own fields. Every field is optional.
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `totalTime` | Total embedding time, in milliseconds. For a `ggml-image-embedding` batch, the sum of the native times of every image. | `number` |
+| `tokensPerSecond` | Tokens processed per second. `llamacpp-embedding` only. | `number` |
+| `totalTokens` | Total tokens processed. `llamacpp-embedding` only. | `number` |
+| `backendDevice` | Device that ran inference. `llamacpp-embedding` only. | `"cpu" \| "gpu"` |
+| `contextSize` | Context size, in tokens. `llamacpp-embedding` only. | `number` |
+| `backendId` | Native backend ID: CPU=0, Metal=1, CUDA=2, Vulkan=3, OpenCL=4, other=99. `ggml-image-embedding` only; describes the final image of a batch. | `number` |
+| `cpuFallbackNodes` | Number of graph nodes scheduled on CPU fallback. `ggml-image-embedding` only; describes the final image of a batch. | `number` |
+| `weightBytes` | Allocated model weight bytes. `ggml-image-embedding` only; describes the final image of a batch. | `number` |
+
+## Throws
+
+An error written as a code, such as `MODEL_NOT_FOUND`, is not exported as a class: it reaches the caller as an `Error` whose `name` is that code.
+
+| Error | When |
+| --- | --- |
+| `RequestValidationFailedError` | `params` fail validation, such as an empty `inputs`, an empty string or parts array, invalid base64, `text` or `input` set, or packed RGB dimensions that are incomplete or do not match the byte length. |
+| `MODEL_NOT_FOUND` | No model with `modelId` is loaded. |
+| `MODEL_OPERATION_NOT_SUPPORTED` | The loaded model is not an embedding model. |
+| `EMBED_FAILED` | The model cannot embed an input: media parts on a model loaded without a projector, an image object on a `llamacpp-embedding` model, text, audio, or several parts on a `ggml-image-embedding` model, or a media file the worker cannot read. The message carries the details. |
+| `EMBED_NO_EMBEDDINGS` | The model returns no vectors. |
+| `InferenceCancelledError` | The call is cancelled. See [Cancellation](/sdk/runtime/cancellation). |
+| `RequestRejectedByPolicyError` | A `ggml-image-embedding` model already has 64 calls waiting. |
+| `InvalidResponseError` | The worker answers with an unexpected or malformed response. |
+
+## Examples
+
+```ts
+import { readFile } from "node:fs/promises";
+import {
+  embedBatch,
+  loadModel,
+  ModelType,
+  GTE_LARGE_FP16,
+  EMBEDDINGGEMMA_2_Q8_0,
+  MMPROJ_EMBEDDINGGEMMA_2_Q8_0,
+  MEGALOC_F16,
+} from "@qvac/sdk";
+
+// Texts, one vector each.
+const textId = await loadModel({ modelSrc: GTE_LARGE_FP16, modelType: "embeddings" });
+const { embedding: vectors } = await embedBatch({
+  modelId: textId,
+  inputs: ["first document", "second document"],
+});
+
+// Text, an image, and audio in one shared vector space.
+const multimodalId = await loadModel({
+  modelSrc: EMBEDDINGGEMMA_2_Q8_0,
+  modelType: "llamacpp-embedding",
+  modelConfig: { projectionModelSrc: MMPROJ_EMBEDDINGGEMMA_2_Q8_0, ctxSize: 2048, batchSize: 2048 },
+});
+const { embedding: [query, image, audio] } = await embedBatch({
+  modelId: multimodalId,
+  inputs: [
+    "task: search result | query: a newspaper report about the Titanic",
+    ["title: none | text: ", { media: { type: "filePath", value: "/home/user/scan.jpg" } }],
+    [{ media: { type: "filePath", value: "/home/user/clip.wav" } }],
+  ],
+});
+
+// Images with MegaLoc, compared by dot product.
+const megalocId = await loadModel({ modelSrc: MEGALOC_F16, modelType: ModelType.ggmlImageEmbedding });
+const { embedding: [first, second], stats } = await embedBatch({
+  modelId: megalocId,
+  inputs: [{ image: await readFile("/home/user/first.jpg") }, { image: await readFile("/home/user/second.jpg") }],
+});
+const similarity = first.reduce((sum, value, index) => sum + value * second[index], 0);
+```

@@ -11,7 +11,9 @@ Loads a snapshot written by a vector index's `write()` method into the SDK worke
 ## Signature
 
 ```ts
-function loadVectorIndex(params: LoadVectorIndexParams, options?: RPCOptions): Promise<VectorIndex>;
+function loadVectorIndex(params: LoadVectorIndexParams, options?: RPCOptions): VectorIndexOperation<VectorIndex>;
+
+type VectorIndexOperation<T> = Promise<T> & { requestId: string };
 ```
 
 ## Parameters
@@ -35,6 +37,7 @@ function loadVectorIndex(params: LoadVectorIndexParams, options?: RPCOptions): P
 | `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
 | `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
 | `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
 
 #### `PerCallProfiling`
 
@@ -47,7 +50,9 @@ function loadVectorIndex(params: LoadVectorIndexParams, options?: RPCOptions): P
 
 ## Returns
 
-A promise that resolves with a [`VectorIndex`](/sdk/reference/api/createVectorIndex#vectorindex) handle holding the snapshot's entries. `dim` and `length` come from the snapshot. `storage` is derived from the snapshot's bit width, so a 4-bit snapshot (`q4` or `turbovec-q4`) reports `undefined`.
+A promise that resolves with a [`VectorIndex`](/sdk/reference/api/createVectorIndex#vectorindex) handle holding the snapshot's entries. `dim` and `length` come from the snapshot. `storage` is derived from the snapshot's bit width, so a 4-bit snapshot (`q4` or `turbovec-q4`) reports `undefined`. Staged search and IVF search start off, since snapshots save neither setting: `stagedSearch` is `false` and `ivf` is `null`, unless the provider does not report them.
+
+The promise also carries `requestId`, available synchronously, so the call can be cancelled with [`cancel({ requestId })`](/sdk/reference/api/cancel) before it resolves. See [Cancellation](/sdk/runtime/cancellation).
 
 ## Throws
 
@@ -58,6 +63,7 @@ An error written as a code, such as `MODEL_NOT_FOUND`, is not exported as a clas
 | `RequestValidationFailedError` | `path` is empty. |
 | `VECTOR_INDEX_PROVIDER_UNAVAILABLE` | No registered plugin exposes a vector index provider, such as the built-in `llamacpp-embedding` plugin. |
 | `VECTOR_INDEX_FAILED` | The file is missing, corrupt, or not a vector index snapshot. |
+| `InferenceCancelledError` | The call is cancelled with `cancel({ requestId })` before it resolves. An index loaded for a cancelled call is released. |
 
 ## Examples
 

@@ -35,6 +35,7 @@ function getLoadedModelInfo(params: GetLoadedModelInfoParams, rpcOptions?: RPCOp
 | `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
 | `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
 | `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
 
 #### `PerCallProfiling`
 
@@ -60,6 +61,7 @@ A promise that resolves with a `LoadedModelInfo`:
 | `name` | The model's name, when known. | `string \| undefined` |
 | `path` | Path of the model file on disk, when known. | `string \| undefined` |
 | `toolDialect` | The tool-call dialect the completion parser reads for this model, so a prior tool call can be replayed in the model's own dialect. Present only for models that run completions. | `"hermes" \| "pythonic" \| "json" \| "harmony" \| "qwen35" \| "gemma4" \| "dsml" \| undefined` |
+| `leaseCount` | Number of caller sessions, the owner included, that hold the model loaded. See [Model leases](/sdk/runtime/sessions#model-leases). | `number \| undefined` |
 | `fitProbe` | Outcome of the engine fitter's check that ran before this load, in the shape of an [`assessModelFit()` result](/sdk/reference/api/assessModelFit#returns) with one model. Absent when the load set `modelFitPolicy: "off"`. | [`ModelFitProbe`](#modelfitprobe)` \| undefined` |
 
 #### `ModelFitProbe`
@@ -77,6 +79,7 @@ An error written as a code, such as `MODEL_NOT_FOUND`, is not exported as a clas
 | Error | When |
 | --- | --- |
 | `MODEL_NOT_FOUND` | No loaded model has this `modelId`. |
+| `SessionNotOpenError` | `rpcOptions.sessionId` names a session that is not open. |
 | `InvalidResponseError` | The worker answers with an unexpected response type. |
 
 ## Examples

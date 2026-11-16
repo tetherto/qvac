@@ -11,7 +11,7 @@ Runs the ACE-Step generation pipeline backwards over a recording: the engine enc
 ## Signature
 
 ```ts
-function audioUnderstand(params: AudioUnderstandClientParams): AudioUnderstandResult;
+function audioUnderstand(params: AudioUnderstandClientParams, options?: RPCOptions): AudioUnderstandResult;
 ```
 
 ## Parameters
@@ -19,6 +19,7 @@ function audioUnderstand(params: AudioUnderstandClientParams): AudioUnderstandRe
 | Parameter | Description | Type | Required |
 | --- | --- | --- | --- |
 | `params` | The recording and the LM sampling settings. Unknown keys are rejected. | [`AudioUnderstandClientParams`](#audiounderstandclientparams) | Yes |
+| `options` | Transport options for this call only. | [`RPCOptions`](/sdk/reference/api/transcribe#rpcoptions) | No |
 
 ### `AudioUnderstandClientParams`
 

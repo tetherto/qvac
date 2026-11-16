@@ -39,6 +39,7 @@ function downloadAsset(options: DownloadAssetOptions, rpcOptions?: RPCOptions): 
 | `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
 | `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
 | `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
 
 #### `PerCallProfiling`
 
@@ -61,6 +62,8 @@ When two calls request the same asset, they share one underlying transfer. Cance
 | --- | --- |
 | `DownloadAssetFailedError` | The download fails, including `seed: true` on a non-`pear://` source; the message carries the details. |
 | `InferenceCancelledError` | The download is cancelled with [`cancel()`](/sdk/reference/api/cancel). |
+| `ModelRegistryBusyError` | A registry download waits too long for another QVAC process that holds the model registry. The download waits for a process on this SDK version until cancelled, and gives up after 30 seconds when the holder runs an older SDK, which keeps the registry until it exits. |
+| `SessionNotOpenError` | `rpcOptions.sessionId` names a session that is not open. |
 | `StreamEndedError` | The progress stream ends without a final response (only with `onProgress`). |
 | `InvalidResponseError` | The worker answers with an unexpected response type. |
 

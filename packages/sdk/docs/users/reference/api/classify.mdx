@@ -11,7 +11,7 @@ Runs an image through a loaded `ggml-classification` (`classification`) model an
 ## Signature
 
 ```ts
-function classify(params: ClassifyClientParams): Promise<ClassificationResult[]>;
+function classify(params: ClassifyClientParams, options?: RPCOptions): Promise<ClassificationResult[]> & { requestId: string };
 ```
 
 ## Parameters
@@ -19,6 +19,7 @@ function classify(params: ClassifyClientParams): Promise<ClassificationResult[]>
 | Parameter | Description | Type | Required |
 | --- | --- | --- | --- |
 | `params` | The model and the image to classify. | [`ClassifyClientParams`](#classifyclientparams) | Yes |
+| `options` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
 
 ### `ClassifyClientParams`
 
@@ -31,6 +32,16 @@ function classify(params: ClassifyClientParams): Promise<ClassificationResult[]>
 | `height` | Image height in pixels. Required for raw RGB bytes. | `number` | No | — |
 | `channels` | Channel count. Must be `3` for raw RGB bytes. | `3` | No | — |
 
+#### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. See [Profiler](/sdk/runtime/profiler). | `PerCallProfiling` | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
 ## Returns
 
 A promise that resolves with one `ClassificationResult` per returned class, sorted by confidence in descending order. The label set comes from the model's GGUF metadata.
@@ -39,6 +50,14 @@ A promise that resolves with one `ClassificationResult` per returned class, sort
 | --- | --- | --- |
 | `label` | Class label. | `string` |
 | `confidence` | Confidence score for the label. | `number` |
+
+The promise also carries `requestId`, available synchronously, so the call can be cancelled with [`cancel({ requestId })`](/sdk/reference/api/cancel) before it resolves.
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `InferenceCancelledError` | The request is cancelled. Classification is a single forward pass that cannot be interrupted: a cancel while it runs discards its result. |
 
 ## Examples
 

@@ -11,7 +11,10 @@ Deletes cached files from disk. Three forms delete the KV caches that [`completi
 ## Signature
 
 ```ts
-function deleteCache(params: { all: true } | { auto: true } | { kvCacheKey: string; modelId?: string } | { modelSrc: string }): Promise<{ success: boolean }>;
+function deleteCache(
+  params: { all: true } | { auto: true } | { kvCacheKey: string; modelId?: string } | { modelSrc: string },
+  options?: RPCOptions,
+): Promise<{ success: boolean }>;
 ```
 
 The shape of `params` selects what is deleted:
@@ -28,6 +31,7 @@ The shape of `params` selects what is deleted:
 | Parameter | Description | Type | Required |
 | --- | --- | --- | --- |
 | `params` | What to delete. One of the four forms above. | See [forms](#signature) | Yes |
+| `options` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
 
 ### KV cache key
 
@@ -50,6 +54,25 @@ Do not delete a cache key that a running request is using. Only the `{ auto: tru
 
 The delete fails while the model, or another model sharing its files, is downloading: cancel the download first. It also fails while the model is loaded: unload it with [`unloadModel({ modelId, clearStorage: true })`](/sdk/reference/api/unloadModel) instead.
 
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. `deleteCache()` is [owner-only](/sdk/runtime/sessions#owner-only-operations): a call that sets it fails, so leave it unset. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
+
 ## Returns
 
 A promise that resolves with `{ success: boolean }` once the files are deleted. A delete the worker reports as failed throws instead.
@@ -60,6 +83,8 @@ A promise that resolves with `{ success: boolean }` once the files are deleted. 
 | --- | --- |
 | `InvalidDeleteCacheParamsError` | `params` matches none of the four forms, such as `{ all: false }`. |
 | `DeleteCacheFailedError` | The worker reports a failed delete: `modelSrc` is not a `registry://` URL, the model is downloading or loaded, or a file operation fails. The message carries the details. |
+| `SessionNotOpenError` | `options.sessionId` names a session that is not open. |
+| `OwnerOnlyError` | `options.sessionId` names an open session: only the runtime owner can call `deleteCache()`. See [Owner-only operations](/sdk/runtime/sessions#owner-only-operations). |
 
 ## Examples
 

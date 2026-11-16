@@ -89,7 +89,7 @@ The three session types share one shape and differ only in what iteration yields
 | `stats` | Engine statistics from the terminal frame. Resolves `undefined` when the stream closes without them, rejects when the stream fails. | `Promise<` [`TranscribeStats`](/sdk/reference/api/transcribe#transcribestats) ` \| undefined>` |
 | `diagnostics` | Backend selection detail for the session, settled from the same terminal frame as `stats`. | `Promise<` [`InferenceBackendDiagnostics`](#inferencebackenddiagnostics) ` \| undefined>` |
 
-Iteration skips text that is empty or only whitespace. It ends on the engine's terminal frame, or when the connection closes. Lines the client cannot parse are logged and skipped.
+Iteration skips text that is empty or only whitespace. In segment output, Parakeet streaming also yields segments with empty text and `isFinal: true`; each marks the end of a chunk. It ends on the engine's terminal frame, or when the connection closes. Lines the client cannot parse are logged and skipped.
 
 #### `TranscribeStreamEvent`
 
@@ -99,9 +99,9 @@ What a conversation session yields. Narrow on `type`.
 | --- | --- | --- |
 | `{ type: "text" }` | `text: string` | New transcript text is available (without `metadata`). |
 | `{ type: "segment" }` | `segment:` [`TranscribeSegment`](/sdk/reference/api/transcribe#transcribesegment) | A segment is available (with `metadata: true`). |
-| `{ type: "vad" }` | `speaking: boolean`, `probability: number`, and optionally `source`, `timestamp`, `speakerId` | Voice-activity state changes. `source` is `"silero"` for Whisper, `"energy"` for Parakeet energy VAD, `"sortformer"` for Sortformer speaker activity. `timestamp` (Parakeet) is seconds from the start of the session. `speakerId` is the dominant speaker during Parakeet diarization. |
+| `{ type: "vad" }` | `speaking: boolean`, `probability: number`, and optionally `source`, `timestamp`, `chunkIndex`, `speakerId` | Voice-activity state changes. `source` is `"silero"` for Whisper, `"energy"` for Parakeet energy VAD, `"sortformer"` for Sortformer speaker activity. `timestamp` (Parakeet) is seconds from the start of the session. `chunkIndex` (Parakeet) is the native streaming chunk of the event, `-1` when unavailable. `speakerId` is the dominant speaker during Parakeet diarization. |
 | `{ type: "endOfTurn", source: "whisper" }` | `silenceDurationMs: number` | Whisper measured `endOfTurnSilenceMs` of silence. |
-| `{ type: "endOfTurn", source: "parakeet" }` | — | A Parakeet EOU model emitted its end-of-utterance token. |
+| `{ type: "endOfTurn", source: "parakeet" }` | Optionally `timestamp: number`, `chunkIndex: number`, `confidence: number` | A Parakeet EOU model emitted its end-of-utterance token. `timestamp` is the native event time in seconds from the start of the session, `chunkIndex` the native streaming chunk of the boundary (`-1` when unknown), and `confidence` the end-of-turn confidence the EOU model reported. Each is present only when the engine reports it. |
 
 #### `InferenceBackendDiagnostics`
 
