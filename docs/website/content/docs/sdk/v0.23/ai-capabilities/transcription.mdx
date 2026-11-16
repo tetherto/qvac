@@ -72,7 +72,7 @@ await loadModel({
 });
 ```
 
-On macOS and iOS, loading a supported Parakeet registry constant also downloads its complete Core ML encoder bundle and stages the `.mlmodelc` directory beside the GGUF. This applies to TDT 0.6B v3, Unified English 0.6B, EOU 120M v1, and streaming Sortformer v2.1. The sidecar weights increase the first download and disk use. Other platforms download the GGUF alone; if a sidecar is unavailable or cannot load, the GGUF encoder is used.
+On macOS and iOS, loading a supported Parakeet registry constant also downloads its complete Core ML encoder bundle and stages the `.mlmodelc` directory beside the GGUF. This applies to TDT 0.6B v3, Unified English 0.6B, and streaming Sortformer v2.1. EOU 120M v1 downloads its GGUF alone and uses the GGUF encoder, because the registry's EOU bundle is compiled for one fixed 11 s input that its default streaming windows never match. The sidecar weights increase the first download and disk use. Other platforms download the GGUF alone; if a sidecar is unavailable or cannot load, the GGUF encoder is used.
 
 TranscribePsy publishes a separate Core ML distribution. `PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0` is an encoder-less GGUF whose encoder and decoder bundles the SDK downloads and stages beside it, so both stages run on the Apple Neural Engine; `stats.encoderUsedCoreml` on the `transcribe()` call reports it. That constant loads on macOS and iOS only: elsewhere the load is refused up front, and `PARAKEET_TRANSCRIBEPSY_250M_Q8_0` is the one to use.
 
