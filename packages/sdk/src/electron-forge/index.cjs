@@ -215,6 +215,10 @@ const MOBILE_PREBUILD_PATTERNS = [/[\\/]prebuilds[\\/]android-/, /[\\/]prebuilds
 /** Forge's default output dir — always exclude to avoid recursive packaging. */
 const OUT_DIR_PATTERN = /^\/out\//
 
+/** bundleSdk's scratch folders in `qvac/` (`.worker-<uuid>/`), which a killed run leaves behind. */
+const QVAC_SCRATCH_PATTERN =
+  /^[\\/]qvac[\\/]\.[^\\/]+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}([\\/]|$)/
+
 function toArray(value) {
   if (value === undefined) return []
   return Array.isArray(value) ? value : [value]
@@ -252,6 +256,7 @@ function createIgnore(exclusions, existingIgnore) {
     return (filePath) => {
       if (existingIgnore(filePath)) return true
       if (OUT_DIR_PATTERN.test(filePath)) return true
+      if (QVAC_SCRATCH_PATTERN.test(filePath)) return true
       for (const pattern of addonIgnorePatterns) {
         if (pattern.test(filePath)) return true
       }
@@ -265,6 +270,7 @@ function createIgnore(exclusions, existingIgnore) {
   return [
     ...toArray(existingIgnore),
     OUT_DIR_PATTERN,
+    QVAC_SCRATCH_PATTERN,
     ...MOBILE_PREBUILD_PATTERNS,
     ...addonIgnorePatterns
   ]

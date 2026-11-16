@@ -117,7 +117,7 @@ export interface IngestParams {
 export type IngestStage = 'chunk' | 'embed' | 'commit'
 
 // `chunk` counts text documents, `embed` counts chunks sent to the port and
-// `commit` counts documents written.
+// `commit` counts documents written or found unchanged.
 export interface IngestProgress {
   stage: IngestStage
   done: number
@@ -130,11 +130,18 @@ export interface IngestOptions {
   onProgress?: (progress: IngestProgress) => void
 }
 
-export interface IngestedDocument {
+// `unchanged`: the stored generation already has the same content, so nothing
+// was written. Content covers the chunks after chunking, their vectors when
+// precomputed, and the document metadata.
+export type IngestedDocument = {
   id: string
   generation: number
   chunkCount: number
-}
+} & (
+  | { status: 'created' | 'unchanged' }
+  // `removedChunks` counts the previous generation's chunks.
+  | { status: 'replaced'; removedChunks: number }
+)
 
 export interface IngestResult {
   documents: IngestedDocument[]

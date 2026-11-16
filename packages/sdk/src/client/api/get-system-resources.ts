@@ -1,7 +1,8 @@
 import {
   type GetSystemResourcesInput,
   type GetSystemResourcesRequest,
-  type SystemResources
+  type SystemResources,
+  type RPCOptions
 } from '@qvac/inference/surface'
 import { send } from '@/client/rpc/rpc-client'
 import { InvalidResponseError } from '@/utils/errors-client'
@@ -15,14 +16,15 @@ import { InvalidResponseError } from '@/utils/errors-client'
  * @throws {Error} If the RPC request fails.
  */
 export async function getSystemResources(
-  input?: GetSystemResourcesInput
+  input?: GetSystemResourcesInput,
+  options?: RPCOptions
 ): Promise<SystemResources> {
   const request: GetSystemResourcesRequest = {
     type: 'getSystemResources',
     ...(input?.sample !== undefined && { sample: input.sample })
   }
 
-  const response = await send(request)
+  const response = await send(request, options)
   if (response.type !== 'getSystemResources') {
     throw new InvalidResponseError('getSystemResources')
   }

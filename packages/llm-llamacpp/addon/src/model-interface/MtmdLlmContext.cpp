@@ -1161,15 +1161,9 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
       break;
     }
 
+    // The token was already streamed, so it is decoded even when a cancel
+    // landed meanwhile (see `TextLlmContext::generateResponse`).
     llamaBatchClear(*batch);
-    if (stopGeneration_.load()) {
-      // Route through the post-loop `cancelGenerationCleanup` instead
-      // of injecting EOT — EOT would advance the cursor past rollback.
-      // The token was already streamed, so count it (see the same branch in
-      // `TextLlmContext::generateResponse`).
-      ++lastGeneratedTokenCount_;
-      break;
-    }
     llamaBatchAdd(*batch, tokenId, current_.pos, {seqId_}, true);
 
     // eval the token
@@ -2279,12 +2273,9 @@ void MtmdLlmContext::generateSpeculative(
   llama_token sampled = step.token;
 
   while (true) {
-    if (stopGeneration_.load()) {
-      ++lastGeneratedTokenCount_;
-      return;
-    }
-    if (nRemain == 0) {
-      // The plain loop decodes the token it stops on for the budget.
+    if (stopGeneration_.load() || nRemain == 0) {
+      // See TextLlmContext::generateSpeculative: `sampled` was streamed, so
+      // it is decoded before stopping.
       llamaBatchClear(*batch);
       llamaBatchAdd(*batch, sampled, current_.pos, {seqId_}, false);
       decodeOrThrow();

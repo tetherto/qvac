@@ -28,8 +28,13 @@ const DEFAULT_WORKSPACE = 'default'
  * delegates to it via `rag-workspace-manager.ts`) all see the same state.
  */
 
-// workspace key → requestId of the in-flight RAG operation on that workspace.
-const activeRagRequestByWorkspace = new Map<string, string>()
+export interface ActiveRagRequest {
+  requestId: string
+  sessionId: string
+}
+
+// workspace key → identity of the in-flight RAG operation on that workspace.
+const activeRagRequestByWorkspace = new Map<string, ActiveRagRequest>()
 
 export function getWorkspaceKey(workspace?: string): string {
   return workspace ?? DEFAULT_WORKSPACE
@@ -40,7 +45,7 @@ export function getWorkspaceKey(workspace?: string): string {
  * (or `undefined` if none). The dispatcher uses this to decide whether to
  * pre-empt before calling `registry.begin(...)`.
  */
-export function getActiveRagRequest(workspace?: string): string | undefined {
+export function getActiveRagRequest(workspace?: string): ActiveRagRequest | undefined {
   return activeRagRequestByWorkspace.get(getWorkspaceKey(workspace))
 }
 
@@ -50,8 +55,15 @@ export function getActiveRagRequest(workspace?: string): string | undefined {
  * `clearActiveRagRequest` via the request scope's deferred cleanup so the
  * map never outlives the request.
  */
-export function setActiveRagRequest(workspace: string | undefined, requestId: string): void {
-  activeRagRequestByWorkspace.set(getWorkspaceKey(workspace), requestId)
+export function setActiveRagRequest(
+  workspace: string | undefined,
+  request: ActiveRagRequest
+): void {
+  activeRagRequestByWorkspace.set(getWorkspaceKey(workspace), request)
+}
+
+function sameRequest(a: ActiveRagRequest | undefined, b: ActiveRagRequest): boolean {
+  return a !== undefined && a.requestId === b.requestId && a.sessionId === b.sessionId
 }
 
 /**
@@ -60,9 +72,12 @@ export function setActiveRagRequest(workspace: string | undefined, requestId: st
  * the same workspace: the older context's scope unwind must not stomp the
  * newer context's mapping installed by the pre-emption sequence.
  */
-export function clearActiveRagRequest(workspace: string | undefined, requestId: string): void {
+export function clearActiveRagRequest(
+  workspace: string | undefined,
+  request: ActiveRagRequest
+): void {
   const key = getWorkspaceKey(workspace)
-  if (activeRagRequestByWorkspace.get(key) === requestId) {
+  if (sameRequest(activeRagRequestByWorkspace.get(key), request)) {
     activeRagRequestByWorkspace.delete(key)
   }
 }
@@ -76,8 +91,8 @@ export function clearActiveRagRequest(workspace: string | undefined, requestId: 
 export function cancelAllRagOperations(): void {
   if (activeRagRequestByWorkspace.size === 0) return
   const registry = getRequestRegistry()
-  for (const [key, requestId] of activeRagRequestByWorkspace) {
-    registry.cancel({ requestId, reason: 'rag-shutdown' })
+  for (const [key, request] of activeRagRequestByWorkspace) {
+    registry.cancel({ ...request, reason: 'rag-shutdown' })
     activeRagRequestByWorkspace.delete(key)
   }
 }

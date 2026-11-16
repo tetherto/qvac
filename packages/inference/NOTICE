@@ -97,6 +97,8 @@ Third-Party Model Licenses
     https://huggingface.co/primeline/whisper-tiny-german-1224
   dolphin-mixtral-2x7b-dop-Q2_K-00001-of-00005
     https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF
+  embeddinggemma-2-GGUF
+    https://huggingface.co/ggml-org/embeddinggemma-2-GGUF
   en-base-ggml-model-f16
     https://huggingface.co/openai/whisper-base
   FLUX.2-klein-4B
@@ -263,6 +265,8 @@ Third-Party Model Licenses
     https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF
   Ternary-Bonsai-2-27B-gguf
     https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf
+  transcribepsy-250m-eu
+    https://huggingface.co/qvac/TranscribePsy-250M-EU
   TranscribePsy-250M-EU-sub-coreml
     https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml
   TranscribePsy-250M-EU-sub-gguf
@@ -394,8 +398,12 @@ Third-Party Model Licenses
 
 --- gemma (Gemma Terms of Use) ---
 
-  embeddinggemma-300m-GGUF
-    https://huggingface.co/unsloth/embeddinggemma-300m-GGUF
+  embeddinggemma-300M-BF16
+    https://huggingface.co/google/embeddinggemma-300m
+  embeddinggemma-300M-Q4_0
+    https://huggingface.co/google/embeddinggemma-300m
+  embeddinggemma-300M-Q8_0
+    https://huggingface.co/google/embeddinggemma-300m
   gemma-3-12b-it-GGUF
     https://huggingface.co/unsloth/gemma-3-12b-it-GGUF
 
@@ -432,6 +440,10 @@ Third-Party Model Licenses
     https://huggingface.co/ACE-Step/acestep-v15-base
   acestep-v15-sft-Q8_0
     https://huggingface.co/ACE-Step/acestep-v15-sft
+  acestep-v15-turbo-BF16
+    https://huggingface.co/ACE-Step/Ace-Step1.5
+  acestep-v15-turbo-F16
+    https://huggingface.co/ACE-Step/Ace-Step1.5
   acestep-v15-turbo-Q4_K_M
     https://huggingface.co/ACE-Step/Ace-Step1.5
   acestep-v15-turbo-Q8_0
@@ -454,10 +466,14 @@ Third-Party Model Licenses
     https://huggingface.co/ResembleAI/chatterbox-turbo
   coremldata
     https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual
+  coremldata
+    https://huggingface.co/ACE-Step/Ace-Step1.5
   de-base-ggml-model-f16
     https://huggingface.co/aware-ai/whisper-base-german
   DeepSeek-V4-Flash-0731-GGUF
     https://huggingface.co/unsloth/DeepSeek-V4-Flash-0731-GGUF
+  DeepSeek-V4.1-Flash-1017-GGUF
+    https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF
   es-tiny-ggml-model-f16
     https://huggingface.co/JaepaX/whisper-tiny-es
   ggml-indictrans2-en-indic-1B-f16
@@ -472,6 +488,8 @@ Third-Party Model Licenses
     https://huggingface.co/ai4bharat/indictrans2-indic-indic-1B
   ggml-indictrans2-indic-indic-dist-320M-f16
     https://huggingface.co/ai4bharat/indictrans2-indic-indic-dist-320M
+  GLM-5.3-Flash-BF16-GGUF
+    https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF
   gte-large_fp16-00001-of-00005
     https://huggingface.co/ChristianAzinn/gte-large-gguf
   gte-large-gguf
@@ -486,8 +504,16 @@ Third-Party Model Licenses
     https://huggingface.co/spaces/YatharthS
   lavasr-enhancer-f16
     https://huggingface.co/spaces/YatharthS
+  Manifest
+    https://huggingface.co/ACE-Step/Ace-Step1.5
+  megaloc-f16
+    https://huggingface.co/gberton/MegaLoc
+  megaloc-mixed
+    https://huggingface.co/gberton/MegaLoc
   model
     https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual
+  model
+    https://huggingface.co/ACE-Step/Ace-Step1.5
   pt-tiny-ggml-model-f16
     https://huggingface.co/DavyCosta701/whisper-tiny-pt-bpra
   taew2_2_f16
@@ -500,6 +526,8 @@ Third-Party Model Licenses
     https://huggingface.co/ACE-Step/Ace-Step1.5
   weight
     https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual
+  weight
+    https://huggingface.co/ACE-Step/Ace-Step1.5
   whisper-vad
     https://huggingface.co/ggml-org/whisper-vad
   whisper.cpp
@@ -817,7 +845,7 @@ JavaScript Dependencies
     https://github.com/tetherto/qvac
   @qvac/rag@0.9.0
     https://github.com/tetherto/qvac
-  @qvac/registry-client@0.7.0
+  @qvac/registry-client@0.8.0
     https://github.com/tetherto/qvac
   @qvac/registry-schema@0.4.0
     https://github.com/tetherto/qvac
@@ -830,7 +858,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-abort
   bare-abort-controller@1.1.2
     https://github.com/holepunchto/bare-abort-controller
-  bare-addon-resolve@1.11.0
+  bare-addon-resolve@1.12.0
     https://github.com/holepunchto/bare-addon-resolve
   bare-ansi-escapes@2.2.4
     https://github.com/holepunchto/bare-ansi-escapes
@@ -842,7 +870,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-cpu-info
   bare-crypto@1.15.4
     https://github.com/holepunchto/bare-crypto
-  bare-dns@2.3.1
+  bare-dns@2.3.2
     https://github.com/holepunchto/bare-dns
   bare-env@3.0.1
     https://github.com/holepunchto/bare-env
@@ -856,8 +884,10 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-form-data
   bare-fs@4.8.4
     https://github.com/holepunchto/bare-fs
-  bare-gpu-info@0.1.1
+  bare-gpu-info@0.1.3
     https://github.com/holepunchto/bare-gpu-info
+  bare-host-parser@1.0.0
+    https://github.com/holepunchto/bare-host-parser
   bare-hrtime@2.1.2
     https://github.com/holepunchto/bare-hrtime
   bare-http-parser@2.1.4
@@ -874,7 +904,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-module-resolve
   bare-net@2.3.3
     https://github.com/holepunchto/bare-net
-  bare-os@3.9.3
+  bare-os@3.9.4
     https://github.com/holepunchto/bare-os
   bare-path@3.1.2
     https://github.com/holepunchto/bare-path
@@ -886,8 +916,6 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-posix
   bare-process@4.5.1
     https://github.com/holepunchto/bare-process
-  bare-rpc@1.3.9
-    https://github.com/holepunchto/bare-rpc
   bare-semver@1.1.0
     https://github.com/holepunchto/bare-semver
   bare-signals@5.0.0
@@ -898,19 +926,19 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-stream
   bare-tcp@2.6.1
     https://github.com/holepunchto/bare-tcp
-  bare-tls@3.2.0
+  bare-tls@3.2.1
     https://github.com/holepunchto/bare-tls
-  bare-tty@5.2.1
+  bare-tty@5.2.2
     https://github.com/holepunchto/bare-tty
   bare-type@1.4.0
     https://github.com/holepunchto/bare-type
-  bare-url@2.5.5
+  bare-url@2.5.6
     https://github.com/holepunchto/bare-url
   bare-zlib@1.4.1
     https://github.com/holepunchto/bare-zlib
   blind-relay@1.6.1
     https://github.com/holepunchto/blind-relay
-  compact-encoding@3.5.2
+  compact-encoding@3.6.0
     https://github.com/holepunchto/compact-encoding
   compact-encoding-bitfield@1.1.0
     https://github.com/compact-encoding/compact-encoding-bitfield
@@ -922,7 +950,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/events-universal
   fd-lock@2.2.0
     https://github.com/holepunchto/fd-lock
-  fs-native-extensions@1.5.2
+  fs-native-extensions@1.5.3
     https://github.com/holepunchto/fs-native-extensions
   hyperblobs@2.13.0
     https://github.com/holepunchto/hyperblobs
@@ -934,7 +962,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/hypercore-stats
   hypercore-storage@3.4.0
     https://github.com/holepunchto/hypercore-storage
-  hyperdb@6.11.0
+  hyperdb@6.11.1
     https://github.com/holepunchto/hyperdb
   hyperdht-address@1.1.1
     https://github.com/holepunchto/hyperdht-address
@@ -946,15 +974,15 @@ JavaScript Dependencies
     https://github.com/holepunchto/hyperdrive
   hyperschema@1.26.2
     https://github.com/holepunchto/hyperschema
-  hyperswarm-stats@1.3.3
+  hyperswarm-stats@1.3.4
     https://github.com/holepunchto/hyperswarm-stats
   index-encoder@3.5.0
     https://github.com/holepunchto/index-encoder
   mirror-drive@1.14.2
     https://github.com/holepunchto/mirror-drive
-  noise-handshake@4.2.0
+  noise-handshake@4.2.1
     https://github.com/holepunchto/noise-handshake
-  paparam@1.14.0
+  paparam@1.15.0
     https://github.com/holepunchto/paparam
   passive-core-watcher@1.0.2
     https://github.com/holepunchto/passive-core-watcher
@@ -972,7 +1000,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/require-addon
   resource-on-exit@1.0.0
     https://github.com/holepunchto/bare-teardown
-  rocksdb-native@3.19.1
+  rocksdb-native@3.19.3
     https://github.com/holepunchto/rocksdb-native
   scope-lock@1.2.4
     https://github.com/holepunchto/scope-lock
@@ -982,7 +1010,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/sub-encoder
   text-decoder@1.2.7
     https://github.com/holepunchto/text-decoder
-  udx-native@1.22.0
+  udx-native@1.22.1
     https://github.com/holepunchto/udx-native
   unslab@1.3.1
     https://github.com/holepunchto/unslab
@@ -999,7 +1027,7 @@ JavaScript Dependencies
     https://github.com/chm-diederichs/noise-curve-ed
   quickbit-universal@2.2.1
     https://github.com/holepunchto/quickbit-universal
-  semver@7.8.5
+  semver@7.8.6
     https://github.com/npm/node-semver
   simdle-universal@1.1.3
     https://github.com/holepunchto/simdle-universal
@@ -1032,11 +1060,11 @@ JavaScript Dependencies
     https://github.com/mafintosh/generate-string
   hyperbee@2.27.3
     https://github.com/holepunchto/hyperbee
-  hypercore@11.39.5
+  hypercore@11.40.3
     https://github.com/holepunchto/hypercore
   hypercore-crypto@3.7.0
     https://github.com/mafintosh/hypercore-crypto
-  hyperdht@6.35.0
+  hyperdht@6.36.0
     https://github.com/holepunchto/hyperdht
   hyperswarm@4.17.2
     https://github.com/holepunchto/hyperswarm
@@ -1054,7 +1082,7 @@ JavaScript Dependencies
     https://github.com/mafintosh/nat-sampler
   protocol-buffers-encodings@1.2.0
     https://github.com/mafintosh/protocol-buffers-encodings
-  protomux@3.13.0
+  protomux@3.13.1
     https://github.com/holepunchto/protomux
   queue-tick@1.0.1
     https://github.com/mafintosh/queue-tick
@@ -1076,7 +1104,7 @@ JavaScript Dependencies
     https://github.com/mafintosh/signal-promise
   signed-varint@2.0.1
     https://github.com/dominictarr/signed-varint
-  sodium-native@5.2.0
+  sodium-native@5.2.1
     https://github.com/holepunchto/sodium-native
   sodium-secretstream@1.2.0
     https://github.com/mafintosh/sodium-secretstream

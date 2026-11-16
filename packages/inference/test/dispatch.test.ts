@@ -7,7 +7,19 @@ import { send, stream, close } from '@/dispatch'
 import { registerPlugin, clearPlugins } from '@/plugins'
 import { ModelType } from '@/schemas'
 import type { Request, Response } from '@/schemas'
-import { PluginsNotRegisteredError, RequestValidationFailedError } from '@/errors'
+import { z } from 'zod'
+import { AbortController } from 'bare-abort-controller'
+import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
+import type { PluginHandlerContext, QvacPlugin } from '@/schemas/plugin'
+import {
+  InferenceCancelledError,
+  RequestIdConflictError,
+  OwnerOnlyError as OwnerOnly,
+  PluginsNotRegisteredError,
+  RequestValidationFailedError,
+  SessionNotOpenError as SessionNotOpen
+} from '@/errors'
+import { clearSessions, openSession } from '@/runtime/session-registry'
 import { makeFakePlugin } from './fixtures/fake-plugin'
 import { TEST_CACHE_DIR } from './fixtures/test-cache'
 
@@ -15,6 +27,10 @@ import { TEST_CACHE_DIR } from './fixtures/test-cache'
 // reads HOME once (bare-env is the live module object the engine reads), so
 // point it at a throwaway dir before any dispatch runs.
 env['HOME'] = path.join(os.tmpdir(), `qvac-inference-test-${os.pid()}`)
+
+const OwnerOnlyError = OwnerOnly as unknown as new () => Error
+const SessionNotOpenError = SessionNotOpen as unknown as new () => Error
+const InferenceCancelled = InferenceCancelledError as unknown as new () => Error
 
 function fakeRequest(type: string): Request {
   return { type } as unknown as Request
@@ -38,6 +54,43 @@ test('send dispatches a model-free request in-process to its handler', async fun
     t.is(response.type, 'heartbeat', 'the heartbeat handler answered')
     t.is(typeof response.number, 'number', 'and returned its payload')
   } finally {
+    await close()
+    clearPlugins()
+  }
+})
+
+test('send refuses a runtime-wide operation from a session before its handler runs', async function (t) {
+  clearPlugins()
+  clearSessions()
+  registerPlugin(makeFakePlugin(ModelType.llamacppCompletion))
+  openSession('s-owner-only')
+  try {
+    const heartbeat = await send({ type: 'heartbeat', sessionId: 's-owner-only' } as Request)
+    t.is(heartbeat.type, 'heartbeat', 'an ordinary request runs as the session')
+    await t.exception(
+      () => send({ type: 'suspend', sessionId: 's-owner-only' } as Request),
+      OwnerOnlyError,
+      'suspend from a session is refused'
+    )
+    await t.exception(
+      () => send({ type: 'deleteCache', all: true, sessionId: 's-owner-only' } as Request),
+      OwnerOnlyError,
+      'deleteCache from a session is refused'
+    )
+    await t.exception(
+      () => send({ type: 'suspend', sessionId: 'never-opened' } as Request),
+      SessionNotOpenError,
+      'an unknown session fails the open check first'
+    )
+    const state = (await send({
+      type: 'state',
+      sessionId: 's-owner-only'
+    } as Request)) as Response & {
+      state: string
+    }
+    t.is(state.state, 'active', 'the runtime was never suspended')
+  } finally {
+    clearSessions()
     await close()
     clearPlugins()
   }
@@ -198,4 +251,140 @@ test('close resets readiness so the next call re-runs the guard', async function
   clearPlugins()
   await t.exception(() => send(fakeRequest('heartbeat')), PluginsNotRegisteredError)
   await close()
+})
+
+// The host passes the transport's per-request signal, which aborts when the
+// caller cancels the request over the transport. That cancels the request's
+// registered work, whether it has begun or not.
+
+const WAIT_PLUGIN_TYPE = 'dispatch-transport-cancel-test'
+
+function registerWaitingPlugin() {
+  const seen = { started: 0, stopped: 0 }
+  const plugin = {
+    modelType: WAIT_PLUGIN_TYPE,
+    displayName: 'Transport cancel',
+    addonPackage: '@qvac/dispatch-transport-cancel-test',
+    loadConfigSchema: z.looseObject({}),
+    skipPrimaryModelPathValidation: true,
+    createModel: () => ({ model: { load: async () => {}, unload: async () => {} } }),
+    handlers: {
+      wait: {
+        requestSchema: z.object({}),
+        responseSchema: z.object({}),
+        streaming: false,
+        handler: async (_request: unknown, _input: unknown, context?: PluginHandlerContext) => {
+          seen.started++
+          const signal = context!.signal!
+          await new Promise<void>((resolve) => {
+            if (signal.aborted) resolve()
+            else signal.addEventListener('abort', () => resolve(), { once: true })
+          })
+          seen.stopped++
+          return {}
+        }
+      }
+    }
+  } as unknown as QvacPlugin
+  clearPlugins()
+  registerPlugin(plugin)
+  registerModel('transport-cancel-model', {
+    model: { load: async () => {}, unload: async () => {} } as unknown as AnyModel,
+    path: '/tmp/model.bin',
+    config: {},
+    modelType: WAIT_PLUGIN_TYPE as never
+  })
+  return seen
+}
+
+function waitInvoke(requestId?: string): Request {
+  return {
+    type: 'pluginInvoke',
+    modelId: 'transport-cancel-model',
+    handler: 'wait',
+    params: {},
+    ...(requestId === undefined ? {} : { requestId })
+  } as unknown as Request
+}
+
+async function untilStarted(seen: { started: number }, count: number) {
+  while (seen.started < count) await new Promise<void>((resolve) => setTimeout(resolve, 5))
+}
+
+test('a transport abort cancels the running request', async function (t) {
+  const seen = registerWaitingPlugin()
+  const transport = new AbortController()
+  try {
+    const running = send(waitInvoke('transport-running'), { signal: transport.signal })
+    await untilStarted(seen, 1)
+
+    transport.abort(undefined)
+
+    await t.exception(running, InferenceCancelled, 'the request ends cancelled')
+    t.is(seen.stopped, 1, 'the handler saw the cancel')
+  } finally {
+    unregisterModel('transport-cancel-model')
+    await close()
+    clearPlugins()
+  }
+})
+
+test('a transport abort cancels a request that came without a request id', async function (t) {
+  const seen = registerWaitingPlugin()
+  const transport = new AbortController()
+  try {
+    const running = send(waitInvoke(), { signal: transport.signal })
+    await untilStarted(seen, 1)
+
+    transport.abort(undefined)
+
+    await t.exception(running, InferenceCancelled)
+    t.is(seen.stopped, 1, 'the handler saw the cancel')
+  } finally {
+    unregisterModel('transport-cancel-model')
+    await close()
+    clearPlugins()
+  }
+})
+
+test('a cancelled duplicate of a running request leaves the running one alone', async function (t) {
+  const seen = registerWaitingPlugin()
+  const first = new AbortController()
+  const duplicate = new AbortController()
+  duplicate.abort(undefined)
+  try {
+    const running = send(waitInvoke('transport-dup'), { signal: first.signal })
+    await untilStarted(seen, 1)
+
+    await t.exception(
+      send(waitInvoke('transport-dup'), { signal: duplicate.signal }),
+      RequestIdConflictError as unknown as new () => Error
+    )
+    await new Promise<void>((resolve) => setTimeout(resolve, 20))
+    t.is(seen.stopped, 0, 'the running request keeps running')
+
+    first.abort(undefined)
+    await t.exception(running, InferenceCancelled)
+  } finally {
+    unregisterModel('transport-cancel-model')
+    await close()
+    clearPlugins()
+  }
+})
+
+test('a transport abort before the request begins keeps its work from running', async function (t) {
+  const seen = registerWaitingPlugin()
+  const transport = new AbortController()
+  transport.abort(undefined)
+  try {
+    await t.exception(
+      send(waitInvoke('transport-early'), { signal: transport.signal }),
+      InferenceCancelled
+    )
+    t.is(seen.started, 0, 'the handler never ran')
+  } finally {
+    unregisterModel('transport-cancel-model')
+    await close()
+    clearPlugins()
+  }
 })
