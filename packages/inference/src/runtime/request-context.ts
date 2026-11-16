@@ -22,6 +22,7 @@ export type RequestKind =
   | 'batchCompletion'
   | 'embeddings'
   | 'imageEmbedding'
+  | 'stereoDepth'
   | 'decision'
   | 'rerank'
   | 'transcribe'
@@ -115,6 +116,14 @@ const LLAMACPP_COMPLETION_SLOT_GROUP = 'llamacppCompletion'
 function installDefaultPolicies(r: RequestRegistry): void {
   r.policy({
     kind: 'imageEmbedding',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    maxQueueDepthPerModel: 64
+  })
+  // BridgeDepth runs one job at a time per model. Queue here so a cancelled
+  // waiting request never reaches the addon.
+  r.policy({
+    kind: 'stereoDepth',
     maxConcurrentPerModel: 1,
     onOverflow: 'queue',
     maxQueueDepthPerModel: 64

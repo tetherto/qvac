@@ -23,6 +23,7 @@ object ModelTypeMaps {
         "ggml-classification" to "classification",
         "ggml-image-embedding" to "classification",
         "ggml-ocr" to "ocr",
+        "ggml-stereo-depth" to "classification",
         "ggml-vla" to "vla",
         "llamacpp-completion" to "llm",
         "llamacpp-decision" to "embeddings",
