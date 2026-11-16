@@ -38,6 +38,7 @@ import {
   ModelFileNotFoundError,
   ModelLoadFailedError,
   ModelNotFoundError,
+  ModelRegistryBusyError,
   SeedingNotSupportedError
 } from '@/errors/index'
 import { validateAndJoinPath } from '@/utils/path-security'
@@ -191,6 +192,8 @@ export async function resolveRegistryModel(params: {
     if (params.hasFallback) {
       return params.resolveFallback()
     }
+    // Already says what is wrong and how to act on it.
+    if (error instanceof ModelRegistryBusyError) throw error
     const isCorrectnessError =
       error instanceof ChecksumValidationFailedError ||
       error instanceof ModelNotFoundError ||

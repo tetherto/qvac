@@ -32,6 +32,7 @@ function serializeError(error: unknown, depth: number = 0): SerializedProbeError
     code?: unknown
     exitCode?: unknown
     exitSignal?: unknown
+    timedOut?: unknown
   }
   const result: SerializedProbeError = {
     name: error.name,
@@ -47,6 +48,7 @@ function serializeError(error: unknown, depth: number = 0): SerializedProbeError
   if (typeof extended.exitSignal === 'string' || extended.exitSignal === null) {
     result.exitSignal = extended.exitSignal
   }
+  if (typeof extended.timedOut === 'boolean') result.timedOut = extended.timedOut
   if (error.cause !== undefined && depth < MAX_CAUSE_DEPTH) {
     result.cause = serializeError(error.cause, depth + 1)
   }

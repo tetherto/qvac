@@ -80,6 +80,27 @@ class Wire(private val client: QvacClient) {
 
         fun base64(data: ByteArray): String = Base64.getEncoder().encodeToString(data)
 
+        /**
+         * The samples of a TTS frame. The worker sends them as base64 little-endian signed 16-bit
+         * bytes in `pcm` with `buffer` empty; a frame without `pcm` carries them in `buffer`.
+         * Same decode as `decodeTtsPcm` in @qvac/inference and `ttsSamples` in the Kotlin SDK.
+         */
+        fun ttsSamples(frame: Map<String, Any?>): List<Any?> {
+            val pcm = frame["pcm"] as? String
+            if (pcm.isNullOrEmpty()) return asList(frame["buffer"])
+            val bytes = Base64.getDecoder().decode(pcm)
+            val samples = ArrayList<Any?>(bytes.size / 2)
+            var i = 0
+            while (i + 1 < bytes.size) {
+                val lo = bytes[i].toInt() and 0xff
+                val hi = bytes[i + 1].toInt()
+                // Long, as a JSON integer in `buffer` decodes to.
+                samples.add(((hi shl 8) or lo).toShort().toLong())
+                i += 2
+            }
+            return samples
+        }
+
         /** A path stays a path; bytes travel inline. The `{ type, value }` union the worker reads. */
         fun fileOrBase64(value: Any?): Map<String, Any?> = when (value) {
             is String -> mapOf("type" to "filePath", "value" to value)

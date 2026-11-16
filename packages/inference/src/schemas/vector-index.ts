@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { trackedRequestSchema } from '@/schemas/request-base'
 
 // ============== Storage vocabulary ==============
 
@@ -78,9 +79,25 @@ export const vectorIndexAddParamsSchema = z.object({
   vectors: vectorRowsSchema
 })
 
+const INT32_MAX = 2147483647
+const ivfCountSchema = z.number().int().positive().max(INT32_MAX)
+
+export const vectorIndexIvfSettingsSchema = z
+  .object({
+    nLists: ivfCountSchema,
+    nProbe: ivfCountSchema,
+    nIter: z.number().int().min(0).max(INT32_MAX).optional()
+  })
+  .meta({ title: 'VectorIndexIvfSettings' })
+
+const vectorIndexIvfStateSchema = vectorIndexIvfSettingsSchema
+  .extend({ built: z.boolean() })
+  .meta({ title: 'VectorIndexIvfState' })
+
 export const vectorIndexSearchParamsSchema = z.object({
   queries: vectorRowsSchema,
-  k: z.number().int().positive()
+  k: z.number().int().positive(),
+  nProbe: ivfCountSchema.optional()
 })
 
 export const vectorIndexIdsParamsSchema = z.object({
@@ -95,61 +112,72 @@ export const vectorIndexSetStagedSearchParamsSchema = z.object({
   enabled: z.boolean()
 })
 
+export const vectorIndexSetIvfParamsSchema = z.object({
+  ivf: vectorIndexIvfSettingsSchema.nullable()
+})
+
 // ============== Requests ==============
 
 const vectorIndexTypeField = { type: z.literal('vectorIndex') }
+const vectorIndexRequestFields = { ...vectorIndexTypeField, ...trackedRequestSchema.shape }
 const handleField = { indexId: indexIdSchema }
 
 const vectorIndexCreateRequestSchema = createVectorIndexParamsSchema.extend({
-  ...vectorIndexTypeField,
+  ...vectorIndexRequestFields,
   operation: z.literal('create')
 })
 
 const vectorIndexLoadRequestSchema = loadVectorIndexParamsSchema.extend({
-  ...vectorIndexTypeField,
+  ...vectorIndexRequestFields,
   operation: z.literal('load')
 })
 
 const vectorIndexAddRequestSchema = vectorIndexAddParamsSchema.extend({
-  ...vectorIndexTypeField,
+  ...vectorIndexRequestFields,
   ...handleField,
   operation: z.literal('add')
 })
 
 const vectorIndexSearchRequestSchema = vectorIndexSearchParamsSchema.extend({
-  ...vectorIndexTypeField,
+  ...vectorIndexRequestFields,
   ...handleField,
   operation: z.literal('search')
 })
 
 const vectorIndexRemoveRequestSchema = vectorIndexIdsParamsSchema.extend({
-  ...vectorIndexTypeField,
+  ...vectorIndexRequestFields,
   ...handleField,
   operation: z.literal('remove')
 })
 
 const vectorIndexContainsRequestSchema = vectorIndexIdsParamsSchema.extend({
-  ...vectorIndexTypeField,
+  ...vectorIndexRequestFields,
   ...handleField,
   operation: z.literal('contains')
 })
 
 const vectorIndexWriteRequestSchema = vectorIndexWriteParamsSchema.extend({
-  ...vectorIndexTypeField,
+  ...vectorIndexRequestFields,
   ...handleField,
   operation: z.literal('write')
 })
 
 const vectorIndexDisposeRequestSchema = z.object({
-  ...vectorIndexTypeField,
+  ...vectorIndexRequestFields,
   ...handleField,
   operation: z.literal('dispose')
 })
 
 const vectorIndexSetStagedSearchRequestSchema = vectorIndexSetStagedSearchParamsSchema.extend({
-  ...vectorIndexTypeField,
+  ...vectorIndexRequestFields,
   ...handleField,
   operation: z.literal('setStagedSearch')
+})
+
+const vectorIndexSetIvfRequestSchema = vectorIndexSetIvfParamsSchema.extend({
+  ...vectorIndexRequestFields,
+  ...handleField,
+  operation: z.literal('setIvf')
 })
 
 export const vectorIndexRequestSchema = z.discriminatedUnion('operation', [
@@ -161,6 +189,7 @@ export const vectorIndexRequestSchema = z.discriminatedUnion('operation', [
   vectorIndexContainsRequestSchema,
   vectorIndexWriteRequestSchema,
   vectorIndexSetStagedSearchRequestSchema,
+  vectorIndexSetIvfRequestSchema,
   vectorIndexDisposeRequestSchema
 ])
 
@@ -171,13 +200,20 @@ export const vectorIndexHitSchema = z.object({
   score: z.number()
 })
 
-const vectorIndexResponseBaseSchema = z.object(vectorIndexTypeField)
+const vectorIndexResponseBaseSchema = z.object({
+  ...vectorIndexTypeField,
+  requestId: z.string().optional().describe('Identity of the request.')
+})
 
 // External providers may omit controls introduced after the original contract.
+// `ivf` is null while IVF is off, so only a missing field means unsupported.
+// The generated Python and Kotlin models read both as null.
 const vectorIndexStateFields = {
   calibrated: z.boolean().optional(),
-  stagedSearch: z.boolean().optional()
+  stagedSearch: z.boolean().optional(),
+  ivf: vectorIndexIvfStateSchema.nullable().optional()
 }
+const vectorIndexStateSchema = z.object(vectorIndexStateFields)
 
 const vectorIndexCreateResponseSchema = vectorIndexResponseBaseSchema.extend({
   ...vectorIndexStateFields,
@@ -211,6 +247,7 @@ const vectorIndexSearchResponseSchema = vectorIndexResponseBaseSchema.extend({
 })
 
 const vectorIndexRemoveResponseSchema = vectorIndexResponseBaseSchema.extend({
+  ...vectorIndexStateFields,
   operation: z.literal('remove'),
   removed: z.array(z.boolean()),
   length: lengthSchema
@@ -236,6 +273,11 @@ const vectorIndexSetStagedSearchResponseSchema = vectorIndexResponseBaseSchema.e
   stagedSearch: z.boolean()
 })
 
+const vectorIndexSetIvfResponseSchema = vectorIndexResponseBaseSchema.extend({
+  operation: z.literal('setIvf'),
+  ivf: vectorIndexIvfStateSchema.nullable()
+})
+
 export const vectorIndexResponseSchema = z.discriminatedUnion('operation', [
   vectorIndexCreateResponseSchema,
   vectorIndexLoadResponseSchema,
@@ -245,6 +287,7 @@ export const vectorIndexResponseSchema = z.discriminatedUnion('operation', [
   vectorIndexContainsResponseSchema,
   vectorIndexWriteResponseSchema,
   vectorIndexSetStagedSearchResponseSchema,
+  vectorIndexSetIvfResponseSchema,
   vectorIndexDisposeResponseSchema
 ])
 
@@ -264,11 +307,15 @@ export interface VectorIndexIdsParams {
   ids: VectorId[]
 }
 export type VectorIndexSearchParams =
-  { query: number[]; k: number } | { queries: number[][]; k: number }
+  | { query: number[]; k: number; nProbe?: number }
+  | { queries: number[][]; k: number; nProbe?: number }
 export type VectorIndexWriteParams = z.infer<typeof vectorIndexWriteParamsSchema>
 export type VectorIndexSetStagedSearchParams = z.infer<
   typeof vectorIndexSetStagedSearchParamsSchema
 >
+export type VectorIndexIvfSettings = z.infer<typeof vectorIndexIvfSettingsSchema>
+export type VectorIndexIvfState = z.infer<typeof vectorIndexIvfStateSchema>
+export type VectorIndexState = z.infer<typeof vectorIndexStateSchema>
 
 // ============== Helpers shared by the in-process and RPC clients ==============
 

@@ -79,9 +79,9 @@ native addon's copy has no prebuilds, so the train never links one (see
    `@qvac/sdk` section also carries the Python and Kotlin clients, which have
    no changelog of their own. When the train moves `@qvac/sdk`, bring
    `packages/sdk-python` and `packages/sdk-kotlin` to its new version (the
-   `sdk-python` and `sdk-kotlin` syncs of `qv-sdk-inference-version`);
-   sdk-kotlin's `verify:generated` in `sdk-checks.yml` checks the Kotlin version
-   on both PRs.
+   `sdk-python` and `sdk-kotlin` syncs of `qv-sdk-inference-version`). The
+   `sdk-kotlin` check fails on a Kotlin version that does not match, and
+   sdk-kotlin's `verify:generated` in `sdk-checks.yml` checks it on both PRs.
 
    Take every package outside the train out of the workspace in a separate
    commit. pnpm links a workspace package whenever its version satisfies the
@@ -143,7 +143,8 @@ native addon's copy has no prebuilds, so the train never links one (see
    5. with the `sdk-python` check, publishes `tetherto-qvac-sdk` after the
       `pypi` approval
    6. tags each package, then creates the `githubRelease` package's GitHub
-      release on its tag and, with `sdk-python`, attaches the fat wheels
+      release on its tag and, with `sdk-python`, attaches the fat wheels and,
+      with `sdk-kotlin`, the Kotlin SDK's Maven zips (`publish-kotlin.yml`)
 8. Merge the backmerge PR once the push run has published to npm. Before that,
    `main` would name versions that the checks of later PRs cannot install. If
    the run fails before publishing, fix it with a PR into the train branch
@@ -190,6 +191,11 @@ Before npm publish:
   sdk, as their `verify:deps` targets run it.
 - **`sdk-python`**: the Python contract check, build, version lockstep and
   `twine check`.
+- **`sdk-kotlin`**: `sdk-checks.yml`'s sdk-kotlin checks on every published runtime
+  profile, against the workspace `@qvac/sdk` and `@qvac/inference`: version
+  lockstep, contract, unit tests, the Maven publications and the standalone
+  consumers. Needs the `@qvac/sdk` GitHub release, which the Maven zips attach
+  to.
 - **`pear-e2e`**: `test-inference-pear-e2e.yml` on the train's
   `@qvac/inference` tarball, as `publish-npm.yml` runs it for an inference release. Pin upstream
   with the `PEAR_E2E_*_VERSION` repository variables.
@@ -197,7 +203,12 @@ Before npm publish:
   workspace.
 
 After npm publish, `package-checks` runs again with every package installed
-from npm. Tags, the GitHub release, PyPI and the wheels wait for it.
+from npm. Tags, the GitHub release, PyPI, the wheels and the Maven zips wait
+for it.
+
+On the release PR, outside `release-train.yml`: when the PR touches the SDK,
+`sdk-e2e.yml` runs the e2e legs its labels and `base:release-*` keys select,
+including the Kotlin worker conformance leg.
 
 ### Dry run
 
@@ -237,7 +248,8 @@ check that is skipped counts as passed.
   rebuilds the train and no longer compares npm's sha with what was published.
   Versions on npm from that commit are skipped, and every job after publishing
   runs again: it skips tags already at npm's `gitHead` and files PyPI already
-  has, and updates the notes of an existing GitHub release.
+  has, updates the notes of an existing GitHub release, and replaces the Maven
+  zips on it.
 - **Partly published, fix needs a new commit**: the branch can no longer
   publish. Cut a new train with new versions for the packages npm already has;
   the others can keep theirs.

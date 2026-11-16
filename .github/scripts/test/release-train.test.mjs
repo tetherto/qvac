@@ -90,6 +90,11 @@ test('a train inside another, versioned by one project', () => {
     () => loadTrain('sdk', { sdk: { ...CATALOG.sdk, checks: ['lint-everything'] } }, NX_JSON),
     /unknown checks lint-everything/,
   )
+  assert.deepEqual(loadTrain('sdk', { sdk: { ...CATALOG.sdk, checks: ['sdk-kotlin'] } }, NX_JSON).checks, ['sdk-kotlin'])
+  assert.throws(
+    () => loadTrain('cli', { cli: { ...CATALOG.cli, checks: ['sdk-kotlin'] } }, NX_JSON),
+    /sdk-kotlin needs the @qvac\/sdk GitHub release/,
+  )
 })
 
 test('reads the train and anchor version from the branch name', () => {

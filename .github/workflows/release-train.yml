@@ -250,6 +250,21 @@ jobs:
       source: train
       ref: ${{ github.sha }}
 
+  # sdk-checks.yml's sdk-kotlin checks with every runtime profile, on this commit's
+  # @qvac/sdk and @qvac/inference. attach-kotlin-maven-zips runs the release
+  # gates again when it builds the zips after publishing.
+  sdk-kotlin:
+    name: Kotlin SDK checks
+    needs: [train]
+    if: needs.train.outputs.moved != '[]' && contains(fromJSON(needs.train.outputs.checks), 'sdk-kotlin')
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/sdk-checks.yml
+    with:
+      packages: sdk-kotlin
+      ref: ${{ github.sha }}
+
   sdk-python:
     name: Build tetherto-qvac-sdk (Python)
     needs:
@@ -333,6 +348,7 @@ jobs:
       - shared-runtime-libs
       - package-checks
       - sdk-python
+      - sdk-kotlin
       - pear-e2e
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
@@ -633,4 +649,19 @@ jobs:
       id-token: write
     uses: ./.github/workflows/publish-pypi.yml
     with:
+      version: ${{ needs.train.outputs.release_version }}
+
+  # One Maven repository zip per Android runtime profile, plus the JVM client,
+  # on the same release, as publish-sdk.yml attaches them.
+  attach-kotlin-maven-zips:
+    name: Attach the Kotlin Maven zips
+    needs:
+      - train
+      - github-release
+    if: ${{ !cancelled() && needs.github-release.result == 'success' && contains(fromJSON(needs.train.outputs.checks), 'sdk-kotlin') }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/publish-kotlin.yml
+    with:
+      destination: release-assets
       version: ${{ needs.train.outputs.release_version }}

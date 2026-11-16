@@ -46,6 +46,8 @@ export interface DownloadRequestBinding {
   signal: AbortSignal
   scope: DisposableScope
   requestId: string
+  /** Session the request runs as; the registry resolves `requestId` within it. */
+  sessionId: string
 }
 
 export interface DownloadHooks {

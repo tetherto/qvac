@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // sdk-kotlin's test:unit, main's Kotlin PR checks in one pass, against this commit's built @qvac/sdk and @qvac/inference:
 // the contract check, JVM and Android example tests, debug build checks, Maven publications and consumers, and the Kotlin
-// e2e app's unit tests. PRs into release-* and dispatches build every runtime profile; other PRs the all-in-one one.
+// e2e app's unit tests. PRs into release-*, release trains and dispatches build every runtime profile; other PRs the
+// all-in-one one.
 
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
@@ -65,7 +66,8 @@ if (!kotlinChanged()) {
 
 const profile =
   env.GITHUB_EVENT_NAME === 'workflow_dispatch' ||
-  (env.GITHUB_BASE_REF ?? '').startsWith('release-')
+  (env.GITHUB_BASE_REF ?? '').startsWith('release-') ||
+  (env.GITHUB_REF_NAME ?? '').startsWith('release-train-')
     ? ''
     : 'aio'
 

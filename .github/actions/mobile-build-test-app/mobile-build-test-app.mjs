@@ -66,6 +66,8 @@ export function build({
   run('node', [join(TOOLCHAIN, 'install.mjs')])
   run('npm', ['pkg', 'delete', 'devDependencies.bare-link'], { cwd: appDir })
   run('npm', ['pkg', 'set', 'dependencies.react-native-bare-kit=^0.16.0'], { cwd: appDir })
+  // bare-type 1.5+ needs Bare >= 1.37 and fails to load on this app's runtime; bare-inspect and bare-assert pull it in.
+  run('npm', ['pkg', 'set', 'overrides.bare-type=1.4.0'], { cwd: appDir })
   run('npm', ['install'], { cwd: appDir })
   run('node', installerArgs('.', addonDir, dependencyPrebuilds), {
     cwd: appDir

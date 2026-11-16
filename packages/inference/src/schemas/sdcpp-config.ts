@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { modelSrcInputSchema } from '@/schemas/model-src-utils'
+import { trackedRequestSchema } from '@/schemas/request-base'
 
 const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
 
@@ -106,7 +107,7 @@ export const sdcppConfigSchema = z.object({
       'Operation mode for the diffusion plugin. ' +
         "`'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX / Qwen-Image pipeline from " +
         'the primary model plus optional auxiliary text encoders, VAE, unconditional ' +
-        'diffusion model, and ESRGAN ' +
+        'diffusion model, external tokenizer, and ESRGAN ' +
         'upscaler, and exposes diffusion({ ... }). ' +
         "`'upscale'` builds a standalone ESRGAN upscaler from the primary model " +
         'file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). ' +
@@ -141,8 +142,9 @@ export const sdcppConfigSchema = z.object({
     .optional()
     .describe(
       'GPU to pin when `device` is "gpu": a GPU-device index, "integrated", or ' +
-        '"dedicated" (the discrete GPU with the most VRAM). Omit to let the ' +
-        'backend choose the first enumerated device. Resolved against the ' +
+        '"dedicated" (the discrete GPU with the most VRAM). Omit to let automatic ' +
+        'placement choose: a dedicated GPU first, then an integrated one, taking ' +
+        'the largest available memory budget within each. Resolved against the ' +
         "addon's own ggml device enumeration, so it cannot desync from the " +
         'device list the backend actually uses. If an explicit request cannot ' +
         'be satisfied (e.g. "integrated" with no integrated GPU, "dedicated" ' +
@@ -291,7 +293,8 @@ export const sdcppConfigSchema = z.object({
     .optional()
     .describe(
       'LLM text encoder model — required for FLUX.2 [klein] (Qwen3), ' +
-        'FLUX.3 Image Klein, Qwen-Image-2.1 and Ideogram 4 (Qwen3-VL), LTX-2 video (Gemma), ' +
+        'FLUX.3 Image Klein, Qwen-Image-2.1 and Ideogram 4 (Qwen3-VL), MOSS-Image (Qwen3.5), ' +
+        'LTX-2 video (Gemma), ' +
         'and MiniMax-H3 (H3-specific Qwen3-VL).'
     ),
   projectionModelSrc: modelSrcInputSchema
@@ -304,7 +307,8 @@ export const sdcppConfigSchema = z.object({
   vaeModelSrc: modelSrcInputSchema
     .optional()
     .describe(
-      'VAE decoder model, required for Qwen-Image-2.1, FLUX.2 [klein], FLUX.3 Image Klein, Ideogram 4, ' +
+      'VAE decoder model, required for Qwen-Image-2.1, FLUX.2 [klein], FLUX.3 Image Klein, ' +
+        'Ideogram 4, MOSS-Image, ' +
         'LTX-2 video, and MiniMax-H3 video; optional for SDXL.'
     ),
   highNoiseDiffusionModelSrc: modelSrcInputSchema
@@ -322,6 +326,13 @@ export const sdcppConfigSchema = z.object({
         'llmModelSrc (Qwen3-VL), vaeModelSrc, and a JSON-serialized structured ' +
         'caption with explicit bounding boxes as the generation prompt. Plain-text ' +
         "prompts produce degenerate output or the model's placeholder response."
+    ),
+  tokenizerSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'External `tokenizer.json` for the Qwen3.5 text encoder — MOSS-Image only. ' +
+        'Requires diffusion mode, llmModelSrc (Qwen3.5) and vaeModelSrc. ' +
+        'Layout prompts can be passed as a JSON string.'
     ),
   clipVisionModelSrc: modelSrcInputSchema
     .optional()
@@ -654,6 +665,7 @@ export type VideoStats = z.infer<typeof videoStatsSchema>
 
 export const diffusionStreamResponseSchema = z.object({
   type: z.literal('diffusionStream'),
+  requestId: z.string().optional().describe('Identity of the request, on the terminal frame.'),
   step: z.number().optional(),
   totalSteps: z.number().optional(),
   elapsedMs: z.number().optional(),
@@ -866,9 +878,11 @@ export const diffusionRequestSchema = z
 
 export type DiffusionRequest = z.input<typeof diffusionRequestSchema>
 
-export const diffusionStreamRequestSchema = diffusionRequestSchema.extend({
-  type: z.literal('diffusionStream')
-})
+export const diffusionStreamRequestSchema = diffusionRequestSchema
+  .extend({
+    type: z.literal('diffusionStream')
+  })
+  .extend(trackedRequestSchema.shape)
 
 export type DiffusionStreamRequest = z.input<typeof diffusionStreamRequestSchema>
 
@@ -1344,6 +1358,7 @@ export type VideoRequest = z.input<typeof videoRequestSchema>
 
 export const videoStreamRequestSchema = videoRequestObjectSchema
   .extend({ type: z.literal('videoStream') })
+  .extend(trackedRequestSchema.shape)
   .superRefine(refineVideoMode)
 
 export type VideoStreamRequest = z.input<typeof videoStreamRequestSchema>
@@ -1472,14 +1487,17 @@ export const upscaleRequestSchema = z.object({
 
 export type UpscaleRequest = z.input<typeof upscaleRequestSchema>
 
-export const upscaleStreamRequestSchema = upscaleRequestSchema.extend({
-  type: z.literal('upscaleStream')
-})
+export const upscaleStreamRequestSchema = upscaleRequestSchema
+  .extend({
+    type: z.literal('upscaleStream')
+  })
+  .extend(trackedRequestSchema.shape)
 
 export type UpscaleStreamRequest = z.input<typeof upscaleStreamRequestSchema>
 
 export const upscaleStreamResponseSchema = z.object({
   type: z.literal('upscaleStream'),
+  requestId: z.string().optional().describe('Identity of the request, on the terminal frame.'),
   data: z.string().optional(),
   outputIndex: z.number().optional(),
   done: z.boolean().optional(),
@@ -1593,9 +1611,11 @@ export const worldStepRequestSchema = z.object({
 
 export type WorldStepRequest = z.input<typeof worldStepRequestSchema>
 
-export const worldStepStreamRequestSchema = worldStepRequestSchema.extend({
-  type: z.literal('worldStepStream')
-})
+export const worldStepStreamRequestSchema = worldStepRequestSchema
+  .extend({
+    type: z.literal('worldStepStream')
+  })
+  .extend(trackedRequestSchema.shape)
 
 export type WorldStepStreamRequest = z.input<typeof worldStepStreamRequestSchema>
 
@@ -1799,7 +1819,11 @@ export const worldSceneRequestSchema = z
 export type WorldSceneRequest = z.input<typeof worldSceneRequestSchema>
 
 export const worldSceneStreamRequestSchema = z
-  .object({ ...worldSceneRequestShape, type: z.literal('worldSceneStream') })
+  .object({
+    ...worldSceneRequestShape,
+    type: z.literal('worldSceneStream')
+  })
+  .extend(trackedRequestSchema.shape)
   .superRefine(refineWorldSceneBudget)
 
 export type WorldSceneStreamRequest = z.input<typeof worldSceneStreamRequestSchema>

@@ -1,4 +1,8 @@
-import type { AudioUnderstandClientParams, AudioUnderstandResult } from '@qvac/inference/surface'
+import type {
+  AudioUnderstandClientParams,
+  AudioUnderstandResult,
+  RPCOptions
+} from '@qvac/inference/surface'
 import { stream as streamRpc } from '@/client/rpc/rpc-client'
 import { createAudioUnderstandResult } from '@/client/api/audio-gen-result'
 
@@ -24,6 +28,9 @@ import { createAudioUnderstandResult } from '@/client/api/audio-gen-result'
  * const remake = audioGen({ modelId, caption: "the same song, brighter mix", audioCodes });
  * ```
  */
-export function audioUnderstand(params: AudioUnderstandClientParams): AudioUnderstandResult {
-  return createAudioUnderstandResult(params, streamRpc)
+export function audioUnderstand(
+  params: AudioUnderstandClientParams,
+  options?: RPCOptions
+): AudioUnderstandResult {
+  return createAudioUnderstandResult(params, (request) => streamRpc(request, options))
 }

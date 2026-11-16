@@ -1,14 +1,13 @@
 {
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": [
-    [
-      "@qvac/opencode-plugin",
-      {
+  "plugins": [
+    {
+      "package": "@qvac/opencode-plugin",
+      "options": {
         "model": "qwen3.5-2b",
         "ctxSize": 32768,
         "reasoningBudget": -1,
         "tools": true
       }
-    ]
+    }
   ]
 }

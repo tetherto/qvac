@@ -34,6 +34,7 @@ export interface SubscriberRequestBinding {
   signal: AbortSignal
   scope: DisposableScope
   requestId: string
+  sessionId: string
 }
 
 export interface Subscriber {
@@ -45,6 +46,7 @@ export interface Subscriber {
   promise: Promise<string>
   /** Identity of the registry request this subscriber belongs to, if any. */
   requestId?: string | undefined
+  sessionId?: string | undefined
 }
 
 export interface Transfer {
@@ -52,7 +54,6 @@ export interface Transfer {
   abortController: AbortController
   subscribers: Map<string, Subscriber>
   lastProgress?: ModelProgressUpdate | undefined
-  downloadPromise?: Promise<string> | undefined
   clearCache: boolean
   cacheHit?: boolean
 }
@@ -71,12 +72,14 @@ export interface StartOrJoinResult {
 }
 
 const activeTransfers = new Map<string, Transfer>()
+// Every download until it settles, including a cancelled one a retry replaced.
+const runningDownloads = new Set<Promise<string>>()
 const deletingKeys = new Set<string>()
 let nextSubscriberId = 0
 
 function createSubscriber(
   onProgress?: (progress: ModelProgressUpdate) => void,
-  requestId?: string
+  request?: SubscriberRequestBinding
 ): Subscriber {
   let resolve!: (path: string) => void
   let reject!: (error: unknown) => void
@@ -92,7 +95,8 @@ function createSubscriber(
     resolve,
     reject,
     promise,
-    requestId
+    requestId: request?.requestId,
+    sessionId: request?.sessionId
   }
 }
 
@@ -224,7 +228,7 @@ export function startOrJoinDownload(
   const existing = activeTransfers.get(downloadKey)
   if (existing && !existing.abortController.signal.aborted) {
     logger.info(`📥 Reusing existing download for: ${downloadKey}`)
-    const subscriber = createSubscriber(onProgress, request?.requestId)
+    const subscriber = createSubscriber(onProgress, request)
     existing.subscribers.set(subscriber.id, subscriber)
     if (request) {
       attachRequestBinding(existing, subscriber, request)
@@ -249,7 +253,7 @@ export function startOrJoinDownload(
     clearCache: false
   }
 
-  const initialSubscriber = createSubscriber(onProgress, request?.requestId)
+  const initialSubscriber = createSubscriber(onProgress, request)
   transfer.subscribers.set(initialSubscriber.id, initialSubscriber)
   activeTransfers.set(downloadKey, transfer)
   if (request) {
@@ -266,7 +270,7 @@ export function startOrJoinDownload(
       transfer.cacheHit = cacheHit
     }
   })
-  transfer.downloadPromise = downloadPromise
+  runningDownloads.add(downloadPromise)
 
   downloadPromise
     .then(
@@ -283,6 +287,7 @@ export function startOrJoinDownload(
       }
     )
     .finally(() => {
+      runningDownloads.delete(downloadPromise)
       if (activeTransfers.get(downloadKey) === transfer) {
         activeTransfers.delete(downloadKey)
       }
@@ -325,10 +330,10 @@ export function startOrJoinDownload(
  * asks for clearCache, the partial file is deleted when the last
  * subscriber leaves.
  */
-export function markClearCacheForRequest(requestId: string): boolean {
+export function markClearCacheForRequest(requestId: string, sessionId: string): boolean {
   for (const transfer of activeTransfers.values()) {
     for (const sub of transfer.subscribers.values()) {
-      if (sub.requestId === requestId) {
+      if (sub.requestId === requestId && sub.sessionId === sessionId) {
         transfer.clearCache = true
         return true
       }
@@ -388,6 +393,7 @@ export function cancelTransfer(downloadKey: string, clearCache = false): void {
     if (sub.requestId !== undefined) {
       registry.cancel({
         requestId: sub.requestId,
+        sessionId: sub.sessionId,
         reason: 'download-transfer-cancel'
       })
     } else {
@@ -459,9 +465,7 @@ export async function cleanupDownloads(): Promise<void> {
   isCleaningUp = true
 
   try {
-    const downloadPromises = Array.from(activeTransfers.values())
-      .filter((t) => t.downloadPromise !== undefined)
-      .map((t) => t.downloadPromise!.catch(() => {}))
+    const downloadPromises = Array.from(runningDownloads, (download) => download.catch(() => {}))
 
     cancelAllDownloads()
 
@@ -470,5 +474,7 @@ export async function cleanupDownloads(): Promise<void> {
     }
   } catch (error) {
     logger.error('❌ Error during download cleanup:', error)
+  } finally {
+    isCleaningUp = false
   }
 }

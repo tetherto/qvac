@@ -81,7 +81,7 @@ std::vector<Device> registryDevices(const Registry& registry = {}) {
     // captured for the CPU-fallback warning.
     device.eligible = backend == "mtl" || backend == "metal" ||
                       backend == "cuda" || backend == "vulkan" ||
-                      backend == "opencl";
+                      backend == "opencl" || backend == "webgpu";
     hasAdrenoOpencl = hasAdrenoOpencl || device.adrenoOpencl;
     adrenoVulkan[i] = backend == "vulkan" && adreno;
     device.identity = deviceIdentity(registry, dev);

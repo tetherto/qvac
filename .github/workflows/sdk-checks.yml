@@ -16,6 +16,10 @@ on:
         default: ""
   workflow_call:
     inputs:
+      packages:
+        description: Comma-separated package names or directories to check, e.g. a train's sdk-kotlin; empty selects by train or change
+        type: string
+        default: ""
       train:
         description: Release train whose packages to check; empty checks the PR's changed packages
         type: string

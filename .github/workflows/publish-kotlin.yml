@@ -2,7 +2,7 @@ name: Publish SDK Kotlin
 
 # The Kotlin SDK's Maven repository at @qvac/sdk's version, after the release gates and the standalone Maven consumers:
 # release-assets attaches one zip per Android runtime profile, plus the JVM client, to the sdk-v<version> release that
-# publish-npm.yml creates; central stages on Maven Central (publishes with release_central).
+# publish-npm.yml or a release train with the sdk-kotlin check creates; central stages on Maven Central (publishes with release_central).
 on:
   push:
     tags:

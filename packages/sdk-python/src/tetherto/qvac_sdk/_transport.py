@@ -20,6 +20,27 @@ from collections.abc import AsyncIterable, AsyncIterator
 from typing import Any, Protocol
 
 
+def held_model_change(
+    request: dict[str, Any], response: dict[str, Any]
+) -> tuple[str, bool] | None:
+    """The model a reply to `request` made its caller hold (True) or release
+    (False), or None for any other reply. A `loadModel` reply names the model;
+    an `unloadModel` reply that released the lease drops it. Both arrive on the
+    unary call and, for a load with progress, as the last frame of the stream.
+    `SessionTransport` and `BareRpcTransport` apply it to every reply, so a
+    model loaded through a generated stub is tracked as well."""
+    kind = request.get("type")
+    if response.get("type") != kind or response.get("success") is False:
+        return None
+    if kind == "loadModel":
+        model_id = response.get("modelId")
+        return (model_id, True) if isinstance(model_id, str) else None
+    if kind == "unloadModel" and response.get("released") is not False:
+        model_id = request.get("modelId")
+        return (model_id, False) if isinstance(model_id, str) else None
+    return None
+
+
 class Transport(Protocol):
     async def call(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Unary request/reply: send `payload`, return the single parsed response."""

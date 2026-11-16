@@ -72,6 +72,7 @@ extra.
 | `embeddings.py`                    | `embed-p2p.ts`                                         | `embed` (`EmbedRequest`)                                                                                                  |
 | `rag_managed.py`                   | `rag/rag-hyperdb/ingest.ts`                            | `rag` (`RagRequest`) — `ingest`, `search`, `closeWorkspace` against the built-in vector store                             |
 | `rag_turbovec.py`                  | `rag/rag-turbovec.ts`                                  | `vector_index` (`VectorIndexRequest`) — TurboVec index over `embed` vectors, with snapshot `write`/`load`                 |
+| `rag_turbovec_ivf.py`              | `rag/rag-turbovec-ivf.ts`                              | `vector_index` `setIvf` on an F32 index: IVF lists, per-call `nProbe` on `search`, rebuilt after `add`, off with `None`   |
 | `rag_mongodb.py`                   | `rag/rag-mongodb.ts`                                   | `embed` into MongoDB Atlas Vector Search: `$vectorSearch` with a pre-filter (needs `pymongo`)                             |
 | `rag_sqlite.py`                    | `rag/rag-sqlite.ts`                                    | `embed` into SQLite with the vector extension: quantized `vector_quantize_scan` top-k (needs `sqliteai-vector`)           |
 | `translation.py`                   | `translation/translation-llm.ts`                       | `translate`                                                                                                               |
@@ -106,6 +107,7 @@ extra.
 | `audiogen_minimax.py`              | `audiogen/generate-music-minimax.ts`                   | `audio_gen_stream` on the MiniMax-Music3 engine: a bring-your-own GGUF pair and the MiniMax-only sampling knobs           |
 | `diffusion_flux2_klein.py`         | `diffusion-flux2-klein.ts`                             | `diffusion_stream` (`DiffusionStreamRequest`) — split-layout FLUX.2 [klein]; progress, images and stats off one iterator  |
 | `diffusion_ideogram.py`            | `diffusion-ideogram.ts`                                | `diffusion_stream` with Ideogram 4's serialized structured caption; split layout with an extra unconditional model        |
+| `diffusion_moss_image.py`          | `diffusion-moss-image.ts`                              | `diffusion_stream` with a serialized MOSS-Image JSON layout; Qwen3.5 encoder plus external `tokenizerSrc`                 |
 | `diffusion_qwen_image_21.py`       | `diffusion-qwen-image-21.ts`                           | `diffusion_stream` with two base64 `init_images` references; Qwen3-VL encoder plus `projectionModelSrc`, RGBA output      |
 | `diffusion_flux3_klein.py`         | `diffusion-flux3-klein.ts`                             | `diffusion_stream` with split-layout FLUX.3 Image Klein; optional base64 `init_images` references for editing             |
 | `diffusion_simple.py`              | `diffusion-simple.ts`                                  | `diffusion_stream` at its smallest: one all-in-one SD 2.x GGUF, prompt only, image read off the stream                    |
@@ -133,6 +135,7 @@ extra.
 | `decisions.py`                     | `decisions.ts`                                         | `decide` (`DecideRequest`): choice, score and `noul` questions on one state; optional local GGUF argument               |
 | `rerank.py`                        | `rerank.ts`                                            | `rerank` (`RerankRequest`): one score per document, sorted; optional GGUF path or URL argument                          |
 | `suspend_resume.py`                | `suspend-resume.ts`                                    | `suspend` / `resume` / `state`; a `completion` while suspended fails with `LIFECYCLE_OPERATION_BLOCKED`                |
+| `sessions.py`                      | `sessions.ts`                                          | `Client.open_session`: two sessions share one model by lease; a session's `cancel` reaches only its own requests         |
 | `vla.py`                           | `vla-smolvla.ts`                                       | `vla`, `vla_hparams`, `vla_preprocess_image`, `vla_pad_state`                                                             |
 | `vla_pi05.py`                     | `vla-pi05.ts`                                          | π₀.₅: three camera frames, discrete state (empty `state`), required `noise`; per-stage timings                           |
 | `vla_groot.py`                    | `vla-groot.ts`                                         | GR00T patch inputs, padded continuous state, hand-laid prompt; optional `vla_set_embodiment` via `QVAC_GROOT_*` env vars |

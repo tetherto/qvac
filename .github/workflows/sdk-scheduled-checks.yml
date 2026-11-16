@@ -78,7 +78,7 @@ jobs:
 
   opencode-compat:
     if: github.event.schedule == '0 7 * * *' || inputs.check == 'opencode-compat'
-    name: opencode-ai@latest + @qvac/opencode-plugin@latest
+    name: "@opencode/cli@latest + @qvac/opencode-plugin@latest"
     runs-on: ubuntu-latest
     timeout-minutes: 60
     concurrency:
@@ -90,7 +90,7 @@ jobs:
       QVAC_UPSTREAM_TIMEOUT_MS: "300000"
       OPENCODE_TIMEOUT: 45m
     steps:
-      # No persisted token: the smoke runs opencode-ai's own install scripts on purpose.
+      # No persisted token: the smoke runs @opencode/cli's own install scripts on purpose.
       - name: Checkout
         uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
