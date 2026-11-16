@@ -1,5 +1,7 @@
 import test from 'brittle'
 import { createDisposableScope } from '@/runtime/disposable-scope'
+import { defineDisposeSymbols } from '@/runtime/dispose-symbols'
+import { AsyncDisposeUnavailableError } from '@/errors/index'
 
 // -----------------------------------------------------------------------------
 // DisposableScope unit tests.
@@ -15,18 +17,27 @@ import { createDisposableScope } from '@/runtime/disposable-scope'
 //      cleanup eagerly so resources don't leak silently.
 // -----------------------------------------------------------------------------
 
-test('disposable-scope: host runtime exposes Symbol.asyncDispose', (t) => {
-  // Tripwire for the module-load guard in disposable-scope.ts. If a future
-  // runtime upgrade strips Symbol.asyncDispose (older Bare/Expo, missing
-  // polyfill), the guard throws at import time and this test fails first.
-  // The guard converts a silent registry-leak bug into a loud startup error.
-  t.is(
-    typeof Symbol.asyncDispose,
-    'symbol',
-    'Symbol.asyncDispose must be a symbol; the request-lifecycle stack depends on it'
-  )
+test('dispose-symbols: an engine without the symbols gets the ones esbuild falls back to', (t) => {
+  const symbol = { for: Symbol.for } as unknown as SymbolConstructor
+  defineDisposeSymbols(symbol)
+
+  t.is(symbol.asyncDispose, Symbol.for('Symbol.asyncDispose'))
+  t.is(symbol.dispose, Symbol.for('Symbol.dispose'))
 })
 
+test("dispose-symbols: an engine's own symbols are kept", (t) => {
+  const own = { for: Symbol.for, asyncDispose: Symbol('own'), dispose: Symbol('own') }
+  const before = [own.asyncDispose, own.dispose]
+  defineDisposeSymbols(own as unknown as SymbolConstructor)
+
+  t.alike([own.asyncDispose, own.dispose], before)
+})
+
+test('dispose-symbols: an engine where they cannot be defined fails with ASYNC_DISPOSE_UNAVAILABLE', (t) => {
+  const frozen = Object.freeze({ for: Symbol.for }) as unknown as SymbolConstructor
+
+  t.exception(() => defineDisposeSymbols(frozen), AsyncDisposeUnavailableError)
+})
 test('disposable-scope: cleanups run in LIFO order', async (t) => {
   const order: string[] = []
   const scope = createDisposableScope()
