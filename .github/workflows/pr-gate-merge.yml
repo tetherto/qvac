@@ -142,13 +142,33 @@ jobs:
       - name: Build package lists
         id: pkglist
         env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
           CHANGES: ${{ steps.filter.outputs.changes }}
           # Every package filter key above. Kept in step with that list.
           # One line: a folded scalar with a deeper indent keeps its newlines,
           # and $GITHUB_OUTPUT rejects a multiline value.
           ALL_PACKAGES: '["asr-ggml","audiogen-ggml","bci-whispercpp","classification-ggml","decoder-audio","diffusion-cpp","embed-llamacpp","ggml-rpc-server","infer-base","llm-llamacpp","model-fit","ocr-ggml","translation-nmtcpp","tts-ggml","turbovec-ggml","fabric","vla"]'
         run: |
-          CHANGED=$(echo "$CHANGES" | jq -c 'map(select(. != "pkg-any" and . != "shared-ci"))')
+          set -euo pipefail
+          # A package this PR deletes still matches its filter through the
+          # deleted paths, but the PR head has no directory left to check, and
+          # nx-project-matrix drops it so no prebuild status is ever posted.
+          # A rename away from packages/<dir>/package.json deletes it the same way.
+          DELETED=$(gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" \
+            --jq '.[] | if .status == "removed" then .filename elif .status == "renamed" then .previous_filename else empty end' \
+            | { grep -E '^packages/[^/]+/package\.json$' || true; } \
+            | cut -d/ -f2 | jq -R . | jq -sc .)
+          keep_present() {
+            jq -c --argjson deleted "$DELETED" \
+              'map(select((if . == "vla" then "vla-ggml" else . end) as $dir | $deleted | index($dir) | not))'
+          }
+          if [ "$DELETED" != "[]" ]; then
+            echo "::notice::this PR deletes $DELETED, so they are not checked"
+          fi
+
+          CHANGED=$(echo "$CHANGES" | jq -c 'map(select(. != "pkg-any" and . != "shared-ci"))' | keep_present)
 
           # `packages` gates verify-prebuilds, so it must only ever name packages
           # a producer will actually post a status for.
@@ -160,7 +180,7 @@ jobs:
           SANITY="$CHANGED"
           if [ "$SANITY" = "[]" ] && echo "$CHANGES" | jq -e 'index("shared-ci")' >/dev/null; then
             # Compacted again so a wrapped value cannot split the output line.
-            SANITY=$(jq -c . <<< "$ALL_PACKAGES")
+            SANITY=$(keep_present <<< "$ALL_PACKAGES")
             echo "::notice::shared CI changed but no package path did; running sanity-checks across every addon"
           fi
           echo "sanity-packages=${SANITY}" >> "$GITHUB_OUTPUT"
