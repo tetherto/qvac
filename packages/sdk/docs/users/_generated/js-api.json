@@ -2,26 +2,10 @@
   "functions": [
     {
       "name": "assessModelFit",
-      "signature": "function assessModelFit(input: AssessModelFitInput): Promise<AssessModelFitResult>;",
-      "description": "Whether a set of models fits in this device's memory when loaded together,\nwithout downloading them.",
+      "signature": "function assessModelFit(input: AssessModelFitInput, options?: RPCOptions): Promise<AssessModelFitResult>;",
+      "description": "Whether a set of models fits in this device's memory when loaded together,\nwithout downloading them.\n\nEach model's engine fitter runs against the registry's weightless description\nof the model, or the model itself when it is on disk. The memory each load\ntakes is summed per device and compared against what is free.\n\n`unknown` is the answer for a load that would start but cannot be sized: an\nengine with no fitter, a load the fitter cannot project, a model with no\nregistry description that is not on disk, or a device that reported no free\nmemory.",
       "returns": "Promise<AssessModelFitResult>",
-      "returnFields": [
-        {
-          "name": "models",
-          "type": "{ devices: { freeBytes?: number; id: string; name: string; totalBytes?: number; unified: boolean; usedBytes: number }[]; stats: Record<string, never> | { ctxSize: number; gpuLayers: number }; status: \"unknown\" | \"fits\" | \"does-not-fit\" }[]",
-          "required": true
-        },
-        {
-          "name": "pools",
-          "type": "{ freeBytes?: number; id: string; totalBytes?: number; unified: boolean; usedBytes: number }[]",
-          "required": true
-        },
-        {
-          "name": "verdict",
-          "type": "\"unknown\" | \"fits\" | \"does-not-fit\"",
-          "required": true
-        }
-      ],
+      "returnFields": [],
       "throws": [
         {
           "error": "",
@@ -32,154 +16,45 @@
     },
     {
       "name": "audioEdit",
-      "signature": "function audioEdit(params: AudioEditClientParams): AudioGenResult;",
+      "signature": "function audioEdit(params: AudioEditClientParams, options?: RPCOptions): AudioGenResult;",
       "description": "Edits a source recording with a loaded ACE-Step AudioGen model: an ordered\npipeline of `flow-edit` and `repaint` operations, executed in array order.",
       "returns": "AudioGenResult",
-      "returnFields": [
-        {
-          "name": "audio",
-          "type": "Promise<AudioGenAudio>",
-          "required": true
-        },
-        {
-          "name": "diagnostics",
-          "type": "Promise<{ driver?: { name: string; version?: string }; fallback?: { reason: string; requestedBackend?: string; requestedDevice?: \"cpu\" | \"gpu\" }; gpuId?: string; graphicsApi?: \"vulkan\" | \"opencl\" | \"metal\" | \"cuda\" | \"rocm\" | \"opengl\" | \"webgpu\" | \"direct3d11\" | \"direct3d12\" | \"levelZero\"; probe?: { backend: string; reason?: string; status: \"unknown\" | \"compatible\" | \"incompatible\" }; selectedBackend: string; selectedDevice: \"cpu\" | \"gpu\" } | undefined>",
-          "required": true
-        },
-        {
-          "name": "progressStream",
-          "type": "AsyncGenerator<AudioGenProgress>",
-          "required": true
-        },
-        {
-          "name": "requestId",
-          "type": "string",
-          "required": true
-        },
-        {
-          "name": "stats",
-          "type": "Promise<{ arMs?: number; audioDurationMs?: number; backendDevice?: number; backendId?: number; conditionMs?: number; emittedFrames?: number; flowMs?: number; gpuFallbackReason?: number; lrc?: string; lyricsScore?: number; metadata?: { beatsPerBar: number; bpm: number; caption: string; codeFrames: number; keyscale: string; lyrics: string; qualityReport?: string; seed: number; vocalLanguage: string }; qualityScore?: number; realTimeFactor?: number; totalTimeMs?: number; understand?: { audioCodes: number[]; bpm: number; caption: string; duration: number; keyscale: string; seed: number; timesignature: string; vocalLanguage: string }; vocoderMs?: number } | undefined>",
-          "required": true
-        }
-      ],
+      "returnFields": [],
       "throws": [],
       "deprecated": null
     },
     {
       "name": "audioGen",
-      "signature": "function audioGen(params: AudioGenClientParams): AudioGenResult;",
+      "signature": "function audioGen(params: AudioGenClientParams, options?: RPCOptions): AudioGenResult;",
       "description": "Generates PCM audio using a loaded AudioGen model.",
       "returns": "AudioGenResult",
-      "returnFields": [
-        {
-          "name": "audio",
-          "type": "Promise<AudioGenAudio>",
-          "required": true
-        },
-        {
-          "name": "diagnostics",
-          "type": "Promise<{ driver?: { name: string; version?: string }; fallback?: { reason: string; requestedBackend?: string; requestedDevice?: \"cpu\" | \"gpu\" }; gpuId?: string; graphicsApi?: \"vulkan\" | \"opencl\" | \"metal\" | \"cuda\" | \"rocm\" | \"opengl\" | \"webgpu\" | \"direct3d11\" | \"direct3d12\" | \"levelZero\"; probe?: { backend: string; reason?: string; status: \"unknown\" | \"compatible\" | \"incompatible\" }; selectedBackend: string; selectedDevice: \"cpu\" | \"gpu\" } | undefined>",
-          "required": true
-        },
-        {
-          "name": "progressStream",
-          "type": "AsyncGenerator<AudioGenProgress>",
-          "required": true
-        },
-        {
-          "name": "requestId",
-          "type": "string",
-          "required": true
-        },
-        {
-          "name": "stats",
-          "type": "Promise<{ arMs?: number; audioDurationMs?: number; backendDevice?: number; backendId?: number; conditionMs?: number; emittedFrames?: number; flowMs?: number; gpuFallbackReason?: number; lrc?: string; lyricsScore?: number; metadata?: { beatsPerBar: number; bpm: number; caption: string; codeFrames: number; keyscale: string; lyrics: string; qualityReport?: string; seed: number; vocalLanguage: string }; qualityScore?: number; realTimeFactor?: number; totalTimeMs?: number; understand?: { audioCodes: number[]; bpm: number; caption: string; duration: number; keyscale: string; seed: number; timesignature: string; vocalLanguage: string }; vocoderMs?: number } | undefined>",
-          "required": true
-        }
-      ],
+      "returnFields": [],
       "throws": [],
       "deprecated": null
     },
     {
       "name": "audioUnderstand",
-      "signature": "function audioUnderstand(params: AudioUnderstandClientParams): AudioUnderstandResult;",
+      "signature": "function audioUnderstand(params: AudioUnderstandClientParams, options?: RPCOptions): AudioUnderstandResult;",
       "description": "Describes a recording with a loaded ACE-Step AudioGen model, running the\nengine's reverse pipeline: the PCM is encoded, its FSQ semantic codes are\nrecovered, and the LM reports a caption and the clip's metadata.",
       "returns": "AudioUnderstandResult",
-      "returnFields": [
-        {
-          "name": "description",
-          "type": "Promise<{ audioCodes: number[]; bpm: number; caption: string; duration: number; keyscale: string; seed: number; timesignature: string; vocalLanguage: string }>",
-          "required": true
-        },
-        {
-          "name": "diagnostics",
-          "type": "Promise<{ driver?: { name: string; version?: string }; fallback?: { reason: string; requestedBackend?: string; requestedDevice?: \"cpu\" | \"gpu\" }; gpuId?: string; graphicsApi?: \"vulkan\" | \"opencl\" | \"metal\" | \"cuda\" | \"rocm\" | \"opengl\" | \"webgpu\" | \"direct3d11\" | \"direct3d12\" | \"levelZero\"; probe?: { backend: string; reason?: string; status: \"unknown\" | \"compatible\" | \"incompatible\" }; selectedBackend: string; selectedDevice: \"cpu\" | \"gpu\" } | undefined>",
-          "required": true
-        },
-        {
-          "name": "progressStream",
-          "type": "AsyncGenerator<AudioGenProgress>",
-          "required": true
-        },
-        {
-          "name": "requestId",
-          "type": "string",
-          "required": true
-        },
-        {
-          "name": "stats",
-          "type": "Promise<{ arMs?: number; audioDurationMs?: number; backendDevice?: number; backendId?: number; conditionMs?: number; emittedFrames?: number; flowMs?: number; gpuFallbackReason?: number; lrc?: string; lyricsScore?: number; metadata?: { beatsPerBar: number; bpm: number; caption: string; codeFrames: number; keyscale: string; lyrics: string; qualityReport?: string; seed: number; vocalLanguage: string }; qualityScore?: number; realTimeFactor?: number; totalTimeMs?: number; understand?: { audioCodes: number[]; bpm: number; caption: string; duration: number; keyscale: string; seed: number; timesignature: string; vocalLanguage: string }; vocoderMs?: number } | undefined>",
-          "required": true
-        }
-      ],
+      "returnFields": [],
       "throws": [],
       "deprecated": null
     },
     {
       "name": "batchCompletion",
       "signature": "function batchCompletion(params: BatchCompletionParams): BatchCompletionRun;",
-      "description": "Runs multiple prompts concurrently through one loaded model.",
+      "description": "Runs multiple prompts concurrently through one loaded model.\n\nThe returned run exposes the request ID immediately, a merged event stream,\nordered results, aggregate batch statistics, and per-prompt streams via\n`byId()`. Stream-level failures reject the aggregate promises; individual\nterminal failures are also exposed through the corresponding `byId().final`.",
       "returns": "BatchCompletionRun",
-      "returnFields": [
-        {
-          "name": "events",
-          "type": "AsyncIterable<BatchCompletionEvent>",
-          "required": true
-        },
-        {
-          "name": "ids",
-          "type": "Promise<string[]>",
-          "required": true
-        },
-        {
-          "name": "requestId",
-          "type": "string",
-          "required": true
-        },
-        {
-          "name": "results",
-          "type": "Promise<BatchCompletionResult[]>",
-          "required": true
-        },
-        {
-          "name": "stats",
-          "type": "Promise<CompletionStats | undefined>",
-          "required": true
-        },
-        {
-          "name": "byId",
-          "type": "unknown",
-          "required": true
-        }
-      ],
+      "returnFields": [],
       "throws": [],
       "deprecated": null
     },
     {
       "name": "bciTranscribe",
-      "signature": "function bciTranscribe(params: BciTranscribeClientParams & { metadata: true }, options?: RPCOptions): Promise<{ append: boolean; endMs: number; id: number; isEndOfTurn?: boolean; language?: string; noSpeechProb?: number; speaker?: string; speakerId?: number; speakerSegments?: { endMs: number; speakerId: number; startMs: number }[]; speakerTurnNext?: boolean; startMs: number; startsWord?: boolean; text: string; tokens?: { endMs: number; probability: number; startMs: number; text: string }[] }[]> & { requestId: string };\nfunction bciTranscribe(params: BciTranscribeClientParams, options?: RPCOptions): Promise<string> & { requestId: string };",
+      "signature": "function bciTranscribe(params: BciTranscribeClientParams & { metadata: true }, options?: RPCOptions): Promise<{}[]> & { requestId: string };\nfunction bciTranscribe(params: BciTranscribeClientParams, options?: RPCOptions): Promise<string> & { requestId: string };",
       "description": "Transcribe a neural-signal buffer with a loaded BCI model and return the\ncomplete text. Accepts either a `.bin` file path or a raw neural buffer.",
-      "returns": "Promise<{ append: boolean; endMs: number; id: number; isEndOfTurn?: boolean; language?: string; noSpeechProb?: number; speaker?: string; speakerId?: number; speakerSegments?: { endMs: number; speakerId: number; startMs: number }[]; speakerTurnNext?: boolean; startMs: number; startsWord?: boolean; text: string; tokens?: { endMs: number; probability: number; startMs: number; text: string }[] }[]> & { requestId: string }",
+      "returns": "Promise<{}[]> & { requestId: string }",
       "returnFields": [
         {
           "name": "requestId",
@@ -193,42 +68,42 @@
     {
       "name": "bciTranscribeStream",
       "signature": "function bciTranscribeStream(params: BciTranscribeStreamClientParams & { metadata: true }, options?: RPCOptions): Promise<BciTranscribeStreamMetadataSession>;\nfunction bciTranscribeStream(params: BciTranscribeStreamClientParams, options?: RPCOptions): Promise<BciTranscribeStreamSession>;",
-      "description": "Opens a bidirectional streaming BCI transcription session. Neural-signal\nchunks are streamed in via `write()`, and transcription is yielded as the\naddon's sliding window decodes successive windows.",
+      "description": "Opens a bidirectional streaming BCI transcription session. Neural-signal\nchunks are streamed in via `write()`, and transcription is yielded as the\naddon's sliding window decodes successive windows.\n\nThe returned session is single-use. Attempting to iterate a second time\nwill throw a `TranscriptionFailedError`.",
       "returns": "Promise<BciTranscribeStreamMetadataSession>",
-      "returnFields": [
-        {
-          "name": "requestId",
-          "type": "string",
-          "required": true
-        },
-        {
-          "name": "[asyncIterator]",
-          "type": "unknown",
-          "required": true
-        },
-        {
-          "name": "destroy",
-          "type": "unknown",
-          "required": true
-        },
-        {
-          "name": "end",
-          "type": "unknown",
-          "required": true
-        },
-        {
-          "name": "write",
-          "type": "unknown",
-          "required": true
-        }
-      ],
+      "returnFields": [],
       "throws": [],
       "deprecated": null
     },
     {
+      "name": "calcTokens",
+      "signature": "function calcTokens(params: CalcTokensClientParams, options?: RPCOptions): Promise<number>;",
+      "description": "Counts tokens with a loaded language model without running generation.\n\nWhen neither `history` nor enabled tools are supplied, `text` is counted raw.\nOtherwise, the conversation is rendered with the model's chat template and\n`text`, when present, becomes its final user turn. Tools are counted only when\nthe model was loaded with `modelConfig.tools: true`.\n`toolSearch` controls the limits rendered for deferred-tool search, matching\n`completion()`.\nMedia content and attachments are not supported.\nThe count uses every supplied tool and the load-time reasoning setting. A named\n`generationParams.tool_choice` or `generationParams.reasoning_budget` override on\n`completion()` can render a different prompt.",
+      "returns": "Promise<number>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "RequestValidationFailedError",
+          "description": "If the request is invalid."
+        },
+        {
+          "error": "ModelNotFoundError",
+          "description": "If `modelId` is not loaded."
+        },
+        {
+          "error": "ModelOperationNotSupportedError",
+          "description": "If the loaded model is not a language model."
+        },
+        {
+          "error": "InvalidResponseError",
+          "description": "If the worker returns a malformed result."
+        }
+      ],
+      "deprecated": null
+    },
+    {
       "name": "cancel",
-      "signature": "function cancel(params: CancelClientInput): Promise<void>;",
-      "description": "Cancels an ongoing operation.",
+      "signature": "function cancel(params: CancelClientInput, options?: RPCOptions): Promise<void>;",
+      "description": "Cancels an ongoing operation.\n\nTwo cancel paths are supported:\n - **By `requestId`** (primary) — pass the `requestId` exposed on\n   the result of a long-running call (`completion(...)`,\n   `loadModel(...)`, `downloadAsset(...)`, `embed(...)`,\n   `transcribe(...)`, `ragIngest(...)`, etc.) to cancel exactly\n   that request. A cancel that races the originating call is\n   recorded and applied retroactively when the begin arrives.\n - **Broad by `modelId`** (escape hatch) — `{ modelId, kind? }`\n   cancels every in-flight request on that model. Useful for\n   model unload, app shutdown, or admin sweeps where the caller\n   doesn't have a `requestId` to hand.\n\nThe legacy `{ operation: \"inference\" | \"embeddings\", modelId }`\nsugars remain callable for source compatibility. For migration off\nthe removed `{ operation: \"downloadAsset\" | \"rag\" }` shapes, see\nthe 0.11.0 changelog / release notes.",
       "returns": "Promise<void>",
       "returnFields": [],
       "throws": [
@@ -241,57 +116,13 @@
     },
     {
       "name": "classify",
-      "signature": "function classify(params: ClassifyClientParams): Promise<ClassificationResult[]>;",
-      "description": "Classifies an image using a loaded classification model.",
-      "returns": "Promise<ClassificationResult[]>",
-      "returnFields": [],
-      "throws": [],
-      "deprecated": null
-    },
-    {
-      "name": "completion",
-      "signature": "function completion(params: CompletionParams): CompletionRun;",
-      "description": "Generates completion from a language model based on conversation history.",
-      "returns": "CompletionRun",
+      "signature": "function classify(params: ClassifyClientParams, options?: RPCOptions): Promise<{}[]> & { requestId: string };",
+      "description": "Classifies an image using a loaded classification model.\n\nThe `MOBILENETV3_3CLASS_V3_FP16` model produces 3 labels: `\"food\"`, `\"report\"`, `\"other\"`.\nCustom models may emit different labels sourced from the GGUF metadata.",
+      "returns": "Promise<{}[]> & { requestId: string }",
       "returnFields": [
-        {
-          "name": "events",
-          "type": "AsyncIterable<CompletionEvent>",
-          "required": true
-        },
-        {
-          "name": "final",
-          "type": "Promise<CompletionFinal>",
-          "required": true
-        },
         {
           "name": "requestId",
           "type": "string",
-          "required": true
-        },
-        {
-          "name": "stats",
-          "type": "Promise<CompletionStats | undefined>",
-          "required": true
-        },
-        {
-          "name": "text",
-          "type": "Promise<string>",
-          "required": true
-        },
-        {
-          "name": "tokenStream",
-          "type": "AsyncGenerator<string>",
-          "required": true
-        },
-        {
-          "name": "toolCalls",
-          "type": "Promise<ToolCallWithCall[]>",
-          "required": true
-        },
-        {
-          "name": "toolCallStream",
-          "type": "AsyncGenerator<ToolCallEvent>",
           "required": true
         }
       ],
@@ -299,64 +130,23 @@
       "deprecated": null
     },
     {
+      "name": "completion",
+      "signature": "function completion(params: CompletionParams): CompletionRun;",
+      "description": "Generates completion from a language model based on conversation history.\n\nReturns a `CompletionRun` whose canonical surfaces are:\n\n - `events`  — `AsyncIterable<CompletionEvent>` of ordered, typed events.\n - `final`   — `Promise<CompletionFinal>` with aggregated results once the\n               stream ends (content, thinking, tool calls, stats, raw text).\n\nLegacy convenience fields (`tokenStream`, `text`, `toolCallStream`,\n`toolCalls`, `stats`) are still available but deprecated — they derive\nfrom `events` / `final` internally.",
+      "returns": "CompletionRun",
+      "returnFields": [],
+      "throws": [],
+      "deprecated": null
+    },
+    {
       "name": "createVectorIndex",
-      "signature": "function createVectorIndex(params: CreateVectorIndexParams, options?: RPCOptions): Promise<VectorIndex>;",
-      "description": "Creates an empty vector index in worker memory and returns a handle to it.",
-      "returns": "Promise<VectorIndex>",
+      "signature": "function createVectorIndex(params: CreateVectorIndexParams, options?: RPCOptions): VectorIndexOperation<VectorIndex>;",
+      "description": "Creates an empty vector index in worker memory and returns a handle to it.\n\nThe index is backed by the native TurboVec engine of the registered\nembedding plugin (the built-in llama.cpp embedding plugin provides it).\nPair it with `embed()` to build retrieval over documents kept in any store:\nadd each document's embedding under an id of your choosing, then search\nwith the embedding of a query and map the returned ids back to your\ndocuments.",
+      "returns": "VectorIndexOperation<VectorIndex>",
       "returnFields": [
         {
-          "name": "dim",
-          "type": "number",
-          "required": true
-        },
-        {
-          "name": "indexId",
+          "name": "requestId",
           "type": "string",
-          "required": true
-        },
-        {
-          "name": "length",
-          "type": "number",
-          "required": true
-        },
-        {
-          "name": "storage",
-          "type": "VectorIndexStorage | undefined",
-          "required": true
-        },
-        {
-          "name": "[asyncDispose]",
-          "type": "unknown",
-          "required": true
-        },
-        {
-          "name": "add",
-          "type": "unknown",
-          "required": true
-        },
-        {
-          "name": "contains",
-          "type": "unknown",
-          "required": true
-        },
-        {
-          "name": "dispose",
-          "type": "unknown",
-          "required": true
-        },
-        {
-          "name": "remove",
-          "type": "unknown",
-          "required": true
-        },
-        {
-          "name": "search",
-          "type": "unknown",
-          "required": true
-        },
-        {
-          "name": "write",
-          "type": "unknown",
           "required": true
         }
       ],
@@ -374,25 +164,10 @@
     },
     {
       "name": "decide",
-      "signature": "function decide(params: Extract<DecideParams, { state: unknown }>, options?: RPCOptions): Promise<{ answers: z.ZodRecord<z.ZodString, z.ZodDiscriminatedUnion<[z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; choice: z.ZodUnion<readonly [(...), (...), (...)]>; confidence: z.ZodNumber; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; type: z.ZodLiteral<\"choice\"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; legend: z.ZodRecord<z.ZodString, z.ZodString>; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; score: z.ZodNumber; type: z.ZodLiteral<\"score\"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; noul: z.ZodNumber; type: z.ZodLiteral<\"noul\"> }, z.core.$strip>], \"type\">>; model: string; usage: { inputTokens: number; options?: Record<string, { distinct: number; tokensPerOption: number | null; total: number }>; outputTokens: number; stateTokens: number; stateTokensDropped: number; truncated: boolean; truncatedQuestions: string[] } }> & { requestId: string };\nfunction decide(params: Extract<DecideParams, { states: unknown }>, options?: RPCOptions): Promise<{ answers: z.ZodRecord<z.ZodString, z.ZodDiscriminatedUnion<[z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; choice: z.ZodUnion<readonly (...)>; confidence: z.ZodNumber; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; type: z.ZodLiteral<\"choice\"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; legend: z.ZodRecord<z.ZodString, z.ZodString>; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; score: z.ZodNumber; type: z.ZodLiteral<\"score\"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; noul: z.ZodNumber; type: z.ZodLiteral<\"noul\"> }, z.core.$strip>], \"type\">>; model: string; usage: { inputTokens: number; options?: Record<string, { distinct: number; tokensPerOption: number | null; total: number }>; outputTokens: number; stateTokens: number; stateTokensDropped: number; truncated: boolean; truncatedQuestions: string[] } }[]> & { requestId: string };\nfunction decide(params: DecideParams, options?: RPCOptions): Promise<{ answers: z.ZodRecord<z.ZodString, z.ZodDiscriminatedUnion<[z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; choice: z.ZodUnion<readonly (...)>; confidence: z.ZodNumber; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; type: z.ZodLiteral<\"choice\"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; legend: z.ZodRecord<z.ZodString, z.ZodString>; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; score: z.ZodNumber; type: z.ZodLiteral<\"score\"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; noul: z.ZodNumber; type: z.ZodLiteral<\"noul\"> }, z.core.$strip>], \"type\">>; model: string; usage: { inputTokens: number; options?: Record<string, { distinct: number; tokensPerOption: number | null; total: number }>; outputTokens: number; stateTokens: number; stateTokensDropped: number; truncated: boolean; truncatedQuestions: string[] } } | { answers: z.ZodRecord<z.ZodString, z.ZodDiscriminatedUnion<[z.ZodObject<{ action: z.ZodObject<(...), (...)>; answerConfidence: z.ZodNumber; choice: z.ZodUnion<(...)>; confidence: z.ZodNumber; probabilities: z.ZodRecord<(...), (...)>; type: z.ZodLiteral<(...)> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<(...), (...)>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; legend: z.ZodRecord<(...), (...)>; probabilities: z.ZodRecord<(...), (...)>; score: z.ZodNumber; type: z.ZodLiteral<(...)> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<(...), (...)>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; noul: z.ZodNumber; type: z.ZodLiteral<(...)> }, z.core.$strip>], \"type\">>; model: string; usage: { inputTokens: number; options?: Record<string, { distinct: number; tokensPerOption: number | null; total: number }>; outputTokens: number; stateTokens: number; stateTokensDropped: number; truncated: boolean; truncatedQuestions: string[] } }[]> & { requestId: string };",
+      "signature": "function decide(params: Extract<DecideParams, { state: unknown }>, options?: RPCOptions): Promise<{}> & { requestId: string };\nfunction decide(params: Extract<DecideParams, { states: unknown }>, options?: RPCOptions): Promise<{}[]> & { requestId: string };\nfunction decide(params: DecideParams, options?: RPCOptions): Promise<{} | {}[]> & { requestId: string };",
       "description": "Answers typed decision questions about one state or a batch of states.",
-      "returns": "Promise<{ answers: z.ZodRecord<z.ZodString, z.ZodDiscriminatedUnion<[z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; choice: z.ZodUnion<readonly [(...), (...), (...)]>; confidence: z.ZodNumber; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; type: z.ZodLiteral<\"choice\"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; legend: z.ZodRecord<z.ZodString, z.ZodString>; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; score: z.ZodNumber; type: z.ZodLiteral<\"score\"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; noul: z.ZodNumber; type: z.ZodLiteral<\"noul\"> }, z.core.$strip>], \"type\">>; model: string; usage: { inputTokens: number; options?: Record<string, { distinct: number; tokensPerOption: number | null; total: number }>; outputTokens: number; stateTokens: number; stateTokensDropped: number; truncated: boolean; truncatedQuestions: string[] } }> & { requestId: string }",
+      "returns": "Promise<{}> & { requestId: string }",
       "returnFields": [
-        {
-          "name": "answers",
-          "type": "z.ZodRecord<z.ZodString, z.ZodDiscriminatedUnion<[z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; choice: z.ZodUnion<readonly [(...), (...), (...)]>; confidence: z.ZodNumber; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; type: z.ZodLiteral<\"choice\"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; legend: z.ZodRecord<z.ZodString, z.ZodString>; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; score: z.ZodNumber; type: z.ZodLiteral<\"score\"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; noul: z.ZodNumber; type: z.ZodLiteral<\"noul\"> }, z.core.$strip>], \"type\">>",
-          "required": true
-        },
-        {
-          "name": "model",
-          "type": "string",
-          "required": true
-        },
-        {
-          "name": "usage",
-          "type": "{ inputTokens: number; options?: Record<string, { distinct: number; tokensPerOption: number | null; total: number }>; outputTokens: number; stateTokens: number; stateTokensDropped: number; truncated: boolean; truncatedQuestions: string[] }",
-          "required": true
-        },
         {
           "name": "requestId",
           "type": "string",
@@ -421,7 +196,7 @@
     },
     {
       "name": "deleteCache",
-      "signature": "function deleteCache(params: { all: true } | { auto: true } | { kvCacheKey: string; modelId?: string } | { modelSrc: string }): Promise<{ success: boolean }>;",
+      "signature": "function deleteCache(params: { all: true } | { auto: true } | { kvCacheKey: string; modelId?: string } | { modelSrc: string }, options?: RPCOptions): Promise<{ success: boolean }>;",
       "description": "Deletes KV cache files, or a registry model's cached download.",
       "returns": "Promise<{ success: boolean }>",
       "returnFields": [
@@ -441,7 +216,7 @@
     },
     {
       "name": "diffusion",
-      "signature": "function diffusion(params: DiffusionClientParams): DiffusionResult;",
+      "signature": "function diffusion(params: DiffusionClientParams, options?: RPCOptions): DiffusionResult;",
       "description": "Generates images using a loaded diffusion model.",
       "returns": "DiffusionResult",
       "returnFields": [],
@@ -459,9 +234,9 @@
     },
     {
       "name": "discoverRpcServers",
-      "signature": "function discoverRpcServers(options: DiscoverRpcServersOptions): Promise<{ devices: { freeMemory: number; index: number; totalMemory: number }[]; rdmaAvailable: boolean; url: string }[]> & { requestId: string };",
+      "signature": "function discoverRpcServers(options: DiscoverRpcServersOptions, rpcOptions?: RPCOptions): Promise<{}[]> & { requestId: string };",
       "description": "Find private-network candidates with device inventories and server RDMA availability.\nRDMA availability is a server-side offer, not a guarantee of the negotiated transport.\nUse getRpcDeviceMap with the chosen endpoint registration order before loadModel.\nCancel a pending search with its promise.requestId.",
-      "returns": "Promise<{ devices: { freeMemory: number; index: number; totalMemory: number }[]; rdmaAvailable: boolean; url: string }[]> & { requestId: string }",
+      "returns": "Promise<{}[]> & { requestId: string }",
       "returnFields": [
         {
           "name": "requestId",
@@ -475,7 +250,7 @@
     {
       "name": "downloadAsset",
       "signature": "function downloadAsset(options: DownloadAssetOptions, rpcOptions?: RPCOptions): Promise<string> & { requestId: string };",
-      "description": "Downloads an asset (model file) without loading it into memory.",
+      "description": "Downloads an asset (model file) without loading it into memory.\n\nThis function is specifically designed for download-only operations and\ndoesn't accept runtime configuration options like modelConfig.\nUse this for download-only operations instead of loadModel for better semantic clarity.",
       "returns": "Promise<string> & { requestId: string }",
       "returnFields": [
         {
@@ -502,34 +277,28 @@
     },
     {
       "name": "embed",
-      "signature": "function embed(params: { inputs?: undefined; modelId: string; text: string }, options?: RPCOptions): Promise<{ embedding: number[]; stats?: { backendDevice?: \"cpu\" | \"gpu\"; contextSize?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }> & { requestId: string };\nfunction embed(params: { inputs?: undefined; modelId: string; text: string[] }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: { backendDevice?: \"cpu\" | \"gpu\"; contextSize?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }> & { requestId: string };\nfunction embed(params: { inputs: (string | (string | { media: { type: \"base64\"; value: string } | { type: \"filePath\"; value: string } })[])[]; modelId: string; text?: undefined }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: { backendDevice?: \"cpu\" | \"gpu\"; contextSize?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }> & { requestId: string };\nfunction embed(params: EmbedParams, options?: RPCOptions): Promise<{ embedding: number[] | number[][]; stats?: { backendDevice?: \"cpu\" | \"gpu\"; contextSize?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }> & { requestId: string };",
-      "description": "Generates embeddings for a single text using a specified model.",
-      "returns": "Promise<{ embedding: number[]; stats?: { backendDevice?: \"cpu\" | \"gpu\"; contextSize?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }> & { requestId: string }",
-      "returnFields": [
-        {
-          "name": "embedding",
-          "type": "number[]",
-          "required": true
-        },
-        {
-          "name": "stats",
-          "type": "{ backendDevice?: \"cpu\" | \"gpu\"; contextSize?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number }",
-          "required": false
-        },
-        {
-          "name": "requestId",
-          "type": "string",
-          "required": true
-        }
-      ],
+      "signature": "function embed(params: { input: string | (string | {})[] | {}; inputs?: undefined; modelId: string; text?: undefined }, options?: RPCOptions): EmbedResult<number[]>;\nfunction embed(params: { input?: undefined; inputs?: undefined; modelId: string; text: string }, options?: RPCOptions): EmbedResult<number[]>;\nfunction embed(params: { input?: undefined; inputs?: undefined; modelId: string; text: string[] }, options?: RPCOptions): EmbedResult<number[][]>;\nfunction embed(params: { input?: undefined; inputs: (string | (string | {})[])[]; modelId: string; text?: undefined }, options?: RPCOptions): EmbedResult<number[][]>;\nfunction embed(params: EmbedClientParams, options?: RPCOptions): EmbedResult<number[] | number[][]>;",
+      "description": "Embeds one input supported by the loaded model.",
+      "returns": "EmbedResult<number[]>",
+      "returnFields": [],
       "throws": [
         {
           "error": "QvacErrorBase",
-          "description": "When the response type is invalid or when the embedding fails"
-        },
+          "description": "When validation or inference fails."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "embedBatch",
+      "signature": "function embedBatch(params: EmbedBatchClientParams, options?: RPCOptions): EmbedResult<number[][]>;",
+      "description": "Embeds a batch of inputs supported by the loaded model, in input order.",
+      "returns": "EmbedResult<number[][]>",
+      "returnFields": [],
+      "throws": [
         {
           "error": "QvacErrorBase",
-          "description": "When validation or embedding fails"
+          "description": "When validation or inference fails."
         }
       ],
       "deprecated": null
@@ -542,7 +311,7 @@
       "returnFields": [
         {
           "name": "progressStream",
-          "type": "AsyncGenerator<{ accuracy: number | null; accuracy_uncertainty: number | null; current_batch: number; current_epoch: number; elapsed_ms: number; eta_ms: number; global_steps: number; is_train: boolean; loss: number | null; loss_uncertainty: number | null; total_batches: number }>",
+          "type": "AsyncGenerator<{}>",
           "required": true
         },
         {
@@ -552,7 +321,7 @@
         },
         {
           "name": "result",
-          "type": "Promise<{ stats?: { epochs_completed: number; global_steps: number; learning_rate?: number; train_accuracy?: number; train_accuracy_uncertainty?: number | null; train_loss?: number; train_loss_uncertainty?: number | null; val_accuracy?: number; val_accuracy_uncertainty?: number | null; val_loss?: number; val_loss_uncertainty?: number | null }; status: \"IDLE\" | \"RUNNING\" | \"PAUSED\" | \"CANCELLED\" | \"COMPLETED\"; type: \"finetune\" }>",
+          "type": "Promise<{}>",
           "required": true
         }
       ],
@@ -562,60 +331,9 @@
     {
       "name": "getLoadedModelInfo",
       "signature": "function getLoadedModelInfo(params: GetLoadedModelInfoParams, rpcOptions?: RPCOptions): Promise<LoadedModelInfo>;",
-      "description": "Returns introspection info for a loaded `modelId`.",
+      "description": "Returns introspection info for a loaded `modelId`.\n\n`info.modelType` and `info.handlers` are authoritative. Use them to preflight\nan SDK call before sending the actual RPC, e.g. confirm that a model supports\n`transcribeStream` before calling `transcribe()`.\n\nThrows `ModelNotFoundError` if no entry exists for `modelId`.",
       "returns": "Promise<LoadedModelInfo>",
-      "returnFields": [
-        {
-          "name": "addonPackage",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "displayName",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "fitProbe",
-          "type": "{ models: { devices: { freeBytes?: number; id: string; name: string; totalBytes?: number; unified: boolean; usedBytes: number }[]; stats: { ctxSize: number; gpuLayers: number } | Record<string, never>; status: \"unknown\" | \"fits\" | \"does-not-fit\" }[]; pools: { freeBytes?: number; id: string; totalBytes?: number; unified: boolean; usedBytes: number }[]; verdict: \"unknown\" | \"fits\" | \"does-not-fit\" }",
-          "required": false
-        },
-        {
-          "name": "handlers",
-          "type": "string[]",
-          "required": true
-        },
-        {
-          "name": "loadedAt",
-          "type": "Date",
-          "required": true
-        },
-        {
-          "name": "modelId",
-          "type": "string",
-          "required": true
-        },
-        {
-          "name": "modelType",
-          "type": "string",
-          "required": true
-        },
-        {
-          "name": "name",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "path",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "toolDialect",
-          "type": "\"json\" | \"hermes\" | \"pythonic\" | \"harmony\" | \"qwen35\" | \"gemma4\" | \"dsml\"",
-          "required": false
-        }
-      ],
+      "returnFields": [],
       "throws": [
         {
           "error": "InvalidResponseError",
@@ -630,111 +348,10 @@
     },
     {
       "name": "getModelInfo",
-      "signature": "function getModelInfo(params: GetModelInfoParams): Promise<ModelInfo>;",
+      "signature": "function getModelInfo(params: GetModelInfoParams, options?: RPCOptions): Promise<ModelInfo>;",
       "description": "Returns status information for a catalog model, including cache state and loaded instances.",
       "returns": "Promise<ModelInfo>",
-      "returnFields": [
-        {
-          "name": "actualSize",
-          "type": "number",
-          "required": false
-        },
-        {
-          "name": "addon",
-          "type": "\"bci\" | \"embeddings\" | \"diffusion\" | \"audiogen\" | \"tts\" | \"ocr\" | \"vla\" | \"moss-transcribe\" | \"llm\" | \"whisper\" | \"nmt\" | \"parakeet\" | \"classification\" | \"vad\" | \"other\"",
-          "required": true
-        },
-        {
-          "name": "blobBlockLength",
-          "type": "number",
-          "required": false
-        },
-        {
-          "name": "blobBlockOffset",
-          "type": "number",
-          "required": false
-        },
-        {
-          "name": "blobByteOffset",
-          "type": "number",
-          "required": false
-        },
-        {
-          "name": "blobCoreKey",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "cachedAt",
-          "type": "Date",
-          "required": false
-        },
-        {
-          "name": "cacheFiles",
-          "type": "{ actualSize?: number; cachedAt?: Date; expectedSize: number; filename: string; isCached: boolean; path: string; sha256Checksum: string }[]",
-          "required": true
-        },
-        {
-          "name": "engine",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "expectedSize",
-          "type": "number",
-          "required": true
-        },
-        {
-          "name": "isCached",
-          "type": "boolean",
-          "required": true
-        },
-        {
-          "name": "isLoaded",
-          "type": "boolean",
-          "required": true
-        },
-        {
-          "name": "loadedInstances",
-          "type": "{ config?: unknown; loadedAt: Date; registryId: string }[]",
-          "required": false
-        },
-        {
-          "name": "modelId",
-          "type": "string",
-          "required": true
-        },
-        {
-          "name": "name",
-          "type": "string",
-          "required": true
-        },
-        {
-          "name": "params",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "quantization",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "registryPath",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "registrySource",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "sha256Checksum",
-          "type": "string",
-          "required": true
-        }
-      ],
+      "returnFields": [],
       "throws": [
         {
           "error": "QvacErrorBase",
@@ -745,21 +362,10 @@
     },
     {
       "name": "getSystemResources",
-      "signature": "function getSystemResources(input?: GetSystemResourcesInput): Promise<SystemResources>;",
+      "signature": "function getSystemResources(input?: GetSystemResourcesInput, options?: RPCOptions): Promise<SystemResources>;",
       "description": "Read the worker's system capabilities and optional resource sample.",
       "returns": "Promise<SystemResources>",
-      "returnFields": [
-        {
-          "name": "capabilities",
-          "type": "{ cpu: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: { architecture: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; cacheLineBytes: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; efficiencyCores: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; frequencyHz: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; logicalCores: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; name: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: string } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; performanceCores: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; physicalCores: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; vendor: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: string } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" } } } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; gpus: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: { driverName: { provenance: { scope?: (...) | (...) | (...) | (...) | (...) | (...); source: string }; status: \"supported\"; value: string } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; drivers: { cuda: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: boolean } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; direct3d11: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: boolean } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; direct3d12: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: boolean } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; levelZero: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: boolean } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; metal: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: boolean } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; opencl: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: boolean } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; opengl: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: boolean } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; rocm: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: boolean } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; vulkan: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: boolean } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; webgpu: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: boolean } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" } }; driverVersion: { provenance: { scope?: (...) | (...) | (...) | (...) | (...) | (...); source: string }; status: \"supported\"; value: string } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; id: string; memoryTotalBytes: { provenance: { scope?: (...) | (...) | (...) | (...) | (...) | (...); source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; name: { provenance: { scope?: (...) | (...) | (...) | (...) | (...) | (...); source: string }; status: \"supported\"; value: string } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; type: { provenance: { scope?: (...) | (...) | (...) | (...) | (...) | (...); source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; unifiedMemory: { provenance: { scope?: (...) | (...) | (...) | (...) | (...) | (...); source: string }; status: \"supported\"; value: boolean } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; vendor: { provenance: { scope?: (...) | (...) | (...) | (...) | (...) | (...); source: string }; status: \"supported\"; value: string } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" } }[] } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; memory: { totalBytes: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" } } }",
-          "required": true
-        },
-        {
-          "name": "sample",
-          "type": "{ cpu: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; gpus: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: { compute: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: number } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; decode: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: number } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; encode: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: number } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; id: string; memoryTotalBytes: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: number } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; memoryUsedBytes: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: number } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; powerWatts: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: number } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; temperatureCelsius: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: number } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" } }[] } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; memory: { processAvailableBytes: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; processUsedBytes: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; totalBytes: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; usedBytes: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" } }; sampledAt: number }",
-          "required": false
-        }
-      ],
+      "returnFields": [],
       "throws": [
         {
           "error": "InvalidResponseError",
@@ -774,21 +380,10 @@
     },
     {
       "name": "heartbeat",
-      "signature": "function heartbeat(): Promise<HeartbeatResponse>;",
+      "signature": "function heartbeat(options?: RPCOptions): Promise<HeartbeatResponse>;",
       "description": "Checks whether the local SDK worker is responsive by sending a heartbeat\nround-trip.",
       "returns": "Promise<HeartbeatResponse>",
-      "returnFields": [
-        {
-          "name": "number",
-          "type": "number",
-          "required": true
-        },
-        {
-          "name": "type",
-          "type": "\"heartbeat\"",
-          "required": true
-        }
-      ],
+      "returnFields": [],
       "throws": [
         {
           "error": "QvacErrorBase",
@@ -799,10 +394,16 @@
     },
     {
       "name": "invokePlugin",
-      "signature": "function invokePlugin(options: InvokePluginOptions<TParams>, rpcOptions?: RPCOptions): Promise<TResponse>;",
+      "signature": "function invokePlugin(options: InvokePluginOptions<TParams>, rpcOptions?: RPCOptions): Promise<TResponse> & { requestId: string };",
       "description": "Invoke a non-streaming plugin handler.",
-      "returns": "Promise<TResponse>",
-      "returnFields": [],
+      "returns": "Promise<TResponse> & { requestId: string }",
+      "returnFields": [
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        }
+      ],
       "throws": [
         {
           "error": "QvacErrorBase",
@@ -813,10 +414,16 @@
     },
     {
       "name": "invokePluginStream",
-      "signature": "function invokePluginStream(options: InvokePluginOptions<TParams>, rpcOptions?: RPCOptions): AsyncGenerator<TResponse>;",
+      "signature": "function invokePluginStream(options: InvokePluginOptions<TParams>, rpcOptions?: RPCOptions): AsyncGenerator<TResponse, any, any> & { requestId: string };",
       "description": "Invoke a streaming plugin handler.",
-      "returns": "AsyncGenerator<TResponse>",
-      "returnFields": [],
+      "returns": "AsyncGenerator<TResponse, any, any> & { requestId: string }",
+      "returnFields": [
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        }
+      ],
       "throws": [
         {
           "error": "QvacErrorBase",
@@ -863,63 +470,13 @@
     },
     {
       "name": "loadVectorIndex",
-      "signature": "function loadVectorIndex(params: LoadVectorIndexParams, options?: RPCOptions): Promise<VectorIndex>;",
-      "description": "Loads a vector index snapshot written by `VectorIndex.write()` into worker\nmemory and returns a handle to it.",
-      "returns": "Promise<VectorIndex>",
+      "signature": "function loadVectorIndex(params: LoadVectorIndexParams, options?: RPCOptions): VectorIndexOperation<VectorIndex>;",
+      "description": "Loads a vector index snapshot written by `VectorIndex.write()` into worker\nmemory and returns a handle to it.\n\nThe snapshot records its dimension, storage mode, and entries, so nothing\nelse needs to be supplied. Loading copies the file into memory; later\nchanges are not written back until `write()` is called again.",
+      "returns": "VectorIndexOperation<VectorIndex>",
       "returnFields": [
         {
-          "name": "dim",
-          "type": "number",
-          "required": true
-        },
-        {
-          "name": "indexId",
+          "name": "requestId",
           "type": "string",
-          "required": true
-        },
-        {
-          "name": "length",
-          "type": "number",
-          "required": true
-        },
-        {
-          "name": "storage",
-          "type": "VectorIndexStorage | undefined",
-          "required": true
-        },
-        {
-          "name": "[asyncDispose]",
-          "type": "unknown",
-          "required": true
-        },
-        {
-          "name": "add",
-          "type": "unknown",
-          "required": true
-        },
-        {
-          "name": "contains",
-          "type": "unknown",
-          "required": true
-        },
-        {
-          "name": "dispose",
-          "type": "unknown",
-          "required": true
-        },
-        {
-          "name": "remove",
-          "type": "unknown",
-          "required": true
-        },
-        {
-          "name": "search",
-          "type": "unknown",
-          "required": true
-        },
-        {
-          "name": "write",
-          "type": "unknown",
           "required": true
         }
       ],
@@ -951,85 +508,18 @@
     },
     {
       "name": "modelRegistryGetModel",
-      "signature": "function modelRegistryGetModel(registryPath: string, registrySource: string): Promise<ModelRegistryEntry>;",
+      "signature": "function modelRegistryGetModel(registryPath: string, registrySource: string, options?: RPCOptions): RegistryQuery<ModelRegistryEntry>;",
       "description": "Fetches a single model entry from the registry by its path and source.",
-      "returns": "Promise<ModelRegistryEntry>",
-      "returnFields": [
-        {
-          "name": "addon",
-          "type": "\"bci\" | \"embeddings\" | \"diffusion\" | \"audiogen\" | \"tts\" | \"ocr\" | \"vla\" | \"moss-transcribe\" | \"llm\" | \"whisper\" | \"nmt\" | \"parakeet\" | \"classification\" | \"vad\" | \"other\"",
-          "required": true
-        },
-        {
-          "name": "blobBlockLength",
-          "type": "number",
-          "required": true
-        },
-        {
-          "name": "blobBlockOffset",
-          "type": "number",
-          "required": true
-        },
-        {
-          "name": "blobByteOffset",
-          "type": "number",
-          "required": true
-        },
-        {
-          "name": "blobCoreKey",
-          "type": "string",
-          "required": true
-        },
-        {
-          "name": "engine",
-          "type": "\"bci-whispercpp-transcription\" | \"moss-transcribe\" | \"llamacpp-completion\" | \"whispercpp-transcription\" | \"llamacpp-embedding\" | \"llamacpp-decision\" | \"llamacpp-rerank\" | \"nmtcpp-translation\" | \"onnx-tts\" | \"tts-ggml\" | \"parakeet-transcription\" | \"ggml-ocr\" | \"sdcpp-generation\" | \"audiogen-ggml\" | \"ggml-vla\" | \"ggml-classification\" | \"ggml-image-embedding\" | \"onnx-vad\"",
-          "required": true
-        },
-        {
-          "name": "expectedSize",
-          "type": "number",
-          "required": true
-        },
-        {
-          "name": "modelId",
-          "type": "string",
-          "required": true
-        },
-        {
-          "name": "name",
-          "type": "string",
-          "required": true
-        },
-        {
-          "name": "params",
-          "type": "string",
-          "required": true
-        },
-        {
-          "name": "quantization",
-          "type": "string",
-          "required": true
-        },
-        {
-          "name": "registryPath",
-          "type": "string",
-          "required": true
-        },
-        {
-          "name": "registrySource",
-          "type": "string",
-          "required": true
-        },
-        {
-          "name": "sha256Checksum",
-          "type": "string",
-          "required": true
-        }
-      ],
+      "returns": "RegistryQuery<ModelRegistryEntry>",
+      "returnFields": [],
       "throws": [
         {
           "error": "ModelRegistryModelNotFoundError",
           "description": "When the registry has no model at this source and path."
+        },
+        {
+          "error": "ModelRegistryBusyError",
+          "description": "When another QVAC process kept the registry for longer than the query waits."
         },
         {
           "error": "ModelRegistryQueryFailedError",
@@ -1040,11 +530,15 @@
     },
     {
       "name": "modelRegistryList",
-      "signature": "function modelRegistryList(): Promise<ModelRegistryEntry[]>;",
+      "signature": "function modelRegistryList(options?: RPCOptions): RegistryQuery<ModelRegistryEntry[]>;",
       "description": "Returns all available models from the QVAC distributed model registry.",
-      "returns": "Promise<ModelRegistryEntry[]>",
+      "returns": "RegistryQuery<ModelRegistryEntry[]>",
       "returnFields": [],
       "throws": [
+        {
+          "error": "ModelRegistryBusyError",
+          "description": "When another QVAC process kept the registry for longer than the query waits."
+        },
         {
           "error": "ModelRegistryQueryFailedError",
           "description": "When the registry query fails."
@@ -1054,11 +548,15 @@
     },
     {
       "name": "modelRegistrySearch",
-      "signature": "function modelRegistrySearch(params: ModelRegistrySearchParams): Promise<ModelRegistryEntry[]>;",
+      "signature": "function modelRegistrySearch(params: ModelRegistrySearchParams, options?: RPCOptions): RegistryQuery<ModelRegistryEntry[]>;",
       "description": "Searches the model registry with optional filters for model type, engine, and quantization.",
-      "returns": "Promise<ModelRegistryEntry[]>",
+      "returns": "RegistryQuery<ModelRegistryEntry[]>",
       "returnFields": [],
       "throws": [
+        {
+          "error": "ModelRegistryBusyError",
+          "description": "When another QVAC process kept the registry for longer than the query waits."
+        },
         {
           "error": "ModelRegistryQueryFailedError",
           "description": "When the registry query fails."
@@ -1068,27 +566,357 @@
     },
     {
       "name": "ocr",
-      "signature": "function ocr(params: OCRClientParams): { blocks: Promise<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; blockStream: AsyncGenerator<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; stats: Promise<{ detectionTime?: number; recognitionTime?: number; totalTime?: number } | undefined> };",
+      "signature": "function ocr(params: OCRClientParams, options?: RPCOptions): { blocks: Promise<{}[]>; blockStream: AsyncGenerator<{}[]>; requestId: string; stats: Promise<{} | undefined> };",
       "description": "Performs Optical Character Recognition (OCR) on an image to extract text.",
-      "returns": "{ blocks: Promise<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; blockStream: AsyncGenerator<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; stats: Promise<{ detectionTime?: number; recognitionTime?: number; totalTime?: number } | undefined> }",
+      "returns": "{ blocks: Promise<{}[]>; blockStream: AsyncGenerator<{}[]>; requestId: string; stats: Promise<{} | undefined> }",
       "returnFields": [
         {
           "name": "blocks",
-          "type": "Promise<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>",
+          "type": "Promise<{}[]>",
           "required": true
         },
         {
           "name": "blockStream",
-          "type": "AsyncGenerator<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>",
+          "type": "AsyncGenerator<{}[]>",
+          "required": true
+        },
+        {
+          "name": "requestId",
+          "type": "string",
           "required": true
         },
         {
           "name": "stats",
-          "type": "Promise<{ detectionTime?: number; recognitionTime?: number; totalTime?: number } | undefined>",
+          "type": "Promise<{} | undefined>",
           "required": true
         }
       ],
       "throws": [],
+      "deprecated": null
+    },
+    {
+      "name": "openSession",
+      "signature": "function openSession(options: OpenSessionOptions): QvacSession;",
+      "description": "Opens a caller session on the runtime and returns its handle at once. The\n`openSession` round trip runs in the background; calls made on the handle\nwait for it, so the handle is usable immediately.",
+      "returns": "QvacSession",
+      "returnFields": [
+        {
+          "name": "assessModelFit",
+          "type": "(input: {}, options?: {}) => Promise<{}>",
+          "required": true
+        },
+        {
+          "name": "audioEdit",
+          "type": "(params: {}, options?: {}) => AudioGenResult",
+          "required": true
+        },
+        {
+          "name": "audioGen",
+          "type": "(params: {}, options?: {}) => AudioGenResult",
+          "required": true
+        },
+        {
+          "name": "audioUnderstand",
+          "type": "(params: {}, options?: {}) => AudioUnderstandResult",
+          "required": true
+        },
+        {
+          "name": "batchCompletion",
+          "type": "(params: BatchCompletionParams) => BatchCompletionRun",
+          "required": true
+        },
+        {
+          "name": "bciTranscribe",
+          "type": "{ (params: BciTranscribeClientParams & { metadata: true }, options?: {}): Promise<{}[]> & { requestId: string }; (params: BciTranscribeClientParams, options?: {}): Promise<string> & { requestId: string } }",
+          "required": true
+        },
+        {
+          "name": "bciTranscribeStream",
+          "type": "{ (params: BciTranscribeStreamClientParams & { metadata: true }, options?: {}): Promise<BciTranscribeStreamMetadataSession>; (params: BciTranscribeStreamClientParams, options?: {}): Promise<BciTranscribeStreamSession> }",
+          "required": true
+        },
+        {
+          "name": "calcTokens",
+          "type": "(params: CalcTokensClientParams, options?: {}) => Promise<number>",
+          "required": true
+        },
+        {
+          "name": "cancel",
+          "type": "(params: CancelClientInput, options?: {}) => Promise<void>",
+          "required": true
+        },
+        {
+          "name": "classify",
+          "type": "(params: ClassifyClientParams, options?: {}) => Promise<{}[]> & { requestId: string }",
+          "required": true
+        },
+        {
+          "name": "completion",
+          "type": "(params: CompletionParams) => CompletionRun",
+          "required": true
+        },
+        {
+          "name": "createVectorIndex",
+          "type": "(params: {}, options?: {}) => VectorIndexOperation<VectorIndex>",
+          "required": true
+        },
+        {
+          "name": "decide",
+          "type": "{ (params: {} & {}, options?: {}): Promise<{}> & { requestId: string }; (params: {} & {}, options?: {}): Promise<{}[]> & { requestId: string }; (params: DecideParams, options?: {}): Promise<{} | {}[]> & { requestId: string } }",
+          "required": true
+        },
+        {
+          "name": "diffusion",
+          "type": "(params: DiffusionClientParams, options?: {}) => DiffusionResult",
+          "required": true
+        },
+        {
+          "name": "discoverRpcServers",
+          "type": "(options: {}, rpcOptions?: {}) => Promise<{}[]> & { requestId: string }",
+          "required": true
+        },
+        {
+          "name": "downloadAsset",
+          "type": "(options: DownloadAssetOptions, rpcOptions?: {}) => Promise<string> & { requestId: string }",
+          "required": true
+        },
+        {
+          "name": "embed",
+          "type": "{ (params: { input: string | (string | {})[] | {}; inputs?: undefined; modelId: string; text?: undefined }, options?: {}): EmbedResult<number[]>; (params: { input?: undefined; inputs?: undefined; modelId: string; text: string }, options?: {}): EmbedResult<number[]>; (params: { input?: undefined; inputs?: undefined; modelId: string; text: string[] }, options?: {}): EmbedResult<number[][]>; (params: { input?: undefined; inputs: (string | (string | {})[])[]; modelId: string; text?: undefined }, options?: {}): EmbedResult<number[][]>; (params: {} | {} | {}, options?: {}): EmbedResult<number[] | number[][]> }",
+          "required": true
+        },
+        {
+          "name": "embedBatch",
+          "type": "(params: {}, options?: {}) => EmbedResult<number[][]>",
+          "required": true
+        },
+        {
+          "name": "finetune",
+          "type": "{ (params: {}, rpcOptions?: {}): FinetuneHandle; (params: FinetuneReplyParams, rpcOptions?: {}): Promise<{}> }",
+          "required": true
+        },
+        {
+          "name": "getLoadedModelInfo",
+          "type": "(params: {}, rpcOptions?: {}) => Promise<{}>",
+          "required": true
+        },
+        {
+          "name": "getModelInfo",
+          "type": "(params: {}, options?: {}) => Promise<{}>",
+          "required": true
+        },
+        {
+          "name": "getSystemResources",
+          "type": "(input?: {}, options?: {}) => Promise<{}>",
+          "required": true
+        },
+        {
+          "name": "heartbeat",
+          "type": "(options?: {}) => Promise<{}>",
+          "required": true
+        },
+        {
+          "name": "invokePlugin",
+          "type": "(options: InvokePluginOptions<TParams>, rpcOptions?: {}) => Promise<TResponse> & { requestId: string }",
+          "required": true
+        },
+        {
+          "name": "invokePluginStream",
+          "type": "(options: InvokePluginOptions<TParams>, rpcOptions?: {}) => AsyncGenerator<TResponse, any, any> & { requestId: string }",
+          "required": true
+        },
+        {
+          "name": "loadModel",
+          "type": "{ (options: LoadModelDescriptorParam<S>, rpcOptions?: {}): Promise<string> & { requestId: string }; (options: LoadModelOptions, rpcOptions?: {}): Promise<string> & { requestId: string }; (options: LoadCustomPluginModelOptions<T>, rpcOptions?: {}): Promise<string> & { requestId: string }; (options: {}, rpcOptions?: {}): Promise<string> & { requestId: string } }",
+          "required": true
+        },
+        {
+          "name": "loadVectorIndex",
+          "type": "(params: {}, options?: {}) => VectorIndexOperation<VectorIndex>",
+          "required": true
+        },
+        {
+          "name": "loggingStream",
+          "type": "(params: {}, options?: AbortableRPCOptions) => AsyncGenerator<{}>",
+          "required": true
+        },
+        {
+          "name": "modelRegistryGetModel",
+          "type": "(registryPath: string, registrySource: string, options?: {}) => RegistryQuery<{}>",
+          "required": true
+        },
+        {
+          "name": "modelRegistryList",
+          "type": "(options?: {}) => RegistryQuery<{}[]>",
+          "required": true
+        },
+        {
+          "name": "modelRegistrySearch",
+          "type": "(params: ModelRegistrySearchParams, options?: {}) => RegistryQuery<{}[]>",
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "string | undefined",
+          "required": true
+        },
+        {
+          "name": "ocr",
+          "type": "(params: OCRClientParams, options?: {}) => { blocks: Promise<{}[]>; blockStream: AsyncGenerator<{}[]>; requestId: string; stats: Promise<{} | undefined> }",
+          "required": true
+        },
+        {
+          "name": "opened",
+          "type": "Promise<void>",
+          "required": true
+        },
+        {
+          "name": "ragChunk",
+          "type": "(params: {}, options?: {}) => Promise<Doc[]>",
+          "required": true
+        },
+        {
+          "name": "ragCloseWorkspace",
+          "type": "(params?: {}, options?: {}) => Promise<void>",
+          "required": true
+        },
+        {
+          "name": "ragDeleteEmbeddings",
+          "type": "(params: {}, options?: {}) => Promise<void>",
+          "required": true
+        },
+        {
+          "name": "ragDeleteWorkspace",
+          "type": "(params: {}, options?: {}) => Promise<void>",
+          "required": true
+        },
+        {
+          "name": "ragIngest",
+          "type": "(params: RagIngestParams, options?: {}) => Promise<{ droppedIndices: number[]; processed: SaveEmbeddingsResult[] }> & { requestId: string }",
+          "required": true
+        },
+        {
+          "name": "ragListWorkspaces",
+          "type": "(options?: {}) => Promise<{}[]>",
+          "required": true
+        },
+        {
+          "name": "ragReindex",
+          "type": "(params: RagReindexParams, options?: {}) => Promise<ReindexResult> & { requestId: string }",
+          "required": true
+        },
+        {
+          "name": "ragSaveEmbeddings",
+          "type": "(params: RagSaveEmbeddingsParams, options?: {}) => Promise<SaveEmbeddingsResult[]> & { requestId: string }",
+          "required": true
+        },
+        {
+          "name": "ragSearch",
+          "type": "(params: {}, options?: {}) => Promise<SearchResult[]>",
+          "required": true
+        },
+        {
+          "name": "rerank",
+          "type": "(params: {}, options?: {}) => Promise<number[]> & { requestId: string }",
+          "required": true
+        },
+        {
+          "name": "sessionId",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "state",
+          "type": "(options?: {}) => Promise<\"active\" | \"suspending\" | \"suspended\" | \"resuming\">",
+          "required": true
+        },
+        {
+          "name": "subscribeServerLogs",
+          "type": "(handler: ServerLogHandler, options?: {}) => () => void",
+          "required": true
+        },
+        {
+          "name": "textToSpeech",
+          "type": "(params: {}, options?: {}) => TextToSpeechStreamResult",
+          "required": true
+        },
+        {
+          "name": "textToSpeechStream",
+          "type": "(params: {}, options?: {}) => Promise<TextToSpeechStreamSession>",
+          "required": true
+        },
+        {
+          "name": "transcribe",
+          "type": "{ (params: TranscribeClientParams & { metadata: true }, options?: {}): TranscribeCall<{}[]>; (params: TranscribeClientParams, options?: {}): TranscribeCall<string> }",
+          "required": true
+        },
+        {
+          "name": "transcribeStream",
+          "type": "{ (params: TranscribeClientParams & { metadata: true }, options?: {}): AsyncGenerator<{}>; (params: TranscribeClientParams, options?: {}): AsyncGenerator<string>; (params: TranscribeStreamClientParams & { emitVadEvents: true }, options?: {}): Promise<TranscribeStreamConversationSession>; (params: TranscribeStreamClientParams & { parakeetStreamingConfig: {} }, options?: {}): Promise<TranscribeStreamConversationSession>; (params: TranscribeStreamClientParams & { metadata: true }, options?: {}): Promise<TranscribeStreamMetadataSession>; (params: TranscribeStreamClientParams, options?: {}): Promise<TranscribeStreamSession> }",
+          "required": true
+        },
+        {
+          "name": "translate",
+          "type": "(params: TranslateClientParams, options?: {}) => { requestId: string; stats: Promise<{} | undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string>; translations: Promise<string[]> }",
+          "required": true
+        },
+        {
+          "name": "unloadModel",
+          "type": "(params: {}, options?: {}) => Promise<UnloadModelResult>",
+          "required": true
+        },
+        {
+          "name": "upscale",
+          "type": "(params: UpscaleClientParams, options?: {}) => UpscaleResult",
+          "required": true
+        },
+        {
+          "name": "video",
+          "type": "(params: VideoClientParams, options?: {}) => VideoResult",
+          "required": true
+        },
+        {
+          "name": "vla",
+          "type": "(params: VlaClientRunParams, options?: {}) => Promise<VlaClientRunResult> & { requestId: string }",
+          "required": true
+        },
+        {
+          "name": "vlaHparams",
+          "type": "(params: { modelId: string }, options?: {}) => Promise<{ backendName: string | null; hparams: {} }>",
+          "required": true
+        },
+        {
+          "name": "vlaSetEmbodiment",
+          "type": "(params: { embodiment: VlaEmbodimentSelection; modelId: string }, options?: {}) => Promise<{ hparams: {} }>",
+          "required": true
+        },
+        {
+          "name": "worldCreateScene",
+          "type": "{ (params: Omit<{}, \"requestId\" | \"image\"> & {} & { returnPack: true }, options?: {}): WorldSceneResultWithPack; (params: Omit<{}, \"requestId\" | \"image\"> & {} & { returnPack?: false }, options?: {}): WorldSceneResult; (params: WorldSceneClientParams, options?: {}): WorldSceneResultWithPack | WorldSceneResult }",
+          "required": true
+        },
+        {
+          "name": "worldStep",
+          "type": "(params: WorldStepClientParams, options?: {}) => WorldStepResult",
+          "required": true
+        },
+        {
+          "name": "close",
+          "type": "unknown",
+          "required": true
+        },
+        {
+          "name": "isModelHeld",
+          "type": "unknown",
+          "required": true
+        }
+      ],
+      "throws": [
+        {
+          "error": "SessionIdConflictError",
+          "description": "Through `session.opened` and every call,\n  when the worker already has a session with the minted id."
+        }
+      ],
       "deprecated": null
     },
     {
@@ -1149,9 +977,9 @@
     },
     {
       "name": "ragIngest",
-      "signature": "function ragIngest(params: RagIngestParams, options?: RPCOptions): Promise<{ droppedIndices: number[]; processed: RagSaveEmbeddingsResult[] }> & { requestId: string };",
+      "signature": "function ragIngest(params: RagIngestParams, options?: RPCOptions): Promise<{ droppedIndices: number[]; processed: SaveEmbeddingsResult[] }> & { requestId: string };",
       "description": "Ingests documents into the RAG vector database.\nFull pipeline: chunk → embed → save\n\n**Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.\nThe workspace remains open until closed.",
-      "returns": "Promise<{ droppedIndices: number[]; processed: RagSaveEmbeddingsResult[] }> & { requestId: string }",
+      "returns": "Promise<{ droppedIndices: number[]; processed: SaveEmbeddingsResult[] }> & { requestId: string }",
       "returnFields": [
         {
           "name": "droppedIndices",
@@ -1201,16 +1029,6 @@
       "description": "Reindexes the RAG database to optimize search performance.\nFor HyperDB, this rebalances centroids using k-means clustering.\n\n**Workspace lifecycle:** This operation requires an existing workspace.\n\n**Note:** Reindex requires a minimum number of documents to perform clustering.\nFor HyperDB, this is 16 documents by default. If there are insufficient documents,\n`reindexed` will be `false` with `details` explaining the reason.",
       "returns": "Promise<ReindexResult> & { requestId: string }",
       "returnFields": [
-        {
-          "name": "details",
-          "type": "Record<string, any>",
-          "required": false
-        },
-        {
-          "name": "reindexed",
-          "type": "boolean",
-          "required": true
-        },
         {
           "name": "requestId",
           "type": "string",
@@ -1301,8 +1119,8 @@
     },
     {
       "name": "resume",
-      "signature": "function resume(): Promise<void>;",
-      "description": "Resumes the SDK runtime: restores all suspended Hyperswarm and Corestore\nresources and releases the lifecycle gate so all SDK operations are allowed\nagain.",
+      "signature": "function resume(options?: RPCOptions): Promise<void>;",
+      "description": "Resumes the SDK runtime: restores all suspended Hyperswarm and Corestore\nresources and releases the lifecycle gate so all SDK operations are allowed\nagain.\n\nSafe to call from any lifecycle state — `resume()` is never blocked by the\nlifecycle gate (along with `suspend()` and `state()`). Idempotent. Also\nserves as the recovery path after a partial suspend failure.\n\nAfter `resume()` resolves successfully, runtime state is `\"active\"` and\nnon-lifecycle SDK operations are accepted normally.\n\nBehavior of in-flight operations from before the previous `suspend()`:\n  - P2P / Hyperdrive downloads: continue automatically once their underlying\n    swarm/corestore is restored",
       "returns": "Promise<void>",
       "returnFields": [],
       "throws": [
@@ -1315,25 +1133,10 @@
     },
     {
       "name": "startRpcServer",
-      "signature": "function startRpcServer(options: StartRpcServerOptions): Promise<{ rdmaCapable: boolean; serverId: string; url: string }> & { requestId: string };",
+      "signature": "function startRpcServer(options: StartRpcServerOptions, rpcOptions?: RPCOptions): Promise<{}> & { requestId: string };",
       "description": "Start a worker-owned native RPC server. Non-loopback binding and advertising require explicit opt-in.\nCancel a pending start with its promise.requestId.",
-      "returns": "Promise<{ rdmaCapable: boolean; serverId: string; url: string }> & { requestId: string }",
+      "returns": "Promise<{}> & { requestId: string }",
       "returnFields": [
-        {
-          "name": "rdmaCapable",
-          "type": "boolean",
-          "required": true
-        },
-        {
-          "name": "serverId",
-          "type": "string",
-          "required": true
-        },
-        {
-          "name": "url",
-          "type": "string",
-          "required": true
-        },
         {
           "name": "requestId",
           "type": "string",
@@ -1345,8 +1148,8 @@
     },
     {
       "name": "state",
-      "signature": "function state(): Promise<LifecycleState>;",
-      "description": "Returns the current runtime lifecycle state.",
+      "signature": "function state(options?: RPCOptions): Promise<LifecycleState>;",
+      "description": "Returns the current runtime lifecycle state.\n\nSafe to call from any lifecycle state — `state()` is never blocked by the\nlifecycle gate (along with `suspend()` and `resume()`).",
       "returns": "Promise<LifecycleState>",
       "returnFields": [],
       "throws": [
@@ -1359,7 +1162,7 @@
     },
     {
       "name": "stopRpcServer",
-      "signature": "function stopRpcServer(options: StopRpcServerOptions): Promise<void>;",
+      "signature": "function stopRpcServer(options: StopRpcServerOptions, rpcOptions?: RPCOptions): Promise<void>;",
       "description": "Withdraw the announcement and await native stop. Bare stop has no deadline.",
       "returns": "Promise<void>",
       "returnFields": [],
@@ -1368,8 +1171,8 @@
     },
     {
       "name": "subscribeServerLogs",
-      "signature": "function subscribeServerLogs(handler: ServerLogHandler): () => void;",
-      "description": "Subscribes to every server-side log through a single stream: SDK server logs,\nper-model addon logs (llamacpp, whispercpp, …) for all loaded models, and RAG\nlogs — without having to open a loggingStream per id.",
+      "signature": "function subscribeServerLogs(handler: ServerLogHandler, options?: RPCOptions): () => void;",
+      "description": "Subscribes to every server-side log through a single stream: SDK server logs,\nper-model addon logs (llamacpp, whispercpp, …) for all loaded models, and RAG\nlogs — without having to open a loggingStream per id.\n\nEach delivered log keeps its origin in `log.id`: `SDK_LOG_ID` for SDK server\nlogs, the model id for model logs, or the RAG workspace key. Use it to tell the\nsources apart.\n\nInternally this opens a loggingStream on the reserved `SDK_ALL_LOG_ID`\nstream that the worker fans every log into.",
       "returns": "() => void",
       "returnFields": [],
       "throws": [],
@@ -1377,8 +1180,8 @@
     },
     {
       "name": "suspend",
-      "signature": "function suspend(): Promise<void>;",
-      "description": "Suspends the SDK runtime: pauses all registered Hyperswarm and Corestore\nresources and engages the lifecycle gate so non-lifecycle operations are\nblocked until `resume()` is called.",
+      "signature": "function suspend(options?: RPCOptions): Promise<void>;",
+      "description": "Suspends the SDK runtime: pauses all registered Hyperswarm and Corestore\nresources and engages the lifecycle gate so non-lifecycle operations are\nblocked until `resume()` is called.\n\nSafe to call from any lifecycle state — `suspend()` is never blocked by the\nlifecycle gate (along with `resume()` and `state()`). Idempotent.\n\nAfter `suspend()` resolves, runtime state is `\"suspended\"` and any non-\nlifecycle SDK operation throws `LifecycleOperationBlockedError` until\n`resume()` is called. `session.close()` is the exception: a session can\nstill end and release its leases while the runtime is suspended.\n\nIn-flight operations started before suspend:\n  - P2P / Hyperdrive downloads: stall cleanly, continue after `resume()`\n  - HTTP downloads: bypass suspend entirely (bytes keep flowing)\n  - Local native inference: runs to completion regardless",
       "returns": "Promise<void>",
       "returnFields": [],
       "throws": [
@@ -1392,60 +1195,9 @@
     {
       "name": "textToSpeech",
       "signature": "function textToSpeech(params: TtsClientParamsInput, options?: RPCOptions): TextToSpeechStreamResult;",
-      "description": "Converts text to speech audio using a loaded TTS model.",
+      "description": "Converts text to speech audio using a loaded TTS model.\n\nThree modes selected by `params.stream` and `params.sentenceStream`:\n\n- `stream: false` — collect all PCM samples and resolve once via\n  `result.buffer` (`Promise<number[]>`). `bufferStream` is empty.\n- `stream: true` (default) — yield PCM through `result.chunkStream`\n  (`AsyncGenerator<Int16Array>`, one chunk per frame) or\n  `result.bufferStream` (`AsyncGenerator<number>`, one sample at a time).\n  `buffer` resolves to an empty array.\n- `stream: true, sentenceStream: true` — also exposes `result.chunkUpdates`\n  (`AsyncGenerator<TtsSentenceChunkUpdate>`) so callers can mux per-sentence\n  metadata with the audio. Multiple consumers can iterate the response\n  independently via the underlying `TtsMulticast`.\n\nMOSS models stream natively rather than by sentence: under `stream: true`\nthe whole text is one synthesis whose audio arrives every\n`streamChunkTokens` codec frames (in one piece when that is unset), so\n`durationTokens` and a MOSS-TTSD dialogue's reference transcripts apply to\nthe text as a whole. `sentenceStream: true` still splits a single-speaker\ntext; a dialogue rejects it. `sentenceStreamLocale` and\n`sentenceStreamMaxChunkScalars` configure that splitting, so a MOSS request\nrejects them unless it sets `sentenceStream: true`.\n\n`result.done` resolves to `true` when synthesis completes cleanly, `false`\nif the consumer breaks out before the terminal frame, or rejects on a\npipeline error. Awaiting `done` is safe even when no stream is iterated.\n\n`result.sampleRate` resolves from the first audio frame (so it can be awaited\nbefore draining the audio); `result.stats` and `result.stopReason` resolve\nfrom the terminal frame. All three resolve — with `undefined` when the run\nproduced none — rather than reject. In `stream: true` mode (the default) the\nrun starts lazily: nothing is sent until `chunkStream` or `bufferStream` is\nfirst iterated, so\n`done`, `sampleRate`, `stats` and `stopReason` stay pending until then. In\n`stream: false` and `sentenceStream: true` modes the run starts immediately.\nRead `sampleRate` rather than assuming the engine default: `outputSampleRate`\nand the LavaSR enhancer both change it.",
       "returns": "TextToSpeechStreamResult",
-      "returnFields": [
-        {
-          "name": "buffer",
-          "type": "Promise<number[]>",
-          "required": true
-        },
-        {
-          "name": "bufferStream",
-          "type": "AsyncGenerator<number>",
-          "required": true
-        },
-        {
-          "name": "chunkStream",
-          "type": "AsyncGenerator<Int16Array<ArrayBufferLike>>",
-          "required": true
-        },
-        {
-          "name": "chunkUpdates",
-          "type": "AsyncGenerator<TtsSentenceChunkUpdate, any, any>",
-          "required": false
-        },
-        {
-          "name": "done",
-          "type": "Promise<boolean>",
-          "required": true
-        },
-        {
-          "name": "requestId",
-          "type": "string",
-          "required": true
-        },
-        {
-          "name": "sampleRate",
-          "type": "Promise<number | undefined>",
-          "required": true
-        },
-        {
-          "name": "stats",
-          "type": "Promise<{ audioDuration?: number; backendDevice?: number; backendId?: number; codecOnCoreml?: number; codecSidecarLoaded?: number; denoiserBackendDevice?: number; denoiserBackendId?: number; enhancerBackendDevice?: number; enhancerBackendId?: number; generatedFrames?: number; gpuUnsupported?: number; realTimeFactor?: number; tokensPerSecond?: number; totalSamples?: number; totalTime?: number } | undefined>",
-          "required": true
-        },
-        {
-          "name": "stopReason",
-          "type": "Promise<\"cancelled\" | \"completed\" | undefined>",
-          "required": true
-        },
-        {
-          "name": "text",
-          "type": "Promise<string | undefined>",
-          "required": true
-        }
-      ],
+      "returnFields": [],
       "throws": [
         {
           "error": "TextToSpeechStreamFailedError",
@@ -1459,33 +1211,7 @@
       "signature": "function textToSpeechStream(params: TextToSpeechStreamClientParams, options?: RPCOptions): Promise<TextToSpeechStreamSession>;",
       "description": "Duplex session: write UTF-8 text fragments (e.g. LLM token deltas) via `write`. Each string or\nUint8Array should be a complete UTF-8 fragment. The worker forwards them to the TTS streaming handler\n(optional sentence accumulation via request fields). Iterate the session for `TextToSpeechStreamResponse`\nlines (PCM in `buffer`, optional `chunkIndex` / `sentenceChunk`) until `done`.",
       "returns": "Promise<TextToSpeechStreamSession>",
-      "returnFields": [
-        {
-          "name": "requestId",
-          "type": "string",
-          "required": true
-        },
-        {
-          "name": "[asyncIterator]",
-          "type": "unknown",
-          "required": true
-        },
-        {
-          "name": "destroy",
-          "type": "unknown",
-          "required": true
-        },
-        {
-          "name": "end",
-          "type": "unknown",
-          "required": true
-        },
-        {
-          "name": "write",
-          "type": "unknown",
-          "required": true
-        }
-      ],
+      "returnFields": [],
       "throws": [
         {
           "error": "TextToSpeechStreamFailedError",
@@ -1505,7 +1231,7 @@
     },
     {
       "name": "transcribeStream",
-      "signature": "function transcribeStream(params: TranscribeClientParams & { metadata: true }, options?: RPCOptions): AsyncGenerator<TranscribeSegment>;\nfunction transcribeStream(params: TranscribeClientParams, options?: RPCOptions): AsyncGenerator<string>;\nfunction transcribeStream(params: TranscribeStreamClientParams & { emitVadEvents: true }, options?: RPCOptions): Promise<TranscribeStreamConversationSession>;\nfunction transcribeStream(params: TranscribeStreamClientParams & { parakeetStreamingConfig: { chunkLeftContextMs?: number; chunkMs?: number; chunkRightContextMs?: number; diarizationMinSegmentMs?: number; diarizationThreshold?: number; emitEnergyVad?: boolean; emitPartials?: boolean; emitSpeakerVad?: boolean; energyVadHangoverMs?: number; energyVadThresholdDb?: number; energyVadWindowMs?: number; fifoLen?: number; historyMs?: number; leftContextMs?: number; rightLookaheadMs?: number; spkCacheEnable?: boolean; spkCacheLen?: number; spkCacheUpdatePeriod?: number } }, options?: RPCOptions): Promise<TranscribeStreamConversationSession>;\nfunction transcribeStream(params: TranscribeStreamClientParams & { metadata: true }, options?: RPCOptions): Promise<TranscribeStreamMetadataSession>;\nfunction transcribeStream(params: TranscribeStreamClientParams, options?: RPCOptions): Promise<TranscribeStreamSession>;",
+      "signature": "function transcribeStream(params: TranscribeClientParams & { metadata: true }, options?: RPCOptions): AsyncGenerator<TranscribeSegment>;\nfunction transcribeStream(params: TranscribeClientParams, options?: RPCOptions): AsyncGenerator<string>;\nfunction transcribeStream(params: TranscribeStreamClientParams & { emitVadEvents: true }, options?: RPCOptions): Promise<TranscribeStreamConversationSession>;\nfunction transcribeStream(params: TranscribeStreamClientParams & { parakeetStreamingConfig: {} }, options?: RPCOptions): Promise<TranscribeStreamConversationSession>;\nfunction transcribeStream(params: TranscribeStreamClientParams & { metadata: true }, options?: RPCOptions): Promise<TranscribeStreamMetadataSession>;\nfunction transcribeStream(params: TranscribeStreamClientParams, options?: RPCOptions): Promise<TranscribeStreamSession>;",
       "description": "",
       "returns": "AsyncGenerator<TranscribeSegment>",
       "returnFields": [],
@@ -1514,9 +1240,9 @@
     },
     {
       "name": "translate",
-      "signature": "function translate(params: TranslateClientParams, options?: RPCOptions): { requestId: string; stats: Promise<{ cacheTokens?: number; decodeTime?: number; encodeTime?: number; timeToFirstToken?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } | undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string>; translations: Promise<string[]> };",
+      "signature": "function translate(params: TranslateClientParams, options?: RPCOptions): { requestId: string; stats: Promise<{} | undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string>; translations: Promise<string[]> };",
       "description": "Translates text from one language to another using a specified translation model.\nSupports both NMT (Neural Machine Translation) and LLM models.",
-      "returns": "{ requestId: string; stats: Promise<{ cacheTokens?: number; decodeTime?: number; encodeTime?: number; timeToFirstToken?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } | undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string>; translations: Promise<string[]> }",
+      "returns": "{ requestId: string; stats: Promise<{} | undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string>; translations: Promise<string[]> }",
       "returnFields": [
         {
           "name": "requestId",
@@ -1525,7 +1251,7 @@
         },
         {
           "name": "stats",
-          "type": "Promise<{ cacheTokens?: number; decodeTime?: number; encodeTime?: number; timeToFirstToken?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } | undefined>",
+          "type": "Promise<{} | undefined>",
           "required": true
         },
         {
@@ -1554,10 +1280,21 @@
     },
     {
       "name": "unloadModel",
-      "signature": "function unloadModel(params: UnloadModelParams): Promise<void>;",
-      "description": "Unloads a previously loaded model from the server.",
-      "returns": "Promise<void>",
-      "returnFields": [],
+      "signature": "function unloadModel(params: UnloadModelParams, options?: RPCOptions): Promise<UnloadModelResult>;",
+      "description": "Releases the caller's hold on a loaded model. The model leaves memory once\nno caller session holds it; a session that shares the model with another\nonly drops its own lease.\n\nWhen the owner unloads the last model and no caller session is open, this\nfunction automatically closes the RPC connection on Node/Electron, allowing\nthe process to exit naturally without requiring manual cleanup. On Bare the\nconnection is left open by default so long-lived workers survive a routine\nunload; pass `autoClose: true` to opt in to closing. A session never closes\nthe runtime.",
+      "returns": "Promise<UnloadModelResult>",
+      "returnFields": [
+        {
+          "name": "released",
+          "type": "boolean",
+          "required": true
+        },
+        {
+          "name": "unloaded",
+          "type": "boolean",
+          "required": true
+        }
+      ],
       "throws": [
         {
           "error": "QvacErrorBase",
@@ -1568,8 +1305,8 @@
     },
     {
       "name": "upscale",
-      "signature": "function upscale(params: UpscaleClientParams): UpscaleResult;",
-      "description": "Runs standalone ESRGAN upscaling on an arbitrary PNG/JPEG image.",
+      "signature": "function upscale(params: UpscaleClientParams, options?: RPCOptions): UpscaleResult;",
+      "description": "Runs standalone ESRGAN upscaling on an arbitrary PNG/JPEG image.\n\nThe model must have been loaded with `modelType: \"diffusion\"` and\n`modelConfig.mode: \"upscale\"` — calling `upscale()` against a model\nloaded in default (`mode: \"diffusion\"`) mode throws\n`ModelOperationNotSupportedError` upfront.\n\n`outputs` always resolves to length 1: `repeats` runs N passes\ninternally and emits a single final image at `source * scale^repeats`\ndimensions. The `Uint8Array[]` shape reserves headroom for future\nmulti-output variants.",
       "returns": "UpscaleResult",
       "returnFields": [],
       "throws": [
@@ -1586,7 +1323,7 @@
     },
     {
       "name": "video",
-      "signature": "function video(params: VideoClientParams): VideoResult;",
+      "signature": "function video(params: VideoClientParams, options?: RPCOptions): VideoResult;",
       "description": "Generates a video using a loaded video diffusion model.",
       "returns": "VideoResult",
       "returnFields": [],
@@ -1595,29 +1332,14 @@
     },
     {
       "name": "vla",
-      "signature": "function vla(params: VlaClientRunParams): Promise<VlaClientRunResult>;",
+      "signature": "function vla(params: VlaClientRunParams, options?: RPCOptions): Promise<VlaClientRunResult> & { requestId: string };",
       "description": "Run VLA inference on a loaded model (SmolVLA, π₀.₅, or GR00T) and return the\nproduced action chunk plus per-stage timings.",
-      "returns": "Promise<VlaClientRunResult>",
+      "returns": "Promise<VlaClientRunResult> & { requestId: string }",
       "returnFields": [
         {
-          "name": "actionDim",
-          "type": "number",
+          "name": "requestId",
+          "type": "string",
           "required": true
-        },
-        {
-          "name": "actions",
-          "type": "Float32Array",
-          "required": true
-        },
-        {
-          "name": "chunkSize",
-          "type": "number",
-          "required": true
-        },
-        {
-          "name": "stats",
-          "type": "{ backendDevice?: number; ode_ms?: number; prefill_compute_ms?: number; prefill_total_ms?: number; smollm2_compute_ms?: number; smollm2_total_ms?: number; total_ms?: number; vision_ms?: number }",
-          "required": false
         }
       ],
       "throws": [],
@@ -1625,7 +1347,7 @@
     },
     {
       "name": "vlaHparams",
-      "signature": "function vlaHparams(params: { modelId: string }): Promise<{ hparams: VlaHparams; backendName: string | null }>;",
+      "signature": "function vlaHparams(params: { modelId: string }, options?: RPCOptions): Promise<{ hparams: VlaHparams; backendName: string | null }>;",
       "description": "Fetch the loaded VLA model's hyperparameters and the active ggml backend\nname. Useful to size token / state / noise buffers before calling `vla()`.",
       "returns": "Promise<{ hparams: VlaHparams; backendName: string | null }>",
       "returnFields": [
@@ -1636,7 +1358,7 @@
         },
         {
           "name": "hparams",
-          "type": "{ actionDim: number; chunkSize: number; imageInputMode?: \"pixels\" | \"patches\"; imagePatchElems?: number; maxActionDim: number; maxStateDim: number; numCameras?: number; selectedEmbodimentCatId?: number; selectedEmbodimentTag?: string; stateInputMode?: \"discrete\" | \"continuous\"; tokenizerMaxLength: number; visionImageSize: number }",
+          "type": "{}",
           "required": true
         }
       ],
@@ -1664,7 +1386,7 @@
     {
       "name": "vlaPreprocessImage",
       "signature": "function vlaPreprocessImage(pixels: PixelsInput, width: number, height: number, opts: VlaPreprocessImageOptions): Float32Array;",
-      "description": "Resize + letterbox + normalize a camera frame to `(3, size, size)` Float32\nin `[-1, 1]`. Drop-in equivalent of `@qvac/vla-ggml`'s `preprocessImage`.",
+      "description": "Resize + letterbox + normalize a camera frame to `(3, size, size)` Float32\nin `[-1, 1]`. Drop-in equivalent of `@qvac/vla-ggml`'s `preprocessImage`.\n\nLetterbox places the resized content at the **bottom-right** with padding\nat top/left (`padLeft = size - newW`, `padTop = size - newH`), matching\nthe reference smolvla.cpp behavior.",
       "returns": "Float32Array",
       "returnFields": [],
       "throws": [
@@ -1681,13 +1403,13 @@
     },
     {
       "name": "vlaSetEmbodiment",
-      "signature": "function vlaSetEmbodiment(params: { embodiment: VlaEmbodimentSelection; modelId: string }): Promise<{ hparams: VlaHparams }>;",
-      "description": "Switch a loaded multi-embodiment GR00T model to another embodiment shipped\nin the same GGUF — no reload, only that embodiment's weight rows are re-read.",
+      "signature": "function vlaSetEmbodiment(params: { embodiment: VlaEmbodimentSelection; modelId: string }, options?: RPCOptions): Promise<{ hparams: VlaHparams }>;",
+      "description": "Switch a loaded multi-embodiment GR00T model to another embodiment shipped\nin the same GGUF — no reload, only that embodiment's weight rows are re-read.\n\nThe returned hparams follow the newly active embodiment: re-read\n`numCameras` (and re-size buffers if needed) before the next `vla()` call.\n`selectedEmbodimentTag` / `selectedEmbodimentCatId` report what was\nresolved. Selecting by `catId` reports that id's canonical tag, which may\ndiffer from the alias used to select — the id is the stable identity.\n\nRejects (leaving the current embodiment active) for a non-GR00T or\nsingle-embodiment model, an unknown tag or `cat_id`, one not stored in the\nGGUF, an embodiment with no known camera count and no `numCameras`\noverride, or while an inference response is still pending — await the\nin-flight `vla()` call first.",
       "returns": "Promise<{ hparams: VlaHparams }>",
       "returnFields": [
         {
           "name": "hparams",
-          "type": "{ actionDim: number; chunkSize: number; imageInputMode?: \"pixels\" | \"patches\"; imagePatchElems?: number; maxActionDim: number; maxStateDim: number; numCameras?: number; selectedEmbodimentCatId?: number; selectedEmbodimentTag?: string; stateInputMode?: \"discrete\" | \"continuous\"; tokenizerMaxLength: number; visionImageSize: number }",
+          "type": "{}",
           "required": true
         }
       ],
@@ -1696,8 +1418,8 @@
     },
     {
       "name": "worldCreateScene",
-      "signature": "function worldCreateScene(params: Omit<{ height?: number; image: string; modelId: string; prompt: string; requestId?: string; returnPack?: boolean; width?: number }, \"requestId\" | \"image\"> & { image: Uint8Array } & { returnPack: true }): WorldSceneResultWithPack;\nfunction worldCreateScene(params: Omit<{ height?: number; image: string; modelId: string; prompt: string; requestId?: string; returnPack?: boolean; width?: number }, \"requestId\" | \"image\"> & { image: Uint8Array } & { returnPack?: false }): WorldSceneResult;\nfunction worldCreateScene(params: WorldSceneClientParams): WorldSceneResultWithPack | WorldSceneResult;",
-      "description": "Builds a world for an ABot-World session: the prompt and first frame are\nencoded into a scene pack the walk then runs on.",
+      "signature": "function worldCreateScene(params: Omit<{}, \"requestId\" | \"image\"> & {} & { returnPack: true }, options?: RPCOptions): WorldSceneResultWithPack;\nfunction worldCreateScene(params: Omit<{}, \"requestId\" | \"image\"> & {} & { returnPack?: false }, options?: RPCOptions): WorldSceneResult;\nfunction worldCreateScene(params: WorldSceneClientParams, options?: RPCOptions): WorldSceneResultWithPack | WorldSceneResult;",
+      "description": "Builds a world for an ABot-World session: the prompt and first frame are\nencoded into a scene pack the walk then runs on.\n\nRun this once per world. The world is live on the session as soon as this\ncompletes — `stats` is the completion signal. Creating a world on a session\nthat already has one replaces it and restarts the walk from the beginning.\n\nThe pack itself is NOT returned by default: it is 10+ MB, a third larger again\nas base64, and the common create-then-walk-now flow never touches the bytes.\nPass `returnPack: true` to get them, save them, and pass that file back as\n`modelConfig.sceneSrc` on a later `loadModel` to walk the same world again.\n`sceneSrc` takes a path or URL, so persist the bytes yourself.\n\nScene creation cannot be interrupted — the engine exposes no abort hook for\nit — so cancelling by request id stops the SDK from yielding but the encode\nruns to completion. Await the result before unloading the model.",
       "returns": "WorldSceneResultWithPack",
       "returnFields": [
         {
@@ -1712,7 +1434,7 @@
         },
         {
           "name": "stats",
-          "type": "Promise<{ height?: number; sceneCreateMs?: number; width?: number } | undefined>",
+          "type": "Promise<{} | undefined>",
           "required": true
         }
       ],
@@ -1742,8 +1464,8 @@
     },
     {
       "name": "worldStep",
-      "signature": "function worldStep(params: WorldStepClientParams): WorldStepResult;",
-      "description": "Generates the next block of an ABot-World walk under the keys held for it.",
+      "signature": "function worldStep(params: WorldStepClientParams, options?: RPCOptions): WorldStepResult;",
+      "description": "Generates the next block of an ABot-World walk under the keys held for it.\n\nOne call produces one block: at the default `world.numFramePerBlock`, 9 frames\nfor the first block after the session loads (decoder warmup) and 12\nthereafter. Both counts move with `numFramePerBlock`, so read `stats.frames`\nrather than assuming them. Frames arrive on `frameStream` as they are decoded,\nso a viewer can display them without waiting for the block.\n\nOnly one block runs at a time per model — a second call while one is in\nflight is rejected rather than queued, so drive the next call off the\nprevious one. Cancelling has block granularity: the current block finishes\ninternally, delivery stops, and the call rejects rather than returning a\ntruncated block.\n\n`keys` accepts an array, a key-state object, or a raw 8-bit mask. WASD move,\nIJKL steer the camera; omit for an idle block.\n\n`progressStream` forwards the engine's step / totalSteps / elapsedMs tick,\nthe same shape `video` and `diffusion` emit. The engine fires it once per\nblock, AFTER the frames, so it is an end-of-block summary rather than\nmid-block liveness — one tick per `worldStep` call.",
       "returns": "WorldStepResult",
       "returnFields": [
         {
@@ -1768,7 +1490,7 @@
         },
         {
           "name": "stats",
-          "type": "Promise<{ actionMask?: number; frames?: number; height?: number; modelLoadMs?: number; stepMs?: number; totalFrames?: number; totalStepMs?: number; totalSteps?: number; width?: number } | undefined>",
+          "type": "Promise<{} | undefined>",
           "required": true
         }
       ],

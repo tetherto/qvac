@@ -130,7 +130,7 @@
         "tags": [
           "Audio"
         ],
-        "description": "Synthesize speech from `input` text. **The response is raw audio bytes**\n(not JSON) with the appropriate `Content-Type` (`audio/wav`,\n`audio/L16; rate=<sr>; channels=1`, `audio/mpeg`, etc.). The\n`X-Audio-Sample-Rate` / `X-Audio-Channels` / `X-Audio-Bits-Per-Sample`\nheaders are sent for the native `wav`/`pcm` bodies only.\n\n**Model lookup is voice-aware** (multi-stage): the server first checks the\n`serve.openai.audio.speech.voices` map (`voice → alias`), then a hyphen\nalias (`{model}-{voice}`), then the bare `model`. If no candidate\nresolves, the error message lists all three lookup keys it tried.\n\n**`voice`** is required unless `serve.openai.audio.speech.defaultVoice` is\nconfigured (default: `\"alloy\"`). It takes a built-in OpenAI voice name, any\nother string, or a custom voice reference `{ \"id\": \"...\" }`, which routes the\nsame way as its `id` string.\n\n**`input_too_long`** is returned when `input.length` exceeds\n`serve.openai.audio.speech.maxInputChars` (default 4096). Whitespace-only\ninput is rejected as `missing_input`.\n\n**`response_format`** accepts `wav` (default) and `pcm` natively, plus\n`mp3`, `opus`, `aac`, `flac` when `ffmpeg` is on the server's PATH.\nThose four return `503 transcode_unavailable` when ffmpeg is absent; unknown\nvalues return `400 invalid_response_format`.\n\n**`stream_format`** accepts `audio` (default, the audio body above) and\n`sse`. With `sse` the response is `text/event-stream`: one\n`speech.audio.delta` event per synthesized chunk (`audio` is base64), then\n`speech.audio.done`. `usage` token counts are always 0. `sse` supports\n`wav` (a streaming header with unknown length) and `pcm` only; other\nformats return `400 unsupported_response_format`. Unknown values return\n`400 invalid_stream_format`. MOSS-SoundEffect and MOSS-Speech aliases\n(`ttsEngine` `moss-sfx` / `moss-speech`) are batch-only and return\n`400 unsupported_stream_format` with `sse`. Errors before the first audio chunk return JSON\nas usual; a failure after it arrives as a final `{ \"error\": ... }` event.\n\n**Error codes:** `400` `missing_input`, `input_too_long`,\n`missing_voice`, `invalid_response_format`, `invalid_stream_format`,\n`unsupported_response_format`, `unsupported_stream_format`,\n`invalid_model_type`; `404`\n`model_not_found`; `502` `speech_empty`, `transcode_failed`; `503`\n`transcode_unavailable`, `model_not_ready`.\n\n**Ignored params** (logged, returned in `X-QVAC-Ignored-Params` header):\n`speed`, `instructions`.",
+        "description": "Synthesize speech from `input` text. **The response is raw audio bytes**\n(not JSON) with the appropriate `Content-Type` (`audio/wav`,\n`audio/L16; rate=<sr>; channels=1`, `audio/mpeg`, etc.). The\n`X-Audio-Sample-Rate` / `X-Audio-Channels` / `X-Audio-Bits-Per-Sample`\nheaders are sent for the native `wav`/`pcm` bodies only.\n\n**Model lookup is voice-aware** (multi-stage): the server first checks the\n`serve.openai.audio.speech.voices` map (`voice → alias`), then a hyphen\nalias (`{model}-{voice}`), then the bare `model`. If no candidate\nresolves, the error message lists all three lookup keys it tried.\n\n**`voice`** is required unless `serve.openai.audio.speech.defaultVoice` is\nconfigured (default: `\"alloy\"`). It takes a built-in OpenAI voice name, any\nother string, or a custom voice reference `{ \"id\": \"...\" }`, which routes the\nsame way as its `id` string.\n\n**`input_too_long`** is returned when `input.length` exceeds\n`serve.openai.audio.speech.maxInputChars` (default 4096). Whitespace-only\ninput is rejected as `missing_input`.\n\n**`response_format`** accepts `wav` (default) and `pcm` natively, plus\n`mp3`, `opus`, `aac`, `flac` when `ffmpeg` is on the server's PATH.\nThose four return `503 transcode_unavailable` when ffmpeg is absent; unknown\nvalues return `400 invalid_response_format`.\n\n**`stream_format`** accepts `audio` (default, the audio body above) and\n`sse`. With `sse` the response is `text/event-stream`: one\n`speech.audio.delta` event per synthesized chunk (`audio` is base64), then\n`speech.audio.done`. `usage` token counts are always 0. `sse` supports\n`wav` (a streaming header with unknown length) and `pcm` only; other\nformats return `400 unsupported_response_format`. Unknown values return\n`400 invalid_stream_format`. MOSS-SoundEffect and MOSS-Speech aliases\n(`ttsEngine` `moss-sfx` / `moss-speech`) are batch-only and return\n`400 unsupported_stream_format` with `sse`. Errors before the first audio chunk return JSON\nas usual; a failure after it arrives as a final `{ \"error\": ... }` event.\n\n**Error codes:** `400` `missing_input`, `input_too_long`,\n`missing_voice`, `invalid_response_format`, `invalid_stream_format`,\n`unsupported_response_format`, `unsupported_stream_format`,\n`invalid_model_type`; `404`\n`model_not_found`; `502` `speech_empty`, `transcode_failed`; `503`\n`transcode_unavailable`, `model_not_ready`.\n\n**`instructions`** reaches a CosyVoice3 alias (`ttsEngine` `cosyvoice3`)\nas the engine's per-request `instruct` control, a raw natural-language\ninstruction such as a Chinese dialect, emotion or speaking style, when the\nalias configures no conditioning of its own. An alias whose config sets\n`instruct`, `emotion` or a non-moderate `pace` keeps that choice, and\nother engines have no free-text voice control; in both cases it is an ignored\nparam.\n\n**Ignored params** (logged, returned in `X-QVAC-Ignored-Params` header):\n`speed`; `instructions` unless the alias is a CosyVoice3 one without\nconfigured conditioning.",
         "requestBody": {
           "required": true,
           "content": {
@@ -188,13 +188,9 @@
                     "type": "string"
                   },
                   "speed": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "string"
-                      }
+                    "type": [
+                      "number",
+                      "string"
                     ]
                   },
                   "instructions": {
@@ -263,15 +259,11 @@
                             ]
                           },
                           "model": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ],
-                            "description": "`serve.models` alias the voice maps to, if any."
+                            "description": "`serve.models` alias the voice maps to, if any.",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
@@ -1223,13 +1215,9 @@
                                 "type": "object",
                                 "properties": {
                                   "value": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "boolean"
-                                      }
+                                    "type": [
+                                      "string",
+                                      "boolean"
                                     ]
                                   },
                                   "description": {
@@ -1358,13 +1346,9 @@
                             "type": "object",
                             "properties": {
                               "name": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "null"
-                                  }
+                                "type": [
+                                  "string",
+                                  "null"
                                 ]
                               },
                               "type": {
@@ -1390,13 +1374,9 @@
                             "type": "object",
                             "properties": {
                               "name": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "null"
-                                  }
+                                "type": [
+                                  "string",
+                                  "null"
                                 ]
                               },
                               "type": {
@@ -1406,13 +1386,9 @@
                                 ]
                               },
                               "choice": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  }
+                                "type": [
+                                  "string",
+                                  "boolean"
                                 ]
                               },
                               "confidence": {
@@ -1426,13 +1402,9 @@
                                   "type": "object",
                                   "properties": {
                                     "value": {
-                                      "anyOf": [
-                                        {
-                                          "type": "string"
-                                        },
-                                        {
-                                          "type": "boolean"
-                                        }
+                                      "type": [
+                                        "string",
+                                        "boolean"
                                       ]
                                     },
                                     "probability": {
@@ -1462,13 +1434,9 @@
                             "type": "object",
                             "properties": {
                               "name": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "null"
-                                  }
+                                "type": [
+                                  "string",
+                                  "null"
                                 ]
                               },
                               "type": {
@@ -1526,13 +1494,9 @@
                             "type": "object",
                             "properties": {
                               "name": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "null"
-                                  }
+                                "type": [
+                                  "string",
+                                  "null"
                                 ]
                               },
                               "type": {
@@ -1872,33 +1836,21 @@
                     "type": "string"
                   },
                   "n": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      }
+                    "type": [
+                      "string",
+                      "number"
                     ]
                   },
                   "strength": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      }
+                    "type": [
+                      "string",
+                      "number"
                     ]
                   },
                   "stream": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "boolean"
-                      }
+                    "type": [
+                      "string",
+                      "boolean"
                     ]
                   }
                 },
@@ -2464,13 +2416,9 @@
                 "type": "object",
                 "properties": {
                   "name": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
+                    "type": [
+                      "string",
+                      "null"
                     ]
                   },
                   "expires_after": {},
@@ -2533,13 +2481,9 @@
                 "type": "object",
                 "properties": {
                   "name": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
+                    "type": [
+                      "string",
+                      "null"
                     ]
                   },
                   "expires_after": {},
@@ -2774,13 +2718,9 @@
                   },
                   "strength": {
                     "description": "QVAC extension. img2vid denoise strength [0, 1]. Only meaningful when `input_reference` is provided.",
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      }
+                    "type": [
+                      "string",
+                      "number"
                     ]
                   }
                 },
@@ -2865,13 +2805,9 @@
                   },
                   "strength": {
                     "description": "QVAC extension. img2vid denoise strength [0, 1]. Only meaningful when `input_reference` is provided.",
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      }
+                    "type": [
+                      "string",
+                      "number"
                     ]
                   }
                 },
@@ -2947,13 +2883,9 @@
                       ]
                     },
                     "prompt": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     },
                     "size": {
@@ -3124,13 +3056,9 @@
                             ]
                           },
                           "prompt": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
+                            "type": [
+                              "string",
+                              "null"
                             ]
                           },
                           "size": {
@@ -3185,23 +3113,15 @@
                       }
                     },
                     "first_id": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     },
                     "last_id": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     },
                     "has_more": {
@@ -3305,13 +3225,9 @@
                       ]
                     },
                     "prompt": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     },
                     "size": {

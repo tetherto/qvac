@@ -860,7 +860,8 @@ function buildApiFunction(
 
 /**
  * Scope filter: only public functions re-exported from
- * `packages/sdk/client/api/index.ts` make it into the API summary.
+ * `packages/sdk/client/api/index.ts`, plus `openSession` from
+ * `client/session.ts`, make it into the API data.
  *
  * The single-page summary deliberately excludes auxiliary helpers
  * (`close`, `getLogger`, `getModelByName/Path/Src`, `definePlugin`,
@@ -870,6 +871,8 @@ function buildApiFunction(
 function isInClientApiScope(sourcePath: string): boolean {
   if (!sourcePath) return false;
   const normalized = sourcePath.replace(/\\/g, "/");
+  // `openSession` is public API that lives beside the client functions.
+  if (normalized.endsWith("/client/session.ts")) return true;
   if (!normalized.includes("/client/api/")) return false;
   if (normalized.endsWith("/client/api/index.ts")) return false;
   if (normalized.includes("/server/") || normalized.includes("/examples/")) return false;

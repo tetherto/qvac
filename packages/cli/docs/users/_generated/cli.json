@@ -39,10 +39,37 @@
               "env": null
             },
             {
-              "flags": "--host <target>",
+              "flags": "--target <target>",
+              "long": "--target",
+              "short": null,
+              "description": "Where the worker runs",
+              "default": "bare-sidecar",
+              "choices": [
+                "bare-sidecar",
+                "react-native",
+                "pear-runtime"
+              ],
+              "required": false,
+              "env": null
+            },
+            {
+              "flags": "--language <language>",
+              "long": "--language",
+              "short": null,
+              "description": "Language of the app that starts the worker",
+              "default": "javascript",
+              "choices": [
+                "javascript",
+                "python"
+              ],
+              "required": false,
+              "env": null
+            },
+            {
+              "flags": "--host <host>",
               "long": "--host",
               "short": null,
-              "description": "Target host (repeatable)",
+              "description": "Host to bundle for (repeatable; default depends on --target)",
               "default": [],
               "choices": null,
               "required": false,
@@ -292,7 +319,7 @@
               "flags": "--addons-source <path>",
               "long": "--addons-source",
               "short": null,
-              "description": "Path to a worker.bundle.js or a node_modules directory",
+              "description": "Path to a worker bundle written by bundleSdk, or a node_modules directory",
               "default": null,
               "choices": null,
               "required": true,
@@ -309,30 +336,10 @@
               "env": null
             },
             {
-              "flags": "--bare-runtime-version <semver>",
-              "long": "--bare-runtime-version",
-              "short": null,
-              "description": "Override detected Bare runtime version for ABI checks",
-              "default": null,
-              "choices": null,
-              "required": false,
-              "env": null
-            },
-            {
-              "flags": "-c, --config <path>",
-              "long": "--config",
-              "short": "-c",
-              "description": "Config file path (default: auto-detect qvac.config.*)",
-              "default": null,
-              "choices": null,
-              "required": false,
-              "env": null
-            },
-            {
               "flags": "--project-root <path>",
               "long": "--project-root",
               "short": null,
-              "description": "Project root used to resolve bundle resolutions and runtime metadata (default: cwd)",
+              "description": "Project root used to resolve bundle resolutions and its package manager (default: cwd)",
               "default": null,
               "choices": null,
               "required": false,
@@ -362,7 +369,7 @@
               "flags": "--offline",
               "long": "--offline",
               "short": null,
-              "description": "Skip GitHub and npm registry lookups (runtime detection for new react-native-bare-kit releases, override suggestions)",
+              "description": "Skip GitHub and npm registry lookups (Bare version of Bare Kit releases missing from the built-in tables, override suggestions)",
               "default": null,
               "choices": null,
               "required": false,
@@ -525,7 +532,7 @@
           "long": "--port",
           "short": "-p",
           "description": "Port to listen on",
-          "default": "11434",
+          "default": "11435",
           "choices": null,
           "required": false,
           "env": null
@@ -734,7 +741,7 @@
               "long": "--port",
               "short": "-p",
               "description": "Port to listen on",
-              "default": "11434",
+              "default": "11435",
               "choices": null,
               "required": false,
               "env": null

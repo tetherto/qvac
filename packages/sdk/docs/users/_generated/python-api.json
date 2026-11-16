@@ -213,6 +213,28 @@
       "module": "sessions"
     },
     {
+      "name": "calc_tokens",
+      "async": true,
+      "signature": "async def calc_tokens(transport: Transport, params: CalcTokensRequest) -> CalcTokensResponse",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "CalcTokensRequest",
+          "default": null
+        }
+      ],
+      "returns": "CalcTokensResponse",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
       "name": "cancel",
       "async": true,
       "signature": "async def cancel(transport: Transport, *, request_id: str | None=None, model_id: str | None=None, kind: str | None=None, clear_cache: bool | None=None) -> None",
@@ -275,9 +297,31 @@
       "module": "_generated.methods"
     },
     {
+      "name": "close_session",
+      "async": true,
+      "signature": "async def close_session(transport: Transport, params: CloseSessionRequest) -> CloseSessionResponse",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "CloseSessionRequest",
+          "default": null
+        }
+      ],
+      "returns": "CloseSessionResponse",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
       "name": "completion",
       "async": false,
-      "signature": "def completion(transport: Transport, *, model_id: str, history: list[dict[str, Any]], tools: list[dict[str, Any]] | None=None, stream: bool=True, generation_params: dict[str, Any] | None=None, kv_cache: Any=None, prefill: bool | None=None, capture_thinking: bool | None=None, emit_raw_deltas: bool | None=None, tool_dialect: str | None=None, response_format: dict[str, Any] | None=None, request_id: str | None=None) -> CompletionRun",
+      "signature": "def completion(transport: Transport, *, model_id: str, history: list[dict[str, Any]], tools: list[dict[str, Any]] | None=None, tool_search: dict[str, int] | None=None, stream: bool=True, generation_params: dict[str, Any] | None=None, kv_cache: Any=None, prefill: bool | None=None, seed_from: str | None=None, capture_thinking: bool | None=None, emit_raw_deltas: bool | None=None, tool_dialect: str | None=None, response_format: dict[str, Any] | None=None, request_id: str | None=None) -> CompletionRun",
       "params": [
         {
           "name": "transport",
@@ -304,6 +348,12 @@
           "default": "None"
         },
         {
+          "name": "tool_search",
+          "kind": "keyword",
+          "annotation": "dict[str, int] | None",
+          "default": "None"
+        },
+        {
           "name": "stream",
           "kind": "keyword",
           "annotation": "bool",
@@ -325,6 +375,12 @@
           "name": "prefill",
           "kind": "keyword",
           "annotation": "bool | None",
+          "default": "None"
+        },
+        {
+          "name": "seed_from",
+          "kind": "keyword",
+          "annotation": "str | None",
           "default": "None"
         },
         {
@@ -591,6 +647,28 @@
       "module": "_generated.methods"
     },
     {
+      "name": "embed_batch",
+      "async": true,
+      "signature": "async def embed_batch(transport: Transport, params: EmbedBatchRequest) -> EmbedBatchResponse",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "EmbedBatchRequest",
+          "default": null
+        }
+      ],
+      "returns": "EmbedBatchResponse",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
       "name": "finetune",
       "async": true,
       "signature": "async def finetune(transport: Transport, params: FinetuneRequest) -> FinetuneResponse",
@@ -734,7 +812,7 @@
     {
       "name": "invoke_plugin",
       "async": true,
-      "signature": "async def invoke_plugin(transport: Transport, model_id: str, handler: str, params: Any=None) -> Any",
+      "signature": "async def invoke_plugin(transport: Transport, model_id: str, handler: str, params: Any=None, *, request_id: str | None=None) -> Any",
       "params": [
         {
           "name": "transport",
@@ -759,16 +837,22 @@
           "kind": "positional",
           "annotation": "Any",
           "default": "None"
+        },
+        {
+          "name": "request_id",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
         }
       ],
       "returns": "Any",
-      "summary": "",
+      "summary": "`request_id` is minted when omitted; pass your own to target the invoke\nwith `cancel(request_id=...)`.",
       "module": "_api"
     },
     {
       "name": "invoke_plugin_stream",
       "async": true,
-      "signature": "async def invoke_plugin_stream(transport: Transport, model_id: str, handler: str, params: Any=None) -> AsyncIterator[Any]",
+      "signature": "async def invoke_plugin_stream(transport: Transport, model_id: str, handler: str, params: Any=None, *, request_id: str | None=None) -> AsyncIterator[Any]",
       "params": [
         {
           "name": "transport",
@@ -792,6 +876,12 @@
           "name": "params",
           "kind": "positional",
           "annotation": "Any",
+          "default": "None"
+        },
+        {
+          "name": "request_id",
+          "kind": "keyword",
+          "annotation": "str | None",
           "default": "None"
         }
       ],
@@ -1046,6 +1136,34 @@
       "returns": "AsyncIterator[OcrStreamResponse]",
       "summary": "",
       "module": "_generated.methods"
+    },
+    {
+      "name": "open_session",
+      "async": true,
+      "signature": "async def open_session(owner: Transport, name: str | None=None, *, on_closed: Callable[[Session], None] | None=None) -> Session",
+      "params": [
+        {
+          "name": "owner",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "name",
+          "kind": "positional",
+          "annotation": "str | None",
+          "default": "None"
+        },
+        {
+          "name": "on_closed",
+          "kind": "keyword",
+          "annotation": "Callable[[Session], None] | None",
+          "default": "None"
+        }
+      ],
+      "returns": "Session",
+      "summary": "Registers a new session on the worker and returns its handle. `owner`\nis the client's own transport: a session's transport stamps its id over\nevery call, so a session opened through another session would run as\nits parent. `on_closed` runs when the handle's own `close()` ends it.",
+      "module": "caller_session"
     },
     {
       "name": "plugin_invoke",
@@ -1325,7 +1443,7 @@
       ],
       "returns": "AsyncIterator[TextToSpeechResponse]",
       "summary": "",
-      "module": "_generated.methods"
+      "module": "methods"
     },
     {
       "name": "text_to_speech_stream",
@@ -1353,7 +1471,7 @@
       ],
       "returns": "AsyncIterator[TextToSpeechStreamResponse]",
       "summary": "",
-      "module": "_generated.methods"
+      "module": "methods"
     },
     {
       "name": "text_to_speech_stream_session",
