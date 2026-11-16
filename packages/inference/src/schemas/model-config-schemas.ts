@@ -1,4 +1,5 @@
 import { imageEmbeddingConfigSchema } from '@/schemas/image-embedding'
+import { stereoDepthConfigSchema } from '@/schemas/stereo-depth'
 import { z } from 'zod'
 import { llmConfigBaseSchema, embedConfigBaseSchema } from '@/schemas/llamacpp-config'
 import {
@@ -37,6 +38,7 @@ export const MODEL_CONFIG_SCHEMA_BY_TYPE = {
   [ModelType.llamacppDecision]: decisionConfigBaseSchema,
   [ModelType.llamacppRerank]: rerankConfigBaseSchema,
   [ModelType.ggmlImageEmbedding]: imageEmbeddingConfigSchema,
+  [ModelType.ggmlStereoDepth]: stereoDepthConfigSchema,
   [ModelType.llamacppEmbedding]: embedConfigBaseSchema,
   [ModelType.nmtcppTranslation]: nmtConfigBaseSchema,
   [ModelType.ttsGgml]: ttsLoadConfigSchema,
