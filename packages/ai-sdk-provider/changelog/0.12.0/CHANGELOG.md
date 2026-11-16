@@ -20,5 +20,7 @@ Release Date: 2026-11-13
   Removed: EMBEDDINGGEMMA_300M_F32
 - Add the TranscribePsy-250M-EU constant. (see PR [#5683](https://github.com/tetherto/qvac/pull/5683)) - See [API changes](./api.md), [model changes](./models.md)
   Added: PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0
+- Add the Qwen3.5 9B DFlash drafter constant. (see PR [#5772](https://github.com/tetherto/qvac/pull/5772)) - See [model changes](./models.md)
+  Added: QWEN3_5_9B_DFLASH_Q8_0
 - Add GLM 5.3 Flash constants to the AI SDK provider. (see PR [#5739](https://github.com/tetherto/qvac/pull/5739)) - See [model changes](./models.md)
   Added: GLM_5_3_FLASH_320B_A18B_MULTIMODAL_Q4_K_M_SHARD, MMPROJ_GLM_5_3_FLASH_320B_A18B_MULTIMODAL_BF16

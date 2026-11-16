@@ -4,7 +4,7 @@
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/ai-sdk-provider/v/0.12.0
 
-QVAC AI SDK Provider 0.12.0 follows `@qvac/cli` 0.19.0, whose `qvac serve` now listens on the provider's default port. It adds nine model constants, removes one, and repoints the EmbeddingGemma-300M constants at new model files.
+QVAC AI SDK Provider 0.12.0 follows `@qvac/cli` 0.19.0, whose `qvac serve` now listens on the provider's default port. It adds ten model constants, removes one, and repoints the EmbeddingGemma-300M constants at new model files.
 
 ## Breaking Changes
 
@@ -67,6 +67,7 @@ Trailing slashes on `baseURL` are trimmed in linear time, so a very long run of 
 - `PARAKEET_MOSAIC_COMPACT_Q4_0_Q8_0_Q3_K_IQ3_S`
 - `PARAKEET_NEMOTRON_3_DIARIZATION_Q4_K`
 - `TTS_LM_MULTILINGUAL_AUDIO8_Q4_0`
+- `QWEN3_5_9B_DFLASH_Q8_0`
 
 ### Updated
 
