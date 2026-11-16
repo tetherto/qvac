@@ -20,6 +20,7 @@
 
 #include <ggml-alloc.h>
 #include <ggml.h>
+#include <gguf.h>
 #include <gtest/gtest.h>
 #if !defined(_WIN32)
 #include <sys/resource.h>
@@ -54,6 +55,10 @@ constexpr uint32_t FULL_HD_HEIGHT = 1080;
 // 4K height, paired with bd::MAX_SIDE for the widest accepted input.
 constexpr uint32_t UHD_HEIGHT = 2160;
 constexpr uint32_t RGB_CHANNELS = 3;
+// syntheticRgb shifts of a stereo pair: the right view is the left one moved
+// by a few pixels, so the pair has a disparity to find.
+constexpr uint32_t LEFT_VIEW_SHIFT = 0;
+constexpr uint32_t RIGHT_VIEW_SHIFT = 5;
 
 std::string envOr(const char* name, const std::string& fallback) {
   const char* value = std::getenv(name);
@@ -176,12 +181,11 @@ void checkBridgeDepth(uint32_t width, uint32_t height) {
   EXPECT_EQ(measured.kind, qcc::ModelKind::BridgeDepth);
   bd::BridgeDepthModel model({path, "", backendName(), TEST_THREADS});
   model.load();
-  constexpr uint32_t rightViewShift = 5;
   const auto output = std::any_cast<bd::DisparityOutput>(model.process(
       std::any(
           bd::StereoInput{
-              syntheticRgb(width, height, 0),
-              syntheticRgb(width, height, rightViewShift)})));
+              syntheticRgb(width, height, LEFT_VIEW_SHIFT),
+              syntheticRgb(width, height, RIGHT_VIEW_SHIFT)})));
   EXPECT_EQ(output.width, width);
   EXPECT_EQ(output.height, height);
   const std::string label =
@@ -254,13 +258,20 @@ TEST(ModelFootprint, BridgeDepthMaxSquareEqualsLoadedBuffers) {
 
 // A caller that cycles through sizes holds one slot per size, up to
 // SIZE_SLOT_LIMIT, the least recently used size giving its slot up first.
-// Each size here pads to a different grid, so each takes a slot.
+// Each size here pads to a different grid, so each takes a slot. The order
+// reuses a slot from the middle of the list (A), evicts the least recently
+// used one (B, then C) and brings an evicted size back (B). Every call must
+// give the output of that size's first call, whatever the slots did between.
 TEST(ModelFootprint, BridgeDepthHoldsOneSlotPerSizeUpToTheLimit) {
   const std::string path = envOr("QVAC_BRIDGEDEPTH_MODEL_PATH", "");
   if (path.empty())
     GTEST_SKIP() << "QVAC_BRIDGEDEPTH_MODEL_PATH is not set";
+  static_assert(bd::SIZE_SLOT_LIMIT == 4, "the order below is written for 4");
   constexpr uint32_t side = 2 * bd::MIN_SIDE;
-  constexpr size_t sizeCount = bd::SIZE_SLOT_LIMIT + 1;
+  constexpr size_t sizeA = 0, sizeB = 1, sizeC = 2, sizeD = 3, sizeE = 4;
+  constexpr size_t sizeCount = sizeE + 1;
+  const std::vector<size_t> order = {
+      sizeA, sizeB, sizeA, sizeC, sizeD, sizeE, sizeB};
   std::vector<uint32_t> widths;
   std::vector<uint64_t> slotBytes;
   for (size_t i = 0; i < sizeCount; ++i) {
@@ -269,25 +280,79 @@ TEST(ModelFootprint, BridgeDepthHoldsOneSlotPerSizeUpToTheLimit) {
   }
   bd::BridgeDepthModel model(bridgeDepthConfig(path));
   model.load();
-  uint64_t expected = 0;
-  for (size_t i = 0; i < sizeCount; ++i) {
-    const uint32_t width = widths[i];
-    model.process(
+  std::vector<size_t> held; // most recently used first, as the graph keeps it
+  std::vector<std::vector<float>> firstOutput(sizeCount);
+  for (size_t step = 0; step < order.size(); ++step) {
+    const size_t size = order[step];
+    const uint32_t width = widths[size];
+    const auto output = std::any_cast<bd::DisparityOutput>(model.process(
         std::any(
             bd::StereoInput{
-                syntheticRgb(width, side, 0), syntheticRgb(width, side, 1)}));
-    expected += slotBytes[i];
-    if (i >= bd::SIZE_SLOT_LIMIT)
-      expected -= slotBytes[i - bd::SIZE_SLOT_LIMIT];
-    EXPECT_EQ(model.heldSizeSlotBytes(), expected) << "width " << width;
+                syntheticRgb(width, side, LEFT_VIEW_SHIFT),
+                syntheticRgb(width, side, RIGHT_VIEW_SHIFT)})));
+    const auto it = std::find(held.begin(), held.end(), size);
+    if (it != held.end())
+      held.erase(it);
+    else if (held.size() == bd::SIZE_SLOT_LIMIT)
+      held.pop_back();
+    held.insert(held.begin(), size);
+    uint64_t expected = 0;
+    for (const size_t h : held)
+      expected += slotBytes[h];
+    const std::string label =
+        "step " + std::to_string(step) + " width " + std::to_string(width);
+    EXPECT_EQ(model.heldSizeSlotBytes(), expected) << label;
+    if (firstOutput[size].empty())
+      firstOutput[size] = output.disparity;
+    else
+      EXPECT_EQ(output.disparity, firstOutput[size]) << label;
   }
-  // A size that keeps its slot does not take another one.
-  model.process(
-      std::any(
-          bd::StereoInput{
-              syntheticRgb(widths.back(), side, 0),
-              syntheticRgb(widths.back(), side, 1)}));
-  EXPECT_EQ(model.heldSizeSlotBytes(), expected);
+}
+
+// seedsOverride builds a slightly different graph, in the slot of its padded
+// size: a size run with and without seeds holds one slot, and the run without
+// seeds after the one with them gives the same output as before.
+TEST(ModelFootprint, BridgeDepthSeedsShareTheSlotOfTheirSize) {
+  const std::string path = envOr("QVAC_BRIDGEDEPTH_MODEL_PATH", "");
+  if (path.empty())
+    GTEST_SKIP() << "QVAC_BRIDGEDEPTH_MODEL_PATH is not set";
+  // DPN proposals per pixel at 1/8, the length of one seeds row.
+  uint32_t proposals = 0;
+  {
+    gguf_init_params params{};
+    params.no_alloc = true;
+    std::unique_ptr<gguf_context, decltype(&gguf_free)> file(
+        gguf_init_from_file(path.c_str(), params), gguf_free);
+    ASSERT_NE(file, nullptr);
+    const int64_t key =
+        gguf_find_key(file.get(), "bridgedepth.dpn.num_proposals");
+    ASSERT_GE(key, 0);
+    proposals = gguf_get_val_u32(file.get(), key);
+  }
+  constexpr uint32_t side = 2 * bd::MIN_SIDE;
+  constexpr uint32_t seedScale = 8; // the DPN runs at 1/8 resolution
+  qcc::GgmlBackends backends(backendName(), "", TEST_THREADS, "test");
+  bd::BridgeDepthGraph graph(path, backends.device(), backends.cpu());
+  uint32_t width = 0;
+  uint32_t height = 0;
+  const auto left =
+      bd::toPlanarRgb(syntheticRgb(side, side, LEFT_VIEW_SHIFT), width, height);
+  const auto right = bd::toPlanarRgb(
+      syntheticRgb(side, side, RIGHT_VIEW_SHIFT), width, height);
+  // side is a multiple of PAD_DIVISOR, so the padded grid is side / 8.
+  static_assert(side % bd::PAD_DIVISOR == 0);
+  const std::vector<float> seeds(
+      static_cast<size_t>(side / seedScale) * (side / seedScale) * proposals,
+      0.0f);
+  const int h = static_cast<int>(height);
+  const int w = static_cast<int>(width);
+  const auto first = graph.infer(left.data(), right.data(), h, w);
+  const uint64_t oneSlot = graph.heldSizeSlotBytes();
+  EXPECT_GT(oneSlot, 0U);
+  graph.infer(left.data(), right.data(), h, w, &seeds);
+  EXPECT_EQ(graph.heldSizeSlotBytes(), oneSlot);
+  EXPECT_EQ(graph.infer(left.data(), right.data(), h, w), first);
+  EXPECT_EQ(graph.heldSizeSlotBytes(), oneSlot);
 }
 
 TEST(ModelFootprint, BridgeDepthAboveTheBoxIsSizedAtTheModelSize) {
@@ -500,8 +565,8 @@ TEST(ModelFootprint, DISABLED_ReportBridgeDepthResidentGrowth) {
     return static_cast<uint64_t>(usage.ru_maxrss) * kibibyte;
 #endif
   };
-  const auto left = syntheticRgb(HD_WIDTH, HD_HEIGHT, 0);
-  const auto right = syntheticRgb(HD_WIDTH, HD_HEIGHT, 5);
+  const auto left = syntheticRgb(HD_WIDTH, HD_HEIGHT, LEFT_VIEW_SHIFT);
+  const auto right = syntheticRgb(HD_WIDTH, HD_HEIGHT, RIGHT_VIEW_SHIFT);
   const uint64_t beforeMeasure = peakResident();
   const auto measured = qcc::measureFootprint(
       path,

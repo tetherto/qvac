@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include <ggml-backend.h>
 #include <ggml.h>
 #include <gguf.h>
 #include <gtest/gtest.h>
@@ -417,7 +418,9 @@ TEST_F(BridgeDepthReference, MatchesTorchWithReferenceSeeds) {
   ASSERT_EQ(disparity.size(), reference_.size());
   const int deviceId =
       classification_ggml::backendId(ggml_backend_name(backends.device()));
-  const bool onCpu = deviceId == 0; // ids are from backendId()
+  const bool onCpu =
+      ggml_backend_dev_type(ggml_backend_get_device(backends.device())) ==
+      GGML_BACKEND_DEVICE_TYPE_CPU;
   std::printf(
       "%s reference seeds: %.5f within 0.05 px, %.5f within 0.2 px\n",
       ggml_backend_name(backends.device()),
