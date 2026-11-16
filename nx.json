@@ -19,7 +19,7 @@
             "sha256": "6550da740ac8565ec2f1dc886f6ec6425af1df79588d773594163b0778832560"
           },
           "hostSetup": {
-            "linux-x64": ["cuda", "rocm"],
+            "linux-x64": ["cuda", "rocm", "xdna"],
             "linux-arm64": ["cuda"],
             "win32-x64": ["cuda"]
           }
