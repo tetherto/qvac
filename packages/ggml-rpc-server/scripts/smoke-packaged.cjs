@@ -42,8 +42,9 @@ function copyIntoPackage(path) {
 function findPackage(name, from) {
   for (let dir = from; ; dir = dirname(dir)) {
     const candidate = join(dir, "node_modules", ...name.split("/"));
-    if (existsSync(join(candidate, "package.json")))
+    if (existsSync(join(candidate, "package.json"))) {
       return realpathSync(candidate);
+    }
     if (dirname(dir) === dir) return null;
   }
 }
@@ -82,11 +83,12 @@ function installDependencies(manifestRoot, required) {
           ]
         : readdirSync(source).filter((entry) => entry !== "node_modules");
       for (const entry of entries) {
-        if (existsSync(join(source, entry)))
+        if (existsSync(join(source, entry))) {
           cpSync(join(source, entry), join(destination, entry), {
             recursive: true,
             dereference: true,
           });
+        }
       }
       pending.push({
         from: source,

@@ -16,13 +16,19 @@ mkdirSync(dir, { recursive: true })
 execFileSync('npm', ['pack', `bare-sidecar@${VERSION}`, '--pack-destination', dir, '--silent'], {
   stdio: 'inherit'
 })
-execFileSync('tar', ['-xzf', join(dir, `bare-sidecar-${VERSION}.tgz`), '-C', dir], { stdio: 'inherit' })
+execFileSync('tar', ['-xzf', join(dir, `bare-sidecar-${VERSION}.tgz`), '-C', dir], {
+  stdio: 'inherit'
+})
 // The Vulkan module loads first, and Mesa's ICDs need libstdc++, which would let a broken CUDA module load.
 execFileSync(
   join(dir, 'package/prebuilds/linux-x64/bare'),
   ['test/integration/sidecar-cuda-smoke.js', MODEL],
   {
     stdio: 'inherit',
-    env: { ...process.env, VK_DRIVER_FILES: '/nonexistent.json', VK_ICD_FILENAMES: '/nonexistent.json' }
+    env: {
+      ...process.env,
+      VK_DRIVER_FILES: '/nonexistent.json',
+      VK_ICD_FILENAMES: '/nonexistent.json'
+    }
   }
 )

@@ -119,7 +119,7 @@
     "typescript-eslint": "^8.63.0",
     "cmake-npm": "^1.1.0",
     "bare-process": "^4.2.2",
-    "bare-https": "^3.0.0",
+    "bare-https": "^4.0.0",
     "bare-crypto": "^1.15.3",
     "bare-os": "^3.6.2",
     "bare-url": "^2.1.6"
