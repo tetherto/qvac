@@ -68,6 +68,11 @@ on:
           - dev
           - feature
           - temp
+      allow_oversized_tarball:
+        description: "Publish npm platform packages even if a tarball is over the size budget (npm may still reject it with E413)"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -552,6 +557,7 @@ jobs:
           # 0.30.0 at ~201.9 MB got E413. Checked here, not in the slicer, so
           # slices already on npm are not packed.
           MAX_TARBALL_BYTES: "200417383"
+          ALLOW_OVERSIZED: ${{ inputs.allow_oversized_tarball && 'true' || 'false' }}
         run: |
           set -euo pipefail
           # Prints "hit" or "miss"; any npm view failure other than E404 is a
@@ -583,14 +589,22 @@ jobs:
             if [ "$SLICE_STATE" = miss ]; then
               SIZE=$(cd "$dir" && npm pack --dry-run --json --ignore-scripts | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8"))[0].size')
               echo "${NAME}@${VERSION}: ${SIZE} byte tarball"
-              # A non-number would make the -gt test error, which set -e ignores
-              # inside an if, and let the slice through.
+              # Test the format first: a non-number makes -gt error, which set -e
+              # ignores inside an if.
+              REASON=""
               if ! [[ "$SIZE" =~ ^[0-9]+$ ]]; then
-                echo "::error title=npm pack size unreadable::${NAME}@${VERSION}: npm pack reported '${SIZE}' as its size." >&2
-                exit 1
+                REASON="has an unreadable packed size ('${SIZE}')"
+              elif [ "$SIZE" -gt "$MAX_TARBALL_BYTES" ]; then
+                REASON="packs to ${SIZE} bytes, over the ${MAX_TARBALL_BYTES}-byte budget, and npm may reject it with E413"
               fi
-              if [ "$SIZE" -gt "$MAX_TARBALL_BYTES" ]; then
-                echo "::error title=npm tarball too large::${NAME}@${VERSION} packs to ${SIZE} bytes, over the ${MAX_TARBALL_BYTES}-byte budget (npm rejects oversized tarballs with E413). No slice was published by this run." >&2
+              if [ -n "$REASON" ]; then
+                if [ "$ALLOW_OVERSIZED" = true ]; then
+                  echo "::warning title=npm tarball size check::${NAME}@${VERSION} ${REASON}. Publishing anyway (allow_oversized_tarball)." >&2
+                  # Publish it first, so an E413 stops the run before the other slices.
+                  TO_PUBLISH=("$dir" "${TO_PUBLISH[@]}")
+                  continue
+                fi
+                echo "::error title=npm tarball size check::${NAME}@${VERSION} ${REASON}. No slice was published by this run. To publish anyway, dispatch this workflow with allow_oversized_tarball." >&2
                 OVERSIZED+=("$NAME")
               fi
               TO_PUBLISH+=("$dir")
