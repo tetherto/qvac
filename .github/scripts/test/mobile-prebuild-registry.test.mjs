@@ -880,134 +880,6 @@ test("artifacts still win over a split addon's published slices", () => {
   assert.ok(run.prebuildMarkerSurvived)
 })
 
-// Every mobile addon routes through this one step, so a change here can break an
-// addon nobody thought to test. Read each workflow's REAL addon-npm-name and
-// exercise the step for all of them, rather than spot-checking llm-llamacpp.
-function mobileAddons() {
-  const files = spawnSync(
-    'git',
-    ['ls-files', '.github/workflows/integration-mobile-test-*.yml'],
-    { cwd: root, encoding: 'utf8' },
-  ).stdout.trim().split('\n').filter(Boolean)
-
-  const addons = []
-  for (const relativePath of files) {
-    const source = read(relativePath)
-    const match = source.match(/addon-npm-name:\s*'([^']+)'/)
-    if (!match) continue
-    addons.push({
-      workflow: relativePath.replace(/.*integration-mobile-test-|\.yml$/g, ''),
-      npmName: match[1],
-      skipsPrebuilds: /skip-prebuilds:\s*'true'/.test(source),
-    })
-  }
-  return addons
-}
-
-const MOBILE_ADDONS = mobileAddons()
-
-// 2 since the fabric consumers and the speech packages moved to the CI contract's mobile-tests.yml.
-test('every mobile addon was discovered', () => {
-  assert.ok(MOBILE_ADDONS.length >= 2, `found ${MOBILE_ADDONS.length}`)
-})
-
-for (const addon of MOBILE_ADDONS) {
-  // decoder-audio passes skip-prebuilds:'true', so this step never runs for it.
-  if (addon.skipsPrebuilds) continue
-
-  const bare = addon.npmName.replace(/^@qvac\//, '')
-
-  // A full published spec, except for the one addon whose name is UNSCOPED
-  // (inference-addon-cpp). The action's spec-form detection only recognises
-  // SCOPED full specs (`@*/*`), so an unscoped `name@version` would be
-  // double-prefixed into `name@name@version`. That path is unreachable — that
-  // workflow exposes no `package` input, so its package-version is always empty
-  // — and the spec validator now rejects the malformed result loudly instead of
-  // handing nonsense to npm. Pass a bare version for it, which is the form its
-  // callers could actually produce.
-  const publishedSpec = addon.npmName.startsWith('@')
-    ? `${addon.npmName}@1.2.3`
-    : '1.2.3'
-
-  test(`${addon.workflow}: published spec still resolves`, () => {
-    const run = runStep({
-      addonName: addon.npmName,
-      packageVersion: publishedSpec,
-      force: 'true',
-      npmEnv: { MOCK_NPM_VERSION: '1.2.3' },
-    })
-    assert.equal(run.status, 0, run.output)
-    assert.ok(run.invocations.includes(`registry=${NPM_HOST}`), run.invocations)
-    assert.ok(run.androidPrebuildInstalled)
-  })
-
-  test(`${addon.workflow}: GPR -mono dev spec resolves`, () => {
-    const run = runStep({
-      addonName: addon.npmName,
-      packageVersion: `@tetherto/${bare}-mono@1.2.3-tmp.runid-42`,
-      force: 'true',
-      npmEnv: { MOCK_NPM_VERSION: '1.2.3-tmp.runid-42' },
-    })
-    assert.equal(run.status, 0, run.output)
-    assert.ok(run.invocations.includes(`registry=${GPR_HOST}`), run.invocations)
-    assert.match(run.invocations, /auth=token/)
-    assert.ok(run.androidPrebuildInstalled)
-  })
-
-  test(`${addon.workflow}: empty package-version resolves its own @latest`, () => {
-    const run = runStep({ addonName: addon.npmName })
-    assert.equal(run.status, 0, run.output)
-    // Plain containment, not a built regex: the addon name is interpolated from
-    // a workflow file, and hand-escaping it for RegExp is how the earlier
-    // incomplete-escaping alerts happened. There is nothing to match here.
-    assert.ok(
-      run.invocations.includes(`spec=${addon.npmName}@latest`),
-      `expected spec=${addon.npmName}@latest in:\n${run.invocations}`,
-    )
-  })
-
-  test(`${addon.workflow}: another addon's package is rejected`, () => {
-    const other = bare === 'llm-llamacpp' ? 'ocr-ggml' : 'llm-llamacpp'
-    const run = runStep({
-      addonName: addon.npmName,
-      packageVersion: `@tetherto/${other}-mono@1.2.3`,
-      force: 'true',
-      npmEnv: { MOCK_NPM_VERSION: '1.2.3' },
-    })
-    assert.notEqual(run.status, 0, `${addon.workflow} accepted ${other}`)
-    assert.match(run.output, /is not a build of/)
-  })
-}
-
-// The dispatch inputs are what people copy from. They advertise the @tetherto
-// form, so the advertised name must be the one publish-library-to-gpr actually
-// publishes (`name-suffix: "-mono"`).
-test('every mobile dispatch input advertises the -mono GPR name', () => {
-  const workflows = spawnSync(
-    'git',
-    ['ls-files', '.github/workflows/integration-mobile-test-*.yml'],
-    { cwd: root, encoding: 'utf8' },
-  )
-    .stdout.trim()
-    .split('\n')
-    .filter(Boolean)
-
-  assert.ok(workflows.length >= 2, `found ${workflows.length} mobile workflows`)
-
-  const offenders = []
-  for (const relativePath of workflows) {
-    // Any @tetherto/<name>@ spec whose name lacks the -mono suffix.
-    for (const match of read(relativePath).matchAll(/@tetherto\/[a-z0-9-]+?(?<!-mono)@/g)) {
-      offenders.push(`${relativePath}: ${match[0]}`)
-    }
-  }
-
-  assert.deepEqual(
-    offenders,
-    [],
-    `GPR dev builds are published as @tetherto/<addon>-mono:\n${offenders.join('\n')}`,
-  )
-})
 
 // ── prebuild_run_id ─────────────────────────────────────────────────────────
 // Resolution logic is unit-tested in
@@ -1076,10 +948,9 @@ test('the run-id steps are the first prebuild source and fail closed', () => {
   )
 })
 
-// Every mobile workflow sparse-checks out only
-// .github/actions/run-mobile-integration-tests, so a move would leave the step
-// calling a file that is not on disk — visible only at dispatch time.
-test('the resolver is reachable from the callers own sparse checkout', () => {
+// The setup step runs the resolver through its own action path, so a move would leave the step calling a file that
+// is not on disk, visible only at dispatch time.
+test('the resolver is reachable from the setup action', () => {
   const resolver = '.github/actions/run-mobile-integration-tests/setup/resolve-prebuild-run.mjs'
   assert.ok(existsSync(join(root, resolver)), `${resolver} must exist`)
   assert.match(
@@ -1087,97 +958,6 @@ test('the resolver is reachable from the callers own sparse checkout', () => {
     /node "\$ACTION_PATH\/resolve-prebuild-run\.mjs"/,
     'the step must invoke the resolver through github.action_path',
   )
-
-  const workflows = spawnSync(
-    'git',
-    ['ls-files', '.github/workflows/integration-mobile-test-*.yml'],
-    { cwd: root, encoding: 'utf8' },
-  ).stdout.trim().split('\n').filter(Boolean)
-
-  for (const relativePath of workflows) {
-    const source = read(relativePath)
-    if (!source.includes('prebuild-run-id:')) continue
-    assert.match(
-      source,
-      /sparse-checkout: \|\n\s+\.github\/actions\/run-mobile-integration-tests/,
-      `${relativePath} must sparse-check out the directory holding the resolver`,
-    )
-  }
-})
-
-// One addon deliberately has no run-id route. Pinning it means another
-// exclusion has to be a decision, not a silent omission.
-const RUN_ID_EXEMPT = {
-  // Compiles its own prebuilds in prebuild-android / prebuild-ios jobs in the
-  // SAME run from the dispatched ref, so a dispatch already tests the branch's
-  // native code and the gap this route closes does not exist.
-  'inference-addon-cpp': /^\s{2}prebuild-android:$/m,
-}
-
-test('every mobile dispatch offers the run-id route, or is a pinned exemption', () => {
-  const workflows = spawnSync(
-    'git',
-    ['ls-files', '.github/workflows/integration-mobile-test-*.yml'],
-    { cwd: root, encoding: 'utf8' },
-  ).stdout.trim().split('\n').filter(Boolean)
-
-  assert.ok(workflows.length >= 2, `found ${workflows.length} mobile workflows`)
-
-  const missing = []
-  for (const relativePath of workflows) {
-    const slug = relativePath.replace(/.*integration-mobile-test-|\.yml$/g, '')
-    const source = read(relativePath)
-
-    if (slug in RUN_ID_EXEMPT) {
-      assert.match(
-        source,
-        RUN_ID_EXEMPT[slug],
-        `${slug} is exempt from the run-id route for a reason that no longer holds`,
-      )
-      assert.ok(
-        !source.includes('prebuild_run_id'),
-        `${slug} is listed as exempt but now exposes prebuild_run_id — drop the exemption`,
-      )
-      continue
-    }
-
-    const problems = []
-    if (!/^      prebuild_run_id:$/m.test(source)) problems.push('no prebuild_run_id input')
-    if (!source.includes('prebuild-run-id: ${{ inputs.prebuild_run_id }}')) {
-      problems.push('input not wired into setup')
-    }
-    // Without actions: read the lookup 403s and the download fails — after the
-    // dispatcher has already waited for a build.
-    if (!/^      actions: read$/m.test(source)) problems.push('no actions: read')
-    if (problems.length > 0) missing.push(`${slug}: ${problems.join(', ')}`)
-  }
-
-  assert.deepEqual(missing, [], `incomplete prebuild_run_id wiring:\n${missing.join('\n')}`)
-})
-
-// The dispatch inputs are what people copy from, and the action rejects the
-// combination, so the descriptions must say so.
-test('the run-id input documents its precedence and the mutual exclusion', () => {
-  const workflows = spawnSync(
-    'git',
-    ['ls-files', '.github/workflows/integration-mobile-test-*.yml'],
-    { cwd: root, encoding: 'utf8' },
-  ).stdout.trim().split('\n').filter(Boolean)
-
-  for (const relativePath of workflows) {
-    const source = read(relativePath)
-    const match = source.match(/^      prebuild_run_id:\n        description: "([^"]*)"/m)
-    if (!match) continue
-
-    const description = match[1]
-    assert.match(description, /Mutually exclusive/, `${relativePath} must state the exclusion`)
-    assert.match(description, /precedence over/, `${relativePath} must state the precedence`)
-    assert.match(
-      description,
-      /fails the run/,
-      `${relativePath} must say a bad run id fails rather than falling back`,
-    )
-  }
 })
 
 test('the documented route is the one docs/ci/MOBILE-ON-DEMAND.md tells people to use', () => {
@@ -1328,46 +1108,6 @@ test('the resolver reports which repository built the prebuilds', () => {
   assert.ok(
     !/throw new ResolveError\(`Refusing prebuilds/.test(resolver),
     'a fork-built run must warn, not be refused — this repo is fork-first',
-  )
-})
-
-// audiogen-ggml pins its composite actions to the DEFAULT BRANCH as a
-// supply-chain guard, so it runs main's setup action rather than the PR's. An
-// older copy has no `prebuild-run-id` input, and GitHub only WARNS on an unknown
-// input — observed live: the run logged "Unexpected input(s) 'prebuild-run-id'"
-// and then "downloading @qvac/audiogen-ggml@latest from npm", i.e. it silently
-// tested the published release. That is the failure this route exists to remove,
-// so the workflow must assert the input was honoured.
-test('a workflow pinning the composite to the default branch asserts the run id took effect', () => {
-  const workflows = spawnSync(
-    'git',
-    ['ls-files', '.github/workflows/integration-mobile-test-*.yml'],
-    { cwd: root, encoding: 'utf8' },
-  ).stdout.trim().split('\n').filter(Boolean)
-
-  const offenders = []
-  for (const relativePath of workflows) {
-    const source = read(relativePath)
-    if (!source.includes('prebuild-run-id:')) continue
-
-    // Does this workflow load the setup composite from the default branch?
-    const pinned = /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/.test(source)
-    if (!pinned) continue
-
-    const asserts =
-      source.includes('steps.setup.outputs.prebuild-source-run-id') &&
-      // always(): when the input is ignored, setup fails first, so a plain
-      // conditional would skip the step that explains why.
-      /if: always\(\) && inputs\.prebuild_run_id != ''/.test(source)
-    if (!asserts) offenders.push(relativePath)
-  }
-
-  assert.deepEqual(
-    offenders,
-    [],
-    'a default-branch-pinned workflow silently ignores prebuild-run-id until the action is on main,\n' +
-      'so it must assert steps.setup.outputs.prebuild-source-run-id matches the request:\n' +
-      offenders.join('\n'),
   )
 })
 

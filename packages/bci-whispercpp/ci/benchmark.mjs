@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// bci's RTF benchmark, as integration-test-nx.yml ran it after the tests: a named set from ci/benchmark-matrix.json as
+// bci's RTF benchmark, as main's desktop test workflow ran it after the tests: a named set from ci/benchmark-matrix.json as
 // QVAC_BCI_BENCHMARK_MATRIX_JSON, then scripts/run-rtf-benchmark-matrix.js into benchmarks/results. It fails when the
 // matrix fails or writes no result file.
 //

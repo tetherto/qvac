@@ -21,10 +21,8 @@ on:
         type: choice
         required: true
         options:
-          - "On PR Trigger (nx)"
           - "PR build and test"
           - "Mobile tests"
-          - "Mobile Integration Tests (Diffusion CPP)"
           - "Benchmarks"
       runs:
         description: "Number of recent runs to aggregate"
@@ -70,10 +68,17 @@ jobs:
             ARTIFACT_ADDON="llamacpp-llm"
             FILTER_ARGS=(--filter "gemma4-vl|qwen3.5-vl")
           fi
-          # llm's contract artifacts: <slug>-perf-<config>-<n> on PR build and test, <slug>-perf-mobile-* on Mobile tests.
-          case "$ARTIFACT_ADDON/$PERF_WORKFLOW" in
-            "llamacpp-llm/PR build and test") FILTER_ARGS+=(--artifact-pattern "llm-llamacpp-perf-*") ;;
-            "llamacpp-llm/Mobile tests") FILTER_ARGS+=(--artifact-pattern "llm-llamacpp-perf-mobile-*") ;;
+          # The contract names perf artifacts <slug>-perf-<config>-<n>, and <slug>-perf-mobile-<platform>-<n> on Mobile tests;
+          # llm's, translation's and Parakeet's slugs differ from their report names.
+          SLUG="$ARTIFACT_ADDON"
+          case "$ARTIFACT_ADDON" in
+            llamacpp-llm) SLUG=llm-llamacpp ;;
+            nmtcpp) SLUG=translation-nmtcpp ;;
+            parakeet) SLUG=asr-ggml ;;
+          esac
+          case "$PERF_WORKFLOW" in
+            "PR build and test"|"Benchmarks") FILTER_ARGS+=(--artifact-pattern "${SLUG}-perf-*") ;;
+            "Mobile tests") FILTER_ARGS+=(--artifact-pattern "${SLUG}-perf-mobile-*") ;;
           esac
           # ACE-Step rows arrive in two differently shaped artifacts (desktop
           # rtf-benchmark-*.json and the canonical mobile report), which the
@@ -102,14 +107,11 @@ jobs:
         run: |
           mkdir -p reports
 
-          # "On PR Trigger (nx)", not "Integration Tests (nx)": the latter runs
-          # via workflow_call, and a called run is listed under its caller, so
-          # querying it by name finds nothing. --addon still selects the right
-          # artifact, and runs without one simply contribute nothing.
           echo "=== Translation ==="
           node scripts/perf-report/aggregate.js \
             --addon nmtcpp \
-            --workflow "On PR Trigger (nx)" \
+            --workflow "PR build and test" \
+            --artifact-pattern "translation-nmtcpp-perf-*" \
             --runs 6 \
             --output reports/nmtcpp-performance.md \
             --output-json reports/nmtcpp-performance.json \
@@ -180,7 +182,8 @@ jobs:
           echo "=== Diffusion (Desktop) ==="
           node scripts/perf-report/aggregate.js \
             --addon diffusion-cpp \
-            --workflow "On PR Trigger (nx)" \
+            --workflow "PR build and test" \
+            --artifact-pattern "diffusion-cpp-perf-*" \
             --runs 6 \
             --output reports/diffusion-cpp-performance.md \
             --output-json reports/diffusion-cpp-performance.json \
@@ -189,7 +192,8 @@ jobs:
           echo "=== Diffusion (Mobile) ==="
           node scripts/perf-report/aggregate.js \
             --addon diffusion-cpp \
-            --workflow "Mobile Integration Tests (Diffusion CPP)" \
+            --workflow "Mobile tests" \
+            --artifact-pattern "diffusion-cpp-perf-mobile-*" \
             --runs 6 \
             --output reports/diffusion-cpp-mobile-performance.md \
             --output-json reports/diffusion-cpp-mobile-performance.json \

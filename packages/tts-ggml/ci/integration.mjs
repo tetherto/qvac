@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// tts's test:integration, as integration-test-nx.yml ran it: the suite with the addon's prebuilds on the library path,
+// tts's test:integration, as main's desktop test workflow ran it: the suite with the addon's prebuilds on the library path,
 // main's per-test timeout and the configuration's GPU backend. The manifest supplies the models.
 //
 //   node ci/integration.mjs [--script test:integration:smoke] [--lib <dir>] [--set NAME=value]...

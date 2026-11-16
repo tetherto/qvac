@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// audiogen's RTF benchmark, as integration-test-nx.yml ran it after the tests: a named set from ci/benchmark-matrix.json
+// audiogen's RTF benchmark, as main's desktop test workflow ran it after the tests: a named set from ci/benchmark-matrix.json
 // as QVAC_AUDIOGEN_GGML_BENCHMARK_MATRIX_JSON with main's warmup, runs and duration and the job's runner label, then
 // scripts/run-rtf-benchmark-matrix.js into benchmarks/results. It fails when the matrix fails or writes no result.
 //

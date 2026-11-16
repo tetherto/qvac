@@ -53,7 +53,7 @@ Do **not** use it for:
 
 **`fabric` is NOT a refusal.** An earlier version of this skill refused it, claiming its release read
 `packages/fabric/release-notes/v<ver>.md` via `create-github-release-fabric.yml`. That workflow does
-not exist and is referenced nowhere; `on-merge-nx.yml` passes
+not exist and is referenced nowhere; `publish-npm.yml` passes
 `changelog-path: packages/fabric/CHANGELOG.md`, and that file is current and correctly bracketed.
 `packages/fabric/release-notes/` holds only a `v0.1.0.md` leftover and is not the release source.
 Treat `fabric` like any other addon.
@@ -176,8 +176,7 @@ Rules:
 ## Step 6 — Report what happens next
 
 Look up the git tag prefix in `packages/<pkg>/project.json`: `metadata.publish.tagPrefix` on the
-`publish` target for a package on the CI contract (passed by `publish-npm.yml`), else `repoName` in
-`targets.on-merge.options.ci` (passed by `on-merge-nx.yml`). Both feed `create-release-tag.yml`.
+`publish` target, which `publish-npm.yml` passes to `create-release-tag.yml`.
 **Never derive the tag from the directory name** — several are counter-intuitive:
 
 | Package | Tag |
@@ -193,7 +192,7 @@ Addons get a **git tag only, no GitHub Release** — the release workflow calls 
 since #2602. Do not promise a Releases-page entry; only the SDK publishes one.
 
 Then tell the user the next step is `/release <pkg>`, which cuts `release-<pkg>-<version>`, dispatches
-its release workflow (`publish-npm.yml` for a package on the CI contract, else `on-merge-nx.yml`), and pauses at
+its release workflow (`publish-npm.yml`), and pauses at
 the human-only `npm` approval gate.
 
 ## Step 7 — Verify before committing

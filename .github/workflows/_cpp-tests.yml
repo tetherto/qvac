@@ -63,7 +63,7 @@ jobs:
         run: node src/.github/bare-toolchain/install.mjs
       - uses: ./.github/actions/setup-vulkan
         with:
-          arch: ${{ matrix.row.arch }}
+          arch: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
       - uses: ./.github/actions/vcpkg-bootstrap
       - uses: ./.github/actions/vcpkg-cache-setup
         with:
@@ -98,8 +98,10 @@ jobs:
         env:
           NPM: ${{ matrix.row.npm }}
         run: pnpm install --frozen-lockfile --ignore-scripts --filter . --filter "$NPM..."
-      # The build job's prebuilds for this platform: the package's and its native dependencies'.
-      - uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      # The build job's prebuilds for this platform: the package's and its native dependencies'. A package without a
+      # build target has none, and its C++ tests build against the checkout alone.
+      - if: matrix.row.hasBuild
+        uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           name: prebuild-${{ matrix.row.slug }}-${{ matrix.row.platform }}-${{ matrix.row.arch }}
           path: src
@@ -112,6 +114,7 @@ jobs:
         run: pnpm exec nx run-many -t ci:system -p "$PROJECT" -c "$CONFIG" --parallel=1 --outputStyle=stream
       # Links each restored package's prebuilds where its dependents look for them, without rebuilding.
       - name: link:platform
+        if: matrix.row.hasBuild
         shell: bash
         working-directory: src
         run: |

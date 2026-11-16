@@ -76,5 +76,12 @@
     "lunte": "^1.8.4",
     "prettier": "^3.9.6",
     "prettier-config-holepunch": "^2.0.0"
+  },
+  "nx": {
+    "includedScripts": [
+      "lint",
+      "test:unit",
+      "link:platform"
+    ]
   }
 }

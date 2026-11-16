@@ -6,7 +6,7 @@ This document explains the **Manual Workspace Cleanup** step used at the start o
 
 ## Addon runner labels (QVAC-14347)
 
-Specialized runner labels used by addon workflows (`cpp-tests-*`, `integration-test-*`, `integration-mobile-test-*`, `reusable-prebuilds.yml`, and related files) live in [`.github/runners.yaml`](../../.github/runners.yaml). `ubuntu-latest` orchestration jobs stay hardcoded.
+Specialized runner labels used by addon workflows (the CI contract's groups and templates, and related files) live in [`.github/runners.yaml`](../../.github/runners.yaml). `ubuntu-latest` orchestration jobs stay hardcoded.
 
 GitHub evaluates `runs-on` and `strategy.matrix` before any step runs, so callers cannot read that YAML directly. A generated reusable workflow exports the labels as job outputs:
 
@@ -35,7 +35,7 @@ Keep [`.github/actionlint.yaml`](../../.github/actionlint.yaml) in sync: every `
 
 ### `os` is a frozen logical id, not a catalog label
 
-The catalog governs only **where a job runs** — `runs-on:` and matrix `runner:`. It deliberately does **not** manage the `os:` matrix field, `matrix.os == '...'` step conditionals, or `"os":"..."` inside `fromJSON` matrices. `os` is a frozen logical identity: it names a matrix row, gates platform-specific steps (e.g. `if: matrix.os == 'macos-14'` in [`pr-test-inference-addon-cpp.yml`](../../.github/workflows/pr-test-inference-addon-cpp.yml)), and labels artifacts. Self-hosted rows intentionally pair a logical `os` with a different runner (e.g. `os: macos-14` + `runner: qvac-macos26-arm64-gpu`).
+The catalog governs only **where a job runs** — `runs-on:` and matrix `runner:`. It deliberately does **not** manage the `os:` matrix field, `matrix.os == '...'` step conditionals, or `"os":"..."` inside `fromJSON` matrices. `os` is a frozen logical identity: it names a matrix row, gates platform-specific steps (e.g. `if: matrix.os == 'macos-14'`), and labels artifacts. Self-hosted rows intentionally pair a logical `os` with a different runner (e.g. `os: macos-14` + `runner: qvac-macos26-arm64-gpu`).
 
 Because every catalog-label `os` row also carries an explicit `runner:` from the catalog, `runs-on` never falls back to `matrix.os`. So bumping a catalog label (e.g. `macos_arm64_gpu: qvac-macos26-arm64-gpu` → a new label) never requires touching any `os:` value, and re-imaging the logical `os` id (should the darwin fleet move off the `macos-14` string) is a separate, deliberate edit. `validate-runner-names.mjs` does not flag `os` for this reason. If you ever need `os` values that must track the runner, add an explicit `runner:` from the catalog to that row rather than relying on the `os` string.
 
@@ -109,7 +109,7 @@ The inverse condition is also common:
 if: runner.environment == 'github-hosted'
 ```
 
-Example: [`.github/workflows/cpp-tests-nx.yml`](../../.github/workflows/cpp-tests-nx.yml) runs **Setup build host** only on GitHub-hosted runners.
+Example: [`.github/workflows/_build.yml`](../../.github/workflows/_build.yml) frees disk and installs the Android cross packages only on GitHub-hosted runners.
 
 ## Checklist when adding or editing workflows
 

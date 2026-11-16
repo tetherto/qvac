@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// bci's test:integration, as integration-test-nx.yml ran it: the neural-signal fixtures from the private release
+// bci's test:integration, as main's desktop test workflow ran it: the neural-signal fixtures from the private release
 // (GITHUB_TOKEN), the Vulkan loader next to the addon on win32, then the suite. The manifest supplies the models.
 //
 //   node ci/integration.mjs [--script test:integration:smoke] [--set NAME=value]...
