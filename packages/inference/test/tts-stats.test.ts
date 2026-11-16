@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { appendPcm, collectTtsStats, chunkMetadata } from '@/utils/tts-stats'
+import { appendPcm, carriesSpeechTokenIds, collectTtsStats, chunkMetadata } from '@/utils/tts-stats'
 
 test('collectTtsStats: maps LavaSR enhancer and denoiser backend stats', (t) => {
   const stats = collectTtsStats({
@@ -172,4 +172,23 @@ test('collectTtsStats: forwards the engines’ stage timings and counters, zero 
 
 test('collectTtsStats: forwards only the stage fields the addon reported', (t) => {
   t.alike(collectTtsStats({ stats: { t3Ms: 410 } }), { t3Ms: 410 })
+})
+
+test('collectTtsStats: forwards the Parler Core ML sidecar flags, zero included', (t) => {
+  // 0 is a real report: a retired sidecar, or a synthesis that ran on ggml.
+  t.alike(
+    collectTtsStats({
+      stats: { decoderSidecarLoaded: 1, dacSidecarLoaded: 1, decoderOnCoreml: 0, dacOnCoreml: 1 }
+    }),
+    { decoderSidecarLoaded: 1, dacSidecarLoaded: 1, decoderOnCoreml: 0, dacOnCoreml: 1 }
+  )
+})
+
+test('chunkMetadata: forwards CosyVoice3 speechTokenIds and nothing else on an end marker', (t) => {
+  t.alike(
+    chunkMetadata({ outputArray: new Int16Array(0), isLast: true, speechTokenIds: [12, 480, 3] }),
+    { isLast: true, speechTokenIds: [12, 480, 3] }
+  )
+  t.is(carriesSpeechTokenIds({ outputArray: new Int16Array(0), speechTokenIds: [] }), true)
+  t.is(carriesSpeechTokenIds({ outputArray: new Int16Array(0), isLast: true }), false)
 })

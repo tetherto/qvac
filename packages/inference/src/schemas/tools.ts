@@ -43,6 +43,43 @@ export const toolSchema = z.object({
   })
 })
 
+export const DEFAULT_TOOL_SEARCH_LIMIT = 3
+export const MAX_TOOL_SEARCH_LIMIT = 8
+
+export const toolSearchOptionsSchema = z
+  .object({
+    defaultLimit: z
+      .number()
+      .int()
+      .min(1)
+      .optional()
+      .describe(
+        `How many tool definitions one \`tool_search\` call loads when the model does not ask for a number with its \`limit\` argument. Defaults to ${DEFAULT_TOOL_SEARCH_LIMIT}, or \`maxLimit\` when that is lower.`
+      ),
+    maxLimit: z
+      .number()
+      .int()
+      .min(1)
+      .optional()
+      .describe(
+        `The most tool definitions one \`tool_search\` call can load. A larger \`limit\` from the model is lowered to this. Defaults to ${MAX_TOOL_SEARCH_LIMIT}.`
+      )
+  })
+  .strict()
+  .superRefine((options, ctx) => {
+    const maxLimit = options.maxLimit ?? MAX_TOOL_SEARCH_LIMIT
+    if (options.defaultLimit !== undefined && options.defaultLimit > maxLimit) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `toolSearch.defaultLimit (${options.defaultLimit}) cannot exceed maxLimit (${maxLimit}).`,
+        path: ['defaultLimit']
+      })
+    }
+  })
+  .describe(
+    'Limits on what the built-in `tool_search` loads per call. Only used when a tool sets `deferLoading`. The limits are stated in the `tool_search` definition at the front of the prompt, so set them once per conversation: changing them re-prefills from there.'
+  )
+
 export const toolCallSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -68,6 +105,7 @@ export const toolCallEventSchema = z.union([
 ])
 
 export type Tool = z.infer<typeof toolSchema>
+export type ToolSearchOptions = z.input<typeof toolSearchOptionsSchema>
 export type ToolCall = z.infer<typeof toolCallSchema>
 export type ToolCallError = z.infer<typeof toolCallErrorSchema>
 export type ToolCallEvent = z.infer<typeof toolCallEventSchema>

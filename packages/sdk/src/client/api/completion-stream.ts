@@ -49,6 +49,7 @@ type CompletionParams = Omit<CompletionClientParams, 'tools'> & {
  * @param params.stream - Whether to stream tokens (true) or return complete response (false). Defaults to true
  * @param params.tools - Optional array of tools (can be simple ToolInput with Zod schemas or full Tool objects)
  * @param params.mcp - Optional array of MCP client inputs for tool integration
+ * @param params.toolSearch - Limits on what the built-in `tool_search` loads per call, used when a tool sets `deferLoading`: `defaultLimit` (default 3) is how many tool definitions one call loads when the model does not ask for a number with the call's `limit` argument; `maxLimit` (default 8) is the most one call can load, and a larger `limit` is lowered to it. The model is told these limits in the tool definitions at the front of the prompt, so set them once per conversation; changing them re-prefills from there. When you run the search yourself, pass these same params to `executeToolSearch`.
  * @param params.captureThinking - Best-effort parsing of `<think>` blocks into `thinkingDelta` events; `final.raw.fullText` always preserves the original output
  * @param params.emitRawDeltas - When true, every raw model token is also emitted as a `rawDelta` event
  * @param params.toolDialect - Override the SDK's dialect detection, which uses the model name, then the GGUF `general.architecture`, then `"hermes"`. Supported values: `"hermes"`, `"pythonic"`, `"json"`, `"harmony"`, `"qwen35"` (Qwen3.5/3.6/3.8), `"gemma4"`, `"dsml"` (DeepSeek V3.2/V4). Use when detection picks the wrong dialect for your model. Drives both streaming frame detection and finalization parsing.
@@ -68,7 +69,13 @@ type CompletionParams = Omit<CompletionClientParams, 'tools'> & {
  *   validation must encode it explicitly in `schema`.
  *
  *   Cannot be combined with `tools` (tools already constrain output via their parameter schema).
- * @param params.prefill - Evaluate the prompt and tools without generating an answer. Requires an enabled kvCache; cannot force tool_choice. Await final before sending the question with the same prefix.
+ * @param params.prefill - Evaluate the prompt and tools without generating an answer. Requires an enabled kvCache and at least one message (from history or `modelConfig.system_prompt`); cannot force tool_choice. Await final before sending the question with the same prefix.
+ * @param params.seedFrom - Optional name of another caller-managed cache to start this chat from, such as a
+ *   system prompt and tools primed with `prefill`. On the first turn of a chat whose `kvCache` key has no
+ *   cache yet, the model reads that cache and reuses the prefix it shares with the prompt, so only the rest is
+ *   processed; the source is never written. Ignored once the chat has a cache. Requires a string `kvCache`
+ *   other than `seedFrom`. Refused when no cache of that name exists for this model and system prompt, or
+ *   when the model was not loaded with `cache_share_across_keys: true`, which is off by default.
  * @param params.kvCache - Optional KV cache configuration. Cache files are organized hierarchically:
  *   - Structure: `{kvCacheKey}/{modelId}/{configHash}.bin`
  *   - The configHash includes model config + system prompt to ensure cache isolation
@@ -221,7 +228,9 @@ export function completion(params: CompletionParams): CompletionRun {
         history: params.history.map((message) => ({ ...message, content: message.content ?? '' })),
         kvCache: params.kvCache,
         prefill: params.prefill,
+        seedFrom: params.seedFrom,
         tools: allTools.length > 0 ? allTools : undefined,
+        toolSearch: params.toolSearch,
         stream: params.stream ?? true,
         generationParams: params.generationParams,
         captureThinking: params.captureThinking,

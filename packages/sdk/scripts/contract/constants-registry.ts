@@ -20,6 +20,9 @@ import {
   TTS_COSYVOICE3_INSTRUCT_DIALECTS,
   TTS_COSYVOICE3_INSTRUCT_VOLUMES,
   TTS_COSYVOICE3_INSTRUCT_STYLES,
+  TTS_PARLER_COREML_COMPUTE_UNITS,
+  TTS_LAVASR_COREML_COMPUTE_UNITS,
+  TTS_SUPERTONIC_PRECISIONS,
   VectorIndexStorage
 } from '@qvac/inference/surface'
 import {
@@ -116,6 +119,9 @@ export const constantsRegistry = {
   TtsCosyvoice3InstructDialect: enumFromVocabulary(TTS_COSYVOICE3_INSTRUCT_DIALECTS),
   TtsCosyvoice3InstructVolume: enumFromVocabulary(TTS_COSYVOICE3_INSTRUCT_VOLUMES),
   TtsCosyvoice3InstructStyle: enumFromVocabulary(TTS_COSYVOICE3_INSTRUCT_STYLES),
+  TtsParlerCoremlComputeUnits: enumFromVocabulary(TTS_PARLER_COREML_COMPUTE_UNITS),
+  TtsLavasrCoremlComputeUnits: enumFromVocabulary(TTS_LAVASR_COREML_COMPUTE_UNITS),
+  TtsSupertonicPrecision: enumFromVocabulary(TTS_SUPERTONIC_PRECISIONS),
   AudioGenEngine: enumFromVocabulary(AUDIOGEN_ENGINES),
   AudioGenTaskType: enumFromVocabulary(AUDIOGEN_TASK_TYPES),
   AudioGenEditOperation: enumFromVocabulary(AUDIOGEN_EDIT_OPERATIONS),

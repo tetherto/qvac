@@ -119,9 +119,9 @@ Response: `{ "object": "list", "data": [ … ], "has_more": <bool> }`.
 
 ```bash
 # All chat-capable models the SDK provides
-curl 'http://localhost:11434/v1/models/catalog?role=chat&limit=20'
+curl 'http://localhost:11435/v1/models/catalog?role=chat&limit=20'
 # Search by name
-curl 'http://localhost:11434/v1/models/catalog?search=qwen'
+curl 'http://localhost:11435/v1/models/catalog?search=qwen'
 ```
 
 The catalog does not include on-disk download state. To browse the live remote model registry,
@@ -136,7 +136,7 @@ description in a catalog carried by a built-in `tool_search` tool, and the
 schema is loaded when the model searches for it.
 
 ```bash
-curl -sS http://127.0.0.1:11434/v1/chat/completions \
+curl -sS http://127.0.0.1:11435/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "<alias>",
@@ -212,17 +212,17 @@ Backed by the same chat-category models and SDK `completion` capability as
 
 ```bash
 # Blocking, single prompt
-curl -sS http://127.0.0.1:11434/v1/completions \
+curl -sS http://127.0.0.1:11435/v1/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"my-llm","prompt":"Say hello in one word.","max_tokens":16}'
 
 # Streaming (single prompt only)
-curl -sN http://127.0.0.1:11434/v1/completions \
+curl -sN http://127.0.0.1:11435/v1/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"my-llm","prompt":"Say hello in one word.","stream":true}'
 
 # Multi-prompt fan-out (blocking only; stream:true returns 400)
-curl -sS http://127.0.0.1:11434/v1/completions \
+curl -sS http://127.0.0.1:11435/v1/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"my-llm","prompt":["Reply with alpha.","Reply with beta."],"max_tokens":8}'
 ```
@@ -313,17 +313,17 @@ reasoning as `response.reasoning_text.delta` events.
 
 ```bash
 # Blocking
-curl -sS http://127.0.0.1:11434/v1/responses \
+curl -sS http://127.0.0.1:11435/v1/responses \
   -H "Content-Type: application/json" \
   -d '{"model":"<alias>","input":"ping","store":true}'
 
 # Streaming (SSE)
-curl -sN http://127.0.0.1:11434/v1/responses \
+curl -sN http://127.0.0.1:11435/v1/responses \
   -H "Content-Type: application/json" \
   -d '{"model":"<alias>","input":"ping","stream":true}'
 
 # Multi-turn via previous_response_id
-curl -sS http://127.0.0.1:11434/v1/responses \
+curl -sS http://127.0.0.1:11435/v1/responses \
   -H "Content-Type: application/json" \
   -d '{"model":"<alias>","input":"and now?","previous_response_id":"resp_..."}'
 ```
@@ -438,7 +438,7 @@ requests receive HTTP 429 with error type `rate_limit_error` and code
 ### Example
 
 ```bash
-curl -sS http://127.0.0.1:11434/v1/decisions \
+curl -sS http://127.0.0.1:11435/v1/decisions \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "laya-multilingual-322m-q8-0",
@@ -463,7 +463,7 @@ curl -sS http://127.0.0.1:11434/v1/decisions \
 ```
 
 Use an OpenAI client that supports Decisions, or send the request directly over
-HTTP with base URL `http://127.0.0.1:11434/v1` and your configured model alias.
+HTTP with base URL `http://127.0.0.1:11435/v1` and your configured model alias.
 
 ## `POST /v1/images/generations` and `POST /v1/images/edits`
 
@@ -534,7 +534,7 @@ Generated images live in process memory only — no disk, no P2P. Defaults: **1 
 **`b64_json` (default), text-to-image:**
 
 ```bash
-curl -sS http://127.0.0.1:11434/v1/images/generations \
+curl -sS http://127.0.0.1:11435/v1/images/generations \
   -H "Content-Type: application/json" \
   -d '{
     "model": "my-diffusion",
@@ -585,7 +585,7 @@ curl -sS https://api.example.com/v1/images/generations \
 **`/v1/images/edits` (img2img, multipart):**
 
 ```bash
-curl -sS http://127.0.0.1:11434/v1/images/edits \
+curl -sS http://127.0.0.1:11435/v1/images/edits \
   -F "image=@input.png" \
   -F "model=my-diffusion" \
   -F "prompt=oil painting style, warm lighting" \
@@ -597,7 +597,7 @@ Response shape matches `/v1/images/generations`.
 For models with multi-reference support, including FLUX.2 and Qwen-Image-2.1, send repeated `image[]` files. The server forwards every image in upload order as SDK `init_images`; a single file still uses `init_image`. Configure the model with its required companion files and prediction settings before sending edits.
 
 ```bash
-curl -sS http://127.0.0.1:11434/v1/images/edits \
+curl -sS http://127.0.0.1:11435/v1/images/edits \
   -F "image[]=@reference-a.png" \
   -F "image[]=@reference-b.png" \
   -F "model=my-diffusion" \
@@ -636,7 +636,7 @@ Transcribes audio in its source language using a transcription model.
 - `language` is configured when the model loads; a per-request override is ignored with a warning. `temperature` is also ignored with a warning. These warnings report parameter names without values.
 
 ```bash
-curl -sS http://127.0.0.1:11434/v1/audio/transcriptions \
+curl -sS http://127.0.0.1:11435/v1/audio/transcriptions \
   -F model=whisper-transcribe \
   -F file=@./sample.wav \
   -F response_format=srt
@@ -719,7 +719,7 @@ If you need to point at non-registry weights (a local path, `https://…`, `regi
 ### Example (`curl`)
 
 ```bash
-curl -s http://127.0.0.1:11434/v1/audio/translations \
+curl -s http://127.0.0.1:11435/v1/audio/translations \
   -F model=whisper-translate \
   -F file=@./sample.wav \
   -F response_format=json
@@ -946,7 +946,7 @@ data: {"type":"speech.audio.done","usage":{"input_tokens":0,"output_tokens":0,"t
 - The stream has no `[DONE]` sentinel. `speech.audio.done` is the last event.
 
 ```bash
-curl -N http://localhost:11434/v1/audio/speech \
+curl -N http://localhost:11435/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{"model":"my-tts","voice":"alloy","input":"Hello from QVAC.","response_format":"pcm","stream_format":"sse"}'
 ```
@@ -956,7 +956,7 @@ curl -N http://localhost:11434/v1/audio/speech \
 **WAV (default), drop-in alias for OpenAI `tts-1`:**
 
 ```bash
-curl -sS http://127.0.0.1:11434/v1/audio/speech \
+curl -sS http://127.0.0.1:11435/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{"model":"tts-1","voice":"alloy","input":"Hello from QVAC."}' \
   --output speech.wav
@@ -965,7 +965,7 @@ curl -sS http://127.0.0.1:11434/v1/audio/speech \
 **Raw PCM (RFC 2586 `audio/L16`) — easier for in-process playback:**
 
 ```bash
-curl -sS http://127.0.0.1:11434/v1/audio/speech \
+curl -sS http://127.0.0.1:11435/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{"model":"my-tts","voice":"echo","input":"PCM body.","response_format":"pcm"}' \
   --output speech.pcm

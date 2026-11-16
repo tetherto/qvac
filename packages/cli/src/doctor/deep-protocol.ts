@@ -10,6 +10,8 @@ export interface SerializedProbeError {
   code?: string | number | undefined
   exitCode?: number | null | undefined
   exitSignal?: string | null | undefined
+  /** Set from the SDK's `WorkerStartupError.timedOut`. */
+  timedOut?: boolean | undefined
   cause?: SerializedProbeError | undefined
 }
 
@@ -64,6 +66,7 @@ function isSerializedError(value: unknown, depth: number = 0): value is Serializ
   ) {
     return false
   }
+  if (value['timedOut'] !== undefined && typeof value['timedOut'] !== 'boolean') return false
   return value['cause'] === undefined || isSerializedError(value['cause'], depth + 1)
 }
 

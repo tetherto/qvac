@@ -16,7 +16,7 @@ export interface LlmStats {
   // the model was loaded with `spec_type`.
   draftTokens?: number
   draftAcceptedTokens?: number
-  backendDevice?: 'cpu' | 'gpu'
+  backendDevice?: 'cpu' | 'gpu' | 'npu'
   stopReason?:
     'none' | 'eos' | 'antiprompt' | 'predictionLimit' | 'sequenceLimit' | 'contextOverflow'
 }
@@ -53,6 +53,12 @@ export interface TtsStats {
   codecSidecarLoaded?: number
   /** Audio8 only: 1 when the synthesis ran its codec on that sidecar, 0 on ggml. */
   codecOnCoreml?: number
+  /** Parler only, macOS / iOS: 1 while the decoder / DAC Core ML sidecar is attached. */
+  decoderSidecarLoaded?: number
+  dacSidecarLoaded?: number
+  /** Parler only: 1 when the synthesis ran that stage on Core ML, 0 for ggml or a mixed run. */
+  decoderOnCoreml?: number
+  dacOnCoreml?: number
   /** Milliseconds to the first audio, where the engine reports it. */
   firstAudioMs?: number
   /** Chatterbox: T3 decode and S3Gen + HiFT wall times (ms), speech tokens T3 emitted. */
@@ -103,6 +109,11 @@ export interface TtsOutputChunk {
   sentenceChunk?: string
   /** True on the final pre-chunked output; undefined when it is not known up front. */
   isLast?: boolean
+  /**
+   * CosyVoice3: the speech tokens of this synthesis. Batch output carries them
+   * with the PCM; native chunk streaming on a final `isLast` chunk with no PCM.
+   */
+  speechTokenIds?: number[]
 }
 
 export interface TtsResponse {

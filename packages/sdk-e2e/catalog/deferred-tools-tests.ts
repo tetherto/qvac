@@ -212,6 +212,7 @@ export interface DeferredToolsParams {
   expectedToolCall: { name: string; argKeys?: string[] }
   resourceKey?: string
   toolDialect?: ToolDialect
+  toolSearch?: { defaultLimit?: number; maxLimit?: number }
 }
 
 /**
@@ -290,6 +291,16 @@ export const deferredToolsKvCacheIsolation = createDeferredToolsTest(
   { estimatedDurationMs: 60000 }
 )
 
+// "github" matches two tools under the default limits. With defaultLimit 1 the
+// search loads one, and the worker declares only that one: the prompt is
+// smaller than after the default search.
+export const deferredToolsSearchLimit = createDeferredToolsTest('deferred-tools-search-limit', {
+  userPrompt: "Open an issue titled 'Crash on start' on acme/app.",
+  searchQuery: 'github',
+  expectedToolCall: { name: 'create_issue', argKeys: ['repo', 'title'] },
+  toolSearch: { defaultLimit: 1 }
+})
+
 export const deferredToolsLoadThenCallQwen35 = createDeferredToolsTest(
   'deferred-tools-load-then-call-qwen35',
   { ...HOROSCOPE, resourceKey: 'tools-qwen35', toolDialect: 'qwen35' }
@@ -365,6 +376,7 @@ export const deferredToolsTests = [
   deferredToolsRepeatSearch,
   deferredToolsReopenedChat,
   deferredToolsKvCacheIsolation,
+  deferredToolsSearchLimit,
   deferredToolsLoadThenCallQwen35,
   deferredToolsWarmVsColdQwen35,
   deferredToolsWarmFollowUpQwen35,

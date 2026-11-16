@@ -25,6 +25,7 @@ function fixture(t) {
   for (const quant of ['f16', 'mixed']) {
     fs.writeFileSync(path.join(root, `test/fixtures/megaloc-${quant}.gguf`), quant)
   }
+  fs.writeFileSync(path.join(root, 'test/fixtures/bridgedepth-vits-f32.gguf'), 'bridgedepth')
   return root
 }
 
@@ -35,6 +36,7 @@ function stage(root, overrides = {}) {
       ...process.env,
       QVAC_MEGALOC_F16_MODEL_PATH: '',
       QVAC_MEGALOC_MIXED_MODEL_PATH: '',
+      QVAC_BRIDGEDEPTH_MODEL_PATH: '',
       ...overrides
     }
   })
@@ -48,6 +50,10 @@ test('mobile assets use manually converted fixtures and retain reference files',
   for (const quant of ['f16', 'mixed']) {
     assert.equal(fs.readFileSync(path.join(assets, `megaloc-${quant}.gguf.bin`), 'utf8'), quant)
   }
+  assert.equal(
+    fs.readFileSync(path.join(assets, 'bridgedepth-vits-f32.gguf.bin'), 'utf8'),
+    'bridgedepth'
+  )
   assert.equal(fs.readFileSync(path.join(assets, 'megaloc-input.png'), 'utf8'), 'reference image')
   assert.equal(
     fs.readFileSync(path.join(assets, 'megaloc-upscale-f32.bin'), 'utf8'),
@@ -81,4 +87,19 @@ test('mobile assets reject missing models and invalid explicit paths', (t) => {
   const missing = stage(root)
   assert.notEqual(missing.status, 0)
   assert.match(missing.stderr, /QVAC_MEGALOC_MIXED_MODEL_PATH/)
+  fs.writeFileSync(path.join(root, 'test/fixtures/megaloc-mixed.gguf'), 'mixed')
+  fs.unlinkSync(path.join(root, 'test/fixtures/bridgedepth-vits-f32.gguf'))
+  const noDepth = stage(root)
+  assert.notEqual(noDepth.status, 0)
+  assert.match(noDepth.stderr, /Convert the BridgeDepth test models first/)
+})
+
+test('a filtered mobile run ships only the models its runners use', (t) => {
+  const root = fixture(t)
+  const result = stage(root, { MOBILE_TESTS_FILTER: 'runFit' })
+  assert.equal(result.status, 0, result.stderr)
+  const assets = path.join(root, 'test/mobile/testAssets')
+  assert.ok(fs.existsSync(path.join(assets, 'megaloc-f16.gguf.bin')))
+  assert.ok(fs.existsSync(path.join(assets, 'bridgedepth-vits-f32.gguf.bin')))
+  assert.ok(!fs.existsSync(path.join(assets, 'megaloc-mixed.gguf.bin')))
 })

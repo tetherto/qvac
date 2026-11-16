@@ -84,11 +84,9 @@ export default {
         args: ['-m', 'qvac_e2e.runner'],
         cwd: './runners/python',
         env: {
-          // Point the Python client at the worker this suite bundles, not a
-          // stock one. Same binary as the JS legs, so any difference in a
-          // result can only have come from the client. The Bare runtime is
-          // resolved by the framework and injected as QVAC_BARE_PATH, so it
-          // stays out of this file.
+          // Point the Python client at the worker entry this suite generates,
+          // so it registers the same plugins as the JS legs. Python runs the
+          // entry without a bundle, on the Bare of the bare-sidecar wheel.
           QVAC_WORKER_PATH: '../../qvac/worker.entry.mjs',
           QVAC_RESOURCE_PLATFORM: 'desktop-python'
         }

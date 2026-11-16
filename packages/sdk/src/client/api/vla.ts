@@ -11,9 +11,12 @@ import {
   type VlaSetEmbodimentResponse,
   vlaHparamsResponseSchema,
   vlaRunResponseSchema,
-  vlaSetEmbodimentResponseSchema
+  vlaSetEmbodimentResponseSchema,
+  type RPCOptions
 } from '@qvac/inference/surface'
 import { decodeBase64, encodeBase64 } from '@/utils/encoding'
+import { decoratePromise } from '@/utils/decorate-promise'
+import { generateClientRequestId } from '@/client/api/client-request-id'
 import { invokePlugin } from './invoke-plugin'
 
 const VLA_RUN_HANDLER = 'vlaRun'
@@ -63,9 +66,11 @@ function f32FromBase64(b64: string): Float32Array {
  *   (`Float32Array` of length `hparams.chunkSize * hparams.maxActionDim`).
  *   Optional for SmolVLA / π₀.₅ (addon samples its own prior when omitted).
  *   Required for GR00T (`hparams.imageInputMode === 'patches'`).
+ * @param options - Optional RPC options (timeout, profiling, force new connection).
  * @returns A `VlaClientRunResult` with the produced `actions` Float32Array
  *   (length `chunkSize * actionDim`), the corresponding `chunkSize` /
- *   `actionDim` returned by the addon, and optional per-stage `stats`.
+ *   `actionDim` returned by the addon, and optional per-stage `stats`. The
+ *   promise carries `requestId` synchronously for `cancel({ requestId })`.
  *
  * @example
  * ```typescript
@@ -86,7 +91,19 @@ function f32FromBase64(b64: string): Float32Array {
  * });
  * ```
  */
-export async function vla(params: VlaClientRunParams): Promise<VlaClientRunResult> {
+export function vla(
+  params: VlaClientRunParams,
+  options?: RPCOptions
+): Promise<VlaClientRunResult> & { requestId: string } {
+  const requestId = generateClientRequestId()
+  return decoratePromise(runVla(params, requestId, options), { requestId })
+}
+
+async function runVla(
+  params: VlaClientRunParams,
+  requestId: string,
+  options?: RPCOptions
+): Promise<VlaClientRunResult> {
   const wireRequest: VlaRunRequest = {
     type: 'vlaRun',
     modelId: params.modelId,
@@ -101,11 +118,15 @@ export async function vla(params: VlaClientRunParams): Promise<VlaClientRunResul
     })
   }
 
-  const result = await invokePlugin<VlaRunResponse, VlaRunRequest>({
-    modelId: params.modelId,
-    handler: VLA_RUN_HANDLER,
-    params: wireRequest
-  })
+  const result = await invokePlugin<VlaRunResponse, VlaRunRequest>(
+    {
+      modelId: params.modelId,
+      handler: VLA_RUN_HANDLER,
+      params: wireRequest,
+      requestId
+    },
+    options
+  )
 
   const parsed = vlaRunResponseSchema.parse(result)
   return {
@@ -125,18 +146,24 @@ export async function vla(params: VlaClientRunParams): Promise<VlaClientRunResul
  *   (`"CPU"` / `"Vulkan"` / `"Metal"` / `"OpenCL"` / `null` if the addon
  *   has not surfaced one).
  */
-export async function vlaHparams(params: {
-  modelId: string
-}): Promise<{ hparams: VlaHparams; backendName: string | null }> {
+export async function vlaHparams(
+  params: {
+    modelId: string
+  },
+  options?: RPCOptions
+): Promise<{ hparams: VlaHparams; backendName: string | null }> {
   const wireRequest: VlaHparamsRequest = {
     type: 'vlaHparams',
     modelId: params.modelId
   }
-  const result = await invokePlugin<VlaHparamsResponse, VlaHparamsRequest>({
-    modelId: params.modelId,
-    handler: VLA_HPARAMS_HANDLER,
-    params: wireRequest
-  })
+  const result = await invokePlugin<VlaHparamsResponse, VlaHparamsRequest>(
+    {
+      modelId: params.modelId,
+      handler: VLA_HPARAMS_HANDLER,
+      params: wireRequest
+    },
+    options
+  )
   return vlaHparamsResponseSchema.parse(result)
 }
 
@@ -175,19 +202,25 @@ export async function vlaHparams(params: {
  * console.log(hparams.selectedEmbodimentTag, hparams.numCameras);
  * ```
  */
-export async function vlaSetEmbodiment(params: {
-  modelId: string
-  embodiment: VlaEmbodimentSelection
-}): Promise<{ hparams: VlaHparams }> {
+export async function vlaSetEmbodiment(
+  params: {
+    modelId: string
+    embodiment: VlaEmbodimentSelection
+  },
+  options?: RPCOptions
+): Promise<{ hparams: VlaHparams }> {
   const wireRequest: VlaSetEmbodimentRequest = {
     type: 'vlaSetEmbodiment',
     modelId: params.modelId,
     embodiment: params.embodiment
   }
-  const result = await invokePlugin<VlaSetEmbodimentResponse, VlaSetEmbodimentRequest>({
-    modelId: params.modelId,
-    handler: VLA_SET_EMBODIMENT_HANDLER,
-    params: wireRequest
-  })
+  const result = await invokePlugin<VlaSetEmbodimentResponse, VlaSetEmbodimentRequest>(
+    {
+      modelId: params.modelId,
+      handler: VLA_SET_EMBODIMENT_HANDLER,
+      params: wireRequest
+    },
+    options
+  )
   return vlaSetEmbodimentResponseSchema.parse(result)
 }

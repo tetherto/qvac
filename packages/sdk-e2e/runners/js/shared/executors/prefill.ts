@@ -25,8 +25,20 @@ export async function runPrefill(
     )
   try {
     if (expectation.validation === 'throws-error') {
-      await completion({ ...params, modelId: 'prefill-validation', history: [], stream: false })
-        .final
+      // A case that names a dependency needs a loaded model to reach its check.
+      const modelId = params.dependency
+        ? await resources.ensureLoaded(params.dependency)
+        : 'prefill-validation'
+      const { tools, generationParams, kvCache, prefill } = params
+      await completion({
+        modelId,
+        history: [],
+        tools,
+        generationParams,
+        kvCache,
+        prefill,
+        stream: false
+      }).final
       return { passed: false, output: 'Expected prefill validation to reject' }
     }
     await cleanup()

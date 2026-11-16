@@ -1,7 +1,8 @@
 # Data flow — `@qvac/classification-ggml`
 
-The addon exposes classification through `ImageClassifier.classify()` and image
-embeddings through `MegaLoc.embed()`. Their graphs and outputs are separate.
+The addon exposes classification through `ImageClassifier.classify()`, image
+embeddings through `MegaLoc.embed()` and stereo disparity through
+`BridgeDepth.infer()`. Their graphs and outputs are separate.
 See [MegaLoc](megaloc.md) for complete usage, GGUF conversion and backend details.
 
 ## MegaLoc embedding path
@@ -20,6 +21,25 @@ See [MegaLoc](megaloc.md) for complete usage, GGUF conversion and backend detail
 
 `load`, `embed` and `unload` are serialized per instance. `unload()` releases
 native resources and permits a later `load()`; `destroy()` is permanent.
+
+## BridgeDepth disparity path
+
+1. `BridgeDepth.load()` creates the native instance with
+   `modelType: "bridgedepth"` and awaits `activate()`, which selects the device,
+   checks the GGUF tensor layout against the converter's and uploads the weights
+   on a native worker.
+2. `infer()` submits a `stereo` job with both views. The native bridge validates
+   the buffers and the shared raw RGB dimensions.
+3. `BridgeDepthModel::process()` decodes each view, checks they have the same
+   size and converts it to planar floats, downsampled to fit inside 1280x720
+   when it is larger, freeing the decoded view before the next one. It pads
+   them to a multiple of 16 on the top and the right and runs the whole model
+   in one graph: mono branch, stereo features, cost volume and DPN, both
+   alignment stages and heads.
+4. The padded disparity is cropped back to the size the model ran at. After a
+   downsample it is resized back to the input size and multiplied by the input
+   width over the model width, then returned as
+   `[{ width, height, disparity }]`.
 
 ## MobileNet classification path
 

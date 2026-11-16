@@ -15,14 +15,14 @@ export interface ClassificationBinding {
     outputCallback: ClassificationOutputCallback,
   ): object;
   activate(handle: unknown): void | Promise<void>;
-  runJob(handle: unknown, input: ClassificationJob | ImageEmbeddingJob): Promise<boolean>;
+  runJob(handle: unknown, input: ClassificationJob | ImageEmbeddingJob | StereoDepthJob): Promise<boolean>;
   cancel(handle: unknown): Promise<void>;
   destroyInstance(handle: unknown): void;
 }
 
 export interface ClassificationConfigurationParams {
   path: string;
-  modelType?: "mobilenet" | "megaloc";
+  modelType?: "mobilenet" | "megaloc" | "bridgedepth";
   config: {
     /** Directory of ggml backend modules; defaults to the ones @qvac/fabric ships. */
     backendsDir?: string;
@@ -34,6 +34,15 @@ export interface ClassificationConfigurationParams {
 export interface ImageEmbeddingJob {
   type: "embedding";
   content: Uint8Array;
+  width?: number;
+  height?: number;
+  channels?: 3;
+}
+
+export interface StereoDepthJob {
+  type: "stereo";
+  left: Uint8Array;
+  right: Uint8Array;
   width?: number;
   height?: number;
   channels?: 3;
@@ -199,7 +208,7 @@ export class ClassificationInterface {
     await this.binding.activate(this.handle);
   }
 
-  async runJob(input: ClassificationJob | ImageEmbeddingJob): Promise<boolean> {
+  async runJob(input: ClassificationJob | ImageEmbeddingJob | StereoDepthJob): Promise<boolean> {
     if (!this.handle) throw new Error("Classification addon is not initialized");
     return this.binding.runJob(this.handle, input);
   }

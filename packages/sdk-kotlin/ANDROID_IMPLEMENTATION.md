@@ -15,13 +15,16 @@ generated contract and worker bundle.
 
 ## Runtime artifact
 
-The `android-barekit` AAR packages:
+Each profile's worker is the module bare-stow writes for its `bare-kit` target
+in Kotlin: the generated `start(context)` harness, the worker bundle as an
+asset, and the native addons it links. The `android-barekit` AAR packages:
 
-- BareKit Java classes and JNI libraries.
-- The generated `worker.bundle`.
-- Configured Android `.bare` addon libraries.
+- That module's harness, bundle and linked addons.
 - `libc++_shared.so` and the CMake runtime anchor.
 - The Binder service and AIDL callback interfaces.
+
+Bare Kit itself comes from `bare-kit-kotlin` and the worker's lifecycle from
+`bare-stow-host-kotlin`, both dependencies of the AAR.
 
 The all-in-one profile is restricted to `arm64-v8a`, API 29+, and packages
 every current SDK addon: completion/embeddings, Whisper/Parakeet/BCI

@@ -1,6 +1,6 @@
 import type QvacLogger from "@qvac/logging";
 import type { JobHandler, QvacResponse } from "@qvac/infer-base";
-import type { ASRRunOutput, ASRStreamOutput, AudioInput, BackendInfo } from "../lib/types";
+import type { ASRRunOutput, ASRStreamOutput, AudioInput, BackendInfo, MossTranscribeProgress } from "../lib/types";
 import type { WhisperReloadConfig, WhisperStreamingOptions } from "./whisper/driver";
 import type { ParakeetReloadConfig, ParakeetStreamingRunConfig } from "./parakeet/driver";
 export type EngineType = "whisper" | "parakeet" | "moss-transcribe";
@@ -13,6 +13,10 @@ export interface ASRRunOptions {
     hotwords?: string[];
     prompt?: string;
     maxNewTokens?: number;
+    /** MOSS only: called on the JS thread as native tokens are generated. */
+    onProgress?: (progress: MossTranscribeProgress) => void;
+    /** Parakeet standalone batch diarization only; omitted keeps compact output. */
+    includeSpeakerProbabilities?: boolean;
 }
 /** Files handed to the client; the engine drivers receive them verbatim. */
 export interface ASRGgmlFiles {

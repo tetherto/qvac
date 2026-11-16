@@ -9,6 +9,7 @@ export {
   batchCompletion,
   completion,
   deleteCache,
+  calcTokens,
   loadModel,
   downloadAsset,
   heartbeat,

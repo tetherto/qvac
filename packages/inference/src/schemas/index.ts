@@ -1,14 +1,19 @@
 // Re-export all schemas and types
 export * from '@/schemas/model-file'
+export * from '@/schemas/request-base'
+export * from '@/schemas/session'
 export * from '@/schemas/cancel'
 export * from '@/schemas/batch-completion-stream'
 export * from '@/schemas/completion-stream'
+export * from '@/schemas/calc-tokens'
 export * from '@/schemas/completion-event'
 export {
   toolSchema,
   toolCallSchema,
   toolCallErrorSchema,
+  toolSearchOptionsSchema,
   type Tool,
+  type ToolSearchOptions,
   type ToolCall,
   type ToolCallError,
   type ToolCallWithCall
@@ -44,7 +49,7 @@ export * from '@/schemas/classification'
 export * from '@/schemas/audio-gen'
 export * from '@/schemas/model-config-schemas'
 export * from '@/schemas/lifecycle'
-export { ERROR_CODES, REGISTRY_ERROR_CODES } from '@/schemas/errors'
+export { ERROR_CODES, REGISTRY_ERROR_CODES, modelRegistryBusyMessage } from '@/schemas/errors'
 export { ERR_CODES as RAG_ERROR_CODES } from '@qvac/rag/errors'
 export {
   qvacConfigSchema,

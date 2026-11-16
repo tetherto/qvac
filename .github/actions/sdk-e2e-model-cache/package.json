@@ -1,0 +1,17 @@
+{
+  "name": "sdk-e2e-model-cache",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.mjs",
+  "scripts": {
+    "build": "ncc build src/index.mjs -o dist --license licenses.txt",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@actions/cache": "^5.0.5",
+    "@actions/core": "^2.0.3"
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.38.4"
+  }
+}

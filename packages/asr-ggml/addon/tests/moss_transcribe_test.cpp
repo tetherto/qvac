@@ -299,3 +299,18 @@ TEST(MossTranscribeRealGguf, TranscribesSpeechIntoLabelledSegments) {
   EXPECT_GE(transcripts.front().speakerId, 0);
   EXPECT_LE(transcripts.front().start, transcripts.front().end);
 }
+
+TEST(
+    MossTranscribeDetailedOutput,
+    RetainsActualEncoderRouteIncludingMixedFallback) {
+  auto native = twoSpeakerResult();
+  for (const std::string backend : {"ggml", "coreml", "coreml-ane", "mixed"}) {
+    native.encoder_backend = backend;
+    const auto result = MossTranscribeModel::toTranscripts(native);
+    ASSERT_EQ(result.size(), native.segments.size());
+    for (const auto& segment : result) {
+      ASSERT_TRUE(segment.encoderBackend);
+      EXPECT_EQ(*segment.encoderBackend, backend);
+    }
+  }
+}

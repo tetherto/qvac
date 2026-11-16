@@ -2,6 +2,7 @@ import configPlugins from '@expo/config-plugins'
 import type { ExpoConfig } from 'expo/config'
 import withAndroidArchitecture from './withAndroidArchitecture'
 import withAndroidNdkVersion from './withAndroidNdkVersion'
+import withBareKit from './withBareKit'
 import withDeviceInfo from './withDeviceInfo'
 import withMobileBundle, { type MobileBundleOptions } from './withMobileBundle'
 import withOpenCL from './withOpenCL'
@@ -13,6 +14,7 @@ type QvacSDKPluginOptions = MobileBundleOptions
 /**
  * Main Qvac SDK Expo plugin that combines all necessary mobile configurations:
  * - Mobile worker bundle generation
+ * - Bare Kit and the native addons as a Gradle module and a Swift package
  * - Device info stubbing when expo-device is not installed
  * - Android build properties (minSdkVersion, NDK, proguard)
  * - Android NDK version pinning in build.gradle
@@ -25,6 +27,7 @@ type QvacSDKPluginOptions = MobileBundleOptions
 function withQvacSDK(config: ExpoConfig, options: QvacSDKPluginOptions = {}): ExpoConfig {
   return withPlugins(config, [
     [withMobileBundle, options],
+    withBareKit,
     withDeviceInfo,
     [
       'expo-build-properties',

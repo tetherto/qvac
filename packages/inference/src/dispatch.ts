@@ -5,14 +5,15 @@ import type {
   CanonicalModelType,
   ProfilingRequestMeta,
   QvacConfig,
-  RPCOptions,
-  AbortableRPCOptions
+  AbortableRPCOptions,
+  AbortSignalLike
 } from '@/schemas/index'
 import {
   normalizeModelType,
   PROFILING_KEY,
   createErrorResponse,
-  requestSchema
+  requestSchema,
+  UNTRACKED_REQUEST_TYPES
 } from '@/schemas/index'
 import { z } from 'zod'
 import { formatZodError } from '@/utils/zod-error'
@@ -25,6 +26,9 @@ import { handlerSupportsProgress, selectHandler } from '@/selection'
 import { assertLifecycleAllowed } from '@/runtime/runtime-lifecycle'
 import { resolveModelConfig, setConfig, setRuntimeContext, isConfigSet } from '@/runtime/state'
 import { initialize, close as closeEngine } from '@/runtime/lifecycle'
+import { assertOwnerOperation, assertWireSessionOpen } from '@/runtime/session-registry'
+import { getRequestRegistry } from '@/runtime/request-context'
+import { generateRandomRequestId } from '@/runtime/request-id'
 import { getAllPlugins } from '@/plugins/index'
 import { hasRpcServerProvider } from '@/rpc/provider'
 import { resolveConfig } from '@/config/resolve-config'
@@ -197,7 +201,34 @@ function prepareRequest<T extends Request>(request: T): Request {
   if (profilingMeta !== undefined) {
     ;(validated as Record<PropertyKey, unknown>)[PROFILING_KEY] = profilingMeta
   }
+  assertRequestSessionAllowed(validated)
   return validated
+}
+
+// A request runs as the session it names, or as the owner when it names none.
+// The session handlers validate their own `sessionId`: open registers a new id
+// and close removes one, so neither can require it to be open already. A
+// session may not run the operations reserved for the owner.
+function assertRequestSessionAllowed(request: Request): void {
+  if (request.type === 'openSession' || request.type === 'closeSession') return
+  assertWireSessionOpen(request)
+  assertOwnerOperation(request)
+}
+
+/**
+ * The host aborts `signal` when the caller cancels this request over the
+ * transport or the connection ends. The signal becomes the parent of the work
+ * the request registers under its `requestId`, so the abort stops that work
+ * whether it has begun or not. A request that registers work and came without
+ * an id gets one here, so its handler registers under an id the binding knows.
+ * Returns a function that removes the binding; call it once the request has
+ * finished.
+ */
+function bindTransportSignal(request: Request, signal: AbortSignalLike | undefined): () => void {
+  const tracked = request as { type: string; requestId?: string; sessionId?: string }
+  if (!signal || UNTRACKED_REQUEST_TYPES.has(tracked.type)) return () => {}
+  tracked.requestId ??= generateRandomRequestId()
+  return getRequestRegistry().bindTransportSignal(tracked.requestId, tracked.sessionId, signal)
 }
 
 function invokeHandler(request: Request, handler: HandlerEntry['handler']): HandlerResult {
@@ -258,9 +289,10 @@ async function* streamWithProgress(
   if (handlerError) throw handlerError
 }
 
+/** `options.signal` aborting cancels the request; see `bindTransportSignal`. */
 export async function send<T extends Request>(
   request: T,
-  _options?: RPCOptions
+  options?: AbortableRPCOptions
 ): Promise<Response> {
   await ensureReady(
     request.type === 'startRpcServer' ||
@@ -274,19 +306,28 @@ export async function send<T extends Request>(
   const entry = getHandlerEntry(processed.type)
   const handler = selectHandler(entry)
 
-  // Plugin capabilities profile themselves inside plugin dispatch. Everything
-  // else is timed here so the `profiler` covers every operation. Profiling is a
-  // no-op unless enabled.
-  if (entry.pluginOp) {
-    return (await invokeHandler(processed, handler)) as Response
+  const unbindTransportSignal = bindTransportSignal(processed, options?.signal)
+  try {
+    // Plugin capabilities profile themselves inside plugin dispatch. Everything
+    // else is timed here so the `profiler` covers every operation. Profiling is
+    // a no-op unless enabled.
+    if (entry.pluginOp) {
+      return (await invokeHandler(processed, handler)) as Response
+    }
+    return await profileReplyHandler(
+      { op: processed.type, request: processed },
+      () => invokeHandler(processed, handler) as Promise<Response>
+    )
+  } finally {
+    unbindTransportSignal()
   }
-  return profileReplyHandler(
-    { op: processed.type, request: processed },
-    () => invokeHandler(processed, handler) as Promise<Response>
-  )
 }
 
-/** `options.signal` ends the stream only for a handler with `endsOnAbort`. */
+/**
+ * `options.signal` aborting cancels the request (see `bindTransportSignal`)
+ * and ends the stream of a handler with `endsOnAbort`, which registers no
+ * request.
+ */
 export async function* stream<T extends Request>(
   request: T,
   options?: AbortableRPCOptions
@@ -300,6 +341,7 @@ export async function* stream<T extends Request>(
   const signal = entry.endsOnAbort ? options?.signal : undefined
   if (signal?.aborted) return
   const context: StreamHandlerContext = signal ? { signal } : {}
+  const unbindTransportSignal = bindTransportSignal(processed, options?.signal)
 
   async function* run(): AsyncGenerator<Response> {
     if (handlerSupportsProgress(entry, processed)) {
@@ -314,11 +356,15 @@ export async function* stream<T extends Request>(
     }
   }
 
-  // See `send`: plugin capabilities are timed elsewhere.
-  if (entry.pluginOp) {
-    yield* run()
-  } else {
-    yield* profileStreamHandler({ op: processed.type, request: processed }, run)
+  try {
+    // See `send`: plugin capabilities are timed elsewhere.
+    if (entry.pluginOp) {
+      yield* run()
+    } else {
+      yield* profileStreamHandler({ op: processed.type, request: processed }, run)
+    }
+  } finally {
+    unbindTransportSignal()
   }
 }
 
@@ -337,9 +383,10 @@ export interface DuplexSession {
   responseStream: DuplexReadable
 }
 
+/** `options.signal` aborting cancels the request; see `bindTransportSignal`. */
 export async function duplex<T extends Request>(
   request: T,
-  _options?: RPCOptions
+  options?: AbortableRPCOptions
 ): Promise<DuplexSession> {
   await ensureReady()
   assertLifecycleAllowed(request)
@@ -358,6 +405,7 @@ export async function duplex<T extends Request>(
     stream: Readable
   ) => AsyncGenerator<Response>
 
+  const unbindTransportSignal = bindTransportSignal(processed, options?.signal)
   void (async () => {
     try {
       for await (const response of duplexHandler(processed, inputStream)) {
@@ -367,6 +415,7 @@ export async function duplex<T extends Request>(
       inputStream.destroy()
       outputStream.write(JSON.stringify(createErrorResponse(error)) + '\n', 'utf-8')
     } finally {
+      unbindTransportSignal()
       outputStream.end()
     }
   })()

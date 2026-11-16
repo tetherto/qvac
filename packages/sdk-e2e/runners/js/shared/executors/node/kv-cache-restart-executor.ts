@@ -1,4 +1,4 @@
-import { completion, deleteCache } from '@qvac/sdk'
+import { completion, deleteCache, SDK_CLIENT_ERROR_CODES } from '@qvac/sdk'
 import { type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from '../abstract-model-executor.js'
 import { kvCacheRestartTests } from '../../../../../catalog/kv-cache-restart-tests.js'
@@ -40,8 +40,13 @@ export class KvCacheRestartExecutor extends AbstractModelExecutor<typeof kvCache
         return await this.resources.ensureLoaded('llm')
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
+        const crashed =
+          error !== null &&
+          typeof error === 'object' &&
+          'code' in error &&
+          (error as { code?: unknown }).code === SDK_CLIENT_ERROR_CODES.WORKER_CRASHED
         const recovering =
-          /exited mid-request|ECONNRESET|not connected|connection (closed|reset)/i.test(message)
+          crashed || /ECONNRESET|not connected|connection (closed|reset)/i.test(message)
         if (!recovering || Date.now() >= deadline) throw error
         await new Promise<void>((resolve) => setTimeout(resolve, 250))
       }

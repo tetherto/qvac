@@ -119,6 +119,8 @@ export {
   definePlugin,
   defineHandler,
   defineDuplexHandler,
+  requestParent,
+  type PluginHandlerContext,
   type QvacPlugin,
   type CreateModelParams,
   type PluginModelResult,
@@ -157,7 +159,9 @@ export {
   buildToolSearchTool,
   executeToolSearch,
   loadedToolNames,
-  searchDeferredTools
+  resolveToolSearchSource,
+  searchDeferredTools,
+  type ToolSearchSource
 } from '@/utils/tools/defer'
 export { untilAborted } from '@/utils/until-aborted'
 
@@ -206,9 +210,19 @@ export {
   RequestNotFoundError,
   RequestRejectedByPolicyError,
   RequestValidationFailedError,
+  SessionIdConflictError,
+  SessionNotOpenError,
+  ModelLeasedError,
+  ModelReconfiguredError,
+  OwnerOnlyError,
+  RAGWorkspaceBusyError,
   ModelNotLoadedError,
   ModelRegistryModelNotFoundError,
+  ModelRegistryBusyError,
   TranslationFailedError,
+  InvalidSeedFromParamsError,
+  KvCacheSeedSourceNotFoundError,
+  KvCacheSeedSharingDisabledError,
   PluginDefinitionInvalidError,
   PluginModelTypeReservedError,
   PluginAlreadyRegisteredError,

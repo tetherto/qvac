@@ -191,7 +191,8 @@ bool isRpcDevice(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
       "rpc");
 }
 
-// The AMD XDNA NPU registers as an integrated GPU. It is opt-in only: the
+// The AMD XDNA NPU registers as an integrated GPU, but it is its own device
+// class here: `device: 'npu'` selects it and GPU selection never does. The
 // fused decode path rejects some quantizations outright, and there are no
 // NPU-vs-iGPU measurements to justify picking it automatically.
 bool isXdnaDevice(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
@@ -322,34 +323,26 @@ void tryEmplaceDevice(
     std::vector<std::string>& openClBackends,
     std::vector<std::string>& cudaBackends,
     std::vector<std::string>& otherOpenClBackends,
-    std::vector<std::string>& xdnaBackends,
     std::optional<int>& maxAdrenoVersion, bool& sawMaliGpu,
-    std::vector<std::string>& rejectedDevices, const bool allowNonAdrenoOpenCl,
-    const bool allowXdna) {
+    std::vector<std::string>& rejectedDevices,
+    const bool allowNonAdrenoOpenCl) {
   const ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(deviceIndex);
   const enum ggml_backend_dev_type backendTypeEnum =
       bckI.ggml_backend_dev_type(dev);
   const DeviceDescription devDescr(dev, backendTypeEnum, bckI);
   const bool isOpenCl = isOpenClDevice(bckI, dev, devDescr);
-  const bool isXdna = isXdnaDevice(bckI, dev);
   const bool isGpuType = backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU ||
                          backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU;
   // Recorded before the main-gpu type filter so the CPU-fallback warning names
-  // a refused device even when `integrated`/`dedicated` skips its type.
+  // a refused device even when `integrated`/`dedicated` skips its type. The
+  // NPU is refused too, as it is never a GPU candidate.
   if (isGpuType && !isEligibleGpuDevice(bckI, dev) &&
-      !(allowNonAdrenoOpenCl && isOpenCl) && !(allowXdna && isXdna)) {
-    // The NPU is opt-in rather than unusable, so say how to select it.
+      !(allowNonAdrenoOpenCl && isOpenCl)) {
+    // The NPU is a device class of its own, so say how to select it.
     rejectedDevices.emplace_back(
-        isXdna ? deviceIdentity(bckI, dev) + " [opt in with backend: 'xdna']"
-               : deviceIdentity(bckI, dev));
-    return;
-  }
-  // Kept in its own bucket, which only the backend override reads, so the
-  // default cascade can never fall through to the NPU.
-  if (isXdna) {
-    if (shouldProcessDevice(backendTypeEnum, false, mainGpuType)) {
-      xdnaBackends.emplace_back(devDescr.gpuBackend);
-    }
+        isXdnaDevice(bckI, dev)
+            ? deviceIdentity(bckI, dev) + " [opt in with device: 'npu']"
+            : deviceIdentity(bckI, dev));
     return;
   }
   if (shouldProcessDevice(backendTypeEnum, isOpenCl, mainGpuType)) {
@@ -386,10 +379,13 @@ backend_selection::preferredBackendTypeFromString(const std::string& device) {
   if (device == "cpu") {
     return BackendType::CPU;
   }
+  if (device == "npu") {
+    return BackendType::NPU;
+  }
   throw qvac_errors::StatusError(
       qvac_errors::general_error::InvalidArgument,
-      "preferredDeviceFromString: wrong device specified, must be 'gpu' or "
-      "'cpu'.\n");
+      "preferredDeviceFromString: wrong device specified, must be 'gpu', "
+      "'npu' or 'cpu'.\n");
 }
 
 std::optional<MainGpu>
@@ -426,9 +422,10 @@ namespace {
 // mistyped `backend` value (hard error) apart from a correctly-spelled backend
 // that simply has no device on this machine (falls through). Deliberately does
 // NOT include "cpu": the CPU path is `device`, and accepting two spellings for
-// it would make `device: 'gpu', backend: 'cpu'` ambiguous.
-constexpr std::array<std::string_view, 5> KNOWN_GPU_BACKEND_FAMILIES = {
-    "cuda", "vulkan", "metal", "opencl", "xdna"};
+// it would make `device: 'gpu', backend: 'cpu'` ambiguous. Nor "xdna": the
+// NPU is `device: 'npu'`.
+constexpr std::array<std::string_view, 4> KNOWN_GPU_BACKEND_FAMILIES = {
+    "cuda", "vulkan", "metal", "opencl"};
 
 // Trimmed from each family. \r matters: a value from a CRLF config file would
 // otherwise throw "unknown backend 'cuda\r'", which renders identically to the
@@ -484,8 +481,9 @@ backend_selection::parseBackendOverride(const std::string& backendStr) {
           qvac_errors::general_error::InvalidArgument,
           string_format(
               "backend: unknown backend '%s'. Expected a comma-separated list "
-              "of cuda/vulkan/metal/opencl/xdna or 'auto', for example "
-              "'cuda,vulkan'. To run on CPU use device 'cpu' instead.\n",
+              "of cuda/vulkan/metal/opencl or 'auto', for example "
+              "'cuda,vulkan'. To run on CPU use device 'cpu' instead, and "
+              "device 'npu' for the NPU.\n",
               family.c_str()));
     }
     if (std::ranges::find(families, family) == families.end()) {
@@ -510,8 +508,9 @@ backend_selection::parseBackendOverride(const std::string& backendStr) {
         qvac_errors::general_error::InvalidArgument,
         string_format(
             "backend: '%s' names no backend. Expected a comma-separated list "
-            "of cuda/vulkan/metal/opencl/xdna or 'auto', for example "
-            "'cuda,vulkan'. To run on CPU use device 'cpu' instead.\n",
+            "of cuda/vulkan/metal/opencl or 'auto', for example "
+            "'cuda,vulkan'. To run on CPU use device 'cpu' instead, and "
+            "device 'npu' for the NPU.\n",
             backendStr.c_str()));
   }
   return families;
@@ -552,21 +551,53 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     std::optional<int>* outAdrenoVersion, const bool isFinetuning,
     bool* outIsMaliGpu, const std::vector<std::string>& backendOverride) {
 
+  // An NPU request with no NPU listed continues as a GPU request, so it falls
+  // back through the GPU order and then to the CPU.
+  BackendType searchType = preferredBackendType;
+  if (preferredBackendType == BackendType::NPU) {
+    // The first NPU in ggml's registration order wins. Each NPU is built into
+    // its host's processor, so one host lists at most one NPU backend; the
+    // rule only decides between several devices of that backend.
+    std::string chosen;
+    size_t npuCount = 0;
+    for (size_t i = 0; i < bckI.ggml_backend_dev_count(); ++i) {
+      const ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
+      if (::isXdnaDevice(bckI, dev)) {
+        if (npuCount++ == 0) {
+          chosen = lowerCopy(bckI.ggml_backend_dev_name(dev));
+        }
+      }
+    }
+    if (npuCount > 0) {
+      const std::string text =
+          npuCount == 1
+              ? string_format("Chosen NPU Backend: %s", chosen.c_str())
+              : string_format(
+                    "Chosen NPU Backend: %s, the first of %zu NPU devices",
+                    chosen.c_str(),
+                    npuCount);
+      bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, text.c_str(), nullptr);
+      return {BackendType::NPU, chosen};
+    }
+    bckI.llamaLogCallback(
+        GGML_LOG_LEVEL_WARN,
+        "No NPU device found; falling back to the GPU backend order, then CPU",
+        nullptr);
+    searchType = BackendType::GPU;
+  }
+
   std::vector<std::string> gpuBackends;
   std::vector<std::string> igpuBackends;
   std::vector<std::string> openClBackends;
   std::vector<std::string> cudaBackends;
   std::vector<std::string> otherOpenClBackends;
-  std::vector<std::string> xdnaBackends;
   std::vector<std::string> rejectedDevices;
   const bool allowNonAdrenoOpenCl =
       std::ranges::find(backendOverride, "opencl") != backendOverride.end();
-  const bool allowXdna =
-      std::ranges::find(backendOverride, "xdna") != backendOverride.end();
   std::optional<int> maxAdrenoVersion;
   bool sawMaliGpu = false;
 
-  if (preferredBackendType == BackendType::GPU) {
+  if (searchType == BackendType::GPU) {
     bool loopAllDevices = true;
     std::optional<MainGpuType> gpuType = std::nullopt;
     if (mainGpu.has_value()) {
@@ -585,12 +616,10 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
               openClBackends,
               cudaBackends,
               otherOpenClBackends,
-              xdnaBackends,
               maxAdrenoVersion,
               sawMaliGpu,
               rejectedDevices,
-              allowNonAdrenoOpenCl,
-              allowXdna);
+              allowNonAdrenoOpenCl);
           loopAllDevices = false;
         } else {
           std::string errorMsg;
@@ -622,12 +651,10 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
           openClBackends,
           cudaBackends,
           otherOpenClBackends,
-          xdnaBackends,
           maxAdrenoVersion,
           sawMaliGpu,
           rejectedDevices,
-          allowNonAdrenoOpenCl,
-          allowXdna);
+          allowNonAdrenoOpenCl);
     }
   }
 
@@ -637,7 +664,6 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     gpuBackends.clear();
     igpuBackends.clear();
     otherOpenClBackends.clear();
-    xdnaBackends.clear();
   };
 
   const bool noMainGpuOverride = !mainGpu.has_value();
@@ -698,15 +724,14 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
   // Skipped entirely for a CPU load. No devices are enumerated in that case, so
   // the block could only ever reach its "matched no available device" warning,
   // which would be noise on a deliberate device:'cpu' request.
-  if (!backendOverride.empty() && preferredBackendType == BackendType::GPU) {
+  if (!backendOverride.empty() && searchType == BackendType::GPU) {
     for (const std::string& family : backendOverride) {
       for (const std::vector<std::string>* candidates :
            {&openClBackends,
             &cudaBackends,
             &gpuBackends,
             &igpuBackends,
-            &otherOpenClBackends,
-            &xdnaBackends}) {
+            &otherOpenClBackends}) {
         for (const std::string& name : *candidates) {
           if (::backendNameMatchesFamily(name, family)) {
             std::string text = string_format(
@@ -745,7 +770,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     return {BackendType::GPU, igpuBackends.front()};
   }
 
-  if (preferredBackendType == BackendType::GPU && !hadEligibleGpu &&
+  if (searchType == BackendType::GPU && !hadEligibleGpu &&
       !rejectedDevices.empty() && bckI.llamaLogCallback != nullptr) {
     std::string message = "No eligible GPU backend found; rejected ";
     for (size_t index = 0; index < rejectedDevices.size(); ++index) {

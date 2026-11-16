@@ -325,13 +325,13 @@ export async function buildConsumerMobile(options: MobileBuildOptions) {
       // iOS build
       const iosDir = path.join(outputDir, 'ios')
 
-      // Detect scheme from the generated Xcode project (expo prebuild already ran pod install)
-      const listOutput = execSync('xcodebuild -list', { cwd: iosDir, encoding: 'utf-8' })
-      const schemeMatch = listOutput.match(/Schemes:\s*\n\s*(.+)/)
-      if (!schemeMatch) {
-        throw new Error('Could not detect Xcode scheme from xcodebuild -list')
+      // The app's scheme carries the name of the workspace expo prebuild writes;
+      // local Swift packages the app links bring schemes of their own.
+      const workspace = fs.readdirSync(iosDir).find((name) => name.endsWith('.xcworkspace'))
+      if (!workspace) {
+        throw new Error(`No Xcode workspace in ${iosDir}`)
       }
-      const scheme = schemeMatch[1].trim()
+      const scheme = path.basename(workspace, '.xcworkspace')
       console.log(`   Detected scheme: ${scheme}`)
 
       const archivePath = path.join(iosDir, 'build', `${scheme}.xcarchive`)
@@ -891,8 +891,8 @@ function patchPerformanceToolkitIosMemoryBuffer(
  * extra series.
  *
  * The worklet is Android-only (iOS has no /proc), so we only invoke bare-pack
- * for Android builds. `--linked` reuses the native addons linked ahead of time
- * by react-native-bare-kit rather than recompiling them.
+ * for Android builds. `--linked` reuses the native addons the QVAC Expo plugin
+ * links into the app rather than recompiling them.
  */
 function generateProcMemWorkletBundle(outputDir: string, platform: 'ios' | 'android'): void {
   const entry = path.join(outputDir, 'proc-mem-worklet.mjs')

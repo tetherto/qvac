@@ -12,21 +12,33 @@ import {
   createErrorResponse,
   ContextOverflowError as InferenceContextOverflowError,
   ModelRegistryModelNotFoundError as InferenceModelRegistryModelNotFoundError,
+  ModelRegistryBusyError as InferenceModelRegistryBusyError,
   RequestIdConflictError as InferenceRequestIdConflictError,
   RequestNotFoundError as InferenceRequestNotFoundError,
   RequestRejectedByPolicyError as InferenceRequestRejectedByPolicyError,
   TranslationFailedError as InferenceTranslationFailedError,
-  AudioEncodeFailedError as InferenceAudioEncodeFailedError
+  AudioEncodeFailedError as InferenceAudioEncodeFailedError,
+  InvalidSeedFromParamsError as InferenceInvalidSeedFromParamsError,
+  KvCacheSeedSourceNotFoundError as InferenceKvCacheSeedSourceNotFoundError,
+  KvCacheSeedSharingDisabledError as InferenceKvCacheSeedSharingDisabledError,
+  ModelReconfiguredError as InferenceModelReconfiguredError,
+  RAGWorkspaceBusyError as InferenceRAGWorkspaceBusyError
 } from '@qvac/inference/surface'
 import {
   ContextOverflowError,
   InferenceCancelledError,
   ModelRegistryModelNotFoundError,
+  ModelRegistryBusyError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
   TranslationFailedError,
-  AudioEncodeFailedError
+  AudioEncodeFailedError,
+  InvalidSeedFromParamsError,
+  KvCacheSeedSourceNotFoundError,
+  KvCacheSeedSharingDisabledError,
+  ModelReconfiguredError,
+  RAGWorkspaceBusyError
 } from '@/utils/errors-server'
 
 test('reconstructError: cancellation preserves its public request ID and partial output', (t) => {
@@ -86,6 +98,38 @@ test('reconstructError: RequestNotFoundError round-trips', (t) => {
   t.is((reconstructed as RequestNotFoundError).code, 52418)
 })
 
+test('reconstructError: InvalidSeedFromParamsError round-trips', (t) => {
+  const envelope = createErrorResponse(new InferenceInvalidSeedFromParamsError())
+
+  const reconstructed = reconstructError(envelope)
+
+  t.ok(reconstructed instanceof InvalidSeedFromParamsError)
+  t.is((reconstructed as InvalidSeedFromParamsError).code, 53204)
+})
+
+test('reconstructError: KvCacheSeedSourceNotFoundError round-trips', (t) => {
+  const original = new InferenceKvCacheSeedSourceNotFoundError('base', 'llm-1')
+  const envelope = createErrorResponse(original)
+
+  const reconstructed = reconstructError(envelope)
+
+  t.ok(reconstructed instanceof KvCacheSeedSourceNotFoundError)
+  t.is((reconstructed as KvCacheSeedSourceNotFoundError).seedFrom, 'base')
+  t.is((reconstructed as KvCacheSeedSourceNotFoundError).modelId, 'llm-1')
+  t.is((reconstructed as KvCacheSeedSourceNotFoundError).code, 53205)
+})
+
+test('reconstructError: KvCacheSeedSharingDisabledError round-trips', (t) => {
+  const original = new InferenceKvCacheSeedSharingDisabledError('llm-1')
+  const envelope = createErrorResponse(original)
+
+  const reconstructed = reconstructError(envelope)
+
+  t.ok(reconstructed instanceof KvCacheSeedSharingDisabledError)
+  t.is((reconstructed as KvCacheSeedSharingDisabledError).modelId, 'llm-1')
+  t.is((reconstructed as KvCacheSeedSharingDisabledError).code, 53206)
+})
+
 test('reconstructError: ModelRegistryModelNotFoundError round-trips', (t) => {
   const original = new InferenceModelRegistryModelNotFoundError('hf', 'org/m.gguf')
   const envelope = createErrorResponse(original)
@@ -96,6 +140,20 @@ test('reconstructError: ModelRegistryModelNotFoundError round-trips', (t) => {
   t.is((reconstructed as ModelRegistryModelNotFoundError).registrySource, 'hf')
   t.is((reconstructed as ModelRegistryModelNotFoundError).registryPath, 'org/m.gguf')
   t.is((reconstructed as ModelRegistryModelNotFoundError).code, 53951)
+})
+
+test('reconstructError: ModelRegistryBusyError round-trips with its holder and wait', (t) => {
+  for (const holder of ['current', 'legacy'] as const) {
+    const original = new InferenceModelRegistryBusyError(holder, 60_250)
+    const reconstructed = reconstructError(createErrorResponse(original))
+
+    t.ok(reconstructed instanceof ModelRegistryBusyError, holder)
+    const busy = reconstructed as ModelRegistryBusyError
+    t.is(busy.holder, holder)
+    t.is(busy.waitedMs, 60_250)
+    t.is(busy.code, 53952)
+    t.is(busy.message, original.message)
+  }
 })
 
 test('reconstructError: ContextOverflowError round-trips with all fields', (t) => {
@@ -292,4 +350,20 @@ test('reconstructError: native RPC errors preserve details and cause', (t) => {
   t.is(rpcError.code, 52423)
   t.ok(rpcError.cause)
   t.ok(rpcError.cause?.message.includes('native cause'))
+})
+
+test('reconstructError: the session refusals keep their typed fields', (t) => {
+  const reconfigured = reconstructError(
+    JSON.parse(JSON.stringify(createErrorResponse(new InferenceModelReconfiguredError('m-1'))))
+  )
+  t.ok(reconfigured instanceof ModelReconfiguredError)
+  t.is((reconfigured as ModelReconfiguredError).modelId, 'm-1')
+  t.is((reconfigured as ModelReconfiguredError).code, 53624)
+
+  const busy = reconstructError(
+    JSON.parse(JSON.stringify(createErrorResponse(new InferenceRAGWorkspaceBusyError('default'))))
+  )
+  t.ok(busy instanceof RAGWorkspaceBusyError)
+  t.is((busy as RAGWorkspaceBusyError).workspace, 'default')
+  t.is((busy as RAGWorkspaceBusyError).code, 52812)
 })

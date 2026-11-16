@@ -1,5 +1,5 @@
 # Build the self-contained per-platform `tetherto-qvac-sdk` wheels (thin client +
-# bundled Bare runtime + built @qvac/sdk worker + pruned native prebuilds) and
+# the @qvac/sdk worker and the native addons it loads, bundled by bare-stow) and
 # attach them to a GitHub release as assets, for a turnkey
 #   pip install tetherto-qvac-sdk -f <release expanded_assets URL>
 # install that needs no separately-provisioned worker.
@@ -83,7 +83,7 @@ jobs:
           platforms="${IN_PLATFORMS:-all}"
           [ -z "$platforms" ] && platforms="all"
           all='[
-            {"label":"darwin-arm64","os":"macos-15","platform":"macosx_11_0_arm64"},
+            {"label":"darwin-arm64","os":"macos-15","platform":"macosx_13_0_arm64"},
             {"label":"linux-x64","os":"ubuntu-22.04","platform":"manylinux_2_35_x86_64"},
             {"label":"linux-arm64","os":"ubuntu-22.04-arm","platform":"manylinux_2_35_aarch64"},
             {"label":"win32-x64","os":"windows-2025","platform":"win_amd64"}

@@ -25,18 +25,14 @@ test('IndicProcessor, should preprocess from mal_Mlym to eng_Latn', (t) => {
   const ip = new IndicProcessor(true)
   const sentences = ['ശരിയായ സമയത്ത് ശരിയായ ചിന്ത ലഭിക്കുക എന്നതാണ് അവബോധം.']
   const preProcessedBatch = ip.preprocessBatch(sentences, 'mal_Mlym', 'eng_Latn')
-  t.alike(preProcessedBatch, [
-    'mal_Mlym eng_Latn शरियाय समयत्त् शरियाय चिन्त लभिक्कुक ऎन्नताण् अवबोधं .'
-  ])
+  t.alike(preProcessedBatch, ['mal_Mlym eng_Latn शरियाय समयत्त् शरियाय चिन्त लभिक्कुक ऎन्नताण् अवबोधं .'])
 })
 
 test('IndicProcessor, should preprocess from mal_Mlym to ory_Orya', (t) => {
   const ip = new IndicProcessor(true)
   const sentences = ['ശരിയായ സമയത്ത് ശരിയായ ചിന്ത ലഭിക്കുക എന്നതാണ് അവബോധം.']
   const preProcessedBatch = ip.preprocessBatch(sentences, 'mal_Mlym', 'ory_Orya')
-  t.alike(preProcessedBatch, [
-    'mal_Mlym ory_Orya शरियाय समयत्त् शरियाय चिन्त लभिक्कुक ऎन्नताण् अवबोधं .'
-  ])
+  t.alike(preProcessedBatch, ['mal_Mlym ory_Orya शरियाय समयत्त् शरियाय चिन्त लभिक्कुक ऎन्नताण् अवबोधं .'])
 })
 
 test('IndicProcessor, should preprocess from eng_Latn to hin_Deva', (t) => {

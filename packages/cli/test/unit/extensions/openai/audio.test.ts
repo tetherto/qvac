@@ -118,6 +118,19 @@ describe('resolveSampleRate', () => {
     assert.equal(resolveSampleRate({ ttsEngine: 'supertonic' }), 44100)
   })
 
+  it('knows the native rate of every @qvac/tts-ggml engine', () => {
+    for (const [ttsEngine, sampleRate] of [
+      ['parler', 44100],
+      ['cosyvoice3', 24000],
+      ['audio8', 44100],
+      ['moss', 24000],
+      ['moss-sfx', 48000],
+      ['moss-speech', 24000]
+    ] as const) {
+      assert.equal(resolveSampleRate({ ttsEngine }), sampleRate, ttsEngine)
+    }
+  })
+
   it('is case-insensitive on engine name', () => {
     assert.equal(resolveSampleRate({ ttsEngine: 'CHATTERBOX' }), 24000)
   })

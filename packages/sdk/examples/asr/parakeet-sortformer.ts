@@ -102,13 +102,24 @@ try {
 
 // ── Helpers ──
 
+// Sortformer reports each segment as `Speaker N: HH:MM:SS.mmm - HH:MM:SS.mmm`
 function parseDiarization(text: string) {
   const segs: { speaker: number; start: number; end: number }[] = []
   for (const line of text.split('\n')) {
-    const m = line.match(/Speaker (\d+): ([\d.]+)s - ([\d.]+)s/)
-    if (m) segs.push({ speaker: +m[1]!, start: +m[2]!, end: +m[3]! })
+    const m = line.match(/Speaker (\d+): (\d+):(\d+):([\d.]+) - (\d+):(\d+):([\d.]+)/)
+    if (m) {
+      segs.push({
+        speaker: +m[1]!,
+        start: seconds(m[2]!, m[3]!, m[4]!),
+        end: seconds(m[5]!, m[6]!, m[7]!)
+      })
+    }
   }
   return segs.sort((a, b) => a.start - b.start)
+}
+
+function seconds(h: string, m: string, s: string) {
+  return +h * 3600 + +m * 60 + +s
 }
 
 function readPcm(wavPath: string): Buffer {

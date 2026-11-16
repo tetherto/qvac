@@ -23,6 +23,9 @@ async function resolveMinimaxConfig(parsed: MinimaxAudioGenConfig, ctx: ResolveC
   if (parsed.coremlProfileDir !== undefined && ctx.platform !== 'darwin') {
     throw new ModelLoadFailedError('MiniMax Core ML is available on macOS only')
   }
+  if (parsed.coremlConditionerPath !== undefined && ctx.platform !== 'darwin') {
+    throw new ModelLoadFailedError('The MiniMax Core ML conditioner is available on macOS only')
+  }
 
   const { lmModelSrc, synthModelSrc, ...runtimeConfig } = parsed
   // Resolve sequentially for the same stall-timeout reason documented for the
