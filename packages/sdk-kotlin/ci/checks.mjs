@@ -111,6 +111,12 @@ run(
   kotlin
 )
 run('./scripts/verify-maven-consumers.sh', [`-PqvacProfile=${profile}`], kotlin)
+// Every example the docs embed, each compiled in isolation against this SDK, as main; packages/sdk is built above.
+run(
+  './gradlew',
+  ['--no-daemon', '-p', 'examples', '-x', ':sdk-kotlin:android-barekit:buildWorkspaceSdk', 'check'],
+  kotlin
+)
 // The Kotlin e2e app against this SDK, so an API break fails here rather than on Device Farm.
 run(
   '../../../sdk-kotlin/gradlew',
