@@ -489,7 +489,8 @@ jobs:
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: 22
+          node-version: lts/*
+          check-latest: true
 
       - name: Resolve and prepare inference
         id: inference
@@ -545,7 +546,8 @@ jobs:
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: 22
+          node-version: lts/*
+          check-latest: true
 
       - name: Resolve and prepare test-suite
         id: test-suite
@@ -712,6 +714,7 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
+          check-latest: true
 
       - name: Check @qvac/sdk
         env:

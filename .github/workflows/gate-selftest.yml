@@ -30,6 +30,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
+          check-latest: true
 
       - name: Gate MUST hard-fail on the broken 0.2.1 (the build #2502 reverted)
         shell: bash
@@ -126,6 +127,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
+          check-latest: true
 
       - name: Dry-run the UND gate over every published addon (android-arm64)
         shell: bash

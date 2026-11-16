@@ -71,6 +71,7 @@ runs:
     - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
       with:
         node-version: lts/*
+        check-latest: true
     - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
     # --ignore-scripts: the affected graph only needs the nx CLI + project.json,
     # not built packages; running every package's prepare is wasteful and flaky here.
