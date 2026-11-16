@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstring>
 #include <fstream>
 #include <functional>
 #include <iterator>
@@ -2668,10 +2669,13 @@ BridgeDepthGraph::measure(int h, int w, const CallerHostBytes& caller) {
       Impl::graphArenaBytes() + m.measuredSlotConstantBytes;
   // The run: every graph input and output on the host, the resized pos_embed
   // and the slot's inputs already counted above, plus both views as planar
-  // floats. The output is the [h, w] disparity forward() returns.
+  // floats. The output is the padded map forward() cuts down in place and
+  // returns, so the disparity keeps the padded size.
   const uint64_t pixels = static_cast<uint64_t>(h) * w;
   const uint64_t planarViewFloats = 2ULL * 3 * pixels;
-  const uint64_t disparityBytes = pixels * sizeof(float);
+  const Padding pad = computePadding(h, w, PAD_DIVISOR);
+  const uint64_t disparityBytes =
+      static_cast<uint64_t>(h + pad.top) * (w + pad.right) * sizeof(float);
   const uint64_t runBytes = m.measuredRunHostBytes - m.measuredPosTableBytes -
                             m.measuredSlotConstantBytes +
                             planarViewFloats * sizeof(float);
@@ -2999,24 +3003,15 @@ std::vector<float> BridgeDepthGraph::Impl::forward(
             ai1);
         T* mono1 =
             ggml_reshape_4d(ctx, find(al, "align0.mono"), 128, 1, w8, h8);
-        T* padded = find(
-            m.buildAlign1(ctx, embed1, mono1, hpos1, dispEst, ai1),
-            "disp_final_padded"); // [wDim, hDim]
-        if (padded->ne[0] != wDim || padded->ne[1] != hDim)
-          throw std::runtime_error("BridgeDepth: unexpected disparity shape");
-        // InputPadder.unpad on the device: drop the top rows and the right
-        // columns, so the read back is the returned disparity itself. Only
-        // this map is a graph output, so the allocator can reuse the memory
-        // of every intermediate.
+        // Only the final map is a graph output, so the allocator can reuse the
+        // memory of every intermediate. It stays padded: a crop in the graph
+        // would depend on the unpadded size, so two inputs of one padded size
+        // would build different graphs and lose the slot's CUDA graph replay.
         return Impl::Outputs{
-            {"disparity",
-             ggml_view_2d(
-                 ctx,
-                 padded,
-                 w,
-                 h,
-                 padded->nb[1],
-                 static_cast<size_t>(pad.top) * padded->nb[1])}};
+            {"disp_final_padded",
+             find(
+                 m.buildAlign1(ctx, embed1, mono1, hpos1, dispEst, ai1),
+                 "disp_final_padded")}};
       });
 
   if (m.measureOnly) {
@@ -3027,7 +3022,21 @@ std::vector<float> BridgeDepthGraph::Impl::forward(
         m.measuredInputBytes - viewsBytes - m.measuredPosTableBytes;
     return {};
   }
-  return std::move(outsHost.at("disparity").data);
+  // InputPadder.unpad: drop the top rows and the right columns, in place in
+  // the buffer read back from the device, so the map is copied once. A row
+  // only moves towards the start and never onto a row still to be moved;
+  // memmove because a row can overlap its own old place. The buffer keeps
+  // its padded capacity, which measure() counts.
+  std::vector<float> disparity =
+      std::move(outsHost.at("disp_final_padded").data);
+  for (int y = 0; y < h; ++y) {
+    std::memmove(
+        disparity.data() + static_cast<size_t>(y) * w,
+        disparity.data() + static_cast<size_t>(y + pad.top) * wDim,
+        static_cast<size_t>(w) * sizeof(float));
+  }
+  disparity.resize(static_cast<size_t>(h) * w);
+  return disparity;
 }
 
 } // namespace classification_ggml::bridgedepth

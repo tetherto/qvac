@@ -420,8 +420,15 @@ TEST(ModelFootprint, BridgeDepthHostStagingAddsTheCallerPhases) {
     // The run outweighs the load's read buffer, so a job byte adds one byte.
     ASSERT_EQ(graphStaging(model, {.jobBytes = 1}), withRun + 1) << label;
     const auto caller = bd::callerHostBytes(input.width, input.height);
+    // The returned disparity keeps the capacity of the padded map it is cut
+    // from in place.
+    const bd::Padding pad = bd::computePadding(
+        static_cast<int>(model.height),
+        static_cast<int>(model.width),
+        bd::PAD_DIVISOR);
     const uint64_t modelDisparityBytes =
-        static_cast<uint64_t>(model.width) * model.height * sizeof(float);
+        static_cast<uint64_t>(model.width + pad.right) *
+        (model.height + pad.top) * sizeof(float);
     const uint64_t expected = persistent + caller.jobBytes +
                               std::max(
                                   {caller.prepareBytes,
