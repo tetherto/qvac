@@ -40,18 +40,19 @@ npx qvac-test run:local:kotlin-android --suite=smoke
 - The app's memory is sampled through adb every 5 s and charted per test in the report.
   `QVAC_ANDROID_MEM_INTERVAL_MS` sets the period; `QVAC_ANDROID_MEM_DISABLED=1` turns it off.
 
-## Build and unit-test
+## Build
 
 From `packages/sdk-e2e`:
 
 ```bash
 node runners/kotlin/scripts/device.mjs build   # -> build/consumers/kotlin-android/consumer.apk
-cd runners/kotlin && ../../../sdk-kotlin/gradlew :app:testDebugUnitTest
+cd runners/kotlin && ../../../sdk-kotlin/gradlew :app:compileDebugKotlin
 ```
 
 The Gradle build includes `packages/sdk-kotlin` as a composite build, so the app always runs this
-checkout's Kotlin SDK and the worker it bundles. `pr-checks-sdk-kotlin.yml` runs the unit tests, so an
-SDK change that breaks the app fails the Kotlin SDK's PR checks.
+checkout's Kotlin SDK and the worker it bundles. `pr-checks-sdk-kotlin.yml` compiles the app, so an
+SDK change that breaks the app fails the Kotlin SDK's PR checks. The runner has no unit tests: verify a
+runner change by running the affected e2e tests on a device.
 
 ## CI
 
