@@ -1,0 +1,113 @@
+---
+title: Caller sessions
+sidebarTitle: Sessions
+icon: Users
+description: Let several callers share one SDK runtime, each with its own requests, cancellation scope and model leases.
+schemaType: HowTo
+---
+
+## Overview
+
+One SDK runtime can serve several callers, for example an agent harness and the skill runner it starts. Without sessions, every caller shares one request namespace: any caller can cancel another caller's request, and any caller's [`unloadModel()`](/sdk/reference/api#unloadmodel) frees a model that another caller is still using.
+
+`openSession()` returns a session handle with the same model-work methods as the module-level SDK. Every call made through the handle carries the session's id, so:
+
+- [`cancel()`](/sdk/reference/api#cancel) reaches only the session's own requests.
+- [`loadModel()`](/sdk/reference/api#loadmodel) takes a lease on the model. `unloadModel()` releases only the session's lease, and the model unloads when its last lease is released.
+- `session.close()` cancels the session's requests, waits for them to end, disposes the vector indexes the session opened and releases its model leases.
+
+Calls made without a session run as the **owner**. Existing single-caller code needs no change.
+
+## Functions
+
+1. `openSession({ name? })` — returns a session handle at once. The open round trip runs in the background; calls on the handle wait for it.
+2. `session.close()` — ends the session. It does not stop the runtime.
+3. `close()` — the owner's shutdown. It stops the runtime and ends every session.
+
+For how to use each function, see [SDK — API reference](/sdk/reference/api/).
+
+## Requests and cancellation
+
+The worker keys every request by its session and its `requestId`, so two sessions may use the same `requestId` without conflict.
+
+- `session.cancel({ requestId })` with another session's `requestId` cancels nothing, and the other session's request keeps running.
+- `session.cancel({ modelId })` cancels only the session's requests on that model.
+- The owner's `cancel({ modelId })` cancels the requests of every session on that model.
+
+See [Cancellation](/sdk/runtime/cancellation) for the cancel forms themselves.
+
+## Model leases
+
+A loaded model records which sessions hold it.
+
+- `loadModel()` for a configuration that is already loaded adds a lease and returns the same `modelId`. Concurrent loads of one configuration share one load.
+- `unloadModel()` releases the caller's lease and resolves with `{ released, unloaded }`. `unloaded` is `true` only when that release was the last lease.
+- [`getLoadedModelInfo()`](/sdk/reference/api#getloadedmodelinfo) reports the model's `leaseCount`.
+- A reload of a loaded model's configuration, `loadModel({ modelId, modelConfig })`, fails with `ModelLeasedError` while another session holds a lease on the model.
+- The `modelId` stays the hash of the configuration the model was first loaded with. After a reload, a session that holds no lease and loads that first configuration gets `ModelReconfiguredError` instead of the reconfigured model.
+
+## Owner-only operations
+
+[`suspend()`](/sdk/reference/api#suspend), [`resume()`](/sdk/reference/api#resume), [`deleteCache()`](/sdk/reference/api#deletecache), [`startRpcServer()`](/sdk/reference/api#startrpcserver) and [`stopRpcServer()`](/sdk/reference/api#stoprpcserver) change the runtime for every session, so only the owner may call them. A session handle has no method for them, and the worker refuses them from a session with `OwnerOnlyError`. A session cannot open another session.
+
+## Runtime loss
+
+When the worker exits or the owner calls `close()`, every session ends:
+
+- Later calls on a session fail locally with `SessionInvalidatedError`.
+- Calls that name a model the session had loaded fail with `ModelHandleInvalidatedError` until the model is loaded again.
+- Calls in flight when the worker exits fail with `WorkerCrashedError`.
+
+The SDK does not reconnect a session or restart the worker.
+
+## Example
+
+The following script opens two sessions that share one model by lease, shows that only the session that started a completion can cancel it, and releases the leases one session at a time:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/sessions.js title="sessions.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/sessions.ts title="sessions.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/sessions.py title="sessions.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/Sessions.kt title="Sessions.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart), the [Python quickstart](/sdk/python-sdk#quickstart), or the [Kotlin quickstart](/sdk/kotlin-sdk#quickstart).
+</Callout>
+
+## Errors
+
+- `SessionIdConflictError` — the worker already has a session with the id the client generated.
+- `SessionNotOpenError` — the worker received a call for a session it does not have, for example one that already closed.
+- `SessionInvalidatedError` — a call on a session handle after the session ended: its own `close()`, the owner's `close()` or the loss of the worker.
+- `ModelHandleInvalidatedError` — a call naming a model the session loaded, after the session ended. Load the model again.
+- `ModelLeasedError` — a reload of a model's configuration while another session holds a lease on it.
+- `ModelReconfiguredError` — a load, from a session that holds no lease, of a configuration whose model was since reloaded with another configuration.
+- `OwnerOnlyError` — a session called an owner-only operation.

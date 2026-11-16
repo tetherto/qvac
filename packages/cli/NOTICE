@@ -24,7 +24,7 @@ JavaScript Dependencies
     https://github.com/tetherto/qvac
   @qvac/bci-whispercpp@0.15.1
     https://github.com/tetherto/qvac
-  @qvac/classification-ggml@0.36.0
+  @qvac/classification-ggml@0.36.1
     https://github.com/tetherto/qvac
   @qvac/decoder-audio@0.9.0
     https://github.com/tetherto/qvac
@@ -32,22 +32,18 @@ JavaScript Dependencies
     https://github.com/tetherto/qvac
   @qvac/diffusion-cpp-darwin-arm64@0.35.1
     https://github.com/tetherto/qvac
-  @qvac/embed-llamacpp@0.56.0
+  @qvac/embed-llamacpp@0.56.1
     https://github.com/tetherto/qvac
   @qvac/error@0.1.1
-  @qvac/fabric@0.28.0
+  @qvac/fabric@0.29.1
     https://github.com/tetherto/qvac
-  @qvac/fabric@0.29.0
+  @qvac/fabric-darwin-arm64@0.29.1
     https://github.com/tetherto/qvac
-  @qvac/fabric-darwin-arm64@0.28.0
-    https://github.com/tetherto/qvac
-  @qvac/fabric-darwin-arm64@0.29.0
-    https://github.com/tetherto/qvac
-  @qvac/ggml-rpc-server@0.9.0
+  @qvac/ggml-rpc-server@0.9.1
     https://github.com/tetherto/qvac
   @qvac/infer-base@0.8.0
     https://github.com/tetherto/qvac
-  @qvac/inference@0.23.0
+  @qvac/inference@0.24.0
     https://github.com/tetherto/qvac
   @qvac/langdetect-text@0.1.3
     https://github.com/tetherto/qvac
@@ -55,7 +51,7 @@ JavaScript Dependencies
     https://github.com/tetherto/qvac
   @qvac/logging@0.1.1
     https://github.com/tetherto/qvac
-  @qvac/ocr-ggml@0.33.0
+  @qvac/ocr-ggml@0.33.1
     https://github.com/tetherto/qvac
   @qvac/rag@0.9.0
     https://github.com/tetherto/qvac
@@ -64,17 +60,17 @@ JavaScript Dependencies
   @qvac/registry-schema@0.4.0
     https://github.com/tetherto/qvac
   @qvac/response@0.1.2
-  @qvac/sdk@0.23.0
+  @qvac/sdk@0.24.0
     https://github.com/tetherto/qvac
-  @qvac/translation-nmtcpp@0.25.0
+  @qvac/translation-nmtcpp@0.25.1
     https://github.com/tetherto/qvac
   @qvac/tts-ggml@0.15.1
     https://github.com/tetherto/qvac
   @qvac/tts-ggml-darwin-arm64@0.15.1
     https://github.com/tetherto/qvac
-  @qvac/turbovec-ggml@0.5.0
+  @qvac/turbovec-ggml@0.5.1
     https://github.com/tetherto/qvac
-  @qvac/vla-ggml@0.36.0
+  @qvac/vla-ggml@0.36.1
     https://github.com/tetherto/qvac
   adaptive-timeout@1.0.1
     https://github.com/holepunchto/adaptive-timeout
@@ -90,7 +86,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-ansi-escapes
   bare-assert@1.3.0
     https://github.com/holepunchto/bare-assert
-  bare-buffer@3.7.1
+  bare-buffer@3.7.2
     https://github.com/holepunchto/bare-buffer
   bare-bundle@1.11.0
     https://github.com/holepunchto/bare-bundle
@@ -148,13 +144,13 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-mime
   bare-module@6.4.0
     https://github.com/holepunchto/bare-module
-  bare-module@7.5.1
+  bare-module@7.5.2
     https://github.com/holepunchto/bare-module
   bare-module-lexer@1.7.0
     https://github.com/holepunchto/bare-module-lexer
   bare-module-resolve@1.12.6
     https://github.com/holepunchto/bare-module-resolve
-  bare-module-traverse@2.7.5
+  bare-module-traverse@2.7.6
     https://github.com/holepunchto/bare-module-traverse
   bare-net@2.3.3
     https://github.com/holepunchto/bare-net
@@ -162,7 +158,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-os
   bare-pack@3.1.0
     https://github.com/holepunchto/bare-pack
-  bare-path@3.1.2
+  bare-path@3.1.3
     https://github.com/holepunchto/bare-path
   bare-performance@2.1.1
     https://github.com/holepunchto/bare-performance
@@ -176,11 +172,11 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-rpc
   bare-semver@1.1.0
     https://github.com/holepunchto/bare-semver
-  bare-sidecar@0.5.15
+  bare-sidecar@0.5.16
     https://github.com/holepunchto/bare-sidecar
   bare-signals@5.0.0
     https://github.com/holepunchto/bare-signals
-  bare-sleep@1.0.0
+  bare-sleep@1.0.1
     https://github.com/holepunchto/bare-sleep
   bare-stdio@1.0.3
     https://github.com/holepunchto/bare-stdio
@@ -190,7 +186,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-stow-host
   bare-stow-protocol@0.1.1
     https://github.com/holepunchto/bare-stow-protocol
-  bare-stow-runtime@0.1.1
+  bare-stow-runtime@0.1.2
     https://github.com/holepunchto/bare-stow-runtime
   bare-stow-target-react-native@0.3.0
     https://github.com/holepunchto/bare-stow-target-react-native
@@ -216,7 +212,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-type-stripper
   bare-unpack@1.1.4
     https://github.com/holepunchto/bare-unpack
-  bare-url@2.5.6
+  bare-url@2.5.7
     https://github.com/holepunchto/bare-url
   bare-utils@1.6.1
     https://github.com/holepunchto/bare-utils
@@ -236,7 +232,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/blind-relay
   brittle@3.19.1
     https://github.com/holepunchto/brittle
-  compact-encoding@3.6.0
+  compact-encoding@3.7.0
     https://github.com/holepunchto/compact-encoding
   compact-encoding-bitfield@1.1.0
     https://github.com/compact-encoding/compact-encoding-bitfield
@@ -302,7 +298,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/require-asset
   resource-on-exit@1.0.0
     https://github.com/holepunchto/bare-teardown
-  rocksdb-native@3.19.3
+  rocksdb-native@3.19.5
     https://github.com/holepunchto/rocksdb-native
   scope-lock@1.2.4
     https://github.com/holepunchto/scope-lock
@@ -322,7 +318,7 @@ JavaScript Dependencies
 --- blueoak-1.0.0 ---
 
   @isaacs/nonrecursive-glob-match@1.1.0
-  glob@14.0.4
+  glob@14.0.6
     https://github.com/isaacs/node-glob
   lru-cache@11.5.3
     https://github.com/isaacs/node-lru-cache
@@ -354,7 +350,7 @@ JavaScript Dependencies
     https://github.com/mcollina/fastq
   inherits@2.0.4
     https://github.com/isaacs/inherits
-  mute-stream@3.0.0
+  mute-stream@4.0.0
     https://github.com/npm/mute-stream
   nanoassert@2.0.0
     https://github.com/emilbayes/nanoassert
@@ -389,13 +385,13 @@ JavaScript Dependencies
     https://github.com/fastify/ajv-compiler
   @fastify/busboy@3.2.5
     https://github.com/fastify/busboy
-  @fastify/cors@11.4.1
+  @fastify/cors@11.4.3
     https://github.com/fastify/fastify-cors
   @fastify/deepmerge@3.2.4
     https://github.com/fastify/deepmerge
   @fastify/error@4.2.1
     https://github.com/fastify/fastify-error
-  @fastify/fast-json-stringify-compiler@5.1.1
+  @fastify/fast-json-stringify-compiler@5.2.0
     https://github.com/fastify/fast-json-stringify-compiler
   @fastify/forwarded@3.1.2
     https://github.com/fastify/forwarded
@@ -407,45 +403,45 @@ JavaScript Dependencies
     https://github.com/fastify/proxy-addr
   @fastify/send@4.2.1
     https://github.com/fastify/send
-  @fastify/static@10.1.10
+  @fastify/static@10.1.11
     https://github.com/fastify/fastify-static
   @fastify/swagger@9.9.3
     https://github.com/fastify/fastify-swagger
   @fastify/swagger-ui@6.1.3
     https://github.com/fastify/fastify-swagger-ui
-  @inquirer/ansi@2.0.10
+  @inquirer/ansi@2.1.0
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/checkbox@5.2.8
+  @inquirer/checkbox@5.3.0
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/confirm@6.3.5
+  @inquirer/confirm@6.4.0
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/core@12.0.6
+  @inquirer/core@12.1.0
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/editor@5.3.6
+  @inquirer/editor@5.4.0
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/expand@5.1.8
+  @inquirer/expand@5.2.0
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/external-editor@3.0.7
+  @inquirer/external-editor@3.1.0
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/figures@2.0.10
+  @inquirer/figures@2.1.0
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/input@5.1.9
+  @inquirer/input@5.2.0
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/number@4.2.6
+  @inquirer/number@4.3.0
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/password@5.2.5
+  @inquirer/password@5.3.0
     https://github.com/SBoudrias/Inquirer.js
   @inquirer/prompts@8.5.2
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/rawlist@5.3.8
+  @inquirer/rawlist@5.4.0
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/search@4.3.6
+  @inquirer/search@4.4.0
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/select@5.2.8
+  @inquirer/select@5.3.0
     https://github.com/SBoudrias/Inquirer.js
-  @inquirer/type@4.2.1
+  @inquirer/type@4.3.0
     https://github.com/SBoudrias/Inquirer.js
-  @jridgewell/resolve-uri@3.1.2
+  @jridgewell/resolve-uri@3.1.3
     https://github.com/jridgewell/resolve-uri
   @jridgewell/sourcemap-codec@1.6.0
     https://github.com/jridgewell/sourcemaps
@@ -551,7 +547,7 @@ JavaScript Dependencies
     https://github.com/jshttp/http-errors
   hyperbee@2.27.3
     https://github.com/holepunchto/hyperbee
-  hypercore@11.40.3
+  hypercore@11.40.4
     https://github.com/holepunchto/hypercore
   hypercore-crypto@3.7.0
     https://github.com/mafintosh/hypercore-crypto

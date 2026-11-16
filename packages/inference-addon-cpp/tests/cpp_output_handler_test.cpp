@@ -61,6 +61,25 @@ TEST(CppOutputHandlerTest, LogMsgOutputHandlerOutputsToCout) {
   EXPECT_EQ(capture.getOutput(), "[INFO]: Test log message\n");
 }
 
+TEST(CppOutputHandlerTest, RuntimeStatsOutputHandlerLogsMixedValues) {
+  out_handl::CppRuntimeStatsOutputHandler handler;
+
+  RuntimeStats stats = {
+      {"totalTime", 1.5},
+      {"totalTokens", int64_t{7}},
+      {"backendName", std::string{"metal"}}};
+  std::any testData = std::any(stats);
+
+  EXPECT_TRUE(handler.canHandle(testData));
+
+  CoutCapture capture;
+  handler.handleOutput(testData);
+  EXPECT_EQ(
+      capture.getOutput(),
+      "[INFO]: RuntimeStats: totalTime=1.5 totalTokens=7 backendName=metal "
+      "\n");
+}
+
 TEST(CppOutputHandlerTest, ErrorOutputHandlerOutputsToCerr) {
   out_handl::CppErrorOutputHandler handler;
 
