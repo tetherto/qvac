@@ -72,12 +72,12 @@ speculativePostDecode(const mtmd_helper_embd_batch* embdBatch, void* userData) {
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 MtmdLlmContext::MtmdLlmContext(
     common_params& commonParams, common_init_result_ptr llamaInit,
-    uint64_t maxImagePixels,
+    const MediaLimits& mediaLimits,
     std::unique_ptr<
         qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
         speculative)
     : llamaInit_(std::move(llamaInit)), speculative_(std::move(speculative)),
-      params_(commonParams), maxImagePixels_(maxImagePixels) {
+      params_(commonParams), mediaLimits_(mediaLimits) {
   modelCtx_.model = llamaInit_->model();
   modelCtx_.lctx = llamaInit_->context();
   modelCtx_.speculative = speculative_.get();
@@ -87,9 +87,9 @@ MtmdLlmContext::MtmdLlmContext(
 MtmdLlmContext::MtmdLlmContext(
     const common_params& commonParams, const LlmModelContext& shared,
     mtmd_context* sharedVision, llama_seq_id seqId, llama_pos perSeqCtxCeiling,
-    uint64_t maxImagePixels)
+    const MediaLimits& mediaLimits)
     : sharedVision_(sharedVision), modelCtx_(shared), params_(commonParams),
-      maxImagePixels_(maxImagePixels), perSeqCtxCeiling_(perSeqCtxCeiling) {
+      mediaLimits_(mediaLimits), perSeqCtxCeiling_(perSeqCtxCeiling) {
   seqId_ = seqId;
   if (sharedVision_ == nullptr) {
     throw qvac_errors::StatusError(
@@ -1307,19 +1307,43 @@ void MtmdLlmContext::loadMedia(const std::vector<uint8_t>& media) {
         ADDON_ID, toString(UnableToLoadModel), errorMsg);
   }
 
+  // Rejects an image stb_image cannot size (WebP, a video), so mtmd never
+  // hands it to ffmpeg. mtmd then bounds the decode itself.
   try {
-    image_pixel_limit::checkBuffer(media.data(), media.size(), maxImagePixels_);
+    image_pixel_limit::checkBuffer(
+        media.data(), media.size(), mediaLimits_.maxImagePixels);
   } catch (const qvac_errors::StatusError&) {
     resetMedia();
     throw;
   }
-  mtmd::bitmap bmp(mtmd_helper_bitmap_init_from_buf(
-                       visionContext(),
-                       media.data(),
-                       media.size(),
-                       /*placeholder=*/false,
-                       mtmd_helper_init_opt_default())
-                       .bitmap);
+  const mtmd_helper_bitmap_wrapper decoded = mtmd_helper_bitmap_init_from_buf(
+      visionContext(),
+      media.data(),
+      media.size(),
+      /*placeholder=*/false,
+      mediaDecodeOptions(
+          mediaLimits_, mtmd_get_audio_sample_rate(visionContext())));
+  mtmd::bitmap bmp(decoded.bitmap);
+  if (decoded.status == MTMD_HELPER_BITMAP_AUDIO_TOO_LONG ||
+      decoded.status == MTMD_HELPER_BITMAP_IMAGE_TOO_LARGE) {
+    resetMedia();
+    const std::string errorMsg =
+        decoded.status == MTMD_HELPER_BITMAP_AUDIO_TOO_LONG
+            ? "[MtmdLlm] Audio exceeds the " +
+                  std::to_string(mediaLimits_.maxAudioSeconds) +
+                  " s limit. Increase audio-max-seconds to allow longer "
+                  "audio."
+            : "[MtmdLlm] Image exceeds the " +
+                  std::to_string(mediaLimits_.maxImagePixels / 1'000'000) +
+                  " MP limit. Increase image-max-megapixels to allow larger "
+                  "images.";
+    QLOG_IF(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, errorMsg);
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        errorMsg);
+  }
   if (!bmp.ptr) {
     resetMedia();
     const char* errorMsg =

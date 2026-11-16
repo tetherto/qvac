@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### Added
+
+- `audio-max-seconds` (alias `audio_max_seconds`, default 600) bounds the audio
+  a multimodal model decodes
+  ([#5783](https://github.com/tetherto/qvac/pull/5783)). fabric's mtmd-helper checks it against the length
+  its decoder reads, before it allocates the samples; until now a small WAV
+  declared at a low sample rate could make it allocate gigabytes. Longer audio
+  is rejected with `InvalidArgument`.
+
+### Changed
+
+- `image-max-megapixels` is also passed to fabric's mtmd-helper, which checks it
+  against the size its own decoder reads
+  ([#5783](https://github.com/tetherto/qvac/pull/5783)). The header check before the prompt
+  is processed stays, so an oversized image is still rejected before the
+  session cache changes, and formats stb_image cannot read (WebP, video) are
+  still rejected rather than handed to ffmpeg.
+
 ### Fixed
 
 - A cancel that landed after a token was streamed but before it was decoded

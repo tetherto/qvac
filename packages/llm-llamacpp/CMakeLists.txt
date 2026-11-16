@@ -51,6 +51,7 @@ set(ADDON_SOURCES
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MediaLimits.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MediaLoadOrder.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
@@ -108,6 +109,7 @@ if(BUILD_CLI AND NOT BUILD_FUZZING)
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MediaLimits.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MediaLoadOrder.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
