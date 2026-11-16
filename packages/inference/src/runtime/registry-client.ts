@@ -13,6 +13,7 @@ import {
 import { getEngineLogger } from '@/logging/index'
 import { DEFAULT_REGISTRY_CORE_KEY } from '@/constants/index'
 import { DownloadCancelledError, ModelRegistryBusyError } from '@/errors/index'
+import '@/runtime/dispose-symbols'
 
 const logger = getEngineLogger()
 
