@@ -229,7 +229,7 @@ Run a preflight check of host system requirements.
 | Requirement | When it is needed |
 | --- | --- |
 | Available RAM `>= 2 GB` | Needed when loading a model. Checked via `os.availableMemory()` on Node 22+, falling back to `os.freemem()` on older Nodes. |
-| GPU acceleration | macOS: passes (Metal). Linux and Windows: runs `vulkaninfo --summary` and warns when no Vulkan driver is found. On Windows, the SDK needs Vulkan `>= 1.4` even for CPU inference. |
+| GPU acceleration | macOS: passes (Metal). Linux and Windows: runs `vulkaninfo --summary` and warns when no Vulkan driver is found. On Windows, the SDK's transcription and text-to-speech need Vulkan `>= 1.4` even for CPU inference. |
 | Free disk `>= 5 GB` in the working directory | Model artifacts are typically multi-GB per model. Uses `fs.statfsSync` (Node 18.15+) with a   POSIX `df` fallback. |
 
 #### Deploy target checks
