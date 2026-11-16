@@ -25,6 +25,7 @@ export interface NamespaceRecord {
   revision: number
   nextNativeId: Uint8Array
   createdAt: Date
+  indexStorage?: string
 }
 
 export interface DocumentRecord {

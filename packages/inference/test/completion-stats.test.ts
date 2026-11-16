@@ -29,6 +29,13 @@ test('normalizeCompletionStats: drops non-finite addon numbers', (t) => {
   t.is(completionStatsSchema.safeParse(normalized).success, true)
 })
 
+test('normalizeCompletionStats: keeps an npu backendDevice', (t) => {
+  const normalized = normalizeCompletionStats({ TPS: 30, backendDevice: 'npu' })
+
+  t.alike(normalized, { tokensPerSecond: 30, backendDevice: 'npu' })
+  t.is(completionStatsSchema.safeParse(normalized).success, true)
+})
+
 test('normalizeCompletionStats: returns undefined when no finite stats remain', (t) => {
   const normalized = normalizeCompletionStats({
     TTFT: Number.NaN,

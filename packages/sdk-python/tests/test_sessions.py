@@ -108,8 +108,25 @@ async def test_conversation_session_routes_typed_events():
                     "timestamp": 1.25,
                 }
             ),
+            _t(
+                vad={
+                    "speaking": True,
+                    "probability": 0.8,
+                    "source": "energy",
+                    "timestamp": 0.5,
+                    "chunkIndex": -1,
+                }
+            ),
             _t(end_of_turn={"source": "whisper", "silenceDurationMs": 700}),
             _t(end_of_turn={"source": "parakeet"}),
+            _t(
+                end_of_turn={
+                    "source": "parakeet",
+                    "timestamp": 4.125,
+                    "chunkIndex": 6,
+                    "confidence": 0.93,
+                }
+            ),
             _t(text="hello"),
             _t(done=True),
         ]
@@ -120,8 +137,12 @@ async def test_conversation_session_routes_typed_events():
     assert events == [
         VadEvent(speaking=True, probability=0.9),
         VadEvent(speaking=False, probability=0.1, timestamp=1.25),
+        VadEvent(speaking=True, probability=0.8, timestamp=0.5, chunk_index=-1),
         EndOfTurnEvent(source="whisper", silence_duration_ms=700),
         EndOfTurnEvent(source="parakeet", silence_duration_ms=None),
+        EndOfTurnEvent(
+            source="parakeet", timestamp=4.125, chunk_index=6, confidence=0.93
+        ),
         TextEvent(text="hello"),
     ]
     assert transport.sent["emitVadEvents"] is True

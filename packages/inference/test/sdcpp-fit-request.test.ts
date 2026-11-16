@@ -45,6 +45,28 @@ test('image: carries the files and engine config the load builds', (t) => {
   t.absent(request !== undefined && 'mode' in request, 'an image load is the default fit mode')
 })
 
+test('image: carries the MOSS-Image tokenizer the load builds', (t) => {
+  const request = requestOf<DiffusionFitRequest>(
+    sdcppFitRequest(
+      fitLoad(
+        { mode: 'diffusion' },
+        {
+          llmModelPath: '/models/encoder.gguf',
+          vaeModelPath: '/models/vae.safetensors',
+          tokenizerPath: '/models/tokenizer.json'
+        }
+      )
+    )
+  )
+
+  t.alike(request?.files, {
+    model: '/models/model.gguf',
+    llm: '/models/encoder.gguf',
+    vae: '/models/vae.safetensors',
+    tokenizer: '/models/tokenizer.json'
+  })
+})
+
 test('image: a configured upscaler is fitted together with its model', (t) => {
   const request = requestOf<DiffusionFitRequest>(
     sdcppFitRequest(

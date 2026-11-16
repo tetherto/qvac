@@ -6,7 +6,13 @@
 // Runs under bare (brittle-bare), where bare-ffmpeg is available.
 
 const test = require('brittle')
-const { encodePcm, pcmToWav, SUPPORTED_FORMATS, MIME_TYPES } = require('../../lib/audio-format')
+const {
+  encodePcm,
+  pcmToWav,
+  SUPPORTED_FORMATS,
+  FFMPEG_FORMATS,
+  MIME_TYPES
+} = require('../../lib/audio-format')
 
 // Four interleaved Int16 samples (8 bytes) as a little-endian byte buffer.
 function samplePcm() {
@@ -172,4 +178,116 @@ test('encodePcm: compressed formats produce valid containers (magic bytes)', (t)
 
 test('encodePcm: unknown format throws with a helpful message', (t) => {
   t.exception(() => encodePcm(samplePcm(), 'mp3'), /Unsupported outputFormat/)
+})
+
+const TRACKED_HANDLES = [
+  'IOContext',
+  'InputFormatContext',
+  'OutputFormatContext',
+  'CodecContext',
+  'Resampler',
+  'AudioFIFO',
+  'Packet',
+  'Frame'
+]
+
+// bare-ffmpeg handles have no GC finalizer, so every handle an encode creates must be destroyed.
+function trackFfmpegHandles(fn) {
+  const ffmpeg = require('bare-ffmpeg')
+  const created = {}
+  const released = {}
+  const restore = []
+  for (const name of TRACKED_HANDLES) {
+    created[name] = 0
+    released[name] = 0
+    const Original = ffmpeg[name]
+    const destroy = Original.prototype.destroy
+    Original.prototype.destroy = function (...args) {
+      if (this._handle) released[name]++
+      return destroy.apply(this, args)
+    }
+    ffmpeg[name] = class extends Original {
+      constructor(...args) {
+        super(...args)
+        created[name]++
+      }
+    }
+    restore.push(() => {
+      Original.prototype.destroy = destroy
+      ffmpeg[name] = Original
+    })
+  }
+  try {
+    fn(ffmpeg)
+  } finally {
+    for (const undo of restore) undo()
+  }
+  return { created, released }
+}
+
+function assertHandlesReleased(t, { created, released }, label, { encoded = true } = {}) {
+  if (encoded) t.ok(created.Frame > 0, `${label}: encoding created frames`)
+  for (const name of TRACKED_HANDLES) {
+    // stream.decoder() builds its CodecContext internally, so it is not counted as created.
+    if (name === 'CodecContext') continue
+    t.is(released[name], created[name], `${label}: every ${name} destroyed`)
+  }
+  t.is(released.CodecContext, 2, `${label}: decoder and encoder codec contexts destroyed`)
+}
+
+test('encodePcm: destroys every bare-ffmpeg handle after an encode', (t) => {
+  const counts = trackFfmpegHandles(() => {
+    encodePcm(tonePcm(), 'm4a', { sampleRate: 44100, channels: 2 })
+  })
+  assertHandlesReleased(t, counts, 'completed encode')
+})
+
+test('encodePcm: destroys every bare-ffmpeg handle when an encode fails', (t) => {
+  const counts = trackFfmpegHandles((ffmpeg) => {
+    ffmpeg.OutputFormatContext.prototype.writeTrailer = () => {
+      throw new Error('writeTrailer failed')
+    }
+    t.exception(
+      () => encodePcm(tonePcm(), 'm4a', { sampleRate: 44100, channels: 2 }),
+      /writeTrailer failed/
+    )
+  })
+  assertHandlesReleased(t, counts, 'failed encode')
+})
+
+test('encodePcm: destroys every bare-ffmpeg handle when muxer setup fails before taking the IO', (t) => {
+  const counts = trackFfmpegHandles((ffmpeg) => {
+    // Throws before the output context takes ownership of the write IO.
+    ffmpeg.OutputFormatContext = class {
+      constructor() {
+        throw new Error('muxer setup failed')
+      }
+    }
+    t.exception(
+      () => encodePcm(tonePcm(), 'm4a', { sampleRate: 44100, channels: 2 }),
+      /muxer setup failed/
+    )
+  })
+  t.is(counts.created.IOContext, 2, 'read and write IO contexts were created')
+  assertHandlesReleased(t, counts, 'muxer setup failure', { encoded: false })
+})
+
+test('encodePcm: destroys every bare-ffmpeg handle when muxer setup fails after taking the IO', (t) => {
+  const spec = FFMPEG_FORMATS.m4a
+  const container = spec.container
+  // OutputFormatContext transfers the write IO, then fails to find this muxer.
+  spec.container = 'no-such-muxer'
+  let counts
+  try {
+    counts = trackFfmpegHandles(() => {
+      t.exception(
+        () => encodePcm(tonePcm(), 'm4a', { sampleRate: 44100, channels: 2 }),
+        /No output format found/
+      )
+    })
+  } finally {
+    spec.container = container
+  }
+  t.is(counts.created.IOContext, 2, 'read and write IO contexts were created')
+  assertHandlesReleased(t, counts, 'muxer lookup failure', { encoded: false })
 })

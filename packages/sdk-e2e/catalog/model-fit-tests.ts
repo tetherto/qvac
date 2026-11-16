@@ -75,7 +75,8 @@ export const modelFitProbeTranslation = probeCase('translation', 'bergamot-en-fr
 
 /**
  * Two measured engines assessed as one set, so their rows from two addons are
- * pooled together: a device both use is one pool, and the set reaches a verdict.
+ * pooled together: a device both use is one pool, and the set reaches a verdict
+ * unless one of them runs on the CPU.
  */
 export const modelFitTogether: TestDefinition = {
   testId: 'model-fit-llm-and-tts',

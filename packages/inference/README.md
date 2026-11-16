@@ -123,6 +123,8 @@ endpoint cannot represent those requests.
 
 The engine resolves a `qvac.config.js` or `qvac.config.json` from the current working directory, or from the path in `QVAC_CONFIG_PATH`. The resolved config applies on the first API call.
 
+The engine keeps models and its cache under `.qvac` in a home folder, which defaults to `HOME`. A Bare Kit worklet has no `HOME`, so call `initialize({ homeDir })` from `@qvac/inference/engine` with the app's storage folder before the first request; only the first call's folder applies.
+
 The `includeAudioDecoder` setting is read by the SDK bundler. Set it to `false` when packaging a worker that only receives raw PCM or streaming audio; `audiogen-ggml` can also use PCM or WAV output without FFmpeg. Compressed audio file decoding and compressed audiogen output formats require `bare-ffmpeg` to be bundled.
 
 ## System resource diagnostics

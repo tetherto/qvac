@@ -45,7 +45,7 @@ export function validateServeStartup(
       '--docs',
       '--docs requires a fixed --port: the trusted loopback origins for Swagger UI are derived ' +
         'from the port, and --port 0 is resolved only after the listener binds. Choose a port ' +
-        '(e.g. --port 11434), or drop --docs and read the spec from /openapi.json.'
+        '(e.g. --port 11435), or drop --docs and read the spec from /openapi.json.'
     )
   }
 }

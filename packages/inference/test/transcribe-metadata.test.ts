@@ -270,10 +270,41 @@ test('toTranscribeSegment: carries the parakeet-only segment flags', (t) => {
   t.ok(transcribeSegmentSchema.safeParse(segment).success, 'still schema-valid')
 })
 
+test('toTranscribeSegment: carries the parakeet streaming fields', (t) => {
+  // What the native streaming serializer sends for an ASR chunk, including an
+  // empty final marker: `isFinal` is the finality signal, not non-empty text.
+  const segment = toTranscribeSegment({
+    text: '',
+    start: 3.2,
+    end: 3.2,
+    toAppend: true,
+    id: 9,
+    tokenIds: [1024, 7, 0],
+    isFinal: true,
+    chunkIndex: 4,
+    eotConfidence: 0
+  })
+  t.alike(segment.tokenIds, [1024, 7, 0], 'token ids survive')
+  t.is(segment.isFinal, true, 'isFinal survives')
+  t.is(segment.chunkIndex, 4, 'chunkIndex survives')
+  t.is(segment.eotConfidence, 0, 'a zero confidence survives')
+  const parsed = transcribeSegmentSchema.safeParse(segment)
+  t.ok(parsed.success, 'still schema-valid')
+  if (parsed.success) t.alike(parsed.data, segment, 'the wire schema keeps every streaming field')
+
+  const unknownChunk = toTranscribeSegment({ text: 'x', isFinal: false, chunkIndex: -1 })
+  t.is(unknownChunk.chunkIndex, -1, 'the native unknown-chunk sentinel is kept')
+  t.is(unknownChunk.isFinal, false, 'a partial chunk keeps isFinal: false')
+  t.ok(transcribeSegmentSchema.safeParse(unknownChunk).success, '-1 is schema-valid')
+})
+
 test('toTranscribeSegment: omits the parakeet flags for whisper segments', (t) => {
   const segment = toTranscribeSegment({ text: 'hi', start: 0, end: 1, toAppend: false, id: 0 })
   t.is('isEndOfTurn' in segment, false, 'no isEndOfTurn key when the engine sent none')
   t.is('startsWord' in segment, false, 'no startsWord key when the engine sent none')
+  for (const key of ['tokenIds', 'isFinal', 'chunkIndex', 'eotConfidence']) {
+    t.is(key in segment, false, `no ${key} key when the engine sent none`)
+  }
 })
 
 test('toTranscribeSegment: carries the whisper-only segment fields', (t) => {

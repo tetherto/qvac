@@ -23,6 +23,10 @@ qvac_addon_fuzz_manifest()
 # direct CUDA linkage here (mirrors tts-ggml); nvcc's clang
 # host-compiler setup lives in vcpkg-overlays/toolchains/linux-clang.cmake.
 option(ASR_CUDA "Enable the CUDA GPU backend (requires nvcc on the build host)" OFF)
+option(ASR_WEBGPU "Enable the WebGPU backend (requires Dawn)" OFF)
+if(ASR_WEBGPU)
+  list(APPEND VCPKG_MANIFEST_FEATURES "webgpu")
+endif()
 
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
@@ -157,6 +161,7 @@ if(((ANDROID OR UNIX) AND NOT APPLE) OR (WIN32 AND ASR_CUDA))
     endforeach()
   endif()
 endif()
+
 
 add_bare_module(asr-ggml NAME ${module_name} EXPORTS ${BACKEND_DL_LIBS})
 
@@ -462,6 +467,7 @@ if(BUILD_TESTING)
     QVAC_ADDON_MODULE_NAME="${module_name}"
     QVAC_ASR_TEST_BACKENDS_DIR="${VCPKG_INSTALLED_PATH}/lib"
     QVAC_ASR_GGML_TESTING)
+
 
   set_target_properties(asr_ggml_tests PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/addon/tests)

@@ -12,9 +12,8 @@ a given python-sdk release makes clear exactly which SDK it targets.
 
 The fastest path is a **self-contained** install — one command, no separate
 worker, no Node.js. It pulls a per-platform wheel that bundles the QVAC worker
-(the `@qvac/sdk` runtime) and the Bare runtime, from the matching GitHub
-release (these wheels are far too large for PyPI, so they live as release
-assets):
+with every built-in plugin, from the matching GitHub release (these wheels are
+far too large for PyPI, so they live as release assets):
 
 ```bash
 # Replace <version> with the release you want, e.g. sdk-v0.17.0:
@@ -22,16 +21,23 @@ pip install tetherto-qvac-sdk \
   -f https://github.com/tetherto/qvac/releases/expanded_assets/sdk-v<version>
 ```
 
-pip selects the bundled wheel for your platform and pulls the pure-Python deps
-(`pydantic`, `bare-rpc`, `compact-encoding`) from PyPI. Then
+pip selects the bundled wheel for your platform and pulls its dependencies from
+PyPI: `pydantic`, Holepunch's `bare-rpc` and `bare-stow-host`, and
+`bare-sidecar`, whose wheel ships the Bare runtime. Then
 `async with Client() as client: ...` just works — the bundled worker is found
 automatically, zero configuration. Optional extras: `vla` (numpy),
 `notebook` (numpy + pandas).
 
 > Bundled wheels ship for **darwin-arm64, linux-x64, linux-arm64, win32-x64**.
-> On any other platform pip falls back to the thin wheel below.
+> On any other platform pip installs the thin wheel below.
 
-### Thin install (any platform)
+> Either way, the Bare runtime comes from the `bare-sidecar` wheel, which ships
+> for macOS 13 or newer (arm64, x86_64), Linux with glibc 2.34 or newer
+> (aarch64, x86_64), and Windows (arm64, x64). On any other platform
+> `bare-sidecar` installs without Bare, and `Client()` fails with "No Bare
+> prebuild".
+
+### Thin install
 
 If there's no bundled wheel for your platform, or you'd rather run a shared
 system worker, install the thin client from PyPI and provide the worker
@@ -200,13 +206,31 @@ for a shared/mounted cache. As a shortcut, the `QVAC_CACHE_DIR` env var sets
 
 ## Worker resolution
 
-`Client()` locates a worker by trying, in order: explicit `worker_path` /
-`bare_path` (or `QVAC_WORKER_PATH` / `QVAC_BARE_PATH`); a self-contained
-**bundled wheel** (`tetherto/qvac_sdk/_bundle/`, zero config); `sdk_dir` / `QVAC_SDK_DIR`
-pointing at an installed `@qvac/sdk`; a worker fetched by **`python -m tetherto.qvac_sdk
-install-worker`** (into `~/.cache/qvac/worker/<version>`, overridable with
-`QVAC_WORKER_HOME`); then a global `npm install -g @qvac/sdk`. The fetched
-worker is version-locked to this package.
+`Client()` starts the worker on the Bare runtime of the `bare-sidecar` wheel and
+talks to it over bare-stow's IPC (`bare-stow-host`), which also carries the
+worker's readiness, errors and exit code, and its termination. The worker is,
+in order:
+
+1. `worker_path` (or `QVAC_WORKER_PATH`): a folder written by
+   `qvac bundle sdk --language python`, started through the bare-stow harness
+   in it, for your own plugin set; or a worker entry file, such as
+   `qvac/worker.entry.mjs`, run without a bundle.
+2. The self-contained **bundled wheel** (`tetherto/qvac_sdk/_worker/`, zero
+   config).
+3. The default worker of an installed `@qvac/sdk`, run without a bundle.
+
+A worker run without a bundle uses the SDK's
+`dist/src/worker/unbundled-shim.js`. For a worker entry file, that is the
+`@qvac/sdk` of `sdk_dir` / `QVAC_SDK_DIR`, else the one the entry's project
+installed; an entry outside a project with `@qvac/sdk` needs `sdk_dir`. For the
+default worker, it is, in order: `sdk_dir` / `QVAC_SDK_DIR`; a worker fetched by
+**`python -m tetherto.qvac_sdk install-worker`** (into
+`~/.cache/qvac/worker/<version>`, overridable with `QVAC_WORKER_HOME`), which is
+version-locked to this package; then a global `npm install -g @qvac/sdk`.
+
+`bare_path` (or `QVAC_BARE_PATH`) replaces the Bare runtime with another build
+of `bare-sidecar`'s Bare, which passes the worker its IPC channel; the stock
+`bare` command does not, so the worker fails before it is ready.
 
 ## Staying in sync with `@qvac/sdk` (drift avoidance)
 

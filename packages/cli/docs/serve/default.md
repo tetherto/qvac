@@ -125,7 +125,7 @@ The batch succeeds or fails as a whole. The request blocks until every prompt fi
 client disconnect cancels it.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/chat/batch \
+curl -sS http://localhost:11435/qvac/v1/chat/batch \
   -H "Content-Type: application/json" \
   -d '{"model":"my-llm","prompts":[
         {"id":"cherry","messages":[{"role":"user","content":"Reply with only the word CHERRY."}]},
@@ -179,7 +179,7 @@ conversations warm: deleting a cache costs the next turn a full prefill instead 
 one, and loses no conversation content, since a KV cache is derived data.
 
 ```bash
-curl -X DELETE http://localhost:11434/qvac/v1/kv_cache
+curl -X DELETE http://localhost:11435/qvac/v1/kv_cache
 ```
 
 ```json
@@ -214,7 +214,7 @@ Every figure is a metric with a `status`. Only `supported` carries a `value`, wi
 not give a trustworthy number, and may carry a `reason`.
 
 ```bash
-curl -sS "http://localhost:11434/qvac/v1/system?sample=true"
+curl -sS "http://localhost:11435/qvac/v1/system?sample=true"
 ```
 
 ```json
@@ -273,7 +273,7 @@ While the runtime is `suspending`, `suspended` or `resuming`, every route except
 ### `GET /qvac/v1/runtime/state`
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/runtime/state
+curl -sS http://localhost:11435/qvac/v1/runtime/state
 ```
 
 ```json
@@ -313,7 +313,7 @@ load say, gets `503 runtime_suspended`. Both are idempotent and return the state
 runtime in.
 
 ```bash
-curl -sS -X POST http://localhost:11434/qvac/v1/runtime/suspend \
+curl -sS -X POST http://localhost:11435/qvac/v1/runtime/suspend \
   -H "Authorization: Bearer $QVAC_API_KEY"
 ```
 
@@ -349,7 +349,8 @@ memory each load takes is summed per device and compared against what is free.
 An alias is assessed with the config it would load with. `modelConfig` is merged over it key
 by key, nested objects included, so `{"ctx_size": 32768}` asks about a longer context and an
 override inside `contextParams` keeps the alias's other context params. Model sources cannot be given in the request:
-companion sources in `modelConfig` (`*ModelSrc` keys) must name SDK model constants, so a request
+companion sources in `modelConfig` (every `*Src` key, such as `llmModelSrc` or `tokenizerSrc`,
+and every entry of a `*Srcs` list) must name SDK model constants, so a request
 never makes the server read a path or URL of its choosing.
 
 The answer is advisory. `verdict` is `fits`, `does-not-fit` or `unknown` for every model loaded
@@ -370,7 +371,7 @@ llama.cpp load with a verdict, empty otherwise. A row's `id` is the PCI bus ID
 where the backend reports one, so the same GPU matches across engines.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/models/fit \
+curl -sS http://localhost:11435/qvac/v1/models/fit \
   -H "Content-Type: application/json" \
   -d '{"models":[{"model":"my-llm","modelConfig":{"ctx_size":8192}}]}'
 ```
@@ -471,7 +472,7 @@ whole `text`, and these arrive together once the batch finishes. Both end with o
 A client disconnect cancels the request and its result is dropped.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/translate \
+curl -sS http://localhost:11435/qvac/v1/translate \
   -H "Content-Type: application/json" \
   -d '{"model":"ta-en","text":"வணக்கம் உலகம்"}'
 ```
@@ -542,7 +543,7 @@ OCR cannot be cancelled: a client disconnect drops the result, but the image is 
 the end.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/ocr \
+curl -sS http://localhost:11435/qvac/v1/ocr \
   -F model=ocr-en \
   -F image=@receipt.png
 ```
@@ -613,7 +614,7 @@ Classification cannot be cancelled: a client disconnect drops the result, but th
 still classified.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/classifications \
+curl -sS http://localhost:11435/qvac/v1/classifications \
   -F model=classifier \
   -F image=@photo.jpg \
   -F top_k=1
@@ -672,9 +673,12 @@ Entries are registry models, not `serve.models` aliases. To call one, add an ali
 is `registry://<registrySource>/<registryPath>`.
 
 The first request after start-up connects to the registry over P2P and can take several seconds.
+Only one process on a machine can use the registry at a time. While another QVAC process is using
+it, a request waits up to a minute, then returns `503 registry_busy`. When that process runs the
+same SDK, the response carries `Retry-After`. Disconnecting stops the wait.
 
 ```bash
-curl -sS "http://localhost:11434/qvac/v1/registry/models?addon=llm&search=qwen3&limit=1"
+curl -sS "http://localhost:11435/qvac/v1/registry/models?addon=llm&search=qwen3&limit=1"
 ```
 
 ```json
@@ -710,6 +714,7 @@ curl -sS "http://localhost:11434/qvac/v1/registry/models?addon=llm&search=qwen3&
 | 400  | `invalid_limit`         | `limit` is not a positive integer            |
 | 400  | `invalid_offset`        | `offset` is not a non-negative integer       |
 | 502  | `registry_query_failed` | The registry could not be reached or queried |
+| 503  | `registry_busy`         | Another QVAC process kept the registry       |
 
 ## `GET /qvac/v1/registry/models/lookup`
 
@@ -717,7 +722,7 @@ Fetch one registry entry by the `registrySource` and `registryPath` a list row c
 shape as a list row. Both params are required.
 
 ```bash
-curl -sS -G http://localhost:11434/qvac/v1/registry/models/lookup \
+curl -sS -G http://localhost:11435/qvac/v1/registry/models/lookup \
   --data-urlencode registrySource=hf \
   --data-urlencode registryPath=unsloth/Qwen3-0.6B-GGUF/blob/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q4_0.gguf
 ```
@@ -730,6 +735,7 @@ curl -sS -G http://localhost:11434/qvac/v1/registry/models/lookup \
 | 400  | `invalid_registry_path`   | `registryPath` is missing or empty           |
 | 404  | `model_not_found`         | No registry entry has this source and path   |
 | 502  | `registry_query_failed`   | The registry could not be reached or queried |
+| 503  | `registry_busy`           | Another QVAC process kept the registry       |
 
 ## Music: `/qvac/v1/audio/*`
 
@@ -771,7 +777,7 @@ The other `audioGen()` fields (`bpm`, `keyscale`, `timesignature`, `vocalLanguag
 accepted under the same names.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/audio/generations \
+curl -sS http://localhost:11435/qvac/v1/audio/generations \
   -H 'Content-Type: application/json' \
   -d '{ "model": "music", "caption": "calm lofi piano", "lyrics": "[Instrumental]", "duration": 30 }'
 ```
@@ -811,7 +817,7 @@ above full scale; the job then fails with `audio_edit_failed` (`sourceAudio must
 in [-1, 1]`). Lowering the source's gain avoids it.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/audio/edits \
+curl -sS http://localhost:11435/qvac/v1/audio/edits \
   -F model=music \
   -F sourceAudio=@song.wav \
   -F 'operations=[{"type":"repaint","caption":"analog synth solo","start":10,"end":20}]'
@@ -953,7 +959,7 @@ Upscaling cannot be cancelled: a client disconnect drops the result, but the
 image is still upscaled to the end.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/images/upscale \
+curl -sS http://localhost:11435/qvac/v1/images/upscale \
   -F model=upscaler -F image=@photo.png -F repeats=1
 ```
 
@@ -1070,9 +1076,9 @@ then `[DONE]`. A block that fails after its first frame ends the stream with an 
 event and no `[DONE]`. A client disconnect cancels the block.
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/world/scenes \
+curl -sS http://localhost:11435/qvac/v1/world/scenes \
   -F model=abot-world -F prompt='| unknown | A forest path' -F image=@first-frame.jpg
-curl -sS http://localhost:11434/qvac/v1/world/scenes/scene_3f1c.../steps \
+curl -sS http://localhost:11435/qvac/v1/world/scenes/scene_3f1c.../steps \
   -H 'Content-Type: application/json' -d '{"keys":["W"]}'
 ```
 

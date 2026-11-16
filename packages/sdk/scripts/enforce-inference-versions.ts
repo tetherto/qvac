@@ -14,9 +14,8 @@
 //    below 1.0.0 (^0.19.0 is >=0.19.0 <0.20.0) but not from 1.0.0 up (^1.19.0
 //    also allows 1.20.0), so a tilde is required there.
 //
-// 3. Bare runtime. Every version allowed by the SDK's bare-runtime dependency
-//    must satisfy inference's engines.bare requirement, including versions
-//    retained by a consumer's existing lockfile.
+// 3. Desktop Bare. The Bare runtime bare-sidecar ships, which runs the desktop
+//    worker, must satisfy inference's engines.bare.
 //
 // The second rule reads @qvac/sdk's manifest alone and never
 // packages/inference's version. The two move independently between releases —
@@ -27,9 +26,10 @@
 // versions.test.ts can drive them over manifest shapes the repo does not hold.
 
 import { readFileSync } from 'fs'
+import { createRequire } from 'module'
 import { join, resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { subset, validRange } from 'semver'
+import { satisfies, validRange } from 'semver'
 
 type Ranges = Record<string, string>
 
@@ -138,42 +138,55 @@ export function checkSharedMajorMinor(sdkPkg: Manifest) {
   return []
 }
 
-export function checkBareRuntimeRange(inferencePkg: Manifest, sdkPkg: Manifest) {
+export function checkDesktopBare(inferencePkg: Manifest, bareVersion: string | null) {
   const required = inferencePkg.engines?.['bare']
   if (required === undefined) return []
   if (validRange(required) === null) {
-    return [`@qvac/inference engines.bare "${required}" is not a valid semver range.`]
+    return [`${dependency} engines.bare "${required}" is not a valid semver range.`]
   }
-
-  const runtime = sdkPkg.dependencies?.['bare-runtime']
-  if (runtime === undefined || validRange(runtime) === null) {
-    return [`${sdkManifest} must declare a valid bare-runtime dependency range.`]
+  if (bareVersion === null) {
+    return ['Could not read the Bare version that bare-sidecar ships.']
   }
-  if (!subset(runtime, required)) {
+  if (!satisfies(bareVersion, required)) {
     return [
-      `SDK bare-runtime "${runtime}" permits versions outside inference's engines.bare "${required}". ` +
-        'Align the runtime dependency so an existing consumer lockfile cannot retain an unsupported worker.'
+      `bare-sidecar ships Bare ${bareVersion}, outside ${dependency} engines.bare "${required}". ` +
+        'Move the SDK to a bare-sidecar release whose Bare satisfies it.'
     ]
   }
   return []
 }
 
 export function collectVersionFailures(inferencePkg: Manifest, sdkPkg: Manifest) {
-  return [
-    ...checkAddonRanges(inferencePkg, sdkPkg),
-    ...checkSharedMajorMinor(sdkPkg),
-    ...checkBareRuntimeRange(inferencePkg, sdkPkg)
-  ]
+  return [...checkAddonRanges(inferencePkg, sdkPkg), ...checkSharedMajorMinor(sdkPkg)]
 }
 
 function readManifest(dir: string) {
   return JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as Manifest
 }
 
+/** The Bare the installed bare-sidecar ships, from its `versions.json`. */
+function readSidecarBareVersion(sdkDir: string): string | null {
+  try {
+    const sidecarDir = dirname(
+      createRequire(join(sdkDir, 'package.json')).resolve('bare-sidecar/package')
+    )
+    const { bare } = JSON.parse(readFileSync(join(sidecarDir, 'versions.json'), 'utf8')) as {
+      bare?: unknown
+    }
+    return typeof bare === 'string' ? bare : null
+  } catch {
+    return null
+  }
+}
+
 export function runEnforceInferenceVersionsCli() {
   const sdkDir = resolve(dirname(fileURLToPath(import.meta.url)), '..')
   const inferenceDir = resolve(sdkDir, '..', 'inference')
-  const failures = collectVersionFailures(readManifest(inferenceDir), readManifest(sdkDir))
+  const inferencePkg = readManifest(inferenceDir)
+  const failures = [
+    ...collectVersionFailures(inferencePkg, readManifest(sdkDir)),
+    ...checkDesktopBare(inferencePkg, readSidecarBareVersion(sdkDir))
+  ]
 
   if (failures.length > 0) {
     console.error(failures.join('\n\n'))

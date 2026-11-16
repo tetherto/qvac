@@ -5150,6 +5150,24 @@ object Models {
         params = "250M",
     )
 
+    val PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0 = ModelConstant(
+        name = "PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0",
+        src = "registry://s3/qvac_models_compiled/ggml/transcribepsy/2026-11-09/transcribepsy-250m-eu.gguf",
+        registryPath = "qvac_models_compiled/ggml/transcribepsy/2026-11-09/transcribepsy-250m-eu.gguf",
+        registrySource = "s3",
+        blobCoreKey = "e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+        blobBlockOffset = 92309,
+        blobBlockLength = 4691,
+        blobByteOffset = 6047386368,
+        modelId = "transcribepsy-250m-eu.gguf",
+        expectedSize = 307402624,
+        sha256Checksum = "1b81d33c96d687b00b4d98068b58e038d5dee909e11f74bada343bb6bedce3b2",
+        addon = "parakeet",
+        engine = "parakeet-transcription",
+        quantization = "q8_0",
+        params = "250M",
+    )
+
     val PARAKEET_TRANSCRIBEPSY_250M_Q8_0 = ModelConstant(
         name = "PARAKEET_TRANSCRIBEPSY_250M_Q8_0",
         src = "registry://hf/qvac/TranscribePsy-250M-EU-sub-gguf/resolve/92460e0a8e7dc20f2fb126198bdd9eebb9ba2dc7/transcribepsy-250m-eu-sub.gguf",
@@ -5598,6 +5616,24 @@ object Models {
         engine = "llamacpp-completion",
         quantization = "q6_k",
         params = "4B",
+    )
+
+    val QWEN3_5_9B_DFLASH_Q8_0 = ModelConstant(
+        name = "QWEN3_5_9B_DFLASH_Q8_0",
+        src = "registry://hf/AtomicChat/Qwen3.5-9B-DFlash-GGUF/resolve/de44b8556576637d1049951f8fdbd98bcb2462f3/Qwen3.5-9B-DFlash.Q8_0.gguf",
+        registryPath = "AtomicChat/Qwen3.5-9B-DFlash-GGUF/resolve/de44b8556576637d1049951f8fdbd98bcb2462f3/Qwen3.5-9B-DFlash.Q8_0.gguf",
+        registrySource = "hf",
+        blobCoreKey = "e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+        blobBlockOffset = 3350063,
+        blobBlockLength = 21115,
+        blobByteOffset = 219547120993,
+        modelId = "Qwen3.5-9B-DFlash.Q8_0.gguf",
+        expectedSize = 1383768224,
+        sha256Checksum = "27b9d18e605aea9c50ef506e4b63921e0dc624cc91c63c60617a8295f153d436",
+        addon = "llm",
+        engine = "llamacpp-completion",
+        quantization = "q8_0",
+        params = "9B",
     )
 
     val QWEN3_5_9B_MTP_Q4_K_M = ModelConstant(
@@ -8892,6 +8928,7 @@ object Models {
         PARAKEET_TDT_1_1B_F16,
         PARAKEET_TDT_1_1B_Q8_0,
         PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0,
+        PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0,
         PARAKEET_TRANSCRIBEPSY_250M_Q8_0,
         PARAKEET_UNIFIED_0_6B_F16,
         PARAKEET_UNIFIED_0_6B_Q4_0,
@@ -8917,6 +8954,7 @@ object Models {
         QWEN3_5_4B_MTP_Q4_K_M,
         QWEN3_5_4B_MULTIMODAL_Q4_K_M,
         QWEN3_5_4B_MULTIMODAL_Q6_K,
+        QWEN3_5_9B_DFLASH_Q8_0,
         QWEN3_5_9B_MTP_Q4_K_M,
         QWEN3_5_9B_MULTIMODAL_Q4_K_M,
         QWEN3_5_9B_MULTIMODAL_Q6_K,

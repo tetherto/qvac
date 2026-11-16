@@ -508,6 +508,34 @@ A session start the engine itself refuses (for any reason) rejects with
 `FAILED_TO_START_STREAMING` (6012, the shared code) carrying the engine's
 message.
 
+### Offline diarization probabilities
+
+Standalone Sortformer and Nemotron diarization can return the native
+frame-level speaker probabilities alongside the existing text and turns:
+
+```javascript
+const response = await model.run(audio, { includeSpeakerProbabilities: true })
+await response.onUpdate(([segment]) => {
+  const { values, frames, speakers, frameStrideSeconds } = segment.speakerProbabilities
+  // values is a Float32Array; values[frame * speakers + speaker] is the probability.
+  console.log({ frames, speakers, frameStrideSeconds, values })
+}).await()
+```
+
+This option applies to standalone batch diarization. Omitted or `false` keeps
+the compact output. Each call owns its matrix; later jobs and unloading the
+model do not invalidate it. The geometry comes from the native model.
+
+```sh
+bare examples/parakeet-diarization-probabilities.js \
+  ./models/sortformer-4spk-v1.q8_0.gguf \
+  ./examples/parakeet-samples/diarization-sample-16k.wav cpu
+```
+
+Parakeet batch ASR also retains `tokenIds`. Streaming ASR retains the native
+fractional `encoderMs` and `decoderMs` per segment. Its statistics expose
+`segmentPlanMs` and `assembleMs` for native long-form planning and assembly.
+
 ### MOSS-Transcribe-Diarize — batch `run()` with hotwords
 
 ```javascript
@@ -538,7 +566,19 @@ The whole recording is transcribed in one pass, so `runStreaming()` and
   the model's default instruction, so they come out spelled as given;
 - `prompt`: replaces the default instruction (not combined with `hotwords`);
 - `maxNewTokens`: bounds the generated tokens (unset or 0 keeps the model
-  default).
+  default);
+- `onProgress`: optional callback receiving `{ generatedTokens, maxNewTokens }`
+  on the JS thread. It reports native token generation, not an audio percentage.
+  A throwing callback cancels the job and rejects its response with that error.
+
+```sh
+bare examples/moss-transcribe-progress.js ./models/moss-transcribe-diarize-q8_0.gguf ./speech-16k.wav metal
+```
+
+MOSS segments include `encoderBackend`, the native route for that transcription
+(`ggml`, a `coreml` label, or `mixed` when a run used both paths).
+`MossTranscribeRuntimeStats` describes its token counts and `encodeMs`,
+`prefillMs`, `decodeMs`, `encoderOnCoreml` and `encoderUsedCoreml` statistics.
 
 ## Engine Selection
 
@@ -897,13 +937,13 @@ that ends mid-sample is rejected.
 ## Backends and GPU Acceleration
 
 For Parakeet, `parakeetConfig.backend` accepts the native selector unchanged:
-`auto`, `cpu`, `cuda`, `vulkan`, `opencl`, `webgpu`, `metal`, `hexagon`, or an
-exact ggml device name such as `CUDA1`, `MTL0` or `HTP0`. An explicit selector
+`auto`, `cpu`, `cuda`, `vulkan`, `opencl`, `webgpu`, `metal`, or an
+exact ggml device name such as `CUDA1` or `MTL0`. An explicit selector
 overrides `useGPU` and fails at load if unavailable; it does not silently
 retry on CPU. Omitted, empty and `auto` selectors preserve existing automatic
 selection and fallback. A selector requires the corresponding backend to be
 built and available on the host. `getBackendInfo()` reports the resolved
-device, including `NPU` for a native NPU backend. Use the same `backend` in
+device. Use the same `backend` in
 the Parakeet `assessFit` request. Core ML sidecars retain their existing
 native routing; selecting a ggml device does not control Core ML placement.
 
@@ -974,17 +1014,27 @@ new selector spelling, or supplying both new spellings, is rejected.
 
 This selector currently applies to the Whisper engine.
 
-`getBackendInfo()` reports what actually ran — `backendName`, `backendId`
+`getBackendInfo()` reports the initialized backend — `backendName`, `backendId`
 (see the `BackendId` enum), string `backendDevice`, `backendDescription`,
-`encoderBackend`, `encoderOnCoreml` (Apple: whether a Parakeet Core ML
-encoder sidecar loaded; see
+`encoderBackend`, `encoderOnCoreml` (Apple: whether the engine loaded a Core ML
+encoder sidecar; see
 [Core ML encoder sidecars](#core-ml-encoder-sidecars-apple)), and
 `modelType` (`'whisper'`, or the Parakeet family detected from the GGUF:
 `'ctc'`, `'tdt'`, `'rnnt'`, `'eou'`, `'nemotron'`, `'sortformer'`,
-`'nemotron-diarization'`). Whisper
+`'nemotron-diarization'`, or `'moss-transcribe'`). Whisper
 additionally reports
 `gpuMemTotalMb` / `gpuMemFreeMb`. This differs from
 `RuntimeStats.backendDevice`, which is the native numeric device-class code.
+
+Optional source builds accept `-D ASR_WEBGPU=ON`. The manifest pins a compatible
+Dawn version and avoids its default X11/GL dependencies. `BackendId.WebGPU` is
+`5`. An unavailable explicit Parakeet/MOSS backend fails instead of silently
+falling back. Hexagon is not included in JavaScript package builds.
+
+The Apple `coreml` feature also enables Whisper's encoder, retaining native
+fallback when a matching sidecar is absent. `encoderOnCoreml` comes from the
+loaded native state; it does not assert that Apple selected the ANE for every
+operation. MOSS reports both loaded-sidecar state and per-call routing.
 
 Two paths matter on Android and Linux:
 
@@ -1027,7 +1077,7 @@ ggml.
 | Nemotron 3 Diarization (`Nemotron-3-Diarization`) | `<stem>-diarizer-<frames>.mlmodelc`, one fixed capacity per bundle (358 frames covers offline inputs up to 28.6 s and the default live chunk, 745 the 30 s long-form blocks and offline inputs up to 59.6 s) | offline, long-form and live calls of up to a capacity: the whole network runs on Core ML, with the smallest capacity that fits | calls above every capacity, and every call if the bundle fails |
 | CTC (`parakeet-ctc-0.6b`), Indic Conformer CTC | none in the pinned `speech-cpp` | — | always (the engine adds CTC sidecars from `speech-cpp` `2026-09-24`) |
 | Sortformer v1 | none | — | always |
-| Whisper | none: the `whisper` feature builds without `WHISPER_COREML` | — | always |
+| Whisper | `<model-stem>-encoder.mlmodelc` beside the GGML model (for example, `ggml-tiny-encoder.mlmodelc` beside `ggml-tiny.bin`), enabled by `speech-cpp[whisper,coreml]` on Apple | the encoder's fixed mel window | when the matching sidecar is absent or cannot be loaded; the decoder always stays on ggml |
 | MOSS-Transcribe-Diarize | `moss-transcribe-diarize-encoder.mlmodelc` | every 30 s window: the audio encoder and adaptor run on Core ML, the decoder on ggml | only on fallback |
 
 Diarizer bundles load on first use, and each capacity costs 190-220 MiB of

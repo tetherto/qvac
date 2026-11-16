@@ -8,6 +8,7 @@ import type { FitLoad, FitRequestPlan } from '@/schemas/plugin'
 
 interface TtsCommon {
   nGpuLayers: number
+  backend?: string
   backendsDir?: string
 }
 
@@ -67,26 +68,36 @@ export function ttsFitRequest(load: FitLoad): FitRequestPlan {
     return { unknown: 'the LavaSR stages have no fitter' }
   }
 
+  // The explicit backend selector resolves the same device the load would, so
+  // the projection lands on that device rather than on the `useGPU` policy's.
   const common: TtsCommon = {
     nGpuLayers: gpuLayersFromCount(config.useGPU, config.nGpuLayers),
+    ...(config.backend !== undefined && { backend: config.backend }),
     ...(config.backendsDir !== undefined && { backendsDir: config.backendsDir })
   }
   const request = (fit: TtsFitRequest): FitRequestPlan => ({ request: fit })
 
   switch (config.ttsEngine) {
     case 'supertonic':
+      // Precision and the f16 weight override change the weight footprint the
+      // fitter sizes, so they travel with the request.
       return request({
         engineType: 'supertonic',
         supertonicModelPath: load.modelPath,
         ...common,
+        ...(config.precision !== undefined && { precision: config.precision }),
+        ...(config.f16Weights !== undefined && { f16Weights: config.f16Weights }),
         ...(config.ttsNumInferenceSteps !== undefined && { steps: config.ttsNumInferenceSteps })
       })
 
     case 'parler':
+      // The decoder sidecar policy decides whether the decoder weights load on
+      // ggml at all; the fitter matches the load's choice.
       return request({
         engineType: 'parler',
         parlerModelPath: load.modelPath,
         ...common,
+        ...(config.coremlDecoder !== undefined && { coremlDecoder: config.coremlDecoder }),
         ...(config.maxFrames !== undefined && { maxFrames: config.maxFrames })
       })
 
@@ -133,7 +144,11 @@ export function ttsFitRequest(load: FitLoad): FitRequestPlan {
         ...(config.streamChunkTokens !== undefined && {
           streamChunkTokens: config.streamChunkTokens
         }),
-        ...(config.durationTokens !== undefined && { durationTokens: config.durationTokens })
+        ...(config.durationTokens !== undefined && { durationTokens: config.durationTokens }),
+        // The context and generation budgets size the KV cache and the
+        // generation buffers the fitter projects.
+        ...(config.nCtx !== undefined && { nCtx: config.nCtx }),
+        ...(config.maxNewTokens !== undefined && { maxNewTokens: config.maxNewTokens })
       })
     }
 

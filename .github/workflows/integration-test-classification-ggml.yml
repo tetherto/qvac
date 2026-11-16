@@ -240,8 +240,7 @@ jobs:
           echo "Prebuilds downloaded from npm successfully"
           Get-ChildItem prebuilds/
 
-      # Keep current MobileNet-only source compatible before MegaLoc lands.
-      - name: Stage MegaLoc test models
+      - name: Stage classification test models
         if: hashFiles(format('{0}/test/integration/megaloc.test.js', env.PKG_DIR)) != ''
         uses: tetherto/qvac/.github/actions/stage-integration-models@94eb8ef3e888f8bc1f1717d5e31f55b14d4ac915
         with:
@@ -250,7 +249,7 @@ jobs:
           bucket: ${{ secrets.MODEL_S3_BUCKET }}
           s3-manifest: ${{ needs.test-models.outputs.manifest }}
 
-      - name: Verify MegaLoc test models
+      - name: Verify classification test models
         if: hashFiles(format('{0}/test/integration/megaloc.test.js', env.PKG_DIR)) != ''
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
@@ -261,7 +260,7 @@ jobs:
             import { createHash } from "node:crypto";
             import { createReadStream } from "node:fs";
             const expected = JSON.parse(process.env.MODEL_MANIFEST);
-            if (expected.length !== 2) throw new Error("Expected both MegaLoc test models");
+            if (expected.length !== 3) throw new Error("Expected the MegaLoc and BridgeDepth test models");
             for (const { dest, sha256 } of expected) {
               const hash = createHash("sha256");
               for await (const chunk of createReadStream(dest)) hash.update(chunk);
@@ -290,6 +289,7 @@ jobs:
           # (noise is bounded to a few lines per sample image).
           QVAC_CLASSIFICATION_TRACE: "1"
           QVAC_MEGALOC_EXPECT_GPU: ${{ matrix.gpu && '1' || '0' }}
+          QVAC_BRIDGEDEPTH_EXPECT_GPU: ${{ matrix.gpu && '1' || '0' }}
         run: npm run test:integration
 
       - name: Upload performance report

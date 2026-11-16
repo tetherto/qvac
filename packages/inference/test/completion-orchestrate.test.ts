@@ -1,5 +1,11 @@
 import test from 'brittle'
-import { orchestrateCompletion, ToolResultReader } from '@/handlers/completion-orchestrate'
+import {
+  orchestrateCompletion,
+  registeredToolWaits,
+  ToolResultReader
+} from '@/handlers/completion-orchestrate'
+import { getRequestRegistry } from '@/runtime/request-context'
+import { openTestSessions } from './fixtures/sessions'
 import type {
   CompletionOrchestrateRequest,
   CompletionOrchestrateResponse,
@@ -376,6 +382,92 @@ test('ToolResultReader: close() returns the upstream and fails a pending waiter'
   reader.close() // idempotent -- second call is a no-op
 })
 
+test('orchestrateCompletion: a session close during a tool wait ends the completion and waits for it', async (t) => {
+  openTestSessions(t, 'A')
+  // The client never answers the tool call.
+  async function* silentClient(): AsyncGenerator<Buffer> {
+    await new Promise<void>(() => {})
+  }
+  const reader = new ToolResultReader(silentClient())
+  t.teardown(() => reader.close())
+  async function* runTurn() {
+    yield toolTurn('call-1', 'get_weather', { city: 'Tokyo' })
+  }
+  const request = baseRequest({ requestId: 'r-1', sessionId: 'A' })
+  const frames: CompletionOrchestrateResponse[] = []
+  const completion = (async () => {
+    for await (const frame of orchestrateCompletion(
+      request,
+      runTurn,
+      registeredToolWaits(reader, request)
+    )) {
+      frames.push(frame)
+    }
+  })()
+  const registry = getRequestRegistry()
+  while (!registry.get('r-1', 'A')) await new Promise<void>((resolve) => setTimeout(resolve, 1))
+
+  t.is(
+    await registry.drainSession('A', 'sessionClosed'),
+    1,
+    'the close finds the waiting completion'
+  )
+  t.absent(registry.get('r-1', 'A'), 'the close returns after the wait left the registry')
+  await completion
+  t.alike(frames.at(-2)?.events, [{ type: 'completionDone', seq: 0, stopReason: 'cancelled' }])
+  t.is(frames.at(-1)?.done, true, 'the completion ends as cancelled')
+})
+
+test('orchestrateCompletion: a cancel between turns wins over a tool result already received', async (t) => {
+  openTestSessions(t, 'A')
+  async function* answeringClient(): AsyncGenerator<Buffer> {
+    yield Buffer.from(JSON.stringify({ callId: 'call-1', result: 'sunny' }) + '\n')
+    await new Promise<void>(() => {})
+  }
+  const reader = new ToolResultReader(answeringClient())
+  t.teardown(() => reader.close())
+  await new Promise<void>((resolve) => setTimeout(resolve, 1))
+  let turns = 0
+  async function* runTurn() {
+    turns++
+    yield turns === 1 ? toolTurn('call-1', 'get_weather', { city: 'Tokyo' }) : contentTurn('Sunny.')
+  }
+  const request = baseRequest({ requestId: 'r-1', sessionId: 'A' })
+  // No request is registered yet, so the cancel waits for the next begin under the id.
+  getRequestRegistry().cancel({ requestId: 'r-1', sessionId: 'A' })
+
+  const frames = await collect(
+    orchestrateCompletion(request, runTurn, registeredToolWaits(reader, request))
+  )
+
+  t.is(turns, 1, 'no turn starts after the cancel')
+  t.alike(frames.at(-2)?.events, [{ type: 'completionDone', seq: 0, stopReason: 'cancelled' }])
+  t.is(frames.at(-1)?.done, true)
+})
+
+test('orchestrateCompletion: a model-wide completion cancel reaches a tool wait', async (t) => {
+  openTestSessions(t, 'A')
+  async function* silentClient(): AsyncGenerator<Buffer> {
+    await new Promise<void>(() => {})
+  }
+  const reader = new ToolResultReader(silentClient())
+  t.teardown(() => reader.close())
+  async function* runTurn() {
+    yield toolTurn('call-1', 'get_weather', { city: 'Tokyo' })
+  }
+  const request = baseRequest({ requestId: 'r-1', sessionId: 'A' })
+  const completion = collect(
+    orchestrateCompletion(request, runTurn, registeredToolWaits(reader, request))
+  )
+  const registry = getRequestRegistry()
+  while (!registry.get('r-1', 'A')) await new Promise<void>((resolve) => setTimeout(resolve, 1))
+
+  t.is(registry.cancel({ modelId: 'm-1', kind: 'completion', sessionId: 'A' }), 1)
+  const frames = await completion
+  t.alike(frames.at(-2)?.events, [{ type: 'completionDone', seq: 0, stopReason: 'cancelled' }])
+  t.is(frames.at(-1)?.done, true, 'the completion ends as cancelled')
+})
+
 test('orchestrateCompletion: runs tool_search itself and never asks the client', async (t) => {
   const deferredTool = {
     type: 'function' as const,
@@ -452,4 +544,50 @@ test('orchestrateCompletion: a caller-declared tool_search goes to the client wh
   const callbacks = frames.filter((frame) => frame.toolCallback)
   t.is(callbacks.length, 1, 'the call is delegated to the caller')
   t.is(callbacks[0]?.toolCallback?.name, 'tool_search')
+})
+
+test('orchestrateCompletion: tool_search applies the request toolSearch limits', async (t) => {
+  const tools = Array.from({ length: 6 }, (_, index) => ({
+    type: 'function' as const,
+    name: `repo_tool_${index}`,
+    description: 'Act on a repository',
+    deferLoading: true,
+    parameters: { type: 'object' as const, properties: {} }
+  }))
+
+  let turn = 0
+  const seenHistories: CompletionStreamRequest['history'][] = []
+  const seenToolSearch: CompletionStreamRequest['toolSearch'][] = []
+  async function* runTurn(request: CompletionStreamRequest) {
+    seenHistories.push(request.history)
+    seenToolSearch.push(request.toolSearch)
+    turn++
+    if (turn === 1) yield toolTurn('call-1', 'tool_search', { query: 'repository' })
+    else if (turn === 2) yield toolTurn('call-2', 'tool_search', { query: 'repository', limit: 9 })
+    else yield contentTurn('Done.')
+  }
+
+  await collect(
+    orchestrateCompletion(
+      baseRequest({ tools, toolSearch: { defaultLimit: 1, maxLimit: 2 } }),
+      runTurn,
+      stubReader({})
+    )
+  )
+
+  const result = (content: unknown) =>
+    (
+      JSON.parse(typeof content === 'string' ? content : '{}') as {
+        tool_search: { loaded: string[]; already_loaded: string[] }
+      }
+    ).tool_search
+  t.alike(result(seenHistories[1]?.at(-1)?.content).loaded, ['repo_tool_0'], 'defaultLimit applies')
+  t.alike(
+    result(seenHistories[2]?.at(-1)?.content),
+    { query: 'repository', loaded: ['repo_tool_1'], already_loaded: ['repo_tool_0'] },
+    'a larger limit is capped at maxLimit'
+  )
+  for (const toolSearch of seenToolSearch) {
+    t.alike(toolSearch, { defaultLimit: 1, maxLimit: 2 }, 'every turn renders the same limits')
+  }
 })

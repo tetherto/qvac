@@ -152,6 +152,7 @@ class Calls(
             "history" to withContent(params["history"]),
             "kvCache" to params["kvCache"],
             "prefill" to params["prefill"],
+            "seedFrom" to params["seedFrom"],
             "tools" to tools.ifEmpty { null },
             "stream" to (params["stream"] ?: true),
             "generationParams" to params["generationParams"],
@@ -324,7 +325,7 @@ class Calls(
         var sampleRate: Any? = null
         var text: Any? = null
         for (frame in frames(request, "textToSpeech")) {
-            pcm.addAll(asList(frame["buffer"]))
+            pcm.addAll(Wire.ttsSamples(frame))
             if (frame["text"] != null) text = frame["text"]
             if (sampleRate == null && frame["sampleRate"] != null) sampleRate = frame["sampleRate"]
             if (frame["done"] == true) done = true
@@ -489,7 +490,7 @@ class Calls(
     private fun describeIndex(response: Map<String, Any?>): Map<String, Any?> {
         val indexId = response["indexId"].toString()
         indexes[indexId] = OpenIndex(response["dim"], response["storage"], response["length"])
-        return linkedMapOf("indexId" to indexId, "dim" to response["dim"], "storage" to response["storage"], "length" to response["length"])
+        return linkedMapOf("indexId" to indexId, "dim" to response["dim"], "storage" to response["storage"], "length" to response["length"], "calibrated" to response["calibrated"], "stagedSearch" to response["stagedSearch"], "ivf" to response["ivf"])
     }
 
     // --- sessions: transcription and logs ---------------------------------------
@@ -769,6 +770,7 @@ class Calls(
         },
         "getModelInfo" to { p -> wire.send(mapOf("type" to "getModelInfo", "name" to p["name"]))["modelInfo"] },
         "getLoadedModelInfo" to { p -> wire.send(mapOf("type" to "getLoadedModelInfo", "modelId" to p["modelId"]))["info"] },
+        "calcTokens" to { p -> wire.send(mapOf("type" to "calcTokens") + p)["tokens"] },
         "modelRegistryList" to { _ -> registry("modelRegistryList", emptyMap(), "models") },
         "modelRegistrySearch" to { p ->
             val rest = p - "modelType"
@@ -811,18 +813,27 @@ class Calls(
             val open = index(p["indexId"])
             val response = vectorIndex("add", mapOf("indexId" to p["indexId"], "ids" to p["ids"], "vectors" to p["vectors"]))
             open.length = response["length"]
-            mapOf("length" to open.length)
+            mapOf("length" to open.length, "calibrated" to response["calibrated"], "stagedSearch" to response["stagedSearch"], "ivf" to response["ivf"])
         },
         "vectorIndexSearch" to { p ->
             index(p["indexId"])
-            val response = vectorIndex("search", mapOf("indexId" to p["indexId"], "queries" to listOf(p["query"]), "k" to p["k"]))
+            val nProbe = p["nProbe"]?.let { mapOf("nProbe" to it) } ?: emptyMap()
+            val response = vectorIndex("search", mapOf("indexId" to p["indexId"], "queries" to listOf(p["query"]), "k" to p["k"]) + nProbe)
             mapOf("results" to (asList(response["results"]).firstOrNull() ?: emptyList<Any?>()))
+        },
+        "vectorIndexSetIvf" to { p ->
+            index(p["indexId"])
+            vectorIndex("setIvf", mapOf("indexId" to p["indexId"], "ivf" to p["ivf"]))
+        },
+        "vectorIndexSetStagedSearch" to { p ->
+            index(p["indexId"])
+            vectorIndex("setStagedSearch", mapOf("indexId" to p["indexId"], "enabled" to p["enabled"]))
         },
         "vectorIndexRemove" to { p ->
             val open = index(p["indexId"])
             val response = vectorIndex("remove", mapOf("indexId" to p["indexId"], "ids" to p["ids"]))
             open.length = response["length"]
-            mapOf("removed" to response["removed"], "length" to open.length)
+            mapOf("removed" to response["removed"], "length" to open.length, "calibrated" to response["calibrated"], "stagedSearch" to response["stagedSearch"], "ivf" to response["ivf"])
         },
         "vectorIndexContains" to { p ->
             index(p["indexId"])

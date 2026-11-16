@@ -89,6 +89,7 @@ export class DeferredToolsExecutor extends AbstractModelExecutor<typeof deferred
     'deferred-tools-repeat-search': this.repeatSearch.bind(this),
     'deferred-tools-reopened-chat': this.reopenedChat.bind(this),
     'deferred-tools-kv-cache-isolation': this.kvCacheIsolation.bind(this),
+    'deferred-tools-search-limit': this.searchLimit.bind(this),
     'deferred-tools-warm-vs-cold-qwen35': this.warmVsCold.bind(this),
     'deferred-tools-warm-follow-up-qwen35': this.warmFollowUp.bind(this),
     'deferred-tools-search-then-call-qwen35': this.searchThenCall.bind(this),
@@ -109,12 +110,18 @@ export class DeferredToolsExecutor extends AbstractModelExecutor<typeof deferred
     modelId: string,
     history: ChatMessage[],
     p: DeferredToolsParams,
-    options: { tools?: DeferredToolDef[]; kvCache?: string | false; predict?: number } = {}
+    options: {
+      tools?: DeferredToolDef[]
+      kvCache?: string | false
+      predict?: number
+      toolSearch?: DeferredToolsParams['toolSearch']
+    } = {}
   ) {
     const result = completion({
       modelId,
       history,
       tools: (options.tools ?? DEFERRED_TOOL_INVENTORY) as never,
+      ...(options.toolSearch && { toolSearch: options.toolSearch }),
       stream: false,
       generationParams: {
         ...DETERMINISTIC,
@@ -155,6 +162,60 @@ export class DeferredToolsExecutor extends AbstractModelExecutor<typeof deferred
         content: executeToolSearch(DEFERRED_TOOL_INVENTORY as never, { query }, searched)
       }
     ]
+  }
+
+  async searchLimit(params: unknown): Promise<TestResult> {
+    const p = params as DeferredToolsParams
+    const modelId = await this.resources.ensureLoaded(p.resourceKey ?? 'tools')
+    const query = p.searchQuery!
+    const searched = [
+      ...this.baseHistory(p),
+      { role: 'assistant', content: searchCallText(query, p.toolDialect) }
+    ]
+    const search = (toolSearch: DeferredToolsParams['toolSearch']) => {
+      const content = executeToolSearch(
+        { tools: DEFERRED_TOOL_INVENTORY as never, toolSearch },
+        { query },
+        searched
+      )
+      return {
+        history: [...searched, { role: 'tool', content }],
+        loaded: (JSON.parse(content) as SearchEnvelope).tool_search.loaded
+      }
+    }
+
+    try {
+      const limited = search(p.toolSearch)
+      const unlimited = search(undefined)
+      if (limited.loaded.length !== 1 || unlimited.loaded.length < 2) {
+        return {
+          passed: false,
+          output: `Expected 1 tool with the limit and at least 2 without. Got ${JSON.stringify(limited.loaded)} and ${JSON.stringify(unlimited.loaded)}`
+        }
+      }
+
+      const withLimit = await this.run(modelId, limited.history, p, {
+        predict: 1,
+        toolSearch: p.toolSearch
+      })
+      const withDefaults = await this.run(modelId, unlimited.history, p, { predict: 1 })
+      const summary = `loaded ${JSON.stringify(limited.loaded)} vs ${JSON.stringify(unlimited.loaded)}; promptTokens ${withLimit.promptTokens} vs ${withDefaults.promptTokens}`
+      if (
+        typeof withLimit.promptTokens !== 'number' ||
+        typeof withDefaults.promptTokens !== 'number'
+      ) {
+        return { passed: false, output: `promptTokens missing from stats. ${summary}` }
+      }
+      if (!(withLimit.promptTokens < withDefaults.promptTokens)) {
+        return {
+          passed: false,
+          output: `The worker declared more than the limited search loaded. ${summary}`
+        }
+      }
+      return { passed: true, output: summary }
+    } catch (error) {
+      return errorResult('Deferred tools search limit', error)
+    }
   }
 
   private async resetCache(key: string): Promise<void> {

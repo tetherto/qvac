@@ -9,7 +9,8 @@ const { connectToRegistry, connectToRegistryByCapacity } = require('./utils/rpc-
 const { parseCanonicalSource } = require('../lib/source-helpers')
 const QVACRegistryClient = require('../client/lib/client')
 
-const ADD_MODEL_RPC_TIMEOUT_MS = 60 * 60 * 1000
+const ADD_MODEL_RPC_TIMEOUT_MS = 4 * 60 * 60 * 1000
+const ADD_MODEL_RECOVERY_TIMEOUT_MS = 60 * 60 * 1000
 const ADD_MODEL_POLL_INTERVAL_MS = 10 * 1000
 
 function hasNewModelEntries(configModels, dbByKey) {
@@ -282,7 +283,12 @@ function isAmbiguousRpcError(err) {
   if (!err) return false
 
   const code = err.code || err.cause?.code
-  if (code === 'ETIMEDOUT' || code === 'CHANNEL_CLOSED' || code === 'CHANNEL_DESTROYED') {
+  if (
+    code === 'ETIMEDOUT' ||
+    code === 'TIMEOUT_EXCEEDED' ||
+    code === 'CHANNEL_CLOSED' ||
+    code === 'CHANNEL_DESTROYED'
+  ) {
     return true
   }
 
@@ -297,7 +303,7 @@ function isAmbiguousRpcError(err) {
 async function waitForModelAfterAmbiguousAdd({
   client,
   sourceInfo,
-  timeoutMs = ADD_MODEL_RPC_TIMEOUT_MS,
+  timeoutMs = ADD_MODEL_RECOVERY_TIMEOUT_MS,
   pollIntervalMs = ADD_MODEL_POLL_INTERVAL_MS,
   logger = console,
   sleep = defaultSleep

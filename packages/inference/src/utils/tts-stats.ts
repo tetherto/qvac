@@ -18,6 +18,8 @@ export type TtsOpYield = {
   chunkIndex?: number
   sentenceChunk?: string
   isLast?: boolean
+  /** CosyVoice3: the speech tokens of the synthesis this frame belongs to. */
+  speechTokenIds?: number[]
 }
 
 /**
@@ -33,8 +35,19 @@ export function chunkMetadata(chunk: TtsStreamChunk) {
     ...(typeof chunk.sentenceChunk === 'string' && chunk.sentenceChunk.length > 0
       ? { sentenceChunk: chunk.sentenceChunk }
       : {}),
-    ...(chunk.isLast !== undefined ? { isLast: chunk.isLast } : {})
+    ...(chunk.isLast !== undefined ? { isLast: chunk.isLast } : {}),
+    ...(chunk.speechTokenIds !== undefined ? { speechTokenIds: chunk.speechTokenIds } : {})
   }
+}
+
+/**
+ * Whether a chunk has anything to forward besides PCM. CosyVoice3's native
+ * chunk streaming ends with an empty-PCM `isLast` chunk that carries the
+ * run's `speechTokenIds`; Audio8's native end markers are empty too but carry
+ * nothing, so the ops skip those and forward these.
+ */
+export function carriesSpeechTokenIds(chunk: TtsStreamChunk): boolean {
+  return chunk.speechTokenIds !== undefined
 }
 
 /**
@@ -104,6 +117,11 @@ const TTS_FORWARDED_STATS = [
   'denoiserBackendId',
   'codecSidecarLoaded',
   'codecOnCoreml',
+  // Parler Core ML sidecars
+  'decoderSidecarLoaded',
+  'dacSidecarLoaded',
+  'decoderOnCoreml',
+  'dacOnCoreml',
   // Chatterbox
   't3Ms',
   's3genMs',

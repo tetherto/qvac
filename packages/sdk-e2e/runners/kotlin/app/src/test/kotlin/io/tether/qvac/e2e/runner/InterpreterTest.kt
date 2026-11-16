@@ -58,11 +58,15 @@ class InterpreterTest {
         override fun asset(kind: String, file: String) = "/fixtures/$kind/$file"
     }
 
-    private fun interpreter(transport: FakeTransport, table: Map<String, Any?> = emptyMap()): Interpreter {
+    private fun interpreter(
+        transport: FakeTransport,
+        table: Map<String, Any?> = emptyMap(),
+        restartWorker: suspend () -> Unit = {},
+    ): Interpreter {
         val client = QvacClient(transport)
         val resources = Resources(client, table, "mobile-android", noHost, {}, unloadSettleMs = 0, singleUseResources = emptyList())
         val calls = Calls(Wire(client), resources, Files.createTempDirectory("scratch").toFile())
-        return Interpreter(resources, calls, Files.createTempDirectory("fixtures").toFile(), {})
+        return Interpreter(resources, calls, Files.createTempDirectory("fixtures").toFile(), {}, restartWorker)
     }
 
     private suspend fun Interpreter.run(text: String): StepResult {
@@ -358,6 +362,28 @@ class InterpreterTest {
         assertEquals(listOf("id-1"), unloads.map { it["modelId"]!!.jsonPrimitive.content })
         assertEquals(llm, resources.ensureLoaded("llm"), "a key outside the policy stays loaded")
         assertEquals("id-3", resources.ensureLoaded("ocr"), "the next test loads a fresh model")
+    }
+
+    @Test
+    fun `close restarts the worker and loads the model again`() = runTest {
+        val transport = FakeTransport(
+            replies = mapOf("loadModel" to { json("""{"type":"loadModel","success":true,"modelId":"id-1"}""") }),
+        )
+        val table = asMap(fromJson(Json.parseToJsonElement("""{"llm": {"modelSrc": "x", "type": "llm"}}""")))
+        var restarts = 0
+        val result = interpreter(transport, table, restartWorker = { restarts++ }).run(
+            """
+            {"steps": [
+               {"useModel": {"deps": ["llm"]}},
+               {"call": {"method": "close"}},
+               {"useModel": {"deps": ["llm"]}},
+               {"assert": {"on": "${'$'}model", "named": "valueIn", "with": {"values": ["id-1"]}}}
+             ]}
+            """,
+        )
+        assertTrue(result.passed, result.output)
+        assertEquals(1, restarts)
+        assertEquals(listOf("loadModel", "loadModel"), transport.requests.map { it["type"]!!.jsonPrimitive.content })
     }
 }
 

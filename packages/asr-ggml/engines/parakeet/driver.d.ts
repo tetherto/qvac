@@ -178,7 +178,7 @@ export declare class ParakeetDriver implements AsrDriver {
      */
     _assertNemotronChunkMs(chunkMs: number | undefined): void;
     _validateStreamingOptions(opts: ASRStreamingOptions): ParakeetStreamingRunConfig;
-    _pumpBatchAudio(audio: NormalizedAudioStream): Promise<void>;
+    _pumpBatchAudio(audio: NormalizedAudioStream, includeSpeakerProbabilities?: boolean): Promise<void>;
     _pumpStreamingAudio(audio: NormalizedAudioStream, markClosing: () => void): Promise<void>;
     _buildConfigurationParams(): ParakeetConfigurationParams;
     _createAddon(configurationParams: ParakeetConfigurationParams): ParakeetInterface;

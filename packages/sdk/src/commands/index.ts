@@ -17,7 +17,7 @@ export type {
   VerifyBundleOptions,
   VerifyBundleResult,
   VerifyBundleIssue,
-  RuntimeGroup
+  PlatformRuntime
 } from '@/commands/verify/index'
 export {
   HostPrebuildsInstallFailedError,
@@ -25,12 +25,9 @@ export {
   HostPrebuildsMissingError
 } from '@/utils/errors-client'
 export { formatRuntimeSource } from '@/commands/verify/abi'
-export type { BareRuntime, BareRuntimeResolution } from '@/commands/verify/abi'
+export type { BareKitBinding, BareRuntime, BareRuntimeResolution } from '@/commands/verify/abi'
 export { isReactNativeBareKitInstalled } from '@/commands/verify/bare-kit-runtime'
+export type { BareKitPlatform } from '@/commands/verify/bare-kit-runtime'
 export { isMobileHost } from '@/commands/verify/prebuilds'
 export { formatEnginesAdvice } from '@/commands/verify/engines-advice'
-export type {
-  EnginesAdvice,
-  EnginesOverride,
-  EnginesUpgrade
-} from '@/commands/verify/engines-advice'
+export type { EnginesAdvice, EnginesOverride } from '@/commands/verify/engines-advice'

@@ -1,6 +1,6 @@
 import type { QvacResponse } from "@qvac/infer-base";
 import { ParakeetInterface, type ParakeetConfigurationParams } from "../parakeet/parakeet";
-import type { ASRRunOutput, AudioInput, BackendInfo } from "../../lib/types";
+import type { ASRRunOutput, AudioInput, BackendInfo, MossTranscribeProgress } from "../../lib/types";
 import type { ASRGgmlFiles, ASRRunOptions, AsrDriver, DriverContext, NormalizedAudioStream, StreamingSession } from "../types";
 export declare const ENGINE_MOSS_TRANSCRIBE: "moss-transcribe";
 /** MOSS-Transcribe-Diarize load-time configuration. */
@@ -40,6 +40,7 @@ export interface MossTranscribeRunOptions {
     prompt?: string;
     /** Bound on generated tokens (0 or unset = model default). */
     maxNewTokens?: number;
+    onProgress?: (progress: MossTranscribeProgress) => void;
 }
 /** Preserve native selector names; availability is checked by the engine. */
 export declare function mossTranscribeBackend(value: unknown): string;
@@ -56,6 +57,8 @@ export declare class MossTranscribeDriver implements AsrDriver {
     readonly supportsReload = false;
     addon?: ParakeetInterface;
     params: MossTranscribeConfig;
+    private progressFailed;
+    private onProgress?;
     private readonly ctx;
     private readonly _files;
     constructor(ctx: DriverContext, files: ASRGgmlFiles, config: MossTranscribeEngineConfig);
@@ -73,5 +76,6 @@ export declare class MossTranscribeDriver implements AsrDriver {
     _buildConfigurationParams(): ParakeetConfigurationParams;
     _createAddon(configurationParams: ParakeetConfigurationParams): ParakeetInterface;
     private _outputCallback;
+    private _failProgress;
     private _requireAddon;
 }

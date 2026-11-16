@@ -90,6 +90,23 @@ test('a run still queued after the slot wait is stopped and reported', { skip: p
   assert.deepEqual(run.calls, ['get-run', 'get-run', 'stop-run'])
 })
 
+test('a run still in SCHEDULING after the slot wait is stopped and reported', { skip: process.platform === 'win32' }, (t) => {
+  const run = waitFor(t, { statuses: ['SCHEDULING'], unmeteredWaitMinutes: SHORT_WAIT_MINUTES })
+  assert.equal(run.status, 0, run.log)
+  assert.equal(run.output, 'slot-timeout=true\n')
+  assert.deepEqual(run.calls, ['get-run', 'get-run', 'stop-run'])
+})
+
+test('a run that leaves SCHEDULING before the slot wait ends is kept', { skip: process.platform === 'win32' }, (t) => {
+  const run = waitFor(t, {
+    statuses: ['SCHEDULING', 'RUNNING'],
+    unmeteredWaitMinutes: SHORT_WAIT_MINUTES,
+  })
+  assert.equal(run.status, 0, run.log)
+  assert.equal(run.output, '')
+  assert.ok(!run.calls.includes('stop-run'), run.log)
+})
+
 test('the job fails when the queued run cannot be stopped', { skip: process.platform === 'win32' }, (t) => {
   const run = waitFor(t, {
     statuses: ['PENDING_CONCURRENCY'],

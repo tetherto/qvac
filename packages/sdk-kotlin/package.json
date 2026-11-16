@@ -9,8 +9,6 @@
     "test:unit": "./gradlew --no-daemon jvmTest :android-example:testDebugUnitTest"
   },
   "dependencies": {
-    "@qvac/sdk": "0.23.0",
-    "bare-link": "4.0.1",
-    "react-native-bare-kit": "0.16.0"
+    "@qvac/sdk": "0.23.0"
   }
 }
