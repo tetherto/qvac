@@ -2,9 +2,12 @@
 name: On PR Trigger (nx)
 
 on:
-  # Fork-safe: matrix loads the action + options.ci from the trusted default branch
-  # (never PR head); code-running jobs gate on fork-approval + authorize.
-  pull_request_target:
+  # Not pull_request_target (banned org-wide), so this YAML loads from the PR
+  # merge ref. The matrix job still runs no PR code: nx-project-matrix checks out
+  # the base branch (trusted-pr-checkout) and reads options.ci from the default
+  # branch. Code-running jobs gate on fork-approval + authorize, and authorize
+  # denies every fork PR on pull_request.
+  pull_request:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches: [main, release-*, feature-*, tmp-*]
     # cmake/qvac-addon/** is native input for every consuming addon (link line,
@@ -97,7 +100,10 @@ jobs:
       pull-requests: write
       statuses: read
     outputs:
-      allowed: ${{ steps.auth.outputs.allowed }}
+      # A fork can still carry qvac/fork-verified from an earlier
+      # pull_request_target run. Under pull_request it gets no secrets and would
+      # fail late, so deny it here.
+      allowed: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.id == github.event.repository.id) && steps.auth.outputs.allowed || 'false' }}
     steps:
       - name: Checkout authorize-pr (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -119,6 +125,11 @@ jobs:
     if: needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # No id-token: this job authenticates to nothing.
+    permissions:
+      contents: read
+      pull-requests: read
+      packages: read
     outputs:
       matrix: ${{ steps.compute.outputs.matrix }}
       any: ${{ steps.compute.outputs.any }}
@@ -147,6 +158,7 @@ jobs:
           target: on-pr
           config-ref: ${{ github.event_name == 'workflow_dispatch' && inputs.config_ref_override || github.event.repository.default_branch }}
           packages: ${{ github.event_name == 'workflow_dispatch' && inputs.packages || '[]' }}
+          trusted-pr-checkout: 'true'
       # PR head, matching on-pr-fabric: a PR that adds itself as a consumer must
       # get the overlay in that same PR. Own path, so it cannot clobber the
       # trusted checkout above.
@@ -164,8 +176,27 @@ jobs:
           M: ${{ steps.compute.outputs.matrix }}
           EVENT_NAME: ${{ github.event_name }}
           CHANGED_FILES: ${{ runner.temp }}/nx-changed-files.raw
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
+          # The action is loaded from the default branch, and a copy without
+          # trusted-pr-checkout writes this list only on pull_request_target.
+          if [ "$EVENT_NAME" = "pull_request" ] && [ ! -f "$CHANGED_FILES" ]; then
+            gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" \
+              --jq '.[] | .filename, (.previous_filename // empty)' > "$CHANGED_FILES"
+            # Same guards as the action: an empty or capped list under-selects.
+            count=$(wc -l < "$CHANGED_FILES")
+            if [ "$count" -eq 0 ]; then
+              echo "::error::the API reported no changed paths for PR ${PR_NUMBER}"
+              exit 1
+            fi
+            if [ "$count" -ge 3000 ]; then
+              echo "::error::hit the 3000-file API cap for PR ${PR_NUMBER}; the path list is truncated"
+              exit 1
+            fi
+          fi
           # Speech cpp-lint needs a changed source/header, not a dependency bump.
           node .github/actions/nx-project-matrix/cpp-lint-selection.mjs >> "$GITHUB_OUTPUT"
           {
@@ -220,7 +251,7 @@ jobs:
       # clause reads this, not fabric_stack, so the two cannot drift into a
       # 120-minute poll for an artifact nobody builds.
       # A dispatch opts in by naming the fabric run that built the artifact.
-      needs_fabric_artifact: ${{ steps.detect.outputs.fabric_stack == 'true' && needs.ci-router.outputs.run_prebuilds == 'true' && (github.event_name == 'pull_request_target' || (github.event_name == 'workflow_dispatch' && inputs.fabric_run_id != '')) }}
+      needs_fabric_artifact: ${{ steps.detect.outputs.fabric_stack == 'true' && needs.ci-router.outputs.run_prebuilds == 'true' && (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.fabric_run_id != '')) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -464,7 +495,7 @@ jobs:
   ts-checks:
     name: await ts-checks (${{ matrix.package }})
     needs: [fork-approval, authorize, matrix]
-    if: github.event_name == 'pull_request_target' && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.tschecks != '[]'
+    if: github.event_name == 'pull_request' && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.tschecks != '[]'
     strategy:
       fail-fast: false
       matrix:

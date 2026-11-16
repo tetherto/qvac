@@ -4,9 +4,9 @@ on:
   # PRs into main run this workflow only through pr-gate-merge.yml
   # (workflow_call), which feeds the result into the required
   # `qvac-merge-guard / validate-pr` check. That caller is triggered by
-  # pull_request_target, so on main the PR code below runs with a base-repo
-  # GITHUB_TOKEN (contents/packages: read); fork PRs reach it only after the
-  # fork-approval gate in the caller.
+  # pull_request, so on main the PR code below runs with a contents/packages:
+  # read GITHUB_TOKEN; fork PRs are denied by the caller's authorize job until
+  # the fork flow is reworked.
   #
   # Merge Guard does not run on the other branches, so they keep this direct
   # `pull_request` trigger: fork PRs get a read-only token and no secrets.
@@ -59,8 +59,8 @@ permissions:
 
 # Literal prefix, not github.workflow: under workflow_call that resolves to the
 # caller's name, so every workflow Merge Guard calls would share one group and
-# cancel each other. event_name keeps the direct pull_request run and the Merge
-# Guard (pull_request_target) call in separate groups.
+# cancel each other. The direct trigger skips main and Merge Guard runs only on
+# main, so the direct run and the Merge Guard call never share a PR.
 concurrency:
   group: pr-checks-sdk-pod-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true

@@ -1,6 +1,6 @@
 name: Authorize PR
 description: >
-  Security gate for pull_request_target workflows. Same-repo PRs are trusted.
+  Security gate for pull_request and pull_request_target workflows. Same-repo PRs are trusted.
   Every external fork PR requires a SHA-bound qvac/fork-verified commit status
   (recorded by fork-approval after fork-ci environment approval) — write-or-higher
   permission on the actor does NOT exempt a fork, because the actor who triggers a

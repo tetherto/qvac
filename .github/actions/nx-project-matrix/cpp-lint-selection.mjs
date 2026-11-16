@@ -12,7 +12,7 @@ export function selectCppLintRows(rows, changedFiles) {
 }
 
 function main() {
-  const changedFiles = process.env.EVENT_NAME === 'pull_request_target'
+  const changedFiles = ['pull_request', 'pull_request_target'].includes(process.env.EVENT_NAME)
     ? readFileSync(process.env.CHANGED_FILES, 'utf8').split(/\r?\n/).filter(Boolean)
     : null
   console.log(`cpplint=${JSON.stringify(selectCppLintRows(JSON.parse(process.env.M), changedFiles))}`)
