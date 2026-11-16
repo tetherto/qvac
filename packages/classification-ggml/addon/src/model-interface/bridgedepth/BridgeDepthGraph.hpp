@@ -13,6 +13,8 @@
 
 #include <ggml-backend.h>
 
+#include "model-interface/ModelFootprint.hpp"
+
 namespace classification_ggml::bridgedepth {
 
 // Inputs are padded to a multiple of this on the top and the right.
@@ -42,12 +44,28 @@ struct ResourceError : std::runtime_error {
   using std::runtime_error::runtime_error;
 };
 
+// Host memory the caller holds around infer(), by phase, for measure().
+struct CallerHostBytes {
+  // Held through every phase of the job, such as the input buffers.
+  uint64_t jobBytes = 0;
+  // Before the run: decoding the views and building the planar ones.
+  uint64_t prepareBytes = 0;
+  // After the run, while the returned disparity is still held.
+  uint64_t afterRunBytes = 0;
+  // After the returned disparity is freed, such as the output handed to JS.
+  uint64_t outputBytes = 0;
+};
+
 class BridgeDepthGraph {
 public:
   // `device` and `cpu` stay owned by the caller and must outlive the graph;
   // they may be the same backend.
+  // Mode::Measure reads only the GGUF metadata and allocates no weight or
+  // compute buffer: measure() works, infer() throws.
+  enum class Mode { Infer, Measure };
   BridgeDepthGraph(
-      const std::string& ggufPath, ggml_backend_t device, ggml_backend_t cpu);
+      const std::string& ggufPath, ggml_backend_t device, ggml_backend_t cpu,
+      Mode mode = Mode::Infer);
   ~BridgeDepthGraph();
   BridgeDepthGraph(const BridgeDepthGraph&) = delete;
   BridgeDepthGraph& operator=(const BridgeDepthGraph&) = delete;
@@ -59,6 +77,14 @@ public:
   std::vector<float> infer(
       const float* left, const float* right, int h, int w,
       const std::vector<float>* seedsOverride = nullptr);
+
+  // Mode::Measure only. The buffers the load plus one infer() of an h x w
+  // pair on a fresh graph would allocate, sized from the same graph infer()
+  // builds, with `caller` added to the host phases it falls in.
+  MeasuredBuffers measure(int h, int w, const CallerHostBytes& caller = {});
+  // The buffers held after the last infer(). The scheduler buffers only grow,
+  // so after several sizes this is the largest need of each buffer.
+  [[nodiscard]] BufferFootprint allocatedBuffers() const;
 
   [[nodiscard]] size_t weightBytes() const;
   // Compute nodes the scheduler put on the CPU in the last run while a non-CPU

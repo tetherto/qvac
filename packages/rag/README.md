@@ -138,11 +138,12 @@ Within one document, either every chunk has an `embedding` or none does. Chunk I
 - The whole call is validated, and text is chunked, before anything is written.
 - Each document commits in its own HyperDB batch, in input order, as soon as all its chunks are embedded. If a later document fails, earlier ones stay committed.
 - `signal` is checked between embedding batches and before each document's commit. An abort does not throw: committed documents stay, the rest are listed in `skipped`, and `cancelled` is `true`.
-- `onProgress({ stage, done, total })` reports `chunk` (text documents chunked), `embed` (chunks embedded, once per batch) and `commit` (documents written).
+- `onProgress({ stage, done, total })` reports `chunk` (text documents chunked), `embed` (chunks embedded, once per batch) and `commit` (documents written or found unchanged).
 - Ingesting an existing document ID replaces it: the new chunks get a new generation and the old chunks are deleted in the same batch.
+- Re-ingesting a document whose content is unchanged writes nothing: no new generation and no revision bump, and its text is not sent to the port. Content is the chunk IDs, text and `metadataJson` after chunking, the precomputed vectors, the document `metadata` and the namespace's space. So new `chunking` options count as a change, while the `indexedAt` timestamp in `rag-extract`'s chunk metadata does not. An `indexedAt` key in any other chunk metadata is compared like every other field.
 - There is no content deduplication. Identical text in two documents is stored and returned twice.
 
-Returns `{ documents: [{ id, generation, chunkCount }], skipped, cancelled, revision }`.
+Returns `{ documents, skipped, cancelled, revision }`. Each entry in `documents` is `{ id, generation, chunkCount, status }`, where `status` is `created`, `replaced` (with `removedChunks`, the previous generation's chunk count) or `unchanged`.
 
 ### `deleteDocuments({ namespace, documentIds })`
 
@@ -167,6 +168,34 @@ Returns `{ search }` bound to `scope`. The `scope` passed to its `search` is opt
 const reader = rag.scoped({ namespace: 'handbook', documentIds: ['leave-policy', 'travel'] })
 await reader.search({ vector: queryVector, spaceId, k: 5, scope: { documentIds: ['travel'] } })
 ```
+
+## Memory
+
+Process RSS and search latency for one namespace of 100,000 chunks × 768 dimensions with `q8` storage, measured with `scripts/bench-index.ts` on an M-series Mac (k = 10, 50 searches):
+
+| Open path                           | RSS after searches | Peak RSS     | Open + first search | Search p50 / p95 |
+| ----------------------------------- | ------------------ | ------------ | ------------------- | ---------------- |
+| Cold open from a snapshot           | ~290 MiB           | ~320 MiB     | 150–170 ms          | 21 / 26–29 ms    |
+| Rebuild from HyperDB (no snapshot)  | 610–775 MiB        | 985–1020 MiB | 2.4–2.6 s           | 21–23 / 24–31 ms |
+| Scan, without `@qvac/turbovec-ggml` | 725–770 MiB        | 775–785 MiB  | ~2.1 s              | 1.3 / 1.4–1.5 s  |
+
+Budget about 1 GiB for the first open of a namespace without a snapshot and about 320 MiB once a snapshot exists. Pass `index.dir` so later opens load the snapshot.
+
+Replacing a document leaves its old rows in the index until it is compacted, which happens once removed rows reach a quarter of the live ones. Re-ingesting all of 20,000 × 768 `q8` chunks with new vectors 20 times in one process ends at about 630 MiB RSS (710 MiB peak), against 1.3 GiB without compaction.
+
+To reproduce:
+
+```bash
+npm run build
+bare scripts/bench-index.ts ingest  /tmp/rag-bench --chunks 100000 --dims 768 --storage q8
+bare scripts/bench-index.ts rebuild /tmp/rag-bench
+bare scripts/bench-index.ts cold    /tmp/rag-bench
+bare scripts/bench-index.ts scan    /tmp/rag-bench
+bare scripts/bench-index.ts ingest  /tmp/rag-replace --chunks 20000 --dims 768 --storage q8
+bare scripts/bench-index.ts replace /tmp/rag-replace --rounds 20
+```
+
+Each phase runs in its own process and prints its RSS, peak RSS and search latency as JSON.
 
 ## Errors
 

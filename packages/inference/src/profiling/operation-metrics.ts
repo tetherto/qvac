@@ -116,7 +116,8 @@ export function buildOperationEvent(
   }
 
   const requestTags = config.getTags?.(request)
-  const resultTags = config.getTagsFromResult?.(finalResponse)
+  // A handler that threw has no response; its event carries request tags only.
+  const resultTags = finalResponse ? config.getTagsFromResult?.(finalResponse) : undefined
   const tags = { ...requestTags, ...resultTags }
 
   const hasGauges = Object.keys(gauges).length > 0

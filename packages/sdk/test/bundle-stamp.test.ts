@@ -4,7 +4,13 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { bundledSdkMismatch, bundledTarget, installedSdkVersion } from '@/client/rpc/bundle-stamp'
+import {
+  BUNDLE_RECORD_FILE,
+  bundledSdkMismatch,
+  bundledTarget,
+  bundleTargetOf,
+  installedSdkVersion
+} from '@/client/rpc/bundle-stamp'
 
 const SDK_MANIFEST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../package.json')
 
@@ -53,6 +59,26 @@ describe('bundledTarget', () => {
 
   it('is undefined for a worker that does not record it', (t) => {
     assert.equal(bundledTarget(bundleWith(t, {})), undefined)
+  })
+})
+
+describe('bundleTargetOf', () => {
+  it('reads the target from the harness package.json beside the bundle', (t) => {
+    const dir = bundleWith(t, { qvacTarget: 'pear-runtime' })
+    assert.equal(bundleTargetOf(path.join(dir, 'index.bundle')), 'pear-runtime')
+  })
+
+  it('reads the target recorded at the root of a harness without a package.json', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-bundle-record-'))
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+    fs.writeFileSync(
+      path.join(root, BUNDLE_RECORD_FILE),
+      JSON.stringify({ qvacTarget: 'bare-kit' })
+    )
+    const artifacts = path.join(root, 'src', 'main', 'resources', 'com', 'example')
+    fs.mkdirSync(artifacts, { recursive: true })
+
+    assert.equal(bundleTargetOf(path.join(artifacts, 'index.bundle')), 'bare-kit')
   })
 })
 

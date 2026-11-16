@@ -9,6 +9,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
@@ -50,6 +51,42 @@ class WorkerRpcTest {
 
             assertEquals("heartbeat", response["type"]?.jsonPrimitive?.content)
             workerJob.await()
+        }
+    }
+
+    @Test
+    fun cancellingACallCancelsTheRequestOnTheWorker() = runBlocking {
+        withWorkerSocket { transport, worker ->
+            val request = CompletableDeferred<Message.Request>()
+            val workerJob = async(Dispatchers.IO) {
+                request.complete(assertIs<Message.Request>(worker.readMessage()))
+                assertIs<Message.Cancel>(worker.readMessage())
+            }
+
+            val call = launch { transport.call(buildJsonObject { put("type", "heartbeat") }) }
+            withTimeout(5_000) {
+                request.await()
+                call.cancelAndJoin()
+                assertEquals(request.await().id, workerJob.await().id)
+            }
+        }
+    }
+
+    @Test
+    fun aStreamCollectionStoppedEarlyCancelsTheRequestOnTheWorker() = runBlocking {
+        withWorkerSocket { transport, worker ->
+            val workerJob = async(Dispatchers.IO) {
+                val request = assertIs<Message.Request>(worker.readMessage())
+                assertEquals(STREAM_RESPONSE or STREAM_OPEN, assertIs<Message.Stream>(worker.readMessage()).flags)
+                worker.write(Message.Response(request.id, STREAM_OPEN, null, null))
+                worker.write(Message.Stream(request.id, STREAM_RESPONSE or STREAM_DATA, "{\"type\":\"tick\"}\n".encodeToByteArray(), null))
+                assertEquals(request.id, assertIs<Message.Cancel>(worker.readMessage()).id)
+            }
+
+            val first = withTimeout(5_000) { transport.stream(buildJsonObject { put("type", "loggingStream") }).first() }
+
+            assertEquals("tick", first["type"]?.jsonPrimitive?.content)
+            withTimeout(5_000) { workerJob.await() }
         }
     }
 

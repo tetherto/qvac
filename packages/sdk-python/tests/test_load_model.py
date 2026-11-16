@@ -220,10 +220,20 @@ async def test_load_model_reload_config_path_skips_type_handling():
     assert model_id == "m-1"
     assert transport.sent["modelId"] == "0123456789abcdef"
     assert "modelSrc" not in transport.sent
-    # Reload keeps the given type verbatim (the wire accepts the alias) and
-    # never threads a client requestId, matching the JS reload path.
+    # Reload keeps the given type verbatim (the wire accepts the alias).
     assert transport.sent["modelType"] == "whisper"
-    assert "requestId" not in transport.sent
+
+
+async def test_load_model_reload_sends_the_request_id_cancel_can_target():
+    transport = FakeTransport(response=OK)
+    await api.load_model(
+        transport,
+        model_id="0123456789abcdef",
+        model_type="whisper",
+        model_config={"language": "es"},
+        request_id="reload-1",
+    )
+    assert transport.sent["requestId"] == "reload-1"
 
 
 async def test_load_model_with_progress_forwards_events_and_returns_id():

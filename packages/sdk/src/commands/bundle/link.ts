@@ -3,7 +3,12 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import stow from 'bare-stow'
 import semver from 'semver'
-import { discardScratch, scratchFolderFor, type Staged } from '@/commands/bundle/scratch'
+import {
+  discardScratch,
+  removeStaleScratch,
+  scratchFolderFor,
+  type Staged
+} from '@/commands/bundle/scratch'
 import { findInAncestorNodeModules } from '@/expo/plugins/find-in-ancestor-node-modules'
 import { AddonLinkFailedError, ReactNativeBareKitUnsupportedError } from '@/utils/errors-client'
 import type { Logger } from '@/logging/types'
@@ -63,6 +68,18 @@ export const NATIVE_MODULES = {
   }
 } as const
 
+const BARE_KIT_SWIFT_FROM =
+  /(\.package\(url: "https:\/\/github\.com\/holepunchto\/bare-kit-swift(?:\.git)?", )from: /
+
+/**
+ * Pins bare-kit-swift at the version bare-stow names. bare-stow writes it as a
+ * minimum, which Swift Package Manager resolves at the newest release, so the
+ * app would run a newer Bare than the one its addons were checked against.
+ */
+export function pinBareKitSwift(manifest: string): string {
+  return manifest.replace(BARE_KIT_SWIFT_FROM, '$1exact: ')
+}
+
 export interface StageAddonsOptions {
   projectRoot: string
   /** The worker entry the bundle starts from. */
@@ -97,6 +114,7 @@ export async function stageAddons(
       }
 
       const out = path.join(projectRoot, module.dir)
+      await removeStaleScratch(out)
       const scratch = await scratchFolderFor(out)
       staged.push({ dir: out, next: scratch })
       const platformWritten: string[] = []
@@ -120,9 +138,11 @@ export async function stageAddons(
       } catch (error) {
         throw new AddonLinkFailedError(platformHosts, error)
       }
-      // Xcode requires the folder of the assets, even when there are none.
       if (module.language === 'swift') {
+        // Xcode requires the folder of the assets, even when there are none.
         await fsp.mkdir(path.join(scratch, BARE_KIT_RESOURCES), { recursive: true })
+        const manifest = path.join(scratch, 'Package.swift')
+        await fsp.writeFile(manifest, pinBareKitSwift(await fsp.readFile(manifest, 'utf8')))
       }
       warnOverwritten(platformWritten, out, logger)
       written.push(...platformWritten)

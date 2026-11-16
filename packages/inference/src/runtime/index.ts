@@ -13,10 +13,25 @@ export {
   withRequestContext
 } from '@/runtime/request-context'
 
+export { OWNER_SESSION_ID, resolveSessionId, requestRegistryKey } from '@/runtime/session-id'
+export {
+  openSession,
+  closeSession,
+  assertSessionOpen,
+  assertWireSessionOpen,
+  isSessionOpen,
+  isOwnerSession,
+  listSessions,
+  hasOpenSessions,
+  clearSessions
+} from '@/runtime/session-registry'
+export type { SessionEntry } from '@/runtime/session-registry'
+
 export type {
   BeginOpts,
   CancelByModelId,
   CancelByRequestId,
+  CancelBySession,
   CancelTarget,
   ConcurrencyPolicy,
   ManagedRequestContext,

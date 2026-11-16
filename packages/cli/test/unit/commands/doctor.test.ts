@@ -705,6 +705,46 @@ describe('deep SDK runtime probe', () => {
     assert.equal(classifySdkRuntimeFailure(failedProbe({ stderr })).id, 'cpu-instruction')
   })
 
+  it('classifies an SDK startup error that reports timedOut as a handshake timeout', async () => {
+    const fixture = createSdkFixture(`
+      export async function heartbeat() {
+        const error = new Error('Worker did not signal ready within 60000 ms')
+        error.name = 'WORKER_STARTUP_FAILED'
+        error.timedOut = true
+        throw error
+      }
+      export async function close() {}
+    `)
+    try {
+      const result = await probeSdkRuntime(fixture.entrypoint, fixture.projectRoot, {
+        timeoutMs: 5_000
+      })
+      assert.equal(result.outcome, 'fail')
+      assert.equal(result.probeMessage?.ok === false && result.probeMessage.error.timedOut, true)
+      assert.equal(classifySdkRuntimeFailure(result).id, 'worker-handshake-timeout')
+    } finally {
+      fs.rmSync(fixture.projectRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('does not read an SDK startup error without timedOut as a timeout', () => {
+    const result = failedProbe({
+      phase: 'heartbeat',
+      probeMessage: {
+        kind: DEEP_PROBE_MESSAGE_KIND,
+        version: DEEP_PROBE_PROTOCOL_VERSION,
+        ok: false,
+        phase: 'heartbeat',
+        error: {
+          name: 'WORKER_STARTUP_FAILED',
+          message: 'Worker failed before signalling ready, not in time',
+          timedOut: false
+        }
+      }
+    })
+    assert.equal(classifySdkRuntimeFailure(result).id, 'heartbeat-failed')
+  })
+
   it('classifies a child-process spawn error', async () => {
     const fixture = createSdkFixture('export async function heartbeat() {}')
     try {
