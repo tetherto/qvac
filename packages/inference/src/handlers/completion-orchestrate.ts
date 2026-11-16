@@ -1,3 +1,4 @@
+import Buffer from 'bare-buffer'
 import type {
   CompletionOrchestrateRequest,
   CompletionOrchestrateResponse,
@@ -5,10 +6,13 @@ import type {
   CompletionStreamResponse
 } from '@/schemas/index'
 import { toolCallbackResultSchema, type ToolCallbackResult } from '@/schemas/completion-stream'
+import type { AbortSignalLike } from '@/schemas/common'
 import { aggregateEvents } from '@/utils/aggregate-events'
-import { CompletionFailedError } from '@/errors/index'
+import { CompletionFailedError, InferenceCancelledError } from '@/errors/index'
 import { dispatchPluginStream } from '@/handlers/plugin-dispatch'
 import { executeToolSearch, TOOL_SEARCH_NAME } from '@/utils/tools/defer'
+import { getRequestRegistry } from '@/runtime/request-context'
+import { generateRandomRequestId } from '@/runtime/request-id'
 
 const DEFAULT_MAX_TOOL_TURNS = 8
 
@@ -32,7 +36,8 @@ const MAX_TOOL_RESULT_LINE_BYTES = 16 * 1024 * 1024
  * and the reader stops holding the request stream open.
  */
 export class ToolResultReader {
-  private buffer = ''
+  private pending: Buffer[] = []
+  private pendingBytes = 0
   private readonly results = new Map<string, ToolCallbackResult>()
   private readonly waiters = new Map<string, (result: ToolCallbackResult) => void>()
   private failed: Error | undefined
@@ -49,20 +54,38 @@ export class ToolResultReader {
       while (!this.closed) {
         const next = await this.iterator.next()
         if (next.done) break
-        this.buffer += next.value.toString()
+        const chunk = next.value
+        let start = 0
         let nl: number
-        while ((nl = this.buffer.indexOf('\n')) !== -1) {
-          const line = this.buffer.slice(0, nl)
-          this.buffer = this.buffer.slice(nl + 1)
+        while ((nl = chunk.indexOf(0x0a, start)) !== -1) {
+          this.append(chunk.subarray(start, nl))
+          // A transport chunk can end inside a UTF-8 character. Decode complete lines only.
+          const line = Buffer.concat(this.pending).toString('utf8')
+          this.pending = []
+          this.pendingBytes = 0
           if (line.trim()) this.accept(line)
+          start = nl + 1
         }
-        if (this.buffer.length > MAX_TOOL_RESULT_LINE_BYTES) {
-          throw new CompletionFailedError('tool result frame exceeds the maximum size')
-        }
+        this.append(chunk.subarray(start))
       }
-      if (!this.closed && this.buffer.trim()) this.accept(this.buffer)
+      if (!this.closed) {
+        const tail = Buffer.concat(this.pending).toString('utf8')
+        this.pending = []
+        this.pendingBytes = 0
+        if (tail.trim()) this.accept(tail)
+      }
     } catch (error) {
       this.failWaiters(error instanceof Error ? error : new Error(String(error)))
+    }
+  }
+
+  private append(bytes: Uint8Array): void {
+    if (this.pendingBytes + bytes.length > MAX_TOOL_RESULT_LINE_BYTES) {
+      throw new CompletionFailedError('tool result frame exceeds the maximum size')
+    }
+    if (bytes.length) {
+      this.pending.push(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength))
+      this.pendingBytes += bytes.length
     }
   }
 
@@ -86,7 +109,15 @@ export class ToolResultReader {
     }
   }
 
-  async waitFor(callId: string, timeoutMs = TOOL_RESULT_TIMEOUT_MS): Promise<ToolCallbackResult> {
+  /** Rejects with `InferenceCancelledError` when `signal` aborts before the result arrives. */
+  async waitFor(
+    callId: string,
+    timeoutMs = TOOL_RESULT_TIMEOUT_MS,
+    signal?: AbortSignalLike
+  ): Promise<ToolCallbackResult> {
+    // A cancel that landed between turns aborts the signal before the wait
+    // starts; it wins over a result the client already sent.
+    if (signal?.aborted) throw new InferenceCancelledError(callId)
     const buffered = this.results.get(callId)
     if (buffered) {
       this.results.delete(callId)
@@ -94,12 +125,22 @@ export class ToolResultReader {
     }
     if (this.failed) throw this.failed
     return await new Promise<ToolCallbackResult>((resolve, reject) => {
-      const timer = setTimeout(() => {
+      const settle = () => {
+        clearTimeout(timer)
+        signal?.removeEventListener('abort', onAbort)
         this.waiters.delete(callId)
+      }
+      const onAbort = () => {
+        settle()
+        reject(new InferenceCancelledError(callId))
+      }
+      const timer = setTimeout(() => {
+        settle()
         reject(new CompletionFailedError(`tool callback ${callId} timed out`))
       }, timeoutMs)
+      signal?.addEventListener('abort', onAbort, { once: true })
       this.waiters.set(callId, (result) => {
-        clearTimeout(timer)
+        settle()
         resolve(result)
       })
     })
@@ -113,7 +154,8 @@ export class ToolResultReader {
   close(): void {
     if (this.closed) return
     this.closed = true
-    this.buffer = ''
+    this.pending = []
+    this.pendingBytes = 0
     this.results.clear()
     if (!this.failed) this.failWaiters(new CompletionFailedError('tool result stream closed'))
     void this.iterator.return?.()
@@ -142,10 +184,11 @@ export async function* orchestrateCompletion(
   // the turn that's currently generating — the expensive part a Stop button
   // targets. Turns run strictly sequentially: turn N's request-registry entry
   // is disposed (on the `for await` break below) before turn N+1 calls
-  // `begin(...)`, so reusing the id can't collide in `entries`. A cancel that
-  // lands between turns (during a tool-result wait) is caught by the
-  // registry's cancel-before-begin tripwire and aborts the next turn's
-  // `begin(...)`. Each turn's `history` and `type` are set below.
+  // `begin(...)`, so reusing the id can't collide in `entries`. The handler
+  // registers each tool-result wait under the same id (see
+  // `registeredToolWaits`), so a cancel during the wait ends it; one that
+  // lands between registrations is caught by the registry's
+  // cancel-before-begin tripwire. Each turn's `history` and `type` are set below.
   const { maxToolTurns, ...turnBase } = request
   const maxTurns = maxToolTurns ?? DEFAULT_MAX_TOOL_TURNS
   let history = [...request.history]
@@ -188,7 +231,7 @@ export async function* orchestrateCompletion(
           ...history,
           {
             role: 'tool',
-            content: executeToolSearch(request.tools ?? [], call.arguments, history)
+            content: executeToolSearch(request, call.arguments, history)
           }
         ]
         continue
@@ -198,7 +241,21 @@ export async function* orchestrateCompletion(
         turn,
         toolCallback: { callId: call.id, name: call.name, arguments: call.arguments }
       }
-      const result = await reader.waitFor(call.id)
+      let result: ToolCallbackResult
+      try {
+        result = await reader.waitFor(call.id)
+      } catch (error) {
+        if (!(error instanceof InferenceCancelledError)) throw error
+        // Cancelled while the client ran its tool: end the way a cancelled
+        // turn ends, so the client folds a `cancelled` stop.
+        yield {
+          type: 'completionOrchestrate',
+          turn: turn + 1,
+          events: [{ type: 'completionDone', seq: 0, stopReason: 'cancelled' }]
+        }
+        yield { type: 'completionOrchestrate', done: true }
+        return
+      }
       const content =
         result.error !== undefined
           ? JSON.stringify({ error: result.error })
@@ -214,6 +271,34 @@ export async function* orchestrateCompletion(
   yield { type: 'completionOrchestrate', done: true, stopReason: 'maxToolTurns' }
 }
 
+/**
+ * Waits for a tool result as a request of its own, under the completion's
+ * `(sessionId, requestId)`, so the registry sees the completion between its
+ * turns: a cancel by id or by model, the transport signal and a session close
+ * stop the wait, and a session close waits for the completion to end.
+ */
+export function registeredToolWaits(
+  reader: Pick<ToolResultReader, 'waitFor'>,
+  request: Pick<CompletionOrchestrateRequest, 'requestId' | 'sessionId' | 'modelId'>
+): Pick<ToolResultReader, 'waitFor'> {
+  const requestId = request.requestId ?? generateRandomRequestId()
+  return {
+    async waitFor(callId) {
+      // The model id lets `cancel({ modelId })` and an unload reach the wait.
+      // An unbounded cap skips slot admission, so the wait holds none of the
+      // model's completion slots while the client runs its tool.
+      await using ctx = await getRequestRegistry().begin({
+        requestId,
+        sessionId: request.sessionId,
+        kind: 'completion',
+        modelId: request.modelId,
+        maxConcurrentPerModel: Infinity
+      })
+      return await reader.waitFor(callId, undefined, ctx.signal)
+    }
+  }
+}
+
 export async function* handleCompletionOrchestrate(
   request: CompletionOrchestrateRequest,
   inputStream: AsyncIterable<Buffer>
@@ -227,7 +312,7 @@ export async function* handleCompletionOrchestrate(
     )
   }
   try {
-    yield* orchestrateCompletion(request, runTurn, reader)
+    yield* orchestrateCompletion(request, runTurn, registeredToolWaits(reader, request))
   } finally {
     // Tear the reader down however orchestration ends -- natural finish, turn
     // cap, error, or the client abandoning the stream -- so the pump stops and

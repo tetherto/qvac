@@ -1,128 +1,222 @@
-import type { BaseLlmAdapter } from './adapters/llm/BaseLlmAdapter.js'
+import type { Corestore } from './db/db-types.js'
 
-export interface Doc {
-  id: string
-  content: string
+export type EmbeddingMetric = 'dot' | 'cosine'
+
+// Everything that decides whether two vectors are comparable. `spaceId` is a
+// hash of this record, so dimensions alone never make two spaces match.
+export interface EmbeddingSpace {
+  model: string
+  revision: string
+  dimensions: number
+  metric: EmbeddingMetric
+  normalized: boolean
+  documentEncoding: string
+  queryEncoding: string
+  preprocessing: string
 }
 
-export interface EmbeddedDoc extends Doc {
-  embedding: number[]
-  embeddingModelId: string
-  metadata?: Record<string, any> | undefined
+// `embedDocuments` returns one row per text, row-major, each with the space's
+// dimensions. `@qvac/rag` never applies the space's encodings; the port does.
+export interface EmbeddingsPort {
+  space: EmbeddingSpace
+  embedDocuments(texts: string[], options?: { signal?: AbortSignal }): Promise<Float32Array>
+  embedQuery(text: string, options?: { signal?: AbortSignal }): Promise<Float32Array>
 }
 
-export interface PartialDoc {
-  content: string
+// Passed to `rag-extract/chunk`; defaults are 256 tokens with 50 of overlap.
+export interface ChunkingOptions {
+  chunkSize?: number
+  chunkOverlap?: number
+}
+
+// How a namespace's vector index stores vectors. `q8` works for any
+// dimension; the TurboVec modes need dimensions divisible by 8 and at most 1,024.
+export type IndexStorage = 'f32' | 'q8' | 'turbovec-q4' | 'turbovec-q2'
+
+export interface IndexOptions {
+  // Directory for index snapshots. Without it, indexes stay in memory and
+  // are rebuilt from the database the first time each namespace is searched.
+  dir?: string
+  // Committed batches between snapshots. Defaults to 256.
+  snapshotEvery?: number
+}
+
+export interface CreateRagOptions {
+  corestore: Corestore
+  // Needed for text and pre-chunked ingest and for text query search.
+  embeddings?: EmbeddingsPort
+  // Applies to text documents only; pre-chunked input keeps its chunks.
+  chunking?: ChunkingOptions
+  // Used only when `@qvac/turbovec-ggml` is installed; without it search
+  // scans the database.
+  index?: IndexOptions
+}
+
+export interface CreateNamespaceParams {
+  name: string
+  space: EmbeddingSpace
+  // Fixed at creation. Defaults to `{ storage: 'q8' }`.
+  index?: { storage?: IndexStorage }
+}
+
+export interface NamespaceInfo {
+  name: string
+  spaceId: string
+  revision: number
+  index: { storage: IndexStorage }
+}
+
+export interface EmbeddedChunkInput {
+  // Defaults to `<documentId>:<ordinal>`.
   id?: string
+  content: string
+  metadataJson?: string
+  embedding: Float32Array | ReadonlyArray<number>
+  // Falls back to the document's `spaceId`.
+  spaceId?: string
 }
 
-export interface SaveEmbeddingsResult {
-  status: 'fulfilled' | 'rejected'
-  id?: string | undefined
-  error?: string | undefined
+// A `rag-extract` artifact's chunks go in as-is with the `spaceId` set here.
+export interface EmbeddedDocumentInput {
+  id: string
+  metadata?: Record<string, unknown>
+  spaceId?: string
+  chunks: EmbeddedChunkInput[]
 }
+
+// Chunked with `rag-extract/chunk`, then embedded through the port.
+export interface TextDocument {
+  id: string
+  text: string
+  metadata?: Record<string, unknown>
+}
+
+// A `rag-extract` chunk goes in as-is; its `tokenCount` is accepted and ignored.
+export interface TextChunkInput {
+  // Defaults to `<documentId>:<ordinal>`.
+  id?: string
+  content: string
+  metadataJson?: string
+  tokenCount?: number
+}
+
+// Keeps its segmentation and chunk IDs; only the embeddings come from the port.
+export interface ChunkedDocument {
+  id: string
+  metadata?: Record<string, unknown>
+  chunks: TextChunkInput[]
+}
+
+export type DocumentInput = EmbeddedDocumentInput | TextDocument | ChunkedDocument
+
+export interface IngestParams {
+  namespace: string
+  documents: DocumentInput[]
+}
+
+export type IngestStage = 'chunk' | 'embed' | 'commit'
+
+// `chunk` counts text documents, `embed` counts chunks sent to the port and
+// `commit` counts documents written or found unchanged.
+export interface IngestProgress {
+  stage: IngestStage
+  done: number
+  total: number
+}
+
+export interface IngestOptions {
+  // Checked between embedding batches and before each document's commit.
+  signal?: AbortSignal
+  onProgress?: (progress: IngestProgress) => void
+}
+
+// `unchanged`: the stored generation already has the same content, so nothing
+// was written. Content covers the chunks after chunking, their vectors when
+// precomputed, and the document metadata.
+export type IngestedDocument = {
+  id: string
+  generation: number
+  chunkCount: number
+} & (
+  | { status: 'created' | 'unchanged' }
+  // `removedChunks` counts the previous generation's chunks.
+  | { status: 'replaced'; removedChunks: number }
+)
 
 export interface IngestResult {
-  processed: SaveEmbeddingsResult[]
-  droppedIndices: number[]
+  documents: IngestedDocument[]
+  // Documents not committed because the signal aborted, in input order.
+  skipped: string[]
+  cancelled: boolean
+  revision: number
 }
 
-export interface SearchResult {
-  id: string
+export interface DeleteDocumentsParams {
+  namespace: string
+  documentIds: string[]
+}
+
+export interface DeleteDocumentsResult {
+  // Only the IDs that existed; unknown IDs are ignored.
+  deleted: string[]
+  revision: number
+}
+
+export interface SearchScope {
+  namespace: string
+  documentIds?: string[]
+}
+
+export interface VectorQuery {
+  vector: Float32Array | number[]
+  // The `spaceId` the query was embedded in; it must match the namespace's.
+  spaceId: string
+  query?: never
+}
+
+// Embedded with the port's `embedQuery`, in the port's space.
+export interface TextQuery {
+  query: string
+  vector?: never
+  spaceId?: never
+}
+
+export type SearchParams = (VectorQuery | TextQuery) & {
+  scope: SearchScope
+  k: number
+  // Checked between scan batches; an aborted search fails with OPERATION_CANCELLED.
+  signal?: AbortSignal
+}
+
+export type ScopedSearchParams = (VectorQuery | TextQuery) & {
+  // Intersected with the bound scope; it can narrow it, never widen it.
+  scope?: Partial<SearchScope>
+  k: number
+  signal?: AbortSignal
+}
+
+export interface SearchHit {
+  namespace: string
+  documentId: string
+  chunkId: string
+  ordinal: number
   content: string
+  metadataJson?: string
+  // The document's `metadata` from ingest, when it had any.
+  documentMetadata?: Record<string, unknown>
   score: number
 }
 
-export interface BaseDBAdapterConfig {
-  embeddingModelId: string
-  dimension: number
-  createdAt: Date
+export interface ScopedRag {
+  search(params: ScopedSearchParams): Promise<SearchHit[]>
 }
 
-export interface HyperDBAdapterConfig extends BaseDBAdapterConfig {
-  key: string
-  NUM_CENTROIDS: number
-  BUCKET_SIZE: number
-  BATCH_SIZE: number
-}
-
-export interface SearchParams {
-  topK?: number
-  n?: number
-  signal?: AbortSignal
-}
-
-export interface InferOpts extends SearchParams {
-  llmAdapter?: BaseLlmAdapter
-  systemPrompt?: string
-}
-
-export interface BaseChunkOpts {
-  [key: string]: unknown
-}
-
-export interface DbOpts {
-  [key: string]: unknown
-}
-
-export interface LLMChunkOpts extends BaseChunkOpts {
-  chunkSize?: number | undefined
-  chunkOverlap?: number | undefined
-  chunkStrategy?: 'character' | 'paragraph' | undefined
-  splitStrategy?: 'character' | 'token' | 'word' | 'sentence' | 'line' | undefined
-  splitter?: ((text: string) => string[]) | undefined
-}
-
-export interface EmbeddingOpts {
-  onProgress?: (current: number, total: number) => void
-  signal?: AbortSignal
-}
-
-export interface GenerateEmbeddingsOpts {
-  chunk?: boolean
-  chunkOpts?: BaseChunkOpts
-  signal?: AbortSignal
-}
-
-export type SaveStage = 'deduplicating' | 'preparing' | 'writing'
-
-export interface SaveEmbeddingsOpts {
-  dbOpts?: DbOpts | undefined
-  onProgress?: ((stage: SaveStage, current: number, total: number) => void) | undefined
-  progressInterval?: number | undefined
-  signal?: AbortSignal | undefined
-}
-
-export type IngestStage =
-  'chunking' | 'embedding' | 'saving:deduplicating' | 'saving:preparing' | 'saving:writing'
-
-export interface IngestOpts {
-  chunk?: boolean | undefined
-  chunkOpts?: BaseChunkOpts | undefined
-  dbOpts?: DbOpts | undefined
-  onProgress?: ((stage: IngestStage, current: number, total: number) => void) | undefined
-  progressInterval?: number | undefined
-  signal?: AbortSignal | undefined
-}
-
-export type ReindexStage = 'collecting' | 'clustering' | 'reassigning' | 'updating'
-
-export interface ReindexOpts {
-  onProgress?: ((stage: ReindexStage, current: number, total: number) => void) | undefined
-  signal?: AbortSignal | undefined
-}
-
-export interface ReindexResult {
-  reindexed: boolean
-  details?: Record<string, any> | undefined
-}
-
-export type EmbeddingFunction = (text: string | string[]) => Promise<number[] | number[][]>
-
-// The QVAC LLM addon returns an engine-specific response. It originates in
-// @qvac/inference and is not a dependency here, so it is left opaque.
-export type QvacResponse = unknown
-
-export interface QvacLlmAddon {
-  run(messages: Array<{ role: string; content: string }>, opts?: object): Promise<QvacResponse>
+export interface Rag {
+  ready(): Promise<void>
+  close(): Promise<void>
+  createNamespace(params: CreateNamespaceParams): Promise<NamespaceInfo>
+  ingest(params: IngestParams, options?: IngestOptions): Promise<IngestResult>
+  deleteDocuments(params: DeleteDocumentsParams): Promise<DeleteDocumentsResult>
+  search(params: SearchParams): Promise<SearchHit[]>
+  scoped(scope: SearchScope): ScopedRag
 }

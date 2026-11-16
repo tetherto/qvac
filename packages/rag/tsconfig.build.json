@@ -1,11 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "include": ["src/**/*"],
-  "exclude": [
-    "src/adapters/database/hyperspec/**/*.js",
-    "src/adapters/database/hyperspec/**/*.json",
-    "test/**/*"
-  ],
+  "exclude": ["src/db/hyperspec/**/*.js", "src/db/hyperspec/**/*.json", "test/**/*"],
   "compilerOptions": {
     "noEmit": false,
     "allowImportingTsExtensions": false,

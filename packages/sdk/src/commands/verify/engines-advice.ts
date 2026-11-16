@@ -5,13 +5,7 @@ import {
 } from '@/commands/host-prebuilds/package-manager'
 import { formatRuntimeSource, type BareRuntime } from '@/commands/verify/abi'
 import type { PackageRecord } from '@/commands/verify/addon-source'
-import {
-  findReactNativeBareKitUpgrade,
-  NETWORK_TIMEOUT_MS,
-  REACT_NATIVE_BARE_KIT,
-  type ProgressFn
-} from '@/commands/verify/bare-kit-runtime'
-import { REACT_NATIVE_BARE_KIT_RUNTIMES } from '@/commands/verify/bare-kit-runtimes'
+import { NETWORK_TIMEOUT_MS, type ProgressFn } from '@/commands/verify/bare-kit-runtime'
 
 const REGISTRY_URL = 'https://registry.npmjs.org'
 
@@ -44,19 +38,12 @@ export interface EnginesOverride {
   lookupError?: string
 }
 
-export interface EnginesUpgrade {
-  packageName: string
-  from: string
-  to: string
-  bare: string
-}
-
+/** How to fix the packages that fail one phone platform's runtime. */
 export interface EnginesAdvice {
   hosts: string[]
   runtime: BareRuntime
+  /** Lowest Bare that satisfies every failing engines.bare. */
   requiredBare: string
-  upgrade: EnginesUpgrade | null
-  upgradeHint: string
   overrides: EnginesOverride[]
   packageManager: PackageManagerName | null
 }
@@ -222,54 +209,6 @@ function requiredBareVersion(ranges: string[]) {
   return required ?? 'unknown'
 }
 
-function newestTableEntry() {
-  const versions = Object.keys(REACT_NATIVE_BARE_KIT_RUNTIMES).sort(semver.rcompare)
-  const newest = versions[0]
-  return newest === undefined
-    ? null
-    : { version: newest, ...REACT_NATIVE_BARE_KIT_RUNTIMES[newest]! }
-}
-
-function buildUpgrade(runtime: BareRuntime, ranges: string[], requiredBare: string) {
-  if (runtime.source === 'react-native-bare-kit' && runtime.packageVersion !== undefined) {
-    const target = findReactNativeBareKitUpgrade(runtime.packageVersion, ranges)
-    if (target !== null) {
-      return {
-        upgrade: {
-          packageName: REACT_NATIVE_BARE_KIT,
-          from: runtime.packageVersion,
-          to: target.version,
-          bare: target.bare
-        },
-        upgradeHint:
-          `Upgrade ${REACT_NATIVE_BARE_KIT} to ${target.version} or newer ` +
-          `(embeds bare-kit ${target.bareKit}, Bare ${target.bare}).`
-      }
-    }
-    const newest = newestTableEntry()
-    return {
-      upgrade: null,
-      upgradeHint:
-        `No ${REACT_NATIVE_BARE_KIT} release in the built-in table embeds Bare ${requiredBare} or newer` +
-        (newest === null
-          ? '.'
-          : `; the newest known, ${newest.version}, embeds Bare ${newest.bare}. Check for a newer release.`)
-    }
-  }
-
-  if (runtime.source === 'bare-runtime' || runtime.source === 'bare') {
-    return {
-      upgrade: null,
-      upgradeHint: `Upgrade ${runtime.source} to ${requiredBare} or newer.`
-    }
-  }
-
-  return {
-    upgrade: null,
-    upgradeHint: `The runtime version comes from ${runtime.source}; raise it to ${requiredBare} or newer if the target runtime allows it.`
-  }
-}
-
 export async function buildEnginesAdvice(
   options: BuildEnginesAdviceOptions
 ): Promise<EnginesAdvice> {
@@ -348,7 +287,6 @@ export async function buildEnginesAdvice(
     hosts,
     runtime,
     requiredBare,
-    ...buildUpgrade(runtime, allRanges, requiredBare),
     overrides,
     packageManager
   }
@@ -368,15 +306,14 @@ export function formatEnginesAdvice(advice: EnginesAdvice): string[] {
     ...advice.overrides.map(
       (override) =>
         `    Requires: ${override.name}@${override.installedVersions.join(', ') || 'unknown'} needs Bare ${override.enginesBare.join(' and ')}`
-    ),
-    `    Option 1: ${advice.upgradeHint}`
+    )
   ]
 
   for (const override of advice.overrides) {
     const installed = override.installedVersions.join(', ') || 'unknown'
     if (override.lookupSkipped === true) {
       lines.push(
-        `    Option 2 (${override.name}): pin an older release; run again with network lookups ` +
+        `    Override (${override.name}): pin an older release; run again with network lookups ` +
           'enabled (without --offline) to find one that runs on this Bare.'
       )
       continue
@@ -387,10 +324,8 @@ export function formatEnginesAdvice(advice: EnginesAdvice): string[] {
           ? ` on the ${installed} release line`
           : ` that ${override.parents.map((p) => `${p.name} (${p.range})`).join(', ')} accept${override.parents.length === 1 ? 's' : ''}`
       lines.push(
-        `    Option 2 (${override.name}): no release that runs on Bare ${advice.runtime.version}${acceptedBy} was found` +
-          (override.lookupError === undefined
-            ? '; upgrade the runtime.'
-            : ` (${override.lookupError}).`)
+        `    Override (${override.name}): no release that runs on Bare ${advice.runtime.version}${acceptedBy} was found` +
+          (override.lookupError === undefined ? '.' : ` (${override.lookupError}).`)
       )
       continue
     }
@@ -399,7 +334,7 @@ export function formatEnginesAdvice(advice: EnginesAdvice): string[] {
         ? '"overrides" (npm/bun), "pnpm.overrides" or "resolutions" (yarn)'
         : MANIFEST_FIELD[advice.packageManager]
     lines.push(
-      `    Option 2 (${override.name}): pin ${installed} -> ${override.version} with ${field} in your app's package.json:`
+      `    Override (${override.name}): pin ${installed} -> ${override.version} with ${field} in your app's package.json:`
     )
     for (const line of (override.snippet ?? '').split('\n')) lines.push(`      ${line}`)
     const rejected = override.parents.filter((parent) => !parent.satisfied)
@@ -415,6 +350,9 @@ export function formatEnginesAdvice(advice: EnginesAdvice): string[] {
     }
   }
 
-  lines.push('')
+  lines.push(
+    `    Or: use an @qvac/sdk release whose bare-stow pins a Bare Kit with Bare ${advice.requiredBare} or newer.`,
+    ''
+  )
   return lines
 }

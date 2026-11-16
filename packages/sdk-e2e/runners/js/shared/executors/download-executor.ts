@@ -2,8 +2,8 @@ import {
   downloadAsset,
   cancel,
   deleteCache,
-  WHISPER_TINY,
-  BERGAMOT_ZH_EN,
+  WHISPER_TINY_Q8_0,
+  BERGAMOT_KO_EN,
   WHISPER_FRENCH_TINY_Q8_0,
   WHISPER_GERMAN_TINY_Q8_0
 } from '@qvac/sdk'
@@ -34,7 +34,7 @@ const CACHE_HIT_THRESHOLD_MS = 500
 // the cache-hit branch below and the cancel path is never exercised.
 // It also shares a blob core with the survivor, so cancelling with `clearCache`
 // is proven not to disturb a concurrent download from that same core.
-const CANCEL_TARGET = BERGAMOT_ZH_EN
+const CANCEL_TARGET = BERGAMOT_KO_EN
 
 // Single-file registry models no other test downloads, so a cached copy from
 // another test cannot stand in for a resume. Each test resets its model first.
@@ -253,7 +253,7 @@ export class DownloadExecutor extends BaseExecutor<typeof downloadTests> {
     const startTime = Date.now()
 
     const survivorPromise = downloadAsset({
-      assetSrc: WHISPER_TINY,
+      assetSrc: WHISPER_TINY_Q8_0,
       onProgress: () => {}
     }).then(
       (id: string) => ({ status: 'ok' as const, id }),

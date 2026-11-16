@@ -1,7 +1,7 @@
 import {
   loadModel,
   unloadModel,
-  embed,
+  embedBatch,
   GTE_LARGE_FP16,
   ragChunk,
   ragSaveEmbeddings,
@@ -51,7 +51,7 @@ try {
 
   console.log('▸ Step 2: Generating embeddings (batch)...')
   const texts = chunks.map((chunk) => chunk.content)
-  const { embedding: embeddings } = await embed({ modelId, text: texts })
+  const { embedding: embeddings } = await embedBatch({ modelId, inputs: texts })
 
   const embeddedDocs = chunks.map((chunk, i) => ({
     id: chunk.id,

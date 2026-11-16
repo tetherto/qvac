@@ -67,7 +67,11 @@ export interface FitStubOptions {
   /** Overall budget for the lookup and the fetch. Defaults to `FIT_STUB_BUDGET_MS`. */
   budgetMs?: number
   logger?: Logger
-  getEntry?: (registryPath: string, registrySource: string) => Promise<FitStubEntry | null>
+  getEntry?: (
+    registryPath: string,
+    registrySource: string,
+    signal?: AbortSignal
+  ) => Promise<FitStubEntry | null>
   downloadBlob?: (
     binding: FitBlobBinding,
     outputFile: string,
@@ -93,11 +97,13 @@ export const FIT_STUB_BUDGET_MS = 40_000
 
 async function defaultGetEntry(
   registryPath: string,
-  registrySource: string
+  registrySource: string,
+  signal?: AbortSignal
 ): Promise<FitStubEntry | null> {
-  const { getRegistryClient } = await import('@/runtime/registry-client')
-  const client = await getRegistryClient()
-  return client.getModel(registryPath, registrySource)
+  const { acquireRegistryClient } = await import('@/runtime/registry-client')
+  await using lease = await acquireRegistryClient({ wait: 'query', signal })
+  // Awaited here: returning the promise would release the lease before the lookup ends.
+  return await lease.client.getModel(registryPath, registrySource)
 }
 
 async function defaultDownloadBlob(
@@ -105,9 +111,9 @@ async function defaultDownloadBlob(
   outputFile: string,
   signal?: AbortSignal
 ): Promise<unknown> {
-  const { getRegistryClient } = await import('@/runtime/registry-client')
-  const client = await getRegistryClient()
-  return client.downloadBlob(binding, {
+  const { acquireRegistryClient } = await import('@/runtime/registry-client')
+  await using lease = await acquireRegistryClient({ wait: 'query', signal })
+  return await lease.client.downloadBlob(binding, {
     outputFile,
     maxRetries: 1,
     ...(signal !== undefined && { signal })
@@ -205,13 +211,14 @@ async function makeStagingDir(options: FitStubOptions): Promise<string> {
 
 async function bindingFor(
   ref: FitStubRef,
-  options: FitStubOptions
+  options: FitStubOptions,
+  signal: AbortSignal
 ): Promise<FitBlobBinding | FitStubUnavailableReason> {
   const { registryPath, registrySource } = ref
   if (!registryPath || !registrySource) return 'unresolvable-ref'
 
   const getEntry = options.getEntry ?? defaultGetEntry
-  const entry = await getEntry(registryPath, registrySource)
+  const entry = await getEntry(registryPath, registrySource, signal)
   if (entry === null || entry === undefined) return 'not-in-registry'
 
   const binding = entry.fitBlobBinding
@@ -271,7 +278,7 @@ async function fetchWithin(
   const logger = options.logger ?? getEngineLogger()
 
   try {
-    const binding = await bindingFor(ref, options)
+    const binding = await bindingFor(ref, options, signal)
     if (typeof binding === 'string') return unavailable(binding)
     if (signal.aborted) return unavailable('timed-out')
 
@@ -300,7 +307,7 @@ async function fetchSetWithin(
   let ready = false
 
   try {
-    const binding = await bindingFor(set.primary, options)
+    const binding = await bindingFor(set.primary, options, signal)
     if (typeof binding === 'string') return unavailable(binding)
     if (signal.aborted) return unavailable('timed-out')
 
@@ -312,7 +319,7 @@ async function fetchSetWithin(
 
     for (const member of set.others) {
       if (signal.aborted) break
-      const memberBinding = await bindingFor(member, options)
+      const memberBinding = await bindingFor(member, options, signal)
       if (typeof memberBinding === 'string') {
         logger.debug(`companion ${member.targetName} has no fit stub: ${memberBinding}`)
         continue

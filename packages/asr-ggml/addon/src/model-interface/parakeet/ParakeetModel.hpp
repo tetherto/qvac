@@ -51,6 +51,7 @@ public:
   using Output = std::vector<Transcript>;
   struct AnyInput {
     Input input;
+    bool includeSpeakerProbabilities = false;
   };
 
   explicit ParakeetModel(const ParakeetConfig& config);
@@ -128,6 +129,7 @@ public:
   const std::string& getEncoderBackend() const { return encoder_backend_; }
   int getEncoderOnCoreml() const { return encoder_on_coreml_; }
   void recordTranscriptionResult(const pkt::EngineResult& result);
+  void recordDiarizationResult(const pkt::DiarizationResult& result);
   int getStreamingChunkMs() const {
     return resolveStreamingChunkMs(cfg_.modelType, cfg_.streamingChunkMs);
   }
@@ -408,14 +410,17 @@ private:
   static constexpr int HOP_LENGTH = 160;
   static constexpr float SAMPLE_RATE = 16000.0f;
 
+  void processInput(const Input& input, bool includeSpeakerProbabilities);
+
   // ── Sortformer head dispatch ───────────────────────────────────────────
   // Returns the "Speaker N: ..." text and fills segmentsOut with the same
   // segments in structured form.
   std::string runSortformerProcess(
-      const Input& input, std::vector<SpeakerSegment>& segmentsOut);
+      const Input& input, std::vector<SpeakerSegment>& segmentsOut,
+      std::optional<SpeakerProbabilities>* probabilities = nullptr);
 
   // ── ASR head dispatch ──────────────────────────────────────────────────
-  std::string runAsrProcess(const Input& input);
+  std::string runAsrProcess(const Input& input, Transcript* details = nullptr);
 
   // ── Streaming session helpers ──────────────────────────────────────────
   // LEGACY framework path (cfg_.streaming): opened in load(), driven by
@@ -466,6 +471,8 @@ private:
   int64_t melSpecMs_ = 0;
   int64_t encoderMs_ = 0;
   int64_t decoderMs_ = 0;
+  double segmentPlanMs_ = 0;
+  double assembleMs_ = 0;
   int64_t totalEncodedFrames_ = 0;
   int64_t jobEncoderCalls_ = 0;
   int64_t jobCoremlEncoderCalls_ = 0;

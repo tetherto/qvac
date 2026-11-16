@@ -1,3 +1,4 @@
+import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
 import { VideoStableDiffusion } from '@qvac/diffusion-cpp'
 import type { VideoRuntimeStats } from '@qvac/diffusion-cpp'
 import type { z } from 'zod'
@@ -21,6 +22,7 @@ import {
   type VideoStreamResponse,
   type VideoStats
 } from '@/schemas/sdcpp-config'
+import type { TrackedRequest } from '@/schemas/request-base'
 
 interface ResponseWithStats {
   stats?: VideoRuntimeStats
@@ -88,10 +90,13 @@ function asVideoModel(model: unknown, modelId: string): VideoStableDiffusion {
 export type VideoOpResult = { stats: VideoStats | undefined }
 
 export async function* video(
-  request: VideoRequest
+  request: VideoRequest & TrackedRequest,
+  context?: PluginHandlerContext
 ): AsyncGenerator<VideoStreamResponse, VideoOpResult> {
   await using ctx = await getRequestRegistry().begin({
     requestId: request.requestId ?? generateRandomRequestId(),
+    sessionId: request.sessionId,
+    ...requestParent(context),
     kind: 'diffusion',
     modelId: request.modelId
   })

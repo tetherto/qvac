@@ -3,7 +3,8 @@
  * Daily production health-check for the QVAC docs site
  * (https://docs.qvac.tether.io). Collects the set of URLs a reader or crawler
  * is expected to reach and probes each one, failing the process if any returns
- * a 404 (or other >= 400 status / network error).
+ * a 404 (or other >= 400 status / network error). Transient failures
+ * (network error, timeout, 429, 5xx) are retried before a URL is reported broken.
  *
  * URL set (per QVAC-20429):
  *   1. Every `<loc>` in the live `/sitemap.xml`.
@@ -43,6 +44,8 @@ export const DEFAULT_REDIRECTS_URL =
   'https://raw.githubusercontent.com/tetherto/qvac/docs-production/docs/website/public/_redirects'
 const DEFAULT_TIMEOUT_MS = 15000
 const DEFAULT_CONCURRENCY = 10
+const DEFAULT_RETRIES = 2
+const DEFAULT_RETRY_DELAY_MS = 1000
 const USER_AGENT = 'qvac-docs-health-check (+https://github.com/tetherto/qvac)'
 
 /** Extract every `<loc>` value from a sitemap XML string. */
@@ -138,8 +141,26 @@ export function buildUrlSet ({ origin, sitemapXml, redirectsText }) {
   return [...seen.entries()].map(([url, category]) => ({ url, category }))
 }
 
-/** Probe a single URL. Never throws — failures are returned as data. */
-export async function probeUrl (url, { timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl = fetch } = {}) {
+/**
+ * Describe a thrown fetch error, including the underlying `cause` as
+ * `code: message` (undici hides it behind "fetch failed"), e.g.
+ * `fetch failed (UND_ERR_SOCKET: other side closed)`.
+ */
+export function describeError (err, timeoutMs) {
+  if (err?.name === 'AbortError') return `timeout after ${timeoutMs}ms`
+  const message = err?.message || String(err)
+  const { code, message: causeMessage } = err?.cause || {}
+  const cause = [code, causeMessage].filter(Boolean).join(': ')
+  return cause && !message.includes(cause) ? `${message} (${cause})` : message
+}
+
+/** Transient outcomes worth retrying: network errors, timeouts, 429 and 5xx. 404 and other 4xx are real. */
+function isTransient (result) {
+  if (result.status === null) return true
+  return result.status === 429 || result.status >= 500
+}
+
+async function probeOnce (url, { timeoutMs, fetchImpl }) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
@@ -153,23 +174,50 @@ export async function probeUrl (url, { timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl
     try { await res.body?.cancel() } catch {}
     return { url, status: res.status, ok: res.status < 400, error: null }
   } catch (err) {
-    const error = err?.name === 'AbortError' ? `timeout after ${timeoutMs}ms` : (err?.message || String(err))
-    return { url, status: null, ok: false, error }
+    return { url, status: null, ok: false, error: describeError(err, timeoutMs) }
   } finally {
     clearTimeout(timer)
   }
 }
 
-/** Probe every entry with a bounded worker pool, preserving input order. */
-export async function runProbes (entries, { concurrency = DEFAULT_CONCURRENCY, timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl = fetch } = {}) {
+/**
+ * Probe a single URL. Never throws — failures are returned as data. Transient
+ * failures (network error, timeout, 429, 5xx) are retried with linear backoff
+ * so a one-off connection reset does not raise a false alarm; a 404 is never
+ * retried. `onRetry(result, attempt)` fires before each retry with the failed
+ * attempt, so absorbed failures stay visible in the log.
+ */
+export async function probeUrl (url, { timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl = fetch, retries = DEFAULT_RETRIES, retryDelayMs = DEFAULT_RETRY_DELAY_MS, onRetry } = {}) {
+  let result = await probeOnce(url, { timeoutMs, fetchImpl })
+  for (let attempt = 1; attempt <= retries && !result.ok && isTransient(result); attempt++) {
+    onRetry?.(result, attempt)
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, retryDelayMs * attempt))
+    result = await probeOnce(url, { timeoutMs, fetchImpl })
+  }
+  return result
+}
+
+/**
+ * Probe every entry with a bounded worker pool, preserving input order.
+ * `onResult` fires as each probe settles, so callers can report failures
+ * before the whole run finishes (a job killed by its timeout keeps its log).
+ */
+export async function runProbes (entries, { concurrency = DEFAULT_CONCURRENCY, timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl = fetch, retries, retryDelayMs, onResult, onRetry } = {}) {
   const results = new Array(entries.length)
   let next = 0
   async function worker () {
     while (next < entries.length) {
       const index = next++
       const { url, category } = entries[index]
-      const result = await probeUrl(url, { timeoutMs, fetchImpl })
+      const result = await probeUrl(url, {
+        timeoutMs,
+        fetchImpl,
+        retries,
+        retryDelayMs,
+        onRetry: onRetry && ((failed, attempt) => onRetry({ ...failed, category }, attempt))
+      })
       results[index] = { ...result, category }
+      onResult?.(results[index])
     }
   }
   const size = Math.max(1, Math.min(concurrency, entries.length))
@@ -239,29 +287,54 @@ function parseArgs (argv) {
   return args
 }
 
-async function fetchText (url, timeoutMs) {
+async function fetchTextOnce (url, { timeoutMs, fetchImpl }) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const res = await fetch(url, {
+    const res = await fetchImpl(url, {
       redirect: 'follow',
       signal: controller.signal,
       headers: { 'user-agent': USER_AGENT }
     })
-    if (res.status >= 400) throw new Error(`HTTP ${res.status}`)
+    if (res.status >= 400) {
+      const err = new Error(`HTTP ${res.status}`)
+      err.status = res.status
+      throw err
+    }
     return await res.text()
   } finally {
     clearTimeout(timer)
   }
 }
 
+/**
+ * Fetch a text resource (sitemap, `_redirects`) with the same retry policy as
+ * `probeUrl`: network errors, timeouts, 429 and 5xx are retried; any other
+ * HTTP error (e.g. a 404 sitemap) throws on the first attempt.
+ */
+export async function fetchText (url, { timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl = fetch, retries = DEFAULT_RETRIES, retryDelayMs = DEFAULT_RETRY_DELAY_MS, onRetry } = {}) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fetchTextOnce(url, { timeoutMs, fetchImpl })
+    } catch (err) {
+      if (attempt >= retries || !isTransient({ status: err.status ?? null })) throw err
+      onRetry?.(err, attempt + 1)
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, retryDelayMs * (attempt + 1)))
+    }
+  }
+}
+
+function logFetchRetry (url, timeoutMs) {
+  return (err, attempt) => console.warn(`  retry ${attempt}: ${url} -> ${describeError(err, timeoutMs)}`)
+}
+
 async function loadRedirects (args) {
   if (args.redirectsUrl) {
     try {
-      const text = await fetchText(args.redirectsUrl, args.timeoutMs)
+      const text = await fetchText(args.redirectsUrl, { timeoutMs: args.timeoutMs, onRetry: logFetchRetry(args.redirectsUrl, args.timeoutMs) })
       return { text, source: args.redirectsUrl }
     } catch (err) {
-      console.warn(`warning: could not fetch _redirects from ${args.redirectsUrl} (${err.message})`)
+      console.warn(`warning: could not fetch _redirects from ${args.redirectsUrl} (${describeError(err, args.timeoutMs)})`)
     }
   }
   if (args.redirectsFile) {
@@ -293,9 +366,10 @@ async function main () {
 
   let sitemapXml
   try {
-    sitemapXml = await fetchText(new URL('/sitemap.xml', args.origin).toString(), args.timeoutMs)
+    const sitemapUrl = new URL('/sitemap.xml', args.origin).toString()
+    sitemapXml = await fetchText(sitemapUrl, { timeoutMs: args.timeoutMs, onRetry: logFetchRetry(sitemapUrl, args.timeoutMs) })
   } catch (err) {
-    console.error(`error: could not fetch sitemap from ${args.origin}/sitemap.xml (${err.message})`)
+    console.error(`error: could not fetch sitemap from ${args.origin}/sitemap.xml (${describeError(err, args.timeoutMs)})`)
     process.exit(1)
   }
 
@@ -310,7 +384,13 @@ async function main () {
   console.log(`Probing ${entries.length} URL(s) with concurrency ${args.concurrency}…`)
   const results = await runProbes(entries, {
     concurrency: args.concurrency,
-    timeoutMs: args.timeoutMs
+    timeoutMs: args.timeoutMs,
+    onRetry: (r, attempt) => {
+      console.warn(`  retry ${attempt}: [${r.category}] ${r.url} -> ${r.status ?? r.error}`)
+    },
+    onResult: (r) => {
+      if (!r.ok) console.error(`  broken: [${r.category}] ${r.url} -> ${r.status ?? r.error}`)
+    }
   })
 
   const failures = results.filter((r) => !r.ok)
@@ -322,10 +402,9 @@ async function main () {
     return
   }
 
-  console.error(`FAILED — ${failures.length} of ${results.length} URL(s) broken:`)
-  for (const f of failures) {
-    console.error(`  [${f.category}] ${f.url} -> ${f.status ?? f.error}`)
-  }
+  // Each broken URL was already logged as a `broken:` line when its probe
+  // settled, and the step summary lists them all; only the total goes here.
+  console.error(`FAILED — ${failures.length} of ${results.length} URL(s) broken (see the \`broken:\` lines above).`)
   process.exit(1)
 }
 

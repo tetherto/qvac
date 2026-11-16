@@ -3,15 +3,19 @@ export {
   batchCompletion,
   completion,
   deleteCache,
+  calcTokens,
+  type CalcTokensClientParams,
   loadModel,
   downloadAsset,
   heartbeat,
   unloadModel,
+  type UnloadModelResult,
   transcribe,
   transcribeStream,
   bciTranscribe,
   bciTranscribeStream,
   embed,
+  embedBatch,
   finetune,
   translate,
   cancel,
@@ -27,6 +31,7 @@ export {
   createVectorIndex,
   loadVectorIndex,
   type VectorIndex,
+  type VectorIndexOperation,
   textToSpeech,
   textToSpeechStream,
   getModelInfo,
@@ -75,6 +80,7 @@ export {
   type FinetuneHandle
 } from './client/api'
 export { close } from './client'
+export { openSession, type QvacSession, type OpenSessionOptions } from './client/session'
 export { plugins } from './client/plugins-factory'
 export {
   type LifecycleState,
@@ -91,6 +97,7 @@ export {
   type CompletionFinal,
   type CompletionRun,
   type CompletionStats,
+  type CalcTokensParams,
   type BatchCompletionEvent,
   type BatchCompletionResult,
   type BatchCompletionRun,
@@ -99,7 +106,13 @@ export {
   type EmbedInput,
   type EmbedInputPart,
   type EmbedMediaSource,
-  type EmbedParams,
+  type EmbedLegacyParams as EmbedParams,
+  type EmbedClientParams,
+  type EmbedClientInput,
+  type EmbedBatchClientParams as EmbedBatchParams,
+  type EmbedBatchClientParams,
+  type ImageEmbeddingConfig,
+  type ImageEmbeddingStats,
   type DecideParams,
   type DecisionState,
   type DecisionQuestion,
@@ -113,6 +126,8 @@ export {
   type TranscribeStats,
   VERBOSITY,
   type Attachment,
+  type HistoryContent,
+  type HistoryContentPart,
   type TranscribeStreamSession,
   type TranscribeStreamMetadataSession,
   type TranscribeStreamConversationSession,
@@ -160,6 +175,9 @@ export {
   TTS_COSYVOICE3_INSTRUCT_DIALECTS,
   TTS_COSYVOICE3_INSTRUCT_VOLUMES,
   TTS_COSYVOICE3_INSTRUCT_STYLES,
+  TTS_PARLER_COREML_COMPUTE_UNITS,
+  TTS_LAVASR_COREML_COMPUTE_UNITS,
+  TTS_SUPERTONIC_PRECISIONS,
   type TtsPace,
   type TtsCosyvoice3Emotion,
   type TtsCosyvoice3Instruct,
@@ -195,7 +213,10 @@ export {
   type LoadVectorIndexParams,
   type VectorIndexAddParams,
   type VectorIndexIdsParams,
+  type VectorIndexIvfSettings,
+  type VectorIndexIvfState,
   type VectorIndexSearchParams,
+  type VectorIndexSetStagedSearchParams,
   type VectorIndexWriteParams,
   type QvacConfig,
   type ModelInfo,
@@ -238,6 +259,9 @@ export {
   executeToolSearch,
   loadedToolNames,
   searchDeferredTools,
+  resolveToolSearchSource,
+  type ToolSearchOptions,
+  type ToolSearchSource,
   type McpClient,
   type McpClientInput,
   type OCRClientParams,
@@ -257,6 +281,8 @@ export {
   AUDIOGEN_MAX_AUDIO_CODES,
   AUDIOGEN_EDIT_OPERATIONS,
   AUDIOGEN_REPAINT_MODES,
+  AUDIOGEN_OUTPUT_FORMATS,
+  AUDIOGEN_MINIMAX_COREML_COMPUTE_UNITS,
   type AudioGenEngine,
   type AudioGenTaskType,
   type AudioGenTrack,
@@ -266,6 +292,9 @@ export {
   type AudioGenRuntimeConfig,
   type AudioGenProgress,
   type AudioGenAudio,
+  type AudioGenEncodedAudio,
+  type AudioGenOutputFormat,
+  type AudioGenMinimaxCoremlComputeUnits,
   type AudioGenStats,
   type AudioGenGenerationMetadata,
   type AudioGenResult,
@@ -306,6 +335,8 @@ export {
   definePlugin,
   defineHandler,
   defineDuplexHandler,
+  requestParent,
+  type PluginHandlerContext,
   PluginDefinitionInvalidError,
   type QvacPlugin,
   type CreateModelParams,
@@ -335,6 +366,7 @@ export { SDK_SERVER_ERROR_CODES } from '@/schemas/sdk-errors-server'
 export {
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
+  PLUGIN_IMAGE_EMBEDDING,
   PLUGIN_DECISION,
   PLUGIN_RERANK,
   PLUGIN_WHISPER,
@@ -386,23 +418,29 @@ export {
   ContextOverflowError,
   type ContextOverflowErrorSizes,
   ModelRegistryModelNotFoundError,
+  ModelRegistryBusyError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
-  TranslationFailedError
+  TranslationFailedError,
+  AudioEncodeFailedError,
+  InvalidSeedFromParamsError,
+  KvCacheSeedSourceNotFoundError,
+  KvCacheSeedSharingDisabledError,
+  SessionIdConflictError,
+  SessionNotOpenError,
+  ModelLeasedError,
+  ModelReconfiguredError,
+  OwnerOnlyError,
+  RAGWorkspaceBusyError
 } from './utils/errors-server'
 
 // `WorkerCrashedError` and `WorkerShutdownError` are thrown by the
 // rpc-client life-signal race when the bare worker exits unexpectedly
-// or close()/process-exit teardown runs while a caller is in flight.
-// `WorkerStartupError` is the pre-handshake counterpart: it is never thrown
-// directly, it is the `cause` of `RPCInitTimeoutError`, and it carries
-// `workerExited` / `exitCode` / `exitSignal` / `stderrTail` so a host can tell a
-// crashed worker from a slow one without parsing the message.
-// `BareRuntimeBinaryNotFoundError` is thrown when the worker fails to
-// spawn because the platform's `bare-runtime-<platform>-<arch>` package is
-// missing (common under pnpm). Exported so consumers can pattern-match with
-// `instanceof`.
+// or close() runs while a caller is in flight.
+// `WorkerStartupError` is thrown when the worker fails to start; its `cause` is
+// the worker's own error, and it carries the exit code or signal of a worker
+// process that exited and whether `rpcInitTimeoutMs` ran out.
 // `StreamEndedError` is raised by the streaming result helpers (upscale, world)
 // when the RPC stream closes without a terminal `done` frame. Exported for the
 // same reason as the rest of this block: matching on it requires the class.
@@ -411,13 +449,14 @@ export {
 // throws on a write after end — its own JSDoc named it long before it was
 // exported.
 export {
-  BareRuntimeBinaryNotFoundError,
   WorkerCrashedError,
   WorkerShutdownError,
   WorkerStartupError,
   RequestValidationFailedError,
   StreamEndedError,
-  TextToSpeechStreamFailedError
+  TextToSpeechStreamFailedError,
+  SessionInvalidatedError,
+  ModelHandleInvalidatedError
 } from './utils/errors-client'
 
 // Logging exports

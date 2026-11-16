@@ -42,7 +42,7 @@ interface DiffusionResult {
  * const { outputs } = diffusion({ modelId, prompt: "oil painting style", init_image: initImage, strength: 0.7 });
  *
  * // img2img (FLUX.2 — in-context conditioning)
- * // IMPORTANT: FLUX img2img requires `prediction: "flux2_flow"` to be set on the
+ * // IMPORTANT: FLUX.2 img2img requires `prediction: "flux2_flow"` to be set on the
  * // model config at loadModel time (e.g. `loadModel(src, { modelType: "diffusion",
  * // modelConfig: { prediction: "flux2_flow" } })`).
  * const { outputs } = diffusion({ modelId, prompt: "turn into watercolor", init_image: initImage });
@@ -60,6 +60,19 @@ interface DiffusionResult {
  *   init_images: [refA, refB],
  *   width: 768,
  *   height: 768,
+ * });
+ *
+ * // FLUX.3 Image Klein reference editing. Load the Qwen3-VL 4B encoder and the
+ * // FLUX.2 VAE; the engine detects FLUX.3 from the weights, so leave `prediction` unset.
+ * const { outputs: flux3Edit } = diffusion({
+ *   modelId,
+ *   prompt: "Place the subject in a lush garden, preserving its appearance.",
+ *   init_images: [refA],
+ *   width: 512,
+ *   height: 512,
+ *   steps: 16,
+ *   cfg_scale: 1,
+ *   sampling_method: "euler",
  * });
  *
  * // Qwen-Image-2.1 reference editing. Load the matching Qwen3-VL encoder,

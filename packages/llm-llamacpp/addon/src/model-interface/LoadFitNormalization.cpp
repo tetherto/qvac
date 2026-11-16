@@ -395,10 +395,13 @@ backend_selection::SplitDeviceSelection selectExplicitDevices(
   selected.devices.reserve(requested.size());
   for (const std::string& name : requested) {
     // A name the automatic dedupe dropped, such as Vulkan0 when CUDA0 is the
-    // same card, is still a valid explicit choice.
+    // same card, or an opt-in device such as XDNA0, is still a valid explicit
+    // choice.
     const backend_selection::SplitDevice* match = nullptr;
     for (const auto* candidates :
-         {&available.devices, &available.dedupedTwins}) {
+         {&available.devices,
+          &available.dedupedTwins,
+          &available.optInDevices}) {
       const auto found = std::ranges::find(
           *candidates, name, &backend_selection::SplitDevice::name);
       if (found != candidates->end()) {
@@ -716,11 +719,44 @@ NormalizedFitSnapshot makeNormalizedFitSnapshot(
   return snapshot;
 }
 
+bool usesBackendFamily(
+    bool isGpu, const std::string& selectedName,
+    const std::vector<backend_selection::SplitDevice>& splitDevices,
+    std::string_view family) {
+  const auto matches = [family](const std::string& name) {
+    return toLowerAscii(name).find(family) != std::string::npos;
+  };
+  return isGpu &&
+         (matches(selectedName) ||
+          std::ranges::any_of(
+              splitDevices, matches, &backend_selection::SplitDevice::name));
+}
+
+bool runsOnNpuOnly(const std::vector<backend_selection::SplitDevice>& devices) {
+  return !devices.empty() &&
+         std::ranges::all_of(
+             devices,
+             [](const std::string& name) {
+               return toLowerAscii(name).find("xdna") != std::string::npos;
+             },
+             &backend_selection::SplitDevice::name);
+}
+
+std::string
+firstLocalGpu(const std::vector<backend_selection::SplitDevice>& devices) {
+  const auto gpu = std::ranges::find_if(
+      devices, [](const backend_selection::SplitDevice& device) {
+        return !device.isRpc &&
+               toLowerAscii(device.name).find("xdna") == std::string::npos;
+      });
+  return gpu != devices.end() ? gpu->name : std::string();
+}
+
 void tuneLoadConfigMap(
     std::unordered_map<std::string, std::string>& configFilemap,
     const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
     const FinetuneConfigOverrides& finetuneOverrides, bool isOpenCl,
-    bool isMetal, bool isGpu, bool isCuda, bool isTensorSplit) {
+    bool isMetal, bool isGpu, bool isCuda, bool isTensorSplit, bool isXdna) {
 
   const bool isFinetuning = finetuneOverrides.active;
 
@@ -911,9 +947,11 @@ void tuneLoadConfigMap(
   // llama_kv_cache::update on Adreno, so f16 stays the safe default — and
   // block 3 now *rejects* any explicit quantized KV on OpenCL (q8_0 and q4_0
   // both crash on a shift). Also skipped for finetuning (manages its own KV
-  // types), when flash attention is off (V-cache quantization requires it), and
-  // on Adreno+Vulkan (see above).
-  if (!isFinetuning && isGpu && !isOpenCl && flashAttnEnabled &&
+  // types), when flash attention is off (V-cache quantization requires it), on
+  // Adreno+Vulkan (see above), and on the XDNA NPU, whose attention kernels
+  // take only f16 K/V and would leave a quantized cache's attention on the
+  // host.
+  if (!isFinetuning && isGpu && !isOpenCl && !isXdna && flashAttnEnabled &&
       !isAdrenoVulkan && notUserSet("cache-type-k", "cache_type_k") &&
       notUserSet("cache-type-v", "cache_type_v")) {
     configFilemap["cache-type-k"] = "q8_0";
@@ -1452,7 +1490,7 @@ NormalizedLoad normalizeLoadForFit(
   auto deviceIt = configFilemap.find("device");
   if (deviceIt == configFilemap.end()) {
     std::string errorMsg = string_format(
-        "%s: must specify a device: 'gpu' or 'cpu'.\n",
+        "%s: must specify a device: 'gpu', 'npu' or 'cpu'.\n",
         K_LEGACY_PARSER_NAME.data());
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument, errorMsg);
@@ -1487,6 +1525,14 @@ NormalizedLoad normalizeLoadForFit(
           string_format(
               "%s: 'rpc-servers' requires device: 'gpu'; device: 'cpu' runs "
               "entirely on the local CPU.\n",
+              K_LEGACY_PARSER_NAME.data()));
+    }
+    if (preferredBackend == backend_selection::BackendType::NPU) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          string_format(
+              "%s: 'rpc-servers' requires device: 'gpu'; device: 'npu' runs "
+              "on the local NPU.\n",
               K_LEGACY_PARSER_NAME.data()));
     }
     if (splitMode == LLAMA_SPLIT_MODE_NONE) {
@@ -1527,6 +1573,7 @@ NormalizedLoad normalizeLoadForFit(
   bool isOpenCl = false;
   bool isMetal = false;
   bool isCuda = false;
+  bool isXdna = false;
   bool isGpu = false;
   {
     using namespace backend_selection;
@@ -1534,6 +1581,15 @@ NormalizedLoad normalizeLoadForFit(
 
     const std::vector<std::string> backendOverride =
         tryBackendOverrideFromMap(configFilemap);
+    // The NPU is a single device: the GPU selectors have nothing to choose.
+    if (preferredBackend == BackendType::NPU &&
+        (splitMode != LLAMA_SPLIT_MODE_NONE || !explicitDevices.empty() ||
+         !backendOverride.empty() || mainGpu.has_value())) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "device 'npu' cannot be combined with 'split-mode', 'devices', "
+          "'backend' or 'main-gpu'.");
+    }
     // The split and explicit-device paths below do not apply the override, so
     // reject the combination rather than silently run on another backend.
     if (preferredBackend == BackendType::GPU && !backendOverride.empty() &&
@@ -1582,6 +1638,17 @@ NormalizedLoad normalizeLoadForFit(
               string_format(
                   "%s: 'devices' names multiple GPUs, but split-mode 'none' "
                   "uses only one. Set split-mode to 'layer' or 'tensor'.\n",
+                  K_LEGACY_PARSER_NAME.data()));
+        }
+        // A tensor split never gives the NPU a whole layer, so its fused
+        // decode path cannot run.
+        if (splitMode == LLAMA_SPLIT_MODE_TENSOR &&
+            usesBackendFamily(true, "", splitSelection.devices, "xdna")) {
+          throw qvac_errors::StatusError(
+              qvac_errors::general_error::InvalidArgument,
+              string_format(
+                  "%s: split-mode 'tensor' does not support the XDNA NPU; use "
+                  "split-mode 'layer' or 'none'.\n",
                   K_LEGACY_PARSER_NAME.data()));
         }
       }
@@ -1660,19 +1727,33 @@ NormalizedLoad normalizeLoadForFit(
             maxAdrenoVersion = device.adrenoVersion;
           }
         }
+        // `devices: 'XDNA0'` runs on the NPU alone, so it reports as one.
         selected = {
-            .type = BackendType::GPU,
+            .type =
+                runsOnNpuOnly(devices) ? BackendType::NPU : BackendType::GPU,
             .name = primary.name,
             .adrenoVersion = maxAdrenoVersion,
             .isOpenCl = anyDevice(&backend_selection::SplitDevice::isOpenCl),
             .isMetal = anyDevice(&backend_selection::SplitDevice::isMetal)};
-      } else if (!splitSelection.rejectedDevices.empty()) {
+      } else if (
+          !splitSelection.rejectedDevices.empty() ||
+          !splitSelection.optInDevices.empty()) {
         std::string rejected;
         for (const std::string& device : splitSelection.rejectedDevices) {
           if (!rejected.empty()) {
             rejected += ", ";
           }
           rejected += device;
+        }
+        // 'backend' cannot be combined with split-mode, so the hint names
+        // 'devices'.
+        for (const backend_selection::SplitDevice& device :
+             splitSelection.optInDevices) {
+          if (!rejected.empty()) {
+            rejected += ", ";
+          }
+          rejected +=
+              device.name + " [opt in with devices: '" + device.name + "']";
         }
         QLOG_IF(
             Priority::WARNING,
@@ -1723,8 +1804,11 @@ NormalizedLoad normalizeLoadForFit(
     }
 
     const bool useGpu = selected.type == BackendType::GPU;
+    const bool useNpu = selected.type == BackendType::NPU;
 
-    if (useGpu) {
+    // The NPU places layers through `--device` exactly as a GPU does; only its
+    // projector default and reported device class differ.
+    if (useGpu || useNpu) {
       params.mmproj_backend = selected.name;
 #ifdef __ANDROID__
       // QVAC-21867: auto-default the projector backend by GPU class.
@@ -1744,7 +1828,7 @@ NormalizedLoad normalizeLoadForFit(
           mmprojAdrenoVersion.has_value() &&
           mmprojAdrenoVersion.value() >= kAdrenoMmprojGpuThreshold;
       bool mmprojUseGpu = isAdreno800Plus;
-      const char* mmprojDefaultReason =
+      const std::string mmprojDefaultReason =
           isAdreno800Plus ? "auto-default, Adreno 800+"
                           : (selected.isMaliGpu
                                  ? "auto-default, Mali GPU"
@@ -1752,23 +1836,49 @@ NormalizedLoad normalizeLoadForFit(
                                         ? "auto-default, Adreno <800"
                                         : "auto-default, non-Adreno-800+ GPU"));
 #else
+      // The projector is untested on the XDNA NPU. When the NPU leads the load,
+      // it runs on a GPU: one of the split, else the first local GPU the split
+      // rules pick. With no GPU it runs on the CPU; mmproj-use-gpu: true then
+      // puts it on the NPU.
+      const bool projectorOnXdna =
+          useNpu || usesBackendFamily(true, selected.name, {}, "xdna");
       bool mmprojUseGpu = true;
-      const char* mmprojDefaultReason = "auto-default";
+      std::string mmprojDefaultReason = "auto-default";
+      if (projectorOnXdna) {
+        std::string projectorGpu = firstLocalGpu(splitSelection.devices);
+        if (projectorGpu.empty() && dependencies.splitDevices) {
+          projectorGpu = firstLocalGpu(dependencies.splitDevices().devices);
+        }
+        if (!projectorGpu.empty()) {
+          params.mmproj_backend = projectorGpu;
+          mmprojDefaultReason = "auto-default, a GPU beside the XDNA NPU";
+        } else {
+          mmprojUseGpu = false;
+          mmprojDefaultReason = "auto-default, XDNA NPU without a GPU";
+        }
+      }
 #endif
       if (mmprojUseGpuOverride.has_value()) {
         mmprojUseGpu = mmprojUseGpuOverride.value();
       }
+      const bool projectorOnNpu =
+          mmprojUseGpu &&
+          usesBackendFamily(true, params.mmproj_backend, {}, "xdna");
+      const std::string projectorDevice =
+          mmprojUseGpu
+              ? (projectorOnNpu ? "NPU " : "GPU ") + params.mmproj_backend
+              : "CPU";
       QLOG_IF(
           Priority::INFO,
           string_format(
               "[LlamaModel] multimodal projector backend: %s (%s)\n",
-              mmprojUseGpu ? "GPU" : "CPU",
+              projectorDevice.c_str(),
               mmprojUseGpuOverride.has_value() ? "mmproj-use-gpu override"
-                                               : mmprojDefaultReason));
+                                               : mmprojDefaultReason.c_str()));
       params.mmproj_use_gpu = mmprojUseGpu;
 
       params.split_mode = splitMode;
-      result.runtimeBackendDevice = 1;
+      result.runtimeBackendDevice = useNpu ? 2 : 1;
 
       if (splitMode != LLAMA_SPLIT_MODE_NONE && mainGpu.has_value()) {
         QLOG_IF(
@@ -1820,8 +1930,8 @@ NormalizedLoad normalizeLoadForFit(
     } else {
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InternalError,
-          "preferredDeviceFromString: wrong deduced device, must be 'gpu' or "
-          "'cpu'.\n");
+          "preferredDeviceFromString: wrong deduced device, must be 'gpu', "
+          "'npu' or 'cpu'.\n");
     }
 
     if (splitMode != LLAMA_SPLIT_MODE_NONE) {
@@ -1868,14 +1978,13 @@ NormalizedLoad normalizeLoadForFit(
     isGpu = useGpu;
     isOpenCl = isGpu && selected.isOpenCl;
     isMetal = isGpu && selected.isMetal;
-    isCuda = isGpu &&
-             (toLowerAscii(selected.name).find("cuda") != std::string::npos ||
-              std::ranges::any_of(
-                  splitSelection.devices,
-                  [](const backend_selection::SplitDevice& device) {
-                    return toLowerAscii(device.name).find("cuda") !=
-                           std::string::npos;
-                  }));
+    isCuda =
+        usesBackendFamily(isGpu, selected.name, splitSelection.devices, "cuda");
+    // A mixed split such as XDNA0,Vulkan0 is a GPU load that still uses the
+    // NPU.
+    isXdna =
+        useNpu ||
+        usesBackendFamily(isGpu, selected.name, splitSelection.devices, "xdna");
   }
 
   tuneLoadConfigMap(
@@ -1891,7 +2000,8 @@ NormalizedLoad normalizeLoadForFit(
       // fallback), so this is the mode fabric will actually see. Tensor mode
       // changes how 'auto' is classified for the q8_0 KV default, see the
       // comment on flashAttnEnabled.
-      params.split_mode == LLAMA_SPLIT_MODE_TENSOR);
+      params.split_mode == LLAMA_SPLIT_MODE_TENSOR,
+      isXdna);
 
   // QVAC-24253: constraints qvac-fabric places on LLAMA_SPLIT_MODE_TENSOR.
   // Keyed on params.split_mode, not the local splitMode, because that is the

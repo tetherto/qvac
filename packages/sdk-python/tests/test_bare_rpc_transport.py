@@ -10,14 +10,18 @@ from __future__ import annotations
 import array
 import asyncio
 import os
+import sys
 import wave
 from pathlib import Path
 
+import bare_sidecar
 import pytest
 import pytest_asyncio
-from _worker_env import BARE_BIN, WORKER_AVAILABLE, WORKER_PATH
+from _worker_env import WORKER, WORKER_AVAILABLE, WORKER_PATH
 
+from tetherto.qvac_sdk import client as client_module
 from tetherto.qvac_sdk.bare_rpc_transport import BareRpcTransport
+from tetherto.qvac_sdk.errors import WorkerCrashedError
 from tetherto.qvac_sdk.methods import (
     bci_transcribe_stream,
     completion_stream,
@@ -54,14 +58,14 @@ pytestmark = [
     pytest.mark.asyncio,
     pytest.mark.skipif(
         not WORKER_AVAILABLE,
-        reason=f"no built SDK worker + Bare runtime found (worker={WORKER_PATH!r}, bare={BARE_BIN!r}) -- run scripts/build_worker.py, or set QVAC_POC_SDK_DIR",
+        reason=f"no built SDK worker found (worker={WORKER_PATH!r}) -- run scripts/build_worker.py, or set QVAC_POC_SDK_DIR",
     ),
 ]
 
 
 @pytest_asyncio.fixture
 async def transport():
-    async with BareRpcTransport([BARE_BIN, WORKER_PATH]) as t:
+    async with BareRpcTransport(WORKER.start) as t:
         yield t
 
 
@@ -284,27 +288,38 @@ async def test_bci_transcribe_stream_duplex(transport) -> None:
     assert "controversial" in text.lower(), f"unexpected BCI transcript: {text!r}"
 
 
-async def test_calls_fail_fast_when_the_worker_disconnects() -> None:
-    """A worker crash (socket EOF) must reject in-flight and subsequent calls
-    instead of leaving them awaiting a reply that never comes. The read loop
-    closes the RPC on EOF, and RPC.close() fails every pending future. Manages
-    its own transport (not the fixture) because it kills the worker mid-life."""
-    t = await BareRpcTransport([BARE_BIN, WORKER_PATH]).connect()
+async def test_calls_fail_fast_when_the_worker_is_killed(monkeypatch) -> None:
+    """Calls after the worker is killed fail at once with a WorkerCrashedError.
+    Manages its own transport (not the fixture) because it kills the worker
+    mid-life."""
+    sidecars: list[bare_sidecar.Sidecar] = []
+    spawn = bare_sidecar.spawn
+
+    async def recording_spawn(*args, **kwargs):
+        sidecar = await spawn(*args, **kwargs)
+        sidecars.append(sidecar)
+        return sidecar
+
+    monkeypatch.setattr(bare_sidecar, "spawn", recording_spawn)
+    monkeypatch.setattr(client_module, "spawn", recording_spawn)
+
+    t = await BareRpcTransport(WORKER.start).connect()
     try:
         alive = await heartbeat(t, HeartbeatRequest(type="heartbeat"))
         assert alive.type == "heartbeat"
 
-        assert t._proc is not None
-        t._proc.kill()
-        await t._proc.wait()
+        sidecars[0].kill()
+        await sidecars[0].wait()
 
-        with pytest.raises(Exception) as excinfo:
+        with pytest.raises(WorkerCrashedError) as killed:
             await asyncio.wait_for(
                 heartbeat(t, HeartbeatRequest(type="heartbeat")), timeout=10
             )
-        assert not isinstance(
-            excinfo.value, asyncio.TimeoutError
-        ), "call hung after the worker disconnected instead of failing fast"
+        # Windows has no signals: a killed process exits with code 1.
+        if sys.platform == "win32":
+            assert killed.value.exit_code is not None
+        else:
+            assert killed.value.signal is not None
     finally:
         await t.close()
 
@@ -317,7 +332,7 @@ async def test_config_cache_directory_redirects_model_storage(tmp_path) -> None:
     cache_dir = str(tmp_path / "cfg-cache")
     os.makedirs(cache_dir, exist_ok=True)
     async with BareRpcTransport(
-        [BARE_BIN, WORKER_PATH], config={"cacheDirectory": cache_dir}
+        WORKER.start, config={"cacheDirectory": cache_dir}
     ) as t:
         load_response = await load_model(
             t,

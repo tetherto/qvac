@@ -1,5 +1,189 @@
 # Changelog
 
+## [0.30.1] - 2026-11-16
+
+### Fixed
+
+- `qvac-fabric` dependency bumped `11739.3.0` -> `11739.3.0#1`: the same
+  source, with the static symbol tables stripped from the Linux release backend
+  modules (`libqvac-ggml-*.so`). The `@qvac/fabric-linux-x64` tarball shrinks
+  by about 1.9 MB, back under npm's size limit. 0.30.0 reached npm only for
+  android-arm64, darwin-arm64, darwin-x64, ios and linux-arm64 (linux-x64 was
+  rejected with `E413 Payload Too Large`), so 0.30.1 is the first complete
+  0.30 release and carries the 0.30.0 changes below.
+
+## [0.30.0] - 2026-11-16
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11739.2.1` -> `11739.3.0`.
+  `GGML_OP_ROPE_FLUX` is appended to `ggml_op`, so existing op and type
+  numbers do not move. `common_params_speculative_draft` gains `n_short` and
+  `long_cost` mid-struct, which shifts the `common_params` layout, so native
+  consumers that use the `common` library must rebuild against these headers.
+- The RPC protocol moves from 116 to 117, so RPC clients and
+  `ggml-rpc-server` must move to this version together.
+
+### Added
+
+- `ggml_rope_flux`, the fused Flux RoPE from diffusion GGML, on CPU, Vulkan
+  and Metal. CUDA declines it, so callers build the unfused RoPE there.
+- Logical buffer-capacity queries `ggml_backend_buft_get_max_capacity` and
+  `ggml_backend_get_max_buffer_capacity`, with a Vulkan provider. Without a
+  provider they return the existing maximum buffer size.
+- DSpine draft models, run with `--spec-type draft-dflash`. The draft ubatch
+  must hold `-np * (--spec-draft-n-max + 1)` tokens, and the target head
+  must not be repacked or row-split (`--no-repack`, no `-sm row`).
+- `--spec-draft-n-short N` and `--spec-draft-long-cost R` for lattice
+  drafters (DFlash2, DSpine, LiliCorr). N must be 0 or at least
+  `--spec-draft-n-min`, and other drafters reject it.
+- Metal `IM2COL_3D`, used by the Wan video models.
+- OpenCL (Adreno) ops for the speech engines: `LEAKY_RELU`, `SIN`, `COS`,
+  `ARGMAX`, `COL2IM_1D`, and BF16 and Q8_0 rows in `GET_ROWS`. Chatterbox,
+  MOSS-Speech and ACE-Step no longer abort on these ops with the GPU on. The
+  conv paths (im2col, tall F16 matmuls, weight upload transposes) are faster.
+
+### Changed
+
+- A DFlash or DSpark draft model, or an external MTP head, that does not match
+  the model is now rejected before the fit with the reason (vocabulary, width,
+  target layer or block size), instead of aborting on a ggml assert. The error
+  text consumers see for a mismatched draft model changes.
+- Vulkan caps each buffer at the smaller of `maxBufferSize` and
+  `maxMemoryAllocationSize`: an op with a larger tensor goes to another
+  backend, and a larger allocation fails with a warning.
+
+### Fixed
+
+- The RPC device no longer offers the ragged and deferred gated delta net ops.
+  A Metal, Vulkan or OpenCL RPC server running qwen35 or qwen35moe layers no
+  longer aborts on `SSM_CONV_RAGGED`, and a model with any RPC layer uses the
+  equal split and ignores `LLAMA_GDN_DEFERRED`.
+- The CPU AMX matmul no longer writes out of bounds with a batched `src1`.
+- The CPU backend declines the `IM2COL_3D` inputs its kernel asserts on.
+
+## [0.29.2] - 2026-11-13
+
+### Fixed
+
+- `qvac-fabric` dependency bumped `11739.2.0#1` -> `11739.2.1`, which adds one
+  CPU backend fix (tetherto/qvac#5537): on Linux and Android, a CPU threadpool
+  with a `cpumask` no longer pins the thread that calls into ggml. The worker
+  threads ggml creates are still pinned, OpenMP workers only for the duration
+  of a graph, and NUMA mode still pins every compute thread. The build recipe
+  from 0.29.1 (CUDA K/V quant pairs, NVRTC fusion) is unchanged, and there is
+  no API, ABI or RPC change.
+
+## [0.29.1] - 2026-11-12
+
+### Changed
+
+- `qvac-fabric` dependency bumped `11739.2.0` -> `11739.2.0#1`: the same
+  source, with two CUDA build changes from the port:
+  - CUDA flash attention builds ggml's default K/V quant pairs instead of a
+    pinned subset, which adds the `f8_e4m3` pairs. An FP8 KV cache
+    (`cache-type-k/v = f8_e4m3`) now has a CUDA flash-attention kernel.
+  - The Linux CUDA 13 modules (x64 and DGX Spark arm64) build with
+    `GGML_CUDA_NVRTC_FUSION`, which fuses each graph's elementwise ops into
+    NVRTC-generated kernels. The module now also needs `libnvrtc.so.13`
+    beside cudart and cuBLAS; a host without it does not load the CUDA module
+    and falls back to another backend. Generated kernels are cached under
+    `~/.cache/ggml-nvrtc`, and `GGML_CUDA_NVRTC_FUSION=0` turns the pass off
+    at run time. The Jetson (CUDA 12.6) and Windows modules are unchanged.
+
+## [0.29.0] - 2026-11-11
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11739.1.1` -> `11739.2.0`.
+  `GGML_TYPE_F8_E4M3` takes type 43 and the TurboQuant and PolarQuant KV-cache
+  types move from 43-50 to 52-59, so native consumers must rebuild against
+  these headers.
+- The RPC protocol moves from 113 to 116 for the new type number and the four
+  new ops, so RPC clients and `ggml-rpc-server` must move to this version
+  together.
+
+### Added
+
+- FP8 E4M3 (`GGML_TYPE_F8_E4M3`, `LLAMA_FTYPE_MOSTLY_F8_E4M3`) for weights and
+  the KV cache, with CUDA FP8 matmuls and flash attention. The FP8
+  prompt-processing attention kernel is opt-in with `GGML_CUDA_FA_F8=1`.
+- ConvRot ops for ComfyUI TensorWise I8 diffusion weights: `ggml_mul_mat_convrot`,
+  `ggml_convrot`, `ggml_convrot_mul_mat` and `ggml_convrot_repack_q8_0`. F32
+  matmuls honor `GGML_PREC_F32`.
+- Ragged ubatches for the qwen35 and qwen35moe recurrent layers
+  (`ggml_ssm_conv_ragged`, `ggml_gated_delta_net_ragged`, CPU and CUDA):
+  sequences of different lengths share one ubatch. They are used with a
+  unified KV cache, no speculative rollback, and devices that support the ops;
+  `LLAMA_RS_RAGGED=0` turns them off.
+- Graph-leaf APIs: `ggml_graph_leaf`, `ggml_graph_leafs`, `ggml_graph_n_leafs`
+  and `ggml_graph_add_leaf`.
+
+### Fixed
+
+- Speculative drafts (DFlash, DSpark, EAGLE3) over several sequences mark
+  every sampling chain as a graph output, so the chains no longer share
+  buffers and one sequence's acceptance no longer collapses.
+- With `GGML_CUDA_GRAPH_OPT=1`, CUDA keeps the tensors of concurrent branches
+  allocated until they join, so attention results no longer depend on timing.
+- XDNA flushes the K/V rows a state restore writes before the decode
+  attention, repairs a lost first line of a bf16 GEMM block's output, and
+  holds the compute lock in its support query.
+- Under `tool_choice` required, the chat grammar accepts only a reasoning
+  block before the tool call, so a model can no longer write prose until the
+  context fills without calling. Continuing an assistant message that already
+  holds content still works.
+
+### Changed
+
+- XDNA runs the fused decode by default for residual widths above 1024
+  (Qwen3.5 2B, 4B and 9B; `GGML_XDNA_FUSED_WIDE=0` keeps the host decode), and
+  can run the prefill GEMM and attention on one merged design with
+  `GGML_XDNA_PFX=1`.
+- Metal fuses more of the Qwen3.5 decode: the FFN norm, the q/k L2 norms, the
+  conv state update and the gated delta net gates.
+- qwen35, qwen35moe and qwen3next read their recurrent states in place, and
+  `n_kv` is padded to at least 1/16 of the used cells once more than 4096
+  cells are in use.
+
+## [0.28.0] - 2026-11-08
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11739.0.0#1` -> `11739.1.1`. `common_params`
+  gains four `coreml_ffn*` fields mid-struct, so native consumers that use the
+  `common` library must rebuild against these headers. Core ML FFN itself is
+  not built into this package.
+
+### Fixed
+
+- XDNA opens the NPU on first use instead of when devices are listed, contains
+  every exception during setup and falls back to the CPU, no longer loads
+  kernels from the working directory, and reports `MemAvailable` as free
+  memory.
+- OpenCL initializes before buffer-type queries, fixing a crash when a buffer
+  type is queried before the backend, and keeps non-contiguous ADD inputs off
+  the broadcast fast path.
+- TurboQuant sign tables and `GGML_TQ_NORM_CORRECTION` initialize once,
+  thread-safely, instead of racing on first use.
+- mtmd keeps DeepSeek OCR SAM position tables in F32 when quantizing and
+  reports projector memory under the device that holds it.
+- Metal supports `DIAG_MASK_INF`.
+
+### Added
+
+- `ggml_backend_buft_get_buffer_alloc_size` returns the physical size of a
+  buffer for a payload without allocating.
+- `ggml_vec_index_load_with_flags` and `ggml_vec_index_from_bytes_with_flags`
+  accept `GGML_VEC_INDEX_LOAD_TURBOVEC_STAGED_OFF`, which skips building the
+  staged-search caches on load. Turning staged search off now frees the sign
+  planes.
+
+### Changed
+
+- Metal few-row MMA mat-mul covers up to 64 rows for F32, Q4_0, Q8_0 and Q4_K
+  (48 for F16 and Q5_K), speeding up concurrent speculative decoding.
+
 ## [0.27.0] - 2026-11-05
 
 ### Fixed

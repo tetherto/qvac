@@ -76,7 +76,7 @@ SDK calls, with an optional extension compatible with the
 [OpenAI REST API](https://developers.openai.com/api/reference/overview), enabling
 broad integration with the AI ecosystem. Run it with `qvac serve --openai` and
 any system compatible with the OpenAI REST API can point to
-`http://localhost:11434/v1/` and work without changes.
+`http://localhost:11435/v1/` and work without changes.
 
 This is what makes QVAC usable as a local model provider: any tool that already speaks that API can point at it and run against models on your own machine, with no code change.
 
@@ -128,6 +128,8 @@ Run `qvac --help` to see all available commands and `qvac <command> --help` for 
 Generate a tree-shaken Bare worker bundle with selected plugins.
 
 <CliReference command="qvac bundle sdk" tablesOnly />
+
+The bundle is written to `qvac/worker/`, with the worker entry at `qvac/worker.entry.mjs`. A bundle that fails leaves the previous `qvac/worker/` in place. Run the command again after upgrading `@qvac/sdk`; a Node.js app warns at startup when its bundle comes from another SDK version.
 
 ### `qvac serve`
 

@@ -321,12 +321,33 @@ for (const target of WIN_TARGETS) {
       fail(`${target}: Vulkan module imports ${dll}* (LoadLibrary fails on stock hosts)`)
     }
   }
+
+  const cudaPath = path.join(prebuildsDir, target, moduleName, 'qvac-diffusion-ggml-cuda.dll')
+  if (!fs.existsSync(cudaPath)) {
+    fail(`${target}: CUDA DL backend module missing at ${cudaPath}`)
+    continue
+  }
+  const cudaImports = peImports(fs.readFileSync(cudaPath))
+  console.log(`${target}/qvac-diffusion-ggml-cuda.dll imports: ${cudaImports.join(', ')}`)
+  // Windows GGML_STATIC links cudart_static and imports cuBLAS. A dynamic
+  // cudart import is valid for source builds, but is not required.
+  if (!cudaImports.some((name) => name.startsWith('cublas64'))) {
+    fail(`${target}: CUDA module does not import cublas64* (broken module)`)
+  }
+  for (const dll of FORBIDDEN_WIN_RUNTIME) {
+    if (cudaImports.some((name) => name.startsWith(dll))) {
+      fail(`${target}: CUDA module imports ${dll}* (LoadLibrary fails on stock hosts)`)
+    }
+  }
 }
 
 // A present win32 prebuild must not hide missing linux ones.
-if (linuxCheckedTargets === 0) {
+if (linuxCheckedTargets === 0 && process.env.BUILD_PLATFORM !== 'win32') {
   console.error('FAIL: no linux prebuilds found to verify (artifact download broken?)')
   process.exit(1)
+}
+if (process.env.BUILD_PLATFORM === 'win32' && checkedTargets === 0) {
+  fail('no win32 prebuilds found to verify (artifact download broken?)')
 }
 if (failures > 0) {
   console.error(`${failures} dynamic-linking violation(s); see FAIL lines above`)

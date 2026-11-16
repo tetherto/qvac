@@ -4,9 +4,13 @@ import type {
   AudioEditRepaintOperation,
   AudioGenClientParams,
   AudioGenConfig,
+  AudioGenEncodedAudio,
   AudioGenEngine,
   AudioGenGenerationMetadata,
+  AudioGenMinimaxCoremlComputeUnits,
+  AudioGenOutputFormat,
   AudioGenRepaintMode,
+  AudioGenResult,
   AudioGenRuntimeConfig,
   AudioGenStats,
   AudioGenTrack,
@@ -250,3 +254,51 @@ void arMs
 
 const decodeSeed: number = recovered.seed
 void decodeSeed
+
+const minimaxCoremlConfig: AudioGenConfig = {
+  engine: 'minimax',
+  lmModelSrc: '/models/minimax-lm.gguf',
+  synthModelSrc: '/models/minimax-synth.gguf',
+  coremlProfileDir: '/models/minimax-coreml',
+  coremlComputeUnits: 'CPU_AND_NE'
+}
+void minimaxCoremlConfig
+
+const coremlUnits: AudioGenMinimaxCoremlComputeUnits = 'ALL'
+void coremlUnits
+
+// @ts-expect-error Core ML compute units are Apple's four policies
+const unknownCoremlUnits: AudioGenMinimaxCoremlComputeUnits = 'NPU'
+void unknownCoremlUnits
+
+const acestepCoremlConfig: AudioGenRuntimeConfig = {
+  engine: 'acestep',
+  // @ts-expect-error the Core ML profile is a MiniMax route
+  coremlProfileDir: '/models/minimax-coreml'
+}
+void acestepCoremlConfig
+
+const encodedRequest: AudioGenClientParams = {
+  modelId: 'acestep-model',
+  caption: 'a short piano note',
+  outputFormat: 'flac'
+}
+void encodedRequest
+
+const encodedEdit: AudioEditClientParams = {
+  modelId: 'acestep-model',
+  sourceAudio: '/path/to/song.wav',
+  operations: [{ type: 'repaint', caption: 'drum fill', start: 0 }],
+  outputFormat: 'm4a'
+}
+void encodedEdit
+
+// @ts-expect-error the addon ships no MP3 encoder
+const mp3Format: AudioGenOutputFormat = 'mp3'
+void mp3Format
+
+declare const audioRun: AudioGenResult
+const chunkView: AsyncGenerator<Int16Array> = audioRun.chunkStream
+void chunkView
+const encodedView: Promise<AudioGenEncodedAudio | undefined> = audioRun.encoded
+void encodedView

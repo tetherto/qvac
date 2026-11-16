@@ -26,8 +26,32 @@ type TtsGgmlDebugModel = {
     backend: {
       enhancerGgufPath?: string
       denoiserGgufPath?: string
+      enhancerCoremlModelPath?: string
+      enhancerCoremlComputeUnits?: string
+      denoiserCoremlModelPath?: string
+      denoiserCoremlComputeUnits?: string
     }
     settings: {
+      precision?: string
+      f16Attn?: number
+      f16Weights?: number
+      kvAttnType?: number
+      f16WeightsDenyList?: string[]
+      vulkanEnvOverrides?: Record<string, string>
+      voiceStyleTtl?: number[]
+      voiceStyleDp?: number[]
+      coremlDecoder?: boolean
+      coremlComputeUnits?: string
+      coremlStrict?: boolean
+      forceSpeechTokens?: number[]
+      maxNewTokens?: number
+      textTemperature?: number
+      textTopP?: number
+      textTopK?: number
+      audioTemperature?: number
+      audioTopP?: number
+      audioTopK?: number
+      audioRepetitionPenalty?: number
       streamChunkTokens?: number
       streamFirstChunkTokens?: number
       cfmSteps?: number
@@ -56,6 +80,23 @@ type TtsGgmlDebugModel = {
       steps?: number
       referenceAudio?: string
       promptText?: string
+      streamLeftContextTokens?: number
+      batchCfmSteps?: number
+      nPredict?: number
+      maxSentenceChars?: number
+      crossfadeMs?: number
+      repeatPenalty?: number
+      exaggeration?: number
+      cfgWeight?: number
+      minP?: number
+      voiceDir?: string
+      voiceJsonPath?: string
+      noiseNpyPath?: string
+      prewarmText?: string
+      vulkanDevice?: number
+      flowCutPrompt?: boolean
+      streamChunkTolerancePct?: number
+      streamMinChunkTokens?: number
     }
   }
   getEngineType?: () => string
@@ -859,4 +900,350 @@ test('ttsPlugin createModel: wires CosyVoice3 voice cloning', async (t) => {
   // registry artifacts and do not land in the model directory.
   t.is(model._setup.paths.cosyvoiceS3tokModelPath, '/tmp/s3tok.gguf')
   t.is(model._setup.paths.cosyvoiceCampplusModelPath, '/tmp/campplus.gguf')
+})
+
+test('ttsPlugin createModel: forwards the Chatterbox sampling, prosody and length controls', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const result = ttsPlugin.createModel({
+    modelId: 'tts-chatterbox-controls',
+    modelPath: '/tmp/chatterbox-t3-mtl.gguf',
+    artifacts: { s3genPath: '/tmp/chatterbox-s3gen-mtl.gguf' },
+    modelConfig: {
+      ttsEngine: 'chatterbox',
+      language: 'en',
+      temperature: 0.8,
+      topK: 1000,
+      topP: 0.95,
+      repeatPenalty: 1.2,
+      exaggeration: 0.7,
+      cfgWeight: 0.5,
+      minP: 0.05,
+      nPredict: 1500,
+      maxSentenceChars: 180,
+      crossfadeMs: 30,
+      batchCfmSteps: 4,
+      streamLeftContextTokens: 32,
+      voiceDir: '/voices/me'
+    }
+  })
+
+  const model = result.model as unknown as TtsGgmlDebugModel
+  t.is(model._setup.settings.temperature, 0.8)
+  t.is(model._setup.settings.topK, 1000)
+  t.is(model._setup.settings.topP, 0.95)
+  t.is(model._setup.settings.repeatPenalty, 1.2)
+  t.is(model._setup.settings.exaggeration, 0.7)
+  t.is(model._setup.settings.cfgWeight, 0.5)
+  t.is(model._setup.settings.minP, 0.05)
+  t.is(model._setup.settings.nPredict, 1500)
+  t.is(model._setup.settings.maxSentenceChars, 180)
+  t.is(model._setup.settings.crossfadeMs, 30)
+  t.is(model._setup.settings.batchCfmSteps, 4)
+  t.is(model._setup.settings.streamLeftContextTokens, 32)
+  t.is(model._setup.settings.voiceDir, '/voices/me')
+})
+
+test('ttsPlugin resolveConfig: resolves the Supertonic voice JSON and noise tensor and strips *Src', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const resolved = await ttsPlugin.resolveConfig!(
+    {
+      ttsEngine: 'supertonic',
+      language: 'en',
+      voiceJsonSrc: 'registry://s3/voices/cloned.json',
+      noiseNpySrc: { src: 'registry://s3/voices/noise.npy', name: 'TTS_SUPERTONIC_NOISE' },
+      prewarmText: 'Warm the pipelines up.',
+      vulkanDevice: -1,
+      streamChunkTokens: 50,
+      lavasrEnhancerModelSrc: undefined
+    },
+    {
+      resolveModelPath: async (src: unknown) =>
+        `/cache/${typeof src === 'string' ? src : (src as { src: string }).src}`,
+      modelSrc: 'registry://s3/supertonic3-q8_0.gguf',
+      modelType: 'tts-ggml'
+    }
+  )
+
+  t.alike(resolved.artifacts, {
+    voiceJsonPath: '/cache/registry://s3/voices/cloned.json',
+    noiseNpyPath: '/cache/registry://s3/voices/noise.npy'
+  })
+  t.is('voiceJsonSrc' in resolved.config, false)
+  t.is('noiseNpySrc' in resolved.config, false)
+  const runtime = resolved.config as {
+    prewarmText?: string
+    vulkanDevice?: number
+    streamChunkTokens?: number
+  }
+  t.is(runtime.prewarmText, 'Warm the pipelines up.')
+  t.is(runtime.vulkanDevice, -1)
+  t.is(runtime.streamChunkTokens, 50)
+})
+
+test('ttsPlugin createModel: forwards the Supertonic streaming, voice and deployment controls', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const result = ttsPlugin.createModel({
+    modelId: 'tts-supertonic-controls',
+    modelPath: '/tmp/supertonic3-q8_0.gguf',
+    artifacts: { voiceJsonPath: '/cache/cloned.json', noiseNpyPath: '/cache/noise.npy' },
+    modelConfig: {
+      ttsEngine: 'supertonic',
+      language: 'en',
+      voice: 'M1',
+      prewarmText: 'Warm the pipelines up.',
+      vulkanDevice: 1,
+      streamChunkTokens: 50,
+      streamFirstChunkTokens: 20,
+      streamChunkTolerancePct: 15,
+      streamMinChunkTokens: 25
+    }
+  })
+
+  const model = result.model as unknown as TtsGgmlDebugModel
+  t.is(model.getEngineType?.(), 'supertonic')
+  t.is(model._setup.settings.voice, 'M1')
+  t.is(model._setup.settings.voiceJsonPath, '/cache/cloned.json')
+  t.is(model._setup.settings.noiseNpyPath, '/cache/noise.npy')
+  t.is(model._setup.settings.prewarmText, 'Warm the pipelines up.')
+  t.is(model._setup.settings.vulkanDevice, 1)
+  t.is(model._setup.settings.streamChunkTokens, 50)
+  t.is(model._setup.settings.streamFirstChunkTokens, 20)
+  t.is(model._setup.settings.streamChunkTolerancePct, 15)
+  t.is(model._setup.settings.streamMinChunkTokens, 25)
+})
+
+test('ttsPlugin createModel: forwards CosyVoice3 flowCutPrompt and vulkanDevice', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const result = ttsPlugin.createModel({
+    modelId: 'tts-cosyvoice3-controls',
+    modelPath: '/tmp/qvac/sets/cosyvoice3/cosyvoice3-llm-q8_0.gguf',
+    modelConfig: { ttsEngine: 'cosyvoice3', flowCutPrompt: true, vulkanDevice: -1 }
+  })
+
+  const model = result.model as unknown as TtsGgmlDebugModel
+  t.is(model._setup.settings.flowCutPrompt, true)
+  t.is(model._setup.settings.vulkanDevice, -1)
+})
+
+// === @qvac/tts-ggml 0.15: backend selector, Fabric controls, Core ML ===
+
+test('ttsPlugin createModel: forwards the explicit backend selector on every engine', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const cases: Array<{ config: Record<string, unknown>; artifacts: Record<string, string> }> = [
+    {
+      config: { ttsEngine: 'chatterbox', language: 'en' },
+      artifacts: { s3genPath: '/tmp/s3gen.gguf' }
+    },
+    { config: { ttsEngine: 'supertonic', language: 'en' }, artifacts: {} },
+    { config: { ttsEngine: 'parler' }, artifacts: {} },
+    { config: { ttsEngine: 'cosyvoice3' }, artifacts: {} },
+    { config: { ttsEngine: 'audio8' }, artifacts: { audio8CodecDecoderPath: '/tmp/dec.gguf' } },
+    { config: { ttsEngine: 'moss' }, artifacts: { mossCodecDecoderPath: '/tmp/dec.gguf' } },
+    { config: { ttsEngine: 'moss-sfx' }, artifacts: {} },
+    { config: { ttsEngine: 'moss-speech' }, artifacts: { mossSpeechCodecPath: '/tmp/codec.gguf' } }
+  ]
+  for (const { config, artifacts } of cases) {
+    const result = ttsPlugin.createModel({
+      modelId: `tts-backend-${String(config['ttsEngine'])}`,
+      modelPath: '/tmp/model.gguf',
+      artifacts,
+      modelConfig: { ...config, backend: 'MTL0' }
+    })
+    const model = result.model as unknown as TtsGgmlDebugModel
+    // The addon reads it from `config`, beside useGPU; it is not a settings knob.
+    t.is(model._setup.config.backend, 'MTL0', String(config['ttsEngine']))
+  }
+})
+
+test('ttsPlugin createModel: forwards the Supertonic Fabric controls', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const result = ttsPlugin.createModel({
+    modelId: 'tts-supertonic-fabric',
+    modelPath: '/tmp/supertonic3-q8_0.gguf',
+    artifacts: {},
+    modelConfig: {
+      ttsEngine: 'supertonic',
+      language: 'en',
+      precision: 'f16',
+      f16Attn: 1,
+      f16Weights: -1,
+      kvAttnType: 0,
+      f16WeightsDenyList: ['vocoder.*'],
+      vulkanEnvOverrides: { GGML_VK_PIPELINE_CACHE_DIR: '/cache/vk' },
+      voiceStyleTtl: [0.1, 0.2],
+      voiceStyleDp: [0.3]
+    }
+  })
+
+  const model = result.model as unknown as TtsGgmlDebugModel
+  t.is(model._setup.settings.precision, 'f16')
+  t.is(model._setup.settings.f16Attn, 1)
+  t.is(model._setup.settings.f16Weights, -1)
+  t.is(model._setup.settings.kvAttnType, 0)
+  t.alike(model._setup.settings.f16WeightsDenyList, ['vocoder.*'])
+  t.alike(model._setup.settings.vulkanEnvOverrides, { GGML_VK_PIPELINE_CACHE_DIR: '/cache/vk' })
+  t.alike(model._setup.settings.voiceStyleTtl, [0.1, 0.2])
+  t.alike(model._setup.settings.voiceStyleDp, [0.3])
+})
+
+test('ttsPlugin createModel: forwards the Parler Core ML sidecar controls', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const result = ttsPlugin.createModel({
+    modelId: 'tts-parler-coreml',
+    modelPath: '/tmp/parler-mini-v1-q8_0.gguf',
+    artifacts: {},
+    modelConfig: {
+      ttsEngine: 'parler',
+      coremlDecoder: true,
+      coremlComputeUnits: 'cpu_and_ane',
+      coremlStrict: false
+    }
+  })
+
+  const model = result.model as unknown as TtsGgmlDebugModel
+  t.is(model._setup.settings.coremlDecoder, true)
+  t.is(model._setup.settings.coremlComputeUnits, 'cpu_and_ane')
+  t.is(model._setup.settings.coremlStrict, false)
+})
+
+test('ttsPlugin createModel: forwards CosyVoice3 greedy decoding and a forced trajectory', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const result = ttsPlugin.createModel({
+    modelId: 'tts-cosyvoice3-replay',
+    modelPath: '/tmp/qvac/sets/cosyvoice3/cosyvoice3-llm-q8_0.gguf',
+    artifacts: {},
+    modelConfig: { ttsEngine: 'cosyvoice3', greedy: true, forceSpeechTokens: [12, 480, 3] }
+  })
+
+  const model = result.model as unknown as TtsGgmlDebugModel
+  t.is(model._setup.settings.greedy, true)
+  t.alike(model._setup.settings.forceSpeechTokens, [12, 480, 3])
+})
+
+test('ttsPlugin createModel: forwards the MOSS budgets and channel samplers', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const result = ttsPlugin.createModel({
+    modelId: 'tts-moss-fabric',
+    modelPath: '/tmp/moss-tts-delay-f16.gguf',
+    artifacts: { mossCodecDecoderPath: '/tmp/moss-codec-decoder-f16.gguf' },
+    modelConfig: {
+      ttsEngine: 'moss',
+      nCtx: 8192,
+      maxNewTokens: 4096,
+      durationTokens: 3000,
+      textTemperature: 0.7,
+      textTopP: 0.9,
+      textTopK: 40,
+      audioTemperature: 0.8,
+      audioTopP: 0.95,
+      audioTopK: 50,
+      audioRepetitionPenalty: 1.1
+    }
+  })
+
+  const model = result.model as unknown as TtsGgmlDebugModel
+  t.is(model._setup.settings.nCtx, 8192)
+  t.is(model._setup.settings.maxNewTokens, 4096)
+  // Accepted by the addon only because the budget was raised above 2048.
+  t.is(model._setup.settings.durationTokens, 3000)
+  t.is(model._setup.settings.textTemperature, 0.7)
+  t.is(model._setup.settings.textTopP, 0.9)
+  t.is(model._setup.settings.textTopK, 40)
+  t.is(model._setup.settings.audioTemperature, 0.8)
+  t.is(model._setup.settings.audioTopP, 0.95)
+  t.is(model._setup.settings.audioTopK, 50)
+  t.is(model._setup.settings.audioRepetitionPenalty, 1.1)
+})
+
+test('ttsPlugin resolveConfig: moves the LavaSR Core ML fields into artifacts and strips them', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  for (const base of [
+    {
+      ttsEngine: 'chatterbox',
+      language: 'en',
+      s3genModelSrc: 'registry://s3/chatterbox/s3gen.gguf'
+    },
+    { ttsEngine: 'supertonic', language: 'en' },
+    { ttsEngine: 'parler' },
+    { ttsEngine: 'cosyvoice3' }
+  ]) {
+    const resolved = await ttsPlugin.resolveConfig!(
+      {
+        ...base,
+        lavasrEnhancerModelSrc: 'registry://s3/lavasr/enhancer.gguf',
+        lavasrEnhancerCoremlModelPath: '/models/enhancer.mlmodelc',
+        lavasrEnhancerCoremlComputeUnits: 'CPU_AND_NE',
+        lavasrDenoiserModelSrc: 'registry://s3/lavasr/denoiser.gguf',
+        lavasrDenoiserCoremlModelPath: '/models/denoiser.mlmodelc',
+        lavasrDenoiserCoremlComputeUnits: 'ALL'
+      },
+      {
+        resolveModelPath: async (src: unknown) => `/cache/${String(src)}`,
+        modelSrc: 'registry://s3/model.gguf',
+        modelType: 'tts-ggml'
+      }
+    )
+    const engine = base.ttsEngine
+    const config = resolved.config as Record<string, unknown>
+    for (const field of [
+      'lavasrEnhancerCoremlModelPath',
+      'lavasrEnhancerCoremlComputeUnits',
+      'lavasrDenoiserCoremlModelPath',
+      'lavasrDenoiserCoremlComputeUnits'
+    ]) {
+      t.is(field in config, false, `${engine}: ${field} must not leak into the runtime config`)
+    }
+    const artifacts = resolved.artifacts ?? {}
+    t.is(artifacts['lavasrEnhancerPath'], '/cache/registry://s3/lavasr/enhancer.gguf', engine)
+    t.is(artifacts['lavasrEnhancerCoremlModelPath'], '/models/enhancer.mlmodelc', engine)
+    t.is(artifacts['lavasrEnhancerCoremlComputeUnits'], 'CPU_AND_NE', engine)
+    t.is(artifacts['lavasrDenoiserCoremlModelPath'], '/models/denoiser.mlmodelc', engine)
+    t.is(artifacts['lavasrDenoiserCoremlComputeUnits'], 'ALL', engine)
+  }
+})
+
+test('ttsPlugin createModel: builds the LavaSR Core ML options beside the GGUF files', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const result = ttsPlugin.createModel({
+    modelId: 'tts-supertonic-lavasr-coreml',
+    modelPath: '/tmp/supertonic3-q8_0.gguf',
+    artifacts: {
+      lavasrEnhancerPath: '/tmp/lavasr-enhancer.gguf',
+      lavasrEnhancerCoremlModelPath: '/models/enhancer.mlmodelc',
+      lavasrEnhancerCoremlComputeUnits: 'CPU_AND_NE',
+      lavasrDenoiserPath: '/tmp/lavasr-denoiser.gguf',
+      lavasrDenoiserCoremlModelPath: '/models/denoiser.mlmodelc',
+      lavasrDenoiserCoremlComputeUnits: 'ALL'
+    },
+    modelConfig: { ttsEngine: 'supertonic', language: 'en' }
+  })
+
+  const model = result.model as unknown as TtsGgmlDebugModel
+  t.is(model._setup.backend.enhancerGgufPath, '/tmp/lavasr-enhancer.gguf')
+  t.is(model._setup.backend.enhancerCoremlModelPath, '/models/enhancer.mlmodelc')
+  t.is(model._setup.backend.enhancerCoremlComputeUnits, 'CPU_AND_NE')
+  t.is(model._setup.backend.denoiserGgufPath, '/tmp/lavasr-denoiser.gguf')
+  t.is(model._setup.backend.denoiserCoremlModelPath, '/models/denoiser.mlmodelc')
+  t.is(model._setup.backend.denoiserCoremlComputeUnits, 'ALL')
+
+  // Without the Core ML artifacts the stage stays on ggml, as before.
+  const plain = ttsPlugin.createModel({
+    modelId: 'tts-supertonic-lavasr-ggml',
+    modelPath: '/tmp/supertonic3-q8_0.gguf',
+    artifacts: { lavasrEnhancerPath: '/tmp/lavasr-enhancer.gguf' },
+    modelConfig: { ttsEngine: 'supertonic', language: 'en' }
+  })
+  const plainModel = plain.model as unknown as TtsGgmlDebugModel
+  t.is(plainModel._setup.backend.enhancerCoremlModelPath, undefined)
 })

@@ -18,7 +18,9 @@ const MINIMAX = 'minimax'
  *
  * `device` is passed through as the load takes it. Without one, the GPU switch
  * maps to `auto` as it does on load: the fitter reads a positive layer count
- * that way. The plugin refuses MiniMax on mobile before this is reached.
+ * that way. A Core ML profile or conditioner is passed through too: the fitter
+ * cannot size either route and answers `unknown` for it. The plugin refuses
+ * MiniMax on mobile before this is reached.
  */
 function minimaxFitRequest(
   config: MinimaxAudioGenRuntimeConfig,
@@ -37,6 +39,13 @@ function minimaxFitRequest(
     ...(config.device !== undefined
       ? { device: config.device }
       : { gpuLayers: gpuLayersFromGate(config.useGPU) }),
+    ...(config.coremlConditionerPath !== undefined && {
+      coremlConditionerPath: config.coremlConditionerPath
+    }),
+    ...(config.coremlProfileDir !== undefined && { coremlProfileDir: config.coremlProfileDir }),
+    ...(config.coremlComputeUnits !== undefined && {
+      coremlComputeUnits: config.coremlComputeUnits
+    }),
     ...(config.threads !== undefined && { threads: config.threads })
   }
   return { request }
@@ -63,12 +72,16 @@ export function audiogenFitRequest(load: FitLoad): FitRequestPlan {
   }
 
   const layers = 'nGpuLayers' in config ? config.nGpuLayers : undefined
+  // A named backend moves a stage to its own device, so the fitter is given
+  // the placement the load will ask for and sizes each device it names.
   const request: AudiogenFitRequest = {
     textEncoderPath,
     lmPath,
     ditPath,
     vaePath,
     gpuLayers: gpuLayersFromGate(config.useGPU, layers),
+    ...(config.backend !== undefined && { backend: config.backend }),
+    ...(config.lmBackend !== undefined && { lmBackend: config.lmBackend }),
     ...(config.threads !== undefined && { threads: config.threads })
   }
   return { request }

@@ -1,11 +1,12 @@
 // Types the untyped `corestore` module for this package's own compile and
-// tests. The member shapes are owned in adapters/database/db-types.ts (which
-// ships); here they are bound to the module specifier plus its default.
+// tests. The shapes this package needs are owned in db/db-types.ts (which
+// ships); tests also close the store they create and open sessions on it.
 declare module 'corestore' {
-  export type { Hypercore, ReplicationStream } from '../adapters/database/db-types.js'
-  const Corestore: new (
-    storage: string,
-    options?: Record<string, unknown>
-  ) => import('../adapters/database/db-types.js').Corestore
+  interface CorestoreInstance extends Corestore {
+    close(): Promise<void>
+    session(): CorestoreInstance
+  }
+  type Corestore = import('../db/db-types.js').Corestore
+  const Corestore: new (storage: string, options?: Record<string, unknown>) => CorestoreInstance
   export default Corestore
 }

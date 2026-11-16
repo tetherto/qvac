@@ -4,14 +4,14 @@ const test = require('brittle')
 
 const { loadImage, TEST_TIMEOUT, makeClassifier, cleanupClassifier } = require('./utils')
 
-test('unsupported native input types report both accepted types', async function (t) {
+test('unsupported native input types report every accepted type', async function (t) {
   t.timeout(TEST_TIMEOUT)
   const classifier = makeClassifier()
   await classifier.load()
   try {
     await t.exception.all(
       () => classifier.addon.runJob({ type: 'unsupported' }),
-      /only 'image' or 'embedding' input types/
+      /only 'image', 'embedding' or 'stereo' input types/
     )
   } finally {
     await cleanupClassifier(classifier)

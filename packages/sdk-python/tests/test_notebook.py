@@ -15,7 +15,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
-from _worker_env import BARE_BIN, WORKER_AVAILABLE, WORKER_PATH
+from _worker_env import WORKER_AVAILABLE, WORKER_PATH
 
 from tetherto.qvac_sdk.client import WorkerNotFoundError
 from tetherto.qvac_sdk.notebook import EmbedFailedError, SyncClient
@@ -154,19 +154,32 @@ def test_text_to_speech_returns_float32_pcm_array():
     assert np.allclose(audio, [0.1, 0.2, 0.3])
 
 
+def test_text_to_speech_decodes_pcm_frames():
+    # little-endian int16 for [1, -1, 32767, -32768], the worker's wire shape
+    frames = [
+        {"type": "textToSpeech", "buffer": [], "pcm": "AQD///9/AIA=", "done": False},
+        {"type": "textToSpeech", "buffer": [7.0], "done": True},
+    ]
+    transport = FakeTransport(stream_items=frames)
+    with SyncClient(transport=transport) as client:
+        audio = client.text_to_speech("m-1", "Hello.")
+    assert audio.dtype == np.float32
+    assert audio.tolist() == [1.0, -1.0, 32767.0, -32768.0, 7.0]
+
+
 # ---- real-worker e2e ----------------------------------------------------------
 
 
 @pytest.mark.skipif(
     not WORKER_AVAILABLE,
-    reason=f"no built SDK worker + Bare runtime (worker={WORKER_PATH!r}, bare={BARE_BIN!r})",
+    reason=f"no built SDK worker (worker={WORKER_PATH!r})",
 )
 def test_sync_client_notebook_flow_against_real_worker():
     """The notebook quickstart, blocking end to end from plain sync code:
     spawn a worker, load a model, run a live-streamed completion, unload."""
     from tetherto.qvac_sdk.models import QWEN3_600M_INST_Q4
 
-    with SyncClient(worker_path=WORKER_PATH, bare_path=BARE_BIN) as client:
+    with SyncClient(worker_path=WORKER_PATH) as client:
         model_id = client.load_model(
             model_src=QWEN3_600M_INST_Q4, model_config={"ctx_size": 2048}
         )

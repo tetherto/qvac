@@ -92,9 +92,9 @@ next request loads it again. There is no "load" endpoint — send a normal reque
 Model-load failures return `503 model_load_failed`. If the worker exits during
 startup, the response names its exit code or signal. If startup times out while
 the worker is still running, the response reports a startup timeout.
-Full diagnostics, including worker stderr, are written to the server's error log;
-the HTTP response contains only the startup summary. Check the terminal running
-`qvac serve` or your service's captured stderr for the cause.
+The full error is written to the server's error log, with the end of the worker's
+stderr; the HTTP response contains only the startup summary. Check the terminal
+running `qvac serve` or your service's captured stderr for the cause.
 A per-load deadline set with `serve.load.timeoutMs` returns
 `503 model_load_timeout` instead.
 
@@ -158,8 +158,10 @@ default) is `image`, and `video`, `upscale` and `world` are categories of the sa
 
 ## Model source constants in config
 
-`serve.models[*].config` fields ending in `ModelSrc` accept SDK model constant
-names, including fields inside nested objects. The CLI resolves those names to
+`serve.models[*].config` source fields accept SDK model constant names: every
+field ending in `Src` (such as `llmModelSrc`, `tokenizerSrc` or
+`referenceAudioSrc`), each entry of a list field ending in `Srcs`, and fields
+inside nested objects. The CLI resolves those names to
 the same `ModelConstant` objects accepted by the SDK. The snake-case
 `upscaler.model_src` field follows the same rules except in video mode, where
 the SDK ignores the entire `upscaler` block and the CLI leaves it unchanged:

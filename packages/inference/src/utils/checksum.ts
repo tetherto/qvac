@@ -68,6 +68,26 @@ export async function calculateCachedFileChecksum(filePath: string): Promise<str
   }
 }
 
+/**
+ * Rename a file, keeping its cached digest if it is unchanged since hashing; the
+ * rename itself can update ctime, which would otherwise force a re-hash.
+ */
+export async function renameWithCachedChecksum(fromPath: string, toPath: string): Promise<void> {
+  const from = path.resolve(fromPath)
+  const to = path.resolve(toPath)
+  const cached = checksumCache.get(from)
+  const unchanged =
+    cached !== undefined && cached.fingerprint === (await fileFingerprint(from).catch(() => null))
+  checksumCache.delete(from)
+  checksumCache.delete(to)
+
+  await fs.promises.rename(from, to)
+
+  if (!unchanged) return
+  const after = await fileFingerprint(to).catch(() => undefined)
+  if (after !== undefined) checksumCache.set(to, { fingerprint: after, checksum: cached.checksum })
+}
+
 export async function measureChecksum(filePath: string, hooks?: DownloadHooks): Promise<string> {
   const start = nowMs()
   const checksum = await calculateCachedFileChecksum(filePath)

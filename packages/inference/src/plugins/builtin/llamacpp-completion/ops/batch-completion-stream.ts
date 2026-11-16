@@ -2,6 +2,7 @@ import type { AbortSignal } from 'bare-abort-controller'
 import type {
   BatchCompletionStreamPrompt,
   CompletionStats,
+  HistoryContent,
   ResponseFormat,
   Tool
 } from '@/schemas/index'
@@ -36,7 +37,7 @@ type BatchCompletionRunOptions = {
 
 type HistoryMessage = {
   role: string
-  content: string
+  content: HistoryContent
   attachments?: { path: string }[] | undefined
 }
 
@@ -124,7 +125,7 @@ function buildBatchPrompt(
   options: BatchPromptRenderOptions
 ): AddonBatchPrompt {
   const history = seedConfiguredSystemPrompt(prompt.history, options.modelConfig)
-  const deferred = resolveDeferredTools(prompt.tools, history)
+  const deferred = resolveDeferredTools(prompt.tools, history, prompt.toolSearch)
   const mergedGenerationParams = withParallelToolCalls(
     mergeGenerationParams(prompt.generationParams, prompt.responseFormat)
   )

@@ -8,14 +8,11 @@ on desktop CPUs and GPUs and returns stereo 44.1 kHz audio.
 
 ## How it works
 
-The C++ CI carve-out builds the native addon on the Ubuntu 22.04 CPU runner,
-reusing vcpkg and compiler caches with two build workers. Addon-level C++ tests
-remain a stub. Only trusted default-branch builds save shared caches; pushes
-affecting AudioGen or its cache configuration, a schedule every 2 days, and
-manual dispatches warm them.
-Non-PR runs build the triggering commit and reject inputs selecting another
-repository or revision. PR events retain caller-selected PR-head checkouts.
-See [C++ CI configuration](../../docs/ci/nx-ci-consolidation.md#optionsci-cheat-sheet).
+The C++ tests run through the CI contract's `cpp:build` and `cpp:tests` targets
+on the Ubuntu 22.04 CPU runner, with two build workers. Addon-level C++ tests
+remain a stub. Only trusted default-branch runs save the shared vcpkg cache;
+`cache-warm.yml` warms it on pushes that touch cache inputs, every 2 days, and
+on dispatch. See [the package CI contract](../../docs/ci/workflow-standard.md).
 
 Under the hood the model runs a small pipeline, and the addon just drives it and
 hands you the audio:
@@ -739,7 +736,7 @@ wrapped by a level-gated `QvacLogger`.
 | `lmPhase1`                                           | Allow the LM to infer missing metadata before generating semantic codes.                                                                                                                  |
 | `simpleMode`                                         | Expand the caption query into a full request (caption, lyrics, unset metadata) before synthesis.                                                                                          |
 | `rewriteQuery`                                       | LM FORMAT pass: rewrite the caption into a detailed description, preserving the lyric content. Requires real `lyrics` and `taskType: 'text2music'`; mutually exclusive with `simpleMode`. |
-| `normalizeLoudness`                                  | Percentile loudness normalization of generated audio (default `true`); edits are never normalized.                                                                                        |
+| `normalizeLoudness`                                  | Percentile loudness normalization of generated audio, then a 0.9 peak (default `true`); `false` returns the raw engine output. Edits and lego stems are never normalized.                 |
 | `generateLrc`                                        | Synchronized lyric timestamps: `stats.lrc` (LRC text) + `stats.lyricsScore`. Requires lyrics and `taskType: 'text2music'`.                                                                |
 | `computeQualityScore`                                | Teacher-forced LM quality score of the generated codes; `stats.qualityScore` in `[0, 1]`. Requires `taskType: 'text2music'`.                                                              |
 | `dcwEnabled` / `dcwScaler` / `dcwHighScaler`         | Haar DCW correction controls.                                                                                                                                                             |

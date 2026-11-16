@@ -1,7 +1,9 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
-import { unlink } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, unlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   openaiToolsToSdk,
   extractResponseFormat,
@@ -109,6 +111,23 @@ describe('hoistInstructions', () => {
     )
   })
 })
+
+// 1x1 transparent PNG, and a JPEG header (enough for the magic-byte check).
+const PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+const JPEG_BASE64 = '/9j/4AAQSkZJRg=='
+const PNG_DATA_URL = `data:image/png;base64,${PNG_BASE64}`
+const JPEG_DATA_URL = `data:image/jpeg;base64,${JPEG_BASE64}`
+
+function interleavedParts(): OpenAIMessage['content'] {
+  return [
+    { type: 'text', text: 'Image A: ' },
+    { type: 'image_url', image_url: { url: PNG_DATA_URL } },
+    { type: 'text', text: '\nImage B: ' },
+    { type: 'image_url', image_url: { url: JPEG_DATA_URL } },
+    { type: 'text', text: '\nWhich one is a photo?' }
+  ]
+}
 
 describe('openaiMessagesToHistory', () => {
   it('sends developer messages as the leading system turn', () => {
@@ -246,35 +265,49 @@ describe('openaiMessagesToHistory', () => {
     assert.deepEqual(history[0], { role: 'user', content: 'hello world' })
   })
 
-  it('decodes an image_url data URL into image bytes', () => {
-    // 1x1 transparent PNG.
-    const dataUrl =
-      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-    const messages: OpenAIMessage[] = [
+  it('decodes image_url data URLs into ordered media parts', () => {
+    const messages: OpenAIMessage[] = [{ role: 'user', content: interleavedParts() }]
+    assert.deepEqual(openaiMessagesToHistory(messages), [
       {
         role: 'user',
         content: [
-          { type: 'text', text: 'what is this?' },
-          { type: 'image_url', image_url: { url: dataUrl } }
+          { type: 'text', text: 'Image A: ' },
+          { type: 'media', image: { ext: 'png', bytes: Buffer.from(PNG_BASE64, 'base64') } },
+          { type: 'text', text: '\nImage B: ' },
+          { type: 'media', image: { ext: 'jpg', bytes: Buffer.from(JPEG_BASE64, 'base64') } },
+          { type: 'text', text: '\nWhich one is a photo?' }
         ]
       }
-    ]
-    const history = openaiMessagesToHistory(messages)
-    assert.equal(history[0]!.role, 'user')
-    assert.equal(history[0]!.content, 'what is this?')
-    assert.equal(history[0]!.attachments!.length, 1)
-    assert.equal(history[0]!.attachments![0]!.ext, 'png')
-    assert.ok(Buffer.isBuffer(history[0]!.attachments![0]!.bytes))
+    ])
   })
 
   it('accepts a string (data URL) image_url', () => {
-    const dataUrl = 'data:image/jpeg;base64,/9j/4AAQSkZJRg=='
     const messages: OpenAIMessage[] = [
-      { role: 'user', content: [{ type: 'image_url', image_url: dataUrl }] }
+      { role: 'user', content: [{ type: 'image_url', image_url: JPEG_DATA_URL }] }
     ]
     const history = openaiMessagesToHistory(messages)
-    assert.equal(history[0]!.attachments!.length, 1)
-    assert.equal(history[0]!.attachments![0]!.ext, 'jpg')
+    assert.deepEqual(history[0]!.content, [
+      { type: 'media', image: { ext: 'jpg', bytes: Buffer.from(JPEG_BASE64, 'base64') } }
+    ])
+  })
+
+  // The SDK takes content parts on user turns only.
+  it('joins the text and attaches the images on a non-user turn', () => {
+    const messages: OpenAIMessage[] = [
+      { role: 'user', content: 'hello' },
+      { role: 'system', content: interleavedParts() }
+    ]
+    assert.deepEqual(openaiMessagesToHistory(messages), [
+      {
+        role: 'system',
+        content: 'Image A: \nImage B: \nWhich one is a photo?',
+        attachments: [
+          { ext: 'png', bytes: Buffer.from(PNG_BASE64, 'base64') },
+          { ext: 'jpg', bytes: Buffer.from(JPEG_BASE64, 'base64') }
+        ]
+      },
+      { role: 'user', content: 'hello' }
+    ])
   })
 
   // Reviewer ask: an image the server cannot materialize must fail loudly (→ 400) instead of
@@ -312,19 +345,69 @@ describe('openaiMessagesToHistory', () => {
     assert.throws(() => openaiMessagesToHistory(messages), UnsupportedImageContentError)
   })
 
-  it('writeChatImages materializes attachment bytes to flat temp files', async () => {
-    const dataUrl =
-      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+  it('writeChatImages writes each media part to a temp file at its own position', async () => {
+    const messages: OpenAIMessage[] = [{ role: 'user', content: interleavedParts() }]
+    const { history, tmpPaths } = await writeChatImages(openaiMessagesToHistory(messages))
+    try {
+      assert.equal(tmpPaths.length, 2)
+      assert.deepEqual(history, [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Image A: ' },
+            { type: 'media', path: tmpPaths[0] },
+            { type: 'text', text: '\nImage B: ' },
+            { type: 'media', path: tmpPaths[1] },
+            { type: 'text', text: '\nWhich one is a photo?' }
+          ]
+        }
+      ])
+      assert.ok(tmpPaths[0]!.endsWith('.png'))
+      assert.ok(tmpPaths[1]!.endsWith('.jpg'))
+      assert.deepEqual(await readFile(tmpPaths[0]!), Buffer.from(PNG_BASE64, 'base64'))
+      assert.deepEqual(await readFile(tmpPaths[1]!), Buffer.from(JPEG_BASE64, 'base64'))
+    } finally {
+      await Promise.all(tmpPaths.map((path) => unlink(path)))
+    }
+  })
+
+  it('writeChatImages writes the images of a non-user turn as attachments', async () => {
     const messages: OpenAIMessage[] = [
-      { role: 'user', content: [{ type: 'image_url', image_url: { url: dataUrl } }] }
+      { role: 'system', content: [{ type: 'image_url', image_url: { url: PNG_DATA_URL } }] }
     ]
     const { history, tmpPaths } = await writeChatImages(openaiMessagesToHistory(messages))
-    assert.equal(tmpPaths.length, 1)
-    assert.ok(tmpPaths[0]!.endsWith('.png'))
-    assert.ok(existsSync(tmpPaths[0]!))
-    assert.equal(history[0]!.attachments![0]!.path, tmpPaths[0])
-    await unlink(tmpPaths[0]!)
-    assert.ok(!existsSync(tmpPaths[0]!))
+    try {
+      assert.equal(tmpPaths.length, 1)
+      assert.ok(existsSync(tmpPaths[0]!))
+      assert.deepEqual(history, [
+        { role: 'system', content: '', attachments: [{ path: tmpPaths[0] }] }
+      ])
+    } finally {
+      await Promise.all(tmpPaths.map((path) => unlink(path)))
+    }
+  })
+
+  it('writeChatImages removes the files it wrote when a later write fails', async (t) => {
+    const dir = await mkdtemp(join(tmpdir(), 'qvac-chat-images-'))
+    // os.tmpdir() reads TMPDIR on POSIX and TEMP/TMP on Windows.
+    const tmpVars = ['TMPDIR', 'TEMP', 'TMP'] as const
+    const previous = tmpVars.map((name) => process.env[name])
+    for (const name of tmpVars) process.env[name] = dir
+    t.after(async () => {
+      tmpVars.forEach((name, index) => {
+        if (previous[index] === undefined) delete process.env[name]
+        else process.env[name] = previous[index]
+      })
+      await rm(dir, { recursive: true, force: true })
+    })
+
+    const history = openaiMessagesToHistory([{ role: 'user', content: interleavedParts() }])
+    // A path inside a directory that does not exist makes the second write fail.
+    const second = (history[0]!.content as Array<{ type: string; image?: { ext: string } }>)[3]!
+    second.image!.ext = 'jpg/missing'
+
+    await assert.rejects(writeChatImages(history), { code: 'ENOENT' })
+    assert.deepEqual(await readdir(dir), [])
   })
 })
 

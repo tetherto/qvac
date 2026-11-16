@@ -122,6 +122,13 @@ function getAudioGenAddonConfig(config: AudioGenRuntimeConfig) {
     return {
       ...commonConfig,
       ...(config.device !== undefined && { device: config.device }),
+      ...(config.coremlConditionerPath !== undefined && {
+        coremlConditionerPath: config.coremlConditionerPath
+      }),
+      ...(config.coremlProfileDir !== undefined && { coremlProfileDir: config.coremlProfileDir }),
+      ...(config.coremlComputeUnits !== undefined && {
+        coremlComputeUnits: config.coremlComputeUnits
+      }),
       ...(config.inferenceSteps !== undefined && { inferenceSteps: config.inferenceSteps }),
       ...(config.cfgScale !== undefined && { cfgScale: config.cfgScale })
     }
@@ -130,6 +137,9 @@ function getAudioGenAddonConfig(config: AudioGenRuntimeConfig) {
     ...commonConfig,
     ...(config.inferenceSteps !== undefined && { inferenceSteps: config.inferenceSteps }),
     ...(config.shift !== undefined && { shift: config.shift }),
-    ...(config.nGpuLayers !== undefined && { nGpuLayers: config.nGpuLayers })
+    ...(config.nGpuLayers !== undefined && { nGpuLayers: config.nGpuLayers }),
+    ...(config.backend !== undefined && { backend: config.backend }),
+    ...(config.lmBackend !== undefined && { lmBackend: config.lmBackend }),
+    ...(config.dumpStagesDir !== undefined && { dumpStagesDir: config.dumpStagesDir })
   }
 }

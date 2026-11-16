@@ -146,3 +146,75 @@ test('CosyVoice: finds its companions beside the checkpoint', (t) => {
   fs.rmSync(path.join(dir, 'voice.gguf'))
   t.ok('unknown' in ttsFitRequest(load(llm, { ttsEngine: 'cosyvoice3' })), 'a missing companion')
 })
+
+test('the explicit backend selector reaches every fit request', (t) => {
+  // The fitter resolves the same device the load would, so the projection
+  // lands there rather than on the useGPU policy's pick.
+  const supertonic = ttsFitRequest(
+    load('/models/supertonic.gguf', { ttsEngine: 'supertonic', backend: 'MTL0' })
+  )
+  t.is(requestOf(supertonic)?.['backend'], 'MTL0')
+  const parler = ttsFitRequest(load('/models/parler.gguf', { ttsEngine: 'parler', backend: 'cpu' }))
+  t.is(requestOf(parler)?.['backend'], 'cpu')
+  const chatterbox = ttsFitRequest(
+    load(
+      '/models/t3.gguf',
+      { ttsEngine: 'chatterbox', backend: 'Vulkan0' },
+      { artifacts: { s3genPath: '/models/s3gen.gguf' } }
+    )
+  )
+  t.is(requestOf(chatterbox)?.['backend'], 'Vulkan0')
+  t.is(
+    'backend' in
+      (requestOf(ttsFitRequest(load('/models/parler.gguf', { ttsEngine: 'parler' }))) ?? {}),
+    false,
+    'absent when unset'
+  )
+})
+
+test('supertonic: carries the precision and f16 weight override the fitter sizes by', (t) => {
+  const plan = ttsFitRequest(
+    load('/models/supertonic3-q8_0.gguf', {
+      ttsEngine: 'supertonic',
+      precision: 'f16',
+      f16Weights: 1,
+      ttsNumInferenceSteps: 4
+    })
+  )
+  t.alike(requestOf(plan), {
+    engineType: 'supertonic',
+    supertonicModelPath: '/models/supertonic3-q8_0.gguf',
+    nGpuLayers: 0,
+    precision: 'f16',
+    f16Weights: 1,
+    steps: 4
+  })
+})
+
+test('parler: carries the decoder sidecar policy', (t) => {
+  const plan = ttsFitRequest(
+    load('/models/parler-mini-v1-q8_0.gguf', { ttsEngine: 'parler', coremlDecoder: true })
+  )
+  t.alike(requestOf(plan), {
+    engineType: 'parler',
+    parlerModelPath: '/models/parler-mini-v1-q8_0.gguf',
+    nGpuLayers: 0,
+    coremlDecoder: true
+  })
+})
+
+test('MOSS: carries the context and generation budgets', (t) => {
+  const plan = ttsFitRequest(
+    load(
+      '/models/moss.gguf',
+      { ttsEngine: 'moss', nCtx: 8192, maxNewTokens: 4096 },
+      {
+        artifacts: { mossCodecDecoderPath: '/models/decoder.gguf' },
+        ttsWorkload: { promptRows: 128, referenceSamples: 0, streaming: false }
+      }
+    )
+  )
+  const request = requestOf(plan)
+  t.is(request?.['nCtx'], 8192)
+  t.is(request?.['maxNewTokens'], 4096)
+})

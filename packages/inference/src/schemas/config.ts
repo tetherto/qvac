@@ -1,3 +1,4 @@
+import { imageEmbeddingConfigSchema } from '@/schemas/image-embedding'
 import { z } from 'zod'
 import { logLevelSchema } from '@/schemas/logging-stream'
 import { decisionConfigBaseSchema } from '@/schemas/decision'
@@ -57,6 +58,7 @@ export const deviceConfigDefaultsSchema = z
     [ModelType.llamacppEmbedding]: embedConfigBaseSchema.optional(),
     [ModelType.llamacppDecision]: decisionConfigBaseSchema.optional(),
     [ModelType.llamacppRerank]: rerankConfigBaseSchema.optional(),
+    [ModelType.ggmlImageEmbedding]: imageEmbeddingConfigSchema.optional(),
     [ModelType.whispercppTranscription]: whisperConfigSchema.partial().optional(),
     [ModelType.parakeetTranscription]: parakeetConfigSchema.partial().optional(),
     [ModelType.mossTranscribe]: mossTranscribeConfigSchema.optional(),
@@ -131,11 +133,10 @@ export const qvacConfigSchema = z.object({
   loggerConsoleOutput: z.boolean().optional(),
 
   /**
-   * Timeout in milliseconds for the worker RPC handshake performed when the SDK
-   * initializes. Raise this on slow storage or embedded hardware where the first
-   * worker start (native addon load) legitimately exceeds the default.
-   * The `QVAC_RPC_INIT_TIMEOUT_MS` environment variable takes precedence.
-   * Defaults to 30000 (30 seconds).
+   * Timeout in milliseconds for the worker to start when the SDK initializes,
+   * from launch until it has applied this configuration. Raise this on slow
+   * storage or embedded hardware where the first worker start (native addon
+   * load) legitimately exceeds the default. Defaults to 60000 (60 seconds).
    */
   rpcInitTimeoutMs: z.number().int().positive().optional(),
 
@@ -267,13 +268,7 @@ export const qvacConfigSchema = z.object({
   includeAudioDecoder: z.boolean().optional(),
 
   /** Optional provider module selected at SDK bundle time. Direct Bare callers register in code. */
-  rpcServerProvider: z.string().min(1).optional(),
-
-  /**
-   * Inert: we have no bundling or ABI-verification step, so this field is
-   * unused. Carried over from the bundle-time config schema.
-   */
-  bareRuntimeVersion: z.string().optional()
+  rpcServerProvider: z.string().min(1).optional()
 })
 
 export type QvacConfig = z.infer<typeof qvacConfigSchema>

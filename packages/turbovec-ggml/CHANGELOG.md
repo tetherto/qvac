@@ -1,5 +1,63 @@
 # Changelog
 
+## [0.5.1] - 2026-11-11
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.28.0` -> `^0.29.0`, which carries
+  `qvac-fabric` `11739.1.1` -> `11739.2.0`
+  ([#5706](https://github.com/tetherto/qvac/pull/5706)): FP8 E4M3 weights and
+  KV cache with CUDA FP8 matmuls, the ConvRot ops, ragged ubatches for
+  qwen35 recurrent layers, a fix for speculative-draft sampling chains that
+  shared buffers, and XDNA and Metal decode work. A caret on a `0.x` version
+  locks the minor, so `^0.28.0` would not have resolved `0.29.0` on its own.
+  The mobile dev and peer dependencies `@qvac/fabric-android-arm64` /
+  `@qvac/fabric-ios` move to `^0.29.0` with it.
+- `@qvac/fabric` 0.29.0 renumbers the TurboQuant and PolarQuant KV-cache types
+  (43-50 -> 52-59) and moves the RPC protocol from 113 to 116, so it is not
+  ABI-compatible with 0.28.x. Every addon loaded in one process must resolve
+  the same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.29.0` together.
+- This package needed no code change for the new fabric.
+
+## [0.5.0] - 2026-11-09
+
+### Breaking
+
+- Search on a TurboVec index now scores every vector by default. Staged
+  search, which 0.4.0 ran from 32,768 vectors and the JS API could not turn
+  off, is off on every index the addon creates or loads, so results match a
+  full scan again. Call `setStagedSearch(true)` for the faster, lower-recall
+  path. The setting is not saved in snapshots
+  ([#5513](https://github.com/tetherto/qvac/pull/5513)).
+- `@qvac/fabric` dependency bumped `^0.26.0` -> `^0.28.0`, which carries
+  `qvac-fabric` `11739.0.0` -> `11739.1.1`. This package now calls
+  `ggml_vec_index_load_with_flags`, which 0.26.x does not export, so every
+  addon loaded in one process must resolve `@qvac/fabric` 0.28. Mobile apps
+  must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.28.0` together
+  ([#5513](https://github.com/tetherto/qvac/pull/5513)).
+
+### Added
+
+- The first `addWithIds()` of at least 1000 rows to a fresh TurboVec index
+  calibrates it from that batch before encoding, as upstream turbovec 0.9 did,
+  restoring the TQ+ recall gain that 1.1.2 no longer fits on its own. The fit
+  uses the whole batch up to 4096 rows, otherwise 4096 rows spread evenly
+  across it. Smaller first batches, later adds and loaded indexes are not
+  calibrated ([#5513](https://github.com/tetherto/qvac/pull/5513)).
+- `calibrated` reports whether a TurboVec index is calibrated, and
+  `stagedSearch` / `setStagedSearch()` read and set staged search
+  ([#5513](https://github.com/tetherto/qvac/pull/5513)).
+
+### Changed
+
+- TurboVec `dim` can now be any multiple of 8 up to 16384, matching fabric,
+  instead of at most 1024 ([#5513](https://github.com/tetherto/qvac/pull/5513)).
+- Loading a large TurboVec index no longer builds the staged-search caches
+  only to drop them, so it loads faster and with a lower peak memory
+  ([#5513](https://github.com/tetherto/qvac/pull/5513)).
+
 ## [0.4.0] - 2026-11-04
 
 ### Breaking

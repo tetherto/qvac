@@ -7,16 +7,8 @@ import { InferenceCancelledError } from '@/errors/index'
 import { getEngineLogger } from '@/logging/index'
 import { throwIfAborted } from './network'
 
-// Fabric RPC_PROTO_*_VERSION:
-// https://github.com/tetherto/qvac-fabric-llm.cpp/blob/v11739.0.0/ggml/include/ggml-rpc.h
 // Command IDs and HELLO layouts, rpc_cmd and rpc_msg_hello_*:
 // https://github.com/tetherto/qvac-fabric-llm.cpp/blob/v11739.0.0/ggml/src/ggml-rpc/ggml-rpc.cpp
-// Native inference needs matching protocol majors, so only servers on the bundled
-// Fabric's protocol are listed. Patch versions are compatible.
-const SUPPORTED_VERSIONS = [{ major: 113, minor: 0 }]
-const SUPPORTED_VERSION_LABEL = SUPPORTED_VERSIONS.map(
-  ({ major, minor }) => `${major}.${minor}.x`
-).join(', ')
 const HELLO = 14
 const HELLO_REQUEST_SIZE = 24
 const HELLO_RESPONSE_SIZE = 28
@@ -68,7 +60,6 @@ export function queryRpcInventory(
         url: `${host}:${port}`,
         reason,
         receivedVersion: version,
-        supportedVersions: SUPPORTED_VERSION_LABEL,
         receivedHelloBytes: size?.toString() ?? 'unavailable',
         expectedHelloBytes: HELLO_RESPONSE_SIZE
       })
@@ -109,12 +100,6 @@ export function queryRpcInventory(
         return finish()
       }
       if (pending.length < 8 + responseSize) return
-      if (
-        command === HELLO &&
-        !SUPPORTED_VERSIONS.some(({ major, minor }) => pending[8] === major && pending[9] === minor)
-      ) {
-        return rejectHello('unsupported protocol version')
-      }
       const payload = Buffer.from(pending.subarray(8))
       pending = Buffer.alloc(0)
       if (command === HELLO) {

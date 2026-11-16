@@ -1,7 +1,11 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { extractBarePackHeader, extractPackedString } from '@/commands/bundle/manifest'
+import { fileURLToPath } from 'node:url'
+import { readBundle } from '@/commands/bundle/read-bundle'
+import { linkDependency } from './link-dependency'
+
+const SDK_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
 export const SPLIT_ADDON = '@qvac/fake-ggml'
 export const SPLIT_ADDON_VERSION = '1.2.3'
@@ -44,17 +48,16 @@ function link(target: string, linkPath: string) {
 /**
  * A project whose only plugin loads a split addon: `@qvac/fake-ggml` ships no
  * prebuilds and names its platform packages in a `#host-addon` map, the way
- * `@qvac/fabric` and the speech addons do. No platform package is installed. The SDK is reachable at `sdkDir` inside the project,
- * with a pnpm lockfile beside it.
+ * `@qvac/fabric` and the speech addons do. No platform package is installed.
+ * The SDK is reachable at `sdkDir` inside the project, with a pnpm lockfile
+ * beside it.
  *
  * The `pnpm` layout reproduces pnpm's isolated install: the SDK and the addon
  * live in `node_modules/.pnpm`, `sdkDir` is a link to the SDK, and the addon
  * is linked only beside the SDK and in `.pnpm/node_modules`, never in the
  * project's top-level node_modules.
  *
- * bare-pack keys the bundle graph relative to the working directory while the
- * manifest and verifier read the keys relative to the project root, so this
- * changes into the project the way running from the app does. `cleanup`
+ * It changes into the project, as running from the app does. `cleanup`
  * restores the working directory and removes the project.
  */
 export function createSplitAddonProject(sdkDir: string, options: SplitAddonProjectOptions = {}) {
@@ -79,23 +82,15 @@ export function createSplitAddonProject(sdkDir: string, options: SplitAddonProje
       name: '@qvac/sdk',
       type: 'module',
       exports: {
-        './worker-lifecycle': './dist/worker-lifecycle.js',
-        './plugins': './dist/plugins.js',
-        './logging': './dist/logging.js',
+        './worker': './dist/worker.js',
         './llamacpp-completion/plugin': './dist/llm-plugin.js'
       }
     })
   )
   writeFile(path.join(sdkRoot, 'bare-imports.json'), '{}\n')
   writeFile(
-    path.join(sdkRoot, 'dist', 'worker-lifecycle.js'),
-    'export function initializeWorker() { return { hasRPCConfig: false } }\n' +
-      'export function ensureRPCSetup() {}\n'
-  )
-  writeFile(path.join(sdkRoot, 'dist', 'plugins.js'), 'export function registerPlugin() {}\n')
-  writeFile(
-    path.join(sdkRoot, 'dist', 'logging.js'),
-    'export function getServerLogger() { return { info() {} } }\n'
+    path.join(sdkRoot, 'dist', 'worker.js'),
+    'export function startWorker(ipc, ready) { ready(); return async () => {} }\n'
   )
   writeFile(
     path.join(sdkRoot, 'dist', 'llm-plugin.js'),
@@ -148,6 +143,11 @@ export function createSplitAddonProject(sdkDir: string, options: SplitAddonProje
     writeFile(path.join(projectRoot, 'node_modules', '.modules.yaml'), 'layoutVersion: 5\n')
   }
 
+  linkDependency(projectRoot, 'bare-stow-runtime', SDK_DIR)
+  linkDependency(projectRoot, 'bare-stow-host', SDK_DIR)
+  linkDependency(projectRoot, 'bare-stow-target-react-native', SDK_DIR)
+  linkDependency(projectRoot, 'react-native-bare-kit', SDK_DIR)
+
   const configPath = path.join(projectRoot, 'qvac.config.json')
   writeFile(configPath, JSON.stringify({ plugins: ['@qvac/sdk/llamacpp-completion/plugin'] }))
   writeFile(path.join(projectRoot, 'pnpm-lock.yaml'), '')
@@ -193,9 +193,8 @@ function writeSplitAddon(root: string, name: string, version: string, dependency
   writeFile(path.join(root, 'addon-unavailable.js'), 'module.exports = null\n')
 }
 
-/** The module keys in the header of the project's `qvac/worker.bundle.js`. */
-export function bundledModules(projectRoot: string) {
-  const bundleText = fs.readFileSync(path.join(projectRoot, 'qvac', 'worker.bundle.js'), 'utf8')
-  const header = extractBarePackHeader(extractPackedString(bundleText))
-  return Object.keys(header.resolutions ?? {})
+/** The module keys of the project's phone bundle. */
+export async function bundledModules(projectRoot: string) {
+  const bundle = await readBundle(path.join(projectRoot, 'qvac', 'worker', 'index.bundle.mjs'))
+  return Object.keys(bundle.resolutions)
 }

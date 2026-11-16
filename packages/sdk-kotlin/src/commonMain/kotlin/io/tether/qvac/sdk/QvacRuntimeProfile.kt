@@ -1,6 +1,8 @@
 package io.tether.qvac.sdk
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
@@ -9,6 +11,7 @@ import kotlinx.serialization.json.jsonPrimitive
 enum class QvacCapability {
     LLM,
     EMBEDDINGS,
+    IMAGE_EMBEDDINGS,
     DECISION,
     RERANK,
     TRANSCRIPTION,
@@ -46,7 +49,7 @@ internal fun QvacRuntimeProfile.requirePayload(payload: JsonObject) {
     val operation = payload["type"]?.jsonPrimitive?.contentOrNull ?: return
     val capability = when (operation) {
         "completionStream", "completionOrchestrate", "batchCompletionStream" -> QvacCapability.LLM
-        "embed" -> QvacCapability.EMBEDDINGS
+        "embed", "embedBatch" -> embeddingCapability(payload)
         "decide" -> QvacCapability.DECISION
         "rerank" -> QvacCapability.RERANK
         "transcribe", "transcribeStream", "bciTranscribe", "bciTranscribeStream" ->
@@ -74,9 +77,25 @@ internal fun QvacRuntimeProfile.requirePayload(payload: JsonObject) {
     }
 }
 
+// MegaLoc takes image objects, text models take text, and either can take media parts.
+private fun QvacRuntimeProfile.embeddingCapability(payload: JsonObject): QvacCapability? {
+    val inputs = buildList<JsonElement> {
+        payload["input"]?.let { add(it) }
+        (payload["inputs"] as? JsonArray)?.let { addAll(it) }
+    }
+    val hasImage = inputs.any { it is JsonObject && "image" in it }
+    val hasMedia = inputs.any { input -> input is JsonArray && input.any { it is JsonObject } }
+    return when {
+        hasImage -> QvacCapability.IMAGE_EMBEDDINGS
+        hasMedia && supports(QvacCapability.IMAGE_EMBEDDINGS) -> null
+        else -> QvacCapability.EMBEDDINGS
+    }
+}
+
 private fun String.toCapability(): QvacCapability? = when (this) {
     "llm", "llamacpp-completion" -> QvacCapability.LLM
     "embeddings", "llamacpp-embedding" -> QvacCapability.EMBEDDINGS
+    "ggml-image-embedding" -> QvacCapability.IMAGE_EMBEDDINGS
     "llamacpp-decision" -> QvacCapability.DECISION
     "llamacpp-rerank" -> QvacCapability.RERANK
     "whisper", "whispercpp-transcription", "parakeet", "parakeet-transcription",

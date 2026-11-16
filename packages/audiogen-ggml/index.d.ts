@@ -144,8 +144,11 @@ export interface GenerateOptions {
     /**
      * Percentile loudness normalization on the generated audio (default true):
      * the 99.999th-percentile sample scales to full scale and the tiny tail
-     * above it clips, matching the reference loudness. Set false for the raw
-     * engine output. Audio edits are never normalized.
+     * above it clips, matching the reference loudness; the result is then
+     * scaled to a 0.9 peak for int16 headroom. Set false for the raw engine
+     * output at its own gain: samples the VAE leaves outside [-1, 1] saturate
+     * at int16 full scale. Audio edits and lego stems are never normalized, so
+     * a stem keeps its mix gain relative to the source.
      */
     normalizeLoudness?: boolean;
     /**

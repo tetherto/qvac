@@ -4,6 +4,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <variant>
@@ -116,6 +117,7 @@ struct NormalizedLoad {
   common_params params;
   NormalizedFitSnapshot fitSnapshot;
   std::optional<int> adrenoVersion;
+  // The `backendDevice` stat: 0 = CPU, 1 = GPU, 2 = NPU.
   int64_t runtimeBackendDevice = 0;
 };
 
@@ -130,7 +132,24 @@ void tuneLoadConfigMap(
     const std::optional<int>& adrenoVersion,
     const FinetuneConfigOverrides& finetuneOverrides = {},
     bool isOpenCl = false, bool isMetal = false, bool isGpu = false,
-    bool isCuda = false, bool isTensorSplit = false);
+    bool isCuda = false, bool isTensorSplit = false, bool isXdna = false);
+
+// True when a GPU load runs on a device of `family` (lowercase, e.g. "xdna"):
+// the selected backend or any device of the split.
+bool usesBackendFamily(
+    bool isGpu, const std::string& selectedName,
+    const std::vector<backend_selection::SplitDevice>& splitDevices,
+    std::string_view family);
+
+// True when every device of a non-empty explicit or split set is the NPU, so
+// the load reports as an NPU load. A mixed set such as XDNA0,Vulkan0 is a GPU
+// load.
+bool runsOnNpuOnly(const std::vector<backend_selection::SplitDevice>& devices);
+
+// The first local GPU of a device set: not RPC and not the NPU. Empty when
+// there is none. An NPU-led load runs its projector there.
+std::string
+firstLocalGpu(const std::vector<backend_selection::SplitDevice>& devices);
 
 void validateMobileMultiDeviceConfig(
     const ConfigMap& configFilemap, llama_split_mode splitMode);

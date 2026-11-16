@@ -47,13 +47,12 @@ worker probe must import the SDK, complete `heartbeat()`, and complete
 ## Deploy targets
 
 These checks are informational/recommended — they never cause `qvac doctor`
-to exit non-zero, because bundling for any target is always supported via
-bare-pack's prebuilt binaries. What's checked here is the host toolchain
-needed to install/deploy to each target class.
+to exit non-zero. What's checked here is the host toolchain needed to
+install/deploy to each target class.
 
 | Target                                                 | Check                                                                | Status when missing                                                                                                          |
 | ------------------------------------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `darwin-{arm64,x64}`, `linux-{arm64,x64}`, `win32-x64` | Listed under the "Desktop" row; native host flagged with `(native)`. | Always `pass` — cross-bundling is built in.                                                                                  |
+| `darwin-{arm64,x64}`, `linux-{arm64,x64}`, `win32-x64` | Listed under the "Desktop" row; native host flagged with `(native)`. | Always `pass`. Bundling for a desktop host other than the native one needs that host's addon platform packages installed.    |
 | `android-arm64`                                        | `adb --version`                                                      | `warn` — install [Android platform tools](https://developer.android.com/tools/releases/platform-tools) to deploy to devices. |
 | `ios-arm64` + simulators                               | `xcodebuild -version` (macOS only)                                   | `warn` on macOS without Xcode, `info` on non-macOS hosts (iOS builds require a macOS host).                                  |
 
@@ -80,7 +79,7 @@ child process. The child reports its import, heartbeat, and cleanup result over
 a private structured channel, while stdout and stderr are captured separately
 and bounded. A valid success result and exit code `0` are both required.
 
-The outer probe timeout is 45 seconds, and SDK cleanup is bounded separately to
+The outer probe timeout is 75 seconds, and SDK cleanup is bounded separately to
 two seconds. On Unix, a timeout requests graceful termination of the probe
 process tree and then forces termination after a two-second grace period. On
 Windows, the CLI requests termination of the live tree with `taskkill /T /F`

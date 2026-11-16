@@ -17,6 +17,10 @@
   ],
   "lines": [
     {
+      "version": "v0.24",
+      "inPlace": true
+    },
+    {
       "version": "v0.23",
       "inPlace": true
     },

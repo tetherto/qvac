@@ -214,6 +214,7 @@ if(BUILD_TESTING)
 
   add_executable(audiogen_ggml_tests
     addon/tests/test_app_memory_budget.cpp
+    addon/tests/test_output_gain.cpp
     addon/tests/test_runtime_options.cpp
     addon/tests/test_fit_result.cpp)
   target_compile_definitions(audiogen_ggml_tests PRIVATE

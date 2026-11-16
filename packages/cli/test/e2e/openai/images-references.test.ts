@@ -50,6 +50,7 @@ for (const [model, config] of Object.entries(models)) {
         state.diffusionOverride = (params) => {
           requests.push(params)
           return {
+            requestId: 'diffusion-1',
             progressStream: (async function* () {
               yield await Promise.resolve({ step: 1, totalSteps: 1, elapsedMs: 1 })
             })(),

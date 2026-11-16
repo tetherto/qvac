@@ -206,7 +206,11 @@ function fakeRun(
     progressStream: (async function* () {
       for (const tick of progress) yield await Promise.resolve(tick)
     })(),
+    // The serve routes read `audio`; the chunk view and the encoded container
+    // are part of the result shape, so the fake carries empty ones.
+    chunkStream: (async function* (): AsyncGenerator<Int16Array> {})(),
     audio,
+    encoded: Promise.resolve(undefined),
     stats: audio.then(() => STATS),
     diagnostics: Promise.resolve(undefined)
   }

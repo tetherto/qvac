@@ -1,4 +1,14 @@
-import type { Tool } from '@/schemas/tools'
+import type { HistoryContent } from '@/schemas/completion-stream'
+import {
+  DEFAULT_TOOL_SEARCH_LIMIT,
+  MAX_TOOL_SEARCH_LIMIT,
+  toolSearchOptionsSchema,
+  type Tool,
+  type ToolSearchOptions
+} from '@/schemas/tools'
+import { InvalidToolSchemaError } from '@/errors/index'
+import type { McpClientInput } from '@/schemas/mcp-adapter'
+import { getMcpTools } from '@/utils/mcp-adapter'
 import { validateTools, type ToolInput } from '@/utils/tool-helpers'
 
 /**
@@ -8,8 +18,6 @@ import { validateTools, type ToolInput } from '@/utils/tool-helpers'
  */
 export const TOOL_SEARCH_NAME = 'tool_search'
 
-const DEFAULT_SEARCH_LIMIT = 3
-const MAX_SEARCH_LIMIT = 8
 const EXACT_NAME_SCORE = 1000
 
 // Ceiling on the definitions one search may declare. A query matching a dozen
@@ -18,7 +26,7 @@ const MAX_DEFINITION_BYTES = 8 * 1024
 
 export type HistoryMessage = {
   role: string
-  content: string
+  content: HistoryContent
 }
 
 /**
@@ -44,6 +52,24 @@ type ToolSearchResult = {
 // move the KV divergence point.
 const NO_MATCH_HINT =
   'No tool matched. Search again with a different capability word, or answer without a tool.'
+
+export type ToolSearchLimits = { defaultLimit: number; maxLimit: number }
+
+/**
+ * The limits a request's `toolSearch` options resolve to. Both the prompt and
+ * the search read them from here, so what the model is told is what applies.
+ */
+export function resolveToolSearchLimits(options?: ToolSearchOptions): ToolSearchLimits {
+  const parsed = toolSearchOptionsSchema.safeParse(options ?? {})
+  if (!parsed.success) {
+    throw new InvalidToolSchemaError(`toolSearch: ${parsed.error.message}`, parsed.error)
+  }
+  const maxLimit = parsed.data.maxLimit ?? MAX_TOOL_SEARCH_LIMIT
+  return {
+    defaultLimit: parsed.data.defaultLimit ?? Math.min(DEFAULT_TOOL_SEARCH_LIMIT, maxLimit),
+    maxLimit
+  }
+}
 
 export function isDeferred(tool: Tool): boolean {
   return tool.deferLoading === true
@@ -108,7 +134,8 @@ export function buildCatalog(deferred: readonly Tool[]): string {
  * tool whose schema the model has never seen. Description text cannot be
  * called, which is the whole point.
  */
-export function buildToolSearchTool(deferred: readonly Tool[]): Tool {
+export function buildToolSearchTool(deferred: readonly Tool[], options?: ToolSearchOptions): Tool {
+  const { defaultLimit, maxLimit } = resolveToolSearchLimits(options)
   return {
     type: 'function',
     name: TOOL_SEARCH_NAME,
@@ -126,7 +153,7 @@ export function buildToolSearchTool(deferred: readonly Tool[]): Tool {
         },
         limit: {
           type: 'integer',
-          description: `Maximum definitions to load (default ${DEFAULT_SEARCH_LIMIT}, max ${MAX_SEARCH_LIMIT}).`
+          description: `Maximum definitions to load (default ${defaultLimit}, max ${maxLimit}).`
         }
       },
       required: ['query']
@@ -193,8 +220,10 @@ function namedBy(scored: readonly Scored[], query: string): Scored[] {
 export function searchDeferredTools(
   deferred: readonly Tool[],
   query: string,
-  limit?: number
+  limit?: number,
+  options?: ToolSearchOptions
 ): Tool[] {
+  const { defaultLimit, maxLimit } = resolveToolSearchLimits(options)
   const tokens = tokenize(query)
   const scored = deferred
     .map((tool, index) => ({ tool, index, score: scoreTool(tool, query, tokens) }))
@@ -206,7 +235,8 @@ export function searchDeferredTools(
       ? namedBy(scored, query)
       : scored.filter(({ score }) => score >= best / 2)
 
-  const cap = Math.min(Math.max(Math.trunc(limit ?? DEFAULT_SEARCH_LIMIT), 1), MAX_SEARCH_LIMIT)
+  const requested = limit !== undefined && Number.isFinite(limit) ? Math.trunc(limit) : defaultLimit
+  const cap = Math.min(Math.max(requested, 1), maxLimit)
 
   const picked: Tool[] = []
   let bytes = 0
@@ -271,7 +301,7 @@ function readSearchResult(content: string): ToolSearchResult['tool_search'] | nu
 export function loadedToolNames(history: readonly HistoryMessage[]): Set<string> {
   const loaded = new Set<string>()
   for (const message of history) {
-    if (message.role !== 'tool') continue
+    if (message.role !== 'tool' || typeof message.content !== 'string') continue
     const envelope = readSearchResult(message.content)
     if (!envelope) continue
     for (const name of envelope.loaded) loaded.add(name)
@@ -333,7 +363,8 @@ export type DeferredResolution = {
  */
 export function resolveDeferredTools(
   tools: readonly Tool[] | undefined,
-  history: readonly HistoryMessage[]
+  history: readonly HistoryMessage[],
+  options?: ToolSearchOptions
 ): DeferredResolution | null {
   if (!tools || tools.length === 0) return null
   const partitioned = partitionTools(tools)
@@ -345,27 +376,61 @@ export function resolveDeferredTools(
   return {
     toolsToRender: [
       ...alwaysLoaded.map(toWireTool),
-      buildToolSearchTool(deferred),
+      buildToolSearchTool(deferred, options),
       ...deferred.filter((tool) => loaded.has(tool.name)).map(toWireTool)
     ],
     deferred
   }
 }
 
+/** What `executeToolSearch` searches: the params passed to `completion()`. */
+export type ToolSearchSource = {
+  tools?: readonly Tool[] | readonly ToolInput[] | undefined
+  toolSearch?: ToolSearchOptions | undefined
+  mcp?: readonly McpClientInput[] | undefined
+}
+
+/**
+ * Resolve completion params into a source `executeToolSearch` can search,
+ * listing MCP tools first as `completion()` does. Needed only when the params
+ * carry `mcp`; resolve once per conversation and reuse the result.
+ */
+export async function resolveToolSearchSource(params: ToolSearchSource): Promise<ToolSearchSource> {
+  const { tools: wire } = validateTools([...(params.tools ?? [])] as Tool[] | ToolInput[])
+  const mcpTools = params.mcp?.length ? await getMcpTools([...params.mcp]) : []
+  return { tools: [...mcpTools, ...wire], toolSearch: params.toolSearch }
+}
+
 /**
  * Run a `tool_search` call and produce the `tool` message that carries its
  * result. Pure over the history it is given; the caller appends the message.
  *
- * Takes either wire `Tool`s or the Zod-schema `ToolInput` form, because what a
- * caller holds is whatever they passed to `completion()`. Both are converted
- * to wire form first, so the size cap measures the JSON schemas the prompt
- * will declare, not Zod objects.
+ * Pass the same params given to `completion()`, so the search applies the
+ * `toolSearch` limits the model was told; with `mcp`, pass
+ * `resolveToolSearchSource(params)` instead. A bare tool list applies the default
+ * limits. Tools may be wire `Tool`s or the Zod-schema `ToolInput` form; both
+ * are converted to wire form first, so the size cap measures the JSON schemas
+ * the prompt will declare, not Zod objects.
  */
 export function executeToolSearch(
-  tools: readonly Tool[] | readonly ToolInput[],
+  source: readonly Tool[] | readonly ToolInput[] | ToolSearchSource,
   args: Record<string, unknown>,
   history: readonly HistoryMessage[]
 ): string {
+  const {
+    tools = [],
+    toolSearch,
+    mcp
+  } = Array.isArray(source)
+    ? { tools: source as readonly Tool[] | readonly ToolInput[], toolSearch: undefined, mcp: [] }
+    : (source as ToolSearchSource)
+  // MCP tools are listed asynchronously; searching without them would find
+  // nothing the model was shown from those servers.
+  if (mcp && mcp.length > 0) {
+    throw new InvalidToolSchemaError(
+      'executeToolSearch cannot list MCP tools. Pass the result of `await resolveToolSearchSource(params)` instead.'
+    )
+  }
   const { tools: wire } = validateTools([...tools] as Tool[] | ToolInput[])
   const { alwaysLoaded, deferred: registered } = partitionTools(wire)
   const deferred = declarableDeferred(alwaysLoaded, registered)
@@ -373,7 +438,7 @@ export function executeToolSearch(
   const limit = typeof args['limit'] === 'number' ? args['limit'] : undefined
 
   const loaded = loadedToolNames(history)
-  const matches = searchDeferredTools(deferred, query, limit)
+  const matches = searchDeferredTools(deferred, query, limit, toolSearch)
 
   // A tool the history already loaded is not reported as loaded again; naming
   // it back tells the model it can call the tool without searching again.

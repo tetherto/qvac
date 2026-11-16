@@ -16,7 +16,7 @@ import os
 
 import pytest
 import pytest_asyncio
-from _worker_env import BARE_BIN, WORKER_AVAILABLE, WORKER_PATH
+from _worker_env import WORKER, WORKER_AVAILABLE, WORKER_PATH
 
 from tetherto.qvac_sdk import translate
 from tetherto.qvac_sdk.bare_rpc_transport import BareRpcTransport
@@ -36,14 +36,14 @@ SDK_DIR = os.environ.get(
 pytestmark = [
     pytest.mark.skipif(
         not WORKER_AVAILABLE,
-        reason=f"no built SDK worker + Bare runtime (worker={WORKER_PATH!r}, bare={BARE_BIN!r})",
+        reason=f"no built SDK worker (worker={WORKER_PATH!r})",
     ),
 ]
 
 
 @pytest_asyncio.fixture
 async def transport():
-    async with BareRpcTransport([BARE_BIN, WORKER_PATH]) as t:
+    async with BareRpcTransport(WORKER.start) as t:
         yield t
 
 

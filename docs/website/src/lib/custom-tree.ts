@@ -179,7 +179,7 @@ function ecosystemChildren(
         { name: 'embed-llamacpp', url: '/ecosystem/addons/embed-llamacpp', type: 'page' },
         { name: 'translation-nmtcpp', url: '/ecosystem/addons/translation-nmtcpp', type: 'page' },
         { name: 'transcription-whispercpp', url: '/ecosystem/addons/transcription-whispercpp', type: 'page' },
-        { name: 'transcription-parakeet', url: '/ecosystem/addons/transcription-parakeet', type: 'page' },
+        { name: 'asr-ggml', url: '/ecosystem/addons/asr-ggml', type: 'page' },
         { name: 'tts-ggml', url: '/ecosystem/addons/tts-ggml', type: 'page' },
         { name: 'audiogen-ggml', url: '/ecosystem/addons/audiogen-ggml', type: 'page' },
         { name: 'diffusion-cpp', url: '/ecosystem/addons/diffusion-cpp', type: 'page' },

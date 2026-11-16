@@ -8,6 +8,8 @@ export {
   embedConfigBaseSchema as llamacppEmbeddingConfigSchema,
   decisionConfigBaseSchema as llamacppDecisionConfigSchema,
   rerankConfigBaseSchema as llamacppRerankConfigSchema,
+  imageEmbeddingConfigSchema as ggmlImageEmbeddingConfigSchema,
+  type ImageEmbeddingConfig as GgmlImageEmbeddingConfig,
   modelSrcInputSchema as modelSourceSchema,
   type LlmConfigInput as LlamacppCompletionConfig,
   type EmbedConfigInput as LlamacppEmbeddingConfig,

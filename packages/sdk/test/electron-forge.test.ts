@@ -3,13 +3,14 @@ import fs from 'fs'
 import { createRequire } from 'module'
 import os from 'os'
 import path from 'path'
+import { promisify } from 'util'
 
 const require = createRequire(import.meta.url)
 const PLUGIN_PATH = path.join(import.meta.dirname, '../src/electron-forge/index.cjs')
 
+const QvacForgePlugin = require(PLUGIN_PATH)
 const {
   createIgnore,
-  diffAddons,
   detectTargetHosts,
   resolveHosts,
   runBundleAndVerify,
@@ -18,31 +19,6 @@ const {
 } = require(PLUGIN_PATH)
 
 setLogLevel('off')
-
-// ============================================
-// diffAddons
-// ============================================
-
-test('diffAddons: required is subset → exclusions are the diff', (t) => {
-  const installed = ['@qvac/llm-llamacpp', '@qvac/ocr-ggml', '@qvac/embed-llamacpp']
-  const required = ['@qvac/llm-llamacpp']
-  const result = diffAddons(installed, required).sort()
-  t.alike(result, ['@qvac/embed-llamacpp', '@qvac/ocr-ggml'])
-})
-
-test('diffAddons: empty required → all installed are exclusions', (t) => {
-  const installed = ['@qvac/llm-llamacpp', '@qvac/ocr-ggml']
-  t.alike(diffAddons(installed, []).sort(), ['@qvac/llm-llamacpp', '@qvac/ocr-ggml'])
-})
-
-test('diffAddons: required matches all installed → no exclusions', (t) => {
-  const installed = ['@qvac/llm-llamacpp']
-  t.alike(diffAddons(installed, ['@qvac/llm-llamacpp']), [])
-})
-
-test('diffAddons: empty installed → no exclusions', (t) => {
-  t.alike(diffAddons([], ['@qvac/llm-llamacpp']), [])
-})
 
 // ============================================
 // createIgnore: composition with user ignore
@@ -66,6 +42,44 @@ test('createIgnore: composes with user function (user OR addon OR mobile prebuil
   )
   t.absent(ignore('/x/node_modules/@qvac/llm-llamacpp/package.json'), 'non-excluded addon kept')
   t.absent(ignore('/x/index.js'), 'regular file kept')
+})
+
+test('createIgnore: keeps the bundled worker addons under qvac/worker', (t) => {
+  const ignore = createIgnore(['@qvac/fabric'], undefined)
+  const ignored = (filePath: string) => ignore.some((re: RegExp) => re.test(filePath))
+
+  t.ok(ignored('/node_modules/@qvac/fabric/package.json'), 'top-level addon package excluded')
+  t.ok(
+    ignored('/node_modules/@qvac/sdk/node_modules/@qvac/fabric/index.js'),
+    'nested addon package excluded'
+  )
+  t.absent(
+    ignored(
+      '/qvac/worker/index.bundle.d/node_modules/@qvac/fabric/prebuilds/darwin-arm64/qvac__fabric.bare'
+    ),
+    'worker addon binary kept'
+  )
+})
+
+test('createIgnore: leaves out scratch folders an interrupted bundle left in qvac/', (t) => {
+  const scratch = [
+    '/qvac/.worker-0f8e6c2a-3b1d-4e5f-9a7b-1c2d3e4f5a6b',
+    '/qvac/.worker-0f8e6c2a-3b1d-4e5f-9a7b-1c2d3e4f5a6b/worker/index.bundle',
+    '/qvac/.worker-scan-0f8e6c2a-3b1d-4e5f-9a7b-1c2d3e4f5a6b/worker-scan/index.js'
+  ]
+  const kept = ['/qvac/worker/index.bundle', '/qvac/worker.entry.mjs']
+  const fromArray = createIgnore([], undefined)
+  const fromFunction = createIgnore([], () => false)
+  const ignoredByArray = (filePath: string) => fromArray.some((re: RegExp) => re.test(filePath))
+
+  for (const filePath of scratch) {
+    t.ok(ignoredByArray(filePath), `${filePath} excluded (array form)`)
+    t.ok(fromFunction(filePath), `${filePath} excluded (function form)`)
+  }
+  for (const filePath of kept) {
+    t.absent(ignoredByArray(filePath), `${filePath} kept (array form)`)
+    t.absent(fromFunction(filePath), `${filePath} kept (function form)`)
+  }
 })
 
 test('createIgnore: composes with user array', (t) => {
@@ -127,6 +141,10 @@ test('detectTargetHosts: --platform + --arch (space form) → single host', (t) 
   t.alike(detectTargetHosts({}, ['--platform', 'linux', '--arch', 'arm64']), ['linux-arm64'])
 })
 
+test('detectTargetHosts: --platform=mas bundles for darwin', (t) => {
+  t.alike(detectTargetHosts({}, ['--platform=mas', '--arch=arm64']), ['darwin-arm64'])
+})
+
 test('detectTargetHosts: comma-separated --arch expands to multiple hosts', (t) => {
   t.alike(detectTargetHosts({}, ['--platform=darwin', '--arch=arm64,x64']), [
     'darwin-arm64',
@@ -160,43 +178,53 @@ test('resolveHosts: null/undefined/empty falls back to host', (t) => {
   t.alike(resolveHosts([]), expected)
 })
 
+const FAKE_BUNDLE_RESULT = {
+  target: 'bare-sidecar',
+  hosts: [],
+  entryPath: '/fake/qvac/worker.entry.mjs',
+  language: 'javascript',
+  outputDir: '/fake/qvac/worker',
+  bundlePath: '/fake/qvac/worker/index.bundle',
+  plugins: [],
+  addons: [],
+  installedPrebuilds: [],
+  linked: [],
+  verification: { issues: [], addons: [] }
+}
+
 function makeFakeCommands() {
-  const calls: { bundleHosts: string[] | null; verifyHosts: string[] | null } = {
+  const calls: {
+    bundleTarget: string | null
+    bundleHosts: string[] | null
+    bundleVerify: boolean | undefined
+  } = {
+    bundleTarget: null,
     bundleHosts: null,
-    verifyHosts: null
+    bundleVerify: undefined
   }
   return {
     calls,
     commands: {
-      bundleSdk: async (opts: { hosts?: string[] }) => {
+      bundleSdk: async (opts: { target?: string; hosts?: string[]; verify?: boolean }) => {
+        calls.bundleTarget = opts.target ?? null
         calls.bundleHosts = opts.hosts ?? null
-        return {
-          bundlePath: '/fake/qvac/worker.bundle.js',
-          plugins: [],
-          addons: [],
-          entryPaths: { worker: '/fake/qvac/worker.entry.mjs' },
-          manifestPath: '/fake/qvac/addons.manifest.json'
-        }
+        calls.bundleVerify = opts.verify
+        return FAKE_BUNDLE_RESULT
       },
-      verifyBundle: async (opts: { hosts?: string[] }) => {
-        calls.verifyHosts = opts.hosts ?? null
-        return { issues: [], addons: [] }
-      },
-      hasErrors: () => false,
       formatVerifyBundleResult: () => ''
     }
   }
 }
 
-test('runBundleAndVerify: same resolved hosts threaded into bundleSdk and verifyBundle', async (t) => {
+test('runBundleAndVerify: bundles and verifies for the resolved hosts', async (t) => {
   const { commands, calls } = makeFakeCommands()
   await runBundleAndVerify(commands, '/fake/project', {
     configPath: null,
     hosts: ['darwin-x64']
   })
+  t.is(calls.bundleTarget, 'bare-sidecar', 'bundleSdk bundles for bare-sidecar')
   t.alike(calls.bundleHosts, ['darwin-x64'], 'bundleSdk got the resolved hosts')
-  t.alike(calls.verifyHosts, ['darwin-x64'], 'verifyBundle got the resolved hosts')
-  t.alike(calls.bundleHosts, calls.verifyHosts, 'both commands receive the same hosts array')
+  t.not(calls.bundleVerify, false, 'bundleSdk verifies before it replaces qvac/worker')
 })
 
 test('runBundleAndVerify: defaults to host arch when hosts is null', async (t) => {
@@ -207,27 +235,21 @@ test('runBundleAndVerify: defaults to host arch when hosts is null', async (t) =
   })
   const expected = [`${process.platform}-${process.arch}`]
   t.alike(calls.bundleHosts, expected, 'bundleSdk got host fallback')
-  t.alike(calls.verifyHosts, expected, 'verifyBundle got host fallback')
 })
 
 test('runBundleAndVerify: narrowed and absent linkedHosts both survive reporting', async (t) => {
   const commands = {
     bundleSdk: async () => ({
-      bundlePath: '/fake/qvac/worker.bundle.js',
-      plugins: [],
-      addons: [],
-      entryPaths: { worker: '/fake/qvac/worker.entry.mjs' },
-      manifestPath: '/fake/qvac/addons.manifest.json'
+      ...FAKE_BUNDLE_RESULT,
+      verification: {
+        issues: [],
+        addons: [
+          { name: 'bare-posix', version: '1.0.1', linkedHosts: [] },
+          { name: 'bare-crypto', version: '1.15.3', linkedHosts: ['win32-x64'] },
+          { name: 'bare-os', version: '3.9.3' }
+        ]
+      }
     }),
-    verifyBundle: async () => ({
-      issues: [],
-      addons: [
-        { name: 'bare-posix', version: '1.0.1', linkedHosts: [] },
-        { name: 'bare-crypto', version: '1.15.3', linkedHosts: ['win32-x64'] },
-        { name: 'bare-os', version: '3.9.3' }
-      ]
-    }),
-    hasErrors: () => false,
     formatVerifyBundleResult: () => ''
   }
   const result = await runBundleAndVerify(commands, '/fake/project', {
@@ -240,10 +262,8 @@ test('runBundleAndVerify: narrowed and absent linkedHosts both survive reporting
 test('runBundleAndVerify: bundleSdk failure is wrapped in QvacForgePluginError', async (t) => {
   const commands = {
     bundleSdk: async () => {
-      throw new Error('bare-pack exploded')
+      throw new Error('bare-stow exploded')
     },
-    verifyBundle: async () => ({ issues: [], addons: [] }),
-    hasErrors: () => false,
     formatVerifyBundleResult: () => ''
   }
   await t.exception(
@@ -252,8 +272,75 @@ test('runBundleAndVerify: bundleSdk failure is wrapped in QvacForgePluginError',
         configPath: null,
         hosts: ['darwin-arm64']
       }),
-    /bundleSdk failed: bare-pack exploded/
+    /bundleSdk failed: bare-stow exploded/
   )
+})
+
+// ============================================
+// Forge plugin contract
+// ============================================
+
+test('QvacForgePlugin: loads on the installed @electron-forge/plugin-base', (t) => {
+  // plugin-base 8 is ESM-only; the CJS plugin reaches it through require(esm).
+  const { PluginBase } = require('@electron-forge/plugin-base')
+  const plugin = new QvacForgePlugin()
+  t.ok(plugin instanceof PluginBase)
+  t.is(plugin.__isElectronForgePlugin, true, 'Forge recognizes the instance as a plugin')
+  t.is(plugin.name, 'qvac')
+  t.is(typeof plugin.getHooks().resolveForgeConfig, 'function')
+})
+
+// ============================================
+// createPruneHook: Packager 18 and 19+ hook conventions
+// ============================================
+
+function makeBuildPath(t: { teardown: (fn: () => void) => void }) {
+  const buildPath = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-forge-'))
+  t.teardown(() => fs.rmSync(buildPath, { recursive: true, force: true }))
+  for (const host of ['darwin-arm64', 'linux-x64']) {
+    const dir = path.join(buildPath, 'node_modules', 'x', 'prebuilds', host)
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, 'x.bare'), '')
+  }
+  const addonDir = path.join(buildPath, 'node_modules', '@qvac', 'ocr-ggml')
+  fs.mkdirSync(addonDir, { recursive: true })
+  fs.writeFileSync(path.join(addonDir, 'package.json'), '{}')
+  return buildPath
+}
+
+function remaining(buildPath: string) {
+  const nodeModules = path.join(buildPath, 'node_modules')
+  return {
+    prebuilds: fs.readdirSync(path.join(nodeModules, 'x', 'prebuilds')).sort(),
+    addonKept: fs.existsSync(path.join(nodeModules, '@qvac', 'ocr-ggml'))
+  }
+}
+
+test('createPruneHook: Packager 19+ object form prunes before the promise resolves', async (t) => {
+  const hook = new QvacForgePlugin().createPruneHook(['@qvac/ocr-ggml'])
+  const buildPath = makeBuildPath(t)
+
+  await hook({ buildPath, electronVersion: '40.0.0', platform: 'linux', arch: 'x64' })
+
+  t.alike(remaining(buildPath), { prebuilds: ['linux-x64'], addonKept: false })
+})
+
+test('createPruneHook: Packager 18 positional form prunes before calling done', async (t) => {
+  const hook = new QvacForgePlugin().createPruneHook(['@qvac/ocr-ggml'])
+  const buildPath = makeBuildPath(t)
+
+  // Forge 7 runs afterPrune hooks through util.promisify with these args.
+  await promisify(hook)(buildPath, '40.0.0', 'darwin', 'arm64')
+
+  t.alike(remaining(buildPath), { prebuilds: ['darwin-arm64'], addonKept: false })
+})
+
+test('createPruneHook: failures reject the promise or reach done', async (t) => {
+  const hook = new QvacForgePlugin().createPruneHook()
+
+  // A missing buildPath fails with a native TypeError, which plain t.exception rethrows.
+  await t.exception.all(hook({ platform: 'linux', arch: 'x64' }), /"path" argument/)
+  await t.exception.all(promisify(hook)(undefined, '40.0.0', 'linux', 'x64'), /"path" argument/)
 })
 
 // ============================================
