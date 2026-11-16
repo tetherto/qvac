@@ -1,13 +1,32 @@
+// runtime: 'ggml-speech' addons statically link the ggml-speech port and ship
+// its backends; 'fabric' addons link the shared @qvac/fabric runtime and ship
+// no ggml at all, so only their speech-cpp pin is checked here.
+export const GGML_SPEECH_RUNTIME = 'ggml-speech'
+export const FABRIC_RUNTIME = 'fabric'
 export const SPEECH_ADDONS = [
-  { name: '@qvac/asr-ggml', dir: 'packages/asr-ggml' },
-  { name: '@qvac/audiogen-ggml', dir: 'packages/audiogen-ggml' },
-  { name: '@qvac/bci-whispercpp', dir: 'packages/bci-whispercpp' },
-  { name: '@qvac/tts-ggml', dir: 'packages/tts-ggml' },
+  { name: '@qvac/asr-ggml', dir: 'packages/asr-ggml', runtime: GGML_SPEECH_RUNTIME },
+  { name: '@qvac/audiogen-ggml', dir: 'packages/audiogen-ggml', runtime: GGML_SPEECH_RUNTIME },
+  { name: '@qvac/bci-whispercpp', dir: 'packages/bci-whispercpp', runtime: GGML_SPEECH_RUNTIME },
+  { name: '@qvac/tts-ggml', dir: 'packages/tts-ggml', runtime: FABRIC_RUNTIME },
 ]
 
 export const GGML_SPEECH_PORT = 'ggml-speech'
-export const PINNED_PORTS = [GGML_SPEECH_PORT, 'speech-cpp']
+export const SPEECH_CPP_PORT = 'speech-cpp'
+export const PINNED_PORTS = [GGML_SPEECH_PORT, SPEECH_CPP_PORT]
+export const FABRIC_PACKAGE = '@qvac/fabric'
 export const BUILD_FIELD = 'qvac'
+
+export function isFabricAddon(addon) {
+  return addon.runtime === FABRIC_RUNTIME
+}
+
+export function ggmlSpeechAddons(addons) {
+  return addons.filter((addon) => !isFabricAddon(addon))
+}
+
+function pinnedPortsOf(addon) {
+  return isFabricAddon(addon) ? [SPEECH_CPP_PORT] : PINNED_PORTS
+}
 
 const OVERRIDE_VERSION_KEYS = ['version', 'version-date', 'version-semver', 'version-string']
 const FLOOR_KEY = 'version>='
@@ -64,9 +83,24 @@ function listPinnedFloors(vcpkgManifest) {
 }
 
 function checkMissingPins(addon) {
-  return PINNED_PORTS.filter((port) => findPin(addon.vcpkg, port) === null).map(
-    (port) => `${addon.name}: vcpkg.json needs exactly one overrides entry for ${port}`,
-  )
+  return pinnedPortsOf(addon)
+    .filter((port) => findPin(addon.vcpkg, port) === null)
+    .map((port) => `${addon.name}: vcpkg.json needs exactly one overrides entry for ${port}`)
+}
+
+function checkFabricRuntime(addon) {
+  if (!isFabricAddon(addon)) return []
+  const errors = []
+  if ((addon.vcpkg.overrides ?? []).some((entry) => entry.name === GGML_SPEECH_PORT)) {
+    errors.push(`${addon.name}: ships no ggml of its own; remove the ${GGML_SPEECH_PORT} overrides entry`)
+  }
+  if (!addon.manifest?.dependencies?.[FABRIC_PACKAGE]) {
+    errors.push(`${addon.name}: package.json must depend on ${FABRIC_PACKAGE}, the runtime it links`)
+  }
+  if (recordedGgmlSpeech(addon.manifest) !== null) {
+    errors.push(`${addon.name}: package.json must not record a ${GGML_SPEECH_PORT} build; the runtime is ${FABRIC_PACKAGE}`)
+  }
+  return errors
 }
 
 function checkPinnedFloors(addon) {
@@ -77,6 +111,7 @@ function checkPinnedFloors(addon) {
 }
 
 function checkRecordedPin(addon) {
+  if (isFabricAddon(addon)) return []
   const pin = findPin(addon.vcpkg, GGML_SPEECH_PORT)
   const recorded = recordedGgmlSpeech(addon.manifest)
   if (pin === null || recorded === pin) return []
@@ -90,6 +125,13 @@ function checkPortLockstep(addons, port) {
   const pinned = addons.filter((addon) => findPin(addon.vcpkg, port) !== null)
   const groups = groupBy(pinned, (addon) => findPin(addon.vcpkg, port), (addon) => addon.name)
   return groups.size > 1 ? [`${port} is pinned to ${groups.size} versions: ${formatGroups(groups)}`] : []
+}
+
+function checkRuntimeLockstep(addons) {
+  return [
+    ...PINNED_PORTS.flatMap((port) => checkPortLockstep(ggmlSpeechAddons(addons), port)),
+    ...checkPortLockstep(addons.filter(isFabricAddon), SPEECH_CPP_PORT),
+  ]
 }
 
 export function checkAddonList(packages) {
@@ -106,9 +148,10 @@ export function checkAddonList(packages) {
 export function checkPins(addons) {
   return [
     ...addons.flatMap(checkMissingPins),
+    ...addons.flatMap(checkFabricRuntime),
     ...addons.flatMap(checkPinnedFloors),
     ...addons.flatMap(checkRecordedPin),
-    ...PINNED_PORTS.flatMap((port) => checkPortLockstep(addons, port)),
+    ...checkRuntimeLockstep(addons),
   ]
 }
 
