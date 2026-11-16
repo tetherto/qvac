@@ -33,6 +33,9 @@ function run(command, args, options = {}) {
 }
 
 run('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], { cwd: dir })
+// npm 10 (Node 18-22) drops every bin that llvm-runtime and its platform package
+// both declare, clang and llvm-profdata among them. rebuild links them again.
+run('npm', ['rebuild', '--ignore-scripts'], { cwd: dir })
 
 if (process.env.GITHUB_PATH) {
   appendFileSync(process.env.GITHUB_PATH, `${bin}\n`)
