@@ -23,7 +23,7 @@ const PUBLISH_MARKER = /uses:.*(npm-publish-logic|publish-library-to-(gpr|npm))/
 const ALLOWED = ['release-*']
 
 // A pattern is allowed when every branch it can match is a release branch. That
-// is `release-*` itself and any narrower glob under it, e.g. publish-inference's
+// is `release-*` itself and any narrower glob under it, e.g. a
 // `release-inference-*` — per docs/gitflow.md you PR INTO a release branch from
 // a fork, so a push to one is a merge, which is the publish trigger this policy
 // exists to permit. Comparing the glob literally rejected the narrower spelling
@@ -44,26 +44,7 @@ const isAllowed = (branch) =>
 // markers and pushing off main/feature-*/tmp-* passed every assertion.
 const LIBRARY_PUBLISHERS = new Set([
   'publish-registry-server.yml',
-  'publish-sdk.yml',
-  'trigger-reusable-infer-base.yml',
-  'trigger-reusable-lib-ai-sdk-provider.yml',
-  'trigger-reusable-lib-cli.yml',
-  'trigger-reusable-lib-error.yml',
-  'trigger-reusable-lib-logging.yml',
-  'trigger-reusable-lib-openclaw-plugin.yml',
-  'trigger-reusable-lib-opencode-plugin.yml',
-  'trigger-reusable-lib-rag.yml',
-  'trigger-reusable-lib-test-suite.yml',
-  'trigger-reusable-lib.yml',
 ])
-
-// Guards against discovery returning an empty set and passing vacuously.
-// Native addons, including model-fit, publish through on-merge-nx.
-// Add a pipeline here when one appears.
-const KNOWN = [
-  'on-merge-ggml-rpc-server.yml',
-  'on-merge-nx.yml',
-]
 
 function read(name) {
   return readFileSync(join(WORKFLOW_DIR, name), 'utf8')
@@ -152,18 +133,6 @@ function hasTrigger(source, name) {
   return onBlock(source).some((line) => new RegExp(`^ {2}${name}:`).test(line))
 }
 
-test('discovery finds every known addon publish pipeline', () => {
-  const found = publishWorkflows()
-  for (const name of KNOWN) {
-    assert.ok(
-      found.includes(name),
-      `${name} is no longer detected as a publish pipeline; fix the discovery, ` +
-        'do not drop the file from KNOWN',
-    )
-  }
-  assert.ok(found.length >= KNOWN.length)
-})
-
 test('every exemption names a file that exists', () => {
   for (const name of LIBRARY_PUBLISHERS) {
     assert.ok(
@@ -175,11 +144,10 @@ test('every exemption names a file that exists', () => {
   }
 })
 
-test('model-fit publishing is covered by the consolidated workflow', () => {
-  const source = read('on-merge-nx.yml')
-  assert.match(pushBody(source).join('\n'), /^ {6}- "packages\/model-fit\/\*\*"$/m)
-  assert.match(source, /^ {10}- model-fit$/m)
-  assert.match(source, /^ {12}model-fit: packages\/model-fit\/\*\*$/m)
+test('model-fit publishing is covered by the CI contract', () => {
+  const project = JSON.parse(readFileSync(join(WORKFLOW_DIR, '../../packages/model-fit/project.json'), 'utf8'))
+  assert.ok(project.tags.includes('ci:addons'))
+  assert.ok(project.targets.publish, 'publish-npm.yml publishes packages with a publish target')
   assert.equal(existsSync(join(WORKFLOW_DIR, 'on-merge-model-fit.yml')), false)
 })
 

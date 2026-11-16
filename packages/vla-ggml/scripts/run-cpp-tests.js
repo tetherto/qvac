@@ -8,9 +8,8 @@ const { spawnSync } = require('child_process')
 // -static-libstdc++ @qvac/fabric prebuild. Objects that cross that module
 // boundary trip alloc-dealloc-mismatch, and fabric's long-lived runtime globals
 // plus its dlopen'd ggml backends look like leaks at exit -- both fire after
-// every test has already passed. Relax exactly those two checks, matching
-// .github/workflows/cpp-tests-vla.yml. See test/unit/CMakeLists.txt for the
-// full rationale.
+// every test has already passed. Relax exactly those two checks. See
+// test/unit/CMakeLists.txt for the full rationale.
 const DEFAULT_ASAN_OPTIONS = 'alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1'
 
 /**

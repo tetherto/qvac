@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict'
 
-// Pin `bytes` + `sha256` in test/integration/parakeet-models.manifest.json from files
+// Pin `bytes` + `sha256` of the parakeet (s3Path) entries in test/integration/models.manifest.json from files
 // already staged in ./models/ (e.g. after scripts/stage-integration-models.mjs
 // or `npm run download-models:registry`). Network-free: it only hashes local
 // files, so it is safe to run in CI right after the S3 staging step.
@@ -22,13 +22,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const MANIFEST_PATH = resolve(
-  __dirname,
-  '..',
-  'test',
-  'integration',
-  'parakeet-models.manifest.json'
-)
+const MANIFEST_PATH = resolve(__dirname, '..', 'test', 'integration', 'models.manifest.json')
 const DEFAULT_MODELS_DIR = resolve(__dirname, '..', 'models')
 
 function parseArgs(argv) {
@@ -54,7 +48,8 @@ function sha256File(filePath) {
 async function main() {
   const args = parseArgs(process.argv.slice(2))
   const manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'))
-  const entries = Object.entries(manifest.models || {})
+  // The parakeet (s3Path) entries; the whisper urls entries are pinned by revision.
+  const entries = Object.entries(manifest.models || {}).filter(([, entry]) => entry.s3Path)
 
   let pinned = 0
   let missing = 0

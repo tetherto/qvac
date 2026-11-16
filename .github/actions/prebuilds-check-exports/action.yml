@@ -1,0 +1,27 @@
+name: Check exported symbols
+description: Fail when a prebuild exports or misses symbols it should not. Skipped on win32.
+
+inputs:
+  platform:
+    description: linux, android, darwin, ios or win32
+    required: true
+  workdir:
+    description: Directory holding prebuilds/ and node_modules/
+    required: true
+  provider:
+    description: npm name of the native dependency whose platform packages provide symbols
+    default: ""
+  enforce-exports:
+    description: Fail instead of warn on engine symbols exported at default visibility
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      working-directory: ${{ inputs.workdir }}
+      env:
+        PLATFORM: ${{ inputs.platform }}
+        PROVIDER: ${{ inputs.provider }}
+        ENFORCE_EXPORTS: ${{ inputs.enforce-exports }}
+      run: node "$GITHUB_ACTION_PATH/prebuilds-check-exports.mjs"
