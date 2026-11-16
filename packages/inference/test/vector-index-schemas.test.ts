@@ -47,6 +47,15 @@ test('vectorIndexRequestSchema: every operation is a member of the global reques
     { type: 'vectorIndex', operation: 'contains', indexId: 'i', ids: ['1'] },
     { type: 'vectorIndex', operation: 'write', indexId: 'i', path: 'index.qvi' },
     { type: 'vectorIndex', operation: 'setStagedSearch', indexId: 'i', enabled: true },
+    { type: 'vectorIndex', operation: 'setIvf', indexId: 'i', ivf: { nLists: 4, nProbe: 2 } },
+    {
+      type: 'vectorIndex',
+      operation: 'setIvf',
+      indexId: 'i',
+      ivf: { nLists: 4, nProbe: 2, nIter: 0 }
+    },
+    { type: 'vectorIndex', operation: 'setIvf', indexId: 'i', ivf: null },
+    { type: 'vectorIndex', operation: 'search', indexId: 'i', queries: [[1]], k: 1, nProbe: 2 },
     { type: 'vectorIndex', operation: 'dispose', indexId: 'i' }
   ]
   for (const request of requests) {
@@ -99,6 +108,15 @@ test('vectorIndexResponseSchema: responses are members of the global response un
     { type: 'vectorIndex', operation: 'contains', present: [true] },
     { type: 'vectorIndex', operation: 'write', path: '/tmp/index.qvi' },
     { type: 'vectorIndex', operation: 'setStagedSearch', stagedSearch: false },
+    { type: 'vectorIndex', operation: 'setIvf', ivf: { nLists: 4, nProbe: 2, built: true } },
+    { type: 'vectorIndex', operation: 'setIvf', ivf: null },
+    {
+      type: 'vectorIndex',
+      operation: 'add',
+      length: 2,
+      ivf: { nLists: 4, nProbe: 2, nIter: 1, built: false }
+    },
+    { type: 'vectorIndex', operation: 'remove', removed: [true], length: 1, ivf: null },
     { type: 'vectorIndex', operation: 'dispose', disposed: true }
   ]
   for (const response of responses) {
@@ -143,5 +161,34 @@ test('vector index staged search: enabled must be a boolean', (t) => {
 test('createVectorIndexParamsSchema: accepts dimensions above 1024', (t) => {
   for (const dim of [2048, 16384]) {
     t.ok(createVectorIndexParamsSchema.safeParse({ dim }).success)
+  }
+})
+
+test('vector index IVF: list and probe counts must be positive int32 values', (t) => {
+  const set = { type: 'vectorIndex', operation: 'setIvf', indexId: 'i' }
+  const valid = { nLists: 4, nProbe: 2 }
+  t.absent(vectorIndexRequestSchema.safeParse(set).success, 'ivf is required; null turns it off')
+  for (const key of ['nLists', 'nProbe'] as const) {
+    for (const value of [undefined, 0, -1, 1.5, '4', 2 ** 31]) {
+      t.absent(
+        vectorIndexRequestSchema.safeParse({ ...set, ivf: { ...valid, [key]: value } }).success,
+        `${key} ${value}`
+      )
+    }
+    t.ok(
+      vectorIndexRequestSchema.safeParse({ ...set, ivf: { ...valid, [key]: 2 ** 31 - 1 } }).success,
+      `${key} int32 max`
+    )
+  }
+  for (const nIter of [-1, 0.5, '2', 2 ** 31]) {
+    t.absent(
+      vectorIndexRequestSchema.safeParse({ ...set, ivf: { ...valid, nIter } }).success,
+      `nIter ${nIter}`
+    )
+  }
+  const search = { type: 'vectorIndex', operation: 'search', indexId: 'i', queries: [[1]], k: 1 }
+  t.ok(vectorIndexRequestSchema.safeParse(search).success, 'nProbe is optional')
+  for (const nProbe of [0, -1, 1.5, '2', 2 ** 31]) {
+    t.absent(vectorIndexRequestSchema.safeParse({ ...search, nProbe }).success, `nProbe ${nProbe}`)
   }
 })
