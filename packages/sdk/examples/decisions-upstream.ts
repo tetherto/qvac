@@ -3,7 +3,7 @@
 // its upstream-format conversion (convert_hf_to_gguf.py).
 //
 //   npx tsx examples/decisions-upstream.ts /path/to/model.gguf
-import { loadModel, decide, unloadModel, close } from '@qvac/sdk'
+import { loadModel, decide, getLoadedModelInfo, unloadModel, close } from '@qvac/sdk'
 
 const modelSrc = process.argv[2]
 if (!modelSrc) {
@@ -19,6 +19,10 @@ try {
     modelType: 'llamacpp-decision',
     modelConfig: { device: 'gpu' }
   })
+  // What the model supports: its decision type, what noul means, the score
+  // range and the longest input.
+  const { decision } = await getLoadedModelInfo({ modelId })
+  console.error('▸ Decision model', decision)
 
   const result = await decide({
     modelId,
@@ -38,12 +42,9 @@ try {
         instructions: 'How urgent is this?',
         criteria: ['not urgent', 'somewhat urgent', 'very urgent']
       },
-      // Rejected by a model whose noul is not a probability (lev).
-      refund: {
-        type: 'noul',
-        instructions: 'Does the customer ask for a refund?',
-        requireProbability: true
-      }
+      // The probability that the statement holds. A model whose noul is an
+      // expected rating (lev) rejects it unless the question sets allowRating.
+      refund: { type: 'noul', instructions: 'Does the customer ask for a refund?' }
     }
   })
   console.log(JSON.stringify(result, null, 2))
