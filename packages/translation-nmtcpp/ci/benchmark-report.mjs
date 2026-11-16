@@ -39,7 +39,11 @@ const platforms = new Set()
 for (const host of readdirSync(results))
   for (const dir of existsSync(join(results, host)) ? readdirSync(join(results, host)) : [])
     if (dir.startsWith('results-')) {
-      cpSync(join(results, host, dir), join(staged, dir), { recursive: true, errorOnExist: true, force: false })
+      cpSync(join(results, host, dir), join(staged, dir), {
+        recursive: true,
+        errorOnExist: true,
+        force: false
+      })
       platforms.add(dir.split('-').slice(-2).join('-'))
     }
 

@@ -336,10 +336,16 @@ export async function plan(env) {
   const pr = event.pull_request?.number
   if (!pr) {
     // A dispatch runs what its inputs select, Device Farm only on the platform it names, as main's test-sdk.yml.
-    const configs = { Android: ['android-arm64'], iOS: ['ios-arm64'], both: ['android-arm64', 'ios-arm64'] }
+    const configs = {
+      Android: ['android-arm64'],
+      iOS: ['ios-arm64'],
+      both: ['android-arm64', 'ios-arm64']
+    }
     // Empty packages runs the SDK alone; sdk-python and sdk-kotlin are opt-in, as on main.
     const named = (r) => env.PACKAGES || r.project === SDK
-    const devices = mobile.filter((r) => named(r) && (configs[env.PLATFORM] ?? []).includes(r.config))
+    const devices = mobile.filter(
+      (r) => named(r) && (configs[env.PLATFORM] ?? []).includes(r.config)
+    )
     const suite = env.SUITE === 'smoke' ? 'smoke' : ''
     const options = {
       exclude: list('exclude-suite', env.EXCLUDE_SUITE),
@@ -377,7 +383,9 @@ export async function plan(env) {
     })
     if (found.include) {
       const add = (r) =>
-        r.project === '@qvac/sdk' ? { ...r, suite: encodeOptions(r.suite, { include: found.include }) } : r
+        r.project === '@qvac/sdk'
+          ? { ...r, suite: encodeOptions(r.suite, { include: found.include }) }
+          : r
       desktop = desktop.map(add)
       devices = devices.map(add)
     }
