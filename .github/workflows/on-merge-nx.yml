@@ -547,6 +547,9 @@ jobs:
           DIST_TAG: ${{ steps.dist-tag.outputs.tag }}
           OUT_DIR: ${{ runner.temp }}/platform-packages
           WORKDIR: ${{ matrix.workdir }}
+          # npm rejects an oversized tarball with E413: 200.4 MB went through,
+          # 201.9 MB did not.
+          MAX_TARBALL_BYTES: "200400000"
         run: |
           set -euo pipefail
           # Prints "hit" or "miss"; any npm view failure other than E404 is a
@@ -570,11 +573,18 @@ jobs:
           # Check every slice before publishing any, so a failed check leaves
           # no new slice behind.
           TO_PUBLISH=()
+          OVERSIZED=()
           for dir in "$OUT_DIR"/*/; do
             NAME=$(node -p "require('${dir}package.json').name")
             VERSION=$(node -p "require('${dir}package.json').version")
             SLICE_STATE=$(on_npm "$NAME" "$VERSION")
             if [ "$SLICE_STATE" = miss ]; then
+              SIZE=$(cd "$dir" && npm pack --dry-run --json --ignore-scripts | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8"))[0].size')
+              echo "${NAME}@${VERSION}: ${SIZE} byte tarball"
+              if [ "$SIZE" -gt "$MAX_TARBALL_BYTES" ]; then
+                echo "::error title=npm tarball too large::${NAME}@${VERSION} packs to ${SIZE} bytes, over the ${MAX_TARBALL_BYTES}-byte budget (npm rejects oversized tarballs with E413). Nothing was published." >&2
+                OVERSIZED+=("$NAME")
+              fi
               TO_PUBLISH+=("$dir")
               continue
             fi
@@ -593,6 +603,9 @@ jobs:
             fi
             echo "${NAME}@${VERSION} already on npm with identical contents, skipping"
           done
+          if [ "${#OVERSIZED[@]}" -gt 0 ]; then
+            exit 1
+          fi
           for dir in "${TO_PUBLISH[@]}"; do
             NAME=$(node -p "require('${dir}package.json').name")
             VERSION=$(node -p "require('${dir}package.json').version")
