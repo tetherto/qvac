@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.35.2] - 2026-11-13
+
 ### Fixes
 
 - Fix corrupted images on Android Adreno GPUs (OpenCL backend). Stable
