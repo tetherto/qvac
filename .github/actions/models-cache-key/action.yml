@@ -1,5 +1,5 @@
 name: Resolve model cache
-description: Cache key, fallback prefix and paths for a package's models, from its manifest alone.
+description: Cache key, fallback prefix and paths for a package's models, from its manifest or the target's metadata.modelCache.
 
 inputs:
   workdir:
@@ -25,6 +25,9 @@ outputs:
   paths:
     description: Newline-separated directories the models land in
     value: ${{ steps.resolve.outputs.paths }}
+  fill:
+    description: true when the target's metadata.modelCache names the directory, which the package's cache:models fills
+    value: ${{ steps.resolve.outputs.fill }}
 
 runs:
   using: composite

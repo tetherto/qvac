@@ -4,7 +4,7 @@ name: Publish to npm
 on:
   push:
     branches: [release-*, "!release-train-*"]
-    paths: ["packages/**"]
+    paths: ["packages/**", "plugins/**"]
   workflow_dispatch:
     inputs:
       packages:
@@ -32,7 +32,9 @@ jobs:
       contents: read
     uses: ./.github/workflows/_select-projects.yml
     with:
-      targets: build,verify:generated,publish,publish:post
+      targets: build,verify:generated,verify:deps,publish:pre,publish,publish:post
+      tags: ci:addons,ci:sdk,ci:libs
+      combine: verify=verify:generated+verify:deps+publish:pre
       packages: ${{ inputs.packages }}
 
   logic:
@@ -85,8 +87,8 @@ jobs:
 
   verify:
     needs: select
-    if: toJSON(fromJSON(needs.select.outputs.matrices)['verify:generated']) != '[]'
-    name: verify:generated ${{ matrix.row.slug }}
+    if: toJSON(fromJSON(needs.select.outputs.matrices).verify) != '[]'
+    name: ${{ matrix.row.target }} ${{ matrix.row.slug }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -94,7 +96,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        row: ${{ fromJSON(needs.select.outputs.matrices)['verify:generated'] }}
+        row: ${{ fromJSON(needs.select.outputs.matrices).verify }}
     steps:
       - name: Checkout actions
         uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
@@ -117,11 +119,29 @@ jobs:
         working-directory: src
         env:
           PROJECT: ${{ matrix.row.project }}
+          # A JavaScript build comes first, as sdk-checks.yml runs it: generated checks read the built output.
+          TARGETS: ${{ matrix.row.jsBuild && format('build,{0}', matrix.row.target) || matrix.row.target }}
           NX_DAEMON: "false"
           NX_NO_CLOUD: "true"
+          SOURCE: ${{ matrix.row.sources[0] && 'published' || '' }}
+          DIR: ${{ matrix.row.dir }}
+        # A package checked in npm's layout installs as a release consumer would, from the committed ranges.
         run: |
-          pnpm install --frozen-lockfile --ignore-scripts
-          pnpm exec nx run "$PROJECT:verify:generated" --outputStyle=stream
+          if [ -n "$SOURCE" ]; then
+            pnpm install --frozen-lockfile --ignore-scripts --filter .
+            node scripts/ci/checks-source.mjs check "$SOURCE" "$DIR" "$PROJECT" "$TARGETS"
+          else
+            pnpm install --frozen-lockfile --ignore-scripts
+            pnpm exec nx run-many -t "$TARGETS" -p "$PROJECT" --outputStyle=stream
+          fi
+
+  # @qvac/inference publishes only after it runs in a Pear app on three OSes.
+  pear-e2e:
+    needs: select
+    if: contains(fromJSON(needs.select.outputs.projects).*.name, '@qvac/inference')
+    permissions:
+      contents: read
+    uses: ./.github/workflows/test-inference-pear-e2e.yml
 
   # Providers build first, once per configuration; a provider's own release builds its rows here.
   providers:
@@ -149,11 +169,12 @@ jobs:
       rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices).build) }}
 
   publish:
-    needs: [select, logic, release-merge-guard, verify, providers, build]
+    needs: [select, logic, release-merge-guard, verify, pear-e2e, providers, build]
     if: >-
       always() && !cancelled() && needs.logic.result == 'success' && toJSON(fromJSON(needs.select.outputs.matrices).publish) != '[]' &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
       (needs.verify.result == 'success' || needs.verify.result == 'skipped') &&
+      (needs.pear-e2e.result == 'success' || needs.pear-e2e.result == 'skipped') &&
       (needs.providers.result == 'success' || needs.providers.result == 'skipped') &&
       (needs.build.result == 'success' || needs.build.result == 'skipped') &&
       (needs.logic.outputs.publish_release == 'true' || inputs.dry_run)
@@ -172,6 +193,8 @@ jobs:
       published_version: ${{ steps.publish.outputs.version }}
     env:
       WORKDIR: src/${{ matrix.row.dir }}
+      # A JavaScript build ships its dist as built here; npm must not rebuild it.
+      NPM_CONFIG_IGNORE_SCRIPTS: ${{ matrix.row.jsBuild && 'true' || 'false' }}
     steps:
       - name: Checkout actions
         uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
@@ -202,6 +225,38 @@ jobs:
         with:
           packages: ${{ toJSON(fromJSON(needs.select.outputs.matrices).publish.*.slug) }}
           workdir: ${{ env.WORKDIR }}
+      # The version's CHANGELOG section must exist before the version is published.
+      - if: matrix.row.meta.publish.releaseNotes
+        id: notes
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: echo "version=$(jq -r .version package.json)" >> "$GITHUB_OUTPUT"
+      - if: matrix.row.meta.publish.releaseNotes
+        uses: ./.github/actions/verify-changelog-notes
+        with:
+          changelog-path: ${{ env.WORKDIR }}/CHANGELOG.md
+          version: ${{ steps.notes.outputs.version }}
+      # A JavaScript build compiles against the committed ranges from npm, as main's release builds did.
+      - if: matrix.row.jsBuild
+        uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          node-version: lts/*
+      - if: matrix.row.jsBuild
+        uses: tetherto/qvac-actions/setup-pnpm@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          package-json-file: src/package.json
+      - if: matrix.row.jsBuild
+        shell: bash
+        working-directory: src
+        env:
+          PROJECT: ${{ matrix.row.project }}
+          DIR: ${{ matrix.row.dir }}
+          NX_DAEMON: "false"
+          NX_NO_CLOUD: "true"
+          NPM_CONFIG_IGNORE_SCRIPTS: "false"
+        run: |
+          pnpm install --frozen-lockfile --filter .
+          node scripts/ci/checks-source.mjs check published "$DIR" "$PROJECT" build
       # npm 11.5 or newer for OIDC trusted publishing; the newest Node LTS ships it.
       - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
@@ -249,6 +304,24 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # The release a package's publish metadata names with githubRelease, from its CHANGELOG section.
+  github-release:
+    needs: [select, publish, create-tag]
+    if: always() && !cancelled() && needs.create-tag.result == 'success' && needs.publish.outputs.published_version != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        row: ${{ fromJSON(needs.select.outputs.matrices).publish }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-github-release.yml
+    with:
+      repo_name: ${{ matrix.row.meta.publish.githubRelease && matrix.row.meta.publish.tagPrefix || '' }}
+      release_name: ${{ matrix.row.meta.publish.githubRelease || '' }}
+      published_version: ${{ matrix.row.meta.publish.githubRelease && needs.publish.outputs.published_version || '' }}
+      prev_sha: ${{ github.event.before }}
+      workdir: ${{ matrix.row.dir }}
+
   create-tag:
     needs: [select, publish]
     if: always() && !cancelled() && needs.publish.result == 'success' && needs.publish.outputs.published_version != ''
@@ -262,6 +335,19 @@ jobs:
     with:
       repo_name: ${{ matrix.row.meta.publish.tagPrefix }}
       published_version: ${{ needs.publish.outputs.published_version }}
+
+  # The Kotlin SDK's Maven zips on the sdk-v<version> release, once @qvac/sdk is published and its release exists.
+  kotlin-maven-zips:
+    needs: [select, publish, github-release]
+    if: >-
+      always() && !cancelled() && needs.github-release.result == 'success' && needs.publish.outputs.published_version != '' &&
+      contains(fromJSON(needs.select.outputs.matrices).publish.*.project, '@qvac/sdk')
+    permissions:
+      contents: write
+    uses: ./.github/workflows/publish-kotlin.yml
+    with:
+      destination: release-assets
+      version: ${{ needs.publish.outputs.published_version }}
 
   post:
     needs: [select, create-tag]

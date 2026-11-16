@@ -20,6 +20,14 @@ on:
         description: Comma-separated configurations to keep, e.g. ios-arm64; empty keeps every configuration
         type: string
         default: ""
+      labels:
+        description: Comma-separated labels that route test:integration configurations outside a pull request
+        type: string
+        default: ""
+      tags:
+        description: Comma-separated Nx tags of the package groups to select
+        type: string
+        default: ci:addons
     outputs:
       matrices:
         description: JSON object of target to matrix rows
@@ -33,6 +41,12 @@ on:
       any:
         description: true when any package was selected
         value: ${{ jobs.select.outputs.any }}
+      base:
+        description: The commit the selection compared from, a merge base for a PR; empty when nothing was compared
+        value: ${{ jobs.select.outputs.base }}
+      head:
+        description: The commit the selection compared to; empty when nothing was compared
+        value: ${{ jobs.select.outputs.head }}
 
 permissions:
   contents: read
@@ -46,6 +60,8 @@ jobs:
       projects: ${{ steps.select.outputs.projects }}
       runners: ${{ steps.select.outputs.runners }}
       any: ${{ steps.select.outputs.any }}
+      base: ${{ steps.select.outputs.base }}
+      head: ${{ steps.select.outputs.head }}
     steps:
       # Actions and settings both come from here, so this is a full checkout of the trusted ref. On any PR event that is
       # the default branch, so a PR's own project.json can never change which of its checks run.
@@ -69,6 +85,8 @@ jobs:
           PACKAGES: ${{ inputs.packages }}
           COMBINE: ${{ inputs.combine }}
           CONFIGS: ${{ inputs.configs }}
+          LABELS: ${{ inputs.labels }}
+          TAGS: ${{ inputs.tags }}
           NX_DAEMON: "false"
           NX_NO_CLOUD: "true"
         run: node .github/scripts/select-projects.mjs
