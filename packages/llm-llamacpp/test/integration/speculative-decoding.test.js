@@ -617,8 +617,8 @@ safeTest('an external head without MTP layers fails to load', { timeout: 300_000
   await model.unload().catch(() => {})
 })
 
-// A head for another model is refused before fabric loads it; fabric itself
-// aborts on a width mismatch and does not check the vocabulary.
+// A head for another model is refused from both GGUF headers, before any
+// weights are read.
 // prestage-ignore: Qwen3-0.6B-Q8_0.gguf — desktop-only; the test skips on mobile
 safeTest(
   'an external head for another model fails to load',

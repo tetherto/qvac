@@ -47,6 +47,7 @@ import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
 import { SystemResourcesExecutor } from '../shared/executors/system-resources-executor.js'
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { MobileCancellationExecutor } from './executors/cancellation-executor.js'
+import { SessionExecutor } from '../shared/executors/session-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
 
 import * as MODEL_CONSTANTS from '@qvac/sdk'
@@ -244,6 +245,7 @@ export const executor = createExecutor({
     new SystemResourcesExecutor(Platform.OS),
     new ConfigExecutor(),
     new MobileCancellationExecutor(resources),
+    new SessionExecutor(resources),
     new PluginExecutor(resources)
   ],
   profiling: {

@@ -936,8 +936,8 @@ export const ttsPlugin = definePlugin({
       streaming: true,
       cancel: { scope: 'model', hard: true },
 
-      handler: async function* (request) {
-        const stream = textToSpeech(request)
+      handler: async function* (request, _inputStream, context) {
+        const stream = textToSpeech(request, context)
         try {
           let result = await stream.next()
 
@@ -975,8 +975,8 @@ export const ttsPlugin = definePlugin({
       duplex: true,
       cancel: { scope: 'model', hard: true },
 
-      handler: async function* (request, inputStream) {
-        const stream = textToSpeechStream(request, inputStream)
+      handler: async function* (request, inputStream, context) {
+        const stream = textToSpeechStream(request, inputStream, context)
         try {
           let result = await stream.next()
 

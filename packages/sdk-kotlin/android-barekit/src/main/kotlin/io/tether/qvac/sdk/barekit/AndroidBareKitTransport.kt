@@ -17,6 +17,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -37,6 +39,12 @@ class AndroidBareKitTransport private constructor(
 ) : QvacTransport {
     private val closeMutex = Mutex()
     private var closed = false
+
+    // Ends with the worker's ipc: the worker exited, crashed or was killed, or close() stopped it.
+    override val lost: Deferred<Unit> = exitWatch.async {
+        runCatching { ipc.wait() }
+        Unit
+    }
 
     override suspend fun call(payload: JsonObject): JsonObject = rpc.call(payload)
 

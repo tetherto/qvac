@@ -256,6 +256,11 @@ async def load_model(
         payload["modelId"] = model_id
         if model_type is not None:
             payload["modelType"] = model_type
+        # The worker registers a reload under this id, so
+        # `cancel(request_id=...)` reaches it while it waits for another load.
+        payload["requestId"] = (
+            request_id if request_id is not None else generate_client_request_id()
+        )
     else:
         # An addon that ships its own weights is loaded by type alone -- `ggml-
         # classification`, `audiogen-ggml`.
@@ -601,18 +606,27 @@ async def unload_model(
     response = UnloadModelResponse.model_validate(await transport.call(_dump(request)))
     if not response.success:
         raise ModelUnloadFailedError(model_id)
-    stop_logging_stream_for_model(model_id)
+    if response.released is not False:
+        stop_logging_stream_for_model(model_id, transport)
 
 
 async def invoke_plugin(
-    transport: Transport, model_id: str, handler: str, params: Any = None
+    transport: Transport,
+    model_id: str,
+    handler: str,
+    params: Any = None,
+    *,
+    request_id: str | None = None,
 ) -> Any:
+    """`request_id` is minted when omitted; pass your own to target the invoke
+    with `cancel(request_id=...)`."""
     request = PluginInvokeRequest.model_validate(
         {
             "type": "pluginInvoke",
             "modelId": model_id,
             "handler": handler,
             "params": params,
+            "requestId": request_id or generate_client_request_id(),
         }
     )
     response = PluginInvokeResponse.model_validate(await transport.call(_dump(request)))
@@ -620,7 +634,12 @@ async def invoke_plugin(
 
 
 async def invoke_plugin_stream(
-    transport: Transport, model_id: str, handler: str, params: Any = None
+    transport: Transport,
+    model_id: str,
+    handler: str,
+    params: Any = None,
+    *,
+    request_id: str | None = None,
 ) -> AsyncIterator[Any]:
     request = PluginInvokeStreamRequest.model_validate(
         {
@@ -628,6 +647,7 @@ async def invoke_plugin_stream(
             "modelId": model_id,
             "handler": handler,
             "params": params,
+            "requestId": request_id or generate_client_request_id(),
         }
     )
     async for chunk in transport.call_stream(_dump(request)):

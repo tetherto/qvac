@@ -46,6 +46,7 @@ function companionPlugin(modelType: string) {
 
 test('resolve load: reads a source already on disk rather than fetching a stub', async (t) => {
   clearPlugins()
+  t.teardown(clearPlugins)
   registerPlugin(companionPlugin(ModelType.llamacppCompletion))
   const model = scratchFile('model.gguf')
 
@@ -63,6 +64,7 @@ test('resolve load: reads a source already on disk rather than fetching a stub',
 
 test('resolve load: takes the config and artifact keys from the plugin', async (t) => {
   clearPlugins()
+  t.teardown(clearPlugins)
   registerPlugin(companionPlugin(ModelType.llamacppCompletion))
   const model = scratchFile('model.gguf')
   const companion = scratchFile('companion.gguf')
@@ -82,6 +84,7 @@ test('resolve load: takes the config and artifact keys from the plugin', async (
 
 test('resolve load: a load whose sources are all config fields needs no primary', async (t) => {
   clearPlugins()
+  t.teardown(clearPlugins)
   registerPlugin(companionPlugin(ModelType.audiogenGgml))
   const companion = scratchFile('stage.gguf')
 
@@ -99,6 +102,7 @@ test('resolve load: a load whose sources are all config fields needs no primary'
 
 test('resolve load: a model type with no plugin throws as the load does', async (t) => {
   clearPlugins()
+  t.teardown(clearPlugins)
 
   await t.exception(
     resolveLoadFromStubs({
@@ -114,6 +118,7 @@ test('resolve load: a model type with no plugin throws as the load does', async 
 // fetch, so the load cannot be described at all.
 test('resolve load: a source with no registry coordinates resolves no stub', async (t) => {
   clearPlugins()
+  t.teardown(clearPlugins)
   registerPlugin(companionPlugin(ModelType.llamacppCompletion))
 
   const resolved = await resolveLoadFromStubs({
@@ -129,6 +134,7 @@ test('resolve load: a source with no registry coordinates resolves no stub', asy
 
 test('resolve load: a minimax pair on disk resolves to the artifacts its plugin loads', async (t) => {
   clearPlugins()
+  t.teardown(clearPlugins)
   registerPlugin(audioGenPlugin)
   const lm = scratchFile('mm3-lm-q8.gguf')
   const synth = scratchFile('mm3-synth-q8.gguf')
@@ -146,6 +152,7 @@ test('resolve load: a minimax pair on disk resolves to the artifacts its plugin 
 
 test('resolve load: a minimax load naming both useGPU and device throws as the load does', async (t) => {
   clearPlugins()
+  t.teardown(clearPlugins)
   registerPlugin(audioGenPlugin)
 
   await t.exception(
@@ -165,6 +172,7 @@ test('resolve load: a minimax load naming both useGPU and device throws as the l
 
 test('resolve load: a translation source not on disk fetches no stub', async (t) => {
   clearPlugins()
+  t.teardown(clearPlugins)
   registerPlugin(companionPlugin(ModelType.nmtcppTranslation))
 
   const resolved = await resolveLoadFromStubs({
@@ -185,6 +193,7 @@ test('resolve load: a translation source not on disk fetches no stub', async (t)
 
 test('resolve load: a translation source on disk is read directly', async (t) => {
   clearPlugins()
+  t.teardown(clearPlugins)
   registerPlugin(companionPlugin(ModelType.nmtcppTranslation))
   const model = scratchFile('model.enfr.intgemm.alphas.bin')
 

@@ -2,13 +2,17 @@ import {
   upscaleStreamResponseSchema,
   type UpscaleClientParams,
   type UpscaleStats,
-  type UpscaleStreamRequest
+  type UpscaleStreamRequest,
+  type RPCOptions
 } from '@qvac/inference/surface'
 import { stream as streamRpc } from '@/client/rpc/rpc-client'
+import { generateClientRequestId } from '@/client/api/client-request-id'
 import { decodeBase64, encodeBase64 } from '@/utils/encoding'
 import { StreamEndedError } from '@/utils/errors-client'
 
 interface UpscaleResult {
+  /** Stable id of this run; pass to `cancel({ requestId })` to stop delivery. */
+  requestId: string
   outputs: Promise<Uint8Array[]>
   stats: Promise<UpscaleStats | undefined>
 }
@@ -28,7 +32,8 @@ interface UpscaleResult {
  *
  * @param params - `{ modelId, image, repeats? }`. `image` is raw PNG/JPEG
  *   bytes; the client base64-encodes them on the wire.
- * @returns `{ outputs, stats }` — `outputs` resolves to a single-element
+ * @param options - Optional RPC options (timeout, profiling, force new connection).
+ * @returns `{ requestId, outputs, stats }` — `outputs` resolves to a single-element
  *   array containing the final upscaled PNG; `stats` resolves to
  *   addon-side stats (load/upscale ms, final width/height, repeats
  *   actually executed, etc.).
@@ -50,12 +55,14 @@ interface UpscaleResult {
  * console.log(await stats);
  * ```
  */
-export function upscale(params: UpscaleClientParams): UpscaleResult {
+export function upscale(params: UpscaleClientParams, options?: RPCOptions): UpscaleResult {
+  const requestId = generateClientRequestId()
   const request: UpscaleStreamRequest = {
     modelId: params.modelId,
     image: encodeBase64(params.image),
     ...(params.repeats !== undefined && { repeats: params.repeats }),
-    type: 'upscaleStream'
+    type: 'upscaleStream',
+    requestId
   }
 
   let statsResolver: (value: UpscaleStats | undefined) => void = () => {}
@@ -79,7 +86,7 @@ export function upscale(params: UpscaleClientParams): UpscaleResult {
   async function processResponses() {
     let sawDone = false
     try {
-      for await (const response of streamRpc(request)) {
+      for await (const response of streamRpc(request, options)) {
         if (
           response &&
           typeof response === 'object' &&
@@ -114,6 +121,7 @@ export function upscale(params: UpscaleClientParams): UpscaleResult {
   void processResponses()
 
   return {
+    requestId,
     outputs: outputsPromise,
     stats: statsPromise
   }
