@@ -36,9 +36,7 @@ QVAC runs AI inference on the CPU or the GPU. The GPU is much faster, especially
 
 The CPU works on every supported platform and needs no driver.
 
-On x64, QVAC picks the fastest code path your processor supports when it loads a model. Older processors without AVX2, such as Intel Sandy Bridge and Ivy Bridge, still run QVAC, only slower.
-
-{/* TODO(addons review): confirm the x64 CPU floor (plain x64 and SSE4.2 variants ship on Linux and Windows since SDK 0.21; untested on pre-Haswell hardware, see https://github.com/tetherto/qvac/issues/4151) and state the arm64 floor. */}
+On x64, most capabilities pick the fastest code path your processor supports, so processors without AVX2, such as Intel Sandy Bridge and Ivy Bridge, still run them, only slower. Image generation, and on Windows also transcription, text-to-speech and audio generation, need AVX2.
 
 ### Memory and disk
 
@@ -204,8 +202,8 @@ Each client has its own requirements. Install steps live on each client's page.
 
 QVAC's native runtime ships as one package per host, such as `@qvac/fabric-linux-x64`.
 
-- **Desktop:** the platform packages are optional dependencies, and your package manager installs the one that matches your OS and CPU. This works with npm 7+, pnpm, bun, and Yarn Berry (2+). Yarn Classic (v1) and installs with `--omit=optional` skip the platform package, so the app fails at startup, not at install.
-- **Mobile:** no package manager picks a mobile package on its own, so your app declares it as a direct dependency. The Expo plugin's `installMissingPrebuilds` option adds it for you; see [Expo setup](/sdk/js-ts-sdk#expo).
+- **Desktop:** the platform packages are optional dependencies, and your package manager installs the one that matches your OS and CPU. Installs with `--omit=optional` skip it, so the app fails at startup, not at install.
+- **Mobile:** no package manager picks a mobile package on its own, so your app declares it as a direct dependency. The Expo plugin's `installMissingPrebuilds` option adds it for you with npm 7+, pnpm, bun, or Yarn Berry (2+); it refuses Yarn Classic (v1). See [Expo setup](/sdk/js-ts-sdk#expo).
 
 ## Known limits
 
@@ -214,7 +212,7 @@ QVAC's native runtime ships as one package per host, such as `@qvac/fabric-linux
 - **Intel Macs are not supported.** See [Compatibility matrix](#compatibility-matrix).
 - **Windows needs Vulkan even for CPU-only inference.** See [Windows](#windows).
 - **Minimal Linux images may lack `libatomic.so.1`.** See [Linux](#linux).
-- **Yarn Classic and `--omit=optional` installs break the app.** See [Native packages and installers](#native-packages-and-installers).
+- **`--omit=optional` installs break the app.** See [Native packages and installers](#native-packages-and-installers).
 
 ## Check your setup
 
