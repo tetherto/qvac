@@ -180,6 +180,9 @@ test('the runtime exports exactly the jinja symbols server-context needs', () =>
   assert.deepEqual(mapJinja.sort(), SERVER_CONTEXT_JINJA.map((name) => name + ';').sort())
   assert.ok(mapLines.includes('fs_validate_filename*;'))
   assert.ok(mapLines.includes('glob_match*;'))
+  // A demangled-name pattern misses function templates, whose demangled names
+  // start with the return type, so common_json::get<T>() is matched mangled.
+  assert.ok(mapLines.includes('_ZNK11common_json3getI*;'))
 
   const exportsTxt = read('exports.txt').split(/\r?\n/)
   const exportsJinja = exportsTxt.filter((line) => line.includes('5jinja'))

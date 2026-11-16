@@ -105,6 +105,13 @@
     _ZTVN5jinja14value_object_tE;
     _ZTVN5jinja14value_string_tE;
 
+    # libcommon's common_json::get<T>() specializations, which server-context
+    # calls. The extern "C++" common_* below cannot match them: a function
+    # template demangles with its return type first ("double
+    # common_json::get<double>() const"). Mach-O and Windows match mangled or
+    # decorated names, where common_ already covers them.
+    _ZNK11common_json3getI*;
+
     # C++-linkage symbols consumed by the addons. Matched against *demangled*
     # names, so the patterns are the source-level names (no _Z mangling).
     # Patterns must stay unquoted: quoting would turn them into literal
