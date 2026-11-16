@@ -5326,11 +5326,11 @@ class DecideSingleRequestQuestionsValueNoul(GeneratedBaseModel):
     )
     type: Literal["noul"] = "noul"
     criteria: DecideSingleRequestQuestionsValueNoulCriteria | None = None
-    require_probability: Annotated[
+    allow_rating: Annotated[
         bool | None,
         Field(
-            alias="requireProbability",
-            description="Require the answer to be the probability that the statement holds. A model whose noul answer means something else (for example an expected rating) rejects the request.",
+            alias="allowRating",
+            description="Accept a model that answers noul with an expected rating (lev, 0 to 1) instead of the probability that the statement holds. Without it, such a model rejects the request, as does a model whose noul meaning is unknown.",
         ),
     ] = None
 
@@ -5522,11 +5522,11 @@ class DecideBatchRequestQuestionsValueNoul(GeneratedBaseModel):
     )
     type: Literal["noul"] = "noul"
     criteria: DecideBatchRequestQuestionsValueNoulCriteria | None = None
-    require_probability: Annotated[
+    allow_rating: Annotated[
         bool | None,
         Field(
-            alias="requireProbability",
-            description="Require the answer to be the probability that the statement holds. A model whose noul answer means something else (for example an expected rating) rejects the request.",
+            alias="allowRating",
+            description="Accept a model that answers noul with an expected rating (lev, 0 to 1) instead of the probability that the statement holds. Without it, such a model rejects the request, as does a model whose noul meaning is unknown.",
         ),
     ] = None
 
@@ -6989,6 +6989,57 @@ class NativeProbeFit(GeneratedBaseModel):
     ] = None
 
 
+class LoadedDecisionInfoNoul(Enum):
+    probability = "probability"
+    expected_rating = "expectedRating"
+    unknown = "unknown"
+
+
+class LoadedDecisionInfoScoreLevels(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    min: Annotated[int, Field(ge=-9007199254740991, le=9007199254740991)]
+    max: Annotated[int, Field(ge=-9007199254740991, le=9007199254740991)]
+
+
+class LoadedDecisionInfo(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    decision_type: Annotated[
+        str,
+        Field(
+            alias="decisionType",
+            description='The upstream decision type, e.g. "laya", "openjev", "lev".',
+        ),
+    ]
+    noul: Annotated[
+        LoadedDecisionInfoNoul,
+        Field(
+            description="What a noul answer means: the probability that the statement holds, an expected rating from 0 to 1 (lev; questions must set allowRating), or unknown (noul questions are rejected).",
+            title="LoadedDecisionInfoNoul",
+        ),
+    ]
+    score_levels: Annotated[
+        LoadedDecisionInfoScoreLevels,
+        Field(
+            alias="scoreLevels",
+            description="How many levels a score question may have.",
+            title="LoadedDecisionInfoScoreLevels",
+        ),
+    ]
+    max_input_tokens: Annotated[
+        int,
+        Field(
+            alias="maxInputTokens",
+            description="The longest input a request can have, in tokens: a state with one question and its options. A longer one fails validation.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
+
+
 class LoadedModelInfo(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -7011,6 +7062,13 @@ class LoadedModelInfo(GeneratedBaseModel):
             alias="fitProbe",
             description="Outcome of the engine fitter's check that ran ahead of this load. Absent when the load set `modelFitPolicy: 'off'`.",
             title="NativeProbeFit",
+        ),
+    ] = None
+    decision: Annotated[
+        LoadedDecisionInfo | None,
+        Field(
+            description="Decision models only: what the loaded model supports.",
+            title="LoadedDecisionInfo",
         ),
     ] = None
 

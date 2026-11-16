@@ -37,7 +37,7 @@ export type DecisionQuestion =
   | (DecisionQuestionBase & {
       type: 'noul'
       criteria?: { true?: DecisionState | null; false?: DecisionState | null } | null
-      requireProbability?: boolean
+      allowRating?: boolean
     })
 
 interface DecisionFields {

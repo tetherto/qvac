@@ -1295,7 +1295,7 @@ internal object DecideSingleRequestQuestionsValueSerializer : KSerializer<Decide
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\",\"criteria\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"type\":{\"type\":\"string\",\"const\":\"choice\"},\"criteria\":{\"anyOf\":[{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"}]}},{\"type\":\"object\"}]}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\",\"criteria\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"type\":{\"type\":\"string\",\"const\":\"score\"},\"criteria\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]}}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"type\":{\"type\":\"string\",\"const\":\"noul\"},\"criteria\":{\"anyOf\":[{\"type\":\"object\",\"properties\":{\"true\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},{\"type\":\"null\"}]},\"false\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},{\"type\":\"null\"}]}}},{\"type\":\"null\"}]},\"requireProbability\":{\"type\":\"boolean\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"type\":{\"type\":\"string\",\"const\":\"noul\"},\"criteria\":{\"anyOf\":[{\"type\":\"object\",\"properties\":{\"true\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},{\"type\":\"null\"}]},\"false\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},{\"type\":\"null\"}]}}},{\"type\":\"null\"}]},\"allowRating\":{\"type\":\"boolean\"}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): DecideSingleRequestQuestionsValue {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
@@ -1558,7 +1558,7 @@ data class DecideSingleRequestQuestionsValueNoul(
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "noul",
     @SerialName("criteria") val `criteria`: DecideSingleRequestQuestionsValueNoulCriteria? = null,
-    @SerialName("requireProbability") val `requireProbability`: Boolean? = null,
+    @SerialName("allowRating") val `allowRating`: Boolean? = null,
 )
 
 @Serializable(with = DecideSingleRequestQuestionsValueNoulInstructionsSerializer::class)
@@ -1748,7 +1748,7 @@ internal object DecideBatchRequestQuestionsValueSerializer : KSerializer<DecideB
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\",\"criteria\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"type\":{\"type\":\"string\",\"const\":\"choice\"},\"criteria\":{\"anyOf\":[{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"}]}},{\"type\":\"object\"}]}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\",\"criteria\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"type\":{\"type\":\"string\",\"const\":\"score\"},\"criteria\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]}}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"type\":{\"type\":\"string\",\"const\":\"noul\"},\"criteria\":{\"anyOf\":[{\"type\":\"object\",\"properties\":{\"true\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},{\"type\":\"null\"}]},\"false\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},{\"type\":\"null\"}]}}},{\"type\":\"null\"}]},\"requireProbability\":{\"type\":\"boolean\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"instructions\",\"type\"],\"properties\":{\"instructions\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},\"type\":{\"type\":\"string\",\"const\":\"noul\"},\"criteria\":{\"anyOf\":[{\"type\":\"object\",\"properties\":{\"true\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},{\"type\":\"null\"}]},\"false\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"number\"},{\"type\":\"boolean\"},{\"type\":\"object\"},{\"type\":\"array\",\"items\":{}}]},{\"type\":\"null\"}]}}},{\"type\":\"null\"}]},\"allowRating\":{\"type\":\"boolean\"}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): DecideBatchRequestQuestionsValue {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
@@ -2011,7 +2011,7 @@ data class DecideBatchRequestQuestionsValueNoul(
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "noul",
     @SerialName("criteria") val `criteria`: DecideBatchRequestQuestionsValueNoulCriteria? = null,
-    @SerialName("requireProbability") val `requireProbability`: Boolean? = null,
+    @SerialName("allowRating") val `allowRating`: Boolean? = null,
 )
 
 @Serializable(with = DecideBatchRequestQuestionsValueNoulInstructionsSerializer::class)
@@ -12307,7 +12307,7 @@ internal object AnyResponseSerializer : KSerializer<AnyResponse> {
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"message\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"error\"},\"message\":{\"type\":\"string\"},\"stack\":{\"type\":\"string\"},\"timestamp\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"code\":{\"type\":\"number\"},\"cause\":{},\"typedFields\":{\"type\":\"object\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"status\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"finetune\"},\"status\":{\"type\":\"string\",\"enum\":[\"IDLE\",\"RUNNING\",\"PAUSED\",\"CANCELLED\",\"COMPLETED\"]},\"stats\":{\"type\":\"object\",\"required\":[\"global_steps\",\"epochs_completed\"],\"properties\":{\"train_loss\":{\"type\":\"number\"},\"train_loss_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"val_loss\":{\"type\":\"number\"},\"val_loss_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"train_accuracy\":{\"type\":\"number\"},\"train_accuracy_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"val_accuracy\":{\"type\":\"number\"},\"val_accuracy_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"learning_rate\":{\"type\":\"number\"},\"global_steps\":{\"type\":\"integer\"},\"epochs_completed\":{\"type\":\"integer\"}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"is_train\",\"loss\",\"loss_uncertainty\",\"accuracy\",\"accuracy_uncertainty\",\"global_steps\",\"current_epoch\",\"current_batch\",\"total_batches\",\"elapsed_ms\",\"eta_ms\",\"type\",\"modelId\"],\"properties\":{\"is_train\":{\"type\":\"boolean\"},\"loss\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"loss_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"accuracy\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"accuracy_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"global_steps\":{\"type\":\"integer\"},\"current_epoch\":{\"type\":\"integer\"},\"current_batch\":{\"type\":\"integer\"},\"total_batches\":{\"type\":\"integer\"},\"elapsed_ms\":{\"type\":\"number\"},\"eta_ms\":{\"type\":\"number\"},\"type\":{\"type\":\"string\",\"const\":\"finetune:progress\"},\"modelId\":{\"type\":\"string\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"info\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"getLoadedModelInfo\"},\"info\":{\"type\":\"object\",\"required\":[\"modelId\",\"modelType\",\"handlers\",\"loadedAt\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\"},\"handlers\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"displayName\":{\"type\":\"string\"},\"addonPackage\":{\"type\":\"string\"},\"loadedAt\":{},\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"},\"toolDialect\":{\"type\":\"string\",\"enum\":[\"hermes\",\"pythonic\",\"json\",\"harmony\",\"qwen35\",\"gemma4\",\"dsml\"]},\"fitProbe\":{\"type\":\"object\",\"required\":[\"verdict\",\"basis\",\"estimatorVersion\",\"reason\"]}}}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"info\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"getLoadedModelInfo\"},\"info\":{\"type\":\"object\",\"required\":[\"modelId\",\"modelType\",\"handlers\",\"loadedAt\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\"},\"handlers\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"displayName\":{\"type\":\"string\"},\"addonPackage\":{\"type\":\"string\"},\"loadedAt\":{},\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"},\"toolDialect\":{\"type\":\"string\",\"enum\":[\"hermes\",\"pythonic\",\"json\",\"harmony\",\"qwen35\",\"gemma4\",\"dsml\"]},\"fitProbe\":{\"type\":\"object\",\"required\":[\"verdict\",\"basis\",\"estimatorVersion\",\"reason\"]},\"decision\":{\"type\":\"object\",\"required\":[\"decisionType\",\"noul\",\"scoreLevels\",\"maxInputTokens\"]}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"modelInfo\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"getModelInfo\"},\"modelInfo\":{\"type\":\"object\",\"required\":[\"name\",\"modelId\",\"expectedSize\",\"sha256Checksum\",\"addon\",\"isCached\",\"isLoaded\",\"cacheFiles\"],\"properties\":{\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobBlockOffset\":{\"type\":\"number\"},\"blobBlockLength\":{\"type\":\"number\"},\"blobByteOffset\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"quantization\":{\"type\":\"string\"},\"params\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"type\":\"string\",\"enum\":[\"llm\",\"whisper\",\"bci\",\"parakeet\",\"moss-transcribe\",\"embeddings\",\"nmt\",\"vad\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\",\"other\"]},\"isCached\":{\"type\":\"boolean\"},\"isLoaded\":{\"type\":\"boolean\"},\"cacheFiles\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"filename\",\"path\",\"expectedSize\",\"sha256Checksum\",\"isCached\"]}},\"actualSize\":{\"type\":\"number\"},\"cachedAt\":{},\"loadedInstances\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"registryId\",\"loadedAt\"]}}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"capabilities\",\"type\"],\"properties\":{\"capabilities\":{\"type\":\"object\",\"required\":[\"cpu\",\"memory\",\"gpus\"],\"properties\":{\"cpu\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"status\",\"value\",\"provenance\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]}]},\"memory\":{\"type\":\"object\",\"required\":[\"totalBytes\"]},\"gpus\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"status\",\"value\",\"provenance\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]}]}}},\"sample\":{\"type\":\"object\",\"required\":[\"sampledAt\",\"cpu\",\"memory\",\"gpus\"],\"properties\":{\"sampledAt\":{\"type\":\"number\"},\"cpu\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"status\",\"value\",\"provenance\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]}]},\"memory\":{\"type\":\"object\",\"required\":[\"usedBytes\",\"totalBytes\",\"processUsedBytes\",\"processAvailableBytes\"]},\"gpus\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"status\",\"value\",\"provenance\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]}]}}},\"type\":{\"type\":\"string\",\"const\":\"getSystemResources\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"number\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"heartbeat\"},\"number\":{\"type\":\"number\"}}}").jsonObject,
@@ -13975,6 +13975,7 @@ data class LoadedModelInfo(
     @SerialName("path") val `path`: String? = null,
     @SerialName("toolDialect") val `toolDialect`: LoadedModelInfoToolDialect? = null,
     @SerialName("fitProbe") val `fitProbe`: NativeProbeFit? = null,
+    @SerialName("decision") val `decision`: LoadedDecisionInfo? = null,
 )
 
 @Serializable
@@ -14037,6 +14038,27 @@ data class NativeProbeFitProjectionDevicesItem(
     @SerialName("weightsBytes") val `weightsBytes`: Double,
     @SerialName("contextBytes") val `contextBytes`: Double,
     @SerialName("computeBytes") val `computeBytes`: Double,
+)
+
+@Serializable
+data class LoadedDecisionInfo(
+    @SerialName("decisionType") val `decisionType`: String,
+    @SerialName("noul") val `noul`: LoadedDecisionInfoNoul,
+    @SerialName("scoreLevels") val `scoreLevels`: LoadedDecisionInfoScoreLevels,
+    @SerialName("maxInputTokens") val `maxInputTokens`: Long,
+)
+
+@Serializable
+enum class LoadedDecisionInfoNoul {
+    @SerialName("probability") `PROBABILITY`,
+    @SerialName("expectedRating") `EXPECTEDRATING`,
+    @SerialName("unknown") `UNKNOWN`,
+}
+
+@Serializable
+data class LoadedDecisionInfoScoreLevels(
+    @SerialName("min") val `min`: Long,
+    @SerialName("max") val `max`: Long,
 )
 
 @Serializable

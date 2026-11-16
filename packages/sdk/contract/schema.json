@@ -5986,8 +5986,8 @@
                           }
                         ]
                       },
-                      "requireProbability": {
-                        "description": "Require the answer to be the probability that the statement holds. A model whose noul answer means something else (for example an expected rating) rejects the request.",
+                      "allowRating": {
+                        "description": "Accept a model that answers noul with an expected rating (lev, 0 to 1) instead of the probability that the statement holds. Without it, such a model rejects the request, as does a model whose noul meaning is unknown.",
                         "type": "boolean"
                       }
                     },
@@ -6323,8 +6323,8 @@
                           }
                         ]
                       },
-                      "requireProbability": {
-                        "description": "Require the answer to be the probability that the statement holds. A model whose noul answer means something else (for example an expected rating) rejects the request.",
+                      "allowRating": {
+                        "description": "Accept a model that answers noul with an expected rating (lev, 0 to 1) instead of the probability that the statement holds. Without it, such a model rejects the request, as does a model whose noul meaning is unknown.",
                         "type": "boolean"
                       }
                     },
@@ -8229,6 +8229,50 @@
               "required": ["verdict", "basis", "estimatorVersion", "reason"],
               "additionalProperties": false,
               "title": "NativeProbeFit"
+            },
+            "decision": {
+              "description": "Decision models only: what the loaded model supports.",
+              "type": "object",
+              "properties": {
+                "decisionType": {
+                  "type": "string",
+                  "description": "The upstream decision type, e.g. \"laya\", \"openjev\", \"lev\"."
+                },
+                "noul": {
+                  "type": "string",
+                  "enum": ["probability", "expectedRating", "unknown"],
+                  "description": "What a noul answer means: the probability that the statement holds, an expected rating from 0 to 1 (lev; questions must set allowRating), or unknown (noul questions are rejected).",
+                  "title": "LoadedDecisionInfoNoul"
+                },
+                "scoreLevels": {
+                  "type": "object",
+                  "properties": {
+                    "min": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "max": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": ["min", "max"],
+                  "additionalProperties": false,
+                  "description": "How many levels a score question may have.",
+                  "title": "LoadedDecisionInfoScoreLevels"
+                },
+                "maxInputTokens": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "The longest input a request can have, in tokens: a state with one question and its options. A longer one fails validation."
+                }
+              },
+              "required": ["decisionType", "noul", "scoreLevels", "maxInputTokens"],
+              "additionalProperties": false,
+              "title": "LoadedDecisionInfo"
             }
           },
           "required": ["modelId", "modelType", "handlers", "loadedAt"],
