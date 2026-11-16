@@ -258,12 +258,16 @@ from the shared runtime, which exports exactly the libcommon symbols it needs
 (the `jinja` entries, `fs_validate_filename` and `glob_match` in `symbols.map`,
 `exports.txt` and `cmake/generate-windows-def.cmake`).
 
-The archive and the runtime must come from the same port version. This
-package's `package.json` records the port it is built from as
-`qvac["qvac-fabric"]`, and the addon records the same. CI
-(`verify-qvac-fabric-lockstep`) checks both records against the `vcpkg.json`
-pins, and the helper fails configure when the port vcpkg installed is not the
-version the installed `@qvac/fabric` records.
+The archive and the runtime must come from the same port version:
+
+- This package's build writes the port it installed into its CMake config
+  (`QVAC_FABRIC_PORT_VERSION`), so the value travels with the prebuilds. The
+  helper fails configure when the addon's own vcpkg build installed another
+  version.
+- `package.json` records the port as `qvac["qvac-fabric"]`, and the addon
+  records the same. This package's build fails unless its record is the port it
+  installed, and CI (`verify-qvac-fabric-lockstep`) checks both records against
+  the `vcpkg.json` pins.
 
 ---
 

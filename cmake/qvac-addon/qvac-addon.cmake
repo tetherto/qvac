@@ -449,12 +449,14 @@ endfunction()
 # port's copy throughout. It is the version the runtime was built from (checked
 # below); only qvac-fabric.h still comes from @qvac/fabric.
 #
-# The archive and the runtime must come from the same port version. The addon's
-# package.json and @qvac/fabric's record it as qvac["qvac-fabric"], which
-# verify-qvac-fabric-lockstep checks against the vcpkg.json pins. Configure
-# fails here unless the port vcpkg installed is the version the installed
-# @qvac/fabric records. Call after qvac_addon_use_fabric(). Only the decision
-# addon needs this.
+# The archive and the runtime must come from the same port version. The
+# installed @qvac/fabric's CMake config records the port its runtime was built
+# from (QVAC_FABRIC_PORT_VERSION, from that build's vcpkg install, so it travels
+# with the prebuilds); configure fails here unless this addon's vcpkg build
+# installed the same version. The packages' package.json records
+# (qvac["qvac-fabric"]) are checked against the vcpkg.json pins by
+# verify-qvac-fabric-lockstep. Call after qvac_addon_use_fabric(). Only the
+# decision addon needs this.
 # ---------------------------------------------------------------------------
 function(qvac_addon_link_fabric_server_context target)
   if(NOT qvac-fabric_DIR OR NOT TARGET qvac-fabric::headers)
@@ -468,43 +470,23 @@ function(qvac_addon_link_fabric_server_context target)
       "with the server-context feature to this addon's vcpkg.json.")
   endif()
 
-  # The port version vcpkg installed, from the SPDX document it writes per port.
+  # The port this addon's vcpkg build installed, against the port the
+  # installed @qvac/fabric runtime was built from, which its CMake config
+  # records (with the reader, qvac-fabric-port.cmake).
   get_filename_component(_installed "${llama_DIR}/../.." ABSOLUTE)
-  set(_spdx "${_installed}/share/qvac-fabric/vcpkg.spdx.json")
-  if(NOT EXISTS "${_spdx}")
-    message(FATAL_ERROR "qvac-addon: ${_spdx} not found; cannot tell which qvac-fabric port was installed.")
-  endif()
-  file(READ "${_spdx}" _spdx_json)
-  string(JSON _count LENGTH "${_spdx_json}" packages)
-  set(_port_version "")
-  math(EXPR _last "${_count} - 1")
-  foreach(_i RANGE ${_last})
-    string(JSON _name GET "${_spdx_json}" packages ${_i} name)
-    if(_name STREQUAL "qvac-fabric")
-      string(JSON _port_version GET "${_spdx_json}" packages ${_i} versionInfo)
-      break()
-    endif()
-  endforeach()
-  if(_port_version STREQUAL "")
-    message(FATAL_ERROR "qvac-addon: ${_spdx} names no qvac-fabric package.")
-  endif()
-
-  # The port version the installed @qvac/fabric was built from.
-  get_filename_component(_fabric_meta "${qvac-fabric_DIR}/../../../.." ABSOLUTE)
-  file(READ "${_fabric_meta}/package.json" _fabric_manifest)
-  string(JSON _fabric_port ERROR_VARIABLE _fabric_port_error
-    GET "${_fabric_manifest}" qvac qvac-fabric)
-  if(_fabric_port_error)
+  if(NOT DEFINED QVAC_FABRIC_PORT_VERSION OR NOT COMMAND qvac_fabric_installed_port_version)
     message(FATAL_ERROR
-      "qvac-addon: ${_fabric_meta}/package.json records no qvac[\"qvac-fabric\"], so the "
-      "server-context archive cannot be matched to it. Use an @qvac/fabric release that "
-      "records the qvac-fabric port it was built from.")
+      "qvac-addon: the installed @qvac/fabric (${qvac-fabric_DIR}) does not record the "
+      "qvac-fabric port it was built from (QVAC_FABRIC_PORT_VERSION), so the "
+      "server-context archive cannot be matched to it. Use an @qvac/fabric build that does.")
   endif()
-  if(NOT _port_version STREQUAL _fabric_port)
+  qvac_fabric_installed_port_version("${_installed}" _port_version)
+  if(NOT _port_version STREQUAL QVAC_FABRIC_PORT_VERSION)
     message(FATAL_ERROR
       "qvac-addon: server-context comes from qvac-fabric ${_port_version}, but the installed "
-      "@qvac/fabric runtime was built from qvac-fabric ${_fabric_port}. Pin qvac-fabric "
-      "${_fabric_port} in vcpkg.json, or install the @qvac/fabric built from ${_port_version}.")
+      "@qvac/fabric runtime was built from qvac-fabric ${QVAC_FABRIC_PORT_VERSION}. Pin "
+      "qvac-fabric ${QVAC_FABRIC_PORT_VERSION} in vcpkg.json, or install the @qvac/fabric "
+      "built from ${_port_version}.")
   endif()
   message(STATUS "qvac-addon: server-context from qvac-fabric ${_port_version}, matching @qvac/fabric")
 

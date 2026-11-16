@@ -10,9 +10,10 @@
   six value classes' vtables and typeinfo of the `jinja` engine, named
   exactly, plus `fs_validate_filename` and `glob_match`, on ELF, Mach-O and
   Windows.
-- `package.json` records the `qvac-fabric` port the runtime is built from, as
-  `qvac["qvac-fabric"]`. An addon that links code from the port itself is
-  checked against it when it configures.
+- The CMake config records the `qvac-fabric` port the runtime is built from, as
+  `QVAC_FABRIC_PORT_VERSION`; an addon that links code from the port itself is
+  checked against it when it configures. `package.json` records the same port
+  as `qvac["qvac-fabric"]`, and the build fails if the two differ.
 
 ## [0.27.0] - 2026-11-05
 

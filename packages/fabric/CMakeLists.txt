@@ -84,6 +84,20 @@ configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-format
 configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-tidy
                ${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy COPYONLY)
 
+# The qvac-fabric port this runtime is built from. It goes into the CMake config
+# (QVAC_FABRIC_PORT_VERSION), so an addon that links code from its own build of
+# the port can check it is the same; package.json records it too
+# (qvac["qvac-fabric"], checked by verify-qvac-fabric-lockstep against
+# vcpkg.json), and the two must agree. The same on every triplet.
+include(cmake/qvac-fabric-port.cmake)
+qvac_fabric_installed_port_version("${VCPKG_INSTALLED_PATH}" QVAC_FABRIC_PORT_VERSION)
+string(JSON _pkg_port ERROR_VARIABLE _pkg_port_error GET "${_pkg_json}" qvac qvac-fabric)
+if(_pkg_port_error OR NOT _pkg_port STREQUAL QVAC_FABRIC_PORT_VERSION)
+  message(FATAL_ERROR
+    "qvac-fabric: package.json records qvac[\"qvac-fabric\"] '${_pkg_port}', but this "
+    "build installed qvac-fabric ${QVAC_FABRIC_PORT_VERSION}. Update the record.")
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -439,6 +453,7 @@ install(FILES
   ${CMAKE_CURRENT_BINARY_DIR}/qvac-fabricConfig.cmake
   ${CMAKE_CURRENT_BINARY_DIR}/qvac-fabricConfigVersion.cmake
   cmake/qvac-fabric-hosts.cmake
+  cmake/qvac-fabric-port.cmake
   DESTINATION share/qvac-fabric/cmake)
 
 # --- Platform-specific -------------------------------------------------------

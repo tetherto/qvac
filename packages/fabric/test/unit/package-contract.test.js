@@ -213,11 +213,21 @@ test('fabric neither builds nor ships server-context', () => {
   assert.doesNotMatch(read('CMakeLists.txt'), /server-context/)
 })
 
-test('package.json records the qvac-fabric port the runtime is built from', () => {
-  // qvac_addon_link_fabric_server_context() checks an addon's own port build
-  // against this record.
+test('the qvac-fabric port the runtime is built from is recorded', () => {
+  // package.json records the pinned port; the build checks the record against
+  // the port it installed and writes it into the CMake config, where
+  // qvac_addon_link_fabric_server_context() compares an addon's own port build.
   const pinned = vcpkgJson.dependencies.find((dep) => dep.name === 'qvac-fabric')['version>=']
   assert.equal(packageJson.qvac['qvac-fabric'], pinned)
+  const cmake = read('CMakeLists.txt')
+  assert.match(
+    cmake,
+    /qvac_fabric_installed_port_version\("\$\{VCPKG_INSTALLED_PATH\}" QVAC_FABRIC_PORT_VERSION\)/
+  )
+  assert.match(cmake, /cmake\/qvac-fabric-port\.cmake\s+DESTINATION share\/qvac-fabric\/cmake/)
+  const config = read('cmake/qvac-fabricConfig.cmake.in')
+  assert.match(config, /set\(QVAC_FABRIC_PORT_VERSION "@QVAC_FABRIC_PORT_VERSION@"\)/)
+  assert.match(config, /include\("\$\{CMAKE_CURRENT_LIST_DIR\}\/qvac-fabric-port\.cmake"\)/)
 })
 
 test('the Mach-O export list does not re-export host symbols', () => {

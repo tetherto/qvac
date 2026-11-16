@@ -169,10 +169,11 @@ taking only the `server-context` archive from it
 (`qvac_addon_link_fabric_server_context()` in `cmake/qvac-addon`). Everything
 else `server-context` references comes from the runtime.
 
-The port and the runtime must be the same version. `package.json` records the
-port as `qvac["qvac-fabric"]`, matching the `vcpkg.json` pin, and configure
-fails unless the installed `@qvac/fabric` records the same version. Update the
-pin, the record and the `@qvac/fabric` dependency together.
+The port and the runtime must be the same version: configure fails unless the
+installed `@qvac/fabric` was built from the port version this build installs
+(its CMake config records it). `package.json` records the port as
+`qvac["qvac-fabric"]`, matching the `vcpkg.json` pin. Update the pin, the
+record and the `@qvac/fabric` dependency together.
 
 ## License
 
