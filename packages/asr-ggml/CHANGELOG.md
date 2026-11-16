@@ -14,8 +14,6 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
-## [0.13.0] - 2026-11-13
-
 ### Added
 
 - Opt-in WebGPU source builds with backend identity reporting.
