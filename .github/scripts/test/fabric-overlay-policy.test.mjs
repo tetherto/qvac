@@ -249,14 +249,27 @@ test('only the fabric producer detects the stack without resolving an artifact',
 // every assertion below vacuous for that package — it would be exempt by
 // omission, which is the failure mode that let cpp-lint drift in the first
 // place. Tie the package list to the workflow list explicitly.
+// A package on the CI contract builds through Nx in _build.yml, and its build target depends on
+// fabric's, so Nx compiles a changed fabric from source before the package, with no overlay.
 test('every fabric-consumer package has an on-pr workflow that detects the stack', () => {
   const detectingSources = FABRIC_WORKFLOWS.map((p) => read(p))
   const nxCovers = FABRIC_WORKFLOWS.includes(NX_WORKFLOW)
     ? new Set(nxCoveredPackages())
     : new Set()
+  const onContract = (pkg) =>
+    (JSON.parse(read(`packages/${pkg}/project.json`)).tags ?? []).includes('ci:addons')
+  const nxBuilds = /nx run-many -t [a-z:,]*\bbuild\b/.test(read('.github/workflows/_build.yml'))
+  const buildsFabric = (pkg) =>
+    (JSON.parse(read(`packages/${pkg}/project.json`)).targets?.build?.dependsOn ?? []).some(
+      (d) =>
+        d === '^build' ||
+        (['build', 'link:platform'].includes(d.target) &&
+          (d.projects ?? []).includes('@qvac/fabric'))
+    )
   const missing = CONSUMER_PACKAGES.filter(
     (pkg) =>
       !nxCovers.has(pkg) &&
+      !(nxBuilds && onContract(pkg) && buildsFabric(pkg)) &&
       !detectingSources.some((source) => source.includes(`packages/${pkg}`))
   )
   assert.deepEqual(

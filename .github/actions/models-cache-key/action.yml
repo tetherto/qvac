@@ -1,0 +1,39 @@
+name: Resolve model cache
+description: Cache key, fallback prefix and paths for a package's models, from its manifest alone.
+
+inputs:
+  workdir:
+    description: Package directory
+    required: true
+  target:
+    description: Only models whose targets include this one; empty means all
+    default: ""
+  manifest:
+    description: Manifest path inside workdir
+    default: test/integration/models.manifest.json
+  version:
+    description: Bump to discard every entry for this package
+    default: v1
+
+outputs:
+  key:
+    description: Exact cache key
+    value: ${{ steps.resolve.outputs.key }}
+  restore-prefix:
+    description: Prefix to fall back to when the exact key misses
+    value: ${{ steps.resolve.outputs.restore-prefix }}
+  paths:
+    description: Newline-separated directories the models land in
+    value: ${{ steps.resolve.outputs.paths }}
+
+runs:
+  using: composite
+  steps:
+    - id: resolve
+      shell: bash
+      env:
+        WORKDIR: ${{ inputs.workdir }}
+        TARGET: ${{ inputs.target }}
+        MANIFEST: ${{ inputs.manifest }}
+        VERSION: ${{ inputs.version }}
+      run: node "$GITHUB_ACTION_PATH/models-cache-key.mjs"

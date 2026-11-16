@@ -186,6 +186,13 @@ test('isRunFresh: ggml-rpc-server trusts only on-pr-nx', () => {
   )
 })
 
+test('isRunFresh: vla trusts pr-build-test.yml, and no longer its old orchestrator', () => {
+  const threshold = Math.floor(Date.parse('2026-08-10T12:00:00Z') / 1000)
+  const at = '2026-08-10T12:00:05Z'
+  assert.equal(isRunFresh({ path: '.github/workflows/pr-build-test.yml', created_at: at }, 'vla', threshold), true)
+  assert.equal(isRunFresh({ path: '.github/workflows/on-pr-vla.yml', created_at: at }, 'vla', threshold), false)
+})
+
 test('isRunFresh: every carved-out key is a real PREBUILD_KEYS entry', () => {
   // A typo ('vla-ggml' for 'vla') would silently fall back to the nx producer.
   for (const pkg of Object.keys(CARVED_OUT_PRODUCERS)) {
