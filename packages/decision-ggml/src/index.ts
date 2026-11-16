@@ -11,6 +11,7 @@ export {
 export type {
   DecisionEngineConfig,
   DecisionEngineRequest,
+  DecisionEngineBatchRequest,
   DecisionEngineQuestion,
   DecisionEngineAnswer,
   DecisionEngineResult,

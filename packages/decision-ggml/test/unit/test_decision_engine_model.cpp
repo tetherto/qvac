@@ -138,9 +138,23 @@ TEST(DecisionEngineConfigTest, UnsetOptionsAreLeftToUpstream) {
   const common_params p = params({{"device", "gpu"}});
   EXPECT_EQ(p.n_gpu_layers, defaults.n_gpu_layers);
   EXPECT_EQ(p.n_ctx, defaults.n_ctx);
-  EXPECT_EQ(p.n_parallel, defaults.n_parallel);
   EXPECT_TRUE(p.mmproj.path.empty());
   EXPECT_EQ(p.mmproj_use_gpu, defaults.mmproj_use_gpu);
+}
+
+TEST(DecisionEngineConfigTest, UnsetParallelIsLlamaServersAutoDefault) {
+  // llama-server's own default without -np: 4 slots sharing one KV cache.
+  const common_params p = params({{"device", "gpu"}});
+  EXPECT_EQ(p.n_parallel, 4);
+  EXPECT_TRUE(p.kv_unified);
+}
+
+TEST(DecisionEngineConfigTest, ExplicitParallelKeepsUpstreamsMeaning) {
+  // As with llama-server's -np: one KV cache per slot unless unified.
+  const common_params defaults{};
+  const common_params p = params({{"device", "gpu"}, {"parallel", "2"}});
+  EXPECT_EQ(p.n_parallel, 2);
+  EXPECT_EQ(p.kv_unified, defaults.kv_unified);
 }
 
 // openclCacheDir is applied by the addon's shared backend initializer before
@@ -364,6 +378,119 @@ TEST_F(DecisionContextModelTest, ReportsInfoAndMapsUpstreamRejections) {
   // The JS side keys err.code DECISION_INVALID_REQUEST on this prefix.
   EXPECT_EQ(rejected.second.rfind("invalid request: ", 0), 0U)
       << rejected.second;
+}
+
+namespace {
+
+const char* kQuestions = R"({
+    "route":  {"type": "choice", "instructions": "Which team?",
+               "criteria": {"support": "Account, order and delivery questions", "billing": "Payments, invoices and refunds"}},
+    "refund": {"type": "noul", "instructions": "Does the customer ask for a refund?"}
+  })";
+
+const std::vector<std::string> kStates = {
+    "My payment failed twice and I was charged both times. Please refund the "
+    "duplicate.",
+    "Where is my parcel? It was due on Monday.",
+    "I want my money back for the broken headphones.",
+    "How do I change the email address on my account?",
+    "The invoice shows the wrong company name.",
+    "Thanks, the replacement arrived and works fine."};
+
+json batchRequest(const json& states) {
+  return json{{"states", states}, {"questions", json::parse(kQuestions)}};
+}
+
+json singleRequest(const json& state) {
+  return json{{"state", state}, {"questions", json::parse(kQuestions)}};
+}
+
+} // namespace
+
+TEST_F(DecisionContextModelTest, ABatchAnswersEveryStateInInputOrder) {
+  const json results =
+      json::parse(context_->run(batchRequest(kStates).dump(), kNeverStop));
+  ASSERT_TRUE(results.is_array());
+  ASSERT_EQ(results.size(), kStates.size());
+  for (size_t i = 0; i < kStates.size(); ++i) {
+    // The state's own answers: run alone, the same state gives the same
+    // choice and, batched with others, a noul equal to rounding.
+    const json alone = json::parse(
+        context_->run(singleRequest(kStates[i]).dump(), kNeverStop));
+    EXPECT_EQ(
+        results[i]["answers"]["route"]["choice"],
+        alone["answers"]["route"]["choice"])
+        << "states[" << i << "]";
+    EXPECT_NEAR(
+        results[i]["answers"]["refund"]["noul"].get<double>(),
+        alone["answers"]["refund"]["noul"].get<double>(),
+        1e-3)
+        << "states[" << i << "]";
+    EXPECT_EQ(
+        results[i]["usage"]["input_tokens"], alone["usage"]["input_tokens"])
+        << "states[" << i << "]";
+  }
+}
+
+TEST_F(DecisionContextModelTest, ABatchOfOneIsAnArrayOfOne) {
+  const json results = json::parse(context_->run(
+      batchRequest(json::array({kStates[0]})).dump(), kNeverStop));
+  ASSERT_TRUE(results.is_array());
+  EXPECT_EQ(results.size(), 1U);
+  EXPECT_TRUE(results[0].contains("answers"));
+}
+
+TEST_F(DecisionContextModelTest, RejectsMalformedBatches) {
+  json both = batchRequest(json::array({"a"}));
+  both["state"] = "b";
+  for (const json& request :
+       {batchRequest(json::array()), batchRequest(json("not a list")), both}) {
+    const auto outcome = runOutcome(*context_, request.dump(), kNeverStop);
+    EXPECT_EQ(outcome.first, "[ Decision :: InvalidRequest ]")
+        << request.dump();
+    EXPECT_EQ(outcome.second.rfind("invalid request: ", 0), 0U)
+        << outcome.second;
+  }
+}
+
+TEST_F(DecisionContextModelTest, AFailingStateFailsTheBatchAndIsNamed) {
+  // openjev needs a state; null is rejected for that state only.
+  const auto outcome = runOutcome(
+      *context_,
+      batchRequest(json::array({kStates[0], kStates[1], nullptr, kStates[3]}))
+          .dump(),
+      kNeverStop);
+  EXPECT_EQ(outcome.first, "[ Decision :: InvalidRequest ]");
+  EXPECT_EQ(outcome.second.rfind("invalid request: states[2]: ", 0), 0U)
+      << outcome.second;
+
+  // The context recovers: the next batch answers.
+  const json next = json::parse(context_->run(
+      batchRequest(json::array({kStates[0], kStates[1]})).dump(), kNeverStop));
+  EXPECT_EQ(next.size(), 2U);
+}
+
+TEST_F(DecisionContextModelTest, AStopBeforeABatchCancelsItAndTheNextAnswers) {
+  EXPECT_EQ(
+      runOutcome(*context_, batchRequest(kStates).dump(), [] { return true; })
+          .first,
+      "Job cancelled");
+  const json next =
+      json::parse(context_->run(batchRequest(kStates).dump(), kNeverStop));
+  EXPECT_EQ(next.size(), kStates.size());
+}
+
+TEST_F(DecisionContextModelTest, AStopDuringABatchCancelsIt) {
+  // Stops once the batch has started: the remaining states never run, and the
+  // batch ends cancelled rather than with partial results.
+  std::atomic<int> polls{0};
+  const auto outcome =
+      runOutcome(*context_, batchRequest(kStates).dump(), [&polls] {
+        return polls.fetch_add(1) > 2;
+      });
+  EXPECT_EQ(outcome.first, "Job cancelled");
+  const json next = json::parse(context_->run(kRequest, kNeverStop));
+  EXPECT_TRUE(next.contains("answers"));
 }
 
 namespace {

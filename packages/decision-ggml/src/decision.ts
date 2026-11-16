@@ -64,6 +64,17 @@ export interface DecisionEngineRequest {
   files?: string[];
 }
 
+/**
+ * Several states with the same questions, answered in one run. The states go
+ * to upstream concurrently, so its slots (`parallel`) batch them.
+ */
+export interface DecisionEngineBatchRequest {
+  states: Array<DecisionPayload | null>;
+  questions: Record<string, DecisionEngineQuestion>;
+  /** Images (or audio clips) as data URLs, sent with every state. */
+  files?: string[];
+}
+
 export type DecisionEngineAnswer =
   | {
       type: "choice";
@@ -131,7 +142,9 @@ export interface DecisionEngineBinding extends ModelBinding {
   runJob(handle: unknown, input: { type: "text"; input: string }): Promise<number | boolean>;
 }
 
-export type MappedDecisionEngineEvent = MappedModelEvent<DecisionEngineResult>;
+export type MappedDecisionEngineEvent = MappedModelEvent<
+  DecisionEngineResult | DecisionEngineResult[]
+>;
 
 /**
  * `code` of a run error for a request the model rejected (bad JSON, nesting
@@ -175,7 +188,7 @@ export function mapDecisionEngineEvent(
   if (typeof rawEvent === "string" && rawEvent.includes("DecisionEngineResult")) {
     return {
       type: "Output",
-      data: JSON.parse(rawData as string) as DecisionEngineResult,
+      data: JSON.parse(rawData as string) as DecisionEngineResult | DecisionEngineResult[],
       error: null,
     };
   }
@@ -224,26 +237,36 @@ export class DecisionEngineInterface extends ModelInterface<
 /**
  * Upstream llama.cpp decision models (laya, openjev, lev, kev, clef, ...)
  * through upstream's server-context, run in-process by this addon. Requests
- * and results use upstream's /v1/systemone shapes, one state per run.
+ * and results use upstream's /v1/systemone shapes: one state per request, or
+ * `states` for several with the same questions.
  *
  * ```js
  * const engine = new DecisionEngine({ files: { model: [path] }, config: { device: 'gpu' } })
  * await engine.load()
  * engine.info() // { decision_type: 'openjev', noul: 'probability', ... }
  * const [result] = await (await engine.run({ state, questions })).await()
+ * const [results] = await (await engine.run({ states, questions })).await()
  * ```
  */
 export class DecisionEngine extends ModelRunner<
   DecisionEngineConfig,
-  DecisionEngineRequest,
+  DecisionEngineRequest | DecisionEngineBatchRequest,
   string,
-  DecisionEngineResult,
+  DecisionEngineResult | DecisionEngineResult[],
   DecisionEngineInterface
 > {
   protected readonly _modelName = "DecisionEngine";
 
-  /** Answers one state. `await()` on the response resolves to `[result]`. */
-  async run(request: DecisionEngineRequest): Promise<QvacResponse<DecisionEngineResult>> {
+  /**
+   * Answers one state: `await()` on the response resolves to `[result]`. With
+   * `states`, it resolves to `[results]`, one per state in input order; the
+   * first failing state fails the run.
+   */
+  async run(request: DecisionEngineRequest): Promise<QvacResponse<DecisionEngineResult>>;
+  async run(request: DecisionEngineBatchRequest): Promise<QvacResponse<DecisionEngineResult[]>>;
+  async run(
+    request: DecisionEngineRequest | DecisionEngineBatchRequest,
+  ): Promise<QvacResponse<DecisionEngineResult | DecisionEngineResult[]>> {
     return this._runRequest(request);
   }
 
@@ -263,7 +286,7 @@ export class DecisionEngine extends ModelRunner<
     return new DecisionEngineInterface(binding, configurationParams, outputCb);
   }
 
-  protected _encodeRequest(request: DecisionEngineRequest): string {
+  protected _encodeRequest(request: DecisionEngineRequest | DecisionEngineBatchRequest): string {
     return JSON.stringify(request);
   }
 

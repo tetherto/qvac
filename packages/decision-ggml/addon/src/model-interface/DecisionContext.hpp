@@ -49,10 +49,16 @@ public:
   ///    "n_ctx": int, "model": string}
   [[nodiscard]] const std::string& info() const noexcept;
 
-  /// Runs one /v1/systemone request (one state), blocks until it finishes and
-  /// returns upstream's response JSON. Upstream checks @p shouldStop between
-  /// result polls, so a stop takes effect at the next poll, not in the middle
-  /// of a backend computation.
+  /// Runs one /v1/systemone request, blocks until it finishes and returns
+  /// upstream's response JSON. Upstream checks @p shouldStop between result
+  /// polls, so a stop takes effect at the next poll, not in the middle of a
+  /// backend computation.
+  ///
+  /// A request with "states" (an array) instead of "state" is a batch: one
+  /// upstream request per state, sent concurrently so upstream batches them
+  /// across its slots, at most one per slot in flight. It returns a JSON array
+  /// of the responses in input order. The first failure stops the others and
+  /// fails the batch; its message names the state ("states[3]: ...").
   ///
   /// Throws std::runtime_error("Job cancelled") when @p shouldStop (or the
   /// context's destruction) stopped the run, even if upstream returned a

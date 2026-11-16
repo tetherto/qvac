@@ -5,8 +5,8 @@ const path = require('bare-path')
 const { DecisionEngine, DECISION_INVALID_REQUEST } = require('../../index.js')
 const { ensureModel, safeTest } = require('./utils')
 
-// Upstream decision models through @qvac/fabric's qvac_fabric_decision_*
-// bridge, on the tiny fixtures llama-server's own /v1/systemone tests use:
+// Upstream decision models through DecisionEngine (upstream server-context,
+// in-process), on the tiny fixtures llama-server's own /v1/systemone tests use:
 // tinylaya (non-causal, marker readout) and tinyopenjev (label logits, shared
 // prefixes, image projector).
 
@@ -108,6 +108,64 @@ for (const [name, mmproj, expectType] of [
     })
   })
 }
+
+const STATES = [
+  STATE,
+  'Where is my parcel? It was due on Monday.',
+  'I want my money back for the broken headphones.',
+  'How do I change the email address on my account?',
+  'The invoice shows the wrong company name.'
+]
+
+for (const [name, expectType] of [
+  [LAYA, 'laya'],
+  [OPENJEV, 'openjev']
+]) {
+  safeTest(
+    `${expectType}: a batch answers every state in input order`,
+    { timeout: 600_000 },
+    async (t) => {
+      await withEngine(t, name, GPU, async (engine) => {
+        const response = await engine.run({ states: STATES, questions: QUESTIONS })
+        const [results] = await response.await()
+        t.is(results.length, STATES.length, 'one result per state')
+        for (let i = 0; i < STATES.length; i++) {
+          checkAnswers(t, results[i].answers)
+          const { result: alone } = await decide(engine, { state: STATES[i], questions: QUESTIONS })
+          t.is(
+            results[i].answers.route.choice,
+            alone.answers.route.choice,
+            `states[${i}]: same choice as alone`
+          )
+          t.ok(
+            Math.abs(results[i].answers.refund.noul - alone.answers.refund.noul) < 1e-3,
+            `states[${i}]: same noul as alone, to rounding`
+          )
+          t.is(
+            results[i].usage.input_tokens,
+            alone.usage.input_tokens,
+            `states[${i}]: same input tokens`
+          )
+        }
+      })
+    }
+  )
+}
+
+safeTest('a batch with a rejected state fails naming it', { timeout: 600_000 }, async (t) => {
+  await withEngine(t, OPENJEV, GPU, async (engine) => {
+    // openjev needs a state: null is rejected for that one.
+    const response = await engine.run({
+      states: [STATES[0], null, STATES[1]],
+      questions: QUESTIONS
+    })
+    const rejected = await response.await().catch((err) => err)
+    t.is(rejected.code, DECISION_INVALID_REQUEST, 'rejection is coded as an invalid request')
+    t.ok(/^states\[1\]: /.test(rejected.message), `names states[1]: ${rejected.message}`)
+    const { result } = await decide(engine, { state: STATE, questions: QUESTIONS })
+    checkAnswers(t, result.answers)
+  })
+})
 
 // A 32x32 RGB PNG.
 const IMAGE =

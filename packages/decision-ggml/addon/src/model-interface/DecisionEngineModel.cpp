@@ -142,9 +142,16 @@ common_params DecisionEngineModel::loadParams(
     }
   }
   // Upstream creates one execution slot per n_parallel and does not check it:
-  // with 0 slots every request would stay deferred forever.
+  // with 0 slots every request would stay deferred forever. Unset, it is
+  // llama-server's own automatic default: 4 slots sharing one unified KV cache,
+  // so a request's questions and a batch's states run together without the
+  // KV memory growing with the slots. An explicit value keeps upstream's
+  // explicit meaning (one KV cache per slot), as llama-server's -np does.
   if (const std::string v = firstOf(config, {"parallel"}); !v.empty()) {
     params.n_parallel = toInt("parallel", v, 1);
+  } else {
+    params.n_parallel = 4;
+    params.kv_unified = true;
   }
   if (const std::string v = firstOf(config, {"mmproj"}); !v.empty()) {
     params.mmproj.path = v;

@@ -9,8 +9,12 @@
   through upstream's `server-context`, which this addon links statically from
   its own build of the `qvac-fabric` port, at the version the installed
   `@qvac/fabric` runtime records.
-  - Requests and results use upstream's `/v1/systemone` shapes, one state per
-    run; `info()` reports the model's decision capabilities.
+  - Requests and results use upstream's `/v1/systemone` shapes; `info()`
+    reports the model's decision capabilities.
+  - `states` answers several states in one run, sent to upstream concurrently
+    so its slots batch them; results keep the input order.
+  - Unset, `parallel` is llama-server's own default: 4 slots sharing one KV
+    cache.
   - One request runs at a time and a second is rejected while it does;
     cancellation reaches a job even before its run starts.
   - A model without decision metadata is rejected from its GGUF header before

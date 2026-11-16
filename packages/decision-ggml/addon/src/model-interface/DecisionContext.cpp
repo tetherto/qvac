@@ -5,12 +5,13 @@
 // addon's errors. No HTTP server is created: post_systemone is called directly
 // with a request struct.
 //
-// server-context is linked statically into this addon (from @qvac/fabric's
-// platform package); its llama / common / mtmd references resolve from the
-// shared fabric runtime.
+// server-context is linked statically into this addon (from its own vcpkg
+// build of the qvac-fabric port); its llama / common / mtmd references resolve
+// from the shared fabric runtime.
 
 #include "DecisionContext.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <condition_variable>
 #include <exception>
@@ -19,6 +20,7 @@
 #include <stdexcept>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #include <common.h>
 #include <inference-addon-cpp/Errors.hpp>
@@ -64,6 +66,11 @@ using State = DecisionContext::State;
   // "invalid request: " is the marker the JS side turns into err.code
   // DECISION_INVALID_REQUEST (job errors reach JS as their message only).
   fail(InvalidRequest, "invalid request: " + message);
+}
+
+// Prefix of a failure inside a batch ("states[3]: "), empty for one state.
+std::string at(const std::string& where) {
+  return where.empty() ? where : where + ": ";
 }
 
 [[noreturn]] void failCancelled() {
@@ -297,6 +304,158 @@ const std::string& DecisionContext::info() const noexcept {
   return state_->info;
 }
 
+namespace {
+
+// One /v1/systemone request (one state) through upstream's handler. @p where
+// names the state inside a batch, for the error messages.
+std::string runOne(
+    State& d, const std::string& requestJson, const std::function<bool()>& stop,
+    const std::string& where) {
+  server_http_res_ptr res;
+  try {
+    server_http_req req{{}, {}, "/v1/systemone", "", requestJson, {}, stop};
+    res = d.routes->post_systemone(req);
+  } catch (const std::invalid_argument& e) {
+    // llama-server's ex_wrapper (HTTP target, not built here) maps these to
+    // 400.
+    if (stop()) {
+      failCancelled();
+    }
+    failRequest(at(where) + e.what());
+  } catch (const common_json_error& e) {
+    if (stop()) {
+      failCancelled();
+    }
+    failRequest(at(where) + e.what());
+  } catch (const std::exception& e) {
+    if (stop()) {
+      failCancelled();
+    }
+    fail(DecodeFailed, at(where) + e.what());
+  } catch (...) {
+    if (stop()) {
+      failCancelled();
+    }
+    fail(DecodeFailed, at(where) + "unknown error");
+  }
+
+  // A cancelled request can come back untouched: status 200 and no data. The
+  // stop signal decides, never the status alone.
+  if (stop()) {
+    failCancelled();
+  }
+  if (!res) {
+    fail(DecodeFailed, at(where) + "no response from the decision handler");
+  }
+  if (res->status != 200) {
+    const std::string message = res->data.empty()
+                                    ? "decision request failed with status " +
+                                          std::to_string(res->status)
+                                    : errorMessage(res->data);
+    // 400 is a rejected request; 501 is "not supported" (e.g. images on a
+    // model without image input), also a property of the request.
+    if (res->status == 400 || res->status == 501) {
+      failRequest(at(where) + message);
+    }
+    fail(DecodeFailed, at(where) + message);
+  }
+
+  try {
+    const common_json result = common_json::parse(res->data);
+    if (!result.is_object() || !result.contains("answers")) {
+      fail(
+          DecodeFailed, at(where) + "the decision handler returned no answers");
+    }
+  } catch (const qvac_errors::StatusError&) {
+    throw;
+  } catch (const std::exception& e) {
+    fail(
+        DecodeFailed,
+        at(where) + "the decision handler returned invalid JSON: " + e.what());
+  }
+  return std::move(res->data);
+}
+
+// A batch: one request per state, sent to upstream concurrently so its slots
+// batch them, at most one in flight per slot. Results keep the input order.
+// The first failure stops the other states and fails the batch.
+std::string runStates(
+    State& d, const common_json& request, const std::function<bool()>& stop) {
+  const common_json& states = request.at("states");
+  if (request.contains("state")) {
+    failRequest("give either \"state\" or \"states\", not both");
+  }
+  if (!states.is_array() || states.empty()) {
+    failRequest("\"states\" must be a non-empty array");
+  }
+
+  common_json shared = request;
+  shared.erase("states");
+  std::vector<std::string> bodies;
+  bodies.reserve(states.size());
+  for (const common_json& state : states) {
+    shared["state"] = state;
+    bodies.push_back(shared.dump());
+  }
+
+  const size_t n = bodies.size();
+  std::vector<std::string> results(n);
+  std::atomic<size_t> next{0};
+  std::atomic<bool> failed{false};
+  std::exception_ptr firstError;
+  std::mutex errorMutex;
+  const auto batchStop = [&stop, &failed]() {
+    return failed.load(std::memory_order_acquire) || stop();
+  };
+
+  const auto worker = [&]() {
+    for (size_t i = next.fetch_add(1); i < n && !batchStop();
+         i = next.fetch_add(1)) {
+      try {
+        results[i] = runOne(
+            d, bodies[i], batchStop, "states[" + std::to_string(i) + "]");
+      } catch (...) {
+        // A sibling's stop makes the others end as cancelled; only the
+        // failure that stopped them is reported.
+        std::lock_guard<std::mutex> lock(errorMutex);
+        if (!failed.exchange(true, std::memory_order_acq_rel)) {
+          firstError = std::current_exception();
+        }
+      }
+    }
+  };
+
+  const size_t workers =
+      std::min(n, static_cast<size_t>(std::max(1, d.params.n_parallel)));
+  std::vector<std::thread> threads;
+  threads.reserve(workers - 1);
+  for (size_t w = 1; w < workers; ++w) {
+    threads.emplace_back(worker);
+  }
+  worker();
+  for (std::thread& t : threads) {
+    t.join();
+  }
+
+  if (stop()) {
+    failCancelled();
+  }
+  if (firstError) {
+    std::rethrow_exception(firstError);
+  }
+  std::string out = "[";
+  for (size_t i = 0; i < n; ++i) {
+    if (i > 0) {
+      out += ',';
+    }
+    out += results[i];
+  }
+  out += ']';
+  return out;
+}
+
+} // namespace
+
 std::string DecisionContext::run(
     const std::string& requestJson, const std::function<bool()>& shouldStop) {
   State& d = *state_;
@@ -335,68 +494,18 @@ std::string DecisionContext::run(
         " levels deep");
   }
 
-  server_http_res_ptr res;
+  // Parsed only to find "states": the depth guard above bounds the recursion.
+  // A body that is not JSON goes to upstream as is, which rejects it.
+  common_json request;
   try {
-    server_http_req req{{}, {}, "/v1/systemone", "", requestJson, {}, stop};
-    res = d.routes->post_systemone(req);
-  } catch (const std::invalid_argument& e) {
-    // llama-server's ex_wrapper (HTTP target, not built here) maps these to
-    // 400.
-    if (stop()) {
-      failCancelled();
-    }
-    failRequest(e.what());
-  } catch (const common_json_error& e) {
-    if (stop()) {
-      failCancelled();
-    }
-    failRequest(e.what());
-  } catch (const std::exception& e) {
-    if (stop()) {
-      failCancelled();
-    }
-    fail(DecodeFailed, e.what());
-  } catch (...) {
-    if (stop()) {
-      failCancelled();
-    }
-    fail(DecodeFailed, "unknown error");
+    request = common_json::parse(requestJson);
+  } catch (const std::exception&) {
+    return runOne(d, requestJson, stop, "");
   }
-
-  // A cancelled request can come back untouched: status 200 and no data. The
-  // stop signal decides, never the status alone.
-  if (stop()) {
-    failCancelled();
+  if (request.is_object() && request.contains("states")) {
+    return runStates(d, request, stop);
   }
-  if (!res) {
-    fail(DecodeFailed, "no response from the decision handler");
-  }
-  if (res->status != 200) {
-    const std::string message = res->data.empty()
-                                    ? "decision request failed with status " +
-                                          std::to_string(res->status)
-                                    : errorMessage(res->data);
-    // 400 is a rejected request; 501 is "not supported" (e.g. images on a
-    // model without image input), also a property of the request.
-    if (res->status == 400 || res->status == 501) {
-      failRequest(message);
-    }
-    fail(DecodeFailed, message);
-  }
-
-  try {
-    const common_json result = common_json::parse(res->data);
-    if (!result.is_object() || !result.contains("answers")) {
-      fail(DecodeFailed, "the decision handler returned no answers");
-    }
-  } catch (const qvac_errors::StatusError&) {
-    throw;
-  } catch (const std::exception& e) {
-    fail(
-        DecodeFailed,
-        std::string("the decision handler returned invalid JSON: ") + e.what());
-  }
-  return std::move(res->data);
+  return runOne(d, requestJson, stop, "");
 }
 
 } // namespace qvac_lib_inference_addon_decision

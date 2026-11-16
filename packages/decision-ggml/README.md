@@ -61,9 +61,23 @@ const [result] = await response.await()
 await engine.unload()
 ```
 
-Requests and results use upstream's `/v1/systemone` shapes, one state per run.
-`info()` reports what the loaded model supports; check it before building
-requests (for example, lev's `noul` is an expected rating, not a probability).
+Requests and results use upstream's `/v1/systemone` shapes. `info()` reports
+what the loaded model supports; check it before building requests (for
+example, lev's `noul` is an expected rating, not a probability).
+
+### Several states
+
+`states` instead of `state` answers several states with the same questions in
+one run. They go to upstream concurrently, at most one per slot (`parallel`),
+so upstream batches them. `await()` resolves to `[results]`, one result per
+state in input order:
+
+```js
+const [results] = await (await engine.run({ states: [ticketA, ticketB], questions })).await()
+```
+
+The first state that fails fails the run, and its error names it
+(`states[1]: ...`). A cancel stops the whole batch.
 
 See [`examples/decisionEngine.js`](./examples/decisionEngine.js) for a runnable
 example.
@@ -76,7 +90,7 @@ example.
 | `gpu_layers` | Layers to offload on `gpu`. |
 | `ctx_size`, `batch_size`, `ubatch_size` | Context and batch sizes. Unset values are left to upstream (the context fits free device memory). |
 | `threads` | CPU threads, at most the device's CPU count; `0` uses every CPU. |
-| `parallel` | Upstream slots, at least 1. Upstream schedules a request's questions and option variants over them; it does not change how many requests run at once. |
+| `parallel` | Upstream slots, at least 1. Upstream runs a request's questions, option variants and a batch's states over them together; it does not change how many requests the engine accepts at once. Unset, it is llama-server's own default: 4 slots sharing one KV cache, so memory does not grow with them. Set, each slot has its own KV cache, as with llama-server's `-np`. |
 | `mmproj` | Projector GGUF, for models that take images or audio. |
 | `verbosity` | Native log level, `0` (error) to `3` (debug). |
 | `openclCacheDir` | Writable OpenCL kernel cache directory (Android). |
@@ -87,7 +101,7 @@ Any other key fails the load. Multi-word keys take either spelling
 ### Behavior
 
 - **One request at a time.** A `run()` while another is in flight is rejected;
-  queue in JS.
+  queue in JS. A batch (`states`) is one request.
 - **Cancellation.** `cancel()` stops the running request at upstream's next
   result poll, and reaches a request even before its run starts. The next
   request runs normally.

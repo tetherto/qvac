@@ -75,18 +75,19 @@ exports.DecisionEngineInterface = DecisionEngineInterface;
 /**
  * Upstream llama.cpp decision models (laya, openjev, lev, kev, clef, ...)
  * through upstream's server-context, run in-process by this addon. Requests
- * and results use upstream's /v1/systemone shapes, one state per run.
+ * and results use upstream's /v1/systemone shapes: one state per request, or
+ * `states` for several with the same questions.
  *
  * ```js
  * const engine = new DecisionEngine({ files: { model: [path] }, config: { device: 'gpu' } })
  * await engine.load()
  * engine.info() // { decision_type: 'openjev', noul: 'probability', ... }
  * const [result] = await (await engine.run({ state, questions })).await()
+ * const [results] = await (await engine.run({ states, questions })).await()
  * ```
  */
 class DecisionEngine extends modelRunner_1.ModelRunner {
     _modelName = "DecisionEngine";
-    /** Answers one state. `await()` on the response resolves to `[result]`. */
     async run(request) {
         return this._runRequest(request);
     }
