@@ -95,9 +95,11 @@ runs:
         # previous_filename too: a rename reports only its destination under
         # .filename, so taking that alone selects the new package and misses the
         # one the file left.
+        files="${RUNNER_TEMP}/nx-changed-files.jsonl"
         raw="${RUNNER_TEMP}/nx-changed-files.raw"
         gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" \
-          --jq '.[] | .filename, (.previous_filename // empty)' > "$raw"
+          --jq '.[] | {filename, status, previous_filename}' > "$files"
+        jq -r '.filename, (.previous_filename // empty)' "$files" > "$raw"
         count=$(wc -l < "$raw")
         if [ "$count" -eq 0 ]; then
           echo "::error::the API reported no changed paths for PR ${PR_NUMBER}"
@@ -137,6 +139,14 @@ runs:
 
         kept=$(wc -l < "$filtered")
         echo "Changed paths: $count (using $kept after dropping packages absent from the trusted ref)"
+
+        # A package the PR deletes is still on this trusted checkout, so nx and
+        # the lockfile selection both pick it, and its jobs would then run in a
+        # directory the PR head no longer has. compute drops these from AFFECTED.
+        # A rename away from packages/<pkg>/package.json deletes <pkg> the same way.
+        jq -r 'if .status == "removed" then .filename elif .status == "renamed" then .previous_filename else empty end' "$files" \
+          | { grep -E '^packages/[^/]+/package\.json$' || true; } \
+          | cut -d/ -f2 | sort -u > "${RUNNER_TEMP}/nx-deleted-packages.txt"
     - id: compute
       shell: bash
       env:
@@ -228,6 +238,13 @@ runs:
           if [ "$DEPENDENTS" != "[]" ]; then
             echo "::notice::packages whose installed dependencies changed, and their workspace dependents, added: $DEPENDENTS"
             AFFECTED=$(jq -c --argjson extra "$DEPENDENTS" '. + $extra | unique' <<< "$AFFECTED")
+          fi
+
+          DELETED_FILE="${RUNNER_TEMP}/nx-deleted-packages.txt"
+          if [ -s "$DELETED_FILE" ]; then
+            DELETED=$(jq -R . "$DELETED_FILE" | jq -sc .)
+            echo "::notice::this PR deletes $DELETED, so they are not selected"
+            AFFECTED=$(jq -c --argjson deleted "$DELETED" '. - $deleted' <<< "$AFFECTED")
           fi
           echo "Affected ($TARGET, transitive): $AFFECTED"
         fi

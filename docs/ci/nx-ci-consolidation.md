@@ -182,4 +182,5 @@ introduced by this policy.
 
 1. Edit that package's `packages/<pkg>/project.json` — add/adjust the `options.ci` block for the relevant target. No workflow edits needed for shape changes.
 2. New package: give it the targets it needs (`build`, `on-pr`, `test:cpp`, ...) with `options.ci`; the leaves pick it up once it's nx-affected. Config must land on the default branch first (that's the trusted ref the matrix reads).
-3. Validate: `node .github/scripts/test/ci-trust-policy.test.mjs`, `actionlint`, and a standalone `workflow_dispatch` of the affected leaf with `base-ref`/`head-ref`.
+3. Removing a package: delete `packages/<pkg>/` and its CI wiring in one PR. The default branch still has the package, so `nx-project-matrix` and Merge Guard would select it from the deleted paths. Both drop a package whose `package.json` the PR deletes or renames away, so none of its jobs run against the missing directory. Packages that depend on it are still selected.
+4. Validate: `node .github/scripts/test/ci-trust-policy.test.mjs`, `actionlint`, and a standalone `workflow_dispatch` of the affected leaf with `base-ref`/`head-ref`.
