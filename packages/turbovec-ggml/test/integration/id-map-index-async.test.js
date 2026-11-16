@@ -446,6 +446,81 @@ test('IdMapIndex async: inputs are copied when the call is made', async (t) => {
   idx.dispose()
 })
 
+// A queued operation's native call starts only after the operations ahead of
+// it settle; the caller changes each input right after making the call.
+test('IdMapIndex async: inputs of queued operations are copied when the call is made', async (t) => {
+  const idx = filledIndex()
+  idx.buildIvf(4, 2)
+
+  const ahead = idx.searchAsync(unitVec(0), 1)
+  const query = unitVec(6)
+  const search = idx.searchAsync(query, 1)
+  query.set(unitVec(2))
+  const ivfQuery = unitVec(6)
+  const ivf = idx.searchIvfAsync(ivfQuery, 1, 4)
+  ivfQuery.set(unitVec(2))
+  const allowed = new BigUint64Array([7n])
+  const filtered = idx.searchFilteredAsync(unitVec(6), 1, allowed)
+  allowed[0] = 3n
+  const filterIds = new BigUint64Array([7n])
+  const prepared = idx.prepareFilterAsync(filterIds)
+  filterIds[0] = 3n
+
+  t.is((await ahead).ids[0], 1n, 'the operation ahead ran')
+  t.is((await search).ids[0], 7n, 'searchAsync used the query it was called with')
+  t.is((await ivf).ids[0], 7n, 'searchIvfAsync used the query it was called with')
+  t.is((await filtered).ids[0], 7n, 'searchFilteredAsync used the allow-list it was called with')
+  const filter = await prepared
+  t.is(
+    filter.search(unitVec(6), 1).ids[0],
+    7n,
+    'prepareFilterAsync used the ids it was called with'
+  )
+
+  const busy = idx.searchAsync(unitVec(0), 1)
+  const filterQuery = unitVec(6)
+  const filterSearch = filter.searchAsync(filterQuery, 1)
+  filterQuery.buffer.transfer()
+  const rows = unitVec(3)
+  const ids = new BigUint64Array([50n])
+  const add = idx.addWithIdsAsync(rows, ids)
+  rows.fill(0)
+  ids[0] = 0xffffffffffffffffn
+
+  await busy
+  t.is((await filterSearch).ids[0], 7n, 'filter.searchAsync used the query it was called with')
+  await add
+  t.absent(idx.contains(0xffffffffffffffffn), 'addWithIdsAsync did not add the reserved id')
+  // Row 3 already holds unitVec(3): the new row is a second exact match only
+  // when it was stored as passed.
+  const scoreOf = (result, id) => result.scores[result.ids.indexOf(id)]
+  t.ok(scoreOf(idx.search(unitVec(3), 2), 50n) > 0.99, 'addWithIdsAsync stored its rows')
+  idx.dispose()
+
+  // A written index takes logged or unlogged mutations, not both, so the
+  // logged add gets an index of its own.
+  const logged = filledIndex()
+  const snapshotPath = tmpPath('async-queued-copy')
+  const deltaPath = snapshotPath.replace(/\.tvim$/, '.tvid')
+  try {
+    logged.write(snapshotPath)
+    const before = logged.searchAsync(unitVec(0), 1)
+    const loggedRows = unitVec(4)
+    const loggedIds = new BigUint64Array([60n])
+    const append = logged.addLoggedAsync(loggedRows, loggedIds, deltaPath)
+    loggedRows.fill(0)
+    loggedIds[0] = 0xffffffffffffffffn
+    await before
+    await append
+    t.absent(logged.contains(0xffffffffffffffffn), 'addLoggedAsync did not add the reserved id')
+    t.ok(scoreOf(logged.search(unitVec(4), 2), 60n) > 0.99, 'addLoggedAsync stored its rows')
+  } finally {
+    logged.dispose()
+    removeFile(snapshotPath)
+    removeFile(deltaPath)
+  }
+})
+
 test('IdMapIndex async: two builds do not hold up a search on a third index', async (t) => {
   const first = busyIndex()
   const second = busyIndex()

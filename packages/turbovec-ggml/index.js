@@ -91,6 +91,13 @@ function enqueue(index, run) {
     index[QUEUE] = result.then(settled, settled);
     return result;
 }
+// The native call copies its array inputs when it starts. An operation that
+// waits behind earlier ones starts later, so its inputs are copied here, at
+// call time: the caller may change or transfer them once the call returns.
+// Must be called in the same synchronous step as the `enqueue()` it feeds.
+function snapshot(index, array) {
+    return index[PENDING] === 0 ? array : array.slice();
+}
 // Frees a native handle once the operations queued on `owner` have settled,
 // or now when none are. An operation that is running holds the handle.
 function releaseAfterQueue(owner, release) {
@@ -147,12 +154,13 @@ class IdMapIndexFilter {
         if (owner === null || this[FILTER_HANDLE] === null) {
             throw new Error('IdMapIndexFilter has been disposed');
         }
+        const input = snapshot(owner, queries);
         return enqueue(owner, () => {
             const filterHandle = this[FILTER_HANDLE];
             if (this[FILTER_OWNER] === null || filterHandle === null) {
                 throw new Error('IdMapIndexFilter has been disposed');
             }
-            return loadBinding().idx_search_prepared_filtered_async(ensureHandle(owner), filterHandle, queries, k);
+            return loadBinding().idx_search_prepared_filtered_async(ensureHandle(owner), filterHandle, input, k);
         });
     }
     /**
@@ -453,18 +461,23 @@ class IdMapIndex {
     /** `addWithIds()` run off the JS thread. */
     async addWithIdsAsync(vectors, ids) {
         this.validateBatch('addWithIdsAsync', vectors, ids);
-        return enqueue(this, () => this.mutate(() => loadBinding().idx_add_async(ensureHandle(this), vectors, ids)));
+        const rows = snapshot(this, vectors);
+        const keys = snapshot(this, ids);
+        return enqueue(this, () => this.mutate(() => loadBinding().idx_add_async(ensureHandle(this), rows, keys)));
     }
     /** `addLogged()` run off the JS thread. */
     async addLoggedAsync(vectors, ids, deltaPath) {
         this.validateBatch('addLoggedAsync', vectors, ids);
         requireNonEmptyPath(deltaPath, 'addLoggedAsync: deltaPath');
-        return enqueue(this, () => this.mutate(() => loadBinding().idx_add_logged_async(ensureHandle(this), vectors, ids, deltaPath)));
+        const rows = snapshot(this, vectors);
+        const keys = snapshot(this, ids);
+        return enqueue(this, () => this.mutate(() => loadBinding().idx_add_logged_async(ensureHandle(this), rows, keys, deltaPath)));
     }
     /** `search()` run off the JS thread. */
     async searchAsync(queries, k) {
         this.validateSearch('searchAsync', queries, k);
-        return enqueue(this, () => loadBinding().idx_search_async(ensureHandle(this), queries, k));
+        const input = snapshot(this, queries);
+        return enqueue(this, () => loadBinding().idx_search_async(ensureHandle(this), input, k));
     }
     /** `searchFiltered()` run off the JS thread. */
     async searchFilteredAsync(queries, k, allowedIds) {
@@ -472,15 +485,18 @@ class IdMapIndex {
         if (!(allowedIds instanceof BigUint64Array)) {
             throw new TypeError('searchFilteredAsync: allowedIds must be a BigUint64Array');
         }
-        return enqueue(this, () => loadBinding().idx_search_filtered_async(ensureHandle(this), queries, k, allowedIds));
+        const input = snapshot(this, queries);
+        const allowed = snapshot(this, allowedIds);
+        return enqueue(this, () => loadBinding().idx_search_filtered_async(ensureHandle(this), input, k, allowed));
     }
     /** `prepareFilter()` run off the JS thread. */
     async prepareFilterAsync(allowedIds) {
         if (!(allowedIds instanceof BigUint64Array)) {
             throw new TypeError('prepareFilterAsync: allowedIds must be a BigUint64Array');
         }
+        const allowed = snapshot(this, allowedIds);
         return enqueue(this, async () => {
-            const filterHandle = await loadBinding().idx_filter_create_async(ensureHandle(this), allowedIds);
+            const filterHandle = await loadBinding().idx_filter_create_async(ensureHandle(this), allowed);
             // dispose() ran while the filter was being built. Free the filter now,
             // while the index is still alive: fabric requires the index to outlive
             // its filters, and the index is freed once this operation settles.
@@ -510,7 +526,8 @@ class IdMapIndex {
         if (!isPositiveInt32(nProbe)) {
             throw new TypeError('searchIvfAsync: nProbe must be a positive int32');
         }
-        return enqueue(this, () => loadBinding().idx_search_ivf_async(ensureHandle(this), queries, k, nProbe));
+        const input = snapshot(this, queries);
+        return enqueue(this, () => loadBinding().idx_search_ivf_async(ensureHandle(this), input, k, nProbe));
     }
     /** `remove()` run off the JS thread. */
     async removeAsync(id) {

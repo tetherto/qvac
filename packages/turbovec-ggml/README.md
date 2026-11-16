@@ -105,9 +105,10 @@ try {
   the `length`, `calibrated` and `stagedSearch` getters throw. `dim`,
   `bitWidth` and `dispose()` still work. Await the async work first, or use the
   async variants throughout.
-- Input arrays are copied when the call is made, so they can be changed or
-  transferred straight away. A large add briefly holds two copies of its
-  vectors.
+- Input arrays are copied when the call is made, including calls that wait
+  behind other work on the same index, so they can be changed or transferred
+  straight away. A large add holds one extra copy of its vectors until it
+  finishes, or two when it was queued behind other work.
 - `dispose()` during async work rejects the calls that have not started. A call
   that is running finishes, and the native index is freed after it.
   `disposeAsync()` resolves once it has been freed. A `prepareFilterAsync()`

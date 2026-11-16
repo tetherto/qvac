@@ -232,6 +232,14 @@ function enqueue<T>(index: IdMapIndex, run: () => Promise<T>): Promise<T> {
   return result
 }
 
+// The native call copies its array inputs when it starts. An operation that
+// waits behind earlier ones starts later, so its inputs are copied here, at
+// call time: the caller may change or transfer them once the call returns.
+// Must be called in the same synchronous step as the `enqueue()` it feeds.
+function snapshot<T extends Float32Array | BigUint64Array>(index: IdMapIndex, array: T): T {
+  return index[PENDING] === 0 ? array : (array.slice() as T)
+}
+
 // Frees a native handle once the operations queued on `owner` have settled,
 // or now when none are. An operation that is running holds the handle.
 function releaseAfterQueue(owner: IdMapIndex, release: () => void) {
@@ -306,6 +314,7 @@ export class IdMapIndexFilter {
     if (owner === null || this[FILTER_HANDLE] === null) {
       throw new Error('IdMapIndexFilter has been disposed')
     }
+    const input = snapshot(owner, queries)
     return enqueue(owner, () => {
       const filterHandle = this[FILTER_HANDLE]
       if (this[FILTER_OWNER] === null || filterHandle === null) {
@@ -314,7 +323,7 @@ export class IdMapIndexFilter {
       return loadBinding().idx_search_prepared_filtered_async(
         ensureHandle(owner),
         filterHandle,
-        queries,
+        input,
         k
       )
     })
@@ -705,8 +714,10 @@ export default class IdMapIndex {
   /** `addWithIds()` run off the JS thread. */
   async addWithIdsAsync(vectors: Float32Array, ids: BigUint64Array) {
     this.validateBatch('addWithIdsAsync', vectors, ids)
+    const rows = snapshot(this, vectors)
+    const keys = snapshot(this, ids)
     return enqueue(this, () =>
-      this.mutate(() => loadBinding().idx_add_async(ensureHandle(this), vectors, ids))
+      this.mutate(() => loadBinding().idx_add_async(ensureHandle(this), rows, keys))
     )
   }
 
@@ -714,9 +725,11 @@ export default class IdMapIndex {
   async addLoggedAsync(vectors: Float32Array, ids: BigUint64Array, deltaPath: string) {
     this.validateBatch('addLoggedAsync', vectors, ids)
     requireNonEmptyPath(deltaPath, 'addLoggedAsync: deltaPath')
+    const rows = snapshot(this, vectors)
+    const keys = snapshot(this, ids)
     return enqueue(this, () =>
       this.mutate(() =>
-        loadBinding().idx_add_logged_async(ensureHandle(this), vectors, ids, deltaPath)
+        loadBinding().idx_add_logged_async(ensureHandle(this), rows, keys, deltaPath)
       )
     )
   }
@@ -724,7 +737,8 @@ export default class IdMapIndex {
   /** `search()` run off the JS thread. */
   async searchAsync(queries: Float32Array, k: number) {
     this.validateSearch('searchAsync', queries, k)
-    return enqueue(this, () => loadBinding().idx_search_async(ensureHandle(this), queries, k))
+    const input = snapshot(this, queries)
+    return enqueue(this, () => loadBinding().idx_search_async(ensureHandle(this), input, k))
   }
 
   /** `searchFiltered()` run off the JS thread. */
@@ -733,8 +747,10 @@ export default class IdMapIndex {
     if (!(allowedIds instanceof BigUint64Array)) {
       throw new TypeError('searchFilteredAsync: allowedIds must be a BigUint64Array')
     }
+    const input = snapshot(this, queries)
+    const allowed = snapshot(this, allowedIds)
     return enqueue(this, () =>
-      loadBinding().idx_search_filtered_async(ensureHandle(this), queries, k, allowedIds)
+      loadBinding().idx_search_filtered_async(ensureHandle(this), input, k, allowed)
     )
   }
 
@@ -743,10 +759,11 @@ export default class IdMapIndex {
     if (!(allowedIds instanceof BigUint64Array)) {
       throw new TypeError('prepareFilterAsync: allowedIds must be a BigUint64Array')
     }
+    const allowed = snapshot(this, allowedIds)
     return enqueue(this, async () => {
       const filterHandle = await loadBinding().idx_filter_create_async(
         ensureHandle(this),
-        allowedIds
+        allowed
       )
       // dispose() ran while the filter was being built. Free the filter now,
       // while the index is still alive: fabric requires the index to outlive
@@ -779,8 +796,9 @@ export default class IdMapIndex {
     if (!isPositiveInt32(nProbe)) {
       throw new TypeError('searchIvfAsync: nProbe must be a positive int32')
     }
+    const input = snapshot(this, queries)
     return enqueue(this, () =>
-      loadBinding().idx_search_ivf_async(ensureHandle(this), queries, k, nProbe)
+      loadBinding().idx_search_ivf_async(ensureHandle(this), input, k, nProbe)
     )
   }
 
