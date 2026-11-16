@@ -69,7 +69,7 @@ jobs:
       # Pin to the exact approved head SHA (not the mutable PR merge ref) so the
       # GPU suite runs the commit `test-e2e-full` was applied to — closing the
       # label-at-A / push-B TOCTOU window. Empty on workflow_dispatch → default ref.
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
@@ -84,7 +84,7 @@ jobs:
       # node is needed to build the worker. Unlike setup-python this action
       # works on the runners (it finds the pre-cached tool, no download). Same
       # action the SDK's own desktop e2e (test-node-sdk.yml) uses on these runners.
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # 7.1.0
         with:
           node-version: 22
 
@@ -92,7 +92,7 @@ jobs:
       # it invalidates in lockstep. Cross-OS so the three platforms share it.
       - name: Restore models cache
         id: models-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}/.qvac-cache
           key: qvac-py-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
@@ -116,7 +116,7 @@ jobs:
       # cache already hit.
       - name: Save models cache
         if: always() && steps.models-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ github.workspace }}/.qvac-cache
           key: qvac-py-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}

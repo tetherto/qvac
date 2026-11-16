@@ -75,7 +75,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout matrix + generated artifacts
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ needs.context.outputs.ref }}
           sparse-checkout: |
@@ -104,7 +104,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout package.json + benchmark matrix
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ needs.context.outputs.ref }}
           sparse-checkout: |
@@ -118,7 +118,7 @@ jobs:
           node -e "const pkg=require('./packages/llm-llamacpp/package.json');const m=require('./packages/llm-llamacpp/test/integration/_benchmark-matrix.js');require('fs').writeFileSync('run-meta/run-meta.json',JSON.stringify({addonVersion:'@qvac/llm-llamacpp@'+pkg.version,expectedShards:m.matrix().map(m.mobileShardKey)})+'\n')"
           cat run-meta/run-meta.json
       - name: Upload run-meta
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # 7.0.2
         with:
           name: benchmark-run-meta-${{ github.run_number }}
           path: run-meta/
@@ -170,12 +170,12 @@ jobs:
         if: runner.environment != 'github-hosted'
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ needs.context.outputs.ref }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # 7.1.0
         with:
           node-version: lts/*
 
@@ -187,7 +187,7 @@ jobs:
       # the integration tests consume) instead of compiling on the runner, so the
       # benchmark needs no build toolchain and matches what ships.
       - name: Download prebuilds (from artifacts)
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # 8.0.2
         with:
           path: ${{ runner.temp }}/prebuilds-staging
           merge-multiple: true
@@ -237,7 +237,7 @@ jobs:
       # mobile view); this job just uploads the raw sweep results.
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # 7.0.2
         with:
           name: llm-param-sweep-desktop-${{ github.run_number }}
           path: packages/llm-llamacpp/benchmarks/performance/results/parameter-sweep/
@@ -322,7 +322,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout aggregator
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ needs.context.outputs.ref }}
           sparse-checkout: |
@@ -331,7 +331,7 @@ jobs:
             packages/llm-llamacpp/package.json
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # 7.1.0
         with:
           node-version: lts/*
 
@@ -346,7 +346,7 @@ jobs:
       # run-id, so the run number is never needed — run-id alone identifies the
       # run. Defaults to the current run; artifact_run_id targets a previous one.
       - name: Download desktop sweep artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # 8.0.2
         with:
           pattern: llm-param-sweep-desktop-*
           run-id: ${{ inputs.artifact_run_id || github.run_id }}
@@ -355,7 +355,7 @@ jobs:
         continue-on-error: true
 
       - name: Download mobile perf-report artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # 8.0.2
         with:
           pattern: perf-report-llamacpp-llm-*
           run-id: ${{ inputs.artifact_run_id || github.run_id }}
@@ -366,7 +366,7 @@ jobs:
       # The version this run benchmarked (run-meta.json), authoritative over any
       # manual --addon-version. Lands alongside the data so the renderer reads it.
       - name: Download run-meta (current)
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # 8.0.2
         with:
           pattern: benchmark-run-meta-*
           run-id: ${{ inputs.artifact_run_id || github.run_id }}
@@ -376,7 +376,7 @@ jobs:
 
       - name: Download baseline desktop artifact for comparison
         if: inputs.compare_run_id != ''
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # 8.0.2
         with:
           pattern: llm-param-sweep-desktop-*
           run-id: ${{ inputs.compare_run_id }}
@@ -386,7 +386,7 @@ jobs:
 
       - name: Download baseline mobile artifacts for comparison
         if: inputs.compare_run_id != ''
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # 8.0.2
         with:
           pattern: perf-report-llamacpp-llm-*
           run-id: ${{ inputs.compare_run_id }}
@@ -396,7 +396,7 @@ jobs:
 
       - name: Download baseline run-meta for comparison
         if: inputs.compare_run_id != ''
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # 8.0.2
         with:
           pattern: benchmark-run-meta-*
           run-id: ${{ inputs.compare_run_id }}
@@ -461,7 +461,7 @@ jobs:
       - name: Upload consolidated report
         id: upload
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # 7.0.2
         with:
           name: qwen35-benchmark-findings-${{ github.run_number }}
           path: benchmark-artifacts/
