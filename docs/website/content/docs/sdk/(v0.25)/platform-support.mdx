@@ -17,16 +17,13 @@ These requirements apply to every QVAC SDK client (JS/TS, Python, and Kotlin), b
 
 ## Compatibility matrix
 
-{/* TODO(addons review): confirm that API 29 is the build floor and Android 12+ the supported floor. */}
-{/* TODO(addons review): confirm that Intel Macs (darwin-x64) stay unsupported in v0.25; see https://github.com/tetherto/qvac/issues/5378. */}
-
 | Platform | Min version | Architecture | GPU backends | Clients | Notes |
 |----------|-------------|--------------|--------------|---------|-------|
 | macOS | 14.0+ | arm64 | Metal | JS/TS, Python, CLI | Intel Macs are not supported. |
-| iOS | 17.0+ | arm64 | Metal | JS/TS (Expo) | Physical devices only. |
+| iOS | 17.0+ | arm64 | Metal | JS/TS (Expo) | Devices and simulators. |
 | Linux | Ubuntu 22+ | arm64, x64 | Vulkan `>= 1.4`, CUDA | JS/TS, Python, CLI | x64 also supports the AMD XDNA2 NPU. |
-| Android | 12+ | arm64 | Vulkan, OpenCL (Adreno 700+) | JS/TS (Expo), Kotlin | Physical devices only. Apps build with API 29 (Android 10), but QVAC supports Android 12+. |
-| Windows | 10+ | x64 | Vulkan `>= 1.4`, CUDA | JS/TS, Python, CLI | Needs Vulkan even for CPU-only inference. |
+| Android | 10+ (API 29) | arm64 | Vulkan, OpenCL (Adreno 700+) | JS/TS (Expo), Kotlin | Physical devices only. |
+| Windows | 10+ | x64 | Vulkan `>= 1.4`, CUDA | JS/TS, Python, CLI | Transcription and text-to-speech need Vulkan even for CPU-only inference. |
 
 ## Hardware
 
@@ -36,9 +33,7 @@ QVAC runs AI inference on the CPU or the GPU. The GPU is much faster, especially
 
 The CPU works on every supported platform and needs no driver.
 
-On x64, QVAC picks the fastest code path your processor supports when it loads a model. Older processors without AVX2, such as Intel Sandy Bridge and Ivy Bridge, still run QVAC, only slower.
-
-{/* TODO(addons review): confirm the x64 CPU floor (plain x64 and SSE4.2 variants ship on Linux and Windows since SDK 0.21; untested on pre-Haswell hardware, see https://github.com/tetherto/qvac/issues/4151) and state the arm64 floor. */}
+On x64, most capabilities pick the fastest code path your processor supports, so processors without AVX2, such as Intel Sandy Bridge and Ivy Bridge, still run them, only slower. Image generation, video generation and world simulation need AVX2, and so do transcription, text-to-speech and audio generation on Windows.
 
 ### Memory and disk
 
@@ -141,6 +136,8 @@ vulkaninfo --summary
 
 Install the NVIDIA driver and the CUDA 13 runtime libraries: `cudart` and `cuBLAS`, plus `nvrtc` on Linux. On Windows, QVAC loads them from `%CUDA_PATH%\bin\x64`, not from `PATH`. On NVIDIA Jetson, QVAC uses CUDA 12.6 instead.
 
+These rules apply to most AI capabilities. Image generation has exceptions; see [Image generation](/sdk/ai-capabilities/image-generation#hardware).
+
 If the driver or a library is missing, QVAC skips CUDA and uses Vulkan or the CPU. You don't need to configure anything.
 
 {/* TODO(addons review): add a verification command and the package names per distro. */}
@@ -187,7 +184,7 @@ Missing libibverbs disables RDMA while RPC continues over TCP, unless `expectRdm
 
 #### Windows
 
-Install Vulkan `>= 1.4`, even for CPU-only inference. See [Vulkan](#vulkan).
+Transcription and text-to-speech need Vulkan `>= 1.4`, even for CPU-only inference. Other capabilities run on the CPU without it. See [Vulkan](#vulkan).
 
 ### Clients and runtimes
 
@@ -204,17 +201,17 @@ Each client has its own requirements. Install steps live on each client's page.
 
 QVAC's native runtime ships as one package per host, such as `@qvac/fabric-linux-x64`.
 
-- **Desktop:** the platform packages are optional dependencies, and your package manager installs the one that matches your OS and CPU. This works with npm 7+, pnpm, bun, and Yarn Berry (2+). Yarn Classic (v1) and installs with `--omit=optional` skip the platform package, so the app fails at startup, not at install.
-- **Mobile:** no package manager picks a mobile package on its own, so your app declares it as a direct dependency. The Expo plugin's `installMissingPrebuilds` option adds it for you; see [Expo setup](/sdk/js-ts-sdk#expo).
+- **Desktop:** the platform packages are optional dependencies, and your package manager installs the one that matches your OS and CPU. Installs with `--omit=optional` skip it, so the app fails at startup, not at install.
+- **Mobile:** no package manager picks a mobile package on its own, so your app declares it as a direct dependency. The Expo plugin's `installMissingPrebuilds` option adds it for you with npm 7+, pnpm, bun, or Yarn Berry (2+); it refuses Yarn Classic (v1). See [Expo setup](/sdk/js-ts-sdk#expo).
 
 ## Known limits
 
-- **No emulators or simulators.** Due to limitations with `llamacpp`, QVAC runs on physical iOS and Android devices only.
+- **No Android emulators.** QVAC runs on physical Android devices only.
 - **The CLI runs on desktops only.** See [Clients and runtimes](#clients-and-runtimes).
 - **Intel Macs are not supported.** See [Compatibility matrix](#compatibility-matrix).
-- **Windows needs Vulkan even for CPU-only inference.** See [Windows](#windows).
+- **On Windows, transcription and text-to-speech need Vulkan even for CPU-only inference.** See [Windows](#windows).
 - **Minimal Linux images may lack `libatomic.so.1`.** See [Linux](#linux).
-- **Yarn Classic and `--omit=optional` installs break the app.** See [Native packages and installers](#native-packages-and-installers).
+- **`--omit=optional` installs break the app.** See [Native packages and installers](#native-packages-and-installers).
 
 ## Check your setup
 
