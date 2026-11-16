@@ -5,8 +5,21 @@ import fs from 'bare-fs'
 import { z } from 'zod'
 import type { TurboVecIndex, TurboVecIndexProvider } from '@qvac/rag'
 import { registerPlugin } from '@/plugins'
+import type { IndexWithControls } from '@/plugins/turbovec-backend'
 
-export function observableIndexProvider() {
+type SearchResult = ReturnType<TurboVecIndex['search']>
+
+type FakeIndex = IndexWithControls & {
+  // Mirrors the real IdMapIndex getter that a loaded snapshot exposes; the
+  // TurboVecIndex interface itself does not declare it.
+  bitWidth?: number
+}
+
+/**
+ * With `ivf: true`, `searchIvf` throws on stale lists as the native index
+ * does, so tests catch an adapter that probes them.
+ */
+export function observableIndexProvider({ ivf = false }: { ivf?: boolean } = {}) {
   const calls = {
     create: 0,
     load: 0,
@@ -16,8 +29,12 @@ export function observableIndexProvider() {
     contains: 0,
     prepare: 0,
     write: 0,
-    dispose: 0
+    dispose: 0,
+    buildIvf: 0,
+    searchIvf: 0
   }
+
+  const lastIvfArgs: { nLists?: number; nIter?: number | undefined; nProbe?: number } = {}
 
   // Forced native failures, one switch per backend call. A test flips one to
   // assert what the registry does when that call throws; success-path
@@ -31,7 +48,8 @@ export function observableIndexProvider() {
     remove: false,
     prepare: false,
     write: false,
-    dispose: false
+    dispose: false,
+    buildIvf: false
   }
 
   // `remove` is the one batched call, so its switch names a single id rather
@@ -49,11 +67,10 @@ export function observableIndexProvider() {
     throw new Error(`native ${call} failed`)
   }
 
-  // `bitWidth` mirrors the real IdMapIndex getter that a loaded snapshot
-  // exposes; the TurboVecIndex interface itself does not declare it.
-  function createIndex(dim: number, bitWidth?: number): TurboVecIndex & { bitWidth?: number } {
+  function createIndex(dim: number, bitWidth?: number): FakeIndex {
     const indexIds: bigint[] = []
-    return {
+    let ivfBuilt = false
+    const index: FakeIndex = {
       get length() {
         return indexIds.length
       },
@@ -66,18 +83,12 @@ export function observableIndexProvider() {
           if (indexIds.includes(id)) throw new Error(`duplicate id ${id}`)
         }
         for (const id of ids) indexIds.push(id)
+        ivfBuilt = false
       },
-      // Pads short rows with UINT64_MAX and a very negative score, as the
-      // native index does.
-      search(_queries, k) {
+      search(queries, k) {
         calls.search++
         if (failures.search) fail('search')
-        const ids = indexIds.slice(0, k)
-        const paddedIds = new BigUint64Array(k).fill(0xffffffffffffffffn)
-        paddedIds.set(ids)
-        const scores = new Float32Array(k).fill(-3.4e38)
-        scores.fill(1, 0, ids.length)
-        return { scores, ids: paddedIds, m: 1, k }
+        return paddedRows(queries, k)
       },
       contains(id) {
         calls.contains++
@@ -90,6 +101,7 @@ export function observableIndexProvider() {
         const index = indexIds.indexOf(id)
         if (index === -1) return false
         indexIds.splice(index, 1)
+        ivfBuilt = false
         return true
       },
       prepare() {
@@ -106,6 +118,37 @@ export function observableIndexProvider() {
         if (failures.dispose) throw new Error('native dispose failed')
       }
     }
+
+    // Pads short rows with UINT64_MAX and a very negative score, as the
+    // native index does.
+    function paddedRows(queries: Float32Array, k: number): SearchResult {
+      const m = queries.length / dim
+      const ids = indexIds.slice(0, k)
+      const paddedIds = new BigUint64Array(m * k).fill(0xffffffffffffffffn)
+      const scores = new Float32Array(m * k).fill(-3.4e38)
+      for (let row = 0; row < m; row++) {
+        paddedIds.set(ids, row * k)
+        scores.fill(1, row * k, row * k + ids.length)
+      }
+      return { scores, ids: paddedIds, m, k }
+    }
+
+    if (ivf) {
+      index.buildIvf = (nLists, nIter) => {
+        calls.buildIvf++
+        if (failures.buildIvf) fail('buildIvf')
+        lastIvfArgs.nLists = nLists
+        lastIvfArgs.nIter = nIter
+        ivfBuilt = true
+      }
+      index.searchIvf = (queries, k, nProbe) => {
+        calls.searchIvf++
+        lastIvfArgs.nProbe = nProbe
+        if (!ivfBuilt) throw new Error('InvalidArgument')
+        return paddedRows(queries, k)
+      }
+    }
+    return index
   }
 
   const provider: TurboVecIndexProvider = {
@@ -122,7 +165,7 @@ export function observableIndexProvider() {
       return createIndex(8, 8)
     }
   }
-  return { provider, calls, failures, failRemoveId, gates }
+  return { provider, calls, failures, failRemoveId, lastIvfArgs, gates }
 }
 
 export function registerProviderPlugin(modelType: string, provider: TurboVecIndexProvider) {
