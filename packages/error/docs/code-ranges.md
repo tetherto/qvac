@@ -21,6 +21,10 @@ Keep registration definitions static too; filter them with
 a map. Shadowed maps, mutations, and passing checked maps to unsupported helpers
 fail validation. The checker reads source without loading packages or native
 addons and ignores compiled JavaScript copies of listed TypeScript modules.
+Call `addCodes` directly or through a single local registration wrapper. Named
+ESM import aliases are supported; keep CommonJS `addCodes` bindings unrenamed.
+Function aliases, `.call`/`.apply`, and storing checked maps in local containers are
+rejected rather than followed.
 Discovery is file-local and does not follow imports, so list maps registered
 through imported helpers explicitly in `sources`.
 

@@ -7,7 +7,8 @@ test('reads numeric maps without importing or executing the module', () => {
     require('native-addon-that-is-not-installed')
     throw new Error('must never run')
     const RANGE = Object.freeze({ start: 1001, end: 2000 })
-    export const CODES = Object.freeze({ FIRST: RANGE.start, LAST: 2000 } as const)
+    const FIRST = RANGE.start
+    export const CODES = Object.freeze({ FIRST: FIRST, LAST: 2000 } as const)
   `
   assert.deepEqual(readCodeMap(source, 'CODES'), { FIRST: 1001, LAST: 2000 })
 })
@@ -28,6 +29,32 @@ test('follows registration definitions through filters and local wrappers', () =
     /Inline numeric/
   )
   assert.throws(() => referencedCodeMaps('addCodes(importedDefinitions)'), /Unresolved/)
+})
+
+test('accepts direct registrations with supported ESM and CommonJS bindings', () => {
+  for (const [binding, callee] of [
+    ["import { addCodes as register } from '@qvac/error'", 'register'],
+    ["const { addCodes } = require('@qvac/error')", 'addCodes'],
+    ["const QvacError = require('@qvac/error')", 'QvacError.addCodes']
+  ]) {
+    const source = `
+      ${binding}
+      const CODES = { FIRST: 1001 }
+      const definitions = { [CODES.FIRST]: { name: 'FIRST', message: 'first' } }
+      function unrelated(addCodes) { return addCodes }
+      const metadata = { addCodes: 'unrelated' }
+      const { addCodes: label } = metadata
+      const { ['addCodes']: computedLabel } = metadata
+      const value = metadata.addCodes
+      ${callee}(definitions)
+    `
+    assert.deepEqual(referencedCodeMaps(source), ['CODES'])
+  }
+})
+
+test('reads code maps exported through CommonJS', () => {
+  const source = 'const CODES = { FIRST: 1001 }; module.exports = { CODES }'
+  assert.deepEqual(readCodeMap(source, 'CODES'), { FIRST: 1001 })
 })
 
 test('does not silently omit missing, dynamic or malformed definitions', () => {

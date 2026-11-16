@@ -27,13 +27,29 @@ function parseSource(source: string, registrars: ReadonlySet<string> = new Set([
     }
   }
   const checked = new Set<ts.Symbol>()
-  function assertUnmodified(identifier: ts.Identifier): void {
+  function isCommonJSExport(node: ts.Node): boolean {
+    const object = node.parent
+    const assignment = object.parent
+    return (
+      ts.isObjectLiteralExpression(object) &&
+      ts.isBinaryExpression(assignment) &&
+      assignment.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      assignment.left.getText(file) === 'module.exports' &&
+      assignment.right === object
+    )
+  }
+  function assertUnmodified(identifier: ts.Identifier, numericValue?: number): void {
     const binding = checker.getSymbolAtLocation(identifier)
     if (!binding || checked.has(binding)) return
     checked.add(binding)
 
     function visit(node: ts.Node): void {
-      if (ts.isIdentifier(node) && checker.getSymbolAtLocation(node) === binding) {
+      const symbol = !ts.isIdentifier(node)
+        ? undefined
+        : ts.isShorthandPropertyAssignment(node.parent)
+          ? checker.getShorthandAssignmentValueSymbol(node.parent)
+          : checker.getSymbolAtLocation(node)
+      if (ts.isIdentifier(node) && symbol === binding) {
         let target: ts.Node = node
         let readsProperty = false
         while (
@@ -71,7 +87,11 @@ function parseSource(source: string, registrars: ReadonlySet<string> = new Set([
         ) {
           throw new Error(`Mutated error table is unsupported: ${identifier.text}`)
         }
-        if (!readsProperty && !(checker.getTypeAtLocation(node).flags & ts.TypeFlags.NumberLike)) {
+        if (
+          !readsProperty &&
+          numericValue === undefined &&
+          !(checker.getTypeAtLocation(node).flags & ts.TypeFlags.NumberLike)
+        ) {
           if (
             ts.isCallExpression(parent) &&
             parent.arguments.some((argument) => argument === target)
@@ -106,6 +126,16 @@ function parseSource(source: string, registrars: ReadonlySet<string> = new Set([
             ts.isIdentifier(parent.name)
           ) {
             assertUnmodified(parent.name)
+          } else if (!(
+            ((ts.isVariableDeclaration(parent) || ts.isParameter(parent)) &&
+              parent.name === target) ||
+            (ts.isCallExpression(parent) &&
+              parent.arguments.some((argument) => argument === target)) ||
+            ts.isExportSpecifier(parent) ||
+            ts.isTypeQueryNode(parent) ||
+            isCommonJSExport(parent)
+          )) {
+            throw new Error(`Unsupported error table escape: ${identifier.text}`)
           }
         }
       }
@@ -228,6 +258,54 @@ export function referencedCodeMaps(source: string): string[] {
       }
     }
   }
+  function checkReferences(node: ts.Node): void {
+    const property =
+      ts.isBindingElement(node) && node.propertyName && ts.isComputedPropertyName(node.propertyName)
+        ? node.propertyName.expression
+        : ts.isBindingElement(node)
+          ? node.propertyName
+          : undefined
+    if (
+      ts.isBindingElement(node) &&
+      property &&
+      (ts.isIdentifier(property) || ts.isStringLiteral(property)) &&
+      registrars.has(property.text) &&
+      !checker.getPropertyOfType(checker.getTypeAtLocation(node.parent), property.text)
+    ) {
+      throw new Error(`Unsupported error registration alias: ${node.getText(file)}`)
+    }
+    let reference =
+      ts.isPropertyAccessExpression(node) &&
+      registrars.has(node.name.text) &&
+      !checker.getSymbolAtLocation(node.name)
+    if (ts.isIdentifier(node) && registrars.has(node.text)) {
+      const symbol = ts.isShorthandPropertyAssignment(node.parent)
+        ? checker.getShorthandAssignmentValueSymbol(node.parent)
+        : checker.getSymbolAtLocation(node)
+      const declaration = symbol?.valueDeclaration ?? symbol?.declarations?.[0]
+      reference =
+        !declaration ||
+        ts.isImportSpecifier(declaration) ||
+        ts.isBindingElement(declaration) ||
+        ts.isFunctionDeclaration(declaration)
+    }
+    if (reference) {
+      const parent = node.parent
+      if (!(
+        (ts.isCallExpression(parent) && parent.expression === node) ||
+        ((ts.isFunctionDeclaration(parent) || ts.isBindingElement(parent)) &&
+          parent.name === node) ||
+        (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+        ts.isImportSpecifier(parent) ||
+        ts.isExportSpecifier(parent) ||
+        ts.isTypeQueryNode(parent)
+      )) {
+        throw new Error(`Unsupported error registration reference: ${node.getText(file)}`)
+      }
+    }
+    ts.forEachChild(node, checkReferences)
+  }
+  checkReferences(file)
   visit(file, (call) => {
     const argument = call.arguments[0]
     if (argument) inspect(argument)
@@ -251,13 +329,14 @@ export function readCodeMap(source: string, symbol: string): Record<string, numb
       return evaluate(node.expression)
     }
     if (ts.isIdentifier(node)) {
-      assertUnmodified(node)
       const expression = declarations.get(node.text)
       if (!expression) throw new Error(`Missing code table or constant: ${node.text}`)
       if (resolving.has(node.text)) throw new Error(`Cyclic code constant: ${node.text}`)
       resolving.add(node.text)
       const value = evaluate(expression)
       resolving.delete(node.text)
+      // The evaluator can prove numbers whose isolated TypeScript type is 'any'.
+      assertUnmodified(node, typeof value === 'number' ? value : undefined)
       return value
     }
     if (ts.isPropertyAccessExpression(node)) {

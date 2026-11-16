@@ -179,6 +179,48 @@ test('rejects helper calls that can hide added registration codes', () => {
   assert.throws(() => checkCodeSources(registry, sources, files), /Unsupported error table call/)
 })
 
+for (const call of [
+  "const register = addCodes; register({ 999999: { name: 'BAD', message: 'bad' } })",
+  "const { addCodes: register } = require('@qvac/error'); register({ 999999: { name: 'BAD', message: 'bad' } })",
+  "const { 'addCodes': register } = require('@qvac/error'); register({ 999999: { name: 'BAD', message: 'bad' } })",
+  "const { ['addCodes']: register } = require('@qvac/error'); register({ 999999: { name: 'BAD', message: 'bad' } })",
+  "addCodes.call(null, { 999999: { name: 'BAD', message: 'bad' } })",
+  "addCodes.apply(null, [{ 999999: { name: 'BAD', message: 'bad' } }])"
+]) {
+  test(`rejects indirect registration: ${call}`, () => {
+    const source = `
+      import { addCodes } from '@qvac/error'
+      const CODES = { FIRST: 1001 }
+      ${call}
+    `
+    const files = new Map(sources.map(({ file }) => [file, source]))
+    assert.throws(
+      () => checkCodeSources(registry, sources, files),
+      /Unsupported error registration/
+    )
+  })
+}
+
+for (const escape of [
+  'const [alias] = [definitions]; alias[999999] = {}',
+  'const holder = { map: definitions }; holder.map[999999] = {}',
+  'const holder = { definitions }; const { definitions: alias } = holder; alias[999999] = {}'
+]) {
+  test(`rejects checked maps escaping through containers: ${escape}`, () => {
+    const source = `
+      const CODES = { FIRST: 1001 }
+      const definitions = { [CODES.FIRST]: { name: 'FIRST', message: 'first' } }
+      ${escape}
+      addCodes(definitions)
+    `
+    const files = new Map(sources.map(({ file }) => [file, source]))
+    assert.throws(
+      () => checkCodeSources(registry, sources, files),
+      /Unsupported error table escape/
+    )
+  })
+}
+
 test('rejects a function-local code map shadowing a listed module map', () => {
   const source = `
     const CODES = { FIRST: 1001 }
