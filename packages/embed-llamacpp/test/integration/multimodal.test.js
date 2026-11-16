@@ -86,6 +86,18 @@ function sineWav(frequency = 440, seconds = 1, sampleRate = 16000) {
   return buf
 }
 
+// MPEG-1 layer III frames at 44.1 kHz, mono, with bitrate index 0 (free
+// format): the header carries no frame size, so only decoding the frames tells
+// the length. Empty side info and main data decode to silence.
+function freeFormatMp3(frames) {
+  const frameBytes = 418 // 1152 samples each
+  const buf = new Uint8Array(frames * frameBytes)
+  for (let i = 0; i < frames; i++) {
+    buf.set([0xff, 0xfb, 0x00, 0xc0], i * frameBytes)
+  }
+  return buf
+}
+
 function cosine(a, b) {
   let dot = 0
   let na = 0
@@ -347,6 +359,24 @@ safeTest('a WAV that decodes past the limit is rejected before decoding', {}, as
     const wav = sineWav(440, 700, 1)
     await t.exception.all(embed(model, { inputs: [[{ media: wav }]] }), /exceeds the 600 s limit/)
   })
+})
+
+safeTest('audio-max-seconds bounds a free-format MP3', {}, async (t) => {
+  await withModel(
+    t,
+    OPTIONS_DEVICE,
+    async (model) => {
+      // About 5.2 s that no header states.
+      await t.exception.all(
+        embed(model, { inputs: [[{ media: freeFormatMp3(200) }]] }),
+        /exceeds the 1 s limit/
+      )
+      // About 0.5 s.
+      const [short] = await embed(model, { inputs: [[{ media: freeFormatMp3(20) }]] })
+      t.is(short.length, 768, 'a free-format MP3 within the limit embeds')
+    },
+    { 'audio-max-seconds': '1' }
+  )
 })
 
 safeTest('cancel stops a running multimodal request', { timeout: 600_000 }, async (t) => {
