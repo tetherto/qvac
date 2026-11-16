@@ -1,7 +1,12 @@
 name: Mobile tests
 
 # On-demand Device Farm runs of test:mobile: one platform, the dispatcher's devices. How to pick them: docs/ci/MOBILE-ON-DEMAND.md.
+# Every Sunday it also runs the androidWeekly/iosWeekly groups of any package that has them and files a report issue;
+# every Monday it sweeps stale report issues, as main's weekend workflows did.
 on:
+  schedule:
+    - cron: "0 6 * * 0"
+    - cron: "0 8 * * 1"
   workflow_dispatch:
     inputs:
       platform:
@@ -60,18 +65,14 @@ permissions: {}
 # One manual run per branch, package and platform, as main's per-addon workflows had; a fresh dispatch cancels the
 # one in flight so Device Farm runs never stack, while an Android and an iOS dispatch of one package run side by side.
 concurrency:
-  group: mobile-tests-${{ github.ref }}-${{ inputs.packages }}-${{ inputs.platform }}
-  cancel-in-progress: true
-
-env:
-  TEST_FRAMEWORK_REF: main
-  BUNDLE_ID: io.tether.test.qvac
-  DEVICES: ${{ inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '') }}
+  group: mobile-tests-${{ github.ref }}-${{ inputs.packages || github.event.schedule }}-${{ inputs.platform }}
+  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
 
 jobs:
   # One package per dispatch, as main's per-addon mobile workflows ran one addon each, so the per-package run cap in
   # devicefarm-check-devices caps the whole dispatch.
   one-package:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -94,314 +95,139 @@ jobs:
       packages: ${{ inputs.packages }}
       configs: ${{ inputs.platform == 'iOS' && 'ios-arm64' || 'android-arm64' }}
 
-  # Fails before any build: who dispatched, which install source, and whether the devices exist.
-  check:
+  mobile:
     needs: select
-    if: toJSON(fromJSON(needs.select.outputs.matrices)['test:mobile']) != '[]'
-    name: check ${{ matrix.row.slug }}
-    runs-on: ubuntu-latest
-    environment: release
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      id-token: write
-    strategy:
-      fail-fast: false
-      matrix:
-        row: ${{ fromJSON(needs.select.outputs.matrices)['test:mobile'] }}
-    steps:
-      - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          sparse-checkout: .github/actions
-          persist-credentials: false
-      # Data only, from the ref the build will use; nothing here is executed.
-      - name: Checkout test groups
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          ref: ${{ inputs.ref || github.sha }}
-          sparse-checkout: ${{ matrix.row.dir }}/test/mobile
-          path: src
-          persist-credentials: "false"
-      - uses: tetherto/qvac-actions/configure-aws-credentials@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: us-west-2
-      - uses: ./.github/actions/devicefarm-check-devices
-        with:
-          platform: ${{ inputs.platform }}
-          devices: ${{ env.DEVICES }}
-          device-model-operator: ${{ inputs.device_model_operator }}
-          tests: ${{ inputs.tests }}
-          test-groups: ${{ hashFiles(format('src/{0}/test/mobile/test-groups.json', matrix.row.dir)) != '' && format('src/{0}/test/mobile/test-groups.json', matrix.row.dir) || '' }}
-          runner-source: ${{ hashFiles(format('src/{0}/test/mobile/integration.auto.cjs', matrix.row.dir)) != '' && format('src/{0}/test/mobile/integration.auto.cjs', matrix.row.dir) || '' }}
-          package: ${{ inputs.package }}
-          prebuild-run-id: ${{ inputs.prebuild_run_id }}
-
-  test:
-    needs: [select, check]
-    name: ${{ matrix.row.slug }} ${{ matrix.row.config }}
-    runs-on: ${{ matrix.row.runner }}
-    environment: release
-    # No continue-on-error: a Device Farm failure must fail the run.
-    timeout-minutes: 120
     permissions:
       contents: read
       actions: read
       packages: read
       id-token: write
       pull-requests: write
-    strategy:
-      fail-fast: false
-      matrix:
-        row: ${{ fromJSON(needs.select.outputs.matrices)['test:mobile'] }}
-    env:
-      WORKDIR: src/${{ matrix.row.dir }}
-      NX_DAEMON: "false"
-      NX_NO_CLOUD: "true"
-      # Named one by one: indexing secrets by an expression hands every secret to the runner.
-      PROJECT_ARN: ${{ matrix.row.meta.mobile.devicefarmProject == 'LLAMACPP_EMBED' && secrets.AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED || '' }}
-      GITHUB_TOKEN: ${{ github.token }}
-      NPM: ${{ matrix.row.npm }}
-      PLATFORM: ${{ inputs.platform }}
+    uses: ./.github/workflows/_mobile.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices)['test:mobile']) }}
+      platform: ${{ inputs.platform }}
+      devices: ${{ inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '') }}
+      device_model_operator: ${{ inputs.device_model_operator }}
+      tests: ${{ inputs.tests }}
+      ref: ${{ inputs.ref }}
+      package: ${{ inputs.package }}
+      prebuild_run_id: ${{ inputs.prebuild_run_id }}
+      dependency_prebuild_run_id: ${{ inputs.dependency_prebuild_run_id }}
+
+  weekly:
+    if: github.event.schedule == '0 6 * * 0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      android: ${{ steps.find.outputs.android }}
+      ios: ${{ steps.find.outputs.ios }}
     steps:
-      - name: Checkout actions
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           sparse-checkout: |
-            .github/actions
-            .github/bare-toolchain
-            .github/scripts
-            scripts/perf-report
-            scripts/test-utils
-          persist-credentials: false
-      - run: node .github/scripts/pr-comment.mjs mobile
-      - name: Checkout source
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          ref: ${{ inputs.ref || github.sha }}
-          path: src
-          fetch-depth: "0"
+            .github/actions/mobile-weekly
+            packages/*/test/mobile/test-groups.json
+          sparse-checkout-cone-mode: "false"
           persist-credentials: "false"
-      - name: Checkout mobile test framework
-        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - id: find
+        uses: ./.github/actions/mobile-weekly
         with:
-          repository: tetherto/qvac-test-addon-mobile
-          ref: ${{ env.TEST_FRAMEWORK_REF }}
-          path: test-framework
-          fetch-depth: "0"
+          command: find
+
+  weekly-select-android:
+    needs: weekly
+    if: needs.weekly.outputs.android != ''
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_select-projects.yml
+    with:
+      targets: test:mobile
+      packages: ${{ needs.weekly.outputs.android }}
+      configs: android-arm64
+
+  weekly-select-ios:
+    needs: weekly
+    if: needs.weekly.outputs.ios != ''
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_select-projects.yml
+    with:
+      targets: test:mobile
+      packages: ${{ needs.weekly.outputs.ios }}
+      configs: ios-arm64
+
+  weekly-android:
+    needs: weekly-select-android
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+      id-token: write
+      pull-requests: write
+    uses: ./.github/workflows/_mobile.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.weekly-select-android.outputs.matrices)['test:mobile']) }}
+      platform: Android
+      devices: Google Pixel 9 Pro, Samsung Galaxy S25 Ultra, Samsung Galaxy S26 Ultra
+      weekly: true
+
+  weekly-ios:
+    needs: weekly-select-ios
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+      id-token: write
+      pull-requests: write
+    uses: ./.github/workflows/_mobile.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.weekly-select-ios.outputs.matrices)['test:mobile']) }}
+      platform: iOS
+      devices: Apple iPhone 16, Apple iPhone 17
+      weekly: true
+
+  # One weekly-mobile-report issue per package that ran, from each platform's test-case-details.json.
+  weekly-report:
+    needs: [weekly-select-android, weekly-select-ios, weekly-android, weekly-ios]
+    if: always() && github.event.schedule == '0 6 * * 0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          sparse-checkout: .github/actions/mobile-weekly
           persist-credentials: "false"
-      - if: inputs.platform == 'Android' && runner.environment == 'github-hosted'
-        uses: tetherto/qvac-actions/runner-free-disk@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
-          keep-android: "true"
-      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+          pattern: console-logs-*
+          path: logs
+      - uses: ./.github/actions/mobile-weekly
         with:
-          node-version: lts/*
-      - uses: tetherto/qvac-actions/setup-pnpm@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+          command: report
+          projects: |
+            ${{ needs.weekly-select-android.outputs.projects }}
+            ${{ needs.weekly-select-ios.outputs.projects }}
+
+  weekly-report-gc:
+    if: github.event.schedule == '0 8 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
-          package-json-file: src/package.json
-      # Nx only: test:mobile runs a package script on Node built-ins, so the workspace root is enough.
-      - name: Install
-        shell: bash
-        working-directory: src
-        run: pnpm install --frozen-lockfile --ignore-scripts --filter .
-      # Prebuilds: a named run's, else a published build's; prepare-mobile-prebuilds checks either is this package's.
-      - id: run
-        if: inputs.prebuild_run_id != ''
-        uses: ./.github/actions/prebuilds-find-in-run
-        with:
-          run-id: ${{ inputs.prebuild_run_id }}
-          workdir: ${{ matrix.row.dir }}
-          platform: ${{ inputs.platform }}
-          github-token: ${{ github.token }}
-      - if: inputs.prebuild_run_id != ''
-        uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          artifact-ids: ${{ steps.run.outputs.artifact-id }}
-          run-id: ${{ steps.run.outputs.source-run-id }}
-          path: ${{ env.WORKDIR }}/prebuilds
-      - if: inputs.prebuild_run_id == ''
-        uses: ./.github/actions/prebuilds-from-registry
-        with:
-          workdir: ${{ env.WORKDIR }}
-          npm-name: ${{ matrix.row.npm }}
-          platform: ${{ inputs.platform }}
-          package: ${{ inputs.package }}
-          pinned: ${{ inputs.package != '' }}
-          gpr-token: ${{ github.token }}
-      - uses: ./.github/actions/prebuilds-prepare-mobile
-        with:
-          workdir: ${{ env.WORKDIR }}
-          expected-dirs: ${{ steps.run.outputs.expected-dirs }}
-          source: ${{ inputs.prebuild_run_id != '' && format('run {0}', steps.run.outputs.source-run-id) || inputs.package || 'npm latest' }}
-      # Device Farm lives in us-west-2, and the package presigns its models there; the session spans build and wait.
-      - uses: tetherto/qvac-actions/configure-aws-credentials@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: us-west-2
-          role-duration-seconds: "7200"
-      - id: prepare
-        name: test:mobile
-        shell: bash
-        working-directory: src
-        env:
-          PROJECT: ${{ matrix.row.project }}
-          CONFIG: ${{ matrix.row.config }}
-          AWS_REGION: us-west-2
-          MODEL_S3_BUCKET: tether-ai-dev-us
-        run: pnpm exec nx run-many -t test:mobile -p "$PROJECT" -c "$CONFIG" --outputStyle=stream
-      - if: inputs.dependency_prebuild_run_id != ''
-        uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          name: ${{ matrix.row.providerArtifact }}
-          run-id: ${{ inputs.dependency_prebuild_run_id }}
-          path: ${{ runner.temp }}/dep-prebuilds
-      - uses: ./.github/actions/mobile-build-test-app
-        with:
-          platform: ${{ inputs.platform }}
-          workdir: ${{ env.WORKDIR }}
-          npm-name: ${{ matrix.row.npm }}
-          app-dir: test-framework
-          dependency-prebuilds: ${{ inputs.dependency_prebuild_run_id != '' && format('{0}={1}/dep-prebuilds', matrix.row.provider, runner.temp) || '' }}
-          per-test-timeout-minutes: ${{ matrix.row.meta.mobile.perTestTimeoutMinutes[inputs.platform] || '' }}
-      - if: inputs.platform == 'Android'
-        uses: tetherto/qvac-actions/setup-java@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          java-version: "17"
-      - if: inputs.platform == 'Android'
-        uses: tetherto/qvac-actions/setup-android@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-      - id: android
-        if: inputs.platform == 'Android'
-        uses: ./.github/actions/android-build-app
-        with:
-          app-dir: test-framework
-      - if: inputs.platform == 'iOS'
-        uses: tetherto/qvac-actions/setup-xcode@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          # As main's #5607: ibtool needs the iOS runtime matching the SDK, and macos-15 ships only iOS 18.5+ runtimes.
-          xcode-versions: "26.3"
-          brew-packages: ninja
-          gems: cocoapods
-          require-tools: xcodebuild pod ninja
-          sdk: iphoneos
-      - id: signing
-        if: inputs.platform == 'iOS'
-        uses: tetherto/qvac-actions/ios-import-signing@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          certificate-base64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
-          certificate-password: ${{ secrets.APPLE_P12_PASSWORD }}
-          profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
-          bundle-id: ${{ env.BUNDLE_ID }}
-      - id: ios
-        if: inputs.platform == 'iOS'
-        uses: ./.github/actions/ios-build-app
-        with:
-          profile-uuid: ${{ steps.signing.outputs.profile-uuid }}
-          export-method: ${{ steps.signing.outputs.export-method }}
-          team-id: ${{ secrets.APPLE_TEAM_ID }}
-          bundle-id: ${{ env.BUNDLE_ID }}
-          app-dir: test-framework
-      - id: specs
-        uses: ./.github/actions/devicefarm-write-specs
-        with:
-          platform: ${{ inputs.platform }}
-          workdir: ${{ env.WORKDIR }}
-          tests: ${{ inputs.tests }}
-          app-dir: test-framework
-          enables-perf: ${{ matrix.row.meta.mobile.enablesPerf == true }}
-          mocha-timeout-ms: ${{ matrix.row.meta.mobile.mochaTimeoutMs || '1800000' }}
-          extra-pre-test-commands: ${{ steps.prepare.outputs.pre-test-commands }}
-          bundle-id: ${{ env.BUNDLE_ID }}
-      - id: app
-        uses: tetherto/qvac-actions/devicefarm-upload@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          project-arn: ${{ env.PROJECT_ARN }}
-          type: ${{ steps.android.outputs.app-type || steps.ios.outputs.app-type }}
-          files: ${{ steps.android.outputs.app-path || steps.ios.outputs.app-path }}
-          name: ${{ steps.android.outputs.app-name || steps.ios.outputs.app-name }}
-      - id: package
-        uses: tetherto/qvac-actions/devicefarm-upload@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          project-arn: ${{ env.PROJECT_ARN }}
-          type: APPIUM_NODE_TEST_PACKAGE
-          files: ${{ steps.specs.outputs.test-package }}
-      - id: spec-uploads
-        uses: tetherto/qvac-actions/devicefarm-upload@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          project-arn: ${{ env.PROJECT_ARN }}
-          type: APPIUM_NODE_TEST_SPEC
-          files: ${{ steps.specs.outputs.specs }}
-      - id: schedule
-        uses: tetherto/qvac-actions/devicefarm-schedule-runs@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          platform: ${{ inputs.platform }}
-          project-arn: ${{ env.PROJECT_ARN }}
-          app-arn: ${{ steps.app.outputs.arn }}
-          test-type: APPIUM_NODE
-          test-package-arn: ${{ steps.package.outputs.arn }}
-          specs: ${{ steps.spec-uploads.outputs.uploads }}
-          devices: ${{ env.DEVICES }}
-          device-model-operator: ${{ inputs.device_model_operator }}
-      - uses: tetherto/qvac-actions/devicefarm-wait-runs@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          run-arns: ${{ steps.schedule.outputs.run-arns }}
-          specs: ${{ steps.spec-uploads.outputs.uploads }}
-          # As main did: a device stopped on its timeout after every counted test passed is a teardown overrun.
-          accept-stopped: "true"
-      - if: cancelled() && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'
-        uses: tetherto/qvac-actions/devicefarm-cancel-runs@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          run-arns: ${{ steps.schedule.outputs.run-arns }}
-      # Fresh credentials: the session above may have run out during a long wait.
-      - if: always() && steps.schedule.outputs.run-count != '' && steps.schedule.outputs.run-count != '0'
-        uses: tetherto/qvac-actions/configure-aws-credentials@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: us-west-2
-      - id: logs
-        if: always() && steps.schedule.outputs.run-count != '' && steps.schedule.outputs.run-count != '0'
-        uses: tetherto/qvac-actions/devicefarm-download-logs@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          platform: ${{ inputs.platform }}
-          run-arns: ${{ steps.schedule.outputs.run-arns }}
-          files: |
-            bare_console.log
-            appium.log
-            test-results.json
-            logcat_full.txt
-            crash-reports/QvacAddonTester*
-          skip-extensions: ${{ inputs.platform == 'Android' && 'mp4' || '' }}
-      - if: always() && steps.logs.outcome == 'success'
-        uses: tetherto/qvac-actions/devicefarm-summarize-results@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          title: ${{ format('{0} ({1})', matrix.row.npm, inputs.platform) }}
-          console-dir: ${{ steps.logs.outputs.console-dir }}
-          tap-files: bare_console.log logcat_full.txt
-          results-file: test-results.json
-          min-pass-ms: "500"
-      - if: always()
-        env:
-          STATE: ${{ job.status }}
-          DETAILS: ${{ steps.logs.outputs.console-dir }}/test-case-details.json
-        run: node .github/scripts/pr-comment.mjs mobile
-      - if: always() && steps.logs.outcome == 'success'
-        uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          name: console-logs-${{ matrix.row.slug }}-${{ inputs.platform }}
-          path: ${{ steps.logs.outputs.console-dir }}
-          retention-days: "30"
-          if-no-files-found: ignore
-      - id: perf
-        if: always() && steps.logs.outcome == 'success' && matrix.row.meta.mobile.perfReport
-        uses: ./.github/actions/devicefarm-perf-report
-        with:
-          log-dir: ${{ steps.logs.outputs.log-dir }}
-          output-dir: ${{ runner.temp }}/perf-report
-          title: ${{ format('{0} ({1})', matrix.row.meta.mobile.perfReport.title, inputs.platform) }}
-          merge: ${{ matrix.row.meta.mobile.perfReport.merge == true }}
-      - if: always() && steps.perf.outputs.extracted == 'true'
-        uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          name: ${{ matrix.row.slug }}-perf-mobile-${{ inputs.platform }}-${{ github.run_number }}
-          path: ${{ runner.temp }}/perf-report
+          sparse-checkout: .github/actions/mobile-weekly-report-gc
+          persist-credentials: "false"
+      - uses: ./.github/actions/mobile-weekly-report-gc

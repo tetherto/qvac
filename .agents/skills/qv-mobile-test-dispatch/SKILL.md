@@ -40,8 +40,8 @@ operating procedure, that doc is the source of truth.
   always filter for LLM.
 - **One platform per dispatch.** Android and iOS are separate runs.
 - **A second dispatch of the same workflow on the same branch cancels the
-  first.** To cover both platforms, either wait, or use different addons in
-  parallel.
+  first** (for `mobile-tests.yml`, the same `packages` too). To cover both
+  platforms, either wait, or use different addons in parallel.
 - Never dispatch on someone's behalf without telling them it bills Device Farm.
 
 ## Step 1 — decide which binary should be tested
@@ -66,7 +66,9 @@ label-gated by `ci-router` — it runs only when the PR carries `prebuilds`,
 is no bundle and no run id. Add the `prebuilds` label and let CI re-run.
 
 **Then:** open the PR's Checks tab, click the run that built the prebuilds, and
-take the number at the end of its URL.
+take the number at the end of its URL. For a package on the CI contract (see the
+per-addon notes) that run is always the PR's `PR build and test`:
+`gh run list --repo tetherto/qvac --workflow pr-build-test.yml --commit <head sha> --limit 1`.
 
 Do **not** filter by the addon's own workflow name. Which workflow built the
 bundle varies — `on-pr-nx.yml` for most addons, `on-pr-<addon>.yml` for some,
@@ -157,8 +159,20 @@ gh workflow run integration-mobile-test-<addon>.yml --repo tetherto/qvac --ref <
 ```
 
 Report a first run as complete only when **both** platforms actually completed. A
-cancelled Android leg is not a pass, and on `llm-llamacpp` it also discards a
-seed-models step budgeted at up to 120 minutes.
+cancelled Android leg is not a pass, and on `llm-llamacpp` it also discards the
+model seeding into the Device Farm bucket, which can take up to two hours.
+
+A package on the CI contract dispatches `mobile-tests.yml` instead, naming the
+package directory; every other input is the same:
+
+```bash
+gh workflow run mobile-tests.yml --repo tetherto/qvac --ref <branch> \
+  -f packages=<dir> \
+  -f platform=Android \
+  -f devices_custom="Google Pixel 9 Pro, Samsung Galaxy S25 Ultra, Samsung Galaxy S26 Ultra" \
+  -f device_model_operator=EQUALS \
+  -f prebuild_run_id=<run id>
+```
 
 Follow-up — one device, one test, after something fails:
 
@@ -250,7 +264,7 @@ failure is still reproducing, and when a leg was cancelled rather than run.
 | `llm-llamacpp` | sharded — always pass `tests` |
 | `asr-ggml`, `audiogen-ggml`, `tts-ggml` | split addons: an empty input or `@qvac` pin installs the matching `-android-arm64` / `-ios` package from npm at the same version. `@tetherto` `-mono` builds carry prebuilds inline. |
 | `audiogen-ggml` | pins its composite actions to the default branch, so `prebuild_run_id` only works once that support is on `main`; it fails loudly with instructions until then |
-| `vla` | package dir is `packages/vla-ggml`, workflow slug is `vla` |
+| `classification-ggml`, `embed-llamacpp`, `ggml-rpc-server`, `llm-llamacpp`, `model-fit`, `ocr-ggml`, `translation-nmtcpp`, `turbovec-ggml`, `vla-ggml` | on the CI contract: one workflow, `mobile-tests.yml`, with `-f packages=<dir>`. `prebuild_run_id` is a `pr-build-test.yml` run; Route B dev builds come from dispatching `publish-gpr.yml` with `-f packages=<dir>` |
 | `decoder-audio` | no native prebuild of its own (rides `bare-ffmpeg` from npm). `package` has no effect; use `ref`. |
 | `inference-addon-cpp` | compiles its own prebuilds in-run from the dispatched `ref`, so no prebuild input is needed or offered |
 

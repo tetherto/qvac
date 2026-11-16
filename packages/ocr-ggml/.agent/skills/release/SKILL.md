@@ -75,11 +75,11 @@ Proceed? (y/n)
    ```bash
    git push origin release-<package>-<version>
    ```
-4. Trigger the release workflow manually. Pushing the branch does not start it: a branch with no new commits never matches the workflow's `paths` filter.
+4. Trigger the release workflow manually. Pushing the branch does not start it: a branch with no new commits never matches the workflow's `paths` filter. A package on the CI contract (`"tags": ["ci:addons"]` in its `project.json`) publishes through `publish-npm.yml`; the others through `on-merge-nx.yml`:
    ```bash
-   gh workflow run on-merge-nx.yml --repo tetherto/qvac --ref release-<package>-<version> -f package=<package>
+   gh workflow run publish-npm.yml --repo tetherto/qvac --ref release-<package>-<version> -f packages=<package>   # CI contract
+   gh workflow run on-merge-nx.yml --repo tetherto/qvac --ref release-<package>-<version> -f package=<package>    # the rest
    ```
-   `ggml-rpc-server` keeps its own `on-merge-ggml-rpc-server.yml`; dispatch that one with no inputs.
 
 This workflow:
 - Runs `release-merge-guard` (validates version bump + changelog)

@@ -94,7 +94,7 @@ test('roster keeps only packages whose PR legs build in the cpp-tests-nx matrix'
     ['carved-out-cpp', project({}, { carveOut: true })],
     ['no-cpp-ci', { targets: { 'on-pr': { options: { ci: {} } }, 'test:cpp': { options: {} } } }],
     ['no-pr-target', project(undefined, { mode: 'standard' })],
-    ['embed-llamacpp', project({}, { mode: 'standard' })],
+    ['diffusion-cpp', project({}, { mode: 'standard' })],
   ])
   assert.deepEqual(selectRoster(projects), ['matrix'])
 })

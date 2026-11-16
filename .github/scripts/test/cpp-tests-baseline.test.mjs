@@ -16,6 +16,12 @@ import { fileURLToPath } from "node:url";
 // lands new C++ tests and the on-pr run reports cpp-tests as skipped, which
 // merge-guard accepts as a pass (QVAC-25289).
 //
+// A package on the CI contract opts in with `metadata.baseline: true` on its
+// cpp:tests target instead: select-projects emits build:baseline and
+// cpp:tests:baseline rows for it, and pr-build-test.yml builds and tests those
+// rows when the labels are absent, reporting every other package as a routing
+// skip.
+//
 // Parsed with regexes and run through bash rather than a YAML library, like
 // the other suites in this directory: bare node, no dependencies.
 
@@ -75,9 +81,65 @@ function baselinePackages() {
     .map(([name, project]) => [name, project]);
 }
 
-test("at least one package declares cppTestsBaseline, so the wiring below is exercised", () => {
-  const names = baselinePackages().map(([name]) => name);
+function contractBaselinePackages() {
+  return projects()
+    .filter(([, project]) => project.targets?.["cpp:tests"]?.metadata?.baseline === true)
+    .map(([name]) => name);
+}
+
+test("at least one package opts into the C++ baseline, so the wiring below is exercised", () => {
+  const names = [...baselinePackages().map(([name]) => name), ...contractBaselinePackages()];
   assert.ok(names.includes("translation-nmtcpp"), `translation-nmtcpp opts in; found: ${names.join(", ") || "none"}`);
+});
+
+test("every contract baseline package has build and cpp:tests configurations", () => {
+  for (const name of contractBaselinePackages()) {
+    const { targets, tags } = JSON.parse(read(`packages/${name}/project.json`));
+    assert.ok(tags?.includes("ci:addons"), `${name}: metadata.baseline is read only for packages on the CI contract`);
+    assert.ok(Object.keys(targets["cpp:tests"].configurations ?? {}).length, `${name}: cpp:tests needs a configuration`);
+    assert.ok(Object.keys(targets.build.configurations ?? {}).length, `${name}: the baseline build needs a configuration`);
+  }
+});
+
+test("pr-build-test runs the baseline rows when the labels are absent, and only those", () => {
+  const source = read(".github/workflows/pr-build-test.yml");
+  const build = jobBlock(source, "build");
+  const cppTests = jobBlock(source, "cpp-tests");
+  const status = jobBlock(source, "status");
+  assert.match(build, /needs\.route\.outputs\.run_prebuilds == 'true' \|\| fromJSON\(needs\.select\.outputs\.matrices\)\['build:baseline'\]\[0\] != null/);
+  assert.match(build, /run_prebuilds == 'true' && fromJSON\(needs\.select\.outputs\.matrices\)\.build \|\| fromJSON\(needs\.select\.outputs\.matrices\)\['build:baseline'\]/);
+  assert.match(cppTests, /needs\.route\.outputs\.run_cpp_tests == 'true' \|\| fromJSON\(needs\.select\.outputs\.matrices\)\['cpp:tests:baseline'\]\[0\] != null/);
+  assert.match(cppTests, /run_cpp_tests == 'true' && fromJSON\(needs\.select\.outputs\.matrices\)\['cpp:tests'\] \|\| fromJSON\(needs\.select\.outputs\.matrices\)\['cpp:tests:baseline'\]/);
+  // A package the baseline run did not test must not read as a pass it never earned.
+  assert.match(status, /CPP_TEST_RESULT: \$\{\{ \(needs\.route\.outputs\.run_cpp_tests == 'true' \|\| matrix\.project\.cppBaseline\) && needs\.cpp-tests\.result \|\| 'skipped' \}\}/);
+  assert.match(status, /PREBUILD_RESULT: \$\{\{ \(needs\.route\.outputs\.run_prebuilds == 'true' \|\| matrix\.project\.cppBaseline\) && /);
+});
+
+test("select-projects emits baseline rows for the opted-in package alone", async () => {
+  const { select } = await import(join(root, ".github/scripts/select-projects.mjs"));
+  const cfg = { "linux-x64": { ci: { runner: "linux_ubuntu2204_x64" } } };
+  const node = (name, baseline) => ({
+    name,
+    data: {
+      root: `packages/${name}`,
+      tags: ["ci:addons"],
+      targets: {
+        build: { configurations: cfg },
+        "cpp:tests": { configurations: cfg, metadata: baseline ? { baseline: true } : {} },
+      },
+    },
+  });
+  const graph = { nodes: { a: node("a", true), b: node("b", false) }, dependencies: {} };
+  const out = select({
+    graph,
+    affected: null,
+    targets: ["build", "cpp:tests"],
+    labels: { linux_ubuntu2204_x64: "qvac-ubuntu2204-x64" },
+    gate: { a: "a", b: "b" },
+  });
+  assert.deepEqual(out.matrices["build:baseline"].map((r) => r.project), ["a"]);
+  assert.deepEqual(out.matrices["cpp:tests:baseline"].map((r) => r.project), ["a"]);
+  assert.deepEqual(out.projects.map((p) => [p.name, p.cppBaseline]), [["a", true], ["b", false]]);
 });
 
 test("every cppTestsBaseline package has a test:cpp lane and sits in the on-pr matrix", () => {

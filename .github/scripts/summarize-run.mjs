@@ -7,28 +7,34 @@ import { pathToFileURL } from 'node:url'
 const ICON = { success: '✅', failure: '❌', cancelled: '🚫', skipped: '⏭️', pending: '⏳' }
 const FAILED = new Set(['failure', 'cancelled', 'timed_out', 'startup_failure'])
 
-// "build / vla-ggml win32-x64" or "status vla-ggml": the stage, then the package, then the configuration.
+// "build / vla-ggml win32-x64", "build / reuse vla-ggml win32-x64" (a leg taken from an earlier run) or
+// "status vla-ggml": the stage, then the package, then the configuration.
 export function classify(name, slugs) {
   const stage = name.includes(' / ') ? name.split(' / ')[0] : name.split(' ')[0]
-  const rest = name.slice(name.includes(' / ') ? stage.length + 3 : stage.length).trim()
+  let rest = name.slice(name.includes(' / ') ? stage.length + 3 : stage.length).trim()
+  const reused = rest.startsWith('reuse ')
+  if (reused) rest = rest.slice(6)
   const pkg = [...slugs]
     .sort((a, b) => b.length - a.length)
     .find((s) => rest === s || rest.startsWith(`${s} `))
-  return { stage, pkg: pkg ?? '', config: pkg ? rest.slice(pkg.length).trim() : rest }
+  return { stage, pkg: pkg ?? '', config: pkg ? rest.slice(pkg.length).trim() : rest, reused }
 }
 
 const outcome = (job) => (job.status === 'completed' ? job.conclusion : 'pending')
 
-function cell(jobs) {
+function cell(jobs, reused = 0) {
   if (!jobs?.length) return ''
+  const note = reused ? ` (${reused} reused)` : ''
   const states = jobs.map(outcome)
   const passed = states.filter((s) => s === 'success').length
   const worst = ['failure', 'timed_out', 'startup_failure', 'cancelled', 'pending'].find((s) =>
     states.includes(s)
   )
-  if (worst) return `${ICON[worst] ?? '❌'} ${passed}/${jobs.length}`
+  if (worst) return `${ICON[worst] ?? '❌'} ${passed}/${jobs.length}${note}`
   if (states.every((s) => s === 'skipped')) return ICON.skipped
-  return jobs.length > 1 ? `${ICON.success} ${passed}/${jobs.length}` : ICON.success
+  return jobs.length > 1
+    ? `${ICON.success} ${passed}/${jobs.length}${note}`
+    : `${ICON.success}${note}`
 }
 
 export function summarize({ jobs, slugs, title, self = 'summary' }) {
@@ -37,17 +43,29 @@ export function summarize({ jobs, slugs, title, self = 'summary' }) {
   const rows = real.map((j) => ({ ...classify(j.name, slugs), job: j }))
   const stages = [...new Set(rows.filter((r) => r.pkg).map((r) => r.stage))]
   const lines = [`## ${title}`, '']
-  const setup = rows.filter((r) => !r.pkg)
-  if (setup.length)
+  // Jobs that belong to no package, one entry per name: "select ✅ · build plan ✅".
+  const setup = Map.groupBy(
+    rows.filter((r) => !r.pkg),
+    (r) => (/^[a-z-]+$/.test(r.config) && r.config !== r.stage ? `${r.stage} ${r.config}` : r.stage)
+  )
+  if (setup.size)
     lines.push(
-      `Setup: ${setup.map((r) => `${r.stage} ${ICON[outcome(r.job)] ?? outcome(r.job)}`).join(' · ')}`,
+      `Setup: ${[...setup].map(([name, rs]) => `${name} ${cell(rs.map((r) => r.job))}`).join(' · ')}`,
       ''
     )
   if (stages.length) {
     lines.push(`| Package | ${stages.join(' | ')} |`, `|---|${stages.map(() => '---').join('|')}|`)
     for (const pkg of slugs) {
       lines.push(
-        `| ${pkg} | ${stages.map((s) => cell(rows.filter((r) => r.pkg === pkg && r.stage === s).map((r) => r.job))).join(' | ')} |`
+        `| ${pkg} | ${stages
+          .map((s) => {
+            const rs = rows.filter((r) => r.pkg === pkg && r.stage === s)
+            return cell(
+              rs.map((r) => r.job),
+              rs.filter((r) => r.reused).length
+            )
+          })
+          .join(' | ')} |`
       )
     }
     lines.push('')

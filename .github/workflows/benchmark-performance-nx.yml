@@ -200,41 +200,6 @@ jobs:
       ref: ${{ needs.context.outputs.ref }}
       prebuild_package: ${{ inputs.prebuild_package }}
 
-  mobile-llm-llamacpp:
-    needs: [matrix, context, prebuild]
-    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"llm-llamacpp"') }}
-    permissions:
-      actions: read
-      contents: read
-      packages: read
-      pull-requests: write
-      id-token: write
-    uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
-    secrets: inherit
-    with:
-      repository: ${{ needs.context.outputs.repository }}
-      ref: ${{ needs.context.outputs.ref }}
-      addon_npm_version: ${{ inputs.prebuild_package }}
-      qvac_perf_runs: ${{ inputs.qvac_perf_runs }}
-      qvac_perf_warmup_runs: ${{ inputs.qvac_perf_warmup_runs }}
-      qvac_perf_only: true
-
-  mobile-ocr-ggml:
-    needs: [matrix, context, prebuild]
-    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"ocr-ggml"') }}
-    permissions:
-      actions: read
-      contents: read
-      packages: read
-      pull-requests: write
-      id-token: write
-    uses: ./.github/workflows/integration-mobile-test-ocr-ggml.yml
-    secrets: inherit
-    with:
-      repository: ${{ needs.context.outputs.repository }}
-      ref: ${{ needs.context.outputs.ref }}
-      prebuild_package: ${{ inputs.prebuild_package }}
-
   mobile-tts-ggml:
     needs: [matrix, context, prebuild]
     if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"tts-ggml"') }}
@@ -263,8 +228,6 @@ jobs:
       - mobile-audiogen-ggml
       - mobile-bci-whispercpp
       - mobile-diffusion-cpp
-      - mobile-llm-llamacpp
-      - mobile-ocr-ggml
       - mobile-tts-ggml
     if: always() && needs.matrix.outputs.any == 'true'
     runs-on: ubuntu-latest

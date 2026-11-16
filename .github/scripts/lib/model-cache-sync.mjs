@@ -288,9 +288,10 @@ const versionOf = (f) =>
 // workflows were consolidated into integration-test-nx.yml, which reads its
 // cache blocks from each package's project.json instead. The nxConsumers floor
 // is what guards that path, so a blind parser still cannot slip through. Seeds
-// dropped to 10 and consumers to 51 when vla moved to the CI contract, whose
-// cache-warm seeds the keys models-cache-key computes from the manifest.
-export const FLOOR = { seeds: 10, consumers: 51, nxConsumers: 10 };
+// and consumers dropped to 10 and 51 when vla moved to the CI contract, then to
+// 7 and 37 when the fabric consumers followed; its cache-warm seeds the keys
+// models-cache-key computes from each manifest.
+export const FLOOR = { seeds: 7, consumers: 37, nxConsumers: 10 };
 
 export function findParserGaps(files = listWorkflows()) {
   const gaps = [];

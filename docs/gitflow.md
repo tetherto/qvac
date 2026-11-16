@@ -105,8 +105,8 @@ labels and fork trust, and [TEAMS.md](ci/TEAMS.md) for approval ownership.
    - Merge to `main` can publish **dev** builds (GitHub Packages) when package paths changed.
    - `feature-*` / `tmp-*` publish **feature/temp** builds (GitHub Packages).
    - **Native addons publish on `release-*` pushes only.** Their
-     `on-merge-nx.yml` pipeline (and `on-merge-model-fit.yml`,
-     `on-merge-ggml-rpc-server.yml`) does not push-trigger on `main`, `feature-*` or
+     `on-merge-nx.yml` pipeline, and `publish-npm.yml` for packages on the CI
+     contract, do not push-trigger on `main`, `feature-*` or
      `tmp-*`, because a push to a `feature-*`/`tmp-*` branch would start a 9-platform
      matrix off an open PR's branch. Every non-release addon build is started with
      `workflow_dispatch` on the branch.

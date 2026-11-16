@@ -1,7 +1,7 @@
 name: Mobile Integration Tests (inference-addon-cpp)
 
 # Runs the inference-addon-cpp integration suite on real iOS + Android devices
-# (AWS Device Farm), mirroring integration-mobile-test-embed-llamacpp.yml.
+# (AWS Device Farm).
 #
 # Unlike the llamacpp addons this package has no published npm package and no
 # prebuild pipeline, so prebuild-android/-ios build the `.bare` files here and hand

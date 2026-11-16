@@ -9,7 +9,7 @@ inputs:
     description: Only models whose targets include this one; empty means all
     default: ""
   manifest:
-    description: Manifest path inside workdir
+    description: Manifest path inside workdir; a missing one means no models
     default: test/integration/models.manifest.json
   version:
     description: Bump to discard every entry for this package

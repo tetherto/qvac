@@ -49,8 +49,11 @@ export function sdkVersionFromReadme(text) {
 
 async function download(url, out) {
   for (let attempt = 1; ; attempt++) {
-    const res = await fetch(url).catch((e) => ({ ok: false, statusText: e.message }))
-    if (res.ok) return writeFileSync(out, Buffer.from(await res.arrayBuffer()))
+    // A body that drops mid-transfer (ECONNRESET, body timeout) retries like a failed request.
+    const res = await fetch(url)
+      .then(async (r) => (r.ok ? { ok: true, body: Buffer.from(await r.arrayBuffer()) } : r))
+      .catch((e) => ({ ok: false, statusText: e.message }))
+    if (res.ok) return writeFileSync(out, res.body)
     if (attempt === 5)
       throw new Error(`download failed: ${url} ${res.status ?? ''} ${res.statusText}`)
     await new Promise((r) => setTimeout(r, 10_000 * attempt))

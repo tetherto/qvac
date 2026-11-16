@@ -30,7 +30,7 @@ export function classifyConclusion(conclusion) {
 // Locates the producer check run on the PR head.
 //
 // Callers pass the job-level name a reusable-workflow call produces, e.g.
-// 'llm-pr-head-ts-checks / ts-checks' (caller job / called job). When the
+// '<pkg>-pr-head-ts-checks / ts-checks' (caller job / called job). When the
 // CALLER job's `if` is false the called workflow never starts, so that nested
 // check run is never created — GitHub records a single run under the bare
 // caller-job name with conclusion 'skipped'. Polling only for the nested name
