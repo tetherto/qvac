@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.30.1] - 2026-11-16
+
+### Fixed
+
+- `qvac-fabric` dependency bumped `11739.3.0` -> `11739.3.0#1`: the same
+  source, with the static symbol tables stripped from the Linux release backend
+  modules (`libqvac-ggml-*.so`). The `@qvac/fabric-linux-x64` tarball shrinks
+  by about 1.9 MB, back under npm's size limit. 0.30.0 reached npm only for
+  android-arm64, darwin-arm64, darwin-x64, ios and linux-arm64 (linux-x64 was
+  rejected with `E413 Payload Too Large`), so 0.30.1 is the first complete
+  0.30 release and carries the 0.30.0 changes below.
+
 ## [0.30.0] - 2026-11-16
 
 ### Breaking
