@@ -432,8 +432,12 @@ TEST_F(BridgeDepthReference, MatchesTorchWithReferenceSeeds) {
     EXPECT_GE(within(disparity, 0.2), 0.99);
   }
   // A GPU op that falls back to the CPU keeps parity and only costs speed.
-  // OpenCL lacks ops this graph needs and is left out.
-  if (deviceId == 1 || deviceId == 2 || deviceId == 3) {
+  // OpenCL lacks ops this graph needs and is left out. Ids from
+  // classification_ggml::backendId.
+  constexpr int metalId = 1;
+  constexpr int cudaId = 2;
+  constexpr int vulkanId = 3;
+  if (deviceId == metalId || deviceId == cudaId || deviceId == vulkanId) {
     EXPECT_EQ(graph.cpuFallbackNodes(), 0);
   }
 }

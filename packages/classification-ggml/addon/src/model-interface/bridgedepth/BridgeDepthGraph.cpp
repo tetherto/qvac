@@ -72,8 +72,10 @@ struct GpuPath {
   // nn.Linear weights are held as F16 on the device, converted from the F32
   // file at load: the GGUF and its layout hash do not change. The matmul
   // against an F16 weight is the fast kernel on CUDA, and Metal and Vulkan
-  // already staged these operands as half. Weights lose precision, the
-  // activations stay F32. DEPTH_PRIOR_LINEAR is left out.
+  // already staged these operands as half. On CUDA cuBLAS then also converts
+  // the activations to half and accumulates in half, so a linear whose input
+  // or output passes 65504 would give inf. Not seen on ETH3D or Middlebury.
+  // DEPTH_PRIOR_LINEAR is left out for that reason.
   bool halfLinearWeights = false;
   // conv2d writes its im2col as F16. The im2col is the largest tensor of the
   // graph (785 MiB as F32 at 1436 x 992), so this halves the peak, and Vulkan
@@ -2327,7 +2329,8 @@ BridgeDepthGraph::BridgeDepthGraph(
   // fingerprint can be forged, so it is checked before it is read.
   constexpr const char* vitQkvName = "mono.pretrained.blocks.0.attn.qkv.weight";
   const T* vitQkv = ggml_get_tensor(fileCtx.get(), vitQkvName);
-  if (vitQkv == nullptr || ggml_n_dims(vitQkv) != 2) {
+  if (vitQkv == nullptr || ggml_n_dims(vitQkv) != 2 ||
+      vitQkv->ne[1] != 3 * vitQkv->ne[0]) {
     throw std::runtime_error(
         std::string("BridgeDepth: missing or malformed tensor ") + vitQkvName);
   }
