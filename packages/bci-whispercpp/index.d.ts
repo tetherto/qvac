@@ -69,8 +69,8 @@ export interface BCIWhispercppConfig {
     };
     /**
      * Directory scanned, as given, for the dynamically-loaded ggml backend
-     * `.so` modules on Android and Linux. When omitted the native addon scans
-     * next to the module it was loaded from. Ignored on other platforms.
+     * modules. When omitted the `@qvac/fabric` runtime loads the backends it
+     * ships.
      */
     backendsDir?: string;
 }

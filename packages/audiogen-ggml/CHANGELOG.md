@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Require `inference-addon-cpp` 1.6.0 for the shared runtime-stat value type
   ([#5812](https://github.com/tetherto/qvac/pull/5812)).
+
+- Share the `@qvac/fabric` runtime and backend loader, retaining addon-local speech engines built against its headers.
+
 - Update the shared `speech-cpp` native dependency to `2026-11-11`
   ([#5747](https://github.com/tetherto/qvac/pull/5747)).
 
@@ -339,6 +342,7 @@ could never select them during a cross-build and mobile bundles failed
 verification with missing prebuilds. They now publish without install filters;
 mobile applications declare the target's platform package as a direct
 dependency pinned to the exact meta package version.
+
 
 ## [0.4.0] - 2026-09-11
 

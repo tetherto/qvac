@@ -182,3 +182,10 @@ loaded.
 | Windows | (default MSVC) | dynamic `.dll` under `prebuilds/<host>/qvac__fabric-<host>/` |
 | Android | `arm64-android` | shared `.so` under `prebuilds/<host>/qvac__fabric-<host>/` |
 | iOS | `arm64-ios` | static inside `.bare` |
+
+### Optional WebGPU build
+
+Pass `-D VCPKG_MANIFEST_FEATURES=webgpu` to `bare-make generate` when building
+Fabric, then build, install and run `npm run link:platform`. Build speech and
+LLM consumers against this platform package. The default published runtime
+does not include WebGPU; consumers do not build or ship a separate backend.
