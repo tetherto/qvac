@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-11-17
+
 ### Changed
 
+- Require `inference-addon-cpp` 1.6.0 for the shared runtime-stat value type
+  ([#5812](https://github.com/tetherto/qvac/pull/5812)).
 - Update the shared `speech-cpp` native dependency to `2026-11-11`
   ([#5747](https://github.com/tetherto/qvac/pull/5747)).
 
@@ -19,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   kept the input PCM, the encoded output and the native FFmpeg state in memory
   for the life of the process
   ([#5610](https://github.com/tetherto/qvac/pull/5610)).
+
 ## [0.10.1] - 2026-11-10
 
 ### Added
@@ -334,7 +339,6 @@ could never select them during a cross-build and mobile bundles failed
 verification with missing prebuilds. They now publish without install filters;
 mobile applications declare the target's platform package as a direct
 dependency pinned to the exact meta package version.
-
 
 ## [0.4.0] - 2026-09-11
 

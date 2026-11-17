@@ -1,6 +1,6 @@
 {
   "name": "@qvac/audiogen-ggml",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "description": "Audio generation (music) addon for qvac",
   "qvac": {
     "ggml-speech": "2026-10-27#1"
@@ -167,11 +167,11 @@
     "bare-process": "^4.2.2"
   },
   "optionalDependencies": {
-    "@qvac/audiogen-ggml-linux-x64": "0.6.0",
-    "@qvac/audiogen-ggml-linux-arm64": "0.6.0",
-    "@qvac/audiogen-ggml-darwin-arm64": "0.6.0",
-    "@qvac/audiogen-ggml-darwin-x64": "0.6.0",
-    "@qvac/audiogen-ggml-win32-x64": "0.6.0"
+    "@qvac/audiogen-ggml-linux-x64": "0.10.2",
+    "@qvac/audiogen-ggml-linux-arm64": "0.10.2",
+    "@qvac/audiogen-ggml-darwin-arm64": "0.10.2",
+    "@qvac/audiogen-ggml-darwin-x64": "0.10.2",
+    "@qvac/audiogen-ggml-win32-x64": "0.10.2"
   },
   "overrides": {
     "bare-module-lexer": "1.6.3"
