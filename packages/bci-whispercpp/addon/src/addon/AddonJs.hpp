@@ -358,9 +358,7 @@ inline FitResult runFit(const FitRequest& request) {
 
   // whisper_fit_params reads ggml's global device registry and loads nothing
   // itself, so whatever is registered here is its whole view of the machine.
-#if defined(__ANDROID__) || defined(__linux__)
   ensureBackendsLoaded(request.backendsDir);
-#endif
 
   whisper_fit_options options = whisper_fit_default_options();
   options.model_path = request.modelPath.c_str();
