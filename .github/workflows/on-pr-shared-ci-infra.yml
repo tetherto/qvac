@@ -21,6 +21,7 @@ on:
       - ".github/scripts/devicefarm-pool-run.mjs"
       - ".github/scripts/test/devicefarm-slot-wait.test.mjs"
       - ".github/actions/sdk-e2e-model-cache/**"
+      - ".github/actions/npm-publish-platform-packages/**"
       - "scripts/perf-report/**"
       - "scripts/ci/**"
       - "packages/ocr-ggml/.agent/setup.sh"
@@ -78,6 +79,9 @@ jobs:
         run: node --test .github/scripts/test/devicefarm-slot-wait.test.mjs
       - name: Run SDK e2e model cache action unit tests
         run: node --test .github/actions/sdk-e2e-model-cache/test/*.test.mjs
+      # Only a release publish runs the action, so a wrong publish order would first show up as a partial release.
+      - name: Run npm platform-package publish unit tests
+        run: node --test .github/actions/npm-publish-platform-packages/test/*.test.mjs
       # The runner executes the committed dist/, not src/.
       - name: Check SDK e2e model cache action bundle is current
         working-directory: .github/actions/sdk-e2e-model-cache

@@ -168,8 +168,80 @@ jobs:
     with:
       rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices).build) }}
 
+  # The platform package sizes of a package whose publish metadata sets maxTarballBytes, on the run page before the npm
+  # environment asks for approval. Advisory: publish checks its needs' results by name and never this one's.
+  tarball-size:
+    needs: [select, logic, providers, build]
+    if: >-
+      always() && !cancelled() && needs.logic.outputs.publish_release == 'true' && !inputs.dry_run &&
+      (needs.providers.result == 'success' || needs.providers.result == 'skipped') &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped') &&
+      join(fromJSON(needs.select.outputs.matrices).publish.*.meta.publish.maxTarballBytes, '') != ''
+    name: tarball size ${{ matrix.row.slug }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        row: ${{ fromJSON(needs.select.outputs.matrices).publish }}
+    env:
+      WORKDIR: src/${{ matrix.row.dir }}
+    steps:
+      - if: matrix.row.meta.publish.maxTarballBytes
+        name: Checkout actions
+        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - if: matrix.row.meta.publish.maxTarballBytes
+        name: Checkout source
+        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          path: src
+          persist-credentials: "false"
+      # The same prebuilds, placement and slices as the publish job.
+      - if: matrix.row.meta.publish.maxTarballBytes
+        uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          pattern: prebuild-${{ matrix.row.slug }}-*
+          path: ${{ runner.temp }}/prebuilds
+          merge-multiple: "true"
+      - if: matrix.row.meta.publish.maxTarballBytes
+        uses: ./.github/actions/prebuilds-place
+        with:
+          staging: ${{ runner.temp }}/prebuilds/${{ matrix.row.dir }}/prebuilds
+          workdir: ${{ env.WORKDIR }}
+          extra-dirs: ${{ join(matrix.row.meta.prebuildExtraDirs, ' ') }}
+      - if: matrix.row.meta.publish.maxTarballBytes
+        uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          node-version: lts/*
+      - if: matrix.row.meta.publish.maxTarballBytes
+        id: dist-tag
+        uses: tetherto/qvac-actions/npm-release-dist-tag@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          workdir: ${{ env.WORKDIR }}
+          tag: ${{ inputs.npm_tag || 'latest' }}
+      - if: matrix.row.meta.publish.maxTarballBytes
+        shell: bash
+        working-directory: src
+        env:
+          DIR: ${{ matrix.row.dir }}
+          KEEP_DIRS: ${{ join(matrix.row.meta.prebuildExtraDirs, ' ') }}
+        run: node scripts/ci/slice-platform-packages.mjs --workdir "$DIR" --out-dir "$RUNNER_TEMP/platform-packages" --keep-dirs "$KEEP_DIRS"
+      - if: matrix.row.meta.publish.maxTarballBytes
+        uses: ./.github/actions/npm-publish-platform-packages
+        with:
+          workdir: ${{ env.WORKDIR }}
+          slices-dir: ${{ runner.temp }}/platform-packages
+          tag: ${{ steps.dist-tag.outputs.tag }}
+          dry-run: "true"
+          max-tarball-bytes: ${{ matrix.row.meta.publish.maxTarballBytes }}
+
   publish:
-    needs: [select, logic, release-merge-guard, verify, pear-e2e, providers, build]
+    needs: [select, logic, release-merge-guard, verify, pear-e2e, providers, build, tarball-size]
     if: >-
       always() && !cancelled() && needs.logic.result == 'success' && toJSON(fromJSON(needs.select.outputs.matrices).publish) != '[]' &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
@@ -283,6 +355,7 @@ jobs:
           slices-dir: ${{ runner.temp }}/platform-packages
           tag: ${{ steps.dist-tag.outputs.tag }}
           dry-run: ${{ inputs.dry_run == true }}
+          max-tarball-bytes: ${{ matrix.row.meta.publish.maxTarballBytes }}
       - id: publish
         if: ${{ !inputs.dry_run }}
         uses: tetherto/qvac-actions/npm-release-publish@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0

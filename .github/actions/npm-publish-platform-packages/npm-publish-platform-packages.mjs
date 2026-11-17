@@ -3,7 +3,7 @@
 // no transactions, so every slice is checked before any publishes, and the meta publishes only after this succeeds.
 
 import { execFileSync, spawnSync } from 'node:child_process'
-import { readFileSync, readdirSync } from 'node:fs'
+import { appendFileSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -40,13 +40,30 @@ export function plan({ meta, slices, view, integrity }) {
   return publish
 }
 
+// npm's tarball limit is undocumented, so a slice over max packed bytes only warns. Those slices publish first, largest
+// first, so an E413 stops the release before anything else is published; an unreadable size counts as the largest.
+export function bySize(slices, sizeOf, max) {
+  const sized = slices.map((slice) => {
+    let size = null
+    try {
+      size = sizeOf(slice)
+    } catch {}
+    size = Number.isSafeInteger(size) ? size : null
+    return { slice, size, over: size === null || size > max }
+  })
+  const key = (x) => x.size ?? Number.MAX_SAFE_INTEGER
+  const over = sized.filter((x) => x.over).sort((a, b) => key(b) - key(a))
+  return { order: [...over, ...sized.filter((x) => !x.over)].map((x) => x.slice), sized }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const env = process.env
   const npm = (args, cwd) => spawnSync('npm', args, { cwd, encoding: 'utf8' })
+  const pack = (s) => JSON.parse(npm(['pack', '--dry-run', '--json', '--ignore-scripts'], s.dir).stdout)[0]
   const slices = readdirSync(env.SLICES_DIR, { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => ({ dir: join(env.SLICES_DIR, d.name), ...manifest(join(env.SLICES_DIR, d.name)) }))
-  const publish = plan({
+  let publish = plan({
     meta: manifest(env.WORKDIR),
     slices,
     view: (args) => npm(args),
@@ -56,11 +73,25 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
           encoding: 'utf8'
         }).trim(),
       // npm pack normalises mtimes, so re-slicing the same artifact reproduces the published tarball.
-      staged: (s) =>
-        JSON.parse(npm(['pack', '--dry-run', '--json', '--ignore-scripts'], s.dir).stdout)[0]
-          .integrity
+      staged: (s) => pack(s).integrity
     }
   })
+  const max = Number(env.MAX_TARBALL_BYTES || 0)
+  if (max > 0 && publish.length) {
+    const { order, sized } = bySize(publish, (s) => pack(s).size, max)
+    const rows = sized.map(({ slice, size, over }) => {
+      const id = `${slice.name}@${slice.version}`
+      const what = size === null ? 'has an unreadable packed size' : `packs to ${size} bytes, over the ${max}-byte budget`
+      if (over)
+        console.log(
+          `::warning title=npm tarball size::${id} ${what}. Over-budget slices publish first, largest first, so an E413 stops the release before the others.`
+        )
+      return `| \`${id}\` | ${size ?? 'unknown'} | ${over ? 'over budget' : 'ok'} |`
+    })
+    const summary = ['## npm tarball sizes', '', `Budget: ${max} bytes.`, '', '| Package | Bytes | Status |', '|---|---:|---|']
+    if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, [...summary, ...rows, ''].join('\n'))
+    publish = order
+  }
   for (const s of publish) {
     console.log(
       `${env.DRY_RUN === 'true' ? 'Would publish' : 'Publishing'} ${s.name}@${s.version} with tag ${env.DIST_TAG}`
