@@ -356,24 +356,27 @@ export function createSystemResourceCollector(dependencies: ResourceCollectorDep
     return supportedMetric(samples, gpuProvenance)
   }
 
-  function sampleProcessMemory() {
+  function sampleProcessBytes(read: () => number | undefined, notExposed: string) {
     try {
-      const view = dependencies.sampleProcessMemory()
-      return {
-        processUsedBytes:
-          view.usedBytes === undefined
-            ? unavailableMetric<number>('process memory usage is not exposed on this platform')
-            : normalizeNonNegativeIntegerMetric(view.usedBytes, processProvenance),
-        processAvailableBytes:
-          view.availableBytes === undefined
-            ? unavailableMetric<number>('the per-process allowance is not exposed on this platform')
-            : normalizeNonNegativeIntegerMetric(view.availableBytes, processProvenance)
-      }
+      const bytes = read()
+      return bytes === undefined
+        ? unavailableMetric<number>(notExposed)
+        : normalizeNonNegativeIntegerMetric(bytes, processProvenance)
     } catch {
-      return {
-        processUsedBytes: failedMetric<number>('process memory sampling failed'),
-        processAvailableBytes: failedMetric<number>('process memory sampling failed')
-      }
+      return failedMetric<number>('process memory sampling failed')
+    }
+  }
+
+  function sampleProcessMemory() {
+    return {
+      processUsedBytes: sampleProcessBytes(
+        () => dependencies.sampleProcessUsedBytes(),
+        'process memory usage is not exposed on this platform'
+      ),
+      processAvailableBytes: sampleProcessBytes(
+        () => dependencies.sampleProcessAvailableBytes(),
+        'the per-process allowance is not exposed on this platform'
+      )
     }
   }
 
