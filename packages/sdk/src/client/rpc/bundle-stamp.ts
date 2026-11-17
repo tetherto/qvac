@@ -8,9 +8,13 @@ export const BUNDLED_SDK_VERSION_FIELD = 'qvacSdkVersion'
 /** The field `bundleSdk` sets in a bundled worker's package.json to the target it bundled for. */
 export const BUNDLED_TARGET_FIELD = 'qvacTarget'
 
+/** The field `bundleSdk` sets to the language of the harness it wrote. */
+export const BUNDLED_LANGUAGE_FIELD = 'qvacLanguage'
+
 /**
- * The file `bundleSdk` writes at the root of a Kotlin or Python harness, which
- * has no package.json, with the same fields as a JavaScript harness stamp.
+ * The file `bundleSdk` writes at the root of a Kotlin, Python or Swift
+ * harness, which has no package.json, with the same fields as a JavaScript
+ * harness stamp.
  */
 export const BUNDLE_RECORD_FILE = 'qvac-bundle.json'
 
@@ -69,17 +73,31 @@ export function bundledTarget(dir: string): string | undefined {
 }
 
 /**
- * The target the bundle at `bundlePath` was bundled for. A Kotlin or Python
- * harness keeps its bundle in a subfolder, so the nearest folder above it with
- * a record or a package.json says; undefined when that folder does not record it.
+ * The stamp of the harness holding the bundle at `bundlePath`. A Kotlin,
+ * Python or Swift harness keeps its bundle in a subfolder, so it is the nearest
+ * folder above it with a record or a package.json.
  */
-export function bundleTargetOf(bundlePath: string): string | undefined {
+function bundleStampOf(bundlePath: string): Record<string, unknown> | null {
   for (let dir = path.dirname(bundlePath); ; dir = path.dirname(dir)) {
     const record = readJson(path.join(dir, BUNDLE_RECORD_FILE))
     if (record !== null || fs.existsSync(path.join(dir, 'package.json'))) {
-      const target = (record ?? readManifest(dir))?.[BUNDLED_TARGET_FIELD]
-      return typeof target === 'string' ? target : undefined
+      return record ?? readManifest(dir)
     }
-    if (path.dirname(dir) === dir) return undefined
+    if (path.dirname(dir) === dir) return null
   }
+}
+
+function stampedField(bundlePath: string, field: string): string | undefined {
+  const value = bundleStampOf(bundlePath)?.[field]
+  return typeof value === 'string' ? value : undefined
+}
+
+/** The target the bundle at `bundlePath` was bundled for, or undefined when its harness does not record it. */
+export function bundleTargetOf(bundlePath: string): string | undefined {
+  return stampedField(bundlePath, BUNDLED_TARGET_FIELD)
+}
+
+/** The language of the harness holding the bundle at `bundlePath`, or undefined when it does not record it. */
+export function bundleLanguageOf(bundlePath: string): string | undefined {
+  return stampedField(bundlePath, BUNDLED_LANGUAGE_FIELD)
 }

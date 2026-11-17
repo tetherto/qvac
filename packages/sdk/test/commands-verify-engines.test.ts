@@ -722,6 +722,24 @@ describe('verifyBundle engines.bare against the phone runtimes', () => {
     })
   })
 
+  it('checks macOS hosts against bare-kit-swift when the desktop runs Bare Kit for Swift', async () => {
+    await withTempDir(async (dir) => {
+      const bareStowDir = writeMobileProject(dir, { hosts: ['darwin-arm64'] })
+      writeSidecar(dir, '1.40.0')
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: path.join(dir, 'node_modules'),
+        hosts: ['darwin-arm64'],
+        desktopRuntime: 'bare-kit-swift',
+        bareStowDir,
+        network: false
+      })
+      const mismatches = result.issues.filter((issue) => issue.code === 'abi-mismatch')
+      assert.equal(mismatches.length, 1)
+      assert.match(mismatches[0]!.message, /runtime is 1\.36\.2 \(from bare-kit-swift/)
+    })
+  })
+
   it('checks desktop hosts against the bare-sidecar pear-runtime resolves', async () => {
     await withTempDir(async (dir) => {
       const bareStowDir = writeMobileProject(dir, { hosts: ['darwin-arm64'] })
@@ -805,6 +823,33 @@ describe('verifyBundle engines.bare against the phone runtimes', () => {
       const mismatches = result.issues.filter((issue) => issue.code === 'abi-mismatch')
       assert.equal(mismatches.length, 1)
       assert.match(mismatches[0]!.message, /runtime is 1\.36\.2 \(from bare-kit-kotlin/)
+    })
+  })
+
+  it('checks a Swift macOS bundle against bare-kit-swift from the language recorded at its harness root', async () => {
+    await withTempDir(async (dir) => {
+      const { bundlePath: written, bareStowDir } = writeMixedHostBundle(dir, {
+        linkedOnDesktop: true
+      })
+      const harnessRoot = path.join(dir, 'apple', 'worker')
+      fs.mkdirSync(harnessRoot, { recursive: true })
+      fs.renameSync(written, path.join(harnessRoot, 'worker.bundle'))
+      writeFile(
+        path.join(harnessRoot, 'qvac-bundle.json'),
+        JSON.stringify({ qvacTarget: 'bare-kit', qvacLanguage: 'swift' })
+      )
+      writeSidecar(dir, '1.40.0')
+
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: path.join(harnessRoot, 'worker.bundle'),
+        hosts: ['darwin-arm64'],
+        bareStowDir,
+        network: false
+      })
+      const mismatches = result.issues.filter((issue) => issue.code === 'abi-mismatch')
+      assert.equal(mismatches.length, 1)
+      assert.match(mismatches[0]!.message, /runtime is 1\.36\.2 \(from bare-kit-swift/)
     })
   })
 

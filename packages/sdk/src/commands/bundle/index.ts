@@ -23,7 +23,11 @@ import {
   listBundledAddonModules,
   listBundledAddons
 } from '@/commands/bundle/addons'
-import { assertReactNativeBareKitSupported, stageAddons } from '@/commands/bundle/link'
+import {
+  assertReactNativeBareKitSupported,
+  pinBareKitSwift,
+  stageAddons
+} from '@/commands/bundle/link'
 import { assertNodeCanBundle } from '@/commands/bundle/node-support'
 import { readBundle } from '@/commands/bundle/read-bundle'
 import {
@@ -50,7 +54,7 @@ import { findInAncestorNodeModules } from '@/expo/plugins/find-in-ancestor-node-
 import type { NativeAddon } from '@/commands/verify/addon-source'
 import { isMobileHost } from '@/commands/verify/prebuilds'
 import {
-  DESKTOP_RUNTIMES,
+  desktopRuntimeFor,
   formatVerifyBundleResult,
   hasErrors,
   verifyBundle,
@@ -60,6 +64,7 @@ import { formatRuntimeSource } from '@/commands/verify/abi'
 import { formatEnginesAdvice } from '@/commands/verify/engines-advice'
 import {
   BUNDLE_RECORD_FILE,
+  BUNDLED_LANGUAGE_FIELD,
   BUNDLED_SDK_VERSION_FIELD,
   BUNDLED_TARGET_FIELD
 } from '@/client/rpc/bundle-stamp'
@@ -73,9 +78,9 @@ export interface BundleSdkOptions {
   target?: BundleTarget | undefined
   /**
    * The language of the app that starts the worker, which bare-stow writes
-   * the harness package in: `javascript`, `kotlin` for `bare-kit`, or `python`
-   * for `bare-sidecar`. Defaults to `kotlin` for `bare-kit` and `javascript`
-   * otherwise.
+   * the harness package in: `javascript`, `kotlin` or `swift` for `bare-kit`,
+   * or `python` for `bare-sidecar`. Defaults to `kotlin` for `bare-kit` and
+   * `javascript` otherwise.
    */
   language?: BundleLanguage | undefined
   /** bare-stow's options for the language, such as `{ package }` for `kotlin`. */
@@ -88,8 +93,10 @@ export interface BundleSdkOptions {
   outputDir?: string | undefined
   /**
    * Hosts to bundle for. Defaults to this machine for `bare-sidecar` and
-   * `pear-runtime`, to every phone host for `react-native`, and to the
-   * Android hosts for `bare-kit`.
+   * `pear-runtime`, to every phone host for `react-native`, and for
+   * `bare-kit` to the Android hosts, or the iOS hosts for `swift`. macOS hosts
+   * need a bundle of their own: an addon split into per-platform packages
+   * resolves for every host in a bundle.
    */
   hosts?: string[] | undefined
   defer?: string[] | undefined
@@ -195,6 +202,7 @@ interface VerifyOutputOptions {
   bundlePath: string
   hosts: string[]
   target: BundleTarget
+  language: BundleLanguage
   network: boolean | undefined
   logger: Logger
 }
@@ -223,7 +231,7 @@ function bundlerBareStowDir(): string {
 }
 
 async function verifyOutput(options: VerifyOutputOptions): Promise<VerifyBundleResult> {
-  const { projectRoot, bundlePath, hosts, target, network, logger } = options
+  const { projectRoot, bundlePath, hosts, target, language, network, logger } = options
 
   logger.info('\n🔎 Verifying the bundle...')
   const result = await verifyBundle({
@@ -231,7 +239,7 @@ async function verifyOutput(options: VerifyOutputOptions): Promise<VerifyBundleR
     addonsSource: bundlePath,
     hosts,
     bareStowDir: bundlerBareStowDir(),
-    desktopRuntime: DESKTOP_RUNTIMES[target],
+    desktopRuntime: desktopRuntimeFor(target, language),
     ...(network !== undefined ? { network } : {}),
     onProgress: (message) => logger.info(`   ${message}`)
   })
@@ -268,8 +276,11 @@ async function verifyOutput(options: VerifyOutputOptions): Promise<VerifyBundleR
   return result
 }
 
-function defaultHosts(target: BundleTarget): string[] {
+function defaultHosts(target: BundleTarget, language: BundleLanguage): string[] {
   if (target === 'react-native') return DEFAULT_HOSTS.filter(isMobileHost)
+  if (target === 'bare-kit' && language === 'swift') {
+    return DEFAULT_HOSTS.filter((host) => host.startsWith('ios-'))
+  }
   if (target === 'bare-kit') return DEFAULT_HOSTS.filter((host) => host.startsWith('android-'))
   return [`${process.platform}-${process.arch}`]
 }
@@ -324,6 +335,10 @@ async function stowBundle(options: StowBundleOptions): Promise<string> {
     throw new BundleFailedError(entryPath, new Error(`bare-stow wrote no bundle to ${outputDir}`))
   }
   if (language === 'javascript') await assertHarnessDependenciesResolve(entryPath, outputDir)
+  if (language === 'swift') {
+    const manifest = path.join(outputDir, 'Package.swift')
+    await fsp.writeFile(manifest, pinBareKitSwift(await fsp.readFile(manifest, 'utf8')))
+  }
   return bundlePath
 }
 
@@ -378,8 +393,9 @@ const STALE_QVAC_FILES = ['worker.bundle.js', 'addons.manifest.json']
 
 /**
  * Records the SDK version and the target in the harness package.json, for the
- * client and `verifyBundle` to check. A Kotlin or Python harness has no
- * package.json, so they go in a record file at its root.
+ * client and `verifyBundle` to check, and for `bare-kit` the language, which
+ * picks the Bare Kit that desktop hosts run. A Kotlin, Python or Swift harness
+ * has no package.json, so they go in a record file at its root.
  */
 async function stampBundle(
   harnessDir: string,
@@ -400,6 +416,7 @@ async function stampBundle(
       : {}
   if (typeof sdk.version === 'string') stamp[BUNDLED_SDK_VERSION_FIELD] = sdk.version
   stamp[BUNDLED_TARGET_FIELD] = target
+  if (target === 'bare-kit') stamp[BUNDLED_LANGUAGE_FIELD] = language
   await fsp.writeFile(stampPath, `${JSON.stringify(stamp, null, 2)}\n`)
 }
 
@@ -519,7 +536,21 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     logger.info(`   ${label}: ${spec}`)
   }
 
-  const hosts = options.hosts && options.hosts.length > 0 ? options.hosts : defaultHosts(target)
+  const hosts =
+    options.hosts && options.hosts.length > 0 ? options.hosts : defaultHosts(target, language)
+  if (
+    language === 'swift' &&
+    hosts.some((host) => host.startsWith('ios-')) &&
+    hosts.some((host) => host.startsWith('darwin-'))
+  ) {
+    throw new BundleFailedError(
+      entryPath,
+      new Error(
+        `hosts ${hosts.join(', ')} mix iOS and macOS: a bundle holds one platform family, ` +
+          'so bundle the macOS hosts on their own'
+      )
+    )
+  }
 
   const explicitDefer = options.defer ?? []
   const includeAudioDecoder =
@@ -648,6 +679,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
         bundlePath: scratchBundlePath,
         hosts,
         target,
+        language,
         network: options.network,
         logger
       })
