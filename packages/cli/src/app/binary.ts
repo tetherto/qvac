@@ -242,7 +242,7 @@ function isRunning(pid: number): boolean {
 }
 
 function binaryName(hostKey: string): string {
-  return hostKey.startsWith('win32-') ? 'qvac.exe' : 'qvac'
+  return hostKey.startsWith('win32-') ? 'qvac-app.exe' : 'qvac-app'
 }
 
 async function readState(dir: string): Promise<State | null> {

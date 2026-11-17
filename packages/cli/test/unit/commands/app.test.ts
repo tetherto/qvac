@@ -33,8 +33,8 @@ const VERSION = (
   }
 ).version
 const HOST_KEY = `${process.platform}-${process.arch}`
-const BINARY_NAME = process.platform === 'win32' ? 'qvac.exe' : 'qvac'
-const FILE = `qvac-${HOST_KEY}.gz`
+const BINARY_NAME = process.platform === 'win32' ? 'qvac-app.exe' : 'qvac-app'
+const FILE = `qvac-app-${HOST_KEY}.gz`
 const HOUR = 60 * 60 * 1000
 const NOW = 1_800_000_000_000
 const SKIP_EXEC =
@@ -436,7 +436,7 @@ describe('qvac app', () => {
 
   it('exits 128 + 15 when the binary dies from SIGTERM', { skip: SKIP_EXEC }, async (t) => {
     const dir = await cacheDir(t)
-    const file = join(dir, 'qvac')
+    const file = join(dir, 'qvac-app')
     await writeFile(file, `#!${process.execPath}\nprocess.kill(process.pid, 'SIGTERM')\n`, {
       mode: 0o755
     })
