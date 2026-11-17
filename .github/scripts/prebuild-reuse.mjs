@@ -89,14 +89,12 @@ export const legKey = (row, ctx) => hash(JSON.stringify(keyParts(row, ctx)))
 export const cacheName = (row, key) => `prebuild-cache-${row.slug}-${row.config}-${key}`
 
 // Only an unexpired artifact from a same-repository run on this branch or the default branch, never one a fork's run
-// produced; cache-warm builds the default branch's. maxDays, when set, also refuses an older one: the runners'
-// compilers and images are not in the key.
-export function pick(artifacts, branch, defaultBranch = '', { maxDays = 0, now = Date.now() } = {}) {
+// produced; cache-warm builds the default branch's.
+export function pick(artifacts, branch, defaultBranch = '') {
   return (
     artifacts.find(
       (a) =>
         !a.expired &&
-        (!maxDays || now - Date.parse(a.created_at) <= maxDays * 86400000) &&
         [branch, defaultBranch].filter(Boolean).includes(a.workflow_run?.head_branch) &&
         a.workflow_run.head_repository_id === a.workflow_run.repository_id
     ) ?? null
@@ -115,13 +113,13 @@ export function legs({ slugs, configs, dirs, runners, providers = [] }) {
 }
 
 // Legs to build go back as their row index, which _build reads the full row by.
-export async function plan(rows, { tree, read, pnpmList, list, branch, defaultBranch = '', maxDays = 0 }) {
+export async function plan(rows, { tree, read, pnpmList, list, branch, defaultBranch = '' }) {
   const build = []
   const reused = []
   for (const [i, row] of rows.entries()) {
     const parts = keyParts(row, { tree, read, pnpmList })
     const name = cacheName(row, hash(JSON.stringify(parts)))
-    const hit = branch ? pick(await list(name), branch, defaultBranch, { maxDays }) : null
+    const hit = branch ? pick(await list(name), branch, defaultBranch) : null
     if (hit) reused.push({ slug: row.slug, config: row.config, name, runId: hit.workflow_run.id })
     else build.push({ i, cacheName: name, parts })
   }
@@ -192,8 +190,7 @@ async function main(env) {
     pnpmList,
     list,
     branch,
-    defaultBranch: env.DEFAULT_BRANCH,
-    maxDays: Number(env.REUSE_MAX_DAYS || 0)
+    defaultBranch: env.DEFAULT_BRANCH
   })
   for (const r of reused) console.log(`reuse ${r.slug} ${r.config} from run ${r.runId}`)
   // Compare these with the default branch's cache-warm log to see which input moved.
