@@ -8,83 +8,39 @@ import { appendFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 
 // The package's and its providers' native code (a consumer links its providers' prebuilds); package.json names the
-// addon and project.json holds the build commands and per-configuration settings.
+// addon and project.json holds the build commands and per-configuration settings. Linker maps, export lists and config
+// templates shape the module, and the ci/build-* and ci/verify-* scripts are the build commands' own steps.
 export const NATIVE =
-  /\.(c|cc|cpp|cxx|h|hh|hpp|hxx|inl|ipp|cu|cuh|m|mm|S|asm)$|(^|\/)CMakeLists\.txt$|\.cmake$|(^|\/)vcpkg(-configuration)?\.json$|\/vcpkg\/|(^|\/)(package|project)\.json$/
+  /\.(c|cc|cpp|cxx|h|hh|hpp|hxx|inl|ipp|cu|cuh|m|mm|S|asm|map|def)$|(^|\/)CMakeLists\.txt$|\.cmake$|\.cmake\.in$|(^|\/)exports\.txt$|(^|\/)vcpkg(-configuration)?\.json$|\/vcpkg\/|(^|\/)(package|project)\.json$|(^|\/)ci\/(build|verify)-[^/]+$/
 
-// What decides a leg's key. Each part is hashed on its own, so a leg that has to build can log which part changed.
-//   row       the build row: package, configuration, runner, providers
-//   native    the package's and its providers' native files (NATIVE above)
-//   lockfile  only the packages those packages install, from pnpm's reading of the lockfile (lockfilePart)
-//   actions   only the local actions _build.yml uses (actionsUsed)
-//   shared    files every build reads, whatever the package (INPUTS)
-
+// Build inputs, every file: shared CMake and vcpkg code, toolchain pins, lockfile and install layout, and the CI code
+// the build runs.
 export const INPUTS = [
   'cmake',
   'vcpkg-overlays',
   'nx.json',
+  'pnpm-lock.yaml',
   'pnpm-workspace.yaml',
   'scripts/ci',
   '.github/bare-toolchain',
+  '.github/scripts/check-linux-module-cxx-runtime.mjs',
+  '.github/actions',
   '.github/config',
   '.github/workflows/_build.yml'
 ]
 
-const hash = (text) => createHash('sha256').update(text).digest('hex').slice(0, 16)
-
-// The leg's packages and every package they install, one 'name@version tarball' line each, from
-// `pnpm list --lockfile-only --json` (pnpm reads the lockfile; nothing is installed). A change anywhere else in the
-// lockfile leaves this text the same.
-export function lockfilePart(projects) {
-  const lines = new Set()
-  const walk = (deps = {}) => {
-    for (const [name, dep] of Object.entries(deps)) {
-      lines.add(`${name}@${dep.version} ${dep.resolved ?? ''}`)
-      walk(dep.dependencies)
-      walk(dep.optionalDependencies)
-    }
-  }
-  for (const project of projects) {
-    lines.add(`${project.name}@${project.version}`)
-    walk(project.dependencies)
-    walk(project.devDependencies)
-    walk(project.optionalDependencies)
-  }
-  return [...lines].sort().join('\n')
-}
-
-// The local actions _build.yml uses, and the local actions those use in turn.
-export function actionsUsed(read) {
-  const found = new Set()
-  const scan = (yaml) => {
-    for (const [, name] of yaml.matchAll(/uses: \.\/\.github\/actions\/([A-Za-z0-9_-]+)/g)) {
-      const dir = `.github/actions/${name}`
-      if (found.has(dir)) continue
-      found.add(dir)
-      scan(read(`${dir}/action.yml`) || read(`${dir}/action.yaml`))
-    }
-  }
-  scan(read('.github/workflows/_build.yml'))
-  return [...found].sort()
-}
-
-// tree(paths) lists files with their content hashes (git ls-tree), read(path) returns one file's text, and
-// pnpmList(dirs) returns `pnpm list --lockfile-only --json` for those packages.
-export function keyParts(row, { tree, read, pnpmList }) {
-  const dirs = [row.dir, ...(row.providers ?? []).map((p) => `packages/${p}`)]
-  const nativeFiles = tree(dirs)
+export function legKey(row, tree) {
+  const native = tree([row.dir, ...(row.providers ?? []).map((p) => `packages/${p}`)])
     .split('\n')
     .filter((line) => NATIVE.test(line.split('\t')[1] ?? ''))
-  return {
-    row: hash(JSON.stringify(row)),
-    native: hash(nativeFiles.join('\n')),
-    lockfile: hash(lockfilePart(pnpmList(dirs))),
-    actions: hash(tree(actionsUsed(read))),
-    shared: hash(tree(INPUTS))
-  }
+    .join('\n')
+  return createHash('sha256')
+    .update(JSON.stringify(row))
+    .update(native)
+    .update(tree(INPUTS))
+    .digest('hex')
+    .slice(0, 16)
 }
-
-export const legKey = (row, ctx) => hash(JSON.stringify(keyParts(row, ctx)))
 
 export const cacheName = (row, key) => `prebuild-cache-${row.slug}-${row.config}-${key}`
 
@@ -113,15 +69,14 @@ export function legs({ slugs, configs, dirs, runners, providers = [] }) {
 }
 
 // Legs to build go back as their row index, which _build reads the full row by.
-export async function plan(rows, { tree, read, pnpmList, list, branch, defaultBranch = '' }) {
+export async function plan(rows, { tree, list, branch, defaultBranch = '' }) {
   const build = []
   const reused = []
   for (const [i, row] of rows.entries()) {
-    const parts = keyParts(row, { tree, read, pnpmList })
-    const name = cacheName(row, hash(JSON.stringify(parts)))
+    const name = cacheName(row, legKey(row, tree))
     const hit = branch ? pick(await list(name), branch, defaultBranch) : null
     if (hit) reused.push({ slug: row.slug, config: row.config, name, runId: hit.workflow_run.id })
-    else build.push({ i, cacheName: name, parts })
+    else build.push({ i, cacheName: name })
   }
   return { build, reused }
 }
@@ -132,34 +87,6 @@ async function main(env) {
       encoding: 'utf8',
       maxBuffer: 256 * 1024 * 1024
     })
-  const read = (path) => {
-    try {
-      return execFileSync('git', ['-C', env.SRC, 'show', `HEAD:${path}`], {
-        encoding: 'utf8',
-        maxBuffer: 256 * 1024 * 1024,
-        stdio: ['ignore', 'pipe', 'ignore']
-      })
-    } catch {
-      return ''
-    }
-  }
-  // SRC can be a pull request's code: ignore-pnpmfile keeps pnpm from running its .pnpmfile.cjs.
-  const pnpmList = (dirs) =>
-    JSON.parse(
-      execFileSync(
-        'pnpm',
-        [
-          'list',
-          '--lockfile-only',
-          '--config.ignore-pnpmfile=true',
-          '--depth',
-          'Infinity',
-          '--json',
-          ...dirs.flatMap((d) => ['--filter', `./${d}`])
-        ],
-        { cwd: env.SRC, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }
-      )
-    )
   const list = async (name) => {
     const url = `${env.GITHUB_API_URL}/repos/${env.GITHUB_REPOSITORY}/actions/artifacts?name=${encodeURIComponent(name)}&per_page=30`
     const res = await fetch(url, {
@@ -184,21 +111,12 @@ async function main(env) {
     runners: JSON.parse(env.RUNNERS),
     providers: aligned ? providers : []
   })
-  const { build, reused } = await plan(rows, {
-    tree,
-    read,
-    pnpmList,
-    list,
-    branch,
-    defaultBranch: env.DEFAULT_BRANCH
-  })
+  const { build, reused } = await plan(rows, { tree, list, branch, defaultBranch: env.DEFAULT_BRANCH })
   for (const r of reused) console.log(`reuse ${r.slug} ${r.config} from run ${r.runId}`)
-  // Compare these with the default branch's cache-warm log to see which input moved.
-  for (const b of build) console.log(`build ${b.cacheName}: ${JSON.stringify(b.parts)}`)
   console.log(`${build.length} to build, ${reused.length} reused`)
   appendFileSync(
     env.GITHUB_OUTPUT,
-    `build=${JSON.stringify(build.map(({ i, cacheName }) => ({ i, cacheName })))}\nreused=${JSON.stringify(reused)}\n`
+    `build=${JSON.stringify(build)}\nreused=${JSON.stringify(reused)}\n`
   )
 }
 

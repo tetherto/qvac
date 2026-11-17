@@ -143,8 +143,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/test-inference-pear-e2e.yml
 
-  # Providers build first, once per configuration; a provider's own release builds its rows here, and a consumer's
-  # release reuses main's build of an unchanged provider.
+  # Providers build first, once per configuration; a provider's own release builds its rows here.
   providers:
     needs: [select, logic]
     if: toJSON(fromJSON(needs.select.outputs.matrices)['build:providers']) != '[]'
@@ -156,7 +155,6 @@ jobs:
     secrets: inherit
     with:
       rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices)['build:providers']) }}
-      reuse: true
 
   build:
     needs: [select, logic, providers]
