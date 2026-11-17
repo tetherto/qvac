@@ -8,6 +8,9 @@ declare const QUEUE: unique symbol;
 declare const PENDING: unique symbol;
 declare const DIM: unique symbol;
 declare const BIT_WIDTH: unique symbol;
+declare const LENGTH: unique symbol;
+declare const CALIBRATED: unique symbol;
+declare const STAGED: unique symbol;
 declare const BIT_WIDTH_BY_STORAGE: {
     readonly f32: 32;
     readonly q8: 8;
@@ -29,6 +32,28 @@ export interface IdMapIndexOptions {
     /** Use `turbovec-q4` to distinguish TurboVec q4 from generic q4 storage. */
     storage?: IdMapIndexStorage;
 }
+/**
+ * The parts of an `AbortSignal` the index uses. Signals from the DOM, Node
+ * and `bare-abort-controller` all fit.
+ */
+export interface IdMapIndexAbortSignal {
+    readonly aborted: boolean;
+    readonly reason?: unknown;
+    addEventListener(type: 'abort', listener: () => void, options?: {
+        once?: boolean;
+    }): void;
+    removeEventListener(type: 'abort', listener: () => void): void;
+}
+export interface IdMapIndexCallOptions {
+    /**
+     * Cancels the call. A call that has not started is skipped. A call that is
+     * running rejects at once, but its native work runs to the end: a search's
+     * result is dropped, while a mutation such as `addWithIds()` or
+     * `buildIvf()` still takes effect. Later calls on the index wait for that
+     * work. The promise rejects with `signal.reason`.
+     */
+    signal?: IdMapIndexAbortSignal;
+}
 export interface IdMapIndexSearchResult {
     /**
      * Row-major similarity scores. f32/q4/q8 use dot products against stored or
@@ -49,17 +74,16 @@ export declare class IdMapIndexFilter {
     [FILTER_OWNER]: IdMapIndex | null;
     [FILTER_REF]: WeakRef<IdMapIndexFilter> | null;
     private constructor();
-    /** Search with this prepared allowlist. Mutating the owner invalidates the filter. */
-    search(queries: Float32Array, k: number): IdMapIndexSearchResult;
     /**
-     * `search()` run off the JS thread, queued behind the owner's other async
-     * operations. Rejects when a mutation queued before it disposed the filter.
+     * Search with this prepared allowlist, queued behind the owner's other
+     * operations. Rejects when an earlier mutation of the owner disposed the
+     * filter: every mutation invalidates the owner's filters.
      */
-    searchAsync(queries: Float32Array, k: number): Promise<IdMapIndexSearchResult>;
+    search(queries: Float32Array, k: number, options?: IdMapIndexCallOptions): Promise<IdMapIndexSearchResult>;
     /**
      * Release the prepared native filter. This operation is idempotent. While
-     * the owner has async operations queued, the native filter is freed after
-     * they settle.
+     * the owner has operations queued, the native filter is freed after they
+     * settle.
      */
     dispose(): void;
 }
@@ -73,6 +97,15 @@ type IdMapIndexClass<T extends IdMapIndex> = (abstract new (...args: never[]) =>
  * queries before search. TurboVec normalizes indexed vectors while quantizing,
  * then restores their magnitude with a per-vector scale; it does not normalize
  * queries.
+ *
+ * Every method that reads or changes the index returns a promise and runs
+ * its native work on a worker thread owned by the addon, so the JS thread
+ * stays free. Calls on one index run one at a time, in call order, so a
+ * search made after an add sees that add. Across indexes, long work (adds,
+ * builds, loads, writes, compaction) and searches run on two separate worker
+ * threads, so a long build never holds up a search. Input arrays are copied
+ * when the call is made. Each call takes an optional `{ signal }`: see
+ * {@link IdMapIndexCallOptions}.
  */
 export default class IdMapIndex {
     static Filter: typeof IdMapIndexFilter;
@@ -85,69 +118,62 @@ export default class IdMapIndex {
     [PENDING]: number;
     [DIM]: number;
     [BIT_WIDTH]: IdMapIndexBitWidth;
+    [LENGTH]: number;
+    [CALIBRATED]: boolean;
+    [STAGED]: boolean;
     constructor(options: IdMapIndexOptions);
     /**
      * Load a v2/v3/v8 snapshot or migrate legacy v1 storage. Legacy bit-width 8
      * snapshots migrate to q8; other v1 widths migrate to f32. TurboVec v3
      * snapshots from earlier releases keep their encoding and keep writing v3;
      * those above 1,024 dimensions can be loaded and rewritten, but cannot add,
-     * search, or build IVF state. Synchronous and potentially blocking.
-     * Called on a subclass, returns an instance of that subclass; its
-     * constructor and field initializers do not run.
+     * search, or build IVF state. Called on a subclass, resolves to an instance
+     * of that subclass; its constructor and field initializers do not run. An
+     * index that finishes loading after `signal` aborts is disposed.
      */
-    static load<T extends IdMapIndex>(this: IdMapIndexClass<T>, path: string): T;
-    /** Detached call, e.g. `const { load } = IdMapIndex`. Returns an IdMapIndex. */
-    static load(path: string): IdMapIndex;
+    static load<T extends IdMapIndex>(this: IdMapIndexClass<T>, path: string, options?: IdMapIndexCallOptions): Promise<T>;
+    /** Detached call, e.g. `const { load } = IdMapIndex`. Resolves to an IdMapIndex. */
+    static load(path: string, options?: IdMapIndexCallOptions): Promise<IdMapIndex>;
     /**
      * Load a v2 snapshot with read-only mmap-backed vectors. Legacy v1 and
      * TurboVec (v3 and v8) snapshots are rejected. Requires a little-endian host
      * and, on POSIX, a filesystem supporting flock(). Mutations are rejected.
-     * Returns a subclass instance when called on a subclass, as `load()` does.
+     * Resolves to a subclass instance when called on a subclass, as `load()`
+     * does.
      */
-    static loadMmap<T extends IdMapIndex>(this: IdMapIndexClass<T>, path: string): T;
-    /** Detached call, e.g. `const { loadMmap } = IdMapIndex`. Returns an IdMapIndex. */
-    static loadMmap(path: string): IdMapIndex;
+    static loadMmap<T extends IdMapIndex>(this: IdMapIndexClass<T>, path: string, options?: IdMapIndexCallOptions): Promise<T>;
+    /** Detached call, e.g. `const { loadMmap } = IdMapIndex`. Resolves to an IdMapIndex. */
+    static loadMmap(path: string, options?: IdMapIndexCallOptions): Promise<IdMapIndex>;
     /**
      * Load a snapshot and replay its append-only delta log. A missing log is
-     * treated as empty. The returned handle is bound to `deltaPath`; use logged
+     * treated as empty. The returned index is bound to `deltaPath`; use logged
      * mutations and `compactDelta()` rather than plain mutations or `write()`.
      * Delta logs require a local filesystem with reliable cooperative locking.
-     * TurboVec snapshots are rejected with `InvalidArgument`. Returns a
+     * TurboVec snapshots are rejected with `InvalidArgument`. Resolves to a
      * subclass instance when called on a subclass, as `load()` does.
      */
-    static loadWithDelta<T extends IdMapIndex>(this: IdMapIndexClass<T>, snapshotPath: string, deltaPath: string): T;
-    /** Detached call, e.g. `const { loadWithDelta } = IdMapIndex`. Returns an IdMapIndex. */
-    static loadWithDelta(snapshotPath: string, deltaPath: string): IdMapIndex;
+    static loadWithDelta<T extends IdMapIndex>(this: IdMapIndexClass<T>, snapshotPath: string, deltaPath: string, options?: IdMapIndexCallOptions): Promise<T>;
+    /** Detached call, e.g. `const { loadWithDelta } = IdMapIndex`. Resolves to an IdMapIndex. */
+    static loadWithDelta(snapshotPath: string, deltaPath: string, options?: IdMapIndexCallOptions): Promise<IdMapIndex>;
+    private static startLoad;
     private static fromHandle;
-    /** `load()` run off the JS thread. */
-    static loadAsync<T extends IdMapIndex>(this: IdMapIndexClass<T>, path: string): Promise<T>;
-    /** Detached call, e.g. `const { loadAsync } = IdMapIndex`. Resolves to an IdMapIndex. */
-    static loadAsync(path: string): Promise<IdMapIndex>;
-    /** `loadMmap()` run off the JS thread. */
-    static loadMmapAsync<T extends IdMapIndex>(this: IdMapIndexClass<T>, path: string): Promise<T>;
-    /** Detached call, e.g. `const { loadMmapAsync } = IdMapIndex`. Resolves to an IdMapIndex. */
-    static loadMmapAsync(path: string): Promise<IdMapIndex>;
-    /** `loadWithDelta()` run off the JS thread. */
-    static loadWithDeltaAsync<T extends IdMapIndex>(this: IdMapIndexClass<T>, snapshotPath: string, deltaPath: string): Promise<T>;
-    /** Detached call, e.g. `const { loadWithDeltaAsync } = IdMapIndex`. Resolves to an IdMapIndex. */
-    static loadWithDeltaAsync(snapshotPath: string, deltaPath: string): Promise<IdMapIndex>;
     /**
      * Atomically add vectors with stable uint64 IDs. `vectors` is row-major and
      * must contain `ids.length * dim` finite components. TurboVec additionally
      * requires `abs(component) < 1e16`. UINT64_MAX is reserved.
      */
-    addWithIds(vectors: Float32Array, ids: BigUint64Array): void;
+    addWithIds(vectors: Float32Array, ids: BigUint64Array, options?: IdMapIndexCallOptions): Promise<void>;
     /**
      * Add vectors and append a durable v4 delta record. The index must first be
-     * loaded from or successfully written to a snapshot. Delta logs are
-     * state-bound and support one evolving writer; stale writers may catch up,
-     * and that catch-up remains applied even if this add throws. A complete
-     * record may also remain applied after a durability error, leaving the
-     * handle requiring a reload. Store delta logs on a local filesystem with
-     * reliable cooperative locking. TurboVec storage does not support logged
-     * mutations.
+     * loaded from or successfully written to a snapshot, and then takes only
+     * logged mutations. Delta logs are state-bound and support one evolving
+     * writer; stale writers may catch up, and that catch-up remains applied
+     * even if this add rejects. A complete record may also remain applied after
+     * a durability error, leaving the index requiring a reload. Store delta
+     * logs on a local filesystem with reliable cooperative locking. TurboVec
+     * storage does not support logged mutations.
      */
-    addLogged(vectors: Float32Array, ids: BigUint64Array, deltaPath: string): void;
+    addLogged(vectors: Float32Array, ids: BigUint64Array, deltaPath: string, options?: IdMapIndexCallOptions): Promise<void>;
     /**
      * Top-k similarity search over row-major queries. Results are sorted
      * by descending score, then ascending ID. TurboVec rotates queries without
@@ -155,122 +181,98 @@ export default class IdMapIndex {
      * scoring. TurboVec query components require `abs(value) < 1e16`. Short rows
      * use UINT64_MAX padding.
      */
-    search(queries: Float32Array, k: number): IdMapIndexSearchResult;
+    search(queries: Float32Array, k: number, options?: IdMapIndexCallOptions): Promise<IdMapIndexSearchResult>;
     /** Exact search restricted to the supplied external IDs. */
-    searchFiltered(queries: Float32Array, k: number, allowedIds: BigUint64Array): IdMapIndexSearchResult;
+    searchFiltered(queries: Float32Array, k: number, allowedIds: BigUint64Array, options?: IdMapIndexCallOptions): Promise<IdMapIndexSearchResult>;
     /**
-     * Prepare an allowlist for repeated searches. Native mutation attempts
-     * invalidate all prepared filters created from this index. Call `dispose()`
-     * when done to release native filter memory promptly; dropped filters are
-     * reclaimed by GC.
+     * Prepare an allowlist for repeated searches. Every mutation of this index
+     * invalidates all prepared filters created from it. Call `dispose()` when
+     * done to release native filter memory promptly; dropped filters are
+     * reclaimed by GC. A filter that finishes after `signal` aborts is
+     * disposed.
      */
-    prepareFilter(allowedIds: BigUint64Array): IdMapIndexFilter;
+    prepareFilter(allowedIds: BigUint64Array, options?: IdMapIndexCallOptions): Promise<IdMapIndexFilter>;
     /**
      * Build deterministic in-memory IVF-flat search state. Mutations invalidate
-     * it, and snapshots do not persist it.
+     * it, and snapshots do not persist it. A build that has started runs to the
+     * end even when `signal` aborts.
      */
-    buildIvf(nLists: number, nIter?: number): void;
+    buildIvf(nLists: number, nIter?: number, options?: IdMapIndexCallOptions): Promise<void>;
     /**
      * Search the IVF-flat candidate lists. `buildIvf()` must have run after the
      * latest mutation or load. Higher `nProbe` generally improves recall.
      */
-    searchIvf(queries: Float32Array, k: number, nProbe: number): IdMapIndexSearchResult;
-    /** Remove an ID, returning false when it is not present. */
-    remove(id: bigint): boolean;
+    searchIvf(queries: Float32Array, k: number, nProbe: number, options?: IdMapIndexCallOptions): Promise<IdMapIndexSearchResult>;
+    /** Remove an ID, resolving to false when it is not present. */
+    remove(id: bigint, options?: IdMapIndexCallOptions): Promise<boolean>;
     /**
-     * Remove an ID and append a durable v4 delta record. Returns false when the
-     * ID is absent. Stale-writer catch-up may still mutate the handle when this
-     * method returns false or throws, and a complete record may remain applied
-     * after a durability error. The same binding and reload rules as
+     * Remove an ID and append a durable v4 delta record. Resolves to false when
+     * the ID is absent. Stale-writer catch-up may still mutate the index when
+     * this resolves to false or rejects, and a complete record may remain
+     * applied after a durability error. The same binding and reload rules as
      * `addLogged()` apply.
      */
-    removeLogged(id: bigint, deltaPath: string): boolean;
-    /** Physically reclaim tombstoned slots. Rejected on delta-bound handles. */
-    compact(): void;
-    /** Return whether the index contains an external ID. */
-    contains(id: bigint): boolean;
+    removeLogged(id: bigint, deltaPath: string, options?: IdMapIndexCallOptions): Promise<boolean>;
+    /** Physically reclaim tombstoned slots. Rejected on delta-bound indexes. */
+    compact(options?: IdMapIndexCallOptions): Promise<void>;
+    /** Resolve to whether the index contains an external ID. */
+    contains(id: bigint, options?: IdMapIndexCallOptions): Promise<boolean>;
     /** Best-effort warmup of TurboVec rotation and codebook state. */
-    prepare(): void;
+    prepare(options?: IdMapIndexCallOptions): Promise<void>;
     /**
      * Persist a checksummed v2 snapshot for f32/q4/q8, or a v8 snapshot for
-     * TurboVec (v3 for an index loaded from a v3 snapshot). Delta-bound handles
+     * TurboVec (v3 for an index loaded from a v3 snapshot). Delta-bound indexes
      * must use `compactDelta()`. A NotDurable error means replacement succeeded
      * but parent-directory durability was not confirmed.
      */
-    write(path: string): void;
+    write(path: string, options?: IdMapIndexCallOptions): Promise<void>;
     /**
      * Write a fresh snapshot and reset its matching v4 delta log. A
      * PartialCompact error means replacement occurred but durability or log
      * reset could not be confirmed. TurboVec storage does not support delta
      * compaction and is rejected with `InvalidArgument`.
      */
-    compactDelta(snapshotPath: string, deltaPath: string): void;
-    /** `addWithIds()` run off the JS thread. */
-    addWithIdsAsync(vectors: Float32Array, ids: BigUint64Array): Promise<void>;
-    /** `addLogged()` run off the JS thread. */
-    addLoggedAsync(vectors: Float32Array, ids: BigUint64Array, deltaPath: string): Promise<void>;
-    /** `search()` run off the JS thread. */
-    searchAsync(queries: Float32Array, k: number): Promise<IdMapIndexSearchResult>;
-    /** `searchFiltered()` run off the JS thread. */
-    searchFilteredAsync(queries: Float32Array, k: number, allowedIds: BigUint64Array): Promise<IdMapIndexSearchResult>;
-    /** `prepareFilter()` run off the JS thread. */
-    prepareFilterAsync(allowedIds: BigUint64Array): Promise<IdMapIndexFilter>;
+    compactDelta(snapshotPath: string, deltaPath: string, options?: IdMapIndexCallOptions): Promise<void>;
     /**
-     * `buildIvf()` run off the JS thread. The build cannot be cancelled: once
-     * it starts, it runs to the end.
+     * Turn TurboVec staged search on or off for the searches queued after this
+     * call. On, a search of 32,768 or more vectors scans a compressed form
+     * first and scores only a shortlist: several times faster per query, but
+     * it can miss some of the best matches, especially at small k. It applies
+     * only at a dimension divisible by 32, on hosts that support it, and never
+     * to an index loaded from a v3 snapshot; elsewhere the setting is kept but
+     * every search scans in full. Rejects for non-TurboVec storage. Not saved
+     * in snapshots.
      */
-    buildIvfAsync(nLists: number, nIter?: number): Promise<void>;
-    /** `searchIvf()` run off the JS thread. */
-    searchIvfAsync(queries: Float32Array, k: number, nProbe: number): Promise<IdMapIndexSearchResult>;
-    /** `remove()` run off the JS thread. */
-    removeAsync(id: bigint): Promise<boolean>;
-    /** `removeLogged()` run off the JS thread. */
-    removeLoggedAsync(id: bigint, deltaPath: string): Promise<boolean>;
-    /** `compact()` run off the JS thread. */
-    compactAsync(): Promise<void>;
-    /** `prepare()` run off the JS thread. */
-    prepareAsync(): Promise<void>;
-    /** `write()` run off the JS thread. */
-    writeAsync(path: string): Promise<void>;
-    /** `compactDelta()` run off the JS thread. */
-    compactDeltaAsync(snapshotPath: string, deltaPath: string): Promise<void>;
-    /** Number of live entries. */
+    setStagedSearch(enabled: boolean, options?: IdMapIndexCallOptions): Promise<void>;
+    /** Number of live entries after the last call that finished. */
     get length(): number;
     /** Vector dimensionality. */
     get dim(): number;
     /** Effective storage bit width. */
     get bitWidth(): IdMapIndexBitWidth;
     /**
-     * Whether a TurboVec index holds a TQ+ calibration. A fresh TurboVec index
-     * calibrates from its first `addWithIds()` batch when that batch has at
-     * least 1,000 rows; other storages are never calibrated.
+     * Whether a TurboVec index holds a TQ+ calibration, as of the last call
+     * that finished. A fresh TurboVec index calibrates from its first
+     * `addWithIds()` batch when that batch has at least 1,000 rows; other
+     * storages are never calibrated.
      */
     get calibrated(): boolean;
     /**
-     * Whether staged search is turned on. Off for every new or loaded index.
-     * Reports the setting, not whether a search runs in stages: see
-     * `setStagedSearch()`.
+     * Whether staged search is turned on, as of the last `setStagedSearch()`
+     * that finished. Off for every new or loaded index. Reports the setting,
+     * not whether a search runs in stages: see `setStagedSearch()`.
      */
     get stagedSearch(): boolean;
     /**
-     * Turn TurboVec staged search on or off. On, a search of 32,768 or more
-     * vectors scans a compressed form first and scores only a shortlist: several
-     * times faster per query, but it can miss some of the best matches,
-     * especially at small k. It applies only at a dimension divisible by 32, on
-     * hosts that support it, and never to an index loaded from a v3 snapshot;
-     * elsewhere the setting is kept but every search scans in full. Throws for
-     * non-TurboVec storage. Not saved in snapshots.
+     * Release filters and native index resources. The index cannot be used
+     * after this call, and calls that have not started reject. A call that is
+     * running finishes first; the native index is freed after it. Resolves
+     * once the native index has been freed. This operation is idempotent.
      */
-    setStagedSearch(enabled: boolean): void;
-    /**
-     * Release filters and native index resources. This operation is
-     * idempotent. Async operations that have not started yet reject; one that
-     * is running finishes first, and the native index is freed after it.
-     */
-    dispose(): void;
-    /** `dispose()`, resolving once the native index has been freed. */
-    disposeAsync(): Promise<void>;
+    dispose(): Promise<void>;
     private disposeFilters;
+    private readState;
+    private afterMutation;
     private mutate;
     private registerFilter;
     private pruneFilters;

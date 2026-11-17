@@ -1,6 +1,7 @@
 #include "AsyncJob.hpp"
 
 #include <atomic>
+#include <cstdint>
 #include <exception>
 #include <memory>
 #include <new>
@@ -32,9 +33,13 @@ struct Job {
   js_deferred_teardown_t* teardown = nullptr;
   // JS thread only. Once false, no JS call is legal.
   bool envAlive = true;
-  // Set with envAlive. A job that has not started by then is skipped, so
-  // teardown waits only for the jobs already running.
+  // Set with envAlive. Teardown removes a job that is still queued from its
+  // lane; one that a worker has already taken but not started is skipped
+  // here. Either way teardown waits only for the jobs already running.
   std::atomic<bool> abandoned{false};
+  Lane lane = Lane::Bulk;
+  // From WorkerPool::post(), for cancelling the job at teardown.
+  std::uint64_t ticket = 0;
   std::vector<js_ref_t*> refs;
   Work work;
   Settle settle;
@@ -50,10 +55,18 @@ void deleteRefs(Job* job) {
   job->refs.clear();
 }
 
+void onClose(uv_handle_t* handle);
+
 void onEnvTeardown(js_deferred_teardown_t* /*handle*/, void* data) {
   auto* job = static_cast<Job*>(data);
   job->envAlive = false;
   job->abandoned.store(true);
+  // A job still in its lane's queue would hold teardown until every job
+  // ahead of it, from any environment, had run. Removed, it never runs and
+  // never signals, so close it here; onClose finishes the teardown.
+  if (job->ticket != 0 && pool(job->lane).cancel(job->ticket)) {
+    uv_close(reinterpret_cast<uv_handle_t*>(&job->async), onClose);
+  }
 }
 
 void onClose(uv_handle_t* handle) {
@@ -188,7 +201,8 @@ js_value_t* start(
     return nullptr;
   }
 
-  const bool posted = pool(lane).post([raw]() {
+  raw->lane = lane;
+  raw->ticket = pool(lane).post([raw]() {
     try {
       raw->status =
           raw->abandoned.load() ? GGML_VEC_INDEX_E_INTERNAL : raw->work();
@@ -199,7 +213,7 @@ js_value_t* start(
     }
     uv_async_send(&raw->async);
   });
-  if (!posted) {
+  if (raw->ticket == 0) {
     deleteRefs(raw);
     uv_close(reinterpret_cast<uv_handle_t*>(&raw->async), onClose);
     js_throw_error(env, "InternalError", "failed to queue async job");

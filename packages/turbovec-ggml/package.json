@@ -31,8 +31,7 @@
     "test:types": "npm run typecheck && npm run test:types:consumer && npm run check:generated",
     "test:types:consumer": "tsc -p test/types/tsconfig.cjs.json",
     "test:dts": "npm run test:types",
-    "benchmarks:cpu": "bare benchmarks/performance/id-map-index-turbovec-cpu.js",
-    "benchmarks:async": "bare benchmarks/performance/id-map-index-async-overhead.js"
+    "benchmarks:cpu": "bare benchmarks/performance/id-map-index-turbovec-cpu.js"
   },
   "files": [
     "binding.js",

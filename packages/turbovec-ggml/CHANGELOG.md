@@ -2,31 +2,36 @@
 
 ## [Unreleased]
 
+### Breaking
+
+- Every `IdMapIndex` call that reads or changes the index now returns a
+  promise and runs on a worker thread owned by the addon instead of the JS
+  thread, so a large IVF build, search or load no longer stalls every other
+  request in the process. This covers `addWithIds()`, `addLogged()`,
+  `remove()`, `removeLogged()`, `compact()`, `compactDelta()`, `contains()`,
+  `search()`, `searchFiltered()`, `prepareFilter()`, `buildIvf()`,
+  `searchIvf()`, `prepare()`, `write()`, `setStagedSearch()`,
+  `IdMapIndexFilter#search()` and the static `load()`, `loadMmap()` and
+  `loadWithDelta()`. Await each call; bad arguments reject instead of
+  throwing. There is no synchronous variant.
+- `dispose()` on an index returns a promise that resolves once the native
+  index has been freed. The index cannot be used after the call; calls that
+  have not started reject, and a running call finishes first.
+- The `length`, `calibrated` and `stagedSearch` getters report the state after
+  the last call that finished, and never wait for calls still in progress.
+
 ### Added
 
-- Async variants of every operation that can run long: `addWithIdsAsync()`,
-  `addLoggedAsync()`, `removeAsync()`, `removeLoggedAsync()`,
-  `compactAsync()`, `compactDeltaAsync()`, `searchAsync()`,
-  `searchFilteredAsync()`, `prepareFilterAsync()`, `buildIvfAsync()`,
-  `searchIvfAsync()`, `prepareAsync()`, `writeAsync()`,
-  `IdMapIndexFilter#searchAsync()`, the static `loadAsync()`,
-  `loadMmapAsync()` and `loadWithDeltaAsync()`, and `disposeAsync()`. They run
-  the native work on two worker threads owned by the addon instead of the JS
-  thread, so a large IVF build or search no longer stalls every other request
-  in the process. Calls on one index run one at a time in call order. Across
-  indexes, long work (adds, builds, loads, writes, compaction) runs on one
-  thread and searches on the other, so a build never holds up a search. Input
-  arrays are copied when the call is made.
-- `benchmarks:async` measures the per-call cost of `searchAsync()` against
-  `search()`.
-
-### Changed
-
-- While an async call on an index is queued or running, its sync methods and
-  the `length`, `calibrated` and `stagedSearch` getters throw, and `dispose()`
-  frees the native index only after the running call finishes. Code that uses
-  only the sync API is not affected.
-- `dim` and `bitWidth` are read once when the index is created or loaded.
+- Calls on one index run one at a time, in call order. Across indexes, long
+  work (adds, builds, loads, writes, compaction) runs on one worker thread
+  and searches on another, so a build never holds up a search. Input arrays
+  are copied when the call is made.
+- Every call takes an optional `{ signal }` (`AbortSignal`, for example from
+  `bare-abort-controller`). A call that has not started when the signal
+  aborts is skipped. A running call rejects at once with `signal.reason`
+  while its native work runs to the end: a search's result is dropped, a
+  loaded index or prepared filter is freed, and a mutation still takes
+  effect.
 
 ## [0.6.0] - 2026-11-16
 

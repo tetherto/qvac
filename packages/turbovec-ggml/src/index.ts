@@ -8,6 +8,9 @@ const QUEUE = Symbol('IdMapIndex.queue')
 const PENDING = Symbol('IdMapIndex.pending')
 const DIM = Symbol('IdMapIndex.dim')
 const BIT_WIDTH = Symbol('IdMapIndex.bitWidth')
+const LENGTH = Symbol('IdMapIndex.length')
+const CALIBRATED = Symbol('IdMapIndex.calibrated')
+const STAGED = Symbol('IdMapIndex.staged')
 const INT32_MAX = 0x7fffffff
 // Dropped filters leave dead WeakRefs behind. Pruning once the set doubles
 // keeps prepareFilter amortized O(1) instead of rescanning on every call.
@@ -30,46 +33,13 @@ const STORAGE_BY_BIT_WIDTH = {
 
 type NativeHandle = object
 
+// Every call that reads or changes the native index returns a promise and
+// runs on a worker thread owned by the addon. The few sync calls here are
+// cheap reads and frees that the JS wrapper makes only while no worker holds
+// the index.
 interface IdMapIndexBinding {
   idx_create(options: { dim: number; storage: IdMapIndexStorage }): NativeHandle
-  idx_load(path: string): NativeHandle
-  idx_load_mmap(path: string): NativeHandle
-  idx_load_with_delta(snapshotPath: string, deltaPath: string): NativeHandle
-  idx_add(handle: NativeHandle, vectors: Float32Array, ids: BigUint64Array): void
-  idx_add_logged(
-    handle: NativeHandle,
-    vectors: Float32Array,
-    ids: BigUint64Array,
-    deltaPath: string
-  ): void
-  idx_search(handle: NativeHandle, queries: Float32Array, k: number): IdMapIndexSearchResult
-  idx_search_filtered(
-    handle: NativeHandle,
-    queries: Float32Array,
-    k: number,
-    allowedIds: BigUint64Array
-  ): IdMapIndexSearchResult
-  idx_filter_create(handle: NativeHandle, allowedIds: BigUint64Array): NativeHandle
-  idx_search_prepared_filtered(
-    handle: NativeHandle,
-    filterHandle: NativeHandle,
-    queries: Float32Array,
-    k: number
-  ): IdMapIndexSearchResult
-  idx_build_ivf(handle: NativeHandle, nLists: number, nIter: number): void
-  idx_search_ivf(
-    handle: NativeHandle,
-    queries: Float32Array,
-    k: number,
-    nProbe: number
-  ): IdMapIndexSearchResult
-  idx_remove(handle: NativeHandle, id: bigint): boolean
-  idx_remove_logged(handle: NativeHandle, id: bigint, deltaPath: string): boolean
-  idx_compact(handle: NativeHandle): void
   idx_contains(handle: NativeHandle, id: bigint): boolean
-  idx_prepare(handle: NativeHandle): void
-  idx_write(handle: NativeHandle, path: string): void
-  idx_compact_delta(handle: NativeHandle, snapshotPath: string, deltaPath: string): void
   idx_dispose(handle: NativeHandle): void
   idx_filter_dispose(handle: NativeHandle): void
   idx_len(handle: NativeHandle): number
@@ -133,13 +103,6 @@ function loadBinding() {
   return binding
 }
 
-function releaseFilter(owner: IdMapIndex, filter: IdMapIndexFilter) {
-  const ref = filter[FILTER_REF]
-  if (ref !== null) {
-    owner[FILTERS].delete(ref)
-  }
-}
-
 export type IdMapIndexBitWidth = 2 | 4 | 8 | 32
 export type IdMapIndexStorage = keyof typeof BIT_WIDTH_BY_STORAGE
 
@@ -153,6 +116,28 @@ export interface IdMapIndexOptions {
   bitWidth?: IdMapIndexBitWidth
   /** Use `turbovec-q4` to distinguish TurboVec q4 from generic q4 storage. */
   storage?: IdMapIndexStorage
+}
+
+/**
+ * The parts of an `AbortSignal` the index uses. Signals from the DOM, Node
+ * and `bare-abort-controller` all fit.
+ */
+export interface IdMapIndexAbortSignal {
+  readonly aborted: boolean
+  readonly reason?: unknown
+  addEventListener(type: 'abort', listener: () => void, options?: { once?: boolean }): void
+  removeEventListener(type: 'abort', listener: () => void): void
+}
+
+export interface IdMapIndexCallOptions {
+  /**
+   * Cancels the call. A call that has not started is skipped. A call that is
+   * running rejects at once, but its native work runs to the end: a search's
+   * result is dropped, while a mutation such as `addWithIds()` or
+   * `buildIvf()` still takes effect. Later calls on the index wait for that
+   * work. The promise rejects with `signal.reason`.
+   */
+  signal?: IdMapIndexAbortSignal
 }
 
 export interface IdMapIndexSearchResult {
@@ -185,6 +170,41 @@ function requireNonEmptyPath(value: string, name: string) {
   }
 }
 
+function readSignal(name: string, options: IdMapIndexCallOptions | undefined) {
+  if (options === undefined) {
+    return undefined
+  }
+  if (options === null || typeof options !== 'object') {
+    throw new TypeError(`${name}: options must be an object`)
+  }
+  const { signal } = options
+  if (signal === undefined) {
+    return undefined
+  }
+  if (
+    signal === null ||
+    typeof signal !== 'object' ||
+    typeof signal.aborted !== 'boolean' ||
+    typeof signal.addEventListener !== 'function' ||
+    typeof signal.removeEventListener !== 'function'
+  ) {
+    throw new TypeError(`${name}: options.signal must be an AbortSignal`)
+  }
+  return signal
+}
+
+// The caller's own reason, passed through as fetch() does: an AbortError or
+// TimeoutError unless they aborted with something else. Typed as Error for
+// the code that throws it.
+function abortReason(signal: IdMapIndexAbortSignal): Error {
+  if (signal.reason !== undefined) {
+    return signal.reason as Error
+  }
+  const error = new Error('The operation was aborted')
+  error.name = 'AbortError'
+  return error
+}
+
 function ensureHandle(index: IdMapIndex) {
   const handle = index[HANDLE]
   if (handle === null) {
@@ -193,43 +213,62 @@ function ensureHandle(index: IdMapIndex) {
   return handle
 }
 
-// Sync calls are rejected while async work is queued or running: fabric
-// would block the JS thread on the index lock until that work finished, and
-// the call would run out of order with it.
-function ensureIdleHandle(index: IdMapIndex) {
-  const handle = ensureHandle(index)
-  if (index[PENDING] > 0) {
-    throw new Error(
-      'IdMapIndex has async operations in progress; await them before calling a sync method'
-    )
-  }
-  return handle
-}
-
 function swallow() {}
 
 // Calls `run` now; a synchronous throw becomes a rejection.
-function startNow<T>(run: () => Promise<T>): Promise<T> {
+function startNow<T>(run: () => T | Promise<T>): Promise<T> {
   return new Promise<T>((resolve) => {
     resolve(run())
   })
 }
 
-// Runs async operations on one index one at a time, in call order. On an
-// idle index `run` starts now, so the native job holds the index before the
-// caller's next statement (a `dispose()` right after lets it finish);
-// otherwise it starts when every earlier operation has settled. The pending
-// count drops before the caller's own continuation runs, so code that
-// awaited the last operation can use the sync API straight away.
-function enqueue<T>(index: IdMapIndex, run: () => Promise<T>): Promise<T> {
+// Rejects with the signal's reason once it aborts, without waiting for
+// `result`. A value `result` produces after that is passed to `discard`, so
+// resources such as a loaded index or a prepared filter are freed.
+function raceAbort<T>(
+  result: Promise<T>,
+  signal: IdMapIndexAbortSignal,
+  discard?: (value: T) => unknown
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      reject(abortReason(signal))
+      result.then(discard ?? swallow, swallow)
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    result.finally(() => signal.removeEventListener('abort', onAbort)).then(resolve, reject)
+  })
+}
+
+// Runs operations on one index one at a time, in call order. Each runs once
+// every earlier operation, and every native free queued before it, has
+// settled, so `run` always finds no worker holding the index. On an idle
+// index `run` starts now, so the native job holds the index before the
+// caller's next statement (a `dispose()` right after lets it finish). An
+// operation whose signal aborts while it waits is skipped.
+function enqueue<T>(
+  index: IdMapIndex,
+  run: () => T | Promise<T>,
+  signal: IdMapIndexAbortSignal | undefined,
+  discard?: (value: T) => unknown
+): Promise<T> {
   ensureHandle(index)
-  const result = index[PENDING] === 0 ? startNow(run) : index[QUEUE].then(run)
+  if (signal?.aborted) {
+    return Promise.reject(abortReason(signal))
+  }
+  const guarded = () => {
+    if (signal?.aborted) {
+      throw abortReason(signal)
+    }
+    return run()
+  }
+  const result = index[PENDING] === 0 ? startNow(guarded) : index[QUEUE].then(guarded)
   index[PENDING] += 1
   const settled = () => {
     index[PENDING] -= 1
   }
   index[QUEUE] = result.then(settled, settled)
-  return result
+  return signal === undefined ? result : raceAbort(result, signal, discard)
 }
 
 // The native call copies its array inputs when it starts. An operation that
@@ -240,14 +279,19 @@ function snapshot<T extends Float32Array | BigUint64Array>(index: IdMapIndex, ar
   return index[PENDING] === 0 ? array : (array.slice() as T)
 }
 
-// Frees a native handle once the operations queued on `owner` have settled,
-// or now when none are. An operation that is running holds the handle.
+// Frees a native handle once everything queued on `owner` has settled, or
+// now when nothing is. A queued free counts as pending work until it has
+// run, so a later free, such as the index's own, always runs after it.
 function releaseAfterQueue(owner: IdMapIndex, release: () => void) {
   if (owner[PENDING] === 0) {
     release()
     return
   }
-  owner[QUEUE] = owner[QUEUE].then(release).then(swallow, swallow)
+  owner[PENDING] += 1
+  const done = () => {
+    owner[PENDING] -= 1
+  }
+  owner[QUEUE] = owner[QUEUE].then(release).then(done, done)
 }
 
 function normalizeStorageOptions(options: IdMapIndexOptions): IdMapIndexStorage {
@@ -279,6 +323,24 @@ function normalizeStorageOptions(options: IdMapIndexOptions): IdMapIndexStorage 
   return STORAGE_BY_BIT_WIDTH[width]
 }
 
+// Unlinks a filter from its owner and returns its native handle, or null
+// when it was already disposed.
+function detachFilter(filter: IdMapIndexFilter) {
+  const filterHandle = filter[FILTER_HANDLE]
+  if (filterHandle === null) {
+    return null
+  }
+  const owner = filter[FILTER_OWNER]
+  const ref = filter[FILTER_REF]
+  if (owner !== null && ref !== null) {
+    owner[FILTERS].delete(ref)
+  }
+  filter[FILTER_HANDLE] = null
+  filter[FILTER_OWNER] = null
+  filter[FILTER_REF] = null
+  return { filterHandle, owner }
+}
+
 export class IdMapIndexFilter {
   [FILTER_HANDLE]: NativeHandle | null = null;
   [FILTER_OWNER]: IdMapIndex | null = null;
@@ -288,68 +350,53 @@ export class IdMapIndexFilter {
     throw new TypeError('IdMapIndexFilter instances must be created by IdMapIndex.prepareFilter()')
   }
 
-  /** Search with this prepared allowlist. Mutating the owner invalidates the filter. */
-  search(queries: Float32Array, k: number) {
-    validateFilterSearch('IdMapIndexFilter.search', queries, k)
-    const owner = this[FILTER_OWNER]
-    const filterHandle = this[FILTER_HANDLE]
-    if (owner === null || filterHandle === null) {
-      throw new Error('IdMapIndexFilter has been disposed')
-    }
-    return loadBinding().idx_search_prepared_filtered(
-      ensureIdleHandle(owner),
-      filterHandle,
-      queries,
-      k
-    )
-  }
-
   /**
-   * `search()` run off the JS thread, queued behind the owner's other async
-   * operations. Rejects when a mutation queued before it disposed the filter.
+   * Search with this prepared allowlist, queued behind the owner's other
+   * operations. Rejects when an earlier mutation of the owner disposed the
+   * filter: every mutation invalidates the owner's filters.
    */
-  async searchAsync(queries: Float32Array, k: number) {
-    validateFilterSearch('IdMapIndexFilter.searchAsync', queries, k)
+  async search(queries: Float32Array, k: number, options?: IdMapIndexCallOptions) {
+    validateFilterSearch('IdMapIndexFilter.search', queries, k)
+    const signal = readSignal('IdMapIndexFilter.search', options)
     const owner = this[FILTER_OWNER]
     if (owner === null || this[FILTER_HANDLE] === null) {
       throw new Error('IdMapIndexFilter has been disposed')
     }
     const input = snapshot(owner, queries)
-    return enqueue(owner, () => {
-      const filterHandle = this[FILTER_HANDLE]
-      if (this[FILTER_OWNER] === null || filterHandle === null) {
-        throw new Error('IdMapIndexFilter has been disposed')
-      }
-      return loadBinding().idx_search_prepared_filtered_async(
-        ensureHandle(owner),
-        filterHandle,
-        input,
-        k
-      )
-    })
+    return enqueue(
+      owner,
+      () => {
+        const filterHandle = this[FILTER_HANDLE]
+        if (this[FILTER_OWNER] === null || filterHandle === null) {
+          throw new Error('IdMapIndexFilter has been disposed')
+        }
+        return loadBinding().idx_search_prepared_filtered_async(
+          ensureHandle(owner),
+          filterHandle,
+          input,
+          k
+        )
+      },
+      signal
+    )
   }
 
   /**
    * Release the prepared native filter. This operation is idempotent. While
-   * the owner has async operations queued, the native filter is freed after
-   * they settle.
+   * the owner has operations queued, the native filter is freed after they
+   * settle.
    */
   dispose() {
-    const filterHandle = this[FILTER_HANDLE]
-    if (filterHandle === null) {
+    const detached = detachFilter(this)
+    if (detached === null) {
       return
     }
-
-    const owner = this[FILTER_OWNER]
-    this[FILTER_HANDLE] = null
-    this[FILTER_OWNER] = null
+    const { filterHandle, owner } = detached
     if (owner !== null) {
-      releaseFilter(owner, this)
       releaseAfterQueue(owner, () => loadBinding().idx_filter_dispose(filterHandle))
     } else {
       loadBinding().idx_filter_dispose(filterHandle)
     }
-    this[FILTER_REF] = null
   }
 }
 
@@ -376,6 +423,10 @@ type IdMapIndexClass<T extends IdMapIndex> = (abstract new (...args: never[]) =>
   prototype: T
 }
 
+function disposeIndex(index: IdMapIndex) {
+  return index.dispose()
+}
+
 /**
  * CPU vector index with fixed dimensionality and stable uint64 external IDs.
  * Search uses exact or approximate dot products depending on storage. Callers
@@ -383,6 +434,15 @@ type IdMapIndexClass<T extends IdMapIndex> = (abstract new (...args: never[]) =>
  * queries before search. TurboVec normalizes indexed vectors while quantizing,
  * then restores their magnitude with a per-vector scale; it does not normalize
  * queries.
+ *
+ * Every method that reads or changes the index returns a promise and runs
+ * its native work on a worker thread owned by the addon, so the JS thread
+ * stays free. Calls on one index run one at a time, in call order, so a
+ * search made after an add sees that add. Across indexes, long work (adds,
+ * builds, loads, writes, compaction) and searches run on two separate worker
+ * threads, so a long build never holds up a search. Input arrays are copied
+ * when the call is made. Each call takes an optional `{ signal }`: see
+ * {@link IdMapIndexCallOptions}.
  */
 export default class IdMapIndex {
   static Filter = IdMapIndexFilter
@@ -394,10 +454,14 @@ export default class IdMapIndex {
   [FILTERS_PRUNE_AT] = MIN_FILTERS_PRUNE_AT;
   [QUEUE]: Promise<unknown> = Promise.resolve();
   [PENDING] = 0;
-  // Fixed for the life of the index. Kept in JS so validating an async call
-  // never has to reach the native index while another call holds it.
+  // Kept in JS so the getters never reach the native index while a worker
+  // holds it. `dim` and `bitWidth` are fixed; the rest are read again after
+  // each call that can change them.
   [DIM] = 0;
-  [BIT_WIDTH]: IdMapIndexBitWidth = 8
+  [BIT_WIDTH]: IdMapIndexBitWidth = 8;
+  [LENGTH] = 0;
+  [CALIBRATED] = false;
+  [STAGED] = false
 
   constructor(options: IdMapIndexOptions) {
     const { dim } = options ?? ({} as IdMapIndexOptions)
@@ -410,10 +474,8 @@ export default class IdMapIndex {
         'IdMapIndex: TurboVec dim must be divisible by 8 and no greater than 16384'
       )
     }
-    const handle = loadBinding().idx_create({ dim, storage })
-    this[HANDLE] = handle
-    this[DIM] = dim
-    this[BIT_WIDTH] = loadBinding().idx_bit_width(handle)
+    this[HANDLE] = loadBinding().idx_create({ dim, storage })
+    this.readState()
   }
 
   /**
@@ -421,51 +483,95 @@ export default class IdMapIndex {
    * snapshots migrate to q8; other v1 widths migrate to f32. TurboVec v3
    * snapshots from earlier releases keep their encoding and keep writing v3;
    * those above 1,024 dimensions can be loaded and rewritten, but cannot add,
-   * search, or build IVF state. Synchronous and potentially blocking.
-   * Called on a subclass, returns an instance of that subclass; its
-   * constructor and field initializers do not run.
+   * search, or build IVF state. Called on a subclass, resolves to an instance
+   * of that subclass; its constructor and field initializers do not run. An
+   * index that finishes loading after `signal` aborts is disposed.
    */
-  static load<T extends IdMapIndex>(this: IdMapIndexClass<T>, path: string): T
-  /** Detached call, e.g. `const { load } = IdMapIndex`. Returns an IdMapIndex. */
-  static load(path: string): IdMapIndex
-  static load(this: unknown, path: string): IdMapIndex {
+  static load<T extends IdMapIndex>(
+    this: IdMapIndexClass<T>,
+    path: string,
+    options?: IdMapIndexCallOptions
+  ): Promise<T>
+  /** Detached call, e.g. `const { load } = IdMapIndex`. Resolves to an IdMapIndex. */
+  static load(path: string, options?: IdMapIndexCallOptions): Promise<IdMapIndex>
+  static async load(
+    this: unknown,
+    path: string,
+    options?: IdMapIndexCallOptions
+  ): Promise<IdMapIndex> {
     requireNonEmptyPath(path, 'IdMapIndex.load: path')
-    return IdMapIndex.fromHandle(this, loadBinding().idx_load(path))
+    const signal = readSignal('IdMapIndex.load', options)
+    return IdMapIndex.startLoad(this, signal, () => loadBinding().idx_load_async(path))
   }
 
   /**
    * Load a v2 snapshot with read-only mmap-backed vectors. Legacy v1 and
    * TurboVec (v3 and v8) snapshots are rejected. Requires a little-endian host
    * and, on POSIX, a filesystem supporting flock(). Mutations are rejected.
-   * Returns a subclass instance when called on a subclass, as `load()` does.
+   * Resolves to a subclass instance when called on a subclass, as `load()`
+   * does.
    */
-  static loadMmap<T extends IdMapIndex>(this: IdMapIndexClass<T>, path: string): T
-  /** Detached call, e.g. `const { loadMmap } = IdMapIndex`. Returns an IdMapIndex. */
-  static loadMmap(path: string): IdMapIndex
-  static loadMmap(this: unknown, path: string): IdMapIndex {
+  static loadMmap<T extends IdMapIndex>(
+    this: IdMapIndexClass<T>,
+    path: string,
+    options?: IdMapIndexCallOptions
+  ): Promise<T>
+  /** Detached call, e.g. `const { loadMmap } = IdMapIndex`. Resolves to an IdMapIndex. */
+  static loadMmap(path: string, options?: IdMapIndexCallOptions): Promise<IdMapIndex>
+  static async loadMmap(
+    this: unknown,
+    path: string,
+    options?: IdMapIndexCallOptions
+  ): Promise<IdMapIndex> {
     requireNonEmptyPath(path, 'IdMapIndex.loadMmap: path')
-    return IdMapIndex.fromHandle(this, loadBinding().idx_load_mmap(path))
+    const signal = readSignal('IdMapIndex.loadMmap', options)
+    return IdMapIndex.startLoad(this, signal, () => loadBinding().idx_load_mmap_async(path))
   }
 
   /**
    * Load a snapshot and replay its append-only delta log. A missing log is
-   * treated as empty. The returned handle is bound to `deltaPath`; use logged
+   * treated as empty. The returned index is bound to `deltaPath`; use logged
    * mutations and `compactDelta()` rather than plain mutations or `write()`.
    * Delta logs require a local filesystem with reliable cooperative locking.
-   * TurboVec snapshots are rejected with `InvalidArgument`. Returns a
+   * TurboVec snapshots are rejected with `InvalidArgument`. Resolves to a
    * subclass instance when called on a subclass, as `load()` does.
    */
   static loadWithDelta<T extends IdMapIndex>(
     this: IdMapIndexClass<T>,
     snapshotPath: string,
-    deltaPath: string
-  ): T
-  /** Detached call, e.g. `const { loadWithDelta } = IdMapIndex`. Returns an IdMapIndex. */
-  static loadWithDelta(snapshotPath: string, deltaPath: string): IdMapIndex
-  static loadWithDelta(this: unknown, snapshotPath: string, deltaPath: string): IdMapIndex {
+    deltaPath: string,
+    options?: IdMapIndexCallOptions
+  ): Promise<T>
+  /** Detached call, e.g. `const { loadWithDelta } = IdMapIndex`. Resolves to an IdMapIndex. */
+  static loadWithDelta(
+    snapshotPath: string,
+    deltaPath: string,
+    options?: IdMapIndexCallOptions
+  ): Promise<IdMapIndex>
+  static async loadWithDelta(
+    this: unknown,
+    snapshotPath: string,
+    deltaPath: string,
+    options?: IdMapIndexCallOptions
+  ): Promise<IdMapIndex> {
     requireNonEmptyPath(snapshotPath, 'IdMapIndex.loadWithDelta: snapshotPath')
     requireNonEmptyPath(deltaPath, 'IdMapIndex.loadWithDelta: deltaPath')
-    return IdMapIndex.fromHandle(this, loadBinding().idx_load_with_delta(snapshotPath, deltaPath))
+    const signal = readSignal('IdMapIndex.loadWithDelta', options)
+    return IdMapIndex.startLoad(this, signal, () =>
+      loadBinding().idx_load_with_delta_async(snapshotPath, deltaPath)
+    )
+  }
+
+  private static startLoad(
+    ctor: unknown,
+    signal: IdMapIndexAbortSignal | undefined,
+    start: () => Promise<NativeHandle>
+  ) {
+    if (signal?.aborted) {
+      return Promise.reject(abortReason(signal))
+    }
+    const loaded = start().then((handle) => IdMapIndex.fromHandle(ctor, handle))
+    return signal === undefined ? loaded : raceAbort(loaded, signal, disposeIndex)
   }
 
   // `ctor` is the class a loader was called on. A detached call such as
@@ -480,48 +586,8 @@ export default class IdMapIndex {
     instance[FILTERS_PRUNE_AT] = MIN_FILTERS_PRUNE_AT
     instance[QUEUE] = Promise.resolve()
     instance[PENDING] = 0
-    instance[DIM] = loadBinding().idx_dim(handle)
-    instance[BIT_WIDTH] = loadBinding().idx_bit_width(handle)
+    instance.readState()
     return instance
-  }
-
-  /** `load()` run off the JS thread. */
-  static loadAsync<T extends IdMapIndex>(this: IdMapIndexClass<T>, path: string): Promise<T>
-  /** Detached call, e.g. `const { loadAsync } = IdMapIndex`. Resolves to an IdMapIndex. */
-  static loadAsync(path: string): Promise<IdMapIndex>
-  static async loadAsync(this: unknown, path: string): Promise<IdMapIndex> {
-    requireNonEmptyPath(path, 'IdMapIndex.loadAsync: path')
-    return IdMapIndex.fromHandle(this, await loadBinding().idx_load_async(path))
-  }
-
-  /** `loadMmap()` run off the JS thread. */
-  static loadMmapAsync<T extends IdMapIndex>(this: IdMapIndexClass<T>, path: string): Promise<T>
-  /** Detached call, e.g. `const { loadMmapAsync } = IdMapIndex`. Resolves to an IdMapIndex. */
-  static loadMmapAsync(path: string): Promise<IdMapIndex>
-  static async loadMmapAsync(this: unknown, path: string): Promise<IdMapIndex> {
-    requireNonEmptyPath(path, 'IdMapIndex.loadMmapAsync: path')
-    return IdMapIndex.fromHandle(this, await loadBinding().idx_load_mmap_async(path))
-  }
-
-  /** `loadWithDelta()` run off the JS thread. */
-  static loadWithDeltaAsync<T extends IdMapIndex>(
-    this: IdMapIndexClass<T>,
-    snapshotPath: string,
-    deltaPath: string
-  ): Promise<T>
-  /** Detached call, e.g. `const { loadWithDeltaAsync } = IdMapIndex`. Resolves to an IdMapIndex. */
-  static loadWithDeltaAsync(snapshotPath: string, deltaPath: string): Promise<IdMapIndex>
-  static async loadWithDeltaAsync(
-    this: unknown,
-    snapshotPath: string,
-    deltaPath: string
-  ): Promise<IdMapIndex> {
-    requireNonEmptyPath(snapshotPath, 'IdMapIndex.loadWithDeltaAsync: snapshotPath')
-    requireNonEmptyPath(deltaPath, 'IdMapIndex.loadWithDeltaAsync: deltaPath')
-    return IdMapIndex.fromHandle(
-      this,
-      await loadBinding().idx_load_with_delta_async(snapshotPath, deltaPath)
-    )
   }
 
   /**
@@ -529,35 +595,47 @@ export default class IdMapIndex {
    * must contain `ids.length * dim` finite components. TurboVec additionally
    * requires `abs(component) < 1e16`. UINT64_MAX is reserved.
    */
-  addWithIds(vectors: Float32Array, ids: BigUint64Array) {
+  async addWithIds(vectors: Float32Array, ids: BigUint64Array, options?: IdMapIndexCallOptions) {
     this.validateBatch('addWithIds', vectors, ids)
-    const handle = ensureIdleHandle(this)
-    try {
-      loadBinding().idx_add(handle, vectors, ids)
-    } finally {
-      this.disposeFilters()
-    }
+    const signal = readSignal('addWithIds', options)
+    const rows = snapshot(this, vectors)
+    const keys = snapshot(this, ids)
+    return enqueue(
+      this,
+      () => this.mutate(() => loadBinding().idx_add_async(ensureHandle(this), rows, keys)),
+      signal
+    )
   }
 
   /**
    * Add vectors and append a durable v4 delta record. The index must first be
-   * loaded from or successfully written to a snapshot. Delta logs are
-   * state-bound and support one evolving writer; stale writers may catch up,
-   * and that catch-up remains applied even if this add throws. A complete
-   * record may also remain applied after a durability error, leaving the
-   * handle requiring a reload. Store delta logs on a local filesystem with
-   * reliable cooperative locking. TurboVec storage does not support logged
-   * mutations.
+   * loaded from or successfully written to a snapshot, and then takes only
+   * logged mutations. Delta logs are state-bound and support one evolving
+   * writer; stale writers may catch up, and that catch-up remains applied
+   * even if this add rejects. A complete record may also remain applied after
+   * a durability error, leaving the index requiring a reload. Store delta
+   * logs on a local filesystem with reliable cooperative locking. TurboVec
+   * storage does not support logged mutations.
    */
-  addLogged(vectors: Float32Array, ids: BigUint64Array, deltaPath: string) {
+  async addLogged(
+    vectors: Float32Array,
+    ids: BigUint64Array,
+    deltaPath: string,
+    options?: IdMapIndexCallOptions
+  ) {
     this.validateBatch('addLogged', vectors, ids)
     requireNonEmptyPath(deltaPath, 'addLogged: deltaPath')
-    const handle = ensureIdleHandle(this)
-    try {
-      loadBinding().idx_add_logged(handle, vectors, ids, deltaPath)
-    } finally {
-      this.disposeFilters()
-    }
+    const signal = readSignal('addLogged', options)
+    const rows = snapshot(this, vectors)
+    const keys = snapshot(this, ids)
+    return enqueue(
+      this,
+      () =>
+        this.mutate(() =>
+          loadBinding().idx_add_logged_async(ensureHandle(this), rows, keys, deltaPath)
+        ),
+      signal
+    )
   }
 
   /**
@@ -567,117 +645,186 @@ export default class IdMapIndex {
    * scoring. TurboVec query components require `abs(value) < 1e16`. Short rows
    * use UINT64_MAX padding.
    */
-  search(queries: Float32Array, k: number) {
+  async search(queries: Float32Array, k: number, options?: IdMapIndexCallOptions) {
     this.validateSearch('search', queries, k)
-    return loadBinding().idx_search(ensureIdleHandle(this), queries, k)
+    const signal = readSignal('search', options)
+    const input = snapshot(this, queries)
+    return enqueue(
+      this,
+      () => loadBinding().idx_search_async(ensureHandle(this), input, k),
+      signal
+    )
   }
 
   /** Exact search restricted to the supplied external IDs. */
-  searchFiltered(queries: Float32Array, k: number, allowedIds: BigUint64Array) {
+  async searchFiltered(
+    queries: Float32Array,
+    k: number,
+    allowedIds: BigUint64Array,
+    options?: IdMapIndexCallOptions
+  ) {
     this.validateSearch('searchFiltered', queries, k)
     if (!(allowedIds instanceof BigUint64Array)) {
       throw new TypeError('searchFiltered: allowedIds must be a BigUint64Array')
     }
-    return loadBinding().idx_search_filtered(ensureIdleHandle(this), queries, k, allowedIds)
+    const signal = readSignal('searchFiltered', options)
+    const input = snapshot(this, queries)
+    const allowed = snapshot(this, allowedIds)
+    return enqueue(
+      this,
+      () => loadBinding().idx_search_filtered_async(ensureHandle(this), input, k, allowed),
+      signal
+    )
   }
 
   /**
-   * Prepare an allowlist for repeated searches. Native mutation attempts
-   * invalidate all prepared filters created from this index. Call `dispose()`
-   * when done to release native filter memory promptly; dropped filters are
-   * reclaimed by GC.
+   * Prepare an allowlist for repeated searches. Every mutation of this index
+   * invalidates all prepared filters created from it. Call `dispose()` when
+   * done to release native filter memory promptly; dropped filters are
+   * reclaimed by GC. A filter that finishes after `signal` aborts is
+   * disposed.
    */
-  prepareFilter(allowedIds: BigUint64Array) {
+  async prepareFilter(allowedIds: BigUint64Array, options?: IdMapIndexCallOptions) {
     if (!(allowedIds instanceof BigUint64Array)) {
       throw new TypeError('prepareFilter: allowedIds must be a BigUint64Array')
     }
-    return this.registerFilter(loadBinding().idx_filter_create(ensureIdleHandle(this), allowedIds))
+    const signal = readSignal('prepareFilter', options)
+    const allowed = snapshot(this, allowedIds)
+    return enqueue(
+      this,
+      async () => {
+        const filterHandle = await loadBinding().idx_filter_create_async(
+          ensureHandle(this),
+          allowed
+        )
+        // dispose() ran while the filter was being built. Free the filter now,
+        // while the index is still alive: fabric requires the index to outlive
+        // its filters, and the index is freed once this operation settles.
+        if (this[HANDLE] === null) {
+          loadBinding().idx_filter_dispose(filterHandle)
+          throw new Error('IdMapIndex has been disposed')
+        }
+        return this.registerFilter(filterHandle)
+      },
+      signal,
+      (filter) => filter.dispose()
+    )
   }
 
   /**
    * Build deterministic in-memory IVF-flat search state. Mutations invalidate
-   * it, and snapshots do not persist it.
+   * it, and snapshots do not persist it. A build that has started runs to the
+   * end even when `signal` aborts.
    */
-  buildIvf(nLists: number, nIter = 0) {
+  async buildIvf(nLists: number, nIter = 0, options?: IdMapIndexCallOptions) {
     if (!isPositiveInt32(nLists)) {
       throw new TypeError('buildIvf: nLists must be a positive int32')
     }
     if (!isNonNegativeInt32(nIter)) {
       throw new TypeError('buildIvf: nIter must be a non-negative int32')
     }
-    loadBinding().idx_build_ivf(ensureIdleHandle(this), nLists, nIter)
+    const signal = readSignal('buildIvf', options)
+    return enqueue(
+      this,
+      () => loadBinding().idx_build_ivf_async(ensureHandle(this), nLists, nIter),
+      signal
+    )
   }
 
   /**
    * Search the IVF-flat candidate lists. `buildIvf()` must have run after the
    * latest mutation or load. Higher `nProbe` generally improves recall.
    */
-  searchIvf(queries: Float32Array, k: number, nProbe: number) {
+  async searchIvf(
+    queries: Float32Array,
+    k: number,
+    nProbe: number,
+    options?: IdMapIndexCallOptions
+  ) {
     this.validateSearch('searchIvf', queries, k)
     if (!isPositiveInt32(nProbe)) {
       throw new TypeError('searchIvf: nProbe must be a positive int32')
     }
-    return loadBinding().idx_search_ivf(ensureIdleHandle(this), queries, k, nProbe)
+    const signal = readSignal('searchIvf', options)
+    const input = snapshot(this, queries)
+    return enqueue(
+      this,
+      () => loadBinding().idx_search_ivf_async(ensureHandle(this), input, k, nProbe),
+      signal
+    )
   }
 
-  /** Remove an ID, returning false when it is not present. */
-  remove(id: bigint) {
+  /** Remove an ID, resolving to false when it is not present. */
+  async remove(id: bigint, options?: IdMapIndexCallOptions) {
     this.validateId('remove', id)
-    const removed = loadBinding().idx_remove(ensureIdleHandle(this), id)
-    if (removed) {
-      this.disposeFilters()
-    }
-    return removed
+    const signal = readSignal('remove', options)
+    return enqueue(
+      this,
+      async () => {
+        const removed = await loadBinding().idx_remove_async(ensureHandle(this), id)
+        if (removed) {
+          this.afterMutation()
+        }
+        return removed
+      },
+      signal
+    )
   }
 
   /**
-   * Remove an ID and append a durable v4 delta record. Returns false when the
-   * ID is absent. Stale-writer catch-up may still mutate the handle when this
-   * method returns false or throws, and a complete record may remain applied
-   * after a durability error. The same binding and reload rules as
+   * Remove an ID and append a durable v4 delta record. Resolves to false when
+   * the ID is absent. Stale-writer catch-up may still mutate the index when
+   * this resolves to false or rejects, and a complete record may remain
+   * applied after a durability error. The same binding and reload rules as
    * `addLogged()` apply.
    */
-  removeLogged(id: bigint, deltaPath: string) {
+  async removeLogged(id: bigint, deltaPath: string, options?: IdMapIndexCallOptions) {
     this.validateId('removeLogged', id)
     requireNonEmptyPath(deltaPath, 'removeLogged: deltaPath')
-    const handle = ensureIdleHandle(this)
-    try {
-      return loadBinding().idx_remove_logged(handle, id, deltaPath)
-    } finally {
-      this.disposeFilters()
-    }
+    const signal = readSignal('removeLogged', options)
+    return enqueue(
+      this,
+      () =>
+        this.mutate(() => loadBinding().idx_remove_logged_async(ensureHandle(this), id, deltaPath)),
+      signal
+    )
   }
 
-  /** Physically reclaim tombstoned slots. Rejected on delta-bound handles. */
-  compact() {
-    const handle = ensureIdleHandle(this)
-    try {
-      loadBinding().idx_compact(handle)
-    } finally {
-      this.disposeFilters()
-    }
+  /** Physically reclaim tombstoned slots. Rejected on delta-bound indexes. */
+  async compact(options?: IdMapIndexCallOptions) {
+    const signal = readSignal('compact', options)
+    return enqueue(
+      this,
+      () => this.mutate(() => loadBinding().idx_compact_async(ensureHandle(this))),
+      signal
+    )
   }
 
-  /** Return whether the index contains an external ID. */
-  contains(id: bigint) {
+  /** Resolve to whether the index contains an external ID. */
+  async contains(id: bigint, options?: IdMapIndexCallOptions) {
     this.validateId('contains', id)
-    return loadBinding().idx_contains(ensureIdleHandle(this), id)
+    const signal = readSignal('contains', options)
+    // A hash lookup: run on the JS thread at this call's turn in the queue,
+    // when no worker holds the index.
+    return enqueue(this, () => loadBinding().idx_contains(ensureHandle(this), id), signal)
   }
 
   /** Best-effort warmup of TurboVec rotation and codebook state. */
-  prepare() {
-    loadBinding().idx_prepare(ensureIdleHandle(this))
+  async prepare(options?: IdMapIndexCallOptions) {
+    const signal = readSignal('prepare', options)
+    return enqueue(this, () => loadBinding().idx_prepare_async(ensureHandle(this)), signal)
   }
 
   /**
    * Persist a checksummed v2 snapshot for f32/q4/q8, or a v8 snapshot for
-   * TurboVec (v3 for an index loaded from a v3 snapshot). Delta-bound handles
+   * TurboVec (v3 for an index loaded from a v3 snapshot). Delta-bound indexes
    * must use `compactDelta()`. A NotDurable error means replacement succeeded
    * but parent-directory durability was not confirmed.
    */
-  write(path: string) {
+  async write(path: string, options?: IdMapIndexCallOptions) {
     requireNonEmptyPath(path, 'write: path')
-    loadBinding().idx_write(ensureIdleHandle(this), path)
+    const signal = readSignal('write', options)
+    return enqueue(this, () => loadBinding().idx_write_async(ensureHandle(this), path), signal)
   }
 
   /**
@@ -686,175 +833,49 @@ export default class IdMapIndex {
    * reset could not be confirmed. TurboVec storage does not support delta
    * compaction and is rejected with `InvalidArgument`.
    */
-  compactDelta(snapshotPath: string, deltaPath: string) {
+  async compactDelta(snapshotPath: string, deltaPath: string, options?: IdMapIndexCallOptions) {
     requireNonEmptyPath(snapshotPath, 'compactDelta: snapshotPath')
     requireNonEmptyPath(deltaPath, 'compactDelta: deltaPath')
-    const handle = ensureIdleHandle(this)
-    try {
-      loadBinding().idx_compact_delta(handle, snapshotPath, deltaPath)
-    } finally {
-      this.disposeFilters()
-    }
-  }
-
-  // -------------------------------------------------------------------------
-  // Async API
-  //
-  // Each method runs its sync twin's native work off the JS thread and
-  // resolves with the same value, or rejects with the same error. Async
-  // operations on one index run one at a time, in call order, so a search
-  // queued after an add sees that add. Across indexes, long work (adds,
-  // builds, loads, writes, compaction) and searches run on two separate
-  // native worker threads, so a long build never holds up a search. While any
-  // async operation is queued or running, sync methods and the `length`,
-  // `calibrated` and `stagedSearch` getters throw; `dim`, `bitWidth` and
-  // `dispose()` still work. Input arrays are copied when the call is made.
-  // -------------------------------------------------------------------------
-
-  /** `addWithIds()` run off the JS thread. */
-  async addWithIdsAsync(vectors: Float32Array, ids: BigUint64Array) {
-    this.validateBatch('addWithIdsAsync', vectors, ids)
-    const rows = snapshot(this, vectors)
-    const keys = snapshot(this, ids)
-    return enqueue(this, () =>
-      this.mutate(() => loadBinding().idx_add_async(ensureHandle(this), rows, keys))
+    const signal = readSignal('compactDelta', options)
+    return enqueue(
+      this,
+      () =>
+        this.mutate(() =>
+          loadBinding().idx_compact_delta_async(ensureHandle(this), snapshotPath, deltaPath)
+        ),
+      signal
     )
-  }
-
-  /** `addLogged()` run off the JS thread. */
-  async addLoggedAsync(vectors: Float32Array, ids: BigUint64Array, deltaPath: string) {
-    this.validateBatch('addLoggedAsync', vectors, ids)
-    requireNonEmptyPath(deltaPath, 'addLoggedAsync: deltaPath')
-    const rows = snapshot(this, vectors)
-    const keys = snapshot(this, ids)
-    return enqueue(this, () =>
-      this.mutate(() =>
-        loadBinding().idx_add_logged_async(ensureHandle(this), rows, keys, deltaPath)
-      )
-    )
-  }
-
-  /** `search()` run off the JS thread. */
-  async searchAsync(queries: Float32Array, k: number) {
-    this.validateSearch('searchAsync', queries, k)
-    const input = snapshot(this, queries)
-    return enqueue(this, () => loadBinding().idx_search_async(ensureHandle(this), input, k))
-  }
-
-  /** `searchFiltered()` run off the JS thread. */
-  async searchFilteredAsync(queries: Float32Array, k: number, allowedIds: BigUint64Array) {
-    this.validateSearch('searchFilteredAsync', queries, k)
-    if (!(allowedIds instanceof BigUint64Array)) {
-      throw new TypeError('searchFilteredAsync: allowedIds must be a BigUint64Array')
-    }
-    const input = snapshot(this, queries)
-    const allowed = snapshot(this, allowedIds)
-    return enqueue(this, () =>
-      loadBinding().idx_search_filtered_async(ensureHandle(this), input, k, allowed)
-    )
-  }
-
-  /** `prepareFilter()` run off the JS thread. */
-  async prepareFilterAsync(allowedIds: BigUint64Array) {
-    if (!(allowedIds instanceof BigUint64Array)) {
-      throw new TypeError('prepareFilterAsync: allowedIds must be a BigUint64Array')
-    }
-    const allowed = snapshot(this, allowedIds)
-    return enqueue(this, async () => {
-      const filterHandle = await loadBinding().idx_filter_create_async(
-        ensureHandle(this),
-        allowed
-      )
-      // dispose() ran while the filter was being built. Free the filter now,
-      // while the index is still alive: fabric requires the index to outlive
-      // its filters, and the index is freed once this operation settles.
-      if (this[HANDLE] === null) {
-        loadBinding().idx_filter_dispose(filterHandle)
-        throw new Error('IdMapIndex has been disposed')
-      }
-      return this.registerFilter(filterHandle)
-    })
   }
 
   /**
-   * `buildIvf()` run off the JS thread. The build cannot be cancelled: once
-   * it starts, it runs to the end.
+   * Turn TurboVec staged search on or off for the searches queued after this
+   * call. On, a search of 32,768 or more vectors scans a compressed form
+   * first and scores only a shortlist: several times faster per query, but
+   * it can miss some of the best matches, especially at small k. It applies
+   * only at a dimension divisible by 32, on hosts that support it, and never
+   * to an index loaded from a v3 snapshot; elsewhere the setting is kept but
+   * every search scans in full. Rejects for non-TurboVec storage. Not saved
+   * in snapshots.
    */
-  async buildIvfAsync(nLists: number, nIter = 0) {
-    if (!isPositiveInt32(nLists)) {
-      throw new TypeError('buildIvfAsync: nLists must be a positive int32')
+  async setStagedSearch(enabled: boolean, options?: IdMapIndexCallOptions) {
+    if (typeof enabled !== 'boolean') {
+      throw new TypeError('setStagedSearch: enabled must be a boolean')
     }
-    if (!isNonNegativeInt32(nIter)) {
-      throw new TypeError('buildIvfAsync: nIter must be a non-negative int32')
-    }
-    return enqueue(this, () => loadBinding().idx_build_ivf_async(ensureHandle(this), nLists, nIter))
-  }
-
-  /** `searchIvf()` run off the JS thread. */
-  async searchIvfAsync(queries: Float32Array, k: number, nProbe: number) {
-    this.validateSearch('searchIvfAsync', queries, k)
-    if (!isPositiveInt32(nProbe)) {
-      throw new TypeError('searchIvfAsync: nProbe must be a positive int32')
-    }
-    const input = snapshot(this, queries)
-    return enqueue(this, () =>
-      loadBinding().idx_search_ivf_async(ensureHandle(this), input, k, nProbe)
+    const signal = readSignal('setStagedSearch', options)
+    return enqueue(
+      this,
+      () => {
+        loadBinding().idx_set_staged(ensureHandle(this), enabled)
+        this[STAGED] = enabled
+      },
+      signal
     )
   }
 
-  /** `remove()` run off the JS thread. */
-  async removeAsync(id: bigint) {
-    this.validateId('removeAsync', id)
-    return enqueue(this, async () => {
-      const removed = await loadBinding().idx_remove_async(ensureHandle(this), id)
-      if (removed) {
-        this.disposeFilters()
-      }
-      return removed
-    })
-  }
-
-  /** `removeLogged()` run off the JS thread. */
-  async removeLoggedAsync(id: bigint, deltaPath: string) {
-    this.validateId('removeLoggedAsync', id)
-    requireNonEmptyPath(deltaPath, 'removeLoggedAsync: deltaPath')
-    return enqueue(this, () =>
-      this.mutate(() => loadBinding().idx_remove_logged_async(ensureHandle(this), id, deltaPath))
-    )
-  }
-
-  /** `compact()` run off the JS thread. */
-  async compactAsync() {
-    return enqueue(this, () =>
-      this.mutate(() => loadBinding().idx_compact_async(ensureHandle(this)))
-    )
-  }
-
-  /** `prepare()` run off the JS thread. */
-  async prepareAsync() {
-    return enqueue(this, () => loadBinding().idx_prepare_async(ensureHandle(this)))
-  }
-
-  /** `write()` run off the JS thread. */
-  async writeAsync(path: string) {
-    requireNonEmptyPath(path, 'writeAsync: path')
-    return enqueue(this, () => loadBinding().idx_write_async(ensureHandle(this), path))
-  }
-
-  /** `compactDelta()` run off the JS thread. */
-  async compactDeltaAsync(snapshotPath: string, deltaPath: string) {
-    requireNonEmptyPath(snapshotPath, 'compactDeltaAsync: snapshotPath')
-    requireNonEmptyPath(deltaPath, 'compactDeltaAsync: deltaPath')
-    return enqueue(this, () =>
-      this.mutate(() =>
-        loadBinding().idx_compact_delta_async(ensureHandle(this), snapshotPath, deltaPath)
-      )
-    )
-  }
-
-  /** Number of live entries. */
+  /** Number of live entries after the last call that finished. */
   get length() {
-    return loadBinding().idx_len(ensureIdleHandle(this))
+    ensureHandle(this)
+    return this[LENGTH]
   }
 
   /** Vector dimensionality. */
@@ -870,75 +891,91 @@ export default class IdMapIndex {
   }
 
   /**
-   * Whether a TurboVec index holds a TQ+ calibration. A fresh TurboVec index
-   * calibrates from its first `addWithIds()` batch when that batch has at
-   * least 1,000 rows; other storages are never calibrated.
+   * Whether a TurboVec index holds a TQ+ calibration, as of the last call
+   * that finished. A fresh TurboVec index calibrates from its first
+   * `addWithIds()` batch when that batch has at least 1,000 rows; other
+   * storages are never calibrated.
    */
   get calibrated() {
-    return loadBinding().idx_calibrated(ensureIdleHandle(this))
+    ensureHandle(this)
+    return this[CALIBRATED]
   }
 
   /**
-   * Whether staged search is turned on. Off for every new or loaded index.
-   * Reports the setting, not whether a search runs in stages: see
-   * `setStagedSearch()`.
+   * Whether staged search is turned on, as of the last `setStagedSearch()`
+   * that finished. Off for every new or loaded index. Reports the setting,
+   * not whether a search runs in stages: see `setStagedSearch()`.
    */
   get stagedSearch() {
-    return loadBinding().idx_staged(ensureIdleHandle(this))
+    ensureHandle(this)
+    return this[STAGED]
   }
 
   /**
-   * Turn TurboVec staged search on or off. On, a search of 32,768 or more
-   * vectors scans a compressed form first and scores only a shortlist: several
-   * times faster per query, but it can miss some of the best matches,
-   * especially at small k. It applies only at a dimension divisible by 32, on
-   * hosts that support it, and never to an index loaded from a v3 snapshot;
-   * elsewhere the setting is kept but every search scans in full. Throws for
-   * non-TurboVec storage. Not saved in snapshots.
+   * Release filters and native index resources. The index cannot be used
+   * after this call, and calls that have not started reject. A call that is
+   * running finishes first; the native index is freed after it. Resolves
+   * once the native index has been freed. This operation is idempotent.
    */
-  setStagedSearch(enabled: boolean) {
-    if (typeof enabled !== 'boolean') {
-      throw new TypeError('setStagedSearch: enabled must be a boolean')
-    }
-    loadBinding().idx_set_staged(ensureIdleHandle(this), enabled)
-  }
-
-  /**
-   * Release filters and native index resources. This operation is
-   * idempotent. Async operations that have not started yet reject; one that
-   * is running finishes first, and the native index is freed after it.
-   */
-  dispose() {
+  dispose(): Promise<void> {
     const handle = this[HANDLE]
-    if (handle === null) {
-      return
+    if (handle !== null) {
+      this.disposeFilters(false)
+      this[HANDLE] = null
+      releaseAfterQueue(this, () => loadBinding().idx_dispose(handle))
     }
-
-    this.disposeFilters()
-    this[HANDLE] = null
-    releaseAfterQueue(this, () => loadBinding().idx_dispose(handle))
+    return this[QUEUE].then(swallow)
   }
 
-  /** `dispose()`, resolving once the native index has been freed. */
-  async disposeAsync() {
-    this.dispose()
-    await this[QUEUE]
-  }
-
-  private disposeFilters() {
+  // Frees every prepared filter. `now` is for a call's own turn in the queue,
+  // when no worker holds the index; otherwise each free waits its turn.
+  private disposeFilters(now: boolean) {
     for (const ref of this[FILTERS]) {
-      ref.deref()?.dispose()
+      const filter = ref.deref()
+      if (filter === undefined) {
+        continue
+      }
+      if (!now) {
+        filter.dispose()
+        continue
+      }
+      const detached = detachFilter(filter)
+      if (detached !== null) {
+        loadBinding().idx_filter_dispose(detached.filterHandle)
+      }
     }
     this[FILTERS].clear()
   }
 
+  // Reads the cached state back from the native index. Called at a turn in
+  // the queue, or before the index is shared, when no worker holds it.
+  private readState() {
+    const handle = this[HANDLE]
+    if (handle === null) {
+      return
+    }
+    const native = loadBinding()
+    this[DIM] = native.idx_dim(handle)
+    this[BIT_WIDTH] = native.idx_bit_width(handle)
+    this[LENGTH] = native.idx_len(handle)
+    this[CALIBRATED] = native.idx_calibrated(handle)
+    this[STAGED] = native.idx_staged(handle)
+  }
+
+  // After a mutation: prepared filters no longer match the index, and the
+  // cached state may have changed.
+  private afterMutation() {
+    this.disposeFilters(true)
+    this.readState()
+  }
+
   // Runs a native mutation, then invalidates prepared filters whether or not
-  // it succeeded, as the sync mutations do.
+  // it succeeded: a failed mutation may still have changed the index.
   private async mutate<T>(start: () => Promise<T>) {
     try {
       return await start()
     } finally {
-      this.disposeFilters()
+      this.afterMutation()
     }
   }
 

@@ -1,5 +1,9 @@
 'use strict'
 
+// How calls run: off the JS thread, in call order per index, with inputs
+// copied at call time, and cancellable with an AbortSignal. What each call
+// computes is covered by id-map-index.test.js.
+
 const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
@@ -19,6 +23,7 @@ const BUSY_ROWS = 20_000
 const BUSY_DIM = 64
 const BUSY_LISTS = 128
 const BUSY_ITERS = 5
+const RESERVED_ID = 0xffffffffffffffffn
 
 let tmpCounter = 0
 function tmpPath(name) {
@@ -63,17 +68,17 @@ function randomBatch(n, dim, seed = 0x5eed) {
   return { vectors, ids }
 }
 
-function filledIndex(options = { dim: DIM, bitWidth: 32 }) {
+async function filledIndex(options = { dim: DIM, bitWidth: 32 }) {
   const idx = new IdMapIndex(options)
   const { vectors, ids } = unitBatch()
-  idx.addWithIds(vectors, ids)
+  await idx.addWithIds(vectors, ids)
   return idx
 }
 
-function busyIndex() {
+async function busyIndex() {
   const idx = new IdMapIndex({ dim: BUSY_DIM, bitWidth: 32 })
   const { vectors, ids } = randomBatch(BUSY_ROWS, BUSY_DIM)
-  idx.addWithIds(vectors, ids)
+  await idx.addWithIds(vectors, ids)
   return idx
 }
 
@@ -95,148 +100,81 @@ function syncError(fn) {
   return null
 }
 
-function sameResult(t, actual, expected, message) {
-  t.is(actual.m, expected.m, `${message}: m`)
-  t.is(actual.k, expected.k, `${message}: k`)
-  t.alike(Array.from(actual.ids), Array.from(expected.ids), `${message}: ids`)
-  t.alike(Array.from(actual.scores), Array.from(expected.scores), `${message}: scores`)
+// A minimal AbortController: Bare has none built in, and the SDK passes
+// signals from bare-abort-controller, which have this shape. Counts its
+// listeners so tests can check that none are left behind.
+function createController() {
+  const listeners = new Set()
+  const signal = {
+    aborted: false,
+    reason: undefined,
+    addEventListener(type, listener) {
+      if (type === 'abort') listeners.add(listener)
+    },
+    removeEventListener(type, listener) {
+      if (type === 'abort') listeners.delete(listener)
+    },
+    get listenerCount() {
+      return listeners.size
+    }
+  }
+  return {
+    signal,
+    abort(reason) {
+      if (signal.aborted) return
+      signal.aborted = true
+      signal.reason = reason === undefined ? abortError() : reason
+      for (const listener of [...listeners]) {
+        listeners.delete(listener)
+        listener()
+      }
+    }
+  }
 }
 
-test('IdMapIndex async: searches resolve with the same results as the sync calls', async (t) => {
-  const idx = filledIndex()
-  const query = unitVec(3)
-  sameResult(t, await idx.searchAsync(query, 3), idx.search(query, 3), 'searchAsync')
+function abortError() {
+  const error = new Error('The operation was aborted')
+  error.name = 'AbortError'
+  return error
+}
 
-  const allowed = new BigUint64Array([2n, 4n, 6n])
-  sameResult(
-    t,
-    await idx.searchFilteredAsync(query, 2, allowed),
-    idx.searchFiltered(query, 2, allowed),
-    'searchFilteredAsync'
-  )
-
-  const filter = await idx.prepareFilterAsync(allowed)
-  t.ok(filter instanceof IdMapIndex.IdMapIndexFilter, 'prepareFilterAsync returns a filter')
-  sameResult(t, await filter.searchAsync(query, 2), filter.search(query, 2), 'filter.searchAsync')
-  filter.dispose()
-
-  const twin = filledIndex()
-  await idx.buildIvfAsync(4, 2)
-  twin.buildIvf(4, 2)
-  sameResult(
-    t,
-    await idx.searchIvfAsync(query, 3, 4),
-    twin.searchIvf(query, 3, 4),
-    'searchIvfAsync after buildIvfAsync'
-  )
-
-  await idx.prepareAsync()
-  t.pass('prepareAsync resolves')
-  twin.dispose()
-  idx.dispose()
-})
-
-test('IdMapIndex async: mutations resolve like the sync calls', async (t) => {
-  const idx = new IdMapIndex({ dim: DIM, bitWidth: 32 })
-  const { vectors, ids } = unitBatch()
-  t.is(await idx.addWithIdsAsync(vectors, ids), undefined, 'addWithIdsAsync resolves undefined')
-  t.is(idx.length, N, 'the add landed')
-
-  t.is(await idx.removeAsync(3n), true, 'removeAsync resolves true for a present id')
-  t.is(await idx.removeAsync(3n), false, 'removeAsync resolves false for a missing id')
-  t.absent(idx.contains(3n), 'the id is gone')
-
-  await idx.compactAsync()
-  t.is(idx.length, N - 1, 'compactAsync keeps the live entries')
-  idx.dispose()
-})
-
-test('IdMapIndex async: write and load round-trip', async (t) => {
-  const file = tmpPath('id-map-index-async')
-  const idx = filledIndex()
-  try {
-    await idx.writeAsync(file)
-    const loaded = await IdMapIndex.loadAsync(file)
-    t.ok(loaded instanceof IdMapIndex, 'loadAsync resolves an IdMapIndex')
-    t.is(loaded.length, N, 'loadAsync keeps every entry')
-    t.is(loaded.dim, DIM, 'loadAsync keeps dim')
-    t.is(loaded.bitWidth, 32, 'loadAsync keeps bitWidth')
-    sameResult(t, await loaded.searchAsync(unitVec(5), 2), idx.search(unitVec(5), 2), 'search')
-    loaded.dispose()
-
-    const mapped = await IdMapIndex.loadMmapAsync(file)
-    t.is(mapped.length, N, 'loadMmapAsync keeps every entry')
-    t.is(
-      (await rejection(mapped.addWithIdsAsync(unitVec(0), new BigUint64Array([99n])))) !== null,
-      true,
-      'an mmap index rejects async mutations'
-    )
-    mapped.dispose()
-
-    class Sub extends IdMapIndex {}
-    const sub = await Sub.loadAsync(file)
-    t.ok(sub instanceof Sub, 'loadAsync on a subclass resolves that subclass')
-    sub.dispose()
-  } finally {
-    idx.dispose()
-    removeFile(file)
+// Records the native frees the index makes, in order. Desktop only: the
+// relative binding path does not resolve after the mobile test app copies
+// the integration tests.
+function recordFrees(t) {
+  const binding = require('../../binding')
+  const original = {
+    idx_dispose: binding.idx_dispose,
+    idx_filter_dispose: binding.idx_filter_dispose
   }
-})
-
-test('IdMapIndex async: delta log mutations and compaction', async (t) => {
-  const snapshot = tmpPath('id-map-index-async-delta')
-  const delta = snapshot.replace(/\.tvim$/, '.tvid')
-  const idx = filledIndex()
-  try {
-    await idx.writeAsync(snapshot)
-    await idx.addLoggedAsync(unitVec(11), new BigUint64Array([100n]), delta)
-    t.is(await idx.removeLoggedAsync(1n, delta), true, 'removeLoggedAsync resolves true')
-
-    const replayed = await IdMapIndex.loadWithDeltaAsync(snapshot, delta)
-    t.is(replayed.length, N, 'loadWithDeltaAsync replays the add and the remove')
-    t.ok(replayed.contains(100n), 'the logged add replays')
-    t.absent(replayed.contains(1n), 'the logged remove replays')
-
-    await replayed.compactDeltaAsync(snapshot, delta)
-    const compacted = await IdMapIndex.loadAsync(snapshot)
-    t.is(compacted.length, N, 'compactDeltaAsync writes the replayed state')
-    compacted.dispose()
-    replayed.dispose()
-  } finally {
-    idx.dispose()
-    removeFile(snapshot)
-    removeFile(delta)
+  const frees = []
+  binding.idx_dispose = (handle) => {
+    frees.push('index')
+    return original.idx_dispose(handle)
   }
-})
-
-test('IdMapIndex async: native errors reject with the sync error code', async (t) => {
-  const idx = filledIndex()
-  const duplicate = await rejection(idx.addWithIdsAsync(unitVec(0), new BigUint64Array([1n])))
-  const syncDuplicate = syncError(() => idx.addWithIds(unitVec(0), new BigUint64Array([1n])))
-  t.ok(duplicate, 'a duplicate id rejects')
-  t.is(duplicate && duplicate.code, syncDuplicate && syncDuplicate.code, 'with the sync code')
-
-  const ivf = await rejection(idx.searchIvfAsync(unitVec(0), 1, 1))
-  const syncIvf = syncError(() => idx.searchIvf(unitVec(0), 1, 1))
-  t.ok(ivf, 'IVF search before a build rejects')
-  t.is(ivf && ivf.code, syncIvf && syncIvf.code, 'with the sync code')
-
-  const missing = await rejection(IdMapIndex.loadAsync(tmpPath('id-map-index-async-missing')))
-  t.ok(missing, 'loading a missing file rejects')
-  idx.dispose()
-})
+  binding.idx_filter_dispose = (handle) => {
+    frees.push('filter')
+    return original.idx_filter_dispose(handle)
+  }
+  t.teardown(() => Object.assign(binding, original))
+  return frees
+}
 
 test('IdMapIndex async: bad arguments reject instead of throwing', async (t) => {
-  const idx = filledIndex()
+  const idx = await filledIndex()
   const calls = {
-    searchAsync: () => idx.searchAsync([1, 2], 1),
-    'searchAsync k': () => idx.searchAsync(unitVec(0), 0),
-    addWithIdsAsync: () => idx.addWithIdsAsync(unitVec(0), new BigUint64Array(2)),
-    buildIvfAsync: () => idx.buildIvfAsync(0),
-    searchIvfAsync: () => idx.searchIvfAsync(unitVec(0), 1, 0),
-    removeAsync: () => idx.removeAsync(1),
-    writeAsync: () => idx.writeAsync(''),
-    loadAsync: () => IdMapIndex.loadAsync('')
+    search: () => idx.search([1, 2], 1),
+    'search k': () => idx.search(unitVec(0), 0),
+    addWithIds: () => idx.addWithIds(unitVec(0), new BigUint64Array(2)),
+    buildIvf: () => idx.buildIvf(0),
+    searchIvf: () => idx.searchIvf(unitVec(0), 1, 0),
+    remove: () => idx.remove(1),
+    contains: () => idx.contains(1),
+    setStagedSearch: () => idx.setStagedSearch('yes'),
+    write: () => idx.write(''),
+    load: () => IdMapIndex.load(''),
+    'options type': () => idx.search(unitVec(0), 1, 5),
+    'options.signal': () => idx.search(unitVec(0), 1, { signal: {} })
   }
   for (const [name, call] of Object.entries(calls)) {
     let promise = null
@@ -246,116 +184,138 @@ test('IdMapIndex async: bad arguments reject instead of throwing', async (t) => 
     t.ok(await rejection(promise), `${name} rejects`)
   }
   t.is(idx.length, N, 'the index is untouched')
-  idx.dispose()
+  await idx.dispose()
 })
 
 test('IdMapIndex async: operations on one index run in call order', async (t) => {
   const idx = new IdMapIndex({ dim: DIM, bitWidth: 32 })
   const { vectors, ids } = unitBatch()
   const order = []
-  const add = idx.addWithIdsAsync(vectors, ids).then(() => order.push('add'))
-  const search = idx.searchAsync(unitVec(4), 1).then((result) => {
-    order.push('search')
-    return result
-  })
-  const remove = idx.removeAsync(5n).then((removed) => {
-    order.push('remove')
-    return removed
-  })
-  const after = idx.searchAsync(unitVec(4), 1)
-  const [, found, removed, gone] = await Promise.all([add, search, remove, after])
-  t.alike(order, ['add', 'search', 'remove'], 'promises settle in call order')
+  const track = (name, promise) =>
+    promise.then((value) => {
+      order.push(name)
+      return value
+    })
+  const add = track('add', idx.addWithIds(vectors, ids))
+  const search = track('search', idx.search(unitVec(4), 1))
+  const remove = track('remove', idx.remove(5n))
+  const contains = track('contains', idx.contains(5n))
+  const after = track('after', idx.search(unitVec(4), 1))
+  const [, found, removed, present, gone] = await Promise.all([
+    add,
+    search,
+    remove,
+    contains,
+    after
+  ])
+  t.alike(order, ['add', 'search', 'remove', 'contains', 'after'], 'promises settle in call order')
   t.is(found.ids[0], 5n, 'a search queued after an add sees it')
   t.is(removed, true, 'the remove ran after the add')
+  t.is(present, false, 'contains queued after a remove sees it')
   t.not(gone.ids[0], 5n, 'a search queued after a remove does not see the id')
-  idx.dispose()
+  await idx.dispose()
 })
 
-test('IdMapIndex async: sync calls throw while async work is pending', async (t) => {
-  const idx = filledIndex()
-  const pending = idx.searchAsync(unitVec(0), 1)
-  for (const [name, call] of Object.entries({
-    search: () => idx.search(unitVec(0), 1),
-    addWithIds: () => idx.addWithIds(unitVec(0), new BigUint64Array([99n])),
+test('IdMapIndex async: getters work while calls are pending', async (t) => {
+  const idx = await filledIndex()
+  const add = idx.addWithIds(unitVec(3), new BigUint64Array([50n]))
+  for (const [name, read] of Object.entries({
     length: () => idx.length,
-    contains: () => idx.contains(1n),
-    prepareFilter: () => idx.prepareFilter(new BigUint64Array([1n]))
+    dim: () => idx.dim,
+    bitWidth: () => idx.bitWidth,
+    calibrated: () => idx.calibrated,
+    stagedSearch: () => idx.stagedSearch
   })) {
-    const error = syncError(call)
-    t.ok(error && /async operations in progress/.test(error.message), `${name} throws`)
+    t.is(syncError(read), null, `${name} does not throw`)
   }
-  t.is(idx.dim, DIM, 'dim still works')
-  t.is(idx.bitWidth, 32, 'bitWidth still works')
-  await pending
-  t.is(idx.length, N, 'sync calls work again once the work has settled')
-  idx.dispose()
+  t.is(idx.length, N, 'length reports the calls that have finished')
+  await add
+  t.is(idx.length, N + 1, 'and follows the add once it finishes')
+  await idx.dispose()
+})
+
+test('IdMapIndex async: setStagedSearch applies to the searches queued after it', async (t) => {
+  if (!SUPPORTS_TURBOVEC) {
+    t.pass('TurboVec needs a 64-bit target')
+    return
+  }
+  const idx = new IdMapIndex({ dim: 128, storage: 'turbovec-q4' })
+  const { vectors, ids } = randomBatch(16, 128, 21)
+  const add = idx.addWithIds(vectors, ids)
+  const on = idx.setStagedSearch(true)
+  t.is(idx.stagedSearch, false, 'the setting changes when its turn comes')
+  await add
+  await on
+  t.is(idx.stagedSearch, true, 'and is reported once applied')
+  await idx.dispose()
 })
 
 test('IdMapIndex async: an IVF build leaves the JS thread free', async (t) => {
-  const big = busyIndex()
-  const small = filledIndex()
+  const big = await busyIndex()
+  const small = await filledIndex()
   let ticks = 0
   const timer = setInterval(() => {
     ticks += 1
   }, 1)
   let buildDone = false
   try {
-    const build = big.buildIvfAsync(BUSY_LISTS, BUSY_ITERS).then(() => {
+    const build = big.buildIvf(BUSY_LISTS, BUSY_ITERS).then(() => {
       buildDone = true
     })
-    const result = await small.searchAsync(unitVec(2), 1)
+    const result = await small.search(unitVec(2), 1)
     t.is(result.ids[0], 3n, 'another index answers a search')
     t.absent(buildDone, 'before the build on the first index finishes')
     await build
     t.ok(ticks > 0, `timers kept firing during the build (${ticks} ticks)`)
-    const hits = await big.searchIvfAsync(randomBatch(1, BUSY_DIM, 7).vectors, 5, 8)
+    const hits = await big.searchIvf(randomBatch(1, BUSY_DIM, 7).vectors, 5, 8)
     t.is(hits.k, 5, 'the built IVF state is searchable')
   } finally {
     clearInterval(timer)
-    small.dispose()
-    big.dispose()
+    await small.dispose()
+    await big.dispose()
   }
 })
 
 test('IdMapIndex async: dispose during a build', async (t) => {
-  const idx = busyIndex()
-  const build = idx.buildIvfAsync(BUSY_LISTS, BUSY_ITERS)
+  const idx = await busyIndex()
+  const build = idx.buildIvf(BUSY_LISTS, BUSY_ITERS)
   // Handled right away: it rejects as soon as the build settles.
-  const queued = rejection(idx.searchAsync(randomBatch(1, BUSY_DIM, 3).vectors, 1))
-  idx.dispose()
+  const queued = rejection(idx.search(randomBatch(1, BUSY_DIM, 3).vectors, 1))
+  const disposed = idx.dispose()
   t.execution(() => idx.dispose(), 'dispose stays idempotent')
+  t.is(
+    syncError(() => idx.length)?.message,
+    'IdMapIndex has been disposed',
+    'getters throw at once'
+  )
 
   await build
   t.pass('the running build still finishes')
   const error = await queued
   t.is(error && error.message, 'IdMapIndex has been disposed', 'a queued search rejects')
-  await idx.disposeAsync()
-  t.is(
-    syncError(() => idx.length)?.message,
-    'IdMapIndex has been disposed',
-    'the index is disposed afterwards'
-  )
-  t.ok(await rejection(idx.searchAsync(randomBatch(1, BUSY_DIM).vectors, 1)), 'later calls reject')
+  await disposed
+  t.pass('dispose() resolves once the index is freed')
+  t.ok(await rejection(idx.search(randomBatch(1, BUSY_DIM).vectors, 1)), 'later calls reject')
 })
 
-test('IdMapIndex async: disposeAsync resolves after queued work', async (t) => {
-  const idx = filledIndex()
-  const search = idx.searchAsync(unitVec(1), 1)
-  await idx.disposeAsync()
+test('IdMapIndex async: dispose resolves after the running call', async (t) => {
+  const idx = await filledIndex()
+  const search = idx.search(unitVec(1), 1)
+  await idx.dispose()
   t.is((await search).ids[0], 2n, 'the running search finished')
 })
 
 test('IdMapIndex async: filters and queued mutations', async (t) => {
-  const idx = filledIndex()
-  const filter = idx.prepareFilter(new BigUint64Array([1n, 2n]))
-  const search = filter.searchAsync(unitVec(1), 1)
+  const idx = await filledIndex()
+  const filter = await idx.prepareFilter(new BigUint64Array([1n, 2n]))
+  const search = filter.search(unitVec(1), 1)
   filter.dispose()
   t.is((await search).ids[0], 2n, 'a filter disposed mid-search still answers that search')
-  t.ok(await rejection(filter.searchAsync(unitVec(1), 1)), 'later filter searches reject')
+  t.ok(await rejection(filter.search(unitVec(1), 1)), 'later filter searches reject')
 
-  const second = idx.prepareFilter(new BigUint64Array([1n, 2n]))
-  const add = idx.addWithIdsAsync(unitVec(5), new BigUint64Array([50n]))
-  const stale = rejection(second.searchAsync(unitVec(1), 1))
+  const second = await idx.prepareFilter(new BigUint64Array([1n, 2n]))
+  const add = idx.addWithIds(unitVec(5), new BigUint64Array([50n]))
+  const stale = rejection(second.search(unitVec(1), 1))
   await add
   const error = await stale
   t.is(
@@ -363,31 +323,45 @@ test('IdMapIndex async: filters and queued mutations', async (t) => {
     'IdMapIndexFilter has been disposed',
     'a filter search queued after a mutation rejects'
   )
-  idx.dispose()
+  await idx.dispose()
 })
 
-test('IdMapIndex async: TurboVec search matches sync', async (t) => {
-  if (!SUPPORTS_TURBOVEC) {
-    t.pass('TurboVec needs a 64-bit target')
-    return
-  }
-  const idx = new IdMapIndex({ dim: 128, storage: 'turbovec-q4' })
-  const { vectors, ids } = randomBatch(64, 128, 11)
-  await idx.addWithIdsAsync(vectors, ids)
-  const query = randomBatch(2, 128, 12).vectors
-  sameResult(t, await idx.searchAsync(query, 5), idx.search(query, 5), 'turbovec searchAsync')
-  idx.dispose()
+// fabric requires an index to outlive its filters.
+test('IdMapIndex async: filters are freed before their index', { skip: IS_MOBILE }, async (t) => {
+  const frees = recordFrees(t)
+
+  // A mutation invalidates every filter; disposing right after it must not
+  // overtake those frees.
+  const idx = await filledIndex()
+  // Held, so GC cannot free any of them first.
+  const filters = []
+  for (let i = 0; i < 8; i++) filters.push(await idx.prepareFilter(new BigUint64Array([1n])))
+  await idx.addWithIds(unitVec(4), new BigUint64Array([60n]))
+  await idx.dispose()
+  t.alike(frees, [...Array(filters.length).fill('filter'), 'index'], 'after a mutation')
+
+  // Filters disposed while a call runs are freed after that call, one by one.
+  // Disposing the index right after awaiting the call must wait for them.
+  frees.length = 0
+  const other = await filledIndex()
+  const held = []
+  for (let i = 0; i < 8; i++) held.push(await other.prepareFilter(new BigUint64Array([1n])))
+  const search = other.search(unitVec(0), 1)
+  for (const filter of held) filter.dispose()
+  await search
+  await other.dispose()
+  t.alike(frees, [...Array(held.length).fill('filter'), 'index'], 'after filters disposed mid-call')
 })
 
 test('IdMapIndex async: native async calls refuse a busy index', { skip: IS_MOBILE }, async (t) => {
   const binding = require('../../binding')
   const handle = binding.idx_create({ dim: DIM, storage: 'f32' })
   const { vectors, ids } = unitBatch()
-  binding.idx_add(handle, vectors, ids)
+  await binding.idx_add_async(handle, vectors, ids)
   const running = binding.idx_search_async(handle, unitVec(0), 1)
   for (const [name, call] of Object.entries({
     'a second job': () => binding.idx_search_async(handle, unitVec(0), 1),
-    'a sync call': () => binding.idx_len(handle),
+    'a sync read': () => binding.idx_len(handle),
     dispose: () => binding.idx_dispose(handle)
   })) {
     const error = syncError(call)
@@ -398,146 +372,243 @@ test('IdMapIndex async: native async calls refuse a busy index', { skip: IS_MOBI
   binding.idx_dispose(handle)
 })
 
-test('IdMapIndex async: a sync mutation refused while busy keeps prepared filters', async (t) => {
-  const idx = filledIndex()
-  const filter = idx.prepareFilter(new BigUint64Array([1n, 2n]))
-  const search = filter.searchAsync(unitVec(1), 1)
-  for (const [name, call] of Object.entries({
-    addWithIds: () => idx.addWithIds(unitVec(0), new BigUint64Array([99n])),
-    compact: () => idx.compact()
-  })) {
-    t.ok(syncError(call), `${name} throws while busy`)
-  }
-  t.is((await search).ids[0], 2n, 'the queued filter search still runs')
-  t.is(filter.search(unitVec(0), 1).ids[0], 1n, 'and the filter is still usable')
-  idx.dispose()
-})
-
-test('IdMapIndex async: prepareFilterAsync rejects when the index is disposed meanwhile', async (t) => {
-  const idx = filledIndex()
-  const pending = rejection(idx.prepareFilterAsync(new BigUint64Array([1n, 2n])))
-  idx.dispose()
+test('IdMapIndex async: prepareFilter rejects when the index is disposed meanwhile', async (t) => {
+  const idx = await filledIndex()
+  const pending = rejection(idx.prepareFilter(new BigUint64Array([1n, 2n])))
+  const disposed = idx.dispose()
   const error = await pending
   t.is(error && error.message, 'IdMapIndex has been disposed', 'the filter is not handed out')
-  await idx.disposeAsync()
+  await disposed
 })
 
 test('IdMapIndex async: inputs are copied when the call is made', async (t) => {
   const idx = new IdMapIndex({ dim: DIM, bitWidth: 32 })
   const { vectors, ids } = unitBatch()
-  const add = idx.addWithIdsAsync(vectors, ids)
-  ids.fill(0xffffffffffffffffn)
+  const add = idx.addWithIds(vectors, ids)
+  ids.fill(RESERVED_ID)
   vectors.fill(0)
   await add
-  t.ok(idx.contains(1n) && idx.contains(BigInt(N)), 'the add used the ids it was called with')
-  t.absent(idx.contains(0xffffffffffffffffn), 'the reserved id was not added')
+  t.ok(
+    (await idx.contains(1n)) && (await idx.contains(BigInt(N))),
+    'the add used the ids it was called with'
+  )
+  t.absent(await idx.contains(RESERVED_ID), 'the reserved id was not added')
 
   const query = unitVec(6)
-  const expected = idx.search(query, 1)
-  const search = idx.searchAsync(query, 1)
+  const search = idx.search(query, 1)
   query.buffer.transfer()
   t.is(query.length, 0, 'the query buffer was detached')
-  sameResult(t, await search, expected, 'a search whose query was detached')
+  t.is((await search).ids[0], 7n, 'a search whose query was detached')
 
   const allowed = new BigUint64Array([7n])
-  const filtered = idx.searchFilteredAsync(unitVec(6), 1, allowed)
+  const filtered = idx.searchFiltered(unitVec(6), 1, allowed)
   allowed[0] = 3n
   t.is((await filtered).ids[0], 7n, 'the allow-list was copied')
-  idx.dispose()
+  await idx.dispose()
 })
 
 // A queued operation's native call starts only after the operations ahead of
 // it settle; the caller changes each input right after making the call.
 test('IdMapIndex async: inputs of queued operations are copied when the call is made', async (t) => {
-  const idx = filledIndex()
-  idx.buildIvf(4, 2)
+  const idx = await filledIndex()
+  await idx.buildIvf(4, 2)
 
-  const ahead = idx.searchAsync(unitVec(0), 1)
+  const ahead = idx.search(unitVec(0), 1)
   const query = unitVec(6)
-  const search = idx.searchAsync(query, 1)
+  const search = idx.search(query, 1)
   query.set(unitVec(2))
   const ivfQuery = unitVec(6)
-  const ivf = idx.searchIvfAsync(ivfQuery, 1, 4)
+  const ivf = idx.searchIvf(ivfQuery, 1, 4)
   ivfQuery.set(unitVec(2))
   const allowed = new BigUint64Array([7n])
-  const filtered = idx.searchFilteredAsync(unitVec(6), 1, allowed)
+  const filtered = idx.searchFiltered(unitVec(6), 1, allowed)
   allowed[0] = 3n
   const filterIds = new BigUint64Array([7n])
-  const prepared = idx.prepareFilterAsync(filterIds)
+  const prepared = idx.prepareFilter(filterIds)
   filterIds[0] = 3n
 
   t.is((await ahead).ids[0], 1n, 'the operation ahead ran')
-  t.is((await search).ids[0], 7n, 'searchAsync used the query it was called with')
-  t.is((await ivf).ids[0], 7n, 'searchIvfAsync used the query it was called with')
-  t.is((await filtered).ids[0], 7n, 'searchFilteredAsync used the allow-list it was called with')
+  t.is((await search).ids[0], 7n, 'search used the query it was called with')
+  t.is((await ivf).ids[0], 7n, 'searchIvf used the query it was called with')
+  t.is((await filtered).ids[0], 7n, 'searchFiltered used the allow-list it was called with')
   const filter = await prepared
   t.is(
-    filter.search(unitVec(6), 1).ids[0],
+    (await filter.search(unitVec(6), 1)).ids[0],
     7n,
-    'prepareFilterAsync used the ids it was called with'
+    'prepareFilter used the ids it was called with'
   )
 
-  const busy = idx.searchAsync(unitVec(0), 1)
+  const busy = idx.search(unitVec(0), 1)
   const filterQuery = unitVec(6)
-  const filterSearch = filter.searchAsync(filterQuery, 1)
+  const filterSearch = filter.search(filterQuery, 1)
   filterQuery.buffer.transfer()
   const rows = unitVec(3)
   const ids = new BigUint64Array([50n])
-  const add = idx.addWithIdsAsync(rows, ids)
+  const add = idx.addWithIds(rows, ids)
   rows.fill(0)
-  ids[0] = 0xffffffffffffffffn
+  ids[0] = RESERVED_ID
 
   await busy
-  t.is((await filterSearch).ids[0], 7n, 'filter.searchAsync used the query it was called with')
+  t.is((await filterSearch).ids[0], 7n, 'filter.search used the query it was called with')
   await add
-  t.absent(idx.contains(0xffffffffffffffffn), 'addWithIdsAsync did not add the reserved id')
+  t.absent(await idx.contains(RESERVED_ID), 'addWithIds did not add the reserved id')
   // Row 3 already holds unitVec(3): the new row is a second exact match only
   // when it was stored as passed.
   const scoreOf = (result, id) => result.scores[result.ids.indexOf(id)]
-  t.ok(scoreOf(idx.search(unitVec(3), 2), 50n) > 0.99, 'addWithIdsAsync stored its rows')
-  idx.dispose()
+  t.ok(scoreOf(await idx.search(unitVec(3), 2), 50n) > 0.99, 'addWithIds stored its rows')
+  await idx.dispose()
 
   // A written index takes logged or unlogged mutations, not both, so the
   // logged add gets an index of its own.
-  const logged = filledIndex()
+  const logged = await filledIndex()
   const snapshotPath = tmpPath('async-queued-copy')
   const deltaPath = snapshotPath.replace(/\.tvim$/, '.tvid')
   try {
-    logged.write(snapshotPath)
-    const before = logged.searchAsync(unitVec(0), 1)
+    await logged.write(snapshotPath)
+    const before = logged.search(unitVec(0), 1)
     const loggedRows = unitVec(4)
     const loggedIds = new BigUint64Array([60n])
-    const append = logged.addLoggedAsync(loggedRows, loggedIds, deltaPath)
+    const append = logged.addLogged(loggedRows, loggedIds, deltaPath)
     loggedRows.fill(0)
-    loggedIds[0] = 0xffffffffffffffffn
+    loggedIds[0] = RESERVED_ID
     await before
     await append
-    t.absent(logged.contains(0xffffffffffffffffn), 'addLoggedAsync did not add the reserved id')
-    t.ok(scoreOf(logged.search(unitVec(4), 2), 60n) > 0.99, 'addLoggedAsync stored its rows')
+    t.absent(await logged.contains(RESERVED_ID), 'addLogged did not add the reserved id')
+    t.ok(scoreOf(await logged.search(unitVec(4), 2), 60n) > 0.99, 'addLogged stored its rows')
   } finally {
-    logged.dispose()
+    await logged.dispose()
     removeFile(snapshotPath)
     removeFile(deltaPath)
   }
 })
 
 test('IdMapIndex async: two builds do not hold up a search on a third index', async (t) => {
-  const first = busyIndex()
-  const second = busyIndex()
-  const small = filledIndex()
+  const first = await busyIndex()
+  const second = await busyIndex()
+  const small = await filledIndex()
   let builds = 0
   try {
     const done = Promise.all([
-      first.buildIvfAsync(BUSY_LISTS, BUSY_ITERS).then(() => builds++),
-      second.buildIvfAsync(BUSY_LISTS, BUSY_ITERS).then(() => builds++)
+      first.buildIvf(BUSY_LISTS, BUSY_ITERS).then(() => builds++),
+      second.buildIvf(BUSY_LISTS, BUSY_ITERS).then(() => builds++)
     ])
-    const result = await small.searchAsync(unitVec(2), 1)
+    const result = await small.search(unitVec(2), 1)
     t.is(result.ids[0], 3n, 'the search answers')
     t.is(builds, 0, 'before either build finishes')
     await done
   } finally {
-    small.dispose()
-    second.dispose()
-    first.dispose()
+    await small.dispose()
+    await second.dispose()
+    await first.dispose()
   }
+})
+
+test('IdMapIndex abort: an aborted signal rejects without running the call', async (t) => {
+  const idx = await filledIndex()
+  const controller = createController()
+  const reason = new Error('stop')
+  controller.abort(reason)
+  const { signal } = controller
+  for (const [name, call] of Object.entries({
+    addWithIds: () => idx.addWithIds(unitVec(3), new BigUint64Array([70n]), { signal }),
+    search: () => idx.search(unitVec(0), 1, { signal }),
+    contains: () => idx.contains(1n, { signal }),
+    load: () => IdMapIndex.load(tmpPath('never-read'), { signal })
+  })) {
+    t.is(await rejection(call()), reason, `${name} rejects with the signal's reason`)
+  }
+  t.is(idx.length, N, 'the add did not run')
+  t.absent(await idx.contains(70n), 'and the id is absent')
+  await idx.dispose()
+})
+
+test('IdMapIndex abort: a call waiting in the queue is skipped', async (t) => {
+  const idx = await busyIndex()
+  const build = idx.buildIvf(BUSY_LISTS, BUSY_ITERS)
+  let buildDone = false
+  build.then(() => {
+    buildDone = true
+  })
+  const controller = createController()
+  const { signal } = controller
+  const add = rejection(
+    idx.addWithIds(unitVec(0, BUSY_DIM), new BigUint64Array([999_999n]), { signal })
+  )
+  const search = rejection(idx.search(unitVec(0, BUSY_DIM), 1, { signal }))
+  controller.abort()
+
+  const error = await add
+  t.is(error && error.name, 'AbortError', 'the queued add rejects with an AbortError')
+  t.absent(buildDone, 'without waiting for the build ahead of it')
+  t.is((await search)?.name, 'AbortError', 'the queued search rejects too')
+  await build
+  t.absent(await idx.contains(999_999n), 'the add never ran')
+  t.is(signal.listenerCount, 0, 'no abort listener is left on the signal')
+  await idx.dispose()
+})
+
+test('IdMapIndex abort: a running build rejects at once but still finishes', async (t) => {
+  const idx = await busyIndex()
+  const controller = createController()
+  const build = rejection(idx.buildIvf(BUSY_LISTS, BUSY_ITERS, { signal: controller.signal }))
+  // Waits for the native build, which keeps running after the abort.
+  let afterDone = false
+  const after = idx.searchIvf(randomBatch(1, BUSY_DIM, 9).vectors, 3, 8).then((hits) => {
+    afterDone = true
+    return hits
+  })
+  controller.abort()
+  const error = await build
+  t.is(error && error.name, 'AbortError', 'the build rejects with an AbortError')
+  t.absent(afterDone, 'before the native build finishes')
+  const hits = await after
+  t.is(hits.k, 3, 'the build took effect: a search queued after it uses the IVF state')
+  await idx.dispose()
+})
+
+test(
+  'IdMapIndex abort: results that finish after an abort are freed',
+  { skip: IS_MOBILE },
+  async (t) => {
+    const frees = recordFrees(t)
+    const file = tmpPath('id-map-index-abort-load')
+    const idx = await filledIndex()
+    try {
+      await idx.write(file)
+
+      const filterController = createController()
+      const filter = rejection(
+        idx.prepareFilter(new BigUint64Array([1n]), { signal: filterController.signal })
+      )
+      filterController.abort()
+      t.is((await filter)?.name, 'AbortError', 'prepareFilter rejects')
+      await idx.search(unitVec(0), 1)
+      t.alike(frees, ['filter'], 'and the filter it built is freed')
+
+      frees.length = 0
+      const loadController = createController()
+      const loaded = rejection(IdMapIndex.load(file, { signal: loadController.signal }))
+      loadController.abort()
+      t.is((await loaded)?.name, 'AbortError', 'load rejects')
+      for (let i = 0; i < 100 && frees.length === 0; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 5))
+      }
+      t.alike(frees, ['index'], 'and the index it loaded is freed')
+    } finally {
+      await idx.dispose()
+      removeFile(file)
+    }
+  }
+)
+
+test('IdMapIndex abort: a call that finishes first leaves the signal clean', async (t) => {
+  const idx = await filledIndex()
+  const controller = createController()
+  const { signal } = controller
+  t.is((await idx.search(unitVec(2), 1, { signal })).ids[0], 3n, 'the search resolves')
+  t.is(await idx.contains(3n, { signal }), true, 'contains resolves')
+  t.is(signal.listenerCount, 0, 'no abort listener is left on the signal')
+  controller.abort()
+  t.is((await idx.search(unitVec(2), 1)).ids[0], 3n, 'a later abort changes nothing')
+  await idx.dispose()
 })

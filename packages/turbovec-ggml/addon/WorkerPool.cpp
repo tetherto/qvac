@@ -18,16 +18,18 @@ WorkerPool::~WorkerPool() {
   }
 }
 
-bool WorkerPool::post(std::function<void()> task) noexcept {
+std::uint64_t WorkerPool::post(std::function<void()> task) noexcept {
+  std::uint64_t ticket = 0;
   {
     std::lock_guard<std::mutex> lock(mutex_);
     if (stopping_) {
-      return false;
+      return 0;
     }
+    ticket = nextTicket_++;
     try {
-      queue_.push_back(std::move(task));
+      queue_.push_back(Task{ticket, std::move(task)});
     } catch (...) {
-      return false;
+      return 0;
     }
     if (idle_ < queue_.size() && threads_.size() < maxThreads_) {
       try {
@@ -35,13 +37,30 @@ bool WorkerPool::post(std::function<void()> task) noexcept {
       } catch (...) {
         if (threads_.empty()) {
           queue_.pop_back();
-          return false;
+          return 0;
         }
       }
     }
   }
   cv_.notify_one();
-  return true;
+  return ticket;
+}
+
+bool WorkerPool::cancel(std::uint64_t ticket) noexcept {
+  // Declared outside the lock's scope, so the task is destroyed after the
+  // lock is released.
+  std::function<void()> removed;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (auto it = queue_.begin(); it != queue_.end(); ++it) {
+      if (it->ticket == ticket) {
+        removed = std::move(it->run);
+        queue_.erase(it);
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 size_t WorkerPool::threadCount() const {
@@ -58,7 +77,7 @@ void WorkerPool::run() {
     if (queue_.empty()) {
       return; // stopping_ and nothing left to run
     }
-    std::function<void()> task = std::move(queue_.front());
+    std::function<void()> task = std::move(queue_.front().run);
     queue_.pop_front();
     lock.unlock();
     task();
