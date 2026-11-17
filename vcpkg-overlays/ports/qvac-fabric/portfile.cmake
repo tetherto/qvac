@@ -395,6 +395,17 @@ if(VCPKG_TARGET_IS_LINUX AND DL_BACKENDS)
     list(APPEND QVAC_RUNTIME_OPTIONS WITH_XDNA)
   endif()
   qvac_check_cxx_runtime(${QVAC_RUNTIME_OPTIONS} ${QVAC_MODULES})
+
+  # The release modules ship in the npm platform packages, which npm caps in
+  # size. dlopen needs only the dynamic symbols, so drop the static symbol
+  # table; debug modules keep theirs.
+  find_program(QVAC_STRIP NAMES llvm-strip strip REQUIRED)
+  file(GLOB QVAC_RELEASE_MODULES "${CURRENT_PACKAGES_DIR}/lib/libqvac-ggml-*.so")
+  foreach(_qvac_module IN LISTS QVAC_RELEASE_MODULES)
+    execute_process(
+      COMMAND "${QVAC_STRIP}" --strip-unneeded "${_qvac_module}"
+      COMMAND_ERROR_IS_FATAL ANY)
+  endforeach()
 endif()
 
 if(BUILD_LLAMA)
