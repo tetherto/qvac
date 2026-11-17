@@ -157,6 +157,8 @@ jobs:
     with:
       rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices)['build:providers']) }}
       reuse: true
+      # A release links what it reuses into the published package, and the key leaves out the runners' compilers.
+      reuse-max-days: 3
 
   build:
     needs: [select, logic, providers]
