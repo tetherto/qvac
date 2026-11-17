@@ -31,13 +31,19 @@ test('CUDA is opt-in for source builds and enabled for Linux and Windows release
     'utf8'
   )
   assert.match(cudaConfig, /if\(SD_CUDA\)\s+list\(APPEND VCPKG_MANIFEST_FEATURES "cuda"\)/)
-  assert.equal(project.targets.build.options.ci.includeCuda, true)
-  assert.equal(project.targets.build.options.ci.includeCudaArm64, true)
-  assert.equal(project.targets.build.options.ci.includeCudaWin32, true)
-  assert.equal(
-    project.targets.build.options.ci.platformCmakeDefines,
-    'linux: -D SD_CUDA=ON\nwin32: -D SD_CUDA=ON'
+  const build = project.targets.build
+  const sourceGenerate = build.options.commands.find(({ command }) =>
+    command.includes('bare-make generate')
   )
+  assert.ok(sourceGenerate, 'ordinary source builds configure the addon')
+  assert.doesNotMatch(sourceGenerate.command, /-D\s*SD_CUDA=ON\b/)
+  for (const host of ['linux-x64', 'linux-arm64', 'win32-x64']) {
+    const generate = build.configurations[host].commands.find(({ command }) =>
+      command.includes('bare-make generate')
+    )
+    assert.ok(generate, `${host} prebuilds configure the addon`)
+    assert.match(generate.command, /-D\s*SD_CUDA=ON\b/, `${host} prebuilds enable CUDA`)
+  }
 })
 
 // Real ELF64 section and symbol layouts, including symbol binding/definition.
