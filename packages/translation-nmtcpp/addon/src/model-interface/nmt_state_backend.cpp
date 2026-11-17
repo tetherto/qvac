@@ -562,11 +562,16 @@ struct nmt_state* nmtInitState(nmt_context* ctx) {
   // TAGS: NMT_DECODER_INIT
   // state->decoders[0].sequence.tokens.reserve(ctx->model.hparams.n_decoder_ctx);
 
-  state->decoders[0].probs.reserve(ctx->model.hparams.n_vocab);
-  state->decoders[0].logits.reserve(ctx->model.hparams.n_vocab);
-  state->decoders[0].logprobs.reserve(ctx->model.hparams.n_vocab);
-  state->decoders[0].sorted_probs.reserve(ctx->model.hparams.n_vocab);
-  state->decoders[0].logits_id.resize(ctx->model.hparams.n_vocab);
+  // The decoder scores the target vocabulary. IndicTrans sizes it separately
+  // from the source vocabulary in n_vocab, as the loader does.
+  const int32_t targetVocab = ctx->model.hparams.n_tgt_vocab > 0
+                                  ? ctx->model.hparams.n_tgt_vocab
+                                  : ctx->model.hparams.n_vocab;
+  state->decoders[0].probs.reserve(targetVocab);
+  state->decoders[0].logits.reserve(targetVocab);
+  state->decoders[0].logprobs.reserve(targetVocab);
+  state->decoders[0].sorted_probs.reserve(targetVocab);
+  state->decoders[0].logits_id.resize(targetVocab);
 
   state->decoders[0].rng = std::mt19937(0);
   state->tokens_to_process = ctx->model.hparams.n_decoder_ctx;

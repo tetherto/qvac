@@ -177,14 +177,20 @@ void applyRepetitionPenalty(
  *
  * @param[in,out] logits    Vector of logits to be pruned in-place. Non-top-k
  * entries will be set to -INFINITY; top-k entries keep their values.
- * @param[in,out] logits_id Workspace of size logits.size() holding pairs
- * {logit, id}. It is filled in this function and used to map back ids.
- * @param[in]     top_k     Number of highest logits to retain.
+ * @param[in,out] logits_id Workspace holding pairs {logit, id}. It is resized
+ * to logits.size(), filled in this function and used to map back ids.
+ * @param[in]     top_k     Number of highest logits to retain. A value of
+ * logits.size() or more keeps every logit.
  */
 void applyTopKFilter(
     std::vector<float>& logits,
     std::vector<nmt_pair<float, nmt_vocab::id>>& logitsId, int topK) {
-  assert(logitsId.size() == logits.size());
+  if (topK <= 0 || static_cast<size_t>(topK) >= logits.size()) {
+    return;
+  }
+  // Size the workspace from the logits: a smaller one overflows, and a larger
+  // one lets stale entries compete in the selection.
+  logitsId.resize(logits.size());
   for (size_t i = 0; i < logits.size(); ++i) {
     logitsId[i].first = logits[i];
     logitsId[i].second = i;
@@ -197,7 +203,7 @@ void applyTopKFilter(
       [](auto& a, auto& b) { return a.first > b.first; });
 
   std::fill(logits.begin(), logits.end(), -INFINITY);
-  for (size_t i = 0; i < topK; ++i) {
+  for (size_t i = 0; i < static_cast<size_t>(topK); ++i) {
     logits[logitsId[i].second] = logitsId[i].first;
   }
 }

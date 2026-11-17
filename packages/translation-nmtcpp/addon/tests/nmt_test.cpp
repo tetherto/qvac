@@ -1,6 +1,10 @@
+#include <cmath>
+#include <vector>
+
 #include <gtest/gtest.h>
 
 #include "model-interface/nmt.hpp"
+#include "model-interface/nmt_graph_decoder.hpp"
 
 class Nmt : public ::testing::Test {
 protected:
@@ -219,4 +223,50 @@ TEST_F(Nmt, State_Defaults) {
   // Energy / speech
   EXPECT_TRUE(state.energy.empty());
   EXPECT_FLOAT_EQ(state.no_speech_prob, 0.0F);
+}
+
+// IndicTrans keeps separate source and target vocabularies, and the top-k
+// workspace must follow the target one. en->indic models have a larger target
+// vocabulary (32322 vs 122672), indic->en ones a smaller one.
+using TopKWorkspace = std::vector<nmt_pair<float, nmt_vocab::id>>;
+
+static size_t countFinite(const std::vector<float>& logits) {
+  size_t kept = 0;
+  for (float logit : logits) {
+    kept += std::isfinite(logit) ? 1 : 0;
+  }
+  return kept;
+}
+
+TEST(NmtTopK, WorkspaceSmallerThanLogits_KeepsTopK) {
+  std::vector<float> logits = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  TopKWorkspace workspace(4);
+
+  applyTopKFilter(logits, workspace, 3);
+
+  EXPECT_EQ(countFinite(logits), 3U);
+  EXPECT_FLOAT_EQ(logits[7], 7.0F);
+  EXPECT_FLOAT_EQ(logits[8], 8.0F);
+  EXPECT_FLOAT_EQ(logits[9], 9.0F);
+}
+
+TEST(NmtTopK, WorkspaceLargerThanLogits_IgnoresStaleEntries) {
+  std::vector<float> logits = {-1, -2, -3, -4, -5};
+  TopKWorkspace workspace(8);
+
+  applyTopKFilter(logits, workspace, 2);
+
+  EXPECT_EQ(countFinite(logits), 2U);
+  EXPECT_FLOAT_EQ(logits[0], -1.0F);
+  EXPECT_FLOAT_EQ(logits[1], -2.0F);
+}
+
+TEST(NmtTopK, TopKAtLeastVocab_KeepsAllLogits) {
+  const std::vector<float> original = {-1, 2, -3};
+  std::vector<float> logits = original;
+  TopKWorkspace workspace(1);
+
+  applyTopKFilter(logits, workspace, 5);
+
+  EXPECT_EQ(logits, original);
 }
