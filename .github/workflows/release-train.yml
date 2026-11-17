@@ -265,6 +265,18 @@ jobs:
       packages: sdk-kotlin
       ref: ${{ github.sha }}
 
+  sdk-swift:
+    name: Swift SDK checks
+    needs: [train]
+    if: needs.train.outputs.moved != '[]' && contains(fromJSON(needs.train.outputs.checks), 'sdk-swift')
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/sdk-checks.yml
+    with:
+      packages: sdk-swift
+      ref: ${{ github.sha }}
+
   sdk-python:
     name: Build tetherto-qvac-sdk (Python)
     needs:
@@ -349,6 +361,7 @@ jobs:
       - package-checks
       - sdk-python
       - sdk-kotlin
+      - sdk-swift
       - pear-e2e
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
