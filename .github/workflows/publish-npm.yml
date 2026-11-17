@@ -173,7 +173,8 @@ jobs:
   tarball-size:
     needs: [select, logic, providers, build]
     if: >-
-      always() && !cancelled() && needs.logic.outputs.publish_release == 'true' && !inputs.dry_run &&
+      always() && !cancelled() && needs.logic.result == 'success' &&
+      needs.logic.outputs.publish_release == 'true' && !inputs.dry_run &&
       (needs.providers.result == 'success' || needs.providers.result == 'skipped') &&
       (needs.build.result == 'success' || needs.build.result == 'skipped') &&
       join(fromJSON(needs.select.outputs.matrices).publish.*.meta.publish.maxTarballBytes, '') != ''

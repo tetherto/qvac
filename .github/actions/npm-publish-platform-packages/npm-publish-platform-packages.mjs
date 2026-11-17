@@ -86,7 +86,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         console.log(
           `::warning title=npm tarball size::${id} ${what}. Over-budget slices publish first, largest first, so an E413 stops the release before the others.`
         )
-      return `| \`${id}\` | ${size ?? 'unknown'} | ${over ? 'over budget' : 'ok'} |`
+      return `| \`${id}\` | ${size ?? 'unknown'} | ${size === null ? 'unreadable' : over ? 'over budget' : 'ok'} |`
     })
     const summary = ['## npm tarball sizes', '', `Budget: ${max} bytes.`, '', '| Package | Bytes | Status |', '|---|---:|---|']
     if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, [...summary, ...rows, ''].join('\n'))
