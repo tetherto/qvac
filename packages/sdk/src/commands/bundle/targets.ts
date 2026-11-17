@@ -8,7 +8,7 @@ export const BUNDLE_TARGETS = ['bare-sidecar', 'react-native', 'pear-runtime', '
 
 export type BundleTarget = (typeof BUNDLE_TARGETS)[number]
 
-export type BundleLanguage = 'javascript' | 'kotlin' | 'python'
+export type BundleLanguage = 'javascript' | 'kotlin' | 'python' | 'swift'
 
 /** The harness file bare-stow writes in a `javascript` harness package. */
 export const HARNESS_FILE = 'index.js'
