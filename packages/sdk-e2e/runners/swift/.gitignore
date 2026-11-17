@@ -1,0 +1,7 @@
+.build/
+.swiftpm/
+Package.resolved
+QvacWorker/
+xcuserdata/
+/ios/build/
+/ios/E2E/
