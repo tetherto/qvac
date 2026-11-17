@@ -4,7 +4,7 @@ import type { Step, TestDefinition } from '@qvac/test-suite'
 const logsAround = (
   open: Record<string, unknown>,
   trigger: Step[],
-  options: { target?: number; timeoutMs?: number; before?: Step[] } = {}
+  options: { target?: number; timeoutMs?: number; before?: Step[]; containing?: string } = {}
 ): Step[] => [
   ...(options.before ?? []),
   { call: { method: 'loggingStreamOpen', params: open, as: 'logs' } },
@@ -17,7 +17,8 @@ const logsAround = (
       params: {
         streamId: '$streamId',
         target: options.target ?? 1,
-        timeoutMs: options.timeoutMs ?? 5000
+        timeoutMs: options.timeoutMs ?? 5000,
+        ...(options.containing !== undefined ? { containing: options.containing } : {})
       },
       as: 'collected'
     }
@@ -269,14 +270,24 @@ export const addonLoggingDiffusion: TestDefinition = {
 
 export const addonLoggingSdkServer: TestDefinition = {
   testId: 'addon-logging-sdk-server',
-  params: { handler: 'addon-logging' },
+  params: { handler: 'addon-logging', requestId: 'e2e-sdk-server-log-probe' },
   expectation: { validation: 'type', expectedType: 'string' },
-  // No trigger: SDK-server logs flow with any RPC, and the registry listing is the cheapest one to
-  // make.
+  // A cancel that matches no request is the one call the engine logs at `info` whether the worker
+  // has just started or has been running for the whole suite, and its line names the request id.
+  // Only entries naming that id count, so the line read is the one this test caused.
   steps: [
-    ...logsAround({}, [{ call: { method: 'modelRegistryList', as: 'triggered' } }], {
-      timeoutMs: 8000
-    }),
+    ...logsAround(
+      {},
+      [
+        {
+          call: {
+            method: 'cancel',
+            params: { operation: 'request', requestId: '$params.requestId' }
+          }
+        }
+      ],
+      { timeoutMs: 8000, containing: '$params.requestId' }
+    ),
     { assert: { on: '$entries', named: 'lengthAtLeast', with: { length: 1 } } }
   ],
   finally: closeLogStream,
