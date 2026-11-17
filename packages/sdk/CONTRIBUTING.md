@@ -175,3 +175,9 @@ We require a DCO 1.1 sign-off on every commit. By signing off you certify that y
 - The sign-off name and email must match the commit author and reflect your real identity.
 - If you amend or rebase, keep the sign-off lines intact (`git commit --amend --no-edit -s`).
 - For co-authored work, each author should add their own `Signed-off-by` line.
+
+## Speech addon CI preflight
+
+The temporary `ci/speech-preflight.json` manifest pins the merged speech source and its native build run. With this manifest present, desktop SDK e2e jobs install locally packed speech/Fabric packages from that run instead of their published npm versions. Missing artifacts, changed source, unexpected installed tarballs, altered native files, or separate Fabric installations fail before inference starts.
+
+Use the existing `test-e2e-full` PR label for the full desktop suite on Linux, macOS and Windows. The pinned build must provide each host’s artifacts first. Results include `speech-preflight-provenance.json`. This preflight does not publish packages or run mobile tests; remove the temporary manifest after validation.
