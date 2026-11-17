@@ -16,7 +16,10 @@ export interface ParakeetConfigurationParams {
     captionEnabled?: boolean;
     timestampsEnabled?: boolean;
     seed?: number;
-    /** Indic CTC language id or Nemotron locale alias; empty selects auto. */
+    /**
+     * Indic CTC language id, Nemotron locale alias, or the full TranscribePsy
+     * EU route (`"en"`, `"other"`, `"auto"`); empty selects auto.
+     */
     language?: string;
     streaming?: boolean;
     /**
