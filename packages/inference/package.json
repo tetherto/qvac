@@ -181,6 +181,7 @@
     "bare": ">=1.32.0"
   },
   "dependencies": {
+    "@qvac/decision-ggml": "workspace:*",
     "@qvac/error": "^0.1.1",
     "@qvac/logging": "^0.1.1",
     "@qvac/rag": "^0.9.0",

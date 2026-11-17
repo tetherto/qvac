@@ -1,0 +1,8 @@
+{
+  "status": "PROPOSED: to be agreed by the decision owners before results are judged",
+  "probability": 0.0001,
+  "noul": 0.0001,
+  "score": 0.0001,
+  "confidence": 0.0001,
+  "exact": ["choice key", "probability keys", "legend", "input_tokens", "error status"]
+}
