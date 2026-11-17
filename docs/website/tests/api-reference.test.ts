@@ -155,3 +155,13 @@ describe('the SDK reference, read from the working tree', () => {
     expect(models.every((model) => model.engine === 'llamacpp-decision')).toBe(true)
   })
 })
+
+describe('a generated reference page description', () => {
+  it('survives quotes and backslashes in the source sentence', async () => {
+    const { firstSentence } = await import('../scripts/api-reference/generate-sdk-data')
+    const source = 'Reads C:\\models\\"llm".gguf as a path. Then more.'
+    const escaped = firstSentence(source)
+    // A double-quoted YAML scalar escapes `\\` and `"` as JSON does.
+    expect(JSON.parse(`"${escaped}"`)).toBe('Reads C:\\models\\"llm".gguf as a path.')
+  })
+})

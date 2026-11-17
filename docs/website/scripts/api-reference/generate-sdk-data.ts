@@ -52,10 +52,12 @@ interface JsSummary {
   deprecated: string | null
 }
 
-function firstSentence(text: string): string {
+/** The first sentence of `text`, escaped for a double-quoted YAML scalar. */
+export function firstSentence(text: string): string {
   const flat = text.replace(/\s+/g, ' ').trim()
   const match = /^(.+?[.!?])(\s|$)/.exec(flat)
-  return (match ? match[1] : flat).replace(/"/g, '\\"')
+  // The backslash first, so the escapes added for quotes are not escaped again.
+  return (match ? match[1] : flat).replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
 
 /** The reference pages: one stub per public function, plus the index. */
