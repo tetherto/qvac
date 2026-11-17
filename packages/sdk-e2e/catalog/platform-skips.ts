@@ -10,6 +10,11 @@ type Rule = {
   /** Test ids this applies to: a prefix pattern or an explicit list. */
   match: RegExp | string[]
   skip: SkipInfo
+  /**
+   * The skip belongs to the client its labels name, not to the device, so the legs that share
+   * that device (`SAME_DEVICE`) do not inherit it.
+   */
+  client?: true
 }
 
 const RULES: Rule[] = [
@@ -97,7 +102,8 @@ const RULES: Rule[] = [
     skip: {
       reason: 'Step-based with no hand-written body: the React Native runner has no step bindings',
       platforms: ['mobile-ios', 'mobile-android']
-    }
+    },
+    client: true
   },
   {
     match: /^vla-/,
@@ -160,9 +166,10 @@ const RULES: Rule[] = [
     match: ['kv-cache-shared-prefix-default-isolated', 'kv-cache-shared-prefix-opt-in'],
     skip: {
       reason:
-        'Defined only as steps, which the JS mobile consumer does not run; Kotlin inherits the skip because it shares the Android device. Covered by desktop and Python e2e',
-      platforms: ['mobile']
-    }
+        'Defined only as steps, which the JS mobile consumer does not run. The desktop and the other clients cover them',
+      platforms: ['mobile-ios', 'mobile-android']
+    },
+    client: true
   },
   {
     match: /^tools-(?!simple-function$|no-function-match$)/,
@@ -482,6 +489,30 @@ const RULES: Rule[] = [
     }
   },
 
+  // ── the Swift client ─────────────────────────────────────────────────────
+  // As for Python and Kotlin: skip only claims that belong to the JS client.
+  {
+    match: ['model-load-llm-legacy-no-mmap-rejected'],
+    skip: {
+      reason:
+        "Asserts 50010, the code the JS client's strict load schema gives a modelConfig with the removed no_mmap key before sending. The Swift client sends the config as is and the worker drops the unknown key, so the claim belongs to the JS client",
+      platforms: ['swift-macos', 'swift-ios']
+    }
+  },
+  {
+    match: [
+      'tts-parler-invalid-emotion',
+      'tts-cosyvoice3-invalid-emotion',
+      'system-resources-invalid-input',
+      'transcribe-stream-events-invalid'
+    ],
+    skip: {
+      reason:
+        "Asserts the message the JS client's request schema gives before sending. The Swift client sends an unknown emotion, a non-boolean sample or a negative endOfTurnSilenceMs as is, and the worker rejects it later or with a message that names no field",
+      platforms: ['swift-macos', 'swift-ios']
+    }
+  },
+
   // ── one desktop OS only ──────────────────────────────────────────────────
   {
     match: /^world-/,
@@ -546,9 +577,15 @@ const RULES: Rule[] = [
 /**
  * Legs that run on another leg's devices (same phones, memory and Device Farm budget) and inherit
  * its device skips. A skip that belongs to one client, not the device, goes under that client's
- * label.
+ * label, and a rule on the device leg's own label marks it `client`.
  */
-const SAME_DEVICE: Record<string, string> = { 'kotlin-android': 'mobile-android' }
+const SAME_DEVICE: Record<string, string> = {
+  'kotlin-android': 'mobile-android',
+  'swift-macos': 'desktop-macos',
+  'swift-ios': 'mobile-ios'
+}
+
+const CLIENT_REASONS = new Set(RULES.filter((rule) => rule.client).map((rule) => rule.skip.reason))
 
 const OPERATING_SYSTEMS = new Set(['macos', 'linux', 'windows', 'ios', 'android'])
 
@@ -572,15 +609,19 @@ function applySameDevice(test: TestDefinition): void {
     ...group,
     platforms: [...group.platforms]
   }))
+  const deviceGroups = groups.filter((group) => !CLIENT_REASONS.has(group.reason))
+  const deviceEntries = skip.reasons
+    ? deviceGroups.flatMap((group) => group.platforms)
+    : skip.platforms
   // A leg may already be listed by its own rule while a device reason group still lacks it.
   let changed = false
   for (const [leg, device] of Object.entries(SAME_DEVICE)) {
-    if (!skip.platforms.some((entry) => applies(entry, device))) continue
+    if (!deviceEntries.some((entry) => applies(entry, device))) continue
     if (!platforms.has(leg)) {
       platforms.add(leg)
       changed = true
     }
-    for (const group of groups) {
+    for (const group of deviceGroups) {
       if (
         group.platforms.some((entry) => applies(entry, device)) &&
         !group.platforms.includes(leg)
