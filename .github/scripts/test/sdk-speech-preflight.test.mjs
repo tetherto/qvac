@@ -11,9 +11,13 @@ import {
   validateRun,
   validateSources,
   applyOverrides,
+  packPackage,
+  downloadArtifact,
   prepareSpeechPreflight,
   verifySpeechPreflight
 } from '../../../packages/sdk/ci/speech-preflight.mjs'
+import { buildSdk } from '../../../packages/sdk/ci/e2e.mjs'
+import { expectedAddonFile } from '../../../scripts/ci/slice-platform-packages.mjs'
 
 const CONFIG = {
   repository: 'tetherto/qvac',
@@ -63,8 +67,8 @@ test('accepts the pinned native build and rejects a different revision, reposito
   assert.throws(() => validateRun({ ...RUN, event: 'pull_request' }, CONFIG), /provenance/)
 })
 
-test('without the opt-in manifest, the ordinary SDK installation remains unchanged', (t) => {
-  assert.equal(prepareSpeechPreflight(temporary(t), {}), null)
+test('without the opt-in manifest, the ordinary SDK installation remains unchanged', async (t) => {
+  assert.equal(await prepareSpeechPreflight(temporary(t), {}), null)
 })
 
 test('rejects changed native sources, renamed source files and truncated comparisons', () => {
@@ -155,4 +159,111 @@ test('rejects published npm fallback and a separately resolved Fabric runtime', 
   assert.throws(() => verifySpeechPreflight(root, altered), /unexpected tarball/)
   installPackage(join(root, 'node_modules/@qvac/asr-ggml'), 'fabric')
   assert.throws(() => verifySpeechPreflight(root, provenance), /separate Fabric/)
+})
+
+function packageFixture(root, slug, host) {
+  const workdir = join(root, 'packages', slug)
+  mkdirSync(join(workdir, 'prebuilds', host), { recursive: true })
+  const name = `@qvac/${slug}`
+  writeJson(join(workdir, 'package.json'), {
+    name,
+    version: '0.0.1',
+    main: 'index.js',
+    files: ['index.js', 'prebuilds'],
+    exports: { '.': './index.js', './package': './package.json' },
+    optionalDependencies: { [`${name}-${host}`]: '0.0.1' },
+    ...(slug === 'fabric' ? {} : { dependencies: { '@qvac/fabric': '0.0.1' } })
+  })
+  writeFileSync(join(workdir, 'index.js'), 'module.exports = {}\n')
+  writeFileSync(join(workdir, 'prebuilds', host, expectedAddonFile(name, host)), slug)
+  return workdir
+}
+
+function packFixtures(root, host) {
+  return PACKAGES.flatMap((slug) =>
+    packPackage(packageFixture(root, slug, host), root, host, {
+      ...process.env,
+      npm_config_cache: join(root, 'npm-cache')
+    })
+  )
+}
+
+function installFixture(root, packages) {
+  const sdk = join(root, 'sdk')
+  const e2e = join(root, 'consumer')
+  mkdirSync(sdk, { recursive: true })
+  mkdirSync(e2e, { recursive: true })
+  writeJson(join(sdk, 'package.json'), {
+    name: '@qvac/sdk',
+    version: '0.0.1',
+    dependencies: Object.fromEntries(PACKAGES.map((slug) => [`@qvac/${slug}`, '0.0.1']))
+  })
+  writeJson(join(e2e, 'package.json'), {
+    name: 'preflight-fixture',
+    version: '0.0.1',
+    dependencies: { '@qvac/sdk': pathToFileURL(sdk).href }
+  })
+  applyOverrides(join(sdk, 'package.json'), packages)
+  applyOverrides(join(e2e, 'package.json'), packages)
+  const result = spawnSync(
+    'npm',
+    ['install', '--ignore-scripts', '--install-links', '--offline', '--no-audit', '--no-fund'],
+    {
+      cwd: e2e,
+      encoding: 'utf8',
+      shell: process.platform === 'win32',
+      env: { ...process.env, npm_config_cache: join(root, 'npm-cache') }
+    }
+  )
+  assert.equal(result.status, 0, `${result.error || ''}\n${result.stdout}\n${result.stderr}`)
+  return e2e
+}
+
+test('packs and installs only the current host, then verifies the actual npm installation', (t) => {
+  const root = temporary(t)
+  const host = `${process.platform}-${process.arch}`
+  const packages = packFixtures(root, host)
+  assert.equal(packages.length, PACKAGES.length * 2)
+  assert.deepEqual(
+    new Set(packages.map((p) => p.name)),
+    new Set(PACKAGES.flatMap((slug) => [`@qvac/${slug}`, `@qvac/${slug}-${host}`]))
+  )
+  const consumer = installFixture(root, packages)
+  verifySpeechPreflight(consumer, { ...CONFIG, host, packages })
+})
+
+test('SDK range validation runs before temporary tarball overrides are applied', (t) => {
+  const file = join(temporary(t), 'package.json')
+  writeJson(file, { dependencies: { '@qvac/asr-ggml': '^0.12.0' } })
+  let checked = false
+  buildSdk(
+    {},
+    () => {
+      assert.equal(checked, true)
+      applyOverrides(file, [{ name: '@qvac/asr-ggml', spec: 'file:/tmp/test.tgz' }])
+    },
+    (program, args) => {
+      assert.equal(program, 'npm')
+      assert.equal(JSON.parse(readFileSync(file)).dependencies['@qvac/asr-ggml'], '^0.12.0')
+      if (args.join(' ') === 'run build') checked = true
+    }
+  )
+  assert.equal(JSON.parse(readFileSync(file)).dependencies['@qvac/asr-ggml'], 'file:/tmp/test.tgz')
+})
+
+test('artifact lookup uses the GitHub API and fails explicitly when a build artifact is missing', async (t) => {
+  const requests = []
+  t.mock.method(globalThis, 'fetch', (url) => {
+    requests.push(url)
+    return Promise.resolve(new Response(JSON.stringify({ artifacts: [] })))
+  })
+  await assert.rejects(
+    downloadArtifact({ ...CONFIG, runId: 42 }, {}, 'prebuild-asr-ggml-linux-x64', temporary(t)),
+    /requires one available artifact/
+  )
+  assert.equal(requests.length, 1)
+  assert.match(
+    requests[0],
+    /^https:\/\/api.github.com\/repos\/tetherto\/qvac\/actions\/runs\/42\/artifacts\?name=/
+  )
 })

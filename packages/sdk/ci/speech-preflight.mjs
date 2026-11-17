@@ -3,8 +3,12 @@ import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { basename, dirname, join, relative } from 'node:path'
 import { tmpdir } from 'node:os'
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import {
   cpSync,
+  createWriteStream,
+  renameSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -13,7 +17,12 @@ import {
   realpathSync,
   writeFileSync
 } from 'node:fs'
-import { slicePlatformPackages } from '../../../scripts/ci/slice-platform-packages.mjs'
+import {
+  SLICE_DEFINITIONS,
+  PLATFORM_INDEX_SOURCE,
+  buildSliceManifest,
+  expectedAddonFile
+} from '../../../scripts/ci/slice-platform-packages.mjs'
 import { toLocalTarballSpec } from './e2e-inference.mjs'
 
 export const PACKAGES = ['fabric', 'asr-ggml', 'tts-ggml', 'audiogen-ggml', 'bci-whispercpp']
@@ -47,7 +56,7 @@ export function validateRun(run, config) {
   }
 }
 
-function verifySources(root, config, env) {
+async function verifySources(root, config, env) {
   command(
     'git',
     [
@@ -63,14 +72,9 @@ function verifySources(root, config, env) {
     env
   )
   const sha = command('git', ['rev-parse', 'HEAD'], root, env).trim()
-  const comparison = JSON.parse(
-    command(
-      'gh',
-      ['api', `repos/${config.repository}/compare/${config.sourceSha}...${sha}`],
-      root,
-      env
-    )
-  )
+  const comparison = await (
+    await github(config, env, `compare/${config.sourceSha}...${sha}`)
+  ).json()
   validateSources(comparison)
 }
 
@@ -94,25 +98,46 @@ export function validateSources(comparison) {
   }
 }
 
-function downloadPackage(root, stage, slug, host, config, env) {
+async function github(config, env, endpoint) {
+  const response = await fetch(`https://api.github.com/repos/${config.repository}/${endpoint}`, {
+    headers: {
+      Authorization: `Bearer ${env.GITHUB_TOKEN || env.GH_TOKEN}`,
+      Accept: 'application/vnd.github+json'
+    }
+  })
+  if (!response.ok) throw new Error(`Speech preflight GitHub ${endpoint}: HTTP ${response.status}`)
+  return response
+}
+
+export async function downloadArtifact(config, env, name, destination) {
+  const listing = await (
+    await github(
+      config,
+      env,
+      `actions/runs/${config.runId}/artifacts?name=${encodeURIComponent(name)}`
+    )
+  ).json()
+  const artifacts = listing.artifacts.filter(
+    (artifact) => artifact.name === name && !artifact.expired
+  )
+  if (artifacts.length !== 1) {
+    throw new Error(`Speech preflight requires one available artifact: ${name}`)
+  }
+  mkdirSync(destination, { recursive: true })
+  const archive = join(destination, 'artifact.zip')
+  const response = await github(config, env, `actions/artifacts/${artifacts[0].id}/zip`)
+  await pipeline(Readable.fromWeb(response.body), createWriteStream(archive))
+  if (process.platform === 'win32') {
+    command('tar', ['-xf', archive, '-C', destination], destination, env)
+  } else {
+    command('unzip', ['-q', archive, '-d', destination], destination, env)
+  }
+}
+
+async function downloadPackage(root, stage, slug, host, config, env) {
   const artifact = `prebuild-${slug}-${host}`
   const destination = join(stage, 'artifacts', slug)
-  command(
-    'gh',
-    [
-      'run',
-      'download',
-      String(config.runId),
-      '--repo',
-      config.repository,
-      '--name',
-      artifact,
-      '--dir',
-      destination
-    ],
-    root,
-    env
-  )
+  await downloadArtifact(config, env, artifact, destination)
   const workdir = join(stage, 'packages', slug)
   cpSync(join(root, 'packages', slug), workdir, {
     recursive: true,
@@ -153,13 +178,27 @@ function pack(workdir, stage, env) {
   }
 }
 
-function packPackage(workdir, stage, slug, env) {
-  const slices = slicePlatformPackages({
-    workdir,
-    outDir: join(stage, 'slices'),
-    keepDirs: slug === 'fabric' ? ['include', 'share'] : []
-  })
-  return [...slices.map((slice) => pack(slice, stage, env)), pack(workdir, stage, env)]
+export function packPackage(workdir, stage, host, env) {
+  const manifest = readJson(join(workdir, 'package.json'))
+  const definition = SLICE_DEFINITIONS.find((slice) => slice.hosts.includes(host))
+  if (!definition || !HOSTS.has(host)) throw new Error(`Unsupported speech preflight host: ${host}`)
+  const prebuilds = join(workdir, 'prebuilds')
+  if (!existsSync(join(prebuilds, host, expectedAddonFile(manifest.name, host)))) {
+    throw new Error(`Missing native addon for ${manifest.name} on ${host}`)
+  }
+  const slice = join(stage, 'slices', `${basename(workdir)}-${host}`)
+  mkdirSync(join(slice, 'prebuilds'), { recursive: true })
+  writeJson(join(slice, 'package.json'), buildSliceManifest(manifest, definition))
+  writeFileSync(join(slice, 'index.js'), PLATFORM_INDEX_SOURCE)
+  renameSync(join(prebuilds, host), join(slice, 'prebuilds', host))
+  copyLicenses(workdir, slice)
+  return [pack(slice, stage, env), pack(workdir, stage, env)]
+}
+
+function copyLicenses(source, destination) {
+  for (const name of ['LICENSE', 'NOTICE']) {
+    if (existsSync(join(source, name))) cpSync(join(source, name), join(destination, name))
+  }
 }
 
 export function applyOverrides(file, packages) {
@@ -174,26 +213,38 @@ export function applyOverrides(file, packages) {
   writeJson(file, manifest)
 }
 
-export function prepareSpeechPreflight(root, env, host = `${process.platform}-${process.arch}`) {
+export async function prepareSpeechPreflight(
+  root,
+  env,
+  host = `${process.platform}-${process.arch}`
+) {
   const file = join(root, 'packages/sdk/ci/speech-preflight.json')
   if (!existsSync(file)) return null
   if (!HOSTS.has(host)) throw new Error(`Speech preflight does not support ${host}`)
   const config = readJson(file)
-  const auth = { ...env, GH_TOKEN: env.GITHUB_TOKEN || env.GH_TOKEN }
-  const run = JSON.parse(
-    command('gh', ['api', `repos/${config.repository}/actions/runs/${config.runId}`], root, auth)
-  )
+  const run = await (await github(config, env, `actions/runs/${config.runId}`)).json()
   validateRun(run, config)
-  verifySources(root, config, auth)
+  await verifySources(root, config, env)
   const stage = mkdtempSync(join(env.RUNNER_TEMP || tmpdir(), 'speech-sdk-preflight-'))
-  const packages = PACKAGES.flatMap((slug) => {
-    const workdir = downloadPackage(root, stage, slug, host, config, auth)
-    return packPackage(workdir, stage, slug, env)
-  })
-  for (const target of ['sdk', 'sdk-e2e']) {
-    applyOverrides(join(root, 'packages', target, 'package.json'), packages)
-  }
+  const packages = await collectPackages(root, stage, host, config, env)
   return { ...config, host, packages }
+}
+
+async function collectPackages(root, stage, host, config, env) {
+  const packages = []
+  for (const slug of PACKAGES) {
+    const workdir = await downloadPackage(root, stage, slug, host, config, env)
+    packages.push(...packPackage(workdir, stage, host, env))
+  }
+  return packages
+}
+
+export function installSpeechPreflight(root, env, provenance) {
+  if (!provenance) return
+  for (const target of ['sdk', 'sdk-e2e']) {
+    applyOverrides(join(root, 'packages', target, 'package.json'), provenance.packages)
+  }
+  command('npm', ['install', '--ignore-scripts'], join(root, 'packages/sdk'), env)
 }
 
 function installedDirectory(anchor, name) {
