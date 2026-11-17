@@ -678,3 +678,15 @@ jobs:
     with:
       destination: release-assets
       version: ${{ needs.train.outputs.release_version }}
+
+  publish-swift-package:
+    name: Publish the Swift package
+    needs:
+      - train
+      - github-release
+    if: ${{ !cancelled() && needs.github-release.result == 'success' && contains(fromJSON(needs.train.outputs.checks), 'sdk-swift') }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/publish-swift.yml
+    with:
+      version: ${{ needs.train.outputs.release_version }}

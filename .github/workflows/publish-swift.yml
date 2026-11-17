@@ -1,0 +1,148 @@
+name: Publish SDK Swift
+
+# Publishes the Swift worker profiles of an SDK release as a Swift package.
+# Each profile and native addon is an xcframework zip on the sdk-v<version>
+# release. A commit on the release commit lists them in the root Package.swift
+# and only its plain <version> tag is pushed, so no branch carries the block.
+# A Swift package version never changes: a <version> tag whose commit's parent
+# is the sdk-v<version> release commit is this release's, so a re-run skips
+# every step after the check, and a <version> tag on any other commit fails.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Published SDK version; the release tag sdk-v<version> must exist"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        description: "Published SDK version; the release tag is sdk-v<version>"
+        required: true
+        type: string
+
+permissions:
+  contents: write # gh release upload, and the <version> tag
+
+concurrency:
+  group: publish-swift-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build and publish the worker profiles
+    runs-on: macos-26
+    timeout-minutes: 120
+    environment: release
+    steps:
+      - name: Verify the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: gh release view "sdk-v$VERSION" --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: refs/tags/sdk-v${{ inputs.version }}
+          persist-credentials: false
+
+      - name: Check the Swift tag
+        id: tag
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          remote="https://github.com/$GITHUB_REPOSITORY.git"
+          status=0
+          git ls-remote --exit-code --tags "$remote" "refs/tags/$VERSION" || status=$?
+          case "$status" in
+            2)
+              echo "publish=true" >> "$GITHUB_OUTPUT"
+              ;;
+            0)
+              git fetch --no-tags --depth=2 "$remote" "refs/tags/$VERSION:refs/tags/$VERSION"
+              release=$(git rev-parse HEAD)
+              parent=$(git rev-parse "refs/tags/$VERSION^{commit}^")
+              if [ "$parent" != "$release" ]; then
+                echo "::error::Tag $VERSION is on a commit whose parent is $parent, not the sdk-v$VERSION release commit $release"
+                exit 1
+              fi
+              echo "::notice::Tag $VERSION already publishes sdk-v$VERSION; nothing to do"
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::git ls-remote failed with exit code $status"
+              exit "$status"
+              ;;
+          esac
+
+      - if: steps.tag.outputs.publish == 'true'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: '3.10'
+
+      - if: steps.tag.outputs.publish == 'true'
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Build the SDK
+        if: steps.tag.outputs.publish == 'true'
+        working-directory: packages/sdk
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run sdk-source:workspace
+          node_modules/.bin/tsc --project tsconfig.json
+          npm run postcompile:aliases
+          git checkout -- package.json
+
+      - name: Build the worker profiles
+        if: steps.tag.outputs.publish == 'true'
+        working-directory: packages/sdk-swift
+        run: node scripts/build-profiles.mjs --install-missing-prebuilds
+
+      - name: Attach the profile zips to the GitHub release
+        if: steps.tag.outputs.publish == 'true'
+        working-directory: packages/sdk-swift
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          gh release upload "sdk-v$VERSION" build/profiles/*.zip --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Tag the Swift package version
+        if: steps.tag.outputs.publish == 'true'
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          git checkout -- .
+          node packages/sdk-swift/scripts/write-release-manifest.mjs \
+            --base-url "https://github.com/$GITHUB_REPOSITORY/releases/download/sdk-v$VERSION"
+          git add Package.swift packages/sdk-swift/Profiles
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit --message "chore: list the Swift worker profiles of $VERSION"
+          git tag "$VERSION"
+
+      # Resolves the local tag with the archives downloaded from the release.
+      - name: Build an app-side consumer of the tagged version
+        if: steps.tag.outputs.publish == 'true'
+        working-directory: packages/sdk-swift
+        env:
+          VERSION: ${{ inputs.version }}
+        run: node scripts/check-release-consumer.mjs --package "file://$GITHUB_WORKSPACE" --version "$VERSION"
+
+      - name: Push the Swift package tag
+        if: steps.tag.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "refs/tags/$VERSION"
