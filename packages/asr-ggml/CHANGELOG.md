@@ -14,6 +14,11 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Changed
+
+- Share the `@qvac/fabric` runtime and backend loader, retaining addon-local speech engines built against its headers.
+
+
 ### Added
 
 - Opt-in WebGPU source builds with backend identity reporting.

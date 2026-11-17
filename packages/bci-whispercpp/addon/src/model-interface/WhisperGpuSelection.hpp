@@ -72,10 +72,6 @@ std::vector<Device> registryDevices(const Registry& registry = {}) {
     device.integrated = type == GGML_BACKEND_DEVICE_TYPE_IGPU;
     const auto backend = lower(registry.backend(dev));
     const auto description = lower(registry.description(dev));
-    // Families provided by the pinned ggml-speech port features. Metal
-    // registers as MTL; retain Metal as a compatibility spelling. Every other
-    // family (HIP/ROCm, SYCL, MUSA, RPC, unknown) is refused with its identity
-    // captured for the CPU-fallback warning.
     device.eligible = backend == "mtl" || backend == "metal" ||
                       backend == "cuda" || backend == "vulkan" ||
                       backend == "opencl";

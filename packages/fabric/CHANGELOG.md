@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Opt-in WebGPU backend build for shared speech and LLM consumers using `VCPKG_MANIFEST_FEATURES=webgpu`.
+
 ## [0.30.1] - 2026-11-16
 
 ### Fixed

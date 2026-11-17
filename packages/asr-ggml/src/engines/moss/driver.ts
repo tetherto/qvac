@@ -43,7 +43,7 @@ export interface MossTranscribeConfig {
   backend?: string;
   /**
    * Directory scanned, as given, for dynamically-loaded ggml backend
-   * libraries. Unset scans the addon's own, next to its native module.
+   * libraries. Unset uses the backends the `@qvac/fabric` runtime ships.
    */
   backendsDir?: string;
 }
