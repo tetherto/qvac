@@ -9,6 +9,7 @@ import {
   buildUrlSet,
   probeUrl,
   runProbes,
+  fetchText,
   formatSummary
 } from '../docs-website-health-check.mjs'
 
@@ -135,7 +136,7 @@ test('probeUrl reports ok for 2xx and failure for 4xx', async () => {
 
 test('probeUrl captures network errors without throwing', async () => {
   const fetchImpl = async () => { throw new Error('ECONNREFUSED') }
-  const res = await probeUrl(`${ORIGIN}/`, { fetchImpl })
+  const res = await probeUrl(`${ORIGIN}/`, { fetchImpl, retryDelayMs: 0 })
   assert.equal(res.ok, false)
   assert.equal(res.status, null)
   assert.match(res.error, /ECONNREFUSED/)
@@ -150,9 +151,112 @@ test('probeUrl reports a timeout when the request aborts', async () => {
         reject(err)
       })
     })
-  const res = await probeUrl(`${ORIGIN}/`, { fetchImpl, timeoutMs: 10 })
+  const res = await probeUrl(`${ORIGIN}/`, { fetchImpl, timeoutMs: 10, retryDelayMs: 0 })
   assert.equal(res.ok, false)
   assert.match(res.error, /timeout after 10ms/)
+})
+
+test('probeUrl retries a transient network error and succeeds', async () => {
+  let calls = 0
+  const fetchImpl = async () => {
+    calls++
+    if (calls < 3) throw new Error('fetch failed')
+    return new Response('', { status: 200 })
+  }
+  const res = await probeUrl(`${ORIGIN}/`, { fetchImpl, retryDelayMs: 0 })
+  assert.equal(res.ok, true)
+  assert.equal(calls, 3)
+})
+
+for (const status of [503, 429]) {
+  test(`probeUrl retries ${status} but gives up after the retry budget`, async () => {
+    let calls = 0
+    const fetchImpl = async () => { calls++; return new Response('', { status }) }
+    const res = await probeUrl(`${ORIGIN}/`, { fetchImpl, retries: 2, retryDelayMs: 0 })
+    assert.equal(res.ok, false)
+    assert.equal(res.status, status)
+    assert.equal(calls, 3)
+  })
+}
+
+test('runProbes reports each result as it settles', async () => {
+  const entries = [
+    { url: `${ORIGIN}/a/`, category: 'sitemap' },
+    { url: `${ORIGIN}/b/`, category: 'redirect' }
+  ]
+  const fetchImpl = async (url) => new Response('', { status: url.endsWith('/b/') ? 404 : 200 })
+  const seen = []
+  await runProbes(entries, { fetchImpl, concurrency: 1, onResult: (r) => seen.push([r.url, r.ok, r.category]) })
+  assert.deepEqual(seen, [[`${ORIGIN}/a/`, true, 'sitemap'], [`${ORIGIN}/b/`, false, 'redirect']])
+})
+
+test('probeUrl never retries a 404', async () => {
+  let calls = 0
+  const fetchImpl = async () => { calls++; return new Response('', { status: 404 }) }
+  const res = await probeUrl(`${ORIGIN}/missing/`, { fetchImpl, retryDelayMs: 0 })
+  assert.equal(res.ok, false)
+  assert.equal(res.status, 404)
+  assert.equal(calls, 1)
+})
+
+test('probeUrl surfaces the underlying error cause', async () => {
+  const fetchImpl = async () => {
+    const err = new TypeError('fetch failed')
+    err.cause = { code: 'ECONNRESET' }
+    throw err
+  }
+  const res = await probeUrl(`${ORIGIN}/`, { fetchImpl, retries: 0 })
+  assert.equal(res.ok, false)
+  assert.match(res.error, /fetch failed \(ECONNRESET\)/)
+})
+
+test('probeUrl reports the cause as code: message', async () => {
+  const fetchImpl = async () => {
+    const err = new TypeError('fetch failed')
+    err.cause = { code: 'UND_ERR_SOCKET', message: 'other side closed' }
+    throw err
+  }
+  const res = await probeUrl(`${ORIGIN}/`, { fetchImpl, retries: 0 })
+  assert.equal(res.error, 'fetch failed (UND_ERR_SOCKET: other side closed)')
+})
+
+test('runProbes reports each retry with its error and category', async () => {
+  let calls = 0
+  const fetchImpl = async () => {
+    calls++
+    if (calls === 1) throw new Error('fetch failed')
+    return new Response('', { status: 200 })
+  }
+  const retried = []
+  const [result] = await runProbes([{ url: `${ORIGIN}/a/`, category: 'redirect' }], {
+    fetchImpl,
+    retryDelayMs: 0,
+    onRetry: (r, attempt) => retried.push([r.url, r.category, r.error, attempt])
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(retried, [[`${ORIGIN}/a/`, 'redirect', 'fetch failed', 1]])
+})
+
+test('fetchText retries a transient sitemap failure and returns the body', async () => {
+  let calls = 0
+  const fetchImpl = async () => {
+    calls++
+    if (calls === 1) throw new TypeError('fetch failed')
+    if (calls === 2) return new Response('', { status: 503 })
+    return new Response('<urlset/>', { status: 200 })
+  }
+  const retried = []
+  const text = await fetchText(`${ORIGIN}/sitemap.xml`, { fetchImpl, retryDelayMs: 0, onRetry: (_err, attempt) => retried.push(attempt) })
+  assert.equal(text, '<urlset/>')
+  assert.equal(calls, 3)
+  assert.deepEqual(retried, [1, 2])
+})
+
+test('fetchText fails a 404 sitemap on the first attempt', async () => {
+  let calls = 0
+  const fetchImpl = async () => { calls++; return new Response('', { status: 404 }) }
+  await assert.rejects(fetchText(`${ORIGIN}/sitemap.xml`, { fetchImpl, retryDelayMs: 0 }), /HTTP 404/)
+  assert.equal(calls, 1)
 })
 
 test('runProbes preserves order and attaches category', async () => {
@@ -162,7 +266,7 @@ test('runProbes preserves order and attaches category', async () => {
     { url: `${ORIGIN}/llms.txt`, category: 'llms' }
   ]
   const fetchImpl = async (url) => new Response('', { status: url.endsWith('index.md') ? 500 : 200 })
-  const results = await runProbes(entries, { fetchImpl, concurrency: 2 })
+  const results = await runProbes(entries, { fetchImpl, concurrency: 2, retryDelayMs: 0 })
   assert.equal(results.length, 3)
   assert.equal(results[0].category, 'sitemap')
   assert.equal(results[1].category, 'markdown')

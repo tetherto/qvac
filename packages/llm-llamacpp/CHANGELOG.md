@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.71.0] - 2026-11-16
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.29.0` -> `^0.30.1`, which carries
+  `qvac-fabric` `11739.2.1` -> `11739.3.0#1`
+  ([#5781](https://github.com/tetherto/qvac/pull/5781),
+  [#5787](https://github.com/tetherto/qvac/pull/5787)): the fused Flux RoPE,
+  logical buffer-capacity queries with a Vulkan provider, DSpine draft models,
+  Metal `IM2COL_3D`, OpenCL (Adreno) ops for the speech engines, and fixes for
+  the RPC device's ragged ops, the CPU AMX matmul and CPU `IM2COL_3D`. 0.30.0
+  was not published for every platform, so the range starts at `0.30.1`. The
+  mobile dev and peer dependencies `@qvac/fabric-android-arm64` /
+  `@qvac/fabric-ios` move to `^0.30.1` with it.
+- `@qvac/fabric` 0.30 shifts the `common_params` layout and moves the RPC
+  protocol from 116 to 117, so it is not ABI-compatible with 0.29.x. Every
+  addon loaded in one process must resolve the same `@qvac/fabric` minor.
+  Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.30.1` together.
+- A draft model or MTP head made for another model now fails to load with
+  `the draft model '<path>' does not match the model: <reason>`, from
+  fabric's `common_speculative_draft_mismatch`. Fabric 0.30 refuses the
+  mismatch inside its own load, before the addon's MTP-head check runs, so the
+  error no longer reads `the MTP head '<path>' does not match the model`.
+- RPC peers must match the new protocol: use `@qvac/ggml-rpc-server` 0.10.0 or
+  newer.
+- The addon no longer sets `LLAMA_RS_RAGGED=0` at backend init. Fabric 0.30
+  checks each layer's device and falls back to the equal ubatch split when any
+  of them lacks the ragged ops, an RPC server included, so qwen35 recurrent
+  layers use ragged ubatches only where every device supports them. Set
+  `LLAMA_RS_RAGGED=0` to keep the equal split everywhere.
+
+### Fixed
+
+- A cancel that landed after a token was streamed but before it was decoded
+  dropped that token from the context and the cache, so `CacheTokens` could
+  stay one short of what the caller received. The streamed token is now
+  decoded before the cancel settles on the single-prompt text and multimodal
+  paths, with and without speculative decoding
+  ([#5744](https://github.com/tetherto/qvac/pull/5744)).
+
 ## [0.70.1] - 2026-11-11
 
 ### Changed

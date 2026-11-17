@@ -102,8 +102,10 @@ database drivers to those two examples only. `Finetune` trains on
 | `RagMongodb.kt` | `packages/sdk/examples/rag/rag-mongodb.ts` |
 | `RagSqlite.kt` | `packages/sdk/examples/rag/rag-sqlite.ts` |
 | `RagTurbovec.kt` | `packages/sdk/examples/rag/rag-turbovec.ts` |
+| `RagTurbovecIvf.kt` | `packages/sdk/examples/rag/rag-turbovec-ivf.ts` |
 | `RegistryQuery.kt` | `packages/sdk/examples/registry-query.ts` |
 | `Rerank.kt` | `packages/sdk/examples/rerank.ts` |
+| `Sessions.kt` | `packages/sdk/examples/sessions.ts` |
 | `ShardedModels.kt` | `packages/sdk/examples/llamacpp-sharded.ts` |
 | `SuspendResume.kt` | `packages/sdk/examples/suspend-resume.ts` |
 | `TextToSpeech.kt` | `packages/sdk/examples/tts/supertonic.ts` |

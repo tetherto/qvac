@@ -1,10 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { lockfileSelection } from '../select-projects.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 const script = join(root, '.github/actions/nx-project-matrix/lockfile-selection.mjs')
@@ -222,7 +224,8 @@ test('without a lockfile change nothing is corrected', () => {
 
 test('selected packages are only ones the matrix loop can read', () => {
   const { extra } = withLock({ fabricPath: '3.2.0' })
-  assert.ok(!extra.includes('inference'), 'inference has no project.json')
+  for (const name of extra)
+    assert.ok(existsSync(join(root, 'packages', name, 'project.json')), `${name} has no project.json`)
   assert.ok(!extra.some((name) => name.endsWith('-plugin')), 'plugins live outside packages/')
 })
 
@@ -250,4 +253,32 @@ test('the matrix action still feeds both lockfile revisions and adds the selecti
     'nx-project-matrix no longer passes the base and head lockfiles, so every ' +
       'lockfile change would fall back to selecting everything')
   assert.match(source, /\$DEPENDENTS/, 'nx-project-matrix no longer adds the selection to AFFECTED')
+})
+
+// select-projects.mjs runs the same selection on the two commits it compares, reading the files through git.
+const gitStub = (paths, files) => (args) => {
+  if (args[0] === 'diff') return paths.join('\n')
+  if (args[0] === 'show' && files[args[1]] !== undefined) return files[args[1]]
+  throw new Error(`no ${args.join(' ')}`)
+}
+const locks = { 'B:pnpm-lock.yaml': lock(), 'H:pnpm-lock.yaml': lock({ llmFs: '4.8.0' }) }
+
+test('select-projects adds the packages a lockfile-only change touches', () => {
+  const run = gitStub(['pnpm-lock.yaml'], locks)
+  const { mode, extra } = lockfileSelection({ base: 'B', head: 'H' }, run, root)
+  assert.equal(mode, '')
+  assert.ok(extra.includes('llm-llamacpp'))
+  assert.ok(!extra.includes('ocr-ggml'), 'ocr-ggml does not depend on the bumped package')
+})
+
+test('select-projects selects every package when a root package.json or .npmrc changes with the lockfile', () => {
+  for (const file of ['package.json', '.npmrc']) {
+    const run = gitStub(['pnpm-lock.yaml', file], locks)
+    assert.equal(lockfileSelection({ base: 'B', head: 'H' }, run, root).mode, 'all', file)
+  }
+})
+
+test('select-projects leaves selection to Nx when the lockfile is unchanged', () => {
+  const run = gitStub(['packages/llm-llamacpp/index.js'], {})
+  assert.deepEqual(lockfileSelection({ base: 'B', head: 'H' }, run, root), { mode: '', extra: [] })
 })

@@ -1,6 +1,8 @@
 import { randomBytes } from 'node:crypto'
 import { writeSync } from 'node:fs'
 
+import type { Model, Provider } from '@opencode/plugin'
+
 import { HostHandshakeChannelUnavailableError, HostInvalidHandshakeError } from './errors.js'
 
 // The proxy token authenticates OpenCode against the host proxy. It is the only
@@ -76,17 +78,43 @@ export function writeHostListening(listening: HostListening, fd = HANDSHAKE_FD):
   }
 }
 
-export function createManagedProviderConfig(listening: HostListening, timeout: number) {
+// Plain data in the V2 provider/model shape. The host process imports this
+// module too and has no `@opencode/plugin` at runtime, so only types come from it.
+export const PROVIDER_ID = 'qvac'
+export const PROVIDER_PACKAGE = '@opencode/ai/providers/openai-compatible'
+
+export function createManagedProviderConfig(
+  listening: HostListening,
+  options: { readonly readyTimeoutMs: number; readonly ctxSize: number }
+): { info: Provider.Info; models: Model.Info[] } {
+  const providerID = PROVIDER_ID as Provider.ID
+  const modelID = listening.modelId as Model.ID
   return {
-    npm: '@ai-sdk/openai-compatible',
-    name: 'QVAC (local, managed)',
-    options: { baseURL: listening.baseURL, apiKey: listening.proxyToken, timeout },
-    models: {
-      [listening.modelId]: {
-        name: `${listening.modelName} (local)`,
-        tool_call: true,
-        reasoning: true
+    info: {
+      id: providerID,
+      name: 'QVAC (local, managed)',
+      activation: 'enabled',
+      package: PROVIDER_PACKAGE,
+      settings: {
+        baseURL: listening.baseURL,
+        apiKey: listening.proxyToken,
+        timeout: options.readyTimeoutMs
       }
-    }
+    },
+    models: [
+      {
+        id: modelID,
+        modelID,
+        providerID,
+        name: `${listening.modelName} (local)`,
+        capabilities: { tools: true, input: ['text'], output: ['text'] },
+        variants: [],
+        time: { released: 0 },
+        cost: [],
+        status: 'active',
+        enabled: true,
+        limit: { context: options.ctxSize, output: Math.min(32_000, options.ctxSize) }
+      }
+    ]
   }
 }

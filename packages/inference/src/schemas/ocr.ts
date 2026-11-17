@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type Buffer from 'bare-buffer'
 import { modelSrcInputSchema } from '@/schemas/model-src-utils'
+import { trackedRequestSchema } from '@/schemas/request-base'
 
 // Model config — maps to @qvac/ocr-ggml `OcrGgmlParams`. Legacy ONNX-only knobs
 // (useGPU, timeout, pipelineMode, decodingMethod, straightenPages) are dropped;
@@ -148,9 +149,11 @@ export const ocrParamsSchema = z.object({
   options: ocrOptionsSchema.optional()
 })
 
-export const ocrStreamRequestSchema = ocrParamsSchema.extend({
-  type: z.literal('ocrStream')
-})
+export const ocrStreamRequestSchema = ocrParamsSchema
+  .extend({
+    type: z.literal('ocrStream')
+  })
+  .extend(trackedRequestSchema.shape)
 
 export const ocrTextBlockSchema = z.object({
   text: z.string(),
@@ -166,6 +169,7 @@ export const ocrStatsSchema = z.object({
 
 export const ocrStreamResponseSchema = z.object({
   type: z.literal('ocrStream'),
+  requestId: z.string().optional().describe('Identity of the request, on the terminal frame.'),
   blocks: z.array(ocrTextBlockSchema).optional(),
   done: z.boolean().optional(),
   error: z.string().optional(),

@@ -1,3 +1,4 @@
+import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
 import { type AnyModel, getModel, getModelConfig, getModelEntry } from '@/runtime/model-registry'
 import {
   ModelType,
@@ -12,8 +13,9 @@ import {
 import type ASRGgml from '@qvac/asr-ggml'
 import type Buffer from 'bare-buffer'
 import { createAudioStream } from '@/utils/audio-input'
+import { untilAborted } from '@/utils/until-aborted'
 import { getEngineLogger } from '@/logging/index'
-import { TranscriptionFailedError } from '@/errors/index'
+import { InferenceCancelledError, TranscriptionFailedError } from '@/errors/index'
 import type { TranscribeResponse } from '@/utils/addon-responses'
 import { nowMs } from '@/profiling/index'
 import { buildStreamResult } from '@/profiling/model-execution'
@@ -55,6 +57,10 @@ interface StreamableModel {
     audioStream: AsyncIterable<Buffer>,
     opts?: RunStreamingOpts
   ): Promise<StreamingModelResponse>
+}
+
+async function* iterateAll<T>(source: AsyncIterable<T>): AsyncGenerator<T> {
+  yield* source
 }
 
 function hasRunStreaming(model: AnyModel): model is AnyModel & StreamableModel {
@@ -202,15 +208,21 @@ function mapTranscribeStats(stats: TranscribeResponse['stats']): TranscribeStats
 
 export function transcribe(
   params: TranscribeParams & { metadata: true },
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<TranscribeSegment, TranscribeReturn, void>
 export function transcribe(
   params: TranscribeParams,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<string, TranscribeReturn, void>
 export async function* transcribe(
   params: TranscribeParams,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<string | TranscribeSegment, TranscribeReturn, void> {
   const { modelId, metadata } = params
 
@@ -220,9 +232,14 @@ export async function* transcribe(
   // caller didn't send one.
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRandomRequestId(),
+    sessionId,
+    ...requestParent(context),
     kind: 'transcribe',
     modelId
   })
+  // A request cancelled while it queued holds no slot; the model-wide
+  // `addon.cancel()` below would stop the job that does.
+  if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
   const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
   const engineType = getEngineModelType(modelId)
@@ -352,7 +369,9 @@ export function transcribeStream(
   prompt: string | undefined,
   metadata: true,
   opts?: TranscribeStreamOpts,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<TranscribeSegment | TranscribeStreamEvent, TranscribeReturn, void>
 export function transcribeStream(
   modelId: string,
@@ -360,7 +379,9 @@ export function transcribeStream(
   prompt?: string,
   metadata?: boolean,
   opts?: TranscribeStreamOpts,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<string | TranscribeStreamEvent, TranscribeReturn, void>
 export async function* transcribeStream(
   modelId: string,
@@ -368,7 +389,9 @@ export async function* transcribeStream(
   prompt?: string,
   metadata?: boolean,
   opts?: TranscribeStreamOpts,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<string | TranscribeSegment | TranscribeStreamEvent, TranscribeReturn, void> {
   // Same `kind: "transcribe"` as the unary variant — the registry
   // doesn't distinguish streaming vs non-streaming variants of the same
@@ -376,9 +399,12 @@ export async function* transcribeStream(
   // either shape.
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRandomRequestId(),
+    sessionId,
+    ...requestParent(context),
     kind: 'transcribe',
     modelId
   })
+  if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
   const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
   const engineType = getEngineModelType(modelId)
@@ -396,28 +422,20 @@ export async function* transcribeStream(
     throw new TranscriptionFailedError(`Model ${modelId} does not support streaming transcription`)
   }
 
-  const onAbort = () => {
-    const addon = model.addon
-    if (addon?.cancel) {
-      addon.cancel.call(addon).catch((err: unknown) => {
-        requestLogger.warn(
-          `[cancel] addon.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`
-        )
-      })
-    }
-  }
-  ctx.signal.addEventListener('abort', onAbort, { once: true })
-  if (ctx.signal.aborted) onAbort()
-  ctx.scope.defer(() => {
-    ctx.signal.removeEventListener('abort', onAbort)
-  })
+  // A streaming session ends when its input ends, so an abort ends the input
+  // and the session drains the audio it already has, yielding nothing more.
+  // The model-wide `addon.cancel()` the unary path uses is not safe here: a
+  // parakeet stream cancelled that way leaves its stream state to the next
+  // session, whose output starts with the cancelled session's audio and never
+  // ends.
+  const input = untilAborted(iterateAll(audioInputStream), ctx.signal)
 
   const runOpts = buildRunStreamingOpts(engineType, opts)
   const modelStart = nowMs()
-  const response = await model.runStreaming(audioInputStream, runOpts)
+  const response = await model.runStreaming(input, runOpts)
 
   for await (const output of response.iterate()) {
-    if (ctx.signal.aborted) break
+    if (ctx.signal.aborted) continue
     requestLogger.debug('Live Transcription Update:', output)
 
     if (!Array.isArray(output)) {

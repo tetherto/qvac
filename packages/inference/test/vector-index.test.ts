@@ -8,12 +8,15 @@ import { send, close } from '@/dispatch'
 import { createVectorIndex, loadVectorIndex } from '@/api/vector-index'
 import {
   disposeAllVectorIndexes,
+  disposeVectorIndex,
   getOpenVectorIndexCount,
   resolveVectorIndexPath
 } from '@/runtime/vector-index-registry'
+import { handleCloseSession, handleOpenSession } from '@/handlers/session'
 import { getConfiguredCacheDir } from '@/runtime/state'
 import { storageFromBitWidth } from '@/plugins/turbovec-backend'
 import {
+  InferenceCancelledError,
   RequestValidationFailedError,
   VectorIndexFailedError,
   VectorIndexInvalidVectorsError,
@@ -23,6 +26,8 @@ import {
 import type { Response } from '@/schemas/index'
 import { makeFakePlugin } from './fixtures/fake-plugin'
 import { observableIndexProvider, registerProviderPlugin } from './fixtures/turbovec-provider'
+import { handleVectorIndex } from '@/handlers/vector-index'
+import { getRequestRegistry } from '@/runtime/index'
 
 // Keep the storage-root lock out of the real home, as dispatch.test.ts does.
 env['HOME'] = path.join(os.tmpdir(), `qvac-inference-test-${os.pid()}`)
@@ -31,6 +36,8 @@ type Provider = ReturnType<typeof observableIndexProvider>
 type ProviderCalls = Provider['calls']
 type ProviderFailures = Provider['failures']
 type ProviderFailRemoveId = Provider['failRemoveId']
+type ProviderLastIvfArgs = Provider['lastIvfArgs']
+type ProviderGates = Provider['gates']
 
 function tempSnapshotPath(suffix: string) {
   return path.join(os.tmpdir(), `qvac-vector-index-${os.pid()}-${suffix}.qvi`)
@@ -40,14 +47,18 @@ async function withProvider(
   run: (
     calls: ProviderCalls,
     failures: ProviderFailures,
-    failRemoveId: ProviderFailRemoveId
-  ) => Promise<void>
+    failRemoveId: ProviderFailRemoveId,
+    lastIvfArgs: ProviderLastIvfArgs,
+    gates: ProviderGates
+  ) => Promise<void>,
+  options: { ivf?: boolean } = {}
 ) {
   clearPlugins()
-  const { provider, calls, failures, failRemoveId } = observableIndexProvider()
+  const { provider, calls, failures, failRemoveId, lastIvfArgs, gates } =
+    observableIndexProvider(options)
   registerProviderPlugin('test-vector-index-provider', provider)
   try {
-    await run(calls, failures, failRemoveId)
+    await run(calls, failures, failRemoveId, lastIvfArgs, gates)
   } finally {
     failures.dispose = false
     await disposeAllVectorIndexes()
@@ -78,6 +89,32 @@ test('storageFromBitWidth: maps unambiguous widths and leaves 4 bits undefined',
   t.is(storageFromBitWidth(4), undefined, 'q4 and turbovec-q4 share a bit width')
   t.is(storageFromBitWidth(undefined), undefined)
 })
+
+// A cancel that lands while the native open is in flight: the call reports
+// the cancel and the index it opened is released, since no caller holds its id.
+for (const operation of ['create', 'load'] as const) {
+  test(`vectorIndex: a ${operation} cancelled during the native open is released and reported cancelled`, async (t) => {
+    await withProvider(async (calls, _failures, _failRemoveId, _lastIvfArgs, gates) => {
+      let finishOpen = () => {}
+      gates[operation] = new Promise<void>((resolve) => {
+        finishOpen = resolve
+      })
+      const requestId = `vi-cancel-${operation}`
+      const pending = handleVectorIndex(
+        operation === 'create'
+          ? { type: 'vectorIndex', operation, dim: 2, storage: 'f32', requestId }
+          : { type: 'vectorIndex', operation, path: tempSnapshotPath('cancelled-load'), requestId }
+      )
+      await new Promise<void>((resolve) => setTimeout(resolve, 5))
+      t.is(getRequestRegistry().cancel({ requestId }), 1, 'the open is in flight and cancellable')
+      finishOpen()
+      await expectRejects(t, () => pending, InferenceCancelledError, 'the open reports the cancel')
+      t.is(calls[operation], 1)
+      t.is(calls.dispose, 1, 'the index the cancelled caller opened is released')
+      t.is(getOpenVectorIndexCount(), 0)
+    })
+  })
+}
 
 test('createVectorIndex: rejects when no plugin provides a vector index', async (t) => {
   clearPlugins()
@@ -294,6 +331,33 @@ test('vector index: worker cleanup disposes every open index', async (t) => {
     t.is(calls.dispose, 2)
     await disposeAllVectorIndexes()
     t.is(calls.dispose, 2, 'a second cleanup is a no-op')
+  })
+})
+
+test('vector index: closing a session disposes the indexes it opened and no others', async (t) => {
+  await withProvider(async (calls) => {
+    const sessionId = 'vi-session-close'
+    handleOpenSession({ type: 'openSession', sessionId })
+    const created = await handleVectorIndex({
+      type: 'vectorIndex',
+      operation: 'create',
+      dim: 2,
+      storage: 'f32',
+      sessionId
+    })
+    if (created.operation !== 'create') return t.fail(`create replied ${created.operation}`)
+    const owned = await createVectorIndex({ dim: 2 })
+    t.is(getOpenVectorIndexCount(), 2)
+
+    await handleCloseSession({ type: 'closeSession', sessionId })
+    t.is(calls.dispose, 1, 'the session index is released')
+    t.is(getOpenVectorIndexCount(), 1)
+    t.is(
+      disposeVectorIndex({ indexId: created.indexId }).disposed,
+      false,
+      'the session index is gone'
+    )
+    t.alike(await owned.contains({ ids: ['1'] }), [false], "the owner's index stays usable")
   })
 })
 
@@ -620,4 +684,230 @@ test('vector index: the worker rejects a non-boolean staged search setting', asy
       'validation runs before the provider is reached'
     )
   })
+})
+
+test('vector index: setIvf builds lists that search then probes', async (t) => {
+  await withProvider(
+    async (calls, _failures, _failRemoveId, lastIvfArgs) => {
+      const index = await createVectorIndex({ dim: 2 })
+      t.is(index.ivf, null, 'IVF starts off on a provider that supports it')
+      const loaded = await loadVectorIndex({ path: 'ivf.qvi' })
+      t.is(loaded.ivf, null, 'a loaded index starts with IVF off')
+      await loaded.dispose()
+      await index.add({
+        ids: ['1', '2', '3'],
+        vectors: [
+          [1, 0],
+          [0, 1],
+          [1, 1]
+        ]
+      })
+
+      const result = await index.setIvf({ nLists: 2, nProbe: 1 })
+      const built = { nLists: 2, nProbe: 1, built: true }
+      t.alike(result, { ivf: built })
+      t.alike(index.ivf, built, 'the handle reports the new state')
+      t.is(calls.buildIvf, 1, 'setIvf builds right away')
+      t.is(lastIvfArgs.nLists, 2)
+      t.is(lastIvfArgs.nIter, 0, 'an omitted nIter builds with the initial centroids only')
+
+      const hits = await index.search({ query: [1, 0], k: 5 })
+      t.alike(
+        hits.map((hit) => hit.id),
+        ['1', '2', '3'],
+        'a single query returns one flat hit list without padding'
+      )
+      t.is(calls.searchIvf, 1, 'search probes the IVF lists')
+      t.is(calls.search, 0, 'search skips the full scan')
+      t.is(lastIvfArgs.nProbe, 1, 'search probes the configured number of lists')
+
+      const rows = await index.search({
+        queries: [
+          [0, 1],
+          [1, 0]
+        ],
+        k: 1,
+        nProbe: 2
+      })
+      t.is(rows.length, 2, 'multi-query search returns one list per query')
+      t.is(lastIvfArgs.nProbe, 2, 'a per-call nProbe overrides the setting')
+      t.is(index.ivf?.nProbe, 1, 'the override leaves the setting alone')
+
+      await index.setIvf({ nLists: 2, nProbe: 3 })
+      t.is(calls.buildIvf, 1, 'a new probe count alone keeps the built lists')
+      await index.search({ query: [1, 0], k: 1 })
+      t.is(lastIvfArgs.nProbe, 3)
+      await index.setIvf({ nLists: 2, nProbe: 3, nIter: 5 })
+      t.is(calls.buildIvf, 2, 'a new iteration count rebuilds')
+      t.is(lastIvfArgs.nIter, 5, 'nIter reaches the provider')
+      t.alike(index.ivf, { nLists: 2, nProbe: 3, nIter: 5, built: true })
+    },
+    { ivf: true }
+  )
+})
+
+test('vector index: a mutation makes search scan in full until setIvf builds again', async (t) => {
+  await withProvider(
+    async (calls) => {
+      const index = await createVectorIndex({ dim: 2 })
+      await index.add({
+        ids: ['1', '2'],
+        vectors: [
+          [1, 0],
+          [0, 1]
+        ]
+      })
+      await index.setIvf({ nLists: 2, nProbe: 1 })
+
+      await index.add({ ids: ['3'], vectors: [[1, 1]] })
+      t.alike(index.ivf, { nLists: 2, nProbe: 1, built: false }, 'add reports stale IVF state')
+      const preparedBeforeSearch = calls.prepare
+      t.is((await index.search({ query: [1, 0], k: 5, nProbe: 2 })).length, 3)
+      t.is(calls.searchIvf, 0, 'stale lists are never probed')
+      t.is(calls.search, 1, 'search falls back to the full scan, nProbe included')
+      t.is(calls.prepare, preparedBeforeSearch + 1, 'the fallback prepares the changed index')
+
+      await index.setIvf({ nLists: 2, nProbe: 1 })
+      t.is(calls.buildIvf, 2, 'the same settings rebuild stale lists')
+      t.is(index.ivf?.built, true)
+      await index.search({ query: [1, 0], k: 1 })
+      t.is(calls.searchIvf, 1, 'search probes again after the rebuild')
+
+      t.alike(await index.remove({ ids: ['9'] }), [false])
+      t.is(index.ivf?.built, true, 'removing an absent id keeps the lists')
+      await index.remove({ ids: ['3'] })
+      t.is(index.ivf?.built, false, 'remove reports stale IVF state')
+
+      await index.dispose()
+      await expectRejects(
+        t,
+        () => index.setIvf({ nLists: 2, nProbe: 1 }),
+        VectorIndexNotFoundError,
+        'a disposed index rejects setIvf'
+      )
+    },
+    { ivf: true }
+  )
+})
+
+test('vector index: setIvf(null) turns IVF off and nProbe then rejects', async (t) => {
+  await withProvider(
+    async (calls) => {
+      const index = await createVectorIndex({ dim: 2 })
+      await index.add({ ids: ['1'], vectors: [[1, 0]] })
+      await index.setIvf({ nLists: 1, nProbe: 1 })
+
+      t.alike(await index.setIvf(null), { ivf: null })
+      t.is(index.ivf, null)
+      await index.search({ query: [1, 0], k: 1 })
+      t.is(calls.searchIvf, 0, 'search scans in full while IVF is off')
+      t.is(calls.search, 1)
+      await expectRejects(
+        t,
+        () => index.search({ query: [1, 0], k: 1, nProbe: 1 }),
+        VectorIndexFailedError,
+        'nProbe without IVF is a coded error'
+      )
+      t.is(calls.search, 1, 'the refused search never reaches the provider')
+
+      await index.setIvf({ nLists: 1, nProbe: 1 })
+      t.is(calls.buildIvf, 2, 'turning IVF back on builds again')
+    },
+    { ivf: true }
+  )
+})
+
+test('vector index: a failed IVF build falls back to the full scan', async (t) => {
+  await withProvider(
+    async (calls, failures, _failRemoveId, lastIvfArgs) => {
+      const index = await createVectorIndex({ dim: 2 })
+      await index.add({ ids: ['1'], vectors: [[1, 0]] })
+      await index.setIvf({ nLists: 1, nProbe: 1 })
+      failures.buildIvf = true
+      await expectRejects(
+        t,
+        () => index.setIvf({ nLists: 2, nProbe: 2 }),
+        VectorIndexFailedError,
+        'the build failure is a coded error'
+      )
+      failures.buildIvf = false
+      const previous = { nLists: 1, nProbe: 1, built: true }
+      t.alike(index.ivf, previous, 'the handle keeps the last reported state')
+      // The native index may drop its lists when a build fails, so the worker
+      // stops probing them.
+      await index.search({ query: [1, 0], k: 1 })
+      t.is(calls.searchIvf, 0, 'search never probes lists from before the failed build')
+      t.is(calls.search, 1, 'search falls back to the full scan')
+      await index.add({ ids: ['2'], vectors: [[0, 1]] })
+      t.alike(index.ivf, { ...previous, built: false }, 'the worker kept the earlier settings')
+      await index.setIvf({ nLists: 1, nProbe: 1 })
+      t.is(calls.buildIvf, 3, 'the earlier settings build again')
+      await index.search({ query: [1, 0], k: 1 })
+      t.is(calls.searchIvf, 1, 'search probes the rebuilt lists')
+      t.is(lastIvfArgs.nProbe, 1)
+    },
+    { ivf: true }
+  )
+})
+
+test('vector index: providers without IVF report undefined and reject IVF calls', async (t) => {
+  await withProvider(async (calls) => {
+    const index = await createVectorIndex({ dim: 2 })
+    t.is(index.ivf, undefined)
+    await index.add({ ids: ['1'], vectors: [[1, 0]] })
+    t.is(index.ivf, undefined, 'add reports no IVF state')
+    await expectRejects(
+      t,
+      () => index.setIvf({ nLists: 1, nProbe: 1 }),
+      VectorIndexFailedError,
+      'setIvf reports a coded error'
+    )
+    try {
+      await index.search({ query: [1, 0], k: 1, nProbe: 1 })
+      t.fail('nProbe should reject')
+    } catch (error) {
+      t.ok(error instanceof VectorIndexFailedError, 'nProbe reports a coded error')
+      t.ok(
+        error instanceof Error && error.message.includes('does not support IVF search'),
+        'the error names the missing support instead of pointing to setIvf()'
+      )
+    }
+    t.is(calls.prepare, 0, 'the refused search runs no warm-up')
+    t.is((await index.search({ query: [1, 0], k: 1 })).length, 1, 'plain search still works')
+  })
+})
+
+test('vector index: IVF arguments are validated before the provider is reached', async (t) => {
+  await withProvider(
+    async (calls) => {
+      const index = await createVectorIndex({ dim: 2 })
+      await expectRejects(
+        t,
+        () => index.search({ query: [1], k: 1, nProbe: 1 }),
+        RequestValidationFailedError,
+        'the client rejects a query of the wrong length'
+      )
+      await expectRejects(
+        t,
+        () => index.setIvf({ nLists: 0, nProbe: 1 }),
+        RequestValidationFailedError,
+        'the worker rejects a non-positive list count'
+      )
+      await expectRejects(
+        t,
+        () => index.setIvf({ nLists: 1, nProbe: 0 }),
+        RequestValidationFailedError,
+        'the worker rejects a non-positive probe count'
+      )
+      await expectRejects(
+        t,
+        () => index.search({ query: [1, 0], k: 1, nProbe: 0 }),
+        RequestValidationFailedError,
+        'the worker rejects a non-positive per-call probe count'
+      )
+      t.is(calls.buildIvf, 0)
+      t.is(calls.search + calls.searchIvf, 0)
+    },
+    { ivf: true }
+  )
 })

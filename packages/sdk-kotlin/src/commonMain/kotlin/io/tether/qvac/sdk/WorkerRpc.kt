@@ -25,6 +25,7 @@ import to.holepunch.bare.rpc.Messages
 import to.holepunch.bare.rpc.RemoteError
 import to.holepunch.bare.rpc.RemoteException
 import to.holepunch.bare.rpc.Rpc
+import to.holepunch.bare.rpc.Transport
 import to.holepunch.compactEncoding.State
 import to.holepunch.compactEncoding.uint
 import to.holepunch.compactEncoding.uint32
@@ -56,12 +57,13 @@ class WorkerRpc(
     private val maxBufferedBytes = 4 * maxFrameBytes
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // The owner closes the transport after [close], so the session leaves it open.
     private val rpc = Rpc(
-        data = frames(data),
-        write = send,
+        transport = Transport(frames(data), send) {},
         scope = scope,
-        maxFrameSize = maxFrameBytes.toUInt(),
-        maxBufferedBytes = maxBufferedBytes.toUInt(),
+        maxFrameSize = maxFrameBytes.toInt(),
+        // The library takes an Int; four of the largest frames would overflow it.
+        maxBufferedBytes = maxBufferedBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
     )
     private val json = Json {
         ignoreUnknownKeys = true

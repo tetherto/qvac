@@ -741,6 +741,7 @@ class QVACRegistryClient extends ReadyResource {
     await fs.promises.mkdir(dir, { recursive: true })
 
     const writeStream = fs.createWriteStream(filePath)
+    const writerClosed = new Promise((resolve) => writeStream.once('close', resolve))
 
     try {
       await new Promise((resolve, reject) => {
@@ -768,6 +769,10 @@ class QVACRegistryClient extends ReadyResource {
         }
       })
     } finally {
+      // Callers may release a file lock as soon as this settles.
+      stream.destroy()
+      writeStream.destroy()
+      await writerClosed
       rangeDownload.destroy()
       core.off('download', progressHandler)
     }

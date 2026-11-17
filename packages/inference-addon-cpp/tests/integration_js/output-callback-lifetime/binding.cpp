@@ -33,6 +33,18 @@ public:
   addon_cpp::RuntimeStats runtimeStats() const override { return {}; }
 };
 
+class StatsModel : public EchoModel {
+public:
+  std::string getName() const override { return "StatsModel"; }
+
+  addon_cpp::RuntimeStats runtimeStats() const override {
+    return {
+        {"totalTime", 1.5},
+        {"totalTokens", int64_t{7}},
+        {"backendName", std::string{"cuda,vulkan"}}};
+  }
+};
+
 /// Multi-job model whose in-flight jobs block until cancelled. cancel() is
 /// deliberately slow so the cancel JsAsyncTask stays alive while the JS
 /// thread runs destroyInstance(), making the task's captured
@@ -70,6 +82,7 @@ public:
 
 std::thread::id moduleInitThreadId;
 
+template <typename Model>
 js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   addon_cpp::JsArgsParser args(env, info);
 
@@ -86,7 +99,7 @@ js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       std::move(outputHandlers));
 
   auto addon = std::make_unique<addon_cpp::AddonJs>(
-      env, std::move(outputCallback), std::make_unique<EchoModel>());
+      env, std::move(outputCallback), std::make_unique<Model>());
 
   return addon_cpp::JsInterface::createInstance(env, std::move(addon));
 }
@@ -164,7 +177,8 @@ js_value_t* outputCallbackLifetimeExports(js_env_t* env, js_value_t* exports) {
     }                                                                          \
   }
 
-  V("createInstance", createInstance)
+  V("createInstance", createInstance<EchoModel>)
+  V("createStatsInstance", createInstance<StatsModel>)
   V("createMultiInstance", createMultiInstance)
   V("runJob", runJob)
   V("cancelJob", cancelJob)

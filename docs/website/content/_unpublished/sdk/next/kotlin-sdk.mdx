@@ -41,13 +41,13 @@ Gradle at. There is one archive per Android runtime profile:
 
 | Archive | Dependency | Capabilities |
 | --- | --- | --- |
-| `qvac-sdk-android-0.23.0-maven.zip` | `io.tether:qvac-sdk-android` | all current SDK addons/capabilities |
-| `qvac-sdk-android-assistant-0.23.0-maven.zip` | `io.tether:qvac-sdk-android-assistant` | chat and transcription |
-| `qvac-sdk-android-llm-0.23.0-maven.zip` | `io.tether:qvac-sdk-android-llm` | completion and embeddings |
-| `qvac-sdk-android-speech-0.23.0-maven.zip` | `io.tether:qvac-sdk-android-speech` | Whisper, Parakeet and BCI transcription, translation, and TTS |
-| `qvac-sdk-android-vision-0.23.0-maven.zip` | `io.tether:qvac-sdk-android-vision` | multimodal completion, OCR, and classification |
-| `qvac-sdk-android-media-0.23.0-maven.zip` | `io.tether:qvac-sdk-android-media` | audio, image, video, world generation, and upscaling |
-| `qvac-sdk-android-robotics-0.23.0-maven.zip` | `io.tether:qvac-sdk-android-robotics` | VLA inference |
+| `qvac-sdk-android-0.24.0-maven.zip` | `io.tether:qvac-sdk-android` | all current SDK addons/capabilities |
+| `qvac-sdk-android-assistant-0.24.0-maven.zip` | `io.tether:qvac-sdk-android-assistant` | chat and transcription |
+| `qvac-sdk-android-llm-0.24.0-maven.zip` | `io.tether:qvac-sdk-android-llm` | completion and embeddings |
+| `qvac-sdk-android-speech-0.24.0-maven.zip` | `io.tether:qvac-sdk-android-speech` | Whisper, Parakeet and BCI transcription, translation, and TTS |
+| `qvac-sdk-android-vision-0.24.0-maven.zip` | `io.tether:qvac-sdk-android-vision` | multimodal completion, OCR, and classification |
+| `qvac-sdk-android-media-0.24.0-maven.zip` | `io.tether:qvac-sdk-android-media` | audio, image, video, world generation, and upscaling |
+| `qvac-sdk-android-robotics-0.24.0-maven.zip` | `io.tether:qvac-sdk-android-robotics` | VLA inference |
 
 The experimental desktop JVM worker host is not in these archives; it is built
 from this repository, as the
@@ -59,14 +59,14 @@ describes.
 <Step>
 Download the archive of the profile your app needs, and the release's
 checksums, from the
-[`sdk-v0.23.0` release](https://github.com/tetherto/qvac/releases/tag/sdk-v0.23.0).
+[`sdk-v0.24.0` release](https://github.com/tetherto/qvac/releases/tag/sdk-v0.24.0).
 For example, the LLM profile:
 
 ```bash
-curl -fLO https://github.com/tetherto/qvac/releases/download/sdk-v0.23.0/qvac-sdk-android-llm-0.23.0-maven.zip
-curl -fLO https://github.com/tetherto/qvac/releases/download/sdk-v0.23.0/qvac-sdk-kotlin-0.23.0-SHA256SUMS
-sha256sum --check --ignore-missing qvac-sdk-kotlin-0.23.0-SHA256SUMS
-# macOS: shasum -a 256 --check --ignore-missing qvac-sdk-kotlin-0.23.0-SHA256SUMS
+curl -fLO https://github.com/tetherto/qvac/releases/download/sdk-v0.24.0/qvac-sdk-android-llm-0.24.0-maven.zip
+curl -fLO https://github.com/tetherto/qvac/releases/download/sdk-v0.24.0/qvac-sdk-kotlin-0.24.0-SHA256SUMS
+sha256sum --check --ignore-missing qvac-sdk-kotlin-0.24.0-SHA256SUMS
+# macOS: shasum -a 256 --check --ignore-missing qvac-sdk-kotlin-0.24.0-SHA256SUMS
 ```
 </Step>
 
@@ -75,7 +75,7 @@ Extract it. The archive is a Maven repository: it holds the runtime and the
 Kotlin client modules it depends on.
 
 ```bash
-unzip qvac-sdk-android-llm-0.23.0-maven.zip -d qvac-maven-repository
+unzip qvac-sdk-android-llm-0.24.0-maven.zip -d qvac-maven-repository
 ```
 </Step>
 
@@ -105,7 +105,7 @@ Add the dependency of the archive you downloaded:
 ```kotlin
 // app/build.gradle.kts
 dependencies {
-    implementation("io.tether:qvac-sdk-android-llm:0.23.0")
+    implementation("io.tether:qvac-sdk-android-llm:0.24.0")
 }
 ```
 </Step>
