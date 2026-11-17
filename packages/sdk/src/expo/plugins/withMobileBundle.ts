@@ -38,7 +38,9 @@ type MobileBundleOptions = {
   /**
    * The JavaScript engine the worker runs with on iOS: `'javascriptcore'`, the
    * default, or `'v8'`. V8 needs an entitlement that free Apple developer
-   * accounts cannot sign with; the plugin adds it to the app.
+   * accounts cannot sign with; the plugin adds it to the app. A prebuild over
+   * an existing `ios` folder keeps it, so switching back to JavaScriptCore
+   * needs `expo prebuild --clean`.
    */
   iosEngine?: IosEngine
 }
