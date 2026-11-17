@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// The sdk's test:integration, one leg of main's desktop, python, electron or snap family: this commit's inference and
-// test-suite packed into the sdk and sdk-e2e npm installs, the consumer and the producer over MQTT, the results checked
-// and compared with the newest dispatch run on the base branch. Usage: node ci/e2e.mjs <family|cache>.
+// The sdk's test:integration, one leg of main's desktop, python, electron or snap family, and sdk-swift's swift family:
+// this commit's inference and test-suite packed into the sdk and sdk-e2e npm installs, the consumer and the producer
+// over MQTT, the results checked and compared with the newest dispatch run on the base branch.
+// Usage: node ci/e2e.mjs <family|cache>.
 
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import {
@@ -23,7 +24,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 export const ROOT = fileURLToPath(new URL('../../..', import.meta.url))
 export const SDK = join(ROOT, 'packages/sdk')
 export const E2E = join(ROOT, 'packages/sdk-e2e')
-const FAMILIES = ['desktop', 'python', 'electron', 'snap']
+const FAMILIES = ['desktop', 'python', 'electron', 'snap', 'swift']
+// The external consumer each family runs through run:consumer:external.
+const EXTERNAL = { python: 'python', swift: 'swift-macos' }
 // Checked before any value reaches a command line, as main's run step did.
 export const SAFE_LIST = /^[A-Za-z0-9._-]+(,[A-Za-z0-9._-]+)*$/
 
@@ -290,6 +293,12 @@ function pythonVenv(env) {
   run(bin, ['-m', 'pip', 'install', '-e', `${join(ROOT, 'packages/sdk-python')}[dev]`], { env })
 }
 
+// sdk-swift's unit tests, the client's at the repository root and then the e2e runner's.
+function swiftTests(env) {
+  run('swift', ['test'], { env })
+  run('swift', ['test', '--package-path', join(E2E, 'runners/swift')], { env })
+}
+
 // main's strict Snap steps: tooling, the LXD egress preflight, two revisions and the refresh test, install, interfaces.
 function snapBuild(env) {
   rmSync(join(E2E, '.npmrc'), { force: true })
@@ -350,13 +359,13 @@ function snapBuild(env) {
 
 // main's run step: the consumer in the background, the producer in the foreground for up to 60 minutes.
 async function consumerAndProducer({ env, runId, family, filter, options }) {
-  const external = family === 'python'
+  const external = EXTERNAL[family]
   const consumerArgs = [
     'qvac-test',
     external ? 'run:consumer:external' : `run:consumer:${family}`,
     `--runId=${runId}`,
     '--config=.',
-    ...(external ? ['--name=python'] : []),
+    ...(external ? [`--name=${external}`] : []),
     ...(family === 'electron' ? ['--skip-build'] : []),
     ...(family === 'snap' ? ['--skip-build', '--skip-snap-install'] : [])
   ]
@@ -411,7 +420,8 @@ export function seedSnapModels(from = join(E2E, '.qvac-cache'), home = homedir()
   console.log(`Seeded the Snap's models from ${from}`)
 }
 
-// The model cache the consumers download into: test:integration's metadata.modelCache, which cache-warm saves.
+// The model cache the consumers download into: test:integration's metadata.modelCache, which cache-warm saves. The
+// Swift client reads it through QVAC_CONFIG_PATH too.
 function modelCache(env) {
   const dir = join(E2E, '.qvac-cache')
   mkdirSync(dir, { recursive: true })
@@ -431,6 +441,7 @@ async function main(family, env) {
   if (!FAMILIES.includes(family)) throw new Error(`family must be one of ${FAMILIES.join(', ')}`)
   const platform = platformOf(env.CI_RUNNER_LABEL)
   if (family === 'snap' && platform !== 'linux') throw new Error('Snap runs on Linux only')
+  if (family === 'swift' && platform !== 'macos') throw new Error('Swift runs on macOS only')
   const options = runOptions(env.CI_SUITE)
   // A rerun's previously failed tests, from the e2e router; empty runs the suite.
   const tests = list('tests', env.CI_TESTS)
@@ -443,15 +454,18 @@ async function main(family, env) {
     collectNativeCrashes
   } = await import('./speech-preflight.mjs')
   const speechPreflight = family === 'desktop' ? await prepareSpeechPreflight(ROOT, env) : null
+  // The package whose test/results/e2e the group uploads as <slug>-results-<configuration>.
+  const slug = family === 'swift' ? 'sdk-swift' : 'sdk'
+  // The python and swift clients run on the desktop bootstrap's models; swift downloads them, having no cache entry.
+  const desktopModels = ['desktop', 'python', 'swift'].includes(family)
+  if (family === 'swift') swiftTests(env)
   let e = prepare(env, () => installSpeechPreflight(ROOT, env, speechPreflight))
   verifySpeechPreflight(E2E, speechPreflight)
   const startedAt = Date.now()
   let status = 1
   try {
     if (family === 'python') pythonVenv(e)
-    if (family === 'desktop' || family === 'python') {
-      run('npm', ['run', 'bundle:sdk'], { cwd: E2E, env: e })
-    }
+    if (desktopModels) run('npm', ['run', 'bundle:sdk'], { cwd: E2E, env: e })
     if (family === 'snap') {
       e = {
         ...e,
@@ -467,15 +481,19 @@ async function main(family, env) {
     } else {
       e = modelCache(e)
       // As main: an exact hit already holds the desktop bootstrap's models.
-      if (env.MODELS_CACHE_HIT === 'true' && (family === 'desktop' || family === 'python')) {
+      if (env.MODELS_CACHE_HIT === 'true' && desktopModels) {
         console.log('Models restored from the cache; skipping the bootstrap')
       } else {
         run(
           'npx',
-          ['qvac-test', `run:bootstrap:${family === 'python' ? 'desktop' : family}`, '--config=.'],
+          ['qvac-test', `run:bootstrap:${desktopModels ? 'desktop' : family}`, '--config=.'],
           { cwd: E2E, env: e }
         )
       }
+    }
+    // run:consumer:external skips an entry's prepare step, so the Swift client is bundled and built here.
+    if (family === 'swift') {
+      run('node', ['runners/swift/scripts/prepare.mjs'], { cwd: E2E, env: e })
     }
     if (family === 'electron') {
       run('npx', ['qvac-test', 'build:consumer:electron', '--config=.', '--skip-install'], {
@@ -515,7 +533,7 @@ async function main(family, env) {
         startedAt
       )
     }
-    keepResults(join(SDK, 'test/results/e2e', label), [
+    keepResults(join(ROOT, 'packages', slug, 'test/results/e2e', label), [
       reports,
       join(E2E, 'consumer.log'),
       ...snaps
@@ -523,7 +541,7 @@ async function main(family, env) {
     await compareBaseline({
       env: e,
       workflow: 'sdk-e2e.yml',
-      artifact: `sdk-results-${env.CONFIG}`,
+      artifact: `${slug}-results-${env.CONFIG}`,
       reports,
       label
     })
