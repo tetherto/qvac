@@ -4,7 +4,11 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import Bundle from 'bare-bundle'
 import stow from 'bare-stow'
-import { commonJSStowOptions, convertToCommonJS } from '@/commands/bundle/commonjs'
+import {
+  commonJSStowOptions,
+  convertToCommonJS,
+  lowerDynamicImports
+} from '@/commands/bundle/commonjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const MODULE_URL = new URL('file:///app/index.js')
@@ -41,6 +45,18 @@ test('convertToCommonJS: rejects import.meta, which CommonJS has no equivalent o
   )
 })
 
+test('lowerDynamicImports: turns the import() of a CommonJS module into a require()', async (t) => {
+  const code = await lowerDynamicImports(MODULE_URL, "exports.lazy = () => import('./lazy.js')\n")
+
+  t.ok(code!.includes('require("./lazy.js")'))
+  t.absent(/\bimport\s*\(/.test(code!), 'no import() is left for JavaScriptCore')
+  t.absent(code!.includes('use strict'), 'a CommonJS module is not made strict')
+})
+
+test('lowerDynamicImports: leaves a module without import() alone', async (t) => {
+  t.is(await lowerDynamicImports(MODULE_URL, "module.exports = require('a')\n"), null)
+})
+
 test('commonJSStowOptions: reads a missing module as null', async (t) => {
   const { readModule } = commonJSStowOptions()
 
@@ -71,10 +87,24 @@ test('commonJSStowOptions: stows a graph without ES modules that runs as its ES 
     path.join(dir, 'node_modules', 'flagged-pkg', 'index.js'),
     "Object.defineProperty(exports, '__esModule', { value: true })\nexports.default = 'inner'\n"
   )
+  // CommonJS that loads a sibling lazily, as a plugin written in CommonJS may.
+  writeFile(
+    path.join(dir, 'node_modules', 'lazy-cjs-pkg', 'package.json'),
+    '{"name":"lazy-cjs-pkg"}'
+  )
+  writeFile(
+    path.join(dir, 'node_modules', 'lazy-cjs-pkg', 'index.js'),
+    "exports.lazy = () => import('./lazy.js')\n"
+  )
+  writeFile(
+    path.join(dir, 'node_modules', 'lazy-cjs-pkg', 'lazy.js'),
+    "module.exports = 'lazy-cjs'\n"
+  )
   writeFile(
     path.join(dir, 'app', 'entry.mjs'),
     `import cjs from 'cjs-pkg'
 import flagged from 'flagged-pkg'
+import lazyCjs from 'lazy-cjs-pkg'
 import { value, lazy } from 'esm-pkg'
 
 function receiver() {
@@ -85,6 +115,9 @@ export default async function start(ipc, ready) {
   const loaded = await lazy()
   if (cjs.value !== 'cjs' || value !== 'esm' || loaded.default !== 'lazy') {
     throw new Error('the converted graph lost a binding')
+  }
+  if ((await lazyCjs.lazy()).default !== 'lazy-cjs') {
+    throw new Error('a CommonJS module lost its lazy import')
   }
   if (flagged !== 'inner') throw new Error('a compiled CommonJS default is not its default export')
   if (receiver() !== undefined) throw new Error('the converted entry is not strict')
@@ -112,6 +145,7 @@ export default async function start(ipc, ready) {
   for (const file of scripts) {
     const source = bundle.read(file)!.toString()
     t.absent(/^\s*(import|export)\s/m.test(source), `${file} holds no ES module syntax`)
+    t.absent(/\bimport\s*\(/.test(source), `${file} holds no import()`)
   }
   const cjsFile = scripts.find((file) => file.endsWith('/cjs-pkg/index.cjs'))
   t.is(bundle.read(cjsFile!)!.toString(), cjsSource, 'a CommonJS module is left as it is')

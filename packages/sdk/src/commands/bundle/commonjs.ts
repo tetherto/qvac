@@ -26,10 +26,21 @@ export function commonJSStowOptions(): CommonJSStowOptions {
       } catch {
         return null
       }
-      if (!(await isESModule(url, isModuleScope))) return source
-      return convertToCommonJS(url, source.toString())
+      if (await isESModule(url, isModuleScope)) return convertToCommonJS(url, source.toString())
+      return (await lowerDynamicImports(url, source.toString())) ?? source
     }
   }
+}
+
+/**
+ * A CommonJS module with its `import()` calls turned into `require()` calls,
+ * or null when it has none and stays as it is. `import()` is the one piece of
+ * module syntax CommonJS may hold, and JavaScriptCore cannot run it either.
+ */
+export async function lowerDynamicImports(url: URL, source: string): Promise<string | null> {
+  // Also matches the word in a comment or a string, which only costs a transform.
+  if (!/\bimport\s*\(/.test(source)) return null
+  return transformToCommonJS(url, source, {})
 }
 
 async function isESModule(url: URL, isModuleScope: (dir: string) => Promise<boolean>) {
@@ -77,19 +88,27 @@ function packageScopeTypes() {
 }
 
 export async function convertToCommonJS(url: URL, source: string): Promise<string> {
+  // ES modules are strict.
+  return transformToCommonJS(url, source, { banner: "'use strict';" })
+}
+
+async function transformToCommonJS(
+  url: URL,
+  source: string,
+  options: { banner?: string }
+): Promise<string> {
   const { transform } = await import('esbuild')
   let result: Awaited<ReturnType<typeof transform>>
   try {
     result = await transform(source, {
       format: 'cjs',
-      loader: /\.m?ts$/.test(url.pathname) ? 'ts' : 'js',
+      loader: /\.[cm]?ts$/.test(url.pathname) ? 'ts' : 'js',
       // Not named as an ES module, which esbuild would import CommonJS into
       // as Node does: the default import of a module marked `__esModule`, as
       // a converted one is, stays its `default` export. Bare imports CommonJS
       // compiled from TypeScript the same way.
       sourcefile: url.href.replace(/\.m([jt]s)$/, '.$1'),
-      // ES modules are strict.
-      banner: "'use strict';",
+      ...options,
       target: 'esnext',
       supported: { 'dynamic-import': false },
       logLevel: 'silent'
