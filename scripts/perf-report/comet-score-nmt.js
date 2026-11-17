@@ -4,7 +4,7 @@
 /**
  * COMET scoring for NMT translations captured in the weekly perf-report.
  *
- * ONLY runs in the `.github/workflows/perf-report.yml` weekly aggregate
+ * ONLY runs in `.github/workflows/benchmarks.yml`'s weekly perf report
  * job on a Linux GitHub-hosted runner — never in per-PR desktop or
  * per-PR mobile integration tests.
  *
@@ -35,6 +35,7 @@
  *                                               [--output PATH]
  *                                               [--repo OWNER/REPO]
  *                                               [--dir LOCAL_DIR]
+ *                                               [--artifact-pattern GLOB]
  *                                               [--skip-comet]
  *
  * Flags:
@@ -47,6 +48,7 @@
  *   --dir LOCAL_DIR    Skip `gh` download; read performance-report.json
  *                      files recursively from this local dir instead
  *                      (used by the unit test + for local dev).
+ *   --artifact-pattern GLOB  Artifacts to download. Default perf-report-*.
  *   --skip-comet   Collect + render the markdown with chrF++ only but
  *                  no COMET column. Used by the unit test so it can
  *                  verify the non-network code path.
@@ -91,6 +93,7 @@ function parseArgs (argv) {
     workflow: DEFAULT_WORKFLOW,
     repo: null,
     dir: null,
+    artifactPattern: 'perf-report-*',
     skipComet: false
   }
   for (let i = 2; i < argv.length; i++) {
@@ -110,6 +113,7 @@ function parseArgs (argv) {
       case '--workflow': args.workflow = argv[++i]; break
       case '--repo': args.repo = argv[++i]; break
       case '--dir': args.dir = argv[++i]; break
+      case '--artifact-pattern': args.artifactPattern = argv[++i]; break
       case '--skip-comet': args.skipComet = true; break
     }
   }
@@ -505,7 +509,7 @@ async function main () {
       console.log(`  Found ${runs.length} completed runs. Downloading perf-report artifacts (parallel, concurrency=${DEFAULT_DOWNLOAD_CONCURRENCY})...`)
       for (const r of runs) console.log(`    #${r.number} (${r.databaseId})`)
       tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'comet-nmt-src-'))
-      await downloadRunArtifactsParallel(runs, tmpDir, 'perf-report-*', args.repo,
+      await downloadRunArtifactsParallel(runs, tmpDir, args.artifactPattern, args.repo,
         { concurrency: DEFAULT_DOWNLOAD_CONCURRENCY })
       rootDir = tmpDir
     }
