@@ -1,0 +1,177 @@
+{
+  "models": {
+    "chatterbox-t3-turbo.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-turbo-q4_0.gguf",
+      "dest": "models/chatterbox-t3-turbo.gguf",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ],
+      "skip": [
+        "darwin-x64"
+      ]
+    },
+    "chatterbox-s3gen.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-q4_0.gguf",
+      "dest": "models/chatterbox-s3gen.gguf",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ],
+      "skip": [
+        "darwin-x64"
+      ]
+    },
+    "chatterbox-t3-mtl.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-mtl-q4_0.gguf",
+      "dest": "models/chatterbox-t3-mtl.gguf",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ],
+      "skip": [
+        "darwin-x64"
+      ]
+    },
+    "chatterbox-s3gen-mtl.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/chatterbox/2026-06-01/chatterbox-s3gen-mtl-q4_0.gguf",
+      "dest": "models/chatterbox-s3gen-mtl.gguf",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ],
+      "skip": [
+        "darwin-x64"
+      ]
+    },
+    "supertonic.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/supertonic/2026-05-18/supertonic-q4_0.gguf",
+      "dest": "models/supertonic.gguf",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ]
+    },
+    "supertonic2.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/supertonic/2026-05-18/supertonic2-q4_0.gguf",
+      "dest": "models/supertonic2.gguf",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ],
+      "skip": [
+        "darwin-x64"
+      ]
+    },
+    "supertonic3-f16.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/supertonic/2026-06-10/supertonic3-f16.gguf",
+      "dest": "models/supertonic3-f16.gguf",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ],
+      "skip": [
+        "darwin-x64"
+      ]
+    },
+    "supertonic3-f32.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/supertonic/2026-06-10/supertonic3-f32.gguf",
+      "dest": "models/supertonic3-f32.gguf",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ],
+      "skip": [
+        "darwin-x64"
+      ]
+    },
+    "supertonic3-q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/supertonic/2026-06-15/supertonic3-q8_0.gguf",
+      "dest": "models/supertonic3-q8_0.gguf",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ],
+      "skip": [
+        "darwin-x64"
+      ]
+    },
+    "supertonic3-q4_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/supertonic/2026-06-15/supertonic3-q4_0.gguf",
+      "dest": "models/supertonic3-q4_0.gguf",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ],
+      "skip": [
+        "darwin-x64"
+      ]
+    },
+    "parler-mini-v1-q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-mini-v1-q8_0.gguf",
+      "dest": "models/parler-mini-v1-q8_0.gguf",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ],
+      "skip": [
+        "darwin-x64"
+      ]
+    },
+    "parler-indic-q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-indic-q8_0.gguf",
+      "dest": "models/parler-indic-q8_0.gguf",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ],
+      "skip": [
+        "darwin-x64"
+      ]
+    },
+    "parler-indic-f16.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parler-tts/2026-07-20/parler-indic-f16.gguf",
+      "dest": "models/parler-indic-f16.gguf",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ],
+      "skip": [
+        "darwin-x64"
+      ]
+    },
+    "audio8-lm-q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-lm-q8_0.gguf",
+      "dest": "models/audio8-lm-q8_0.gguf",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ],
+      "skip": [
+        "darwin-x64"
+      ]
+    },
+    "audio8-codec-decoder-q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-decoder-q8_0.gguf",
+      "dest": "models/audio8-codec-decoder-q8_0.gguf",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ],
+      "skip": [
+        "darwin-x64"
+      ]
+    },
+    "audio8-codec-encoder-q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-encoder-q8_0.gguf",
+      "dest": "models/audio8-codec-encoder-q8_0.gguf",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ],
+      "skip": [
+        "darwin-x64"
+      ]
+    }
+  }
+}

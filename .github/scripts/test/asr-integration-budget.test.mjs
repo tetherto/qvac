@@ -5,30 +5,26 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
-const WORKFLOW = '.github/workflows/integration-test-asr-ggml.yml'
-const STEP_SEPARATOR = '\n      - name: '
-const UNIX_STEP = 'Run integration test (Unix)'
-const WINDOWS_STEP = 'Run integration test (Windows)'
+// asr's test:integration runs the parakeet suite through this script on every platform.
+const RUNNER = 'packages/asr-ggml/ci/integration.mjs'
+const SUITE_CALL = "run('npm', ['run', 'test:integration'],"
 const BUDGET_PATTERN = /INTEGRATION_TEST_TIMEOUT: (.+)/
 
-const src = readFileSync(join(root, WORKFLOW), 'utf8')
+const src = readFileSync(join(root, RUNNER), 'utf8')
 
-function findStep(name) {
-  const step = src.split(STEP_SEPARATOR).find((candidate) => candidate.startsWith(`${name}\n`))
-  assert.ok(step, `step not found: ${name}`)
-  return step
+function budget() {
+  const start = src.indexOf(SUITE_CALL)
+  assert.ok(start !== -1, `${RUNNER} does not run test:integration`)
+  const call = src.slice(start, src.indexOf('})', start))
+  const match = call.match(BUDGET_PATTERN)
+  assert.ok(match, 'the test:integration run does not set INTEGRATION_TEST_TIMEOUT')
+  return match[1].trim().replace(/,$/, '')
 }
 
-function budgetOf(name) {
-  const match = findStep(name).match(BUDGET_PATTERN)
-  assert.ok(match, `${name} does not set INTEGRATION_TEST_TIMEOUT`)
-  return match[1].trim()
-}
-
-test('the Unix integration step sets a literal parakeet suite budget', () => {
-  assert.match(budgetOf(UNIX_STEP), /^'\d+'$/)
+test('the test:integration run sets a literal parakeet suite budget', () => {
+  assert.match(budget(), /^'\d+'$/)
 })
 
 test('Unix and Windows give the parakeet suite the same budget', () => {
-  assert.equal(budgetOf(UNIX_STEP), budgetOf(WINDOWS_STEP))
+  assert.doesNotMatch(budget(), /\bWIN\b|process\.platform|\?/)
 })

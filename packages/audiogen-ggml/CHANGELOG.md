@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Update the shared `speech-cpp` native dependency to `2026-11-11`
+  ([#5747](https://github.com/tetherto/qvac/pull/5747)).
+
+### Fixed
+
+- `encode()` / `encodePcm()` release every bare-ffmpeg object they create for
+  compressed formats, including when an encode fails. Before this, each encode
+  kept the input PCM, the encoded output and the native FFmpeg state in memory
+  for the life of the process
+  ([#5610](https://github.com/tetherto/qvac/pull/5610)).
 ## [0.10.1] - 2026-11-10
 
 ### Added

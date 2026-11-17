@@ -1,0 +1,52 @@
+{
+  "models": {
+    "Qwen3-Embedding-0.6B-Q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/acestep/2026-07-22/Qwen3-Embedding-0.6B-Q8_0.gguf",
+      "dest": "models/Qwen3-Embedding-0.6B-Q8_0.gguf",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ]
+    },
+    "acestep-5Hz-lm-0.6B-Q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/acestep/2026-07-22/acestep-5Hz-lm-0.6B-Q8_0.gguf",
+      "dest": "models/acestep-5Hz-lm-0.6B-Q8_0.gguf",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ]
+    },
+    "vae-BF16.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/acestep/2026-07-22/vae-BF16.gguf",
+      "dest": "models/vae-BF16.gguf",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ]
+    },
+    "acestep-v15-turbo-Q4_K_M.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/acestep/2026-07-22/acestep-v15-turbo-Q4_K_M.gguf",
+      "dest": "models/acestep-v15-turbo-Q4_K_M.gguf",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ]
+    },
+    "acestep-v15-turbo-Q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/acestep/2026-07-22/acestep-v15-turbo-Q8_0.gguf",
+      "dest": "models/acestep-v15-turbo-Q8_0.gguf",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ]
+    },
+    "acestep-v15-sft-Q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/acestep/2026-07-22/acestep-v15-sft-Q8_0.gguf",
+      "dest": "models/acestep-v15-sft-Q8_0.gguf",
+      "targets": [
+        "test:integration",
+        "benchmark"
+      ]
+    }
+  }
+}

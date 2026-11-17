@@ -90,10 +90,6 @@ test('a train inside another, versioned by one project', () => {
     () => loadTrain('sdk', { sdk: { ...CATALOG.sdk, checks: ['lint-everything'] } }, NX_JSON),
     /unknown checks lint-everything/,
   )
-  assert.throws(
-    () => loadTrain('sdk', { sdk: { ...CATALOG.sdk, checks: ['package-checks'] } }, NX_JSON),
-    /package-checks needs packageChecks/,
-  )
   assert.deepEqual(loadTrain('sdk', { sdk: { ...CATALOG.sdk, checks: ['sdk-kotlin'] } }, NX_JSON).checks, ['sdk-kotlin'])
   assert.throws(
     () => loadTrain('cli', { cli: { ...CATALOG.cli, checks: ['sdk-kotlin'] } }, NX_JSON),

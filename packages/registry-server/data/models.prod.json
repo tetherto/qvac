@@ -10149,9 +10149,20 @@
     "link": "https://huggingface.co/AtomicChat/Qwen3.5-4B-DFlash-GGUF"
   },
   {
+    "source": "https://huggingface.co/AtomicChat/Qwen3.5-9B-DFlash-GGUF/resolve/de44b8556576637d1049951f8fdbd98bcb2462f3/Qwen3.5-9B-DFlash.Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DFlash draft model for Qwen 3.5 9B",
+    "quantization": "q8_0",
+    "params": "9B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "dflash", "qwen3.5", "draft"],
+    "notes": "Speculative-decoding drafter, not a standalone model. Load a Qwen 3.5 9B entry with spec_type draft-dflash and this file as the draft model (draftModelSrc in the SDK). params is the target's size. Requires @qvac/llm-llamacpp >= 0.63.0.",
+    "link": "https://huggingface.co/AtomicChat/Qwen3.5-9B-DFlash-GGUF"
+  },
+  {
     "source": "https://huggingface.co/incoai/Qwen3.8-27B-DFlash2-GGUF/resolve/144eb06583b4fb0b6e54bc814b16a206a240f4d2/Qwen3.8-27B-DFlash2-Q8_0.gguf",
     "engine": "@qvac/llm-llamacpp",
-    "description": "DFlash2 draft model for Qwen 3.8 27B",
+    "description": "DFlash2 draft model for Qwen3.8 27B",
     "quantization": "q8_0",
     "params": "27B",
     "licenseId": "Apache-2.0",
