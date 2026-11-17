@@ -91,14 +91,16 @@ export const SECRETS = [
 ]
 // platformPackages publishes one npm package per platform before the meta; nameTransform renames the GPR build;
 // githubRelease names the GitHub release created after the npm publish; releaseGuard checks the release PR
-// (pr-checks.yml); releaseNotes needs the version's CHANGELOG section before the npm publish.
+// (pr-checks.yml); releaseNotes needs the version's CHANGELOG section before the npm publish; maxTarballBytes warns on a
+// platform package packed over that many bytes and publishes it first.
 const PUBLISH_KEYS = [
   'tagPrefix',
   'platformPackages',
   'nameTransform',
   'githubRelease',
   'releaseGuard',
-  'releaseNotes'
+  'releaseNotes',
+  'maxTarballBytes'
 ]
 const MOBILE_KEYS = [
   'devicefarmProject',
@@ -223,6 +225,11 @@ export function checkMetadata(project, target) {
     if (extra.length)
       throw new Error(
         `${project.name} ${target}: metadata.publish takes ${PUBLISH_KEYS.join(', ')}, found ${extra.join(', ')}`
+      )
+    const max = meta.publish.maxTarballBytes
+    if (max !== undefined && !(Number.isSafeInteger(max) && max > 0 && meta.publish.platformPackages))
+      throw new Error(
+        `${project.name} ${target}: metadata.publish.maxTarballBytes is a positive byte count and needs platformPackages`
       )
   }
   return meta
