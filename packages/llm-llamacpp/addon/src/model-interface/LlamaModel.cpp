@@ -1166,7 +1166,11 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
   auto parseAndPreflight = [this, &prompt](const std::string& input) {
     auto parsed = formatPrompt(input);
     if (!state_->isTextLlm_) {
-      // handleCache mutates the active session after parsing.
+      // handleCache mutates the active session after parsing. Audio has no
+      // header check here: mtmd bounds it when loadMedia decodes it, after
+      // handleCache, so audio over the limit leaves the requested session
+      // active and unchanged, as unreadable media or a rejected tool_choice
+      // does (see processPromptImpl).
       preflightImagePixels(parsed, prompt.media, mediaLimits_.maxImagePixels);
     }
     return parsed;
