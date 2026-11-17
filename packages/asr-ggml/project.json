@@ -73,17 +73,19 @@
         "parallel": false,
         "forwardAllArgs": false,
         "commands": [
-          "echo no system packages"
+          "pnpm --dir ../.. install --frozen-lockfile --ignore-scripts --filter @qvac/fabric..."
         ]
       },
       "configurations": {
         "linux-arm64": {
           "commands": [
+            "pnpm --dir ../.. install --frozen-lockfile --ignore-scripts --filter @qvac/fabric...",
             "dpkg -s pkg-config libx11-dev libxcb1-dev libxkbcommon-dev libopenblas-dev liblapack-dev libfftw3-dev mesa-vulkan-drivers >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y pkg-config libx11-dev libxcb1-dev libxkbcommon-dev libopenblas-dev liblapack-dev libfftw3-dev mesa-vulkan-drivers)"
           ]
         },
         "android-arm64": {
           "commands": [
+            "pnpm --dir ../.. install --frozen-lockfile --ignore-scripts --filter @qvac/fabric...",
             "dpkg -s pkg-config libx11-dev libxcb1-dev libxkbcommon-dev libopenblas-dev liblapack-dev libfftw3-dev >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y pkg-config libx11-dev libxcb1-dev libxkbcommon-dev libopenblas-dev liblapack-dev libfftw3-dev)"
           ]
         }
