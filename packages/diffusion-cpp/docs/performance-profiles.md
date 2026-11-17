@@ -97,12 +97,16 @@ H3 Strix Vulkan and LTX GB10 temporal changes remain excluded by the 5% rule.
 
 Hardware classification and selection are grouped in
 `addon/src/utils/PerformanceProfiles.cpp`. Add selection and fallback tests when
-adding a measured device/API row. The temporary vcpkg overlay pins merged
+adding a measured device/API row. `stable-diffusion-cpp` resolves to registry
+revision `2026-11-01#1`, containing merged
 [engine #64](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/64)
-(`bc53357484bc5d2ba08fbe5301dae192e5b9a176`) without source patches. It mirrors
-the pending `stable-diffusion-cpp` registry revision `2026-11-01#1`. After that
-revision is published, update the registry baseline, remove the overlay, and
-validate dependency resolution again before releasing the addon.
+(`bc53357484bc5d2ba08fbe5301dae192e5b9a176`). A scoped Git registry entry pins
+the [QVAC-27486 registry branch](https://github.com/tetherto/qvac-registry-vcpkg/tree/codex/qvac-27486-diffusion-engine64)
+at `c33611a32161c01324d961cd72c5ee400262415a`; the addon carries no port overlay.
+Other dependencies retain their existing registry baselines. After the registry
+change merges, switch this entry's reference to `main`, pin a baseline containing
+the merged revision, and verify dependency resolution before merging or releasing
+the addon.
 
 See [implementation validation](performance-profiles-validation.md) for timings,
 quality comparisons, memory costs, CI status and remaining release checks.
