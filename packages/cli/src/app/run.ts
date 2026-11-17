@@ -6,8 +6,12 @@ const WINDOWS = process.platform === 'win32'
 const FORWARDED_SIGNALS: NodeJS.Signals[] = WINDOWS ? ['SIGINT'] : ['SIGINT', 'SIGTERM', 'SIGHUP']
 
 export async function privateTempDir(dir: string): Promise<string | null> {
-  if (WINDOWS) return null
+  return WINDOWS ? null : await privateDir(dir)
+}
+
+export async function privateDir(dir: string): Promise<string> {
   await mkdir(dir, { recursive: true, mode: 0o700 })
+  if (WINDOWS) return dir
   const stats = await lstat(dir)
   if (!stats.isDirectory() || stats.uid !== process.getuid?.() || (stats.mode & 0o022) !== 0) {
     throw new Error(

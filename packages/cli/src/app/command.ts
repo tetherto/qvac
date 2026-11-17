@@ -17,8 +17,10 @@ export function registerAppCommand(program: Command): void {
 export async function runAppCli(args: string[]): Promise<void> {
   try {
     const { ensureAppBinary, resolveBaseUrl } = await import('@/app/binary')
-    const { privateTempDir, runBinary } = await import('@/app/run')
-    const dir = process.env['QVAC_APP_CLI_DIR'] ?? join(homedir(), '.qvac', 'app-cli')
+    const { privateDir, privateTempDir, runBinary } = await import('@/app/run')
+    const dir = await privateDir(
+      process.env['QVAC_APP_CLI_DIR'] || join(homedir(), '.qvac', 'app-cli')
+    )
     const file = await ensureAppBinary({
       baseUrl: resolveBaseUrl(process.env['QVAC_APP_CLI_URL']),
       dir,
@@ -27,7 +29,7 @@ export async function runAppCli(args: string[]): Promise<void> {
     })
     const versionDir = dirname(file)
     const marker = join(versionDir, 'run', String(process.pid))
-    await mkdir(dirname(marker), { recursive: true })
+    await mkdir(dirname(marker), { recursive: true, mode: 0o700 })
     await writeFile(marker, '')
     let code: number
     try {

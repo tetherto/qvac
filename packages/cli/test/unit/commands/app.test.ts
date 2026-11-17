@@ -130,12 +130,17 @@ async function readState(dir: string): Promise<unknown> {
 
 async function runCli(
   args: string[],
-  env: Record<string, string>
+  env: Record<string, string>,
+  cwd = CLI_ROOT
 ): Promise<{ stdout: string; stderr: string; code: number | null }> {
-  const child = spawn(process.execPath, ['--import', 'tsx', CLI_ENTRY, ...args], {
-    cwd: CLI_ROOT,
-    env: { ...process.env, ...env }
-  })
+  const child = spawn(
+    process.execPath,
+    ['--import', import.meta.resolve('tsx'), CLI_ENTRY, ...args],
+    {
+      cwd,
+      env: { ...process.env, TSX_TSCONFIG_PATH: join(CLI_ROOT, 'tsconfig.json'), ...env }
+    }
+  )
   let stdout = ''
   let stderr = ''
   child.stdout.on('data', (d) => {
@@ -512,6 +517,75 @@ describe('qvac app', () => {
       await assert.rejects(privateTempDir(join(dir, 'link')), /Refusing/)
       await assert.rejects(privateTempDir(join(dir, 'shared')), /Refusing/)
       assert.equal(await privateTempDir(join(dir, 'real')), join(dir, 'real'))
+    }
+  )
+
+  it(
+    'refuses a cache directory that others can write to and does not run the binary in it',
+    { skip: SKIP_EXEC },
+    async (t) => {
+      for (const mode of [0o775, 0o777]) {
+        const dir = await cacheDir(t)
+        await seed(dir, '1.0.0', Date.now())
+        await chmod(dir, mode)
+
+        const r = await runCli(['app'], {
+          QVAC_APP_CLI_URL: await downUrl(),
+          QVAC_APP_CLI_DIR: dir
+        })
+
+        assert.equal(r.code, 1, mode.toString(8))
+        assert.equal(r.stdout, '')
+        assert.ok(r.stderr.includes(`Refusing ${dir}`), r.stderr)
+      }
+    }
+  )
+
+  it(
+    'creates the cache directory and everything under it for this user only',
+    { skip: SKIP_EXEC },
+    async (t) => {
+      const gz = gzipSync(fakeBinary(0))
+      const { baseUrl } = await serve(t, { 'manifest.json': manifest('1.0.0', gz), [FILE]: gz })
+      const dir = join(await cacheDir(t), 'app-cli')
+      const umask = process.umask(0o002)
+      t.after(() => process.umask(umask))
+
+      const r = await runCli(['app'], { QVAC_APP_CLI_URL: baseUrl, QVAC_APP_CLI_DIR: dir })
+
+      assert.equal(r.code, 0, r.stderr)
+      const versionDir = join(dir, 'versions', '1.0.0')
+      for (const created of [
+        dir,
+        join(dir, 'versions'),
+        versionDir,
+        join(versionDir, 'run'),
+        join(versionDir, 'tmp')
+      ]) {
+        assert.equal((await stat(created)).mode & 0o777, 0o700, created)
+      }
+    }
+  )
+
+  it(
+    'uses the default cache directory when QVAC_APP_CLI_DIR is empty',
+    { skip: SKIP_EXEC },
+    async (t) => {
+      const cwd = await cacheDir(t)
+      await seed(cwd, '1.0.0', Date.now())
+      const home = await cacheDir(t)
+      const baseUrl = await downUrl()
+
+      const r = await runCli(
+        ['app'],
+        { QVAC_APP_CLI_URL: baseUrl, QVAC_APP_CLI_DIR: '', HOME: home },
+        cwd
+      )
+
+      assert.equal(r.code, 1)
+      assert.equal(r.stdout, '')
+      assert.ok(r.stderr.includes(`${baseUrl}/manifest.json`), r.stderr)
+      assert.ok(existsSync(join(home, '.qvac', 'app-cli')))
     }
   )
 

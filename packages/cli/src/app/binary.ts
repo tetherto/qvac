@@ -142,7 +142,7 @@ async function install(opts: AppBinaryOptions, manifest: Manifest): Promise<stri
   const temp = `${target}.${process.pid}.download`
   const url = `${opts.baseUrl}/${binary.file}`
   const stallMs = opts.stallMs ?? STALL_MS
-  await mkdir(versionDir, { recursive: true })
+  await mkdir(versionDir, { recursive: true, mode: 0o700 })
   await removeStaleDownloads(versionDir, opts.now - stallMs)
   console.error(`Downloading the QV.AC app CLI ${manifest.version} (${formatSize(binary.size)})...`)
   const stall = new AbortController()
