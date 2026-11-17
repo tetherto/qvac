@@ -61,8 +61,18 @@
           "features": [
             "webgpu"
           ]
+        },
+        {
+          "name": "dawn",
+          "default-features": false
         }
       ]
     }
-  }
+  },
+  "overrides": [
+    {
+      "name": "dawn",
+      "version": "20260410.140140"
+    }
+  ]
 }
