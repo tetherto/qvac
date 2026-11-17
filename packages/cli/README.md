@@ -435,6 +435,8 @@ See **[docs/serve/](./docs/serve/README.md)** for the server reference: shared c
 
 Run the QV.AC app CLI. Every argument after `app` goes to it unchanged, including `--help` and `--version`.
 
+The app CLI calls itself `qvac-app` in its help and messages: where it says `qvac-app serve`, type `qvac app serve`.
+
 ```bash
 qvac app [args...]
 ```
