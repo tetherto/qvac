@@ -181,7 +181,7 @@
     "@types/node": "^22.15.3",
     "bare-buffer": "^3.4.2",
     "bare-ffmpeg": "^1.0.0-32",
-    "bare-https": "^3.0.0",
+    "bare-https": "^4.0.0",
     "bare-os": "^3.6.2",
     "bare-process": "^4.2.2",
     "bare-stream": "^2.7.0",
