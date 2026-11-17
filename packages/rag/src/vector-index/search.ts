@@ -8,16 +8,20 @@ import {
   type SpaceRecord
 } from '../db/records.js'
 import {
-  attachDocumentMetadata,
+  attachDocumentDetails,
   checkQuery,
   checkStoredVector,
   dot,
   norm,
   resolveDocuments,
+  scanSearch,
+  sortHits,
   throwIfAborted,
   toHit,
+  type SearchOptions,
   type SearchQuery
 } from '../search.js'
+import { selectDiverse } from '../diversify.js'
 import { QvacErrorRAG, ERR_CODES } from '../errors.js'
 import { PADDING_ID, TURBOVEC_MAX_COMPONENT, type NativeSearchResult } from './native.js'
 import { normalizeRows, type OpenIndex } from './registry.js'
@@ -27,6 +31,11 @@ import type { SearchHit, SearchScope } from '../types.js'
 // Extra candidates fetched past k. They are rescored exactly from the stored
 // vectors, which absorbs quantization error and IDs the reader doesn't know.
 const MIN_EXTRA_CANDIDATES = 16
+
+// With `perDocument`, the pool starts at k × POOL_GROWTH candidates and grows by
+// that factor while the cap leaves fewer than k hits, up to MAX_POOL.
+const POOL_GROWTH = 4
+const MAX_POOL = 4096
 
 // Index search with the same contract as `scanSearch`. The index proposes
 // candidates; every hit is then read back through `nativeIds` from the same
@@ -45,7 +54,7 @@ export async function indexSearch(
   query: SearchQuery,
   k: number,
   openIndex: () => Promise<OpenIndex | null>,
-  options: { strict: boolean; signal?: AbortSignal }
+  options: SearchOptions
 ): Promise<SearchHit[] | 'stale' | 'unavailable'> {
   throwIfAborted(options.signal)
   checkQuery(space, scope, query)
@@ -54,62 +63,100 @@ export async function indexSearch(
   const { namespace } = scope
   let allowed: Set<string> | null = null
   let allowlist: BigUint64Array | null = null
+  let documents: DocumentRecord[] = []
   if (scope.documentIds !== undefined) {
-    const documents = await resolveDocuments(reader, scope, options.strict)
+    documents = await resolveDocuments(reader, scope, options.strict)
     allowed = new Set(documents.map((document) => document.documentId))
     allowlist = await nativeIdsOf(reader, documents)
     if (allowlist.length === 0) return []
   }
 
-  // Opened last: a rebuild started by another search may dispose the native
-  // index it replaces, so nothing awaits between this and the native search.
-  const index = await untilAborted(openIndex(), options.signal)
-  if (!index) return 'unavailable'
-  if (index.revision() !== revision) return 'stale'
-  if (index.storage.startsWith('turbovec-') && !index.normalize && !quantizable(query.vector)) {
-    return 'unavailable'
-  }
-  const available = allowlist ? allowlist.length : index.native.length
-  if (available === 0) return []
-
   const dims = space.dimensions
-  const vector = query.vector.slice()
-  if (index.normalize) normalizeRows(vector, dims)
-  let result: NativeSearchResult
-  try {
-    result = searchCandidates(index, vector, k, available, allowlist)
-  } catch {
-    index.fail()
-    return 'unavailable'
-  }
-
   const cosine = space.metric === 'cosine'
   const queryNorm = cosine ? norm(query.vector, 0, dims) : 1
   const stored = new Float32Array(dims)
-  const hits: SearchHit[] = []
-  for (let slot = 0; slot < result.k; slot++) {
-    const id = result.ids[slot]
-    if (id === PADDING_ID) break
-    const chunk = await readChunk(reader, namespace, id)
-    if (!chunk || (allowed && !allowed.has(chunk.documentId))) continue
-    checkStoredVector(chunk, dims)
-    decodeVectorInto(chunk.vector, stored, 0)
-    let score = dot(query.vector, stored, 0)
-    if (cosine) {
-      const denominator = queryNorm * norm(stored, 0, dims)
-      score = denominator === 0 ? 0 : score / denominator
-    }
-    hits.push(toHit(chunk, score))
-  }
-  throwIfAborted(options.signal)
 
-  // Ties keep the scan's order: scope order for a document list, key order
-  // for a whole namespace.
-  const rank = new Map(scope.documentIds?.map((documentId, i) => [documentId, i]))
-  hits.sort((a, b) => compareHits(a, b, rank))
-  if (hits.length > k) hits.length = k
-  await attachDocumentMetadata(reader, namespace, hits)
-  return hits
+  // The top `want` candidates, rescored exactly and sorted. Each call opens the
+  // index last: a rebuild started by another search may dispose the native
+  // index it replaces, so nothing awaits between the open and the native search.
+  async function candidates(
+    want: number
+  ): Promise<{ hits: SearchHit[]; available: number } | 'stale' | 'unavailable'> {
+    const index = await untilAborted(openIndex(), options.signal)
+    if (!index) return 'unavailable'
+    if (index.revision() !== revision) return 'stale'
+    if (index.storage.startsWith('turbovec-') && !index.normalize && !quantizable(query.vector)) {
+      return 'unavailable'
+    }
+    const available = allowlist ? allowlist.length : index.native.length
+    if (available === 0) return { hits: [], available }
+
+    const vector = query.vector.slice()
+    if (index.normalize) normalizeRows(vector, dims)
+    let result: NativeSearchResult
+    try {
+      result = searchCandidates(index, vector, want, available, allowlist)
+    } catch {
+      index.fail()
+      return 'unavailable'
+    }
+    const hits: SearchHit[] = []
+    for (let slot = 0; slot < result.k; slot++) {
+      const id = result.ids[slot]
+      if (id === PADDING_ID) break
+      const chunk = await readChunk(reader, namespace, id)
+      if (!chunk || (allowed && !allowed.has(chunk.documentId))) continue
+      checkStoredVector(chunk, dims)
+      decodeVectorInto(chunk.vector, stored, 0)
+      let score = dot(query.vector, stored, 0)
+      if (cosine) {
+        const denominator = queryNorm * norm(stored, 0, dims)
+        score = denominator === 0 ? 0 : score / denominator
+      }
+      hits.push(toHit(chunk, score))
+    }
+    throwIfAborted(options.signal)
+    return { hits: sortHits(hits, scope), available }
+  }
+
+  const { perDocument } = options
+  let pool = perDocument === undefined ? k : Math.max(k, Math.min(MAX_POOL, k * POOL_GROWTH))
+  let ranked: SearchHit[]
+  let selected: SearchHit[]
+  for (;;) {
+    const found = await candidates(pool)
+    if (typeof found === 'string') return found
+    ranked = found.hits
+    if (perDocument === undefined) {
+      selected = ranked.slice(0, k)
+      break
+    }
+    selected = selectDiverse(ranked, k, perDocument)
+    if (selected.length === k || pool >= found.available || pool >= MAX_POOL) break
+    pool = Math.min(MAX_POOL, pool * POOL_GROWTH)
+  }
+
+  // Listed documents the pool missed get their best chunk from an exact scan,
+  // so every one of them can be seated.
+  if (perDocument !== undefined && documents.length > 0 && documents.length <= k) {
+    const present = new Set(ranked.map((hit) => hit.documentId))
+    const missing = documents
+      .filter((document) => document.chunkCount > 0 && !present.has(document.documentId))
+      .map((document) => document.documentId)
+    if (missing.length > 0) {
+      const best = await scanSearch(
+        reader,
+        space,
+        { namespace, documentIds: missing },
+        query,
+        missing.length,
+        { strict: false, perDocument: 1, signal: options.signal }
+      )
+      selected = selectDiverse(sortHits(ranked.concat(best), scope), k, perDocument)
+    }
+  }
+  await attachDocumentDetails(reader, namespace, selected)
+  return selected
 }
 
 // A query TurboVec can't rotate is still a valid query; the scan answers it.
@@ -159,17 +206,6 @@ async function untilAborted<T>(pending: Promise<T>, signal: AbortSignal | undefi
   } finally {
     signal.removeEventListener('abort', onAbort)
   }
-}
-
-function compareHits(a: SearchHit, b: SearchHit, rank: Map<string, number>): number {
-  if (a.score !== b.score) return b.score - a.score
-  if (a.documentId !== b.documentId) {
-    const ra = rank.get(a.documentId)
-    const rb = rank.get(b.documentId)
-    if (ra !== undefined && rb !== undefined) return ra - rb
-    return a.documentId < b.documentId ? -1 : 1
-  }
-  return a.ordinal - b.ordinal
 }
 
 async function readChunk(

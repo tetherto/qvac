@@ -181,9 +181,14 @@ export interface TextQuery {
   spaceId?: never
 }
 
+// `k` is the number of hits to return. With `perDocument`, every document's best
+// hit is seated before any document gets a second one, and no document gets
+// more than `perDocument`. When `scope.documentIds` lists at most `k` documents,
+// each one that has chunks gets a hit.
 export type SearchParams = (VectorQuery | TextQuery) & {
   scope: SearchScope
   k: number
+  perDocument?: number
   // Checked between scan batches; an aborted search fails with OPERATION_CANCELLED.
   signal?: AbortSignal
 }
@@ -192,7 +197,19 @@ export type ScopedSearchParams = (VectorQuery | TextQuery) & {
   // Intersected with the bound scope; it can narrow it, never widen it.
   scope?: Partial<SearchScope>
   k: number
+  perDocument?: number
   signal?: AbortSignal
+}
+
+// Lifted from the document's `metadata`, else from the chunk's `metadataJson`
+// (the rag-extract chunk format). `page` only comes from the chunk. A key is
+// absent unless it holds a non-empty string, or for `page` an integer >= 1.
+export interface SearchCitation {
+  title?: string
+  page?: number
+  sourceUrl?: string
+  sourcePath?: string
+  mimeType?: string
 }
 
 export interface SearchHit {
@@ -200,10 +217,15 @@ export interface SearchHit {
   documentId: string
   chunkId: string
   ordinal: number
+  // The document's generation the chunk belongs to; re-ingest bumps it.
+  generation: number
+  // Chunks in that generation.
+  chunkCount: number
   content: string
   metadataJson?: string
   // The document's `metadata` from ingest, when it had any.
   documentMetadata?: Record<string, unknown>
+  citation: SearchCitation
   score: number
 }
 

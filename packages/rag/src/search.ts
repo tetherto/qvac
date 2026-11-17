@@ -8,7 +8,8 @@ import {
   type SpaceRecord
 } from './db/records.js'
 import type { HyperDBReader } from './db/db-types.js'
-import type { SearchHit, SearchScope } from './types.js'
+import { selectDiverse } from './diversify.js'
+import type { SearchCitation, SearchHit, SearchScope } from './types.js'
 
 // Rows decoded and scored per step; memory stays bounded by this and k.
 export const SCAN_BATCH_SIZE = 256
@@ -18,20 +19,28 @@ export interface SearchQuery {
   spaceId: string
 }
 
+export interface SearchOptions {
+  strict: boolean
+  signal?: AbortSignal
+  // Caps hits per document and seats every document's best hit first.
+  perDocument?: number
+}
+
 interface Ranked {
   score: number
   hit: SearchHit
 }
 
 // Exact scan over the chunks inside `scope`. Out-of-scope rows are never read,
-// so only allowed chunks compete for the top k.
+// so only allowed chunks compete for the top k. With `perDocument`, each
+// document keeps its own top `perDocument`, so the selection is exact too.
 export async function scanSearch(
   reader: HyperDBReader,
   space: SpaceRecord,
   scope: SearchScope,
   { vector: query, spaceId }: SearchQuery,
   k: number,
-  options: { strict: boolean; signal?: AbortSignal }
+  options: SearchOptions
 ): Promise<SearchHit[]> {
   throwIfAborted(options.signal)
   checkQuery(space, scope, { vector: query, spaceId })
@@ -44,6 +53,18 @@ export async function scanSearch(
   const vectors = new Float32Array(SCAN_BATCH_SIZE * dims)
   const batch: ChunkRecord[] = []
   const top: Ranked[] = []
+  const perDocument = options.perDocument
+  const byDocument = new Map<string, Ranked[]>()
+
+  function keep(score: number, chunk: ChunkRecord) {
+    if (perDocument === undefined) return offer(top, k, score, chunk)
+    let kept = byDocument.get(chunk.documentId)
+    if (!kept) {
+      kept = []
+      byDocument.set(chunk.documentId, kept)
+    }
+    offer(kept, perDocument, score, chunk)
+  }
 
   function scoreBatch() {
     for (let row = 0; row < batch.length; row++) {
@@ -53,7 +74,7 @@ export async function scanSearch(
         const denominator = queryNorm * norm(vectors, offset, dims)
         score = denominator === 0 ? 0 : score / denominator
       }
-      offer(top, k, score, batch[row])
+      keep(score, batch[row])
     }
     batch.length = 0
   }
@@ -72,9 +93,32 @@ export async function scanSearch(
   scoreBatch()
   throwIfAborted(options.signal)
 
-  const hits = top.map((entry) => entry.hit)
-  await attachDocumentMetadata(reader, scope.namespace, hits)
+  let hits = top.map((entry) => entry.hit)
+  if (perDocument !== undefined) {
+    const ranked: SearchHit[] = []
+    for (const kept of byDocument.values()) for (const entry of kept) ranked.push(entry.hit)
+    hits = selectDiverse(sortHits(ranked, scope), k, perDocument)
+  }
+  await attachDocumentDetails(reader, scope.namespace, hits)
   return hits
+}
+
+// Score first; ties go by the scope's document order for a document list and by
+// key order (document ID, then ordinal) otherwise, which is the scan's order.
+export function sortHits(hits: SearchHit[], scope: SearchScope): SearchHit[] {
+  const rank = new Map(scope.documentIds?.map((documentId, i) => [documentId, i]))
+  return hits.sort((a, b) => compareHits(a, b, rank))
+}
+
+function compareHits(a: SearchHit, b: SearchHit, rank: Map<string, number>): number {
+  if (a.score !== b.score) return b.score - a.score
+  if (a.documentId !== b.documentId) {
+    const ra = rank.get(a.documentId)
+    const rb = rank.get(b.documentId)
+    if (ra !== undefined && rb !== undefined) return ra - rb
+    return a.documentId < b.documentId ? -1 : 1
+  }
+  return a.ordinal - b.ordinal
 }
 
 export function checkQuery(
@@ -106,8 +150,9 @@ export function checkStoredVector(chunk: ChunkRecord, dims: number): void {
   }
 }
 
-// Reads each hit's document once, from the same snapshot as the scan.
-export async function attachDocumentMetadata(
+// Reads each hit's document once, from the same snapshot as the scan, and
+// fills the fields that come from it: chunk count, metadata and citation.
+export async function attachDocumentDetails(
   reader: HyperDBReader,
   namespace: string,
   hits: SearchHit[]
@@ -118,14 +163,52 @@ export async function attachDocumentMetadata(
       reader.get<DocumentRecord>(DOCUMENTS, { namespace, documentId })
     )
   )
-  const metadata = new Map<string, Record<string, unknown>>()
+  const byId = new Map<string, DocumentRecord>()
   documents.forEach((document, i) => {
-    if (document?.metadata) metadata.set(documentIds[i], document.metadata)
+    if (document) byId.set(documentIds[i], document)
   })
   for (const hit of hits) {
-    const value = metadata.get(hit.documentId)
-    if (value) hit.documentMetadata = value
+    const document = byId.get(hit.documentId)
+    if (!document) continue
+    hit.chunkCount = document.chunkCount
+    if (document.metadata) hit.documentMetadata = document.metadata
+    hit.citation = citationOf(document.metadata, hit.metadataJson)
   }
+}
+
+const SOURCE_KEYS = ['title', 'sourceUrl', 'sourcePath', 'mimeType'] as const
+
+// Document metadata wins over chunk metadata (the rag-extract chunk format
+// carries the same keys); `page` is per chunk. Only well-typed values are lifted.
+export function citationOf(
+  documentMetadata: Record<string, unknown> | undefined,
+  metadataJson: string | undefined
+): SearchCitation {
+  const chunk = parseObject(metadataJson)
+  const citation: SearchCitation = {}
+  for (const key of SOURCE_KEYS) {
+    const value = nonEmptyString(documentMetadata?.[key]) ?? nonEmptyString(chunk?.[key])
+    if (value !== undefined) citation[key] = value
+  }
+  const page = chunk?.page
+  if (typeof page === 'number' && Number.isSafeInteger(page) && page >= 1) citation.page = page
+  return citation
+}
+
+function parseObject(json: string | undefined): Record<string, unknown> | null {
+  if (json === undefined) return null
+  try {
+    const value: unknown = JSON.parse(json)
+    return value !== null && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null
+  } catch {
+    return null
+  }
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 
 // Resolves the scope to key ranges over current-generation chunks.
@@ -216,7 +299,10 @@ export function toHit(chunk: ChunkRecord, score: number): SearchHit {
     documentId: chunk.documentId,
     chunkId: chunk.chunkId,
     ordinal: chunk.ordinal,
+    generation: chunk.generation,
+    chunkCount: 0,
     content: chunk.content,
+    citation: {},
     score
   }
   if (typeof chunk.metadataJson === 'string') hit.metadataJson = chunk.metadataJson

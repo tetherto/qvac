@@ -149,9 +149,17 @@ Returns `{ documents, skipped, cancelled, revision }`. Each entry in `documents`
 
 Deletes the documents and their chunks in one batch. Unknown IDs are ignored. Returns `{ deleted, revision }`.
 
-### `search({ scope, vector, spaceId, k, signal? })` / `search({ scope, query, k, signal? })`
+### `search({ scope, vector, spaceId, k, perDocument?, signal? })` / `search({ scope, query, k, perDocument?, signal? })`
 
-A text `query` is embedded with the port's `embedQuery` and searched in the port's space, so it takes no `spaceId`. Returns up to `k` hits `{ namespace, documentId, chunkId, ordinal, content, metadataJson?, documentMetadata?, score }`, best first. `metadataJson` is the chunk's and `documentMetadata` is the document's `metadata` from ingest. `spaceId` is the space the query was embedded in; a different one fails with `EMBEDDING_SPACE_MISMATCH`, even when its dimensions match. The score is the dot product, or the cosine similarity for `cosine` spaces, computed from the stored float32 vectors either way. With the index, candidates come from TurboVec and are rescored exactly; a candidate HyperDB no longer maps to a current chunk is dropped. An aborted `signal` fails with `OPERATION_CANCELLED`; the scan checks it between batches, and a search waiting for an index to load or rebuild stops waiting, while the rebuild finishes for later searches. Equal scores rank in scope order for a `documentIds` list and in document ID order otherwise, with and without the index.
+A text `query` is embedded with the port's `embedQuery` and searched in the port's space, so it takes no `spaceId`. Returns up to `k` hits `{ namespace, documentId, chunkId, ordinal, generation, chunkCount, content, metadataJson?, documentMetadata?, citation, score }`, best first. `metadataJson` is the chunk's and `documentMetadata` is the document's `metadata` from ingest. `generation` and `chunkCount` describe the document version the chunk belongs to. `spaceId` is the space the query was embedded in; a different one fails with `EMBEDDING_SPACE_MISMATCH`, even when its dimensions match. The score is the dot product, or the cosine similarity for `cosine` spaces, computed from the stored float32 vectors either way. With the index, candidates come from TurboVec and are rescored exactly; a candidate HyperDB no longer maps to a current chunk is dropped. An aborted `signal` fails with `OPERATION_CANCELLED`; the scan checks it between batches, and a search waiting for an index to load or rebuild stops waiting, while the rebuild finishes for later searches. Equal scores rank in scope order for a `documentIds` list and in document ID order otherwise, with and without the index.
+
+`citation` holds `title`, `sourceUrl`, `sourcePath` and `mimeType` from the document's `metadata`, falling back to the chunk's `metadataJson` (the `rag-extract` chunk format carries the same keys), and `page` from the chunk's `metadataJson`. A key is present only when it holds a non-empty string, or for `page` an integer of at least 1.
+
+`perDocument` spreads the `k` hits across documents: each document's best hit is taken first, in score order, then further hits go round the documents again, up to `perDocument` each. The hits still come back best first. When `scope.documentIds` lists at most `k` documents, every listed document that has chunks gets a hit. Without the index the selection is exact. With it, candidates are fetched in a window that grows while the cap leaves fewer than `k` hits, up to 4,096 candidates, so a result can hold fewer than `k` hits when one document fills that window.
+
+```ts
+const hits = await rag.search({ scope: { namespace: 'handbook' }, query, k: 8, perDocument: 2 })
+```
 
 `scope` is `{ namespace, documentIds? }`. Only chunks inside the scope are read and ranked, so a restricted search fills its top `k` from allowed documents. Search fails closed:
 
@@ -162,7 +170,7 @@ A text `query` is embedded with the port's `embedQuery` and searched in the port
 
 ### `scoped(scope)`
 
-Returns `{ search }` bound to `scope`. The `scope` passed to its `search` is optional and is intersected with the bound one: it can narrow to fewer documents but never add a document or switch namespace. Its `search` takes the same `vector` and `spaceId`, or `query`, plus `k` and `signal`, as `search`. A handle never fails on document identity: an ID that the namespace does not have, whether it was never ingested or has since been deleted, is skipped, so a handle whose documents are gone returns no hits instead of an error. Only the shape of the scope can fail (`INVALID_SCOPE`), and a namespace that does not exist fails with `NAMESPACE_NOT_FOUND`.
+Returns `{ search }` bound to `scope`. The `scope` passed to its `search` is optional and is intersected with the bound one: it can narrow to fewer documents but never add a document or switch namespace. Its `search` takes the same `vector` and `spaceId`, or `query`, plus `k`, `perDocument` and `signal`, as `search`. A handle never fails on document identity: an ID that the namespace does not have, whether it was never ingested or has since been deleted, is skipped, so a handle whose documents are gone returns no hits instead of an error. Only the shape of the scope can fail (`INVALID_SCOPE`), and a namespace that does not exist fails with `NAMESPACE_NOT_FOUND`.
 
 ```ts
 const reader = rag.scoped({ namespace: 'handbook', documentIds: ['leave-policy', 'travel'] })

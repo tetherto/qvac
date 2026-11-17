@@ -124,6 +124,7 @@ const searchSchema = z
     vector: vectorSchema,
     spaceId: z.string().min(1),
     k: z.number().int().positive(),
+    perDocument: z.number().int().positive().optional(),
     signal: signalSchema.optional()
   })
   .strict()
@@ -133,6 +134,7 @@ const textSearchSchema = z
     scope: z.unknown(),
     query: z.string().min(1),
     k: z.number().int().positive(),
+    perDocument: z.number().int().positive().optional(),
     signal: signalSchema.optional()
   })
   .strict()
@@ -311,6 +313,7 @@ export function parseDelete(params: unknown): DeleteDocumentsParams {
 export type ValidSearch = {
   scope: unknown
   k: number
+  perDocument?: number
   signal?: AbortSignal
 } & ({ vector: Float32Array; spaceId: string; query?: undefined } | { query: string })
 
@@ -318,8 +321,8 @@ export function parseSearch(params: unknown): ValidSearch {
   if (hasKey(params, 'query')) {
     const parsed = textSearchSchema.safeParse(params)
     if (!parsed.success) throw invalidInput(parsed.error)
-    const { scope, query, k, signal } = parsed.data
-    return { scope, query, k, signal }
+    const { scope, query, k, perDocument, signal } = parsed.data
+    return { scope, query, k, perDocument, signal }
   }
   const parsed = searchSchema.safeParse(params)
   if (!parsed.success) throw invalidInput(parsed.error)
@@ -328,6 +331,7 @@ export function parseSearch(params: unknown): ValidSearch {
     vector: toVector(parsed.data.vector, 'vector'),
     spaceId: parsed.data.spaceId,
     k: parsed.data.k,
+    perDocument: parsed.data.perDocument,
     signal: parsed.data.signal
   }
 }
