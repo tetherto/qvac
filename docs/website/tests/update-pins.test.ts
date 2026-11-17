@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { lineOf, packageDirOf, planPin, type PinRequest } from '../scripts/update-pins'
+import { lineOf, packageDirOf, planPin, releasesVersion, type PinRequest } from '../scripts/update-pins'
 import { parseVersionsFile, type VersionsFile } from '../src/lib/versions-file'
 
 const declaration = (lines: unknown[]): VersionsFile =>
@@ -18,7 +18,7 @@ const request = (overrides: Partial<PinRequest> = {}): PinRequest => ({
   ref: 'release-sdk-0.24.0',
   sha: SHA_B,
   packageVersion: '0.24.0',
-  bumped: true,
+  releasesVersion: true,
   changedSince: () => true,
   ...overrides,
 })
@@ -71,16 +71,16 @@ describe('pinning a release', () => {
     // release-sdk-0.25.0 cut from a main still at 0.24.x: its version reads as v0.24.
     const { move, next } = planPin(
       declaration([{ version: 'v0.24', ref: 'release-sdk-0.24.0', sha: SHA_A }]),
-      request({ ref: 'release-sdk-0.25.0', packageVersion: '0.24.0', bumped: false }),
+      request({ ref: 'release-sdk-0.25.0', packageVersion: '0.24.0', releasesVersion: false }),
     )
-    expect(move).toEqual({ kind: 'unchanged', version: 'v0.24', reason: 'version not bumped on this branch yet' })
+    expect(move).toEqual({ kind: 'unchanged', version: 'v0.24', reason: 'not the version this branch releases yet' })
     expect(next.lines).toEqual([{ version: 'v0.24', ref: 'release-sdk-0.24.0', sha: SHA_A }])
   })
 
   it('declares the line of a main bumped before the cut', () => {
     const { move } = planPin(
       declaration([{ version: 'v0.24', ref: 'release-sdk-0.24.0', sha: SHA_A }]),
-      request({ ref: 'release-sdk-0.25.0', packageVersion: '0.25.0', bumped: false }),
+      request({ ref: 'release-sdk-0.25.0', packageVersion: '0.25.0', releasesVersion: false }),
     )
     expect(move).toEqual({ kind: 'declare', version: 'v0.25' })
   })
@@ -88,9 +88,17 @@ describe('pinning a release', () => {
   it('still moves the pin to a documentation fix on a branch whose version was never bumped from main', () => {
     const { move } = planPin(
       declaration([{ version: 'v0.25', ref: 'release-sdk-0.25.0', sha: SHA_A }]),
-      request({ ref: 'release-sdk-0.25.0', packageVersion: '0.25.0', bumped: false }),
+      request({ ref: 'release-sdk-0.25.0', packageVersion: '0.25.0', releasesVersion: false }),
     )
     expect(move.kind).toBe('move')
+  })
+
+  it('moves the pin to a patch branch cut from a main that already holds its version', () => {
+    const { move } = planPin(
+      declaration([{ version: 'v0.25', ref: 'release-sdk-0.25.0', sha: SHA_A }]),
+      request({ ref: 'release-sdk-0.25.1', packageVersion: '0.25.1', releasesVersion: true }),
+    )
+    expect(move).toMatchObject({ kind: 'move', version: 'v0.25' })
   })
 
   it('pins nothing over a line still held in place', () => {
@@ -130,5 +138,18 @@ describe('previewing a release pull request', () => {
 
     expect(previewFlags('pr', ['sdk'], root)).toEqual({ flags: ['--override sdk@v0.24=pr'], notes: [] })
     expect(previewFlags('pr', ['cli'], root)).toEqual({ flags: [], notes: ['@qvac/cli v0.19: not pinned on main yet, so it cannot be previewed'] })
+  })
+})
+
+describe('the version a release branch releases', () => {
+  it('is the one a package branch names, even when main held it before the cut', () => {
+    expect(releasesVersion('release-sdk-0.25.1', 'packages/sdk', '0.25.1', '0.25.1')).toBe(true)
+    expect(releasesVersion('release-sdk-0.26.0', 'packages/sdk', '0.25.0', '0.25.0')).toBe(false)
+    expect(releasesVersion('release-sdk-0.26.0', 'packages/sdk', '0.26.0', '0.25.0')).toBe(true)
+  })
+
+  it('on a train branch, any version other than the one it was cut with', () => {
+    expect(releasesVersion('release-train-sdk-0.26.0', 'packages/cli', '0.20.0', '0.19.2')).toBe(true)
+    expect(releasesVersion('release-train-sdk-0.26.0', 'packages/cli', '0.19.2', '0.19.2')).toBe(false)
   })
 })

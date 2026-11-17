@@ -421,10 +421,13 @@ with the branch name.
 branch head, for the packages the branch releases — its name's package, or
 every package of a release train. A release PR's versions are read from the
 PR's head, because the branch still carries the versions it was cut with;
-the pin is always the branch head. No PR code runs. A version still equal to
-the one at the branch's fork point from `main` never moves a line pinned to
-another branch, so a branch read before its bump cannot take over the
-previous line. A new minor's line is declared, pinned to
+the pin is always the branch head. No PR code runs. A version that is not the
+one the branch releases never moves a line pinned to another branch, so a
+branch read before its bump cannot take over the previous line. A
+`release-<package>-x.y.z` branch releases the `x.y.z` its name gives, which
+also covers a version prepared on `main` before the cut; a train branch names
+only its anchor's version, so there the version must differ from the one at
+the branch's fork point from `main`. A new minor's line is declared, pinned to
 the branch head; an existing line's pin moves to a later patch branch, or to
 a documentation change on the same branch; a line still held in place is
 reported and left alone. When anything moved, it opens or updates one pull

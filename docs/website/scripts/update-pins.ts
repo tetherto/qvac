@@ -10,8 +10,10 @@
  * and edits its versions file. A release PR passes its head there: at the cut
  * the release branch still carries the version it forked from main with, and
  * the PR is what brings the new one. The pin itself is always `<commit>`, the
- * release branch's head. The version is compared with the one at the fork
- * point, the merge base of `<commit>` and the checkout (main):
+ * release branch's head. The version must be the one the branch releases: the
+ * `x.y.z` of a `release-<package>-x.y.z` name, or, on a train branch, whose
+ * name carries only the anchor's version, any version other than the one at
+ * the fork point (the merge base of `<commit>` and the checkout, main):
  *
  * - its minor has no line: the line is declared, pinned to `<ref>@<commit>`,
  *   in version order — first for a new minor;
@@ -19,9 +21,9 @@
  *   ref is a later patch branch, or when any declared path changed between the
  *   two commits;
  * - its line is held in place: nothing is pinned, and the run says why;
- * - its version is still the fork point's while its line is pinned to another
- *   branch: nothing moves. That version is not this branch's release, and
- *   reading it as one would move the previous line onto the new branch.
+ * - its version is not the one the branch releases while its line is pinned to
+ *   another branch: nothing moves. Reading a branch before its bump as a
+ *   release of the previous version would move that line onto the new branch.
  *
  * The packages are named rather than inferred, because a release branch holds
  * every package of the monorepo and releases only some of them. Writes nothing
@@ -48,8 +50,8 @@ export interface PinRequest {
   sha: string
   /** The package's version this release publishes, `x.y.z`. */
   packageVersion: string
-  /** Whether that version differs from the one at the branch's fork point from main. */
-  bumped: boolean
+  /** Whether that version is the one the branch releases (see `releasesVersion`). */
+  releasesVersion: boolean
   /** Whether a declared path differs between `from` and `sha`. */
   changedSince: (from: string) => boolean
 }
@@ -77,6 +79,19 @@ function branchVersion(ref: string): number[] | null {
   return match ? match.slice(1).map(Number) : null
 }
 
+/**
+ * Whether `packageVersion` is the version `ref` releases for the package in
+ * `packageDir`. A `release-<package>-x.y.z` branch names it, so a version
+ * prepared on main before the cut counts. A train branch names only its
+ * anchor's version, so there the version must differ from the one at the
+ * fork point from main (`forkedVersion`).
+ */
+export function releasesVersion(ref: string, packageDir: string, packageVersion: string, forkedVersion: string | null): boolean {
+  const single = /^release-(?!train-)([a-z0-9][a-z0-9-]*)-(\d+\.\d+\.\d+)$/.exec(ref)
+  if (single && single[1] === path.posix.basename(packageDir)) return packageVersion === single[2]
+  return packageVersion !== forkedVersion
+}
+
 function olderBranch(candidate: string, current: string): boolean {
   const a = branchVersion(candidate)
   const b = branchVersion(current)
@@ -99,8 +114,8 @@ export function planPin(declaration: VersionsFile, request: PinRequest): { move:
     return { move: { kind: 'declare', version }, next: { ...declaration, lines: nextLines } }
   }
   if (!isPinnedLine(existing)) return { move: { kind: 'held-in-place', version }, next: declaration }
-  if (!request.bumped && existing.ref !== request.ref) {
-    return { move: { kind: 'unchanged', version, reason: 'version not bumped on this branch yet' }, next: declaration }
+  if (!request.releasesVersion && existing.ref !== request.ref) {
+    return { move: { kind: 'unchanged', version, reason: 'not the version this branch releases yet' }, next: declaration }
   }
   if (existing.ref === request.ref && existing.sha === request.sha) {
     return { move: { kind: 'unchanged', version, reason: 'already pinned to this commit' }, next: declaration }
@@ -209,7 +224,7 @@ if (import.meta.main) {
       ref,
       sha,
       packageVersion,
-      bumped: packageVersion !== forkedVersion,
+      releasesVersion: releasesVersion(ref, packageDir, packageVersion, forkedVersion),
       changedSince: (from) => changedBetween(from, sha, declaration.paths),
     })
     report.push(describe(declaration, move, ref, sha))
