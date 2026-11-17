@@ -333,7 +333,8 @@ function(qvac_addon_fabric_layout host base_dir out_specifier out_working_dir ou
     "qvac-addon: no fabric runtime for ${host}: ${_platform_package} is not installed. ${_remedy}")
 endfunction()
 
-# ---------------------------------------------------------------------------
+include(${CMAKE_CURRENT_LIST_DIR}/speech-engines.cmake)
+
 # qvac_addon_import_fabric_cxx_runtime(<target> <fabric_target>)
 #
 # Linux only: link <target> without a C++ standard library of its own, so it
@@ -458,9 +459,6 @@ function(qvac_addon_finalize addon_target)
 
   # The module's outward interface is the bare entry points and nothing else;
   # see addon-symbols.map. Hides definitions only, so the C++ runtime the module
-  # imports from fabric is unaffected. Applied to every ELF target, matching
-  # packages/asr-ggml, since co-loaded addons interposing each other's statics is
-  # as much an Android concern as a Linux one.
   if(UNIX AND NOT APPLE)
     set(_qaf_exports "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/addon-symbols.map")
     target_link_options(${addon_target}_module PRIVATE

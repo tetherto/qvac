@@ -16,6 +16,13 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [0.12.2] - 2026-11-17
 
+### Changed
+
+- Require `inference-addon-cpp` 1.6.0 for the shared runtime-stat value type
+  ([#5812](https://github.com/tetherto/qvac/pull/5812)).
+
+- Share the `@qvac/fabric` runtime and backend loader, retaining addon-local speech engines built against its headers.
+
 ### Added
 
 - Opt-in WebGPU source builds with backend identity reporting.
@@ -35,8 +42,6 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
-- Require `inference-addon-cpp` 1.6.0 for the shared runtime-stat value type
-  ([#5812](https://github.com/tetherto/qvac/pull/5812)).
 - Update the shared `speech-cpp` native dependency to `2026-11-11`.
 - Full TranscribePsy EU streaming applies `parakeetConfig.language`. With
   `"auto"`, a session buffers its first 20 s for the language gate before it
