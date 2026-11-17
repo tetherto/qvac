@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.0] - 2026-11-17
+
+### Added
+- `RuntimeStats` values can be strings. The value type is now `RuntimeStatValue`, an alias for `std::variant<double, int64_t, std::string>`. `JsRuntimeStatsOutputHandler` emits a string stat as a JavaScript string and numeric stats as numbers, as before. `CppRuntimeStatsOutputHandler` logs string stats alongside numeric ones.
+
+### Breaking
+- Code that spells out the old value type `std::variant<double, int64_t>` no longer compiles against `RuntimeStats`. That covers stat pairs built with `std::make_pair(key, std::variant<double, int64_t>(value))` and pointers or references to that type taken from a `RuntimeStats` entry. Build pairs from the plain value (`std::make_pair(key, value)`) and use `RuntimeStatValue` where a type name is needed. A visitor that passes every alternative to a numeric API, such as a generic lambda calling `js::Number::create`, must handle `std::string` too. `std::get<double>`, `std::get<int64_t>` and `std::holds_alternative` work unchanged.
+
 ## [1.5.0] - 2026-10-13
 
 ### Added
