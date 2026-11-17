@@ -28,5 +28,9 @@
     "plugins/opencode/",
     "plugins/openclaw/"
   ],
-  "docPaths": ["docs/website/content/docs/"]
+  "docPaths": [
+    "docs/website/content/docs/",
+    "packages/sdk/docs/users/",
+    "packages/cli/docs/users/"
+  ]
 }

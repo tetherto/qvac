@@ -40,6 +40,20 @@ test("isDocsOnly: docs-only vs mixed vs impl", () => {
   );
 });
 
+test("isDocsOnly: a package's documentation root inside an owned path is docs", () => {
+  const docs = [...DOCS, "packages/sdk/docs/users/"];
+  assert.equal(isDocsOnly(files("packages/sdk/docs/users/index.mdx"), OWNED, docs), true);
+  assert.equal(
+    isDocsOnly(files("packages/sdk/docs/users/index.mdx", "docs/website/content/docs/sdk.md"), OWNED, docs),
+    true,
+  );
+  assert.equal(
+    isDocsOnly(files("packages/sdk/docs/users/index.mdx", "packages/sdk/src/index.ts"), OWNED, docs),
+    false,
+  );
+  assert.equal(isDocsOnly(files("packages/sdk/docs/contributors/notes.md"), OWNED, docs), false);
+});
+
 test("computeE2e: PR-triggered names drop skipped electron/snap", () => {
   const e2e = computeE2e([
     {

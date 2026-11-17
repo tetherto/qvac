@@ -576,9 +576,14 @@ function touchesOwnedPaths(files, ownedPaths) {
   return files.some((file) => ownedPaths.some((path) => file.path.startsWith(path)));
 }
 
+// A file under docPaths is documentation even inside an owned path: a
+// package's documentation root, packages/<pkg>/docs/users/, sits inside the
+// package.
 export function isDocsOnly(files, ownedPaths, docPaths) {
   if (!docPaths?.length) return false;
-  return touchesOwnedPaths(files, docPaths) && !touchesOwnedPaths(files, ownedPaths);
+  const isDoc = (file) => docPaths.some((path) => file.path.startsWith(path));
+  const implFiles = files.filter((file) => !isDoc(file));
+  return touchesOwnedPaths(files, docPaths) && !touchesOwnedPaths(implFiles, ownedPaths);
 }
 
 export function collectPRActivity({
