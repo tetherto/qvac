@@ -4,6 +4,8 @@
 
 ### Changed
 
+- Align Fabric dependencies with workspace `0.30.1` and update `bare-https` to 4.x.
+
 - `@qvac/fabric` dependency bumped `^0.22.0` -> `^0.24.0`, which carries
   `qvac-fabric` `11018.2.0` -> `11259.1.0`, a rebase onto upstream llama.cpp
   b11259 ([#5171](https://github.com/tetherto/qvac/pull/5171),
