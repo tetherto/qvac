@@ -26,6 +26,9 @@ export function toDecideParams(
       body.questions.map((question, index): [string, DecisionQuestion] => {
         const { instructions } = question
         if (question.type === 'predicate') {
+          // A predicate is a probability, which noul is by default: a model
+          // whose noul means something else (lev's expected rating) rejects it
+          // instead of being relabeled.
           return [questionId(index), { type: 'noul', instructions }]
         }
         if (question.type === 'choice') {

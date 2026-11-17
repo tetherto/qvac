@@ -1,44 +1,35 @@
-import { LayaDecisions } from '@qvac/embed-llamacpp'
 import {
   definePlugin,
   defineHandler,
   ModelType,
-  ADDON_EMBEDDING,
+  ADDON_DECISION,
   decisionConfigSchema,
   decideRequestSchema,
   decideResponseSchema,
   type CreateModelParams
 } from '@/schemas/index'
-import { createStreamLogger, registerAddonLogger, getEngineLogger } from '@/logging/index'
-import { isMobile } from '@/runtime/state'
-import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
-import { getModelShardFiles } from '@/utils/shard-utils'
+import { createStreamLogger, registerAddonLogger } from '@/logging/index'
+import { getFirstShardPath } from '@/utils/index'
 import { decide } from './ops/decide'
-import { transformDecisionConfig } from './helpers'
+import { DecisionModel, loadDecisionAddonLogging } from './upstream'
 
-function createDecisionModel(params: CreateModelParams): LayaDecisions {
-  const config = { ...transformDecisionConfig(decisionConfigSchema.parse(params.modelConfig)) }
-  if (isMobile()) {
-    const stripped = stripMultiGpuKeys(config)
-    if (stripped.length > 0) {
-      getEngineLogger().warn(
-        `[${ModelType.llamacppDecision}:${params.modelId}] Multi-GPU parameters (${stripped.join(', ')}) are not supported on mobile. Removing them from config; model will load with single-GPU defaults.`
-      )
-    }
-  }
+// Decision models run on @qvac/decision-ggml's DecisionEngine: upstream
+// llama.cpp decision models, Laya included.
+function createDecisionModel(params: CreateModelParams): DecisionModel {
+  const config = decisionConfigSchema.parse(params.modelConfig)
   const logger = createStreamLogger(params.modelId, ModelType.llamacppDecision)
   registerAddonLogger(params.modelId, ModelType.llamacppDecision, logger)
-  return new LayaDecisions({
-    files: { model: getModelShardFiles(params.modelPath) },
-    config,
-    logger
-  })
+  // One disk path, as for the LLM plugin: a sharded GGUF's first shard, which
+  // holds the header the load checks; fabric finds the other shards on disk.
+  // decision-ggml rejects weight streaming's file lists.
+  const modelPath = getFirstShardPath(params.modelPath)
+  return new DecisionModel({ modelPath, files: [modelPath], config, logger })
 }
 
 export const decisionPlugin = definePlugin({
   modelType: ModelType.llamacppDecision,
   displayName: 'Decisions (llama.cpp)',
-  addonPackage: ADDON_EMBEDDING,
+  addonPackage: ADDON_DECISION,
   loadConfigSchema: decisionConfigSchema,
   createModel: (params) => ({ model: createDecisionModel(params) }),
   handlers: {
@@ -51,7 +42,7 @@ export const decisionPlugin = definePlugin({
     })
   },
   logging: {
-    module: () => import('@qvac/embed-llamacpp/addonLogging'),
-    namespace: ModelType.llamacppEmbedding
+    module: loadDecisionAddonLogging,
+    namespace: ModelType.llamacppDecision
   }
 })

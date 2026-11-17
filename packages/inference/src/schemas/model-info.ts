@@ -122,6 +122,30 @@ export const getLoadedModelInfoRequestSchema = getLoadedModelInfoParamsSchema.ex
 })
 
 /**
+ * What a loaded decision model supports, from its addon. Reported for models
+ * whose plugin handles `decide`.
+ */
+export const loadedDecisionInfoSchema = z
+  .object({
+    decisionType: z.string().describe('The upstream decision type, e.g. "laya", "openjev", "lev".'),
+    noul: z
+      .enum(['probability', 'expectedRating', 'unknown'])
+      .describe(
+        'What a noul answer means: the probability that the statement holds, an expected rating from 0 to 1 (lev; questions must set allowRating), or unknown (noul questions are rejected).'
+      ),
+    scoreLevels: z
+      .object({ min: z.number().int(), max: z.number().int() })
+      .describe('How many levels a score question may have.'),
+    maxInputTokens: z
+      .number()
+      .int()
+      .describe(
+        'The longest input a request can have, in tokens: a state with one question and its options. For a model that reads it in one pass (Laya) a longer one fails validation; for a causal model it is the share of the context each question gets when every slot is busy, so a longer one may still run but is not promised to.'
+      )
+  })
+  .meta({ title: 'LoadedDecisionInfo' })
+
+/**
  * Loaded model info: routing plugin known on this node, so modelType +
  * handler vocabulary are authoritative. `toolDialect` is the tool-call dialect
  * the completion normalizer parses for this model (completion-capable models
@@ -142,7 +166,10 @@ export const loadedModelInfoSchema = z
       .optional()
       .describe(
         "Outcome of the engine fitter's check that ran ahead of this load. Absent when the load set `modelFitPolicy: 'off'`."
-      )
+      ),
+    decision: loadedDecisionInfoSchema
+      .optional()
+      .describe('Decision models only: what the loaded model supports.')
   })
   .meta({ title: 'LoadedModelInfo' })
 
@@ -155,3 +182,4 @@ export type GetLoadedModelInfoParams = z.input<typeof getLoadedModelInfoParamsSc
 export type GetLoadedModelInfoRequest = z.infer<typeof getLoadedModelInfoRequestSchema>
 export type GetLoadedModelInfoResponse = z.infer<typeof getLoadedModelInfoResponseSchema>
 export type LoadedModelInfo = z.infer<typeof loadedModelInfoSchema>
+export type LoadedDecisionInfo = z.infer<typeof loadedDecisionInfoSchema>

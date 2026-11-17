@@ -7,14 +7,7 @@ import type { DecideRequest, DecisionResult } from '@qvac/inference/surface'
 const result: DecisionResult = {
   model: 'laya',
   answers: {},
-  usage: {
-    inputTokens: 1,
-    outputTokens: 0,
-    stateTokens: 1,
-    stateTokensDropped: 0,
-    truncated: false,
-    truncatedQuestions: []
-  }
+  usage: { inputTokens: 1, outputTokens: 0 }
 }
 const params = {
   modelId: 'laya',

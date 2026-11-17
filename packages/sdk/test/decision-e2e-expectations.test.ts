@@ -4,34 +4,26 @@ import { decisionTests } from '../../sdk-e2e/catalog/decision-tests'
 import { RESOURCE_TABLE } from '../../sdk-e2e/catalog/resource-table'
 
 function result(billing = 0.2, noul = 0.3) {
-  const base = { confidence: 0.2, answerConfidence: 0.8, action: { actProbability: 0.5 } }
   return {
     model: 'test-checkpoint',
     answers: {
       department: {
-        ...base,
+        confidence: 0.2,
         type: 'choice',
         choice: billing > 0.5 ? 'billing' : 'technical',
-        answerConfidence: Math.max(billing, 1 - billing),
         probabilities: { billing, technical: 1 - billing }
       },
       urgency: {
-        ...base,
+        confidence: 0.2,
         type: 'score',
         score: 1.3,
         probabilities: { 0: 0.2, 1: 0.3, 2: 0.5 },
         legend: { 0: 'not urgent', 1: 'somewhat urgent', 2: 'very urgent' }
       },
-      refund: { ...base, type: 'noul', noul }
+      // Upstream models report no confidence for noul answers.
+      refund: { type: 'noul', noul } as { type: 'noul'; noul: number; confidence?: number }
     },
-    usage: {
-      inputTokens: 30,
-      outputTokens: 0,
-      stateTokens: 10,
-      stateTokensDropped: 0,
-      truncated: false,
-      truncatedQuestions: [] as string[]
-    }
+    usage: { inputTokens: 30, outputTokens: 0 }
   }
 }
 
@@ -73,7 +65,7 @@ test('batch and concurrent tests reject swapped or missing results', () => {
 })
 
 test('recovery and repeat tests reject changed answers', () => {
-  for (const testId of ['decision-invalid-budget', 'decision-ticket']) {
+  for (const testId of ['decision-invalid-request', 'decision-ticket']) {
     assert.equal(validate(testId, [result(0.8)], [result(0.2)]), false)
     assert.equal(validate(testId, [result(0.2, 0.9)], [result(0.2, 0.3)]), false)
   }
@@ -110,11 +102,7 @@ test('CPU parity uses the same inputs and model with a fixed forward-pass size',
   assert.equal(batch.metadata.dependency, 'decision')
   assert.equal(parity.metadata.dependency, 'decision-parity')
   assert.deepEqual(RESOURCE_TABLE['decision-parity'].constant, RESOURCE_TABLE.decision.constant)
-  assert.deepEqual(RESOURCE_TABLE['decision-parity'].config, {
-    device: 'cpu',
-    flash_attn: 'off',
-    batch_size: 64
-  })
+  assert.deepEqual(RESOURCE_TABLE['decision-parity'].config, { device: 'cpu' })
   assert.equal(RESOURCE_TABLE.decision.config, undefined)
 })
 
@@ -122,7 +110,7 @@ test('GPU batch still rejects changed usage, legends, choices, and duplicated re
   const reference = [result(0.2), result(0.8)]
   const mutations = [
     (values: ReturnType<typeof result>[]) => {
-      values[0].usage.stateTokens += 1
+      values[0].usage.inputTokens += 1
     },
     (values: ReturnType<typeof result>[]) => {
       values[0].answers.urgency.legend[0] = 'urgent'
@@ -151,8 +139,11 @@ const invalidResults: Record<string, (value: ReturnType<typeof result>) => void>
   'choice disagrees with probabilities': (value) => {
     value.answers.department.choice = 'billing'
   },
-  'choice confidence disagrees with probabilities': (value) => {
-    value.answers.department.answerConfidence = 0.1
+  'out-of-range choice confidence': (value) => {
+    value.answers.department.confidence = 1.5
+  },
+  'out-of-range noul confidence': (value) => {
+    value.answers.refund.confidence = -0.1
   },
   'unnormalized probabilities': (value) => {
     value.answers.department.probabilities.technical = 0.4

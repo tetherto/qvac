@@ -5743,14 +5743,6 @@
                           }
                         ]
                       },
-                      "optionOrder": {
-                        "type": "array",
-                        "items": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 9007199254740991
-                        }
-                      },
                       "type": {
                         "type": "string",
                         "const": "choice"
@@ -5847,14 +5839,6 @@
                           }
                         ]
                       },
-                      "optionOrder": {
-                        "type": "array",
-                        "items": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 9007199254740991
-                        }
-                      },
                       "type": {
                         "type": "string",
                         "const": "score"
@@ -5919,14 +5903,6 @@
                             "items": {}
                           }
                         ]
-                      },
-                      "optionOrder": {
-                        "type": "array",
-                        "items": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 9007199254740991
-                        }
                       },
                       "type": {
                         "type": "string",
@@ -6010,19 +5986,9 @@
                           }
                         ]
                       },
-                      "labels": {
-                        "type": "object",
-                        "properties": {
-                          "false": {
-                            "type": "string"
-                          },
-                          "true": {
-                            "type": "string"
-                          }
-                        },
-                        "required": ["false", "true"],
-                        "additionalProperties": false,
-                        "title": "DecideSingleRequestQuestionsValueNoulLabels"
+                      "allowRating": {
+                        "description": "Accept a model that answers noul with an expected rating (lev, 0 to 1) instead of the probability that the statement holds. Without it, such a model rejects the request, as does a model whose noul meaning is unknown.",
+                        "type": "boolean"
                       }
                     },
                     "required": ["instructions", "type"],
@@ -6033,18 +5999,6 @@
               },
               "description": "Question ID to decision question.",
               "title": "DecideSingleRequestQuestions"
-            },
-            "maxLen": {
-              "description": "Token budget per sequence; unset uses the checkpoint budget.",
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 9007199254740991
-            },
-            "headMaxLen": {
-              "description": "Token budget for each question and its options; unset uses the checkpoint budget.",
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 9007199254740991
             },
             "state": {
               "anyOf": [
@@ -6125,14 +6079,6 @@
                             "items": {}
                           }
                         ]
-                      },
-                      "optionOrder": {
-                        "type": "array",
-                        "items": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 9007199254740991
-                        }
                       },
                       "type": {
                         "type": "string",
@@ -6230,14 +6176,6 @@
                           }
                         ]
                       },
-                      "optionOrder": {
-                        "type": "array",
-                        "items": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 9007199254740991
-                        }
-                      },
                       "type": {
                         "type": "string",
                         "const": "score"
@@ -6302,14 +6240,6 @@
                             "items": {}
                           }
                         ]
-                      },
-                      "optionOrder": {
-                        "type": "array",
-                        "items": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 9007199254740991
-                        }
                       },
                       "type": {
                         "type": "string",
@@ -6393,19 +6323,9 @@
                           }
                         ]
                       },
-                      "labels": {
-                        "type": "object",
-                        "properties": {
-                          "false": {
-                            "type": "string"
-                          },
-                          "true": {
-                            "type": "string"
-                          }
-                        },
-                        "required": ["false", "true"],
-                        "additionalProperties": false,
-                        "title": "DecideBatchRequestQuestionsValueNoulLabels"
+                      "allowRating": {
+                        "description": "Accept a model that answers noul with an expected rating (lev, 0 to 1) instead of the probability that the statement holds. Without it, such a model rejects the request, as does a model whose noul meaning is unknown.",
+                        "type": "boolean"
                       }
                     },
                     "required": ["instructions", "type"],
@@ -6416,18 +6336,6 @@
               },
               "description": "Question ID to decision question.",
               "title": "DecideBatchRequestQuestions"
-            },
-            "maxLen": {
-              "description": "Token budget per sequence; unset uses the checkpoint budget.",
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 9007199254740991
-            },
-            "headMaxLen": {
-              "description": "Token budget for each question and its options; unset uses the checkpoint budget.",
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 9007199254740991
             },
             "states": {
               "type": "array",
@@ -6502,23 +6410,8 @@
                       {
                         "type": "object",
                         "properties": {
-                          "answerConfidence": {
-                            "type": "number"
-                          },
                           "confidence": {
                             "type": "number"
-                          },
-                          "action": {
-                            "type": "object",
-                            "properties": {
-                              "actProbability": {
-                                "type": "number",
-                                "description": "Currently unreliable; do not use to trigger actions."
-                              }
-                            },
-                            "required": ["actProbability"],
-                            "additionalProperties": false,
-                            "title": "DecideResponseResultAnswersValueChoiceAction"
                           },
                           "type": {
                             "type": "string",
@@ -6548,37 +6441,15 @@
                             "title": "DecideResponseResultAnswersValueChoiceProbabilities"
                           }
                         },
-                        "required": [
-                          "answerConfidence",
-                          "confidence",
-                          "action",
-                          "type",
-                          "choice",
-                          "probabilities"
-                        ],
+                        "required": ["confidence", "type", "choice", "probabilities"],
                         "additionalProperties": false,
                         "title": "DecideResponseResultAnswersValueChoice"
                       },
                       {
                         "type": "object",
                         "properties": {
-                          "answerConfidence": {
-                            "type": "number"
-                          },
                           "confidence": {
                             "type": "number"
-                          },
-                          "action": {
-                            "type": "object",
-                            "properties": {
-                              "actProbability": {
-                                "type": "number",
-                                "description": "Currently unreliable; do not use to trigger actions."
-                              }
-                            },
-                            "required": ["actProbability"],
-                            "additionalProperties": false,
-                            "title": "DecideResponseResultAnswersValueScoreAction"
                           },
                           "type": {
                             "type": "string",
@@ -6608,38 +6479,16 @@
                             "title": "DecideResponseResultAnswersValueScoreProbabilities"
                           }
                         },
-                        "required": [
-                          "answerConfidence",
-                          "confidence",
-                          "action",
-                          "type",
-                          "score",
-                          "legend",
-                          "probabilities"
-                        ],
+                        "required": ["confidence", "type", "score", "legend", "probabilities"],
                         "additionalProperties": false,
                         "title": "DecideResponseResultAnswersValueScore"
                       },
                       {
                         "type": "object",
                         "properties": {
-                          "answerConfidence": {
-                            "type": "number"
-                          },
                           "confidence": {
+                            "description": "Only some models report a confidence for noul answers; none is derived.",
                             "type": "number"
-                          },
-                          "action": {
-                            "type": "object",
-                            "properties": {
-                              "actProbability": {
-                                "type": "number",
-                                "description": "Currently unreliable; do not use to trigger actions."
-                              }
-                            },
-                            "required": ["actProbability"],
-                            "additionalProperties": false,
-                            "title": "DecideResponseResultAnswersValueNoulAction"
                           },
                           "type": {
                             "type": "string",
@@ -6649,7 +6498,7 @@
                             "type": "number"
                           }
                         },
-                        "required": ["answerConfidence", "confidence", "action", "type", "noul"],
+                        "required": ["type", "noul"],
                         "additionalProperties": false,
                         "title": "DecideResponseResultAnswersValueNoul"
                       }
@@ -6665,62 +6514,9 @@
                     },
                     "outputTokens": {
                       "type": "number"
-                    },
-                    "stateTokens": {
-                      "type": "number"
-                    },
-                    "stateTokensDropped": {
-                      "type": "number"
-                    },
-                    "truncated": {
-                      "type": "boolean"
-                    },
-                    "truncatedQuestions": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "options": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      },
-                      "additionalProperties": {
-                        "type": "object",
-                        "properties": {
-                          "total": {
-                            "type": "number"
-                          },
-                          "distinct": {
-                            "type": "number"
-                          },
-                          "tokensPerOption": {
-                            "anyOf": [
-                              {
-                                "type": "number"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          }
-                        },
-                        "required": ["total", "distinct", "tokensPerOption"],
-                        "additionalProperties": false,
-                        "title": "DecideResponseResultUsageOptionsValue"
-                      },
-                      "title": "DecideResponseResultUsageOptions"
                     }
                   },
-                  "required": [
-                    "inputTokens",
-                    "outputTokens",
-                    "stateTokens",
-                    "stateTokensDropped",
-                    "truncated",
-                    "truncatedQuestions"
-                  ],
+                  "required": ["inputTokens", "outputTokens"],
                   "additionalProperties": false,
                   "title": "DecideResponseResultUsage"
                 }
@@ -6747,23 +6543,8 @@
                         {
                           "type": "object",
                           "properties": {
-                            "answerConfidence": {
-                              "type": "number"
-                            },
                             "confidence": {
                               "type": "number"
-                            },
-                            "action": {
-                              "type": "object",
-                              "properties": {
-                                "actProbability": {
-                                  "type": "number",
-                                  "description": "Currently unreliable; do not use to trigger actions."
-                                }
-                              },
-                              "required": ["actProbability"],
-                              "additionalProperties": false,
-                              "title": "DecideResponseResultItemAnswersValueChoiceAction"
                             },
                             "type": {
                               "type": "string",
@@ -6793,37 +6574,15 @@
                               "title": "DecideResponseResultItemAnswersValueChoiceProbabilities"
                             }
                           },
-                          "required": [
-                            "answerConfidence",
-                            "confidence",
-                            "action",
-                            "type",
-                            "choice",
-                            "probabilities"
-                          ],
+                          "required": ["confidence", "type", "choice", "probabilities"],
                           "additionalProperties": false,
                           "title": "DecideResponseResultItemAnswersValueChoice"
                         },
                         {
                           "type": "object",
                           "properties": {
-                            "answerConfidence": {
-                              "type": "number"
-                            },
                             "confidence": {
                               "type": "number"
-                            },
-                            "action": {
-                              "type": "object",
-                              "properties": {
-                                "actProbability": {
-                                  "type": "number",
-                                  "description": "Currently unreliable; do not use to trigger actions."
-                                }
-                              },
-                              "required": ["actProbability"],
-                              "additionalProperties": false,
-                              "title": "DecideResponseResultItemAnswersValueScoreAction"
                             },
                             "type": {
                               "type": "string",
@@ -6853,38 +6612,16 @@
                               "title": "DecideResponseResultItemAnswersValueScoreProbabilities"
                             }
                           },
-                          "required": [
-                            "answerConfidence",
-                            "confidence",
-                            "action",
-                            "type",
-                            "score",
-                            "legend",
-                            "probabilities"
-                          ],
+                          "required": ["confidence", "type", "score", "legend", "probabilities"],
                           "additionalProperties": false,
                           "title": "DecideResponseResultItemAnswersValueScore"
                         },
                         {
                           "type": "object",
                           "properties": {
-                            "answerConfidence": {
-                              "type": "number"
-                            },
                             "confidence": {
+                              "description": "Only some models report a confidence for noul answers; none is derived.",
                               "type": "number"
-                            },
-                            "action": {
-                              "type": "object",
-                              "properties": {
-                                "actProbability": {
-                                  "type": "number",
-                                  "description": "Currently unreliable; do not use to trigger actions."
-                                }
-                              },
-                              "required": ["actProbability"],
-                              "additionalProperties": false,
-                              "title": "DecideResponseResultItemAnswersValueNoulAction"
                             },
                             "type": {
                               "type": "string",
@@ -6894,7 +6631,7 @@
                               "type": "number"
                             }
                           },
-                          "required": ["answerConfidence", "confidence", "action", "type", "noul"],
+                          "required": ["type", "noul"],
                           "additionalProperties": false,
                           "title": "DecideResponseResultItemAnswersValueNoul"
                         }
@@ -6910,62 +6647,9 @@
                       },
                       "outputTokens": {
                         "type": "number"
-                      },
-                      "stateTokens": {
-                        "type": "number"
-                      },
-                      "stateTokensDropped": {
-                        "type": "number"
-                      },
-                      "truncated": {
-                        "type": "boolean"
-                      },
-                      "truncatedQuestions": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      },
-                      "options": {
-                        "type": "object",
-                        "propertyNames": {
-                          "type": "string"
-                        },
-                        "additionalProperties": {
-                          "type": "object",
-                          "properties": {
-                            "total": {
-                              "type": "number"
-                            },
-                            "distinct": {
-                              "type": "number"
-                            },
-                            "tokensPerOption": {
-                              "anyOf": [
-                                {
-                                  "type": "number"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            }
-                          },
-                          "required": ["total", "distinct", "tokensPerOption"],
-                          "additionalProperties": false,
-                          "title": "DecideResponseResultItemUsageOptionsValue"
-                        },
-                        "title": "DecideResponseResultItemUsageOptions"
                       }
                     },
-                    "required": [
-                      "inputTokens",
-                      "outputTokens",
-                      "stateTokens",
-                      "stateTokensDropped",
-                      "truncated",
-                      "truncatedQuestions"
-                    ],
+                    "required": ["inputTokens", "outputTokens"],
                     "additionalProperties": false,
                     "title": "DecideResponseResultItemUsage"
                   }
@@ -8545,6 +8229,50 @@
               "required": ["verdict", "basis", "estimatorVersion", "reason"],
               "additionalProperties": false,
               "title": "NativeProbeFit"
+            },
+            "decision": {
+              "description": "Decision models only: what the loaded model supports.",
+              "type": "object",
+              "properties": {
+                "decisionType": {
+                  "type": "string",
+                  "description": "The upstream decision type, e.g. \"laya\", \"openjev\", \"lev\"."
+                },
+                "noul": {
+                  "type": "string",
+                  "enum": ["probability", "expectedRating", "unknown"],
+                  "description": "What a noul answer means: the probability that the statement holds, an expected rating from 0 to 1 (lev; questions must set allowRating), or unknown (noul questions are rejected).",
+                  "title": "LoadedDecisionInfoNoul"
+                },
+                "scoreLevels": {
+                  "type": "object",
+                  "properties": {
+                    "min": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "max": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": ["min", "max"],
+                  "additionalProperties": false,
+                  "description": "How many levels a score question may have.",
+                  "title": "LoadedDecisionInfoScoreLevels"
+                },
+                "maxInputTokens": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "The longest input a request can have, in tokens: a state with one question and its options. For a model that reads it in one pass (Laya) a longer one fails validation; for a causal model it is the share of the context each question gets when every slot is busy, so a longer one may still run but is not promised to."
+                }
+              },
+              "required": ["decisionType", "noul", "scoreLevels", "maxInputTokens"],
+              "additionalProperties": false,
+              "title": "LoadedDecisionInfo"
             }
           },
           "required": ["modelId", "modelType", "handlers", "loadedAt"],
@@ -14525,28 +14253,16 @@
                       "title": "LoadModelSrcRequestLlamacppDecisionModelConfigDevice"
                     },
                     "gpu_layers": {
-                      "description": "Layers to offload. Unset lets the addon choose placement.",
+                      "description": "Layers to offload on the GPU. Unset lets the engine fit the model.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "batch_size": {
-                      "description": "Tokens per forward pass. Default 2048; each sequence must fit.",
+                      "description": "Tokens per forward pass. Unset uses the engine's default.",
                       "type": "integer",
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
-                    },
-                    "poll": {
-                      "description": "CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.",
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 100
-                    },
-                    "pollBatch": {
-                      "description": "CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.",
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 100
                     },
                     "threads": {
                       "description": "CPU threads, at most the CPU count. Zero or below uses all logical CPUs.",
@@ -14554,48 +14270,11 @@
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
-                    "threads-batch": {
-                      "description": "Batch CPU threads. Unset uses threads; zero or below uses all logical CPUs.",
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    },
-                    "flash_attn": {
-                      "description": "Flash attention mode. Default auto.",
-                      "type": "string",
-                      "enum": ["on", "off", "auto"],
-                      "title": "LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttn"
-                    },
                     "verbosity": {
                       "description": "Native log level: 0 error, 1 warn, 2 info, 3 debug.",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 3
-                    },
-                    "main-gpu": {
-                      "description": "GPU index or device class.",
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "string",
-                          "enum": ["integrated", "dedicated"],
-                          "title": "LoadModelSrcRequestLlamacppDecisionModelConfigMainGpu"
-                        }
-                      ]
-                    },
-                    "split-mode": {
-                      "description": "Multi-GPU split mode.",
-                      "type": "string",
-                      "enum": ["none", "layer"],
-                      "title": "LoadModelSrcRequestLlamacppDecisionModelConfigSplitMode"
-                    },
-                    "tensor-split": {
-                      "description": "Per-GPU tensor split proportions.",
-                      "type": "string"
                     },
                     "openclCacheDir": {
                       "description": "Writable OpenCL kernel cache directory, required on Android.",

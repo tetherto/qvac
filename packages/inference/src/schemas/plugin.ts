@@ -471,6 +471,9 @@ export const ADDON_LLM = '@qvac/llm-llamacpp' as const
 /** Native addon package for text embeddings (llama.cpp) */
 export const ADDON_EMBEDDING = '@qvac/embed-llamacpp' as const
 
+/** Native addon package for upstream llama.cpp decision models, Laya included */
+export const ADDON_DECISION = '@qvac/decision-ggml' as const
+
 /** Unified native addon package for Whisper and Parakeet transcription */
 export const ADDON_ASR = '@qvac/asr-ggml' as const
 

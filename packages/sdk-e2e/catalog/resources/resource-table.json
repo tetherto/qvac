@@ -99,9 +99,7 @@
     },
     "type": "llamacpp-decision",
     "config": {
-      "device": "cpu",
-      "flash_attn": "off",
-      "batch_size": 64
+      "device": "cpu"
     }
   },
   "embeddings": {
