@@ -478,7 +478,7 @@ Before completing:
 - [ ] Versions sorted in descending semver order
 - [ ] No duplicated versions
 - [ ] Root file is deterministic (fully regenerated)
-- [ ] For a package with a versions file: the documentation pin PR opened, its URL reported, neither approved nor merged
+- [ ] For a package with a versions file: the documentation pin PR opened by `docs-pin-update.yml` once the release PR was opened, its URL reported, neither approved nor merged
 - [ ] Org remote (`upstream` when that is tetherto/qvac) is the push target, not the fork
 
 ## References

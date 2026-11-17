@@ -18,6 +18,12 @@ A release SHALL publish its documentation line by pinning it: the software's ver
 - **THEN** the `v0.24` line is pinned to the `0.24.1` release commit
 - **AND** no new line is declared
 
+#### Scenario: A release branch read before its version bump moves no pin
+
+- **WHEN** `release-sdk-0.25.0` is cut from a `main` whose `@qvac/sdk` is still `0.24.3`, and `v0.24` is pinned to `release-sdk-0.24.0`
+- **THEN** the `v0.24` pin stays on `release-sdk-0.24.0`
+- **AND** `v0.25` is declared from the version its release PR brings
+
 ### Requirement: An older line stays editable
 
 A released line SHALL be corrected on the release branch of the highest patch in its minor, and the correction SHALL be published by moving that line's pin to the corrected commit.

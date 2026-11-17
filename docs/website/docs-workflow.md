@@ -297,7 +297,7 @@ Raising `NODE_OPTIONS` does not help and tends to hurt: it is a ceiling, not a r
 During the sprint: feature PRs document packages/<pkg>/docs/users/ on main
     │                 (not built — preview it locally with `npm run dev`)
     ▼
-At the release: the pin PR declares the line, pinned to the release branch
+At the release PR: the pin PR declares the line, pinned to the release branch
     │
     ▼
 Hosting provider detects each new commit on main and rebuilds staging
@@ -412,12 +412,19 @@ None of these jobs is a required check.
 
 **File:** `.github/workflows/docs-pin-update.yml`
 
-**Triggers:** a `release-*` branch is created; a push to a `release-*` branch
-changes `packages/*/docs/users/**`; or manual dispatch with the branch name.
+**Triggers:** a pull request into a `release-*` branch changes
+`packages/*/package.json` (the release PR, which bumps the versions); a push to
+a `release-*` branch changes `packages/*/docs/users/**`; or manual dispatch
+with the branch name.
 
 **What it does:** runs `scripts/update-pins.ts` from `main` against the
 branch head, for the packages the branch releases — its name's package, or
-every package of a release train. A new minor's line is declared, pinned to
+every package of a release train. A release PR's versions are read from the
+PR's head, because the branch still carries the versions it was cut with;
+the pin is always the branch head. No PR code runs. A version still equal to
+the one at the branch's fork point from `main` never moves a line pinned to
+another branch, so a branch read before its bump cannot take over the
+previous line. A new minor's line is declared, pinned to
 the branch head; an existing line's pin moves to a later patch branch, or to
 a documentation change on the same branch; a line still held in place is
 reported and left alone. When anything moved, it opens or updates one pull

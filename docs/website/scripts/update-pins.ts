@@ -3,18 +3,25 @@
  * Publish documentation lines from a release branch by pinning them.
  *
  * Usage:
- *   bun run scripts/update-pins.ts --ref <release-branch> --sha <commit> --package <dir>... [--summary <file>]
+ *   bun run scripts/update-pins.ts --ref <release-branch> --sha <commit> [--version-sha <commit>] --package <dir>... [--summary <file>]
  *
  * For each documented software whose package directory (`packages/<dir>`) is
- * named, reads the package's version at `<commit>` and edits its versions
- * file:
+ * named, reads the package's version at `--version-sha` (default `<commit>`)
+ * and edits its versions file. A release PR passes its head there: at the cut
+ * the release branch still carries the version it forked from main with, and
+ * the PR is what brings the new one. The pin itself is always `<commit>`, the
+ * release branch's head. The version is compared with the one at the fork
+ * point, the merge base of `<commit>` and the checkout (main):
  *
  * - its minor has no line: the line is declared, pinned to `<ref>@<commit>`,
  *   in version order — first for a new minor;
  * - its line is pinned elsewhere: the pin moves to `<ref>@<commit>` when the
  *   ref is a later patch branch, or when any declared path changed between the
  *   two commits;
- * - its line is held in place: nothing is pinned, and the run says why.
+ * - its line is held in place: nothing is pinned, and the run says why;
+ * - its version is still the fork point's while its line is pinned to another
+ *   branch: nothing moves. That version is not this branch's release, and
+ *   reading it as one would move the previous line onto the new branch.
  *
  * The packages are named rather than inferred, because a release branch holds
  * every package of the monorepo and releases only some of them. Writes nothing
@@ -39,8 +46,10 @@ const VERSIONS_DIR = path.join(WEBSITE, 'versions')
 export interface PinRequest {
   ref: string
   sha: string
-  /** The package's version at `sha`, `x.y.z`. */
+  /** The package's version this release publishes, `x.y.z`. */
   packageVersion: string
+  /** Whether that version differs from the one at the branch's fork point from main. */
+  bumped: boolean
   /** Whether a declared path differs between `from` and `sha`. */
   changedSince: (from: string) => boolean
 }
@@ -90,6 +99,9 @@ export function planPin(declaration: VersionsFile, request: PinRequest): { move:
     return { move: { kind: 'declare', version }, next: { ...declaration, lines: nextLines } }
   }
   if (!isPinnedLine(existing)) return { move: { kind: 'held-in-place', version }, next: declaration }
+  if (!request.bumped && existing.ref !== request.ref) {
+    return { move: { kind: 'unchanged', version, reason: 'version not bumped on this branch yet' }, next: declaration }
+  }
   if (existing.ref === request.ref && existing.sha === request.sha) {
     return { move: { kind: 'unchanged', version, reason: 'already pinned to this commit' }, next: declaration }
   }
@@ -141,9 +153,10 @@ function describe(declaration: VersionsFile, move: PinMove, ref: string, sha: st
   }
 }
 
-function parseArgs(argv: string[]): { ref: string; sha: string; packages: string[]; summary: string | null } {
+function parseArgs(argv: string[]): { ref: string; sha: string; versionSha: string; packages: string[]; summary: string | null } {
   let ref = ''
   let sha = ''
+  let versionSha = ''
   let summary: string | null = null
   const packages: string[] = []
   for (let i = 0; i < argv.length; i += 2) {
@@ -151,18 +164,26 @@ function parseArgs(argv: string[]): { ref: string; sha: string; packages: string
     if (value === undefined) throw new Error(`${flag} needs a value`)
     if (flag === '--ref') ref = value
     else if (flag === '--sha') sha = value
+    else if (flag === '--version-sha') versionSha = value
     else if (flag === '--package') packages.push(value)
     else if (flag === '--summary') summary = value
     else throw new Error(`unknown argument '${flag}'`)
   }
   if (!ref || !sha || packages.length === 0) {
-    throw new Error('usage: update-pins.ts --ref <branch> --sha <commit> --package <dir>... [--summary <file>]')
+    throw new Error('usage: update-pins.ts --ref <branch> --sha <commit> [--version-sha <commit>] --package <dir>... [--summary <file>]')
   }
-  return { ref, sha: git('rev-parse', `${sha}^{commit}`), packages, summary }
+  return {
+    ref,
+    sha: git('rev-parse', `${sha}^{commit}`),
+    versionSha: git('rev-parse', `${versionSha || sha}^{commit}`),
+    packages,
+    summary,
+  }
 }
 
 if (import.meta.main) {
-  const { ref, sha, packages, summary } = parseArgs(process.argv.slice(2))
+  const { ref, sha, versionSha, packages, summary } = parseArgs(process.argv.slice(2))
+  const forkPoint = git('merge-base', 'HEAD', sha)
   const report: string[] = []
   let moved = 0
   for (const file of readdirSync(VERSIONS_DIR).filter((name) => name.endsWith('.json')).sort()) {
@@ -172,7 +193,7 @@ if (import.meta.main) {
     if (declaration.repo) continue
     const packageDir = packageDirOf(declaration)
     if (!packages.includes(path.posix.basename(packageDir))) continue
-    const manifest = readAt(sha, `${packageDir}/package.json`)
+    const manifest = readAt(versionSha, `${packageDir}/package.json`)
     if (!manifest) {
       report.push(`- ${declaration.package}: no \`${packageDir}/package.json\` at this commit; nothing pinned.`)
       continue
@@ -182,10 +203,13 @@ if (import.meta.main) {
       continue
     }
     const { version: packageVersion } = JSON.parse(manifest) as { version: string }
+    const forked = readAt(forkPoint, `${packageDir}/package.json`)
+    const forkedVersion = forked ? (JSON.parse(forked) as { version: string }).version : null
     const { move, next } = planPin(declaration, {
       ref,
       sha,
       packageVersion,
+      bumped: packageVersion !== forkedVersion,
       changedSince: (from) => changedBetween(from, sha, declaration.paths),
     })
     report.push(describe(declaration, move, ref, sha))

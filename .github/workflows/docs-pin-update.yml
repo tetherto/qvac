@@ -1,14 +1,21 @@
 name: Docs Pin Update
 
-run-name: Pin documentation lines from ${{ inputs.branch || github.ref_name }}
+run-name: Pin documentation lines from ${{ inputs.branch || github.base_ref || github.ref_name }}
 
 # Publishes documentation lines from a release branch, by opening (or
 # updating) one pull request on main that edits docs/website/versions/*.json:
 #
-#   - a release branch cut for a new minor declares that line, pinned to the
-#     branch head;
-#   - a later patch branch, or a documentation change merged into a release
-#     branch, moves the line's pin to the branch head.
+#   - the release PR into a branch cut for a new minor declares that line,
+#     pinned to the branch head;
+#   - the release PR into a later patch branch, or a documentation change
+#     merged into a release branch, moves the line's pin to the branch head.
+#
+# The release PR is the trigger at the cut because it carries the version
+# bump: the branch itself still holds the version it forked from main with.
+# The run reads the versions from the PR's head and pins the release branch's
+# head, the commit whose documentation the release ships. It checks out no PR
+# code: the scripts are main's, and the PR's package.json files are read as
+# data.
 #
 # The edit itself is docs/website/scripts/update-pins.ts. Which packages a
 # branch releases comes from its name: release-<package>-x.y.z releases that
@@ -23,8 +30,13 @@ run-name: Pin documentation lines from ${{ inputs.branch || github.ref_name }}
 # reopen it, before merging.
 
 on:
-  # A release branch is cut.
-  create:
+  # A release PR, which bumps the versions, is opened into a release branch.
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - release-*
+    paths:
+      - "packages/*/package.json"
   # A change reaches a documentation root on a release branch: a documentation
   # fix, or the release PR's own documentation.
   push:
@@ -43,14 +55,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: docs-pin-update-${{ inputs.branch || github.ref_name }}
+  group: docs-pin-update-${{ inputs.branch || github.base_ref || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   pin:
     name: Pin documentation lines
-    # `create` fires for tags and every branch; only release branches pin.
-    if: github.event_name != 'create' || (github.ref_type == 'branch' && startsWith(github.ref_name, 'release-'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -61,7 +71,7 @@ jobs:
         id: branch
         shell: bash
         env:
-          BRANCH: ${{ inputs.branch || github.ref_name }}
+          BRANCH: ${{ inputs.branch || github.base_ref || github.ref_name }}
         run: |
           set -euo pipefail
           if [[ "$BRANCH" =~ ^release-train-([a-z0-9][a-z0-9-]*)-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -87,10 +97,19 @@ jobs:
         shell: bash
         env:
           BRANCH: ${{ steps.branch.outputs.name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
           git fetch --no-tags origin "refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}"
           echo "sha=$(git rev-parse "refs/remotes/origin/${BRANCH}")" >> "$GITHUB_OUTPUT"
+          # A release PR's head carries the bumped versions; anything else
+          # reads them from the branch itself.
+          if [ -n "${PR_NUMBER:-}" ]; then
+            git fetch --no-tags origin "refs/pull/${PR_NUMBER}/head:refs/remotes/origin/pr-head"
+            echo "version_sha=$(git rev-parse refs/remotes/origin/pr-head)" >> "$GITHUB_OUTPUT"
+          else
+            echo "version_sha=$(git rev-parse "refs/remotes/origin/${BRANCH}")" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: List the packages the branch releases
         id: packages
@@ -123,12 +142,13 @@ jobs:
         env:
           BRANCH: ${{ steps.branch.outputs.name }}
           SHA: ${{ steps.head.outputs.sha }}
+          VERSION_SHA: ${{ steps.head.outputs.version_sha }}
           PACKAGE_ARGS: ${{ steps.packages.outputs.args }}
         run: |
           set -euo pipefail
           # PACKAGE_ARGS is built from validated slugs; word splitting is intended.
           # shellcheck disable=SC2086
-          bun run scripts/update-pins.ts --ref "$BRANCH" --sha "$SHA" $PACKAGE_ARGS --summary "$RUNNER_TEMP/pins.md"
+          bun run scripts/update-pins.ts --ref "$BRANCH" --sha "$SHA" --version-sha "$VERSION_SHA" $PACKAGE_ARGS --summary "$RUNNER_TEMP/pins.md"
           cat "$RUNNER_TEMP/pins.md" >> "$GITHUB_STEP_SUMMARY"
 
       # Re-running on the same branch head rewrites the same commit onto the

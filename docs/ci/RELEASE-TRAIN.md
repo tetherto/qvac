@@ -101,8 +101,10 @@ native addon's copy has no prebuilds, so the train never links one (see
    backmerge keeps `main`'s `pnpm-workspace.yaml` and regenerates
    `pnpm-lock.yaml` from it.
 
-   The documentation site has one step here, and it starts on its own. Pushing
-   the train branch starts `docs-pin-update.yml`, which pins the line of each
+   The documentation site has one step here, and it starts on its own. Opening
+   the release PR starts `docs-pin-update.yml`. The train branch still carries
+   the versions it was cut with; the release PR carries the new ones, so the
+   workflow reads them from the PR's head. It pins the line of each
    package the train moves that has a versions file under
    [`docs/website/versions/`](../website/versions/) — `@qvac/sdk` and
    `@qvac/cli` today — and opens one PR into `main` with the edits:
@@ -111,7 +113,9 @@ native addon's copy has no prebuilds, so the train never links one (see
    - a patch release moves its minor's existing line to the train branch, and
      declares no line.
 
-   If the workflow did not run, dispatch it with the train branch. Report the
+   If the workflow did not run, re-run it from the release PR's checks. A
+   dispatch reads the versions from the train branch, so it pins only once the
+   release PR has merged. Report the
    PR's URL. It is opened with `GITHUB_TOKEN`, which starts no pull-request
    checks, so run "Docs Website PR Checks" on its branch by dispatch.
 

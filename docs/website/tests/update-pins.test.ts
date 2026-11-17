@@ -18,6 +18,7 @@ const request = (overrides: Partial<PinRequest> = {}): PinRequest => ({
   ref: 'release-sdk-0.24.0',
   sha: SHA_B,
   packageVersion: '0.24.0',
+  bumped: true,
   changedSince: () => true,
   ...overrides,
 })
@@ -64,6 +65,32 @@ describe('pinning a release', () => {
       request({ ref: 'release-sdk-0.24.1', packageVersion: '0.24.1' }),
     )
     expect(move).toMatchObject({ kind: 'unchanged', reason: 'release-sdk-0.24.2 is a later patch branch' })
+  })
+
+  it('never moves the previous line onto a new branch cut before its bump', () => {
+    // release-sdk-0.25.0 cut from a main still at 0.24.x: its version reads as v0.24.
+    const { move, next } = planPin(
+      declaration([{ version: 'v0.24', ref: 'release-sdk-0.24.0', sha: SHA_A }]),
+      request({ ref: 'release-sdk-0.25.0', packageVersion: '0.24.0', bumped: false }),
+    )
+    expect(move).toEqual({ kind: 'unchanged', version: 'v0.24', reason: 'version not bumped on this branch yet' })
+    expect(next.lines).toEqual([{ version: 'v0.24', ref: 'release-sdk-0.24.0', sha: SHA_A }])
+  })
+
+  it('declares the line of a main bumped before the cut', () => {
+    const { move } = planPin(
+      declaration([{ version: 'v0.24', ref: 'release-sdk-0.24.0', sha: SHA_A }]),
+      request({ ref: 'release-sdk-0.25.0', packageVersion: '0.25.0', bumped: false }),
+    )
+    expect(move).toEqual({ kind: 'declare', version: 'v0.25' })
+  })
+
+  it('still moves the pin to a documentation fix on a branch whose version was never bumped from main', () => {
+    const { move } = planPin(
+      declaration([{ version: 'v0.25', ref: 'release-sdk-0.25.0', sha: SHA_A }]),
+      request({ ref: 'release-sdk-0.25.0', packageVersion: '0.25.0', bumped: false }),
+    )
+    expect(move.kind).toBe('move')
   })
 
   it('pins nothing over a line still held in place', () => {
