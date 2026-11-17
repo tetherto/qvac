@@ -3,7 +3,7 @@
   "version": "0.12.1",
   "description": "Multi-engine ASR (Whisper + NVIDIA Parakeet + MOSS-Transcribe-Diarize) inference addon for qvac on the Bare runtime",
   "qvac": {
-    "ggml-speech": "2026-10-27#1"
+    "qvac-fabric": "11739.3.0#1"
   },
   "engines": {
     "bare": ">=1.20.0"
@@ -181,7 +181,7 @@
     "@types/node": "^22.15.3",
     "bare-buffer": "^3.4.2",
     "bare-ffmpeg": "^1.0.0-32",
-    "bare-https": "^3.0.0",
+    "bare-https": "^4.0.0",
     "bare-os": "^3.6.2",
     "bare-process": "^4.2.2",
     "bare-stream": "^2.7.0",

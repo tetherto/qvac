@@ -13,7 +13,7 @@ const projectJson = JSON.parse(fs.readFileSync(path.join(packageRoot, 'project.j
 const CUDA_OPTION = 'ENABLE_CUDA'
 const PUBLISHED_CUDA_HOST = 'linux-x64'
 const CUDA_FEATURE = 'cuda'
-const GGML_PORT = 'ggml-speech'
+const GGML_PORT = 'qvac-fabric'
 const SPEECH_PORT = 'speech-cpp'
 const DESKTOP_PLATFORM = '!(osx | ios | android)'
 
@@ -87,8 +87,7 @@ test('the hybrid backend dependencies take the versions the overrides pin', () =
 })
 
 test('the Windows CUDA build stages runtime-loaded backend modules', () => {
-  assert.match(cmakeSource, /\(WIN32 AND ENABLE_CUDA\)/)
-  assert.match(cmakeSource, /qvac-speech-ggml-\*\.dll/)
+  assert.match(cmakeSource, /qvac_speech_collect_backends\(BACKEND_DL_LIBS BACKEND_DL_LOOSE_SOS\)/)
   assert.equal(/CUDA::/.test(cmakeSource), false)
 })
 

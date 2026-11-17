@@ -14,6 +14,11 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Changed
+
+- Build speech engines with Fabric ggml `11739.3.0#1` through `speech-cpp` `2026-11-13`, retaining addon-local backends and caller-provided backend directories.
+
+
 ### Added
 
 - Opt-in WebGPU source builds with backend identity reporting.

@@ -927,11 +927,11 @@ dispatches to the corresponding `audiogen-cpp` engine.
 - Built with `cmake-bare` + `cmake-vcpkg`; `vcpkg.json` depends on the
   `speech-cpp[audiogen]` port.
 - Native dependency versions are pinned with vcpkg `overrides` in
-  [vcpkg.json](vcpkg.json), and `package.json` records the `ggml-speech`
-  build as `qvac["ggml-speech"]`. The speech addons ship their
+  [vcpkg.json](vcpkg.json), and `package.json` records the `qvac-fabric`
+  build as `qvac["qvac-fabric"]`. The speech addons ship their
   ggml backends under the same file names, so an app that bundles several of
   them keeps one copy of each: use releases that record the same
-  `ggml-speech`.
+  `qvac-fabric`.
 
 ## Fuzzing
 
@@ -999,3 +999,12 @@ version bump.
 
 Apache-2.0. ACE-Step model weights belong to ACE Studio and StepFun.
 MiniMax-Music3 weights are governed by the MiniMax-Music3 Community License.
+
+## Native runtime packaging
+
+This addon builds `speech-cpp` with the `qvac-fabric` vcpkg port and retains its
+own native runtime and backend directory. It does not require the
+`@qvac/fabric` npm runtime. Backend modules use the `qvac-ggml-*` names;
+explicit `backendsDir` settings continue to override module-relative discovery.
+When bundling several addons, use matching Fabric port revisions and validate
+that backend files with the same destination name have identical contents.

@@ -191,12 +191,12 @@ SDK code — see [Engine Selection](#engine-selection).
 - Bare runtime — see `engines.bare` in `package.json`
 - Linux requires Clang/LLVM 22 with libc++
 
-`ggml-speech` and `speech-cpp` are pinned with vcpkg `overrides` to the same
+`qvac-fabric` and `speech-cpp` are pinned with vcpkg `overrides` to the same
 versions in every speech addon (`@qvac/asr-ggml`, `@qvac/audiogen-ggml`,
 `@qvac/bci-whispercpp`, `@qvac/tts-ggml`), and `package.json` records the
-`ggml-speech` build as `qvac["ggml-speech"]`. The speech addons ship their ggml
+`qvac-fabric` build as `qvac["qvac-fabric"]`. The speech addons ship their ggml
 backends under the same file names, so an app that bundles several of them
-keeps one copy of each: use releases that record the same `ggml-speech`.
+keeps one copy of each: use releases that record the same `qvac-fabric`.
 
 ## Installation
 
@@ -1577,3 +1577,12 @@ files are distributed under the **NVIDIA Open Model License**; see the
 upstream HuggingFace model cards for the per-checkpoint terms.
 
 For questions or issues, please open an issue on the GitHub repository.
+
+## Native runtime packaging
+
+This addon builds `speech-cpp` with the `qvac-fabric` vcpkg port and retains its
+own native runtime and backend directory. It does not require the
+`@qvac/fabric` npm runtime. Backend modules use the `qvac-ggml-*` names;
+explicit `backendsDir` settings continue to override module-relative discovery.
+When bundling several addons, use matching Fabric port revisions and validate
+that backend files with the same destination name have identical contents.

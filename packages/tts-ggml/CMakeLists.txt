@@ -130,59 +130,8 @@ else()
 endif()
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
 
-# Collect every dynamically-loadable ggml backend the ggml-speech port
-# produced ($CURRENT_PACKAGES_DIR/lib/libqvac-speech-ggml-*.so on
-# Android; nothing on Apple/static-only platforms). cmake-bare's
-# `add_bare_module(... EXPORTS INSTALL TARGET <tgt>)` bundles each
-# IMPORTED `ggml::<backend>` target into the per-arch prebuilds folder
-# next to the `.bare` module. Mirrors qvac/packages/transcription-
-# parakeet/CMakeLists.txt's BACKEND_DL_LIBS path.
-#
-# Hybrid-mode caveat: the ggml-speech vcpkg port builds Android (and
-# linux-arm64, and linux-x64 with the cuda feature) with
-# GGML_BACKEND_DL=ON, so backends
-# ship as MODULE .so files at
-# `${VCPKG_INSTALLED_PATH}/lib/libqvac-speech-ggml-{cpu*,vulkan,opencl,cuda}.so`
-# but ggml-config.cmake.in deliberately leaves them out of
-# `GGML_AVAILABLE_BACKENDS`' IMPORTED set (the loader is expected to
-# find them via `ggml_backend_load_all_from_path()` at runtime). We
-# pick those up with an explicit `install(FILES ...)` below so the
-# runtime scan of the module's backends directory actually finds them.
-set(BACKEND_DL_LIBS "")
-if((ANDROID OR UNIX) AND NOT APPLE)
-  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
-    if(TARGET ggml::${_backend})
-      list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
-    endif()
-  endforeach()
-endif()
-
-# Loose-file pickup for MODULE backends that aren't surfaced as
-# IMPORTED targets by find_package(ggml). On Android this is what
-# actually delivers Vulkan + OpenCL into the prebuilds folder, and on
-# hybrid desktop builds (linux-arm64, linux-x64 / win32-x64 with
-# ENABLE_CUDA) it delivers the CPU-variant / Vulkan / CUDA modules.
-# Glob runs at configure time -- the module files come from ggml-speech's
-# portfile pickup into lib/ (.so on Linux/Android, .dll on Windows),
-# which has already completed by the time vcpkg hands control back to
-# us. Apple / static-only configs return an empty list and skip the
-# install rule below.
-set(BACKEND_DL_LOOSE_SOS "")
-if(((ANDROID OR UNIX) AND NOT APPLE) OR (WIN32 AND ENABLE_CUDA))
-  if(NOT VCPKG_INSTALLED_PATH OR NOT EXISTS "${VCPKG_INSTALLED_PATH}/lib")
-    message(WARNING "tts-ggml: VCPKG_INSTALLED_PATH "
-      "('${VCPKG_INSTALLED_PATH}') has no lib/ dir; skipping loose "
-      "ggml backend module pickup -- the runtime may fail to find "
-      "Vulkan / OpenCL / CUDA backends.")
-  else()
-    file(GLOB BACKEND_DL_LOOSE_SOS
-      "${VCPKG_INSTALLED_PATH}/lib/libqvac-speech-ggml-*.so"
-      "${VCPKG_INSTALLED_PATH}/lib/qvac-speech-ggml-*.dll")
-    foreach(_lib IN LISTS BACKEND_DL_LOOSE_SOS)
-      message(STATUS "tts-ggml: will stage ggml backend ${_lib}")
-    endforeach()
-  endif()
-endif()
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/speech-backends.cmake)
+qvac_speech_collect_backends(BACKEND_DL_LIBS BACKEND_DL_LOOSE_SOS)
 
 # Developer builds may consume the shared speech ggml package on macOS.
 # Package its dylibs alongside the addon, using cmake-bare's SONAME-aware
@@ -266,7 +215,7 @@ target_include_directories(
     ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
 )
 
-# No direct CUDA linkage here: the ggml-speech port builds the linux-x64
+# No direct CUDA linkage here: the qvac-fabric port builds the linux-x64
 # [cuda] configuration in hybrid BACKEND_DL mode, so the CUDA backend ships
 # as a MODULE .so (staged by the loose-file pickup above) that carries its
 # own libcuda / cudart / cuBLAS DT_NEEDED entries. Linking them into the

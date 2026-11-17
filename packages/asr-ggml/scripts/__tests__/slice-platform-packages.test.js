@@ -10,6 +10,7 @@ const slicerPromise = import('../../../../scripts/ci/slice-platform-packages.mjs
 
 const META_MANIFEST = {
   name: '@qvac/fake-ggml',
+  qvac: { 'qvac-fabric': '11739.3.0#1' },
   version: '1.2.3',
   license: 'Apache-2.0',
   author: 'Tether',
@@ -71,7 +72,7 @@ function populateHostDir(prebuildsDir, host) {
   const backendsDir = path.join(hostDir, moduleName(host))
   fs.mkdirSync(backendsDir, { recursive: true })
   fs.writeFileSync(path.join(hostDir, moduleName(host) + '.bare'), 'binary-' + host)
-  fs.writeFileSync(path.join(backendsDir, 'libqvac-speech-ggml-cpu.so'), 'backend-' + host)
+  fs.writeFileSync(path.join(backendsDir, 'libqvac-ggml-cpu.so'), 'backend-' + host)
 }
 
 function readJson(...segments) {
@@ -102,6 +103,7 @@ test('generates a loadable platform package layout', async (t) => {
 
   const manifest = readJson(sliceDir, 'package.json')
   assert.equal(manifest.name, '@qvac/fake-ggml-linux-x64')
+  assert.deepEqual(manifest.qvac, META_MANIFEST.qvac)
   assert.equal(manifest.version, '1.2.3')
   assert.deepEqual(manifest.os, ['linux'])
   assert.deepEqual(manifest.cpu, ['x64'])
@@ -128,7 +130,7 @@ test('generates a loadable platform package layout', async (t) => {
         'prebuilds',
         'linux-x64',
         'qvac__fake-ggml-linux-x64',
-        'libqvac-speech-ggml-cpu.so'
+        'libqvac-ggml-cpu.so'
       )
     )
   )

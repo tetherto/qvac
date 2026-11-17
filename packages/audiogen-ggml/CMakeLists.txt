@@ -83,31 +83,8 @@ else()
 endif()
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
 
-set(BACKEND_DL_LIBS "")
-if((ANDROID OR UNIX) AND NOT APPLE)
-  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
-    if(TARGET ggml::${_backend})
-      list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
-    endif()
-  endforeach()
-endif()
-
-set(BACKEND_DL_LOOSE_SOS "")
-if(((ANDROID OR UNIX) AND NOT APPLE) OR (WIN32 AND ENABLE_CUDA))
-  if(NOT VCPKG_INSTALLED_PATH OR NOT EXISTS "${VCPKG_INSTALLED_PATH}/lib")
-    message(WARNING "audiogen-ggml: VCPKG_INSTALLED_PATH "
-      "('${VCPKG_INSTALLED_PATH}') has no lib/ dir; skipping loose "
-      "ggml backend module pickup -- the runtime may fail to find "
-      "Vulkan / OpenCL / CUDA backends.")
-  else()
-    file(GLOB BACKEND_DL_LOOSE_SOS
-      "${VCPKG_INSTALLED_PATH}/lib/libqvac-speech-ggml-*.so"
-      "${VCPKG_INSTALLED_PATH}/lib/qvac-speech-ggml-*.dll")
-    foreach(_lib IN LISTS BACKEND_DL_LOOSE_SOS)
-      message(STATUS "audiogen-ggml: will stage ggml backend ${_lib}")
-    endforeach()
-  endif()
-endif()
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/speech-backends.cmake)
+qvac_speech_collect_backends(BACKEND_DL_LIBS BACKEND_DL_LOOSE_SOS)
 
 add_bare_module(audiogen-ggml NAME ${module_name} EXPORTS ${BACKEND_DL_LIBS})
 

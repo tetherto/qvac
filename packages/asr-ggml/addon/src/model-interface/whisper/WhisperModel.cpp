@@ -125,13 +125,6 @@ auto WhisperModel::formatCaptionOutput(Transcript& transcript) -> void {
 }
 
 #if defined(__ANDROID__) || defined(__linux__) || defined(_WIN32)
-// Android, desktop linux-arm64, and CUDA-enabled linux-x64 / win32-x64
-// builds ship ggml with `GGML_BACKEND_DL=ON`, so no backend is statically
-// registered. Load the per-arch CPU + GPU modules once per process before
-// whisper_init; otherwise it aborts on a NULL CPU device. On static builds
-// the scan finds no modules and the statically registered backends stay in
-// charge, so calling this unconditionally is safe. A configured backendsDir
-// is scanned as given; otherwise the addon's own backends directory.
 void ensureBackendsLoaded(const std::string& backendsDir) {
   static std::once_flag flag;
   std::call_once(flag, [&]() {
@@ -141,7 +134,7 @@ void ensureBackendsLoaded(const std::string& backendsDir) {
           qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
           "the addon could not locate itself; falling back to "
           "ggml_backend_load_all() (default search path), which misses the "
-          "renamed qvac-speech-ggml-* modules.");
+          "renamed qvac-ggml-* modules.");
       ggml_backend_load_all();
       return;
     }

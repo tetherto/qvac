@@ -119,6 +119,7 @@ export function buildSliceManifest (metaManifest, definition) {
     homepage: metaManifest.homepage,
     engines: metaManifest.engines
   }
+  if (metaManifest.qvac) manifest.qvac = { ...metaManifest.qvac }
   if (definition.os) manifest.os = definition.os
   if (definition.cpu) manifest.cpu = definition.cpu
   if (definition.libc) manifest.libc = definition.libc
