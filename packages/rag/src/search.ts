@@ -63,7 +63,7 @@ export async function scanSearch(
       kept = []
       byDocument.set(chunk.documentId, kept)
     }
-    offer(kept, perDocument, score, chunk)
+    offer(kept, Math.min(k, perDocument), score, chunk)
   }
 
   function scoreBatch() {

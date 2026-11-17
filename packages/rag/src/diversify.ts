@@ -14,7 +14,10 @@ export function selectDiverse(ranked: SearchHit[], k: number, perDocument: numbe
 
   const chosen: number[] = []
   const groups = Array.from(documents.values())
-  for (let round = 0; round < perDocument && chosen.length < k; round++) {
+  let longest = 0
+  for (const positions of groups) longest = Math.max(longest, positions.length)
+  const rounds = Math.min(perDocument, longest)
+  for (let round = 0; round < rounds && chosen.length < k; round++) {
     for (const positions of groups) {
       if (chosen.length === k) break
       if (round < positions.length) chosen.push(positions[round])

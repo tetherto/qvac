@@ -139,6 +139,20 @@ both('a scoped handle diversifies inside its bound scope only', async (t) => {
   t.alike(contents(narrowed), ['b0'], 'a request naming an ungranted document cannot reach it')
 })
 
+both('a cap far above the chunk count returns at once', async (t) => {
+  const { rag, spaceId } = await openRag(t)
+  await rag.ingest({ namespace: 'ns', documents: [scored('a', spaceId, [0.9])] })
+
+  const hits = await rag.search({
+    scope: { namespace: 'ns' },
+    vector: QUERY,
+    spaceId,
+    k: 2,
+    perDocument: 1_000_000_000
+  })
+  t.alike(contents(hits), ['a0'])
+})
+
 test('perDocument must be a positive integer', async (t) => {
   const { rag, spaceId } = await openRag(t)
   for (const perDocument of [0, -1, 1.5]) {

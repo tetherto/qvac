@@ -155,7 +155,7 @@ A text `query` is embedded with the port's `embedQuery` and searched in the port
 
 `citation` holds `title`, `sourceUrl`, `sourcePath` and `mimeType` from the document's `metadata`, falling back to the chunk's `metadataJson` (the `rag-extract` chunk format carries the same keys), and `page` from the chunk's `metadataJson`. A key is present only when it holds a non-empty string, or for `page` an integer of at least 1.
 
-`perDocument` spreads the `k` hits across documents: each document's best hit is taken first, in score order, then further hits go round the documents again, up to `perDocument` each. The hits still come back best first. When `scope.documentIds` lists at most `k` documents, every listed document that has chunks gets a hit. Without the index the selection is exact. With it, candidates are fetched in a window that grows while the cap leaves fewer than `k` hits, up to 4,096 candidates, so a result can hold fewer than `k` hits when one document fills that window.
+`perDocument` spreads the `k` hits across documents: each document's best hit is taken first, in score order, then further hits go round the documents again, up to `perDocument` each. The hits still come back best first. When `scope.documentIds` lists at most `k` documents, every listed document that has chunks gets a hit. Without the index the selection is exact. With it, candidates are fetched in a window that grows while the cap leaves fewer than `k` hits, up to a pool of 4,096 (each fetch also takes the usual extra margin and any scores tied at its edge), so a result can hold fewer than `k` hits when one document fills that window.
 
 ```ts
 const hits = await rag.search({ scope: { namespace: 'handbook' }, query, k: 8, perDocument: 2 })
