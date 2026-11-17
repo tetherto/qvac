@@ -22,7 +22,9 @@ if (!base || !head) {
 
 const git = (...args) => execFileSync('git', args, { encoding: 'utf-8' }).trim()
 const mergeBase = git('merge-base', base, head)
-const paths = git('diff', '--name-only', mergeBase, head).split('\n').filter(Boolean)
+// --no-renames lists both sides of a move, so a file moved out of a package
+// into its documentation root still counts as the package's change.
+const paths = git('diff', '--name-only', '--no-renames', mergeBase, head).split('\n').filter(Boolean)
 const docsOnly = isDocsOnly(paths)
 const packages = docsPackages(paths)
 
