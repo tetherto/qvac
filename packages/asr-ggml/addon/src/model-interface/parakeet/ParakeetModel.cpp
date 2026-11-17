@@ -727,6 +727,8 @@ void ParakeetModel::reset() {
   processed_time_ = 0.0f;
   jobEncoderCalls_ = 0;
   jobCoremlEncoderCalls_ = 0;
+  jobTranscriptionCalls_ = 0;
+  jobCoremlDecoderCalls_ = 0;
   cancelGeneration_.store(0, std::memory_order_relaxed);
   activeGeneration_.store(0, std::memory_order_relaxed);
 }
@@ -1005,6 +1007,9 @@ void ParakeetModel::recordTranscriptionResult(const pkt::EngineResult& result) {
   ++jobEncoderCalls_;
   if (result.encoder_used_coreml)
     ++jobCoremlEncoderCalls_;
+  ++jobTranscriptionCalls_;
+  if (result.decoder_used_coreml)
+    ++jobCoremlDecoderCalls_;
 }
 
 void ParakeetModel::recordDiarizationResult(
@@ -1479,6 +1484,12 @@ RuntimeStats ParakeetModel::runtimeStats() const {
         "encoderUsedCoreml",
         static_cast<int64_t>(
             jobCoremlEncoderCalls_ == jobEncoderCalls_ ? 1 : 0));
+  }
+  if (jobTranscriptionCalls_ > 0) {
+    stats.emplace_back(
+        "decoderUsedCoreml",
+        static_cast<int64_t>(
+            jobCoremlDecoderCalls_ == jobTranscriptionCalls_ ? 1 : 0));
   }
   if (isDiarization()) {
     stats.emplace_back("aoscActive", aoscActive_);
