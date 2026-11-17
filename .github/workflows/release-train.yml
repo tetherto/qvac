@@ -677,3 +677,16 @@ jobs:
     with:
       destination: release-assets
       version: ${{ needs.train.outputs.release_version }}
+
+  # On the SDK's sdk-v<version> release, which the profile zips attach to.
+  publish-swift-package:
+    name: Publish the Swift package
+    needs:
+      - train
+      - github-release
+    if: ${{ !cancelled() && needs.github-release.result == 'success' && needs.train.outputs.release_slug == 'sdk' }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/publish-swift.yml
+    with:
+      version: ${{ needs.train.outputs.release_version }}
