@@ -32,7 +32,7 @@ If the material is a defect, a crash, an error message, a missing system library
 
 If the material is setting up or building an app on a platform the docs already teach, do not draft a Solution. That knowledge belongs in the matching tutorial under the SDK's `tutorials/` — `electron.mdx` for Electron, `expo.mdx` for Expo. Say so and stop.
 
-Both live inside the SDK's current documentation line, whose folder is the parenthesized one under `docs/website/content/docs/sdk/`. Resolve it from the version manifest in `docs/website/src/lib/versions.ts` rather than hard-coding a version.
+Both live in the SDK's documentation root, the first of the `paths` in `docs/website/versions/sdk.json` (`packages/sdk/docs/users/`), which holds the line being written. Never edit a released line held in place under `docs/website/content/docs/sdk/`.
 
 If the material is an unresolved product gap with no working approach yet, recommend an issue instead of a page.
 
@@ -40,7 +40,7 @@ A Solution may state a known limitation and the architecture that works around i
 
 A Solution may run on a platform a tutorial covers, as long as the subject of the page is the use case and not the platform setup. Link the tutorial under `Related resources` rather than repeating it.
 
-The second check tests the objective against the site as it already is. State in one sentence the objective the page would serve, phrased as the reader's goal. Then search `docs/website/content/docs/` for a page that already serves that same objective, by title, by description, and by content.
+The second check tests the objective against the site as it already is. State in one sentence the objective the page would serve, phrased as the reader's goal. Then search `docs/website/content/docs/` and the documentation root of each software (the first of the `paths` in each `docs/website/versions/*.json`) for a page that already serves that same objective, by title, by description, and by content.
 
 If a page already fulfills exactly that objective, do not draft a Solution. Name that page and stop. Propose extending it instead when the material adds something the page lacks.
 

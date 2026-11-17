@@ -364,19 +364,20 @@ Only for a package with a versions file under `docs/website/versions/` —
 `@qvac/sdk` → `/sdk`, `@qvac/cli` → `/cli` today. Any other `--package` value
 documents nothing versioned and skips this step.
 
-A release publishes the documentation line written for it by pinning it. Open
-**one** PR into `main`, separate from the release PR, that edits the package's
-versions file:
+A release publishes the documentation line written for it by pinning it in
+the package's versions file. Do not open that PR yourself. Opening the release
+PR, which carries the version bump, starts `docs-pin-update.yml`. It opens
+**one** PR into `main`, separate from the release PR:
 
 - a minor release declares its line first in `lines`:
   `{ "version": "v<x.y>", "ref": "release-<package>-<x.y.z>", "sha": "<head sha>" }`;
 - a patch release moves its minor's existing line to the new release branch and
   its head, and declares no line.
 
-Copy, move, or rename no documentation folder: the site reads the line's pages
-from the pinned commit at build. Report the PR's URL. Do not approve or merge
-it: the documentation engineer reviews it, and that review is the only gate on
-the documentation side of the release.
+Report the PR's URL. If it did not open, report the workflow run instead, and
+re-run it from the release PR's checks. Do not approve or merge it: the
+documentation engineer reviews it, and that review is the only gate on the
+documentation side of the release.
 
 This is the same step a release train runs at `docs/ci/RELEASE-TRAIN.md` step
 6; the only difference is that a train pins every package it moves and this
