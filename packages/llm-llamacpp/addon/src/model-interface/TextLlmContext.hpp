@@ -493,6 +493,9 @@ private:
   // tags.
   bool thinkingForcedOpen_ = false;
   std::string thinkingForcedOpenText_;
+  // The opener is owed to this request's stream: set by `onPrefillComplete`,
+  // cleared once `generateResponse` or the first `onLogitsReady` emits it.
+  bool thinkingOpenerPending_ = false;
 
   bool cacheReconciliationEnabled_ = false;
   // `cache_share_across_keys`; see `sharesCacheAcrossKeys`.
@@ -527,6 +530,7 @@ private:
   // Ledger entries up to the end of the history for the request in flight;
   // 0 when this request takes no end-of-history checkpoint.
   size_t historyCheckpointEntries_ = 0;
+  bool historyEndsAtUserTurn_ = false;
   size_t lastCacheReuse_ = 0;
   size_t donorAdoptions_ = 0;
   qvac_lib_inference_addon_llama::cache::CacheSourceProvider

@@ -9,7 +9,10 @@ import {
   TTS_COSYVOICE3_EMOTIONS,
   TTS_COSYVOICE3_INSTRUCT_DIALECTS,
   TTS_COSYVOICE3_INSTRUCT_VOLUMES,
-  TTS_COSYVOICE3_INSTRUCT_STYLES
+  TTS_COSYVOICE3_INSTRUCT_STYLES,
+  TTS_PARLER_COREML_COMPUTE_UNITS,
+  TTS_LAVASR_COREML_COMPUTE_UNITS,
+  TTS_SUPERTONIC_PRECISIONS
 } from '@/index'
 import * as ttsSchemas from '@qvac/inference/surface'
 import { constantsRegistry } from '../scripts/contract/constants-registry'
@@ -86,4 +89,27 @@ test('TTS vocabulary constants are registered for cross-language codegen', (t) =
   ])
   // 'proper noun' must survive as an identifier-safe varname for codegen.
   t.is(constantsRegistry.TtsParlerEmotion.enum['PROPER_NOUN'], 'proper noun')
+})
+
+// The @qvac/tts-ggml 0.15 vocabularies: the Parler and LavaSR Core ML compute
+// policies (two spellings, each mirroring its own native enum) and the
+// Supertonic weight precision.
+test('Core ML and precision vocabularies are exported and registered', (t) => {
+  t.is(TTS_PARLER_COREML_COMPUTE_UNITS, ttsSchemas.TTS_PARLER_COREML_COMPUTE_UNITS)
+  t.is(TTS_LAVASR_COREML_COMPUTE_UNITS, ttsSchemas.TTS_LAVASR_COREML_COMPUTE_UNITS)
+  t.is(TTS_SUPERTONIC_PRECISIONS, ttsSchemas.TTS_SUPERTONIC_PRECISIONS)
+  t.alike([...TTS_PARLER_COREML_COMPUTE_UNITS], ['all', 'cpu_and_ane', 'cpu_and_gpu', 'cpu_only'])
+  t.alike([...TTS_LAVASR_COREML_COMPUTE_UNITS], ['CPU_ONLY', 'CPU_AND_GPU', 'CPU_AND_NE', 'ALL'])
+  t.alike([...TTS_SUPERTONIC_PRECISIONS], ['auto', 'f32', 'f16', 'q8_0'])
+  t.alike(Object.values(constantsRegistry.TtsParlerCoremlComputeUnits.enum), [
+    ...TTS_PARLER_COREML_COMPUTE_UNITS
+  ])
+  t.alike(Object.values(constantsRegistry.TtsLavasrCoremlComputeUnits.enum), [
+    ...TTS_LAVASR_COREML_COMPUTE_UNITS
+  ])
+  t.alike(Object.values(constantsRegistry.TtsSupertonicPrecision.enum), [
+    ...TTS_SUPERTONIC_PRECISIONS
+  ])
+  t.is(constantsRegistry.TtsParlerCoremlComputeUnits.enum['CPU_AND_ANE'], 'cpu_and_ane')
+  t.is(constantsRegistry.TtsSupertonicPrecision.enum['Q8_0'], 'q8_0')
 })

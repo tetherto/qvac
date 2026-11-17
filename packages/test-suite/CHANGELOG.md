@@ -1,5 +1,82 @@
 # Changelog
 
+## [0.15.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/test-suite/v/0.15.0
+
+This release follows the SDK's move of its worker to bare-stow. The generated mobile consumer now targets Expo SDK 58, and external clients resolve their own Bare runtime.
+
+---
+
+## Breaking Changes
+
+### The generated mobile consumer targets Expo SDK 58
+
+`build:consumer:mobile` generates the app from the mobile consumer template, which now pins Expo SDK 58: `expo` `~58.0.23`, `react-native` `0.88.1`, `react` `19.3.0`, `react-native-bare-kit` `^0.17.1` and `react-native-worklets` `0.13.0`. `bare-runtime` is no longer a dependency of the app. Build mobile consumers against an `@qvac/sdk` that runs its worker on bare-stow; a project on an earlier SDK stays on `@qvac/test-suite` 0.14.x.
+
+### External clients resolve their own Bare runtime
+
+`BridgeExecutor` no longer resolves `bare-runtime-<platform>-<arch>` and no longer sets `QVAC_BARE_PATH` for the client it starts, and the `resolveBareFrom` option is removed from `BridgeExecutorOptions`. A client that needs a specific Bare binary gets it from its own SDK, or from `QVAC_BARE_PATH` set in the entry's `env`.
+
+```typescript
+// Before
+new BridgeExecutor({
+  interpreter,
+  args,
+  cwd,
+  env,
+  testDefinitions,
+  log,
+  resolveBareFrom: configDir
+})
+
+// After
+new BridgeExecutor({ interpreter, args, cwd, env, testDefinitions, log })
+```
+
+---
+
+## Changes
+
+- The iOS build of the mobile consumer takes the Xcode scheme from the name of the workspace `expo prebuild` writes, instead of the first scheme `xcodebuild -list` prints. Local Swift packages the app links no longer get picked as the scheme.
+- The Android memory worklet talks to the app over `Bare.IPC`, as `react-native-bare-kit` 0.17 provides it.
+
+## [0.14.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/test-suite/v/0.14.0
+
+A step that runs before a consumer leg starts can now ask which tests that leg will execute, and a long list of test ids can be passed to the producer through a file instead of the command line.
+
+---
+
+## New APIs
+
+### Resolve the tests a leg will run with `selectRunTests`
+
+`selectRunTests(catalog, { ...selectionOptions, platform })` returns the tests one consumer leg executes, without starting a producer. It applies the same `suite`, `excludeSuite`, `filter` and `include` rules the producer queues from, leaves out tests skipped on every platform, and drops the tests platform policy skips on that leg. The dropped ids come back in `platformSkippedTestIds`. Use it to prepare a leg ahead of the run, for example to restore only the models it needs from a cache.
+
+```typescript
+import { loadConfig, loadTests, selectRunTests } from '@qvac/test-suite'
+
+const config = await loadConfig(configDir)
+const { tests, platformSkippedTestIds } = selectRunTests(await loadTests(config, configDir), {
+  suite: 'smoke',
+  platform: 'desktop-macos'
+})
+```
+
+`selectTests` (the producer's selection alone), `matchesPlatform`, `getPlatformSkipReason` and the selection types are exported from the Node entry as well. The mobile entry is unchanged.
+
+### Pass test ids from a file with `--include-file`
+
+`run:producer` and the `run:local:*` commands take `--include-file <path>`, a file of test ids one per line, combined with `--include`. A long impacted-test list no longer has to fit on the command line, which on Windows is limited to 8,191 characters. An id the catalog does not contain still fails the run.
+
+```bash
+npx qvac-test run:producer --suite=smoke --include-file=include-tests.txt
+```
+
+Both additions are additive: existing configurations and commands run exactly as on 0.13.0.
+
 ## [0.13.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/test-suite/v/0.13.0

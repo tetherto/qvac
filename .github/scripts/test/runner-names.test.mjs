@@ -33,57 +33,36 @@ test('runners.yaml parses with unique keys and labels', () => {
     runners.length,
   )
   assert.ok(runners.some((entry) => entry.label.startsWith('qvac-')))
-  assert.ok(runners.some((entry) => entry.key === 'macos_ios'))
+  assert.ok(runners.some((entry) => entry.key === 'macos_15'))
   assert.equal(
-    runners.find((entry) => entry.key === 'macos_ios').label,
-    'macos-14',
+    runners.find((entry) => entry.key === 'macos_15').label,
+    'macos-15',
   )
 })
 
 test('decoder-audio Linux x64 integration uses the CPU runner for each Ubuntu version', () => {
   const project = JSON.parse(readRepoFile('packages/decoder-audio/project.json'))
-  const platforms = project.targets['test:integration'].options.ci.platforms
-    .filter((row) => row.platform === 'linux' && row.arch === 'x64')
-  const runners = loadRunners()
+  const configs = Object.entries(project.targets['test:integration'].configurations)
+    .filter(([name]) => name.startsWith('linux-x64'))
   const expected = [
-    ['ubuntu-22.04', 'linux_ubuntu2204_x64'],
-    ['ubuntu-24.04', 'linux_ubuntu2404_x64'],
-  ].map(([os, key]) => ({ os, runner: runners.find((entry) => entry.key === key).label }))
-  assert.deepEqual(platforms.map(({ os, runner }) => ({ os, runner })), expected)
+    ['linux-x64', 'linux_ubuntu2204_x64'],
+    ['linux-x64-2404', 'linux_ubuntu2404_x64'],
+  ]
+  assert.deepEqual(configs.map(([name, config]) => [name, config.ci.runner]), expected)
 })
 
-test('speech C++ test targets and standalone coverage workflows use the same CPU runner', () => {
-  const cpuRunner = loadRunners().find((entry) => entry.key === 'linux_ubuntu2204_x64').label
-  for (const name of ['asr-ggml', 'tts-ggml', 'bci-whispercpp']) {
+test('speech C++ test targets use the same CPU runner', () => {
+  for (const name of ['asr-ggml', 'tts-ggml', 'bci-whispercpp', 'audiogen-ggml']) {
     const project = JSON.parse(readRepoFile(`packages/${name}/project.json`))
-    const config = project.targets['test:cpp'].options.ci
-    assert.notEqual(config.carveOut, true, name)
-    assert.deepEqual(config.platforms.map(({ os, platform, arch, runner }) => ({ os, platform, arch, runner })), [
-      { os: 'ubuntu-22.04', platform: 'linux', arch: 'x64', runner: cpuRunner },
-    ], name)
-
-    const standalone = readRepoFile(`.github/workflows/cpp-test-coverage-${name}.yml`)
-    assert.match(standalone, /runner: \$\{\{ needs.runner_names.outputs.linux_ubuntu2204_x64 \}\}/, name)
-    assert.doesNotMatch(standalone, /linux_ubuntu2204_x64_gpu/, name)
+    for (const target of ['cpp:build', 'cpp:tests']) {
+      const configs = project.targets[target].configurations
+      assert.deepEqual(Object.keys(configs), ['linux-x64'], `${name} ${target}`)
+      assert.equal(configs['linux-x64'].ci.runner, 'linux_ubuntu2204_x64', `${name} ${target}`)
+    }
   }
 })
 
-test('audiogen C++ build carve-out uses the CPU runner', () => {
-  const project = JSON.parse(readRepoFile('packages/audiogen-ggml/project.json'))
-  assert.equal(project.targets['test:cpp'].options.ci.carveOut, true)
-  const source = readRepoFile('.github/workflows/cpp-test-coverage-audiogen-ggml.yml')
-  assert.match(source, /runner: \$\{\{ needs.runner_names.outputs.linux_ubuntu2204_x64 \}\}/)
-  assert.doesNotMatch(source, /linux_ubuntu2204_x64_gpu/)
-  assert.doesNotMatch(source, /runs-on:.*gpu/)
-})
-
-test('PR C++ tests consume the package target runner and shared cpp-lint uses CPU', () => {
-  const source = readRepoFile('.github/workflows/cpp-tests-nx.yml')
-  assert.match(source, /target: test:cpp/)
-  assert.ok(source.includes('runs-on: ${{ matrix.runner || matrix.os }}'))
-  assert.match(readRepoFile('.github/workflows/on-pr-nx.yml'), /uses: .\/\.github\/workflows\/cpp-tests-nx.yml/)
-  const cpuRunner = loadRunners().find((entry) => entry.key === 'linux_ubuntu2204_x64').label
-  assert.ok(readRepoFile('.github/workflows/cpp-lint.yaml').includes(`runs-on: ${cpuRunner}\n`))
+test('security-baseline runs the runner-names suite', () => {
   assert.ok(readRepoFile('.github/workflows/security-baseline.yml').includes('.github/scripts/test/runner-names.test.mjs'))
 })
 
@@ -112,7 +91,7 @@ test('reusable-runner-names.yml matches the catalog', () => {
   assert.match(rendered, /AUTO-GENERATED/)
   assert.match(rendered, /runs-on: ubuntu-latest/)
   assert.doesNotMatch(rendered, /actions\/checkout/)
-  assert.match(rendered, /macos_ios=macos-14/)
+  assert.match(rendered, /macos_15=macos-15/)
 })
 
 test('actionlint.yaml lists every self-hosted catalog label', () => {
@@ -291,5 +270,5 @@ test('validate-runner-names.mjs exits 0', () => {
 
 test('catalog path constants point at tracked files', () => {
   assert.equal(RUNNERS_YAML, '.github/runners.yaml')
-  assert.match(readRepoFile(RUNNERS_YAML), /macos_ios:/)
+  assert.match(readRepoFile(RUNNERS_YAML), /macos_15:/)
 })

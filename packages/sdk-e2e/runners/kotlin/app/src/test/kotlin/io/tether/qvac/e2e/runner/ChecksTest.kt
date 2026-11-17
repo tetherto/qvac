@@ -52,6 +52,57 @@ class ChecksTest {
     }
 
     @Test
+    fun `unit vectors accept single and batch inputs and reject invalid shapes`() {
+        val check = Assertions.named.getValue("unitVectors")
+        val args = mapOf("dimensions" to 2L, "tolerance" to 1e-3)
+        assertTrue(check(listOf(1L, 0L), args).passed)
+        assertTrue(check(listOf(listOf(0.6, 0.8), listOf(0L, 1L)), args).passed)
+        for (value in listOf(
+            emptyList<Any?>(), listOf(1L), listOf(0L, 0L), listOf(1L, 1L),
+            listOf(Double.NaN, 0.0), listOf(Double.POSITIVE_INFINITY, 0.0),
+            listOf("1", 0L), listOf(true, 0L), listOf(listOf(1L, 0L), listOf(1L)),
+        )) assertFalse(check(value, args).passed, value.toString())
+        for (dimensions in listOf(null, 0L, -1L, 1.5, Double.NaN, "2", true)) {
+            assertFalse(check(listOf(1L, 0L), args + ("dimensions" to dimensions)).passed)
+        }
+        for (tolerance in listOf(null, 0.0, -0.1, 1.0, Double.NaN, Double.POSITIVE_INFINITY, "0.001")) {
+            assertFalse(check(listOf(1L, 0L), args + ("tolerance" to tolerance)).passed)
+        }
+        assertFalse(check(listOf(0.5, 0.5), args + ("tolerance" to 0.5)).passed)
+    }
+
+    @Test
+    fun `cosine minimum includes equality and rejects invalid vectors and thresholds`() {
+        val check = Assertions.comparisons.getValue("cosineAtLeast")
+        assertTrue(check(listOf(3L, 0L), listOf(2L, 0L), mapOf("min" to 1L)).passed)
+        assertTrue(check(listOf(1L, 0L), listOf(0L, 1L), mapOf("min" to 0L)).passed)
+        assertFalse(check(listOf(1L, 0L), listOf(0L, 1L), mapOf("min" to 0.5)).passed)
+        for (value in listOf(
+            emptyList<Any?>(), listOf(1L), listOf(0L, 0L), listOf(Double.NaN, 0.0),
+            listOf(Double.POSITIVE_INFINITY, 0.0), listOf("1", 0L), listOf(true, 0L),
+        )) {
+            assertFalse(check(value, listOf(1L, 0L), mapOf("min" to 0L)).passed)
+            assertFalse(check(listOf(1L, 0L), value, mapOf("min" to 0L)).passed)
+        }
+        for (minimum in listOf(null, -1.1, 1.1, Double.NaN, Double.POSITIVE_INFINITY, "0", true)) {
+            assertFalse(check(listOf(1L, 0L), listOf(1L, 0L), mapOf("min" to minimum)).passed)
+        }
+    }
+
+    @Test
+    fun `retrieval comparison requires a strictly closer match`() {
+        val check = Assertions.comparisons.getValue("moreSimilarThan")
+        val anchor = listOf(1L, 0L)
+        val other = listOf(0L, 1L)
+        assertTrue(check(anchor, listOf(3L, 0L), mapOf("than" to other)).passed)
+        assertFalse(check(anchor, other, mapOf("than" to anchor)).passed)
+        assertFalse(check(anchor, anchor, mapOf("than" to anchor)).passed)
+        assertFalse(check(anchor, anchor, emptyMap()).passed)
+        assertFalse(check(anchor, anchor, mapOf("than" to listOf(0L, 0L))).passed)
+        assertFalse(check(anchor, listOf(Double.NaN, 0.0), mapOf("than" to other)).passed)
+    }
+
+    @Test
     fun `every refusal this client raises carries the SDK's code for it`() {
         // An unknown name binds `code: ""`, which errorIsStructured reads as an unstructured error.
         val names = listOf(

@@ -8,7 +8,8 @@ build artifact -- if it's missing the tests skip themselves, which silently
 hides real integration coverage (notably in CI). This script builds it so they
 actually run.
 
-Idempotent: does nothing if the worker already exists, unless `--force`.
+Idempotent: does nothing if the worker and its shims already exist, unless
+`--force`.
 
     python3 scripts/build_worker.py            # build if missing
     python3 scripts/build_worker.py --force     # rebuild
@@ -21,7 +22,6 @@ different `@qvac/sdk` checkout; defaults to the monorepo sibling `../sdk`.
 from __future__ import annotations
 
 import argparse
-import glob
 import json
 import os
 import shutil
@@ -86,7 +86,8 @@ def links_workspace_inference(sdk: Path) -> bool:
 
 def build(sdk: Path, *, force: bool) -> Path:
     worker = worker_path(sdk)
-    if worker.exists() and not force:
+    built = worker.exists() and (worker.parent / "unbundled-shim.js").exists()
+    if built and not force:
         print(f"▸ worker already built: {worker}", file=sys.stderr)
         return worker
     if not sdk.exists():
@@ -113,13 +114,6 @@ def build(sdk: Path, *, force: bool) -> Path:
             manifest.write_text(saved, encoding="utf-8")
     else:
         _run([npm, "install", "--ignore-scripts"], sdk)
-    # npm doesn't reliably set the exec bit on the prebuilt Bare binary, and
-    # the client execs it directly (node_modules/bare-runtime-<plat>/bin/bare),
-    # so it fails with EACCES on Linux CI. Make every installed bare runnable.
-    for bare in glob.glob(
-        str(sdk / "node_modules" / "bare-runtime-*" / "bin" / "bare")
-    ):
-        os.chmod(bare, 0o755)
     # --no: run the SDK's installed tsc / tsc-alias, never a registry download.
     # `--` keeps npm from reading the tool's flags as its own.
     _run([npx, "--no", "--", "tsc", "--project", "tsconfig.json"], sdk)

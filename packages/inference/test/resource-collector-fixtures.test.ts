@@ -31,6 +31,8 @@ function createFixture(options?: {
   gpuMemory?: number
   gpuUnifiedMemory?: boolean
   gpuSampleMemoryTotal?: number
+  gpuDedicatedMemory?: number
+  gpuDedicatedMemoryUsed?: number
   emptyGPUInventory?: boolean
   platform?: string
   processAvailableBytes?: number
@@ -96,7 +98,8 @@ function createFixture(options?: {
           subsystemId: 789,
           revision: 3,
           unifiedMemory: options?.gpuUnifiedMemory ?? true,
-          memory: options?.gpuMemory ?? 8_000
+          memory: options?.gpuMemory ?? 8_000,
+          dedicatedMemory: options?.gpuDedicatedMemory
         }
       ]
     },
@@ -109,6 +112,7 @@ function createFixture(options?: {
         decode: undefined,
         memoryUsed: 0,
         memoryTotal: options?.gpuSampleMemoryTotal ?? 8_000,
+        dedicatedMemoryUsed: options?.gpuDedicatedMemoryUsed,
         power: undefined,
         temperature: 42
       }
@@ -395,6 +399,73 @@ test('keeps windows unified-memory GPUs unverified', (t) => {
   t.is(gpus.status, 'supported')
   if (gpus.status === 'supported') {
     t.is(gpus.value[0]?.memoryTotalBytes.status, 'unverified')
+  }
+})
+
+test('trusts the carve-out of a unified-memory GPU and its usage', (t) => {
+  const collector = createSystemResourceCollector(
+    createFixture({
+      gpuMemory: 116_736,
+      gpuSampleMemoryTotal: 116_736,
+      gpuDedicatedMemory: 2_048,
+      gpuDedicatedMemoryUsed: 148
+    }).dependencies
+  )
+  const capabilities = collector.getCapabilities()
+  const { gpus } = collector.sample()
+  const device = { source: 'bare-gpu-info', scope: 'device' }
+
+  t.is(capabilities.gpus.status, 'supported')
+  if (capabilities.gpus.status === 'supported') {
+    t.is(capabilities.gpus.value[0]?.memoryTotalBytes.status, 'unverified')
+    t.alike(capabilities.gpus.value[0]?.dedicatedMemoryTotalBytes, {
+      status: 'supported',
+      value: 2_048,
+      provenance: device
+    })
+  }
+  t.is(gpus.status, 'supported')
+  if (gpus.status === 'supported') {
+    t.is(gpus.value[0]?.memoryUsedBytes.status, 'unverified')
+    t.alike(gpus.value[0]?.dedicatedMemoryUsedBytes, {
+      status: 'supported',
+      value: 148,
+      provenance: device
+    })
+  }
+})
+
+test('scopes the dedicated memory usage of a discrete GPU like its memory usage', (t) => {
+  const collector = createSystemResourceCollector(
+    createFixture({
+      platform: 'win32',
+      gpuUnifiedMemory: false,
+      gpuDedicatedMemory: 8_000,
+      gpuDedicatedMemoryUsed: 512
+    }).dependencies
+  )
+  const { gpus } = collector.sample()
+
+  t.is(gpus.status, 'supported')
+  if (gpus.status === 'supported') {
+    t.alike(gpus.value[0]?.dedicatedMemoryUsedBytes, {
+      status: 'supported',
+      value: 512,
+      provenance: { source: 'bare-gpu-info', scope: 'budget' }
+    })
+  }
+})
+
+test('reports an unknown carve-out as unavailable', (t) => {
+  const collector = createSystemResourceCollector(createFixture().dependencies)
+  const capabilities = collector.getCapabilities()
+  const { gpus } = collector.sample()
+
+  if (capabilities.gpus.status === 'supported' && gpus.status === 'supported') {
+    t.is(capabilities.gpus.value[0]?.dedicatedMemoryTotalBytes.status, 'unavailable')
+    t.is(gpus.value[0]?.dedicatedMemoryUsedBytes.status, 'unavailable')
+  } else {
+    t.fail('GPU inventory and sample should be supported')
   }
 })
 

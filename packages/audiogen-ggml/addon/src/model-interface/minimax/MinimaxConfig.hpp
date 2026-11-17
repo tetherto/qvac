@@ -14,6 +14,7 @@ struct MinimaxConfig {
   // or "auto". Empty derives it from useGpu ("auto" / "cpu").
   std::string device;
   std::string backendsDir;
+  std::string coremlConditionerPath;
   std::string coremlProfileDir;
   std::string coremlComputeUnits;
 };

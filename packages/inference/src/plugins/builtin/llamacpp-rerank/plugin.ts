@@ -12,7 +12,7 @@ import {
 import { createStreamLogger, registerAddonLogger, getEngineLogger } from '@/logging/index'
 import { isMobile } from '@/runtime/state'
 import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
-import { getModelShardFiles } from '@/utils/shard-utils'
+import { getFirstShardPath } from '@/utils/shard-utils'
 import { rerank } from './ops/rerank'
 import { transformRerankConfig } from './helpers'
 
@@ -28,9 +28,8 @@ function createRerankModel(params: CreateModelParams): Reranker {
   }
   const logger = createStreamLogger(params.modelId, ModelType.llamacppRerank)
   registerAddonLogger(params.modelId, ModelType.llamacppRerank, logger)
-  // Reranker streams every shard, as LayaDecisions does.
   return new Reranker({
-    files: { model: getModelShardFiles(params.modelPath) },
+    files: { model: [getFirstShardPath(params.modelPath)] },
     config,
     logger
   })

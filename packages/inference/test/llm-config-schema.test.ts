@@ -6,6 +6,7 @@ import {
 } from '@/schemas/llamacpp-config'
 import { loadModelOptionsToRequestSchema, loadModelSrcRequestSchema } from '@/schemas/load-model'
 import { ModelType, deviceConfigDefaultsSchema } from '@/schemas'
+import { transformLlmConfig } from '@/plugins/builtin/llamacpp-completion/transform'
 
 const LLM_BASE = {
   modelType: ModelType.llamacppCompletion,
@@ -302,6 +303,22 @@ test('llmConfigSchema: does not inject a default for the other prompt-cache keys
     t.absent('cache_checkpoint_dir' in result.data)
     t.absent('cache_ram_mib' in result.data)
   }
+})
+
+test('llmConfigSchema: keeps each conversation to its own cache unless sharing is asked for', (t) => {
+  t.is(llmConfigSchema.parse({}).cache_share_across_keys, false)
+  t.is(llmConfigSchema.parse({ cache_share_across_keys: true }).cache_share_across_keys, true)
+  t.is(llmConfigBaseSchema.safeParse({ cache_share_across_keys: 'false' }).success, false)
+})
+
+test('transformLlmConfig: passes the cache sharing choice to the addon as a string', (t) => {
+  t.is(transformLlmConfig(llmConfigSchema.parse({}))['cache_share_across_keys'], 'false')
+  t.is(
+    transformLlmConfig(llmConfigSchema.parse({ cache_share_across_keys: true }))[
+      'cache_share_across_keys'
+    ],
+    'true'
+  )
 })
 
 test('loadModelOptionsToRequestSchema: keeps the other prompt-cache keys for LLM', (t) => {

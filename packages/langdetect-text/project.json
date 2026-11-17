@@ -1,6 +1,9 @@
 {
   "name": "@qvac/langdetect-text",
   "root": "packages/langdetect-text",
+  "tags": [
+    "ci:libs"
+  ],
   "targets": {
     "test:unit": {
       "executor": "nx:run-commands",
@@ -28,6 +31,14 @@
       "options": {
         "command": "pnpm run test:dts",
         "cwd": "packages/langdetect-text"
+      }
+    },
+    "publish": {
+      "executor": "nx:noop",
+      "metadata": {
+        "publish": {
+          "tagPrefix": "langdetect-text"
+        }
       }
     }
   }

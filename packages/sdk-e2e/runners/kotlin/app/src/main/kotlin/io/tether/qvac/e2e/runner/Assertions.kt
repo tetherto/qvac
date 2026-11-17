@@ -2,6 +2,7 @@ package io.tether.qvac.e2e.runner
 
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.max
 
 typealias Assertion = (value: Any?, args: Map<String, Any?>) -> StepResult
@@ -18,6 +19,35 @@ object Assertions {
         asList(args[key]).map { it.toString() }
 
     private fun number(value: Any?): Double? = if (isNumber(value)) asDouble(value) else null
+
+    private fun vector(value: Any?): List<Double>? {
+        val values = value as? List<*> ?: return null
+        if (values.isEmpty()) return null
+        return values.map { number(it)?.takeIf(Double::isFinite) ?: return null }
+    }
+
+    private fun unitVectors(value: Any?, args: Map<String, Any?>): StepResult {
+        val dimensions = number(args["dimensions"])
+        val tolerance = number(args["tolerance"])
+        if (!isInteger(dimensions) || dimensions == null || dimensions <= 0 ||
+            tolerance == null || !tolerance.isFinite() || tolerance <= 0 || tolerance >= 1
+        ) {
+            return StepResult.fail("expected positive dimensions and a tolerance between 0 and 1")
+        }
+        val vectors = if (vector(value) != null) listOf(value) else value as? List<*>
+        if (vectors.isNullOrEmpty()) return StepResult.fail("expected a vector or a non-empty array of vectors")
+        for ((index, item) in vectors.withIndex()) {
+            val values = vector(item)
+            if (values == null || values.size.toDouble() != dimensions) {
+                return StepResult.fail("vector $index: expected ${jsNumber(dimensions)} finite numbers")
+            }
+            val squaredNorm = values.sumOf { it * it }
+            if (!squaredNorm.isFinite() || abs(squaredNorm - 1) >= tolerance) {
+                return StepResult.fail("vector $index: squared norm ${jsNumber(squaredNorm)}")
+            }
+        }
+        return StepResult.ok("${vectors.size} unit vectors, ${jsNumber(dimensions)} dimensions")
+    }
 
     private fun lengthIs(value: Any?, args: Map<String, Any?>): StepResult {
         if (value !is List<*>) return StepResult.fail("expected an array, got ${jsType(value)}")
@@ -694,6 +724,7 @@ object Assertions {
     }
 
     val named: Map<String, Assertion> = mapOf(
+        "unitVectors" to ::unitVectors,
         "lengthIs" to ::lengthIs,
         "lengthAtLeast" to ::lengthAtLeast,
         "anyFieldPresent" to ::anyFieldPresent,
@@ -749,6 +780,35 @@ object Assertions {
         if (a == null || b == null) return StepResult.fail("expected numbers, got ${describe(left)} and ${describe(right)}")
         if (a <= b) return StepResult.fail("expected ${jsNumber(a)} > ${jsNumber(b)}")
         return StepResult.ok("${jsNumber(a)} > ${jsNumber(b)}")
+    }
+
+    private fun cosine(left: Any?, right: Any?): Double? {
+        val a = vector(left) ?: return null
+        val b = vector(right) ?: return null
+        if (a.size != b.size) return null
+        val normA = a.fold(0.0) { norm, x -> hypot(norm, x) }
+        val normB = b.fold(0.0) { norm, x -> hypot(norm, x) }
+        if (!normA.isFinite() || !normB.isFinite() || normA == 0.0 || normB == 0.0) return null
+        return a.indices.sumOf { (a[it] / normA) * (b[it] / normB) }.takeIf(Double::isFinite)
+    }
+
+    private fun cosineAtLeast(left: Any?, right: Any?, args: Map<String, Any?>): StepResult {
+        val minimum = number(args["min"])
+        if (minimum == null || !minimum.isFinite() || minimum < -1 || minimum > 1) {
+            return StepResult.fail("expected a cosine minimum between -1 and 1")
+        }
+        val similarity = cosine(left, right)
+            ?: return StepResult.fail("expected finite, nonzero vectors of the same length")
+        val output = "cosine ${jsNumber(similarity)}, minimum ${jsNumber(minimum)}"
+        return if (similarity >= minimum) StepResult.ok(output) else StepResult.fail(output)
+    }
+
+    private fun moreSimilarThan(left: Any?, right: Any?, args: Map<String, Any?>): StepResult {
+        val near = cosine(left, right)
+        val far = cosine(left, args["than"])
+        if (near == null || far == null) return StepResult.fail("expected finite, nonzero vectors of the same length")
+        val output = "cosine to match ${jsNumber(near)}, to other ${jsNumber(far)}"
+        return if (near > far) StepResult.ok(output) else StepResult.fail(output)
     }
 
     /** The warm prompt is the cold one minus exactly the primed tokens. */
@@ -829,6 +889,8 @@ object Assertions {
     }
 
     val comparisons: Map<String, Comparison> = mapOf(
+        "cosineAtLeast" to ::cosineAtLeast,
+        "moreSimilarThan" to ::moreSimilarThan,
         "equalStrings" to ::equalStrings,
         "greaterThan" to ::greaterThan,
         "prefillReuse" to ::prefillReuse,

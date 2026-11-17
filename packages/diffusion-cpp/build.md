@@ -143,6 +143,37 @@ directory.
 
 ## Building for Different Platforms
 
+### Windows CUDA
+
+Windows x64 release prebuilds enable `SD_CUDA=ON` and use the shared
+`setup-cuda` action to provision CUDA 13.0.3 and a compatible MSVC host
+compiler. The CUDA and Vulkan DLLs ship next to the addon; the addon itself
+has no hard GPU runtime imports. CUDA runtime and cuBLAS DLLs are external
+requirements and must be available on `PATH` when using CUDA.
+
+For a local source build, follow the Windows prerequisites above, install
+CUDA 13.0.3, select a CUDA-compatible MSVC toolset (older than 14.50), and
+run `npm run build:cuda`. Ordinary source builds keep CUDA disabled.
+Check that `qvac-diffusion-ggml-cuda.dll` is present under
+`prebuilds/win32-x64/qvac__diffusion-cpp-win32-x64/`.
+
+From PowerShell, validate execution in fresh processes:
+
+```powershell
+$env:QVAC_EXPECT_BACKEND = "CUDA"
+bare test/integration/backend-fallback.js --exit
+$env:GGML_DISABLE_CUDA = "1"
+$env:QVAC_EXPECT_BACKEND = "Vulkan"
+bare test/integration/backend-fallback.js --exit
+$env:GGML_DISABLE_VULKAN = "1"
+$env:QVAC_EXPECT_BACKEND = "CPU"
+bare test/integration/backend-fallback.js --exit
+Remove-Item Env:GGML_DISABLE_CUDA, Env:GGML_DISABLE_VULKAN, Env:QVAC_EXPECT_BACKEND
+```
+
+Each case must generate a PNG and report the expected engine backend. Set
+`SD_TEST_MODEL_PATH` to an existing SD2 Q8_0 GGUF to avoid downloading it.
+
 ### DGX Spark and RTX 5090 CUDA
 
 CUDA is opt-in: the default Linux source build does not require the CUDA

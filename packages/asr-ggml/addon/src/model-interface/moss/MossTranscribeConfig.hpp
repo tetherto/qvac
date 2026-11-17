@@ -17,6 +17,7 @@ struct MossTranscribeRequest {
   std::string prompt;
   std::vector<std::string> hotwords;
   int maxNewTokens = 0;
+  bool emitProgress = false;
 };
 
 } // namespace qvac::asrggml::moss

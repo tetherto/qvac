@@ -1,4 +1,4 @@
-import type { CompletionRun } from '@qvac/sdk'
+import type { CompletionRun, ToolCall } from '@qvac/sdk'
 import {
   drainCompletion as drainCompletionRun,
   type DrainedCompletion
@@ -21,8 +21,9 @@ function toOpenAiFinishReason(
 export async function drainCompletion(
   result: CompletionRun,
   onToken?: (token: string) => void,
-  onThinking?: (token: string) => void
+  onThinking?: (token: string) => void,
+  onToolCall?: (call: ToolCall) => void
 ): Promise<DrainedOpenAICompletion> {
-  const drained = await drainCompletionRun(result, onToken, onThinking)
+  const drained = await drainCompletionRun(result, onToken, onThinking, onToolCall)
   return { ...drained, finishReason: toOpenAiFinishReason(drained) }
 }

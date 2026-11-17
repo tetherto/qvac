@@ -14,7 +14,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { validatePR } = require("./validator.cjs");
+const { validatePR } = require("../../packages/sdk/ci/validator.cjs");
 const { getPackageDir, getNpmName } = require("./package-paths.cjs");
 const {
   generateChangelog,

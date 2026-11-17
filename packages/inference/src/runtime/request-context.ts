@@ -4,6 +4,7 @@ import {
   createRequestRegistry as createRegistry,
   type RequestRegistry
 } from '@/runtime/request-registry'
+import { assertSessionOpen } from '@/runtime/session-registry'
 import type { Logger, LogTransport } from '@/logging/types'
 import type { LogLevel } from '@qvac/logging'
 
@@ -20,6 +21,7 @@ export type RequestKind =
   | 'completion'
   | 'batchCompletion'
   | 'embeddings'
+  | 'imageEmbedding'
   | 'decision'
   | 'rerank'
   | 'transcribe'
@@ -29,10 +31,14 @@ export type RequestKind =
   | 'audiogen'
   | 'tts'
   | 'ocr'
+  | 'classification'
   | 'vla'
+  | 'plugin'
+  | 'vectorIndex'
   | 'finetune'
   | 'loadModel'
   | 'downloadAsset'
+  | 'modelRegistry'
   | 'rag'
   | 'rpcServer'
   | 'rpcDiscovery'
@@ -68,6 +74,14 @@ export type RequestState = 'running' | 'cancelling' | 'completed' | 'failed' | '
  */
 export interface RequestContext {
   readonly requestId: string
+  /** Caller session the request belongs to; the owner session when the request named none. */
+  readonly sessionId: string
+  /**
+   * `(sessionId, requestId)` joined into the registry's storage key. Hand this,
+   * not `requestId`, to native code that keys jobs by id: two sessions may reuse
+   * one request id, and the addon has no session of its own to tell them apart.
+   */
+  readonly registryKey: string
   readonly kind: RequestKind
   readonly modelId: string | undefined
   readonly signal: AbortSignal
@@ -99,6 +113,12 @@ let registry: RequestRegistry | null = null
 const LLAMACPP_COMPLETION_SLOT_GROUP = 'llamacppCompletion'
 
 function installDefaultPolicies(r: RequestRegistry): void {
+  r.policy({
+    kind: 'imageEmbedding',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    maxQueueDepthPerModel: 64
+  })
   // Laya owns one active job per model. Wait in the registry so cancelling a
   // queued request never reaches the addon or interrupts the active job.
   r.policy({
@@ -113,6 +133,13 @@ function installDefaultPolicies(r: RequestRegistry): void {
     maxConcurrentPerModel: 1,
     onOverflow: 'queue',
     maxQueueDepthPerModel: 64
+  })
+  // Embeddings have one native job and model-wide cancellation. Preserve
+  // busy rejection, before media preparation or native cancellation is wired.
+  r.policy({
+    kind: 'embeddings',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'reject'
   })
   // Cap is the model's `parallel`, passed per request by the handlers; the value
   // here is only the fallback when a caller supplies none.
@@ -175,6 +202,16 @@ function installDefaultPolicies(r: RequestRegistry): void {
     onOverflow: 'queue',
     maxQueueDepthPerModel: 256
   })
+  // Whisper, Parakeet and MOSS run one job per model and cancel it model-wide,
+  // with no job id. A second request waiting inside the addon would stop the
+  // active one when it is cancelled, which crosses sessions. Waiting in the
+  // registry instead keeps a cancelled waiter away from the addon.
+  r.policy({
+    kind: 'transcribe',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    maxQueueDepthPerModel: 64
+  })
   // Diffusion has one native job per model and model-wide cancellation.
   r.policy({
     kind: 'diffusion',
@@ -197,7 +234,7 @@ function installDefaultPolicies(r: RequestRegistry): void {
 
 export function getRequestRegistry(): RequestRegistry {
   if (!registry) {
-    registry = createRegistry()
+    registry = createRegistry({ assertSessionOpen })
     installDefaultPolicies(registry)
   }
   return registry

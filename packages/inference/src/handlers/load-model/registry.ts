@@ -7,18 +7,20 @@ import {
   detectShardedModel,
   getShardedModelCacheDir,
   getShardPath,
-  extractTensorsFromShards,
+  generateShardFilenames,
   calculatePercentage
 } from '@/utils/index'
 import { getSingleFileCachePath } from '@/utils/cache/paths'
 import { getModelByPath, type RegistryItem } from '@/models/registry/index'
-import { getRegistryClient } from '@/runtime/registry-client'
+import { acquireRegistryClient, type RegistryWait } from '@/runtime/registry-client'
 import { getRuntimeContext } from '@/runtime/state'
 import {
+  createRegistryCacheKey,
   createRegistryDownloadKey,
   startOrJoinDownload,
   applyJoinedDownloadStats
 } from '@/handlers/load-model/download-manager'
+import { acquireDownloadLock, partialDownloadPath } from '@/handlers/load-model/download-lock'
 import {
   buildBlobBinding,
   validateCachedFile,
@@ -34,6 +36,7 @@ import {
 import {
   DownloadCancelledError,
   ModelNotFoundError,
+  ModelRegistryBusyError,
   RegistryDownloadFailedError
 } from '@/errors/index'
 import { getEngineLogger } from '@/logging/index'
@@ -48,11 +51,19 @@ const logger = getEngineLogger()
 /**
  * Find all shards for a model using path prefix query.
  */
-async function findModelShards(
-  registryPath: string
-): Promise<{ path: string; source: string; size: number; checksum: string }[]> {
-  const client = await getRegistryClient()
-
+export async function findModelShards(
+  registryPath: string,
+  signal?: AbortSignal,
+  wait: RegistryWait = 'download'
+): Promise<
+  {
+    path: string
+    source: string
+    size: number
+    checksum: string
+    blobBinding: QVACBlobBinding | undefined
+  }[]
+> {
   const shardInfo = detectShardedModel(registryPath.split('/').pop() || '')
   if (!shardInfo.isSharded) {
     throw new RegistryDownloadFailedError(`Not a sharded model path: ${registryPath}`)
@@ -63,10 +74,14 @@ async function findModelShards(
 
   logger.info(`🔍 Finding shards with prefix: ${basePath}`)
 
-  const shards: QVACModelEntry[] = await client.findModels({
-    gte: { path: basePath },
-    lte: { path: basePath + '\uffff' }
-  })
+  let shards: QVACModelEntry[]
+  {
+    await using lease = await acquireRegistryClient({ wait, signal })
+    shards = await lease.client.findModels({
+      gte: { path: basePath },
+      lte: { path: basePath + '\uffff' }
+    })
+  }
 
   const sortedShards = shards
     .filter((s) => {
@@ -82,11 +97,32 @@ async function findModelShards(
       path: s.path,
       source: s.source,
       size: s.blobBinding?.byteLength || 0,
-      checksum: (s.blobBinding as unknown as Record<string, string>)?.['sha256'] || s.sha256 || ''
+      checksum: (s.blobBinding as unknown as Record<string, string>)?.['sha256'] || s.sha256 || '',
+      blobBinding: s.blobBinding
     }))
 
   logger.info(`📦 Found ${sortedShards.length} shards`)
   return sortedShards
+}
+
+/**
+ * The shards a registry listing holds for the filename's declared shard group.
+ * Fails here, rather than at load time, when the registry is missing one.
+ */
+export function selectDeclaredShards<T extends { path: string }>(
+  registryPath: string,
+  remoteShards: T[]
+) {
+  const dir = registryPath.slice(0, registryPath.lastIndexOf('/') + 1)
+  const byPath = new Map(remoteShards.map((s) => [s.path, s]))
+  const expected = generateShardFilenames(registryPath.slice(dir.length))
+  const declared = expected.flatMap((name) => byPath.get(dir + name) ?? [])
+  if (declared.length !== expected.length) {
+    throw new RegistryDownloadFailedError(
+      `Expected ${expected.length} shards for ${registryPath} but the registry has ${declared.length}`
+    )
+  }
+  return declared
 }
 
 /**
@@ -101,7 +137,8 @@ async function downloadShardedFilesFromRegistry(
   progressCallback?: (progress: ModelProgressUpdate) => void,
   signal?: AbortSignal,
   localShardMetadata?: RegistryItem['shardMetadata'],
-  hooks?: DownloadHooks
+  hooks?: DownloadHooks,
+  shouldClearCache?: () => boolean
 ): Promise<string> {
   if (signal?.aborted) {
     throw new DownloadCancelledError()
@@ -133,17 +170,15 @@ async function downloadShardedFilesFromRegistry(
       throw new RegistryDownloadFailedError(`Not a sharded model: ${filename}`)
     }
 
-    const remoteShards = await findModelShards(registryPath)
+    const remoteShards = await findModelShards(registryPath, signal)
 
     if (remoteShards.length === 0) {
       throw new ModelNotFoundError(`No shards found for ${registryPath}`)
     }
 
-    if (remoteShards.length !== shardInfo.totalShards) {
-      logger.warn(`⚠️ Expected ${shardInfo.totalShards} shards but found ${remoteShards.length}`)
-    }
+    const declared = selectDeclaredShards(registryPath, remoteShards)
 
-    shards = remoteShards.map((s) => ({
+    shards = declared.map((s) => ({
       filename: s.path.split('/').pop() || '',
       size: s.size,
       checksum: s.checksum,
@@ -231,15 +266,13 @@ async function downloadShardedFilesFromRegistry(
       shardProgressCallback,
       signal,
       shard.blobBinding,
-      hooks
+      hooks,
+      shouldClearCache
     )
 
     overallDownloaded += shard.size
     logger.info(`✅ Shard ${i + 1}/${shards.length} downloaded`)
   }
-
-  const firstShardFilename = shards[0]!.filename
-  await extractTensorsFromShards(shardDir, firstShardFilename)
 
   if (progressCallback) {
     const lastShard = shards[shards.length - 1]!
@@ -260,7 +293,17 @@ async function downloadShardedFilesFromRegistry(
     })
   }
 
-  return getShardPath(cacheKey, firstShardFilename)
+  return getShardPath(cacheKey, shards[0]!.filename)
+}
+
+// A size check only: the single-file path validates the file before using it.
+async function hasFileOfSize(path: string, expectedSize: number): Promise<boolean> {
+  if (expectedSize <= 0) return false
+  try {
+    return (await fsPromises.stat(path)).size === expectedSize
+  } catch {
+    return false
+  }
 }
 
 export async function downloadModelFromRegistry(
@@ -282,6 +325,11 @@ export async function downloadModelFromRegistry(
   const result = startOrJoinDownload(
     downloadKey,
     async (ctx) => {
+      // Every source of a registry path writes the same files, so lock the path.
+      await using _downloadLock = await acquireDownloadLock(
+        createRegistryCacheKey(registryPath),
+        ctx.signal
+      )
       if (shardInfo.isSharded) {
         const cacheKey = generateShortHash(registryPath)
         const localShardMeta = modelMetadata?.shardMetadata
@@ -341,7 +389,8 @@ export async function downloadModelFromRegistry(
             ctx.broadcastProgress,
             ctx.signal,
             localShardMeta,
-            hooks
+            hooks,
+            ctx.shouldClearCache
           )
         } catch (error) {
           if (error instanceof DownloadCancelledError && ctx.shouldClearCache()) {
@@ -390,11 +439,15 @@ export async function downloadModelFromRegistry(
             })
           }
 
-          const coremlSet = await findCoremlCompanionSet(
-            await getRegistryClient(),
-            modelMetadata,
-            platform
-          )
+          let coremlSet: Awaited<ReturnType<typeof findCoremlCompanionSet>>
+          {
+            // Released before the set downloads, which lease the client per file.
+            await using lease = await acquireRegistryClient({
+              wait: 'download',
+              signal: ctx.signal
+            })
+            coremlSet = await findCoremlCompanionSet(lease.client, modelMetadata, platform)
+          }
           if (coremlSet) {
             const modelPath = await downloadCompanionSetFromRegistry({
               companionSet: coremlSet,
@@ -414,6 +467,18 @@ export async function downloadModelFromRegistry(
         } catch (error) {
           if (ctx.signal.aborted || error instanceof DownloadCancelledError) {
             throw new DownloadCancelledError()
+          }
+          // Unless the GGUF is already on disk, loading it needs the same
+          // registry and would wait just as long.
+          if (error instanceof ModelRegistryBusyError) {
+            const { expectedSize } = resolveRegistryDownloadMetadata(
+              modelMetadata,
+              explicitMetadata,
+              expectedChecksum
+            )
+            if (!(await hasFileOfSize(getSingleFileCachePath(registryPath), expectedSize))) {
+              throw error
+            }
           }
           logger.warn('Core ML sidecar unavailable; loading the GGUF without it', {
             registryPath,
@@ -495,15 +560,17 @@ export async function downloadModelFromRegistry(
           ctx.broadcastProgress,
           ctx.signal,
           blobBinding,
-          hooks
+          hooks,
+          ctx.shouldClearCache
         )
       } catch (error) {
         if (error instanceof DownloadCancelledError && ctx.shouldClearCache()) {
+          const partialPath = partialDownloadPath(modelPath)
           try {
-            await fsPromises.unlink(modelPath)
+            await fsPromises.unlink(partialPath)
           } catch (cleanupError) {
-            logger.debug('Failed to delete model file during cleanup', {
-              path: modelPath,
+            logger.debug('Failed to delete partial model file during cleanup', {
+              path: partialPath,
               error: cleanupError
             })
           }

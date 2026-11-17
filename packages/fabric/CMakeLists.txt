@@ -146,6 +146,12 @@ qvac_fabric_module_name("${_fabric_host}" _fabric_module_name)
 
 add_bare_module(qvac-fabric NAME ${_fabric_module_name} EXPORTS ${BACKEND_DL_LIBS})
 
+# The XDNA module loads its NPU kernels from its own directory, so they ship
+# beside the staged backend modules.
+if(GGML_XDNA_KERNEL_FILES)
+  install(FILES ${GGML_XDNA_KERNEL_FILES} DESTINATION ${_fabric_host}/${_fabric_module_name})
+endif()
+
 target_sources(${qvac-fabric} PRIVATE addon/binding.cpp addon/backends.cpp)
 target_include_directories(${qvac-fabric} PRIVATE include)
 target_compile_definitions(${qvac-fabric} PRIVATE

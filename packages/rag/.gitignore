@@ -10,3 +10,4 @@ store
 test-external-hyperdb-store
 models
 .test
+.quickstart-store

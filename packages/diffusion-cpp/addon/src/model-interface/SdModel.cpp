@@ -398,6 +398,7 @@ void SdModel::fillCtxParams(CtxParams& out) const {
   params.t5xxl_path = optPath(config_.t5XxlPath);
   params.llm_path = optPath(config_.llmPath);
   params.llm_vision_path = optPath(config_.llmVisionPath);
+  params.tokenizer = optPath(config_.tokenizerPath);
   params.vae_path = optPath(config_.vaePath);
   params.clip_vision_path = optPath(config_.clipVisionPath);
   params.taesd_path = optPath(config_.taesdPath);
@@ -612,6 +613,7 @@ SdModel::FitOutcome SdModel::assessFit(const FitWorkload& workload) const {
   request.height = workload.height;
   request.video_frames = workload.videoFrames;
   request.vae_tiling_params.enabled = workload.vaeTiling;
+  request.vae_tiling_params.tile_size_in_latent_units = true;
   request.vae_tiling_params.tile_size_x = workload.vaeTileSizeX;
   request.vae_tiling_params.tile_size_y = workload.vaeTileSizeY;
   request.vae_tiling_params.target_overlap = workload.vaeTileOverlap;
@@ -907,6 +909,7 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
 
   // -- VAE tiling ------------------------------------------------------------
   genParams.vae_tiling_params.enabled = gen.vaeTiling;
+  genParams.vae_tiling_params.tile_size_in_latent_units = true;
   genParams.vae_tiling_params.tile_size_x = gen.vaeTileSizeX;
   genParams.vae_tiling_params.tile_size_y = gen.vaeTileSizeY;
   genParams.vae_tiling_params.target_overlap = gen.vaeTileOverlap;
@@ -1726,6 +1729,7 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
 
   // VAE tiling (strongly recommended for Wan)
   vidParams.vae_tiling_params.enabled = vid.vaeTiling;
+  vidParams.vae_tiling_params.tile_size_in_latent_units = true;
   vidParams.vae_tiling_params.tile_size_x = vid.vaeTileSizeX;
   vidParams.vae_tiling_params.tile_size_y = vid.vaeTileSizeY;
   vidParams.vae_tiling_params.target_overlap = vid.vaeTileOverlap;

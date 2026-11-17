@@ -17,7 +17,10 @@
         "spirv-headers",
         "zlib",
         "antlr4",
-        "libuuid"
+        "libuuid",
+        "dawn",
+        "vulkan-utility-libraries",
+        "vcpkg-get-python-packages"
       ]
     }
   ]

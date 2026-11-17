@@ -9,9 +9,13 @@ import {
   type VectorIndexAddParams,
   type VectorIndexHit,
   type VectorIndexIdsParams,
+  type VectorIndexIvfSettings,
+  type VectorIndexIvfState,
   type VectorIndexRequest,
   type VectorIndexResponse,
   type VectorIndexSearchParams,
+  type VectorIndexSetStagedSearchParams,
+  type VectorIndexState,
   type VectorIndexStorage,
   type VectorIndexWriteParams
 } from '@qvac/inference/surface'
@@ -20,6 +24,15 @@ import {
   InvalidResponseError,
   RequestValidationFailedError
 } from '@/utils/errors-client'
+import { decoratePromise } from '@/utils/decorate-promise'
+import { generateClientRequestId } from '@/client/api/client-request-id'
+import { withTimeout } from '@/utils/withTimeout'
+
+/**
+ * A pending index operation. `requestId` is readable before the promise
+ * settles, so the operation can be targeted with `cancel({ requestId })`.
+ */
+export type VectorIndexOperation<T> = Promise<T> & { requestId: string }
 
 /**
  * A handle to a vector index that lives in worker memory.
@@ -34,6 +47,10 @@ import {
  * shutdown. After a worker crash or restart every method rejects with
  * `VECTOR_INDEX_NOT_FOUND`; recover by creating a new index or loading a
  * snapshot written earlier with `write()`.
+ *
+ * A handle opened through a session keeps that session: every call it makes
+ * runs as the session, is swept by the session's close, and is refused once
+ * the session ended.
  */
 export interface VectorIndex {
   /** Opaque id of the worker-side index; useful in logs, not needed for any call. */
@@ -48,40 +65,104 @@ export interface VectorIndex {
   readonly storage: VectorIndexStorage | undefined
   /** Number of live entries as of the last call that changed or reported it. */
   readonly length: number
+  /**
+   * TQ+ calibration state as of create, load, or the last successful add.
+   * Undefined when an external provider does not report calibration.
+   */
+  readonly calibrated: boolean | undefined
+  /**
+   * Staged search setting as of the last successful call that reported it.
+   * Undefined when an external provider does not report the setting.
+   */
+  readonly stagedSearch: boolean | undefined
+  /**
+   * IVF settings from the last call that reported them; `built` says whether
+   * searches use the IVF lists. Null while IVF is off, as on every new or
+   * loaded index. Undefined when an external provider has no IVF search.
+   */
+  readonly ivf: VectorIndexIvfState | null | undefined
+
+  /**
+   * Turns TurboVec staged search on or off. Off on every new or loaded index.
+   * On supported hosts, dimensions divisible by 32 and at least 32,768 entries
+   * use a shortlist for faster searches with lower recall. Other dimensions
+   * and v3 snapshots retain the setting but scan in full. The setting is not
+   * saved in snapshots. Rejects non-TurboVec storage or unsupported providers.
+   */
+  setStagedSearch(
+    params: VectorIndexSetStagedSearchParams,
+    options?: RPCOptions
+  ): VectorIndexOperation<{ stagedSearch: boolean }>
+
+  /**
+   * Turns IVF search on or off. With settings, it groups the entries into
+   * `nLists` lists now, and `search()` scans only the `nProbe` lists nearest
+   * each query. On a large F32 index that can be many times faster than a
+   * full scan. TurboVec storage scores vectors in blocks, so probing a few
+   * lists saves little work and IVF can be slower than a full scan. Either
+   * way it can miss true nearest entries. A higher `nProbe` misses fewer and costs more; `nProbe >= nLists` scans
+   * every entry. `nLists` is an upper bound: an index with fewer entries
+   * builds one list per entry, while `ivf.nLists` keeps the requested value.
+   * `nIter` sets the k-means passes of the build, and the default 0 keeps the
+   * initial centroids. Null turns IVF off. The build blocks the worker until
+   * it finishes, and its cost grows with `nIter`, `nLists`, the entry count
+   * and `dim`. A `timeout` only stops the wait: the build still finishes, and
+   * `ivf` updates when its reply arrives. To see whether a build is still
+   * running, race the returned promise instead of passing a timeout.
+   *
+   * Any later add or remove sets `ivf.built` to false, and searches scan every
+   * entry until the next `setIvf()`. So does a build that fails; the handle
+   * keeps its last reported state until another call reports one. Snapshots
+   * do not save the setting.
+   * Repeating the call with the same `nLists` and `nIter` on a built index
+   * only changes `nProbe`. Staged search, when on, also applies within the
+   * probed lists. Rejects providers without IVF support.
+   */
+  setIvf(
+    settings: VectorIndexIvfSettings | null,
+    options?: RPCOptions
+  ): VectorIndexOperation<{ ivf: VectorIndexIvfState | null }>
 
   /**
    * Adds vectors under the given ids in one atomic batch. Rejects duplicate
    * ids, ids equal to 2^64 - 1, and rows whose length differs from `dim`.
+   * A fresh TurboVec index attempts calibration from a first batch of at
+   * least 1,000 vectors. A smaller first batch leaves it uncalibrated.
    * @returns The number of live entries after the add.
    */
-  add(params: VectorIndexAddParams, options?: RPCOptions): Promise<{ length: number }>
+  add(params: VectorIndexAddParams, options?: RPCOptions): VectorIndexOperation<{ length: number }>
 
   /**
    * Finds the `k` nearest entries to one query. Hits are ordered by
    * descending score, then ascending id, and fewer than `k` are returned
-   * when the index holds fewer entries.
+   * when the index holds fewer entries. With built IVF lists it scans only
+   * the nearest ones. `nProbe` overrides the setting for this call and
+   * rejects while IVF is off.
    * @overloadLabel "Single query"
    */
-  search(params: { query: number[]; k: number }, options?: RPCOptions): Promise<VectorIndexHit[]>
+  search(
+    params: { query: number[]; k: number; nProbe?: number },
+    options?: RPCOptions
+  ): VectorIndexOperation<VectorIndexHit[]>
 
   /**
    * Finds the `k` nearest entries to each query row; one hit list per row.
    * @overloadLabel "Multiple queries"
    */
   search(
-    params: { queries: number[][]; k: number },
+    params: { queries: number[][]; k: number; nProbe?: number },
     options?: RPCOptions
-  ): Promise<VectorIndexHit[][]>
+  ): VectorIndexOperation<VectorIndexHit[][]>
 
   /**
    * Removes ids; each boolean tells whether that id was present. Ids are
    * applied in order, so a rejection leaves the ids before the failure
    * removed and `length` reporting the last successful call.
    */
-  remove(params: VectorIndexIdsParams, options?: RPCOptions): Promise<boolean[]>
+  remove(params: VectorIndexIdsParams, options?: RPCOptions): VectorIndexOperation<boolean[]>
 
   /** Reports, per id, whether the index holds it. */
-  contains(params: VectorIndexIdsParams, options?: RPCOptions): Promise<boolean[]>
+  contains(params: VectorIndexIdsParams, options?: RPCOptions): VectorIndexOperation<boolean[]>
 
   /**
    * Writes a checksummed snapshot to `path`, replacing any existing file.
@@ -89,20 +170,23 @@ export interface VectorIndex {
    * QVAC data directory. Load it later with `loadVectorIndex`.
    * @returns The resolved absolute path.
    */
-  write(params: VectorIndexWriteParams, options?: RPCOptions): Promise<{ path: string }>
+  write(
+    params: VectorIndexWriteParams,
+    options?: RPCOptions
+  ): VectorIndexOperation<{ path: string }>
 
   /** Releases worker memory. Safe to call more than once. */
-  dispose(options?: RPCOptions): Promise<void>
+  dispose(options?: RPCOptions): VectorIndexOperation<void>
 
   [Symbol.asyncDispose](): Promise<void>
 }
 
-type VectorIndexOperation = VectorIndexRequest['operation']
-type RequestFor<TOperation extends VectorIndexOperation> = Extract<
+type VectorIndexOperationName = VectorIndexRequest['operation']
+type RequestFor<TOperation extends VectorIndexOperationName> = Extract<
   VectorIndexRequest,
   { operation: TOperation }
 >
-type ResponseFor<TOperation extends VectorIndexOperation> = Extract<
+type ResponseFor<TOperation extends VectorIndexOperationName> = Extract<
   VectorIndexResponse,
   { operation: TOperation }
 >
@@ -112,18 +196,25 @@ interface OpenedIndex {
   dim: number
   length: number
   storage?: VectorIndexStorage | undefined
+  calibrated?: boolean | undefined
+  stagedSearch?: boolean | undefined
+  ivf?: VectorIndexIvfState | null | undefined
 }
 
 /**
  * Builds the two public functions over a transport. The default export pair
- * below binds them to the RPC client; tests bind a fake instead.
+ * below binds them to the RPC client; a session binds them to its own
+ * stamped transport, and tests bind a fake.
  */
 export function createVectorIndexClient(transport: typeof send) {
-  async function call<TOperation extends VectorIndexOperation>(
+  // Every operation is sent under a client-minted id, so a pending one can be
+  // cancelled by id before it settles.
+  async function call<TOperation extends VectorIndexOperationName>(
     request: RequestFor<TOperation>,
+    requestId: string,
     options?: RPCOptions
   ): Promise<ResponseFor<TOperation>> {
-    const response = await transport(request, options)
+    const response = await transport({ ...request, requestId }, options)
     if (response.type !== 'vectorIndex') {
       throw new InvalidResponseError('vectorIndex')
     }
@@ -133,9 +224,17 @@ export function createVectorIndexClient(transport: typeof send) {
     return response as ResponseFor<TOperation>
   }
 
+  function operation<T>(run: (requestId: string) => Promise<T>): VectorIndexOperation<T> {
+    const requestId = generateClientRequestId()
+    return decoratePromise(run(requestId), { requestId })
+  }
+
   function createHandle(opened: OpenedIndex): VectorIndex {
     const { indexId, dim, storage } = opened
     let length = opened.length
+    let calibrated = opened.calibrated
+    let stagedSearch = opened.stagedSearch
+    let ivf = opened.ivf
     let disposed = false
 
     // Row lengths are checked here so a mismatch fails before any request is
@@ -150,20 +249,38 @@ export function createVectorIndexClient(transport: typeof send) {
 
     // The flag is set only after the worker confirms, so a failed dispose
     // can be retried instead of leaking the index until worker shutdown.
-    async function dispose(options?: RPCOptions) {
-      if (disposed) return
-      await call({ type: 'vectorIndex', operation: 'dispose', indexId }, options)
-      disposed = true
+    function dispose(options?: RPCOptions) {
+      return operation(async (requestId) => {
+        if (disposed) return
+        await call({ type: 'vectorIndex', operation: 'dispose', indexId }, requestId, options)
+        disposed = true
+      })
     }
 
-    async function search(params: VectorIndexSearchParams, options?: RPCOptions) {
-      const queries = 'queries' in params ? params.queries : [params.query]
-      assertRows(queries, 'queries')
-      const response = await call(
-        { type: 'vectorIndex', operation: 'search', indexId, queries, k: params.k },
-        options
-      )
-      return 'queries' in params ? response.results : (response.results[0] ?? [])
+    function search(params: VectorIndexSearchParams, options?: RPCOptions) {
+      return operation(async (requestId) => {
+        const queries = 'queries' in params ? params.queries : [params.query]
+        assertRows(queries, 'queries')
+        const response = await call(
+          {
+            type: 'vectorIndex',
+            operation: 'search',
+            indexId,
+            queries,
+            k: params.k,
+            ...(params.nProbe !== undefined && { nProbe: params.nProbe })
+          },
+          requestId,
+          options
+        )
+        return 'queries' in params ? response.results : (response.results[0] ?? [])
+      })
+    }
+
+    function syncCachedState(response: VectorIndexState) {
+      calibrated = response.calibrated
+      stagedSearch = response.stagedSearch
+      ivf = response.ivf
     }
 
     const handle = {
@@ -173,43 +290,113 @@ export function createVectorIndexClient(transport: typeof send) {
       get length() {
         return length
       },
-      async add(params: VectorIndexAddParams, options?: RPCOptions) {
-        assertRows(params.vectors, 'vectors')
-        const response = await call(
-          {
-            type: 'vectorIndex',
-            operation: 'add',
-            indexId,
-            ids: toWireVectorIds(params.ids),
-            vectors: params.vectors
-          },
-          options
-        )
-        length = response.length
-        return { length }
+      get calibrated() {
+        return calibrated
+      },
+      get stagedSearch() {
+        return stagedSearch
+      },
+      get ivf() {
+        return ivf
+      },
+      setStagedSearch(params: VectorIndexSetStagedSearchParams, options?: RPCOptions) {
+        return operation(async (requestId) => {
+          const response = await call(
+            {
+              type: 'vectorIndex',
+              operation: 'setStagedSearch',
+              indexId,
+              enabled: params.enabled
+            },
+            requestId,
+            options
+          )
+          stagedSearch = response.stagedSearch
+          return { stagedSearch }
+        })
+      },
+      setIvf(settings: VectorIndexIvfSettings | null, options?: RPCOptions) {
+        return operation((requestId) => {
+          // The worker finishes a build even after the caller stops waiting,
+          // so the timeout applies only to the caller and a late reply still
+          // updates `ivf`.
+          const { timeout, ...transportOptions } = options ?? {}
+          const reply = call(
+            {
+              type: 'vectorIndex',
+              operation: 'setIvf',
+              indexId,
+              ivf: settings && {
+                nLists: settings.nLists,
+                nProbe: settings.nProbe,
+                ...(settings.nIter !== undefined && { nIter: settings.nIter })
+              }
+            },
+            requestId,
+            transportOptions
+          ).then((response) => {
+            ivf = response.ivf
+            return { ivf }
+          })
+          return withTimeout(reply, timeout)
+        })
+      },
+      add(params: VectorIndexAddParams, options?: RPCOptions) {
+        return operation(async (requestId) => {
+          assertRows(params.vectors, 'vectors')
+          const response = await call(
+            {
+              type: 'vectorIndex',
+              operation: 'add',
+              indexId,
+              ids: toWireVectorIds(params.ids),
+              vectors: params.vectors
+            },
+            requestId,
+            options
+          )
+          length = response.length
+          syncCachedState(response)
+          return { length }
+        })
       },
       search,
-      async remove(params: VectorIndexIdsParams, options?: RPCOptions) {
-        const response = await call(
-          { type: 'vectorIndex', operation: 'remove', indexId, ids: toWireVectorIds(params.ids) },
-          options
-        )
-        length = response.length
-        return response.removed
+      remove(params: VectorIndexIdsParams, options?: RPCOptions) {
+        return operation(async (requestId) => {
+          const response = await call(
+            { type: 'vectorIndex', operation: 'remove', indexId, ids: toWireVectorIds(params.ids) },
+            requestId,
+            options
+          )
+          length = response.length
+          syncCachedState(response)
+          return response.removed
+        })
       },
-      async contains(params: VectorIndexIdsParams, options?: RPCOptions) {
-        const response = await call(
-          { type: 'vectorIndex', operation: 'contains', indexId, ids: toWireVectorIds(params.ids) },
-          options
-        )
-        return response.present
+      contains(params: VectorIndexIdsParams, options?: RPCOptions) {
+        return operation(async (requestId) => {
+          const response = await call(
+            {
+              type: 'vectorIndex',
+              operation: 'contains',
+              indexId,
+              ids: toWireVectorIds(params.ids)
+            },
+            requestId,
+            options
+          )
+          return response.present
+        })
       },
-      async write(params: VectorIndexWriteParams, options?: RPCOptions) {
-        const response = await call(
-          { type: 'vectorIndex', operation: 'write', indexId, path: params.path },
-          options
-        )
-        return { path: response.path }
+      write(params: VectorIndexWriteParams, options?: RPCOptions) {
+        return operation(async (requestId) => {
+          const response = await call(
+            { type: 'vectorIndex', operation: 'write', indexId, path: params.path },
+            requestId,
+            options
+          )
+          return { path: response.path }
+        })
       },
       dispose
     } as VectorIndex
@@ -227,30 +414,36 @@ export function createVectorIndexClient(transport: typeof send) {
   }
 
   return {
-    async createVectorIndex(
+    createVectorIndex(
       params: CreateVectorIndexParams,
       options?: RPCOptions
-    ): Promise<VectorIndex> {
-      const response = await call(
-        {
-          type: 'vectorIndex',
-          operation: 'create',
-          dim: params.dim,
-          storage: params.storage ?? DEFAULT_VECTOR_INDEX_STORAGE
-        },
-        options
-      )
-      return createHandle(response)
+    ): VectorIndexOperation<VectorIndex> {
+      return operation(async (requestId) => {
+        const response = await call(
+          {
+            type: 'vectorIndex',
+            operation: 'create',
+            dim: params.dim,
+            storage: params.storage ?? DEFAULT_VECTOR_INDEX_STORAGE
+          },
+          requestId,
+          options
+        )
+        return createHandle(response)
+      })
     },
-    async loadVectorIndex(
+    loadVectorIndex(
       params: LoadVectorIndexParams,
       options?: RPCOptions
-    ): Promise<VectorIndex> {
-      const response = await call(
-        { type: 'vectorIndex', operation: 'load', path: params.path },
-        options
-      )
-      return createHandle(response)
+    ): VectorIndexOperation<VectorIndex> {
+      return operation(async (requestId) => {
+        const response = await call(
+          { type: 'vectorIndex', operation: 'load', path: params.path },
+          requestId,
+          options
+        )
+        return createHandle(response)
+      })
     }
   }
 }
@@ -268,10 +461,10 @@ const client = createVectorIndexClient(send)
  * documents.
  *
  * @param params - Index parameters
- * @param params.dim - Vector dimensionality, for example 1024 for GTE Large. TurboVec storage needs a multiple of 8 no greater than 1024.
+ * @param params.dim - Vector dimensionality, for example 1024 for GTE Large. TurboVec storage needs a multiple of 8 no greater than 16384.
  * @param params.storage - Storage mode from `VectorIndexStorage`; defaults to `TURBOVEC_Q4`. `TURBOVEC_Q2` halves memory again at lower recall; `F32`, `Q8`, and `Q4` are exact or generically quantised stores for dimensions TurboVec cannot hold.
  * @param options - Optional RPC options (timeout, profiling, force new connection, etc.).
- * @returns A handle whose methods add, search, remove, snapshot, and dispose the index.
+ * @returns A handle whose methods add, search, remove, snapshot, and dispose the index. The pending promise carries `requestId` for `cancel({ requestId })`.
  * @throws {VectorIndexProviderUnavailableError} When no registered plugin exposes a vector index provider
  * @throws {VectorIndexFailedError} When the native index rejects the dimension or storage mode
  *
@@ -281,7 +474,7 @@ const client = createVectorIndexClient(send)
  *   ['1', 'Saturn moon Titan has lakes of liquid methane.'],
  *   ['2', 'Solar panels turn sunlight into electricity.']
  * ])
- * const { embedding } = await embed({ modelId, text: [...documents.values()] })
+ * const { embedding } = await embedBatch({ modelId, inputs: [...documents.values()] })
  *
  * await using index = await createVectorIndex({ dim: embedding[0].length })
  * await index.add({ ids: [...documents.keys()], vectors: embedding })
@@ -294,7 +487,7 @@ const client = createVectorIndexClient(send)
 export function createVectorIndex(
   params: CreateVectorIndexParams,
   options?: RPCOptions
-): Promise<VectorIndex> {
+): VectorIndexOperation<VectorIndex> {
   return client.createVectorIndex(params, options)
 }
 
@@ -323,6 +516,6 @@ export function createVectorIndex(
 export function loadVectorIndex(
   params: LoadVectorIndexParams,
   options?: RPCOptions
-): Promise<VectorIndex> {
+): VectorIndexOperation<VectorIndex> {
   return client.loadVectorIndex(params, options)
 }

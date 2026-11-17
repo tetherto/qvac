@@ -44,6 +44,10 @@ try {
   })
   console.log(`▸ Model loaded. Model ID: ${modelId}`)
 
+  // One search loads at most two definitions, one unless the model asks for
+  // more. Keep these the same for the whole conversation.
+  const params = { modelId, tools, toolSearch: { defaultLimit: 1, maxLimit: 2 } }
+
   const history = [
     {
       role: 'system',
@@ -53,7 +57,7 @@ try {
   ]
 
   console.log('\n▸ Turn 1 — only get_weather and tool_search are in the prompt\n')
-  const first = completion({ modelId, history, stream: true, tools })
+  const first = completion({ ...params, history, stream: true })
   for await (const token of first.tokenStream) process.stdout.write(token)
 
   const calls = await first.toolCalls
@@ -65,15 +69,16 @@ try {
 
     // Running the search is the SDK's job, not a tool handler's. The result is
     // an ordinary tool message naming what it loaded: keeping it in the history
-    // is what declares those definitions on the next turn.
+    // is what declares those definitions on the next turn. Passing the same
+    // params applies the limits the model was told.
     history.push({ role: 'assistant', content: await first.text })
     history.push({
       role: 'tool',
-      content: executeToolSearch(tools, search.arguments, history)
+      content: executeToolSearch(params, search.arguments, history)
     })
 
     console.log('▸ Definitions loaded. Turn 2 — the model can now call them directly.\n')
-    const second = completion({ modelId, history, stream: true, tools })
+    const second = completion({ ...params, history, stream: true })
     for await (const token of second.tokenStream) process.stdout.write(token)
 
     for (const call of await second.toolCalls) {

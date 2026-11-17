@@ -1,11 +1,32 @@
-import { downloadAsset, cancel, WHISPER_TINY, BERGAMOT_ZH_EN } from '@qvac/sdk'
+import {
+  downloadAsset,
+  cancel,
+  deleteCache,
+  WHISPER_TINY_Q8_0,
+  BERGAMOT_KO_EN,
+  WHISPER_FRENCH_TINY_Q8_0,
+  WHISPER_GERMAN_TINY_Q8_0
+} from '@qvac/sdk'
 import { BaseExecutor, type TestResult } from '@qvac/test-suite'
 import {
   downloadCancelIsolation,
-  downloadHuggingFaceVerify
+  downloadHuggingFaceVerify,
+  downloadPauseResume,
+  downloadCancelClearCache,
+  downloadDeleteCacheReclaim,
+  downloadDeleteCacheWhileDownloading,
+  downloadDeleteCacheInvalidSrc
 } from '../../../../catalog/download-tests.js'
 
-const downloadTests = [downloadCancelIsolation, downloadHuggingFaceVerify] as const
+const downloadTests = [
+  downloadCancelIsolation,
+  downloadHuggingFaceVerify,
+  downloadPauseResume,
+  downloadCancelClearCache,
+  downloadDeleteCacheReclaim,
+  downloadDeleteCacheWhileDownloading,
+  downloadDeleteCacheInvalidSrc
+] as const
 
 const CACHE_HIT_THRESHOLD_MS = 500
 
@@ -13,14 +34,196 @@ const CACHE_HIT_THRESHOLD_MS = 500
 // the cache-hit branch below and the cancel path is never exercised.
 // It also shares a blob core with the survivor, so cancelling with `clearCache`
 // is proven not to disturb a concurrent download from that same core.
-const CANCEL_TARGET = BERGAMOT_ZH_EN
+const CANCEL_TARGET = BERGAMOT_KO_EN
+
+// Single-file registry models no other test downloads, so a cached copy from
+// another test cannot stand in for a resume. Each test resets its model first.
+const RESUME_TARGET = WHISPER_FRENCH_TINY_Q8_0
+const RESTART_TARGET = WHISPER_GERMAN_TINY_Q8_0
+
+type RegistryModel = typeof RESUME_TARGET | typeof RESTART_TARGET
+
+type Attempt = {
+  firstPercentage: number | undefined
+  status: 'ok' | 'fail'
+  stopped: boolean
+  err?: string
+}
+
+function message(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
+// Downloads `model`, cancelling once progress reaches `stopAtPercent`, and
+// reports the first progress event: on a resume it carries the kept bytes.
+async function attempt(
+  model: RegistryModel,
+  stopAtPercent: number | undefined,
+  clearCache = false
+): Promise<Attempt> {
+  let firstPercentage: number | undefined
+  let stopped = false
+  const op = downloadAsset({
+    assetSrc: model,
+    onProgress: (p: { percentage: number }) => {
+      firstPercentage ??= p.percentage
+      if (stopAtPercent !== undefined && !stopped && p.percentage >= stopAtPercent) {
+        stopped = true
+        void cancel({ requestId: op.requestId, clearCache })
+      }
+    }
+  })
+  try {
+    await op
+    return { firstPercentage, status: 'ok', stopped }
+  } catch (err) {
+    return { firstPercentage, status: 'fail', stopped, err: message(err) }
+  }
+}
+
+// A pause only counts when our cancel fired and the download then ended early;
+// any other failure leaves nothing partial to resume or reclaim.
+function pauseFailure(paused: Attempt, stopAtPercent: number): string | undefined {
+  if (!paused.stopped) {
+    return `The download ended before reaching ${stopAtPercent}%: ${paused.err ?? 'completed'}`
+  }
+  if (paused.status === 'ok') return 'The download completed before the cancel took effect'
+  return undefined
+}
 
 export class DownloadExecutor extends BaseExecutor<typeof downloadTests> {
   pattern = /^download-/
 
   protected handlers = {
     [downloadCancelIsolation.testId]: this.cancelIsolation.bind(this),
-    [downloadHuggingFaceVerify.testId]: this.huggingFaceVerify.bind(this)
+    [downloadHuggingFaceVerify.testId]: this.huggingFaceVerify.bind(this),
+    [downloadPauseResume.testId]: this.pauseResume.bind(this),
+    [downloadCancelClearCache.testId]: this.cancelClearCache.bind(this),
+    [downloadDeleteCacheReclaim.testId]: this.deleteCacheReclaim.bind(this),
+    [downloadDeleteCacheWhileDownloading.testId]: this.deleteCacheWhileDownloading.bind(this),
+    [downloadDeleteCacheInvalidSrc.testId]: this.deleteCacheInvalidSrc.bind(this)
+  }
+
+  async pauseResume(
+    params: typeof downloadPauseResume.params,
+    _expectation: typeof downloadPauseResume.expectation
+  ): Promise<TestResult> {
+    await deleteCache({ modelSrc: RESUME_TARGET.src })
+    try {
+      const paused = await attempt(RESUME_TARGET, params.pauseAtPercent)
+      const notPaused = pauseFailure(paused, params.pauseAtPercent)
+      if (notPaused) return { passed: false, output: notPaused }
+      const resumed = await attempt(RESUME_TARGET, undefined)
+      if (resumed.status !== 'ok') {
+        return { passed: false, output: `Resumed download failed: ${resumed.err}` }
+      }
+      const start = resumed.firstPercentage ?? 0
+      return {
+        passed: start >= params.resumeAtPercent,
+        output: `Paused at ${params.pauseAtPercent}%, resumed from ${start.toFixed(1)}% and completed`
+      }
+    } finally {
+      await deleteCache({ modelSrc: RESUME_TARGET.src }).catch(() => {})
+    }
+  }
+
+  async cancelClearCache(
+    params: typeof downloadCancelClearCache.params,
+    _expectation: typeof downloadCancelClearCache.expectation
+  ): Promise<TestResult> {
+    await deleteCache({ modelSrc: RESTART_TARGET.src })
+    try {
+      const cancelled = await attempt(RESTART_TARGET, params.pauseAtPercent, true)
+      const notCancelled = pauseFailure(cancelled, params.pauseAtPercent)
+      if (notCancelled) return { passed: false, output: notCancelled }
+      return await this.expectRestart(params.restartBelowPercent, 'cancel({ clearCache: true })')
+    } finally {
+      await deleteCache({ modelSrc: RESTART_TARGET.src }).catch(() => {})
+    }
+  }
+
+  async deleteCacheReclaim(
+    params: typeof downloadDeleteCacheReclaim.params,
+    _expectation: typeof downloadDeleteCacheReclaim.expectation
+  ): Promise<TestResult> {
+    await deleteCache({ modelSrc: RESTART_TARGET.src })
+    try {
+      const paused = await attempt(RESTART_TARGET, params.pauseAtPercent)
+      const notPaused = pauseFailure(paused, params.pauseAtPercent)
+      if (notPaused) return { passed: false, output: notPaused }
+      const { success } = await deleteCache({ modelSrc: RESTART_TARGET.src })
+      if (!success) return { passed: false, output: 'deleteCache({ modelSrc }) reported failure' }
+      return await this.expectRestart(params.restartBelowPercent, 'deleteCache({ modelSrc })')
+    } finally {
+      await deleteCache({ modelSrc: RESTART_TARGET.src }).catch(() => {})
+    }
+  }
+
+  // Starts the restart target again and checks it began from scratch, then stops it.
+  async expectRestart(restartBelowPercent: number, after: string): Promise<TestResult> {
+    const next = await attempt(RESTART_TARGET, 0, true)
+    const start = next.firstPercentage
+    if (start === undefined) {
+      return { passed: false, output: `No progress from the download after ${after}: ${next.err}` }
+    }
+    return {
+      passed: start < restartBelowPercent,
+      output: `After ${after} the next download started from ${start.toFixed(1)}%`
+    }
+  }
+
+  async deleteCacheWhileDownloading(
+    params: typeof downloadDeleteCacheWhileDownloading.params,
+    _expectation: typeof downloadDeleteCacheWhileDownloading.expectation
+  ): Promise<TestResult> {
+    await deleteCache({ modelSrc: RESUME_TARGET.src })
+    let refusal: string | undefined
+    let deleted = false
+    let checked = false
+    const op = downloadAsset({
+      assetSrc: RESUME_TARGET,
+      onProgress: () => {
+        if (checked) return
+        checked = true
+        void deleteCache({ modelSrc: RESUME_TARGET.src })
+          .then(
+            () => (deleted = true),
+            (err: unknown) => (refusal = message(err))
+          )
+          .finally(() => cancel({ requestId: op.requestId, clearCache: true }))
+      }
+    })
+    await op.then(
+      () => {},
+      () => {}
+    )
+    await deleteCache({ modelSrc: RESUME_TARGET.src }).catch(() => {})
+
+    if (deleted)
+      return { passed: false, output: 'deleteCache removed a model that was downloading' }
+    if (refusal === undefined) {
+      return { passed: false, output: 'The download finished before deleteCache was tried' }
+    }
+    return {
+      passed: refusal.includes(params.errorContains),
+      output: `deleteCache refused: ${refusal}`
+    }
+  }
+
+  async deleteCacheInvalidSrc(
+    params: typeof downloadDeleteCacheInvalidSrc.params,
+    _expectation: typeof downloadDeleteCacheInvalidSrc.expectation
+  ): Promise<TestResult> {
+    try {
+      await deleteCache({ modelSrc: params.modelSrc })
+      return { passed: false, output: `deleteCache accepted ${params.modelSrc}` }
+    } catch (err) {
+      const text = message(err)
+      return {
+        passed: text.includes(params.errorContains),
+        output: `deleteCache rejected: ${text}`
+      }
+    }
   }
 
   async huggingFaceVerify(
@@ -50,7 +253,7 @@ export class DownloadExecutor extends BaseExecutor<typeof downloadTests> {
     const startTime = Date.now()
 
     const survivorPromise = downloadAsset({
-      assetSrc: WHISPER_TINY,
+      assetSrc: WHISPER_TINY_Q8_0,
       onProgress: () => {}
     }).then(
       (id: string) => ({ status: 'ok' as const, id }),

@@ -1,5 +1,6 @@
 #include "LlamaLazyInitializeBackend.hpp"
 
+#include <cstdlib>
 #include <filesystem>
 #include <string>
 

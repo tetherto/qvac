@@ -1,0 +1,22 @@
+/**
+ * Session id of the runtime owner: the process that started the engine and
+ * calls it without a session handle. Requests without a `sessionId` run as
+ * this session. It is never accepted on the wire (`openSession` refuses it and
+ * `assertWireSessionOpen` fails a request naming it), so a client cannot act
+ * as the owner by sending the string.
+ */
+export const OWNER_SESSION_ID = 'owner'
+
+/** The session a request runs as: its `sessionId`, or the owner when absent. */
+export function resolveSessionId(request: { sessionId?: string | undefined }): string {
+  return request.sessionId ?? OWNER_SESSION_ID
+}
+
+/**
+ * Key the request registry stores a request under. The session id is length
+ * prefixed, so no choice of characters in either id lets two different
+ * `(sessionId, requestId)` pairs share a key.
+ */
+export function requestRegistryKey(sessionId: string, requestId: string): string {
+  return `${sessionId.length}:${sessionId}:${requestId}`
+}

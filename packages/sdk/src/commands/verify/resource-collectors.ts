@@ -14,7 +14,6 @@ export const RESOURCE_COLLECTOR_SIZE_BUDGETS = {
 export interface ResourceCollectorAcceptanceOptions {
   projectRoot: string
   bundlePath: string
-  manifestPath: string
   hosts: string[]
   budgets?: ResourceCollectorSizeBudgets
 }
@@ -49,7 +48,6 @@ export type ResourceCollectorAcceptanceIssue =
       code: 'missing-collector'
       level: 'error'
       package: string
-      location: 'bundle' | 'manifest'
       message: string
     }
   | {
@@ -57,11 +55,6 @@ export type ResourceCollectorAcceptanceIssue =
       level: 'error'
       package: string
       host: string
-      message: string
-    }
-  | {
-      code: 'invalid-manifest'
-      level: 'error'
       message: string
     }
   | {
@@ -79,17 +72,6 @@ export type ResourceCollectorAcceptanceIssue =
       budgetBytes: number
       message: string
     }
-
-interface AddonsManifest {
-  version: 1
-  bundleId: string
-  addons: string[]
-}
-
-interface ManifestReadResult {
-  manifest?: AddonsManifest
-  issue?: ResourceCollectorAcceptanceIssue
-}
 
 interface MeasurementEntry {
   package: string
@@ -119,13 +101,9 @@ export async function acceptResourceCollectorPackaging(
       .filter((addon) => isResourceCollectorPackage(addon.name))
       .map((addon) => [addon.name, addon])
   )
-  const manifestResult = await readAddonsManifest(options.manifestPath)
-  const manifestAddons = new Set(manifestResult.manifest?.addons)
   const issues: ResourceCollectorAcceptanceIssue[] = []
   const entriesByHost = new Map(options.hosts.map((host) => [host, [] as MeasurementEntry[]]))
   const budgets = options.budgets ?? RESOURCE_COLLECTOR_SIZE_BUDGETS
-
-  if (manifestResult.issue !== undefined) issues.push(manifestResult.issue)
 
   for (const packageName of RESOURCE_COLLECTOR_PACKAGES) {
     const collector = collectors.get(packageName)
@@ -134,22 +112,10 @@ export async function acceptResourceCollectorPackaging(
         code: 'missing-collector',
         level: 'error',
         package: packageName,
-        location: 'bundle',
         message: `${packageName} is missing from the linked worker bundle graph.`
       })
+      continue
     }
-
-    if (manifestResult.manifest !== undefined && !manifestAddons.has(packageName)) {
-      issues.push({
-        code: 'missing-collector',
-        level: 'error',
-        package: packageName,
-        location: 'manifest',
-        message: `${packageName} is missing from ${options.manifestPath}.`
-      })
-    }
-
-    if (collector === undefined) continue
 
     for (const host of options.hosts) {
       const hostDir = path.join(collector.packageRoot, 'prebuilds', host)
@@ -360,47 +326,4 @@ function isResourceCollectorPackage(
   packageName: string
 ): packageName is (typeof RESOURCE_COLLECTOR_PACKAGES)[number] {
   return RESOURCE_COLLECTOR_PACKAGES.some((collector) => collector === packageName)
-}
-
-async function readAddonsManifest(manifestPath: string): Promise<ManifestReadResult> {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(await fsp.readFile(manifestPath, 'utf8'))
-  } catch (error) {
-    return {
-      issue: invalidManifestIssue(manifestPath, error)
-    }
-  }
-
-  if (!isAddonsManifest(parsed)) {
-    return {
-      issue: invalidManifestIssue(manifestPath, 'manifest does not match the expected shape')
-    }
-  }
-
-  return { manifest: parsed }
-}
-
-function isAddonsManifest(value: unknown): value is AddonsManifest {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
-
-  const manifest = value as Record<string, unknown>
-  return (
-    manifest['version'] === 1 &&
-    typeof manifest['bundleId'] === 'string' &&
-    Array.isArray(manifest['addons']) &&
-    manifest['addons'].every((addon) => typeof addon === 'string')
-  )
-}
-
-function invalidManifestIssue(
-  manifestPath: string,
-  cause: unknown
-): ResourceCollectorAcceptanceIssue {
-  const reason = cause instanceof Error ? cause.message : String(cause)
-  return {
-    code: 'invalid-manifest',
-    level: 'error',
-    message: `Could not read a valid addon manifest at ${manifestPath}: ${reason}.`
-  }
 }

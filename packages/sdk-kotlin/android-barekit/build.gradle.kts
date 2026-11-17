@@ -1,6 +1,4 @@
 import org.gradle.api.publish.maven.MavenPublication
-import org.gradle.api.services.BuildService
-import org.gradle.api.services.BuildServiceParameters
 import java.net.URI
 
 plugins {
@@ -19,7 +17,6 @@ mavenPublishing {
         validateDeployment = com.vanniktech.maven.publish.DeploymentValidation.PUBLISHED)
 }
 val runtimeRoot = rootProject.layout.projectDirectory
-val bareKitRoot = runtimeRoot.dir("node_modules/react-native-bare-kit/android/libs/bare-kit")
 data class RuntimeProfile(val name: String, val configFile: String, val artifactId: String, val pomName: String)
 val allRuntimeProfiles = listOf(
     RuntimeProfile("aio", "qvac.config.json", "qvac-sdk-android", "QVAC SDK for Android"),
@@ -89,14 +86,16 @@ android {
     }
 
     sourceSets {
-        getByName("main") {
-            jniLibs.directories.add(bareKitRoot.dir("jni").asFile.absolutePath)
-        }
+        // Each profile carries the module bare-stow writes for its worker:
+        // the harness, the bundle as an asset and the linked addons.
         runtimeProfiles.forEach { profile ->
             getByName(profile.name) {
                 val generatedRuntime = layout.buildDirectory.dir("generated/qvac/${profile.name}").get()
+                val worker = generatedRuntime.dir("worker/src/main")
                 assets.directories.add(generatedRuntime.dir("assets").asFile.absolutePath)
-                jniLibs.directories.add(generatedRuntime.dir("addons").asFile.absolutePath)
+                assets.directories.add(worker.dir("assets").asFile.absolutePath)
+                kotlin.directories.add(worker.dir("kotlin").asFile.absolutePath)
+                jniLibs.directories.add(worker.dir("addons").asFile.absolutePath)
             }
         }
     }
@@ -136,6 +135,7 @@ val npmCi by tasks.registering(Exec::class) {
 // that npmCi installs. The worker build and the inputs that read the sibling
 // packages exist only in the monorepo.
 val workspaceSdk = runtimeRoot.dir("../sdk")
+val workspaceInference = runtimeRoot.dir("../inference")
 val hasWorkspaceSdk = workspaceSdk.file("package.json").asFile.exists()
 
 val buildWorkspaceSdk by tasks.registering(Exec::class) {
@@ -145,27 +145,22 @@ val buildWorkspaceSdk by tasks.registering(Exec::class) {
     commandLine("python3", "../sdk-python/scripts/build_worker.py", "--force")
     if (hasWorkspaceSdk) {
         inputs.dir(workspaceSdk.dir("src"))
-        inputs.dir(runtimeRoot.dir("../inference/src"))
+        inputs.dir(workspaceInference.dir("src"))
         inputs.files(
             workspaceSdk.file("package.json"),
             workspaceSdk.file("tsconfig.json"),
             workspaceSdk.file("tsconfig.alias.json"),
             workspaceSdk.file("scripts/link-workspace-inference.mjs"),
-            runtimeRoot.file("../inference/package.json"),
-            runtimeRoot.file("../inference/tsconfig.build.json"),
-            runtimeRoot.file("../inference/tsconfig.alias.json"),
+            workspaceInference.file("package.json"),
+            workspaceInference.file("tsconfig.build.json"),
+            workspaceInference.file("tsconfig.alias.json"),
             runtimeRoot.file("../sdk-python/scripts/build_worker.py"),
         )
-        outputs.dir(workspaceSdk.dir("dist/src/worker"))
+        outputs.dirs(workspaceSdk.dir("dist"), workspaceInference.dir("dist"))
     }
 }
 
-// Every profile bundles through the same packages/sdk/qvac/worker.bundle.*
-// files, so the prepare tasks must not run concurrently.
-abstract class QvacRuntimeBundleLock : BuildService<BuildServiceParameters.None>
-val runtimeBundleLock = gradle.sharedServices.registerIfAbsent("qvacRuntimeBundleLock", QvacRuntimeBundleLock::class) {
-    maxParallelUsages.set(1)
-}
+val runtimeBundleLock = gradle.sharedServices.registrations.getByName("qvacRuntimeBundleLock").service
 
 val prepareRuntimeTasks = runtimeProfiles.associateWith { profile ->
     tasks.register<Exec>("prepare${profile.name.replaceFirstChar(Char::uppercase)}QvacAndroidRuntime") {
@@ -173,7 +168,7 @@ val prepareRuntimeTasks = runtimeProfiles.associateWith { profile ->
         usesService(runtimeBundleLock)
         dependsOn(npmCi, buildWorkspaceSdk)
         workingDir(runtimeRoot)
-        commandLine("node", "scripts/prepare-android-runtime.mjs")
+        commandLine("node", "scripts/prepare-runtime.mjs")
         environment("QVAC_KOTLIN_CONFIG", runtimeRoot.file(profile.configFile).asFile.absolutePath)
         environment("QVAC_KOTLIN_PROFILE", profile.name)
         environment(
@@ -182,7 +177,7 @@ val prepareRuntimeTasks = runtimeProfiles.associateWith { profile ->
         )
         inputs.files(
             runtimeRoot.file("package.json"),
-            runtimeRoot.file("scripts/prepare-android-runtime.mjs"),
+            runtimeRoot.file("scripts/prepare-runtime.mjs"),
         )
         if (hasWorkspaceSdk) {
             inputs.files(
@@ -190,7 +185,8 @@ val prepareRuntimeTasks = runtimeProfiles.associateWith { profile ->
                 workspaceSdk.file("LICENSE"),
                 workspaceSdk.file("NOTICE"),
             )
-            inputs.dir(workspaceSdk.dir("dist/src/worker"))
+            inputs.dir(workspaceSdk.dir("dist"))
+            inputs.dir(workspaceInference.dir("dist"))
         } else {
             inputs.dir(runtimeRoot.dir("node_modules/@qvac/sdk"))
         }
@@ -202,7 +198,11 @@ val prepareRuntimeTasks = runtimeProfiles.associateWith { profile ->
 tasks.configureEach {
     runtimeProfiles.forEach { profile ->
         val capitalized = profile.name.replaceFirstChar(Char::uppercase)
-        if (name.startsWith("merge$capitalized") || name.startsWith("package$capitalized")) {
+        if (
+            name.startsWith("merge$capitalized") ||
+            name.startsWith("package$capitalized") ||
+            name.startsWith("compile$capitalized")
+        ) {
             dependsOn(prepareRuntimeTasks.getValue(profile))
         }
     }
@@ -210,7 +210,9 @@ tasks.configureEach {
 
 dependencies {
     api(project(":"))
-    api(files(bareKitRoot.file("classes.jar")).builtBy(npmCi))
+    // The dependencies of bare-stow's `bare-kit` harness module for Kotlin.
+    api("com.github.holepunchto.bare-kit-kotlin:bare-kit-kotlin:v0.2.2")
+    api("com.github.holepunchto.bare-stow-host-kotlin:bare-stow-host-kotlin:v0.2.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 }
 

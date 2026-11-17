@@ -54,6 +54,7 @@ interface LocalOptions {
   suite?: string
   excludeSuite?: string
   include?: string
+  includeFile?: string
   reportDir?: string
 }
 
@@ -108,6 +109,7 @@ function buildProducerArgs(
   if (opts.suite) args.push(`--suite=${opts.suite}`)
   if (opts.excludeSuite) args.push(`--exclude-suite=${opts.excludeSuite}`)
   if (opts.include) args.push(`--include=${opts.include}`)
+  if (opts.includeFile) args.push(`--include-file=${path.resolve(opts.includeFile)}`)
   return args
 }
 

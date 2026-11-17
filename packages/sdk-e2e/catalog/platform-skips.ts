@@ -14,6 +14,14 @@ type Rule = {
 
 const RULES: Rule[] = [
   {
+    match: /^image-embedding-/,
+    skip: {
+      reason:
+        'MegaLoc inference uses a shared JS executor; Python and Kotlin runners do not implement it.',
+      platforms: ['desktop-python', 'kotlin-android']
+    }
+  },
+  {
     match: /^tts-moss-/,
     skip: {
       reason:
@@ -32,7 +40,7 @@ const RULES: Rule[] = [
 
   // ── the packaged Electron app, Snap included ─────────────────────────────
   {
-    match: /^(diffusion-|addon-logging-diffusion$)/,
+    match: /^(diffusion-|session-diffusion-|addon-logging-diffusion$)/,
     skip: {
       reason:
         'The packaged Electron pass, Snap included, skips diffusion: image generation takes too long for it',
@@ -77,6 +85,18 @@ const RULES: Rule[] = [
       reason:
         'Asserts on Bare worker processes outside the packaged app lifecycle, on Electron and Snap alike',
       platforms: ['electron', 'snap']
+    }
+  },
+  {
+    match: [
+      'kv-cache-seed-ignored-once-cached',
+      'kv-cache-seed-without-named-key',
+      'kv-cache-seed-missing-source',
+      'kv-cache-seed-different-system-prompt'
+    ],
+    skip: {
+      reason: 'Step-based with no hand-written body: the React Native runner has no step bindings',
+      platforms: ['mobile-ios', 'mobile-android']
     }
   },
   {
@@ -137,13 +157,21 @@ const RULES: Rule[] = [
     }
   },
   {
+    match: ['kv-cache-shared-prefix-default-isolated', 'kv-cache-shared-prefix-opt-in'],
+    skip: {
+      reason:
+        'Defined only as steps, which the JS mobile consumer does not run; Kotlin inherits the skip because it shares the Android device. Covered by desktop and Python e2e',
+      platforms: ['mobile']
+    }
+  },
+  {
     match: /^tools-(?!simple-function$|no-function-match$)/,
     skip: { reason: 'Tools test disabled on mobile', platforms: ['mobile'] }
   },
   {
-    match: /^(diffusion-|addon-logging-diffusion$)/,
+    match: /^(diffusion-|session-diffusion-|addon-logging-diffusion$)/,
     skip: {
-      reason: 'SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (OOM, 3+GB)',
+      reason: 'Diffusion cold-load is too heavy for Device Farm devices (OOM, 3+GB)',
       platforms: ['mobile']
     }
   },
@@ -214,6 +242,20 @@ const RULES: Rule[] = [
       platforms: ['mobile']
     }
   },
+  {
+    match: [
+      'tts-parler-emotion-conditioning',
+      'tts-parler-default-description',
+      'tts-parler-streaming',
+      'tts-parler-sentence-streaming',
+      'tts-parler-duplex-streaming'
+    ],
+    skip: {
+      reason:
+        'Parler Mini (English) is left off mobile; tts-parler-indic-multilingual covers Parler there',
+      platforms: ['mobile', 'kotlin-android']
+    }
+  },
 
   // ── the RPC server ───────────────────────────────────────────────────────
   {
@@ -249,7 +291,7 @@ const RULES: Rule[] = [
     match: /^model-fit-probe-(?:audiogen|diffusion(?:-esrgan)?|upscaler)$/,
     skip: {
       reason:
-        'Reading the projection needs a resident model, and both sets are too heavy to load on Device Farm devices; the assessment needs no load and still runs',
+        'Reading the load-time fit check needs a resident model, and both sets are too heavy to load on Device Farm devices; the assessment needs no load and still runs',
       platforms: ['mobile']
     }
   },
@@ -381,6 +423,33 @@ const RULES: Rule[] = [
     }
   },
 
+  // ── one desktop OS only ──────────────────────────────────────────────────
+  {
+    match: /^world-/,
+    skip: {
+      reason:
+        'ABot-World runs on the Linux JS leg and the Python leg only: its 12.7 GiB model set is not worth pulling on every JS desktop OS',
+      platforms: ['desktop-macos', 'desktop-windows']
+    }
+  },
+  {
+    match: ['tools-simple-function-gemma4'],
+    skip: {
+      reason:
+        'The Gemma4 tool dialect is checked on the Linux JS leg and the Python leg only: the parse does not depend on the OS, and its model is 3.22 GiB',
+      platforms: ['desktop-macos', 'desktop-windows']
+    }
+  },
+
+  {
+    match: /^tts-moss-sfx-/,
+    skip: {
+      reason:
+        'MOSS-SoundEffect runs on the Linux GPU leg only: its 3.25 GiB model has no smaller build',
+      platforms: ['desktop-macos', 'desktop-windows']
+    }
+  },
+
   // ── one mobile OS only ───────────────────────────────────────────────────
   {
     match: ['parakeet-stream-eou', 'parakeet-stream-iterator-throw'],
@@ -394,6 +463,16 @@ const RULES: Rule[] = [
     // the footprint down, so listing ids individually only moved where the leg died.
     match: /^(ocr-|addon-logging-ocr$)/,
     skip: { reason: 'OCR disabled on iOS (ONNX/CoreML OOM)', platforms: ['mobile-ios'] }
+  },
+  {
+    // ocr-large-image peaks near 7 GB (a lower canvasSize does not lower it), and a 12 GB
+    // Device Farm phone kills the app; the rest of the run then fails with it.
+    match: /^(ocr-|addon-logging-ocr$)/,
+    skip: {
+      reason:
+        'OCR disabled on Android: ocr-large-image peaks near 7 GB and 12 GB phones kill the app',
+      platforms: ['mobile-android']
+    }
   }
 ]
 

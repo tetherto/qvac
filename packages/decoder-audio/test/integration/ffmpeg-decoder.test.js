@@ -226,6 +226,128 @@ test('FFmpegDecoder - streaming response does not retain PCM chunks', async (t) 
   }
 })
 
+// bare-ffmpeg handles have no GC finalizer, so every handle a run creates must be destroyed.
+async function trackFFmpegHandles(fn) {
+  const ffmpeg = require('bare-ffmpeg')
+  const counts = {
+    framesCreated: 0,
+    Frame: 0,
+    IOContext: 0,
+    InputFormatContext: 0,
+    Resampler: 0,
+    Packet: 0,
+    CodecContext: 0
+  }
+  const restore = []
+  for (const name of Object.keys(counts).filter((key) => key !== 'framesCreated')) {
+    const original = ffmpeg[name].prototype.destroy
+    ffmpeg[name].prototype.destroy = function (...args) {
+      counts[name]++
+      return original.apply(this, args)
+    }
+    restore.push(() => {
+      ffmpeg[name].prototype.destroy = original
+    })
+  }
+  const OriginalFrame = ffmpeg.Frame
+  ffmpeg.Frame = class extends OriginalFrame {
+    constructor(...args) {
+      super(...args)
+      counts.framesCreated++
+    }
+  }
+  restore.push(() => {
+    ffmpeg.Frame = OriginalFrame
+  })
+
+  try {
+    await fn()
+  } finally {
+    for (const undo of restore) undo()
+  }
+  return counts
+}
+
+function assertDecodeHandlesReleased(t, counts, label) {
+  t.is(counts.InputFormatContext, 1, `${label}: format context destroyed`)
+  t.ok(counts.IOContext >= 1, `${label}: IO context (which pins the input buffer) destroyed`)
+  t.is(counts.CodecContext, 1, `${label}: codec context destroyed`)
+  t.is(counts.Resampler, 1, `${label}: resampler destroyed`)
+  t.is(counts.Packet, 1, `${label}: packet destroyed`)
+  t.ok(counts.framesCreated > 1, `${label}: decoding created frames`)
+  t.is(counts.Frame, counts.framesCreated, `${label}: every created frame destroyed`)
+}
+
+test('FFmpegDecoder - destroys native FFmpeg objects after a completed run', async (t) => {
+  const counts = await trackFFmpegHandles(async () => {
+    const decoder = await loadDecoder()
+    try {
+      await decoder.run(fs.createReadStream(sampleMp3())).await()
+    } finally {
+      await decoder.unload()
+    }
+  })
+  assertDecodeHandlesReleased(t, counts, 'completed run')
+})
+
+test('FFmpegDecoder - destroys native FFmpeg objects when decoding fails midway', async (t) => {
+  const counts = await trackFFmpegHandles(async () => {
+    const decoder = await loadDecoder({ maxDecodedBytes: 1024 })
+    try {
+      const response = decoder.run(fs.createReadStream(sampleMp3()), { retainOutput: false })
+      response.onError(() => {})
+      await t.exception(() => response.await(), /Decoded audio exceeds the configured byte limit/)
+    } finally {
+      await decoder.unload()
+    }
+  })
+  assertDecodeHandlesReleased(t, counts, 'failed run')
+})
+
+test(
+  'FFmpegDecoder - destroys native FFmpeg objects when cancelled while waiting for a consumer',
+  { timeout: 10000 },
+  async (t) => {
+    const counts = await trackFFmpegHandles(async () => {
+      const decoder = await loadDecoder()
+      let firstChunk
+      const firstChunkReceived = new Promise((resolve) => {
+        firstChunk = resolve
+      })
+      try {
+        const response = decoder.run(fs.createReadStream(sampleMp3()), {
+          retainOutput: false,
+          waitForConsumer: () => new Promise(() => {})
+        })
+        response.onError(() => {})
+        response.onUpdate(firstChunk)
+        await firstChunkReceived
+        await response.cancel()
+        await t.exception(() => response.await(), /JOB_CANCELLED/)
+      } finally {
+        await decoder.unload()
+      }
+    })
+    assertDecodeHandlesReleased(t, counts, 'cancelled run')
+  }
+)
+
+test('FFmpegDecoder - destroys format and IO contexts when stream setup fails', async (t) => {
+  const counts = await trackFFmpegHandles(async () => {
+    const decoder = await loadDecoder({ streamIndex: 99 })
+    try {
+      const response = decoder.run(fs.createReadStream(sampleMp3()))
+      response.onError(() => {})
+      await t.exception(() => response.await(), /STREAM_INDEX_OUT_OF_BOUNDS|stream index/i)
+    } finally {
+      await decoder.unload()
+    }
+  })
+  t.is(counts.InputFormatContext, 1, 'format context destroyed')
+  t.ok(counts.IOContext >= 1, 'IO context destroyed')
+  t.is(counts.framesCreated, 0, 'no frames were created')
+})
+
 test('FFmpegDecoder - releases a completed retained response', async (t) => {
   const decoder = await loadDecoder()
   try {

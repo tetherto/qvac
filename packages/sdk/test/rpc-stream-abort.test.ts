@@ -2,6 +2,7 @@ import test from 'brittle'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Response } from '@qvac/inference/surface'
+import { OperationTimeoutError } from '@/utils/withTimeout'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -9,11 +10,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 process.env['QVAC_WORKER_PATH'] = path.resolve(__dirname, 'fixtures/stream-close-worker.mjs')
 
 async function load() {
-  const { stream, close } = await import('@/client/rpc/rpc-client')
+  const { send, stream, duplex, close } = await import('@/client/rpc/rpc-client')
   const { loggingStream } = await import('@/client/api/logging-stream')
   const { subscribeServerLogs } = await import('@/client/api/subscribe-logs')
   const { SDK_ALL_LOG_ID } = await import('@/logging')
-  return { stream, close, loggingStream, subscribeServerLogs, SDK_ALL_LOG_ID }
+  return { send, stream, duplex, close, loggingStream, subscribeServerLogs, SDK_ALL_LOG_ID }
 }
 
 function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
@@ -57,6 +58,17 @@ test('aborting a stream() parked on a quiet id ends it and closes the request on
   const result = await within(read, 2000, 'the pending read did not end on abort')
   t.ok(result.done, 'the pending read ends without an error and without another entry')
   t.is(await nextReport(), 'closed:quiet', 'the worker sees the stream closed')
+})
+
+test('a send() that times out cancels the request on the worker', async function (t) {
+  t.timeout(30_000)
+  const { send } = await load()
+
+  await t.exception(
+    send({ type: 'heartbeat' }, { timeout: 100 }),
+    OperationTimeoutError as unknown as new () => Error
+  )
+  t.is(await nextReport(), 'cancelled:heartbeat', 'the worker sees the request cancelled')
 })
 
 test('a stream() delivers responses until it is aborted', async function (t) {
@@ -133,6 +145,72 @@ test('the unsubscribe from subscribeServerLogs closes the stream without another
 
   t.is(await nextReport(), `closed:${SDK_ALL_LOG_ID}`, 'the worker sees it closed')
 })
+
+for (const profiled of [false, true]) {
+  test(`leaving a duplex session's responses early closes it without an uncaught error (profiling=${profiled})`, async function (t) {
+    t.timeout(30_000)
+    const { duplex } = await load()
+
+    const uncaught: unknown[] = []
+    const onUncaught = (error: unknown) => uncaught.push(error)
+    process.on('uncaughtException', onUncaught)
+    t.teardown(() => {
+      process.off('uncaughtException', onUncaught)
+    })
+
+    const session = await duplex(
+      { type: 'loggingStream', id: 'duplex' },
+      { profiling: { enabled: profiled } }
+    )
+    t.is(await nextReport(), 'opened:duplex', 'the worker holds the session open')
+
+    for await (const chunk of session.responseStream) {
+      t.ok(chunk.toString().includes('loggingStream'), 'the worker echoes the request back')
+      break
+    }
+
+    t.is(await nextReport(), 'closed:duplex', 'the worker sees the session closed')
+    t.alike(uncaught, [], 'no uncaught error')
+  })
+
+  for (const afterFirst of [false, true]) {
+    test(`stream timeout closes a stalled ${afterFirst ? 'later' : 'first'} read (profiling=${profiled})`, async function (t) {
+      t.timeout(10_000)
+      const { stream } = await load()
+      const controller = new AbortController()
+      const id = afterFirst ? 'chatty' : 'quiet'
+      const responses = stream(
+        { type: 'loggingStream', id },
+        { timeout: 100, signal: controller.signal, profiling: { enabled: profiled } }
+      )
+      let read = responses.next()
+      if (afterFirst) {
+        t.is(((await within(read, 5000, 'no first entry')).value as LogResponse).message, 'hello')
+        read = responses.next()
+      }
+      const outcome = read.then(
+        () => undefined,
+        (error: unknown) => error
+      )
+      try {
+        t.is(await nextReport(), `opened:${id}`, 'the worker has an open request')
+        const error = await within(outcome, 1000, 'the streaming timeout did not fire').catch(
+          (reason: unknown) => reason
+        )
+        t.ok(
+          error instanceof OperationTimeoutError,
+          'the read fails as a timeout, not a worker crash'
+        )
+        if (!(error instanceof OperationTimeoutError)) controller.abort()
+        t.is(await nextReport(), `closed:${id}`, 'the worker sees the timed-out stream close')
+      } finally {
+        controller.abort()
+        await outcome
+        await responses.return(undefined)
+      }
+    })
+  }
+}
 
 test('close the worker', { hook: true }, async function () {
   const { close } = await load()

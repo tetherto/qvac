@@ -15,14 +15,24 @@ set(TEST_SOURCES
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/mobilenet/MobileNetGraph.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/megaloc/MegaLocModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/megaloc/MegaLocPreprocessor.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/GgmlBackend.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelFootprint.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelFit.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/bridgedepth/BridgeDepthGraph.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/bridgedepth/BridgeDepthModel.cpp
   megaloc_test.cpp
+  bridgedepth_test.cpp
+  footprint_test.cpp
+  fit_test.cpp
+  mobilenet_gguf_test.cpp
 )
 
 add_executable(addon-test ${TEST_SOURCES})
 target_compile_features(addon-test PRIVATE cxx_std_20)
 
 target_compile_options(addon-test PRIVATE -Wall -Wextra -Wfatal-errors -g)
-target_compile_definitions(addon-test PRIVATE GTEST_HAS_POSIX_RE=0)
+target_compile_definitions(addon-test PRIVATE GTEST_HAS_POSIX_RE=0
+  QVAC_TEST_FIXTURES_DIR="${CMAKE_SOURCE_DIR}/test/fixtures")
 
 if(NOT WIN32)
   target_compile_options(addon-test PRIVATE -fno-omit-frame-pointer)

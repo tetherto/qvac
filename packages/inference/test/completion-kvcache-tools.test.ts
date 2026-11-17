@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { AttachmentNotFoundError } from '@/errors/index'
+import { AttachmentNotFoundError, RequestValidationFailedError } from '@/errors/index'
 import { llmPlugin } from '@/plugins/builtin/llamacpp-completion/plugin'
 import {
   clearRegistry,
@@ -267,32 +267,65 @@ test('completion: auto prefill commits the full normalized history without an as
   clearRegistry()
 })
 
-test('completion: tools-only auto prefill is reused by the first question', async (t) => {
+test('completion: tools-only auto prefill with a configured system prompt is reused', async (t) => {
   await setIsolatedHome()
   clearRegistry()
   const modelId = 'tools-only-prefill'
   const calls: RecordedCall[] = []
   const paths: string[] = []
-  registerRecordingModel(modelId, calls, { tools: true }, paths)
+  registerRecordingModel(
+    modelId,
+    calls,
+    { tools: true, system_prompt: 'Use the area tool.' },
+    paths
+  )
   const complete = completer(modelId, true)
   await complete([], [areaTool], undefined, true)
-  t.alike(shape(calls[0]!), ['tool'])
+  t.alike(shape(calls[0]!), ['system', 'tool'], 'the configured system prompt leads the tools')
   t.ok(await holdsCommittedBytes(paths[0]), 'tools-only prime is persisted')
   await complete([user('Find the area.')], [areaTool])
-  t.is(paths[1], paths[0], 'the first user message finds the empty-history prefix')
+  t.is(paths[1], paths[0], 'the first user message finds the primed prefix')
+  clearRegistry()
+})
+
+test('completion: a prefill with no message is rejected before the model runs', async (t) => {
+  for (const kvCache of [true, 'tools-only-key'] as const) {
+    await setIsolatedHome()
+    clearRegistry()
+    const modelId = `no-message-prefill-${kvCache === true ? 'auto' : 'named'}`
+    const calls: RecordedCall[] = []
+    registerRecordingModel(modelId, calls, { tools: true })
+    let error: unknown
+    try {
+      await completer(modelId, kvCache)([], [areaTool], undefined, true)
+    } catch (caught) {
+      error = caught
+    }
+    t.ok(error instanceof RequestValidationFailedError, `${String(kvCache)}: a validation error`)
+    t.ok(
+      (error as Error | undefined)?.message.includes('modelConfig.system_prompt'),
+      `${String(kvCache)}: names the ways to supply a message`
+    )
+    t.is(calls.length, 0, `${String(kvCache)}: the model is never called`)
+  }
   clearRegistry()
 })
 
 test('completion: unrelated requests do not consume tool-bearing auto prefills', async (t) => {
-  for (const systemPrompt of [undefined, 'Use the area tool.']) {
+  for (const configured of [true, false]) {
     await setIsolatedHome()
     clearRegistry()
-    const modelId = `isolated-prefill-${systemPrompt ? 'system' : 'tools-only'}`
+    const modelId = `isolated-prefill-${configured ? 'configured' : 'history'}`
     const calls: RecordedCall[] = []
     const paths: string[] = []
-    registerRecordingModel(modelId, calls, { tools: true }, paths)
+    registerRecordingModel(
+      modelId,
+      calls,
+      configured ? { tools: true, system_prompt: 'Use the area tool.' } : { tools: true },
+      paths
+    )
     const complete = completer(modelId, true)
-    const prefix = systemPrompt ? [system(systemPrompt)] : []
+    const prefix = configured ? [] : [system('Use the area tool.')]
 
     await complete(prefix, [areaTool], undefined, true)
     const primedPath = paths[0]
@@ -1100,6 +1133,57 @@ function registerScriptedModel(
     modelType: ModelType.llamacppCompletion
   })
   return conversations
+}
+
+for (const stream of [false, true]) {
+  for (const kvCache of [undefined, true, 'terminal-reason-cache']) {
+    for (const scenario of [
+      { native: 'eos', expected: 'eos', generatedTokens: 1 },
+      { native: 'antiprompt', expected: 'stopSequence', generatedTokens: 1 },
+      { native: 'contextOverflow', expected: 'length', generatedTokens: 1 },
+      { native: 'predictionLimit', expected: 'length', generatedTokens: 2 },
+      { native: 'none', expected: undefined, generatedTokens: 1 },
+      { native: 'eos', expected: 'cancelled', generatedTokens: 1, cancel: true }
+    ]) {
+      test(`completion: terminal reason ${scenario.expected}, stream=${stream}, cache=${kvCache}`, async (t) => {
+        await setIsolatedHome()
+        clearRegistry()
+        const modelId = `terminal-reason-${Date.now()}`
+        registerScriptedModel(modelId, [], [], {
+          config: { predict: 2 },
+          ...(scenario.cancel && { cancelOnRun: 1 }),
+          statsOnRun: () => ({
+            stopReason: scenario.native,
+            generatedTokens: scenario.generatedTokens
+          })
+        })
+        const handler = llmPlugin.handlers.completionStream.handler as unknown as LooseHandler
+        const events: { type: string; stopReason?: string }[] = []
+        try {
+          for await (const frame of handler({
+            modelId,
+            requestId: `${modelId}-1`,
+            history: [user('Hello')],
+            stream,
+            ...(kvCache !== undefined && { kvCache })
+          })) {
+            const response = frame as { events?: { type: string; stopReason?: string }[] }
+            events.push(...(response.events ?? []))
+          }
+          const done = events.filter((event) => event.type === 'completionDone')
+          t.is(done.length, 1, 'one terminal event')
+          t.is(
+            done[0]?.stopReason,
+            scenario.expected,
+            'native reason with limit/cancellation precedence'
+          )
+        } finally {
+          unregisterModel(modelId)
+          clearRegistry()
+        }
+      })
+    }
+  }
 }
 
 // Once the run returns, the file holds whatever the addon kept — it commits

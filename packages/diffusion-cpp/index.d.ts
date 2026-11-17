@@ -70,6 +70,8 @@ export interface DiffusionFiles {
     t5Xxl?: string;
     llm?: string;
     llmVision?: string;
+    /** External tokenizer.json, required by MOSS-Image's Qwen3.5 encoder. */
+    tokenizer?: string;
     vae?: string;
     esrgan?: string;
     highNoiseDiffusionModel?: string;
@@ -131,6 +133,7 @@ export interface GenerationParams {
     seed?: number;
     batch_count?: number;
     vae_tiling?: boolean;
+    /** Positive spatial tile dimensions in latent pixels; omit to use the engine default. */
     vae_tile_size?: number | string;
     vae_tile_overlap?: number;
     cache_mode?: CacheMode;

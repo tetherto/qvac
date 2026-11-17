@@ -954,11 +954,16 @@ describe('responses API', () => {
     )
   })
 
-  it('rejects built-in web_search tool', async () => {
-    assertError(
-      await post('/v1/responses', { model: E2E.llm, input: 'hi', tools: [{ type: 'web_search' }] }),
-      'invalid_tool_type'
-    )
+  it('ignores a built-in web_search tool', async () => {
+    const res = await post('/v1/responses', {
+      model: E2E.llm,
+      input: 'Reply with exactly OK.',
+      tools: [{ type: 'web_search' }],
+      reasoning_budget: false,
+      max_output_tokens: 32
+    })
+    assert.equal(res.statusCode, 200)
+    assert.equal((res.json() as any).status, 'completed')
   })
 })
 

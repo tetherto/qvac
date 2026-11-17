@@ -14,7 +14,8 @@ const COMPANION_FILE_KEYS = [
     'esrgan',
     'llm',
     'audioVae',
-    'embeddingsConnectors'
+    'embeddingsConnectors',
+    'tokenizer'
 ];
 const VIDEO_MODES = new Set(['txt2vid', 'img2vid']);
 const WAN22_MOE_PARAMS = [
@@ -157,6 +158,7 @@ class VideoStableDiffusion {
             t5XxlPath: this._files.t5Xxl || '',
             llmPath: this._files.llm || '',
             llmVisionPath: this._files.llmVision || '',
+            tokenizerPath: this._files.tokenizer || '',
             vaePath: this._files.vae || '',
             clipVisionPath: this._files.clipVision || '',
             esrganPath: this._files.esrgan || '',

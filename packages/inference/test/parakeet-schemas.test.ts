@@ -3,6 +3,7 @@ import {
   parakeetRuntimeConfigSchema,
   parakeetConfigSchema,
   parakeetLoadConfigSchema,
+  parakeetSpeakerAttributionConfigSchema,
   LEGACY_PARAKEET_ONNX_MODEL_CONFIG_FIELDS
 } from '@/schemas/transcription-config'
 
@@ -95,15 +96,17 @@ test('parakeetRuntimeConfigSchema: accepts backend loader directories', (t) => {
   t.is(result.openclCacheDir, '/tmp/qvac-opencl-cache')
 })
 
-test('parakeetRuntimeConfigSchema: accepts Indic ids and Nemotron locale aliases', (t) => {
-  for (const language of ['hi', 'ta', 'en-US', 'hi-IN', 'auto', ''] as const) {
+test('parakeetRuntimeConfigSchema: accepts Indic ids, Nemotron locale aliases and the TranscribePsy EU route', (t) => {
+  // `other` selects TranscribePsy-250M-EU's non-English adapters; `en` its
+  // English trunk and `auto` the model's own routing.
+  for (const language of ['hi', 'ta', 'en-US', 'hi-IN', 'auto', 'other', ''] as const) {
     const result = parakeetRuntimeConfigSchema.parse({ language })
     t.is(result.language, language)
   }
 })
 
 test('parakeetRuntimeConfigSchema: rejects invalid language values', (t) => {
-  for (const language of ['english', 'en_US', 'en-US-extra', 'auto-US']) {
+  for (const language of ['english', 'en_US', 'en-US-extra', 'auto-US', 'others', 'other-EU']) {
     t.exception(() => parakeetRuntimeConfigSchema.parse({ language }), language)
   }
 })
@@ -200,4 +203,65 @@ test('parakeetRuntimeConfigSchema: accepts prewarm and the length of its pass', 
       `prewarmAudioSeconds ${seconds}`
     )
   }
+})
+
+test('parakeetRuntimeConfigSchema: accepts the native backend selector', (t) => {
+  for (const backend of ['auto', 'cpu', 'cuda', 'vulkan', 'opencl', 'metal', 'CUDA0', 'MTL0']) {
+    t.is(parakeetRuntimeConfigSchema.parse({ backend }).backend, backend)
+  }
+  t.exception(() => parakeetRuntimeConfigSchema.parse({ backend: 1 }), 'a non-string selector')
+  t.ok(
+    parakeetLoadConfigSchema.safeParse({ useGPU: false, backend: 'cuda' }).success,
+    'the strict load schema accepts the selector'
+  )
+})
+
+test('parakeetSpeakerAttributionConfigSchema: mirrors the addon vocabulary', (t) => {
+  const full = {
+    modelSrc: 'sortformer-4spk-v1.q8_0.gguf',
+    mergeSameSpeaker: false,
+    minSegmentMs: 0,
+    padSegmentMs: 250
+  }
+  t.alike(parakeetSpeakerAttributionConfigSchema.parse(full), full)
+  t.alike(
+    parakeetSpeakerAttributionConfigSchema.parse({ modelSrc: { src: 'pear://x/nemotron.gguf' } }),
+    { modelSrc: { src: 'pear://x/nemotron.gguf' } },
+    'a structured model source is accepted'
+  )
+  t.exception(() => parakeetSpeakerAttributionConfigSchema.parse({}), 'modelSrc is required')
+  t.exception(
+    () => parakeetSpeakerAttributionConfigSchema.parse({ modelSrc: 'd.gguf', minSegmentMs: -1 }),
+    'durations are non-negative'
+  )
+  t.exception(
+    () => parakeetSpeakerAttributionConfigSchema.parse({ modelSrc: 'd.gguf', padSegmentMs: 1.5 }),
+    'durations are integers'
+  )
+  t.exception(
+    () =>
+      parakeetSpeakerAttributionConfigSchema.parse({ modelSrc: 'd.gguf', padSegmentMs: 2 ** 31 }),
+    'durations fit the native integer'
+  )
+  t.exception(
+    () => parakeetSpeakerAttributionConfigSchema.parse({ modelPath: '/d.gguf' }),
+    'the addon-side modelPath is not the SDK vocabulary'
+  )
+})
+
+test('parakeetLoadConfigSchema: speakerAttribution is a batch-only load', (t) => {
+  const speakerAttribution = { modelSrc: 'nemotron-3-diarization.q8_0.gguf' }
+  const accepted = parakeetLoadConfigSchema.safeParse({ backend: 'cpu', speakerAttribution })
+  t.ok(accepted.success, 'an attributed batch load parses')
+  if (accepted.success) t.alike(accepted.data.speakerAttribution, speakerAttribution)
+
+  const rejected = parakeetLoadConfigSchema.safeParse({ streaming: true, speakerAttribution })
+  t.absent(rejected.success, 'streaming and speakerAttribution are refused together')
+  if (!rejected.success) {
+    t.alike(rejected.error.issues[0]?.path, ['speakerAttribution'])
+  }
+  t.ok(
+    parakeetConfigSchema.partial().safeParse({ streaming: true, speakerAttribution }).success,
+    'the public schema stays refinement-free so device defaults can still take .partial()'
+  )
 })

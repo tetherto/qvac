@@ -394,6 +394,7 @@ void MtmdLlmContext::tokenizeChat(
   if (cacheReconciliationEnabled_) {
     const auto& lastRole = chatMsgs.back().role;
     isLastMessageFromUser = lastRole == "user" || lastRole == "tool";
+    historyEndsAtUserTurn_ = lastRole == "user";
     addSpecial = true;
   } else if (current_.pos == 0 && !isCacheLoaded) {
     const auto& lastRole = chatMsgs.back().role;
@@ -1160,15 +1161,9 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
       break;
     }
 
+    // The token was already streamed, so it is decoded even when a cancel
+    // landed meanwhile (see `TextLlmContext::generateResponse`).
     llamaBatchClear(*batch);
-    if (stopGeneration_.load()) {
-      // Route through the post-loop `cancelGenerationCleanup` instead
-      // of injecting EOT — EOT would advance the cursor past rollback.
-      // The token was already streamed, so count it (see the same branch in
-      // `TextLlmContext::generateResponse`).
-      ++lastGeneratedTokenCount_;
-      break;
-    }
     llamaBatchAdd(*batch, tokenId, current_.pos, {seqId_}, true);
 
     // eval the token
@@ -1413,6 +1408,7 @@ void MtmdLlmContext::resetStateKeepingMemory(bool resetStats) {
   utf8Buffer_.clear();
   thinkingForcedOpen_ = false;
   thinkingForcedOpenText_.clear();
+  thinkingOpenerPending_ = false;
   llama_synchronize(modelCtx_.lctx);
   if (resetStats) {
     llama_perf_context_reset(modelCtx_.lctx);
@@ -1852,7 +1848,8 @@ void MtmdLlmContext::commitCacheRequest() {
         cacheCheckpoints_,
         std::move(*pendingHistoryCheckpoint_),
         cacheCheckpointPolicy_,
-        [](const CacheCheckpoint& entry) { return entry.state.bytes(); });
+        [](const CacheCheckpoint& entry) { return entry.state.bytes(); },
+        [](const CacheCheckpoint& entry) { return entry.endsAtUserTurn; });
     pendingHistoryCheckpoint_.reset();
   }
   cacheRequestActive_ = false;
@@ -1880,7 +1877,8 @@ void MtmdLlmContext::captureHistoryCheckpoint(llama_pos pos) {
   CacheCheckpoint checkpoint{
       .ledger = std::move(ledger),
       .cacheTokens =
-          pendingPromptLedger_.cacheTokens(historyCheckpointEntries_)};
+          pendingPromptLedger_.cacheTokens(historyCheckpointEntries_),
+      .endsAtUserTurn = historyEndsAtUserTurn_};
   if (!snapshotSequenceState(
           modelCtx_.lctx,
           seqId_,
@@ -2182,6 +2180,7 @@ void MtmdLlmContext::onPrefillComplete(
   if (thinkingForcedOpen_ && reasoningEnabled_) {
     reasoningState_.inside_reasoning = true;
   }
+  thinkingOpenerPending_ = thinkingForcedOpen_;
 }
 
 int32_t MtmdLlmContext::evalAudioChunkSpeculative(
@@ -2274,12 +2273,9 @@ void MtmdLlmContext::generateSpeculative(
   llama_token sampled = step.token;
 
   while (true) {
-    if (stopGeneration_.load()) {
-      ++lastGeneratedTokenCount_;
-      return;
-    }
-    if (nRemain == 0) {
-      // The plain loop decodes the token it stops on for the budget.
+    if (stopGeneration_.load() || nRemain == 0) {
+      // See TextLlmContext::generateSpeculative: `sampled` was streamed, so
+      // it is decoded before stopping.
       llamaBatchClear(*batch);
       llamaBatchAdd(*batch, sampled, current_.pos, {seqId_}, false);
       decodeOrThrow();
@@ -2440,6 +2436,13 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
     int logitIdx, unsigned generatedAfterAccept,
     const std::function<void(const std::string&)>& outputCallback,
     LlamaBatch* inlineDecodeBatch) {
+  // See TextLlmContext::onLogitsReady.
+  if (thinkingOpenerPending_) {
+    thinkingOpenerPending_ = false;
+    if (outputCallback && !thinkingForcedOpenText_.empty()) {
+      outputCallback(thinkingForcedOpenText_);
+    }
+  }
   const SequenceStepResult result = sampleFromLogits(
       logitIdx, generatedAfterAccept, outputCallback, inlineDecodeBatch);
   // See TextLlmContext::onLogitsReady: the scheduler decodes the sample later.

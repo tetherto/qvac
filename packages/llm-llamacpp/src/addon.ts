@@ -140,6 +140,8 @@ export function mapAddonEvent(
       stats.backendDevice = "cpu";
     } else if (stats.backendDevice === 1) {
       stats.backendDevice = "gpu";
+    } else if (stats.backendDevice === 2) {
+      stats.backendDevice = "npu";
     }
     if (typeof stats.stopReason === "number") {
       stats.stopReason = STOP_REASONS[stats.stopReason] || "none";

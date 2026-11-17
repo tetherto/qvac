@@ -6,6 +6,7 @@ import {
   type CompletionFinal,
   type CompletionStats
 } from '@/schemas/completion-event'
+import { trackedRequestSchema } from '@/schemas/request-base'
 import {
   completionParamsSchema,
   generationParamsSchema,
@@ -15,7 +16,7 @@ import {
   toolDialectSchema
 } from '@/schemas/completion-stream'
 import { type McpClientInput } from '@/schemas/mcp-adapter'
-import { toolSchema } from '@/schemas/tools'
+import { toolSchema, toolSearchOptionsSchema } from '@/schemas/tools'
 
 const mcpClientInputSchema = z.custom<McpClientInput>()
 
@@ -32,7 +33,8 @@ const batchPromptBaseSchema = z
       .describe('Optional per-prompt sampling / generation parameters.'),
     responseFormat: responseFormatSchema
       .optional()
-      .describe('Optional per-prompt structured-output constraint.')
+      .describe('Optional per-prompt structured-output constraint.'),
+    toolSearch: toolSearchOptionsSchema.optional()
   })
   .strict()
 
@@ -129,24 +131,26 @@ const batchCompletionClientParamsBaseSchema = z
 
 export const batchCompletionClientParamsSchema = batchCompletionClientParamsBaseSchema
 
-export const batchCompletionStreamRequestSchema = batchCompletionClientParamsBaseSchema.extend({
-  prompts: z
-    .array(batchPromptStreamSchema)
-    .min(1)
-    .refine(
-      (prompts) => {
-        const ids = prompts
-          .map((prompt) => prompt.id)
-          .filter((id): id is string => id !== undefined)
-        return new Set(ids).size === ids.length
-      },
-      {
-        message: 'Batch prompt ids must be unique.'
-      }
-    )
-    .describe('Batch prompts submitted to the addon in one run.'),
-  type: z.literal('batchCompletionStream')
-})
+export const batchCompletionStreamRequestSchema = batchCompletionClientParamsBaseSchema
+  .extend({
+    prompts: z
+      .array(batchPromptStreamSchema)
+      .min(1)
+      .refine(
+        (prompts) => {
+          const ids = prompts
+            .map((prompt) => prompt.id)
+            .filter((id): id is string => id !== undefined)
+          return new Set(ids).size === ids.length
+        },
+        {
+          message: 'Batch prompt ids must be unique.'
+        }
+      )
+      .describe('Batch prompts submitted to the addon in one run.'),
+    type: z.literal('batchCompletionStream')
+  })
+  .extend(trackedRequestSchema.shape)
 
 export const batchCompletionEventSchema = z
   .object({

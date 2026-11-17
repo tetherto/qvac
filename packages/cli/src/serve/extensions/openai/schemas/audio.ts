@@ -109,7 +109,9 @@ export const audioSpeechBody = z
   })
   .passthrough()
 
-export const SPEECH_UNSUPPORTED_PARAMS = ['speed', 'instructions'] as const
+// `instructions` is not here: the speech route forwards it to CosyVoice3 as
+// the per-request `instruct` control and only ignores it on other engines.
+export const SPEECH_UNSUPPORTED_PARAMS = ['speed'] as const
 
 export const voiceObject = z.object({
   id: z.string(),

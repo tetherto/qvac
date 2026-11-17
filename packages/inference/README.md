@@ -111,7 +111,7 @@ projections. Add `ttsWorkload` beside `modelConfig` on the assessment candidate:
 decoder; reference encoding also needs the codec encoder. Prompt rows must
 cover the complete native prompt, including dialogue and reference rows.
 Missing workloads return an unknown assessment rather than guessing.
-MOSS-Speech has no native fitter and assesses as unknown. Workloads are
+MOSS-Speech has no fitter and assesses as unknown. Workloads are
 fit-only: loading a MOSS model does not accept them, so the fit check before a
 MOSS load is unknown.
 
@@ -122,6 +122,8 @@ endpoint cannot represent those requests.
 ## Configuration
 
 The engine resolves a `qvac.config.js` or `qvac.config.json` from the current working directory, or from the path in `QVAC_CONFIG_PATH`. The resolved config applies on the first API call.
+
+The engine keeps models and its cache under `.qvac` in a home folder, which defaults to `HOME`. A Bare Kit worklet has no `HOME`, so call `initialize({ homeDir })` from `@qvac/inference/engine` with the app's storage folder before the first request; only the first call's folder applies.
 
 The `includeAudioDecoder` setting is read by the SDK bundler. Set it to `false` when packaging a worker that only receives raw PCM or streaming audio; `audiogen-ggml` can also use PCM or WAV output without FFmpeg. Compressed audio file decoding and compressed audiogen output formats require `bare-ffmpeg` to be bundled.
 

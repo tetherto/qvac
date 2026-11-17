@@ -255,7 +255,9 @@ function buildVlmBatchItem(item) {
     return {
       id: item.id,
       prompt: [
-        { role: 'system', content: 'Follow the user instruction exactly. Do not add a preamble.' },
+        // No "Do not add a preamble": a 460M VLM answers about the preamble
+        // instead of writing the sentence, so the reply misses the word.
+        { role: 'system', content: 'Follow the user instruction exactly.' },
         {
           role: 'user',
           content: `Write one short sentence that contains the exact word "${word}".`

@@ -1,3 +1,4 @@
+import { requestParent } from '@/schemas/plugin'
 import LlmLlamacpp from '@qvac/llm-llamacpp'
 import {
   definePlugin,
@@ -7,6 +8,8 @@ import {
   batchCompletionStreamResponseSchema,
   completionStreamRequestSchema,
   completionStreamResponseSchema,
+  calcTokensRequestSchema,
+  calcTokensResponseSchema,
   finetuneResponseSchema,
   translateRequestSchema,
   translateResponseSchema,
@@ -30,8 +33,10 @@ import { getModelParallel } from '@/utils/config-transform'
 import { completion } from '@/plugins/builtin/llamacpp-completion/ops/completion-stream'
 import { batchCompletion } from '@/plugins/builtin/llamacpp-completion/ops/batch-completion-stream'
 import { finetune } from '@/plugins/builtin/llamacpp-completion/ops/finetune'
+import { calcTokens } from '@/plugins/builtin/llamacpp-completion/ops/calc-tokens'
 import { translate } from '@/plugins/ops/translate'
 import { transformLlmConfig } from '@/plugins/builtin/llamacpp-completion/transform'
+import { llmFitRequest } from '@/plugins/builtin/llamacpp-completion/fit'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
 import { getModelConfig } from '@/runtime/model-registry'
 import { createCompletionNormalizer } from '@/utils/completion-normalizer'
@@ -119,6 +124,7 @@ export const llmPlugin = definePlugin({
   displayName: 'LLM (llama.cpp)',
   addonPackage: ADDON_LLM,
   loadConfigSchema: llmConfigBaseSchema,
+  fitRequest: llmFitRequest,
   assessFit: LlmLlamacpp.assessFit,
 
   async resolveConfig(cfg: LlmConfigInput, ctx: ResolveContext) {
@@ -156,6 +162,12 @@ export const llmPlugin = definePlugin({
   },
 
   handlers: {
+    calcTokens: defineHandler({
+      requestSchema: calcTokensRequestSchema,
+      responseSchema: calcTokensResponseSchema,
+      streaming: false,
+      handler: calcTokens
+    }),
     batchCompletionStream: defineHandler({
       requestSchema: batchCompletionStreamRequestSchema,
       responseSchema: batchCompletionStreamResponseSchema,
@@ -163,7 +175,7 @@ export const llmPlugin = definePlugin({
       // Request-scope: a model-wide cancel would kill concurrent batching peers.
       cancel: { scope: 'request', hard: true },
 
-      handler: async function* (request) {
+      handler: async function* (request, _inputStream, context) {
         const dialect = request.toolDialect ?? detectToolDialect(request.modelId)
         const modelCfg = getModelConfig(request.modelId)
         const toolsActive = (modelCfg as { tools?: boolean }).tools === true
@@ -171,7 +183,7 @@ export const llmPlugin = definePlugin({
         // includes whatever an earlier `tool_search` loaded.
         const toolsByPosition = request.prompts.map(
           (prompt) =>
-            resolveDeferredTools(prompt.tools, prompt.history)?.toolsToRender ??
+            resolveDeferredTools(prompt.tools, prompt.history, prompt.toolSearch)?.toolsToRender ??
             prompt.tools?.map(toWireTool) ??
             []
         )
@@ -206,6 +218,8 @@ export const llmPlugin = definePlugin({
         const parallel = getModelParallel(modelCfg as { parallel?: number })
         await using ctx = await getRequestRegistry().begin({
           requestId: request.requestId ?? generateRandomRequestId(),
+          sessionId: request.sessionId,
+          ...requestParent(context),
           kind: 'batchCompletion',
           modelId: request.modelId,
           maxConcurrentPerModel: parallel
@@ -345,7 +359,7 @@ export const llmPlugin = definePlugin({
       // Request-scope: a model-wide cancel would kill concurrent batching peers.
       cancel: { scope: 'request', hard: true },
 
-      handler: async function* (request) {
+      handler: async function* (request, _inputStream, context) {
         const filteredHistory = request.history.map((message) => ({
           ...message,
           attachments: message.attachments ?? []
@@ -382,6 +396,8 @@ export const llmPlugin = definePlugin({
         const parallel = getModelParallel(modelCfg as { parallel?: number })
         await using ctx = await getRequestRegistry().begin({
           requestId: request.requestId ?? generateRandomRequestId(),
+          sessionId: request.sessionId,
+          ...requestParent(context),
           kind: 'completion',
           modelId: request.modelId,
           maxConcurrentPerModel: parallel
@@ -410,7 +426,9 @@ export const llmPlugin = definePlugin({
             modelId: request.modelId,
             kvCache: request.kvCache,
             prefill: request.prefill,
+            seedFrom: request.seedFrom,
             ...(toolsActive && request.tools && { tools: request.tools }),
+            ...(request.toolSearch && { toolSearch: request.toolSearch }),
             ...(request.generationParams && { generationParams: request.generationParams }),
             ...(toolsActive && { toolDialect: dialect }),
             ...(request.responseFormat && { responseFormat: request.responseFormat })
@@ -436,7 +454,8 @@ export const llmPlugin = definePlugin({
             result = await stream.next()
           }
 
-          const { modelExecutionMs, stats, toolCalls, stoppedAtContextBoundary } = result.value
+          const { modelExecutionMs, stats, toolCalls, stoppedAtContextBoundary, stopReason } =
+            result.value
           // Cancellation rides the done path: observable via the last event's
           // stopReason; client aggregates reject with InferenceCancelledError.
           const cancelled = ctx.signal.aborted
@@ -455,6 +474,7 @@ export const llmPlugin = definePlugin({
           const terminalEvents = normalizer.finish({
             ...(stats && { stats }),
             ...(toolCalls.length > 0 && { toolCalls }),
+            ...(stopReason && { stopReason }),
             ...(cancelled && { stopReason: 'cancelled' as const }),
             ...(lengthStop && { stopReason: 'length' as const })
           })
@@ -521,8 +541,8 @@ export const llmPlugin = definePlugin({
       // registry.
       cancel: { scope: 'model', hard: true },
 
-      handler: function (request) {
-        return finetune(request)
+      handler: function (request, _inputStream, context) {
+        return finetune(request, undefined, context)
       }
     }),
 
@@ -533,8 +553,8 @@ export const llmPlugin = definePlugin({
       // LLM translate cancels its own run (request-scoped), like completion.
       cancel: { scope: 'request', hard: true },
 
-      handler: async function* (request) {
-        const stream = translate(request, request.requestId)
+      handler: async function* (request, _inputStream, context) {
+        const stream = translate(request, request.requestId, request.sessionId, context)
         try {
           let result = await stream.next()
 

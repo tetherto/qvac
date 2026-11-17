@@ -13,9 +13,9 @@ CMake-template adoption. Bounded Linux CI coverage exists for
 fronts, the `asr-ggml` s16le PCM decoder, the `bci-whispercpp`
 neural-signal parser, the `embed-llamacpp` main-gpu config parsers, the
 `diffusion-cpp` GGUF video-capability inspector, the `llm-llamacpp`
-stop-string and log sanitizers, the `vla-ggml` safetensors header parser, and
-the `translation-nmtcpp` weight-header parsers. Fleet corpus/dictionary
-scale-up, scheduled continuous fuzzing, and
+stop-string and log sanitizers, the `vla-ggml` safetensors header parser,
+the `translation-nmtcpp` weight-header parsers, and the `ocr-ggml` image
+decoder. Fleet corpus/dictionary scale-up, scheduled continuous fuzzing, and
 optional OSS-Fuzz onboarding remain future phases. Chosen framework: **Google FuzzTest** (backed by
 libFuzzer).
 
@@ -146,9 +146,9 @@ Two consequences for fuzzing, both important:
 - The monorepo pins **clang-22 / libc++** centrally in
   `.github/actions/setup-llvm` (the single source of truth for the LLVM major).
   libFuzzer ships with that clang, so no new compiler is required.
-- C++ tests run through per-package reusable workflows (e.g.
-  `cpp-tests-classification.yml`, invoked from `on-pr-classification-ggml.yml`)
-  on self-hosted `qvac-*` runners, gated by the SHA-bound fork-CI trust policy.
+- C++ tests run on self-hosted `qvac-*` runners, gated by the SHA-bound fork-CI
+  trust policy, through each package's `cpp:build`/`cpp:tests` targets in
+  `_cpp-tests.yml` (e.g. `classification-ggml`).
 - Builds are CMake + vcpkg with existing `BUILD_TESTING` and `ENABLE_COVERAGE`
   options — a `BUILD_FUZZING` option added to `qvac_addon_preproject` follows the
   same established pattern, mapping a `fuzz` vcpkg manifest feature the way
@@ -616,6 +616,9 @@ families that protect several addons at once.
   `build-fuzz/` tree (`test/fuzz/vcpkg.json`) so FuzzTest's
   ASan Abseil never shares a prefix with production `abseil@onnxruntime#1` and
   the coverage artefacts in `build/` are left alone.
+  **`ocr-ggml` decodeOrWrapImage: done.** OpenCV only, no `LINK_FABRIC`
+  (full ASan + LSan). The shared `cpp-tests-nx.yml` job runs the bounded fuzz scripts after
+  the existing C++ tests.
 - **Phase 2 — text + audio + config families.** Add targets for the llama.cpp /
   NMT text parsers, the whisper/parakeet/tts audio buffer math, and the config
   JSON parsers. Code behind engine state lands with (or after) that addon's
@@ -637,7 +640,7 @@ families that protect several addons at once.
 - **Phase 5 — CI wiring.** Run fuzz targets *bounded* inside the existing
   `cpp-tests-*` workflows (free per-PR regression coverage). **Landed for
   `classification-ggml`:** on **Linux** (matching the `if(NOT WIN32)` ASan gate)
-  `cpp-tests-classification.yml` runs a **single** configure of the `build/`
+  its `linux-x64` `cpp:build` configuration runs a **single** configure of the `build/`
   tree (`test:cpp:fuzz:configure`) so the CMake cost is paid once for both
   `addon-test` and the bounded fuzz target (sharing the vcpkg GoogleTest)
   instead of configuring two trees. Build and run are then **split per target
@@ -800,8 +803,8 @@ families that protect several addons at once.
   needed).
 - `packages/ocr-ggml/addon/src/model-interface/easyocr/gguf_loader.cpp` —
   reference model-file-header target (the kind that may need `LINK_FABRIC`).
-- `.github/workflows/cpp-tests-classification.yml` — reusable per-package C++
-  test workflow; on Linux does one configure then builds and runs each target in
+- `packages/classification-ggml/project.json` — `cpp:build`/`cpp:tests`
+  configurations; on Linux one configure, then builds and runs each target in
   turn, unit tests before fuzz, while darwin/win32 keep the `test:cpp` unit-only
   path.
 - `.github/AGENTS.md` — CI trust policy for fork PRs

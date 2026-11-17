@@ -29,10 +29,14 @@ from . import (
     BciTranscribeResponse,
     BciTranscribeStreamRequest,
     BciTranscribeStreamResponse,
+    CalcTokensRequest,
+    CalcTokensResponse,
     CancelRequest,
     CancelResponse,
     ClassifyRequest,
     ClassifyResponse,
+    CloseSessionRequest,
+    CloseSessionResponse,
     CompletionOrchestrateRequest,
     CompletionOrchestrateResponse,
     CompletionStreamRequest,
@@ -47,6 +51,8 @@ from . import (
     DiscoverRpcServersResponse,
     DownloadAssetRequest,
     DownloadAssetResponse,
+    EmbedBatchRequest,
+    EmbedBatchResponse,
     EmbedRequest,
     EmbedResponse,
     FinetuneProgressResponse,
@@ -73,6 +79,8 @@ from . import (
     ModelRegistrySearchResponse,
     OcrStreamRequest,
     OcrStreamResponse,
+    OpenSessionRequest,
+    OpenSessionResponse,
     PluginInvokeRequest,
     PluginInvokeResponse,
     PluginInvokeStreamRequest,
@@ -172,6 +180,13 @@ async def bci_transcribe_stream(
         yield BciTranscribeStreamResponse.model_validate(chunk)
 
 
+async def calc_tokens(
+    transport: Transport, params: CalcTokensRequest
+) -> CalcTokensResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return CalcTokensResponse.model_validate(await transport.call(payload))
+
+
 async def cancel(transport: Transport, params: CancelRequest) -> CancelResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     return CancelResponse.model_validate(await transport.call(payload))
@@ -183,6 +198,13 @@ async def classify(
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     async for chunk in transport.call_stream(payload):
         yield ClassifyResponse.model_validate(chunk)
+
+
+async def close_session(
+    transport: Transport, params: CloseSessionRequest
+) -> CloseSessionResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return CloseSessionResponse.model_validate(await transport.call(payload))
 
 
 async def completion_orchestrate(
@@ -255,6 +277,13 @@ async def download_asset_with_progress(
 async def embed(transport: Transport, params: EmbedRequest) -> EmbedResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     return EmbedResponse.model_validate(await transport.call(payload))
+
+
+async def embed_batch(
+    transport: Transport, params: EmbedBatchRequest
+) -> EmbedBatchResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return EmbedBatchResponse.model_validate(await transport.call(payload))
 
 
 async def finetune(transport: Transport, params: FinetuneRequest) -> FinetuneResponse:
@@ -366,6 +395,13 @@ async def ocr_stream(
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     async for chunk in transport.call_stream(payload):
         yield OcrStreamResponse.model_validate(chunk)
+
+
+async def open_session(
+    transport: Transport, params: OpenSessionRequest
+) -> OpenSessionResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return OpenSessionResponse.model_validate(await transport.call(payload))
 
 
 async def plugin_invoke(
@@ -533,8 +569,10 @@ __all__ = [
     "batch_completion_stream",
     "bci_transcribe",
     "bci_transcribe_stream",
+    "calc_tokens",
     "cancel",
     "classify",
+    "close_session",
     "completion_orchestrate",
     "completion_stream",
     "decide",
@@ -544,6 +582,7 @@ __all__ = [
     "download_asset",
     "download_asset_with_progress",
     "embed",
+    "embed_batch",
     "finetune",
     "finetune_with_progress",
     "get_loaded_model_info",
@@ -557,6 +596,7 @@ __all__ = [
     "model_registry_list",
     "model_registry_search",
     "ocr_stream",
+    "open_session",
     "plugin_invoke",
     "plugin_invoke_stream",
     "rag",

@@ -11,11 +11,9 @@ export interface MissingPrebuildIssue {
   message: string
   packageRoot: string
   /**
-   * The per-platform package to declare for this mobile host, at the exact
-   * version it must be installed at. Set when the addon's `#host-addon` map
-   * names one and it is either not installed or installed at another version.
-   * Never set for desktop hosts, whose platform packages install as the
-   * addon's os/cpu-filtered optionalDependencies.
+   * The per-platform package to declare for this host, at the exact version
+   * it must be installed at. Set when the addon's `#host-addon` map names one
+   * and it is either not installed or installed at another version.
    */
   platformPackage?: PlatformPackagePin
 }
@@ -151,8 +149,7 @@ export async function checkPrebuilds(
       message: describeMissingPrebuild(addon, host, locations, platformPackage, platformLocation)
     }
     const needsPin =
-      isMobileHost(host) &&
-      (platformLocation === undefined || platformLocation.mismatchedVersion !== undefined)
+      platformLocation === undefined || platformLocation.mismatchedVersion !== undefined
     if (platformPackage !== null && addon.version !== undefined && needsPin) {
       issue.platformPackage = { name: platformPackage, version: addon.version }
     }

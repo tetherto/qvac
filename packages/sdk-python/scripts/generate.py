@@ -343,21 +343,22 @@ def run_datamodel_codegen(output_dir: Path) -> None:
 
 
 def preserve_forbidden_fields(output_dir: Path) -> None:
-    """Keep removed properties out of generated constructors.
+    """Keep forbidden properties out of generated constructors.
 
-    The generator currently turns `not: {}` into Any. Record those names for
-    the base validator instead, without changing how other unknown keys work.
+    The generator turns `not: {}` into Any, including removed fields and
+    fields excluded from a union arm. Record those names for the base
+    validator without changing how other unknown keys work.
     """
     forbidden_by_title: dict[str, dict[str, str]] = {}
 
     def visit(node: Any) -> None:
         if isinstance(node, dict):
             forbidden = {
-                key: prop.get("description", "This field is no longer supported.")
+                key: prop.get(
+                    "description", "This field is not allowed in this request shape."
+                )
                 for key, prop in node.get("properties", {}).items()
-                if isinstance(prop, dict)
-                and prop.get("not") == {}
-                and prop.get("deprecated") is True
+                if isinstance(prop, dict) and prop.get("not") == {}
             }
             if forbidden:
                 title = node.get("title")

@@ -1,0 +1,75 @@
+name: "Setup XDNA toolchain (XRT + IRON)"
+description: >-
+  Validates the runner-provisioned AMD XRT installation and installs an IRON
+  (mlir-aie + llvm-aie) Python venv for compiling the XDNA backend and NPU
+  kernels. No NPU is required on the runner (compile-only).
+
+inputs:
+  mlir-aie-version:
+    description: "mlir-aie (IRON) release; its requirement files pin llvm-aie and eudsl"
+    required: false
+    default: "1.4.3"
+
+runs:
+  using: composite
+  steps:
+    - name: Verify provisioned XRT
+      shell: bash
+      run: |
+        set -euo pipefail
+        root="${XILINX_XRT:-/opt/xilinx/xrt}"
+        for f in share/cmake/XRT/xrt-config.cmake share/cmake/AIEBU/aiebu-config.cmake bin/xclbinutil lib/libxrt_coreutil.so.2; do
+          if [ ! -e "$root/$f" ]; then
+            echo "::error::$root/$f missing; provision the builder with XRT 2.25 or newer (base, base-dev and npu packages)"
+            exit 1
+          fi
+        done
+        grep -m1 '^set(XRT_VERSION' "$root/share/cmake/XRT/xrt-config.cmake"
+        "$root/bin/xclbinutil" --version
+        echo "XILINX_XRT=$root" >> "$GITHUB_ENV"
+
+    - name: Setup Python for IRON
+      id: python
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+      with:
+        python-version: "3.12"
+        # The hosted-toolcache Python needs its lib directory in
+        # LD_LIBRARY_PATH, including when invoked by its absolute path.
+        update-environment: true
+
+    - name: Create IRON venv
+      shell: bash
+      env:
+        PYTHON: ${{ steps.python.outputs.python-path }}
+        MLIR_AIE_VERSION: ${{ inputs.mlir-aie-version }}
+      run: |
+        set -euo pipefail
+        venv="$RUNNER_TEMP/iron-env"
+        "$PYTHON" -m venv "$venv"
+        py="$venv/bin/python"
+        "$py" -m pip install -q --upgrade pip
+        base="https://raw.githubusercontent.com/Xilinx/mlir-aie/v${MLIR_AIE_VERSION}"
+        curl -fsSL "$base/python/requirements.txt" -o "$RUNNER_TEMP/mlir-aie-requirements.txt"
+        curl -fsSL "$base/utils/peano-requirements.txt" -o "$RUNNER_TEMP/peano-requirements.txt"
+        "$py" -m pip install -q -r "$RUNNER_TEMP/mlir-aie-requirements.txt"
+        "$py" -m pip install -q -r "$RUNNER_TEMP/peano-requirements.txt"
+        "$py" -m pip install -q "mlir_aie==${MLIR_AIE_VERSION}" \
+          -f "https://github.com/Xilinx/mlir-aie/releases/expanded_assets/v${MLIR_AIE_VERSION}/"
+        # The wheel installs the aie package under mlir_aie/python, which is
+        # not on sys.path by itself.
+        site="$("$py" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+        echo "$site/mlir_aie/python" > "$site/mlir-aie.pth"
+        "$py" -c "import aie.iron, aie.helpers.taplib, aie.iron.kernels"
+        "$py" -m pip list 2>/dev/null | grep -i -E '^(mlir.aie|llvm.aie) '
+        echo "QVAC_XDNA_IRON_PYTHON=$py" >> "$GITHUB_ENV"
+        echo "QVAC_XDNA_IRON_VERSION=$MLIR_AIE_VERSION" >> "$GITHUB_ENV"
+
+    - name: Export XRT environment
+      shell: bash
+      run: |
+        # Merge, not assign: setup-cuda and setup-rocm set the same var.
+        keep="XILINX_XRT;QVAC_XDNA_IRON_PYTHON;QVAC_XDNA_IRON_VERSION"
+        if [ -n "${VCPKG_KEEP_ENV_VARS:-}" ]; then
+          keep="${VCPKG_KEEP_ENV_VARS%;};${keep}"
+        fi
+        echo "VCPKG_KEEP_ENV_VARS=$keep" >> "$GITHUB_ENV"

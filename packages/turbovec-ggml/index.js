@@ -143,8 +143,8 @@ class IdMapIndex {
             throw new TypeError('IdMapIndex: dim must be a positive int32');
         }
         const storage = normalizeStorageOptions(options);
-        if (storage.startsWith('turbovec-') && (dim > 1_024 || dim % 8 !== 0)) {
-            throw new RangeError('IdMapIndex: TurboVec dim must be divisible by 8 and no greater than 1024');
+        if (storage.startsWith('turbovec-') && (dim > 16_384 || dim % 8 !== 0)) {
+            throw new RangeError('IdMapIndex: TurboVec dim must be divisible by 8 and no greater than 16384');
         }
         this[HANDLE] = loadBinding().idx_create({ dim, storage });
     }
@@ -313,9 +313,10 @@ class IdMapIndex {
         loadBinding().idx_prepare(ensureHandle(this));
     }
     /**
-     * Persist a checksummed v2 snapshot for f32/q4/q8 or v3 for TurboVec.
-     * Delta-bound handles must use `compactDelta()`. A NotDurable error means
-     * replacement succeeded but parent-directory durability was not confirmed.
+     * Persist a checksummed v2 snapshot for f32/q4/q8, or a v8 snapshot for
+     * TurboVec (v3 for an index loaded from a v3 snapshot). Delta-bound handles
+     * must use `compactDelta()`. A NotDurable error means replacement succeeded
+     * but parent-directory durability was not confirmed.
      */
     write(path) {
         requireNonEmptyPath(path, 'write: path');
@@ -348,6 +349,37 @@ class IdMapIndex {
     /** Effective storage bit width. */
     get bitWidth() {
         return loadBinding().idx_bit_width(ensureHandle(this));
+    }
+    /**
+     * Whether a TurboVec index holds a TQ+ calibration. A fresh TurboVec index
+     * calibrates from its first `addWithIds()` batch when that batch has at
+     * least 1,000 rows; other storages are never calibrated.
+     */
+    get calibrated() {
+        return loadBinding().idx_calibrated(ensureHandle(this));
+    }
+    /**
+     * Whether staged search is turned on. Off for every new or loaded index.
+     * Reports the setting, not whether a search runs in stages: see
+     * `setStagedSearch()`.
+     */
+    get stagedSearch() {
+        return loadBinding().idx_staged(ensureHandle(this));
+    }
+    /**
+     * Turn TurboVec staged search on or off. On, a search of 32,768 or more
+     * vectors scans a compressed form first and scores only a shortlist: several
+     * times faster per query, but it can miss some of the best matches,
+     * especially at small k. It applies only at a dimension divisible by 32, on
+     * hosts that support it, and never to an index loaded from a v3 snapshot;
+     * elsewhere the setting is kept but every search scans in full. Throws for
+     * non-TurboVec storage. Not saved in snapshots.
+     */
+    setStagedSearch(enabled) {
+        if (typeof enabled !== 'boolean') {
+            throw new TypeError('setStagedSearch: enabled must be a boolean');
+        }
+        loadBinding().idx_set_staged(ensureHandle(this), enabled);
     }
     /** Release filters and native index resources. This operation is idempotent. */
     dispose() {

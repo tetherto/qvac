@@ -1,7 +1,9 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
-import { unlink } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, unlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   openaiToolsToSdk,
   extractResponseFormat,
@@ -10,7 +12,8 @@ import {
   extractGenerationParams,
   extractToolChoice,
   withToolChoice,
-  InvalidToolChoiceError
+  InvalidToolChoiceError,
+  hoistInstructions
 } from '@/serve/extensions/openai/schemas/common'
 import {
   openaiMessagesToHistory,
@@ -40,8 +43,8 @@ import {
   validateResponsesStatefulOptions,
   normalizeResponsesInputItemsForStorage,
   historyPrefixFromStoredResponse,
-  UnsupportedToolTypeError,
   InvalidResponsesConversationError,
+  InvalidResponsesToolsError,
   InvalidResponsesBackgroundError,
   responsesBody,
   toSdkResponsesArgs
@@ -53,7 +56,91 @@ import {
 } from '@/serve/extensions/openai/schemas/completions'
 import type { VectorStoreMeta } from '@/serve/core/stores/vector-stores'
 
+describe('hoistInstructions', () => {
+  it('leaves a history with one leading system turn as is', () => {
+    const history = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'hi' }
+    ]
+    assert.equal(hoistInstructions(history), history)
+  })
+
+  it('merges developer and later system turns into one leading system turn', () => {
+    assert.deepEqual(
+      hoistInstructions([
+        { role: 'system', content: 'sys' },
+        { role: 'developer', content: 'dev 1' },
+        { role: 'user', content: 'hi' },
+        { role: 'assistant', content: 'hello' },
+        { role: 'developer', content: 'dev 2' },
+        { role: 'system', content: '' },
+        { role: 'user', content: 'next' }
+      ]),
+      [
+        { role: 'system', content: 'sys\n\ndev 1\n\ndev 2' },
+        { role: 'user', content: 'hi' },
+        { role: 'assistant', content: 'hello' },
+        { role: 'user', content: 'next' }
+      ]
+    )
+  })
+
+  it('keeps the attachments of every merged instruction', () => {
+    const [system] = hoistInstructions([
+      { role: 'system', content: 'sys', attachments: [{ path: 'a.png' }] },
+      { role: 'user', content: 'hi' },
+      { role: 'developer', content: 'dev', attachments: [{ path: 'b.png' }] }
+    ])
+    assert.deepEqual(system, {
+      role: 'system',
+      content: 'sys\n\ndev',
+      attachments: [{ path: 'a.png' }, { path: 'b.png' }]
+    })
+  })
+
+  it('turns a lone developer turn into the system turn', () => {
+    assert.deepEqual(
+      hoistInstructions([
+        { role: 'user', content: 'hi' },
+        { role: 'developer', content: 'dev' }
+      ]),
+      [
+        { role: 'system', content: 'dev' },
+        { role: 'user', content: 'hi' }
+      ]
+    )
+  })
+})
+
+// 1x1 transparent PNG, and a JPEG header (enough for the magic-byte check).
+const PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+const JPEG_BASE64 = '/9j/4AAQSkZJRg=='
+const PNG_DATA_URL = `data:image/png;base64,${PNG_BASE64}`
+const JPEG_DATA_URL = `data:image/jpeg;base64,${JPEG_BASE64}`
+
+function interleavedParts(): OpenAIMessage['content'] {
+  return [
+    { type: 'text', text: 'Image A: ' },
+    { type: 'image_url', image_url: { url: PNG_DATA_URL } },
+    { type: 'text', text: '\nImage B: ' },
+    { type: 'image_url', image_url: { url: JPEG_DATA_URL } },
+    { type: 'text', text: '\nWhich one is a photo?' }
+  ]
+}
+
 describe('openaiMessagesToHistory', () => {
+  it('sends developer messages as the leading system turn', () => {
+    const messages: OpenAIMessage[] = [
+      { role: 'developer', content: 'Use the tools.' },
+      { role: 'user', content: 'hello' }
+    ]
+    assert.deepEqual(openaiMessagesToHistory(messages), [
+      { role: 'system', content: 'Use the tools.' },
+      { role: 'user', content: 'hello' }
+    ])
+  })
+
   it('converts simple user/assistant messages', () => {
     const messages: OpenAIMessage[] = [
       { role: 'user', content: 'hello' },
@@ -178,35 +265,49 @@ describe('openaiMessagesToHistory', () => {
     assert.deepEqual(history[0], { role: 'user', content: 'hello world' })
   })
 
-  it('decodes an image_url data URL into image bytes', () => {
-    // 1x1 transparent PNG.
-    const dataUrl =
-      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-    const messages: OpenAIMessage[] = [
+  it('decodes image_url data URLs into ordered media parts', () => {
+    const messages: OpenAIMessage[] = [{ role: 'user', content: interleavedParts() }]
+    assert.deepEqual(openaiMessagesToHistory(messages), [
       {
         role: 'user',
         content: [
-          { type: 'text', text: 'what is this?' },
-          { type: 'image_url', image_url: { url: dataUrl } }
+          { type: 'text', text: 'Image A: ' },
+          { type: 'media', image: { ext: 'png', bytes: Buffer.from(PNG_BASE64, 'base64') } },
+          { type: 'text', text: '\nImage B: ' },
+          { type: 'media', image: { ext: 'jpg', bytes: Buffer.from(JPEG_BASE64, 'base64') } },
+          { type: 'text', text: '\nWhich one is a photo?' }
         ]
       }
-    ]
-    const history = openaiMessagesToHistory(messages)
-    assert.equal(history[0]!.role, 'user')
-    assert.equal(history[0]!.content, 'what is this?')
-    assert.equal(history[0]!.attachments!.length, 1)
-    assert.equal(history[0]!.attachments![0]!.ext, 'png')
-    assert.ok(Buffer.isBuffer(history[0]!.attachments![0]!.bytes))
+    ])
   })
 
   it('accepts a string (data URL) image_url', () => {
-    const dataUrl = 'data:image/jpeg;base64,/9j/4AAQSkZJRg=='
     const messages: OpenAIMessage[] = [
-      { role: 'user', content: [{ type: 'image_url', image_url: dataUrl }] }
+      { role: 'user', content: [{ type: 'image_url', image_url: JPEG_DATA_URL }] }
     ]
     const history = openaiMessagesToHistory(messages)
-    assert.equal(history[0]!.attachments!.length, 1)
-    assert.equal(history[0]!.attachments![0]!.ext, 'jpg')
+    assert.deepEqual(history[0]!.content, [
+      { type: 'media', image: { ext: 'jpg', bytes: Buffer.from(JPEG_BASE64, 'base64') } }
+    ])
+  })
+
+  // The SDK takes content parts on user turns only.
+  it('joins the text and attaches the images on a non-user turn', () => {
+    const messages: OpenAIMessage[] = [
+      { role: 'user', content: 'hello' },
+      { role: 'system', content: interleavedParts() }
+    ]
+    assert.deepEqual(openaiMessagesToHistory(messages), [
+      {
+        role: 'system',
+        content: 'Image A: \nImage B: \nWhich one is a photo?',
+        attachments: [
+          { ext: 'png', bytes: Buffer.from(PNG_BASE64, 'base64') },
+          { ext: 'jpg', bytes: Buffer.from(JPEG_BASE64, 'base64') }
+        ]
+      },
+      { role: 'user', content: 'hello' }
+    ])
   })
 
   // Reviewer ask: an image the server cannot materialize must fail loudly (→ 400) instead of
@@ -244,19 +345,69 @@ describe('openaiMessagesToHistory', () => {
     assert.throws(() => openaiMessagesToHistory(messages), UnsupportedImageContentError)
   })
 
-  it('writeChatImages materializes attachment bytes to flat temp files', async () => {
-    const dataUrl =
-      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+  it('writeChatImages writes each media part to a temp file at its own position', async () => {
+    const messages: OpenAIMessage[] = [{ role: 'user', content: interleavedParts() }]
+    const { history, tmpPaths } = await writeChatImages(openaiMessagesToHistory(messages))
+    try {
+      assert.equal(tmpPaths.length, 2)
+      assert.deepEqual(history, [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Image A: ' },
+            { type: 'media', path: tmpPaths[0] },
+            { type: 'text', text: '\nImage B: ' },
+            { type: 'media', path: tmpPaths[1] },
+            { type: 'text', text: '\nWhich one is a photo?' }
+          ]
+        }
+      ])
+      assert.ok(tmpPaths[0]!.endsWith('.png'))
+      assert.ok(tmpPaths[1]!.endsWith('.jpg'))
+      assert.deepEqual(await readFile(tmpPaths[0]!), Buffer.from(PNG_BASE64, 'base64'))
+      assert.deepEqual(await readFile(tmpPaths[1]!), Buffer.from(JPEG_BASE64, 'base64'))
+    } finally {
+      await Promise.all(tmpPaths.map((path) => unlink(path)))
+    }
+  })
+
+  it('writeChatImages writes the images of a non-user turn as attachments', async () => {
     const messages: OpenAIMessage[] = [
-      { role: 'user', content: [{ type: 'image_url', image_url: { url: dataUrl } }] }
+      { role: 'system', content: [{ type: 'image_url', image_url: { url: PNG_DATA_URL } }] }
     ]
     const { history, tmpPaths } = await writeChatImages(openaiMessagesToHistory(messages))
-    assert.equal(tmpPaths.length, 1)
-    assert.ok(tmpPaths[0]!.endsWith('.png'))
-    assert.ok(existsSync(tmpPaths[0]!))
-    assert.equal(history[0]!.attachments![0]!.path, tmpPaths[0])
-    await unlink(tmpPaths[0]!)
-    assert.ok(!existsSync(tmpPaths[0]!))
+    try {
+      assert.equal(tmpPaths.length, 1)
+      assert.ok(existsSync(tmpPaths[0]!))
+      assert.deepEqual(history, [
+        { role: 'system', content: '', attachments: [{ path: tmpPaths[0] }] }
+      ])
+    } finally {
+      await Promise.all(tmpPaths.map((path) => unlink(path)))
+    }
+  })
+
+  it('writeChatImages removes the files it wrote when a later write fails', async (t) => {
+    const dir = await mkdtemp(join(tmpdir(), 'qvac-chat-images-'))
+    // os.tmpdir() reads TMPDIR on POSIX and TEMP/TMP on Windows.
+    const tmpVars = ['TMPDIR', 'TEMP', 'TMP'] as const
+    const previous = tmpVars.map((name) => process.env[name])
+    for (const name of tmpVars) process.env[name] = dir
+    t.after(async () => {
+      tmpVars.forEach((name, index) => {
+        if (previous[index] === undefined) delete process.env[name]
+        else process.env[name] = previous[index]
+      })
+      await rm(dir, { recursive: true, force: true })
+    })
+
+    const history = openaiMessagesToHistory([{ role: 'user', content: interleavedParts() }])
+    // A path inside a directory that does not exist makes the second write fail.
+    const second = (history[0]!.content as Array<{ type: string; image?: { ext: string } }>)[3]!
+    second.image!.ext = 'jpg/missing'
+
+    await assert.rejects(writeChatImages(history), { code: 'ENOENT' })
+    assert.deepEqual(await readdir(dir), [])
   })
 })
 
@@ -894,6 +1045,21 @@ describe('openaiResponsesInputToHistory', () => {
     ])
   })
 
+  it('merges instructions and developer items into the leading system turn', () => {
+    const h = openaiResponsesInputToHistory(
+      [
+        { type: 'message', role: 'developer', content: [{ type: 'input_text', text: 'dev' }] },
+        { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'a' }] },
+        { type: 'message', role: 'developer', content: [{ type: 'input_text', text: 'later' }] }
+      ],
+      'sys'
+    )
+    assert.deepEqual(h, [
+      { role: 'system', content: 'sys\n\ndev\n\nlater' },
+      { role: 'user', content: 'a' }
+    ])
+  })
+
   it('maps message items', () => {
     const h = openaiResponsesInputToHistory(
       [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'a' }] }],
@@ -957,15 +1123,195 @@ describe('openaiResponsesToolsToSdk', () => {
         parameters: { type: 'object', properties: {} }
       }
     ])
-    assert.ok(t && t.length === 1)
-    assert.equal(t[0]!.name, 'fn')
+    assert.equal(t.tools?.length, 1)
+    assert.equal(t.tools[0]!.name, 'fn')
   })
 
-  it('throws on web_search', () => {
-    assert.throws(
-      () => openaiResponsesToolsToSdk([{ type: 'web_search' }]),
-      UnsupportedToolTypeError
+  it('leaves out built-in tools and reports their types', () => {
+    const t = openaiResponsesToolsToSdk([
+      { type: 'web_search' },
+      { type: 'function', name: 'fn' },
+      { type: 'web_search' }
+    ])
+    assert.deepEqual(
+      t.tools?.map((tool) => tool.name),
+      ['fn']
     )
+    assert.deepEqual(t.skippedTypes, ['web_search'])
+    assert.equal(openaiResponsesToolsToSdk([{ type: 'web_search' }]).tools, undefined)
+  })
+
+  it('flattens namespace tools under qualified names', () => {
+    const t = openaiResponsesToolsToSdk([
+      {
+        type: 'namespace',
+        name: 'mcp__node_repl',
+        tools: [{ type: 'function', name: 'js', description: 'Run JS' }]
+      },
+      {
+        type: 'namespace',
+        name: 'mcp__codex_apps__gmail',
+        tools: [{ type: 'function', name: '_search_emails' }]
+      },
+      { type: 'namespace', name: 'mcp__cua_repl', tools: [{ type: 'function', name: 'js' }] }
+    ])
+    assert.deepEqual(
+      t.tools?.map((tool) => tool.name),
+      ['mcp__node_repl__js', 'mcp__codex_apps__gmail___search_emails', 'mcp__cua_repl__js']
+    )
+    assert.equal(t.tools![0]!.description, 'Run JS')
+    assert.deepEqual(t.namespaces.get('mcp__codex_apps__gmail___search_emails'), {
+      namespace: 'mcp__codex_apps__gmail',
+      name: '_search_emails'
+    })
+  })
+})
+
+describe('openaiResponsesToolsToSdk: name collisions and bad shapes', () => {
+  it('keeps tools whose names differ only by a leading underscore apart', () => {
+    const t = openaiResponsesToolsToSdk([
+      {
+        type: 'namespace',
+        name: 'files',
+        tools: [
+          { type: 'function', name: 'read' },
+          { type: 'function', name: '_read' }
+        ]
+      }
+    ])
+    assert.deepEqual(
+      t.tools?.map((tool) => tool.name),
+      ['files__read', 'files___read']
+    )
+  })
+
+  it('rejects a top-level tool spelled like a qualified name', () => {
+    assert.throws(
+      () =>
+        openaiResponsesToolsToSdk([
+          { type: 'function', name: 'files__read' },
+          { type: 'namespace', name: 'files', tools: [{ type: 'function', name: 'read' }] }
+        ]),
+      InvalidResponsesToolsError
+    )
+  })
+
+  for (const tool of [
+    { type: 'namespace', name: 'files', tools: [null] },
+    { type: 'namespace', name: 'files', tools: {} },
+    { type: 'namespace', tools: [] }
+  ]) {
+    it(`rejects malformed namespace ${JSON.stringify(tool)}`, () => {
+      assert.throws(
+        () =>
+          openaiResponsesToolsToSdk([
+            tool as Parameters<typeof openaiResponsesToolsToSdk>[0] extends
+              Array<infer T> | undefined
+              ? T
+              : never
+          ]),
+        InvalidResponsesToolsError
+      )
+    })
+  }
+})
+
+describe('Responses review follow-ups', () => {
+  it('keeps messages sent without type', () => {
+    const items = [
+      { role: 'developer', content: 'Use the tools.' },
+      { role: 'user', content: 'hello' }
+    ]
+    const expected = [
+      { role: 'system', content: 'Use the tools.' },
+      { role: 'user', content: 'hello' }
+    ]
+    assert.deepEqual(openaiResponsesInputToHistory(items, undefined), expected)
+    assert.deepEqual(
+      historyPrefixFromStoredResponse({
+        inputItems: items,
+        responseObject: { output: [], output_text: '' }
+      }),
+      [
+        { role: 'developer', content: 'Use the tools.' },
+        { role: 'user', content: 'hello' }
+      ]
+    )
+  })
+
+  it('rejects two namespaced tools that would share a qualified name', () => {
+    assert.throws(
+      () =>
+        openaiResponsesToolsToSdk([
+          { type: 'namespace', name: 'a__b', tools: [{ type: 'function', name: 'c' }] },
+          { type: 'namespace', name: 'a', tools: [{ type: 'function', name: 'b__c' }] }
+        ]),
+      InvalidResponsesToolsError
+    )
+  })
+
+  it('keeps defer_loading on top-level and namespaced tools', () => {
+    const t = openaiResponsesToolsToSdk([
+      { type: 'function', name: 'top', defer_loading: true },
+      {
+        type: 'namespace',
+        name: 'files',
+        tools: [
+          { type: 'function', name: 'read', defer_loading: true },
+          { type: 'function', name: 'list' }
+        ]
+      },
+      {
+        type: 'namespace',
+        name: 'mail',
+        defer_loading: true,
+        tools: [{ type: 'function', name: 'send' }]
+      }
+    ])
+    assert.deepEqual(
+      t.tools!.map((tool) => [tool.name, tool.deferLoading]),
+      [
+        ['top', true],
+        ['files__read', true],
+        ['files__list', undefined],
+        ['mail__send', true]
+      ]
+    )
+  })
+
+  it('forces a namespaced tool by its qualified name', () => {
+    const args = toSdkResponsesArgs(
+      responsesBody.parse({
+        model: 'm',
+        input: 'hi',
+        tools: [
+          { type: 'function', name: 'read' },
+          { type: 'namespace', name: 'files', tools: [{ type: 'function', name: 'read' }] }
+        ],
+        tool_choice: { type: 'function', namespace: 'files', name: 'read' }
+      })
+    )
+    assert.equal(args.generationParams?.tool_choice, 'files__read')
+  })
+})
+
+describe('openaiResponsesInputToHistory: namespaced calls', () => {
+  it('replays a namespaced function_call under its qualified name', () => {
+    const h = openaiResponsesInputToHistory(
+      [
+        {
+          type: 'function_call',
+          call_id: 'c1',
+          namespace: 'mcp__node_repl',
+          name: 'js',
+          arguments: '{"code":"1+1"}'
+        },
+        { type: 'function_call_output', call_id: 'c1', output: '2' }
+      ],
+      undefined
+    )
+    assert.equal(h[0]!.toolCalls![0]!.name, 'mcp__node_repl__js')
+    assert.equal(h[1]!.toolName, 'mcp__node_repl__js')
   })
 })
 

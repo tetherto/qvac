@@ -1,4 +1,4 @@
 {
   "title": "Runtime",
-  "pages": ["cancellation", "lifecycle", "logging", "profiler"]
+  "pages": ["cancellation", "lifecycle", "sessions", "logging", "profiler"]
 }

@@ -1,4 +1,4 @@
-import { embed, GTE_LARGE_FP16, loadModel, unloadModel } from '@qvac/sdk'
+import { embed, embedBatch, GTE_LARGE_FP16, loadModel, unloadModel } from '@qvac/sdk'
 
 function cosineSimilarity(vecA: number[], vecB: number[]) {
   let dotProduct = 0
@@ -44,7 +44,7 @@ try {
     'Python is a programming language'
   ]
 
-  const { embedding: batchEmbeddings } = await embed({ modelId, text: texts })
+  const { embedding: batchEmbeddings } = await embedBatch({ modelId, inputs: texts })
 
   console.log('Input: Array of', texts.length, 'texts')
   console.log('Output: Array of', batchEmbeddings.length, 'embeddings')

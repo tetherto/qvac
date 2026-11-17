@@ -11,7 +11,9 @@ import {
   loggingStream,
   SDK_LOG_ID,
   cancel,
+  calcTokens,
   classify,
+  close,
   completion,
   createVectorIndex,
   deleteCache,
@@ -50,10 +52,12 @@ import {
   worldCreateScene,
   worldStep,
   AUDIOGEN_INPUT_SAMPLE_RATE,
-  AUDIOGEN_INPUT_CHANNELS
+  AUDIOGEN_INPUT_CHANNELS,
+  type VectorIndexIvfSettings
 } from '@qvac/sdk'
 import { StepIncompleteError, type CollectMode, type StepBindings } from '@qvac/test-suite'
 import type { ResourceManager } from './resource-manager.js'
+import { unitVectors, cosineAtLeast, moreSimilarThan } from './vector-checks.js'
 import { decodeWavToMonoF32, f32ToLeBytes } from './wav-pcm.js'
 
 /** How the shared step interpreter reaches this SDK. */
@@ -64,6 +68,7 @@ const CALLS: Record<string, (params: never) => Promise<unknown>> = {
   embed: (params) => embed(params),
   classify: async (params) => ({ results: await classify(params) }),
   rerank: async (params) => ({ scores: await rerank(params) }),
+  calcTokens: (params) => calcTokens(params),
   /**
    * One transcription, bound under the name that says what came back: `metadata` swaps the flat
    * transcript for per-segment records, so a body that projected `text` off a metadata run would be
@@ -130,6 +135,10 @@ const CALLS: Record<string, (params: never) => Promise<unknown>> = {
     return { resumed: true }
   },
   state: async () => ({ state: await state() }),
+  close: async () => {
+    await close()
+    return { closed: true }
+  },
 
   // --- rag and vector index ------------------------------------------------
   ragIngest: (params) => ragIngest(params),
@@ -147,17 +156,47 @@ const CALLS: Record<string, (params: never) => Promise<unknown>> = {
   loadVectorIndex: async (params) => describeIndex(await loadVectorIndex(params)),
   vectorIndexAdd: async (params: never) => {
     const p = params as { indexId: string; ids: unknown[]; vectors: number[][] }
-    return await vectorIndex(p.indexId).add({ ids: p.ids as never, vectors: p.vectors })
+    const index = vectorIndex(p.indexId)
+    const added = await index.add({ ids: p.ids as never, vectors: p.vectors })
+    // The wire response carries the post-add state; the handle keeps it off the method result.
+    return {
+      ...added,
+      calibrated: index.calibrated,
+      stagedSearch: index.stagedSearch,
+      ivf: index.ivf
+    }
+  },
+  vectorIndexSetStagedSearch: async (params: never) => {
+    const p = params as { indexId: string; enabled: boolean }
+    return await vectorIndex(p.indexId).setStagedSearch({ enabled: p.enabled })
+  },
+  vectorIndexSetIvf: async (params: never) => {
+    const p = params as { indexId: string; ivf: VectorIndexIvfSettings | null }
+    return await vectorIndex(p.indexId).setIvf(p.ivf)
   },
   vectorIndexSearch: async (params: never) => {
-    const p = params as { indexId: string; query: number[]; k: number }
-    return { results: await vectorIndex(p.indexId).search({ query: p.query, k: p.k }) }
+    const p = params as { indexId: string; query: number[]; k: number; nProbe?: number }
+    const index = vectorIndex(p.indexId)
+    return {
+      results: await index.search({
+        query: p.query,
+        k: p.k,
+        ...(p.nProbe !== undefined && { nProbe: p.nProbe })
+      })
+    }
   },
   vectorIndexRemove: async (params: never) => {
     const p = params as { indexId: string; ids: unknown[] }
     const index = vectorIndex(p.indexId)
     const removed = await index.remove({ ids: p.ids as never })
-    return { removed, length: index.length }
+    // Like add, the post-remove state lives on the handle, not the method result.
+    return {
+      removed,
+      length: index.length,
+      calibrated: index.calibrated,
+      stagedSearch: index.stagedSearch,
+      ivf: index.ivf
+    }
   },
   vectorIndexContains: async (params: never) => {
     const p = params as { indexId: string; ids: unknown[] }
@@ -401,10 +440,13 @@ const STREAMS: Record<string, Fold> = {
       // completion is the expensive part, and "how did it stop" and "what did it cost" are
       // questions about the run that just happened, not reasons to run it again.
       // A streaming run's text is read off the token stream, so a stream that yields nothing fails.
-      const streamed = p.stream ? joinStream(run.tokenStream) : undefined
-      const final = await run.final
+      // Await both: a failed run rejects each, and an unhandled rejection kills a Node consumer.
+      const [streamed, final] = await Promise.all([
+        p.stream ? joinStream(run.tokenStream) : undefined,
+        run.final
+      ])
       return {
-        text: streamed ? await streamed : await run.text,
+        text: streamed ?? (await run.text),
         toolCalls: (await run.toolCalls) ?? [],
         stats: final.stats,
         stopReason: final.stopReason,
@@ -758,7 +800,15 @@ const VECTOR_INDEXES = new Map<string, Awaited<ReturnType<typeof createVectorInd
 
 const describeIndex = (index: Awaited<ReturnType<typeof createVectorIndex>>) => {
   VECTOR_INDEXES.set(index.indexId, index)
-  return { indexId: index.indexId, dim: index.dim, storage: index.storage, length: index.length }
+  return {
+    indexId: index.indexId,
+    dim: index.dim,
+    storage: index.storage,
+    length: index.length,
+    calibrated: index.calibrated,
+    stagedSearch: index.stagedSearch,
+    ivf: index.ivf
+  }
 }
 
 const vectorIndex = (indexId: string) => {
@@ -862,6 +912,10 @@ const COMPARISONS: Record<
     output: string
   }
 > = {
+  /** The cosine similarity of the two vectors is at least `min`. */
+  cosineAtLeast,
+  /** The left vector is strictly closer by cosine to the right one than to `than`. */
+  moreSimilarThan,
   prefillReuse(left, right, args) {
     const [cold, warm, primed] = [Number(left), Number(right), Number(args.primedTokens)]
     const passed =
@@ -978,6 +1032,8 @@ const ASSERTIONS: Record<
   string,
   (value: unknown, args: Record<string, unknown>) => { passed: boolean; output: string }
 > = {
+  /** Each vector has the expected size and unit norm; a bare vector is one. */
+  unitVectors,
   /** The collection has exactly the expected number of elements. */
   lengthIs(value, args) {
     if (!Array.isArray(value)) {
@@ -2011,6 +2067,12 @@ export function createStepBindings(resources: ResourceManager): StepBindings {
       if (method === 'evictResource') {
         await resources.evict(String((params as { dep: string }).dep))
         return { evicted: true }
+      }
+      /** Closing the SDK drops every loaded model, so the resource manager forgets them too. */
+      if (method === 'close') {
+        await close()
+        resources.forgetAll()
+        return { closed: true }
       }
       /** A fresh directory the test may write into, and a look at what landed there. */
       if (method === 'scratchDirectory') {

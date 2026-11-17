@@ -142,7 +142,9 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-inspector
   bare-lief@0.2.7
     https://github.com/holepunchto/bare-lief
-  bare-link@3.0.1
+  bare-link@4.0.1
+    https://github.com/holepunchto/bare-link
+  bare-link@4.1.0
     https://github.com/holepunchto/bare-link
   bare-mime@1.0.0
     https://github.com/holepunchto/bare-mime
@@ -154,11 +156,13 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-module-resolve
   bare-module-traverse@2.5.6
     https://github.com/holepunchto/bare-module-traverse
+  bare-module-traverse@2.7.1
+    https://github.com/holepunchto/bare-module-traverse
   bare-net@2.3.3
     https://github.com/holepunchto/bare-net
   bare-os@3.9.3
     https://github.com/holepunchto/bare-os
-  bare-pack@2.2.2
+  bare-pack@3.0.0
     https://github.com/holepunchto/bare-pack
   bare-path@3.1.2
     https://github.com/holepunchto/bare-path
@@ -170,20 +174,28 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-posix
   bare-process@4.5.1
     https://github.com/holepunchto/bare-process
-  bare-rpc@1.3.8
+  bare-rpc@1.3.9
     https://github.com/holepunchto/bare-rpc
-  bare-runtime@1.33.4
-    https://github.com/holepunchto/bare-runtime
-  bare-runtime-darwin-arm64@1.33.4
-    https://github.com/holepunchto/bare-runtime
   bare-semver@1.1.0
     https://github.com/holepunchto/bare-semver
+  bare-sidecar@0.5.13
+    https://github.com/holepunchto/bare-sidecar
   bare-signals@4.2.0
     https://github.com/holepunchto/bare-signals
   bare-signals@5.0.0
     https://github.com/holepunchto/bare-signals
   bare-stdio@1.0.3
     https://github.com/holepunchto/bare-stdio
+  bare-stow@0.2.0
+    https://github.com/holepunchto/bare-stow
+  bare-stow-host@0.1.0
+    https://github.com/holepunchto/bare-stow-host
+  bare-stow-protocol@0.1.0
+    https://github.com/holepunchto/bare-stow-protocol
+  bare-stow-runtime@0.1.0
+    https://github.com/holepunchto/bare-stow-runtime
+  bare-stow-target-react-native@0.2.0
+    https://github.com/holepunchto/bare-stow-target-react-native
   bare-stream@2.13.4
     https://github.com/holepunchto/bare-stream
   bare-structured-clone@1.6.0
@@ -204,6 +216,8 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-type
   bare-type-stripper@0.1.7
     https://github.com/holepunchto/bare-type-stripper
+  bare-unpack@1.1.4
+    https://github.com/holepunchto/bare-unpack
   bare-url@2.5.4
     https://github.com/holepunchto/bare-url
   bare-utils@1.6.0
@@ -291,8 +305,6 @@ JavaScript Dependencies
     https://github.com/holepunchto/rabin-stream
   rache@1.0.0
     https://github.com/holepunchto/rache
-  react-native-bare-kit@0.15.1
-    https://github.com/holepunchto/react-native-bare-kit
   refcounter@1.0.0
     https://github.com/holepunchto/refcounter
   require-addon@1.3.0

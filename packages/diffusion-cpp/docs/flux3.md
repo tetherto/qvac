@@ -1,0 +1,99 @@
+# FLUX.3 Image Klein
+
+FLUX.3 uses split diffusion weights, a Qwen3-VL 4B text encoder, and the
+FLUX.2 VAE. The native engine detects the architecture from the weights;
+use `prediction: 'auto'`. No vision projector or external tokenizer is required.
+
+## Backend and build
+
+This integration builds on [QVAC #5550](https://github.com/tetherto/qvac/pull/5550).
+The engine fixes are merged through
+[engine #62](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/62).
+
+[Registry #475](https://github.com/tetherto/qvac-registry-vcpkg/pull/475) is merged;
+the addon resolves ports from `main`. It retains
+baseline `651be7f3023d30fffbe1593b35ba57b39f2ba78b`; explicit minimum versions
+request `2026-11-01` for both GGML and stable-diffusion-cpp.
+The registry pins engine commit
+`29f8fe63dc44c7bd4353dc0a71b4910e4b33e272`, which contains the integer LoRA
+alpha conversion, latent-unit VAE compatibility (including allocation-failure
+retry handling), dedicated-GPU preference during automatic placement, and
+FLUX.3 reference-editing fixes directly in the engine
+source. The port applies no patches.
+
+Rebuild the addon and its paired GGML dependency together using the package's
+[build instructions](../build.md). Previously published `0.33.0` binaries do
+not establish support for this engine. From this package directory, run
+`npm run build` (or `npm run build:cuda` for a CUDA build) after installing
+the repository dependencies and platform build tools.
+
+## Download
+
+Accept the [FLUX.3 model access terms](https://huggingface.co/black-forest-labs/flux-3-image-klein)
+and export `HF_TOKEN` with read access, then run from `packages/diffusion-cpp`:
+
+```bash
+bash scripts/download-model-flux3.sh
+```
+
+`FLUX3_MODELS_DIR` overrides the default `models/flux3` directory. The script
+pins repository revisions and verifies SHA-256 before promoting `.part` files.
+It resumes interrupted transfers and reuses verified files, including the VAE
+without a token when already cached. Invalid partial downloads are removed so
+the next run can retry. Downloaded weights retain their source licenses.
+
+| File                              | Source                                                                                                                               |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `flux3-image-klein-Q8_0.gguf`     | [leejet FLUX.3 Image Klein](https://huggingface.co/leejet/flux-3-image-klein-GGUF/tree/1c2ad2f9b9247ccca6506a23bdb033fdb0873321)     |
+| `Qwen3VL-4B-Instruct-Q4_K_M.gguf` | [Qwen3-VL 4B](https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/tree/1cd86afb9a95c410a6038ab3b40d8b578c892266)                   |
+| `flux3-vae.safetensors`           | [FLUX.3 `ae.safetensors`](https://huggingface.co/black-forest-labs/flux-3-image-klein/tree/09561231f44e41381c461caf53d5452005a60ac9) |
+
+These files total approximately 9 GB. The downloader fetches the gated VAE
+first to report access failures before downloading the larger public files.
+
+## Generate and edit
+
+```bash
+bare examples/generate-image-flux3.js
+FLUX3_PROMPT='Put the cat in a garden' FLUX3_OUTPUT=flux3-edit.png \
+  bare examples/generate-image-flux3.js flux3.png
+```
+
+The example uses the distilled Klein model with 16 Euler steps, CFG 1,
+the discrete scheduler, seed 42, and explicit 512×512 output dimensions.
+The engine supplies the FLUX.3 time shift. Set `FLUX3_WIDTH`, `FLUX3_HEIGHT`
+(positive multiples of 32), `FLUX3_SEED`, `FLUX3_PROMPT`, and `FLUX3_OUTPUT`
+to override the example defaults. `FLUX3_BACKEND=cuda0` or `vulkan0` selects
+a backend when its module is built and available; otherwise selection is automatic.
+
+Pass up to ten reference image paths as positional arguments. They map to
+`init_images`, which the native model capability routes to reference editing.
+Output dimensions stay explicit instead of inheriting the first reference's size.
+
+For direct API use, pass absolute paths as `files.model`, `files.llm`, and
+`files.vae`, using the filenames above. The existing load and `assessFit` APIs
+share this split-file mapping. This setup targets the distilled model;
+FLUX.3 Image Klein Base requires its own weights and sampling settings.
+
+## Validation
+
+Run the downloader behavior tests without downloading model weights:
+
+```bash
+node --test scripts/download-model-flux3.test.mjs
+```
+
+To check Bash 3.2 compatibility, set `BASH_BIN` to that shell when running
+the downloader tests.
+
+With a rebuilt native package and checksum-verified downloaded weights, run
+the addon integration test for both one-reference and multiple-reference editing:
+
+```bash
+FLUX3_MODELS_DIR="$PWD/models/flux3" FLUX3_BACKEND=cuda0 \
+  bare test/integration/generate-image-flux3-i2i.test.js --exit
+```
+
+The integration test is opt-in: without `FLUX3_MODELS_DIR`, it is skipped.
+It generates one-step 256×256 images to exercise native reference dispatch;
+use the generation example for image-quality checks.

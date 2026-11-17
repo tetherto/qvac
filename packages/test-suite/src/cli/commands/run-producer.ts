@@ -3,7 +3,7 @@ import { config as loadDotenv } from 'dotenv'
 import * as path from 'node:path'
 import { loadConfig } from '../../utils/config-loader.js'
 import { loadTests } from '../../utils/test-loader.js'
-import { selectTests } from '../../utils/test-selection.js'
+import { readTestIds, selectTests } from '../../utils/test-selection.js'
 import { buildMqttConnectionConfig, createMqttClient } from '../../utils/mqtt-connection.js'
 
 interface ProducerOptions {
@@ -16,6 +16,7 @@ interface ProducerOptions {
   suite?: string
   excludeSuite?: string
   include?: string
+  includeFile?: string
   reportDir?: string
 }
 
@@ -46,7 +47,9 @@ export async function runProducer(options: ProducerOptions) {
     if (options.excludeSuite) console.log(`🚫 Excluding suites: ${options.excludeSuite}`)
     if (options.filter) console.log(`🔍 Filtering tests by: ${options.filter}`)
 
-    const selection = selectTests(catalog, options)
+    const fromFile = options.includeFile ? await readTestIds(options.includeFile) : []
+    const include = [options.include ?? '', ...fromFile].filter(Boolean).join(',')
+    const selection = selectTests(catalog, { ...options, include })
     const tests = selection.tests
 
     // A typo would otherwise drop the test and let the run go green, which is

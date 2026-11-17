@@ -7,8 +7,10 @@ background asyncio tasks and dispatches to a caller-supplied logger --
 anything with `error/warning/info/debug` methods, i.e. a stdlib
 `logging.Logger` works directly (the JS `warn` level maps to `warning`).
 
-The registry is module-global keyed by model id, same as the JS client's
-`activeStreams` map.
+The registry is module-global keyed by caller and model id, same as the JS
+client's `activeStreams` map: a session's logger streams through the session's
+transport, so the worker ends the stream when the session closes, and callers
+sharing a model keep their own streams.
 
 Intentional divergence: the JS SDK's top-level `getLogger` facade (a bespoke
 `Logger` with levels, transports, and a namespace cache) is deliberately not
@@ -37,7 +39,12 @@ SDK_ALL_LOG_ID = "__all__"
 
 _logger = _stdlib_logging.getLogger("qvac")
 
-_active_streams: dict[str, asyncio.Task[None]] = {}
+_active_streams: dict[tuple[str | None, str], asyncio.Task[None]] = {}
+
+
+def _stream_key(transport: Any, model_id: str) -> tuple[str | None, str]:
+    # A session transport carries its session id; the owner's carries none.
+    return (getattr(transport, "session_id", None), model_id)
 
 
 def logging_stream(
@@ -67,9 +74,10 @@ def start_logging_stream_for_model(
     transport: Transport, model_id: str, model_logger: Any
 ) -> None:
     """Start pumping the model's worker logs into `model_logger` in a
-    background task. A second start for the same model id warns and no-ops,
-    matching JS."""
-    if model_id in _active_streams:
+    background task. A second start by the same caller for the same model id
+    warns and no-ops, matching JS."""
+    key = _stream_key(transport, model_id)
+    if key in _active_streams:
         _logger.warning("Logging stream already active for model %s", model_id)
         return
 
@@ -82,22 +90,25 @@ def start_logging_stream_for_model(
         except Exception:
             _logger.exception("Logging stream error for model %s", model_id)
         finally:
-            _active_streams.pop(model_id, None)
+            if _active_streams.get(key) is task:
+                _active_streams.pop(key, None)
 
-    _active_streams[model_id] = asyncio.get_running_loop().create_task(pump())
+    task = asyncio.get_running_loop().create_task(pump())
+    _active_streams[key] = task
 
 
-def stop_logging_stream_for_model(model_id: str) -> None:
-    """Stop the model's log pump; closing the iterator ends the server-side
+def stop_logging_stream_for_model(model_id: str, transport: Any = None) -> None:
+    """Stop the log pump the caller behind `transport` (the owner when None)
+    opened for the model; closing the iterator ends the server-side
     generator, same as JS's `streamIterator.return()`."""
-    task = _active_streams.pop(model_id, None)
+    task = _active_streams.pop(_stream_key(transport, model_id), None)
     if task is not None:
         task.cancel()
         _logger.debug("Stopped logging stream for model %s", model_id)
 
 
-def has_active_stream_for_model(model_id: str) -> bool:
-    return model_id in _active_streams
+def has_active_stream_for_model(model_id: str, transport: Any = None) -> bool:
+    return _stream_key(transport, model_id) in _active_streams
 
 
 def subscribe_server_logs(

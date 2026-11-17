@@ -161,9 +161,8 @@ reasoning routed to \`reasoning_content\` (a \`message.reasoning_content\` field
 on blocking responses, \`delta.reasoning_content\` chunks when streaming) so it
 never appears in \`content\`.
 
-**Token accounting**: \`usage.prompt_tokens\` and
-\`prompt_tokens_details.cached_tokens\` come from \`CompletionStats\` when the SDK
-provides them. \`completion_tokens\` prefers \`stats.emittedTokens\` (non-empty
+**Token accounting**: \`usage.prompt_tokens\` comes from \`CompletionStats\`
+when the SDK provides it. \`completion_tokens\` prefers \`stats.emittedTokens\` (non-empty
 addon stream pieces) over \`stats.generatedTokens\` (decode / \`n_eval\` count,
 which inline recovery can inflate toward the \`max_tokens\` / predict budget),
 and falls back to a whitespace split of the output. When streaming, \`usage\`
@@ -271,7 +270,6 @@ async function runBlocking(
         toolCalls,
         completionTokens,
         ...(stats?.promptTokens !== undefined ? { promptTokens: stats.promptTokens } : {}),
-        ...(stats?.cacheTokens !== undefined ? { cachedTokens: stats.cacheTokens } : {}),
         finishReason
       })
     )
@@ -373,8 +371,7 @@ async function runStreaming(
     if (includeUsage) {
       const usage = buildUsage({
         completionTokens,
-        ...(stats?.promptTokens !== undefined ? { promptTokens: stats.promptTokens } : {}),
-        ...(stats?.cacheTokens !== undefined ? { cachedTokens: stats.cacheTokens } : {})
+        ...(stats?.promptTokens !== undefined ? { promptTokens: stats.promptTokens } : {})
       })
       sendSSE(raw, chatCompletionUsageChunk({ id, created, model: p.modelAlias, usage }))
     }
