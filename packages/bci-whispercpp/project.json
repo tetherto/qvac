@@ -100,7 +100,14 @@
     },
     "build": {
       "executor": "nx:run-commands",
-      "dependsOn": [],
+      "dependsOn": [
+        {
+          "projects": [
+            "@qvac/fabric"
+          ],
+          "target": "link:platform"
+        }
+      ],
       "options": {
         "cwd": "packages/bci-whispercpp",
         "parallel": false,
@@ -181,7 +188,7 @@
       },
       "inputs": [
         "default",
-        "!{projectRoot}/prebuilds/**"
+        "{workspaceRoot}/cmake/qvac-addon/**/*"
       ],
       "outputs": [
         "{projectRoot}/prebuilds"
@@ -194,7 +201,7 @@
         "parallel": false,
         "commands": [
           {
-            "command": "node ../../scripts/ci/cpp-lint-changed.mjs --base {args.diff-base} --generate \"pnpm exec bare-make generate -D ENABLE_VULKAN=OFF\"",
+            "command": "node ../../scripts/ci/cpp-lint-changed.mjs --base {args.diff-base} --generate \"pnpm exec bare-make generate\"",
             "forwardAllArgs": false
           }
         ]
@@ -208,7 +215,19 @@
       },
       "metadata": {
         "timeoutMinutes": 120
-      }
+      },
+      "dependsOn": [
+        {
+          "projects": [
+            "@qvac/fabric"
+          ],
+          "target": "link:platform"
+        }
+      ],
+      "inputs": [
+        "default",
+        "{workspaceRoot}/cmake/qvac-addon/**/*"
+      ]
     },
     "cpp:build": {
       "executor": "nx:run-commands",
@@ -229,7 +248,19 @@
             "runner": "linux_ubuntu2204_x64"
           }
         }
-      }
+      },
+      "dependsOn": [
+        {
+          "projects": [
+            "@qvac/fabric"
+          ],
+          "target": "link:platform"
+        }
+      ],
+      "inputs": [
+        "default",
+        "{workspaceRoot}/cmake/qvac-addon/**/*"
+      ]
     },
     "cpp:tests": {
       "executor": "nx:run-commands",

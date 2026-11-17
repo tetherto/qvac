@@ -263,6 +263,10 @@
   "implicitDependencies": [
     "lint-cpp",
     "!@qvac/llm-llamacpp",
-    "!@qvac/embed-llamacpp"
+    "!@qvac/embed-llamacpp",
+    "!@qvac/asr-ggml",
+    "!@qvac/tts-ggml",
+    "!@qvac/audiogen-ggml",
+    "!@qvac/bci-whispercpp"
   ]
 }

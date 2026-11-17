@@ -52,6 +52,17 @@
           ]
         }
       ]
+    },
+    "webgpu": {
+      "description": "Build the shared WebGPU backend for speech and LLM consumers",
+      "dependencies": [
+        {
+          "name": "qvac-fabric",
+          "features": [
+            "webgpu"
+          ]
+        }
+      ]
     }
   }
 }

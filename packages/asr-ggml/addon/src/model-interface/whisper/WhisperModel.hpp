@@ -26,8 +26,9 @@ namespace qvac::asrggml::whisper {
 
 #if defined(__ANDROID__) || defined(__linux__) || defined(_WIN32)
 /**
- * Registers the ggml backends shipped as separate modules. Static builds have
- * nothing to load and do not declare this.
+ * Registers the ggml backends the @qvac/fabric runtime ships as separate
+ * modules. Hosts whose backends are linked into the runtime do not declare
+ * this.
  */
 void ensureBackendsLoaded(const std::string& backendsDir);
 #endif
