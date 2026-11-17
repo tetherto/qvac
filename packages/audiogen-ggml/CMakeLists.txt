@@ -87,7 +87,9 @@ if(BUILD_TESTING)
     ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
   )
   target_link_libraries(audiogen_ggml_tests PRIVATE
-    GTest::gtest_main audiogen-cpp::audiogen-cpp ggml::ggml)
+    GTest::gtest_main audiogen-cpp::audiogen-cpp
+    qvac-fabric::headers ${qvac_fabric_target}_module)
+  qvac_addon_stage_fabric_for_test(audiogen_ggml_tests ${qvac_fabric_target})
 
   add_library(audiogen_acestep_only_options OBJECT
     addon/tests/test_acestep_only_options.cpp)
