@@ -65,6 +65,13 @@ class Stalled {
   }
 }
 
+class Redirect {
+  location: string
+  constructor(location: string) {
+    this.location = location
+  }
+}
+
 interface Fixture {
   baseUrl: string
   requests: string[]
@@ -83,6 +90,10 @@ async function serve(t: TestContext, files: Record<string, unknown>): Promise<Fi
       if (file.head.length > 0) res.write(file.head)
       return
     }
+    if (file instanceof Redirect) {
+      res.writeHead(302, { location: file.location }).end()
+      return
+    }
     res.end(typeof file === 'string' || Buffer.isBuffer(file) ? file : JSON.stringify(file))
   })
   server.listen(0, '127.0.0.1')
@@ -93,6 +104,17 @@ async function serve(t: TestContext, files: Record<string, unknown>): Promise<Fi
   })
   const { port } = server.address() as AddressInfo
   return { baseUrl: `http://127.0.0.1:${port}`, requests }
+}
+
+function notAllowedHost(baseUrl: string): string {
+  return baseUrl.replace('127.0.0.1', '[::ffff:127.0.0.1]')
+}
+
+function redirectChain(hops: number, target: unknown): Record<string, unknown> {
+  const files: Record<string, unknown> = { 'manifest.json': new Redirect('/1') }
+  for (let i = 1; i < hops; i++) files[String(i)] = new Redirect(`/${i + 1}`)
+  files[String(hops)] = target
+  return files
 }
 
 async function downUrl(): Promise<string> {
@@ -690,5 +712,90 @@ describe('qvac app', () => {
     assert.throws(() => resolveBaseUrl('http://example.com/cli'), /only downloaded over https/)
     assert.equal(resolveBaseUrl('https://example.com/cli/'), 'https://example.com/cli')
     assert.equal(resolveBaseUrl('http://localhost:8080/cli'), 'http://localhost:8080/cli')
+  })
+
+  it('follows a redirect to an allowed URL for the manifest and the binary', async (t) => {
+    const body = fakeBinary(0)
+    const gz = gzipSync(body)
+    const { baseUrl, requests } = await serve(t, {
+      'manifest.json': new Redirect('/moved/manifest.json'),
+      'moved/manifest.json': manifest('1.0.0', gz),
+      [FILE]: new Redirect(`/moved/${FILE}`),
+      [`moved/${FILE}`]: gz
+    })
+    const dir = await cacheDir(t)
+
+    const file = await ensureAppBinary({ baseUrl, dir, hostKey: HOST_KEY, now: NOW })
+
+    assert.equal(await readFile(file, 'utf8'), body)
+    assert.deepEqual(requests, [
+      '/manifest.json',
+      '/moved/manifest.json',
+      `/${FILE}`,
+      `/moved/${FILE}`
+    ])
+  })
+
+  it('refuses a redirect to a host that is not allowed and sends it no request', async (t) => {
+    const gz = gzipSync(fakeBinary(0))
+    for (const path of ['manifest.json', FILE]) {
+      const other = await serve(t, { 'manifest.json': manifest('1.0.0', gz), [FILE]: gz })
+      const target = new URL(`/${path}`, notAllowedHost(other.baseUrl)).href
+      const files: Record<string, unknown> = { 'manifest.json': manifest('1.0.0', gz) }
+      files[path] = new Redirect(target)
+      const { baseUrl } = await serve(t, files)
+      const dir = await cacheDir(t)
+
+      await assert.rejects(ensureAppBinary({ baseUrl, dir, hostKey: HOST_KEY, now: NOW }), {
+        message: `Refusing ${target}: the QV.AC app CLI is only downloaded over https`
+      })
+      assert.deepEqual(other.requests, [], path)
+      assert.deepEqual(await filesUnder(dir), [], path)
+    }
+  })
+
+  it('refuses a redirect chain that passes through a host that is not allowed', async (t) => {
+    const gz = gzipSync(fakeBinary(0))
+    const bounce: Record<string, unknown> = {}
+    const other = await serve(t, bounce)
+    const hop = new URL('/bounce', notAllowedHost(other.baseUrl)).href
+    const { baseUrl, requests } = await serve(t, {
+      'manifest.json': new Redirect(hop),
+      'real/manifest.json': manifest('1.0.0', gz),
+      [FILE]: gz
+    })
+    bounce['bounce'] = new Redirect(`${baseUrl}/real/manifest.json`)
+    const dir = await cacheDir(t)
+
+    await assert.rejects(ensureAppBinary({ baseUrl, dir, hostKey: HOST_KEY, now: NOW }), {
+      message: `Refusing ${hop}: the QV.AC app CLI is only downloaded over https`
+    })
+    assert.deepEqual(other.requests, [])
+    assert.deepEqual(requests, ['/manifest.json'])
+  })
+
+  it('follows five redirects', async (t) => {
+    const body = fakeBinary(0)
+    const gz = gzipSync(body)
+    const { baseUrl } = await serve(t, { ...redirectChain(5, manifest('1.0.0', gz)), [FILE]: gz })
+    const dir = await cacheDir(t)
+
+    const file = await ensureAppBinary({ baseUrl, dir, hostKey: HOST_KEY, now: NOW })
+
+    assert.equal(await readFile(file, 'utf8'), body)
+  })
+
+  it('refuses a sixth redirect and does not request its target', async (t) => {
+    const gz = gzipSync(fakeBinary(0))
+    const { baseUrl, requests } = await serve(t, {
+      ...redirectChain(6, manifest('1.0.0', gz)),
+      [FILE]: gz
+    })
+    const dir = await cacheDir(t)
+
+    await assert.rejects(ensureAppBinary({ baseUrl, dir, hostKey: HOST_KEY, now: NOW }), {
+      message: `Could not fetch ${baseUrl}/manifest.json: more than 5 redirects`
+    })
+    assert.deepEqual(requests, ['/manifest.json', '/1', '/2', '/3', '/4', '/5'])
   })
 })

@@ -22,6 +22,7 @@ export const DEFAULT_BASE_URL = 'https://static.tether.dev/qv.ac/latest/cli'
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 const CHECK_TIMEOUT_MS = 5000
 const STALL_MS = 30_000
+const MAX_REDIRECTS = 5
 
 const plainName = z
   .string()
@@ -95,17 +96,29 @@ function assertAllowedUrl(raw: string): void {
 }
 
 async function get(url: string, signal?: AbortSignal): Promise<Response> {
-  let response: Response
-  try {
-    response = await fetch(url, signal ? { signal } : {})
-  } catch (error: unknown) {
-    throw new Error(`Could not fetch ${url}: ${error instanceof Error ? error.message : error}`)
+  let next = url
+  for (let redirects = 0; ; redirects++) {
+    assertAllowedUrl(next)
+    let response: Response
+    try {
+      response = await fetch(next, { redirect: 'manual', signal: signal ?? null })
+    } catch (error: unknown) {
+      throw new Error(`Could not fetch ${url}: ${error instanceof Error ? error.message : error}`)
+    }
+    const location =
+      response.status >= 300 && response.status < 400 && response.headers.get('location')
+    if (!location) {
+      if (!response.ok || !response.body) {
+        throw new Error(`Could not fetch ${url}: HTTP ${response.status}`)
+      }
+      return response
+    }
+    await response.body?.cancel()
+    if (redirects === MAX_REDIRECTS) {
+      throw new Error(`Could not fetch ${url}: more than ${MAX_REDIRECTS} redirects`)
+    }
+    next = new URL(location, next).href
   }
-  assertAllowedUrl(response.url)
-  if (!response.ok || !response.body) {
-    throw new Error(`Could not fetch ${url}: HTTP ${response.status}`)
-  }
-  return response
 }
 
 async function fetchManifest(baseUrl: string, signal?: AbortSignal): Promise<Manifest> {
