@@ -1,10 +1,5 @@
 #!/usr/bin/env node
-// The mobile check that the speech addons a test app installs record one ggml-speech build, for a package's
-// ci/prepare-mobile.mjs. It installs what the app would take from the package (the package and its production
-// dependencies) into a scratch directory, then applies build-mobile-app's check to that tree.
-//
-//   node scripts/ci/check-speech-ggml-builds.mjs [--package <dir>] [--modules-dir <dir>]
-
+import { backendFiles, recordedFabric } from './fabric-backend-builds.mjs'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -19,12 +14,16 @@ import {
   summarizeSpeechAddons
 } from '../../.github/actions/run-mobile-integration-tests/build-mobile-app/check-speech-ggml-builds.mjs'
 
-// The speech addons in an installed tree, plus the package itself when it is one, as the app holds it.
-export function speechAddons(modulesDir, pkg = null) {
+export function speechAddons(modulesDir, pkg = null, packageRoot = null) {
   const found = findSpeechAddons(modulesDir)
   if (!pkg || !SPEECH_ADDONS.includes(pkg.name)) return found
   return [
-    { id: `${pkg.name}@${pkg.version}`, ggmlSpeech: pkg.qvac?.['ggml-speech'] ?? null },
+    {
+      id: `${pkg.name}@${pkg.version}`,
+      ggmlSpeech: pkg.qvac?.['ggml-speech'] ?? null,
+      ...(recordedFabric(pkg) !== null ? { fabric: recordedFabric(pkg) } : {}),
+      ...(packageRoot ? { backendFiles: backendFiles(packageRoot) } : {})
+    },
     ...found
   ]
 }
@@ -49,7 +48,6 @@ export function installDependencies(pkg) {
   return join(app, 'node_modules')
 }
 
-// Fails the process when the addons record different builds; an unrecorded one only warns.
 export function check(addons, log = console) {
   log.log(summarizeSpeechAddons(addons))
   const { errors, warnings } = checkSpeechAddons(addons)
@@ -68,8 +66,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     ? JSON.parse(readFileSync(join(resolve(values.package), 'package.json'), 'utf8'))
     : null
   const modules = values['modules-dir'] ? resolve(values['modules-dir']) : installDependencies(pkg)
-  if (!check(speechAddons(modules, pkg))) {
-    console.error('Install speech addon releases that record the same ggml-speech build.')
+  if (!check(speechAddons(modules, pkg, values.package ? resolve(values.package) : null))) {
+    console.error(
+      'Install coordinated addon releases with matching backend revisions and identical colliding backend files.'
+    )
     process.exit(1)
   }
 }

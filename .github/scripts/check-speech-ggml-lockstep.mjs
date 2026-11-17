@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
  * Fail unless asr-ggml, audiogen-ggml, bci-whispercpp and tts-ggml build their
- * ggml backends from one ggml-speech: the same ggml-speech and speech-cpp
- * overrides in every vcpkg.json, that ggml-speech recorded in every
- * package.json, and the same ggml-speech version and features in every addon's
+ * ggml backends from one qvac-fabric: the same qvac-fabric and speech-cpp
+ * overrides in every vcpkg.json, that qvac-fabric recorded in every
+ * package.json, and the same qvac-fabric version and features in every addon's
  * vcpkg install plan for each prebuild triplet. Any other package that depends
- * on ggml-speech or speech-cpp fails it until it is listed as a speech addon.
+ * on speech-cpp fails it until it is listed as a speech addon.
  *
  * The plans come from `vcpkg install --dry-run` with compiler tracking off, so
  * no toolchain or build is needed.
@@ -21,7 +21,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  GGML_SPEECH_PORT,
+  FABRIC_PORT,
   PINNED_PORTS,
   SPEECH_ADDONS,
   checkAddonList,
@@ -60,7 +60,7 @@ const ADDON_TRIPLET_OVERLAY = 'vcpkg/triplets'
 const TRIPLET_EXTENSION = '.cmake'
 const MISMATCH_HINT =
   'The speech addons ship their ggml backends under the same file names, so an app with two of them ' +
-  'keeps one copy for both. Give all four the same ggml-speech and speech-cpp overrides and the same ' +
+  'keeps one copy for both. Give all four the same qvac-fabric and speech-cpp overrides and the same ' +
   'per-platform speech-cpp GPU features.'
 
 function parseArgs(argv) {
@@ -142,9 +142,9 @@ function planGgmlSpeech({ vcpkg, addon, triplet, tripletDir, runDir }) {
     `--x-buildtrees-root=${join(runDir, 'buildtrees')}`,
     `--x-packages-root=${join(runDir, 'packages')}`,
   ])
-  const planned = parsePlannedPort(output, GGML_SPEECH_PORT)
+  const planned = parsePlannedPort(output, FABRIC_PORT)
   if (planned === null) {
-    throw new Error(`vcpkg planned no ${GGML_SPEECH_PORT} for ${addon.name} on ${triplet}:\n${output}`)
+    throw new Error(`vcpkg planned no ${FABRIC_PORT} for ${addon.name} on ${triplet}:\n${output}`)
   }
   return { addon: addon.name, triplet, planned }
 }
@@ -153,7 +153,7 @@ function planAddon(vcpkg, addon, workDir) {
   const slug = addon.dir.replaceAll('/', '-')
   const tripletDir = writePlanTriplets(addon, join(workDir, slug, 'triplets'))
   return PREBUILD_TRIPLETS.map((triplet) =>
-    planGgmlSpeech({ vcpkg, addon, triplet, tripletDir, runDir: join(workDir, slug, triplet) }),
+    planGgmlSpeech({ vcpkg, addon, triplet, tripletDir, runDir: join(workDir, slug, triplet) })
   )
 }
 
@@ -183,8 +183,8 @@ function main() {
   console.log(`${addons.map((addon) => addon.name).join(', ')} pin ${pins.join(' and ')}.`)
 
   const plans = planAddons(args.vcpkg, addons)
-  summarizePlans(plans).forEach((line) => console.log(`  ${line}`))
-  const planErrors = checkPlans(plans, findPin(addons[0].vcpkg, GGML_SPEECH_PORT))
+  summarizePlans(plans, FABRIC_PORT).forEach((line) => console.log(`  ${line}`))
+  const planErrors = checkPlans(plans, findPin(addons[0].vcpkg, FABRIC_PORT), FABRIC_PORT)
   if (planErrors.length > 0) fail(planErrors)
 }
 

@@ -1897,13 +1897,13 @@ The vcpkg port is hosted in
 [`vcpkg-configuration.json`](./vcpkg-configuration.json) for the
 baseline commit.
 
-`ggml-speech` and `speech-cpp` are pinned with vcpkg `overrides` to the
+`qvac-fabric` and `speech-cpp` are pinned with vcpkg `overrides` to the
 same versions in every speech addon (`@qvac/asr-ggml`,
 `@qvac/audiogen-ggml`, `@qvac/bci-whispercpp`, `@qvac/tts-ggml`), and
-`package.json` records the `ggml-speech` build as `qvac["ggml-speech"]`.
+`package.json` records the `qvac-fabric` build as `qvac["qvac-fabric"]`.
 The speech addons ship their ggml backends under the same file names, so
 an app that bundles several of them keeps one copy of each: use releases
-that record the same `ggml-speech`.
+that record the same `qvac-fabric`.
 
 GPU backends are controlled by the `speech-cpp` port's vcpkg features:
 `metal` (default on osx/ios), `vulkan` (default on
@@ -1959,3 +1959,12 @@ backend actually selected. Metadata-only `assessFit()` uses the same
 native configuration and accepts an optional application memory budget.
 
 See [Pocket TTS](docs/pocket-tts.md) for model conversion, addon/SDK usage, supported controls and validation commands.
+
+## Native runtime packaging
+
+This addon builds `speech-cpp` with the `qvac-fabric` vcpkg port and retains its
+own native runtime and backend directory. It does not require the
+`@qvac/fabric` npm runtime. Backend modules use the `qvac-ggml-*` names;
+explicit `backendsDir` settings continue to override module-relative discovery.
+When bundling several addons, use matching Fabric port revisions and validate
+that backend files with the same destination name have identical contents.

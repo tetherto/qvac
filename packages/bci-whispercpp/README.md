@@ -82,13 +82,13 @@ npm install
 VCPKG_ROOT=/path/to/vcpkg npm run build
 ```
 
-`ggml-speech` and `speech-cpp` are pinned with vcpkg `overrides` to the
+`qvac-fabric` and `speech-cpp` are pinned with vcpkg `overrides` to the
 same versions in every speech addon (`@qvac/asr-ggml`,
 `@qvac/audiogen-ggml`, `@qvac/bci-whispercpp`, `@qvac/tts-ggml`), and
-`package.json` records the `ggml-speech` build as `qvac["ggml-speech"]`.
+`package.json` records the `qvac-fabric` build as `qvac["qvac-fabric"]`.
 The speech addons ship their ggml backends under the same file names, so
 an app that bundles several of them keeps one copy of each: use releases
-that record the same `ggml-speech`.
+that record the same `qvac-fabric`.
 
 **CUDA (Linux / Windows on NVIDIA)** needs `nvcc` on the build host, so it is
 gated behind the `ENABLE_CUDA` CMake option. The published linux-x64 prebuild
@@ -527,3 +527,12 @@ Every thrown `QvacErrorAddonBCI` extends `QvacErrorBase` and carries the numeric
 ## License
 
 Apache-2.0
+
+## Native runtime packaging
+
+This addon builds `speech-cpp` with the `qvac-fabric` vcpkg port and retains its
+own native runtime and backend directory. It does not require the
+`@qvac/fabric` npm runtime. Backend modules use the `qvac-ggml-*` names;
+explicit `backendsDir` settings continue to override module-relative discovery.
+When bundling several addons, use matching Fabric port revisions and validate
+that backend files with the same destination name have identical contents.

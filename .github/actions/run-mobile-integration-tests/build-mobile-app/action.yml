@@ -239,7 +239,7 @@ runs:
 
     # The speech addons ship their ggml backends under the same file names, so
     # the app keeps one copy of each for all of them.
-    - name: Check speech addons share one ggml-speech build
+    - name: Check speech and Fabric backend compatibility
       shell: bash
       working-directory: ./test-framework
       run: node "$GITHUB_ACTION_PATH/check-speech-ggml-builds.mjs"

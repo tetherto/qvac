@@ -54,7 +54,7 @@
       "options": {
         "parallel": false,
         "commands": [
-          "node --test .github/scripts/test/speech-ggml.test.mjs .github/actions/run-mobile-integration-tests/build-mobile-app/check-speech-ggml-builds.test.mjs",
+          "node --test .github/scripts/test/speech-fabric-packaging.test.mjs .github/scripts/test/speech-ggml.test.mjs .github/actions/run-mobile-integration-tests/build-mobile-app/check-speech-ggml-builds.test.mjs",
           "node .github/scripts/check-speech-ggml-lockstep.mjs ${VCPKG_INSTALLATION_ROOT:+--vcpkg \"$VCPKG_INSTALLATION_ROOT/vcpkg\"}"
         ]
       },
@@ -522,6 +522,7 @@
     }
   },
   "implicitDependencies": [
+    "@qvac/fabric",
     "inference-addon-cpp",
     "lint-cpp"
   ]

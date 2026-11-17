@@ -53,5 +53,12 @@
         }
       ]
     }
-  }
+  },
+  "overrides": [
+    {
+      "name": "qvac-fabric",
+      "version": "11739.3.0",
+      "port-version": 1
+    }
+  ]
 }

@@ -128,17 +128,8 @@ test('the whisper backend loader covers every hybrid GGML_BACKEND_DL platform', 
   )
 })
 
-test('the CMake loose pickup stages Windows .dll modules on CUDA builds', () => {
-  assert.match(
-    cmakeSource,
-    /\(WIN32 AND ASR_CUDA\)/,
-    'a win32 ASR_CUDA build must enter the loose module pickup'
-  )
-  assert.match(
-    cmakeSource,
-    /qvac-speech-ggml-\*\.dll/,
-    'the loose pickup glob must match the Windows backend module names'
-  )
+test('the CMake build uses the shared per-addon backend collector on Windows without CUDA', () => {
+  assert.match(cmakeSource, /qvac_speech_collect_backends\(BACKEND_DL_LIBS BACKEND_DL_LOOSE_SOS\)/)
 })
 
 test('the GPU integration tests accept CUDA as a desktop backend', () => {

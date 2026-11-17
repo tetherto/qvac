@@ -110,8 +110,10 @@ test('[build] no direct CUDA linkage - the hybrid MODULE backend carries its own
 
 test('[build] the backend loader covers desktop Linux for hybrid GGML_BACKEND_DL builds', (t) => {
   t.ok(
-    /#if defined\(__ANDROID__\) \|\| defined\(__linux__\)/.test(bciModelSource),
-    'ensureBackendsLoaded compiles on all Linux targets, not just arm64'
+    /#if defined\(__ANDROID__\) \|\| defined\(__linux__\) \|\| defined\(_WIN32\)/.test(
+      bciModelSource
+    ),
+    'ensureBackendsLoaded compiles on Windows and all Linux targets'
   )
   t.is(
     /defined\(__aarch64__\)/.test(bciModelSource),

@@ -182,3 +182,10 @@ loaded.
 | Windows | (default MSVC) | dynamic `.dll` under `prebuilds/<host>/qvac__fabric-<host>/` |
 | Android | `arm64-android` | shared `.so` under `prebuilds/<host>/qvac__fabric-<host>/` |
 | iOS | `arm64-ios` | static inside `.bare` |
+
+## Backend build provenance
+
+Published meta and platform packages record the exact vcpkg revision in
+`qvac["qvac-fabric"]`. Applications that also bundle standalone speech addons
+check this revision and compare backend files that would share a destination
+name. Equal source versions alone do not establish binary interchangeability.

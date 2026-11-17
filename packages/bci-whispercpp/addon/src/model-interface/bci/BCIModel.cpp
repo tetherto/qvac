@@ -52,15 +52,7 @@ static bool shouldAbortWhisper(void* userData) {
          cancelRequested->load(std::memory_order_relaxed);
 }
 
-#if defined(__ANDROID__) || defined(__linux__)
-// Android, desktop linux-arm64, and linux-x64-with-CUDA builds ship ggml
-// with `GGML_BACKEND_DL=ON`, so no backend is statically registered. dlopen
-// the per-arch CPU + GPU `.so` modules once per process; otherwise
-// whisper_init aborts on a NULL CPU device. On static linux-x64 builds the
-// scan finds no modules and the statically registered backends stay in
-// charge, so calling this unconditionally on Linux is safe. A configured
-// backendsDir is scanned as given; otherwise the addon's own backends
-// directory.
+#if defined(__ANDROID__) || defined(__linux__) || defined(_WIN32)
 void ensureBackendsLoaded(const std::string& backendsDir) {
   static std::once_flag flag;
   std::call_once(flag, [&]() {
@@ -70,7 +62,7 @@ void ensureBackendsLoaded(const std::string& backendsDir) {
           qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
           "the addon could not locate itself; falling back to "
           "ggml_backend_load_all() (default search path), which misses the "
-          "renamed qvac-speech-ggml-* modules.");
+          "renamed qvac-ggml-* modules.");
       ggml_backend_load_all();
       return;
     }
@@ -80,7 +72,7 @@ void ensureBackendsLoaded(const std::string& backendsDir) {
     ggml_backend_load_all_from_path(dir.string().c_str());
   });
 }
-#endif // __ANDROID__ || __linux__
+#endif
 
 BCIModel::BCIModel(BCIConfig config)
     : cfg_(std::move(config)), neuralProcessor_() {}
@@ -190,7 +182,7 @@ void BCIModel::load() {
   if (ctx_)
     return;
 
-#if defined(__ANDROID__) || defined(__linux__)
+#if defined(__ANDROID__) || defined(__linux__) || defined(_WIN32)
   ensureBackendsLoaded(cfg_.backendsDir);
 #endif
 
@@ -396,7 +388,7 @@ void logSilentCpuFallbackWarning() {
       "backend (Adreno pre-700 OpenCL policy, missing OpenCL ICD, Vulkan "
       "driver without storageBuffer16BitAccess, iOS/Android simulator "
       "without GPU support), or no GPU backend was compiled into "
-      "ggml-speech for this triplet.");
+      "qvac-fabric for this triplet.");
 }
 
 void logActiveGpuBackend(const GpuBackendInfo& info) {

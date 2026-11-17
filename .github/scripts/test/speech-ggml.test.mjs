@@ -47,7 +47,7 @@ function plan(addonName, triplet, features, version = '2026-10-07#1') {
   return { addon: addonName, triplet, planned: { features, triplet, version } }
 }
 
-test('the speech addons in the repo pin one ggml-speech and speech-cpp and record that ggml-speech', () => {
+test('the speech addons in the repo pin and record one backend provider and speech-cpp', () => {
   assert.deepEqual(checkPins(SPEECH_ADDONS.map(readAddon)), [])
 })
 

@@ -49,6 +49,11 @@ QVAC provides:
 - **Cross-platform:** one codebase for Linux, macOS, Windows, Android, and iOS, using JavaScript/TypeScript or Python.
 - **Peer-to-peer:** fetch AI models directly between peers and build unstoppable internet systems, like BitTorrent or IPFS, but for AI.
 
+Speech addons build their native engines against Fabric ggml through vcpkg
+and retain per-addon runtime packaging. Applications combining speech and LLM
+addons must use compatible backend builds; see each speech package’s native
+runtime packaging section.
+
 ## Quickstart
 
 Load a model and run inference locally in a few steps. Pick your path.

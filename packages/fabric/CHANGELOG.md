@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Record the exact Fabric port revision in package metadata for compatibility checks with standalone speech addons.
+
 ## [0.30.1] - 2026-11-16
 
 ### Fixed

@@ -1,22 +1,5 @@
 #!/usr/bin/env node
-/**
- * Fail if installing a package together with all of its @qvac peers resolves
- * @qvac/infer-base, @qvac/logging, @qvac/error, or @qvac/fabric to more than
- * one version, or installs speech addons whose package.json records different
- * ggml-speech builds (they ship their ggml backends under the same file
- * names). A speech addon that records none is reported but cannot fail it.
- *
- * Only the dependency tree is resolved (npm --package-lock-only against a
- * tarball holding just package.json), so no build or prebuild download is
- * needed. Recorded ggml-speech builds come from npm view, or from the
- * package.json of a --local package.
- *
- * Usage:
- *   node .github/scripts/check-shared-runtime-libs.mjs [package-dir] [--local <dir>]...
- *
- *   package-dir defaults to packages/inference. Each --local package replaces
- *   its npm release in the tree, for a dependency that is ahead of npm.
- */
+import { recordedFabric } from '../../scripts/ci/fabric-backend-builds.mjs'
 import { spawnSync } from 'node:child_process'
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -41,7 +24,7 @@ import {
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 
 const SHARED_LIBS_HINT = 'Align the package that pulls the extra copy with the range the others use.'
-const SPEECH_BUILDS_HINT = 'Depend on speech addon releases that record the same ggml-speech build.'
+const SPEECH_BUILDS_HINT = 'Depend on coordinated releases with matching recorded backend revisions.'
 
 function parseArgs(argv) {
   const args = { packageDir: 'packages/inference', local: [] }
@@ -107,8 +90,9 @@ function recordedBuildReader(localDirs) {
   const localManifests = new Map(localDirs.map((dir) => readPackageJson(dir)).map((pkg) => [pkg.name, pkg]))
   return (name, version) => {
     const local = localManifests.get(name)
-    if (local?.version === version) return recordedGgmlSpeech(local)
-    return recordedGgmlSpeech({ [BUILD_FIELD]: readPublishedBuildField(name, version) })
+    const manifest = local?.version === version ? local : { [BUILD_FIELD]: readPublishedBuildField(name, version) }
+    const fabric = recordedFabric(manifest)
+    return fabric !== null || name === '@qvac/fabric' ? { fabric } : recordedGgmlSpeech(manifest)
   }
 }
 
@@ -128,7 +112,7 @@ function main() {
   const args = parseArgs(process.argv.slice(2))
   const { pkg, manifest, lockfile } = resolveLockfile(args)
   const resolved = collectResolvedVersions(lockfile)
-  const speechAddons = collectResolvedVersions(lockfile, SPEECH_ADDONS.map((addon) => addon.name))
+  const speechAddons = collectResolvedVersions(lockfile, [...SPEECH_ADDONS.map((addon) => addon.name), '@qvac/fabric'])
   const builds = listInstalledBuilds(speechAddons, recordedBuildReader(args.local))
 
   const peers = Object.keys(manifest.dependencies).length - 1
