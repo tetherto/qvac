@@ -56,11 +56,11 @@ on:
         type: string
         default: ""
       packages:
-        description: The one package to test, by name or directory
-        required: true
+        description: The one package to test, by name or directory; ignored with weekly
         type: string
+        default: ""
       weekly:
-        description: Run the package's <platform>Weekly test groups, as the Sunday run does
+        description: Run the Sunday weekly job instead (both platforms, its devices, a report issue); ignores the other inputs
         type: boolean
         default: false
 
@@ -69,14 +69,14 @@ permissions: {}
 # One manual run per branch, package and platform, as main's per-addon workflows had; a fresh dispatch cancels the
 # one in flight so Device Farm runs never stack, while an Android and an iOS dispatch of one package run side by side.
 concurrency:
-  group: mobile-tests-${{ github.ref }}-${{ inputs.packages || github.event.schedule }}-${{ inputs.platform }}
+  group: mobile-tests-${{ github.ref }}-${{ inputs.weekly && 'weekly' || inputs.packages || github.event.schedule }}-${{ inputs.platform }}
   cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
 
 jobs:
   # One package per dispatch, as main's per-addon mobile workflows ran one addon each, so the per-package run cap in
   # devicefarm-check-devices caps the whole dispatch.
   one-package:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && !inputs.weekly
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -119,10 +119,9 @@ jobs:
       package: ${{ inputs.package }}
       prebuild_run_id: ${{ inputs.prebuild_run_id }}
       dependency_prebuild_run_id: ${{ inputs.dependency_prebuild_run_id }}
-      weekly: ${{ inputs.weekly }}
 
   weekly:
-    if: github.event.schedule == '0 6 * * 0'
+    if: github.event.schedule == '0 6 * * 0' || (github.event_name == 'workflow_dispatch' && inputs.weekly)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -200,7 +199,7 @@ jobs:
   # One weekly-mobile-report issue per package that ran, from each platform's test-case-details.json.
   weekly-report:
     needs: [weekly-select-android, weekly-select-ios, weekly-android, weekly-ios]
-    if: always() && github.event.schedule == '0 6 * * 0'
+    if: always() && (github.event.schedule == '0 6 * * 0' || (github.event_name == 'workflow_dispatch' && inputs.weekly))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
