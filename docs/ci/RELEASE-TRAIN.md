@@ -145,6 +145,9 @@ native addon's copy has no prebuilds, so the train never links one (see
    6. tags each package, then creates the `githubRelease` package's GitHub
       release on its tag and, with `sdk-python`, attaches the fat wheels and,
       with `sdk-kotlin`, the Kotlin SDK's Maven zips (`publish-kotlin.yml`)
+      and, with `sdk-swift`, the Swift worker profiles (`publish-swift.yml`),
+      then pushes the plain `<version>` tag on a commit whose `Package.swift`
+      lists them
 8. Merge the backmerge PR once the push run has published to npm. Before that,
    `main` would name versions that the checks of later PRs cannot install. If
    the run fails before publishing, fix it with a PR into the train branch
@@ -196,6 +199,8 @@ Before npm publish:
   lockstep, contract, unit tests, the Maven publications and the standalone
   consumers. Needs the `@qvac/sdk` GitHub release, which the Maven zips attach
   to.
+- **`sdk-swift`**: `sdk-checks.yml`'s sdk-swift checks: the generated Swift
+  contract matches the SDK's.
 - **`pear-e2e`**: `test-inference-pear-e2e.yml` on the train's
   `@qvac/inference` tarball, as `publish-npm.yml` runs it for an inference release. Pin upstream
   with the `PEAR_E2E_*_VERSION` repository variables.
@@ -203,8 +208,8 @@ Before npm publish:
   workspace.
 
 After npm publish, `package-checks` runs again with every package installed
-from npm. Tags, the GitHub release, PyPI, the wheels and the Maven zips wait
-for it.
+from npm. Tags, the GitHub release, PyPI, the wheels, the Maven zips and the
+Swift package wait for it.
 
 On the release PR, outside `release-train.yml`: when the PR touches the SDK,
 `sdk-e2e.yml` runs the e2e legs its labels and `base:release-*` keys select,
