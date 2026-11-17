@@ -2,10 +2,11 @@
 
 `performance_profile` defaults to `auto`. The addon selects only measured
 model/GPU/API combinations selected by the November 4–5 measurements (at least
-5% faster warm generation on the engine used then). Those timings are historical;
-paired performance and quality checks against the merged 2026-11-01 engine are
-still required before release. Set `performance_profile: 'off'` to retain the
-current engine settings.
+5% faster warm generation on the engine used then). The November 17 packaged
+GB10 CUDA comparison also validates bounded FLUX image edits on the merged
+2026-11-01 engine. The other timings remain historical; H3/LTX and remaining
+platform performance checks are still required before release. Set
+`performance_profile: 'off'` to retain the current engine settings.
 Explicit options, including `flash_attn: false`, take precedence.
 
 | Model checkpoint | GPU and API | Automatic change | Fallback |
@@ -31,7 +32,10 @@ convolution. Each request rechecks dimensions and free memory, so a later
 unsupported request restores direct convolution. The historical text-to-image
 outputs were visually identical, but not byte-identical; GEMM used about
 4.2 GiB more VRAM in the RTX measurement. Those measurements do not establish
-img2img performance or memory use.
+img2img performance or memory use. The separate November 17 GB10 CUDA image-edit
+comparison measures 56.8% and 51.2% lower warm latency at 512² and 1024², with
+53.80 and 54.20 dB RGB agreement, respectively. It does not measure GPU memory
+peaks; see the [validation scope](performance-profiles-validation.md#packaged-gb10-cuda-flux-comparison).
 
 Fit probes return `unknown` only when the requested dimensions and tiling can
 select GEMM: the current engine planner cannot represent that per-request

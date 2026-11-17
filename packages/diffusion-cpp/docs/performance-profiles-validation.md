@@ -4,7 +4,7 @@ FLUX.2 Klein, MiniMax-H3 and LTX profiles retain device/API selection, explicit 
 
 H3 fused SwiGLU and QKV views are already enabled by that engine. The addon leaves them unchanged for every GPU, workload and profile mode, including `off`; only global flash attention is selected automatically. The old RTX-only graph toggle, its 28 GiB/960×544×124 guard and its fit-probe exclusion are removed. FLUX GEMM now also accepts bounded single-reference img2img after decoding resolves the effective dimensions. Bounded LTX precision selection is unchanged.
 
-All timings below are historical November 4–5 results on the earlier engine. They are retained with their original raw data and do **not** establish current-engine speedups, quality parity or memory budgets. In particular, the old H3 combined attention/graph comparison is not an attention-only comparison against the new fused baseline. Paired model checks on the merged engine remain required before release.
+The November 17 section reports a current-engine GB10 CUDA FLUX comparison. The remaining timing tables are historical November 4–5 results on the earlier engine. They are retained with their original raw data and do **not** establish current-engine speedups, quality parity or memory budgets. In particular, the old H3 combined attention/graph comparison is not an attention-only comparison against the new fused baseline. Paired H3/LTX checks and the remaining platform checks on the merged engine are still required before release.
 
 The historical evidence combines the 4 November 2026 implementation checks with the 5 November Radeon 8060S HIP/Vulkan follow-up. Paired speed comparisons keep the checkpoint, prompt, seed, dimensions, sampler and steps fixed. Generation latency excludes model loading and warmup. Small timing differences on unchanged paths are not claimed improvements.
 
@@ -48,9 +48,43 @@ port through the scoped baseline described in the profile documentation.
   required by that cached backend, allowed the operation test to run. Both logs
   were retained. This workaround is local to validation and does not certify
   release-package loading.
-- Full-model inference, timing and quality comparisons were not repeated. The
-  operation checks do not validate packaged CUDA/Vulkan/Metal/HIP addons or final
-  registry resolution.
+- At addon revision `499fa541`, [CI](https://github.com/tetherto/qvac/actions/runs/44138572976)
+  passed all nine prebuild targets, all three native test jobs and all seven
+  desktop integration lanes. Its Linux arm64 addon and bundled CUDA backend
+  completed the FLUX comparison below without the cached-backend preload
+  workaround. These checks do not establish H3/LTX model-performance parity or
+  a new HIP validation result.
+
+### Packaged GB10 CUDA FLUX comparison
+
+The Linux arm64 artifact from the CI run above was SHA-256 verified
+(`315b1ba7cb16dd5c6566838c0950e48c4d7a6a2dc1cf660745f7acacf186d138`).
+The same binary, FLUX.2 Klein 4B Q8_0 checkpoint, Qwen3 4B Q4_K_M encoder and
+FLUX.2 VAE were used for `off` and `auto`. Each image-edit pair uses the same
+saved reference pixels and prompt, seed 42, ten Euler steps, CFG/guidance 1 and
+explicit diffusion flash attention in both modes. Each size has one warmup
+and two measured requests per mode. Times are medians of native generation
+latency, excluding model loading and warmup.
+
+| Single-reference image edit | Direct (`off`) | GEMM (`auto`) | Generation reduction | Paired RGB PSNR |
+| --- | --- | --- | --- | --- |
+| 512×512 reference and output | 14.525 s | 6.271 s | 56.8% | 53.80 dB |
+| 1024×1024 reference and output | 70.253 s | 34.290 s | 51.2% | 54.20 dB |
+
+The paired outputs differ by at most 6/255 and 9/255 per channel respectively.
+Measured repeats are pixel-identical within each mode. These are numerical
+agreement results for one edit prompt, not a broad image-quality evaluation.
+The improvement includes reference encoding and final VAE decoding; denoising
+timings differ by less than 1% in these pairs. No GPU memory high-water mark was
+measured, so this run does not establish an img2img memory budget.
+
+All ten automatic requests asserted the selected convolution mode from native
+logs. A 768×768 output and a request with two references each restore direct
+convolution and match `off` pixels exactly. A subsequent supported 512×512
+request re-enables GEMM. A 512×512 text-to-image smoke check also selects GEMM
+and has 59.14 dB agreement with `off`; its single request per mode is not a
+repeated timing benchmark. The timing and output records remain outside the
+source tree.
 
 ## Historical warm-generation improvements
 
@@ -76,7 +110,7 @@ Spark Vulkan and M3 Pro are not covered. RTX, Spark and Mac values are the dated
 
 | Model | Automatic profile | Where it applies | Baseline elsewhere |
 | --- | --- | --- | --- |
-| FLUX.2 Klein 4B Q8_0, image generation | GEMM VAE convolution | RTX 5090/GB10 CUDA: single 512² or 1024² text-to-image request. At least 16 GiB free after load | Direct convolution on HIP/Metal/Vulkan; reference images, LoRA, tiling, batches and unvalidated sizes retain baseline |
+| FLUX.2 Klein 4B Q8_0, image generation | GEMM VAE convolution | RTX 5090/GB10 CUDA: single 512² or 1024² output, with at most one 512² or 1024² reference. At least 16 GiB free after load | Direct convolution on HIP/Metal/Vulkan; multiple references, LoRA, tiling, batches and unvalidated sizes retain baseline |
 | MiniMax-H3 FL2VA Q4_K, video with audio | Global flash attention | RTX 5090 CUDA/Vulkan, GB10 CUDA, M3 Ultra Metal, Radeon 8060S HIP | Existing flash-attention setting |
 | LTX-2.3 22B distilled Q5_K, video with audio | F16 transformer matrices | M3 Ultra Metal, declared bounds up to 512×320×97, GPU-resident parameters and sufficient memory | Original quantized matrices |
 
@@ -215,4 +249,4 @@ It retained ggml `2026-11-01#1` and inference-addon-cpp `1.5.0` from the existin
 default registry baseline. This verifies dependency resolution, not a fresh
 packaged-backend build or model-performance measurement.
 
-The registry merge and final dependency-resolution checks are complete. Remaining work: repeat paired model checks and packaged-backend validation, then complete review of [addon #5578](https://github.com/tetherto/qvac/pull/5578). The [low-priority draft inference #5577](https://github.com/tetherto/qvac/pull/5577) remains separate. Version and changelog changes belong to separate release PRs.
+The registry merge, final dependency-resolution checks and packaged GB10 CUDA FLUX comparison are complete. Remaining work: repeat H3/LTX pairs and the remaining platform performance checks against the merged engine, then complete review of [addon #5578](https://github.com/tetherto/qvac/pull/5578). The [low-priority draft inference #5577](https://github.com/tetherto/qvac/pull/5577) remains separate. Version and changelog changes belong to separate release PRs.
