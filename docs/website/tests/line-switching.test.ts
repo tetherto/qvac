@@ -81,6 +81,31 @@ describe('the line label', () => {
   it('marks the current line and leaves every other bare', () => {
     expect(lineTitle('v0.17', true)).toBe('v0.17 (latest)')
     expect(lineTitle('v0.16', false)).toBe('v0.16')
+    expect(lineTitle('preview', false)).toBe('preview (unreleased)')
+  })
+})
+
+describe('the unreleased line of a preview build', () => {
+  const published = ['/sdk', '/sdk/quickstart']
+
+  it('is a line of its own, first, holding only its pages', () => {
+    const sdk = collectionLines([...published, '/sdk/preview', '/sdk/preview/quickstart']).find(
+      (collection) => collection.path === '/sdk',
+    )!
+    expect(sdk.lines[0]).toMatchObject({
+      version: 'preview',
+      current: false,
+      title: 'preview (unreleased)',
+      index: '/sdk/preview/',
+      urls: ['/sdk/preview', '/sdk/preview/quickstart'],
+    })
+    const current = sdk.lines.find((line) => line.current)!
+    expect(current.urls).toEqual(published)
+  })
+
+  it('is absent when the build did not materialize it', () => {
+    const sdk = collectionLines(published).find((collection) => collection.path === '/sdk')!
+    expect(sdk.lines.map((line) => line.version)).not.toContain('preview')
   })
 })
 

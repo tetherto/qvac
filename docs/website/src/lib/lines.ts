@@ -3,6 +3,8 @@ import {
   DOCUMENTED_SOFTWARE,
   getCurrentLine,
   isCurrentLineFolder,
+  navigableLines,
+  PREVIEW,
   versionOfFolder,
 } from './versions';
 
@@ -35,8 +37,9 @@ export interface CollectionLines {
   lines: Line[];
 }
 
-/** `v0.17 (latest)` for the current line, `v0.16` for any other. */
+/** `v0.17 (latest)` for the current line, `preview (unreleased)` for the unreleased one, `v0.16` for any other. */
 export function lineTitle(version: string, current: boolean): string {
+  if (version === PREVIEW) return `${PREVIEW} (unreleased)`;
   return current ? `${version} (latest)` : version;
 }
 
@@ -56,15 +59,22 @@ export function collectionLines(pageUrls: string[]): CollectionLines[] {
   return DOCUMENTED_SOFTWARE.map((software) => {
     const current = getCurrentLine(software);
     const currentVersion = current ? versionOfFolder(current.folder) : null;
+    // A preview build materializes the unreleased line: it is a line of its
+    // own, so the current line must not claim its pages.
+    const previewPrefix = `${software.path}/${PREVIEW}`;
+    const previewBuilt = urls.some(
+      (url) => url === previewPrefix || url.startsWith(`${previewPrefix}/`),
+    );
+    const navigable = navigableLines(software, previewBuilt);
 
-    const lines = software.versions.map((entry): Line => {
+    const lines = navigable.map((entry): Line => {
       const version = versionOfFolder(entry.folder);
       const isCurrent = isCurrentLineFolder(entry.folder);
       const prefix = isCurrent ? software.path : `${software.path}/${version}`;
 
       // The current line holds what is left once the other lines have taken
       // theirs: its pages are the ones no version segment claims.
-      const others = software.versions
+      const others = navigable
         .filter((other) => !isCurrentLineFolder(other.folder))
         .map((other) => `${software.path}/${versionOfFolder(other.folder)}`);
 

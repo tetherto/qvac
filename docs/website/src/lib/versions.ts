@@ -146,6 +146,34 @@ export function getDocumentedSoftware(
   );
 }
 
+/**
+ * The folder, and URL segment, of a software's unreleased line. The
+ * materializer writes it only for previews (`--include-dev`), never for
+ * production, and no versions file declares it.
+ */
+export const PREVIEW = 'preview' as const;
+
+export interface PreviewLine {
+  version: typeof PREVIEW;
+  folder: typeof PREVIEW;
+}
+
+/** A line a reader can be on: a published one, or the unreleased one in a preview. */
+export type NavigableLine = DocumentedVersion | PreviewLine;
+
+/**
+ * The lines a reader moves between: the unreleased line first when this
+ * build materialized it, then the published lines in manifest order.
+ */
+export function navigableLines(
+  software: DocumentedSoftware,
+  previewBuilt: boolean,
+): readonly NavigableLine[] {
+  return previewBuilt
+    ? [{ version: PREVIEW, folder: PREVIEW }, ...software.versions]
+    : software.versions;
+}
+
 /** The versions published for a software, in the order the manifest lists. */
 export function getPublishedVersions(
   software: DocumentedSoftware,

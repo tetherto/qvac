@@ -171,6 +171,23 @@ function resolvesToFolder (dir: string, name: string): boolean {
   return fs.existsSync(target) && fs.statSync(target).isDirectory()
 }
 
+describe('the unreleased line of a preview build', () => {
+  const sdkIndexes = (tree: Node[]) =>
+    tree
+      .filter((node): node is Extract<Node, { type: 'folder' }> => node.type === 'folder' && node.name === 'SDK')
+      .map((node) => node.index?.url)
+
+  it('gets a sidebar root of its own when its folder exists', () => {
+    const pageTree = linePageTree()
+    pageTree.children.push({ type: 'folder', $id: 'root:sdk/preview', name: 'preview', children: [] })
+    expect(sdkIndexes(buildCustomTree(pageTree))).toContain('/sdk/preview/')
+  })
+
+  it('gets none in a build without it', () => {
+    expect(sdkIndexes(buildCustomTree(linePageTree()))).not.toContain('/sdk/preview/')
+  })
+})
+
 describe('sidebar-consistency', () => {
   describe('entries declared in custom-tree', () => {
     const urls = [...new Set(collectUrls(buildCustomTree(linePageTree())))]

@@ -5,9 +5,12 @@ import {
   documentedSoftwareOfKind,
   getCurrentLine,
   getDocumentedSoftware,
+  navigableLines,
+  PREVIEW,
   versionOfFolder,
   type DocumentedSoftware,
   type DocumentedVersion,
+  type NavigableLine,
 } from '@/lib/versions';
 import { resolveIcon } from '@/lib/resolveIcon';
 
@@ -319,6 +322,18 @@ const COLLECTIONS = DECLARED_COLLECTIONS.filter(
  * never cut, and that should stop the build rather than ship.
  */
 export function lineChildren(pageTree: Root, folderPath: string): Node[] {
+  const children = folderChildren(pageTree, folderPath);
+  if (!children) {
+    throw new Error(
+      `No content folder at content/docs/${folderPath}. The version manifest ` +
+        `declares this line, so either cut it or drop its manifest entry.`,
+    );
+  }
+  return children;
+}
+
+/** The children of the folder at `folderPath`, or undefined when the page tree has none. */
+function folderChildren(pageTree: Root, folderPath: string): Node[] | undefined {
   const ids = [folderPath, `${pageTree.$id}:${folderPath}`];
 
   function find(nodes: Node[]): Node[] | undefined {
@@ -332,14 +347,7 @@ export function lineChildren(pageTree: Root, folderPath: string): Node[] {
     }
   }
 
-  const children = find(pageTree.children);
-  if (!children) {
-    throw new Error(
-      `No content folder at content/docs/${folderPath}. The version manifest ` +
-        `declares this line, so either cut it or drop its manifest entry.`,
-    );
-  }
-  return children;
+  return find(pageTree.children);
 }
 
 /**
@@ -350,7 +358,7 @@ export function lineChildren(pageTree: Root, folderPath: string): Node[] {
  */
 function lineIndexUrl(
   basePath: string,
-  line: DocumentedVersion,
+  line: NavigableLine,
   current: DocumentedVersion | null,
 ): string {
   const url = computeSectionVersionUrl(
@@ -394,7 +402,10 @@ function collectionRoots(collection: Collection, pageTree: Root): Node[] {
 
   const current = getCurrentLine(software);
   const folder = collection.path.slice(1);
-  return software.versions.map((line): Node => ({
+  // A preview build materializes the unreleased line too, which needs its own
+  // root like any other line.
+  const previewBuilt = folderChildren(pageTree, `${folder}/${PREVIEW}`) !== undefined;
+  return navigableLines(software, previewBuilt).map((line): Node => ({
     ...root,
     index: {
       type: 'page',
