@@ -116,6 +116,8 @@ A dependency on the contract is a **provider**. Selection finds providers from t
 
 The provider rows build first. A package's build and C++ lint jobs then restore `prebuild-<provider>-<configuration>`, run the provider's `link:platform`, and run their target with `--exclude-task-dependencies`, so they never compile the provider. When a provider leg fails, no package build leg runs in that run, and every selected package's `qvac/prebuild-<key>` status reports failure. A provider posts its own status and `prebuilds-<slug>` bundle only from a run that selected it.
 
+`publish-npm.yml` selects with `released-providers`, so a consumer's release builds against the provider release its users install: selection returns no provider rows for it, and its build job installs it alone from npm (`scripts/ci/checks-source.mjs install published`), and runs its `build` with `--exclude-task-dependencies`. A provider's own release builds its rows as above.
+
 A dependency off the contract is built inside each job that needs it, through the target's own dependencies.
 
 `pr-checks.yml` fails a pull request when a workspace package's range on a provider, or on one of the provider's `#host-addon` platform packages, excludes the provider's workspace version (`scripts/ci/check-workspace-ranges.mjs`): pnpm would install the old release from npm instead of linking the workspace provider. Bump a provider's dependents' ranges with it.
