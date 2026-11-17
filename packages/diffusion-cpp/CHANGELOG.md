@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-## [0.35.2] - 2026-11-13
+## [0.35.2] - 2026-11-17
 
 ### Fixes
 
@@ -11,6 +11,11 @@
   field, and with flash attention enabled, large images such as SD 2.1 at
   768x768 came out as a mosaic
   ([#5722](https://github.com/tetherto/qvac/pull/5722)).
+
+### Changed
+
+- Require `inference-addon-cpp` 1.6.0 for the shared runtime-stat value type
+  ([#5812](https://github.com/tetherto/qvac/pull/5812)).
 
 ## [0.35.1] - 2026-11-09
 
