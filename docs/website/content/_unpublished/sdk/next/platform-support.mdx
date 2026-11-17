@@ -21,7 +21,7 @@ These requirements apply to every QVAC SDK client (JS/TS, Python, and Kotlin), b
 |----------|-------------|--------------|--------------|---------|-------|
 | macOS | 14.0+ | arm64 | Metal | JS/TS, Python, CLI | Intel Macs are not supported. |
 | iOS | 17.0+ | arm64 | Metal | JS/TS (Expo) | Devices and simulators. |
-| Linux | Ubuntu 22+ | arm64, x64 | Vulkan `>= 1.4`, CUDA | JS/TS, Python, CLI | x64 also supports the AMD XDNA2 NPU. |
+| Linux | Ubuntu 22+ | arm64, x64 | Vulkan `>= 1.4`, CUDA, ROCm/HIP (x64) | JS/TS, Python, CLI | x64 also supports the AMD XDNA2 NPU. |
 | Android | 10+ (API 29) | arm64 | Vulkan, OpenCL (Adreno 700+) | JS/TS (Expo), Kotlin | Physical devices only. |
 | Windows | 10+ | x64 | Vulkan `>= 1.4`, CUDA | JS/TS, Python, CLI | Transcription, text-to-speech and audio generation need Vulkan even for CPU-only inference. |
 
@@ -47,13 +47,12 @@ To check whether a specific model fits a device, use [`assessModelFit`](/sdk/mod
 
 #### Backends
 
-{/* TODO(addons review): confirm the table, including ROCm/HIP (Fabric ships a linux-x64 HIP module for gfx1151). */}
-
 | Backend | Platforms | GPUs | Needs on the host |
 |---------|-----------|------|-------------------|
 | Metal | macOS arm64, iOS | Apple silicon | Nothing |
 | Vulkan `>= 1.4` | Linux, Windows, Android | Any GPU with a Vulkan driver | A Vulkan loader and a GPU driver with Vulkan support |
 | CUDA | Linux x64, Linux arm64, Windows x64 | NVIDIA | The NVIDIA driver and the CUDA 13 runtime libraries |
+| ROCm/HIP | Linux x64 | AMD gfx1151 (Strix Halo) | - |
 | OpenCL | Android | Qualcomm Adreno 700+ | Nothing |
 
 All backends ship prebuilt. CUDA support varies by AI capability: every capability that offers CUDA supports it on Linux x64, and some also support it on Linux arm64 and Windows x64. Each capability page says which.
