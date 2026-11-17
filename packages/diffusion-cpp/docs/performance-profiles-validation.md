@@ -174,7 +174,7 @@ The addon already defaults to `temporal_tiling:false`. Research's LTX CUDA full-
 
 ## Historical validation evidence
 
-The 4 November native implementation revision is `4e027082eadc94819adfdcde8187d946e875cc56`; engine revision is `bc3890d`. The 5 November HIP fallback correction is `def6a7c3bd3105b7e32d288ace674a78c7ead4c3`; it removes only automatic FLUX HIP GEMM. Strix's corrected FLUX fallback and H3 HIP/Vulkan pairs use that exact CI binary. FLUX's rejected HIP candidate and Vulkan pair use the earlier binary. Full revision and binary hashes are recorded with each measurement.
+The 4 November native implementation revision is `4e027082eadc94819adfdcde8187d946e875cc56`; engine revision is `bc3890d`. The 5 November HIP fallback correction is `def6a7c3bd3105b7e32d288ace674a78c7ead4c3`; it removes only automatic FLUX HIP GEMM. Strix's corrected FLUX fallback and H3 HIP/Vulkan pairs use that exact CI binary. FLUX's rejected HIP candidate and Vulkan pair use the earlier binary.
 
 - Windows: TypeScript/lint, 137 Bare unit tests and 91 Node unit tests passed. The two new inference schema tests passed all 17 assertions; its broader Windows suite has unrelated failures described below.
 - RTX: all 331 native tests passed with every model fixture and no skips. Twelve profile tests passed. The final GitHub Actions prebuild was downloaded and its archive SHA-256 verified, then used for FLUX/H3 measurements. CI/source outputs are byte-identical. Actual tiled FLUX and unsupported-size fallbacks are byte-identical to baseline; a full → small → full H3 sequence verifies graph disable/re-enable with exact output.
@@ -184,7 +184,7 @@ The 4 November native implementation revision is `4e027082eadc94819adfdcde8187d9
 - Strix: all four existing HIP backend tests passed. The corrected CI addon archive was SHA-256 verified and loaded with the matching source-built HIP module. H3 HIP speed/quality, H3 Vulkan parity and corrected FLUX HIP fallback passed. FLUX Vulkan also has exact pixel parity. The full 331-test addon suite was not rerun on Strix. No LTX performance or stability pass is claimed.
 - [CI for the HIP fallback correction](https://github.com/tetherto/qvac/actions/runs/42028874536): all nine prebuilds and all three C++ targets passed. Remaining desktop lanes were still running or queued at report time. [Windows integration](https://github.com/tetherto/qvac/actions/runs/42028874536/job/127259941020) failed before checkout because a stale Python runner workspace was locked. This infrastructure blocker is documented; no test was disabled or weakened. The earlier documentation run's Linux GPU-allocation failure remains recorded; its retry was superseded by this full run.
 
-Full-precision timings, workload configuration, quality metrics and output hashes are in the [4 November data](performance-profiles-metrics.json) and [5 November Strix data](performance-profiles-strix-metrics.json). Reported percentages use unrounded medians. CUDA device indices in that data are process-local; the RTX run was restricted to the booked physical GPU.
+Reported percentages use unrounded medians.
 
 All three original test directories were removed after preserving results, freeing 220.1 GiB. The separate Strix test directory and models were also removed before its booking ended, freeing another 70.4 GiB. No files outside these task directories were removed.
 
