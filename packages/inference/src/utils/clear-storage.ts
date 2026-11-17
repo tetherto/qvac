@@ -12,7 +12,11 @@ export function resolveClearStorageTarget(
   const relativePath = normalizedPath.slice(normalizedCache.length + 1)
   const parts = relativePath.split('/')
 
-  if (parts.length === 3 && (parts[0] === 'sets' || parts[0] === 'onnx') && parts[1] && parts[2]) {
+  if (
+    parts.length === 3 &&
+    (parts[0] === 'sets' || parts[0] === 'onnx') &&
+    parts.every(isNamedSegment)
+  ) {
     const lastSlash = normalizedPath.lastIndexOf('/')
     return { path: normalizedPath.slice(0, lastSlash), kind: 'directory' }
   }
@@ -40,9 +44,14 @@ export function isCacheShardPath(
   }
 
   const parts = normalizedPath.slice(normalizedCache.length + 1).split('/')
-  return (
-    parts.length === 3 &&
-    parts[0] === 'sharded' &&
-    parts.every((part) => part !== '' && part !== '.' && part !== '..')
-  )
+  return parts.length === 3 && parts[0] === 'sharded' && parts.every(isNamedSegment)
+}
+
+/**
+ * Whether a path segment names an entry. `.`, `..` and empty segments do not:
+ * `<cache>/sets/../<file>` would otherwise make `<cache>/sets/..`, the whole
+ * cache, a directory target.
+ */
+function isNamedSegment(part: string): boolean {
+  return part !== '' && part !== '.' && part !== '..'
 }
