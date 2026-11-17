@@ -41,15 +41,18 @@ export const nativeResourceCollectorDependencies: ResourceCollectorDependencies 
   now() {
     return Date.now()
   },
-  sampleProcessMemory() {
-    // A throw here is a sampling failure, not a platform gap: let it reach the
-    // collector so the metric reports `failed` rather than `unavailable`.
+  // A throw from either reader is a sampling failure, not a platform gap: it
+  // reaches the collector so that metric reports `failed` rather than
+  // `unavailable`. `os.memoryUsage()` throws on JavaScriptCore, whose binding
+  // has no heap statistics, and the allowance is read all the same.
+  sampleProcessUsedBytes() {
     const usage = os.memoryUsage()
-    const available = reportsProcessAllowance ? os.availableMemory() : 0
-    return {
-      usedBytes: usage && usage.rss > 0 ? usage.rss : undefined,
-      // Zero states no headroom, which is not a budget.
-      availableBytes: available > 0 ? available : undefined
-    }
+    return usage && usage.rss > 0 ? usage.rss : undefined
+  },
+  sampleProcessAvailableBytes() {
+    if (!reportsProcessAllowance) return undefined
+    const available = os.availableMemory()
+    // Zero states no headroom, which is not a budget.
+    return available > 0 ? available : undefined
   }
 }
