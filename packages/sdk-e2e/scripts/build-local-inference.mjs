@@ -44,7 +44,7 @@ function step(message) {
   console.log(`\n[36m▶ ${message}[0m`)
 }
 
-// Mirrors .github/actions/sdk-e2e-prepare-inference/prepare.mjs, win32 branch
+// Mirrors packages/sdk/ci/e2e-inference.mjs, win32 branch
 // included, so local and CI manifests carry the same spec.
 function toLocalTarballSpec(tarballPath, platform = process.platform) {
   if (platform === 'win32') {

@@ -48,7 +48,7 @@ existing OpenCL wiring (already used for parakeet-ctc-0.6b) also covers the
 |---|---|
 | Workflow run (OpenCL, S25 Ultra / Adreno 830) | [`32489751168`](https://github.com/tetherto/qvac/actions/runs/32489751168) |
 | Companion run (Vulkan, Pixel 9 / Mali-G715) | [`32483218937`](https://github.com/tetherto/qvac/actions/runs/32483218937) |
-| Trigger | Manual `workflow_dispatch` on `integration-mobile-test-asr-ggml.yml`, `tests=runParakeetGpuSmokeTest` |
+| Trigger | Manual `workflow_dispatch` of asr's mobile tests, `tests=runParakeetGpuSmokeTest` |
 | Resolved `speech-cpp` | pinned via `packages/asr-ggml/vcpkg.json`, `opencl` feature enabled on `android` (unchanged) |
 | Prebuild package identifier | Freshly built in the workflow run; native binaries include `libqvac-speech-ggml-opencl.so` (2.0 MB) alongside `libqvac-speech-ggml-vulkan.so` (61.7 MB) for every Android ABI |
 | Device manufacturer / model | Samsung Galaxy S25 Ultra |
@@ -132,8 +132,9 @@ tolerance.
 ## Reproducing this run
 
 ```bash
-gh workflow run integration-mobile-test-asr-ggml.yml \
+gh workflow run mobile-tests.yml \
   --ref <ref-under-test> \
+  -f packages=asr-ggml \
   -f platform=Android \
   -f device="Samsung Galaxy S25 Ultra" \
   -f device_model_operator=EQUALS \

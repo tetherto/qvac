@@ -136,6 +136,22 @@ test('the vocabulary size comes from the token embedding when undeclared', async
   t.is(parsed.metadata['qwen3.vocab_size'], 151936, 'the token count, not the embedding width')
 })
 
+test('the vocabulary size comes from the token table when no tensor carries it', async (t) => {
+  const dir = tempDir(t)
+  const fixture = buildGguf({
+    architecture: 'dflash',
+    vocabSize: 512,
+    embeddingLength: 16,
+    vocabTensorName: 'selector_predecessor.weight'
+  })
+  const filePath = writeFixture(dir, 'draft.gguf', fixture.buffer)
+
+  const parsed = await parseBlob(dir, await fitBlobContent(filePath))
+
+  t.is(parsed.metadata['dflash.vocab_size'], 512, 'the loader sizes the selectors by it')
+  t.absent(parsed.metadata['tokenizer.ggml.tokens'], 'the token list is left out')
+})
+
 test('a declared vocabulary size is carried through', async (t) => {
   const dir = tempDir(t)
   const fixture = buildGguf({ vocabSize: 128256, embeddingLength: 2048, declareVocabSize: true })

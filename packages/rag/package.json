@@ -83,5 +83,15 @@
     "@qvac/turbovec-ggml": {
       "optional": true
     }
+  },
+  "nx": {
+    "includedScripts": [
+      "format",
+      "format:fix",
+      "lint:fix",
+      "prepare",
+      "build:test",
+      "build:hyperdb-spec"
+    ]
   }
 }

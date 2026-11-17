@@ -117,7 +117,7 @@ const SCENARIOS = require('./scenarios.cjs')
 
 module.exports = {
   // ════════════════════════ MODE — what is compared ════════════════════════
-  // 'two-models' | 'several-sources'. The workflow's matrix_mode input sets it on
+  // 'two-models' | 'several-sources'. The benchmark's mode= word sets it on
   // desktop (QVAC_VLM_MODE); on mobile this default is used.
   mode: 'two-models',
 
@@ -133,7 +133,7 @@ module.exports = {
   candidate: MODEL_2.label,
 
   // ════════════════════════ MODEL CATALOG — known-good short names ════════════════════════
-  // Convenience only — the matrix_models launch param also accepts ad-hoc
+  // Convenience only — the models= benchmark word also accepts ad-hoc
   // <llm-url>|<mmproj-url> pairs for ANY model with no catalog entry (see
   // CONTRACT.md §3 and models.cjs). Add entries for regulars; a catalog entry
   // may carry a per-model `baseline` override for the gate.
@@ -143,11 +143,11 @@ module.exports = {
     'qwen3.5-0.8b-q8': SOURCES_MODEL,
     'gemma4-q4': GEMMA4_Q4
   },
-  // What runs when matrix_models is empty (two-models mode).
+  // What runs when models= is empty (two-models mode).
   defaultModels: ['qwen3.5-f16', 'qwen3.5-q8'],
 
   // ════════════════════════ SOURCES — builds under comparison ════════════════════════
-  // Tokens for the matrix_sources launch param (parsed by sources.cjs).
+  // Tokens for the sources= benchmark word (parsed by sources.cjs).
   // addon@candidate is built from the dispatched ref; addon@baseline is the pinned
   // published npm version; fabric/upstream run via the several-sources CLI path
   // (desktop only — built per-OS on Linux/macOS/Windows).
