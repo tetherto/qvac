@@ -6,7 +6,7 @@ import {
 } from '../../actions/npm-publish-platform-packages/npm-publish-platform-packages.mjs'
 
 const meta = { name: '@qvac/fabric', version: '1.0.0' }
-const slices = ['linux-x64-cuda', 'linux-x64-hip', 'linux-x64'].map((host) => ({
+const slices = ['linux-x64-cuda', 'linux-x64'].map((host) => ({
   name: '@qvac/fabric-' + host,
   version: meta.version
 }))

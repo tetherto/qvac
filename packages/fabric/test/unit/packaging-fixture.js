@@ -29,6 +29,7 @@ async function fixture(t) {
     }
   }
   const base = path.join(workdir, 'prebuilds/linux-x64/qvac__fabric-linux-x64')
+  fs.writeFileSync(path.join(base, 'libqvac-ggml-hip.so'), 'HIP backend')
   fs.writeFileSync(path.join(base, 'fused_layer.xclbin'), 'kernel')
   fs.writeFileSync(path.join(base, 'fused_layer.insts.bin'), 'instructions')
   return { ...slicer, root, workdir, outDir, manifest }

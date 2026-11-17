@@ -38,12 +38,11 @@
 
 ### Changed
 
-- Split the Linux x64 CUDA and HIP backends into `@qvac/fabric-linux-x64-cuda`
-  and `@qvac/fabric-linux-x64-hip` to keep individual npm packages below the
-  registry size limit. Both remain automatically installed at the exact same
-  version as `@qvac/fabric-linux-x64`. Backend discovery supports their separate
-  locations while preserving backend priority and the existing environment
-  override; applications require no installation or inference configuration
+- Split the Linux x64 CUDA backend into `@qvac/fabric-linux-x64-cuda` to keep
+  individual npm packages below the registry size limit. HIP remains in the base
+  package. CUDA remains automatically installed at the exact same version as
+  `@qvac/fabric-linux-x64`. Backend discovery supports its separate location
+  while preserving backend priority and the existing environment override; applications require no installation or inference configuration
   changes.
 - Fabric publishing checks every compressed platform and backend tarball against
   a 190 MB budget before publishing any packages.

@@ -92,7 +92,7 @@ int main(int argc, char** argv) {
     // SONAME alias only needed by the standalone test executable's ELF loader.
     fs.symlinkSync(runtime, path.join(runtimeDir, 'qvac__fabric-linux-x64@0.bare'))
     const carriers = []
-    for (const backend of ['cuda', 'hip']) {
+    for (const backend of ['cuda']) {
       const name = 'qvac__fabric-linux-x64-' + backend
       const dir = path.join(installed, backend)
       fs.mkdirSync(path.join(dir, name), { recursive: true })
@@ -124,9 +124,8 @@ int main(int argc, char** argv) {
     const output = run(path.join(runtimeDir, 'test'), carriers, { env })
     assert.deepEqual(output, [
       path.join(installed, 'cuda/qvac__fabric-linux-x64-cuda/libqvac-ggml-cuda.so'),
-      path.join(installed, 'hip/qvac__fabric-linux-x64-hip/libqvac-ggml-hip.so'),
       path.join(runtimeDir, 'qvac__fabric-linux-x64'),
-      'count=3'
+      'count=2'
     ])
     assert.deepEqual(
       run(path.join(runtimeDir, 'test'), carriers, {

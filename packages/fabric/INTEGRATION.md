@@ -27,7 +27,7 @@ build against the forked llama.cpp + ggml runtime:
   `qvac_fabric_load_backends()` / `qvac_fabric_backends_dir()`
 - **ggml compute backends** — on **Linux, Android, and Windows**, shipped as
   shared libraries under `prebuilds/<host>/<module>/` in the platform package,
-  or the CUDA/HIP backend packages on Linux x64
+  or the CUDA backend package on Linux x64
 
 ### Platform packages
 
@@ -45,12 +45,12 @@ ships in `@qvac/fabric-ios`, as `qvac__fabric-ios.bare`. The module name is the
 platform package's name, so cmake-bare's `include_bare_module(... PREBUILD)`
 derives the right `DT_NEEDED` from the package it resolves.
 
-On Linux x64, CUDA and HIP live in separate, exact-version dependencies,
-`@qvac/fabric-linux-x64-cuda` and `@qvac/fabric-linux-x64-hip`. The platform
-entry loads the runtime first and then their carrier addons, which register
-their backend directories. Installing Fabric continues to install all backends;
-consumer code and dependencies do not change. Both carriers remain ordinary
-Bare addons so `bare-pack` and `bare-link` include their native payloads.
+On Linux x64, CUDA lives in a separate, exact-version dependency,
+`@qvac/fabric-linux-x64-cuda`; HIP remains in the base platform package. The
+platform entry loads the runtime first and then the CUDA carrier addon, which
+registers its backend directory. Installing Fabric continues to install all
+backends; consumer code and dependencies do not change. The carrier remains an
+ordinary Bare addon so `bare-pack` and `bare-link` include its native payload.
 
 The desktop packages are `os`/`cpu` filtered `optionalDependencies` of the meta
 package, so npm 7+, pnpm, bun and Yarn Berry install the right one. Yarn v1 and
@@ -300,7 +300,7 @@ passed through untouched and loaded as given.
 
 For diagnostics, `require('@qvac/fabric').backendsDir()` returns the directory
 of the primary backends. On Linux x64, `loadBackends()` also loads the registered
-CUDA/HIP directories unless `QVAC_FABRIC_BACKENDS_DIR` overrides discovery.
+CUDA directory unless `QVAC_FABRIC_BACKENDS_DIR` overrides discovery.
 
 ---
 

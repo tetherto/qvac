@@ -126,7 +126,6 @@ if(_fabric_host STREQUAL "linux-x64")
   set(_fabric_split_backends ON)
 endif()
 set(QVAC_FABRIC_cuda_LIBS "")
-set(QVAC_FABRIC_hip_LIBS "")
 if((ANDROID OR UNIX OR WIN32) AND NOT APPLE)
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
     if(TARGET ggml::${_backend})
@@ -137,8 +136,8 @@ if((ANDROID OR UNIX OR WIN32) AND NOT APPLE)
       # MODULE_LIBRARY. Accept both so the backend modules are staged next to
       # the runtime (matching only SHARED_LIBRARY silently shipped nothing).
       if(_backend_type STREQUAL "SHARED_LIBRARY" OR _backend_type STREQUAL "MODULE_LIBRARY")
-        if(_fabric_split_backends AND _backend MATCHES "^ggml-(cuda|hip)$")
-          list(APPEND QVAC_FABRIC_${CMAKE_MATCH_1}_LIBS TARGET ggml::${_backend})
+        if(_fabric_split_backends AND _backend STREQUAL "ggml-cuda")
+          list(APPEND QVAC_FABRIC_cuda_LIBS TARGET ggml::${_backend})
         else()
           list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
         endif()
@@ -168,10 +167,11 @@ target_compile_definitions(${qvac-fabric} PRIVATE
   QVAC_FABRIC_BUILD
   QVAC_FABRIC_MODULE_NAME="${_fabric_module_name}")
 
-# Keep GPU binaries in separate addon packages. A tiny carrier in each package
-# registers its directory, and makes bare-pack/bare-link carry its native files.
+# Keep CUDA in a separate addon package. Its tiny carrier registers its
+# directory and makes bare-pack/bare-link carry its native files. HIP stays in
+# the base package alongside the remaining backends.
 if(_fabric_split_backends)
-  foreach(backend cuda hip)
+  foreach(backend cuda)
     if(NOT QVAC_FABRIC_${backend}_LIBS)
       message(FATAL_ERROR "Missing ${backend} backend for the Linux x64 package")
     endif()

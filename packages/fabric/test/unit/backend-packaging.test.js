@@ -12,7 +12,7 @@ const { fixture } = require('./packaging-fixture')
 const json = (file) => JSON.parse(fs.readFileSync(file, 'utf8'))
 
 test(
-  'npm installs both GPU packages automatically and deduplicates the runtime cycle',
+  'npm installs CUDA automatically while retaining HIP in the base package and deduplicates the runtime cycle',
   { skip: process.platform !== 'linux' || process.arch !== 'x64' },
   async (t) => {
     const f = await fixture(t)
@@ -48,7 +48,7 @@ test(
     })
     t.after(() => server.close())
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
-    for (const suffix of ['linux-x64', 'linux-x64-cuda', 'linux-x64-hip']) {
+    for (const suffix of ['linux-x64', 'linux-x64-cuda']) {
       const dir = path.join(f.outDir, 'qvac-fabric-' + suffix)
       const result = spawnSync(
         'npm',
@@ -89,7 +89,16 @@ test(
       ],
       { cwd: app }
     )
-    for (const suffix of ['linux-x64', 'linux-x64-cuda', 'linux-x64-hip']) {
+    assert.ok(!fs.existsSync(path.join(app, 'node_modules/@qvac/fabric-linux-x64-hip')))
+    assert.ok(
+      fs.existsSync(
+        path.join(
+          app,
+          'node_modules/@qvac/fabric-linux-x64/prebuilds/linux-x64/qvac__fabric-linux-x64/libqvac-ggml-hip.so'
+        )
+      )
+    )
+    for (const suffix of ['linux-x64', 'linux-x64-cuda']) {
       const pkg = json(path.join(app, 'node_modules/@qvac/fabric-' + suffix, 'package.json'))
       assert.equal(pkg.version, f.manifest.version)
       assert.ok(
@@ -105,15 +114,14 @@ test(
   }
 )
 
-test('Linux x64 is split into version-locked base, CUDA and HIP packages', async (t) => {
+test('Linux x64 is split into version-locked base and CUDA packages', async (t) => {
   const f = await fixture(t)
   const slices = f.slicePlatformPackages(f)
-  assert.equal(slices.length, 9)
+  assert.equal(slices.length, 8)
   const base = path.join(f.outDir, 'qvac-fabric-linux-x64')
   const manifest = json(path.join(base, 'package.json'))
   assert.deepEqual(manifest.dependencies, {
-    '@qvac/fabric-linux-x64-cuda': f.manifest.version,
-    '@qvac/fabric-linux-x64-hip': f.manifest.version
+    '@qvac/fabric-linux-x64-cuda': f.manifest.version
   })
   assert.equal(manifest.optionalDependencies, undefined)
   const host = path.join(base, 'prebuilds/linux-x64')
@@ -123,7 +131,9 @@ test('Linux x64 is split into version-locked base, CUDA and HIP packages', async
     'qvac__fabric-linux-x64.bare.exports'
   ])
   assert.ok(fs.existsSync(path.join(host, 'qvac__fabric-linux-x64/fused_layer.xclbin')))
-  for (const backend of ['cuda', 'hip']) {
+  assert.ok(fs.existsSync(path.join(host, 'qvac__fabric-linux-x64/libqvac-ggml-hip.so')))
+  assert.ok(!fs.existsSync(path.join(f.outDir, 'qvac-fabric-linux-x64-hip')))
+  for (const backend of ['cuda']) {
     const dir = path.join(f.outDir, 'qvac-fabric-linux-x64-' + backend)
     const m = json(path.join(dir, 'package.json'))
     assert.deepEqual(m.dependencies, { '@qvac/fabric-linux-x64': f.manifest.version })
@@ -152,7 +162,7 @@ test('Linux x64 is split into version-locked base, CUDA and HIP packages', async
   assert.equal(meta.optionalDependencies['@qvac/fabric-linux-x64-cuda'], undefined)
 })
 
-test('the platform entry loads the runtime and both carriers before returning its unchanged exports', async (t) => {
+test('the platform entry loads the runtime and the CUDA carrier before returning its unchanged exports', async (t) => {
   const f = await fixture(t)
   f.slicePlatformPackages(f)
   const calls = []
@@ -167,16 +177,16 @@ test('the platform entry loads the runtime and both carriers before returning it
     fs.readFileSync(path.join(f.outDir, 'qvac-fabric-linux-x64/index.js'), 'utf8'),
     { require, module }
   )
-  assert.deepEqual(calls, ['runtime', '@qvac/fabric-linux-x64-cuda', '@qvac/fabric-linux-x64-hip'])
+  assert.deepEqual(calls, ['runtime', '@qvac/fabric-linux-x64-cuda'])
   assert.equal(module.exports, exports)
 })
 
 test('missing GPU payloads fail before moving any prebuilds', async (t) => {
   const f = await fixture(t)
   fs.unlinkSync(
-    path.join(f.workdir, 'prebuilds/linux-x64/qvac__fabric-linux-x64-hip/libqvac-ggml-hip.so')
+    path.join(f.workdir, 'prebuilds/linux-x64/qvac__fabric-linux-x64-cuda/libqvac-ggml-cuda.so')
   )
-  assert.throws(() => f.slicePlatformPackages(f), /Missing Fabric backend package file.*hip/)
+  assert.throws(() => f.slicePlatformPackages(f), /Missing Fabric backend package file.*cuda/)
   assert.ok(fs.existsSync(path.join(f.workdir, 'prebuilds/linux-x64/qvac__fabric-linux-x64.bare')))
 })
 
@@ -189,10 +199,10 @@ test('stale unsplit GPU modules cannot silently ship in the base package', async
   assert.throws(() => f.slicePlatformPackages(f), /Stale unsplit Fabric backend/)
 })
 
-test('local source builds expose both carriers and keep rebuilds visible', async (t) => {
+test('local source builds expose the CUDA carrier and keep rebuilds visible', async (t) => {
   const f = await fixture(t)
   const linked = f.linkLocalPlatformPackages(f)
-  assert.equal(linked.length, 9)
+  assert.equal(linked.length, 8)
   const name = 'qvac__fabric-linux-x64-cuda'
   const payload = name + '/libqvac-ggml-cuda.so'
   fs.writeFileSync(path.join(f.workdir, 'prebuilds/linux-x64', payload), 'rebuilt')

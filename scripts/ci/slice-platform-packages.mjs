@@ -19,18 +19,17 @@ export const SLICE_DEFINITIONS = [
 // `module.exports = require('#host-addon')`, mapped to these packages.
 export const PLATFORM_INDEX_SOURCE = 'module.exports = require.addon()\n'
 
-export const FABRIC_BACKEND_DEFINITIONS = ['cuda', 'hip'].map((backend) => ({
+export const FABRIC_BACKEND_DEFINITIONS = ['cuda'].map((backend) => ({
   ...SLICE_DEFINITIONS[0],
   suffix: 'linux-x64-' + backend,
   backend
 }))
 
-// Load the shared runtime first, then register both backend directories before
+// Load the shared runtime first, then register the CUDA backend directory before
 // a consumer can call loadBackends(). Literal imports keep Bare's graph complete.
 export const FABRIC_LINUX_INDEX_SOURCE =
   'const fabric = require.addon()\n' +
   "require('@qvac/fabric-linux-x64-cuda')\n" +
-  "require('@qvac/fabric-linux-x64-hip')\n" +
   'module.exports = fabric\n'
 
 function isFabricLinux (metaManifest, definition) {

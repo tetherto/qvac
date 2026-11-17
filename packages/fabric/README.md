@@ -52,18 +52,18 @@ platform package, an ordinary Bare addon:
 | android-arm64 | `@qvac/fabric-android-arm64` | `qvac__fabric-android-arm64` |
 | ios (device + simulators) | `@qvac/fabric-ios` | `qvac__fabric-ios` |
 
-Linux x64 distributes its GPU modules in `@qvac/fabric-linux-x64-cuda` and
-`@qvac/fabric-linux-x64-hip`. Both are exact-version **dependencies** of
-`@qvac/fabric-linux-x64`, so installing Fabric still installs every backend.
-CPU, Vulkan, RPC and XDNA remain in the base platform package. Other platforms
+Linux x64 distributes CUDA in `@qvac/fabric-linux-x64-cuda`, an exact-version
+**dependency** of `@qvac/fabric-linux-x64`, so installing Fabric still installs
+every backend.
+CPU, HIP, Vulkan, RPC and XDNA remain in the base platform package. Other platforms
 keep their existing layout.
 
-The Linux x64 entry loads the shared runtime and both backend carrier addons
-before returning the same Fabric exports. Each carrier registers its native
-module directory without loading the GPU backend. Their dependencies point back
-to the same version of the base package so `bare-link` can rewrite their
-`DT_NEEDED` on the shared runtime. These version-locked dependency cycles are
-packaging details; applications continue to depend on `@qvac/fabric`.
+The Linux x64 entry loads the shared runtime and the CUDA carrier addon
+before returning the same Fabric exports. The carrier registers its native
+module directory without loading the GPU backend. Its dependency points back
+to the same version of the base package so `bare-link` can rewrite its
+`DT_NEEDED` on the shared runtime. This version-locked dependency cycle is
+a packaging detail; applications continue to depend on `@qvac/fabric`.
 
 Desktop packages are `os`/`cpu`-filtered `optionalDependencies`, so installers
 pick the right one; do not depend on them directly. Supported installers are
@@ -119,8 +119,8 @@ of `qvac_fabric_backends_dir()` is:
    the runtime, including inside an APK).
 
 `qvac_fabric_load_backends()` loads that directory and any directories registered
-by the Linux x64 CUDA/HIP carriers once per process. The carriers locate their
-own modules, so this also works when package managers nest dependencies or
+by the Linux x64 CUDA carrier once per process. The carrier locates its
+own module, so this also works when package managers nest dependencies or
 `bare-pack` relocates them. In flattened `bare-link` output, duplicate directories
 are loaded only once. A non-empty `QVAC_FABRIC_BACKENDS_DIR` remains an exclusive
 override and suppresses the additional package directories.

@@ -41,8 +41,8 @@ QVAC_FABRIC_API size_t qvac_fabric_load_backends(void);
 //      to loading each backend by file name).
 // The runtime dir is the directory of the loaded runtime module itself. The
 // string is UTF-8 and stays valid for the life of the process. On Linux x64,
-// load_backends also searches the CUDA/HIP package directories registered by
-// their carrier addons, unless the environment override is set.
+// load_backends also searches the CUDA package directory registered by
+// its carrier addon, unless the environment override is set.
 // NOLINTNEXTLINE(readability-identifier-naming)
 QVAC_FABRIC_API const char* qvac_fabric_backends_dir(void);
 
