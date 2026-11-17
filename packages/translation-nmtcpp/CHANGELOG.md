@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Build against `qvac-lib-inference-addon-cpp` 1.6.0, where a runtime stat
+  value can also hold a string. The runtime stats and their C++ tests use
+  `RuntimeStatValue`, and the dependency floor is now `1.6.0`
+  ([#5728](https://github.com/tetherto/qvac/pull/5728)).
+
 ## [0.26.0] - 2026-11-16
 
 ### Changed
