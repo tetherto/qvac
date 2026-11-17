@@ -16,7 +16,7 @@ exports, from the live P2P registry, then open a `[mod]` PR. Registry sync does
 **not** auto-update the constants — this skill is the deliberate regen + PR
 path.
 
-The Python and Kotlin clients are generated from the SDK's contract at build
+The Python, Kotlin and Swift clients are generated from the SDK's contract at build
 time, so a model sync commits nothing for them.
 
 ## When to use this skill

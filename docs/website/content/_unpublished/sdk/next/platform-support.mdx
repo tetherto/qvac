@@ -9,7 +9,7 @@ schemaType: TechArticle
 
 Read this page when you choose where your QVAC application will run, or when you prepare a machine for it. That can be your development machine, your users' devices, or your servers. The page tells you which platforms QVAC supports, which hardware it uses on each one, and what software the host needs.
 
-These requirements apply to every QVAC SDK client (JS/TS, Python, and Kotlin), because all of them drive the same worker.
+These requirements apply to every QVAC SDK client (JS/TS, Python, Kotlin, and Swift), because all of them drive the same worker.
 
 <Callout type="info">
   A supported platform runs QVAC, but it may not run every model! A model needs to fit in the device's memory, and the device needs enough compute to run it. For example, video generation needs a GPU with a lot of VRAM, so it does not run on every supported device. Each [AI capability](/sdk#ai-tasks) page lists its own hardware requirements.
@@ -19,8 +19,8 @@ These requirements apply to every QVAC SDK client (JS/TS, Python, and Kotlin), b
 
 | Platform | Min version | Architecture | GPU backends | Clients | Notes |
 |----------|-------------|--------------|--------------|---------|-------|
-| macOS | 14.0+ | arm64 | Metal | JS/TS, Python, CLI | Intel Macs are not supported. |
-| iOS | 17.0+ | arm64 | Metal | JS/TS (Expo) | Devices and simulators. |
+| macOS | 14.0+ | arm64 | Metal | JS/TS, Python, Swift, CLI | Intel Macs are not supported. |
+| iOS | 17.0+ | arm64 | Metal | JS/TS (Expo), Swift | Devices and simulators. |
 | Linux | Ubuntu 22+ | arm64, x64 | Vulkan `>= 1.4`, CUDA, ROCm/HIP (x64) | JS/TS, Python, CLI | x64 also supports the AMD XDNA2 NPU. |
 | Android | 10+ (API 29) | arm64 | Vulkan, OpenCL (Adreno 700+) | JS/TS (Expo), Kotlin | Physical devices only. |
 | Windows | 10+ | x64 | Vulkan `>= 1.4`, CUDA | JS/TS, Python, CLI | Transcription, text-to-speech and audio generation need Vulkan even for CPU-only inference. |
@@ -194,6 +194,7 @@ Each client has its own requirements. Install steps live on each client's page.
 | [JS/TS SDK](/sdk/js-ts-sdk) | Node.js `>= v22.17` (bundling the worker, for any target, needs `^22.21.0 \|\| >=24.9.0`), npm `>= v10.9`; Bare `>= v1.32.0` when targeting Bare; Expo `>= v58` for mobile. |
 | [Python SDK](/sdk/python-sdk) | Python `>= 3.10`. Node.js is not required. Bare comes from the `bare-sidecar` wheels, which cover the desktop platforms. Linux needs glibc `>= 2.34`: with an older glibc, or musl, `bare-sidecar` installs without Bare and the client cannot start. |
 | [Kotlin SDK](/sdk/kotlin-sdk) | Android `arm64-v8a`, API 29 or newer, `compileSdk` 36 or newer; Kotlin `>= 2.3`. Desktop JVM is experimental. |
+| [Swift SDK](/sdk/swift-sdk) | iOS 17+ or macOS 14+ on Apple silicon; Swift tools `>= 5.10`. |
 | [CLI](/cli) | Node.js `^22.21.0 \|\| >=24.9.0`. Desktop only: `darwin-arm64`, `linux-arm64`, `linux-x64`, `win32-x64`. |
 
 ### Native packages and installers

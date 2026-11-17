@@ -74,8 +74,9 @@ Pick the strongest achievable strategy:
 6. **Error path** — `throws-error` with a substring that is stable across SDK versions.
 7. **Named assertion** — for deterministic but non-trivial checks like cosine similarity against a
    reference vector, assert with `named:` and implement it for every client, in
-   `runners/js/shared/step-bindings.ts`, `runners/python/qvac_e2e/assertions.py` and
-   `runners/kotlin/runner/src/main/kotlin/io/tether/qvac/e2e/runner/Assertions.kt`. Avoid a `function`
+   `runners/js/shared/step-bindings.ts`, `runners/python/qvac_e2e/assertions.py`,
+   `runners/kotlin/runner/src/main/kotlin/io/tether/qvac/e2e/runner/Assertions.kt` and
+   `runners/swift/Sources/QvacE2E/Assertions.swift`. Avoid a `function`
    expectation: it is a JavaScript closure, so a non-JS client reports the test `incomplete`.
 
 If the model's output is inherently non-deterministic and cannot be constrained, say so in the plan and

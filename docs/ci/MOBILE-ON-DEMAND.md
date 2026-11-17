@@ -10,7 +10,8 @@ All 16 mobile addons are on the CI contract and run through one workflow,
 `ggml-rpc-server`, `inference-addon-cpp`, `llm-llamacpp`, `model-fit`,
 `ocr-ggml`, `translation-nmtcpp`, `tts-ggml`, `turbovec-ggml` and `vla-ggml`.
 The SDK runs there too, with its own consumer app: `@qvac/sdk` on Android and
-iOS, and `sdk-kotlin` (the Kotlin SDK's app) on Android. See
+iOS, `sdk-kotlin` (the Kotlin SDK's app) on Android, and `sdk-swift` (the Swift
+SDK's app) on iOS. See
 [The SDK's e2e apps](#the-sdks-e2e-apps).
 
 ## How to run a mobile test
@@ -468,11 +469,11 @@ and free.
 
 ## The SDK's e2e apps
 
-`@qvac/sdk` and `sdk-kotlin` are producer packages, and they run from `sdk-e2e.yml`,
-not `mobile-tests.yml`: their `test:mobile` builds the SDK e2e consumer app from
-`packages/sdk-e2e`, and the run drives it over MQTT from the runner instead of a
-test package on the device. Dispatch `sdk-e2e.yml` with `android` or `ios` in
-`platforms` and the apps' languages in `languages`:
+`@qvac/sdk`, `sdk-kotlin` and `sdk-swift` are producer packages, and they run
+from `sdk-e2e.yml`, not `mobile-tests.yml`: their `test:mobile` builds the SDK e2e
+consumer app from `packages/sdk-e2e`, and the run drives it over MQTT from the
+runner instead of a test package on the device. Dispatch `sdk-e2e.yml` with
+`android` or `ios` in `platforms` and the apps' languages in `languages`:
 
 - `pool` names one Device Farm pool from the `SDK_ANDROID_DEVICE_FARM_POOLS` or
   `SDK_IOS_DEVICE_FARM_POOLS` repository variable. Leave it empty to take an
@@ -481,12 +482,15 @@ test package on the device. Dispatch `sdk-e2e.yml` with `android` or `ios` in
   mocha `--grep`; empty runs the full catalog.
 - The app always builds this commit's `packages/sdk`, `packages/inference` and
   `packages/test-suite`.
+- `sdk-swift`'s app runs on iOS only, signed with the React Native app's bundle id
+  and profile. `mac` in `platforms` adds the Swift client's macOS leg.
 - The job summary compares the results with the newest dispatch run's on the
   base branch, and `<package>-results-<configuration>` holds the reports.
 
 ```bash
 gh workflow run sdk-e2e.yml --ref <branch> -f languages=js -f platforms=android
 gh workflow run sdk-e2e.yml --ref <branch> -f languages=kotlin -f platforms=android
+gh workflow run sdk-e2e.yml --ref <branch> -f languages=swift -f platforms=ios
 ```
 
 ## PRs and Merge Guard

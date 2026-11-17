@@ -9,12 +9,12 @@ schemaType: TechArticle
 
 ## Overview
 
-Install the JS/TS, Python, or Kotlin client in your project. Then, load models and use them to perform AI inference locally.
+Install the JS/TS, Python, Kotlin, or Swift client in your project. Then, load models and use them to perform AI inference locally.
 
 The SDK has two layers:
 
 - **Worker** — the runtime that actually runs the models. Today the worker ships as the `@qvac/sdk` npm package.
-- **Clients** — per-language APIs that drive the worker. JS/TS (`@qvac/sdk` on npm), Python (`tetherto-qvac-sdk` on PyPI), and Kotlin (`io.tether:qvac-sdk-kotlin` on GitHub Releases) use the same generated contract. Android can embed the worker through capability-specific AARs.
+- **Clients** — per-language APIs that drive the worker. JS/TS (`@qvac/sdk` on npm), Python (`tetherto-qvac-sdk` on PyPI), Kotlin (`io.tether:qvac-sdk-kotlin` on GitHub Releases), and Swift (`QvacSDK`, a Swift package from the QVAC repository) use the same generated contract. Android can embed the worker through capability-specific AARs, and iOS and macOS apps through worker profile frameworks.
 
 Pick the client that matches your stack:
 
@@ -27,6 +27,9 @@ Pick the client that matches your stack:
   </Card>
   <Card href="/sdk/kotlin-sdk" title="Kotlin SDK">
     Kotlin client — `io.tether:qvac-sdk-kotlin` on GitHub Releases. Self-contained Android AARs; coroutine-native and Android service-ready.
+  </Card>
+  <Card href="/sdk/swift-sdk" title="Swift SDK">
+    Swift client — `QvacSDK` with Swift Package Manager. Runs the worker inside iOS and macOS apps; async/await-native.
   </Card>
 </Cards>
 
@@ -43,9 +46,9 @@ The SDK is cross-platform, type-safe, and pluggable, exposing all QVAC capabilit
 
 ### Key features
 
-- **Cross-platform:** portable code across Linux, macOS, and Windows (JS/TS on Node.js / [Bare runtime](https://bare.pears.com), Python on CPython, Kotlin on JVM); Android via [Expo](https://expo.dev) or a native Kotlin AAR, and iOS via Expo.
+- **Cross-platform:** portable code across Linux, macOS, and Windows (JS/TS on Node.js / [Bare runtime](https://bare.pears.com), Python on CPython, Kotlin on JVM); Android via [Expo](https://expo.dev) or a native Kotlin AAR, and iOS via Expo or the native Swift package, which also runs on macOS.
 - **Pluggable**: build lean apps by including only what you need, and extend the SDK with custom plugins.
-- **Type-safe:** typed APIs in JavaScript, Python (Pydantic), and Kotlin (serialization models and typed builders generated from the same contract).
+- **Type-safe:** typed APIs in JavaScript, Python (Pydantic), Kotlin (serialization models and typed builders), and Swift (`Codable` types), the last three generated from the same contract.
 - **Unified interface:** multiple AI tasks, one client package per language.
 
 ## Functionalities
@@ -103,7 +106,7 @@ Before you can use a model, you need to load it from some location into memory. 
 3. When you are done with a model, unload it to release computer resources.
 4. Finally, close the SDK instance.
 
-The concrete API names differ by client — in JS/TS it is `loadModel()` / `completion()` / `unloadModel()` / `close()` (see [API reference](/sdk/reference/api)); in Python it is `load_model` / `completion` / `unload_model` and the `Client()` context manager (see [Python SDK](/sdk/python-sdk)); in Kotlin it is `client.models.load(...)` / `client.completion.run(...)` / `client.models.unload(...)` / `client.close()` (see [Kotlin SDK](/sdk/kotlin-sdk)).
+The concrete API names differ by client — in JS/TS it is `loadModel()` / `completion()` / `unloadModel()` / `close()` (see [API reference](/sdk/reference/api)); in Python it is `load_model` / `completion` / `unload_model` and the `Client()` context manager (see [Python SDK](/sdk/python-sdk)); in Kotlin it is `client.models.load(...)` / `client.completion.run(...)` / `client.models.unload(...)` / `client.close()` (see [Kotlin SDK](/sdk/kotlin-sdk)); in Swift it is `client.models.load(...)` / `client.completion.run(...)` / `client.models.unload(...)` / `client.close()` (see [Swift SDK](/sdk/swift-sdk)).
 
 ## Models
 
@@ -153,6 +156,9 @@ For more on loading models in JS/TS, see [`loadModel()` at `@qvac/sdk` API refer
   </Card>
   <Card href="/sdk/kotlin-sdk#api-surface" title="Kotlin API surface">
     Coroutine-native high-level wrappers plus the complete generated worker contract.
+  </Card>
+  <Card href="/sdk/swift-sdk#api-surface" title="Swift API surface">
+    Async/await high-level wrappers plus the complete generated worker contract.
   </Card>
 </Cards>
 
