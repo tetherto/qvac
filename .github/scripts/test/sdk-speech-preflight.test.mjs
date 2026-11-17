@@ -1,7 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, cpSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
@@ -31,6 +33,24 @@ function temporary(t) {
   t.after(() => rmSync(root, { recursive: true, force: true }))
   return root
 }
+
+test('the SDK planner imports from its sparse checkout without packaging helpers', (t) => {
+  const root = temporary(t)
+  const source = fileURLToPath(new URL('../../../packages/sdk/ci/', import.meta.url))
+  const destination = join(root, 'packages/sdk/ci')
+  cpSync(source, destination, { recursive: true })
+  const result = spawnSync(
+    process.execPath,
+    [
+      '--input-type=module',
+      '-e',
+      'await import(process.argv[1])',
+      pathToFileURL(join(destination, 'e2e-report.mjs')).href
+    ],
+    { encoding: 'utf8' }
+  )
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`)
+})
 
 test('accepts the pinned native build and rejects a different revision, repository or workflow', () => {
   assert.doesNotThrow(() => validateRun(RUN, CONFIG))

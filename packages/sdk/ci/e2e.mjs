@@ -19,7 +19,6 @@ import {
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { prepareSpeechPreflight, verifySpeechPreflight } from './speech-preflight.mjs'
 
 export const ROOT = fileURLToPath(new URL('../../..', import.meta.url))
 export const SDK = join(ROOT, 'packages/sdk')
@@ -432,6 +431,7 @@ async function main(family, env) {
   const tests = list('tests', env.CI_TESTS)
   const label = `${family}-${platform}`
   const reports = join(E2E, 'reports')
+  const { prepareSpeechPreflight, verifySpeechPreflight } = await import('./speech-preflight.mjs')
   const speechPreflight = family === 'desktop' ? prepareSpeechPreflight(ROOT, env) : null
   let e = prepare(env)
   verifySpeechPreflight(E2E, speechPreflight)
