@@ -59,6 +59,10 @@ on:
         description: The one package to test, by name or directory
         required: true
         type: string
+      weekly:
+        description: Run the package's <platform>Weekly test groups, as the Sunday run does
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -115,6 +119,7 @@ jobs:
       package: ${{ inputs.package }}
       prebuild_run_id: ${{ inputs.prebuild_run_id }}
       dependency_prebuild_run_id: ${{ inputs.dependency_prebuild_run_id }}
+      weekly: ${{ inputs.weekly }}
 
   weekly:
     if: github.event.schedule == '0 6 * * 0'

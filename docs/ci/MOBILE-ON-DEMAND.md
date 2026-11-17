@@ -260,6 +260,9 @@ the many shards into a single filtered run, a big cost saving. Leaving it empty
 on a sharded addon runs the **full** shard set pinned to your chosen device(s),
 which is many runs.
 
+Tick `weekly` to run the package's `androidWeekly`/`iosWeekly` groups instead,
+sharded as the Sunday run shards them, on the device(s) you pick.
+
 **A typo can't waste money or pass green.** The `check` job matches your filter
 against the committed runner names *before* any build, and fails fast (printing
 the known runners) if it matches none, so a mistyped filter can't reach the
