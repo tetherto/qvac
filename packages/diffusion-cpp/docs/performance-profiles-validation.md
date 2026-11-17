@@ -202,7 +202,7 @@ All three original test directories were removed after preserving results, freei
 
 [Engine #64](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/64) is merged. Its two per-context setters are available; the addon uses the VAE setter only. No Fabric change or SDK runtime change is needed. `@qvac/inference` has a separate schema/documentation PR for forwarding optional configuration.
 
-The addon consumes `stable-diffusion-cpp` `2026-11-01#1` from the [QVAC-27486 registry branch](https://github.com/tetherto/qvac-registry-vcpkg/tree/codex/qvac-27486-diffusion-engine64), pinned to `c33611a32161c01324d961cd72c5ee400262415a`. The scoped registry entry selects only this port; the default and Microsoft registry baselines remain unchanged. All five registry port files are byte-identical to the validated overlay, which has been removed from the addon. The version history records port tree `009eb7745259b95913109f5b1f1a1ff71495718c` and retains every previous version.
+The addon consumes `stable-diffusion-cpp` `2026-11-01#1` from the branch in [registry #496](https://github.com/tetherto/qvac-registry-vcpkg/pull/496), pinned to `c33611a32161c01324d961cd72c5ee400262415a`. The scoped registry entry selects only this port; the default and Microsoft registry baselines remain unchanged. All five registry port files are byte-identical to the validated overlay, which has been removed from the addon. The version history records port tree `009eb7745259b95913109f5b1f1a1ff71495718c` and retains every previous version.
 
 The engine archive SHA-512 remains `dced9d52efbf8ae7b35cd9e81816190f85178a631c6166095034375d92e0847125f435ec8fed4e7642817158ceb5f5967d34f71b83fcd89756b5d969efa5f71a`; ggml remains on the existing 2026-11-01 revision.
 
