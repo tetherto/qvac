@@ -1,5 +1,5 @@
 // Rebuild licensed runtime artifacts from explicit local source checkouts.
-// Usage: node scripts/vendor-libraries.mjs --yaml-source <miniyaml> --qr-source <qr-fork>
+// Usage: node scripts/vendor-libraries.mjs --yaml-source <miniyaml>
 import { readFile, writeFile, mkdir, readdir, cp } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
@@ -14,11 +14,9 @@ function option(name) {
   return resolve(args[index + 1])
 }
 const yaml = option('--yaml-source')
-const qr = option('--qr-source')
 const target = fileURLToPath(new URL('../src/lib/vendor/', import.meta.url))
 const yamlPkg = JSON.parse(await readFile(join(yaml, 'package.json'), 'utf8'))
-const qrPkg = JSON.parse(await readFile(join(qr, 'package.json'), 'utf8'))
-if (yamlPkg.name !== 'miniyaml' || qrPkg.name !== 'qrcode-generator') {
+if (yamlPkg.name !== 'miniyaml') {
   throw new Error('Unexpected source package')
 }
 execFileSync('npm', ['run', 'build'], { cwd: yaml, stdio: 'inherit' })
@@ -50,8 +48,6 @@ await build({
 })
 await cp(join(yaml, 'lib/index.mjs'), join(target, 'miniyaml.mjs'))
 await cp(join(yaml, 'lib/index.d.ts'), join(target, 'miniyaml.d.mts'))
-await cp(join(qr, 'index.js'), join(target, 'qrcode.mjs'))
-await cp(join(qr, 'index.d.ts'), join(target, 'qrcode.d.mts'))
 await writeFile(
   join(target, 'miniyaml-openapi.d.mts'),
   'export declare function parse(source: string): unknown\n'
@@ -59,9 +55,7 @@ await writeFile(
 for (const [source, name] of [
   [join(yaml, 'LICENSE'), 'LICENSE.js-yaml'],
   [join(yaml, 'LICENSE.md'), 'LICENSE.miniyaml'],
-  [join(yaml, 'NOTICE.md'), 'NOTICE.miniyaml.md'],
-  [join(qr, 'LICENSE'), 'LICENSE.qrcode'],
-  [join(qr, 'NOTICE.md'), 'NOTICE.qrcode.md']
+  [join(yaml, 'NOTICE.md'), 'NOTICE.miniyaml.md']
 ]) {
   await cp(source, join(target, name))
 }
@@ -82,7 +76,7 @@ async function sourceHash(root, entries) {
   return hash(records.join('\n'))
 }
 const artifacts = {}
-for (const name of ['miniyaml.mjs', 'miniyaml-openapi.mjs', 'qrcode.mjs']) {
+for (const name of ['miniyaml.mjs', 'miniyaml-openapi.mjs']) {
   artifacts[name] = { sha256: hash(await readFile(join(target, name))) }
 }
 const provenance = {
@@ -93,18 +87,6 @@ const provenance = {
     sourceSha256: await sourceHash(yaml, ['src', 'support/build-library.mjs', 'package.json']),
     changes:
       'Tether Core-only parser and direct writer; private OpenAPI variant adds v4 default tags and scalar/key compatibility using scripts/vendor sources.'
-  },
-  qrcode: {
-    version: qrPkg.version,
-    upstream: {
-      name: 'qrcode-generator',
-      version: '2.0.4',
-      commit: '83b7e8fe3fddd3b0368dbafd6ce56995bd25e3c8',
-      url: 'https://github.com/kazuhikoarase/qrcode-generator'
-    },
-    sourceSha256: await sourceHash(qr, ['index.js', 'index.d.ts', 'package.json']),
-    changes:
-      'Tether matrix-only fork; browser/image/encoding-map helpers removed; original matrix algorithms retained.'
   },
   compatibilitySourceSha256: await sourceHash(
     fileURLToPath(new URL('./vendor/', import.meta.url)),

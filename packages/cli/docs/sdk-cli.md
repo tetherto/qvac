@@ -1,6 +1,6 @@
 # QVAC SDK commands
 
-The `qvac sdk` commands build, bundle, diagnose and serve QVAC-powered applications. The top-level `qvac` command opens the workspace app; `qvac serve` runs a peer host, while `qvac sdk serve` runs the SDK HTTP API.
+The `qvac sdk` commands build, bundle, diagnose and serve QVAC-powered applications. `qvac sdk serve` runs the SDK HTTP API.
 
 This package is published to npm as **`@qvac/cli`** and lives in the QVAC monorepo at **`packages/cli`**. Older instructions may refer to the deprecated **`qvac-cli`** package name—use **`@qvac/cli`** instead.
 

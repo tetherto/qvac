@@ -74,14 +74,9 @@ jobs:
           node-version: 22
 
       # --ignore-scripts keeps dependency lifecycle scripts out of CI (see
-      # .github/scripts/test/install-scripts-policy.test.mjs), so the CLI's own
-      # postinstall, which applies its dependency patches, runs as a step.
+      # .github/scripts/test/install-scripts-policy.test.mjs).
       - name: Install dependencies
         run: npm ci --ignore-scripts
-        working-directory: ${{ env.WORKDIR }}
-
-      - name: Apply dependency patches
-        run: npm run prepare:runtime
         working-directory: ${{ env.WORKDIR }}
 
       - name: Run format

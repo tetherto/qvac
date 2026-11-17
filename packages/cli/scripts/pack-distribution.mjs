@@ -25,8 +25,6 @@ try {
     'npm-shrinkwrap.json',
     'dist',
     'scripts',
-    'patches',
-    'skills',
     'docs',
     'README.md',
     'LICENSE',

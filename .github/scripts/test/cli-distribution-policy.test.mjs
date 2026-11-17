@@ -39,10 +39,6 @@ test("CLI installs from its lock and publishes validated archives on every strea
     step(workflow, "Install dependencies"),
     /npm ci --ignore-scripts\n/,
   );
-  assert.ok(
-    workflow.indexOf("Install dependencies") <
-      workflow.indexOf("Apply dependency patches"),
-  );
   assert.doesNotMatch(
     workflow,
     /sdk-source:workspace|cli-rewrite-sdk-scope-for-gpr/,

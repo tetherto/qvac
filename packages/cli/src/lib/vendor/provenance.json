@@ -10,17 +10,6 @@
     "sourceSha256": "041c2729789b92b4d7f661f2d1470bc782af81bc5be023239d117df95c544e35",
     "changes": "Tether Core-only parser and direct writer; private OpenAPI variant adds v4 default tags and scalar/key compatibility using scripts/vendor sources."
   },
-  "qrcode": {
-    "version": "3.0.0",
-    "upstream": {
-      "name": "qrcode-generator",
-      "version": "2.0.4",
-      "commit": "83b7e8fe3fddd3b0368dbafd6ce56995bd25e3c8",
-      "url": "https://github.com/kazuhikoarase/qrcode-generator"
-    },
-    "sourceSha256": "731a46a9e65fc3709057c231907c4157dc6cab110c49cc169b103a7cb414a3dc",
-    "changes": "Tether matrix-only fork; browser/image/encoding-map helpers removed; original matrix algorithms retained."
-  },
   "compatibilitySourceSha256": "c4334552d8f84a02ec258a3372309bd1bd3f1f54744ed7bfb1912119a9cb3b98",
   "artifacts": {
     "miniyaml.mjs": {
@@ -28,9 +17,6 @@
     },
     "miniyaml-openapi.mjs": {
       "sha256": "6fbd05fcaddcfd6875f3d1ea52fa666851e33847951f0f51f4eb422446c94778"
-    },
-    "qrcode.mjs": {
-      "sha256": "c5ad0a520ca85f75c4e5658fc0f775dfe24f68758df59b202eb34feb609b24aa"
     }
   }
 }

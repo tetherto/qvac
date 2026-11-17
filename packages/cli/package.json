@@ -1,31 +1,25 @@
 {
   "name": "@qvac/cli",
   "version": "0.22.0",
-  "description": "QVAC workspace, local AI chat and model host",
+  "description": "Command-line interface for the QVAC ecosystem",
   "author": "Tether",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
   "exports": {
-    ".": "./dist/product/app.js",
-    "./tui": "./dist/product/app.js",
+    ".": "./dist/index.js",
     "./package.json": "./package.json"
   },
   "bin": {
-    "qvac": "./dist/index.js",
-    "qvac-bare": "./dist/bare.js"
+    "qvac": "./dist/index.js"
   },
   "files": [
     "dist/**/*",
-    "scripts",
-    "skills",
     "README.md",
     "docs",
     "LICENSE",
     "NOTICE",
-    "!dist/runtime/**/*",
-    "npm-shrinkwrap.json",
-    "patches"
+    "npm-shrinkwrap.json"
   ],
   "engines": {
     "node": "^22.21.0 || >=24.9.0"
@@ -54,7 +48,7 @@
     "typecheck": "tsc -p tsconfig.test.json --noEmit",
     "typecheck:bench-serve-openai-providers": "tsc -p tsconfig.benchmark.json --noEmit",
     "test": "npx tsx --test 'test/unit/**/*.test.ts' && npm run test:workbench",
-    "test:unit": "npm run prepare:runtime && npx tsx --test 'test/unit/**/*.test.ts' && npm run typecheck:bench-serve-openai-providers && npm run test:bench-serve-openai-providers && npm run test:workbench",
+    "test:unit": "npx tsx --test 'test/unit/**/*.test.ts' && npm run typecheck:bench-serve-openai-providers && npm run test:bench-serve-openai-providers && npm run test:workbench",
     "test:bench-serve-openai-providers": "tsx --test benchmarks/serve-openai-providers/*.test.ts",
     "test:e2e": "npm run test:e2e:js",
     "test:e2e:js": "tsx --test 'test/e2e/*.test.ts' 'test/e2e/cli/*.test.ts' 'test/e2e/core/*.test.ts' 'test/e2e/default/*.test.ts' 'test/e2e/openai/*.test.ts' && tsx --test --test-concurrency=1 'test/e2e/model/*.test.ts'",
@@ -65,101 +59,23 @@
     "demo": "node dist/index.js",
     "start": "node dist/index.js",
     "dev": "pnpm build && node dist/index.js",
-    "test:integration": "node test/helpers/run-bare.mjs test/integration/core-smoke.mjs",
     "pack:local": "node scripts/pack-distribution.mjs",
-    "pear:build": "npm run build && node scripts/make.mjs",
     "test:pty": "node --test --test-concurrency=1 --test-timeout=300000 test/workbench/pty/*.pty.mjs",
-    "test:p2p": "node --test --test-concurrency=1 --test-timeout=900000 test/workbench/p2p/*.p2p.mjs",
-    "pear:stage": "npm run build && node scripts/make.mjs --stage",
-    "build:splash": "node scripts/build-splash.mjs",
     "test:workbench": "npm run build && node --test test/workbench/*.test.mjs",
-    "postinstall": "node scripts/patch-dependencies.mjs",
-    "prepare:runtime": "node scripts/patch-dependencies.mjs",
-    "test:standalone": "node --test test/standalone.test.mjs",
-    "test:invite": "node test/helpers/run-bare.mjs test/integration/invite-smoke.mjs",
     "test:diagnostics": "bash test/e2e/check-diagnostics.sh",
     "prepack": "node scripts/check-publish-ready.cjs"
   },
   "dependencies": {
-    "@qvac/asr-ggml": "0.11.2",
-    "@qvac/audiogen-ggml": "0.9.1",
-    "@qvac/bci-whispercpp": "0.14.1",
-    "@qvac/classification-ggml": "0.34.1",
-    "@qvac/core": "1.0.0-rc.8",
-    "@qvac/decoder-audio": "0.8.1",
-    "@qvac/diffusion-cpp": "0.31.0",
-    "@qvac/embed-llamacpp": "0.53.1",
-    "@qvac/ggml-rpc-server": "0.7.1",
-    "@qvac/harness": "1.0.0-rc.19",
-    "@qvac/inference": "0.23.0",
-    "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "0.65.1",
-    "@qvac/ocr-ggml": "0.31.1",
     "@qvac/sdk": "0.23.0",
-    "@qvac/skills": "0.3.0",
-    "@qvac/translation-nmtcpp": "0.23.1",
-    "@qvac/tts-ggml": "0.14.1",
-    "@qvac/turbovec-ggml": "0.3.1",
-    "@qvac/vla-ggml": "0.34.1",
-    "autobee": "^2.13.3",
-    "b4a": "^1.9.0",
-    "bare-abort-controller": "1.1.2",
-    "bare-crypto": "^1.15.3",
-    "bare-events": "^2.9.1",
-    "bare-ffmpeg": "^1.7.1",
-    "bare-fs": "^4.8.4",
-    "bare-http1": "4.6.1",
-    "bare-https": "3.1.0",
-    "bare-image-resample": "^1.0.2",
-    "bare-link": "4.1.0",
-    "bare-media": "^2.10.0",
-    "bare-module": "7.4.0",
-    "bare-module-traverse": "2.5.9",
-    "bare-net": "^2.3.2",
-    "bare-os": "^3.9.4",
-    "bare-path": "3.1.2",
-    "bare-pdfium": "1.8.0",
-    "bare-process": "4.5.1",
-    "bare-runtime": "1.36.0",
     "bare-semver": "^1.1.0",
-    "bare-sidecar": "0.5.15",
-    "bare-stow": "0.1.7",
-    "bare-subprocess": "^6.1.0",
-    "bare-supervisor": "^0.1.1",
-    "bare-thread": "1.4.0",
-    "bare-tls": "3.2.0",
-    "bare-tty": "^5.1.2",
-    "bare-tui": "0.3.0",
-    "bare-tui-updater": "0.0.1",
-    "bare-url": "^2.5.6",
-    "bare-worker": "4.5.3",
-    "barevisor": "0.1.0",
-    "compact-encoding": "^3.4.0",
-    "corestore": "7.16.1",
-    "fs-native-extensions": "^1.5.2",
-    "fs-native-lock": "1.2.0",
     "graceful-goodbye": "^1.3.3",
-    "hrpc": "^4.3.0",
-    "hypercore": "11.40.3",
-    "hypercore-crypto": "^3.7.0",
-    "hyperdb": "^6.11.1",
-    "hyperschema": "^1.26.2",
-    "hyperswarm": "^4.17.1",
     "paparam": "^1.13.0",
-    "pear-runtime-updater": "3.4.0",
-    "ready-guard": "^1.0.0",
-    "ready-resource": "^1.2.0",
-    "safety-catch": "^1.0.3",
-    "scope-lock": "^1.2.4",
-    "streamx": "^2.28.0",
     "zod": "4.6.5"
   },
   "devDependencies": {
     "@types/node": "^25.3.3",
     "bare-buffer": "3.7.1",
-    "bare-build": "1.2.1",
-    "bare-bundle": "1.11.0",
-    "brittle": "^4.1.0",
+    "bare-tui": "0.3.0",
     "lunte": "^1.8.2",
     "lunte-plugin-qvac": "^0.2.0",
     "openai": "^6.48.0",
@@ -169,49 +85,7 @@
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
-  "optionalDependencies": {
-    "@jitl/quickjs-singlefile-mjs-release-sync": "0.32.0",
-    "pyodide": "314.0.2",
-    "quickjs-emscripten-core": "0.32.0"
-  },
   "imports": {
-    "#abort-controller": {
-      "bare": "bare-abort-controller",
-      "default": "./dist/lib/runtime/abort-controller.js"
-    },
-    "#child_process": {
-      "bare": "bare-subprocess",
-      "default": "child_process"
-    },
-    "#config-import": {
-      "bare": "./dist/lib/runtime/config-import.bare.js",
-      "default": "./dist/lib/runtime/config-import.js"
-    },
-    "#fs": {
-      "bare": "bare-fs",
-      "default": "fs"
-    },
-    "#os": {
-      "bare": "bare-os",
-      "default": "os"
-    },
-    "#path": {
-      "bare": "bare-path",
-      "default": "path"
-    },
-    "#process": {
-      "bare": "bare-process",
-      "default": "process"
-    },
-    "#url": {
-      "bare": "bare-url",
-      "default": "url"
-    }
-  },
-  "assets": [
-    "dist/runtime/**"
-  ],
-  "overrides": {
-    "@qvac/harness": "$@qvac/harness"
+    "#config-import": "./dist/lib/runtime/config-import.js"
   }
 }

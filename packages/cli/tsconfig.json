@@ -9,8 +9,7 @@
     "outDir": "dist",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "b4a": ["./types/b4a.d.ts"]
+      "@/*": ["./src/*"]
     },
     "lib": ["ES2023"],
     "declaration": false,

@@ -1,15 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { sdkTree, sdkOptions } from '../../dist/cli/commands/sdk/tree.js'
-import { parseArgs } from '../../dist/cli/index.js'
+import { sdkArguments } from '../../dist/cli/commands/sdk/arguments.js'
 
 const parse = (words) => sdkTree().parse(words, { sync: true, run: false })
 
-test('peer serve and SDK HTTP serve have separate routes', () => {
-  assert.equal(parseArgs(['serve'], { env: {} }).where, 'core')
-  const sdk = parseArgs(['sdk', 'serve', '--openai'], { env: {} })
-  assert.equal(sdk.where, 'launcher')
-  assert.deepEqual(sdk.words, ['serve', '--openai'])
+test('qvac sdk words route to the SDK tree', () => {
+  assert.deepEqual(sdkArguments(['sdk', 'serve', '--openai']), ['serve', '--openai'])
 })
 
 test('SDK repeatable, short, and negative flags preserve handler options', () => {
@@ -38,9 +35,6 @@ test('managed integrations keep their explicit legacy HTTP serve launch', () => 
     ['serve', '--openai', '--no-default', '--ready-fd', '3'],
     ['serve', 'openai']
   ]) {
-    const route = parseArgs(words, { env: {} })
-    assert.equal(route.command, 'sdk')
-    assert.equal(route.where, 'launcher')
-    assert.deepEqual(route.words, words)
+    assert.deepEqual(sdkArguments(words), words)
   }
 })
