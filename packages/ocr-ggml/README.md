@@ -43,8 +43,8 @@ vcpkg, bare-make) match the rest of the QVAC monorepo — see the
 
 ### Supported platforms
 
-Prebuilds are produced by CI for the following targets (see
-[`reusable-prebuilds.yml`](../../.github/workflows/reusable-prebuilds.yml)):
+Prebuilds are produced by CI for the following targets (see the `build`
+configurations in [`project.json`](project.json)):
 
 | Platform | Architectures |
 |---|---|

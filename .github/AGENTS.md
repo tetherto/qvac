@@ -14,6 +14,17 @@ Read the relevant references before changing CI:
 - [`../docs/ci/MOBILE-ON-DEMAND.md`](../docs/ci/MOBILE-ON-DEMAND.md) for dispatching
   addon mobile (Device Farm) tests and choosing the prebuild source.
 - [`../docs/agent-automation.md`](../docs/agent-automation.md) for automation safety.
+- [`../docs/ci/workflow-standard.md`](../docs/ci/workflow-standard.md) for packages on
+  the CI contract.
+
+Before changing a package's CI, check whether its `project.json` carries the
+`ci:addons` or `ci:sdk` tag (`pnpm exec nx show projects --projects tag:ci:addons,tag:ci:sdk`):
+
+- Tagged: change the package's own `project.json`, `ci/` directory or model manifest.
+  Change a shared workflow or action only when most packages on the contract need it,
+  and never add a package-specific condition to one. Use the `qv-ci-contract` skill.
+- Untagged: keep to the workflows the package names itself, such as the registry
+  server's `publish-registry-server.yml`.
 
 When editing workflows or composite actions:
 

@@ -40,7 +40,7 @@ not interleaving.
 | Arg | Required | Default | Meaning |
 |-----|----------|---------|---------|
 | target | yes | — | `#<n>` / PR URL → PR mode; otherwise a branch name |
-| `--device` | no | `s25` | Device Farm phone as a `matrix_mobile` token: `s25` (S25 Ultra / Adreno), `pixel9` (Pixel 9 / Mali), `s26` (S26 Ultra), `iphone16` / `iphone17` / `iphone17pro`. Passed as `-f matrix_mobile=<token>` at dispatch (Step 8) — the workflow resolves it to a **single-device `device_model` filter**. A friendly name ('Pixel 9') maps to its token (`pixel9`). Append `-cpu`/`-gpu` to force the model backend; bare token = the harness picks per `--mmproj`. |
+| `--device` | no | `s25` | Device Farm phone: `s25` (Samsung Galaxy S25 Ultra / Adreno), `pixel9` (Google Pixel 9 / Mali), `s26` (Samsung Galaxy S26 Ultra), `iphone16` / `iphone17` / `iphone17pro`. Passed as the full model name in `-f devices=<model>` with its `-f platform=` at dispatch (Step 8); Device Farm matches it exactly. Add `vlm_devices=cpu` or `vlm_devices=gpu` to `args` to force the model backend; the default `cpu,gpu` = the harness picks per `--mmproj`. |
 | `--model` | no | `qwen3.5-q8` | Which VLM to benchmark — a `config.cjs` catalog `label` (`qwen3.5-f16`, `qwen3.5-q8`, `gemma4-q4` = Gemma-4-E2B Q4) or a new one the skill adds (Step 6). A friendly value like `gemma4`/`gemma4-e2b` maps to the `gemma4-q4` catalog entry. Default = `MODEL_2` / current `mmprojModel` |
 | `--preset` | no | `full` | `full` (5 tasks×5, sharpest — DEFAULT; but **overruns the mobile session for `mmproj=both`** → use only on desktop or `mmproj=gpu`, or raise `mobile_timeout_min` — see Step 8) · `base` (5 tasks×3 = the `cognitive` set with `matrix_samples=3`; **the mobile `mmproj=both` choice**) · `smoke` (textvqa×1, wiring check). Default to `base` on mobile `mmproj=both`. |
 | `--runs` | no | `2` | runs per build (2 baseline + 2 optimized = a 4-run CPU-matched set) |
@@ -153,7 +153,7 @@ git -C <qvac> worktree add <worktree> -b test/<slug> <base>
   `match-devices.js`, and the `matrix_mmproj_gpu` input + conditional targeted-android prebuild in
   `benchmark-vlm-model-comparison.yml`. (Never merge the old `feat/QVAC-21257-mmproj-gpu-config`: it
   trails `main` by ~100 commits, its addon C++ conflicts with `main`'s `ContextSlideOutcome` refactor,
-  and its `matrix-s25`/`android_flagship_models` wiring predates `main`'s `matrix_mobile`/`device_model`.)
+  and its `matrix-s25`/`android_flagship_models` wiring predates the `devices` input.)
 
 **Two refs, one delta.** The A/B is two refs that share **identical** harness config and differ
 **only** by the optimization. Build them in this order (Step 6 gives the exact edits):
@@ -198,16 +198,15 @@ approval needed**, since it's an isolated branch/worktree:
   - **Addon** — cherry-pick / merge the PR/branch's addon commits onto the optimized ref only.
 - **Model** (`--model`, as reconciled in Step 3) — where it's set depends on the mmproj axis:
   - `--mmproj both` (mmproj-compare) → the run uses `config.mmprojModel`, read directly by the compare
-    path (it does **not** honor `matrix_models`). Set `mmprojModel` in `config.cjs` on the `test/` ref
+    path (it does **not** honor `models=`). Set `mmprojModel` in `config.cjs` on the `test/` ref
     (e.g. `mmprojModel: GEMMA4_Q4` for `gemma4-q4` / Gemma-4-E2B). If the model isn't defined yet, add a
     `{label, name, ctx_size, llm: hf(...), mmproj: hf(...)}` literal (match the blob `repo`/`sha`/`file`
     to the registry/HF source) and point `mmprojModel` at it.
-  - `--mmproj gpu` (two-models) → pass the model(s) via `-f matrix_models=…` at dispatch (forwarded to
+  - `--mmproj gpu` (two-models) → pass the model(s) as `models=…` in `args` at dispatch (forwarded to
     the phone as `QVAC_VLM_MODELS`); no branch edit.
-- **Device / preset / samples / mode are DISPATCH INPUTS — not harness edits.** Main's benchmark forwards
-  them to the phone via the `matrix-mobile` job's `device_env` channel (`QVAC_VLM_PRESET` ← `matrix_preset`,
-  `QVAC_VLM_SAMPLES` ← `matrix_samples`, `QVAC_VLM_MODE` ← `matrix_mode`, and `device_model`/
-  `device_manufacturer` from the `matrix_mobile` token). Pass them as `-f` flags in Step 8 — **do not edit
+- **Device / preset / samples / mode are DISPATCH INPUTS — not harness edits.** llm's `ci/prepare-mobile.mjs` forwards
+  the `args` words to the phone as device env (`QVAC_VLM_PRESET` ← `preset`, `QVAC_VLM_SAMPLES` ← `samples`,
+  `QVAC_VLM_MODE` ← `mode`), and `devices` picks the phone. Pass them at dispatch in Step 8 — **do not edit
   the branch for these.** The `--device` token fixes the GPU backend (`s25`→Adreno/OpenCL,
   `pixel9`→Mali/Vulkan) → which drives the Step 9 routing-proof grep and which opts are even relevant.
 - **mmproj** (`--mmproj`) — the **one** run knob that IS a test-branch config edit for mobile: set
@@ -234,30 +233,24 @@ Push only on approval.
 ### Step 8 — Run baseline + optimized on Device Farm (`--runs` each)
 
 Dispatch **each ref `--runs` times** — the optimized ref and the baseline ref from Step 5. `<device>`
-is the `--device` token (default `s25`); `matrix_desktop=none` forces **zero** desktop cells → the run
-is mobile-only, which triggers the targeted android-only prebuild (`prebuild-candidate-mobile`, built
-**with the Vulkan SDK** for Mali) and skips the heavy full-desktop prebuild + desktop legs. ⚠️ Use the
-literal `none` (any non-empty unknown token works), **not** an empty string — the workflow defaults an
-empty/unset `matrix_desktop` to `linux-cpu` (`${MATRIX_DESKTOP:-linux-cpu}`), which would run the full
-desktop prebuild and **skip** the targeted mobile build. `matrix_sources=addon@candidate` builds the
-addon **from the dispatched ref** so the ref's fabric overlay / addon commits actually take effect:
+is the `--device` phone's full model name (default `s25` = `Samsung Galaxy S25 Ultra`);
+`run_desktop=false` skips the desktop legs, so the run is mobile-only. The mobile app bundles the
+addon built **from the dispatched ref**, so the ref's fabric overlay / addon commits take effect:
 ```
 # optimized — dispatch --runs times
-gh workflow run benchmark-vlm-model-comparison.yml --repo tetherto/qvac \
-  --ref test/<slug> \
-  -f matrix_sources=addon@candidate -f matrix_desktop=none \
-  -f matrix_mobile=<device> -f matrix_preset=<preset> -f matrix_mode=two-models
+gh workflow run benchmarks.yml --repo tetherto/qvac --ref test/<slug> -f packages=llm-llamacpp \
+  -f run_desktop=false -f run_mobile=true -f platform=<Android|iOS> -f devices=<device> \
+  -f args="suite=vlm sources=addon@candidate preset=<preset> mode=two-models"
 # baseline — dispatch --runs times (identical inputs; only --ref differs)
-gh workflow run benchmark-vlm-model-comparison.yml --repo tetherto/qvac \
-  --ref test/<slug>-base \
-  -f matrix_sources=addon@candidate -f matrix_desktop=none \
-  -f matrix_mobile=<device> -f matrix_preset=<preset> -f matrix_mode=two-models
+gh workflow run benchmarks.yml --repo tetherto/qvac --ref test/<slug>-base -f packages=llm-llamacpp \
+  -f run_desktop=false -f run_mobile=true -f platform=<Android|iOS> -f devices=<device> \
+  -f args="suite=vlm sources=addon@candidate preset=<preset> mode=two-models"
 ```
-**`--preset` → dispatch inputs.** `matrix_preset` names a `config.cjs` preset (`smoke`, `cognitive`,
+**`--preset` → `args` words.** `preset` names a `config.cjs` preset (`smoke`, `cognitive`,
 `full`); there is **no `base` preset**, so map the arg:
-- `full` → `-f matrix_preset=full`
-- `base` → `-f matrix_preset=cognitive -f matrix_samples=3` (the 5 VQA tasks × 3 = 15/cell, no OCR)
-- `smoke` → `-f matrix_preset=smoke`
+- `full` → `preset=full`
+- `base` → `preset=cognitive samples=3` (the 5 VQA tasks × 3 = 15/cell, no OCR)
+- `smoke` → `preset=smoke`
 
 ⚠️ **Mobile session budget (critical for `mmproj=both`).** On mobile, `mmproj=both` runs **two** cells
 (CPU + GPU) in one Device-Farm session → ~2× the inferences. **`full` × `mmproj=both` overruns the
@@ -393,18 +386,16 @@ copy their exact column headers and phrasing.
   The older `feat/QVAC-21257-mmproj-gpu-config` is NOT usable — it trails `main` by ~100 commits and its
   addon C++ conflicts with `main`'s `ContextSlideOutcome` refactor (the removed `FullWipe`). **End state:**
   once the grafted branch lands on `main`, drop the Step 5 merge and base directly on `origin/main`.
-- **Device targeting** — a `-f matrix_mobile=<token>` dispatch input (`s25`/`pixel9`/`s26`/`iphone*`),
-  **not** a branch edit. The `context` job resolves each token to `device_model`+`device_manufacturer`
-  and the `matrix-mobile` job runs it as a single-device Device Farm filter (one phone per token).
-- **What reaches the phone** — the `matrix-mobile` job forwards dispatch inputs to the device via its
-  `device_env` (`QVAC_VLM_PRESET` ← `matrix_preset`, `QVAC_VLM_MODE` ← `matrix_mode`, `QVAC_VLM_SAMPLES`
-  ← `matrix_samples`, `QVAC_VLM_MODELS` ← `matrix_models`, plus `device_model`). So preset/mode/samples/
-  model are `-f` inputs, **not** `config.cjs` edits. The exception is `mmprojGpu` (`QVAC_VLM_MMPROJ_GPU`
+- **Device targeting** — the `-f devices=<model>` dispatch input with its `-f platform=`, **not** a
+  branch edit; Device Farm runs one session per model name, matched exactly.
+- **What reaches the phone** — llm's `ci/prepare-mobile.mjs` forwards the `args` words as device env
+  (`QVAC_VLM_PRESET` ← `preset`, `QVAC_VLM_MODE` ← `mode`, `QVAC_VLM_SAMPLES` ← `samples`,
+  `QVAC_VLM_MODELS` ← `models`). So preset/mode/samples/model are dispatch words, **not** `config.cjs` edits. The exception is `mmprojGpu` (`QVAC_VLM_MMPROJ_GPU`
   is desktop-only, absent from `device_env`) → set it in `config.cjs` on the `test/` ref.
 - **Per-op OpenCL profiling** (`GGML_OPENCL_PROFILING` / `CLPROF`) is out of scope: its per-kernel
   logcat routing is blocked under `GGML_BACKEND_DL` (the backend module's stderr is not captured).
 - **Assets it drives:** `benchmarks/vlm-benchmark/{config.cjs,harness.cjs,stage.cjs,aggregate.js,match-devices.js}`,
-  `.github/workflows/{benchmark-vlm-model-comparison,reusable-prebuild-targeted,integration-mobile-test-llm-llamacpp}.yml`.
+  `.github/workflows/benchmarks.yml` with llm's `ci/benchmark-vlm.sh`, `ci/benchmark-report.mjs` and `ci/prepare-mobile.mjs`.
   Worked examples of the output format: `QVAC-21320-benchmark-results.md`, `QVAC-21297-benchmark-results.md`.
 - **Writes** the results doc `QVAC-<ticket>-benchmark-results.md` to disk (Step 11) — **creating it if
   absent, otherwise prepending the new run as *Latest* and demoting the prior run to history (never

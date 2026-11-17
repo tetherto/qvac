@@ -1,0 +1,19 @@
+name: Check release branch
+description: Fail unless a release-<dir>-<x.y.z> ref publishes exactly that one package, at that version.
+
+inputs:
+  packages:
+    description: JSON array of the package directory names about to be published
+    required: true
+  workdir:
+    description: Package directory whose package.json version must match the branch; empty skips the version check
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+        WORKDIR: ${{ inputs.workdir }}
+      run: node "$GITHUB_ACTION_PATH/release-check-branch.mjs"

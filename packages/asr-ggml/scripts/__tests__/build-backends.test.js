@@ -43,15 +43,15 @@ function cudaSpeechDependency() {
   return speechDependencies(cudaFeature().dependencies)[0]
 }
 
-function publishBuildCi() {
-  return projectJson.targets.build.options.ci
+// The CI contract: each platform's build configuration args, and the hosts nx.json sets CUDA up on.
+function buildArgs(host) {
+  return projectJson.targets.build.configurations[host]?.args ?? ''
 }
 
-function platformDefines(host) {
-  const entry = (publishBuildCi().platformCmakeDefines ?? '')
-    .split('\n')
-    .find((line) => line.trim().startsWith(`${host}:`))
-  return entry === undefined ? '' : entry.slice(entry.indexOf(':') + 1).trim()
+function cudaHosts() {
+  const nxJson = JSON.parse(fs.readFileSync(path.join(packageRoot, '..', '..', 'nx.json'), 'utf8'))
+  const { hostSetup } = nxJson.targetDefaults.build.metadata.toolchain
+  return Object.keys(hostSetup).filter((h) => hostSetup[h].includes('cuda'))
 }
 
 function versionFloorOf(dependency) {
@@ -149,6 +149,6 @@ test('the GPU integration tests accept CUDA as a desktop backend', () => {
 })
 
 test('the published linux-x64 prebuild builds the CUDA backend', () => {
-  assert.equal(publishBuildCi().includeCuda, true)
-  assert.match(platformDefines(PUBLISHED_CUDA_HOST), new RegExp(`-D ${CUDA_CMAKE_OPTION}=ON`))
+  assert.ok(cudaHosts().includes(PUBLISHED_CUDA_HOST))
+  assert.match(buildArgs(PUBLISHED_CUDA_HOST), new RegExp(`-D ${CUDA_CMAKE_OPTION}=ON`))
 })

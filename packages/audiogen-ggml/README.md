@@ -8,14 +8,11 @@ on desktop CPUs and GPUs and returns stereo 44.1 kHz audio.
 
 ## How it works
 
-The C++ CI carve-out builds the native addon on the Ubuntu 22.04 CPU runner,
-reusing vcpkg and compiler caches with two build workers. Addon-level C++ tests
-remain a stub. Only trusted default-branch builds save shared caches; pushes
-affecting AudioGen or its cache configuration, a schedule every 2 days, and
-manual dispatches warm them.
-Non-PR runs build the triggering commit and reject inputs selecting another
-repository or revision. PR events retain caller-selected PR-head checkouts.
-See [C++ CI configuration](../../docs/ci/nx-ci-consolidation.md#optionsci-cheat-sheet).
+The C++ tests run through the CI contract's `cpp:build` and `cpp:tests` targets
+on the Ubuntu 22.04 CPU runner, with two build workers. Addon-level C++ tests
+remain a stub. Only trusted default-branch runs save the shared vcpkg cache;
+`cache-warm.yml` warms it on pushes that touch cache inputs, every 2 days, and
+on dispatch. See [the package CI contract](../../docs/ci/workflow-standard.md).
 
 Under the hood the model runs a small pipeline, and the addon just drives it and
 hands you the audio:
