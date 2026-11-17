@@ -12,6 +12,7 @@
 #include <gtest/gtest.h>
 #include <whisper.h>
 
+#include "model-interface/ModuleBackendsDir.hpp"
 #include "model-interface/bci/BCIModel.hpp"
 
 namespace {
@@ -248,13 +249,28 @@ TEST_P(BCIModelLoadTest, SelectorTransitionsRecreateContextOnlyWhenChanged) {
   EXPECT_TRUE(model.isLoaded());
 }
 
+TEST(BackendDirectory, ResolutionDoesNotInitializeBackends) {
+  const auto before = g_backendLoads;
+  qvac_lib_inference_addon_bci::resolveBackendsDir("");
+  qvac_lib_inference_addon_bci::resolveBackendsDir("explicit-backends");
+  EXPECT_EQ(g_backendLoads.fromFabric, before.fromFabric);
+  EXPECT_EQ(g_backendLoads.fromPath, before.fromPath);
+}
+
 TEST_P(BCIModelLoadTest, UnconfiguredBackendsComeFromFabricOncePerProcess) {
+  const auto before = g_backendLoads;
+  BCIModel first(config_);
+  ASSERT_NO_THROW(first.load());
+  const auto initialized = g_backendLoads;
+  EXPECT_GT(initialized.fromFabric, 0);
+  EXPECT_LE(initialized.fromFabric - before.fromFabric, 1);
+  EXPECT_EQ(initialized.fromPath, before.fromPath);
   for (int load = 0; load < K_REPEATED_LOADS; ++load) {
     BCIModel model(config_);
     ASSERT_NO_THROW(model.load());
   }
-  EXPECT_EQ(g_backendLoads.fromFabric, 1);
-  EXPECT_EQ(g_backendLoads.fromPath, 0);
+  EXPECT_EQ(g_backendLoads.fromFabric, initialized.fromFabric);
+  EXPECT_EQ(g_backendLoads.fromPath, initialized.fromPath);
 }
 
 INSTANTIATE_TEST_SUITE_P(

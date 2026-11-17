@@ -6,6 +6,7 @@ const path = require('bare-path')
 const process = require('bare-process')
 const { Readable } = require('bare-stream')
 const { ensureModel } = require('./download')
+const { loadPackages } = require('./load-speech-packages')
 
 const speechFirst = process.argv.includes('speech-first')
 const device = process.env.QVAC_TEST_DEVICE || 'cpu'
@@ -17,22 +18,6 @@ const LLM_MODEL = {
 const SPEECH_MODEL = {
   name: 'ggml-tiny.bin',
   url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.bin'
-}
-
-function loadSpeechPackages() {
-  require('@qvac/tts-ggml')
-  require('@qvac/audiogen-ggml')
-  require('@qvac/bci-whispercpp')
-  return require('@qvac/asr-ggml')
-}
-
-function loadPackages() {
-  if (speechFirst) {
-    const ASR = loadSpeechPackages()
-    return { ASR, LLM: require('@qvac/llm-llamacpp') }
-  }
-  const LLM = require('@qvac/llm-llamacpp')
-  return { LLM, ASR: loadSpeechPackages() }
 }
 
 async function complete(model) {
@@ -79,7 +64,7 @@ test(
   `speech and LLM share Fabric: ${speechFirst ? 'speech-first' : 'llm-first'}`,
   { timeout: TIMEOUT_MS },
   async (t) => {
-    const { LLM, ASR } = loadPackages()
+    const { LLM, ASR } = loadPackages(speechFirst)
     const [llmPath, speechPath] = await Promise.all([
       ensureModel(LLM_MODEL),
       ensureModel(SPEECH_MODEL)
