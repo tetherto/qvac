@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Update `bare-https` to version 4 for model downloads.
+
 - Build speech engines with Fabric ggml `11739.3.0#1` through `speech-cpp` `2026-11-13`, retaining addon-local backends and caller-provided backend directories.
 
 
