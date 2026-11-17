@@ -345,10 +345,19 @@ PerformanceProfile selectPerformanceProfile(
 
 bool useVaeGemm(
     const PerformanceProfile& profile, int width, int height, int batch,
-    uint64_t freeBytes, bool vaeTiling) {
-  return profile.vaeGemm && !vaeTiling && width == height &&
-         (width == 1024 || (width == 512 && profile.vaeGemm512)) &&
-         batch == 1 && freeBytes >= 16 * GIB;
+    uint64_t freeBytes, bool vaeTiling,
+    std::span<const sd_image_t> references) {
+  const auto supportedShape = [&](uint32_t w, uint32_t h) {
+    return w == h && (w == 1024 || (w == 512 && profile.vaeGemm512));
+  };
+  // A reference adds VAE encoding and conditioning tokens. Keep both its
+  // dimensions and count within the existing single-image bounds.
+  return profile.vaeGemm && !vaeTiling && supportedShape(width, height) &&
+         batch == 1 && freeBytes >= 16 * GIB && references.size() <= 1 &&
+         std::all_of(
+             references.begin(), references.end(), [&](const auto& ref) {
+               return supportedShape(ref.width, ref.height);
+             });
 }
 
 const char* ltxF16TensorRules() {

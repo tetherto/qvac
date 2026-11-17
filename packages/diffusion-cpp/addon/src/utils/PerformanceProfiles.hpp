@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 #include <string>
 
 #include "handlers/SdCtxHandlers.hpp"
@@ -38,7 +39,8 @@ PerformanceProfile selectPerformanceProfile(
     const SdCtxConfig& config, ProfileModel model, const ProfileDevice& device);
 bool useVaeGemm(
     const PerformanceProfile& profile, int width, int height, int batch,
-    uint64_t freeBytes, bool vaeTiling = false);
+    uint64_t freeBytes, bool vaeTiling = false,
+    std::span<const sd_image_t> references = {});
 const char* ltxF16TensorRules();
 void validatePerformanceWorkload(
     const SdCtxConfig& config, int width, int height, int frames);

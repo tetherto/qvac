@@ -589,7 +589,7 @@ void SdModel::fillCtxParams(CtxParams& out, bool allowMetadataOnly) const {
 }
 
 SdModel::FitOutcome SdModel::assessFit(const FitWorkload& workload) const {
-  if (workload.videoFrames > 1)
+  if (!workload.upscaleOnly)
     qvac_lib_inference_addon_sd::validatePerformanceWorkload(
         config_, workload.width, workload.height, workload.videoFrames);
   CtxParams ctx;
@@ -895,29 +895,6 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   qvac_lib_inference_addon_sd::applySdGenHandlers(
       gen, parsed.get<picojson::object>());
 
-  if (performanceProfile_.vaeGemm) {
-    const auto device = qvac_lib_inference_addon_sd::profileDevice(
-        performanceBackend_.c_str(), SD_BACKEND_PREF_GPU);
-    const bool gemm = gen.mode == "txt2img" && gen.loraPath.empty() &&
-                      job.initImagesBytes.empty() &&
-                      job.initImageBytes.empty() &&
-                      qvac_lib_inference_addon_sd::useVaeGemm(
-                          performanceProfile_,
-                          gen.width,
-                          gen.height,
-                          gen.batchCount,
-                          device.freeBytes,
-                          gen.vaeTiling);
-    if (!sd_set_vae_conv_direct(sdCtx_.get(), !gemm))
-      throw StatusError(
-          general_error::InternalError,
-          "VAE performance profile could not be applied");
-    QLOG_IF(
-        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-        std::string("Automatic VAE convolution: ") +
-            (gemm ? "GEMM" : "direct"));
-  }
-
   if (gen.mode != "txt2img" && gen.mode != "img2img")
     throw StatusError(
         general_error::InvalidArgument,
@@ -1205,6 +1182,32 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
       } // end SDEdit else
     } // end single-image else (nMulti == 0)
   } // end gen.mode == "img2img"
+
+  // Reference decoding can change the output dimensions. Select convolution
+  // only after the effective output and reference shapes are known.
+  if (performanceProfile_.vaeGemm) {
+    const auto device = qvac_lib_inference_addon_sd::profileDevice(
+        performanceBackend_.c_str(), SD_BACKEND_PREF_GPU);
+    const bool gemm = gen.loraPath.empty() &&
+                      qvac_lib_inference_addon_sd::useVaeGemm(
+                          performanceProfile_,
+                          genParams.width,
+                          genParams.height,
+                          genParams.batch_count,
+                          device.freeBytes,
+                          gen.vaeTiling,
+                          std::span<const sd_image_t>{
+                              genParams.ref_images,
+                              static_cast<size_t>(genParams.ref_images_count)});
+    if (!sd_set_vae_conv_direct(sdCtx_.get(), !gemm))
+      throw StatusError(
+          general_error::InternalError,
+          "VAE performance profile could not be applied");
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        std::string("Automatic VAE convolution: ") +
+            (gemm ? "GEMM" : "direct"));
+  }
 
   // -- Generate --------------------------------------------------------------
   // stable-diffusion.cpp invokes sample() once per image batch item before

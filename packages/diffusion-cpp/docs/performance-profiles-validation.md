@@ -2,7 +2,7 @@
 
 FLUX.2 Klein, MiniMax-H3 and LTX profiles retain device/API selection, explicit overrides and conservative fallbacks. The addon now targets merged [engine #64](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/64), commit `bc53357484bc5d2ba08fbe5301dae192e5b9a176`, on the 2026-11-01 baseline.
 
-H3 fused SwiGLU and QKV views are already enabled by that engine. The addon leaves them unchanged for every GPU, workload and profile mode, including `off`; only global flash attention is selected automatically. The old RTX-only graph toggle, its 28 GiB/960×544×124 guard and its fit-probe exclusion are removed. FLUX GEMM and bounded LTX precision policies are unchanged.
+H3 fused SwiGLU and QKV views are already enabled by that engine. The addon leaves them unchanged for every GPU, workload and profile mode, including `off`; only global flash attention is selected automatically. The old RTX-only graph toggle, its 28 GiB/960×544×124 guard and its fit-probe exclusion are removed. FLUX GEMM now also accepts bounded single-reference img2img after decoding resolves the effective dimensions. Bounded LTX precision selection is unchanged.
 
 All timings below are historical November 4–5 results on the earlier engine. They are retained with their original raw data and do **not** establish current-engine speedups, quality parity or memory budgets. In particular, the old H3 combined attention/graph comparison is not an attention-only comparison against the new fused baseline. Paired model checks on the merged engine remain required before release.
 
@@ -23,17 +23,19 @@ The addon was ported onto QVAC main `f937f5f4` and built against engine
 `bc53357484bc5d2ba08fbe5301dae192e5b9a176` with the existing ggml pin
 `a4adfcb1304fb05b64473f1fe8d678bbce7a9ce0`. Validation used Linux arm64,
 Clang 22/libc++, a CPU addon build and a separate leased GB10 CUDA operation
-check. The engine archive checksum was verified; the addon overlay and prepared
-registry port match byte for byte.
+check. The engine archive checksum was verified. The addon resolves the merged registry
+port through the scoped baseline described in the profile documentation.
 
 - `npm run typecheck`, `npm run build:ts` and `npm run lint` passed. The generated
   `index.d.ts` matches the checked-in declaration. Lint retains 72 warnings in
   existing JavaScript files, with no lint errors.
 - The native addon module and `addon-test` target built against the merged
-  engine. C++ formatting passed. All 12 `SdPerformanceProfiles` tests passed,
-  including explicit attention aliases,
+  engine. C++ formatting passed. All 13 `SdPerformanceProfiles` tests and all eight `SdModelTest` tests passed,
+  including single-reference dimensions/count, explicit attention aliases,
   opt-out, memory/request boundaries and metadata-only model recognition.
-- `npm run test:cpp:run` ran 332 tests: 297 passed and 35 were skipped by existing
+  A regression test reproduced skipped width/height checks with default frame
+  count before the fix and passes afterward for both `auto` and `off`.
+- `npm run test:cpp:run` ran 334 tests: 299 passed and 35 were skipped by existing
   SD2.1/FLUX fixture guards and the opt-in Wan smoke-test gate. This is not a
   complete model-backed native pass.
 - All 17 engine CTest tests passed, including enabled H3 defaults, per-context
@@ -150,7 +152,7 @@ Default decoding produces byte-identical video/audio across the warmup and three
 | Model | Approach / type | Decision and reason |
 | --- | --- | --- |
 | H3 | Global attention / parameter tuning | Implement on measured pairs with ≥5% gain; keep Strix Vulkan unchanged (3.2%) |
-| H3 | Focused SwiGLU/QKV / graph optimization | Implement with automatic attention on RTX CUDA/Vulkan; other GPUs not validated for this exact graph |
+| H3 | Focused SwiGLU/QKV / graph optimization | Now enabled by the merged engine for all workloads; retained unchanged by both profile modes |
 | FLUX | VAE GEMM / parameter tuning | Implement for CUDA; reject automatic HIP use pending output repeatability, and Metal/Vulkan because it is slower |
 | FLUX | F16 matrices / precision selection | Exclude: only 3.2–3.6% on Mac and 2.9% on RTX Vulkan, with more memory |
 | LTX | F16 matrices / precision selection | Implement only the bounded Mac profile: 5.4% with default decoding, exact output, more memory |

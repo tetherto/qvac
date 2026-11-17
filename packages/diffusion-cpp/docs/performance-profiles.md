@@ -10,7 +10,7 @@ Explicit options, including `flash_attn: false`, take precedence.
 
 | Model checkpoint | GPU and API | Automatic change | Fallback |
 | --- | --- | --- | --- |
-| FLUX.2 Klein 4B Q8_0 | RTX 5090 CUDA, GB10 CUDA | GEMM VAE for single 512×512 or 1024×1024 text-to-image requests, with at least 16 GiB free after loading | Direct convolution for other requests, APIs and GPUs |
+| FLUX.2 Klein 4B Q8_0 | RTX 5090 CUDA, GB10 CUDA | GEMM VAE for single 512×512 or 1024×1024 outputs, including img2img with one supported square reference, with at least 16 GiB free after loading | Direct convolution for other requests, APIs and GPUs |
 | FLUX.2 Klein 4B Q8_0 | Radeon 8060S HIP | None: repeated-output validation found an inconsistent GEMM output | Direct convolution; explicit GEMM remains experimental |
 | MiniMax-H3 FL2VA Q4_K | RTX 5090 CUDA/Vulkan, GB10 CUDA, M3 Ultra Metal, Radeon 8060S HIP | Global flash attention | Previous flash-attention setting elsewhere |
 | LTX-2.3 22B distilled Q5_K | M3 Ultra Metal | F16 transformer matrices for bounded video contexts with sufficient memory | Original quantized matrices |
@@ -23,10 +23,15 @@ source-build configuration; this change does not add a HIP release package.
 
 FLUX keeps direct convolution on Metal and Vulkan, where GEMM was slower, and
 on HIP, where a repeated-output quality check did not pass.
-Automatic GEMM excludes reference/image conditioning, LoRA, tiling and batches. Each
-request rechecks its dimensions and free memory, so a later larger request
-returns to direct convolution. Reviewed output was visually identical, but not
-byte-identical; GEMM used about 4.2 GiB more VRAM in the RTX measurement.
+Automatic GEMM supports text-to-image and single-reference img2img. Both the
+resolved output and decoded reference must be square 512×512 or 1024×1024;
+selection runs after decoding because a reference can determine output size.
+Multiple references, other shapes, LoRA, tiling and batches retain direct
+convolution. Each request rechecks dimensions and free memory, so a later
+unsupported request restores direct convolution. The historical text-to-image
+outputs were visually identical, but not byte-identical; GEMM used about
+4.2 GiB more VRAM in the RTX measurement. Those measurements do not establish
+img2img performance or memory use.
 
 Fit probes return `unknown` only when the requested dimensions and tiling can
 select GEMM: the current engine planner cannot represent that per-request
@@ -60,8 +65,10 @@ config: {
 ```
 
 Requests and fit probes above these limits fail before inference. They are output
-limits, separate from the existing decoded-input pixel limits. The limits remain
-in force even when the precision profile is unavailable or disabled.
+limits, separate from the existing decoded-input pixel limits. Fit probes enforce
+width and height even when `videoFrames` is omitted or defaults to 1. Upscale-only
+probes use their separate planner. The limits remain in force even when the
+precision profile is unavailable or disabled.
 
 The Metal profile requires GPU-resident parameters, at least 96 GiB physical
 memory, 76 GiB available host memory and 64 GiB available Metal working-set budget

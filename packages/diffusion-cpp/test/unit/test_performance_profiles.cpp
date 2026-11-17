@@ -1,3 +1,4 @@
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -114,6 +115,34 @@ TEST(SdPerformanceProfiles, H3ExplicitAttentionIsPreservedWithAutoAndOff) {
       EXPECT_FALSE(profile.flashAttention);
     }
   }
+}
+
+TEST(SdPerformanceProfiles, FluxReferenceEncodingUsesBoundedDimensions) {
+  const auto profile = selectPerformanceProfile(
+      {},
+      ProfileModel::Flux2Klein4BQ8,
+      device(ProfileApi::Cuda, ProfileGpu::Gb10));
+  std::array<sd_image_t, 1> references{{{512, 512, 3, nullptr}}};
+  EXPECT_TRUE(useVaeGemm(profile, 512, 512, 1, 16 * GIB, false, references));
+  EXPECT_TRUE(useVaeGemm(profile, 1024, 1024, 1, 16 * GIB, false, references));
+  references[0].width = references[0].height = 1024;
+  EXPECT_TRUE(useVaeGemm(profile, 1024, 1024, 1, 16 * GIB, false, references));
+  EXPECT_FALSE(
+      useVaeGemm(profile, 1024, 1024, 1, 16 * GIB - 1, false, references));
+  EXPECT_FALSE(useVaeGemm(profile, 1024, 1024, 1, 24 * GIB, true, references));
+  EXPECT_FALSE(useVaeGemm(profile, 1024, 1024, 2, 24 * GIB, false, references));
+  EXPECT_FALSE(useVaeGemm(profile, 768, 768, 1, 24 * GIB, false, references));
+  for (const auto size : {768U, 1536U}) {
+    references[0].width = references[0].height = size;
+    EXPECT_FALSE(
+        useVaeGemm(profile, 1024, 1024, 1, 24 * GIB, false, references));
+  }
+  references[0].width = 1024;
+  references[0].height = 512;
+  EXPECT_FALSE(useVaeGemm(profile, 1024, 1024, 1, 24 * GIB, false, references));
+  const std::array<sd_image_t, 2> multiple{
+      {{512, 512, 3, nullptr}, {512, 512, 3, nullptr}}};
+  EXPECT_FALSE(useVaeGemm(profile, 1024, 1024, 1, 24 * GIB, false, multiple));
 }
 
 TEST(SdPerformanceProfiles, LtxF16RetainsBaselineOutsideValidatedBudget) {
