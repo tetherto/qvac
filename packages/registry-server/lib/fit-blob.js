@@ -15,6 +15,7 @@ const FIT_BLOB_SUFFIX = '.fit'
 
 const TOKENIZER_KEY_MARKER = 'tokenizer.'
 const TOKENIZER_MODEL_KEY = 'tokenizer.ggml.model'
+const TOKENIZER_TOKENS_KEY = 'tokenizer.ggml.tokens'
 const TOKEN_TYPE_COUNT_KEY = 'tokenizer.ggml.token_type_count'
 const VOCAB_LESS_TOKENIZER_MODEL = 'none'
 const VOCAB_TENSOR_NAMES = ['token_embd.weight', 'output.weight']
@@ -36,9 +37,11 @@ function supportsFitBlob(filePath, engine) {
 }
 
 /**
- * Number of tokens the model was trained with, from `{arch}.vocab_size` or,
- * where that key is absent, the second dimension of the token embedding.
- * Returns `null` when neither is available.
+ * Vocabulary size the loader uses, from `{arch}.vocab_size`, else from the
+ * vocabulary dimension of `token_embd.weight` or `output.weight`, else from
+ * the length of the token list. A DFlash2 draft model has neither tensor, so
+ * its size comes from the token list.
+ * Returns `null` when none of these is present.
  */
 function resolveVocabSize(parsed, architecture) {
   const declared = parsed.metadata[`${architecture}.vocab_size`]
@@ -53,6 +56,9 @@ function resolveVocabSize(parsed, architecture) {
     const size = Number(tensor.shape[1])
     if (Number.isSafeInteger(size) && size > 0) return size
   }
+
+  const tokens = parsed.metadata[TOKENIZER_TOKENS_KEY]
+  if (Array.isArray(tokens) && tokens.length > 0) return tokens.length
 
   return null
 }
@@ -74,8 +80,9 @@ function withoutTokenizerTables(parsed) {
     type: GGUFValueType.STRING
   }
 
-  // The output buffer is as wide as the vocabulary, so a missing count would
-  // under-project it. Omitted rather than guessed when nothing declares it.
+  // The loader reads the vocabulary size only from this key when the tokenizer
+  // is `none`. Without it, the output buffer is sized too small and a DFlash2
+  // draft model fails to load. The key is left out when no size is found.
   if (vocabSize !== null) {
     metadata[`${architecture}.vocab_size`] = {
       value: vocabSize,

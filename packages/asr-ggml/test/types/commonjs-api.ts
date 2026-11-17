@@ -164,6 +164,7 @@ const parakeetStats: ASRGgml.ParakeetRuntimeStats = {
   gpuUnsupported: 0,
   encoderOnCoreml: 0,
   encoderUsedCoreml: 0,
+  decoderUsedCoreml: 0,
 };
 const runtimeStats: ASRGgml.RuntimeStats = whisperStats;
 const statsCore: ASRGgml.RuntimeStatsCore = whisperStats;
