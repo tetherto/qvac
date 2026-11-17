@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <qvac-fabric.h>
 
 #include "model-interface/ModuleBackendsDir.hpp"
 #include "model-interface/bci/BCIConfig.hpp"
@@ -21,7 +22,8 @@ using namespace qvac_lib_inference_addon_bci;
 
 namespace {
 
-std::vector<uint8_t> createTestSignal(uint32_t numTimesteps, uint32_t numChannels) {
+std::vector<uint8_t>
+createTestSignal(uint32_t numTimesteps, uint32_t numChannels) {
   const size_t headerSize = 2 * sizeof(uint32_t);
   const size_t dataSize = numTimesteps * numChannels * sizeof(float);
   std::vector<uint8_t> buffer(headerSize + dataSize);
@@ -32,9 +34,9 @@ std::vector<uint8_t> createTestSignal(uint32_t numTimesteps, uint32_t numChannel
   auto* data = reinterpret_cast<float*>(buffer.data() + headerSize);
   for (uint32_t t = 0; t < numTimesteps; ++t) {
     for (uint32_t c = 0; c < numChannels; ++c) {
-      data[t * numChannels + c] =
-          static_cast<float>(t) / static_cast<float>(numTimesteps) *
-          std::sin(static_cast<float>(c) * 0.1F);
+      data[t * numChannels + c] = static_cast<float>(t) /
+                                  static_cast<float>(numTimesteps) *
+                                  std::sin(static_cast<float>(c) * 0.1F);
     }
   }
   return buffer;
@@ -107,9 +109,10 @@ TEST(NeuralProcessor, ProcessToMelProducesCorrectShape) {
   auto signal = createTestSignal(100, 512);
   auto result = processor.processToMel(signal);
 
-  EXPECT_EQ(result.size(),
-            static_cast<size_t>(NeuralProcessor::K_WHISPER_MEL_FRAMES) *
-            NeuralProcessor::K_WHISPER_N_MEL);
+  EXPECT_EQ(
+      result.size(),
+      static_cast<size_t>(NeuralProcessor::K_WHISPER_MEL_FRAMES) *
+          NeuralProcessor::K_WHISPER_N_MEL);
 }
 
 TEST(NeuralProcessor, ProcessToMelRejectsSmallBuffer) {
@@ -170,7 +173,8 @@ TEST(NeuralProcessor, PaddedFramesAreZero) {
   int lastFrame = NeuralProcessor::K_WHISPER_MEL_FRAMES - 1;
   // mel output is mel-major: data[bin * n_frames + frame]
   for (int m = 0; m < NeuralProcessor::K_WHISPER_N_MEL; ++m) {
-    lastFrameSum += std::abs(result[m * NeuralProcessor::K_WHISPER_MEL_FRAMES + lastFrame]);
+    lastFrameSum +=
+        std::abs(result[m * NeuralProcessor::K_WHISPER_MEL_FRAMES + lastFrame]);
   }
   EXPECT_FLOAT_EQ(lastFrameSum, 0.0F);
 }
@@ -261,15 +265,16 @@ TEST(NeuralProcessor, PassthroughModeSkipsPreprocessing) {
   auto signal = createTestSignal(T, C);
 
   auto result = processor.processToMel(signal, /*dayIdx=*/-1);
-  EXPECT_EQ(result.size(),
-            static_cast<size_t>(NeuralProcessor::K_WHISPER_MEL_FRAMES) *
-            NeuralProcessor::K_WHISPER_N_MEL);
+  EXPECT_EQ(
+      result.size(),
+      static_cast<size_t>(NeuralProcessor::K_WHISPER_MEL_FRAMES) *
+          NeuralProcessor::K_WHISPER_N_MEL);
 
   // First frame, first bin should match the test signal's (t=0, c=0) value
   // after the mel-major transpose: data[bin * n_frames + frame].
   const int nFrames = NeuralProcessor::K_WHISPER_MEL_FRAMES;
-  const float* originalData = reinterpret_cast<const float*>(
-      signal.data() + 2 * sizeof(uint32_t));
+  const float* originalData =
+      reinterpret_cast<const float*>(signal.data() + 2 * sizeof(uint32_t));
   EXPECT_FLOAT_EQ(result[0 * nFrames + 0], originalData[0 * C + 0]);
   EXPECT_FLOAT_EQ(result[1 * nFrames + 0], originalData[0 * C + 1]);
 }
@@ -417,17 +422,12 @@ TEST(ModuleBackendsDir, ConfiguredDirIsScannedAsGiven) {
       std::filesystem::path("/tmp/some/backends"));
 }
 
-#if defined(__linux__)
-// This binary has no <module name>/ subdirectory next to it, which is the
-// flat layout of the SDK worker bundle: the backends sit beside the module.
-TEST(ModuleBackendsDir, UnconfiguredDirIsTheLoadedModulesOwn) {
+TEST(ModuleBackendsDir, UnconfiguredDirIsTheFabricBackendsDirectory) {
   const std::filesystem::path dir = resolveBackendsDir("");
+  EXPECT_EQ(dir.string(), std::string(qvac_fabric_backends_dir()));
   ASSERT_FALSE(dir.empty());
-  EXPECT_TRUE(
-      std::filesystem::equivalent(
-          dir, std::filesystem::canonical("/proc/self/exe").parent_path()));
+  EXPECT_TRUE(std::filesystem::is_directory(dir));
 }
-#endif
 
 namespace {
 
