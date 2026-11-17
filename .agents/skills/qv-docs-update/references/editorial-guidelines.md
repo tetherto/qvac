@@ -127,7 +127,7 @@ Write the prose as either a sentence plus a `-` bullet list of cross-references,
 >
 > - **MobileNetV3-Small**: single all-in-one `*.gguf` file — the base model or any fine-tune of the same architecture (converted to GGUF).
 
-A few pages still close the section with a link to [SDK — Models](/sdk#models) instead of the table. Leave them as they are unless the target is that section.
+A few pages still close the section with a link to the SDK's Models section (`/sdk#models`) instead of the table. Leave them as they are unless the target is that section.
 
 ### `## Features`
 
