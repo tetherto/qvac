@@ -26,14 +26,15 @@ build against the forked llama.cpp + ggml runtime:
   `string_*` / `json_schema_to_grammar` / cpu-params libcommon helpers, and
   `qvac_fabric_load_backends()` / `qvac_fabric_backends_dir()`
 - **ggml compute backends** — on **Linux, Android, and Windows**, shipped as
-  shared libraries in `@qvac/fabric-<host>/prebuilds/<host>/qvac__fabric-<host>/`
+  shared libraries under `prebuilds/<host>/<module>/` in the platform package,
+  or the CUDA/HIP backend packages on Linux x64
 
 ### Platform packages
 
 ```
 node_modules/@qvac/fabric/binding.js                       module.exports = require('#host-addon')
 node_modules/@qvac/fabric/prebuilds/{include,share}/       headers + CMake config
-node_modules/@qvac/fabric-<host>/index.js                  module.exports = require.addon()
+node_modules/@qvac/fabric-<host>/index.js                  loads the runtime and any backend carriers
 node_modules/@qvac/fabric-<host>/prebuilds/<host>/         qvac__fabric-<host>.bare
 node_modules/@qvac/fabric-<host>/prebuilds/<host>/qvac__fabric-<host>/   ggml backends
 ```
@@ -43,6 +44,13 @@ specifier, and every other host to `addon-unavailable.js`. Every iOS flavour
 ships in `@qvac/fabric-ios`, as `qvac__fabric-ios.bare`. The module name is the
 platform package's name, so cmake-bare's `include_bare_module(... PREBUILD)`
 derives the right `DT_NEEDED` from the package it resolves.
+
+On Linux x64, CUDA and HIP live in separate, exact-version dependencies,
+`@qvac/fabric-linux-x64-cuda` and `@qvac/fabric-linux-x64-hip`. The platform
+entry loads the runtime first and then their carrier addons, which register
+their backend directories. Installing Fabric continues to install all backends;
+consumer code and dependencies do not change. Both carriers remain ordinary
+Bare addons so `bare-pack` and `bare-link` include their native payloads.
 
 The desktop packages are `os`/`cpu` filtered `optionalDependencies` of the meta
 package, so npm 7+, pnpm, bun and Yarn Berry install the right one. Yarn v1 and
@@ -291,7 +299,8 @@ not default one: a user-supplied `backendsDir`, if the addon accepts one, is
 passed through untouched and loaded as given.
 
 For diagnostics, `require('@qvac/fabric').backendsDir()` returns the directory
-fabric loads from.
+of the primary backends. On Linux x64, `loadBackends()` also loads the registered
+CUDA/HIP directories unless `QVAC_FABRIC_BACKENDS_DIR` overrides discovery.
 
 ---
 

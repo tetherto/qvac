@@ -23,13 +23,15 @@ extern "C" {
 #endif
 
 // Loads the ggml backend modules shipped with this runtime from
-// qvac_fabric_backends_dir(), once per process; later calls only return the
-// count. Thread-safe. Returns the number of registered ggml backends. A no-op
+// qvac_fabric_backends_dir() and the installed backend packages, once per
+// process; later calls only return the count. A non-empty environment override
+// selects only that directory. Thread-safe. Returns the number of registered
+// ggml backends. A no-op
 // on hosts whose backends are linked into the runtime (Apple).
 // NOLINTNEXTLINE(readability-identifier-naming)
 QVAC_FABRIC_API size_t qvac_fabric_load_backends(void);
 
-// Where qvac_fabric_load_backends() looks, in order:
+// The primary backend directory, selected in order:
 //   1. $QVAC_FABRIC_BACKENDS_DIR, when set and non-empty;
 //   2. <runtime dir>/<runtime module name>, when it is a directory: an
 //      installed platform package, prebuilds/<host>/qvac__fabric-<suffix>/;
@@ -38,7 +40,9 @@ QVAC_FABRIC_API size_t qvac_fabric_load_backends(void);
 //      extracted (the directory cannot be listed there, and ggml falls back
 //      to loading each backend by file name).
 // The runtime dir is the directory of the loaded runtime module itself. The
-// string is UTF-8 and stays valid for the life of the process.
+// string is UTF-8 and stays valid for the life of the process. On Linux x64,
+// load_backends also searches the CUDA/HIP package directories registered by
+// their carrier addons, unless the environment override is set.
 // NOLINTNEXTLINE(readability-identifier-naming)
 QVAC_FABRIC_API const char* qvac_fabric_backends_dir(void);
 

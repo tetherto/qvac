@@ -120,6 +120,13 @@ endif()
 # Without GGML_BACKEND_DL the backends are static archives that get linked
 # directly into the runtime module, so there is nothing to stage.
 set(BACKEND_DL_LIBS "")
+bare_target(_fabric_host)
+set(_fabric_split_backends OFF)
+if(_fabric_host STREQUAL "linux-x64")
+  set(_fabric_split_backends ON)
+endif()
+set(QVAC_FABRIC_cuda_LIBS "")
+set(QVAC_FABRIC_hip_LIBS "")
 if((ANDROID OR UNIX OR WIN32) AND NOT APPLE)
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
     if(TARGET ggml::${_backend})
@@ -130,7 +137,11 @@ if((ANDROID OR UNIX OR WIN32) AND NOT APPLE)
       # MODULE_LIBRARY. Accept both so the backend modules are staged next to
       # the runtime (matching only SHARED_LIBRARY silently shipped nothing).
       if(_backend_type STREQUAL "SHARED_LIBRARY" OR _backend_type STREQUAL "MODULE_LIBRARY")
-        list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
+        if(_fabric_split_backends AND _backend MATCHES "^ggml-(cuda|hip)$")
+          list(APPEND QVAC_FABRIC_${CMAKE_MATCH_1}_LIBS TARGET ggml::${_backend})
+        else()
+          list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
+        endif()
       endif()
     endif()
   endforeach()
@@ -141,7 +152,6 @@ endif()
 # bare-pack and bare-link all find prebuilds/<host>/qvac__fabric-<suffix>.bare
 # there without an inner manifest posing as @qvac/fabric.
 include(cmake/qvac-fabric-hosts.cmake)
-bare_target(_fabric_host)
 qvac_fabric_module_name("${_fabric_host}" _fabric_module_name)
 
 add_bare_module(qvac-fabric NAME ${_fabric_module_name} EXPORTS ${BACKEND_DL_LIBS})
@@ -157,6 +167,24 @@ target_include_directories(${qvac-fabric} PRIVATE include)
 target_compile_definitions(${qvac-fabric} PRIVATE
   QVAC_FABRIC_BUILD
   QVAC_FABRIC_MODULE_NAME="${_fabric_module_name}")
+
+# Keep GPU binaries in separate addon packages. A tiny carrier in each package
+# registers its directory, and makes bare-pack/bare-link carry its native files.
+if(_fabric_split_backends)
+  foreach(backend cuda hip)
+    if(NOT QVAC_FABRIC_${backend}_LIBS)
+      message(FATAL_ERROR "Missing ${backend} backend for the Linux x64 package")
+    endif()
+    set(_backend_module_name "${_fabric_module_name}-${backend}")
+    set(_backend_source_dir "${CMAKE_CURRENT_BINARY_DIR}/backend-packages/${backend}")
+    file(MAKE_DIRECTORY "${_backend_source_dir}")
+    file(WRITE "${_backend_source_dir}/package.json"
+      "{\"name\":\"@qvac/fabric-linux-x64-${backend}\",\"version\":\"${PROJECT_VERSION}\"}\n")
+    configure_file(cmake/backend-package.cmake.in
+      "${_backend_source_dir}/CMakeLists.txt" @ONLY)
+    add_subdirectory("${_backend_source_dir}" "${_backend_source_dir}/build")
+  endforeach()
+endif()
 
 # Force-include the full llama / common / mtmd object code into the shared
 # module so the entire public API is present (the carrier addon itself does not

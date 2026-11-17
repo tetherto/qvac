@@ -9,6 +9,20 @@ import { pathToFileURL } from 'node:url'
 
 const manifest = (dir) => JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
 
+// Leave headroom below the registry's 200 MB tarball limit. Check compressed
+// tarballs, not the slicer's unpacked-size estimate, before publishing anything.
+export function checkPackageSizes(slices, pack, maxBytes = 190_000_000) {
+  for (const slice of slices) {
+    const info = pack(slice)
+    if (!Number.isFinite(info.size) || info.size > maxBytes) {
+      throw new Error(
+        `${slice.name}@${slice.version} packed size ${info.size} exceeds the ${maxBytes} byte budget`
+      )
+    }
+    console.log(`${slice.name}@${slice.version}: ${info.size} bytes packed`)
+  }
+}
+
 // hit or miss; any npm view failure other than E404 is a registry error, so nothing publishes blind.
 export function onNpm(name, version, view) {
   const r = view(['view', `${name}@${version}`, 'version'])
@@ -31,10 +45,11 @@ export function plan({ meta, slices, view, integrity }) {
       console.log(`${id} already on npm and ${meta.name}@${meta.version} is released, skipping`)
       continue
     }
-    if (integrity.published(slice) !== integrity.staged(slice))
+    if (integrity.published(slice) !== integrity.staged(slice)) {
       throw new Error(
         `${id} is on npm from a different build and ${meta.name}@${meta.version} is not, so publishing would pair the meta with binaries from another commit. Bump the version.`
       )
+    }
     console.log(`${id} already on npm with identical contents, skipping`)
   }
   return publish
@@ -59,12 +74,24 @@ export function bySize(slices, sizeOf, max) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const env = process.env
   const npm = (args, cwd) => spawnSync('npm', args, { cwd, encoding: 'utf8' })
-  const pack = (s) => JSON.parse(npm(['pack', '--dry-run', '--json', '--ignore-scripts'], s.dir).stdout)[0]
   const slices = readdirSync(env.SLICES_DIR, { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => ({ dir: join(env.SLICES_DIR, d.name), ...manifest(join(env.SLICES_DIR, d.name)) }))
+  const packed = new Map()
+  const pack = (slice) => {
+    if (!packed.has(slice.dir)) {
+      const result = npm(['pack', '--dry-run', '--json', '--ignore-scripts'], slice.dir)
+      if (result.error || result.status !== 0) {
+        throw new Error(`Could not pack ${slice.name}: ${result.error?.message || result.stderr}`)
+      }
+      packed.set(slice.dir, JSON.parse(result.stdout)[0])
+    }
+    return packed.get(slice.dir)
+  }
+  const meta = manifest(env.WORKDIR)
+  if (meta.name === '@qvac/fabric') checkPackageSizes(slices, pack)
   let publish = plan({
-    meta: manifest(env.WORKDIR),
+    meta,
     slices,
     view: (args) => npm(args),
     integrity: {
@@ -81,15 +108,26 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const { order, sized } = bySize(publish, (s) => pack(s).size, max)
     const rows = sized.map(({ slice, size, over }) => {
       const id = `${slice.name}@${slice.version}`
-      const what = size === null ? 'has an unreadable packed size' : `packs to ${size} bytes, over the ${max}-byte budget`
+      const what =
+        size === null
+          ? 'has an unreadable packed size'
+          : `packs to ${size} bytes, over the ${max}-byte budget`
       if (over)
         console.log(
           `::warning title=npm tarball size::${id} ${what}. Over-budget slices publish first, largest first, so an E413 stops the release before the others.`
         )
       return `| \`${id}\` | ${size ?? 'unknown'} | ${size === null ? 'unreadable' : over ? 'over budget' : 'ok'} |`
     })
-    const summary = ['## npm tarball sizes', '', `Budget: ${max} bytes.`, '', '| Package | Bytes | Status |', '|---|---:|---|']
-    if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, [...summary, ...rows, ''].join('\n'))
+    const summary = [
+      '## npm tarball sizes',
+      '',
+      `Budget: ${max} bytes.`,
+      '',
+      '| Package | Bytes | Status |',
+      '|---|---:|---|'
+    ]
+    if (env.GITHUB_STEP_SUMMARY)
+      appendFileSync(env.GITHUB_STEP_SUMMARY, [...summary, ...rows, ''].join('\n'))
     publish = order
   }
   for (const s of publish) {

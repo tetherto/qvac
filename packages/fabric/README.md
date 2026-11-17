@@ -27,8 +27,9 @@ graph. See [INTEGRATION.md](./INTEGRATION.md) for the consumer guide.
   exposes `qvac-fabric::headers` and the host helpers
   `qvac_fabric_platform_package()` / `qvac_fabric_module_name()`.
 - **ggml compute backends** — on **Linux, Android, and Windows**, separate shared
-  libraries ship under `prebuilds/<host>/qvac__fabric-<host>/` of the platform
-  package and are loaded at runtime by `qvac_fabric_load_backends()`. On
+  libraries ship beside their native carrier under `prebuilds/<host>/<module>/`
+  in the platform or Linux x64 backend package and are loaded at runtime by
+  `qvac_fabric_load_backends()`. On
   **macOS and iOS** the backends are linked statically inside the `.bare` and
   self-register on load. On **linux-x64** this includes the ROCm/HIP backend
   (`libqvac-ggml-hip.so`, gfx1151) alongside Vulkan; the DL loader skips it on
@@ -39,8 +40,7 @@ graph. See [INTEGRATION.md](./INTEGRATION.md) for the consumer guide.
 
 `@qvac/fabric` is a meta package that ships the one-line `binding.js`, headers
 and CMake config. Each host's runtime and backends live in a version-locked
-platform package, an ordinary addon whose `index.js` is
-`module.exports = require.addon()`:
+platform package, an ordinary Bare addon:
 
 | Host | Package | Module |
 | --- | --- | --- |
@@ -51,6 +51,19 @@ platform package, an ordinary addon whose `index.js` is
 | win32-x64 | `@qvac/fabric-win32-x64` | `qvac__fabric-win32-x64` |
 | android-arm64 | `@qvac/fabric-android-arm64` | `qvac__fabric-android-arm64` |
 | ios (device + simulators) | `@qvac/fabric-ios` | `qvac__fabric-ios` |
+
+Linux x64 distributes its GPU modules in `@qvac/fabric-linux-x64-cuda` and
+`@qvac/fabric-linux-x64-hip`. Both are exact-version **dependencies** of
+`@qvac/fabric-linux-x64`, so installing Fabric still installs every backend.
+CPU, Vulkan, RPC and XDNA remain in the base platform package. Other platforms
+keep their existing layout.
+
+The Linux x64 entry loads the shared runtime and both backend carrier addons
+before returning the same Fabric exports. Each carrier registers its native
+module directory without loading the GPU backend. Their dependencies point back
+to the same version of the base package so `bare-link` can rewrite their
+`DT_NEEDED` on the shared runtime. These version-locked dependency cycles are
+packaging details; applications continue to depend on `@qvac/fabric`.
 
 Desktop packages are `os`/`cpu`-filtered `optionalDependencies`, so installers
 pick the right one; do not depend on them directly. Supported installers are
@@ -105,9 +118,21 @@ of `qvac_fabric_backends_dir()` is:
 3. `<runtime dir>` itself (`bare-link`ed layouts, where backends sit next to
    the runtime, including inside an APK).
 
-`qvac_fabric_load_backends()` loads that directory once per process.
+`qvac_fabric_load_backends()` loads that directory and any directories registered
+by the Linux x64 CUDA/HIP carriers once per process. The carriers locate their
+own modules, so this also works when package managers nest dependencies or
+`bare-pack` relocates them. In flattened `bare-link` output, duplicate directories
+are loaded only once. A non-empty `QVAC_FABRIC_BACKENDS_DIR` remains an exclusive
+override and suppresses the additional package directories.
+CUDA and HIP retain their registration priority ahead of the remaining backends.
 `require('@qvac/fabric')` exposes the same two calls as `backendsDir()` and
 `loadBackends()`.
+
+The npm release workflow stages the backend packages alongside the platform
+packages and checks every compressed tarball against a 190 MB budget before
+publishing any of them. The meta package publishes after all staged packages.
+New backend package names need the same npm publishing authorization as the
+existing platform packages.
 
 ## Architecture
 
