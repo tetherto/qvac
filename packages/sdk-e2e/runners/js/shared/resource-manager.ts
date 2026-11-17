@@ -4,9 +4,10 @@ import {
   unloadModel,
   cancel,
   getLoadedModelInfo,
+  openSession,
   SDK_SERVER_ERROR_CODES
 } from '@qvac/sdk'
-import type { ModelConstant } from '@qvac/sdk'
+import type { ModelConstant, QvacSession } from '@qvac/sdk'
 import {
   resolveBootstrapDownloadConcurrency,
   resolveBootstrapRetryConcurrency,
@@ -128,6 +129,17 @@ export interface ResourceManagerOptions {
   downloadTarget?: BootstrapDownloadTarget
   /** Keys never kept loaded between tests (`singleUseResources` in catalog/platform-policy.ts). */
   singleUseResources?: readonly string[]
+  /**
+   * Keep one caller session open for the whole run, so `unloadModel` does not
+   * stop the worker when the last model goes. On iOS the worker is a thread in
+   * the app's process: stopping it does not return the process's memory to the
+   * system the way a worker process exiting does, and a full run would start
+   * about 50 workers. With bare-kit-swift up to 2.4.1 each start also leaves
+   * about 37 MB behind, and such a run is killed at the per-app memory limit.
+   *
+   * Default false.
+   */
+  holdRuntimeOpen?: boolean
 }
 
 export class ResourceManager {
@@ -139,11 +151,34 @@ export class ResourceManager {
   private readonly unloadSettleMs: number
   private readonly downloadTarget: BootstrapDownloadTarget
   private readonly singleUseResources: readonly string[]
+  private readonly holdRuntimeOpen: boolean
+  private runtimeHold: QvacSession | null = null
 
   constructor(options: ResourceManagerOptions = {}) {
     this.unloadSettleMs = options.unloadSettleMs ?? 0
     this.downloadTarget = options.downloadTarget ?? 'desktop'
     this.singleUseResources = options.singleUseResources ?? []
+    this.holdRuntimeOpen = options.holdRuntimeOpen ?? false
+  }
+
+  /**
+   * Opens the session that keeps the worker running, or replaces it when a
+   * test's own `close()` ended it. A call on an ended session fails locally,
+   * so the check costs one heartbeat only while the session is alive.
+   */
+  async ensureRuntimeHold(): Promise<void> {
+    if (!this.holdRuntimeOpen) return
+    if (this.runtimeHold) {
+      try {
+        await this.runtimeHold.heartbeat()
+        return
+      } catch {
+        this.runtimeHold = null
+      }
+    }
+    const session = openSession({ name: 'e2e-runtime-hold' })
+    await session.opened
+    this.runtimeHold = session
   }
 
   private async resolveConfig(dep: string, def: ModelDefinition): Promise<ModelConfig | undefined> {
@@ -328,6 +363,7 @@ export class ResourceManager {
       return existing.modelId
     }
 
+    await this.ensureRuntimeHold()
     const modelId = await loadModel((await this.loadParams(dep)) as never)
 
     this.models.set(dep, {
