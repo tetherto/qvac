@@ -1,0 +1,303 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B10000000000000000000001 /* QvacE2E in Frameworks */ = {isa = PBXBuildFile; productRef = B90000000000000000000001 /* QvacE2E */; };
+		B10000000000000000000002 /* QvacSDK in Frameworks */ = {isa = PBXBuildFile; productRef = B90000000000000000000002 /* QvacSDK */; };
+		B10000000000000000000003 /* QvacWorker in Frameworks */ = {isa = PBXBuildFile; productRef = B90000000000000000000003 /* QvacWorker */; };
+		B10000000000000000000004 /* E2E in Resources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* E2E */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		B20000000000000000000002 /* QvacSwiftE2E.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = QvacSwiftE2E.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B20000000000000000000003 /* E2E */ = {isa = PBXFileReference; lastKnownFileType = folder; path = E2E; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		B40000000000000000000002 /* App */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = App;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B30000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000000000000000000001 /* QvacE2E in Frameworks */,
+				B10000000000000000000002 /* QvacSDK in Frameworks */,
+				B10000000000000000000003 /* QvacWorker in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		B40000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				B40000000000000000000002 /* App */,
+				B20000000000000000000003 /* E2E */,
+				B40000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		B40000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B20000000000000000000002 /* QvacSwiftE2E.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		B50000000000000000000001 /* QvacSwiftE2E */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B80000000000000000000002 /* Build configuration list for PBXNativeTarget "QvacSwiftE2E" */;
+			buildPhases = (
+				B60000000000000000000001 /* Sources */,
+				B30000000000000000000001 /* Frameworks */,
+				B60000000000000000000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				B40000000000000000000002 /* App */,
+			);
+			name = QvacSwiftE2E;
+			packageProductDependencies = (
+				B90000000000000000000001 /* QvacE2E */,
+				B90000000000000000000002 /* QvacSDK */,
+				B90000000000000000000003 /* QvacWorker */,
+			);
+			productName = QvacSwiftE2E;
+			productReference = B20000000000000000000002 /* QvacSwiftE2E.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B00000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2720;
+				LastUpgradeCheck = 2720;
+				TargetAttributes = {
+					B50000000000000000000001 = {
+						CreatedOnToolsVersion = 27.2;
+					};
+				};
+			};
+			buildConfigurationList = B80000000000000000000001 /* Build configuration list for PBXProject "QvacSwiftE2E" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = B40000000000000000000001;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				BA0000000000000000000001 /* XCLocalSwiftPackageReference ".." */,
+				BA0000000000000000000002 /* XCLocalSwiftPackageReference "../../../../.." */,
+				BA0000000000000000000003 /* XCLocalSwiftPackageReference "QvacWorker" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = B40000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B50000000000000000000001 /* QvacSwiftE2E */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		B60000000000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000000000000000000004 /* E2E in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		B60000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		B70000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		B70000000000000000000003 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		B70000000000000000000002 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "$(QVAC_APP_CODE_SIGN_IDENTITY:default=Apple Development)";
+				CODE_SIGN_STYLE = "$(QVAC_APP_CODE_SIGN_STYLE:default=Automatic)";
+				DEVELOPMENT_TEAM = "$(QVAC_APP_TEAM_ID)";
+				PROVISIONING_PROFILE_SPECIFIER = "$(QVAC_APP_PROVISIONING_PROFILE)";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(QVAC_APP_BUNDLE_ID:default=io.tether.qvac.e2e.swift)";
+				PRODUCT_NAME = QvacSwiftE2E;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		B70000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "$(QVAC_APP_CODE_SIGN_IDENTITY:default=Apple Development)";
+				CODE_SIGN_STYLE = "$(QVAC_APP_CODE_SIGN_STYLE:default=Automatic)";
+				DEVELOPMENT_TEAM = "$(QVAC_APP_TEAM_ID)";
+				PROVISIONING_PROFILE_SPECIFIER = "$(QVAC_APP_PROVISIONING_PROFILE)";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(QVAC_APP_BUNDLE_ID:default=io.tether.qvac.e2e.swift)";
+				PRODUCT_NAME = QvacSwiftE2E;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		B80000000000000000000001 /* Build configuration list for PBXProject "QvacSwiftE2E" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B70000000000000000000001 /* Debug */,
+				B70000000000000000000003 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B80000000000000000000002 /* Build configuration list for PBXNativeTarget "QvacSwiftE2E" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B70000000000000000000002 /* Debug */,
+				B70000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		BA0000000000000000000001 /* XCLocalSwiftPackageReference ".." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ..;
+		};
+		BA0000000000000000000002 /* XCLocalSwiftPackageReference "../../../../.." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../../../..;
+		};
+		BA0000000000000000000003 /* XCLocalSwiftPackageReference "QvacWorker" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = QvacWorker;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B90000000000000000000001 /* QvacE2E */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BA0000000000000000000001 /* XCLocalSwiftPackageReference ".." */;
+			productName = QvacE2E;
+		};
+		B90000000000000000000002 /* QvacSDK */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BA0000000000000000000002 /* XCLocalSwiftPackageReference "../../../../.." */;
+			productName = QvacSDK;
+		};
+		B90000000000000000000003 /* QvacWorker */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BA0000000000000000000003 /* XCLocalSwiftPackageReference "QvacWorker" */;
+			productName = QvacWorker;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = B00000000000000000000001 /* Project object */;
+}

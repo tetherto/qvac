@@ -92,6 +92,35 @@ export default {
         }
       },
       {
+        // The Swift SDK on macOS, with the worker in-process through Bare Kit. `prepare` bundles
+        // the worker and builds the client. See runners/swift/README.md.
+        name: 'swift-macos',
+        platform: 'swift-macos',
+        mode: 'bridge',
+        prepare: {
+          interpreter: 'node',
+          args: ['runners/swift/scripts/prepare.mjs']
+        },
+        interpreter: './runners/swift/macos/.build/release/qvac-e2e-bridge',
+        cwd: './runners/swift/macos',
+        env: {
+          QVAC_RESOURCE_PLATFORM: 'desktop-macos'
+        }
+      },
+      {
+        // The Swift SDK in an iOS app, which speaks the consumer protocol itself (mqtt mode).
+        // See runners/swift/README.md.
+        name: 'swift-ios',
+        platform: 'swift-ios',
+        mode: 'mqtt',
+        prepare: {
+          interpreter: 'node',
+          args: ['runners/swift/scripts/ios.mjs', 'prepare']
+        },
+        interpreter: 'node',
+        args: ['runners/swift/scripts/ios.mjs', 'run']
+      },
+      {
         // The Kotlin SDK on an Android device. An app cannot be driven over
         // stdin, so it speaks the consumer protocol itself (mqtt mode).
         // See runners/kotlin/README.md.

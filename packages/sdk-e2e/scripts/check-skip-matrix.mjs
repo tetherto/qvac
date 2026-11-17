@@ -70,7 +70,9 @@ const LEGS = [
   'mobile-ios',
   'mobile-android',
   'desktop-python',
-  'kotlin-android'
+  'kotlin-android',
+  'swift-macos',
+  'swift-ios'
 ]
 
 const current = Object.fromEntries(LEGS.map((p) => [p, skippedOn(p)]))
