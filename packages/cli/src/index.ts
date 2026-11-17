@@ -2,6 +2,7 @@
 
 import { createRequire } from 'node:module'
 import { Command } from 'commander'
+import { registerAppCommand, runAppCli } from '@/app/command'
 import { registerBundleCommand } from '@/bundle-sdk/command'
 import { registerConfigureCommand } from '@/configure/command'
 import { registerDoctorCommand } from '@/doctor/command'
@@ -26,8 +27,11 @@ function setupCli(): void {
   registerVerifyCommand(program)
   registerOpenAiCommand(program)
   registerServeCommand(program)
+  registerAppCommand(program)
 
   program.parse()
 }
 
-setupCli()
+const [command, ...args] = process.argv.slice(2)
+if (command === 'app') void runAppCli(args)
+else setupCli()
