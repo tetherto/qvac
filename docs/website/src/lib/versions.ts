@@ -74,7 +74,8 @@ export const DOCUMENTED_SOFTWARE: readonly DocumentedSoftware[] = [
     kind: 'collection',
     path: '/sdk',
     versions: [
-      { version: 'v0.23', folder: '(v0.23)' },
+      { version: 'v0.24', folder: '(v0.24)' },
+      { version: 'v0.23', folder: 'v0.23' },
       { version: 'v0.22', folder: 'v0.22' },
       { version: 'v0.21', folder: 'v0.21' },
     ],
@@ -84,7 +85,8 @@ export const DOCUMENTED_SOFTWARE: readonly DocumentedSoftware[] = [
     kind: 'collection',
     path: '/cli',
     versions: [
-      { version: 'v0.18', folder: '(v0.18)' },
+      { version: 'v0.19', folder: '(v0.19)' },
+      { version: 'v0.18', folder: 'v0.18' },
       { version: 'v0.17', folder: 'v0.17' },
       { version: 'v0.16', folder: 'v0.16' },
     ],

@@ -1,0 +1,9 @@
+name: Sync vcpkg cache
+description: Copy this job's workspace vcpkg archives into the host cache. Trusted events only; best effort.
+
+runs:
+  using: composite
+  steps:
+    - if: env.VCPKG_CACHE_PERSISTENT == 'true'
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/vcpkg-cache-sync.mjs" || true

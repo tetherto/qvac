@@ -1,6 +1,6 @@
 ---
 name: release-fabric-consumers
-description: Release the qvac-fabric consumers to npm after the bundled version-bump PR merges — one release branch + on-merge dispatch per consumer, stopping at the npm approval gate. Supports --exclude to hold packages back. Phase C after rollout-phase-b.
+description: Release the qvac-fabric consumers to npm after the bundled version-bump PR merges — one release branch + `publish-npm.yml` dispatch per consumer, stopping at the npm approval gate. Supports --exclude to hold packages back. Phase C after rollout-phase-b.
 argument-hint: "[base-branch] [--exclude <pkg>[,<pkg>...]]"
 disable-model-invocation: true
 ---
@@ -13,9 +13,9 @@ version-bump PR (vcpkg `version>=` + `package.json` + `CHANGELOG.md` for the ful
 has merged to `main`. It applies the single-package `release` workflow to every consumer
 in the release set at once.
 
-It reuses the same mechanics as `/release` (cut a `release-*` branch → dispatch
-`on-merge-nx.yml` with the package as an input → the on-merge workflow builds prebuilds,
-publishes to npm with the `latest` tag, and creates a git tag), but for the whole release
+It reuses the same mechanics as `/release` (cut a `release-*` branch → dispatch the package's
+release workflow with the package as an input → it builds prebuilds, publishes to npm with the
+`latest` tag, and creates a git tag), but for the whole release
 set, and it is aware of the per-consumer quirks and the mandatory human approval gate.
 
 **The release set** is the full consumer roster (see the table below) minus anything named
@@ -89,15 +89,15 @@ roster on schedule while a first-publish package waits.
 
 This table is the **full roster**. The release set is this list minus `--exclude`.
 
-| Package dir (`packages/`) | npm name | on-merge workflow | git-tag created |
+| Package dir (`packages/`) | npm name | release workflow | git-tag created |
 |---|---|---|---|
-| `embed-llamacpp` | `@qvac/embed-llamacpp` | `on-merge-nx.yml` | `llamacpp-embed-v<ver>` |
-| `fabric` | `@qvac/fabric` | `on-merge-nx.yml` | `fabric-v<ver>` |
-| `llm-llamacpp` | `@qvac/llm-llamacpp` | `on-merge-nx.yml` | `llamacpp-llm-v<ver>` |
-| `model-fit` | `@qvac/model-fit` | `on-merge-nx.yml` | `model-fit-v<ver>` |
-| `ocr-ggml` | `@qvac/ocr-ggml` | `on-merge-nx.yml` | `ocr-ggml-v<ver>` |
-| `translation-nmtcpp` | `@qvac/translation-nmtcpp` | `on-merge-nx.yml` | `v<ver>` (bare) |
-| `vla-ggml` | `@qvac/vla-ggml` | `on-merge-nx.yml` | `vla-v<ver>` |
+| `embed-llamacpp` | `@qvac/embed-llamacpp` | `publish-npm.yml` | `llamacpp-embed-v<ver>` |
+| `fabric` | `@qvac/fabric` | `publish-npm.yml` | `fabric-v<ver>` |
+| `llm-llamacpp` | `@qvac/llm-llamacpp` | `publish-npm.yml` | `llamacpp-llm-v<ver>` |
+| `model-fit` | `@qvac/model-fit` | `publish-npm.yml` | `model-fit-v<ver>` |
+| `ocr-ggml` | `@qvac/ocr-ggml` | `publish-npm.yml` | `ocr-ggml-v<ver>` |
+| `translation-nmtcpp` | `@qvac/translation-nmtcpp` | `publish-npm.yml` | `translation-nmtcpp-v<ver>` |
+| `vla-ggml` | `@qvac/vla-ggml` | `publish-npm.yml` | `vla-v<ver>` |
 
 The git-tag column is **not** uniform. Use the package's entry when checking a release.
 
@@ -166,13 +166,12 @@ git -C <repo> diff --stat origin/<base-branch>..release-<pkg>-<ver>   # MUST be 
 git -C <repo> push origin release-<pkg>-<ver>                    # non-force, non-main
 ```
 
-### Step 3 — Dispatch the on-merge workflow
+### Step 3 — Dispatch the release workflow
 ```bash
-gh workflow run on-merge-nx.yml --repo tetherto/qvac \
-  --ref release-<pkg>-<ver> -f package=<pkg>
+gh workflow run publish-npm.yml --repo tetherto/qvac \
+  --ref release-<pkg>-<ver> -f packages=<pkg>
 ```
-`package` is a required choice input and takes the package **directory** name, the same
-string the branch carries.
+Both inputs take the package **directory** name, the same string the branch carries.
 
 Pushing a fresh `release-*` branch usually does **not** auto-trigger (path filter sees no
 new commits), so the explicit dispatch is the trigger — but check
@@ -180,15 +179,15 @@ new commits), so the explicit dispatch is the trigger — but check
 NOT double-dispatch.
 
 ### Step 4 — Monitor to the approval gate (do NOT approve)
-Poll until each run pauses at `publish-npm`. Read the run URL straight from `gh` rather than
+Poll until each run pauses at `publish`. Read the run URL straight from `gh` rather than
 hand-assembling it from a run id:
 ```bash
 gh run list --branch release-<pkg>-<ver> --repo tetherto/qvac --limit 1 --json databaseId,url,status,conclusion
 gh api repos/tetherto/qvac/actions/runs/<run-id>/pending_deployments
 ```
-Job order per run: `label-gate` (auto) → `publish-logic` + `release-merge-guard` (env
-`release`, branch-policy only) → `build` (prebuilds, ~9 platforms) → **`publish-npm` (env
-`npm`, required reviewers) ← PAUSES HERE** → `create-tag`.
+Job order per run: `select` → `logic` + `release-merge-guard` + `verify` → `providers`
+(fabric's prebuilds, when the package links fabric or is fabric) → `build` (prebuilds, ~9
+platforms) → **`publish` (env `npm`, required reviewers) ← PAUSES HERE** → `create-tag`.
 
 **When a run reaches the `npm` pending-deployment gate, STOP** and hand off to the user.
 
@@ -246,26 +245,22 @@ indistinguishable later from one that dropped a package by accident.
 
 ## Restrictions & nuances (hard-won)
 
-- All consumers publish from `on-merge-nx.yml`, selected by the `package` input.
-  Both the input and the release branch use the package directory name, including
-  `release-vla-ggml-<ver>`.
-- **The release branch name is load-bearing.** `detect` parses `release-<pkg>-<x.y.z>`,
-  requires `packages/<pkg>/project.json` to exist, and refuses to publish unless the run
-  selected exactly that package. A misnamed branch fails the run rather than publishing
+- Fabric and its consumers publish from `publish-npm.yml` (`packages` input). The input and
+  the release branch use the package directory name, including `release-vla-ggml-<ver>`.
+- **The release branch name is load-bearing.** A push selects exactly the package
+  `release-<pkg>-<x.y.z>` names, and `release-check-branch` refuses to publish unless that
+  package is the one the run publishes, at the branch's version. A misnamed branch fails the run rather than publishing
   the wrong thing.
 - **git-tag naming varies per package** — do NOT assume `<pkg>-v<ver>`. Use the table:
   `llamacpp-embed-v<ver>`, `fabric-v<ver>`, `llamacpp-llm-v<ver>`, `model-fit-v<ver>`,
-  `ocr-ggml-v<ver>`, bare `v<ver>` for `translation-nmtcpp`, and `vla-v<ver>`.
+  `ocr-ggml-v<ver>`, `translation-nmtcpp-v<ver>`, and `vla-v<ver>`.
   The tag comes from `create-release-tag.yml`, which builds `<repo_name>-v<published_version>`
-  from `repoName` in each package's `project.json` (`targets.on-merge.options.ci`) — read
-  that rather than guessing from the directory name if a new consumer appears.
-- **label-gate auto-authorises release dispatches.** The `label-gate`/Authorise job treats
-  `push` and `workflow_dispatch` as *trusted events* (`authorised=true`) — so a
-  `release-*` branch dispatch needs **no labels at all**. PR events are the contrasting
-  case, and they do **not** want `verified` either: they need the granular stage labels
-  (`prebuilds` plus the four `run-*`), which are the only names `ci-router` reads.
-  `verified` selects nothing anywhere — the label gate was retired repo-wide.
-- **The npm approval gate is mandatory and human-only.** `publish-npm` runs in the `npm`
+  from each package's `project.json`: `metadata.publish.tagPrefix` on the `publish` target.
+  Read that rather than guessing from the directory name if a new consumer appears.
+- **A release dispatch needs no labels.** `publish-npm.yml` runs on the push or dispatch
+  alone. Labels steer pull request runs only (`prebuilds` and the `run-*` stage labels);
+  `verified` selects nothing anywhere.
+- **The npm approval gate is mandatory and human-only.** `publish` runs in the `npm`
   environment, protected by `required_reviewers` (team `qvac-internal-release`). Every run
   pauses there. Detect via `.../pending_deployments`. **Never approve** — hand off to the
   user. (Earlier jobs use env `release`, which has only a `branch_policy` allowing
