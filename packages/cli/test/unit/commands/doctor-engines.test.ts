@@ -21,8 +21,9 @@ function writePackage(projectRoot: string, relDir: string, body: Record<string, 
 }
 
 /**
- * A bare-stow whose Bare Kit pins the check reads. bare-kit-kotlin 0.2.2 and
- * bare-kit-swift 2.2.0 run Bare 1.36.2, per the SDK's built-in tables.
+ * A bare-stow whose Bare Kit pins the check reads. bare-kit-kotlin 0.2.2 runs
+ * Bare 1.36.2. iOS links the newest bare-kit-swift from the 2.2.0 minimum, so
+ * its Bare follows the SDK's built-in tables.
  */
 function writeBareStow(projectRoot: string, kotlin = '0.2.2', swift = '2.2.0'): string {
   const bareStowDir = path.join(projectRoot, 'bare-stow')
@@ -90,7 +91,10 @@ describe('checkBareEngines', () => {
       assert.match(result.hint ?? '', /Override \(bare-type\)/)
       assert.match(result.hint ?? '', /bare-stow pins a Bare Kit with Bare 1\.40\.0 or newer/)
       assert.match(result.detail ?? '', /android-arm64: Bare 1\.36\.2/)
-      assert.match(result.detail ?? '', /ios-arm64: Bare 1\.36\.2/)
+      assert.match(
+        result.detail ?? '',
+        /ios-arm64: Bare \d+\.\d+\.\d+ \(bare-kit-swift: bare-stow pins bare-kit-swift 2\.2\.0 or newer/
+      )
     })
   })
 
@@ -103,7 +107,10 @@ describe('checkBareEngines', () => {
       })
       assert.equal(result.status, 'pass')
       assert.match(result.value ?? '', /android-arm64: Bare 1\.36\.2/)
-      assert.match(result.value ?? '', /ios-arm64: Bare 1\.36\.2/)
+      assert.match(
+        result.value ?? '',
+        /ios-arm64: Bare \d+\.\d+\.\d+ \(bare-kit-swift: bare-stow pins bare-kit-swift 2\.2\.0 or newer/
+      )
     })
   })
 
