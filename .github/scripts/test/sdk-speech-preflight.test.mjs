@@ -262,8 +262,8 @@ test('artifact lookup uses the GitHub API and fails explicitly when a build arti
     /requires one available artifact/
   )
   assert.equal(requests.length, 1)
-  assert.match(
-    requests[0],
-    /^https:\/\/api.github.com\/repos\/tetherto\/qvac\/actions\/runs\/42\/artifacts\?name=/
-  )
+  const url = new URL(requests[0])
+  assert.equal(url.origin, 'https://api.github.com')
+  assert.equal(url.pathname, '/repos/tetherto/qvac/actions/runs/42/artifacts')
+  assert.equal(url.searchParams.get('name'), 'prebuild-asr-ggml-linux-x64')
 })
