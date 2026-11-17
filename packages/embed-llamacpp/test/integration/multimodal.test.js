@@ -347,6 +347,9 @@ safeTest('audio-max-seconds rejects longer audio before decoding', {}, async (t)
       )
       const [short] = await embed(model, { inputs: [[{ media: sineWav(440, 1) }]] })
       t.is(short.length, 768, 'audio within the limit still embeds')
+      // miniaudio counts 16001 frames for 1 s of 48 kHz audio at 16 kHz.
+      const [atLimit] = await embed(model, { inputs: [[{ media: sineWav(440, 1, 48000) }]] })
+      t.is(atLimit.length, 768, '48 kHz audio exactly at the limit embeds')
     },
     { 'audio-max-seconds': '1' }
   )
