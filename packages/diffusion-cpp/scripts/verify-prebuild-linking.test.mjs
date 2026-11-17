@@ -14,6 +14,13 @@ import {
 
 const checker = fileURLToPath(new URL('./verify-prebuild-linking.mjs', import.meta.url))
 
+function assertCudaReleaseBuild(project, configuration) {
+  const commands = project.targets.build.configurations[configuration].commands
+  const generate = commands.find((entry) => entry.command.includes('bare-make generate'))
+  assert.ok(generate, `${configuration} must configure the native build`)
+  assert.match(generate.command, /(?:^|\s)-D\s+SD_CUDA=ON(?:\s|$)/)
+}
+
 test('CUDA is opt-in for source builds and enabled for Linux and Windows release prebuilds', () => {
   const manifest = JSON.parse(fs.readFileSync(new URL('../vcpkg.json', import.meta.url), 'utf8'))
   const project = JSON.parse(fs.readFileSync(new URL('../project.json', import.meta.url), 'utf8'))
@@ -31,13 +38,9 @@ test('CUDA is opt-in for source builds and enabled for Linux and Windows release
     'utf8'
   )
   assert.match(cudaConfig, /if\(SD_CUDA\)\s+list\(APPEND VCPKG_MANIFEST_FEATURES "cuda"\)/)
-  assert.equal(project.targets.build.options.ci.includeCuda, true)
-  assert.equal(project.targets.build.options.ci.includeCudaArm64, true)
-  assert.equal(project.targets.build.options.ci.includeCudaWin32, true)
-  assert.equal(
-    project.targets.build.options.ci.platformCmakeDefines,
-    'linux: -D SD_CUDA=ON\nwin32: -D SD_CUDA=ON'
-  )
+  assertCudaReleaseBuild(project, 'linux-x64')
+  assertCudaReleaseBuild(project, 'linux-arm64')
+  assertCudaReleaseBuild(project, 'win32-x64')
 })
 
 // Real ELF64 section and symbol layouts, including symbol binding/definition.
@@ -96,8 +99,9 @@ function fixture(
   fs.mkdirSync(backends, { recursive: true })
   fs.writeFileSync(path.join(target, `${moduleName}.bare`), elf(addon))
   fs.writeFileSync(path.join(backends, 'libqvac-diffusion-ggml-vulkan.so'), elf(['libvulkan.so.1']))
-  if (cuda)
+  if (cuda) {
     fs.writeFileSync(path.join(backends, 'libqvac-diffusion-ggml-cuda.so'), elf(cuda, symbols))
+  }
   const result = spawnSync(process.execPath, [checker, directory], {
     encoding: 'utf8',
     env: { ...process.env, BUILD_PLATFORM: 'linux' }
@@ -434,8 +438,9 @@ function mergedFixture(
       path.join(backends, 'qvac-diffusion-ggml-vulkan.dll'),
       pe(['vulkan-1.dll', 'kernel32.dll'])
     )
-    if (cudaImports)
+    if (cudaImports) {
       fs.writeFileSync(path.join(backends, 'qvac-diffusion-ggml-cuda.dll'), pe(cudaImports))
+    }
   }
   return (buildPlatform) => {
     const env = { ...process.env, BUILD_PLATFORM: buildPlatform ?? '' }
