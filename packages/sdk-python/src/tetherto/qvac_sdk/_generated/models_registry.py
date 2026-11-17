@@ -5627,6 +5627,24 @@ QWEN3_5_4B_MULTIMODAL_Q6_K = ModelConstant(
     params="4B",
 )
 
+QWEN3_5_9B_DFLASH_Q8_0 = ModelConstant(
+    name="QWEN3_5_9B_DFLASH_Q8_0",
+    src="registry://hf/AtomicChat/Qwen3.5-9B-DFlash-GGUF/resolve/de44b8556576637d1049951f8fdbd98bcb2462f3/Qwen3.5-9B-DFlash.Q8_0.gguf",
+    registry_path="AtomicChat/Qwen3.5-9B-DFlash-GGUF/resolve/de44b8556576637d1049951f8fdbd98bcb2462f3/Qwen3.5-9B-DFlash.Q8_0.gguf",
+    registry_source="hf",
+    blob_core_key="e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+    blob_block_offset=3350063,
+    blob_block_length=21115,
+    blob_byte_offset=219547120993,
+    model_id="Qwen3.5-9B-DFlash.Q8_0.gguf",
+    expected_size=1383768224,
+    sha256_checksum="27b9d18e605aea9c50ef506e4b63921e0dc624cc91c63c60617a8295f153d436",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="q8_0",
+    params="9B",
+)
+
 QWEN3_5_9B_MTP_Q4_K_M = ModelConstant(
     name="QWEN3_5_9B_MTP_Q4_K_M",
     src="registry://hf/unsloth/Qwen3.5-9B-MTP-GGUF/resolve/9716a636ee4bddc3fed678220b7a33dd2a4160ae/Qwen3.5-9B-Q4_K_M.gguf",
@@ -8946,6 +8964,7 @@ __all__ = [
     "QWEN3_5_4B_MTP_Q4_K_M",
     "QWEN3_5_4B_MULTIMODAL_Q4_K_M",
     "QWEN3_5_4B_MULTIMODAL_Q6_K",
+    "QWEN3_5_9B_DFLASH_Q8_0",
     "QWEN3_5_9B_MTP_Q4_K_M",
     "QWEN3_5_9B_MULTIMODAL_Q4_K_M",
     "QWEN3_5_9B_MULTIMODAL_Q6_K",

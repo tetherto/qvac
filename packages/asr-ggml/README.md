@@ -1283,9 +1283,9 @@ only ever loads a platform package. `build:native:cuda` is the same chain with
 
 ### Test
 
-The consolidated C++ CI lane uses persistent vcpkg binaries, a package-specific
-compiler cache, and two build workers. C++ test failures block the merge guard.
-See [C++ CI configuration](../../docs/ci/nx-ci-consolidation.md#optionsci-cheat-sheet)
+The C++ tests run through the CI contract's `cpp:build` and `cpp:tests` targets,
+with the shared vcpkg cache and two build workers. C++ test failures block the
+merge guard. See [the package CI contract](../../docs/ci/workflow-standard.md).
 for cache warming and resource settings.
 
 ```bash
@@ -1438,8 +1438,8 @@ Three things are worth knowing before touching these lanes:
   is written, because the artifact is written before the test's own
   assertions run.
 
-Sidecars are pinned in
-[`test/integration/parakeet-coreml.manifest.json`](test/integration/parakeet-coreml.manifest.json)
+Sidecars are pinned in the `sidecars` object of
+[`test/integration/models.manifest.json`](test/integration/models.manifest.json)
 and staged by `scripts/stage-integration-models.mjs`. **Until a bundle is
 published there the Core ML lanes skip themselves loudly** and the rest of the
 matrix is unaffected.

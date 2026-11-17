@@ -24,7 +24,7 @@ The backmerge PR carries the version bump + changelog metadata from the release 
 **On a release train** (`qv-release-train`), run it once for the whole train:
 read `release-train-<train>-<x.y.z>` wherever this skill says
 `release-<pkg>-<x.y.z>`, so the head is `backmerge/release-train-<train>-<x.y.z>`
-and the title names `release-train-<train>-<x.y.z>`. `pr-checks-sdk-pod.yml`
+and the title names `release-train-<train>-<x.y.z>`. `sdk-checks.yml`
 recognises that head name and checks the published train: the commit npm
 records for it, with every package from npm. The checks pass only after the
 push run publishes.

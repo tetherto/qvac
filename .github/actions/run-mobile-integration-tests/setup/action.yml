@@ -13,8 +13,7 @@ description: |
   candidate-vs-baseline benchmark) MUST set force-npm-prebuild=true alongside
   package-version — artifact presence alone would otherwise silently shadow the
   pin with binaries built in the same run (QVAC-21879). Any addon workflow that
-  adds a pinned-npm session must wire this input the way
-  integration-mobile-test-llm-llamacpp.yml does.
+  adds a pinned-npm session must wire this input alongside package-version.
 
   The pinned-package path resolves BOTH registries: @qvac/* from npmjs.org and
   @tetherto/<addon>-mono from GitHub Packages. That is how a build from ANOTHER

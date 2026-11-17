@@ -13,10 +13,9 @@
 // `test/utils/downloadModel.js` `ensure*` helpers.
 //
 // `QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE` must be truthy for the benchmark to
-// actually run — the mobile workflow's variant-injection step only sets it when
-// the dispatch input `run_rtf_benchmarks: true` is passed, so a default PR
-// mobile run is a near-no-op (no brittle test registers, the matrix entry goes
-// green-with-skip).
+// actually run — ci/prepare-mobile.mjs only injects it on a benchmarks.yml run
+// that passes `args`, so a regular mobile run is a near-no-op (no brittle test
+// registers, the run goes green-with-skip).
 
 const os = require('bare-os')
 
