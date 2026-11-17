@@ -45,7 +45,8 @@ TEST(MediaLimits, DecodeOptionsCountAudioAtTheModelRate) {
   const MediaLimits limits{.maxImagePixels = 8'000'000, .maxAudioSeconds = 30};
   const mtmd_helper_init_opt opt = mediaDecodeOptions(limits, 16000);
   EXPECT_EQ(opt.max_image_pixels, 8'000'000U);
-  EXPECT_EQ(opt.max_audio_frames, 30U * 16000U);
+  // One frame of slack: miniaudio counts 16001 frames for 1 s of 48 kHz.
+  EXPECT_EQ(opt.max_audio_frames, 30U * 16000U + 1U);
 }
 
 TEST(MediaLimits, DecodeOptionsWithoutAnAudioEncoder) {
@@ -55,10 +56,13 @@ TEST(MediaLimits, DecodeOptionsWithoutAnAudioEncoder) {
 }
 
 TEST(MediaLimits, DecodeOptionsSaturateInsteadOfWrapping) {
-  // 0 means no limit to mtmd, so an overflowing product must not wrap to it.
-  const MediaLimits limits{
-      .maxAudioSeconds = std::numeric_limits<uint64_t>::max() / 2};
+  // 0 means no limit to mtmd, so an overflowing value must not wrap to it.
+  constexpr uint64_t MAX = std::numeric_limits<uint64_t>::max();
+  constexpr uint64_t RATE = 16000;
+  const MediaLimits largest{.maxAudioSeconds = (MAX - 1) / RATE};
   EXPECT_EQ(
-      mediaDecodeOptions(limits, 16000).max_audio_frames,
-      std::numeric_limits<uint64_t>::max());
+      mediaDecodeOptions(largest, RATE).max_audio_frames,
+      largest.maxAudioSeconds * RATE + 1);
+  const MediaLimits over{.maxAudioSeconds = largest.maxAudioSeconds + 1};
+  EXPECT_EQ(mediaDecodeOptions(over, RATE).max_audio_frames, MAX);
 }

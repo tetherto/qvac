@@ -55,13 +55,15 @@ mediaDecodeOptions(const MediaLimits& limits, int audioSampleRate) {
   mtmd_helper_init_opt opt = mtmd_helper_init_opt_default();
   opt.max_image_pixels = limits.maxImagePixels;
   if (audioSampleRate > 0) {
-    // The limit counts samples at the model's rate. 0 would mean no limit, so
-    // a product past uint64 saturates instead of wrapping.
+    // The limit counts samples at the model's rate, plus one: miniaudio counts
+    // one frame more when the input rate is a multiple of the model's (48 kHz
+    // to 16 kHz), so audio exactly at the limit would fail. 0 would mean no
+    // limit, so a value past uint64 saturates instead of wrapping.
     const auto rate = static_cast<uint64_t>(audioSampleRate);
-    opt.max_audio_frames =
-        limits.maxAudioSeconds > std::numeric_limits<uint64_t>::max() / rate
-            ? std::numeric_limits<uint64_t>::max()
-            : limits.maxAudioSeconds * rate;
+    constexpr uint64_t MAX = std::numeric_limits<uint64_t>::max();
+    opt.max_audio_frames = limits.maxAudioSeconds > (MAX - 1) / rate
+                               ? MAX
+                               : limits.maxAudioSeconds * rate + 1;
   }
   return opt;
 }
