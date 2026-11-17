@@ -21,7 +21,8 @@ import {
   SLICE_DEFINITIONS,
   PLATFORM_INDEX_SOURCE,
   buildSliceManifest,
-  expectedAddonFile
+  expectedAddonFile,
+  mangledAddonName
 } from '../../../scripts/ci/slice-platform-packages.mjs'
 import { toLocalTarballSpec } from './e2e-inference.mjs'
 
@@ -183,9 +184,14 @@ export function packPackage(workdir, stage, host, env) {
   const definition = SLICE_DEFINITIONS.find((slice) => slice.hosts.includes(host))
   if (!definition || !HOSTS.has(host)) throw new Error(`Unsupported speech preflight host: ${host}`)
   const prebuilds = join(workdir, 'prebuilds')
-  if (!existsSync(join(prebuilds, host, expectedAddonFile(manifest.name, host)))) {
+  const addon =
+    manifest.addon === true
+      ? `${mangledAddonName(manifest.name)}.bare`
+      : expectedAddonFile(manifest.name, host)
+  if (!existsSync(join(prebuilds, host, addon))) {
     throw new Error(`Missing native addon for ${manifest.name} on ${host}`)
   }
+  if (manifest.addon === true) return [pack(workdir, stage, env)]
   const slice = join(stage, 'slices', `${basename(workdir)}-${host}`)
   mkdirSync(join(slice, 'prebuilds'), { recursive: true })
   writeJson(join(slice, 'package.json'), buildSliceManifest(manifest, definition))

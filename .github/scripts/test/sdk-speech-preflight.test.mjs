@@ -165,17 +165,19 @@ function packageFixture(root, slug, host) {
   const workdir = join(root, 'packages', slug)
   mkdirSync(join(workdir, 'prebuilds', host), { recursive: true })
   const name = `@qvac/${slug}`
+  const bundled = slug === 'bci-whispercpp'
   writeJson(join(workdir, 'package.json'), {
     name,
     version: '0.0.1',
     main: 'index.js',
     files: ['index.js', 'prebuilds'],
     exports: { '.': './index.js', './package': './package.json' },
-    optionalDependencies: { [`${name}-${host}`]: '0.0.1' },
+    ...(bundled ? { addon: true } : { optionalDependencies: { [`${name}-${host}`]: '0.0.1' } }),
     ...(slug === 'fabric' ? {} : { dependencies: { '@qvac/fabric': '0.0.1' } })
   })
   writeFileSync(join(workdir, 'index.js'), 'module.exports = {}\n')
-  writeFileSync(join(workdir, 'prebuilds', host, expectedAddonFile(name, host)), slug)
+  const addon = bundled ? 'qvac__bci-whispercpp.bare' : expectedAddonFile(name, host)
+  writeFileSync(join(workdir, 'prebuilds', host, addon), slug)
   return workdir
 }
 
@@ -223,10 +225,19 @@ test('packs and installs only the current host, then verifies the actual npm ins
   const root = temporary(t)
   const host = `${process.platform}-${process.arch}`
   const packages = packFixtures(root, host)
-  assert.equal(packages.length, PACKAGES.length * 2)
+  assert.equal(packages.length, PACKAGES.length * 2 - 1)
   assert.deepEqual(
     new Set(packages.map((p) => p.name)),
-    new Set(PACKAGES.flatMap((slug) => [`@qvac/${slug}`, `@qvac/${slug}-${host}`]))
+    new Set(
+      PACKAGES.flatMap((slug) =>
+        slug === 'bci-whispercpp' ? [`@qvac/${slug}`] : [`@qvac/${slug}`, `@qvac/${slug}-${host}`]
+      )
+    )
+  )
+  const bci = packages.find((p) => p.name === '@qvac/bci-whispercpp')
+  assert.deepEqual(
+    bci.native.map(({ name }) => name),
+    [join(host, 'qvac__bci-whispercpp.bare')]
   )
   const consumer = installFixture(root, packages)
   verifySpeechPreflight(consumer, { ...CONFIG, host, packages })
@@ -266,4 +277,12 @@ test('artifact lookup uses the GitHub API and fails explicitly when a build arti
   assert.equal(url.origin, 'https://api.github.com')
   assert.equal(url.pathname, '/repos/tetherto/qvac/actions/runs/42/artifacts')
   assert.equal(url.searchParams.get('name'), 'prebuild-asr-ggml-linux-x64')
+})
+
+test('rejects a bundled addon whose native binary is missing', (t) => {
+  const root = temporary(t)
+  const host = `${process.platform}-${process.arch}`
+  const workdir = packageFixture(root, 'bci-whispercpp', host)
+  rmSync(join(workdir, 'prebuilds', host, 'qvac__bci-whispercpp.bare'))
+  assert.throws(() => packPackage(workdir, root, host, process.env), /Missing native addon/)
 })
