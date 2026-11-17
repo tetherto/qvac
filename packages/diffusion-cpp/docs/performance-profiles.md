@@ -100,13 +100,11 @@ Hardware classification and selection are grouped in
 adding a measured device/API row. `stable-diffusion-cpp` resolves to registry
 revision `2026-11-01#1`, containing merged
 [engine #64](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/64)
-(`bc53357484bc5d2ba08fbe5301dae192e5b9a176`). A scoped Git registry entry pins
-the branch in [registry #496](https://github.com/tetherto/qvac-registry-vcpkg/pull/496)
-at `c33611a32161c01324d961cd72c5ee400262415a`; the addon carries no port overlay.
-Other dependencies retain their existing registry baselines. After the registry
-change merges, switch this entry's reference to `main`, pin a baseline containing
-the merged revision, and verify dependency resolution before merging or releasing
-the addon.
+(`bc53357484bc5d2ba08fbe5301dae192e5b9a176`). A scoped Git registry entry references
+`main` at merged [registry #496](https://github.com/tetherto/qvac-registry-vcpkg/pull/496)
+commit `69541270b6cba537ee42b14a845013d20a061ba7`; the addon carries no port overlay.
+Other dependencies retain their existing registry baselines. Normal and CUDA/test
+dependency-resolution dry runs pass with this merged baseline.
 
 See [implementation validation](performance-profiles-validation.md) for timings,
 quality comparisons, memory costs, CI status and remaining release checks.

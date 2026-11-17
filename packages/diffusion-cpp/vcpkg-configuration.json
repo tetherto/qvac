@@ -8,8 +8,8 @@
   "registries": [
     {
       "kind": "git",
-      "reference": "codex/qvac-27486-diffusion-engine64",
-      "baseline": "c33611a32161c01324d961cd72c5ee400262415a",
+      "reference": "main",
+      "baseline": "69541270b6cba537ee42b14a845013d20a061ba7",
       "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git",
       "packages": [
         "stable-diffusion-cpp"
