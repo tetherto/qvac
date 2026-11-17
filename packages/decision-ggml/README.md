@@ -68,8 +68,12 @@ what the loaded model supports; check it before building requests:
   `expected_rating` (lev, normalized to 0..1), or `unknown` for a decision
   type this addon does not list. Treat an `unknown` one as neither.
 - `max_input_tokens`: the longest input a request can have, a state with one
-  question and its options. A longer one is rejected with
-  `DECISION_INVALID_REQUEST`.
+  question and its options. For a non-causal model (Laya) it is the batch
+  size, and a longer input is rejected with `DECISION_INVALID_REQUEST`. For a
+  causal model it is each slot's share of the context, since a request's
+  questions and a batch's states run in slots that share one KV cache by
+  default; a longer input may still fit when fewer slots are busy, but is not
+  promised to.
 - `score_levels`, `images`, `audio` and the other capabilities.
 
 ### Several states
@@ -124,8 +128,9 @@ Any other key fails the load. Multi-word keys take either spelling
 | `[ Decision :: UnableToLoadModel ]` | The file is missing or cannot be loaded |
 
 `run()` rejects a request the model does not accept (bad JSON, too many
-options, an unsupported question type, nesting deeper than 128 levels, an
-input longer than `max_input_tokens`, ...) with
+options, an unsupported question type, a state, instructions or description
+nested deeper than 128 levels, an input longer than a non-causal model's
+`max_input_tokens`, ...) with
 `err.code === DECISION_INVALID_REQUEST`; other failures do not carry that
 code. A cancelled run fails with `Job cancelled`.
 

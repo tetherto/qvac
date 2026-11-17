@@ -317,12 +317,55 @@ TEST(DecisionContextTest, MissingModelFileFailsToLoadAndNothingRuns) {
 
 namespace {
 
-/// A request whose state is `depth` nested arrays.
-std::string nestedRequest(int depth) {
-  return R"({"state":)" + std::string(static_cast<size_t>(depth), '[') +
-         std::string(static_cast<size_t>(depth), ']') +
-         R"(,"questions":{"q":{"type":"noul","instructions":"?"}}})";
+/// `depth` nested empty arrays.
+std::string nested(int depth) {
+  return std::string(static_cast<size_t>(depth), '[') +
+         std::string(static_cast<size_t>(depth), ']');
 }
+
+/// A request with a value nested @p depth levels deep at one of the places a
+/// request carries values. The limit counts from where the value starts, so
+/// every placement accepts the same depth.
+std::string nestedRequest(const std::string& placement, int depth) {
+  const std::string v = nested(depth);
+  const std::string noul = R"({"q":{"type":"noul","instructions":"?"}})";
+  if (placement == "state") {
+    return R"({"state":)" + v + R"(,"questions":)" + noul + "}";
+  }
+  if (placement == "states") {
+    return R"({"states":["x",)" + v + R"(],"questions":)" + noul + "}";
+  }
+  if (placement == "instructions") {
+    return R"({"state":"x","questions":{"q":{"type":"noul","instructions":)" +
+           v + "}}}";
+  }
+  if (placement == "choice description") {
+    return R"({"state":"x","questions":{"q":{"type":"choice","instructions":"?",)"
+           R"("criteria":{"a":)" +
+           v + R"(,"b":"B"}}}})";
+  }
+  if (placement == "score level") {
+    return R"({"state":"x","questions":{"q":{"type":"score","instructions":"?",)"
+           R"("criteria":["low",)" +
+           v + "]}}}";
+  }
+  if (placement == "noul criteria") {
+    return R"({"state":"x","questions":{"q":{"type":"noul","instructions":"?",)"
+           R"("criteria":{"true":)" +
+           v + R"(,"false":"no"}}}})";
+  }
+  // A field the request does not define is held to the same limit.
+  return R"({"state":"x","extra":)" + v + R"(,"questions":)" + noul + "}";
+}
+
+const char* const kPlacements[] = {
+    "state",
+    "states",
+    "instructions",
+    "choice description",
+    "score level",
+    "noul criteria",
+    "unknown field"};
 
 const std::function<bool()> kNeverStop = [] { return false; };
 
@@ -366,17 +409,23 @@ std::unique_ptr<qdecision::DecisionContext> DecisionContextModelTest::context_;
 } // namespace
 
 TEST_F(DecisionContextModelTest, DepthGuardAccepts128AndRejects129AndDeeper) {
-  // Depth 128 passes the guard; the model may still reject the payload.
-  const auto ok = runOutcome(*context_, nestedRequest(128), kNeverStop);
-  EXPECT_EQ(ok.second.find("nested more than"), std::string::npos) << ok.second;
+  for (const char* placement : kPlacements) {
+    // Depth 128 passes the guard; the model may still reject the payload.
+    const auto ok =
+        runOutcome(*context_, nestedRequest(placement, 128), kNeverStop);
+    EXPECT_EQ(ok.second.find("nested more than"), std::string::npos)
+        << placement << ": " << ok.second;
 
-  for (const int depth : {129, 5000}) {
-    const auto rejected =
-        runOutcome(*context_, nestedRequest(depth), kNeverStop);
-    EXPECT_EQ(rejected.first, "[ Decision :: InvalidRequest ]");
-    EXPECT_NE(
-        rejected.second.find("nested more than 128 levels"), std::string::npos)
-        << rejected.second;
+    for (const int depth : {129, 5000}) {
+      const auto rejected =
+          runOutcome(*context_, nestedRequest(placement, depth), kNeverStop);
+      EXPECT_EQ(rejected.first, "[ Decision :: InvalidRequest ]")
+          << placement << " at " << depth;
+      EXPECT_NE(
+          rejected.second.find("nested more than 128 levels"),
+          std::string::npos)
+          << placement << " at " << depth << ": " << rejected.second;
+    }
   }
 }
 
@@ -421,8 +470,10 @@ TEST_F(DecisionContextModelTest, ReportsInfoAndMapsUpstreamRejections) {
   const json info = json::parse(context_->info());
   EXPECT_EQ(info["decision_type"], "openjev");
   EXPECT_EQ(info["noul"], "probability");
-  // Causal: the input may fill the context but one token.
-  EXPECT_EQ(info["max_input_tokens"], info["n_ctx"].get<int>() - 1);
+  // Causal, 4 default slots sharing a 2048-token cache: a quarter of it each,
+  // but one token.
+  EXPECT_EQ(info["n_ctx"], 2048);
+  EXPECT_EQ(info["max_input_tokens"], 2048 / 4 - 1);
   EXPECT_EQ(info["max_json_depth"], qdecision::DECISION_MAX_JSON_DEPTH);
 
   const auto rejected = runOutcome(
@@ -434,6 +485,34 @@ TEST_F(DecisionContextModelTest, ReportsInfoAndMapsUpstreamRejections) {
   // The JS side keys err.code DECISION_INVALID_REQUEST on this prefix.
   EXPECT_EQ(rejected.second.rfind("invalid request: ", 0), 0U)
       << rejected.second;
+}
+
+TEST(DecisionContextLifetimeTest, DestroyingRightAfterTheLoadReturns) {
+  const std::string openjev = fixture("tinyopenjev-for-testing-Q8_0.gguf");
+  if (openjev.empty()) {
+    GTEST_SKIP() << "decision fixtures not found (set DECISION_TEST_MODELS)";
+  }
+  // Destroyed before upstream's loop thread may have started its loop, which
+  // sets the loop running on entry: the stop must still reach it. A race, so
+  // several rounds; without the fix this hangs on the first one or two.
+  for (int i = 0; i < 10; ++i) {
+    qdecision::DecisionContext context(
+        DecisionEngineModel::loadParams(
+            openjev, {{"device", "cpu"}, {"ctx_size", "512"}}));
+  }
+}
+
+TEST(DecisionContextCausalTest, OneSlotMayFillTheContextButOneToken) {
+  const std::string openjev = fixture("tinyopenjev-for-testing-Q8_0.gguf");
+  if (openjev.empty()) {
+    GTEST_SKIP() << "decision fixtures not found (set DECISION_TEST_MODELS)";
+  }
+  qdecision::DecisionContext context(
+      DecisionEngineModel::loadParams(
+          openjev,
+          {{"device", "cpu"}, {"ctx_size", "2048"}, {"parallel", "1"}}));
+  const json info = json::parse(context.info());
+  EXPECT_EQ(info["max_input_tokens"], 2047);
 }
 
 TEST(DecisionContextLayaTest, AnInputLongerThanOnePassIsARejectedRequest) {

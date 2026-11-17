@@ -8,12 +8,15 @@
 
 namespace qvac_lib_inference_addon_decision {
 
-/// Maximum nesting of the values inside a request body: a state, instruction
-/// or description may be nested this many levels deep, the same limit
-/// upstream applies to the values it walks recursively (llama.cpp #30242). The
-/// body object itself adds one level. Deeper requests are rejected before any
-/// recursive code sees them: running in-process there is no crash isolation,
-/// and catching an exception cannot recover from a stack overflow.
+/// Maximum nesting of each value a request carries: a state (or each of
+/// "states"), each question's instructions and each criteria entry may be
+/// nested this many levels deep, counted from where the value starts, the same
+/// limit upstream applies to the values it walks recursively (llama.cpp
+/// #30242) and the SDK checks. The request's own framing (the body,
+/// "questions", a question, "criteria") does not count. Deeper requests are
+/// rejected before any recursive code sees them: running in-process there is
+/// no crash isolation, and catching an exception cannot recover from a stack
+/// overflow.
 constexpr int DECISION_MAX_JSON_DEPTH = 128;
 
 /// What a `noul` answer means for a decision type: "probability" (of the

@@ -13,13 +13,17 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
+#include <cstring>
 #include <exception>
 #include <filesystem>
 #include <mutex>
 #include <regex>
 #include <stdexcept>
+#include <string_view>
 #include <thread>
+#include <typeinfo>
 #include <utility>
 #include <vector>
 
@@ -27,6 +31,7 @@
 #include <inference-addon-cpp/Errors.hpp>
 #include <json.h>
 #include <llama.h>
+#include <log.h>
 #include <qvac-fabric.h>
 #include <server-context.h>
 #include <server-decision.h>
@@ -53,6 +58,13 @@ struct DecisionContext::State {
   int activeRuns = 0;
   bool closing = false;
   std::atomic<bool> stopping{false};
+
+  // Set when upstream's loop ended with an exception: nothing processes
+  // requests any more. loopError is written before the flag is released.
+  std::atomic<bool> loopDead{false};
+  std::string loopError;
+  // Set when the loop thread is about to end, however start_loop() returned.
+  std::atomic<bool> loopExited{false};
 };
 
 namespace {
@@ -61,6 +73,28 @@ using State = DecisionContext::State;
 
 [[noreturn]] void fail(DecisionErrorCode code, const std::string& message) {
   throw qvac_errors::StatusError(ADDON_ID, toString(code), message);
+}
+
+// A dead loop fails every request with its error instead of letting it wait
+// for a result nobody computes. Checked ahead of the stop signal, which the
+// dead loop also raises, so it is not reported as a cancellation.
+void failIfLoopDead(const State& d, const std::string& where) {
+  if (d.loopDead.load(std::memory_order_acquire)) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(DecodeFailed),
+        where + "the decision loop stopped: " + d.loopError);
+  }
+}
+
+// Whether @p e is upstream's common_json_error (bad JSON, a value of the wrong
+// type). Compared by name as well as by type: the fabric runtime throws it
+// with its own type_info, which it does not export, and Linux libc++ matches
+// a catch clause by type_info address, so `catch (const common_json_error&)`
+// misses it there.
+bool isJsonError(const std::exception& e) {
+  return dynamic_cast<const common_json_error*>(&e) != nullptr ||
+         std::strcmp(typeid(e).name(), typeid(common_json_error).name()) == 0;
 }
 
 [[noreturn]] void failRequest(const std::string& message) {
@@ -108,17 +142,58 @@ std::string errorMessage(const std::string& payload) {
   return payload;
 }
 
-// Container nesting of a JSON text, scanned without recursion and without
-// parsing, so a hostile body cannot overflow the stack before it is rejected.
-// The body object is one level; the values inside may add
-// DECISION_MAX_JSON_DEPTH more, as upstream allows for the values it walks (a
-// state of 128 nested arrays is accepted, 129 is not).
+// Whether every value a request carries is nested at most
+// DECISION_MAX_JSON_DEPTH containers deep, measured from where the value
+// starts: a state (or each of "states"), each question's instructions and
+// each criteria entry, as the SDK and upstream count them. The containers
+// that frame those values -- the body, "questions", each question, "criteria"
+// and "states" -- are recognised only at their fixed places and do not count.
+// Any other value is held to the same limit from where it starts, so the
+// whole text is at most a few levels deeper than the limit. Scanned without
+// recursion and without parsing, so a hostile body cannot overflow the stack
+// before it is rejected. A key written with escapes is not recognised; its
+// value then counts as one payload, which only makes the limit stricter.
 bool withinDepthLimit(const std::string& text) {
-  constexpr int kMaxDepth = DECISION_MAX_JSON_DEPTH + 1;
-  int depth = 0;
+  enum class Frame { Body, Questions, Question, Criteria, States, Payload };
+  struct Level {
+    Frame frame;
+    bool isObject;
+    int payloadDepth;     // containers so far inside the value (Payload only)
+    bool expectKey;       // objects: the next string is a key
+    std::string_view key; // objects: the key of the value being read
+  };
+  std::vector<Level> stack;
+  stack.reserve(DECISION_MAX_JSON_DEPTH + 8);
+
+  // The frame of a container opening as a value of the current level.
+  const auto childFrame = [&stack](bool isObject) -> Frame {
+    if (stack.empty()) {
+      return isObject ? Frame::Body : Frame::Payload;
+    }
+    const Level& parent = stack.back();
+    switch (parent.frame) {
+    case Frame::Body:
+      if (isObject && parent.key == "questions") {
+        return Frame::Questions;
+      }
+      if (!isObject && parent.key == "states") {
+        return Frame::States;
+      }
+      return Frame::Payload;
+    case Frame::Questions:
+      return isObject ? Frame::Question : Frame::Payload;
+    case Frame::Question:
+      return parent.key == "criteria" ? Frame::Criteria : Frame::Payload;
+    default:
+      return Frame::Payload;
+    }
+  };
+
   bool inString = false;
   bool escaped = false;
-  for (const char c : text) {
+  size_t stringStart = 0;
+  for (size_t i = 0; i < text.size(); ++i) {
+    const char c = text[i];
     if (inString) {
       if (escaped) {
         escaped = false;
@@ -126,17 +201,39 @@ bool withinDepthLimit(const std::string& text) {
         escaped = true;
       } else if (c == '"') {
         inString = false;
+        if (!stack.empty() && stack.back().isObject && stack.back().expectKey) {
+          stack.back().key =
+              std::string_view(text).substr(stringStart, i - stringStart);
+        }
       }
       continue;
     }
     if (c == '"') {
       inString = true;
+      stringStart = i + 1;
     } else if (c == '{' || c == '[') {
-      if (++depth > kMaxDepth) {
-        return false;
+      const bool isObject = c == '{';
+      Level level{childFrame(isObject), isObject, 0, isObject, {}};
+      if (level.frame == Frame::Payload) {
+        const bool nested =
+            !stack.empty() && stack.back().frame == Frame::Payload;
+        level.payloadDepth = nested ? stack.back().payloadDepth + 1 : 1;
+        if (level.payloadDepth > DECISION_MAX_JSON_DEPTH) {
+          return false;
+        }
       }
-    } else if ((c == '}' || c == ']') && depth > 0) {
-      --depth;
+      stack.push_back(level);
+    } else if (c == '}' || c == ']') {
+      if (!stack.empty()) {
+        stack.pop_back();
+      }
+    } else if (!stack.empty() && stack.back().isObject) {
+      if (c == ':') {
+        stack.back().expectKey = false;
+      } else if (c == ',') {
+        stack.back().expectKey = true;
+        stack.back().key = {};
+      }
     }
   }
   return true;
@@ -235,11 +332,18 @@ std::string buildInfo(State& d) {
   info["n_ctx"] = meta.slot_n_ctx;
   // The longest input (a state with one question and its options, in
   // tokens) a request can have. A non-causal model reads it in one pass of at
-  // most n_ubatch tokens; a causal one splits it but needs a token of the
-  // context left.
+  // most n_ubatch tokens. A causal one splits it but keeps it in the KV cache
+  // and needs a token of it left; each question of each state takes a slot,
+  // and with the default unified cache upstream gives every slot the whole
+  // context while all of them share it. So the bound is an equal share of the
+  // context, which every slot has even when all are busy; without the unified
+  // cache that is the slot's own context.
+  const int nParallel = std::max(1, d.params.n_parallel);
+  const int causalShare = std::min(
+      meta.slot_n_ctx, static_cast<int>(llama_n_ctx(lctx)) / nParallel);
   info["max_input_tokens"] =
       llama_get_causal_attn(lctx)
-          ? meta.slot_n_ctx - 1
+          ? causalShare - 1
           : std::min(static_cast<int>(llama_n_ubatch(lctx)), meta.slot_n_ctx);
   info["model"] = meta.model_name;
   return info.dump();
@@ -252,6 +356,13 @@ void shutdown(State& d) {
     d.ctx->terminate();
   }
   if (d.loop.joinable()) {
+    // start_loop() marks the queue running on entry, so a terminate() that
+    // lands before the loop thread gets there is overwritten and the loop
+    // never ends. Repeat it until the thread is out.
+    while (!d.loopExited.load(std::memory_order_acquire)) {
+      d.ctx->terminate();
+      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
     d.loop.join();
   }
   d.routes.reset();
@@ -314,14 +425,25 @@ DecisionContext::DecisionContext(const common_params& params)
     d.routes->update_meta(*d.ctx);
     d.info = buildInfo(d);
 
-    server_context* ctx = d.ctx.get();
-    d.loop = std::thread([ctx]() {
+    // start_loop only returns after terminate(). It does not catch what its
+    // task processing throws: record it, so requests fail with it rather
+    // than wait for results nobody computes (and the process does not call
+    // std::terminate). shutdown() joins the thread before State is freed.
+    State* state = &d;
+    d.loop = std::thread([state]() {
+      const auto died = [state](const std::string& error) {
+        LOG_ERR("decision loop stopped: %s\n", error.c_str());
+        state->loopError = error;
+        state->loopDead.store(true, std::memory_order_release);
+      };
       try {
-        ctx->start_loop();
+        state->ctx->start_loop();
+      } catch (const std::exception& e) {
+        died(e.what());
       } catch (...) {
-        // start_loop only returns after terminate(); an exception here would
-        // otherwise call std::terminate on the whole process.
+        died("unknown error");
       }
+      state->loopExited.store(true, std::memory_order_release);
     });
   } catch (const qvac_errors::StatusError&) {
     shutdown(d);
@@ -368,21 +490,28 @@ std::string runOne(
   } catch (const std::invalid_argument& e) {
     // llama-server's ex_wrapper (HTTP target, not built here) maps these to
     // 400.
+    failIfLoopDead(d, at(where));
     if (stop()) {
       failCancelled();
     }
     failRequest(at(where) + e.what());
   } catch (const common_json_error& e) {
+    failIfLoopDead(d, at(where));
     if (stop()) {
       failCancelled();
     }
     failRequest(at(where) + e.what());
   } catch (const std::exception& e) {
+    failIfLoopDead(d, at(where));
     if (stop()) {
       failCancelled();
     }
+    if (isJsonError(e)) {
+      failRequest(at(where) + e.what());
+    }
     fail(DecodeFailed, at(where) + e.what());
   } catch (...) {
+    failIfLoopDead(d, at(where));
     if (stop()) {
       failCancelled();
     }
@@ -390,7 +519,9 @@ std::string runOne(
   }
 
   // A cancelled request can come back untouched: status 200 and no data. The
-  // stop signal decides, never the status alone.
+  // stop signal decides, never the status alone; a dead loop comes first, as
+  // it raises the stop signal too.
+  failIfLoopDead(d, at(where));
   if (stop()) {
     failCancelled();
   }
@@ -534,11 +665,14 @@ std::string DecisionContext::run(
     }
   } scope(d);
 
+  // A dead loop stops the request too, so an in-flight one returns.
   const std::function<bool()> stop = [&d, &shouldStop]() {
     return d.stopping.load(std::memory_order_acquire) ||
+           d.loopDead.load(std::memory_order_acquire) ||
            (shouldStop && shouldStop());
   };
 
+  failIfLoopDead(d, "");
   if (stop()) {
     failCancelled();
   }

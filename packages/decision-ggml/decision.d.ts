@@ -111,14 +111,19 @@ export interface DecisionEngineInfo {
         min: number;
         max: number;
     };
-    /** Maximum nesting of a value inside the request. */
+    /**
+     * Maximum nesting of each value a request carries (a state, the
+     * instructions, each criteria entry), counted from where the value starts.
+     */
     max_json_depth: number;
     n_ctx: number;
     /**
      * The longest input a request can have, in tokens: a state with one
      * question and its options. For a non-causal model (Laya) it is the batch
      * size (`batch_size`, 2048 unless set); a longer one is rejected with
-     * {@link DECISION_INVALID_REQUEST}.
+     * {@link DECISION_INVALID_REQUEST}. For a causal model it is each slot's
+     * share of the context (`n_ctx / parallel`, but one token), which every
+     * question of every state gets even when all slots are busy.
      */
     max_input_tokens: number;
     model: string;

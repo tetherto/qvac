@@ -16,7 +16,13 @@
   - Unset, `parallel` is llama-server's own default: 4 slots sharing one KV
     cache.
   - `info()` reports `noul` as `probability`, `expected_rating` (lev) or
-    `unknown` for a type this addon does not list, and `max_input_tokens`.
+    `unknown` for a type this addon does not list, and `max_input_tokens`;
+    for a causal model that is each slot's share of the context, so a batch
+    of states that each fit it cannot together run out of KV cache.
+  - The nesting limit applies to each value a request carries (a state, the
+    instructions, each criteria entry) from where it starts, 128 levels for
+    each, as the SDK and upstream count them.
+  - Runtime stats count a batch's input tokens over all its states.
   - A non-causal model (Laya) reads up to `batch_size` tokens (2048 by
     default) in one pass; a longer input is rejected with
     `DECISION_INVALID_REQUEST`, not reported as an execution failure.

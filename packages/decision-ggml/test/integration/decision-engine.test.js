@@ -104,7 +104,12 @@ for (const [name, mmproj, expectType] of [
           `one pass of at most 2048 tokens: ${info.max_input_tokens}`
         )
       } else {
-        t.is(info.max_input_tokens, info.n_ctx - 1, 'causal: the context but one token')
+        // 4 default slots share the cache: each is promised a quarter of it.
+        t.is(
+          info.max_input_tokens,
+          Math.floor(info.n_ctx / 4) - 1,
+          "causal: a slot's share of the context but one token"
+        )
       }
       if (mmproj) t.ok(info.images, 'openjev with its projector takes images')
 
@@ -137,6 +142,11 @@ for (const [name, expectType] of [
         const response = await engine.run({ states: STATES, questions: QUESTIONS })
         const [results] = await response.await()
         t.is(results.length, STATES.length, 'one result per state')
+        t.is(
+          response.stats.decision_input_tokens,
+          results.reduce((sum, r) => sum + r.usage.input_tokens, 0),
+          "stats carry the batch's input tokens, summed over its states"
+        )
         for (let i = 0; i < STATES.length; i++) {
           checkAnswers(t, results[i].answers)
           const { result: alone } = await decide(engine, { state: STATES[i], questions: QUESTIONS })
@@ -211,36 +221,38 @@ safeTest(
       t.ok(/2 to 10 levels/.test(rejected.message), `11 score levels rejected: ${rejected.message}`)
       t.is(rejected.code, DECISION_INVALID_REQUEST, 'rejection is coded as an invalid request')
 
-      // The depth guard accepts a state nested 128 deep (upstream may still
-      // answer or reject it on its own terms) and rejects 129 before any
-      // recursive code runs.
-      const atLimit = {
-        state: nested(128),
-        questions: { q: { type: 'noul', instructions: 'Is it empty?' } }
+      // The depth guard counts from where each value starts: a state, the
+      // instructions and an option description all accept 128 nested levels
+      // (upstream may still answer or reject them on its own terms) and
+      // reject 129 before any recursive code runs.
+      const placements = {
+        state: (v) => ({
+          state: v,
+          questions: { q: { type: 'noul', instructions: 'Is it empty?' } }
+        }),
+        instructions: (v) => ({ state: 'x', questions: { q: { type: 'noul', instructions: v } } }),
+        description: (v) => ({
+          state: 'x',
+          questions: { q: { type: 'choice', instructions: '?', criteria: { a: v, b: 'B' } } }
+        })
       }
-      await decide(engine, atLimit).then(
-        () => t.pass('depth 128 passes the guard'),
-        (err) =>
-          t.absent(
-            /levels deep/.test(err.message),
-            `depth 128 not rejected by the guard: ${err.message}`
-          )
-      )
-      const tooDeep = {
-        state: nested(129),
-        questions: { q: { type: 'noul', instructions: 'Is it empty?' } }
+      for (const [name, request] of Object.entries(placements)) {
+        await decide(engine, request(nested(128))).then(
+          () => t.pass(`${name} at depth 128 passes the guard`),
+          (err) =>
+            t.absent(
+              /levels deep/.test(err.message),
+              `${name} at depth 128 not rejected by the guard: ${err.message}`
+            )
+        )
+        await t.exception(
+          decide(engine, request(nested(129))),
+          /nested more than 128 levels deep/,
+          `${name} at depth 129 rejected`
+        )
       }
       await t.exception(
-        decide(engine, tooDeep),
-        /nested more than 128 levels deep/,
-        'depth 129 rejected'
-      )
-      const veryDeep = {
-        state: nested(5000),
-        questions: { q: { type: 'noul', instructions: 'Is it empty?' } }
-      }
-      await t.exception(
-        decide(engine, veryDeep),
+        decide(engine, placements.state(nested(5000))),
         /levels deep/,
         'depth 5000 rejected without a crash'
       )

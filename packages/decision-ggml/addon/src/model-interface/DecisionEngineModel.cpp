@@ -286,10 +286,21 @@ DecisionEngineModel::run(const std::string& requestJson, JobId id) {
                 std::chrono::steady_clock::now() - start)
                 .count();
 
+  // A batch answers with one result per state, each with its own usage.
   lastInputTokens_ = 0;
   try {
     const auto result = nlohmann::json::parse(body);
-    lastInputTokens_ = result.value("/usage/input_tokens"_json_pointer, 0LL);
+    const auto tokensOf = [](const nlohmann::json& r) {
+      return r.is_object() ? r.value("/usage/input_tokens"_json_pointer, 0LL)
+                           : 0LL;
+    };
+    if (result.is_array()) {
+      for (const auto& r : result) {
+        lastInputTokens_ += tokensOf(r);
+      }
+    } else {
+      lastInputTokens_ = tokensOf(result);
+    }
   } catch (const std::exception&) {
   }
   return DecisionEngineResult{std::move(body)};
