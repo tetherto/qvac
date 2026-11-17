@@ -9,6 +9,9 @@ sync-monorepo.sh
 reset_history.sh
 confirmed.txt
 /node_modules
+# Swift Package Manager builds the root Package.swift here.
+/.build/
+/.swiftpm/
 packages/**/node_modules/
 # Without the trailing slash too: that form matches only directories, so a
 # `node_modules` symlink — the usual way to borrow another checkout's install
