@@ -251,7 +251,8 @@
       "metadata": {
         "publish": {
           "tagPrefix": "fabric",
-          "platformPackages": true
+          "platformPackages": true,
+          "maxTarballBytes": 200417383
         },
         "prebuildExtraDirs": [
           "include",
