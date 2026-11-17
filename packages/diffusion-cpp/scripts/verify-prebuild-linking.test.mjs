@@ -38,6 +38,11 @@ test('CUDA is opt-in for source builds and enabled for Linux and Windows release
     'utf8'
   )
   assert.match(cudaConfig, /if\(SD_CUDA\)\s+list\(APPEND VCPKG_MANIFEST_FEATURES "cuda"\)/)
+  const sourceGenerate = project.targets.build.options.commands.find(({ command }) =>
+    command.includes('bare-make generate')
+  )
+  assert.ok(sourceGenerate, 'ordinary source builds configure the addon')
+  assert.doesNotMatch(sourceGenerate.command, /-D\s*SD_CUDA=ON\b/)
   assertCudaReleaseBuild(project, 'linux-x64')
   assertCudaReleaseBuild(project, 'linux-arm64')
   assertCudaReleaseBuild(project, 'win32-x64')
