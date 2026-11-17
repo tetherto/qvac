@@ -1,7 +1,7 @@
 ---
 title: Stereo depth
 icon: Glasses
-description: Estimate per-pixel disparity from a rectified stereo image pair with BridgeDepth
+description: Estimate per-pixel disparity from a rectified stereo image pair for depth measurement via BridgeDepth on GGML
 schemaType: HowTo
 ---
 
@@ -50,7 +50,7 @@ Cancelling a queued call prevents native inference from starting. Cancelling an 
 
 ## Example
 
-The following script estimates the disparity of a stereo pair and prints its range and the value at the image centre. Pass the GGUF path and the left and right image paths, then optionally the focal length in pixels and the baseline in metres to also print the depth at the centre:
+The following script estimates the disparity of a stereo pair and prints its range and the value at the image centre, and also prints the depth at the centre when given the focal length in pixels and the baseline in metres:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
