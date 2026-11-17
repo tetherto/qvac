@@ -62,4 +62,26 @@ describe('the OpenAPI reference', () => {
     expect(markdown).toContain('message: string // What to echo')
     expect(markdown).toContain('`200` The message')
   })
+
+  it('keeps the parameters of each operation and of its path item', () => {
+    const document = {
+      paths: {
+        '/v1/videos/{id}': {
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          get: {
+            parameters: [{ name: 'limit', in: 'query', description: 'Page size', schema: { type: 'integer', maximum: 100 } }],
+            responses: { '200': { description: 'The video' } },
+          },
+        },
+      },
+    }
+    const [operation] = openApiOperations(document).operations
+    expect(operation.parameters).toEqual([
+      { name: 'id', in: 'path', required: true, description: undefined, schema: { type: 'string' } },
+      { name: 'limit', in: 'query', required: false, description: 'Page size', schema: { type: 'integer', maximum: 100 } },
+    ])
+    const markdown = openApiAsMarkdown(document)
+    expect(markdown).toContain('- `id` (path, required)')
+    expect(markdown).toContain('- `limit` (query): Page size')
+  })
 })

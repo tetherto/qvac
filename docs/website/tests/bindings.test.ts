@@ -145,6 +145,12 @@ describe('the bindings of the working tree', () => {
     expect(projected.has('endpoint:POST /v1/chat/completions')).toBe(true)
   })
 
+  it('hash the parameters of an endpoint, so changing one asks for a review', () => {
+    const projected = projectSurface({ root: MONOREPO, paths: ['packages/cli/docs/users'] })
+    const videos = projected.get('endpoint:GET /v1/videos') as { parameters: { name: string; schema: { maximum?: number } }[] }
+    expect(videos.parameters.find((parameter) => parameter.name === 'limit')?.schema.maximum).toBe(100)
+  })
+
   it('keep the SDK lock current', () => {
     const paths = ['packages/sdk/docs/users', 'packages/sdk/contract']
     const root = path.join(MONOREPO, paths[0])

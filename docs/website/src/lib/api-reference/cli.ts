@@ -41,11 +41,21 @@ export interface CliData {
   commands: CliCommand[]
 }
 
+/** A path, query, header or cookie parameter of an operation. */
+export interface OpenApiParameter {
+  name: string
+  in: string
+  required: boolean
+  description?: string
+  schema: JsonSchema | null
+}
+
 export interface OpenApiOperation {
   method: string
   path: string
   summary?: string
   description?: string
+  parameters: OpenApiParameter[]
   request: JsonSchema | null
   responses: { status: string; description?: string; schema: JsonSchema | null }[]
 }
@@ -121,6 +131,16 @@ export function openApiOperations(document: Record<string, unknown>): { reader: 
     for (const method of METHODS) {
       const operation = item[method] as Record<string, unknown> | undefined
       if (!operation) continue
+      // An operation's parameter overrides the path item's of the same name and location.
+      const declared = [...((item.parameters as Record<string, unknown>[]) ?? []), ...((operation.parameters as Record<string, unknown>[]) ?? [])]
+      const byKey = new Map(declared.map((parameter) => [`${parameter.in} ${parameter.name}`, parameter]))
+      const parameters = [...byKey.values()].map((parameter) => ({
+        name: parameter.name as string,
+        in: parameter.in as string,
+        required: parameter.required === true,
+        description: parameter.description as string | undefined,
+        schema: (parameter.schema as JsonSchema | undefined) ?? null,
+      }))
       const body = operation.requestBody as { content?: Record<string, { schema?: JsonSchema }> } | undefined
       const request = body?.content ? Object.values(body.content)[0]?.schema ?? null : null
       const responses = Object.entries((operation.responses as Record<string, Record<string, unknown>>) ?? {}).map(
@@ -138,6 +158,7 @@ export function openApiOperations(document: Record<string, unknown>): { reader: 
         path: route,
         summary: operation.summary as string | undefined,
         description: operation.description as string | undefined,
+        parameters,
         request,
         responses,
       })
@@ -153,6 +174,13 @@ export function openApiAsMarkdown(document: Record<string, unknown>): string {
       const parts = [`### \`${operation.method} ${operation.path}\``]
       if (operation.summary) parts.push(operation.summary)
       if (operation.description && operation.description !== operation.summary) parts.push(operation.description)
+      if (operation.parameters.length > 0) {
+        const lines = operation.parameters.map(
+          (parameter) =>
+            `- \`${parameter.name}\` (${parameter.in}${parameter.required ? ', required' : ''})${parameter.description ? `: ${parameter.description}` : ''}`,
+        )
+        parts.push(`Parameters:\n\n${lines.join('\n')}`)
+      }
       const request = operation.request ? reader.shapeOf(operation.request) : null
       if (request) parts.push(`Request body:\n\n\`\`\`ts\n${shapeAsTypeScript(request)}\n\`\`\``)
       const statuses = operation.responses.map((response) => `\`${response.status}\`${response.description ? ` ${response.description}` : ''}`)
