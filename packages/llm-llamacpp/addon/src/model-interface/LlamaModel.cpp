@@ -56,6 +56,21 @@ using namespace qvac_lib_inference_addon_llama::logging;
 
 namespace {
 
+void requireDraftModelMatch(
+    const common_params& params, const std::string& modelPath) {
+  const std::string mismatch =
+      common_speculative_draft_mismatch(params, modelPath);
+  if (mismatch.empty()) {
+    return;
+  }
+  throw qvac_errors::StatusError(
+      ADDON_ID,
+      toString(qvac_lib_inference_addon_llama::errors::UnableToLoadModel),
+      "[Speculative] the draft model '" +
+          params.speculative.draft.mparams.path +
+          "' does not match the model: " + mismatch);
+}
+
 // llama-server's `draft_n` / `draft_n_accepted` timings, reported only when
 // the model decodes speculatively, and its acceptance log lines.
 void appendSpeculativeStats(
@@ -323,6 +338,7 @@ void LlamaModel::init(bool acquireLock) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument, e.what());
   }
+  requireDraftModelMatch(params, modelPath);
 
   snap.demoteToRead();
   common_init_result_ptr llamaInit = common_init_from_params(params);
