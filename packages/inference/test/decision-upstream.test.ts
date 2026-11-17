@@ -27,6 +27,8 @@ import {
   type UpstreamDecisionInfo,
   type UpstreamResult
 } from '@/plugins/builtin/llamacpp-decision/upstream'
+import { decisionPlugin } from '@/plugins/builtin/llamacpp-decision/plugin'
+import { unregisterAddonLogger } from '@/logging/index'
 import { DECISION_MAX_JSON_DEPTH, decisionStateSchema, ModelType } from '@/schemas/index'
 import {
   InferenceCancelledError as InferenceCancelled,
@@ -214,8 +216,14 @@ test('noul is a probability unless allowRating accepts lev; unknown meanings are
     questions: { q: { type: 'noul' as const, instructions: '?', allowRating: true } }
   }
   // A probability model answers either way; the flag stays in QVAC.
-  t.alike(toUpstreamRequest(plain, 's', openjev).body.questions.q, { type: 'noul', instructions: '?' })
-  t.alike(toUpstreamRequest(rating, 's', openjev).body.questions.q, { type: 'noul', instructions: '?' })
+  t.alike(toUpstreamRequest(plain, 's', openjev).body.questions.q, {
+    type: 'noul',
+    instructions: '?'
+  })
+  t.alike(toUpstreamRequest(rating, 's', openjev).body.questions.q, {
+    type: 'noul',
+    instructions: '?'
+  })
   // lev's expected rating only when the caller accepts it.
   t.exception(
     () => toUpstreamRequest(plain, 's', lev),
@@ -477,6 +485,40 @@ test('upstream load: the plugin config, openclCacheDir included, reaches the eng
       logger: undefined
     }
   ])
+})
+
+test("the plugin gives decision-ggml one disk path, a sharded model's first shard", async (t) => {
+  const dir = path.join(os.tmpdir(), `decision-shards-${Date.now()}`)
+  fs.mkdirSync(dir, { recursive: true })
+  t.teardown(() => fs.rmSync(dir, { recursive: true, force: true }))
+  const shard = (i: number) => path.join(dir, `decider-0000${i}-of-00003.gguf`)
+  // Only the first shard has a header: a fabric-format Laya one, whose load
+  // error shows that the header check read it.
+  writeGguf(shard(1), 'laya')
+  fs.writeFileSync(shard(2), 'not a header')
+  fs.writeFileSync(shard(3), 'not a header')
+
+  t.teardown(() => unregisterAddonLogger('sharded-decider'))
+  const { model } = decisionPlugin.createModel({
+    modelId: 'sharded-decider',
+    modelPath: shard(2),
+    modelConfig: { device: 'cpu' }
+  }) as { model: DecisionModel }
+  const { modelPath, files } = (
+    model as unknown as { options: { modelPath: string; files: string[] } }
+  ).options
+  t.is(modelPath, shard(1), 'the header check reads the first shard')
+  t.alike(files, [shard(1)], 'one path, no tensor-name file')
+  await t.exception(model.load(), /fabric-format Laya file/)
+
+  // The addon's own path validation accepts what the plugin passes.
+  const addon = (await loadDecisionAddon()) as
+    (DecisionAddon & { validateModelPath?: (files: string[]) => string }) | undefined
+  if (addon?.validateModelPath === undefined) {
+    t.comment('@qvac/decision-ggml is not installed here')
+    return
+  }
+  t.is(addon.validateModelPath(files), shard(1))
 })
 
 test('without @qvac/decision-ggml: a decision model fails to load with a clear error', async (t) => {

@@ -39,7 +39,7 @@ Each entry in `questions` has a `type` and `instructions`:
 
 States, instructions and descriptions may nest at most 128 levels deep. A state with one question and its options must fit the model's input limit; a longer one fails validation.
 
-`getLoadedModelInfo()` reports, under `decision`, what a loaded decision model supports: its `decisionType`, what `noul` means (`probability`, `expectedRating` or `unknown`), the `scoreLevels` range, and `maxInputTokens`. For Laya, the input limit is `batch_size` (2048 tokens unless set).
+`getLoadedModelInfo()` reports, under `decision`, what a loaded decision model supports: its `decisionType`, what `noul` means (`probability`, `expectedRating` or `unknown`), the `scoreLevels` range, and `maxInputTokens`. For Laya, the input limit is `batch_size` (2048 tokens unless set), and a longer input fails validation. For a causal model it is the share of the context each question gets when every slot is busy.
 
 The load options are `device`, `gpu_layers`, `batch_size`, `threads`, `verbosity`, and `openclCacheDir` (Android).
 

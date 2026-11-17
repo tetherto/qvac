@@ -9,7 +9,7 @@ import {
   type CreateModelParams
 } from '@/schemas/index'
 import { createStreamLogger, registerAddonLogger } from '@/logging/index'
-import { getModelShardFiles } from '@/utils/shard-utils'
+import { getFirstShardPath } from '@/utils/index'
 import { decide } from './ops/decide'
 import { DecisionModel, loadDecisionAddonLogging } from './upstream'
 
@@ -19,12 +19,11 @@ function createDecisionModel(params: CreateModelParams): DecisionModel {
   const config = decisionConfigSchema.parse(params.modelConfig)
   const logger = createStreamLogger(params.modelId, ModelType.llamacppDecision)
   registerAddonLogger(params.modelId, ModelType.llamacppDecision, logger)
-  return new DecisionModel({
-    modelPath: params.modelPath,
-    files: getModelShardFiles(params.modelPath),
-    config,
-    logger
-  })
+  // One disk path, as for the LLM plugin: a sharded GGUF's first shard, which
+  // holds the header the load checks; fabric finds the other shards on disk.
+  // decision-ggml rejects weight streaming's file lists.
+  const modelPath = getFirstShardPath(params.modelPath)
+  return new DecisionModel({ modelPath, files: [modelPath], config, logger })
 }
 
 export const decisionPlugin = definePlugin({

@@ -7033,7 +7033,7 @@ class LoadedDecisionInfo(GeneratedBaseModel):
         int,
         Field(
             alias="maxInputTokens",
-            description="The longest input a request can have, in tokens: a state with one question and its options. A longer one fails validation.",
+            description="The longest input a request can have, in tokens: a state with one question and its options. For a model that reads it in one pass (Laya) a longer one fails validation; for a causal model it is the share of the context each question gets when every slot is busy, so a longer one may still run but is not promised to.",
             ge=-9007199254740991,
             le=9007199254740991,
         ),
