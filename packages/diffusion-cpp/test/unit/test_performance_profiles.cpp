@@ -42,7 +42,6 @@ TEST(SdPerformanceProfiles, H3OnlyEnablesValidatedDeviceApiPairs) {
       const auto profile = selectPerformanceProfile(
           {}, ProfileModel::MiniMaxH3FL2VAQ4, device(api, gpu));
       EXPECT_EQ(profile.flashAttention, expected);
-      EXPECT_EQ(profile.h3LocalOps, rtx);
     }
   }
 }
@@ -56,20 +55,22 @@ TEST(SdPerformanceProfiles, ExplicitFalseAndAliasesWin) {
         ProfileModel::MiniMaxH3FL2VAQ4,
         device(ProfileApi::Cuda, ProfileGpu::Rtx5090));
     EXPECT_FALSE(profile.flashAttention);
-    EXPECT_FALSE(profile.h3LocalOps);
   }
 }
 
-TEST(SdPerformanceProfiles, H3GraphRequiresMemoryHeadroom) {
+TEST(SdPerformanceProfiles, H3AttentionIsIndependentOfFormerGraphBudget) {
   auto gpu = device(ProfileApi::Cuda, ProfileGpu::Rtx5090);
-  gpu.freeBytes = 28 * GIB;
-  EXPECT_TRUE(selectPerformanceProfile({}, ProfileModel::MiniMaxH3FL2VAQ4, gpu)
-                  .h3LocalOps);
-  gpu.freeBytes -= 1;
-  const auto profile =
-      selectPerformanceProfile({}, ProfileModel::MiniMaxH3FL2VAQ4, gpu);
-  EXPECT_FALSE(profile.h3LocalOps);
-  EXPECT_TRUE(profile.flashAttention);
+  for (const auto freeBytes : {uint64_t{0}, 28 * GIB - 1, 28 * GIB}) {
+    gpu.freeBytes = freeBytes;
+    EXPECT_TRUE(
+        selectPerformanceProfile({}, ProfileModel::MiniMaxH3FL2VAQ4, gpu)
+            .flashAttention);
+    SdCtxConfig config;
+    applySdCtxHandlers(config, {{"performance_profile", "off"}});
+    EXPECT_FALSE(
+        selectPerformanceProfile(config, ProfileModel::MiniMaxH3FL2VAQ4, gpu)
+            .flashAttention);
+  }
 }
 
 TEST(SdPerformanceProfiles, FluxRequiresBoundedWorkloadAndFreeMemory) {
@@ -99,17 +100,20 @@ TEST(SdPerformanceProfiles, FluxRequiresBoundedWorkloadAndFreeMemory) {
   EXPECT_FALSE(select().vaeGemm);
 }
 
-TEST(SdPerformanceProfiles, H3GraphRequiresValidatedVideoShape) {
-  const auto profile = selectPerformanceProfile(
-      {},
-      ProfileModel::MiniMaxH3FL2VAQ4,
-      device(ProfileApi::Cuda, ProfileGpu::Rtx5090));
-  EXPECT_TRUE(useH3LocalOps(profile, 960, 544, 124));
-  EXPECT_FALSE(useH3LocalOps(profile, 512, 288, 39));
-  EXPECT_FALSE(useH3LocalOps(profile, 1920, 544, 124));
-  EXPECT_FALSE(useH3LocalOps(profile, 960, 1088, 124));
-  EXPECT_FALSE(useH3LocalOps(profile, 960, 544, 141));
-  EXPECT_FALSE(useH3LocalOps({}, 960, 544, 124));
+TEST(SdPerformanceProfiles, H3ExplicitAttentionIsPreservedWithAutoAndOff) {
+  for (const auto* policy : {"auto", "off"}) {
+    for (const auto* key : {"flash_attn", "fa"}) {
+      SdCtxConfig config;
+      applySdCtxHandlers(
+          config, {{"performance_profile", policy}, {key, "true"}});
+      const auto profile = selectPerformanceProfile(
+          config,
+          ProfileModel::MiniMaxH3FL2VAQ4,
+          device(ProfileApi::Cuda, ProfileGpu::Rtx5090));
+      EXPECT_TRUE(config.flashAttn);
+      EXPECT_FALSE(profile.flashAttention);
+    }
+  }
 }
 
 TEST(SdPerformanceProfiles, LtxF16RetainsBaselineOutsideValidatedBudget) {
@@ -199,7 +203,6 @@ TEST(SdPerformanceProfiles, ExplicitGraphAndMemoryPoliciesKeepDefaults) {
           ProfileModel::Ltx23Q5}) {
       const auto profile = selectPerformanceProfile(config, model, gpu);
       EXPECT_FALSE(profile.flashAttention);
-      EXPECT_FALSE(profile.h3LocalOps);
       EXPECT_FALSE(profile.vaeGemm);
       EXPECT_FALSE(profile.ltxF16);
     }

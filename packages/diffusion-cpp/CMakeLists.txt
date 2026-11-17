@@ -19,7 +19,7 @@ if(SD_OPENCL)
   list(APPEND VCPKG_MANIFEST_FEATURES "opencl")
 endif()
 
-# CUDA is opt-in through SD_CUDA; Linux release prebuilds enable it in CI.
+# CUDA is opt-in through SD_CUDA; Linux and Windows release prebuilds enable it in CI.
 # Ordinary source, unit-test, coverage and fuzz builds need no CUDA toolkit.
 # Vulkan and Metal use the registry ports' platform-specific defaults.
 #

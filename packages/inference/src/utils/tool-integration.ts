@@ -1,9 +1,9 @@
-import type { Tool, ToolDialect } from '@/schemas/index'
+import type { HistoryContent, Tool, ToolDialect } from '@/schemas/index'
 import { getModelEntry } from '@/runtime/model-registry'
 
 interface HistoryMessage {
   role: string
-  content: string
+  content: HistoryContent
   attachments?: { path: string }[] | undefined
 }
 

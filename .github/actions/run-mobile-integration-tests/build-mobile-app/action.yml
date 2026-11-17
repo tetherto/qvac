@@ -178,6 +178,10 @@ runs:
         # The linker is installed separately from the repository lockfile.
         npm pkg delete devDependencies.bare-link
         npm pkg set dependencies.react-native-bare-kit=^0.16.0
+        # bare-type 1.5+ needs Bare >= 1.37 and fails to load on this app's
+        # runtime (CANNOT_LOAD: missing js_is_detachable_arraybuffer).
+        # bare-inspect and bare-assert pull it in with ^1.x.
+        npm pkg set overrides.bare-type=1.4.0
         npm install
 
     # A leftover tree from an earlier job on the same self-hosted runner must
@@ -394,16 +398,13 @@ runs:
       run: |
         echo "Available Xcode versions:"
         ls /Applications | grep Xcode || echo "No Xcode apps found"
-        if [ -d "/Applications/Xcode_16.1.app" ]; then
-          echo "Switching to Xcode 16.1..."
-          sudo xcode-select -s /Applications/Xcode_16.1.app
-        elif [ -d "/Applications/Xcode_16.1.0.app" ]; then
-          sudo xcode-select -s /Applications/Xcode_16.1.0.app
-        elif [ -d "/Applications/Xcode_16.2.app" ]; then
-          echo "WARN: 16.1 not found, falling back to 16.2"
-          sudo xcode-select -s /Applications/Xcode_16.2.app
+        # ibtool needs the iOS runtime matching the Xcode SDK. macos-15 only
+        # ships iOS 18.5+ runtimes, so older 16.x fails on the storyboard.
+        if [ -d "/Applications/Xcode_26.3.app" ]; then
+          echo "Switching to Xcode 26.3..."
+          sudo xcode-select -s /Applications/Xcode_26.3.app
         else
-          echo "ERROR: No suitable Xcode (need >= 16.1)"
+          echo "ERROR: Xcode 26.3 not found"
           exit 1
         fi
         xcodebuild -version

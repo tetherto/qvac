@@ -120,9 +120,11 @@ const INSTRUCTION_ROLES = new Set(['system', 'developer'])
 // any system turn that is not first. A template that throws is rendered again
 // without the tools, so merge every instruction into one leading system turn.
 export function hoistInstructions<
-  T extends { role: string; content: string; attachments?: unknown[] }
+  T extends { role: string; content: string; attachments?: unknown[] } | { role: 'user' }
 >(history: T[]): T[] {
-  const instructions = history.filter((msg) => INSTRUCTION_ROLES.has(msg.role))
+  const instructions = history.filter((msg): msg is Extract<T, { content: string }> =>
+    INSTRUCTION_ROLES.has(msg.role)
+  )
   if (instructions.length === 0) return history
   if (instructions.length === 1 && history[0]!.role === 'system') return history
   const content = instructions

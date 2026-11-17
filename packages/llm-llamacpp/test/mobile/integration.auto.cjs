@@ -615,3 +615,8 @@ async function runVisionpsyImageNoUpscaleTokensTest (options = {}) { // eslint-d
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runVisionpsyImageNoUpscaleTokensTest')) return __FILTERED
   return runIntegrationModule('../integration/visionpsy-image-no-upscale-tokens.test.js', options)
 }
+
+async function runXdnaTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runXdnaTest')) return __FILTERED
+  return runIntegrationModule('../integration/xdna.test.js', options)
+}

@@ -71,8 +71,7 @@
       ],
       "status": "active",
       "sharedWith": ["@qvac/inference"],
-      "aliases": { "50608": ["WORKER_PLUGINS_NOT_REGISTERED", "PLUGINS_NOT_REGISTERED"] },
-      "note": "Client and server families retain their numeric contract across the SDK/inference split. Code 50608 has an existing client/engine name difference; other shared names must match."
+      "note": "Client and server families retain their numeric contract across the SDK/inference split. Shared names must match."
     },
     { "owner": "@qvac/core", "ranges": [[100001, 102000]], "status": "reserved" },
     { "owner": "@qvac/harness", "ranges": [[102001, 104000]], "status": "reserved" }

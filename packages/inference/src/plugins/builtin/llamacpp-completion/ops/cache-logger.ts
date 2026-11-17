@@ -1,22 +1,33 @@
 import { getEngineLogger } from '@/logging/index'
+import type { ChatHistoryContentPart } from '@/plugins/builtin/llamacpp-completion/ops/completion-stream'
 
 const logger = getEngineLogger()
 
 interface ChatMessage {
   role?: string
-  content?: string
+  content?: string | ChatHistoryContentPart[]
   type?: string
   name?: string
+}
+
+/** A one-line summary of a message's content, parts included. */
+function summarizeContent(content: ChatMessage['content']): string {
+  if (!content) return ''
+  if (typeof content === 'string') return content
+  return content
+    .map((part) => (part.type === 'text' ? part.text : `<media ${part.content}>`))
+    .join('')
 }
 
 function formatMessages(messages: ChatMessage[]): string {
   return messages
     .map((m) => {
       const role = m.role || m.type || '?'
-      const content = m.content
-        ? m.content.length > 40
-          ? m.content.substring(0, 40) + '...'
-          : m.content
+      const summary = summarizeContent(m.content)
+      const content = summary
+        ? summary.length > 40
+          ? summary.substring(0, 40) + '...'
+          : summary
         : m.name || '(no content)'
       return `{${role}: "${content}"}`
     })

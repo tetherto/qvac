@@ -1,5 +1,5 @@
 import { closeRpcResources } from '@/handlers/rpc-server'
-import { initEnv } from '@/runtime/env'
+import { initEnv, type EnvOptions } from '@/runtime/env'
 import { closeAllRagInstances } from '@/rag/index'
 import { disposeAllVectorIndexes } from '@/runtime/vector-index-registry'
 import { cleanupDownloads } from '@/handlers/load-model/download-manager'
@@ -12,6 +12,7 @@ import {
 } from '@/runtime/logging-stream-registry'
 import { clearAllAddonLoggers, getEngineLogger, LOG_ID, ALL_LOG_ID } from '@/logging/index'
 import { clearPlugins } from '@/plugins/index'
+import { clearSessions } from '@/runtime/session-registry'
 import { acquireCacheLock, releaseCacheLock } from '@/runtime/cache-lock'
 import { nativeResourceCollectorDependencies } from '@/resources/native'
 import { destroyResourceCollector, initializeResourceCollector } from '@/resources/instance'
@@ -26,18 +27,20 @@ let cleanupPromise: Promise<void> | null = null
 
 const logger = getEngineLogger()
 
+export type InitializeOptions = EnvOptions
+
 /**
- * Initialize the engine: start log buffering, read env, and acquire the cache
- * lock (guards the cache dir against a second instance in the same home).
- * Idempotent.
+ * Initialize the engine: start log buffering, set the home folder, and acquire
+ * the cache lock (guards the cache dir against a second instance in the same
+ * home). Idempotent: options are only read by the first call.
  */
-export function initialize(): void {
+export function initialize(options: InitializeOptions = {}): void {
   if (initialized) return
 
   startLogBuffering(LOG_ID)
   startLogBuffering(ALL_LOG_ID)
 
-  initEnv()
+  initEnv(options)
   acquireCacheLock()
   initializeResourceCollector(nativeResourceCollectorDependencies)
 
@@ -73,6 +76,9 @@ async function runCleanup(): Promise<void> {
   if (cleanupRan) return
   cleanupPromise = (async () => {
     destroyResourceCollector()
+    // Root shutdown ends every caller session; their models go with
+    // `unloadAllModels` below and their requests with the engine.
+    clearSessions()
     clearRegistries()
     await Promise.allSettled([
       disposeAllVectorIndexes(),

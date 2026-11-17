@@ -1,10 +1,4 @@
-// TODO(QVAC-19194): PLACEHOLDER baseURL — pending the CLI port-change ticket.
-// `qvac serve` currently defaults to 11434, which collides with Ollama. We
-// intentionally do NOT default to 11434 here so the provider's default
-// doesn't become a foot-gun once the CLI moves to a non-conflicting port.
-// Callers MUST set `baseURL` explicitly until this default is finalized;
-// the README highlights this. Replace `11435` with the real CLI default
-// (and remove this TODO) when the CLI ticket lands.
+// Matches the `qvac serve` default port.
 export const DEFAULT_BASE_URL = 'http://127.0.0.1:11435/v1'
 
 // External-mode fallback for OpenAI-shaped clients that require an

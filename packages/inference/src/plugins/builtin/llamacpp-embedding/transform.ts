@@ -4,8 +4,8 @@ import { type EmbedConfig } from '@/schemas/index'
 /**
  * Converts an EmbedConfig into the flat string-keyed map the C++ addon expects.
  *
- * Extracted from the plugin so the advisory fit check can build its request
- * from the same transform the real embedding load uses.
+ * Shared by the embedding load and its fit request, so both send the addon
+ * the same config.
  */
 export function transformEmbedConfig(embedConfig: EmbedConfig): GGMLConfig {
   const config: GGMLConfig = {

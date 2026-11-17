@@ -22,8 +22,8 @@ import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
 const LEXER_PACKAGE = 'bare-module-lexer'
-// The mobile app bundle is produced by the `bare-pack` that @qvac/sdk depends
-// on, so the lexer has to be the one that bare-pack resolves. Reading it out of
+// The mobile app bundle is produced by the `bare-pack` of the `bare-stow` that
+// @qvac/sdk depends on, so the lexer has to be the one that bare-pack resolves. Reading it out of
 // an ambient `node_modules` picks up whatever version happens to be hoisted
 // nearby, and the desync this check hunts for differs between lexer releases.
 // @qvac/cli's engines.node is the Node floor that lexer's native addon needs;
@@ -88,7 +88,7 @@ function readManifest(manifestPath) {
 
 function readBundlerRequirements() {
   return {
-    bundlerSpec: `bare-pack@${readManifest(SDK_MANIFEST_PATH).dependencies['bare-pack']}`,
+    bundlerSpec: `bare-stow@${readManifest(SDK_MANIFEST_PATH).dependencies['bare-stow']}`,
     nodeRange: readManifest(CLI_MANIFEST_PATH).engines.node
   }
 }
@@ -107,7 +107,16 @@ function installBundler(bundlerSpec) {
   if (result.status !== 0) {
     throw new Error(`failed to install ${bundlerSpec}: ${result.stderr || result.stdout}`)
   }
-  return path.join(root, 'node_modules', 'bare-pack', 'package.json')
+  return installedManifest(path.join(root, 'node_modules', 'bare-stow'), 'bare-pack')
+}
+
+/** The package.json of `name` as Node resolves it from `fromDir`, nested or hoisted. */
+function installedManifest(fromDir, name) {
+  for (let dir = fromDir; ; dir = path.dirname(dir)) {
+    const candidate = path.join(dir, 'node_modules', name, 'package.json')
+    if (fs.existsSync(candidate)) return candidate
+    if (path.dirname(dir) === dir) throw new Error(`${name} is not installed under ${fromDir}`)
+  }
 }
 
 function assertNodeCanLoadLexer(bundlerManifest, nodeRange) {

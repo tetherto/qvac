@@ -1,14 +1,14 @@
 {
   "name": "stable-diffusion-cpp",
-  "version-date": "2026-08-11",
-  "port-version": 9,
-  "description": "Diffusion model inference in pure C/C++ (SD1.x, SD2.x, SDXL, SD3, FLUX, Wan, Ideogram, ...)",
+  "version-date": "2026-11-01",
+  "port-version": 1,
+  "description": "Diffusion model inference in pure C/C++ (SD1.x, SD2.x, SDXL, SD3, FLUX, MOSS-Image, Wan, Ideogram, ...)",
   "homepage": "https://github.com/tetherto/qvac-ext-stable-diffusion.cpp",
   "license": "MIT",
   "dependencies": [
     {
       "name": "ggml",
-      "version>=": "2026-08-11#3"
+      "version>=": "2026-11-01"
     },
     {
       "name": "vcpkg-cmake",

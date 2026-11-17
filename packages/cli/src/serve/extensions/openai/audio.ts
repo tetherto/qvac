@@ -95,14 +95,19 @@ export function pcmContentType(sampleRate: number): string {
   return `audio/L16; rate=${sampleRate}; channels=1`
 }
 
-// Engine → native sample rate. Mirrors the constants used in the SDK
-// examples (packages/sdk/examples/tts/{chatterbox,supertonic}.ts).
-// TODO(QVAC-18522): add the GGML engine key here when the TTS-GGML migration
-// lands, otherwise the engine falls through to DEFAULT_SAMPLE_RATE and audio
-// plays back at the wrong speed.
+// Engine → native sample rate, the fallback for a run that produced no audio
+// (the route prefers the rate the engine reports). One row per @qvac/tts-ggml
+// engine that resamples; MOSS-SoundEffect emits 48 kHz, the other MOSS
+// engines their native 24 kHz.
 const ENGINE_SAMPLE_RATE: Record<string, number> = {
   chatterbox: 24000,
-  supertonic: 44100
+  supertonic: 44100,
+  parler: 44100,
+  cosyvoice3: 24000,
+  audio8: 44100,
+  moss: 24000,
+  'moss-sfx': 48000,
+  'moss-speech': 24000
 }
 
 // 24 kHz matches OpenAI's documented pcm output (mono, 16-bit signed LE)
@@ -183,6 +188,30 @@ export function buildWavBuffer(samples: number[], sampleRate: number): Buffer {
   const data = int16SamplesToBuffer(samples)
   const header = buildWavHeader(data.length, sampleRate)
   return Buffer.concat([header, data])
+}
+
+// OpenAI's `instructions` steers the voice in natural language, which is what
+// CosyVoice3's per-request `instruct` control does, so it is forwarded there
+// verbatim (a raw instruction string). No other engine takes a free-text
+// control, so elsewhere the route keeps treating it as an ignored param.
+//
+// A per-request `instruct` replaces the alias's own conditioning for that
+// synthesis, so it is forwarded only to an alias that configures none: when
+// the operator set `instruct`, `emotion` or a non-moderate `pace`, that choice
+// stands and a client's habitual `instructions` text stays an ignored param.
+export function speechInstructFor(
+  config: Record<string, unknown> | undefined,
+  instructions: unknown
+): string | undefined {
+  if (config?.['ttsEngine'] !== 'cosyvoice3' || typeof instructions !== 'string') return undefined
+  const pace = config['pace']
+  const configuresControl =
+    config['instruct'] !== undefined ||
+    config['emotion'] !== undefined ||
+    (pace !== undefined && pace !== 'moderate')
+  if (configuresControl) return undefined
+  const trimmed = instructions.trim()
+  return trimmed.length > 0 ? trimmed : undefined
 }
 
 // Voice + model → alias lookup key. The route tries this first and falls

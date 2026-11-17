@@ -111,6 +111,18 @@ pkt::EngineResult makeEngineResult(bool usedCoreml) {
   return result;
 }
 
+pkt::EngineResult makeDecodedResult(bool decoderUsedCoreml) {
+  pkt::EngineResult result;
+  result.decoder_used_coreml = decoderUsedCoreml;
+  return result;
+}
+
+pkt::DiarizationResult makeDiarizationResult(bool usedCoreml) {
+  pkt::DiarizationResult result;
+  result.encoder_used_coreml = usedCoreml;
+  return result;
+}
+
 class ParakeetModelTest : public ::testing::Test {
 protected:
   void SetUp() override {
@@ -445,9 +457,45 @@ TEST_F(ParakeetModelTest, RecordTranscriptionResultAccumulatesStageStats) {
   EXPECT_EQ(findStatInt(stats, "totalTokens"), 6);
 }
 
+TEST_F(ParakeetModelTest, RecordDiarizationResultAccumulatesStageStats) {
+  ParakeetModel m(cfg);
+  pkt::DiarizationResult result;
+  result.encoder_ms = 12.0;
+  result.decode_ms = 3.0;
+  result.preprocess_ms = 2.0;
+  result.n_frames = 50;
+
+  m.recordDiarizationResult(result);
+  m.recordDiarizationResult(result);
+
+  const auto stats = m.runtimeStats();
+  EXPECT_EQ(findStatInt(stats, "encoderMs"), 24);
+  EXPECT_EQ(findStatInt(stats, "decoderMs"), 6);
+  EXPECT_EQ(findStatInt(stats, "melSpecMs"), 4);
+  EXPECT_EQ(findStatInt(stats, "totalEncodedFrames"), 100);
+}
+
 TEST_F(ParakeetModelTest, EncoderUsedCoremlAbsentWithoutOfflineTranscription) {
   ParakeetModel m(cfg);
   EXPECT_FALSE(hasStatKey(m.runtimeStats(), "encoderUsedCoreml"));
+}
+
+TEST_F(ParakeetModelTest, EncoderUsedCoremlSetWhenDiarizationRanOnCoreml) {
+  ParakeetModel m(cfg);
+  m.recordDiarizationResult(makeDiarizationResult(true));
+
+  const auto stats = m.runtimeStats();
+  ASSERT_TRUE(hasStatKey(stats, "encoderUsedCoreml"));
+  EXPECT_EQ(findStatInt(stats, "encoderUsedCoreml"), 1);
+}
+
+TEST_F(ParakeetModelTest, EncoderUsedCoremlZeroWhenDiarizationRanOnGgml) {
+  ParakeetModel m(cfg);
+  m.recordDiarizationResult(makeDiarizationResult(false));
+
+  const auto stats = m.runtimeStats();
+  ASSERT_TRUE(hasStatKey(stats, "encoderUsedCoreml"));
+  EXPECT_EQ(findStatInt(stats, "encoderUsedCoreml"), 0);
 }
 
 TEST_F(ParakeetModelTest, EncoderUsedCoremlSetWhenEveryCallRanOnCoreml) {
@@ -495,6 +543,59 @@ TEST_F(ParakeetModelTest, EncoderOnCoremlKeepsReportingLoadStatus) {
   const auto stats = m.runtimeStats();
   EXPECT_EQ(findStatInt(stats, "encoderOnCoreml"), 0);
   EXPECT_EQ(findStatInt(stats, "encoderUsedCoreml"), 1);
+}
+
+TEST_F(ParakeetModelTest, DecoderUsedCoremlAbsentWithoutOfflineTranscription) {
+  ParakeetModel m(cfg);
+  EXPECT_FALSE(hasStatKey(m.runtimeStats(), "decoderUsedCoreml"));
+}
+
+TEST_F(ParakeetModelTest, DecoderUsedCoremlAbsentAfterDiarizationOnly) {
+  ParakeetModel m(cfg);
+  m.recordDiarizationResult(makeDiarizationResult(true));
+
+  const auto stats = m.runtimeStats();
+  EXPECT_TRUE(hasStatKey(stats, "encoderUsedCoreml"));
+  EXPECT_FALSE(hasStatKey(stats, "decoderUsedCoreml"));
+}
+
+TEST_F(ParakeetModelTest, DecoderUsedCoremlSetWhenEveryCallDecodedOnCoreml) {
+  ParakeetModel m(cfg);
+  m.recordTranscriptionResult(makeDecodedResult(true));
+  m.recordTranscriptionResult(makeDecodedResult(true));
+
+  const auto stats = m.runtimeStats();
+  ASSERT_TRUE(hasStatKey(stats, "decoderUsedCoreml"));
+  EXPECT_EQ(findStatInt(stats, "decoderUsedCoreml"), 1);
+}
+
+TEST_F(ParakeetModelTest, DecoderUsedCoremlZeroWhenOneCallDecodedNatively) {
+  ParakeetModel m(cfg);
+  m.recordTranscriptionResult(makeDecodedResult(true));
+  m.recordTranscriptionResult(makeDecodedResult(false));
+
+  const auto stats = m.runtimeStats();
+  ASSERT_TRUE(hasStatKey(stats, "decoderUsedCoreml"));
+  EXPECT_EQ(findStatInt(stats, "decoderUsedCoreml"), 0);
+}
+
+TEST_F(ParakeetModelTest, DecoderUsedCoremlIsIndependentOfTheEncoderRoute) {
+  ParakeetModel m(cfg);
+  m.recordTranscriptionResult(makeEngineResult(true));
+
+  const auto stats = m.runtimeStats();
+  EXPECT_EQ(findStatInt(stats, "encoderUsedCoreml"), 1);
+  EXPECT_EQ(findStatInt(stats, "decoderUsedCoreml"), 0);
+}
+
+TEST_F(ParakeetModelTest, DecoderUsedCoremlStartsOverForEachJob) {
+  ParakeetModel m(cfg);
+  m.recordTranscriptionResult(makeDecodedResult(true));
+  ASSERT_TRUE(hasStatKey(m.runtimeStats(), "decoderUsedCoreml"));
+
+  m.process(std::any(ParakeetModel::Input(4000, 0.0f)));
+
+  EXPECT_FALSE(hasStatKey(m.runtimeStats(), "decoderUsedCoreml"));
 }
 
 // ─────────────────────────────────────────────────────────────────────

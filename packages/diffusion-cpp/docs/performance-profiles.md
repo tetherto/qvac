@@ -1,8 +1,11 @@
 # Performance profiles
 
 `performance_profile` defaults to `auto`. The addon selects only measured
-model/GPU/API combinations whose complete profile improved warm generation latency by at least
-5%. Set `performance_profile: 'off'` to retain the previous native settings.
+model/GPU/API combinations selected by the November 4–5 measurements (at least
+5% faster warm generation on the engine used then). Those timings are historical;
+paired performance and quality checks against the merged 2026-11-01 engine are
+still required before release. Set `performance_profile: 'off'` to retain the
+current engine settings.
 Explicit options, including `flash_attn: false`, take precedence.
 
 | Model checkpoint | GPU and API | Automatic change | Fallback |
@@ -10,7 +13,6 @@ Explicit options, including `flash_attn: false`, take precedence.
 | FLUX.2 Klein 4B Q8_0 | RTX 5090 CUDA, GB10 CUDA | GEMM VAE for single 512×512 or 1024×1024 text-to-image requests, with at least 16 GiB free after loading | Direct convolution for other requests, APIs and GPUs |
 | FLUX.2 Klein 4B Q8_0 | Radeon 8060S HIP | None: repeated-output validation found an inconsistent GEMM output | Direct convolution; explicit GEMM remains experimental |
 | MiniMax-H3 FL2VA Q4_K | RTX 5090 CUDA/Vulkan, GB10 CUDA, M3 Ultra Metal, Radeon 8060S HIP | Global flash attention | Previous flash-attention setting elsewhere |
-| MiniMax-H3 FL2VA Q4_K | RTX 5090 CUDA/Vulkan | Fused SwiGLU and QKV views, together with automatic global flash attention | Original graph elsewhere, including Metal |
 | LTX-2.3 22B distilled Q5_K | M3 Ultra Metal | F16 transformer matrices for bounded video contexts with sufficient memory | Original quantized matrices |
 
 Recognition uses GGUF tensor metadata and component sizes, not filenames. It is
@@ -27,22 +29,22 @@ returns to direct convolution. Reviewed output was visually identical, but not
 byte-identical; GEMM used about 4.2 GiB more VRAM in the RTX measurement.
 
 Fit probes return `unknown` only when the requested dimensions and tiling can
-select GEMM or H3 graph changes: the current engine planner cannot represent
-those graphs. Other shapes and tiled FLUX requests retain baseline graph planning.
+select GEMM: the current engine planner cannot represent that per-request
+convolution change. Other shapes, tiled FLUX requests and H3 retain baseline
+graph planning.
 Metadata-only registry descriptions use the measured tensor-data sizes and
 companion layouts to select the same profile as the full files. Header size may
 change when the registry removes tokenizer tables. Static flash-attention and
 F16 settings are passed to the planner; different quantizations or mismatched
 companions retain baseline settings. `off` retains baseline fit planning.
 
-H3's graph changes are local to its context. Explicit `flash_attn`/`fa` prevents
-automatic flash attention and the accompanying graph profile; disabling
-`diffusion_fa` also retains baseline behavior. The engine itself does not enable
-the graph changes by default.
-The RTX graph profile requires at least 28 GiB free at load. Below that threshold,
-only the independently validated flash-attention change is selected.
-Graph changes apply only to 960×544×124 text-to-video requests. Other requests
-restore the original graph in the same context, retaining automatic attention.
+H3 fused SwiGLU and QKV views are enabled by the 2026-11-01 engine by default.
+The addon preserves that graph for all workloads, GPUs and profile modes,
+including `off`; it does not impose the old RTX-only 28 GiB/960×544×124 graph
+policy. H3's automatic change is global flash attention only. Explicit
+`flash_attn`/`fa` prevents automatic attention selection; disabling
+`diffusion_fa` also retains current engine behavior. The old combined graph and
+attention timings cannot establish the gain from attention on this new baseline.
 
 ## Bounded LTX precision
 
@@ -95,9 +97,12 @@ H3 Strix Vulkan and LTX GB10 temporal changes remain excluded by the 5% rule.
 
 Hardware classification and selection are grouped in
 `addon/src/utils/PerformanceProfiles.cpp`. Add selection and fallback tests when
-adding a measured device/API row. The temporary vcpkg overlay carries the two
-engine setters until the engine PR and registry repin are merged; remove the
-overlay before releasing the addon.
+adding a measured device/API row. The temporary vcpkg overlay pins merged
+[engine #64](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/64)
+(`bc53357484bc5d2ba08fbe5301dae192e5b9a176`) without source patches. It mirrors
+the pending `stable-diffusion-cpp` registry revision `2026-11-01#1`. After that
+revision is published, update the registry baseline, remove the overlay, and
+validate dependency resolution again before releasing the addon.
 
 See [implementation validation](performance-profiles-validation.md) for timings,
 quality comparisons, memory costs, CI status and remaining release checks.

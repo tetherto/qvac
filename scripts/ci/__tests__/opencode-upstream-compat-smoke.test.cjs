@@ -62,7 +62,7 @@ if [ "$1" != opencode ] || [ "$2" != run ]; then exit 91; fi
 for arg do prompt="$arg"; done
 if [ "$prompt" != "Reply with only the word qvac-ok." ]; then exit 92; fi
 # Start the serve through serveBinPath, as the plugin does.
-serve_bin=$(node -p "require('./opencode.json').plugin[0][1].serveBinPath")
+serve_bin=$(node -p "require('./opencode.json').plugins[0].options.serveBinPath")
 "$serve_bin" serve > /dev/null 2>&1 || exit 93
 # tee is async; wait for both streams to flush.
 flushed=0

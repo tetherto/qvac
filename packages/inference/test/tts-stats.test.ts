@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { appendPcm, collectTtsStats, chunkMetadata } from '@/utils/tts-stats'
+import { appendPcm, carriesSpeechTokenIds, collectTtsStats, chunkMetadata } from '@/utils/tts-stats'
 
 test('collectTtsStats: maps LavaSR enhancer and denoiser backend stats', (t) => {
   const stats = collectTtsStats({
@@ -129,4 +129,66 @@ test('appendPcm: appends each chunk in place, in order', (t) => {
   appendPcm(buffer, [])
   appendPcm(buffer, new Int16Array([32767, -32768]))
   t.alike(buffer, [1, -2, 3, 32767, -32768])
+})
+
+test('collectTtsStats: forwards the engines’ stage timings and counters, zero included', (t) => {
+  // Chatterbox, CosyVoice3 and Audio8 each report their own stages; a zero
+  // stage time (e.g. no reference to encode) is a real report, not absence.
+  const stats = {
+    firstAudioMs: 180,
+    t3Ms: 410,
+    s3genMs: 220,
+    t3Tokens: 125,
+    stageTotalMs: 900,
+    lmPrefillMs: 30,
+    lmDecodeMs: 400,
+    flowFrontendMs: 5,
+    ditEulerMs: 300,
+    hiftF0Ms: 10,
+    hiftSourceMs: 20,
+    hiftStftMs: 15,
+    hiftDecodeMs: 120,
+    decodeSteps: 100,
+    speechTokens: 98,
+    flowFrames: 240,
+    melFrames: 200,
+    textIds: 12,
+    promptSpeechTokens: 140,
+    voiceEncodeMs: 0,
+    promptMs: 2,
+    prefillMs: 40,
+    sampleMs: 350,
+    fastDecodeMs: 200,
+    slowDecodeMs: 150,
+    codecLatentMs: 60,
+    codecSynthMs: 90,
+    resampleMs: 4
+  }
+  t.alike(collectTtsStats({ stats: { audioDurationMs: 1200, ...stats } }), {
+    audioDuration: 1200,
+    ...stats
+  })
+})
+
+test('collectTtsStats: forwards only the stage fields the addon reported', (t) => {
+  t.alike(collectTtsStats({ stats: { t3Ms: 410 } }), { t3Ms: 410 })
+})
+
+test('collectTtsStats: forwards the Parler Core ML sidecar flags, zero included', (t) => {
+  // 0 is a real report: a retired sidecar, or a synthesis that ran on ggml.
+  t.alike(
+    collectTtsStats({
+      stats: { decoderSidecarLoaded: 1, dacSidecarLoaded: 1, decoderOnCoreml: 0, dacOnCoreml: 1 }
+    }),
+    { decoderSidecarLoaded: 1, dacSidecarLoaded: 1, decoderOnCoreml: 0, dacOnCoreml: 1 }
+  )
+})
+
+test('chunkMetadata: forwards CosyVoice3 speechTokenIds and nothing else on an end marker', (t) => {
+  t.alike(
+    chunkMetadata({ outputArray: new Int16Array(0), isLast: true, speechTokenIds: [12, 480, 3] }),
+    { isLast: true, speechTokenIds: [12, 480, 3] }
+  )
+  t.is(carriesSpeechTokenIds({ outputArray: new Int16Array(0), speechTokenIds: [] }), true)
+  t.is(carriesSpeechTokenIds({ outputArray: new Int16Array(0), isLast: true }), false)
 })

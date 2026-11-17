@@ -30,7 +30,8 @@ export interface ParakeetConfig {
     /**
      * Indic CTC language id or Nemotron locale alias (for example `"en-US"`,
      * `"hi-IN"`, or `"auto"`). Empty selects `"auto"` for Nemotron and keeps
-     * full-vocabulary greedy decode for CTC.
+     * full-vocabulary greedy decode for CTC. Full TranscribePsy EU takes
+     * `"en"`, `"other"`, or `"auto"` (also when empty).
      */
     language?: string;
     /**
@@ -178,7 +179,7 @@ export declare class ParakeetDriver implements AsrDriver {
      */
     _assertNemotronChunkMs(chunkMs: number | undefined): void;
     _validateStreamingOptions(opts: ASRStreamingOptions): ParakeetStreamingRunConfig;
-    _pumpBatchAudio(audio: NormalizedAudioStream): Promise<void>;
+    _pumpBatchAudio(audio: NormalizedAudioStream, includeSpeakerProbabilities?: boolean): Promise<void>;
     _pumpStreamingAudio(audio: NormalizedAudioStream, markClosing: () => void): Promise<void>;
     _buildConfigurationParams(): ParakeetConfigurationParams;
     _createAddon(configurationParams: ParakeetConfigurationParams): ParakeetInterface;

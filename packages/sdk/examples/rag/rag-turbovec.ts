@@ -1,6 +1,7 @@
 import {
   createVectorIndex,
   embed,
+  embedBatch,
   loadModel,
   loadVectorIndex,
   unloadModel,
@@ -33,7 +34,7 @@ try {
   })
 
   console.log('▸ Embedding documents...')
-  const { embedding: vectors } = await embed({ modelId, text: [...documents.values()] })
+  const { embedding: vectors } = await embedBatch({ modelId, inputs: [...documents.values()] })
 
   console.log('▸ Building the vector index...')
   const index = await createVectorIndex({

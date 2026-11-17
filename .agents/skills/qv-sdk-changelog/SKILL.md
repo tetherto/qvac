@@ -438,8 +438,8 @@ push, and keep this list to things that are cheap to prevent:
   generate/commit/cherry-pick, or you operate on the parent repo.
 - **Push the org remote** (`upstream` when that is `tetherto/qvac`), not the
   contributor fork. `git push` with no remote follows `origin`.
-- **Do not skip SDK Pod Checks.** Workspace red vs published red is a real
-  signal; `[skip-sdk-pod-checks]` is not the changelog fix.
+- **Do not skip the SDK's checks.** Workspace red vs published red is a real
+  signal; no label turns a failing check green, and the changelog is not the fix.
 - **Notes vs `--base-version` `gitHead`, not only `git log`.** After generate,
   audit exports / routes / constants against
   `npm view "$PKG@<base-version>" gitHead`. Do not use `sdk-v*` or npm `latest`.

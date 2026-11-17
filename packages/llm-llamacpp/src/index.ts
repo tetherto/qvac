@@ -1221,12 +1221,22 @@ namespace LlmLlamacpp {
   }
 
   export interface LlamaConfig {
+    /**
+     * Device class to run on: `'gpu'`, `'cpu'` or `'npu'`. `'npu'` selects the
+     * first NPU fabric lists, the AMD XDNA NPU on Linux x64, falls back to the
+     * GPU order and then the CPU when there is none, and
+     * cannot be combined with `backend`, `devices`, `split-mode`, `main-gpu`,
+     * `rpc-servers` or finetuning. Only the defaults `backend: 'auto'`,
+     * `devices: ''` and `split-mode: 'none'` are accepted with it. GPU
+     * selection never picks the NPU.
+     */
     device?: string;
     /**
      * Comma-separated GPU backend priority list, e.g. `'cuda,vulkan'`.
      * Accepted names: cuda, vulkan, metal, opencl, plus
      * `auto` for no preference. An unrecognised name is rejected; a recognised
      * one with no device present is skipped. Use `device: 'cpu'` to run on CPU.
+     * Use `device: 'npu'` for the AMD XDNA NPU.
      */
     backend?: string;
     gpu_layers?: NumericLike;
@@ -1356,7 +1366,9 @@ namespace LlmLlamacpp {
      * per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on all other
      * Android GPUs (Arm Mali, Adreno <800, and GPUs whose Adreno tier can't be
      * detected) — the LLM layers still run on the GPU while the projector stays on
-     * CPU. Only honoured when a GPU backend is selected (ignored with a warning on CPU).
+     * CPU. On an NPU load it defaults to a GPU beside the NPU, else the CPU; `true`
+     * with no GPU runs it on the NPU. Only honoured when a GPU or NPU backend is
+     * selected (ignored with a warning on CPU).
      */
     "mmproj-use-gpu"?: string;
     /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
@@ -1800,7 +1812,7 @@ namespace LlmLlamacpp {
      * model-level — never per-job.
      */
     avgConcurrentSeq: number;
-    backendDevice: "cpu" | "gpu";
+    backendDevice: "cpu" | "gpu" | "npu";
     /**
      * Draft tokens proposed by speculative decoding, and how many of them
      * the model accepted (llama-server's `draft_n` / `draft_n_accepted`).

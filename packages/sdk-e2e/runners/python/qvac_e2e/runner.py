@@ -73,11 +73,10 @@ def _stdin_lines() -> asyncio.Queue[str | None]:
 async def main() -> int:
     requests = _stdin_lines()
 
-    # The worker is resolved from QVAC_WORKER_PATH so this client and the JS legs drive
-    # the same binary. Without that the comparison is meaningless: a difference could
-    # just as well be a different engine build.
+    # The worker is resolved from QVAC_WORKER_PATH, the entry the JS legs bundle, so
+    # this client drives the same plugins and engine versions as they do.
     async with Client() as client:
-        resources = ResourceManager(client.transport, _log)
+        resources = ResourceManager(client, _log)
         interpreter = Interpreter(resources, _log)
 
         _write({"type": "ready", "protocol": PROTOCOL_VERSION})

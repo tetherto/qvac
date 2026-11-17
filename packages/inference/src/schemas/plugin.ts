@@ -1,8 +1,15 @@
 import { z } from 'zod'
 import type Buffer from 'bare-buffer'
 import type { TurboVecIndexProvider } from '@qvac/rag'
+import type {
+  ModelFitModelResult,
+  TranscriptionFitWorkload,
+  TtsFitWorkload
+} from '@/schemas/assess-model-fit'
 import type { ModelSrcInput } from '@/schemas/model-src-utils'
 import type { RuntimeContext } from '@/schemas/runtime-context'
+import type { AbortSignalLike } from '@/schemas/abort-signal'
+import { trackedRequestSchema } from '@/schemas/request-base'
 
 /**
  * Granularity at which the addon can cancel.
@@ -23,6 +30,35 @@ export interface PluginHandlerCancel {
 }
 
 /**
+ * The request a handler runs under when it is reached through `pluginInvoke`.
+ * The engine registers that request under the caller's session and id, so a
+ * handler that does not register anything only has to forward the abort to
+ * its native job. A handler that registers its own request begins it with
+ * `requestParent(context)`: the inner request then runs as the caller's
+ * session and aborts with the invoke, so a cancel of the invoke by id or a
+ * close of the session reaches the native job at once.
+ */
+export interface PluginHandlerContext {
+  signal: AbortSignalLike
+  requestId: string
+  /** The caller's session; undefined for the runtime owner. */
+  sessionId: string | undefined
+}
+
+/**
+ * The `begin` options that make a request a child of the invoke it runs under.
+ * Spread last, so the context's session replaces the one the request names.
+ * Without a context the request is its own root, as under direct dispatch.
+ */
+export function requestParent(context: PluginHandlerContext | undefined): {
+  sessionId?: string | undefined
+  parentSignal?: AbortSignalLike
+} {
+  if (!context) return {}
+  return { sessionId: context.sessionId, parentSignal: context.signal }
+}
+
+/**
  * Definition for a plugin handler with explicit Zod schemas.
  * Each handler must define its request/response schemas for validation.
  */
@@ -36,7 +72,11 @@ export interface PluginHandlerDefinition<
   duplex?: boolean
   handler: TRequest extends z.ZodType<infer I>
     ? TResponse extends z.ZodType<infer O>
-      ? (request: I, inputStream?: AsyncIterable<Buffer>) => Promise<O> | AsyncGenerator<O>
+      ? (
+          request: I,
+          inputStream?: AsyncIterable<Buffer>,
+          context?: PluginHandlerContext
+        ) => Promise<O> | AsyncGenerator<O>
       : never
     : never
   /**
@@ -60,7 +100,11 @@ export interface DuplexPluginHandlerDefinition<
   duplex: true
   handler: TRequest extends z.ZodType<infer I>
     ? TResponse extends z.ZodType<infer O>
-      ? (request: I, inputStream: AsyncIterable<Buffer>) => AsyncGenerator<O>
+      ? (
+          request: I,
+          inputStream: AsyncIterable<Buffer>,
+          context?: PluginHandlerContext
+        ) => AsyncGenerator<O>
       : never
     : never
   /** See `PluginHandlerDefinition.cancel`. */
@@ -154,6 +198,18 @@ export interface ResolveResult<TConfig = Record<string, unknown>, K extends stri
   artifacts?: Partial<Record<K, string>>
 }
 
+/** A load as `loadModel` would run it, resolved for its engine's fitter. */
+export interface FitLoad {
+  modelPath: string
+  modelConfig: unknown
+  artifacts?: Record<string, string> | undefined
+  isShardedModel: boolean
+  transcriptionWorkload?: TranscriptionFitWorkload | undefined
+  ttsWorkload?: TtsFitWorkload | undefined
+}
+
+export type FitRequestPlan = { request: unknown } | { unknown: string }
+
 export interface QvacPlugin<
   TConfig = Record<string, unknown>,
   TArtifactKeys extends string = string
@@ -164,12 +220,18 @@ export interface QvacPlugin<
   loadConfigSchema: z.ZodType
   createModel: (params: CreateModelParams) => PluginModelResult
   /**
+   * Builds the addon's fit request from a resolved load, or names why the load
+   * cannot be projected. A plugin without both it and `assessFit` answers every
+   * fit with `unknown`.
+   */
+  fitRequest?: (load: FitLoad) => FitRequestPlan
+  /**
    * The engine's own fitter. Carrying it here keeps every addon specifier
    * inside the module graph of the plugin that owns it, so a bundler walking a
-   * host that ships one engine never resolves the others. It returns the
-   * engine's fit result or a Promise of it.
+   * host that ships one engine never resolves the others. It takes what
+   * `fitRequest` built and resolves to the addon's fit result.
    */
-  assessFit?: (request: never) => unknown
+  assessFit?: (request: never) => Promise<ModelFitModelResult>
   handlers: Record<string, PluginHandlerDefinition>
   logging?: PluginLogging | undefined
   capabilities?: QvacPluginCapabilities | undefined
@@ -187,28 +249,34 @@ export interface QvacPlugin<
 }
 
 // Non-streaming plugin invoke
-export const pluginInvokeRequestSchema = z.object({
-  type: z.literal('pluginInvoke'),
-  modelId: z.string(),
-  handler: z.string(),
-  params: z.unknown()
-})
+export const pluginInvokeRequestSchema = z
+  .object({
+    type: z.literal('pluginInvoke'),
+    modelId: z.string(),
+    handler: z.string(),
+    params: z.unknown()
+  })
+  .extend(trackedRequestSchema.shape)
 
 export const pluginInvokeResponseSchema = z.object({
   type: z.literal('pluginInvoke'),
+  requestId: z.string().optional().describe('Identity of the request.'),
   result: z.unknown()
 })
 
 // Streaming plugin invoke
-export const pluginInvokeStreamRequestSchema = z.object({
-  type: z.literal('pluginInvokeStream'),
-  modelId: z.string(),
-  handler: z.string(),
-  params: z.unknown()
-})
+export const pluginInvokeStreamRequestSchema = z
+  .object({
+    type: z.literal('pluginInvokeStream'),
+    modelId: z.string(),
+    handler: z.string(),
+    params: z.unknown()
+  })
+  .extend(trackedRequestSchema.shape)
 
 export const pluginInvokeStreamResponseSchema = z.object({
   type: z.literal('pluginInvokeStream'),
+  requestId: z.string().optional().describe('Identity of the request, on the terminal frame.'),
   result: z.unknown(),
   done: z.boolean().optional()
 })
@@ -320,6 +388,8 @@ export const pluginDefinitionRuntimeSchema = z
       .min(1, 'addonPackage must be a non-empty string'),
     loadConfigSchema: zodSchemaLikeRuntimeSchema,
     createModel: functionRuntimeSchema,
+    fitRequest: functionRuntimeSchema.optional(),
+    assessFit: functionRuntimeSchema.optional(),
     handlers: z.record(z.string(), pluginHandlerDefinitionRuntimeSchema),
     logging: z
       .object({
@@ -371,6 +441,9 @@ export const PLUGIN_RERANK = '@qvac/inference/llamacpp-rerank/plugin' as const
  * Provides: vector embeddings for RAG and semantic search.
  */
 export const PLUGIN_EMBEDDING = '@qvac/inference/llamacpp-embedding/plugin' as const
+
+/** Image descriptors for visual place recognition and retrieval with MegaLoc. */
+export const PLUGIN_IMAGE_EMBEDDING = '@qvac/inference/ggml-image-embedding/plugin' as const
 
 /**
  * Speech-to-text transcription plugin (whisper.cpp).
@@ -445,6 +518,7 @@ export const PLUGIN_CLASSIFICATION = '@qvac/inference/ggml-classification/plugin
 export const BUILTIN_PLUGINS = [
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
+  PLUGIN_IMAGE_EMBEDDING,
   PLUGIN_DECISION,
   PLUGIN_RERANK,
   PLUGIN_WHISPER,

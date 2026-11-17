@@ -1,7 +1,7 @@
 import { addCodes, isCodeRegistered, type ErrorCodesMap } from '@qvac/error'
 // Load @qvac/inference's registration first, then add only codes not already present, so a
 // shared @qvac/error instance (packed consumers, the Bare worker) is not double-registered.
-import '@qvac/inference/surface'
+import { modelRegistryBusyMessage } from '@qvac/inference/surface'
 
 // Server-side error codes (52,001-54,000 range for this SDK)
 export const SDK_SERVER_ERROR_CODES = {
@@ -49,6 +49,7 @@ export const SDK_SERVER_ERROR_CODES = {
   REQUEST_REJECTED_BY_POLICY: 52420,
   CONTEXT_OVERFLOW: 52421,
   INVALID_AUDIO_INPUT: 52422,
+  AUDIO_ENCODE_FAILED: 52424,
 
   // RAG Operations (52,800-52,999)
   RAG_SAVE_FAILED: 52800,
@@ -63,6 +64,7 @@ export const SDK_SERVER_ERROR_CODES = {
   RAG_LIST_WORKSPACES_FAILED: 52809,
   RAG_CHUNK_FAILED: 52810,
   RAG_WORKSPACE_NOT_OPEN: 52811,
+  RAG_WORKSPACE_BUSY: 52812,
 
   // Vector index (52,850-52,899)
   VECTOR_INDEX_PROVIDER_UNAVAILABLE: 52850,
@@ -95,6 +97,9 @@ export const SDK_SERVER_ERROR_CODES = {
   INVALID_DELETE_CACHE_PARAMS: 53201,
   CACHE_DIR_NOT_ABSOLUTE: 53202,
   CACHE_DIR_NOT_WRITABLE: 53203,
+  INVALID_SEED_FROM_PARAMS: 53204,
+  KV_CACHE_SEED_SOURCE_NOT_FOUND: 53205,
+  KV_CACHE_SEED_SHARING_DISABLED: 53206,
 
   // Config Operations (53,350-53,499)
   SET_CONFIG_FAILED: 53350,
@@ -127,13 +132,21 @@ export const SDK_SERVER_ERROR_CODES = {
   LIFECYCLE_RESUME_FAILED: 53601,
   LIFECYCLE_OPERATION_BLOCKED: 53602,
 
+  // Caller sessions and model leases (53,620-53,649)
+  SESSION_ID_CONFLICT: 53620,
+  SESSION_NOT_OPEN: 53621,
+  MODEL_LEASED: 53622,
+  OWNER_ONLY: 53623,
+  MODEL_RECONFIGURED: 53624,
+
   // Security (53,900-53,949)
   PATH_TRAVERSAL: 53900,
 
   // QVAC Model Registry Operations (53,950-54,000)
   // Note: Registry client errors (19,001-20,000) are re-thrown directly
   QVAC_MODEL_REGISTRY_QUERY_FAILED: 53950,
-  QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND: 53951
+  QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND: 53951,
+  QVAC_MODEL_REGISTRY_BUSY: 53952
 } as const
 
 const serverErrorDefinitions: ErrorCodesMap = {
@@ -351,6 +364,11 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: 'INVALID_AUDIO_INPUT',
     message: (details?: string) => `Invalid audio input${details ? `: ${details}` : ''}`
   },
+  [SDK_SERVER_ERROR_CODES.AUDIO_ENCODE_FAILED]: {
+    name: 'AUDIO_ENCODE_FAILED',
+    message: (format: string, details?: string) =>
+      `Failed to encode audio as ${format}${details ? `: ${details}` : ''}`
+  },
 
   // RAG Operations (52,800-52,999)
   [SDK_SERVER_ERROR_CODES.RAG_SAVE_FAILED]: {
@@ -402,6 +420,11 @@ const serverErrorDefinitions: ErrorCodesMap = {
   [SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_NOT_OPEN]: {
     name: 'RAG_WORKSPACE_NOT_OPEN',
     message: (workspace: string) => `RAG workspace '${workspace}' is not open`
+  },
+  [SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_BUSY]: {
+    name: 'RAG_WORKSPACE_BUSY',
+    message: (workspace: string) =>
+      `RAG workspace '${workspace}' is running another session's operation; retry when it finishes`
   },
 
   // Vector index (52,850-52,899)
@@ -520,6 +543,20 @@ const serverErrorDefinitions: ErrorCodesMap = {
     message: (cacheDir: string, details?: string) =>
       `Cache directory is not writable: ${cacheDir}${details ? `. ${details}` : ''}`
   },
+  [SDK_SERVER_ERROR_CODES.INVALID_SEED_FROM_PARAMS]: {
+    name: 'INVALID_SEED_FROM_PARAMS',
+    message: 'seedFrom needs a caller-managed kvCache key other than itself'
+  },
+  [SDK_SERVER_ERROR_CODES.KV_CACHE_SEED_SOURCE_NOT_FOUND]: {
+    name: 'KV_CACHE_SEED_SOURCE_NOT_FOUND',
+    message: (seedFrom: string, modelId: string) =>
+      `No cache named "${seedFrom}" exists for model "${modelId}" with this system prompt`
+  },
+  [SDK_SERVER_ERROR_CODES.KV_CACHE_SEED_SHARING_DISABLED]: {
+    name: 'KV_CACHE_SEED_SHARING_DISABLED',
+    message: (modelId: string) =>
+      `seedFrom has no effect on model "${modelId}": it was not loaded with cache_share_across_keys true`
+  },
 
   // Config Operations (53,350-53,499)
   [SDK_SERVER_ERROR_CODES.SET_CONFIG_FAILED]: {
@@ -629,6 +666,31 @@ const serverErrorDefinitions: ErrorCodesMap = {
       `Operation "${requestType}" is blocked while runtime state is "${lifecycleState}"`
   },
 
+  // Caller sessions and model leases (53,620-53,649)
+  [SDK_SERVER_ERROR_CODES.SESSION_ID_CONFLICT]: {
+    name: 'SESSION_ID_CONFLICT',
+    message: (sessionId: string) => `Session id "${sessionId}" is already open`
+  },
+  [SDK_SERVER_ERROR_CODES.SESSION_NOT_OPEN]: {
+    name: 'SESSION_NOT_OPEN',
+    message: (sessionId: string) => `Session "${sessionId}" is not open`
+  },
+  [SDK_SERVER_ERROR_CODES.MODEL_LEASED]: {
+    name: 'MODEL_LEASED',
+    message: (modelId: string, leaseCount: string) =>
+      `Model "${modelId}" is held by ${leaseCount} other session(s); it cannot be reconfigured while another session uses it`
+  },
+  [SDK_SERVER_ERROR_CODES.OWNER_ONLY]: {
+    name: 'OWNER_ONLY',
+    message: (operation: string, sessionId: string) =>
+      `Operation "${operation}" is reserved for the runtime owner; session "${sessionId}" cannot call it`
+  },
+  [SDK_SERVER_ERROR_CODES.MODEL_RECONFIGURED]: {
+    name: 'MODEL_RECONFIGURED',
+    message: (modelId: string) =>
+      `Model "${modelId}" was reconfigured after it was loaded and no longer has the configuration this load asks for; load it again once it is unloaded`
+  },
+
   // Security (53,900-53,949)
   [SDK_SERVER_ERROR_CODES.PATH_TRAVERSAL]: {
     name: 'PATH_TRAVERSAL',
@@ -647,6 +709,11 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: 'QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND',
     message: (registrySource: string, registryPath: string) =>
       `QVAC model registry has no model at ${registrySource}/${registryPath}`
+  },
+  // Owned by @qvac/inference, which registers it first; kept here for the contract export.
+  [SDK_SERVER_ERROR_CODES.QVAC_MODEL_REGISTRY_BUSY]: {
+    name: 'QVAC_MODEL_REGISTRY_BUSY',
+    message: modelRegistryBusyMessage
   }
 }
 

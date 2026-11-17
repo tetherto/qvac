@@ -71,6 +71,9 @@ interface IdMapIndexBinding {
   idx_len(handle: NativeHandle): number
   idx_dim(handle: NativeHandle): number
   idx_bit_width(handle: NativeHandle): IdMapIndexBitWidth
+  idx_calibrated(handle: NativeHandle): boolean
+  idx_set_staged(handle: NativeHandle, enabled: boolean): void
+  idx_staged(handle: NativeHandle): boolean
 }
 
 let binding: IdMapIndexBinding | undefined
@@ -94,7 +97,7 @@ export type IdMapIndexStorage = keyof typeof BIT_WIDTH_BY_STORAGE
 export interface IdMapIndexOptions {
   /**
    * Vector dimensionality. TurboVec requires a 64-bit target and a dimension
-   * divisible by 8 and no greater than 1,024.
+   * divisible by 8 and no greater than 16,384.
    */
   dim: number
   /** 2 = TurboVec q2, 4 = q4, 8 = q8, and 32 = full f32 storage. Defaults to 8. */
@@ -250,19 +253,20 @@ export default class IdMapIndex {
       throw new TypeError('IdMapIndex: dim must be a positive int32')
     }
     const storage = normalizeStorageOptions(options)
-    if (storage.startsWith('turbovec-') && (dim > 1_024 || dim % 8 !== 0)) {
+    if (storage.startsWith('turbovec-') && (dim > 16_384 || dim % 8 !== 0)) {
       throw new RangeError(
-        'IdMapIndex: TurboVec dim must be divisible by 8 and no greater than 1024'
+        'IdMapIndex: TurboVec dim must be divisible by 8 and no greater than 16384'
       )
     }
     this[HANDLE] = loadBinding().idx_create({ dim, storage })
   }
 
   /**
-   * Load a v2/v3 snapshot or migrate legacy v1 storage. Legacy bit-width 8
-   * snapshots migrate to q8; other v1 widths migrate to f32. Older TurboVec
-   * snapshots above 1,024 dimensions can be loaded and rewritten, but cannot
-   * add, search, or build IVF state. Synchronous and potentially blocking.
+   * Load a v2/v3/v8 snapshot or migrate legacy v1 storage. Legacy bit-width 8
+   * snapshots migrate to q8; other v1 widths migrate to f32. TurboVec v3
+   * snapshots from earlier releases keep their encoding and keep writing v3;
+   * those above 1,024 dimensions can be loaded and rewritten, but cannot add,
+   * search, or build IVF state. Synchronous and potentially blocking.
    * Called on a subclass, returns an instance of that subclass; its
    * constructor and field initializers do not run.
    */
@@ -276,8 +280,8 @@ export default class IdMapIndex {
 
   /**
    * Load a v2 snapshot with read-only mmap-backed vectors. Legacy v1 and
-   * TurboVec v3 snapshots are rejected. Requires a little-endian host and,
-   * on POSIX, a filesystem supporting flock(). Mutations are rejected.
+   * TurboVec (v3 and v8) snapshots are rejected. Requires a little-endian host
+   * and, on POSIX, a filesystem supporting flock(). Mutations are rejected.
    * Returns a subclass instance when called on a subclass, as `load()` does.
    */
   static loadMmap<T extends IdMapIndex>(this: IdMapIndexClass<T>, path: string): T
@@ -473,9 +477,10 @@ export default class IdMapIndex {
   }
 
   /**
-   * Persist a checksummed v2 snapshot for f32/q4/q8 or v3 for TurboVec.
-   * Delta-bound handles must use `compactDelta()`. A NotDurable error means
-   * replacement succeeded but parent-directory durability was not confirmed.
+   * Persist a checksummed v2 snapshot for f32/q4/q8, or a v8 snapshot for
+   * TurboVec (v3 for an index loaded from a v3 snapshot). Delta-bound handles
+   * must use `compactDelta()`. A NotDurable error means replacement succeeded
+   * but parent-directory durability was not confirmed.
    */
   write(path: string) {
     requireNonEmptyPath(path, 'write: path')
@@ -511,6 +516,40 @@ export default class IdMapIndex {
   /** Effective storage bit width. */
   get bitWidth() {
     return loadBinding().idx_bit_width(ensureHandle(this))
+  }
+
+  /**
+   * Whether a TurboVec index holds a TQ+ calibration. A fresh TurboVec index
+   * calibrates from its first `addWithIds()` batch when that batch has at
+   * least 1,000 rows; other storages are never calibrated.
+   */
+  get calibrated() {
+    return loadBinding().idx_calibrated(ensureHandle(this))
+  }
+
+  /**
+   * Whether staged search is turned on. Off for every new or loaded index.
+   * Reports the setting, not whether a search runs in stages: see
+   * `setStagedSearch()`.
+   */
+  get stagedSearch() {
+    return loadBinding().idx_staged(ensureHandle(this))
+  }
+
+  /**
+   * Turn TurboVec staged search on or off. On, a search of 32,768 or more
+   * vectors scans a compressed form first and scores only a shortlist: several
+   * times faster per query, but it can miss some of the best matches,
+   * especially at small k. It applies only at a dimension divisible by 32, on
+   * hosts that support it, and never to an index loaded from a v3 snapshot;
+   * elsewhere the setting is kept but every search scans in full. Throws for
+   * non-TurboVec storage. Not saved in snapshots.
+   */
+  setStagedSearch(enabled: boolean) {
+    if (typeof enabled !== 'boolean') {
+      throw new TypeError('setStagedSearch: enabled must be a boolean')
+    }
+    loadBinding().idx_set_staged(ensureHandle(this), enabled)
   }
 
   /** Release filters and native index resources. This operation is idempotent. */

@@ -615,3 +615,43 @@ describe('writeStreamingResponse: input tokens across search rounds', () => {
     assert.equal((completed['usage'] as { input_tokens: number }).input_tokens, 308)
   })
 })
+
+describe('writeStreamingResponse: cache occupancy', () => {
+  it("reports the last round's occupancy, not the sum across search rounds", async () => {
+    const holder = createStreamResponse()
+    const p = {
+      ...baseHandlerParams('resp_occupancy'),
+      kvCached: true,
+      tools: [
+        {
+          type: 'function' as const,
+          name: 'create_issue',
+          description: 'Open a new issue on a repository',
+          deferLoading: true,
+          parameters: {
+            type: 'object' as const,
+            properties: { title: { type: 'string' as const } }
+          }
+        }
+      ]
+    }
+    const turns = [
+      fakeStreamCompletion({
+        tokens: [],
+        toolCalls: [{ id: 'c1', name: 'tool_search', arguments: { query: 'create_issue' } }],
+        text: '',
+        stats: { cacheTokens: 100 }
+      }),
+      fakeStreamCompletion({
+        tokens: ['Done.'],
+        toolCalls: [],
+        text: 'Done.',
+        stats: { cacheTokens: 120 }
+      })
+    ]
+    let turn = 0
+    const completed = await writeStreamingResponse(holder.res, p, () => turns[turn++]!)
+    assert.equal(turn, 2)
+    assert.equal((completed['usage'] as Record<string, number>)['qvac_cache_tokens'], 120)
+  })
+})

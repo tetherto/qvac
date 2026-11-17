@@ -9,6 +9,7 @@
 
 #include "audiogen-cpp/minimax/engine.h"
 #include "model-interface/BackendUtils.hpp"
+#include "model-interface/EngineOptions.hpp"
 
 namespace qvac::audiogenggml::minimax {
 
@@ -22,23 +23,6 @@ constexpr int64_t K_BACKEND_DEVICE_CPU = 0;
 constexpr int64_t K_BACKEND_DEVICE_GPU = 1;
 constexpr int K_STEREO_CHANNELS = 2;
 constexpr double K_MILLISECONDS_PER_SECOND = 1000.0;
-
-// Mirrors tts-ggml's BackendUtils.hpp mapping (and AcestepModel.cpp) so the
-// codes the engines report cannot drift apart. Metal registers as "MTL" on
-// newer ggml.
-int64_t backendIdFromName(const std::string& name) {
-  if (name == "CPU")
-    return 0;
-  if (name.rfind("Metal", 0) == 0 || name.rfind("MTL", 0) == 0)
-    return 1;
-  if (name.rfind("CUDA", 0) == 0)
-    return 2;
-  if (name.rfind("Vulkan", 0) == 0)
-    return 3;
-  if (name.rfind("OpenCL", 0) == 0)
-    return 4;
-  return 99;
-}
 
 int64_t backendDeviceFromName(const std::string& name) {
   return name == "CPU" ? K_BACKEND_DEVICE_CPU : K_BACKEND_DEVICE_GPU;
@@ -138,21 +122,7 @@ void MinimaxModel::load() {
 void MinimaxModel::loadLocked() {
   if (engine_)
     return;
-  tts_cpp::minimax::EngineOptions options;
-  options.model_dir = config_.modelDir;
-  options.lm_model_path = config_.lmModelPath;
-  options.synth_model_path = config_.synthModelPath;
-  options.n_threads = config_.threads;
-  options.coreml_profile_dir = config_.coremlProfileDir;
-  options.coreml_compute_units = config_.coremlComputeUnits;
-  // Without an explicit device, "auto" keeps the addon's useGPU contract: take
-  // a GPU when one is usable, otherwise fall back to CPU. An explicit "gpu"
-  // makes creation fail instead. runtimeStats reports the backend in use.
-  if (!config_.device.empty()) {
-    options.device = config_.device;
-  } else {
-    options.device = config_.useGpu ? "auto" : "cpu";
-  }
+  auto options = engineOptions(config_);
   options.backends_dir = resolveBackendsDir(config_.backendsDir).string();
   engine_ = tts_cpp::minimax::Engine::create(options);
   if (!engine_) {

@@ -1,3 +1,4 @@
+import type { RPCOptions } from '@qvac/inference/surface'
 import { send } from '@/client/rpc/rpc-client'
 import { InvalidResponseError } from '@/utils/errors-client'
 
@@ -26,8 +27,8 @@ import { InvalidResponseError } from '@/utils/errors-client'
  * await resume();
  * console.log(await state()); // "active"
  */
-export async function resume(): Promise<void> {
-  const response = await send({ type: 'resume' })
+export async function resume(options?: RPCOptions): Promise<void> {
+  const response = await send({ type: 'resume' }, options)
   if (response.type !== 'resume') {
     throw new InvalidResponseError('resume')
   }

@@ -11,6 +11,7 @@ import io.tether.qvac.e2e.consumer.Runtime
 import io.tether.qvac.e2e.runner.Calls
 import io.tether.qvac.e2e.runner.Interpreter
 import io.tether.qvac.e2e.runner.Resources
+import io.tether.qvac.e2e.runner.RestartableTransport
 import io.tether.qvac.e2e.runner.Wire
 import io.tether.qvac.e2e.runner.asList
 import io.tether.qvac.e2e.runner.asMap
@@ -110,12 +111,12 @@ object E2eSession {
             ?: error("no platform policy for \"$RESOURCE_PLATFORM\" in platform-policy.json")
         val singleUseResources = asList(policy["singleUseResources"]).map(Any?::toString)
         val workerConfig = Json.parseToJsonElement(readAsset(app, "e2e/worker-config.json")).jsonObject
-        val transport = AndroidBareKitTransport.connect(app, config = workerConfig)
+        val transport = RestartableTransport.connect { AndroidBareKitTransport.connect(app, config = workerConfig) }
         val client = QvacClient(transport)
         val wire = Wire(client)
         val resources = Resources(client, table, RESOURCE_PLATFORM, host, ::log, unloadSettleMs, singleUseResources)
         val calls = Calls(wire, resources, File(app.cacheDir, "e2e-scratch"))
-        val interpreter = Interpreter(resources, calls, host.fixtureRoot, ::log)
+        val interpreter = Interpreter(resources, calls, host.fixtureRoot, ::log, restartWorker = transport::restart)
         log("✅ Worker ready")
         return Runtime(client, wire, resources, calls, interpreter)
     }

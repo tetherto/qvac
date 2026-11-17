@@ -34,7 +34,7 @@ export const sources: readonly CodeSource[] = [
   {
     owner: '@qvac/rag',
     file: 'packages/rag/src/errors.ts',
-    symbols: ['ERR_CODES']
+    symbols: ['ERR_CODES', 'RETIRED_ERR_CODES']
   },
   {
     owner: '@qvac/registry-client',

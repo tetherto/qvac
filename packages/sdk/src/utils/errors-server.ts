@@ -570,6 +570,25 @@ export class InvalidAudioInputError extends QvacErrorBase {
   }
 }
 
+export class AudioEncodeFailedError extends QvacErrorBase {
+  readonly format: string
+  readonly details: string | undefined
+  constructor(format: string, details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.AUDIO_ENCODE_FAILED,
+        details ? [format, details] : [format],
+        cause
+      )
+    )
+    this.format = format
+    this.details = details
+  }
+  toErrorResponseFields(): Record<string, unknown> {
+    return { format: this.format, ...(this.details !== undefined && { details: this.details }) }
+  }
+}
+
 // ============== RAG Operation Errors ==============
 
 export class RAGSaveFailedError extends QvacErrorBase {
@@ -784,6 +803,48 @@ export class InvalidDeleteCacheParamsError extends QvacErrorBase {
   }
 }
 
+export class InvalidSeedFromParamsError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(createErrorOptions(SDK_SERVER_ERROR_CODES.INVALID_SEED_FROM_PARAMS, undefined, cause))
+  }
+}
+
+export class KvCacheSeedSourceNotFoundError extends QvacErrorBase {
+  readonly seedFrom: string
+  readonly modelId: string
+
+  constructor(seedFrom: string, modelId: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.KV_CACHE_SEED_SOURCE_NOT_FOUND,
+        [seedFrom, modelId],
+        cause
+      )
+    )
+    this.seedFrom = seedFrom
+    this.modelId = modelId
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { seedFrom: this.seedFrom, modelId: this.modelId }
+  }
+}
+
+export class KvCacheSeedSharingDisabledError extends QvacErrorBase {
+  readonly modelId: string
+
+  constructor(modelId: string, cause?: unknown) {
+    super(
+      createErrorOptions(SDK_SERVER_ERROR_CODES.KV_CACHE_SEED_SHARING_DISABLED, [modelId], cause)
+    )
+    this.modelId = modelId
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { modelId: this.modelId }
+  }
+}
+
 export class CacheDirNotAbsoluteError extends QvacErrorBase {
   constructor(cause?: unknown) {
     super(createErrorOptions(SDK_SERVER_ERROR_CODES.CACHE_DIR_NOT_ABSOLUTE, undefined, cause))
@@ -859,6 +920,20 @@ export class RAGWorkspaceInUseError extends QvacErrorBase {
 export class RAGWorkspaceNotOpenError extends QvacErrorBase {
   constructor(workspace: string, cause?: unknown) {
     super(createErrorOptions(SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_NOT_OPEN, [workspace], cause))
+  }
+}
+
+/** A RAG operation on a workspace that another session's operation is using. */
+export class RAGWorkspaceBusyError extends QvacErrorBase {
+  readonly workspace: string
+
+  constructor(workspace: string, cause?: unknown) {
+    super(createErrorOptions(SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_BUSY, [workspace], cause))
+    this.workspace = workspace
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { workspace: this.workspace }
   }
 }
 
@@ -1003,6 +1078,82 @@ export class LifecycleResumeFailedError extends QvacErrorBase {
   }
 }
 
+export class SessionIdConflictError extends QvacErrorBase {
+  readonly sessionId: string
+
+  constructor(sessionId: string, cause?: unknown) {
+    super(createErrorOptions(SDK_SERVER_ERROR_CODES.SESSION_ID_CONFLICT, [sessionId], cause))
+    this.sessionId = sessionId
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { sessionId: this.sessionId }
+  }
+}
+
+export class SessionNotOpenError extends QvacErrorBase {
+  readonly sessionId: string
+
+  constructor(sessionId: string, cause?: unknown) {
+    super(createErrorOptions(SDK_SERVER_ERROR_CODES.SESSION_NOT_OPEN, [sessionId], cause))
+    this.sessionId = sessionId
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { sessionId: this.sessionId }
+  }
+}
+
+/** A `reloadConfig` on a model another session holds a lease on. */
+export class ModelLeasedError extends QvacErrorBase {
+  readonly modelId: string
+  readonly leaseCount: number
+
+  constructor(modelId: string, leaseCount: number, cause?: unknown) {
+    super(
+      createErrorOptions(SDK_SERVER_ERROR_CODES.MODEL_LEASED, [modelId, String(leaseCount)], cause)
+    )
+    this.modelId = modelId
+    this.leaseCount = leaseCount
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { modelId: this.modelId, leaseCount: this.leaseCount }
+  }
+}
+
+export class OwnerOnlyError extends QvacErrorBase {
+  readonly operation: string
+  readonly sessionId: string
+
+  constructor(operation: string, sessionId: string, cause?: unknown) {
+    super(createErrorOptions(SDK_SERVER_ERROR_CODES.OWNER_ONLY, [operation, sessionId], cause))
+    this.operation = operation
+    this.sessionId = sessionId
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { operation: this.operation, sessionId: this.sessionId }
+  }
+}
+
+/**
+ * A load whose configuration hash names a model that a reload has since
+ * reconfigured, from a session that holds no lease on it.
+ */
+export class ModelReconfiguredError extends QvacErrorBase {
+  readonly modelId: string
+
+  constructor(modelId: string, cause?: unknown) {
+    super(createErrorOptions(SDK_SERVER_ERROR_CODES.MODEL_RECONFIGURED, [modelId], cause))
+    this.modelId = modelId
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { modelId: this.modelId }
+  }
+}
+
 export class LifecycleOperationBlockedError extends QvacErrorBase {
   constructor(requestType: string, lifecycleState: string) {
     super(
@@ -1059,4 +1210,4 @@ export class ModelRegistryModelNotFoundError extends QvacErrorBase {
   }
 }
 
-export { RpcServerOperationError } from '@qvac/inference/surface'
+export { RpcServerOperationError, ModelRegistryBusyError } from '@qvac/inference/surface'

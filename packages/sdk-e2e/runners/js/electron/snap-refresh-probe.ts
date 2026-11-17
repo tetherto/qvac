@@ -44,12 +44,12 @@ export async function runSnapRefreshProbe(prepareConfig: () => void) {
   const runtimeDir = path.join(snapCommon, 'qvac-test-runtime')
   const markerPath = path.join(runtimeDir, 'snap-refresh-marker.json')
   const registryRoot = path.join(snapCommon, '.qvac', 'registry-corestore')
-  const workerLock = path.join(snapCommon, '.qvac', '.worker.lock')
+  const cacheLock = path.join(snapCommon, '.qvac', '.cache.lock')
 
   if (phase === 'before') {
     await heartbeat()
-    if (!fs.existsSync(workerLock)) {
-      throw new Error(`SDK worker lock was not created in Snap common storage: ${workerLock}`)
+    if (!fs.existsSync(cacheLock)) {
+      throw new Error(`SDK cache lock was not created in Snap common storage: ${cacheLock}`)
     }
     if (fs.existsSync(path.join(home, '.qvac'))) {
       throw new Error(`SDK unexpectedly created revision-scoped storage under ${home}`)
@@ -90,8 +90,8 @@ export async function runSnapRefreshProbe(prepareConfig: () => void) {
     }
 
     await modelRegistryList()
-    if (!fs.existsSync(workerLock)) {
-      throw new Error(`SDK worker did not reopen with common storage after refresh: ${workerLock}`)
+    if (!fs.existsSync(cacheLock)) {
+      throw new Error(`SDK worker did not reopen with common storage after refresh: ${cacheLock}`)
     }
     if (fs.existsSync(path.join(home, '.qvac'))) {
       throw new Error(`SDK unexpectedly created revision-scoped storage under ${home}`)
@@ -107,7 +107,7 @@ export async function runSnapRefreshProbe(prepareConfig: () => void) {
       home,
       revision,
       snapCommon,
-      workerLock,
+      cacheLock,
       registryFiles: listRelativeFiles(registryRoot)
     })
   )

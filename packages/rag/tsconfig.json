@@ -1,9 +1,6 @@
 {
   "include": ["src/**/*", "examples/**/*"],
-  "exclude": [
-    "src/adapters/database/hyperspec/**/*.js",
-    "src/adapters/database/hyperspec/**/*.json"
-  ],
+  "exclude": ["src/db/hyperspec/**/*.js", "src/db/hyperspec/**/*.json"],
   "compilerOptions": {
     "lib": ["ES2022"],
     "target": "ES2022",

@@ -21,9 +21,7 @@ File naming convention:
 These files are picked up automatically (recursively) by:
 
 - `scripts/perf-report/aggregate-asr-ggml-rtf.js`
-- `.github/workflows/benchmark-performance-asr-ggml.yml`
-- the `combine-unified-performance-report` job in
-  `.github/workflows/on-pr-asr-ggml.yml`
+- the `benchmark` target's `report` configuration, run by `benchmarks.yml`
 
 Use this directory for results such as:
 

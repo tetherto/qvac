@@ -316,6 +316,7 @@ void TextLlmContext::tokenizeChat(
   if (cacheReconciliationEnabled_) {
     const auto& lastRole = chatMsgs.back().role;
     isLastMessageFromUser = lastRole == "user" || lastRole == "tool";
+    historyEndsAtUserTurn_ = lastRole == "user";
     addSpecial = true;
   } else if (nPast_ == 0 && !isCacheLoaded) {
     const auto& lastRole = chatMsgs.back().role;
@@ -907,15 +908,11 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
       break;
     }
 
+    // `onLogitsReady` already streamed this token, so it is decoded even when
+    // a cancel landed meanwhile: a cancel keeps everything the caller
+    // received. The next stop check, at the loop top or after the loop, then
+    // routes the cancel to `onCancel`.
     llamaBatchClear(*batch);
-    if (stopGeneration_.load()) {
-      // Route through the post-loop `onCancel` instead of injecting
-      // EOT — EOT would advance `nPast_` past the rollback target.
-      //
-      // `onLogitsReady` already streamed this token, so the caller saw it.
-      ++lastGeneratedTokenCount_;
-      break;
-    }
     llamaBatchAdd(*batch, step.token, nPast_, {seqId_}, true);
 
     // NOLINT(clang-analyzer-core.CallAndMessage)
@@ -985,15 +982,12 @@ void TextLlmContext::generateSpeculative(
   llama_token sampled = step.token;
 
   while (true) {
-    if (stopGeneration_.load()) {
-      // Like the plain loop: `sampled` was streamed, so the caller saw it.
-      ++lastGeneratedTokenCount_;
-      return;
-    }
-    if (params_.n_predict > 0 &&
-        generatedAfterAccept >= static_cast<unsigned>(params_.n_predict)) {
-      // The plain loop decodes the token it stops on for the prediction
-      // budget, so the sequence and the ledger hold it.
+    if (stopGeneration_.load() ||
+        (params_.n_predict > 0 &&
+         generatedAfterAccept >= static_cast<unsigned>(params_.n_predict))) {
+      // `sampled` was streamed, so a cancel or the prediction budget stops
+      // after decoding it, like the plain loop: the sequence and the ledger
+      // hold every token the caller received.
       llamaBatchClear(*batch);
       llamaBatchAdd(*batch, sampled, nPast_, {seqId_}, false);
       if (llama_decode(modelCtx_.lctx, *batch) != 0) {
@@ -1215,7 +1209,7 @@ SequenceStepResult TextLlmContext::sampleFromLogits(
     LlamaBatch* inlineDecodeBatch) {
   if (stopGeneration_.load()) {
     // Leave `stopGeneration_` set so the post-loop `onCancel` runs;
-    // do NOT emit EOT since the rollback drops all sampled tokens.
+    // do NOT emit EOT, the cancel path settles the request itself.
     return {.finished = true};
   }
 
@@ -1820,7 +1814,8 @@ void TextLlmContext::commitCacheRequest() {
         cacheCheckpoints_,
         std::move(*pendingHistoryCheckpoint_),
         cacheCheckpointPolicy_,
-        [](const CacheCheckpoint& entry) { return entry.state.bytes(); });
+        [](const CacheCheckpoint& entry) { return entry.state.bytes(); },
+        [](const CacheCheckpoint& entry) { return entry.endsAtUserTurn; });
     pendingHistoryCheckpoint_.reset();
   }
   cacheRequestActive_ = false;
@@ -1847,7 +1842,8 @@ void TextLlmContext::captureHistoryCheckpoint(llama_pos pos) {
             ledger.positions()));
     return;
   }
-  CacheCheckpoint checkpoint{.ledger = std::move(ledger)};
+  CacheCheckpoint checkpoint{
+      .ledger = std::move(ledger), .endsAtUserTurn = historyEndsAtUserTurn_};
   // Only an optimisation for the next turn: a failed capture costs that turn
   // a longer prefill, never this request.
   if (!snapshotSequenceState(

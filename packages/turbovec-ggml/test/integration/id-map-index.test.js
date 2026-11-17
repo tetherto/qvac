@@ -13,6 +13,11 @@ const IdMapIndex = require('@qvac/turbovec-ggml/idMapIndex')
 
 const DIM = 16
 const TURBOVEC_DIM = 128
+// The addon calibrates a fresh TurboVec index from its first add when that add
+// has at least this many rows (VectorIndex::AUTO_CALIBRATE_MIN_ROWS).
+const AUTO_CALIBRATE_MIN_ROWS = 1000
+// Any fixed value works; it only has to be the same on every run.
+const CALIBRATION_SEED = 0x5eed
 const N = 10
 const UINT64_MAX = (1n << 64n) - 1n
 
@@ -164,6 +169,44 @@ function normalizedPatternVec(row) {
   return vector
 }
 
+// Deterministic pseudo-random numbers in [-0.5, 0.5). This is mulberry32, a
+// small public-domain 32-bit generator; the shift amounts and odd constants are
+// its published ones, not tuning values. A fixed seed gives every platform the
+// same rows, so a failure reproduces.
+function mulberry32(seed) {
+  let state = seed >>> 0
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0
+    let x = state
+    x = Math.imul(x ^ (x >>> 15), x | 1)
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61)
+    const uint32 = (x ^ (x >>> 14)) >>> 0
+    return uint32 / 2 ** 32 - 0.5
+  }
+}
+
+// `rows` unit-length TurboVec rows, laid out row after row. Independent random
+// rows are far apart (at dim 128 the closest pair of 1000 has cosine about
+// 0.43), so a search for a stored row has one clear answer even after 4-bit
+// encoding.
+function seededUnitRows(rows, seed) {
+  const next = mulberry32(seed)
+  const vectors = new Float32Array(rows * TURBOVEC_DIM)
+  for (let row = 0; row < rows; row++) {
+    const vector = vectors.subarray(row * TURBOVEC_DIM, (row + 1) * TURBOVEC_DIM)
+    for (let col = 0; col < TURBOVEC_DIM; col++) vector[col] = next()
+    normalizeInPlace(vector)
+  }
+  return vectors
+}
+
+function normalizeInPlace(vector) {
+  let norm = 0
+  for (const value of vector) norm += value * value
+  norm = Math.sqrt(norm) || 1
+  for (let i = 0; i < vector.length; i++) vector[i] /= norm
+}
+
 function runTurboVecRoundTrip(t, storage, bitWidth) {
   const idx = new IdMapIndex({ dim: TURBOVEC_DIM, storage })
   const localN = 6
@@ -306,18 +349,18 @@ test('IdMapIndex: validates production bit widths and TurboVec dimensions', (t) 
   )
   if (SUPPORTS_TURBOVEC) {
     for (const storage of ['turbovec-q2', 'turbovec-q4']) {
-      const max = new IdMapIndex({ dim: 1024, storage })
-      const vector = new Float32Array(1024)
+      const max = new IdMapIndex({ dim: 16384, storage })
+      const vector = new Float32Array(16384)
       vector[0] = 1
-      max.addWithIds(vector, new BigUint64Array([1024n]))
-      t.is(max.search(vector, 1).ids[0], 1024n, `${storage} searches at maximum dimension`)
+      max.addWithIds(vector, new BigUint64Array([16384n]))
+      t.is(max.search(vector, 1).ids[0], 16384n, `${storage} searches at maximum dimension`)
       max.dispose()
     }
   }
   expectThrows(
     t,
-    () => new IdMapIndex({ dim: 1032, storage: 'turbovec-q2' }),
-    'TurboVec dimensions must not exceed 1024'
+    () => new IdMapIndex({ dim: 16392, storage: 'turbovec-q2' }),
+    'TurboVec dimensions must not exceed 16384'
   )
   if (SUPPORTS_TURBOVEC) {
     const q2 = new IdMapIndex({ dim: TURBOVEC_DIM, bitWidth: 2 })
@@ -893,6 +936,94 @@ test('IdMapIndex: corrupt persistence file load fails', (t) => {
     const error = expectThrows(t, () => IdMapIndex.load(file), 'corrupt tvim file should throw')
     if (error !== null) t.is(error.message, 'BadMagic', 'load preserves native error category')
   } finally {
+    if (fs.existsSync(file)) fs.unlinkSync(file)
+  }
+})
+
+test(`IdMapIndex: TurboVec calibrates from a first add of ${AUTO_CALIBRATE_MIN_ROWS} rows`, (t) => {
+  if (!SUPPORTS_TURBOVEC) {
+    t.pass('TurboVec requires a 64-bit target')
+    return
+  }
+  const rows = AUTO_CALIBRATE_MIN_ROWS
+  // Not normalizedPatternVec: it repeats with a period near 2 * pi * 113, so its
+  // row 710 is a near-copy of row 0 and a 4-bit search can return either.
+  const vectors = seededUnitRows(rows, CALIBRATION_SEED)
+  const ids = new BigUint64Array(rows)
+  for (let i = 0; i < rows; i++) ids[i] = BigInt(i + 1)
+  const file = tmpPath('id-map-index-turbovec-calibrated')
+  const idx = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'turbovec-q4' })
+  const small = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'turbovec-q4' })
+  const q2 = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'turbovec-q2' })
+  const plain = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'q8' })
+  let loaded = null
+  try {
+    t.is(idx.calibrated, false, 'a fresh index is uncalibrated')
+    idx.addWithIds(vectors, ids)
+    t.is(idx.calibrated, true, `a first add of ${AUTO_CALIBRATE_MIN_ROWS} rows calibrates`)
+    const query = vectors.subarray(0, TURBOVEC_DIM)
+    t.is(idx.search(query, 1).ids[0], ids[0], 'a calibrated index retrieves a stored row')
+    idx.write(file)
+    loaded = IdMapIndex.load(file)
+    t.is(loaded.calibrated, true, 'the calibration survives a snapshot')
+
+    const belowMin = AUTO_CALIBRATE_MIN_ROWS - 1
+    small.addWithIds(vectors.subarray(0, belowMin * TURBOVEC_DIM), ids.subarray(0, belowMin))
+    t.is(small.calibrated, false, 'a first add one row short of the minimum does not calibrate')
+
+    const repeated = ids.slice()
+    repeated[rows - 1] = repeated[0]
+    expectThrows(
+      t,
+      () => q2.addWithIds(vectors, repeated),
+      'a first add with a repeated id is rejected'
+    )
+    t.is(q2.calibrated, false, 'a rejected first add does not calibrate')
+    q2.addWithIds(new Float32Array(0), new BigUint64Array(0))
+    t.is(q2.calibrated, false, 'an empty first add does not calibrate')
+    q2.addWithIds(vectors, ids)
+    t.is(q2.calibrated, true, 'a q2 index still calibrates on its first rows')
+
+    plain.addWithIds(vectors, ids)
+    t.is(plain.calibrated, false, 'other storages are never calibrated')
+  } finally {
+    if (loaded !== null) loaded.dispose()
+    idx.dispose()
+    small.dispose()
+    q2.dispose()
+    plain.dispose()
+    if (fs.existsSync(file)) fs.unlinkSync(file)
+  }
+})
+
+test('IdMapIndex: TurboVec staged search is off until turned on', (t) => {
+  if (!SUPPORTS_TURBOVEC) {
+    t.pass('TurboVec requires a 64-bit target')
+    return
+  }
+  const file = tmpPath('id-map-index-turbovec-staged')
+  const idx = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'turbovec-q4' })
+  const plain = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'q8' })
+  let loaded = null
+  try {
+    t.is(idx.stagedSearch, false, 'a new index has staged search off')
+    idx.setStagedSearch(true)
+    t.is(idx.stagedSearch, true, 'staged search can be turned on')
+    idx.addWithIds(normalizedPatternVec(0), new BigUint64Array([1n]))
+    t.is(idx.search(normalizedPatternVec(0), 1).ids[0], 1n, 'search works with it on')
+    idx.write(file)
+    loaded = IdMapIndex.load(file)
+    t.is(loaded.stagedSearch, false, 'a loaded index has staged search off')
+    idx.setStagedSearch(false)
+    t.is(idx.stagedSearch, false, 'staged search can be turned off again')
+
+    expectThrows(t, () => idx.setStagedSearch(1), 'a non-boolean is rejected')
+    expectThrows(t, () => plain.setStagedSearch(true), 'other storages reject it')
+    t.is(plain.stagedSearch, false, 'other storages report it off')
+  } finally {
+    if (loaded !== null) loaded.dispose()
+    idx.dispose()
+    plain.dispose()
     if (fs.existsSync(file)) fs.unlinkSync(file)
   }
 })

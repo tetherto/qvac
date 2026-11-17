@@ -17,6 +17,9 @@ import {
 } from '@/rag/index'
 import { getRequestRegistry, withRequestContext, type ManagedRequestContext } from '@/runtime/index'
 import { generateRandomRequestId } from '@/runtime/request-id'
+import { OWNER_SESSION_ID, resolveSessionId } from '@/runtime/session-id'
+import { RAGWorkspaceBusyError } from '@/errors/index'
+import { clearRagEmbedParent, setRagEmbedParent } from '@/rag/embedding-scope'
 import { getEngineLogger } from '@/logging/index'
 import { profileReplyHandler, registerOperationMetrics } from '@/profiling/index'
 
@@ -94,23 +97,51 @@ function omitOnProgress<T extends Record<string, unknown>>(
  * and cleared on scope unwind via `scope.defer(...)`, with a
  * "still mine?" guard so an older op's deferred cleanup cannot stomp
  * a newer op's mapping.
+ *
+ * A session pre-empts only its own operation: one that finds another
+ * session's operation on the workspace is refused with
+ * `RAGWorkspaceBusyError`, since a session reaches only its own requests.
+ * The owner pre-empts any session's operation.
  */
-async function beginRagContext(
+export async function beginRagContext(
   workspace: string,
-  requestId: string
+  request: { requestId?: string | undefined; sessionId?: string | undefined }
 ): Promise<ManagedRequestContext> {
   const registry = getRequestRegistry()
+  const requestId = request.requestId ?? generateRandomRequestId()
+  const sessionId = resolveSessionId(request)
+  const identity = { requestId, sessionId }
   const prev = getActiveRagRequest(workspace)
-  if (prev !== undefined && prev !== requestId) {
-    registry.cancel({ requestId: prev, reason: 'rag-workspace-preempt' })
+  // The same request sent again: the registry refuses the duplicate id, and
+  // the running operation keeps the workspace.
+  const duplicate = prev?.requestId === requestId && prev.sessionId === sessionId
+  if (prev !== undefined && !duplicate) {
+    if (prev.sessionId !== sessionId && sessionId !== OWNER_SESSION_ID) {
+      throw new RAGWorkspaceBusyError(workspace)
+    }
+    registry.cancel({ ...prev, reason: 'rag-workspace-preempt' })
   }
-  const ctx = await registry.begin({
-    requestId,
-    kind: 'rag'
-  })
-  setActiveRagRequest(workspace, requestId)
+  // Recorded before the admission wait, so a second call arriving during it
+  // sees this operation and is refused or pre-empts it.
+  if (!duplicate) setActiveRagRequest(workspace, identity)
+  let ctx: ManagedRequestContext
+  try {
+    ctx = await registry.begin({
+      requestId,
+      sessionId,
+      kind: 'rag'
+    })
+  } catch (error) {
+    if (!duplicate) clearActiveRagRequest(workspace, identity)
+    throw error
+  }
+  // The workspace's embeddings run as children of this request for its
+  // duration: the caller's session, aborted with it.
+  const embedParent = { signal: ctx.signal, requestId, sessionId: request.sessionId }
+  setRagEmbedParent(workspace, embedParent)
   ctx.scope.defer(() => {
-    clearActiveRagRequest(workspace, requestId)
+    clearRagEmbedParent(workspace, embedParent)
+    clearActiveRagRequest(workspace, identity)
   })
   return ctx
 }
@@ -141,8 +172,7 @@ async function handleRagInternal(
 
     case 'ingest': {
       const workspace = request.workspace ?? DEFAULT_WORKSPACE
-      const requestId = request.requestId ?? generateRandomRequestId()
-      await using ctx = await beginRagContext(workspace, requestId)
+      await using ctx = await beginRagContext(workspace, request)
       const log = withRequestContext(getEngineLogger(), ctx)
       log.debug('ingest start')
       const handlerOptions = createHandlerOptions('ingest', workspace, ctx.signal, onProgress)
@@ -159,8 +189,7 @@ async function handleRagInternal(
 
     case 'saveEmbeddings': {
       const workspace = request.workspace ?? DEFAULT_WORKSPACE
-      const requestId = request.requestId ?? generateRandomRequestId()
-      await using ctx = await beginRagContext(workspace, requestId)
+      await using ctx = await beginRagContext(workspace, request)
       const log = withRequestContext(getEngineLogger(), ctx)
       log.debug('saveEmbeddings start')
       const handlerOptions = createHandlerOptions(
@@ -180,7 +209,10 @@ async function handleRagInternal(
     }
 
     case 'search': {
-      const results = await search(request)
+      const results = await search(request, {
+        requestId: request.requestId,
+        sessionId: request.sessionId
+      })
       return {
         type: 'rag',
         operation: request.operation,
@@ -200,8 +232,7 @@ async function handleRagInternal(
 
     case 'reindex': {
       const workspace = request.workspace ?? DEFAULT_WORKSPACE
-      const requestId = request.requestId ?? generateRandomRequestId()
-      await using ctx = await beginRagContext(workspace, requestId)
+      await using ctx = await beginRagContext(workspace, request)
       const log = withRequestContext(getEngineLogger(), ctx)
       log.debug('reindex start')
       const handlerOptions = createHandlerOptions('reindex', workspace, ctx.signal, onProgress)

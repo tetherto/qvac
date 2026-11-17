@@ -317,9 +317,9 @@ PerformanceProfile selectPerformanceProfile(
       ((rtx && (cuda || vulkan)) || (spark && cuda) || (mac && metal) ||
        (strix && hip))) {
     result.flashAttention = !config.explicitFlashAttention;
-    result.h3LocalOps = rtx && (cuda || vulkan) && result.flashAttention &&
-                        config.diffusionFlashAttn &&
-                        device.freeBytes >= 28 * GIB;
+    // Fused SwiGLU and QKV views are engine defaults on the 2026-11-01
+    // baseline. Profiles only select attention; leave that graph unchanged
+    // for every request, including opt-out and unsupported workloads.
   }
   if (model == ProfileModel::Flux2Klein4BQ8 &&
       ((rtx && cuda) || (spark && cuda)) && !config.explicitVaeConvDirect) {
@@ -341,11 +341,6 @@ PerformanceProfile selectPerformanceProfile(
         device.freeBytes >= 64 * GIB;
   }
   return result;
-}
-
-bool useH3LocalOps(
-    const PerformanceProfile& profile, int width, int height, int frames) {
-  return profile.h3LocalOps && width == 960 && height == 544 && frames == 124;
 }
 
 bool useVaeGemm(

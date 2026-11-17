@@ -590,6 +590,7 @@ export function processLineConversation(
           probability: response.vad.probability,
           ...(response.vad.source && { source: response.vad.source }),
           ...(response.vad.timestamp !== undefined && { timestamp: response.vad.timestamp }),
+          ...(response.vad.chunkIndex !== undefined && { chunkIndex: response.vad.chunkIndex }),
           ...(response.vad.speakerId !== undefined && { speakerId: response.vad.speakerId })
         }
       }
@@ -601,9 +602,13 @@ export function processLineConversation(
             silenceDurationMs: response.endOfTurn.silenceDurationMs
           }
         }
+        const { timestamp, chunkIndex, confidence } = response.endOfTurn
         return {
           type: 'endOfTurn',
-          source: 'parakeet'
+          source: 'parakeet',
+          ...(timestamp !== undefined && { timestamp }),
+          ...(chunkIndex !== undefined && { chunkIndex }),
+          ...(confidence !== undefined && { confidence })
         }
       }
       if (wantsMetadata) {

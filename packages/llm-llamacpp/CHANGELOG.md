@@ -1,6 +1,139 @@
 # Changelog
 
-## [Unreleased]
+## [0.71.0] - 2026-11-16
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.29.0` -> `^0.30.1`, which carries
+  `qvac-fabric` `11739.2.1` -> `11739.3.0#1`
+  ([#5781](https://github.com/tetherto/qvac/pull/5781),
+  [#5787](https://github.com/tetherto/qvac/pull/5787)): the fused Flux RoPE,
+  logical buffer-capacity queries with a Vulkan provider, DSpine draft models,
+  Metal `IM2COL_3D`, OpenCL (Adreno) ops for the speech engines, and fixes for
+  the RPC device's ragged ops, the CPU AMX matmul and CPU `IM2COL_3D`. 0.30.0
+  was not published for every platform, so the range starts at `0.30.1`. The
+  mobile dev and peer dependencies `@qvac/fabric-android-arm64` /
+  `@qvac/fabric-ios` move to `^0.30.1` with it.
+- `@qvac/fabric` 0.30 shifts the `common_params` layout and moves the RPC
+  protocol from 116 to 117, so it is not ABI-compatible with 0.29.x. Every
+  addon loaded in one process must resolve the same `@qvac/fabric` minor.
+  Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.30.1` together.
+- A draft model or MTP head made for another model now fails to load with
+  `the draft model '<path>' does not match the model: <reason>`, from
+  fabric's `common_speculative_draft_mismatch`. Fabric 0.30 refuses the
+  mismatch inside its own load, before the addon's MTP-head check runs, so the
+  error no longer reads `the MTP head '<path>' does not match the model`.
+- RPC peers must match the new protocol: use `@qvac/ggml-rpc-server` 0.10.0 or
+  newer.
+- The addon no longer sets `LLAMA_RS_RAGGED=0` at backend init. Fabric 0.30
+  checks each layer's device and falls back to the equal ubatch split when any
+  of them lacks the ragged ops, an RPC server included, so qwen35 recurrent
+  layers use ragged ubatches only where every device supports them. Set
+  `LLAMA_RS_RAGGED=0` to keep the equal split everywhere.
+
+### Fixed
+
+- A cancel that landed after a token was streamed but before it was decoded
+  dropped that token from the context and the cache, so `CacheTokens` could
+  stay one short of what the caller received. The streamed token is now
+  decoded before the cancel settles on the single-prompt text and multimodal
+  paths, with and without speculative decoding
+  ([#5744](https://github.com/tetherto/qvac/pull/5744)).
+
+## [0.70.1] - 2026-11-11
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.28.0` -> `^0.29.0`, which carries
+  `qvac-fabric` `11739.1.1` -> `11739.2.0`
+  ([#5706](https://github.com/tetherto/qvac/pull/5706)): FP8 E4M3 weights and
+  KV cache with CUDA FP8 matmuls, the ConvRot ops, ragged ubatches for
+  qwen35 recurrent layers, a fix for speculative-draft sampling chains that
+  shared buffers, and XDNA and Metal decode work. A caret on a `0.x` version
+  locks the minor, so `^0.28.0` would not have resolved `0.29.0` on its own.
+  The mobile dev and peer dependencies `@qvac/fabric-android-arm64` /
+  `@qvac/fabric-ios` move to `^0.29.0` with it.
+- `@qvac/fabric` 0.29.0 renumbers the TurboQuant and PolarQuant KV-cache types
+  (43-50 -> 52-59) and moves the RPC protocol from 113 to 116, so it is not
+  ABI-compatible with 0.28.x. Every addon loaded in one process must resolve
+  the same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.29.0` together.
+- The `tbq*` / `pq*` `cache-type-k` / `cache-type-v` values keep their names;
+  the addon is rebuilt against the 0.29.0 headers for the new type numbers.
+- Under `tool_choice: 'required'`, the chat grammar accepts only a reasoning
+  block before the tool call, so a model can no longer write prose until the
+  context fills without calling a tool.
+- RPC peers must match the new protocol: use `@qvac/ggml-rpc-server` 0.9.1 or
+  newer.
+
+### Fixed
+
+- The addon sets `LLAMA_RS_RAGGED=0` unless the process already set it, so
+  qwen35 models keep the equal ubatch split. With `rpc-servers`, fabric's RPC
+  device reports the new ragged ops as supported, and a Metal, Vulkan or OpenCL
+  server without them aborts
+  ([qvac-fabric-llm.cpp#519](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/519)).
+  The addon does not enable a unified KV cache, so ragged ubatches would not
+  speed it up.
+
+## [0.70.0] - 2026-11-10
+
+### Added
+
+- `device: "npu"` selects the AMD XDNA NPU as its own device class, beside
+  `gpu` and `cpu`. It takes the first NPU fabric lists, falls back to the GPU
+  order and then the CPU with a warning when none is listed, and is rejected
+  with `InvalidArgument` together with `backend`, `devices`, `split-mode`,
+  `main-gpu` or `rpc-servers`, except the defaults `backend: "auto"`,
+  `devices: ""` and `split-mode: "none"`. Runtime stats report
+  `backendDevice: "npu"`
+  (native code `2`) for an NPU load, including `devices: "XDNA0"`
+  ([#5701](https://github.com/tetherto/qvac/pull/5701)).
+
+### Changed
+
+- `backend` takes GPU families only: `device: "npu"` replaces
+  `backend: "xdna"` from 0.69.0
+  ([#5701](https://github.com/tetherto/qvac/pull/5701)).
+- Finetuning is refused with `InvalidArgument` for a model loaded with
+  `device: "npu"` and for any load with `XDNA0` in `devices`, alone or in a
+  mixed split such as `XDNA0,Vulkan0`, which 0.69.0 allowed
+  ([#5701](https://github.com/tetherto/qvac/pull/5701)).
+- When the NPU leads a load, a vision model's projector now defaults to a GPU
+  beside it (a GPU in `devices`, else the first local GPU) instead of the CPU,
+  and to the CPU only when there is no GPU. `mmproj-use-gpu` still overrides
+  it ([#5701](https://github.com/tetherto/qvac/pull/5701)).
+
+## [0.69.0] - 2026-11-09
+
+### Added
+
+- The AMD XDNA NPU can be selected with `backend: "xdna"` or
+  `devices: "XDNA0"`, on Linux x64 with an `@qvac/fabric` that ships the XDNA
+  backend. It is never chosen automatically and never joins an automatic
+  split. The KV cache stays at `f16` on the NPU, whose attention kernels take
+  only `f16` K/V, and a vision model's projector defaults to the CPU
+  (`mmproj-use-gpu: true` moves it to the NPU). `split-mode: "tensor"` with
+  `XDNA0` is rejected with `InvalidArgument`
+  ([#5588](https://github.com/tetherto/qvac/pull/5588)).
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.26.0` -> `^0.28.0`, whose Linux x64
+  package ships the XDNA backend and its NPU kernels (system XRT 2.25 or newer
+  required to load it). A caret on a `0.x` version locks the minor, so
+  `^0.26.0` would not have resolved `0.28.0`. The mobile dev and peer
+  dependencies `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to
+  `^0.28.0` with it ([#5574](https://github.com/tetherto/qvac/pull/5574),
+  [#5588](https://github.com/tetherto/qvac/pull/5588)).
+- `@qvac/fabric` 0.28.0 (`qvac-fabric` `11739.1.1`,
+  [#5658](https://github.com/tetherto/qvac/pull/5658)) adds four fields to
+  `common_params`, which this addon uses, so it is rebuilt against the 0.28.0
+  headers and is not ABI-compatible with 0.26.x. Every addon loaded in one
+  process must resolve the same `@qvac/fabric` minor. Mobile apps must move
+  `@qvac/fabric` and `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to
+  `0.28.0` together.
 
 ### Fixed
 
@@ -9,6 +142,12 @@
   first, as `parallel: 1` does. Without it, consumers that split reasoning on
   the tags returned the reasoning as content
   ([#5562](https://github.com/tetherto/qvac/pull/5562)).
+- On hybrid and recurrent models (such as Qwen3.5), the next user turn after
+  a tool loop now restores the checkpoint taken at the previous user message
+  instead of reprocessing the whole conversation. The tool rounds' checkpoints
+  no longer evict it, and the `cacheKey` file keeps it beside the newest one
+  (checkpoint section version 2; older files still load)
+  ([#5637](https://github.com/tetherto/qvac/pull/5637)).
 
 ## [0.68.0] - 2026-11-04
 

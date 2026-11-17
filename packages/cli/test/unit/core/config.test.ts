@@ -2,6 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   FLUX_2_KLEIN_4B_VAE,
+  PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
   TTS_S3GEN_EN_CHATTERBOX,
   WHISPER_EN_TINY_Q8_0,
   LAYA_MULTILINGUAL_322M_Q8_0
@@ -220,6 +221,27 @@ describe('resolveNestedModelSrcConstants', () => {
     assert.equal(out['steps'], 20)
   })
 
+  it('treats every *Src key as a model source', () => {
+    const out = resolveNestedModelSrcConstants({
+      srcVocabSrc: 'WHISPER_EN_TINY_Q8_0',
+      tokenizerSrc: './models/tokenizer.json',
+      referenceAudioSrc: 'voice.wav'
+    })
+    assert.equal(out['srcVocabSrc'], WHISPER_EN_TINY_Q8_0)
+    assert.equal(out['tokenizerSrc'], './models/tokenizer.json')
+    assert.equal(out['referenceAudioSrc'], 'voice.wav')
+  })
+
+  it('resolves each entry of a *Srcs list and nested modelSrc', () => {
+    const out = resolveNestedModelSrcConstants({
+      dialogueReferenceSrcs: ['WHISPER_EN_TINY_Q8_0', './speaker2.wav'],
+      pivotModel: { modelSrc: 'TTS_S3GEN_EN_CHATTERBOX' }
+    })
+    assert.deepEqual(out['dialogueReferenceSrcs'], [WHISPER_EN_TINY_Q8_0, './speaker2.wav'])
+    const pivot = out['pivotModel'] as Record<string, unknown>
+    assert.equal(pivot['modelSrc'], TTS_S3GEN_EN_CHATTERBOX)
+  })
+
   it('rewrites nested objects and upscaler.model_src', () => {
     const out = resolveNestedModelSrcConstants({
       whisperConfig: { vadModelSrc: 'WHISPER_EN_TINY_Q8_0' },
@@ -229,6 +251,17 @@ describe('resolveNestedModelSrcConstants', () => {
     const upscaler = out['upscaler'] as Record<string, unknown>
     assert.equal(whisper['vadModelSrc'], WHISPER_EN_TINY_Q8_0)
     assert.equal(upscaler['model_src'], TTS_S3GEN_EN_CHATTERBOX)
+  })
+
+  it("rewrites a nested object's own modelSrc, as the parakeet speaker-attribution diarizer", () => {
+    const out = resolveNestedModelSrcConstants({
+      backend: 'cpu',
+      speakerAttribution: { modelSrc: 'PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0', padSegmentMs: 250 }
+    })
+    const attribution = out['speakerAttribution'] as Record<string, unknown>
+    assert.equal(attribution['modelSrc'], PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0)
+    assert.equal(attribution['padSegmentMs'], 250)
+    assert.equal(out['backend'], 'cpu')
   })
 
   it('throws on unknown CONSTANT_CASE companion names with accepted forms', () => {

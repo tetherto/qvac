@@ -32,6 +32,13 @@ import {
   notifyChannelClosed
 } from '#rpc'
 import { WorkerCrashedError, RequestValidationFailedError } from '@/utils/errors-client'
+import {
+  assertOwnerModelUsable,
+  assertSessionUsable,
+  awaitSessionUsable,
+  endAllSessions,
+  sessionOf
+} from '@/client/session-registry'
 import { formatZodError } from '@/utils/zod-error'
 import { z } from 'zod'
 import {
@@ -117,7 +124,7 @@ function parseRequest<T extends Request>(request: T): Request {
 // bare-rpc's `_onerror`/`_onclose` reject a pending reply or destroy a
 // stream with its own generic `RPCError` (e.g. `CHANNEL_CLOSED`) as soon
 // as the channel dies, which can beat the SDK's own crash detection
-// (driven by the child process's `'exit'` event). Since `req.reply()` and
+// (driven by the worker IPC's `'close'` event). Since `req.reply()` and
 // response streams never reject with an application-level error — those
 // always arrive as a resolved payload handled by `checkAndThrowError` —
 // any rejection reaching these helpers other than our own `withTimeout`
@@ -128,7 +135,7 @@ function parseRequest<T extends Request>(request: T): Request {
 // When we win that race, the life signal hasn't aborted yet, so nothing
 // has invalidated the cached RPC connection — the next call would reuse
 // the same dead channel and fail again. `notifyChannelClosed()` tears it
-// down eagerly instead of waiting on the slow exit event; it's a no-op
+// down eagerly instead of waiting on the `'close'` event; it's a no-op
 // once the signal is already aborted, so this is safe to call every time.
 
 function lifeSignalAbortError(signal: AbortSignal): Error {
@@ -138,14 +145,14 @@ function lifeSignalAbortError(signal: AbortSignal): Error {
 }
 
 async function awaitWithLifeSignal<T>(p: Promise<T>): Promise<T> {
-  // Null on Bare-direct / Expo and pre-spawn.
+  // Null on Bare-direct and before the worker starts.
   const lifeSignal = getWorkerLifeSignal()
   if (!lifeSignal) return p
   if (lifeSignal.aborted) {
-    // `p` (e.g. `req.reply()`) may already be a rejected promise — bare-rpc
-    // 1.3.8 rejects synchronously once its channel is closed. We're
-    // discarding it in favour of the life signal's classification, so give
-    // it a handler or its rejection surfaces as an unhandled rejection.
+    // `p` (e.g. `req.reply()`) may already be rejected, since bare-rpc rejects
+    // once its channel is closed. It is discarded in favour of the life
+    // signal's classification, so it gets a handler or its rejection surfaces
+    // as an unhandled rejection.
     p.catch(() => {})
     throw lifeSignalAbortError(lifeSignal)
   }
@@ -176,7 +183,7 @@ async function awaitWithLifeSignal<T>(p: Promise<T>): Promise<T> {
 }
 
 async function* iterateWithLifeSignal<T>(source: AsyncGenerator<T>): AsyncGenerator<T> {
-  // Null on Bare-direct / Expo and pre-spawn.
+  // Null on Bare-direct and before the worker starts.
   const lifeSignal = getWorkerLifeSignal()
   if (!lifeSignal) {
     yield* source
@@ -223,9 +230,23 @@ async function* iterateWithLifeSignal<T>(source: AsyncGenerator<T>): AsyncGenera
   }
 }
 
-// Destroying the response stream makes the worker abort the engine stream.
-// Registered before `untilAborted`, so the destroyed stream's late rejection is
-// dropped there instead of reaching `iterateWithLifeSignal` as a worker crash.
+/** A reply that times out cancels the request, so the worker stops its work too. */
+async function replyWithin(
+  req: RPC.OutgoingRequest,
+  timeout?: number
+): Promise<Buffer | string | null> {
+  try {
+    return await withTimeout(req.reply('utf-8'), timeout)
+  } catch (error) {
+    if (error instanceof OperationTimeoutError) req.cancel(error)
+    throw error
+  }
+}
+
+// Destroying the response stream before the reply ends cancels the request,
+// and the worker cancels its work. Registered before `untilAborted`, so the
+// destroyed stream's late rejection is dropped there instead of reaching
+// `iterateWithLifeSignal` as a worker crash.
 function destroyOnAbort(responseStream: { destroy(): void }, signal?: AbortSignalLike): () => void {
   if (!signal) return () => {}
   const onAbort = () => responseStream.destroy()
@@ -259,20 +280,89 @@ function invalidateRPCInstance(): void {
   resetConnectionTracking()
 }
 
+// The worker died under the sessions: every handle this process opened is
+// now invalid, and later calls on them fail locally.
+function onWorkerLost(): void {
+  invalidateRPCInstance()
+  endAllSessions('crashed')
+}
+
+/**
+ * A request made through a session handle carries the session id. The call
+ * waits for the session's `openSession` round trip, so a handle is usable the
+ * moment `openSession()` returns, and is refused locally once the session is
+ * closed or lost. The handle's id replaces any id the request carries, so a
+ * caller cannot send a request as another session; only the session methods
+ * themselves (`openSession`, `closeSession`) name the session they act on.
+ *
+ * An owner request is refused the same way when it names a model the owner
+ * loaded on a runtime that has since stopped.
+ *
+ * An owner request is stamped without a promise: it must claim the worker
+ * start in the tick it is made, so a `close()` called right after it sees
+ * that start and shuts it down.
+ */
+function stampSession<T extends Request>(request: T, options?: RPCOptions): T | Promise<T> {
+  const sessionId = options?.sessionId
+  const target = request as { modelId?: string | undefined }
+  if (sessionId === undefined) {
+    assertOwnerModelUsable(request)
+    return request
+  }
+  return stampSessionRequest(request, sessionId, options, target)
+}
+
+async function stampSessionRequest<T extends Request>(
+  request: T,
+  sessionId: string,
+  options: RPCOptions | undefined,
+  target: { modelId?: string | undefined }
+): Promise<T> {
+  // A bare `sessionId` with no handle behind it has no local state; the
+  // worker decides whether that session is open.
+  const record = sessionOf(options)
+  if (record) await awaitSessionUsable(record, target)
+  if (request.type === 'openSession' || request.type === 'closeSession') return request
+  return { ...request, sessionId }
+}
+
+function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
+  return value instanceof Promise
+}
+
+/**
+ * The owner's `close()` can end a session while its request waits for the
+ * stamp. Each call checks again right before acquiring the connection, with
+ * no await in between, so such a call fails locally instead of starting a
+ * worker that never opened the session.
+ */
+function assertStampedSessionUsable(request: Request, options: RPCOptions | undefined): void {
+  const record = sessionOf(options)
+  if (record) assertSessionUsable(record, request as { modelId?: string | undefined })
+}
+
 async function getRPCInstance(): Promise<RPCResult> {
   if (rpcInstance) return { rpc: await rpcInstance }
 
   const connectionStart = firstConnectionPending ? nowMs() : null
-  rpcInstance = getRPC()
-  const rpc = await rpcInstance
+  const connecting = getRPC()
+  rpcInstance = connecting
+  let rpc: RPC
+  try {
+    rpc = await connecting
+  } catch (error) {
+    // A failed start is not cached, so the next call starts a new worker.
+    if (rpcInstance === connecting) rpcInstance = null
+    throw error
+  }
 
   // Drop the cache on worker death so the next call respawns and
   // records connectionMs again as a "first" connection.
   const lifeSignal = getWorkerLifeSignal()
   if (lifeSignal?.aborted) {
-    invalidateRPCInstance()
+    onWorkerLost()
   } else if (lifeSignal) {
-    lifeSignal.addEventListener('abort', invalidateRPCInstance, {
+    lifeSignal.addEventListener('abort', onWorkerLost, {
       once: true
     })
   }
@@ -311,10 +401,13 @@ async function prepareRPCContext(
 }
 
 export async function send<T extends Request>(
-  request: T,
+  input: T,
   options?: RPCOptions,
   rpc?: RPC
 ): Promise<Response> {
+  const stamped = stampSession(input, options)
+  const request = isPromise(stamped) ? await stamped : stamped
+  assertStampedSessionUsable(request, options)
   const ctx = await prepareRPCContext(request.type, options?.profiling, rpc)
 
   if (!ctx.profilingEnabled) {
@@ -338,7 +431,7 @@ async function sendBase<T extends Request>(
   const payload = JSON.stringify(payloadObj)
   req.send(payload, 'utf-8')
 
-  const response = await awaitWithLifeSignal(withTimeout(req.reply('utf-8'), options?.timeout))
+  const response = await awaitWithLifeSignal(replyWithin(req, options?.timeout))
 
   const resPayload = responseSchema.parse(JSON.parse(response?.toString() || '{}'))
   logger.debug('ResPayload', { type: resPayload.type })
@@ -377,7 +470,7 @@ async function sendProfiled<T extends Request>(
     timings.sendStart = nowMs()
     req.send(payload, 'utf-8')
 
-    const response = await awaitWithLifeSignal(withTimeout(req.reply('utf-8'), options?.timeout))
+    const response = await awaitWithLifeSignal(replyWithin(req, options?.timeout))
     timings.firstResponseAt = nowMs()
 
     const parseStart = nowMs()
@@ -413,13 +506,16 @@ async function sendProfiled<T extends Request>(
   }
 }
 
-/** `options.signal` ends the stream; only `endsOnAbort` handlers stop on the worker. */
+/** `options.signal` ends the stream and cancels the request on the worker. */
 export async function* stream<T extends Request>(
-  request: T,
+  input: T,
   options: AbortableRPCOptions = {},
   rpc?: RPC
 ): AsyncGenerator<Response> {
   if (options.signal?.aborted) return
+  const stamped = stampSession(input, options)
+  const request = isPromise(stamped) ? await stamped : stamped
+  assertStampedSessionUsable(request, options)
   const ctx = await prepareRPCContext(request.type, options?.profiling, rpc)
   if (options.signal?.aborted) return
 
@@ -480,6 +576,7 @@ async function* streamBase<T extends Request>(
     }
   } finally {
     stopDestroyOnAbort()
+    responseStream.destroy()
   }
 }
 
@@ -495,6 +592,7 @@ async function* streamProfiled<T extends Request>(
   const timings = createClientStreamTimings(profileId, requestType)
   let profilingMeta: ReturnType<typeof extractProfilingMeta> = undefined
   let stopDestroyOnAbort = () => {}
+  let responseStream: RPC.IncomingStream | undefined
 
   try {
     const zodStart = nowMs()
@@ -514,7 +612,7 @@ async function* streamProfiled<T extends Request>(
     timings.sendStart = nowMs()
     req.send(payload, 'utf-8')
 
-    const responseStream = req.createResponseStream({ encoding: 'utf-8' })
+    responseStream = req.createResponseStream({ encoding: 'utf-8' })
     stopDestroyOnAbort = destroyOnAbort(responseStream, options.signal)
     let buffer = ''
 
@@ -573,6 +671,7 @@ async function* streamProfiled<T extends Request>(
     throw error
   } finally {
     stopDestroyOnAbort()
+    responseStream?.destroy()
     if (timings.chunkCount > 0) {
       timings.requestEnd = nowMs()
       recordClientStreamEvents(timings, profilingMeta)
@@ -619,9 +718,12 @@ function withLifeSignalDuplex(raw: DuplexReadable): DuplexReadable {
 }
 
 export async function duplex<T extends Request>(
-  request: T,
+  input: T,
   options?: RPCOptions
 ): Promise<DuplexSession> {
+  const stamped = stampSession(input, options)
+  const request = isPromise(stamped) ? await stamped : stamped
+  assertStampedSessionUsable(request, options)
   const ctx = await prepareRPCContext(request.type, options?.profiling)
 
   if (!ctx.profilingEnabled) {
@@ -779,7 +881,9 @@ async function duplexProfiled<T extends Request>(
   }
 }
 
+/** Owner shutdown. Every session handle opened on this runtime ends with it. */
 export async function close() {
+  endAllSessions('shutdown')
   if (!rpcInstance) return
   invalidateRPCInstance()
   await closeRPC()

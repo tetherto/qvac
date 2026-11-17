@@ -10,6 +10,8 @@
 #include <ggml-backend.h>
 #include <ggml.h>
 
+#include "model-interface/ModelFootprint.hpp"
+
 namespace classification_ggml::graph {
 
 /// One torchvision MobileNetV3-Small `InvertedResidual` block.
@@ -41,12 +43,16 @@ inline constexpr std::array<BlockConfig, NUM_BLOCKS> BLOCKS = {{
     {11, 96, 576, 96, 5, 1, true, true, 144},
 }};
 
+inline constexpr int POINTWISE_KERNEL = 1;
+inline constexpr int STEM_KERNEL = 3;
+inline constexpr int STEM_STRIDE = 2;
 inline constexpr int STEM_OUT_CHANNELS = 16;
 inline constexpr int TAIL_OUT_CHANNELS = 576;
 inline constexpr int CLASSIFIER_HIDDEN = 1024;
 inline constexpr int NUM_CLASSES = 3;
 inline constexpr float BATCH_NORM_EPSILON = 0.001F;
 inline constexpr int INPUT_HW = 224;
+inline constexpr int INPUT_CHANNELS = 3;
 
 /// ggml context + name→tensor map for every weight, plus the backing
 /// backend buffer. Lives for the entire model lifetime.
@@ -87,7 +93,9 @@ struct ComputeGraph {
 };
 
 /// Loads every tensor + the `mobilenet.class_N` labels from a GGUF file.
-/// `outLabels` is left empty if the metadata keys are not present.
+/// `outLabels` is left empty if the metadata keys are not present. A file
+/// whose metadata, tensor types or shapes do not match the compiled-in config,
+/// or whose tensor data runs past the end of the file, throws InvalidArgument.
 WeightsBundle loadWeights(
     const std::string& ggufPath, ggml_backend_t backend,
     std::vector<std::string>& outLabels);
@@ -95,5 +103,16 @@ WeightsBundle loadWeights(
 /// Build the MobileNetV3-Small forward graph. Caller writes pixels into
 /// `graph.input` via `ggml_backend_tensor_set` before each compute.
 ComputeGraph buildGraph(const WeightsBundle& weights, ggml_backend_t backend);
+
+/// The buffers loadWeights + buildGraph would allocate on `backend`, from the
+/// GGUF metadata alone: the same tensors and graph, nothing allocated. The
+/// file is checked as loadWeights checks it.
+MeasuredBuffers
+measureBuffers(const std::string& ggufPath, ggml_backend_t backend);
+
+/// The buffers a loaded model holds.
+BufferFootprint allocatedBuffers(
+    const WeightsBundle& weights, const ComputeGraph& compute,
+    ggml_backend_t backend);
 
 } // namespace classification_ggml::graph

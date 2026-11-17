@@ -2,9 +2,11 @@ import {
   diffusionStreamResponseSchema,
   type DiffusionStreamRequest,
   type DiffusionClientParams,
-  type DiffusionStats
+  type DiffusionStats,
+  type RPCOptions
 } from '@qvac/inference/surface'
 import { stream as streamRpc } from '@/client/rpc/rpc-client'
+import { generateClientRequestId } from '@/client/api/client-request-id'
 import { decodeBase64, encodeBase64 } from '@/utils/encoding'
 
 export interface DiffusionProgressTick {
@@ -14,6 +16,8 @@ export interface DiffusionProgressTick {
 }
 
 interface DiffusionResult {
+  /** Stable id of this generation; pass to `cancel({ requestId })` to stop it. */
+  requestId: string
   progressStream: AsyncGenerator<DiffusionProgressTick>
   outputs: Promise<Uint8Array[]>
   stats: Promise<DiffusionStats | undefined>
@@ -23,7 +27,8 @@ interface DiffusionResult {
  * Generates images using a loaded diffusion model.
  *
  * @param params - Diffusion request parameters (model, prompt, dimensions, sampler, seed, etc.).
- * @returns A result object exposing `progressStream` (async iterator of `{ step, totalSteps, elapsedMs }`), `outputs` (promise of the generated image buffers), and `stats` (promise of generation statistics).
+ * @param options - Optional RPC options (timeout, profiling, force new connection).
+ * @returns A result object exposing `requestId` (stable identifier for this generation, for `cancel({ requestId })`), `progressStream` (async iterator of `{ step, totalSteps, elapsedMs }`), `outputs` (promise of the generated image buffers), and `stats` (promise of generation statistics).
  * @throws {InferenceCancelledError} The run's promises reject and progress stream throws when an active generation is cancelled.
  * @throws {RequestRejectedByPolicyError} The run rejects when another image or video generation owns the model.
  *
@@ -42,7 +47,7 @@ interface DiffusionResult {
  * const { outputs } = diffusion({ modelId, prompt: "oil painting style", init_image: initImage, strength: 0.7 });
  *
  * // img2img (FLUX.2 — in-context conditioning)
- * // IMPORTANT: FLUX img2img requires `prediction: "flux2_flow"` to be set on the
+ * // IMPORTANT: FLUX.2 img2img requires `prediction: "flux2_flow"` to be set on the
  * // model config at loadModel time (e.g. `loadModel(src, { modelType: "diffusion",
  * // modelConfig: { prediction: "flux2_flow" } })`).
  * const { outputs } = diffusion({ modelId, prompt: "turn into watercolor", init_image: initImage });
@@ -60,6 +65,19 @@ interface DiffusionResult {
  *   init_images: [refA, refB],
  *   width: 768,
  *   height: 768,
+ * });
+ *
+ * // FLUX.3 Image Klein reference editing. Load the Qwen3-VL 4B encoder and the
+ * // FLUX.2 VAE; the engine detects FLUX.3 from the weights, so leave `prediction` unset.
+ * const { outputs: flux3Edit } = diffusion({
+ *   modelId,
+ *   prompt: "Place the subject in a lush garden, preserving its appearance.",
+ *   init_images: [refA],
+ *   width: 512,
+ *   height: 512,
+ *   steps: 16,
+ *   cfg_scale: 1,
+ *   sampling_method: "euler",
  * });
  *
  * // Qwen-Image-2.1 reference editing. Load the matching Qwen3-VL encoder,
@@ -115,16 +133,18 @@ interface DiffusionResult {
  * const buffers = await outputs;
  * ```
  */
-export function diffusion(params: DiffusionClientParams): DiffusionResult {
+export function diffusion(params: DiffusionClientParams, options?: RPCOptions): DiffusionResult {
   const { init_image, init_images, ...rest } = params
 
+  const requestId = generateClientRequestId()
   const request: DiffusionStreamRequest = {
     ...rest,
     ...(init_image !== undefined && { init_image: encodeBase64(init_image) }),
     ...(init_images !== undefined && {
       init_images: init_images.map(encodeBase64)
     }),
-    type: 'diffusionStream'
+    type: 'diffusionStream',
+    requestId
   }
 
   let statsResolver: (value: DiffusionStats | undefined) => void = () => {}
@@ -151,7 +171,7 @@ export function diffusion(params: DiffusionClientParams): DiffusionResult {
 
   const processResponses = async () => {
     try {
-      for await (const response of streamRpc(request)) {
+      for await (const response of streamRpc(request, options)) {
         if (
           response &&
           typeof response === 'object' &&
@@ -217,6 +237,7 @@ export function diffusion(params: DiffusionClientParams): DiffusionResult {
   })()
 
   return {
+    requestId,
     progressStream,
     outputs: outputsPromise,
     stats: statsPromise

@@ -5,6 +5,8 @@ import {
   defineHandler,
   embedRequestSchema,
   embedResponseSchema,
+  embedBatchRequestSchema,
+  embedBatchResponseSchema,
   ModelType,
   embedLoadConfigSchema,
   ADDON_EMBEDDING,
@@ -21,6 +23,7 @@ import { forwardModelExecution } from '@/profiling/model-execution'
 import { isMobile } from '@/runtime/state'
 import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
 import { transformEmbedConfig } from '@/plugins/builtin/llamacpp-embedding/transform'
+import { embedFitRequest } from '@/plugins/builtin/llamacpp-embedding/fit'
 
 async function getIdMapIndex() {
   try {
@@ -83,6 +86,7 @@ export const embeddingsPlugin = definePlugin({
   displayName: 'Embeddings (llama.cpp)',
   addonPackage: ADDON_EMBEDDING,
   loadConfigSchema: embedLoadConfigSchema,
+  fitRequest: embedFitRequest,
   assessFit: embedAssessFit,
 
   async resolveConfig(cfg: EmbedConfigInput, ctx: ResolveContext) {
@@ -106,6 +110,24 @@ export const embeddingsPlugin = definePlugin({
   },
 
   handlers: {
+    embedBatch: defineHandler({
+      requestSchema: embedBatchRequestSchema,
+      responseSchema: embedBatchResponseSchema,
+      streaming: false,
+      cancel: { scope: 'model', hard: true },
+      handler: async (request, _inputStream, context) => {
+        const result = await embed(request, request.requestId, request.sessionId, context)
+        return forwardModelExecution(
+          {
+            type: 'embedBatch' as const,
+            success: true,
+            embedding: result.embedding as number[][],
+            ...(result.stats && { stats: result.stats })
+          },
+          result
+        )
+      }
+    }),
     embed: defineHandler({
       requestSchema: embedRequestSchema,
       responseSchema: embedResponseSchema,
@@ -114,13 +136,8 @@ export const embeddingsPlugin = definePlugin({
       // embedding addon. Compute is interrupted when fired.
       cancel: { scope: 'model', hard: true },
 
-      handler: async function (request) {
-        const embedResult = await embed(
-          request.inputs !== undefined
-            ? { modelId: request.modelId, inputs: request.inputs }
-            : { modelId: request.modelId, text: request.text },
-          request.requestId
-        )
+      handler: async function (request, _inputStream, context) {
+        const embedResult = await embed(request, request.requestId, request.sessionId, context)
 
         return forwardModelExecution(
           {

@@ -149,18 +149,21 @@ export async function installMissingHostPrebuilds(
   return { installed: missing, packageManager: manager }
 }
 
-/**
- * The platform packages `addons` still need for the mobile hosts in `hosts`,
- * one entry per package. Throws when two installed versions of one addon need
- * the same platform package, since only one version of it can be installed.
- */
 export async function findMissingHostPrebuilds(addons: NativeAddon[], hosts: string[]) {
-  const mobileHosts = hosts.filter(isMobileHost)
+  return findMissingPlatformPackages(addons, hosts.filter(isMobileHost))
+}
+
+/**
+ * The platform packages `addons` still need for `hosts`, one entry per
+ * package. Throws when two installed versions of one addon need the same
+ * platform package, since only one version of it can be installed.
+ */
+export async function findMissingPlatformPackages(addons: NativeAddon[], hosts: string[]) {
   const packages = new Map<string, HostPrebuildPackage>()
-  if (mobileHosts.length === 0) return []
+  if (hosts.length === 0) return []
 
   for (const addon of addons) {
-    for (const issue of await checkPrebuilds({ addon, hosts: mobileHosts })) {
+    for (const issue of await checkPrebuilds({ addon, hosts })) {
       const pin = issue.platformPackage
       if (pin === undefined) continue
 

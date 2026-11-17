@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include <filesystem>
 #include <string>
 
@@ -7,6 +8,53 @@
 #include "test_common.hpp"
 
 namespace fs = std::filesystem;
+
+namespace {
+void setRaggedEnv(const char* value) {
+#ifdef _WIN32
+  _putenv_s("LLAMA_RS_RAGGED", value == nullptr ? "" : value);
+#else
+  if (value == nullptr) {
+    unsetenv("LLAMA_RS_RAGGED");
+  } else {
+    setenv("LLAMA_RS_RAGGED", value, /*overwrite=*/1);
+  }
+#endif
+}
+
+std::string raggedEnv() {
+  const char* value = std::getenv("LLAMA_RS_RAGGED");
+  return value == nullptr ? std::string() : std::string(value);
+}
+
+// Frees an initialized backend with no owners, so the next initialize() runs
+// the full init path.
+void releaseBackend() {
+  LlamaLazyInitializeBackend::incrementRefCount();
+  LlamaLazyInitializeBackend::decrementRefCount();
+}
+} // namespace
+
+// Fabric picks ragged ubatches per device, so backend init leaves
+// LLAMA_RS_RAGGED to the caller.
+TEST(LlamaRaggedUbatchesDefault, InitLeavesUnsetVariableUnset) {
+  setRaggedEnv(nullptr);
+  LlamaLazyInitializeBackend::initialize("");
+  releaseBackend();
+  ASSERT_TRUE(LlamaLazyInitializeBackend::initialize(""));
+  EXPECT_EQ(raggedEnv(), "");
+  releaseBackend();
+}
+
+TEST(LlamaRaggedUbatchesDefault, InitKeepsCallerValue) {
+  setRaggedEnv("1");
+  LlamaLazyInitializeBackend::initialize("");
+  releaseBackend();
+  ASSERT_TRUE(LlamaLazyInitializeBackend::initialize(""));
+  EXPECT_EQ(raggedEnv(), "1");
+  releaseBackend();
+  setRaggedEnv(nullptr);
+}
 
 class LlamaLazyInitializeBackendTest : public ::testing::Test {
 protected:

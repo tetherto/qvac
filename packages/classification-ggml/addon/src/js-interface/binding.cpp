@@ -24,6 +24,7 @@ js_value_t* classification_ggml_exports(js_env_t* env, js_value_t* exports) {
 
   V("createInstance", classification_ggml::bindings::createInstance)
   V("runJob", classification_ggml::bindings::runJob)
+  V("assessFit", classification_ggml::bindings::assessFit)
 
   V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
   V("activate", classification_ggml::bindings::activate)

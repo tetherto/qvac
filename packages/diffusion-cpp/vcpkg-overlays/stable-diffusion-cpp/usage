@@ -17,3 +17,8 @@ GPU backends are controlled through the ggml dependency:
   vulkan - Vulkan GPU backend
   cuda   - CUDA GPU backend
   opencl - OpenCL GPU backend (Android/Adreno)
+
+The 2026-11-01 port includes MOSS-Image support. Supply its external
+tokenizer.json through sd_ctx_params_t.tokenizer together with the diffusion,
+Qwen3.5 text-encoder, and VAE weights. The matching ggml port uses
+GGML_MAX_NAME=160 and must be rebuilt together with the engine and consumers.

@@ -1,19 +1,56 @@
 # Diffusion performance profiles: implementation validation
 
-Selected performance profiles for FLUX.2 Klein, MiniMax-H3 and LTX are implemented with device/API selection, explicit overrides and conservative fallbacks.
+FLUX.2 Klein, MiniMax-H3 and LTX profiles retain device/API selection, explicit overrides and conservative fallbacks. The addon now targets merged [engine #64](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/64), commit `bc53357484bc5d2ba08fbe5301dae192e5b9a176`, on the 2026-11-01 baseline.
 
-This report combines the 4 November 2026 implementation checks with the 5 November Radeon 8060S HIP/Vulkan follow-up. Paired speed comparisons keep the checkpoint, prompt, seed, dimensions, sampler and steps fixed. Generation latency excludes model loading and warmup. Small timing differences on unchanged paths are not claimed improvements.
+H3 fused SwiGLU and QKV views are already enabled by that engine. The addon leaves them unchanged for every GPU, workload and profile mode, including `off`; only global flash attention is selected automatically. The old RTX-only graph toggle, its 28 GiB/960×544×124 guard and its fit-probe exclusion are removed. FLUX GEMM and bounded LTX precision policies are unchanged.
+
+All timings below are historical November 4–5 results on the earlier engine. They are retained with their original raw data and do **not** establish current-engine speedups, quality parity or memory budgets. In particular, the old H3 combined attention/graph comparison is not an attention-only comparison against the new fused baseline. Paired model checks on the merged engine remain required before release.
+
+The historical evidence combines the 4 November 2026 implementation checks with the 5 November Radeon 8060S HIP/Vulkan follow-up. Paired speed comparisons keep the checkpoint, prompt, seed, dimensions, sampler and steps fixed. Generation latency excludes model loading and warmup. Small timing differences on unchanged paths are not claimed improvements.
 
 The Strix follow-up confirms H3's short-clip HIP gain and rejects automatic FLUX HIP GEMM because one repeated output was inconsistent. The corrected CI binary retains direct convolution and produces byte-identical outputs to baseline. LTX checks remain incomplete: competing work interrupted the 97-frame HIP attempt, and a host reboot ended the remaining queue. The reboot cause is unknown; kernel logs were inaccessible. No further inference was launched after it.
 
 | Platform | Accelerator / API checked | Evidence |
 | --- | --- | --- |
-| Linux x64 | NVIDIA GeForce RTX 5090 / CUDA and Vulkan | Fresh implementation checks |
-| Linux arm64 | NVIDIA GB10 / CUDA | Fresh implementation checks on DGX Spark; Vulkan not checked |
-| macOS arm64 | Apple M3 Ultra, 60 GPU cores, 96 GiB / Metal | Fresh implementation checks; M3 Pro not checked |
-| Linux x64 | Ryzen AI MAX+ 395, Radeon 8060S / HIP and Vulkan | Fresh FLUX/H3 checks; LTX incomplete. ROCm 7.2.2, RADV Mesa 25.2.8 / Vulkan 1.4.318 |
+| Linux x64 | NVIDIA GeForce RTX 5090 / CUDA and Vulkan | November 4 implementation checks |
+| Linux arm64 | NVIDIA GB10 / CUDA | November 4 implementation checks on DGX Spark; Vulkan not checked |
+| macOS arm64 | Apple M3 Ultra, 60 GPU cores, 96 GiB / Metal | November 4 implementation checks; M3 Pro not checked |
+| Linux x64 | Ryzen AI MAX+ 395, Radeon 8060S / HIP and Vulkan | November 5 FLUX/H3 checks; LTX incomplete. ROCm 7.2.2, RADV Mesa 25.2.8 / Vulkan 1.4.318 |
 
-## Measured warm-generation improvements
+## November 17 merged-engine checks
+
+The addon was ported onto QVAC main `f937f5f4` and built against engine
+`bc53357484bc5d2ba08fbe5301dae192e5b9a176` with the existing ggml pin
+`a4adfcb1304fb05b64473f1fe8d678bbce7a9ce0`. Validation used Linux arm64,
+Clang 22/libc++, a CPU addon build and a separate leased GB10 CUDA operation
+check. The engine archive checksum was verified; the addon overlay and prepared
+registry port match byte for byte.
+
+- `npm run typecheck`, `npm run build:ts` and `npm run lint` passed. The generated
+  `index.d.ts` matches the checked-in declaration. Lint retains 72 warnings in
+  existing JavaScript files, with no lint errors.
+- The native addon module and `addon-test` target built against the merged
+  engine. C++ formatting passed. All 12 `SdPerformanceProfiles` tests passed,
+  including explicit attention aliases,
+  opt-out, memory/request boundaries and metadata-only model recognition.
+- `npm run test:cpp:run` ran 332 tests: 297 passed and 35 were skipped by existing
+  SD2.1/FLUX fixture guards and the opt-in Wan smoke-test gate. This is not a
+  complete model-backed native pass.
+- All 17 engine CTest tests passed, including enabled H3 defaults, per-context
+  VAE/H3 switching, runner rebuild persistence and rejection of busy setters.
+- `test-h3-localops --gpu` passed on a leased GB10: primitive and production-block
+  equivalence, attention on/off, changing inputs, batches, runner rebuilds and
+  guarded context controls. The cached CUDA backend used the same ggml source
+  and 160-character tensor-name ABI. Its initial load failed on an unresolved
+  `std::condition_variable` destructor; explicitly preloading `libstdc++.so.6`,
+  required by that cached backend, allowed the operation test to run. Both logs
+  were retained. This workaround is local to validation and does not certify
+  release-package loading.
+- Full-model inference, timing and quality comparisons were not repeated. The
+  operation checks do not validate packaged CUDA/Vulkan/Metal/HIP addons or final
+  registry resolution.
+
+## Historical warm-generation improvements
 
 **A** = addon selection using existing engine features. **F** = diffusion engine change; here the engine is `stable-diffusion.cpp`, not Fabric. **FA** = both layers. No Fabric PR is needed. Times are seconds; factors and percentages use unrounded medians. Each cell compares the same workload on the same device, not performance across devices.
 
@@ -24,7 +61,7 @@ The Strix follow-up confirms H3's short-clip HIP gain and rejects automatic FLUX
 | LTX-2.3 | Defaults retained | Defaults retained | Defaults retained | 91.8 → 86.8 s **×1.1 A [x6]**, −5.4% | Defaults retained **[x7]** | Defaults retained **[x7]** |
 
 - **[x1] FLUX CUDA:** automatic only for supported single 512²/1024² text-to-image requests and at least 16 GiB free after load. RTX VRAM rises 11.1 → 15.3 GiB (+37.7%). Reviewed images are visually identical, not byte-identical. Callers already setting `vae_conv_direct:false` already receive this gain.
-- **[x2] H3 RTX:** the combined attention/graph profile needs at least 28 GiB free at load and 960×544×124 output; otherwise retain the original graph with attention alone. RTX CUDA VRAM rises 21.9 → 23.2 GiB (+5.7%). Reviewed video is visually identical; audio is exact.
+- **[x2] H3 RTX (historical):** the measured combined attention/graph profile used at least 28 GiB free at load and 960×544×124 output. That graph selection policy is no longer applied; the new engine enables the fused graph by default. RTX CUDA VRAM rises 21.9 → 23.2 GiB (+5.7%). Reviewed video is visually identical; audio is exact.
 - **[x3] H3 HIP:** fresh timing covers 512×288×39, eight steps, CPU-resident parameters, one prompt, one warmup and two measured requests per mode. Video is visually identical (48.1 dB PSNR), audio exact. Full-size repeated timing remains open. HIP is source-built; this PR adds no HIP release package.
 - **[x4] FLUX HIP:** the 68.8 → 34.0 s GEMM candidate (×2.0, −50.6%) is rejected for automatic use. One of three outputs had 32.8 dB agreement versus 54.6 dB in the other two. Root cause and explicit-GEMM control remain open. The final default matches baseline pixels exactly; manually forcing GEMM remains experimental.
 - **[x5] Strix Vulkan:** defaults and exact FLUX/H3 outputs are preserved. One measured request per mode gives 31.1 → 32.2 s for FLUX (+3.4%) and 101.4 → 101.1 s for H3 (−0.4%). These small-sample timings do not establish latency equivalence or an improvement. Earlier attention/GEMM research does not justify changing these defaults.
@@ -39,16 +76,15 @@ Spark Vulkan and M3 Pro are not covered. RTX, Spark and Mac values are the dated
 | --- | --- | --- | --- |
 | FLUX.2 Klein 4B Q8_0, image generation | GEMM VAE convolution | RTX 5090/GB10 CUDA: single 512² or 1024² text-to-image request. At least 16 GiB free after load | Direct convolution on HIP/Metal/Vulkan; reference images, LoRA, tiling, batches and unvalidated sizes retain baseline |
 | MiniMax-H3 FL2VA Q4_K, video with audio | Global flash attention | RTX 5090 CUDA/Vulkan, GB10 CUDA, M3 Ultra Metal, Radeon 8060S HIP | Existing flash-attention setting |
-| MiniMax-H3 FL2VA Q4_K | Fused SwiGLU and QKV views, combined with automatic flash attention | RTX 5090 CUDA/Vulkan only, at least 28 GiB free at load, and a 960×544×124 text-to-video request | Flash attention alone below that memory threshold or outside that shape; original graph on other GPUs |
 | LTX-2.3 22B distilled Q5_K, video with audio | F16 transformer matrices | M3 Ultra Metal, declared bounds up to 512×320×97, GPU-resident parameters and sufficient memory | Original quantized matrices |
 
-`performance_profile: 'off'` opts out. Explicit convolution, flash-attention and precision settings take precedence. Profiles are restricted to researched checkpoint layouts and component sizes; recognition is not a cryptographic weight identity check. Unknown GPUs/APIs/models and explicit streaming or memory-budget policies keep existing settings. Hardware and policy selection live in one addon file, `PerformanceProfiles.cpp`.
+`performance_profile: 'off'` opts out of addon selection and preserves the current engine defaults, including the fused H3 graph. Explicit convolution, flash-attention and precision settings take precedence. Profiles are restricted to researched checkpoint layouts and component sizes; recognition is not a cryptographic weight identity check. Unknown GPUs/APIs/models and explicit streaming or memory-budget policies keep existing settings. Hardware and policy selection live in one addon file, `PerformanceProfiles.cpp`.
 
 The LTX load guard requires at least 96 GiB physical memory, 76 GiB available host memory and 64 GiB available Metal budget. All three output limits must be declared together. Requests above them fail before inference. Memory checks do not reserve memory against concurrent processes.
 
 ## MiniMax-H3 FL2VA Q4_K
 
-Generates video with synchronized audio. Two selected methods are implemented: global flash attention and the focused H3 graph. Tests use 960×544×124 frames and eight steps unless stated otherwise.
+Generates video with synchronized audio. The historical experiment combined global flash attention and the focused H3 graph. The current addon selects attention only. Historical tests use 960×544×124 frames and eight steps unless stated otherwise.
 
 | Platform / API | Applied method | Baseline → profile | Latency change | Decision / quality |
 | --- | --- | --- | --- | --- |
@@ -63,9 +99,9 @@ RTX CUDA numbers use the final CI binary; the earlier source build measured 122.
 
 Strix uses 512×288×39 frames, eight steps, CPU-resident parameters and one prompt. HIP has two measured requests after one warmup per mode; all three paired outputs agree at 48.1 dB PSNR with exact audio and repeat identically within each mode. Vulkan has one measured request after warmup per mode and exact output agreement. Interrupted or contended runs are excluded. These short-clip timings are not comparable with the full-size timings on the other GPUs.
 
-**Recommendation:** enable global flash attention only for the listed GPU/API pairs; add the graph changes on RTX when the memory and request guards pass. CUDA and Vulkan combined profiles save 8.8 s (7.3%) and 11.5 s (11.1%) respectively. Spark saves 60.6 s (9.2%); Mac saves 293.2 s (19.1%); Strix HIP saves 8.9 s (12.8%) on the short workload. Keep the original graph elsewhere. Explicit attention settings take precedence. A later request with different dimensions/frame count restores the original graph in the same context.
+**Current validation requirement:** repeat off/auto comparisons with the fused graph enabled in both modes. The historical CUDA/Vulkan combined profiles and the old unfused Spark/Metal/HIP baselines cannot quantify the benefit of the current attention-only selection. Explicit attention settings continue to take precedence; request dimensions no longer toggle the graph.
 
-RTX CUDA quality measured 53.6 dB PSNR, Vulkan 52.5 dB, Spark CUDA 53.5 dB, and Mac Metal 59.1 dB; reviewed frames are visually identical and audio is exact. CUDA sampled GPU memory increases from 21.9 to 23.2 GiB (+1.2 GiB, +5.7%). Mac process RSS rises from 55.5 to 56.1 GiB (+0.6 GiB, +1.2%). The global-attention improvement is mainly faster VAE decoding. The graph changes add only a few percent by themselves, so they are enabled as part of the validated combined profile, not independently when attention is explicitly configured.
+RTX CUDA quality measured 53.6 dB PSNR, Vulkan 52.5 dB, Spark CUDA 53.5 dB, and Mac Metal 59.1 dB; reviewed frames are visually identical and audio is exact. CUDA sampled GPU memory increases from 21.9 to 23.2 GiB (+1.2 GiB, +5.7%). Mac process RSS rises from 55.5 to 56.1 GiB (+0.6 GiB, +1.2%). The global-attention improvement is mainly faster VAE decoding. In the historical experiment, the isolated graph gain was below 5% and it was selected only as part of the combined profile. The new engine default supersedes that addon graph policy.
 
 ## FLUX.2 Klein 4B Q8_0
 
@@ -129,14 +165,14 @@ The complete earlier matrix, including partial and untested ideas and SGLang/vLL
 
 - **VAE GEMM — parameter selection plus runtime control.** `vae_conv_direct:false` selects the existing matrix convolution implementation. It changes no sampling steps or model weights. The addon chooses it per request and can restore direct convolution before an unsupported request. The existing CUDA FLUX example already specifies this option; these profiles extend selection to eligible callers that leave the option unset.
 - **Global flash attention — parameter tuning.** H3 enables existing flash-attention kernels. Reviewed frames remain visually identical, with small numerical differences and exact audio.
-- **Fused SwiGLU/QKV views — graph optimization.** H3 reuses existing ggml operations and avoids materializing QKV slices. This needs an engine control, but no new kernel or ggml dependency. It is combined with flash attention on RTX; its isolated gain is below the 5% threshold, so explicit flash-attention configurations do not gain a separate automatic graph change.
+- **Fused SwiGLU/QKV views — engine default.** H3 reuses existing ggml operations and avoids materializing QKV slices. Engine #64 preserves the enabled default from the 2026-11-01 baseline. The addon does not call the H3 setter or switch graph implementations between requests.
 - **F16 transformer matrices — precision/layout selection.** LTX converts selected transformer weights at load, using the existing tensor-type rules. It preserves exact tested pixels/audio but increases memory and load time. Encoder/VAE precision is unchanged.
 
 ## Corrections to the research interpretation
 
 The addon already defaults to `temporal_tiling:false`. Research's LTX CUDA full-temporal gain was against explicitly tiled decoding, not the existing addon default. There is no new temporal-decoding profile or new quality-tradeoff enum. Existing explicit tiling controls remain available. Likewise, VAE GPU residency is already the default unless overridden; these profiles do not rewrite a caller's CPU-residency choice.
 
-## Validation evidence
+## Historical validation evidence
 
 The 4 November native implementation revision is `4e027082eadc94819adfdcde8187d946e875cc56`; engine revision is `bc3890d`. The 5 November HIP fallback correction is `def6a7c3bd3105b7e32d288ace674a78c7ead4c3`; it removes only automatic FLUX HIP GEMM. Strix's corrected FLUX fallback and H3 HIP/Vulkan pairs use that exact CI binary. FLUX's rejected HIP candidate and Vulkan pair use the earlier binary. Full revision and binary hashes are recorded with each measurement.
 
@@ -154,8 +190,8 @@ All three original test directories were removed after preserving results, freei
 
 ## Validation and remaining limits
 
-- Native policy tests cover the GPU/API matrix, memory and output boundaries, explicit overrides and fallbacks. Metadata-only registry descriptions cannot produce a baseline-memory fit verdict when full downloaded weights may select a larger profile. Dynamic profiles conservatively return `unknown` from fit probes.
-- Engine operation tests exercise fused SwiGLU, exact QKV views, strided normalization, changing inputs, multiple shapes and batches. Engine defaults and context-parameter ABI layout are unchanged.
+- Native policy tests cover the GPU/API matrix, memory and output boundaries, explicit overrides and fallbacks. Metadata-only registry descriptions cannot produce a baseline-memory fit verdict when full downloaded weights may select GEMM. Eligible dynamic FLUX convolution profiles conservatively return `unknown`; H3 uses engine-default graph planning.
+- Merged-engine operation tests exercise enabled H3 defaults, fused SwiGLU, exact QKV views, strided normalization, multiple shapes/batches, per-context isolation, runner rebuilds and rejection of busy setters. The context-parameter ABI layout is unchanged.
 - Linux native tests use their existing CPU device setting; GPU model execution is validated separately. Direct runs with GPU driver modules initialized reported process-exit driver allocations under LeakSanitizer. No new leak suppression or test exclusion was added. Preserve these diagnostics alongside the final CPU-lane result.
 - The local Windows SDK/inference suite has unrelated Unix-path, permission, RPC timing and shared-state failures. New schema tests pass. Its draft PR remains low priority and is not presented as fully validated.
 - Strix still needs a complete LTX HIP/Vulkan fallback and repeat-stability pass, full-size repeated H3 HIP timing, and diagnosis of the rejected FLUX HIP output. A host reboot ended the final queue; it cannot be attributed to a model or driver from the available evidence. No system configuration was changed.
@@ -164,6 +200,8 @@ All three original test directories were removed after preserving results, freei
 
 ## Integration status
 
-The engine PR adds two per-context setters; all automatic decisions stay in the addon. No Fabric change or SDK runtime change is needed. `@qvac/inference` has a separate schema/documentation PR for forwarding optional configuration.
+[Engine #64](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/64) is merged. Its two per-context setters are available; the addon uses the VAE setter only. No Fabric change or SDK runtime change is needed. `@qvac/inference` has a separate schema/documentation PR for forwarding optional configuration.
 
-Review order: [diffusion engine #61](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/61), separate vcpkg registry update after engine merge, removal of the temporary addon overlay and validation of the final pin, [addon #5578](https://github.com/tetherto/qvac/pull/5578), then the [low-priority draft inference #5577](https://github.com/tetherto/qvac/pull/5577). Version and changelog changes belong to separate release PRs. The temporary overlay is for end-to-end review and must not ship.
+The temporary overlay pins the exact merged engine archive without source patches. Its SHA-512 is `dced9d52efbf8ae7b35cd9e81816190f85178a631c6166095034375d92e0847125f435ec8fed4e7642817158ceb5f5967d34f71b83fcd89756b5d969efa5f71a`. The matching registry revision is prepared as `stable-diffusion-cpp` `2026-11-01#1`; ggml remains on the existing 2026-11-01 revision.
+
+Remaining order: publish the separate registry revision, update the addon registry baseline and remove the overlay, verify the final dependency resolution and repeat paired model checks, then review [addon #5578](https://github.com/tetherto/qvac/pull/5578). The [low-priority draft inference #5577](https://github.com/tetherto/qvac/pull/5577) remains separate. Version and changelog changes belong to separate release PRs. The temporary overlay must not ship.

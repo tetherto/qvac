@@ -1,4 +1,11 @@
-import { downloadAsset, loadModel, unloadModel, suspend, resume, WHISPER_TINY } from '@qvac/sdk'
+import {
+  downloadAsset,
+  loadModel,
+  unloadModel,
+  suspend,
+  resume,
+  WHISPER_TINY_Q8_0
+} from '@qvac/sdk'
 import { BaseExecutor, type TestResult } from '@qvac/test-suite/mobile'
 import {
   downloadResilienceRegistrySuspend,
@@ -105,13 +112,13 @@ export class MobileDownloadResilienceExecutor extends BaseExecutor<typeof resili
     // A known standalone (non-sharded) registry model — small enough to stay
     // fast, large enough to produce in-flight progress. A sharded model would
     // break the clearStorage eviction below.
-    const assetSrc = WHISPER_TINY.src
+    const assetSrc = WHISPER_TINY_Q8_0.src
 
     // Force a cold cache so the transfer is genuinely in-flight at suspend():
     // load it (downloads if needed) then unload with clearStorage to delete the
     // file. There's no asset-level cache-evict API and no fs access on-device.
     try {
-      const seedId = await loadModel({ modelSrc: WHISPER_TINY })
+      const seedId = await loadModel({ modelSrc: WHISPER_TINY_Q8_0 })
       await unloadModel({ modelId: seedId, clearStorage: true })
     } catch {
       /* best effort — proceed; the no-progress check below catches a warm cache */
@@ -141,7 +148,7 @@ export class MobileDownloadResilienceExecutor extends BaseExecutor<typeof resili
 
     try {
       const assetId = await withTimeout(
-        'registry download (WHISPER_TINY)',
+        'registry download (WHISPER_TINY_Q8_0)',
         op,
         REGISTRY_RESUME_TIMEOUT_MS
       )
@@ -149,12 +156,12 @@ export class MobileDownloadResilienceExecutor extends BaseExecutor<typeof resili
         return {
           passed: false,
           output:
-            'could not exercise mid-download — WHISPER_TINY produced no in-flight progress after a forced cold cache'
+            'could not exercise mid-download — WHISPER_TINY_Q8_0 produced no in-flight progress after a forced cold cache'
         }
       }
       return {
         passed: true,
-        output: `registry download WHISPER_TINY survived suspend/resume: ${assetId} (maxPct=${maxPct.toFixed(1)})`
+        output: `registry download WHISPER_TINY_Q8_0 survived suspend/resume: ${assetId} (maxPct=${maxPct.toFixed(1)})`
       }
     } catch (err) {
       return {

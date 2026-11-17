@@ -21,6 +21,7 @@
     "ocr",
     "image-classification",
     "decisions",
-    "reranking"
+    "reranking",
+    "image-embeddings"
   ]
 }

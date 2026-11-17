@@ -1,9 +1,10 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { useModelServer } from '../helpers/server.js'
+import { assertStatusAndError } from '../helpers/http.js'
 
 const ALIAS = 'fit-llm'
-const VERDICTS = ['likely-fits', 'likely-too-large', 'unknown']
+const VERDICTS = ['fits', 'does-not-fit', 'unknown']
 
 // preload:false: the point of the endpoint is asking before anything loads.
 const FIT_CONFIG = {
@@ -28,11 +29,13 @@ interface SystemResult {
 interface FitResult {
   object: string
   verdict: string
-  execution: string
-  budget?: { availableAfterReserveBytes: number }
-  models: Array<{ model: string; name: string; verdict: string; reasons: string[] }>
-  reasons: string[]
-  assumptions: string[]
+  pools: Array<{ id: string; unified: boolean; usedBytes: number }>
+  models: Array<{
+    model: string
+    status: string
+    devices: Array<{ id: string; name: string; unified: boolean; usedBytes: number }>
+    stats: Record<string, unknown>
+  }>
 }
 
 describe('qvac system and models/fit: real host', () => {
@@ -75,15 +78,20 @@ describe('qvac system and models/fit: real host', () => {
     const body = res.json() as FitResult
     assert.equal(body.object, 'model_fit')
     assert.ok(VERDICTS.includes(body.verdict), `unexpected verdict ${body.verdict}`)
-    assert.equal(body.execution, 'sequential')
-    assert.ok(body.budget, 'expected a memory budget on a desktop host')
     assert.equal(body.models.length, 1)
     assert.equal(body.models[0]!.model, ALIAS)
-    assert.equal(body.models[0]!.name, 'QWEN3_600M_INST_Q4')
-    assert.ok(Array.isArray(body.assumptions))
+    assert.ok(VERDICTS.includes(body.models[0]!.status))
+    assert.ok(Array.isArray(body.pools))
+    assert.ok(Array.isArray(body.models[0]!.devices))
+    assert.equal(typeof body.models[0]!.stats, 'object')
 
     const entry = server().qvac.registry.getEntry(ALIAS)
     assert.notEqual(entry?.state, server().qvac.registry.STATES.READY, 'fit must not load')
+  })
+
+  it('answers a config value the engine refuses with a 400', async () => {
+    const res = await fit({ models: [{ model: ALIAS, modelConfig: { ctx_size: 'bad' } }] })
+    assertStatusAndError(res, 400, 'invalid_model_config')
   })
 
   it('assesses an alias and a constant together, in request order', async () => {
@@ -91,19 +99,18 @@ describe('qvac system and models/fit: real host', () => {
       models: [
         { model: ALIAS, modelConfig: { ctx_size: 4096 } },
         { model: 'EMBEDDINGGEMMA_300M_Q4_0' }
-      ],
-      execution: 'concurrent'
+      ]
     })
     assert.equal(res.statusCode, 200, res.payload)
 
     const body = res.json() as FitResult
-    assert.equal(body.execution, 'concurrent')
+    assert.ok(VERDICTS.includes(body.verdict), `unexpected verdict ${body.verdict}`)
     assert.deepEqual(
       body.models.map((m) => m.model),
       [ALIAS, 'EMBEDDINGGEMMA_300M_Q4_0']
     )
     for (const model of body.models) {
-      assert.ok(VERDICTS.includes(model.verdict), `unexpected verdict ${model.verdict}`)
+      assert.ok(VERDICTS.includes(model.status), `unexpected status ${model.status}`)
     }
   })
 })

@@ -940,6 +940,50 @@ TEST_F(TuneConfigMapTest, AutoDefault_OpenClGpu_StaysF16) {
   EXPECT_EQ(configFilemap_.count("cache-type-v"), 0);
 }
 
+// The XDNA NPU's attention kernels take only f16 K/V.
+TEST_F(TuneConfigMapTest, AutoDefault_XdnaNpu_StaysF16) {
+  MockModelMetaData meta(false, "qwen35");
+  configFilemap_["flash-attn"] = "on";
+
+  load_fit_normalization::tuneLoadConfigMap(
+      configFilemap_,
+      meta,
+      std::nullopt,
+      FtOverrides{},
+      /*isOpenCl=*/false,
+      /*isMetal=*/false,
+      /*isGpu=*/true,
+      /*isCuda=*/false,
+      /*isTensorSplit=*/false,
+      /*isXdna=*/true);
+
+  EXPECT_EQ(configFilemap_.count("cache-type-k"), 0);
+  EXPECT_EQ(configFilemap_.count("cache-type-v"), 0);
+  EXPECT_EQ(configFilemap_["flash-attn"], "on");
+}
+
+// An explicit quantized cache is the caller's choice and is not rejected.
+TEST_F(TuneConfigMapTest, XdnaNpu_ExplicitQuantizedKvIsKept) {
+  MockModelMetaData meta(false, "qwen35");
+  configFilemap_["cache-type-k"] = "q8_0";
+  configFilemap_["cache-type-v"] = "q8_0";
+
+  load_fit_normalization::tuneLoadConfigMap(
+      configFilemap_,
+      meta,
+      std::nullopt,
+      FtOverrides{},
+      /*isOpenCl=*/false,
+      /*isMetal=*/false,
+      /*isGpu=*/true,
+      /*isCuda=*/false,
+      /*isTensorSplit=*/false,
+      /*isXdna=*/true);
+
+  EXPECT_EQ(configFilemap_["cache-type-k"], "q8_0");
+  EXPECT_EQ(configFilemap_["cache-type-v"], "q8_0");
+}
+
 TEST_F(TuneConfigMapTest, AutoDefault_MetalGpu_DefaultsQ8_0) {
   MockModelMetaData meta(false, "llama");
   configFilemap_["flash-attn"] = "on";

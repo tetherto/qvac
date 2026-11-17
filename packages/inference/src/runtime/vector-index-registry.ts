@@ -5,8 +5,9 @@ import { getTurboVecBackend } from '@/plugins/turbovec-backend'
 import type { OpenVectorIndex, VectorIndexBackend } from '@/runtime/vector-index-backend'
 import { getConfiguredCacheDir } from '@/runtime/state'
 import { generateRandomRequestId } from '@/runtime/request-id'
+import { resolveSessionId } from '@/runtime/session-id'
 import { getEngineLogger } from '@/logging/index'
-import type { VectorIdWire, VectorIndexStorage } from '@/schemas/index'
+import type { VectorIdWire, VectorIndexIvfSettings, VectorIndexStorage } from '@/schemas/index'
 import {
   VectorIndexFailedError,
   VectorIndexInvalidVectorsError,
@@ -16,8 +17,14 @@ import {
 
 // Worker-side bookkeeping for open indexes: ids, wire-to-native conversion,
 // row validation, snapshot paths, and lifetime. Engine behaviour lives in
-// the backend.
-const indexes = new Map<string, OpenVectorIndex>()
+// the backend. Each index records the session that opened it, so closing that
+// session can release it.
+interface TrackedIndex {
+  index: OpenVectorIndex
+  sessionId: string
+}
+
+const indexes = new Map<string, TrackedIndex>()
 const pendingIndexes = new Set<Promise<OpenVectorIndex>>()
 
 function requireBackend(): VectorIndexBackend {
@@ -27,9 +34,9 @@ function requireBackend(): VectorIndexBackend {
 }
 
 function getIndex(indexId: string): OpenVectorIndex {
-  const index = indexes.get(indexId)
-  if (!index) throw new VectorIndexNotFoundError(indexId)
-  return index
+  const tracked = indexes.get(indexId)
+  if (!tracked) throw new VectorIndexNotFoundError(indexId)
+  return tracked.index
 }
 
 // Backends throw plain TypeError/RangeError/Error values from the native
@@ -51,7 +58,10 @@ function failBackend(error: unknown, describe?: (detail: string) => string): nev
 }
 
 // Keep pending opens reachable by shutdown until their indexes are registered.
-async function openVectorIndex(action: () => OpenVectorIndex | Promise<OpenVectorIndex>) {
+async function openVectorIndex(
+  sessionId: string,
+  action: () => OpenVectorIndex | Promise<OpenVectorIndex>
+) {
   const opening = (async () => {
     try {
       return await action()
@@ -62,7 +72,7 @@ async function openVectorIndex(action: () => OpenVectorIndex | Promise<OpenVecto
   pendingIndexes.add(opening)
   try {
     const index = await opening
-    const indexId = track(index)
+    const indexId = track(index, sessionId)
     return { index, indexId }
   } finally {
     pendingIndexes.delete(opening)
@@ -97,27 +107,50 @@ function toNativeIds(ids: VectorIdWire[]): BigUint64Array {
   return new BigUint64Array(ids.map((id) => BigInt(id)))
 }
 
-function track(index: OpenVectorIndex) {
+function track(index: OpenVectorIndex, sessionId: string) {
   const indexId = generateRandomRequestId()
-  indexes.set(indexId, index)
+  indexes.set(indexId, { index, sessionId })
   return indexId
 }
 
-export async function createVectorIndex(params: { dim: number; storage: VectorIndexStorage }) {
-  const backend = requireBackend()
-  const { index, indexId } = await openVectorIndex(() => backend.create(params.dim, params.storage))
-  return { indexId, dim: index.dim, storage: params.storage, length: index.length }
+// Omit a control the provider lacks so clients read it as unknown, not off.
+function indexState(index: OpenVectorIndex) {
+  const { ivf } = index
+  return {
+    ...(index.calibrated !== undefined && { calibrated: index.calibrated }),
+    ...(index.stagedSearch !== undefined && { stagedSearch: index.stagedSearch }),
+    ...(ivf !== undefined && { ivf })
+  }
 }
 
-export async function loadVectorIndex(params: { path: string }) {
+export async function createVectorIndex(params: {
+  dim: number
+  storage: VectorIndexStorage
+  sessionId?: string | undefined
+}) {
   const backend = requireBackend()
-  const { index, indexId } = await openVectorIndex(() =>
+  const { index, indexId } = await openVectorIndex(resolveSessionId(params), () =>
+    backend.create(params.dim, params.storage)
+  )
+  return {
+    indexId,
+    dim: index.dim,
+    storage: params.storage,
+    length: index.length,
+    ...indexState(index)
+  }
+}
+
+export async function loadVectorIndex(params: { path: string; sessionId?: string | undefined }) {
+  const backend = requireBackend()
+  const { index, indexId } = await openVectorIndex(resolveSessionId(params), () =>
     backend.load(resolveVectorIndexPath(params.path))
   )
   return {
     indexId,
     dim: index.dim,
     length: index.length,
+    ...indexState(index),
     ...(index.storage !== undefined && { storage: index.storage })
   }
 }
@@ -132,13 +165,28 @@ export function addVectors(params: { indexId: string; ids: VectorIdWire[]; vecto
   const vectors = flattenRows(params.vectors, index.dim, 'vectors')
   const ids = toNativeIds(params.ids)
   runBackend(() => index.add(vectors, ids))
-  return { length: index.length }
+  return { length: index.length, ...indexState(index) }
 }
 
-export function searchVectors(params: { indexId: string; queries: number[][]; k: number }) {
+export function setVectorIndexStagedSearch(params: { indexId: string; enabled: boolean }) {
+  const index = getIndex(params.indexId)
+  return runBackend(() => ({ stagedSearch: index.setStagedSearch(params.enabled) }))
+}
+
+export function setVectorIndexIvf(params: { indexId: string; ivf: VectorIndexIvfSettings | null }) {
+  const index = getIndex(params.indexId)
+  return runBackend(() => ({ ivf: index.setIvf(params.ivf) }))
+}
+
+export function searchVectors(params: {
+  indexId: string
+  queries: number[][]
+  k: number
+  nProbe?: number | undefined
+}) {
   const index = getIndex(params.indexId)
   const queries = flattenRows(params.queries, index.dim, 'queries')
-  const results = runBackend(() => index.search(queries, params.k))
+  const results = runBackend(() => index.search(queries, params.k, params.nProbe))
   return { results }
 }
 
@@ -162,7 +210,7 @@ export function removeVectors(params: { indexId: string; ids: VectorIdWire[] }) 
       )
     )
   }
-  return { removed, length: index.length }
+  return { removed, length: index.length, ...indexState(index) }
 }
 
 export function containsVectors(params: { indexId: string; ids: VectorIdWire[] }) {
@@ -189,12 +237,12 @@ export async function writeVectorIndex(params: { indexId: string; path: string }
 // Disposing an unknown id is not an error: the caller may retry after a
 // worker restart, and the memory it refers to is already gone.
 export function disposeVectorIndex(params: { indexId: string }) {
-  const index = indexes.get(params.indexId)
-  if (!index) return { disposed: false }
+  const tracked = indexes.get(params.indexId)
+  if (!tracked) return { disposed: false }
   // Drop the entry only once the backend confirms. Deleting first would strand
   // a failed dispose: the retry would find nothing and report success, and
   // `disposeAllVectorIndexes` could not reach it at shutdown either.
-  runBackend(() => index.dispose())
+  runBackend(() => tracked.index.dispose())
   indexes.delete(params.indexId)
   return { disposed: true }
 }
@@ -203,9 +251,33 @@ export function getOpenVectorIndexCount() {
   return indexes.size
 }
 
+/**
+ * Releases the indexes a session opened. Once the session ends its handles
+ * can no longer reach the worker, so nothing else would release them before
+ * shutdown. An index whose dispose fails stays registered and is released at
+ * shutdown. Returns the ids released.
+ */
+export function disposeSessionVectorIndexes(sessionId: string): string[] {
+  const released: string[] = []
+  for (const [indexId, tracked] of indexes) {
+    if (tracked.sessionId !== sessionId) continue
+    try {
+      tracked.index.dispose()
+      indexes.delete(indexId)
+      released.push(indexId)
+    } catch (error) {
+      getEngineLogger().warn(
+        `Failed to dispose vector index '${indexId}' of closed session '${sessionId}':`,
+        error
+      )
+    }
+  }
+  return released
+}
+
 export async function disposeAllVectorIndexes() {
   await Promise.allSettled(pendingIndexes)
-  for (const [indexId, index] of indexes) {
+  for (const [indexId, { index }] of indexes) {
     try {
       index.dispose()
     } catch (error) {

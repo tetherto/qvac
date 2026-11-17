@@ -26,6 +26,11 @@ KV-cache behavior is owned by the llama.cpp completion plugin under
   dropped, and the addon's copy of the conversation goes with the file.
 - Use `deleteCache({ auto: true })` to reclaim inactive auto caches without
   deleting caller-owned named caches; active cache keys remain protected.
+- Prompt-prefix sharing across cache identities is opt-in at model load. The SDK
+  sends `cache_share_across_keys: false` when it is omitted, so a keyed request
+  reuses only its own state and a keyless request starts cold and resets. Set it
+  to `true` to let any request reuse the longest prefix held by another
+  conversation; keyless state then remains available in model memory.
 
 Implementation and focused tests are authoritative for the current cache format.
 
@@ -36,6 +41,9 @@ key. The run evaluates the history and tools, completes with stats and no answer
 and saves the prepared prefix. Await `run.final` before sending the question.
 Prefill cannot use a forced `generationParams.tool_choice` (`required` or a tool
 name, including `tool_search`). The default `auto` and `none` are supported.
+A prefill needs at least one message: a system message in the history, or the
+`modelConfig.system_prompt` set at load. Tools alone are rejected with
+`RequestValidationFailedError`.
 
 ```typescript
 const history = [{ role: 'system', content: 'You are a helpful assistant.' }]

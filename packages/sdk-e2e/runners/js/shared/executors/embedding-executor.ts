@@ -1,4 +1,4 @@
-import { embed } from '@qvac/sdk'
+import { embed, embedBatch } from '@qvac/sdk'
 import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import { embeddingTests } from '../../../../catalog/embedding-tests.js'
@@ -16,16 +16,15 @@ export class EmbeddingExecutor extends AbstractModelExecutor<typeof embeddingTes
 
     try {
       if (p.texts) {
-        const embeddings = []
-        for (const text of p.texts) {
-          const { embedding } = await embed({ modelId: embeddingModelId, text })
-          embeddings.push(embedding)
-        }
+        const { embedding: embeddings } = await embedBatch({
+          modelId: embeddingModelId,
+          inputs: p.texts
+        })
         return ValidationHelpers.validate(embeddings, expectation as Expectation)
       }
 
       const text = p.text || ''
-      const { embedding } = await embed({ modelId: embeddingModelId, text })
+      const { embedding } = await embed({ modelId: embeddingModelId, input: text })
       return ValidationHelpers.validate(embedding, expectation as Expectation)
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)

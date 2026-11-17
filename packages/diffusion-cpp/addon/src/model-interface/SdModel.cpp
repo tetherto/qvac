@@ -398,6 +398,7 @@ void SdModel::fillCtxParams(CtxParams& out, bool allowMetadataOnly) const {
   params.t5xxl_path = optPath(config_.t5XxlPath);
   params.llm_path = optPath(config_.llmPath);
   params.llm_vision_path = optPath(config_.llmVisionPath);
+  params.tokenizer = optPath(config_.tokenizerPath);
   params.vae_path = optPath(config_.vaePath);
   params.clip_vision_path = optPath(config_.clipVisionPath);
   params.taesd_path = optPath(config_.taesdPath);
@@ -594,18 +595,16 @@ SdModel::FitOutcome SdModel::assessFit(const FitWorkload& workload) const {
   CtxParams ctx;
   fillCtxParams(ctx, true);
 
-  // The planner cannot represent per-request profile fallbacks or the H3
-  // graph toggle. Avoid a fit verdict for a different execution graph.
-  if (!workload.upscaleOnly &&
-      (qvac_lib_inference_addon_sd::useVaeGemm(
-           ctx.profile,
-           workload.width,
-           workload.height,
-           1,
-           UINT64_MAX,
-           workload.vaeTiling) ||
-       qvac_lib_inference_addon_sd::useH3LocalOps(
-           ctx.profile, workload.width, workload.height, workload.videoFrames)))
+  // The planner cannot represent per-request VAE convolution changes.
+  // Avoid a fit verdict for a different execution graph. H3 retains the
+  // engine's default graph, which the planner already represents.
+  if (!workload.upscaleOnly && qvac_lib_inference_addon_sd::useVaeGemm(
+                                   ctx.profile,
+                                   workload.width,
+                                   workload.height,
+                                   1,
+                                   UINT64_MAX,
+                                   workload.vaeTiling))
     return {};
 
   // `sd_fit_params` answers any pinned placement with SD_FIT_FAILURE, and a
@@ -639,6 +638,7 @@ SdModel::FitOutcome SdModel::assessFit(const FitWorkload& workload) const {
   request.height = workload.height;
   request.video_frames = workload.videoFrames;
   request.vae_tiling_params.enabled = workload.vaeTiling;
+  request.vae_tiling_params.tile_size_in_latent_units = true;
   request.vae_tiling_params.tile_size_x = workload.vaeTileSizeX;
   request.vae_tiling_params.tile_size_y = workload.vaeTileSizeY;
   request.vae_tiling_params.target_overlap = workload.vaeTileOverlap;
@@ -786,8 +786,6 @@ void SdModel::load() {
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
       "Performance profile: flash=" +
           std::to_string(performanceProfile_.flashAttention) +
-          ", h3_local_ops_candidate=" +
-          std::to_string(performanceProfile_.h3LocalOps) +
           ", vae_gemm_candidate=" +
           std::to_string(performanceProfile_.vaeGemm) +
           ", ltx_f16=" + std::to_string(performanceProfile_.ltxF16));
@@ -968,6 +966,7 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
 
   // -- VAE tiling ------------------------------------------------------------
   genParams.vae_tiling_params.enabled = gen.vaeTiling;
+  genParams.vae_tiling_params.tile_size_in_latent_units = true;
   genParams.vae_tiling_params.tile_size_x = gen.vaeTileSizeX;
   genParams.vae_tiling_params.tile_size_y = gen.vaeTileSizeY;
   genParams.vae_tiling_params.target_overlap = gen.vaeTileOverlap;
@@ -1599,19 +1598,6 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   // -- Decode init / end / control-frame images -----------------------------
   qvac_lib_inference_addon_sd::validatePerformanceWorkload(
       config_, vid.width, vid.height, vid.videoFrames);
-  if (performanceProfile_.h3LocalOps) {
-    const bool enabled =
-        vid.mode == "txt2vid" &&
-        qvac_lib_inference_addon_sd::useH3LocalOps(
-            performanceProfile_, vid.width, vid.height, vid.videoFrames);
-    if (!sd_set_h3_local_ops(sdCtx_.get(), enabled))
-      throw StatusError(
-          general_error::InternalError,
-          "MiniMax-H3 performance profile could not be applied");
-    QLOG_IF(
-        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-        std::string("H3 graph profile: ") + (enabled ? "enabled" : "baseline"));
-  }
   // sd_image_t::data is allocated by stb_image via malloc(), so we wrap each
   // pixel buffer in unique_ptr with image_codec::FreeDeleter to guarantee
   // release on every exit path (including exceptions from generate_video()
@@ -1802,6 +1788,7 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
 
   // VAE tiling (strongly recommended for Wan)
   vidParams.vae_tiling_params.enabled = vid.vaeTiling;
+  vidParams.vae_tiling_params.tile_size_in_latent_units = true;
   vidParams.vae_tiling_params.tile_size_x = vid.vaeTileSizeX;
   vidParams.vae_tiling_params.tile_size_y = vid.vaeTileSizeY;
   vidParams.vae_tiling_params.target_overlap = vid.vaeTileOverlap;
