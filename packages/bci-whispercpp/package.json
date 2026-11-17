@@ -4,7 +4,7 @@
   "description": "Brain-Computer Interface (BCI) neural signal transcription addon for qvac, powered by whisper.cpp",
   "addon": true,
   "qvac": {
-    "ggml-speech": "2026-11-16"
+    "ggml-speech": "2026-11-17"
   },
   "engines": {
     "bare": ">=1.24.0"

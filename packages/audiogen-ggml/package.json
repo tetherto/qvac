@@ -3,7 +3,7 @@
   "version": "0.10.1",
   "description": "Audio generation (music) addon for qvac",
   "qvac": {
-    "ggml-speech": "2026-11-16"
+    "ggml-speech": "2026-11-17"
   },
   "engines": {
     "bare": ">=1.19.0"
