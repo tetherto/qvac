@@ -137,8 +137,9 @@ LlamaModel::LlamaModel(
           std::move(modelPath),
           std::move(projectionPath),
           std::move(configFilemap)} {
-  // Addon admission limits, not common_params load settings.
-  mediaLimits_ = takeMediaLimits(constructionArgs_.configFilemap);
+  // This is an addon admission limit, not a common_params load setting.
+  maxImagePixels_ =
+      image_pixel_limit::takeMaxPixels(constructionArgs_.configFilemap);
   setInitLoader(InitLoader::LOADER_TYPE::DELAYED);
 }
 
@@ -464,12 +465,12 @@ namespace {
 batching::DriverFactory buildDriverFactory(
     LlmModelContext shared, mtmd_context* sharedVision,
     qvac_lib_inference_addon_llama::cache::CheckpointPolicy checkpointPolicy,
-    bool sharesCacheAcrossKeys, MediaLimits mediaLimits) {
+    bool sharesCacheAcrossKeys, uint64_t maxImagePixels) {
   return [shared,
           sharedVision,
           checkpointPolicy,
           sharesCacheAcrossKeys,
-          mediaLimits](
+          maxImagePixels](
              const common_params& params,
              uint32_t seqId,
              llama_pos perSeqCtxCeiling) -> std::unique_ptr<SequenceDriver> {
@@ -477,7 +478,7 @@ batching::DriverFactory buildDriverFactory(
     std::unique_ptr<SequenceDriver> driver;
     if (sharedVision != nullptr) {
       driver = std::make_unique<MtmdLlmContext>(
-          params, shared, sharedVision, sid, perSeqCtxCeiling, mediaLimits);
+          params, shared, sharedVision, sid, perSeqCtxCeiling, maxImagePixels);
     } else {
       driver = std::make_unique<TextLlmContext>(
           params, shared, sid, perSeqCtxCeiling);
@@ -522,7 +523,7 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
             state.llmContext_->visionContext(),
             state.cacheCheckpointPolicy_,
             state.cacheShareAcrossKeys_,
-            mediaLimits_));
+            maxImagePixels_));
     scheduler->setRamTier(state.ramTier_);
     scheduler->setFileIndex(state.fileIndex_);
     return scheduler;
@@ -1166,12 +1167,8 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
   auto parseAndPreflight = [this, &prompt](const std::string& input) {
     auto parsed = formatPrompt(input);
     if (!state_->isTextLlm_) {
-      // handleCache mutates the active session after parsing. Audio has no
-      // header check here: mtmd bounds it when loadMedia decodes it, after
-      // handleCache, so audio over the limit leaves the requested session
-      // active and unchanged, as unreadable media or a rejected tool_choice
-      // does (see processPromptImpl).
-      preflightImagePixels(parsed, prompt.media, mediaLimits_.maxImagePixels);
+      // handleCache mutates the active session after parsing.
+      preflightImagePixels(parsed, prompt.media, maxImagePixels_);
     }
     return parsed;
   };
@@ -1635,7 +1632,7 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
           "processPromptBatch: media requires a multimodal model");
     }
     if (!state_->isTextLlm_) {
-      preflightImagePixels(parsed, prompt.media, mediaLimits_.maxImagePixels);
+      preflightImagePixels(parsed, prompt.media, maxImagePixels_);
     }
     // The base key's file is a source like any file this model has used.
     if (state_->fileIndex_) {
@@ -2362,7 +2359,7 @@ std::unique_ptr<LlmContext> LlamaModel::createContext(
   if (!projectionPath.empty()) {
     params.mmproj.path = std::move(projectionPath);
     return std::make_unique<MtmdLlmContext>(
-        params, std::move(llamaInit), mediaLimits_, std::move(speculative));
+        params, std::move(llamaInit), maxImagePixels_, std::move(speculative));
   }
   return std::make_unique<TextLlmContext>(
       params, std::move(llamaInit), std::move(speculative));

@@ -27,7 +27,6 @@ add_executable(
   test_llm_parsers.cpp
   test_load_config_handlers.cpp
   test_image_pixel_limit.cpp
-  test_media_limits.cpp
   test_finetune_param_defaults.cpp
   # Placeholder tests (to be implemented)
   test_mtmd_llm_context.cpp
@@ -84,7 +83,6 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LoadFitNormalization.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MediaLimits.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MediaLoadOrder.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp

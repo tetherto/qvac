@@ -41,6 +41,7 @@
 #include "addon/PayloadHandler.hpp"
 #include "handlers/FinetuneParamHandlers.hpp"
 #include "handlers/GenerationParamHandlers.hpp"
+#include "model-interface/ImagePixelLimit.hpp"
 #include "model-interface/LlamaFinetuningParams.hpp"
 #include "model-interface/LlamaModel.hpp"
 #include "model-interface/SpeculativeRuntime.hpp"
@@ -714,9 +715,9 @@ inline FitResult runFit(FitRequest request) {
   common_params loadParams;
   try {
     // Addon-only keys, consumed before llama.cpp's parser sees them, as at
-    // load. The media limits only bound decoding, so the fit just validates
-    // them.
-    static_cast<void>(takeMediaLimits(configFilemap));
+    // load. image-max-megapixels only bounds decoding, so the fit just
+    // validates it.
+    static_cast<void>(image_pixel_limit::takeMaxPixels(configFilemap));
     const auto speculativeConfig =
         qvac_lib_inference_addon_llama::speculative::parseSpeculativeConfig(
             configFilemap);

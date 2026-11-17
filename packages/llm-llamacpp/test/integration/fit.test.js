@@ -99,8 +99,7 @@ const EVERY_SETTING = {
   'override-tensor': 'ffn_.*=CPU',
   'prefetch-weights': 'auto',
   'fit-ctx': '2048',
-  'image-max-megapixels': '8',
-  'audio-max-seconds': '120'
+  'image-max-megapixels': '8'
 }
 
 const MOBILE_REFUSED = ['main-gpu', 'split-mode', 'tensor-split']
@@ -134,10 +133,10 @@ test('a load the engine cannot parse rejects', { timeout: 600_000 }, async (t) =
   await t.exception(assess(await modelPath(), { 'ctx-size': 'not-a-number' }))
 })
 
-test('a media limit a load would refuse rejects', { timeout: 600_000 }, async (t) => {
+test('an image limit a load would refuse rejects', { timeout: 600_000 }, async (t) => {
   const file = await modelPath()
 
-  await t.exception(assess(file, { 'audio-max-seconds': '0' }))
+  await t.exception(assess(file, { 'image-max-megapixels': '0' }))
   await t.exception(assess(file, { 'image-max-megapixels': 'many' }))
 })
 

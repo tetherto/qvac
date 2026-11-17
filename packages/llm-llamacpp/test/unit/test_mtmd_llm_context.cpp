@@ -1367,7 +1367,8 @@ TEST(MtmdLlmContextLoadFailure, ContextWithoutModelThrowsUnableToLoadModel) {
   ASSERT_EQ(failed->model(), nullptr);
 
   try {
-    MtmdLlmContext context(params, std::move(failed), MediaLimits{});
+    MtmdLlmContext context(
+        params, std::move(failed), image_pixel_limit::DEFAULT_MAX_PIXELS);
     FAIL() << "a context without a model must not construct";
   } catch (const qvac_errors::StatusError& error) {
     expectUnableToLoadModel(error);

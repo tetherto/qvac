@@ -14,7 +14,6 @@
 #include "../utils/SequenceStateSnapshot.hpp"
 #include "../utils/UTF8TokenBuffer.hpp"
 #include "LlmContext.hpp"
-#include "MediaLimits.hpp"
 #include "SequenceDriver.hpp"
 #include "SpeculativeRuntime.hpp"
 #include "SpeculativeSequence.hpp"
@@ -44,7 +43,7 @@ public:
    */
   MtmdLlmContext(
       common_params& commonParams, common_init_result_ptr llamaInit,
-      const MediaLimits& mediaLimits,
+      uint64_t maxImagePixels,
       std::unique_ptr<
           qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
           speculative = nullptr);
@@ -55,7 +54,7 @@ public:
   MtmdLlmContext(
       const common_params& commonParams, const LlmModelContext& shared,
       mtmd_context* sharedVision, llama_seq_id seqId,
-      llama_pos perSeqCtxCeiling, const MediaLimits& mediaLimits);
+      llama_pos perSeqCtxCeiling, uint64_t maxImagePixels);
 
   /**
    * The destructor.
@@ -514,7 +513,7 @@ private:
   CommonSamplerPtr smpl_;
 
   common_params params_;
-  MediaLimits mediaLimits_;
+  uint64_t maxImagePixels_;
   common_chat_templates_ptr tmpls_;
   std::vector<llama_token> antipromptTokens_;
   // Per-request stop strings supplied by the chat template

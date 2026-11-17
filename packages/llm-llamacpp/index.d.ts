@@ -279,10 +279,6 @@ declare namespace LlmLlamacpp {
         "image-max-megapixels"?: string;
         /** Alias for image-max-megapixels. Set only one spelling. */
         image_max_megapixels?: string;
-        /** Longest audio accepted, in seconds, checked against the decoder's length before the samples are allocated. Default: 600. */
-        "audio-max-seconds"?: string;
-        /** Alias for audio-max-seconds. Set only one spelling. */
-        audio_max_seconds?: string;
         /**
          * Run the multimodal projector (mmproj / vision encoder) on the GPU. Accepts
          * 'true'/'on'/'1' or 'false'/'off'/'0'. When unset, the backend is auto-selected

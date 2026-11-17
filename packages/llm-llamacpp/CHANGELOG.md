@@ -2,24 +2,6 @@
 
 ## [Unreleased]
 
-### Breaking
-
-- Audio longer than 10 minutes, accepted before, is now rejected by default.
-  Set `audio-max-seconds` higher to accept it
-  ([#5783](https://github.com/tetherto/qvac/pull/5783)).
-
-### Added
-
-- `audio-max-seconds` (alias `audio_max_seconds`, default 600) bounds the audio
-  a multimodal model decodes
-  ([#5783](https://github.com/tetherto/qvac/pull/5783)). fabric's mtmd-helper
-  checks it against the length its decoder reads, before it allocates the
-  samples; until now a small WAV declared at a low sample rate could make it
-  allocate gigabytes. Longer audio is rejected with `InvalidArgument`. Unlike
-  an oversized image, it is rejected when it is decoded, after the request's
-  cache session is selected: the session stays active and unchanged, as after
-  a request with unreadable audio.
-
 ### Changed
 
 - `image-max-megapixels` is also passed to fabric's mtmd-helper, which checks it
@@ -28,10 +10,12 @@
   the prompt is processed stays, so an oversized image is still rejected before
   the session cache changes, and formats stb_image cannot read (WebP, video) are
   still rejected rather than handed to ffmpeg.
-- `assessFit` accepts `image-max-megapixels` and `audio-max-seconds` (and their
-  aliases), and rejects an invalid value as the load does. Before, it rejected
-  `image-max-megapixels` as an unknown argument
-  ([#5783](https://github.com/tetherto/qvac/pull/5783)).
+
+### Fixed
+
+- `assessFit` accepts `image-max-megapixels` (and `image_max_megapixels`), and
+  rejects an invalid value as the load does. Before, it rejected the key as an
+  unknown argument ([#5783](https://github.com/tetherto/qvac/pull/5783)).
 
 ## [0.71.0] - 2026-11-16
 

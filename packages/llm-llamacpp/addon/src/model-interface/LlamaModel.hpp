@@ -19,13 +19,13 @@
 #include "CacheLedger.hpp"
 #include "CacheManager.hpp"
 #include "ContinuousBatchScheduler.hpp"
+#include "ImagePixelLimit.hpp"
 #include "LlamaFinetuner.hpp"
 #include "LlamaFinetuningHelpers.hpp"
 #include "LlamaFinetuningParams.hpp"
 #include "LlamaLazyInitializeBackend.hpp"
 #include "LlmContext.hpp"
 #include "LoadFitNormalization.hpp"
-#include "MediaLimits.hpp"
 #include "ModelMetadata.hpp"
 #include "common/chat.h"
 #include "inference-addon-cpp/InitLoader.hpp"
@@ -483,7 +483,7 @@ private:
 
   ModelMetaData metadata_;
   ConstructionArgs constructionArgs_;
-  MediaLimits mediaLimits_;
+  uint64_t maxImagePixels_ = image_pixel_limit::DEFAULT_MAX_PIXELS;
 
   /// Shared lock for all methods that read/use state_ members; exclusive lock
   /// only in reload()
