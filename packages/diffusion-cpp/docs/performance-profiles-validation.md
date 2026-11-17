@@ -23,8 +23,9 @@ The addon was ported onto QVAC main `f937f5f4` and built against engine
 `bc53357484bc5d2ba08fbe5301dae192e5b9a176` with the existing ggml pin
 `a4adfcb1304fb05b64473f1fe8d678bbce7a9ce0`. Validation used Linux arm64,
 Clang 22/libc++, a CPU addon build and a separate leased GB10 CUDA operation
-check. The engine archive checksum was verified. The addon resolves the merged registry
-port through the scoped baseline described in the profile documentation.
+check. The engine archive checksum was verified. The addon resolves the merged
+registry port through the manifest version requirement and existing default
+registry described in the profile documentation.
 
 - `npm run typecheck`, `npm run build:ts` and `npm run lint` passed. The generated
   `index.d.ts` matches the checked-in declaration. Lint retains 72 warnings in
@@ -238,13 +239,14 @@ All three original test directories were removed after preserving results, freei
 
 [Engine #64](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/64) is merged. Its two per-context setters are available; the addon uses the VAE setter only. No Fabric change or SDK runtime change is needed. `@qvac/inference` has a separate schema/documentation PR for forwarding optional configuration.
 
-The addon consumes `stable-diffusion-cpp` `2026-11-01#1` from registry `main`, pinned to [registry #496](https://github.com/tetherto/qvac-registry-vcpkg/pull/496)'s merge commit `69541270b6cba537ee42b14a845013d20a061ba7`. The scoped registry entry selects only this port; the default and Microsoft registry baselines remain unchanged. All five registry port files are byte-identical to the validated overlay, which has been removed from the addon. The version history records port tree `009eb7745259b95913109f5b1f1a1ff71495718c` and retains every previous version.
+The addon requires `stable-diffusion-cpp` `2026-11-01#1`, published by [registry #496](https://github.com/tetherto/qvac-registry-vcpkg/pull/496). The existing default registry reads available versions from `main`; the manifest's minimum version selects the merged port without a separate scoped registry entry. The default and Microsoft registry baselines remain unchanged. All five registry port files are byte-identical to the validated overlay, which has been removed from the addon. The version history records port tree `009eb7745259b95913109f5b1f1a1ff71495718c` and retains every previous version.
 
 The engine archive SHA-512 remains `dced9d52efbf8ae7b35cd9e81816190f85178a631c6166095034375d92e0847125f435ec8fed4e7642817158ceb5f5967d34f71b83fcd89756b5d969efa5f71a`; ggml remains on the existing 2026-11-01 revision.
 
 A native `arm64-linux` vcpkg dry run, repeated with the CUDA and native-test
-features enabled, fetched registry `main` at the merged baseline and resolved
-`stable-diffusion-cpp` `2026-11-01#1` to the recorded port tree without an overlay.
+features enabled and a fresh registry cache, fetched registry `main` and resolved
+`stable-diffusion-cpp` `2026-11-01#1` to the recorded port tree through the default
+registry, without a scoped entry or an overlay.
 It retained ggml `2026-11-01#1` and inference-addon-cpp `1.5.0` from the existing
 default registry baseline. This verifies dependency resolution, not a fresh
 packaged-backend build or model-performance measurement.
