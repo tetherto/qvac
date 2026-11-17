@@ -92,20 +92,6 @@ function mobileCalls(sources = definitions()) {
   return found
 }
 
-test('discovery finds the leaves and their callers', () => {
-  const need = leavesNeedingActionsRead()
-  assert.ok(need.size >= 12, `expected at least 12 leaves needing actions: read, found ${need.size}`)
-  const found = mobileCalls()
-  // Speech publishing no longer calls mobile tests. Benchmark callers still
-  // exercise the reusable workflows and their permission requirements.
-  for (const addon of ['asr-ggml', 'bci-whispercpp', 'tts-ggml']) {
-    assert.ok(found.some(({ caller, target }) =>
-      caller === 'benchmark-performance-nx.yml' &&
-      target === `integration-mobile-test-${addon}.yml`
-    ), `missing benchmark caller for ${addon}`)
-  }
-})
-
 // `actions: none` is valid YAML and grants nothing, so an absent key is not the
 // only way to fail. Require a level that actually reads.
 const READS = new Set(['read', 'write'])

@@ -1,0 +1,44 @@
+name: Resolve prebuild run
+description: Find the prebuilds artifact a named run built for one package and platform, failing closed when it cannot.
+
+inputs:
+  run-id:
+    description: Run whose prebuilds artifact to install
+    required: true
+  workdir:
+    description: Package directory, which names the prebuilds-<dir> artifact
+    required: true
+  platform:
+    description: Android or iOS
+    required: true
+  github-token:
+    description: Token with actions:read
+    default: ${{ github.token }}
+
+outputs:
+  artifact-id:
+    description: Artifact to download, by id
+    value: ${{ steps.resolve.outputs.artifact_id }}
+  artifact-name:
+    description: Name of that artifact
+    value: ${{ steps.resolve.outputs.artifact_name }}
+  source-run-id:
+    description: Run the artifact belongs to
+    value: ${{ steps.resolve.outputs.source_run_id }}
+  expected-dirs:
+    description: Prebuild directories the platform needs, space-separated
+    value: ${{ steps.resolve.outputs.expected_dirs }}
+
+runs:
+  using: composite
+  steps:
+    # The resolver moves here when run-mobile-integration-tests loses its last caller.
+    - id: resolve
+      shell: bash
+      env:
+        PREBUILD_RUN_ID: ${{ inputs.run-id }}
+        ADDON_WORKDIR: ${{ inputs.workdir }}
+        PLATFORM: ${{ inputs.platform }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+      run: node "$GITHUB_ACTION_PATH/../run-mobile-integration-tests/setup/resolve-prebuild-run.mjs"

@@ -1,6 +1,9 @@
 {
   "name": "@qvac/infer-base",
   "root": "packages/infer-base",
+  "tags": [
+    "ci:libs"
+  ],
   "targets": {
     "build": {
       "executor": "nx:run-commands",
@@ -28,6 +31,21 @@
       "options": {
         "command": "pnpm run test:dts",
         "cwd": "packages/infer-base"
+      }
+    },
+    "publish:pre": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/infer-base",
+        "command": "npm install --ignore-scripts --package-lock=false --registry=https://registry.npmjs.org/ && npm run test:types"
+      }
+    },
+    "publish": {
+      "executor": "nx:noop",
+      "metadata": {
+        "publish": {
+          "tagPrefix": "infer-base"
+        }
       }
     }
   }

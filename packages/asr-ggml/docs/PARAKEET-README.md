@@ -446,6 +446,9 @@ await response.onUpdate(() => {}).await()
 // response.stats.encoderUsedCoreml // offline ASR and batch diarization only:
 //                                  //   1 when every call in the job ran its
 //                                  //   encoder on Core ML, 0 when any ran on ggml
+// response.stats.decoderUsedCoreml // offline ASR only: 1 when every
+//                                  //   transcription decoded on the Core ML TDT
+//                                  //   decoder sidecar, 0 when any decoded on ggml
 // response.stats.audioDurationMs, encoderMs, decoderMs, melSpecMs, totalEncodedFrames, ...
 ```
 
