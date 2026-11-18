@@ -2,6 +2,7 @@
 @file:OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
 package io.tether.qvac.sdk.generated.schema
 
+import io.tether.qvac.sdk.selectWireVariant
 import kotlinx.serialization.*
 import kotlinx.serialization.encoding.*
 import kotlinx.serialization.json.*
