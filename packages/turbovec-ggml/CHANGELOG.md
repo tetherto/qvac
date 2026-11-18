@@ -44,9 +44,8 @@
 
 - The addon runs its jobs through inference-addon-cpp's `JsAsyncTask`, on the
   addon's own worker threads (`JsAsyncTask::runOn`), and reads its arguments
-  with inference-addon-cpp's JS helpers. Until the inference-addon-cpp
-  release that adds `runOn` is in the vcpkg registry, the build takes
-  inference-addon-cpp from an overlay port in `vcpkg-overlays/`.
+  with inference-addon-cpp's JS helpers. The native build requires
+  `qvac-lib-inference-addon-cpp` 1.7.0 or newer.
 
 ## [0.6.0] - 2026-11-16
 

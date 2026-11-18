@@ -106,6 +106,17 @@ function syncError(fn) {
   return null
 }
 
+// Blocks the JS thread for `ms`. A native job started just before is then
+// sure to have started on its worker thread, while its completion cannot have
+// reached JS yet. An abort right after this hits a running (or finished) job,
+// not a waiting one, which would be skipped instead.
+function holdJsThread(ms) {
+  const end = Date.now() + ms
+  while (Date.now() < end) {
+    // spin
+  }
+}
+
 // A minimal AbortController: Bare has none built in, and the SDK passes
 // signals from bare-abort-controller, which have this shape. Counts its
 // listeners so tests can check that none are left behind.
@@ -624,6 +635,7 @@ test('IdMapIndex abort: a running build rejects at once but still finishes', asy
     afterDone = true
     return hits
   })
+  holdJsThread(20)
   controller.abort()
   const error = await build
   t.is(error && error.name, 'AbortError', 'the build rejects with an AbortError')
@@ -647,6 +659,7 @@ test(
       const filter = rejection(
         idx.prepareFilter(new BigUint64Array([1n]), { signal: filterController.signal })
       )
+      holdJsThread(50)
       filterController.abort()
       t.is((await filter)?.name, 'AbortError', 'prepareFilter rejects')
       await idx.search(unitVec(0), 1)
@@ -655,6 +668,7 @@ test(
       frees.length = 0
       const loadController = createController()
       const loaded = rejection(IdMapIndex.load(file, { signal: loadController.signal }))
+      holdJsThread(50)
       loadController.abort()
       t.is((await loaded)?.name, 'AbortError', 'load rejects')
       for (let i = 0; i < 100 && frees.length === 0; i++) {
