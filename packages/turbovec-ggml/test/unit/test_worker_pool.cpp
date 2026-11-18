@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -173,4 +174,39 @@ TEST(WorkerPool, CancellingOneTaskKeepsTheOthersInOrder) {
     release.open();
   }
   EXPECT_EQ(order, (std::vector<int>{0, 1, 3, 4}));
+}
+
+// JsAsyncTask cancels by ticket, so a ticket from a finished task must never
+// name a later one.
+TEST(WorkerPool, NeverReusesATicket) {
+  WorkerPool pool(2);
+  std::vector<std::uint64_t> tickets;
+  for (int i = 0; i < 200; ++i) {
+    Gate done;
+    tickets.push_back(pool.post([&done]() { done.open(); }));
+    ASSERT_NE(tickets.back(), 0U);
+    done.wait();
+  }
+  std::sort(tickets.begin(), tickets.end());
+  EXPECT_EQ(std::adjacent_find(tickets.begin(), tickets.end()), tickets.end())
+      << "a ticket was handed out twice";
+}
+
+// The binding hands the pool to JsAsyncTask::runOn as an IAsyncTaskExecutor.
+TEST(WorkerPool, WorksThroughTheExecutorInterface) {
+  Gate release;
+  std::atomic<bool> ran{false};
+  std::atomic<bool> cancelledRan{false};
+  {
+    WorkerPool pool(1);
+    qvac_lib_inference_addon_cpp::IAsyncTaskExecutor& executor = pool;
+    ASSERT_NE(executor.post([&release]() { release.wait(); }), 0U);
+    const std::uint64_t queued =
+        executor.post([&cancelledRan]() { cancelledRan.store(true); });
+    ASSERT_NE(executor.post([&ran]() { ran.store(true); }), 0U);
+    EXPECT_TRUE(executor.cancel(queued));
+    release.open();
+  }
+  EXPECT_TRUE(ran.load()) << "a posted task runs";
+  EXPECT_FALSE(cancelledRan.load()) << "a cancelled task never runs";
 }

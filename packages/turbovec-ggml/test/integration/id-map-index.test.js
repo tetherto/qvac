@@ -1041,7 +1041,10 @@ test('IdMapIndex: corrupt persistence file load fails', async (t) => {
       () => IdMapIndex.load(file),
       'corrupt tvim file should reject'
     )
-    if (error !== null) t.is(error.message, 'BadMagic', 'load preserves native error category')
+    if (error !== null) {
+      t.is(error.message, 'BadMagic', 'load preserves native error category')
+      t.is(error.code, errorCode('BadMagic'), 'and carries it in a StatusError code')
+    }
   } finally {
     if (fs.existsSync(file)) fs.unlinkSync(file)
   }
@@ -1066,7 +1069,9 @@ test(`IdMapIndex: TurboVec calibrates from a first add of ${AUTO_CALIBRATE_MIN_R
   let loaded = null
   try {
     t.is(idx.calibrated, false, 'a fresh index is uncalibrated')
-    await idx.addWithIds(vectors, ids)
+    const add = idx.addWithIds(vectors, ids)
+    t.is(idx.calibrated, false, 'calibrated reports the state before the add finishes')
+    await add
     t.is(idx.calibrated, true, `a first add of ${AUTO_CALIBRATE_MIN_ROWS} rows calibrates`)
     const query = vectors.subarray(0, TURBOVEC_DIM)
     t.is((await idx.search(query, 1)).ids[0], ids[0], 'a calibrated index retrieves a stored row')

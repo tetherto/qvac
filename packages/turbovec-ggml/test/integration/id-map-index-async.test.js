@@ -179,17 +179,26 @@ function recordFrees(t) {
 
 test('IdMapIndex async: bad arguments reject instead of throwing', async (t) => {
   const idx = await filledIndex()
+  const filter = await idx.prepareFilter(new BigUint64Array([1n]))
   const calls = {
     search: () => idx.search([1, 2], 1),
     'search k': () => idx.search(unitVec(0), 0),
+    searchFiltered: () => idx.searchFiltered(unitVec(0), 1, [1]),
+    'IdMapIndexFilter#search': () => filter.search([1], 1),
     addWithIds: () => idx.addWithIds(unitVec(0), new BigUint64Array(2)),
+    addLogged: () => idx.addLogged(unitVec(0), new BigUint64Array(2), 'delta'),
+    prepareFilter: () => idx.prepareFilter([1]),
     buildIvf: () => idx.buildIvf(0),
     searchIvf: () => idx.searchIvf(unitVec(0), 1, 0),
     remove: () => idx.remove(1),
+    removeLogged: () => idx.removeLogged(1, 'delta'),
     contains: () => idx.contains(1),
     setStagedSearch: () => idx.setStagedSearch('yes'),
     write: () => idx.write(''),
+    compactDelta: () => idx.compactDelta('', 'delta'),
     load: () => IdMapIndex.load(''),
+    loadMmap: () => IdMapIndex.loadMmap(''),
+    loadWithDelta: () => IdMapIndex.loadWithDelta('', ''),
     'options type': () => idx.search(unitVec(0), 1, 5),
     'options.signal': () => idx.search(unitVec(0), 1, { signal: {} })
   }
@@ -201,8 +210,90 @@ test('IdMapIndex async: bad arguments reject instead of throwing', async (t) => 
     t.ok(await rejection(promise), `${name} rejects`)
   }
   t.is(idx.length, N, 'the index is untouched')
+  filter.dispose()
   await idx.dispose()
 })
+
+// Every call that reads or changes the index is async: none returns its
+// result directly.
+test('IdMapIndex async: every index call returns a promise', async (t) => {
+  const file = tmpPath('id-map-index-every-call')
+  const snapshotFile = tmpPath('id-map-index-every-call-snapshot')
+  const delta = `${snapshotFile}.delta`
+  const idx = await filledIndex()
+  const logged = await filledIndex()
+  try {
+    await logged.write(snapshotFile)
+    await idx.write(file)
+    const filter = await idx.prepareFilter(new BigUint64Array([1n]))
+    const loaded = []
+    const calls = {
+      addWithIds: () => idx.addWithIds(unitVec(0), new BigUint64Array([100n])),
+      search: () => idx.search(unitVec(0), 1),
+      searchFiltered: () => idx.searchFiltered(unitVec(0), 1, new BigUint64Array([1n])),
+      'IdMapIndexFilter#search': () => filter.search(unitVec(0), 1),
+      prepareFilter: () => idx.prepareFilter(new BigUint64Array([1n])),
+      contains: () => idx.contains(1n),
+      remove: () => idx.remove(100n),
+      compact: () => idx.compact(),
+      buildIvf: () => idx.buildIvf(1),
+      searchIvf: () => idx.searchIvf(unitVec(0), 1, 1),
+      prepare: () => idx.prepare(),
+      setStagedSearch: () => idx.setStagedSearch(false),
+      write: () => idx.write(file),
+      addLogged: () => logged.addLogged(unitVec(0), new BigUint64Array([200n]), delta),
+      removeLogged: () => logged.removeLogged(200n, delta),
+      compactDelta: () => logged.compactDelta(snapshotFile, delta),
+      load: () => IdMapIndex.load(file).then((i) => loaded.push(i)),
+      loadMmap: () => IdMapIndex.loadMmap(file).then((i) => loaded.push(i)),
+      loadWithDelta: () =>
+        IdMapIndex.loadWithDelta(file, `${file}.delta`).then((i) => loaded.push(i))
+    }
+    for (const [name, call] of Object.entries(calls)) {
+      const result = call()
+      t.ok(result instanceof Promise, `${name} returns a promise`)
+      await rejection(result)
+    }
+    const disposed = filter.dispose()
+    t.is(disposed, undefined, 'IdMapIndexFilter#dispose returns nothing')
+    for (const index of loaded) await index.dispose()
+  } finally {
+    const dispose = idx.dispose()
+    t.ok(dispose instanceof Promise, 'dispose returns a promise')
+    await dispose
+    await logged.dispose()
+    for (const f of [file, snapshotFile, delta, `${file}.delta`]) removeFile(f)
+  }
+})
+
+test(
+  'IdMapIndex async: dispose rejects when freeing the index fails',
+  { skip: IS_MOBILE },
+  async (t) => {
+    const binding = require('../../binding')
+    const original = binding.idx_dispose
+    t.teardown(() => {
+      binding.idx_dispose = original
+    })
+    const failure = new Error('free failed')
+
+    const idle = await filledIndex()
+    binding.idx_dispose = () => {
+      throw failure
+    }
+    let error = null
+    t.execution(() => {
+      error = rejection(idle.dispose())
+    }, 'an idle dispose does not throw synchronously')
+    t.is(await error, failure, 'and rejects with the error')
+
+    const busy = await busyIndex()
+    const build = busy.buildIvf(BUSY_LISTS, BUSY_ITERS)
+    t.is(await rejection(busy.dispose()), failure, 'a dispose queued behind a build rejects too')
+    await build
+    // Both native indexes are freed by their handles' finalizers.
+  }
+)
 
 test('IdMapIndex async: operations on one index run in call order', async (t) => {
   const idx = new IdMapIndex({ dim: DIM, bitWidth: 32 })
@@ -410,6 +501,77 @@ test(
     t.is(error && error.code, errorCode('DuplicateId'), 'a duplicate add rejects')
     t.is(binding.idx_len(handle), N, 'and the index is idle again')
     binding.idx_dispose(handle)
+  }
+)
+
+// A job holds the native index itself, so collecting the JS handle while the
+// job runs cannot free the index under it. Needs `bare --expose-gc`, which
+// `npm run test:integration` passes.
+test(
+  'IdMapIndex async: a running job keeps its index when the handle is collected',
+  { skip: IS_MOBILE },
+  async (t) => {
+    if (typeof globalThis.gc !== 'function') {
+      t.comment('skipped: run bare with --expose-gc')
+      t.pass()
+      return
+    }
+    const binding = require('../../binding')
+    let collected = false
+    const registry = new FinalizationRegistry(() => {
+      collected = true
+    })
+    let handle = binding.idx_create({ dim: BUSY_DIM, storage: 'f32' })
+    registry.register(handle, null)
+    const { vectors, ids } = randomBatch(BUSY_ROWS, BUSY_DIM)
+    await binding.idx_add_async(handle, vectors, ids)
+    let buildDone = false
+    const build = binding.idx_build_ivf_async(handle, BUSY_LISTS, BUSY_ITERS).then(() => {
+      buildDone = true
+    })
+    handle = null
+    for (let i = 0; i < 10 && !collected; i++) {
+      globalThis.gc()
+      await new Promise((resolve) => setTimeout(resolve, 1))
+    }
+    t.ok(collected, 'the handle is collected')
+    t.absent(buildDone, 'while the build is still running')
+    await build
+    t.pass('and the build finishes on its index')
+  }
+)
+
+// A job still waiting for a worker thread when its Bare environment shuts down
+// is dropped, so the shutdown waits only for the job that is running.
+test(
+  'IdMapIndex async: a job still waiting at env shutdown never runs',
+  { skip: IS_MOBILE },
+  async (t) => {
+    t.timeout(120_000)
+    const Thread = require('bare-thread')
+    const base = path.join(os.tmpdir(), `turbovec-ggml-teardown-${os.pid()}`)
+    const ready = `${base}.ready`
+    const written = `${base}.tvim`
+    removeFile(ready)
+    removeFile(written)
+
+    const thread = new Thread(require.resolve('./teardown-worker.js'))
+    let terminated = false
+    try {
+      for (let i = 0; i < 6000 && !fs.existsSync(ready); i++) {
+        await new Promise((resolve) => setTimeout(resolve, 5))
+      }
+      t.ok(fs.existsSync(ready), 'the worker started a build and queued a write behind it')
+      thread.terminate()
+      terminated = true
+    } finally {
+      if (!terminated) thread.terminate()
+      // Waits for the running build, which the shutdown lets finish.
+      thread.join()
+    }
+    t.absent(fs.existsSync(written), 'the queued write never ran')
+    removeFile(ready)
+    removeFile(written)
   }
 )
 

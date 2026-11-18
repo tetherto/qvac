@@ -46,6 +46,9 @@
   addon's own worker threads (`JsAsyncTask::runOn`), and reads its arguments
   with inference-addon-cpp's JS helpers. The native build requires
   `qvac-lib-inference-addon-cpp` 1.7.0 or newer.
+- The addon pins its native library in memory once its worker threads start,
+  as the other addons do: those threads outlive any one Bare environment, so
+  the library stays loaded when a worklet that used it ends.
 - `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries
   `qvac-fabric` `11739.3.0#1` -> `11739.4.0`
   ([#5831](https://github.com/tetherto/qvac/pull/5831)): opt-in WebGPU builds,

@@ -20,6 +20,7 @@
 #include <bare.h>
 #include <inference-addon-cpp/Errors.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
+#include <inference-addon-cpp/Pin.hpp>
 #include <qvac-addon/fabric-bind.h>
 
 #include "VectorIndex.hpp"
@@ -538,8 +539,16 @@ constexpr size_t BULK_THREADS = 1;
 constexpr size_t SEARCH_THREADS = 1;
 
 // Never destroyed, so static destruction at process exit cannot wait on a
-// running job, and JsAsyncTask's executor lifetime rule always holds.
+// running job, and JsAsyncTask's executor lifetime rule always holds. The
+// pools' threads outlive any one Bare environment and run code in this
+// library, so the library is pinned, as the other addons pin theirs:
+// unloading it when a worklet ends would leave those threads in unmapped code.
 WorkerPool& pool(Lane lane) {
+  static const bool pinned = [] {
+    qvac_lib_inference_addon_cpp::pinAddon();
+    return true;
+  }();
+  (void)pinned;
   static auto* bulk = new WorkerPool(BULK_THREADS);
   static auto* search = new WorkerPool(SEARCH_THREADS);
   return lane == Lane::Bulk ? *bulk : *search;
