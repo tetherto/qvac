@@ -58,6 +58,5 @@ if (['format', 'lint', 'typecheck', 'unit'].includes(step)) {
     // mypy cannot follow the package's star re-exports, so names imported from tetherto.qvac_sdk are untyped here.
     run(py, ['-m', 'mypy', 'examples', '--disable-error-code', 'attr-defined'])
   }
-  // Mocked unit tests and transport tests; real-worker tests skip themselves with no worker built.
   if (step === 'unit') run(py, ['-m', 'pytest', 'tests/', '-v'])
 } else throw new Error('usage: python.mjs format | lint | typecheck | unit')

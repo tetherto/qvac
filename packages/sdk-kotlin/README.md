@@ -503,18 +503,11 @@ several times over while it is decoded, so account for device RAM.
 
 The runnable examples the docs embed live in [`examples/`](examples/README.md).
 
-Real-engine cross-client conformance uses the same corpus as JS/Python:
-
-```bash
-QVAC_RUN_CONFORMANCE=1 ./gradlew :jvm-barekit:test --tests '*WorkerConformanceTest' --rerun-tasks
-```
-
-This downloads small models and tests generation, translation, embeddings,
-load/unload, cancellation, the tool loop, and TTS. Without the opt-in variable
-this test is explicitly skipped; `:jvm-barekit:test` still starts the worker
-and checks a heartbeat. CI runs real inference on `test-e2e-smoke`-labelled PRs,
-PRs into a `release-*` branch, or manual dispatch. Publishing requires a release
-tag, explicit dispatch, or an SDK release workflow.
+`:jvm-barekit:test` starts the worker and checks a heartbeat. The real-inference
+e2e for this client is the shared catalog in [`../sdk-e2e`](../sdk-e2e/README.md),
+which the JS and Python clients run as well; its Kotlin runner is an Android app
+in [`../sdk-e2e/runners/kotlin`](../sdk-e2e/runners/kotlin/README.md). Publishing
+requires a release tag, explicit dispatch, or an SDK release workflow.
 
 Central destinations require an in-memory signing key; local Maven
 verification does not.

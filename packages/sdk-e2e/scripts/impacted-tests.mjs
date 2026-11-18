@@ -53,9 +53,6 @@ const SCOPED_DIRS = [
   path.join(E2E_ROOT, 'fixtures'),
   path.join(E2E_ROOT, 'assets')
 ]
-// The conformance corpus and the JS runner for it are run by each client's own
-// conformance test, never by an e2e leg, so a change to them can touch no testId.
-const UNSCOPED_DIRS = [path.join(CATALOG_DIR, 'conformance'), path.join(RUNNER_DIR, 'conformance')]
 
 // Hygiene, not a security control: this script is PR-authored, so the workflow
 // validates what it emits before anything reaches a producer.
@@ -486,7 +483,6 @@ function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, hunksByFile 
   // spellings match.
   const toPrefix = (dir) => `${toPosix(path.relative(repoRoot, dir))}/`
   const scopedPrefixes = SCOPED_DIRS.map(toPrefix)
-  const unscopedPrefixes = UNSCOPED_DIRS.map(toPrefix)
   const handlerModules = readHandlerModules()
   const handlerPaths = new Set(handlerModules.values())
   const handlerOf = (file) => {
@@ -498,8 +494,7 @@ function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, hunksByFile 
   const isApiFile = (file) => file.startsWith(`${SDK_API_ROOT}/`) && file.endsWith('.ts')
   const changedInScope = traversalFree.filter(
     (file) =>
-      (scopedPrefixes.some((p) => file.startsWith(p)) &&
-        !unscopedPrefixes.some((p) => file.startsWith(p))) ||
+      scopedPrefixes.some((p) => file.startsWith(p)) ||
       ENGINE_DIR_RE.test(file) ||
       isApiFile(file) ||
       handlerOf(file) !== null

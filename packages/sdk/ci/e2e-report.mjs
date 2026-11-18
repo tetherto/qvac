@@ -353,8 +353,8 @@ export async function plan(env) {
       inference: list('inference-version', env.INFERENCE_VERSION)
     }
     const tests = list('filter', env.FILTER)
-    // The dispatch's suite and options go to every Device Farm row and the SDK's desktop rows; sdk-python and
-    // sdk-kotlin's conformance keep the suite their label gives them.
+    // The dispatch's suite and options go to every Device Farm row and the SDK's desktop rows; sdk-python's rows keep
+    // the suite their label gives them.
     const withOptions = (r) => ({ ...r, suite: encodeOptions(suite, options), tests })
     return output(env, {
       mode: 'dispatch',
