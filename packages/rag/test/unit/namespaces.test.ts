@@ -89,7 +89,7 @@ test('listNamespaces reports space, index, revision and counts', async (t) => {
   ])
 })
 
-test('dropNamespace removes everything, and neither reopen, import nor create brings it back', async (t) => {
+test('dropNamespace removes everything, and only importing an earlier export brings it back', async (t) => {
   const { store, dir, open } = await setup(t)
   const rag = await open({ snapshotEvery: 1 })
   await rag.createNamespace({ name: 'ns', space: SPACE })
@@ -144,23 +144,22 @@ test('dropNamespace removes everything, and neither reopen, import nor create br
   t.alike((await reopened.listDocuments({ namespace: 'ns' })).documents, [], 'starts empty')
   t.alike(await reopened.search({ ...query, scope: { namespace: 'ns' } }), [])
 
-  await rejectsWithCode(
-    t,
-    reopened.importNamespace({ namespace: 'ns', source: replay(backup) }),
-    ERR_CODES.IMPORT_LINEAGE_MISMATCH,
-    'an export from before the drop is refused',
-    /was dropped/
+  const restored = await reopened.importNamespace({ namespace: 'ns', source: replay(backup) })
+  t.alike(
+    restored.documents.map((entry) => [entry.id, entry.status]),
+    [
+      ['a', 'created'],
+      ['b', 'created']
+    ],
+    'an export from before the drop restores into the re-created namespace'
   )
-  await rejectsWithCode(
-    t,
-    reopened.importNamespace({ namespace: 'elsewhere', source: replay(backup) }),
-    ERR_CODES.IMPORT_LINEAGE_MISMATCH,
-    'under another name too'
-  )
-  t.alike((await reopened.listDocuments({ namespace: 'ns' })).documents, [])
+  t.is((await reopened.search({ ...query, scope: { namespace: 'ns' } })).length, 3)
+
+  const copy = await reopened.importNamespace({ namespace: 'elsewhere', source: replay(backup) })
+  t.is(copy.documents.length, 2, 'and under another name')
   t.alike(
     (await reopened.listNamespaces()).map((ns) => ns.name),
-    ['keep', 'ns']
+    ['elsewhere', 'keep', 'ns']
   )
 
   await reopened.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['new', [1, 0, 0]]])] })

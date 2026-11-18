@@ -4,12 +4,10 @@ import { QvacErrorRAG, ERR_CODES } from '../errors.js'
 import { FIRST_NATIVE_ID, decodeVectorInto, encodeNativeId } from '../db/encoding.js'
 import {
   DOCUMENTS,
-  DROPPED_LINEAGES,
   NAMESPACES,
   SPACES,
   TOMBSTONES,
   type DocumentRecord,
-  type DroppedLineageRecord,
   type NamespaceRecord,
   type SpaceRecord,
   type TombstoneRecord
@@ -226,16 +224,6 @@ async function prepareNamespace(
   header: Header,
   storage: string
 ): Promise<NamespaceRecord> {
-  const dropped = await tx.get<DroppedLineageRecord>(DROPPED_LINEAGES, {
-    lineageId: header.lineageId
-  })
-  if (dropped) {
-    throw new QvacErrorRAG({
-      code: ERR_CODES.IMPORT_LINEAGE_MISMATCH,
-      adds: `the export is from namespace '${dropped.namespace}', which was dropped`
-    })
-  }
-
   const ns = await tx.get<NamespaceRecord>(NAMESPACES, { name: namespace })
   if (!ns) {
     if (!(await tx.get<SpaceRecord>(SPACES, { spaceId: header.spaceId }))) {

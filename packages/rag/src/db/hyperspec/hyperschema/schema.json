@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 3,
   "schema": [
     {
       "name": "spaces",
@@ -336,32 +336,6 @@
           "required": true,
           "type": "date",
           "version": 3
-        }
-      ]
-    },
-    {
-      "name": "droppedLineages",
-      "namespace": "rag",
-      "compact": false,
-      "flagsPosition": -1,
-      "fields": [
-        {
-          "name": "lineageId",
-          "required": true,
-          "type": "buffer",
-          "version": 4
-        },
-        {
-          "name": "namespace",
-          "required": true,
-          "type": "string",
-          "version": 4
-        },
-        {
-          "name": "droppedAt",
-          "required": true,
-          "type": "date",
-          "version": 4
         }
       ]
     }

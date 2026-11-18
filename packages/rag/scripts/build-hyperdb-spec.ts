@@ -116,17 +116,6 @@ function buildRAGSchema(schemaDir: string = SCHEMA_DIR) {
     ]
   })
 
-  // The lineage of every dropped namespace, so an export taken before the drop
-  // can't be imported back.
-  rag.register({
-    name: 'droppedLineages',
-    fields: [
-      { name: 'lineageId', type: 'buffer', required: true },
-      { name: 'namespace', type: 'string', required: true },
-      { name: 'droppedAt', type: 'date', required: true }
-    ]
-  })
-
   Hyperschema.toDisk(schema, { esm: false })
 
   console.log('RAG HyperDB schema generated')
@@ -162,11 +151,6 @@ function buildRAGDatabase(schemaDir: string = SCHEMA_DIR, dbDir: string = DB_DIR
     name: 'tombstones',
     schema: '@rag/tombstones',
     key: ['namespace', 'documentId']
-  })
-  dbNs.collections.register({
-    name: 'droppedLineages',
-    schema: '@rag/droppedLineages',
-    key: ['lineageId']
   })
 
   HyperDB.toDisk(db, { esm: false })

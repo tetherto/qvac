@@ -212,7 +212,7 @@ A delete record removes the target's document unless the target holds a newer ge
 
 Each document is checked before it commits: contiguous ordinals, `dimensions × 4` vector bytes, finite components, and a content hash that matches its text, metadata and, when the source document was ingested with vectors, its vectors. A bad document, a stream cut short, a missing or wrong trailer, or a frame over 64 MiB fails with `IMPORT_INVALID`; documents committed before it stay, and a document is never committed in part. Memory holds one document's chunks at a time. `signal` is checked before each commit, once the write lock is held: an abort keeps what is committed and returns `cancelled: true`. `onProgress({ documents, deletes })` reports the documents and delete records read.
 
-An export of a namespace that has since been dropped is refused with `IMPORT_LINEAGE_MISMATCH`, under any name.
+An export of a namespace that has since been dropped imports like any other: into a new or empty namespace it restores the documents with their lineage.
 
 ### `listNamespaces()`
 
@@ -220,7 +220,7 @@ Returns every namespace as `{ name, spaceId, space, index: { storage }, revision
 
 ### `dropNamespace({ name })`
 
-Deletes the namespace with all its documents, chunks, delete records and index snapshot, in one batch, and returns `{ name, documentCount, chunkCount }`. Nothing comes back on reopen. `createNamespace` with the same name starts an empty namespace with a new lineage, and an export taken before the drop can't be imported again. The embedding space record stays for other namespaces. A namespace that doesn't exist fails with `NAMESPACE_NOT_FOUND`.
+Deletes the namespace with all its documents, chunks, delete records and index snapshot, in one batch, and returns `{ name, documentCount, chunkCount }`. Nothing comes back on reopen. `createNamespace` with the same name starts an empty namespace with a new lineage. An export taken before the drop can still be imported to restore it. The embedding space record stays for other namespaces. A namespace that doesn't exist fails with `NAMESPACE_NOT_FOUND`.
 
 ### `scoped(scope)`
 

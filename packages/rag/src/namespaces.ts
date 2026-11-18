@@ -2,7 +2,6 @@ import { QvacErrorRAG, ERR_CODES } from './errors.js'
 import {
   CHUNKS,
   DOCUMENTS,
-  DROPPED_LINEAGES,
   MUTATIONS,
   NAMESPACES,
   NATIVE_IDS,
@@ -50,14 +49,13 @@ export async function listNamespaceSummaries(reader: HyperDBReader): Promise<Nam
   return summaries
 }
 
-// Deletes every row of the namespace in one batch, and records its lineage so
-// an export taken before the drop can't be imported back. The space record
-// stays; other namespaces may share it.
+// Deletes every row of the namespace in one batch. The space record stays;
+// other namespaces may share it.
 export async function dropNamespaceRows(
   tx: HyperDBTransaction,
   name: string
 ): Promise<DropNamespaceResult> {
-  const ns = await getNamespace(tx, name)
+  await getNamespace(tx, name)
   const range = { gte: { namespace: name }, lte: { namespace: name } }
 
   let documentCount = 0
@@ -68,13 +66,6 @@ export async function dropNamespaceRows(
   })
   for (const collection of [CHUNKS, NATIVE_IDS, TOMBSTONES, MUTATIONS]) {
     await deleteAll(tx, collection, range)
-  }
-  if (ns.lineageId) {
-    await tx.insert(DROPPED_LINEAGES, {
-      lineageId: ns.lineageId,
-      namespace: name,
-      droppedAt: new Date()
-    })
   }
   await tx.delete(NAMESPACES, { name })
   await tx.flush()

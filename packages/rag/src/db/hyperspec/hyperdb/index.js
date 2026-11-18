@@ -4,7 +4,7 @@
 const { IndexEncoder, c, b4a } = require('hyperdb/runtime')
 const { version, getEncoding, setVersion } = require('./messages.js')
 
-const versions = { schema: version, db: 3 }
+const versions = { schema: version, db: 2 }
 
 // '@rag/spaces' collection key
 const collection0_key = new IndexEncoder([
@@ -549,73 +549,6 @@ const collection6 = {
   decodedVersion: 0
 }
 
-// '@rag/droppedLineages' collection key
-const collection7_key = new IndexEncoder([
-  IndexEncoder.BUFFER
-], { prefix: 7 })
-
-function collection7_indexify (record) {
-  const a = record.lineageId
-  return a === undefined ? [] : [a]
-}
-
-// '@rag/droppedLineages' value encoding
-const collection7_enc = getEncoding('@rag/droppedLineages/hyperdb#7')
-
-// '@rag/droppedLineages' reconstruction function
-function collection7_reconstruct (schemaVersion, keyBuf, valueBuf) {
-  const key = collection7_key.decode(keyBuf)
-  setVersion(schemaVersion)
-  const state = { start: 0, end: valueBuf.byteLength, buffer: valueBuf }
-  const type = c.uint.decode(state)
-  if (type !== 0) throw new Error('Unknown collection type: ' + type)
-  collection7.decodedVersion = c.uint.decode(state)
-  const record = collection7_enc.decode(state)
-  record.lineageId = key[0]
-  return record
-}
-// '@rag/droppedLineages' key reconstruction function
-function collection7_reconstruct_key (keyBuf) {
-  const key = collection7_key.decode(keyBuf)
-  return {
-    lineageId: key[0]
-  }
-}
-
-// '@rag/droppedLineages'
-const collection7 = {
-  name: '@rag/droppedLineages',
-  id: 7,
-  version: 3,
-  encodeKey (record) {
-    const key = [record.lineageId]
-    return collection7_key.encode(key)
-  },
-  encodeKeyRange ({ gt, lt, gte, lte } = {}) {
-    return collection7_key.encodeRange({
-      gt: gt ? collection7_indexify(gt) : null,
-      lt: lt ? collection7_indexify(lt) : null,
-      gte: gte ? collection7_indexify(gte) : null,
-      lte: lte ? collection7_indexify(lte) : null
-    })
-  },
-  encodeValue (schemaVersion, collectionVersion, record) {
-    setVersion(schemaVersion)
-    const state = { start: 0, end: 2, buffer: null }
-    collection7_enc.preencode(state, record)
-    state.buffer = b4a.allocUnsafe(state.end)
-    state.buffer[state.start++] = 0
-    state.buffer[state.start++] = collectionVersion
-    collection7_enc.encode(state, record)
-    return state.buffer
-  },
-  trigger: null,
-  reconstruct: collection7_reconstruct,
-  reconstructKey: collection7_reconstruct_key,
-  indexes: [],
-  decodedVersion: 0
-}
-
 const collections = [
   collection0,
   collection1,
@@ -623,8 +556,7 @@ const collections = [
   collection3,
   collection4,
   collection5,
-  collection6,
-  collection7
+  collection6
 ]
 
 const indexes = [
@@ -641,7 +573,6 @@ function resolveCollection (name) {
     case '@rag/nativeIds': return collection4
     case '@rag/mutations': return collection5
     case '@rag/tombstones': return collection6
-    case '@rag/droppedLineages': return collection7
     default: return null
   }
 }
