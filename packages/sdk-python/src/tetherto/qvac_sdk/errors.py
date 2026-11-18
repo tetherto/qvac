@@ -26,8 +26,8 @@ from ._generated.error_codes import (
 )
 
 # Numeric codes come from the generated registries (contract/error-codes.json,
-# the SDK's schemas/sdk-errors-*.ts), so they can't drift from the TS side --
-# generate.py --check fails if a code moves. Only the codes Python references
+# the SDK's schemas/sdk-errors-*.ts), so they can't drift from the TS side.
+# Only the codes Python references
 # are aliased here; the class `name` strings below are the wire identities the
 # reconstructor matches on.
 _CODES = {**SERVER_ERROR_CODES, **CLIENT_ERROR_CODES, **REGISTRY_ERROR_CODES}
