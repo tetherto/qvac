@@ -506,6 +506,25 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
       .vocab = mdl != nullptr ? llama_model_get_vocab(mdl) : nullptr,
       .speculative = state.llmContext_->getSpeculative(),
   };
+  // A unified pool is only split evenly: admission checks each slot against
+  // its own cap, so caps adding up to more than the pool would let the pool
+  // fill mid-decode and fail every request in progress.
+  if (cparams.kv_unified &&
+      (cparams.kv_unified_per_slot <= 0 ||
+       static_cast<uint64_t>(cparams.kv_unified_per_slot) * batchSize >
+           ctxTotalTokens)) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        string_format(
+            "[LlamaModel] kv_unified with parallel=%zu requires "
+            "kv_unified_per_slot, and parallel x kv_unified_per_slot "
+            "(%zu x %d) must fit ctx_size=%u; leave ctx_size unset to size "
+            "the pool to it",
+            batchSize,
+            batchSize,
+            cparams.kv_unified_per_slot,
+            ctxTotalTokens));
+  }
   // The scheduler validates its own geometry (ctxTotalTokens / batchSize, and
   // batchCapacity >= batchSize) with std::invalid_argument, which would escape
   // load unmapped. Both traps are really a `parallel` misconfiguration, so

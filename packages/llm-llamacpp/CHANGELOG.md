@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `kv_unified` and `kv_unified_per_slot` load options, llama-server's
+  `--kv-unified` and `--kv-unified-per-slot`: the `parallel` slots can share
+  one KV buffer split evenly between them. With `ctx_size` unset, the KV cache
+  is sized to `parallel x kv_unified_per_slot`. With `parallel >= 2`,
+  `kv_unified` requires `kv_unified_per_slot`, and the caps must fit
+  `ctx_size`; otherwise the load fails with `InvalidArgument`.
+  `kv_unified_per_slot` also caps each slot without `kv_unified`.
+
 ## [0.71.0] - 2026-11-16
 
 ### Changed

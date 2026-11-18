@@ -5,6 +5,7 @@
 #include <cinttypes>
 #include <initializer_list>
 #include <iterator>
+#include <limits>
 #include <mutex>
 #include <sstream>
 #include <stdexcept>
@@ -2095,6 +2096,19 @@ NormalizedLoad normalizeLoadForFit(
 
   auto ctxArg = common_params_parser_init(
       params, LLAMA_EXAMPLE_COMMON, [](int, char**) {});
+  // llama-server's KV pool options are not registered for
+  // LLAMA_EXAMPLE_COMMON, so fabric's server definitions are used as they are.
+  common_params serverDefaults;
+  auto serverArg = common_params_parser_init(
+      serverDefaults, LLAMA_EXAMPLE_SERVER, [](int, char**) {});
+  for (auto& opt : serverArg.options) {
+    if (std::ranges::any_of(opt.args, [](const char* name) {
+          return std::string_view(name) == "--kv-unified" ||
+                 std::string_view(name) == "--kv-unified-per-slot";
+        })) {
+      ctxArg.options.push_back(std::move(opt));
+    }
+  }
 
   // disable warmup run
   params.warmup = false;
@@ -2263,6 +2277,27 @@ NormalizedLoad normalizeLoadForFit(
         "[LlamaModel] split-mode 'tensor': auto-fit is not available in this "
         "mode and has been disabled; gpu_layers defaults to every layer and "
         "ctx_size to the model's trained context unless set explicitly\n");
+  }
+
+  // As llama-server: without ctx-size, kv-unified-per-slot sizes the KV pool
+  // to parallel x kv-unified-per-slot; ctx-size 0 keeps the trained context.
+  if (params.kv_unified_per_slot > 0 && params.n_ctx == 0 &&
+      params.fit_params_min_ctx != std::numeric_limits<uint32_t>::max()) {
+    const int64_t pool =
+        static_cast<int64_t>(params.n_parallel) * params.kv_unified_per_slot;
+    if (pool > std::numeric_limits<int32_t>::max()) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          string_format(
+              "%s: parallel x kv-unified-per-slot (%d x %d) exceeds the "
+              "largest ctx-size.\n",
+              K_LEGACY_PARSER_NAME.data(),
+              params.n_parallel,
+              params.kv_unified_per_slot));
+    }
+    params.n_ctx = static_cast<int32_t>(pool);
   }
 
   const uint32_t parsedBatchPoll = params.cpuparams_batch.poll;

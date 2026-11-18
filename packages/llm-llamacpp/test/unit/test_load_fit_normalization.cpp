@@ -2021,6 +2021,53 @@ TEST_F(LoadFitNormalizationTest, FalseyValueOnNegatedSpellingEnablesKvOffload) {
   EXPECT_FALSE(result.params.no_kv_offload);
 }
 
+// llama-server's --kv-unified-per-slot without -c sizes the pool to
+// parallel x per-slot (baseConfig has parallel 2).
+TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotSizesThePool) {
+  auto config = baseConfig();
+  config["kv_unified"] = "true";
+  config["kv_unified_per_slot"] = "1024";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_TRUE(result.params.kv_unified);
+  EXPECT_EQ(result.params.kv_unified_per_slot, 1024);
+  EXPECT_EQ(result.params.n_ctx, 2048);
+  EXPECT_TRUE(result.fitSnapshot.kvUnified);
+  EXPECT_EQ(result.fitSnapshot.nCtx, 2048U);
+}
+
+TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotKeepsExplicitContext) {
+  for (const std::string ctxSize : {"4096", "0"}) {
+    auto config = baseConfig();
+    config["kv-unified-per-slot"] = "1024";
+    config["ctx-size"] = ctxSize;
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "none"}));
+    EXPECT_EQ(result.params.n_ctx, std::stoi(ctxSize)) << ctxSize;
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotPoolOverflowIsRejected) {
+  auto config = baseConfig();
+  config["kv-unified-per-slot"] = "2000000000";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
 TEST_F(LoadFitNormalizationTest, UnknownBooleanValueIsRejected) {
   auto config = baseConfig();
   config["kv-offload"] = "maybe";

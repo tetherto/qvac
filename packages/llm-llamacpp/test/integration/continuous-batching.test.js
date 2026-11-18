@@ -302,6 +302,10 @@ async function setupModel(t, configOverrides = {}) {
     verbosity: '2',
     ...configOverrides
   }
+  // An override of `undefined` leaves the key unset.
+  for (const key of Object.keys(config)) {
+    if (config[key] === undefined) delete config[key]
+  }
   const specLogger = attachSpecLogger({ forwardToConsole: true })
   const model = new LlmLlamacpp({
     files: { model: [modelPath] },
@@ -310,12 +314,12 @@ async function setupModel(t, configOverrides = {}) {
     opts: { stats: true }
   })
 
-  await model.load()
-
   t.teardown(async () => {
     await model.unload().catch(() => {})
     specLogger.release()
   })
+
+  await model.load()
 
   return model
 }
@@ -1307,5 +1311,61 @@ test(
     t.ok(toNumber(stats.generatedTokens) > 0, 'plain run() reports its own generatedTokens')
     t.ok(toNumber(stats.TTFT) > 0, 'plain run() reports its own time to first token')
     t.ok(toNumber(stats.promptTokens) > 0, 'plain run() reports its own promptTokens')
+  }
+)
+
+// One KV pool split evenly, as llama-server's `-kvu --kv-unified-per-slot`:
+// with ctx_size unset the pool is parallel x kv_unified_per_slot (1024 here)
+// and each slot is capped at 512.
+test(
+  'continuous batching: kv_unified_per_slot splits one KV pool evenly across slots',
+  { timeout: 600_000, skip: isMobile },
+  async (t) => {
+    const model = await setupModel(t, {
+      parallel: '2',
+      kv_unified: 'true',
+      kv_unified_per_slot: '512',
+      ctx_size: undefined
+    })
+
+    const cases = ['capital-france', 'sky-color'].map((id) => CASES.find((item) => item.id === id))
+    const responses = await Promise.all(
+      cases.map((item) => model.run(buildPrompt(item), runOptionsForCase(item)))
+    )
+    const texts = await Promise.all(responses.map(collectText))
+    for (let idx = 0; idx < cases.length; idx++) {
+      t.comment(`${cases[idx].id}: ${texts[idx].trim()}`)
+      t.ok(
+        containsExpectedWord(texts[idx], cases[idx].expected),
+        `${cases[idx].id} answered from the shared pool`
+      )
+    }
+
+    // About 600 tokens: fits the 1024-cell pool but not one 512-token slot.
+    const longPrompt = [{ role: 'user', content: `Repeat: ${'apple '.repeat(600)}` }]
+    const error = await model
+      .run(longPrompt)
+      .then(collectText)
+      .then(
+        () => null,
+        (err) => err
+      )
+    t.comment(`long prompt: ${error?.message}`)
+    t.ok(
+      /(per-sequence cap|max context tokens) 512\b/.test(error?.message || ''),
+      'a prompt over one slot is rejected against the 512-token cap, not the pool'
+    )
+  }
+)
+
+test(
+  'continuous batching: kv_unified without kv_unified_per_slot is rejected at load',
+  { timeout: 600_000, skip: isMobile },
+  async (t) => {
+    await t.exception(
+      setupModel(t, { parallel: '2', kv_unified: 'true' }),
+      /requires kv_unified_per_slot/,
+      'a shared pool with no per-slot cap is refused'
+    )
   }
 )

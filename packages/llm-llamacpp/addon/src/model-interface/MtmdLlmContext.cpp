@@ -1453,9 +1453,13 @@ llama_pos MtmdLlmContext::removeLastNTokens(llama_pos count) {
 }
 
 llama_pos MtmdLlmContext::ctxCeiling() const {
-  return perSeqCtxCeiling_ > 0
-             ? perSeqCtxCeiling_
-             : static_cast<llama_pos>(llama_n_ctx(modelCtx_.lctx));
+  if (perSeqCtxCeiling_ > 0) {
+    return perSeqCtxCeiling_;
+  }
+  const auto nCtx = static_cast<llama_pos>(llama_n_ctx(modelCtx_.lctx));
+  return params_.kv_unified_per_slot > 0
+             ? std::min(nCtx, params_.kv_unified_per_slot)
+             : nCtx;
 }
 
 cache::Ledger

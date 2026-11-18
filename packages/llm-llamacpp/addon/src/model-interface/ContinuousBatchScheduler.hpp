@@ -68,6 +68,12 @@ namespace qvac_lib_inference_addon_llama::batching {
     unsigned promptSize, unsigned promptKvSize, int nPredict,
     unsigned perSeqMaxTokens);
 
+/// Per-sequence hard ceiling, as llama-server's `n_ctx_slot()`: the slot's
+/// even share of the pool, `ctxTotalTokens / batchSize`, lowered to
+/// `kvUnifiedPerSlot` when that is positive.
+[[nodiscard]] unsigned perSeqCeiling(
+    unsigned ctxTotalTokens, size_t batchSize, int32_t kvUnifiedPerSlot);
+
 /// Observed end-to-end figures for one finished request, computed from its
 /// wall-clock stamps at drain. This is what the submitting caller experienced
 /// (queue wait + shared-GPU decode) — NOT the request's isolated compute
@@ -303,8 +309,7 @@ public:
   /// n_batch).
   /// @param ctxTotalTokens     Whole-pool KV-cache size (== llama_n_ctx).
   ///                            Partitioned uniformly across `batchSize`
-  ///                            slots; per-seq ceiling is
-  ///                            `ctxTotalTokens / batchSize`.
+  ///                            slots; per-seq ceiling is `perSeqCeiling`.
   /// @param batchSize          Concurrent slots (== llama_n_seq_max).
   /// @param batchCapacity      Underlying llama_batch token capacity.
   /// @param baseParams          Baseline llama/common params copied into each

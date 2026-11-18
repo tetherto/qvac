@@ -18,6 +18,7 @@
   - [SequenceDriver and TextLlmContext](#sequencedriver-and-textllmcontext)
 - [Queued vs active requests](#queued-vs-active-requests)
 - [Per-sequence context caps](#per-sequence-context-caps)
+  - [One shared KV pool](#one-shared-kv-pool)
 - [Sequence ids and streaming](#sequence-ids-and-streaming)
 - [Cache per slot](#cache-per-slot)
 - [KV reuse: single-prompt vs batch](#kv-reuse-single-prompt-vs-batch)
@@ -242,7 +243,7 @@ Completion is not the only terminal: `failGroupLocked` also settles a group, wit
 **Per-sequence context cap:**
 
 ```
-perSeqMaxTokens_ = ctxTotalTokens / batchSize
+perSeqMaxTokens_ = min(ctxTotalTokens / batchSize, kv_unified_per_slot)  // the cap only when set
 ```
 
 This is enforced at admission — every check throws `InvalidArgument` before any state is mutated — and there are four of them, not one:
@@ -342,12 +343,25 @@ slot freed, BatchGroup updated
 
 ## Per-sequence context caps
 
-With `parallel = N` and `ctx_size = C`, each slot gets `C / N` tokens. This affects:
+With `parallel = N` and `ctx_size = C`, each slot gets `C / N` tokens, or `kv_unified_per_slot` if that is lower. Below, `C / N` stands for whichever applies. This affects:
 
 - **Admission** — a generating prompt must leave room to generate, so it is rejected once it *reaches* `C / N`; a prefill-only prompt may fill it exactly and is rejected only above it. Either way the rejection is `InvalidArgument` before any tokens are staged.
 - **KV cells** — the physical cell span (`getKvCellsUsed()` plus the plan's KV tokens) is checked against `C / N` independently of the token count, because M-RoPE media consumes more cells than positions.
 - **Budget check** — when `n_predict > 0`, `max(prompt_tokens, prompt_kv_cells) + n_predict` must fit within `C / N`; requests that exceed it are rejected at admission rather than truncated silently. A non-positive `n_predict` (e.g. `predict: -1`) has no budget to check and is admitted, then stops at the slot ceiling with `contextOverflow`.
 - **Cache loading** — the overflow check on cached prompts uses `C / N` as the ceiling.
+
+### One shared KV pool
+
+By default each slot has its own KV buffer of `C / N` cells. `kv_unified: 'true'` keeps all slots in one buffer of `C` cells instead, like llama-server's `--kv-unified`, and `kv_unified_per_slot` caps each slot, like `--kv-unified-per-slot`:
+
+```js
+config: { parallel: '4', kv_unified: 'true', kv_unified_per_slot: '2048' } // one 8192-cell pool, 2048 per slot
+```
+
+- **Pool size** — with `ctx_size` unset, the pool is sized to `parallel x kv_unified_per_slot`, as llama-server does without `-c`. An explicit `ctx_size` is kept, and `ctx_size: 0` keeps the model's trained context.
+- **Only an even split** — with `parallel >= 2`, `kv_unified` requires `kv_unified_per_slot`, and `parallel x kv_unified_per_slot` must fit the pool, or the load fails with `InvalidArgument`. Admission checks each slot only against its own cap, so caps adding up to more than the pool would let the pool fill mid-decode and fail every request in progress. llama-server accepts that setup; the addon does not.
+- **What changes** — each slot gets the same context as with separate buffers. Sliding-window models keep one window cache of `min(C, n_swa x N + n_ubatch)` cells instead of `N` of `n_swa + n_ubatch`. MiniMax-M3 and Qwen4exp turn sparse attention off when more than one sequence shares the buffer, so keep separate buffers there.
+- **Without `kv_unified`** — `kv_unified_per_slot` still caps each slot and still sizes an unset `ctx_size`, again as llama-server does.
 
 ---
 
