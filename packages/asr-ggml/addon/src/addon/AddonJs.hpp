@@ -1065,8 +1065,9 @@ JSCATCH
 //
 // Returns the backend the engine resolved at load() as a JS object:
 // `{ backendDevice, backendId, backendName, backendDescription,
-// encoderBackend, encoderOnCoreml }` (+ whisper-only extras
-// `gpuMemTotalMb`/`gpuMemFreeMb`, -1 = device does not report). The
+// encoderBackend, encoderOnCoreml }`. Parakeet also reports
+// `supportsCacheAwareStreaming`. Whisper reports `gpuMemTotalMb` and
+// `gpuMemFreeMb` (-1 = device does not report). The
 // description is the human-readable GPU name (e.g. "NVIDIA GeForce RTX
 // 3090") recovered from the ggml device registry; it is the
 // nvidia-smi-independent fallback the perf reporter uses on CI runners
@@ -1120,6 +1121,10 @@ inline js_value_t* getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
         env,
         "modelType",
         js::String::create(env, parakeetModel->getModelTypeName()));
+    result.setProperty(
+        env,
+        "supportsCacheAwareStreaming",
+        js::Boolean::create(env, parakeetModel->supportsCacheAwareStreaming()));
     return result;
   }
 

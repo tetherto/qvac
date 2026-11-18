@@ -94,6 +94,14 @@ def test_run_config_forwards_ms_streaming_controls():
         client.close()
 
 
+def test_run_config_omits_decode_window_when_unset():
+    client = build_client(build_streaming_model_config(streaming_chunk_ms=None))
+    try:
+        assert "streamingChunkMs" not in client.build_run_config()
+    finally:
+        client.close()
+
+
 def test_run_config_includes_history_when_set():
     client = build_client(build_streaming_model_config(streaming_history_ms=30000))
 

@@ -555,6 +555,9 @@ int ParakeetModel::resolveStreamingChunkMs(
     ModelType modelType, int configuredChunkMs) {
   if (configuredChunkMs > 0)
     return configuredChunkMs;
+  // The engine selects the default for the specific TDT variant.
+  if (modelType == ModelType::TDT)
+    return pkt::StreamingOptions::automatic_chunk_ms;
   if (modelType == ModelType::NEMOTRON)
     return ParakeetConfig::DEFAULT_NEMOTRON_STREAMING_CHUNK_MS;
   if (modelType == ModelType::RNNT)
@@ -576,6 +579,7 @@ void ParakeetModel::captureBackend() {
   encoder_backend_ = engine_->encoder_backend();
   encoder_on_coreml_ = engine_->encoder_on_coreml() ? 1 : 0;
   modelTypeName_ = engine_->model_type();
+  supports_cache_aware_streaming_ = engine_->supports_cache_aware_streaming();
 
   QLOG(
       logger::Priority::INFO,
