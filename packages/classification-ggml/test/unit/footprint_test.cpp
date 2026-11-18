@@ -309,6 +309,58 @@ TEST(ModelFootprint, BridgeDepthHoldsOneSlotPerSizeUpToTheLimit) {
   }
 }
 
+// A slot keeps the graph of its padded size for the next call, but each call
+// brings its own pixels: a second, different pair at the same size must give
+// what a fresh model gives for it. Two widths that pad to the same grid share
+// one slot and differ only in padding and cropping, so each must match a fresh
+// model too.
+TEST(ModelFootprint, BridgeDepthSlotReuseTakesEachCallsInput) {
+  const std::string path = envOr("QVAC_BRIDGEDEPTH_MODEL_PATH", "");
+  if (path.empty())
+    GTEST_SKIP() << "QVAC_BRIDGEDEPTH_MODEL_PATH is not set";
+  constexpr uint32_t side = 2 * bd::MIN_SIDE;
+  static_assert(side % bd::PAD_DIVISOR == 0);
+  // Any shift other than LEFT_VIEW_SHIFT changes every pixel of the pattern.
+  constexpr uint32_t otherLeftShift = LEFT_VIEW_SHIFT + 3 * RIGHT_VIEW_SHIFT;
+  constexpr uint32_t otherRightShift = otherLeftShift + RIGHT_VIEW_SHIFT;
+  // Both pad up to side + PAD_DIVISOR, the grid after the one of `side`.
+  constexpr uint32_t narrowWidth = side + 1;
+  constexpr uint32_t wideWidth = side + bd::PAD_DIVISOR - 1;
+  auto run = [&](bd::BridgeDepthModel& m,
+                 uint32_t width,
+                 uint32_t leftShift,
+                 uint32_t rightShift) {
+    return std::any_cast<bd::DisparityOutput>(
+               m.process(
+                   std::any(
+                       bd::StereoInput{
+                           syntheticRgb(width, side, leftShift),
+                           syntheticRgb(width, side, rightShift)})))
+        .disparity;
+  };
+  auto fresh = [&](uint32_t width, uint32_t leftShift, uint32_t rightShift) {
+    bd::BridgeDepthModel m(bridgeDepthConfig(path));
+    m.load();
+    return run(m, width, leftShift, rightShift);
+  };
+  bd::BridgeDepthModel model(bridgeDepthConfig(path));
+  model.load();
+
+  const auto first = run(model, side, LEFT_VIEW_SHIFT, RIGHT_VIEW_SHIFT);
+  const auto second = run(model, side, otherLeftShift, otherRightShift);
+  EXPECT_NE(second, first) << "the second pair must give a different map";
+  EXPECT_EQ(second, fresh(side, otherLeftShift, otherRightShift));
+
+  const auto narrow =
+      run(model, narrowWidth, LEFT_VIEW_SHIFT, RIGHT_VIEW_SHIFT);
+  const uint64_t heldAfterNarrow = model.heldSizeSlotBytes();
+  const auto wide = run(model, wideWidth, LEFT_VIEW_SHIFT, RIGHT_VIEW_SHIFT);
+  EXPECT_EQ(model.heldSizeSlotBytes(), heldAfterNarrow)
+      << "both widths must share one slot";
+  EXPECT_EQ(narrow, fresh(narrowWidth, LEFT_VIEW_SHIFT, RIGHT_VIEW_SHIFT));
+  EXPECT_EQ(wide, fresh(wideWidth, LEFT_VIEW_SHIFT, RIGHT_VIEW_SHIFT));
+}
+
 // seedsOverride builds a slightly different graph, in the slot of its padded
 // size: a size run with and without seeds holds one slot, and the run without
 // seeds after the one with them gives the same output as before.
