@@ -113,3 +113,7 @@ module = "tetherto.qvac_sdk._generated.models._internal"
 # enum member on construction (verified: `Model().field == SomeEnum.x`
 # is True). Scoped to this one generated module, not project-wide.
 disable_error_code = ["assignment"]
+
+[[tool.mypy.overrides]]
+module = ["pymongo", "pymongo.*"]
+ignore_missing_imports = true
