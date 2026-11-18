@@ -129,7 +129,7 @@
               "forwardAllArgs": false
             },
             {
-              "command": "node ../../.github/scripts/check-linux-module-cxx-runtime.mjs prebuilds/linux-x64",
+              "command": "node ../../.github/scripts/check-linux-module-cxx-runtime.mjs --fabric ../fabric/prebuilds/linux-x64/qvac__fabric-linux-x64.bare prebuilds/linux-x64",
               "forwardAllArgs": false
             }
           ]
@@ -157,7 +157,7 @@
               "forwardAllArgs": false
             },
             {
-              "command": "node ../../.github/scripts/check-linux-module-cxx-runtime.mjs prebuilds/linux-arm64",
+              "command": "node ../../.github/scripts/check-linux-module-cxx-runtime.mjs --fabric ../fabric/prebuilds/linux-arm64/qvac__fabric-linux-arm64.bare prebuilds/linux-arm64",
               "forwardAllArgs": false
             }
           ]

@@ -2,12 +2,14 @@
  * Decide whether a Linux prebuild depends on a C++ runtime the loading process
  * may not have.
  *
- * Prebuilds link libc++ statically and are dlopen'd by hosts that need not map
+ * Standalone prebuilds link libc++ statically and are dlopen'd by hosts that need not map
  * any C++ runtime (bare-sidecar maps none). A NEEDED shared C++ runtime, or a
  * C++ runtime symbol left undefined, makes a module load only in some
  * processes, and a GPU backend that fails to load falls back to CPU silently.
  *
- * The same rule runs in qvac-registry-vcpkg's qvac-fabric port
+ * Fabric consumers instead require versioned imports exported by their provider.
+ *
+ * The standalone rule runs in qvac-registry-vcpkg's qvac-fabric port
  * (qvac-check-cxx-runtime.cmake); keep the two in step.
  */
 
@@ -85,4 +87,31 @@ export function formatViolations(file, { needed, symbols }, shown = 10) {
     for (const symbol of symbols.slice(0, shown)) lines.push(`    ${symbol}`)
   }
   return lines.join('\n')
+}
+
+export function parseVersionedSymbols(output) {
+  return output
+    .split('\n')
+    .map((line) => line.trim().split(/\s+/)[0])
+    .filter(Boolean)
+}
+
+export function fabricRuntimeViolations({ needed, undefinedSymbols, definedSymbols, fabric }) {
+  const exports = new Set(fabric.symbols.map((symbol) => symbol.replace('@@', '@')))
+  const imports = undefinedSymbols.filter((symbol) => isForbiddenSymbol(symbol.split('@')[0]))
+  const embedded = definedSymbols.filter((symbol) => isForbiddenSymbol(symbol.split('@')[0]))
+  return {
+    needed: [
+      ...needed.filter((lib) => FORBIDDEN_NEEDED.test(lib)),
+      ...(!fabric.soname || !needed.includes(fabric.soname) ? ['missing Fabric DT_NEEDED'] : [])
+    ],
+    symbols: [
+      ...imports.filter((symbol) => !symbol.includes('@') || !exports.has(symbol)),
+      ...embedded.map((symbol) => `embedded C++ runtime: ${symbol}`),
+      ...(!imports.length ? ['no shared C++ runtime imports'] : []),
+      ...(!fabric.symbols.some((symbol) => /^__cxa_throw@@[^@]+$/.test(symbol))
+        ? ['Fabric has no versioned C++ runtime']
+        : [])
+    ]
+  }
 }
