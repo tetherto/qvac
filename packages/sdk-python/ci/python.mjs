@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// sdk-python's targets in one .venv from the host's Python 3.10 or newer: generated | format | lint | typecheck | unit are
-// main's Python PR check steps; e2e runs the suite CI_SUITE names: fast and full, main's real-worker legs, or
-// wheel, which builds the fat wheel for --platform <tag> and tests it installed.
+// sdk-python's targets in one .venv from the host's Python 3.10 or newer: generate | format | lint | typecheck | unit are
+// the Python PR check steps; e2e runs the suite CI_SUITE names: fast and full, the real-worker legs, or wheel, which
+// builds the fat wheel for --platform <tag> and tests it installed. Every step that imports the client generates it
+// first, which exports the SDK contract and so needs the SDK installed and @qvac/inference built.
 
 import { existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
@@ -38,9 +39,9 @@ function venv(name, extras) {
 
 const SOURCES = ['src/tetherto/qvac_sdk', 'scripts/', 'tests/']
 const step = process.argv[2]
-if (['generated', 'format', 'lint', 'typecheck', 'unit'].includes(step)) {
+if (['generate', 'format', 'lint', 'typecheck', 'unit'].includes(step)) {
   const py = venv('.venv', 'gen,dev')
-  if (step === 'generated') run(py, ['scripts/generate.py', '--check'])
+  if (['generate', 'typecheck', 'unit'].includes(step)) run(py, ['scripts/generate.py'])
   if (step === 'format') run(py, ['-m', 'black', '--check', ...SOURCES])
   if (step === 'lint') run(py, ['-m', 'ruff', 'check', ...SOURCES])
   if (step === 'typecheck') {
@@ -62,14 +63,16 @@ if (['generated', 'format', 'lint', 'typecheck', 'unit'].includes(step)) {
   const env = { QVAC_CACHE_DIR: cache }
   if (suite === 'fast' || suite === 'full') {
     const py = venv('.venv', 'gen,dev,vla,notebook')
+    run(py, ['scripts/generate.py'])
     run(py, ['scripts/build_worker.py'])
     // fast: the CLI-set minimal models; the heavy parakeet and BCI streaming tests run in full.
     if (suite === 'fast') run(py, ['-m', 'pytest', '-m', 'not heavy', 'tests/', '-v'])
     else run(py, ['-m', 'pytest', 'tests/', '-v'], env)
   } else if (suite === 'wheel') {
     if (!values.platform) throw new Error('the wheel suite needs --platform <wheel platform tag>')
-    const py = venv('.venv')
+    const py = venv('.venv', 'gen')
     run(py, ['-m', 'pip', 'install', '--upgrade', 'pip', 'build'])
+    run(py, ['scripts/generate.py'])
     run(py, ['scripts/build_worker.py'])
     run(py, ['scripts/build_wheel.py', '--out-dir', 'dist', '--platform', values.platform])
     const test = venv('.venv-wheel')
@@ -83,4 +86,4 @@ if (['generated', 'format', 'lint', 'typecheck', 'unit'].includes(step)) {
     ])
     run(test, ['-m', 'pytest', 'tests/', '-o', 'pythonpath=tests', '-v'], env)
   } else throw new Error(`CI_SUITE must be fast, full or wheel, got '${suite ?? ''}'`)
-} else throw new Error('usage: python.mjs generated | format | lint | typecheck | unit | e2e')
+} else throw new Error('usage: python.mjs generate | format | lint | typecheck | unit | e2e')

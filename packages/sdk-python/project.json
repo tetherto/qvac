@@ -40,7 +40,7 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "packages/sdk-python",
-        "command": "node ci/python.mjs generated"
+        "command": "node ci/python.mjs generate"
       },
       "metadata": {
         "setup": ["python"]
