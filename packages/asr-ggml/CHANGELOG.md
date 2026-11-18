@@ -35,7 +35,7 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
-- Require `inference-addon-cpp` 1.7.0 for the shared runtime-stat value type
+- Require `inference-addon-cpp` 1.6.0 for the shared runtime-stat value type
   ([#5812](https://github.com/tetherto/qvac/pull/5812)).
 
 - Share the `@qvac/fabric` runtime and backend loader, retaining addon-local speech engines built against its headers.
