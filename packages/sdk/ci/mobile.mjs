@@ -92,7 +92,10 @@ function buildKotlin(env) {
     ['install', '--ignore-scripts', '--legacy-peer-deps', '--no-package-lock', `../sdk/${sdkTgz}`],
     { cwd: kotlin, env }
   )
-  run('node', ['runners/kotlin/scripts/device.mjs', 'build', '--prebuilt-sdk'], { cwd: E2E, env })
+  run('node', ['runners/kotlin/scripts/device.mjs', 'build', '--prebuilt-sdk', '--maven'], {
+    cwd: E2E,
+    env
+  })
 }
 
 function build(app, env) {

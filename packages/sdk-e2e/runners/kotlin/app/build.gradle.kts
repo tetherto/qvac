@@ -169,7 +169,8 @@ android {
 }
 
 dependencies {
-    implementation("io.tether:qvac-sdk-android:local")
+    // The version the -PqvacSdkRepository Maven repository holds; the composite build ignores it.
+    implementation("io.tether:qvac-sdk-android:${providers.gradleProperty("qvacSdkVersion").getOrElse("local")}")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

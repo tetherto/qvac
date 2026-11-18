@@ -49,16 +49,20 @@ node runners/kotlin/scripts/device.mjs build   # -> build/consumers/kotlin-andro
 cd runners/kotlin && ../../../sdk-kotlin/gradlew :app:compileDebugKotlin
 ```
 
-The Gradle build includes `packages/sdk-kotlin` as a composite build, so the app always runs this
-checkout's Kotlin SDK and the worker it bundles. sdk-kotlin's `test:unit` in `sdk-checks.yml` compiles the
-app, so an SDK change that breaks the app fails the Kotlin SDK's PR checks. The runner has no unit tests:
-verify a runner change by running the affected e2e tests on a device.
+The Gradle build includes `packages/sdk-kotlin` as a composite build, so the app runs this checkout's
+Kotlin SDK and the worker it bundles, and an edit to either is picked up on the next build. The runner
+has no unit tests: verify a runner change by running the affected e2e tests on a device.
+
+`device.mjs build --maven` builds the app the way an app outside the monorepo gets the SDK. It publishes
+the SDK's all-in-one profile to `packages/sdk-kotlin/build/maven-repository` with
+`publishSdkToBuildRepository`, then builds the app with `-PqvacSdkRepository` pointing there and
+`-PqvacSdkVersion` at the SDK's version, so `io.tether:qvac-sdk-android` resolves from that repository.
 
 ## CI
 
-sdk-kotlin's `test:mobile` builds the APK with the run and broker baked in and runs it on Device Farm under
-the React Native app's test spec. Dispatch `sdk-e2e.yml` with `platform: Android` and `packages:
-sdk-kotlin`.
+sdk-kotlin's `test:mobile` builds the APK with `--maven`, with the run and broker baked in, and runs it on
+Device Farm under the React Native app's test spec. A packaging break in the Maven publication fails the
+build. Dispatch `sdk-e2e.yml` with `languages: kotlin` and `platforms: android`.
 
 ## Adding coverage
 
