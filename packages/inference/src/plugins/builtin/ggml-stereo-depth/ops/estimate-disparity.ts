@@ -6,7 +6,7 @@ import { generateRandomRequestId } from '@/runtime/request-id'
 import { InferenceCancelledError, InvalidResponseError } from '@/errors/index'
 import { rawRgbDimensions } from '@/schemas/raw-rgb'
 import { nowMs } from '@/profiling/index'
-import { attachModelExecutionMs } from '@/profiling/model-execution'
+import { buildUnaryResult } from '@/profiling/model-execution'
 import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
 import {
   encodeFloat32Base64,
@@ -66,11 +66,10 @@ export async function estimateDisparity(
       type: 'estimateDisparity' as const,
       width: result.width,
       height: result.height,
-      disparity: encodeFloat32Base64(result.disparity, Buffer),
-      stats
+      disparity: encodeFloat32Base64(result.disparity, Buffer)
     })
     if (!response.success) throw new InvalidResponseError('estimateDisparity', response.error)
-    return attachModelExecutionMs(response.data, nowMs() - started)
+    return buildUnaryResult(response.data, nowMs() - started, stats)
   } catch (error) {
     if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId, {}, error)
     ctx.state = 'failed'
