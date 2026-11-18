@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iterator>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
@@ -2040,24 +2041,32 @@ TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotSizesThePool) {
   EXPECT_EQ(result.fitSnapshot.nCtx, 2048U);
 }
 
+// fit-ctx also writes the marker ctx-size 0 leaves, and keys are applied in
+// unordered_map order, so it must not decide whether the pool is sized.
 TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotKeepsExplicitContext) {
-  for (const std::string ctxSize : {"4096", "0"}) {
-    auto config = baseConfig();
-    config["kv-unified-per-slot"] = "1024";
-    config["ctx-size"] = ctxSize;
-    const auto result = lfn::normalizeLoadForFit(
-        "/tmp/model.gguf",
-        std::move(config),
-        metadata_,
-        {},
-        backend({.type = backend_selection::GPU, .name = "none"}));
-    EXPECT_EQ(result.params.n_ctx, std::stoi(ctxSize)) << ctxSize;
+  for (const std::string ctxKey : {"ctx-size", "ctx_size"}) {
+    for (const std::string ctxSize : {"4096", "0"}) {
+      auto config = baseConfig();
+      config["kv-unified-per-slot"] = "1024";
+      config["fit-ctx"] = "2048";
+      config[ctxKey] = ctxSize;
+      const auto result = lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}));
+      EXPECT_EQ(result.params.n_ctx, std::stoi(ctxSize))
+          << ctxKey << "=" << ctxSize;
+    }
   }
 }
 
 TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotPoolOverflowIsRejected) {
+  // baseConfig has parallel 2: the smallest cap whose pool overflows int32.
+  constexpr int32_t kPerSlot = std::numeric_limits<int32_t>::max() / 2 + 1;
   auto config = baseConfig();
-  config["kv-unified-per-slot"] = "2000000000";
+  config["kv-unified-per-slot"] = std::to_string(kPerSlot);
   try {
     static_cast<void>(lfn::normalizeLoadForFit(
         "/tmp/model.gguf",
@@ -2070,8 +2079,59 @@ TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotPoolOverflowIsRejected) {
     EXPECT_THAT(
         error.what(),
         ::testing::HasSubstr(
-            "parallel x kv-unified-per-slot (2 x 2000000000) exceeds"));
+            "parallel x kv-unified-per-slot (2 x " + std::to_string(kPerSlot) +
+            ") exceeds"));
   }
+}
+
+TEST_F(LoadFitNormalizationTest, NegativeKvUnifiedPerSlotIsRejected) {
+  auto config = baseConfig();
+  config["kv-unified-per-slot"] = "-512";
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "none"})));
+    FAIL() << "a negative kv-unified-per-slot must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr(
+            "kv-unified-per-slot must be 0 (no cap) or positive, got -512"));
+  }
+}
+
+// Rejected before the weights load. One sequence has nothing to split.
+TEST_F(LoadFitNormalizationTest, KvUnifiedWithoutPerSlotCapIsRejected) {
+  auto config = baseConfig();
+  config["kv-unified"] = "true";
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "none"})));
+    FAIL() << "kv-unified with parallel 2 and no cap must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr(
+            "kv_unified with parallel=2 requires kv_unified_per_slot"));
+  }
+
+  auto single = baseConfig();
+  single["kv-unified"] = "true";
+  single["parallel"] = "1";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(single),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_TRUE(result.params.kv_unified);
 }
 
 TEST_F(LoadFitNormalizationTest, UnknownBooleanValueIsRejected) {

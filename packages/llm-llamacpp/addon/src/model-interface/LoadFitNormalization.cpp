@@ -2086,6 +2086,11 @@ NormalizedLoad normalizeLoadForFit(
     }
   }
 
+  // Keys reach fabric in unordered_map order, so a later fit-ctx can overwrite
+  // the marker ctx-size 0 leaves in fit_params_min_ctx.
+  const bool ctxSizeGiven =
+      configFilemap.contains("ctx-size") || configFilemap.contains("ctx_size");
+
   // transform json config into the format required by llama.cpp
   for (auto& keyValuePair : configFilemap) {
     configVector.push_back(std::string("--") + keyValuePair.first);
@@ -2279,10 +2284,35 @@ NormalizedLoad normalizeLoadForFit(
         "ctx_size to the model's trained context unless set explicitly\n");
   }
 
+  if (params.kv_unified_per_slot < 0) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        string_format(
+            "%s: kv-unified-per-slot must be 0 (no cap) or positive, got %d.\n",
+            K_LEGACY_PARSER_NAME.data(),
+            params.kv_unified_per_slot));
+  }
+  // Rejected before the weights load; LlamaModel checks the caps against the
+  // final pool.
+  if (params.kv_unified && params.n_parallel >= 2 &&
+      params.kv_unified_per_slot == 0) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        string_format(
+            "%s: kv_unified with parallel=%d requires kv_unified_per_slot; "
+            "leave ctx_size unset to size the pool to parallel x "
+            "kv_unified_per_slot.\n",
+            K_LEGACY_PARSER_NAME.data(),
+            params.n_parallel));
+  }
+
   // As llama-server: without ctx-size, kv-unified-per-slot sizes the KV pool
   // to parallel x kv-unified-per-slot; ctx-size 0 keeps the trained context.
-  if (params.kv_unified_per_slot > 0 && params.n_ctx == 0 &&
-      params.fit_params_min_ctx != std::numeric_limits<uint32_t>::max()) {
+  if (params.kv_unified_per_slot > 0 && params.n_ctx == 0 && !ctxSizeGiven) {
     const int64_t pool =
         static_cast<int64_t>(params.n_parallel) * params.kv_unified_per_slot;
     if (pool > std::numeric_limits<int32_t>::max()) {

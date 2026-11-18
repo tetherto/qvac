@@ -285,6 +285,10 @@ function buildVlmBatchItem(item) {
 }
 
 async function setupModel(t, configOverrides = {}) {
+  return (await setupModelWithLogs(t, configOverrides)).model
+}
+
+async function setupModelWithLogs(t, configOverrides = {}) {
   const [modelName, dirPath] = await ensureModel({
     modelName: MODEL.name,
     downloadUrl: MODEL.url
@@ -321,7 +325,7 @@ async function setupModel(t, configOverrides = {}) {
 
   await model.load()
 
-  return model
+  return { model, logs: specLogger.logs }
 }
 
 async function setupMultimodalBatchModel(t, configOverrides = {}) {
@@ -1314,19 +1318,33 @@ test(
   }
 )
 
+// The per-slot cap the kv_unified_per_slot tests set, below every even share.
+const KV_PER_SLOT_CAP = 512
+
 // One KV pool split evenly, as llama-server's `-kvu --kv-unified-per-slot`:
-// with ctx_size unset the pool is parallel x kv_unified_per_slot (1024 here)
-// and each slot is capped at 512.
+// with ctx_size unset the pool is parallel x kv_unified_per_slot and each slot
+// is capped at KV_PER_SLOT_CAP.
 test(
   'continuous batching: kv_unified_per_slot splits one KV pool evenly across slots',
   { timeout: 600_000, skip: isMobile },
   async (t) => {
-    const model = await setupModel(t, {
+    const { model, logs } = await setupModelWithLogs(t, {
       parallel: '2',
       kv_unified: 'true',
-      kv_unified_per_slot: '512',
+      kv_unified_per_slot: String(KV_PER_SLOT_CAP),
       ctx_size: undefined
     })
+
+    // The last context fabric logs is the one the model runs on.
+    const nCtx = logs
+      .map((line) => /llama_context: n_ctx\s+=\s+(\d+)/.exec(line))
+      .filter(Boolean)
+      .pop()
+    t.is(
+      Number(nCtx?.[1]),
+      2 * KV_PER_SLOT_CAP,
+      'the pool is sized to parallel x kv_unified_per_slot'
+    )
 
     const cases = ['capital-france', 'sky-color'].map((id) => CASES.find((item) => item.id === id))
     const responses = await Promise.all(
@@ -1341,20 +1359,48 @@ test(
       )
     }
 
-    await assertLongPromptCappedAt512(t, model)
+    await assertGenerationStopsAtCap(t, model)
+    await assertLongPromptRejectedAtCap(t, model)
   }
 )
 
-// The cap applies without kv_unified too, below the even share: ctx_size 4096
-// gives 4096 to one slot or 2048 to each of two, lowered to 512.
+// The cap sits below the even share of ctx_size 4096 (4096 for one slot, 2048
+// for two): without kv_unified, and with it under an explicit ctx_size larger
+// than the caps add up to.
 test(
   'continuous batching: kv_unified_per_slot caps a slot below its even share',
   { timeout: 600_000, skip: isMobile },
   async (t) => {
+    for (const overrides of [
+      { parallel: '1' },
+      { parallel: '2' },
+      { parallel: '2', kv_unified: 'true' }
+    ]) {
+      t.comment(JSON.stringify(overrides))
+      const model = await setupModel(t, {
+        ...overrides,
+        kv_unified_per_slot: String(KV_PER_SLOT_CAP)
+      })
+      await assertGenerationStopsAtCap(t, model)
+      await assertLongPromptRejectedAtCap(t, model)
+      await model.unload()
+    }
+  }
+)
+
+// The multimodal context applies the same cap, alone (parallel 1) and in the
+// batch scheduler.
+test(
+  'continuous batching MTMD: kv_unified_per_slot caps a slot',
+  { timeout: 900_000, skip: skipHeavyPlatform },
+  async (t) => {
     for (const parallel of ['1', '2']) {
       t.comment(`parallel ${parallel}`)
-      const model = await setupModel(t, { parallel, kv_unified_per_slot: '512' })
-      await assertLongPromptCappedAt512(t, model)
+      const model = await setupMultimodalBatchModel(t, {
+        parallel,
+        kv_unified_per_slot: String(KV_PER_SLOT_CAP)
+      })
+      await assertLongPromptRejectedAtCap(t, model)
       await model.unload()
     }
   }
@@ -1377,9 +1423,33 @@ test(
   }
 )
 
-// About 600 tokens, over the 512-token cap.
-async function assertLongPromptCappedAt512(t, model) {
-  const longPrompt = [{ role: 'user', content: `Repeat: ${'apple '.repeat(600)}` }]
+// A short prompt after filler words, leaving about 100 tokens under the cap, so
+// a long answer runs into it.
+async function assertGenerationStopsAtCap(t, model) {
+  const filler = 'word '.repeat(KV_PER_SLOT_CAP - 150)
+  const prompt = [
+    {
+      role: 'user',
+      content: `Ignore this filler: ${filler}\nNow write the numbers from 1 to 1000, separated by commas.`
+    }
+  ]
+  const response = await model.run(prompt, { generationParams: { predict: -1 } })
+  const output = await collectText(response)
+  const stats = response.stats
+  const used = toNumber(stats?.promptTokens) + toNumber(stats?.generatedTokens)
+  t.comment(`generation to the cap: ${JSON.stringify(stats)}`)
+  t.is(stats?.stopReason, 'contextOverflow', 'a generation that fills the slot reports it')
+  t.ok(output.length > 0, 'a generation stopped by the cap keeps its tokens')
+  // In the cap tests the even share is 2048 or more, so this shows the cap
+  // stopped it.
+  t.ok(used < 2 * KV_PER_SLOT_CAP, `the generation stopped at the cap (${used} tokens)`)
+}
+
+// About 100 tokens over the cap.
+async function assertLongPromptRejectedAtCap(t, model) {
+  const longPrompt = [
+    { role: 'user', content: `Repeat: ${'apple '.repeat(KV_PER_SLOT_CAP + 100)}` }
+  ]
   const error = await model
     .run(longPrompt)
     .then(collectText)
@@ -1389,7 +1459,9 @@ async function assertLongPromptCappedAt512(t, model) {
     )
   t.comment(`long prompt: ${error?.message}`)
   t.ok(
-    /(per-sequence cap|max context tokens) 512\b/.test(error?.message || ''),
-    'a prompt over one slot is rejected against the 512-token cap'
+    new RegExp(`(per-sequence cap|max(?: context tokens)?) ${KV_PER_SLOT_CAP}\\b`).test(
+      error?.message || ''
+    ),
+    `a prompt over one slot is rejected against the ${KV_PER_SLOT_CAP}-token cap`
   )
 }

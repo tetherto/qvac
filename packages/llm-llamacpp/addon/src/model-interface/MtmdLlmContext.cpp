@@ -2645,7 +2645,7 @@ void MtmdLlmContext::acceptRestoredState(
             "': " + ex.what());
   }
 
-  if (getNPast() > llama_n_ctx(modelCtx_.lctx)) {
+  if (getNPast() > ctxCeiling()) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(ContextLengthExeeded),

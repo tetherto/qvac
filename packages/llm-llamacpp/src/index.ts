@@ -1417,8 +1417,8 @@ namespace LlmLlamacpp {
      * Context limit per slot (llama-server's `--kv-unified-per-slot`). With
      * `ctx_size` unset, the KV cache is sized to `parallel x
      * kv_unified_per_slot`; `ctx_size: 0` keeps the model's trained context.
-     * Default `0`, no limit beyond `ctx_size / parallel`. Also accepted as
-     * `kv-unified-per-slot`.
+     * Default `0`, no limit beyond `ctx_size / parallel`; a negative value is
+     * rejected. Also accepted as `kv-unified-per-slot`.
      */
     kv_unified_per_slot?: NumericLike;
     /**

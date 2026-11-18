@@ -9,8 +9,9 @@
   one KV buffer split evenly between them. With `ctx_size` unset, the KV cache
   is sized to `parallel x kv_unified_per_slot`. With `parallel >= 2`,
   `kv_unified` requires `kv_unified_per_slot`, and the caps must fit
-  `ctx_size`; otherwise the load fails with `InvalidArgument`.
-  `kv_unified_per_slot` also caps each slot without `kv_unified`.
+  `ctx_size`; otherwise the load fails with `InvalidArgument`. A negative
+  `kv_unified_per_slot` is rejected. `kv_unified_per_slot` also caps each slot
+  without `kv_unified`.
 
 ### Changed
 
@@ -28,6 +29,12 @@
   same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
   `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.31.0` together.
 - This package needed no code change for the new fabric.
+
+### Fixed
+
+- Loading a cached prompt longer than a slot's limit (`ctx_size / parallel`,
+  or `kv_unified_per_slot` if lower) now fails when the cache loads, as
+  documented. The check compared against the whole context.
 
 ## [0.71.0] - 2026-11-16
 

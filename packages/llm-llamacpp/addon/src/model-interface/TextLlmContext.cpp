@@ -1951,7 +1951,7 @@ void TextLlmContext::acceptRestoredState(
             "': " + ex.what());
   }
   const llama_pos metadataNPast = nPast_;
-  if (metadataNPast > llama_n_ctx(modelCtx_.lctx)) {
+  if (metadataNPast > ctxCeiling()) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(ContextLengthExeeded),
