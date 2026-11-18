@@ -1,8 +1,10 @@
-// What the Python and Kotlin clients' PR checks share: whether a pull request changed a client's own folder, and the
-// SDK prepared to export the contract the clients are generated from.
+// What the Python and Kotlin clients' checks and release workflows share: whether a pull request changed a client's
+// own folder, and the SDK prepared to export the contract the clients are generated from. Workflows run the latter as
+// `node packages/sdk/ci/clients.mjs prepare-sdk`.
 
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
+import { argv } from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = fileURLToPath(new URL('../../..', import.meta.url))
@@ -37,4 +39,9 @@ export function prepareSdk(env = process.env) {
   if (!env.CI) return
   run('npm', ['run', 'sdk-source:workspace'], SDK)
   run('git', ['checkout', '--', 'package.json'], SDK)
+}
+
+if (argv[1] === fileURLToPath(import.meta.url)) {
+  if (argv[2] !== 'prepare-sdk') throw new Error('usage: clients.mjs prepare-sdk')
+  prepareSdk()
 }
