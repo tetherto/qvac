@@ -35,6 +35,7 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 - Load an optional shared-weight Core ML bundle for full TranscribePsy EU on
   macOS 15 and iOS 18 or later.
+- Report cache-aware ASR streaming support in Parakeet backend information.
 
 ### Fixed
 

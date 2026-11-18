@@ -190,6 +190,7 @@ async function runDuplexStreamingTest(t, modelType) {
 
     try {
       await model.load()
+      t.is(model.getBackendInfo().supportsCacheAwareStreaming, modelType === 'unified')
 
       const input =
         modelType === 'tdt'

@@ -56,8 +56,9 @@ verdict `unknown` because the fitter projects one model. Parakeet streaming
 segments and events keep the native `tokenIds`, `isFinal`, `chunkIndex`,
 `eotConfidence`, end-of-turn `timestamp`/`confidence` and VAD `chunkIndex`.
 
-Omit the load-time `streamingChunkMs` or the per-call
+Omit both the load-time `streamingChunkMs` and the per-call
 `parakeetStreamingConfig.chunkMs` to use the model's native decode window.
+Omitting only the per-call value inherits an explicit load-time override.
 Offline TDT push streams, including Parakeet TDT v3, default to 30,000 ms and
 require at least 30,000 ms. Explicit SDK overrides must be positive. Full
 TranscribePsy EU uses its own default.

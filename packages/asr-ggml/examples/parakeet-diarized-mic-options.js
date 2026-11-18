@@ -2,7 +2,6 @@
 
 const DEFAULT_DIAR_CHUNK_MS = 2000
 const MIN_DIAR_CHUNK_MS = 200
-const CACHE_AWARE_ASR_TYPES = new Set(['rnnt', 'nemotron'])
 
 function parseMicChunkMs(flag, value) {
   const ms = Number(value)
@@ -22,8 +21,7 @@ function buildMicChunkOptions({ asrChunkMs, diarChunkMs }) {
 
 async function loadDiarizedMicAsr(model) {
   await model.load()
-  const modelType = model.getBackendInfo()?.modelType
-  if (CACHE_AWARE_ASR_TYPES.has(modelType)) return
+  if (model.getBackendInfo()?.supportsCacheAwareStreaming === true) return
 
   await model.unload()
   throw new Error(

@@ -100,22 +100,27 @@ test('diarized mic chunk overrides target separate sessions', () => {
   assert.throws(() => parseMicChunkMs('--diar-chunk-ms', '80'))
 })
 
-test('diarized mic requires cache-aware ASR and unloads offline TDT', async () => {
-  for (const modelType of ['rnnt', 'nemotron', 'tdt']) {
+test('diarized mic accepts Unified RNN-T and rejects offline RNN-T', async () => {
+  for (const [modelType, supportsCacheAwareStreaming] of [
+    ['rnnt', true],
+    ['rnnt', false],
+    ['nemotron', true],
+    ['tdt', false]
+  ]) {
     const calls = []
     const model = {
       async load() {
         calls.push('load')
       },
       getBackendInfo() {
-        return { modelType }
+        return { modelType, supportsCacheAwareStreaming }
       },
       async unload() {
         calls.push('unload')
       }
     }
 
-    if (modelType === 'tdt') {
+    if (!supportsCacheAwareStreaming) {
       await assert.rejects(loadDiarizedMicAsr(model), /requires a cache-aware ASR checkpoint/)
       assert.deepEqual(calls, ['load', 'unload'])
     } else {

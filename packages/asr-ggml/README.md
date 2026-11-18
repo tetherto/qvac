@@ -176,10 +176,12 @@ SDK code — see [Engine Selection](#engine-selection).
 
 ### Parakeet TDT streaming
 
-For Parakeet TDT v3, omit `parakeetStreamingConfig.chunkMs` in the SDK or
-`chunkMs` in `runStreaming()` to use the 30,000 ms decode window. At load time,
-omit `modelConfig.streamingChunkMs` when using the SDK. With the addon
-directly, omit `parakeetConfig.streamingChunkMs` or set it to `0`.
+For Parakeet TDT v3, leave both the load-time and per-call decode windows
+unset to use the 30,000 ms default. The SDK fields are
+`modelConfig.streamingChunkMs` and `parakeetStreamingConfig.chunkMs`. When
+using the addon directly, leave `parakeetConfig.streamingChunkMs` unset or set
+it to `0`, and omit `chunkMs` in `runStreaming()`. Omitting only the per-call
+value inherits any explicit load-time override.
 Explicit decode windows below 30,000 ms are rejected for offline TDT models
 because they can drop phrases. Keep the default 10,000 ms left context and
 2,000 ms right lookahead. First output typically needs one decode window plus
@@ -650,7 +652,7 @@ Every verb has one signature and one meaning regardless of engine.
 | `unload()` / `destroy()` | Release the model / retire the instance. |
 | `getState()` | `{ configLoaded, weightsLoaded, destroyed }`. |
 | `getEngineType()` | `'whisper'` \| `'parakeet'` \| `'moss-transcribe'`. |
-| `getBackendInfo()` | `BackendInfo` or `null` before `load()`. |
+| `getBackendInfo()` | `BackendInfo` or `null` before `load()`. Parakeet reports `supportsCacheAwareStreaming` for the loaded checkpoint. |
 | `pause()` / `unpause()` | Always reject with `NOT_SUPPORTED` (6019). No engine implements a correct pause/resume. |
 
 Constructor options:
