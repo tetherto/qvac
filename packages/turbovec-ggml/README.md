@@ -29,7 +29,7 @@ The class is also exported as `IdMapIndex` (with `IdMapIndexFilter`), from the
 package root and from the `@qvac/turbovec-ggml/idMapIndex` subpath, for both
 CommonJS and ESM.
 
-`vectors` contains row-major `Float32Array` data with one `dim`-sized row per ID. Queries use the same layout and may contain multiple rows. Search uses dot-product similarity; L2-normalize indexed vectors and queries first when cosine similarity is required. Results are ordered by descending score and then ascending ID. Short result rows are padded with the ID `UINT64_MAX`, which is reserved and cannot be added.
+`vectors` contains row-major `Float32Array` data with one `dim`-sized row per ID. Queries use the same layout and may contain multiple rows. Search uses dot-product similarity; L2-normalize indexed vectors and queries first when cosine similarity is required. Results are ordered by descending score and then ascending ID; TurboVec storage orders equal scores by stored row instead (insertion order, reshuffled by removals and `buildIvf()`). Short result rows are padded with the ID `UINT64_MAX`, which is reserved and cannot be added.
 
 ## Storage modes
 
@@ -55,7 +55,7 @@ Staged search is off for every new or loaded TurboVec index, so a search scores 
 - `search()`, `searchFiltered()`, and `prepareFilter()` perform full-scan retrieval.
 - `buildIvf()` enables approximate `searchIvf()` retrieval. IVF state is in-memory only and must be rebuilt after a mutation or snapshot load.
 - `write()` and the static `load()` persist all storage modes. Generic `f32`, `q8`, and `q4` additionally support `loadMmap()`, `loadWithDelta()`, `addLogged()`, `removeLogged()`, and `compactDelta()`. An index written to a snapshot takes either logged or plain mutations, not both.
-- Mutations invalidate prepared filters and IVF state.
+- Mutations invalidate prepared filters and IVF state. `buildIvf()` also disposes prepared filters: on TurboVec storage it regroups the stored rows by IVF list.
 - Each of these returns a promise. Bad arguments reject too; only the
   constructor throws.
 - The `length`, `dim`, `bitWidth`, `calibrated` and `stagedSearch` getters are

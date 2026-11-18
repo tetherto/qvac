@@ -1,10 +1,40 @@
 # Changelog
 
-## [Unreleased]
+## [0.31.0] - 2026-11-18
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11739.3.0#1` -> `11739.4.0`.
+  `common_params_speculative_draft` gains `n_auto`, and
+  `mtmd_helper_init_opt`, `mtmd_helper_video_init_params` and
+  `mtmd_helper_bitmap_wrapper` gain decode-limit and status fields, so native
+  consumers must rebuild against these headers. No op, type or RPC protocol
+  numbers change.
+- On a TurboVec index, `ggml_vec_index_build_ivf` now stores the rows in IVF
+  list order. Prepared filters made before the build are refused,
+  `ggml_vec_index_ids` reports the new order, and the next
+  `ggml_vec_index_sync` rewrites the whole file.
 
 ### Added
 
 - Opt-in WebGPU backend build for shared speech and LLM consumers using `VCPKG_MANIFEST_FEATURES=webgpu`.
+- mtmd-helper decode limits (`max_audio_frames`, `max_image_pixels`,
+  `max_frame_pixels`), all off by default, with the failure reason in
+  `mtmd_helper_bitmap_wrapper.status`.
+- Core ML FFN prefill for Qwen3.5 0.8B and 2B, with the FFN split picked
+  automatically.
+
+### Fixed
+
+- OpenCL: uploads that convert on the device are serialized, GROUP_NORM
+  normalizes every batch item (also on Metal), the fused GROUP_NORM+MUL+ADD
+  path is fixed, and flash-attention query chunks above 4096 rows are offset
+  correctly. On Android, OpenCL stays loaded when the Vulkan module is not.
+- XDNA: the fused decode and the equal split work again for qwen35, and a
+  model whose in-projection or `attn_output` the decode GEMV cannot read is
+  sent to the host decode instead of failing.
+- TurboVec IVF search scores far fewer blocks, now that each list is stored
+  contiguously.
 
 ## [0.30.1] - 2026-11-16
 

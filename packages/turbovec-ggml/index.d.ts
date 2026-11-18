@@ -177,26 +177,28 @@ export default class IdMapIndex {
     addLogged(vectors: Float32Array, ids: BigUint64Array, deltaPath: string, options?: IdMapIndexCallOptions): Promise<void>;
     /**
      * Top-k similarity search over row-major queries. Results are sorted
-     * by descending score, then ascending ID. TurboVec rotates queries without
-     * normalizing them and performs approximate rotated/quantized dot-product
-     * scoring. TurboVec query components require `abs(value) < 1e16`. Short rows
-     * use UINT64_MAX padding.
+     * by descending score, then ascending ID; TurboVec orders equal scores by
+     * stored row, which removals and `buildIvf()` reshuffle. TurboVec rotates
+     * queries without normalizing them and performs approximate rotated/quantized
+     * dot-product scoring. TurboVec query components require
+     * `abs(value) < 1e16`. Short rows use UINT64_MAX padding.
      */
     search(queries: Float32Array, k: number, options?: IdMapIndexCallOptions): Promise<IdMapIndexSearchResult>;
     /** Exact search restricted to the supplied external IDs. */
     searchFiltered(queries: Float32Array, k: number, allowedIds: BigUint64Array, options?: IdMapIndexCallOptions): Promise<IdMapIndexSearchResult>;
     /**
-     * Prepare an allowlist for repeated searches. Every mutation of this index
-     * invalidates all prepared filters created from it. Call `dispose()` when
-     * done to release native filter memory promptly; dropped filters are
-     * reclaimed by GC. A filter that finishes after `signal` aborts is
-     * disposed.
+     * Prepare an allowlist for repeated searches. Native mutation attempts and
+     * `buildIvf()` invalidate all prepared filters created from this index. Call
+     * `dispose()` when done to release native filter memory promptly; dropped
+     * filters are reclaimed by GC. A filter that finishes after `signal` aborts
+     * is disposed.
      */
     prepareFilter(allowedIds: BigUint64Array, options?: IdMapIndexCallOptions): Promise<IdMapIndexFilter>;
     /**
      * Build deterministic in-memory IVF-flat search state. Mutations invalidate
-     * it, and snapshots do not persist it. A build that has started runs to the
-     * end even when `signal` aborts.
+     * it, and snapshots do not persist it. Disposes every prepared filter, as a
+     * mutation does: on TurboVec storage the build regroups the rows by IVF list.
+     * A build that has started runs to the end even when `signal` aborts.
      */
     buildIvf(nLists: number, nIter?: number, options?: IdMapIndexCallOptions): Promise<void>;
     /**

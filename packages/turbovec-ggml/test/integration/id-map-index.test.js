@@ -783,6 +783,10 @@ test('IdMapIndex: every mutation path disposes prepared filters when required', 
     await idx.compact()
     await expectDisposedFilter(t, filter, 'compact invalidates prepared filter')
 
+    filter = await idx.prepareFilter(new BigUint64Array([11n]))
+    await idx.buildIvf(1, 0)
+    await expectDisposedFilter(t, filter, 'IVF build invalidates prepared filter')
+
     await idx.write(snapshot)
     filter = await idx.prepareFilter(new BigUint64Array([11n]))
     await idx.addLogged(new Float32Array([0.5, 0.5]), new BigUint64Array([33n]), delta)
@@ -800,6 +804,34 @@ test('IdMapIndex: every mutation path disposes prepared filters when required', 
     await idx.dispose()
     if (fs.existsSync(snapshot)) fs.unlinkSync(snapshot)
     removeDeltaArtifacts(delta)
+  }
+})
+
+test('IdMapIndex: TurboVec IVF build disposes prepared filters', async (t) => {
+  if (!SUPPORTS_TURBOVEC) {
+    t.pass('TurboVec requires a 64-bit target')
+    return
+  }
+  const rows = 64
+  const ids = new BigUint64Array(rows)
+  for (let i = 0; i < rows; i++) ids[i] = 9000n + BigInt(i)
+  const vectors = seededUnitRows(rows, CALIBRATION_SEED)
+  const query = vectors.subarray(0, TURBOVEC_DIM)
+  const idx = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'turbovec-q4' })
+  let filter = null
+  try {
+    await idx.addWithIds(vectors, ids)
+    filter = await idx.prepareFilter(new BigUint64Array([ids[0], ids[rows - 1]]))
+    t.is((await filter.search(query, 1)).ids[0], ids[0], 'prepared filter works before the build')
+    await idx.buildIvf(8, 0)
+    await expectDisposedFilter(t, filter, 'TurboVec IVF build invalidates prepared filter')
+
+    filter = await idx.prepareFilter(new BigUint64Array([ids[0], ids[rows - 1]]))
+    t.is((await filter.search(query, 1)).ids[0], ids[0], 'a filter prepared after the build works')
+    t.is((await idx.searchIvf(query, 1, 8)).ids[0], ids[0], 'IVF search works after the build')
+  } finally {
+    if (filter !== null) filter.dispose()
+    await idx.dispose()
   }
 })
 

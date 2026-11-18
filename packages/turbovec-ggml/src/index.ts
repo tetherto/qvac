@@ -731,10 +731,11 @@ export default class IdMapIndex {
 
   /**
    * Top-k similarity search over row-major queries. Results are sorted
-   * by descending score, then ascending ID. TurboVec rotates queries without
-   * normalizing them and performs approximate rotated/quantized dot-product
-   * scoring. TurboVec query components require `abs(value) < 1e16`. Short rows
-   * use UINT64_MAX padding.
+   * by descending score, then ascending ID; TurboVec orders equal scores by
+   * stored row, which removals and `buildIvf()` reshuffle. TurboVec rotates
+   * queries without normalizing them and performs approximate rotated/quantized
+   * dot-product scoring. TurboVec query components require
+   * `abs(value) < 1e16`. Short rows use UINT64_MAX padding.
    */
   async search(queries: Float32Array, k: number, options?: IdMapIndexCallOptions) {
     this.validateSearch('search', queries, k)
@@ -779,11 +780,11 @@ export default class IdMapIndex {
   }
 
   /**
-   * Prepare an allowlist for repeated searches. Every mutation of this index
-   * invalidates all prepared filters created from it. Call `dispose()` when
-   * done to release native filter memory promptly; dropped filters are
-   * reclaimed by GC. A filter that finishes after `signal` aborts is
-   * disposed.
+   * Prepare an allowlist for repeated searches. Native mutation attempts and
+   * `buildIvf()` invalidate all prepared filters created from this index. Call
+   * `dispose()` when done to release native filter memory promptly; dropped
+   * filters are reclaimed by GC. A filter that finishes after `signal` aborts
+   * is disposed.
    */
   async prepareFilter(allowedIds: BigUint64Array, options?: IdMapIndexCallOptions) {
     if (!(allowedIds instanceof BigUint64Array)) {
@@ -817,8 +818,9 @@ export default class IdMapIndex {
 
   /**
    * Build deterministic in-memory IVF-flat search state. Mutations invalidate
-   * it, and snapshots do not persist it. A build that has started runs to the
-   * end even when `signal` aborts.
+   * it, and snapshots do not persist it. Disposes every prepared filter, as a
+   * mutation does: on TurboVec storage the build regroups the rows by IVF list.
+   * A build that has started runs to the end even when `signal` aborts.
    */
   async buildIvf(nLists: number, nIter = 0, options?: IdMapIndexCallOptions) {
     if (!isPositiveInt32(nLists)) {
@@ -830,7 +832,15 @@ export default class IdMapIndex {
     const signal = readSignal('buildIvf', options)
     return enqueue(
       this,
-      (token) => loadBinding().idx_build_ivf_async(ensureHandle(this), nLists, nIter, token),
+      async (token) => {
+        try {
+          await loadBinding().idx_build_ivf_async(ensureHandle(this), nLists, nIter, token)
+        } finally {
+          // At this call's turn, once the native build is done: fabric refuses
+          // TurboVec filters prepared before the build.
+          this.disposeFilters(true)
+        }
+      },
       signal
     )
   }
