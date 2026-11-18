@@ -3,7 +3,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { completion, type CompletionStats } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
-import { InvalidKvCacheKeyError, namedKvCacheRetention } from '@/serve/lib/named-kv-cache'
+import { InvalidKvCacheKeyError, withNamedKvCache } from '@/serve/lib/named-kv-cache'
 import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
 import { accumulateUsage, formatToolErrors } from '@/serve/core/completion'
 import {
@@ -224,26 +224,14 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           `${prepared.kvCache !== undefined ? ' kvCache=named' : ''}`
       )
 
-      const releaseCache =
-        prepared.kvCache !== undefined
-          ? await namedKvCacheRetention.acquire(prepared.kvCache)
-          : undefined
-      try {
-        // The client may have left while the key waited for a deletion; its
-        // close already fired, so nothing would cancel the run.
-        if (reply.raw.destroyed) return
+      await withNamedKvCache(prepared.kvCache, reply.raw, app.qvac.logger, async () => {
         if (streaming) {
           const includeUsage = body.stream_options?.include_usage === true
           await runStreaming(req, reply, prepared, includeUsage)
           return
         }
         await runBlocking(req, reply, prepared)
-      } finally {
-        if (releaseCache) {
-          releaseCache()
-          namedKvCacheRetention.maybeSweep(app.qvac.logger)
-        }
-      }
+      })
     }
   )
 }

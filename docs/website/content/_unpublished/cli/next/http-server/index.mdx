@@ -1664,7 +1664,9 @@ curl http://localhost:11435/v1/chat/completions \
   }'
 ```
 
-Precedence is header, then `metadata.qvac_kv_cache_key`, then `prompt_cache_key`; send the header only once. A key must be a string with at least one non-whitespace character and no more than 512 UTF-8 bytes; anything else returns `400 invalid_kv_cache_key`. Keys are hashed with SHA-256 before filesystem use. Use a separate key per conversation, resend it with the growing history, and serialize turns within a session. The rules are the same as for [Responses](#responses), and the same key selects the same session on both endpoints. Requests without a key keep the automatic cache.
+Precedence is header, then `metadata.qvac_kv_cache_key`, then `prompt_cache_key`; send the header only once. A key must be a string with at least one non-whitespace character and no more than 512 UTF-8 bytes; anything else returns `400 invalid_kv_cache_key`. Keys are hashed with SHA-256 before filesystem use. Use a separate key per conversation, resend it with the growing history, and serialize turns within a session. A key shared by several conversations, such as one `prompt_cache_key` per user, gives them one cache that keeps only their common prefix, so each conversation re-reads the rest when they alternate. The rules are the same as for [Responses](#responses), and the same key selects the same session on both endpoints. Requests without a key keep the automatic cache.
+
+The pi coding agent sends its session id as `prompt_cache_key` to a custom provider only when `PI_CACHE_RETENTION=long` is set.
 
 On a request with a key, `usage.qvac_cache_tokens` reports the SDK's cache occupancy. It is **not** a per-request count of reused prompt tokens. Named caches are bounded by the same quota and TTL as automatic ones; see [KV cache](#kv-cache).
 

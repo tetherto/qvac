@@ -3,7 +3,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { completion } from '@qvac/sdk'
 import type { Tool } from '@qvac/sdk'
 import { HttpError, errorType } from '@/serve/lib/http-error'
-import { InvalidKvCacheKeyError, namedKvCacheRetention } from '@/serve/lib/named-kv-cache'
+import { InvalidKvCacheKeyError, withNamedKvCache } from '@/serve/lib/named-kv-cache'
 import { endSSE, initSSE, sendSSE } from '@/serve/lib/sse'
 import { sdkErrorAsHttp } from '@/serve/core/plugins/error-handler'
 import { requireModel } from '@/serve/core/plugins/require-model'
@@ -323,12 +323,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         }
       }
 
-      const releaseCache =
-        sdk.kvCache !== undefined ? await namedKvCacheRetention.acquire(sdk.kvCache) : undefined
-      try {
-        // The client may have left while the key waited for a deletion; its
-        // close already fired, so nothing would cancel the run.
-        if (reply.raw.destroyed) return
+      await withNamedKvCache(sdk.kvCache, reply.raw, ctx.logger, async () => {
         if (streaming) {
           initSSE(reply, { [VOLATILE_HEADER]: RESPONSES_VOLATILE_STUB })
           try {
@@ -342,12 +337,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           // until then so inference errors before headers can produce HTTP errors.
           await writeBlockingResponse(reply.raw, writerParams, runTurn(false))
         }
-      } finally {
-        if (releaseCache) {
-          releaseCache()
-          namedKvCacheRetention.maybeSweep(ctx.logger)
-        }
-      }
+      })
     }
   )
 

@@ -263,6 +263,52 @@ describe('serve: chat completions KV cache', () => {
     assert.deepEqual(retention, { acquired: [cacheKey('session-a')], released: 1 })
   })
 
+  it(
+    'skips inference when the client leaves while its key waits',
+    { timeout: 15000 },
+    async (t) => {
+      const app = await server(t)
+      await app.ready()
+      let called = false
+      openaiState(app.qvac).completionOverride = () => {
+        called = true
+        return stubRun()
+      }
+      let finishDeletion!: () => void
+      const deletion = new Promise<void>((resolve) => {
+        finishDeletion = resolve
+      })
+      let waiting!: () => void
+      const waitStarted = new Promise<void>((resolve) => {
+        waiting = resolve
+      })
+      t.mock.method(namedKvCacheRetention, 'acquire', async () => {
+        waiting()
+        await deletion
+        return () => {}
+      })
+      const address = await app.listen({ host: '127.0.0.1', port: 0 })
+      const controller = new AbortController()
+      const pending = fetch(`${address}/v1/chat/completions`, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: 'test-llm',
+          messages: MESSAGES,
+          prompt_cache_key: 'session-a'
+        })
+      })
+      pending.catch(() => {})
+      await waitStarted
+      controller.abort()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      finishDeletion()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      assert.equal(called, false)
+    }
+  )
+
   const invalid: Array<[string, Record<string, string>, Record<string, unknown>]> = [
     ['empty prompt_cache_key', {}, { prompt_cache_key: '' }],
     ['non-string prompt_cache_key', {}, { prompt_cache_key: 42 }],

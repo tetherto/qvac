@@ -388,6 +388,27 @@ export const namedKvCacheRetention = createNamedKvCacheRetention({
   prefix: NAMED_KV_CACHE_PREFIX
 })
 
+// Runs a turn while holding the cache session the request named, if any.
+export async function withNamedKvCache(
+  key: string | undefined,
+  raw: { destroyed: boolean },
+  logger: Logger,
+  run: () => Promise<void>
+): Promise<void> {
+  const release = key !== undefined ? await namedKvCacheRetention.acquire(key) : undefined
+  try {
+    // The client may have left while the key waited for a deletion; its
+    // close already fired, so nothing would cancel the run.
+    if (raw.destroyed) return
+    await run()
+  } finally {
+    if (release) {
+      release()
+      namedKvCacheRetention.maybeSweep(logger)
+    }
+  }
+}
+
 function processAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
