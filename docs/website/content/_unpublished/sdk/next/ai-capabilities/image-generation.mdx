@@ -13,6 +13,13 @@ For image-to-image, pass `init_image` as PNG or JPEG bytes in a `Uint8Array`. SD
 
 For higher-resolution outputs, you can chain a Real-ESRGAN upscaler. Either attach it as a post-processing step at load time and trigger it per generation via `diffusion({ upscale })`, or load an ESRGAN model standalone with `modelConfig.mode: "upscale"` and call `upscale()` on any PNG/JPEG buffer — generated or not. Both paths return PNG `Uint8Array` buffers and accept a `repeats` option that compounds the scale factor across sequential passes.
 
+## Hardware
+
+Image generation supports CUDA with two exceptions to the [general CUDA rules](/sdk/platform-support#cuda):
+
+- On Windows, it finds the CUDA 13 runtime and cuBLAS DLLs through `PATH`, not `%CUDA_PATH%\bin\x64`.
+- On Linux arm64, its CUDA build targets NVIDIA DGX Spark only. It has no NVIDIA Jetson module.
+
 ## Functions
 
 Use the following sequence of function calls:
