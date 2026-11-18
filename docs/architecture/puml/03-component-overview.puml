@@ -2,39 +2,30 @@
 !include <C4/C4_Component>
 HIDE_STEREOTYPE()
 
-title QVAC SDK Family - Internal Components
+title QVAC SDK - Bare Worker Components
 
-Container_Boundary(host_side, "Host") {
-    Component(api, "Public API", "TypeScript / Python", "loadModel, completion, transcribe, embed, translate, and other plugin operations")
-    Component(rpc_client, "RPC Adapter", "bare-rpc", "Socket, BareKit IPC, loopback TCP, or in-process")
+Container_Ext(client, "Host Client", "TypeScript / Python / Kotlin", "Runs the host-side bare-stow harness")
+
+Container_Boundary(worker, "Bare Worker") {
+    Component(bridge, "Worker Entry and RPC Bridge", "bare-stow-runtime / bare-rpc", "Registers plugins and adapts RPC calls to engine dispatch")
+
+    Boundary(engine, "@qvac/inference") {
+        Component(dispatch, "Dispatch", "TypeScript / Zod", "Validates requests and routes operations")
+        Component(state, "Runtime State", "TypeScript", "Tracks sessions, requests and loaded models")
+        Component(plugins, "Inference Plugins", "TypeScript / C++", "Run operations through native addons")
+        Component(artifacts, "Model Resolution", "TypeScript", "Resolves sources and caches artifacts")
+        Component(rag, "Retrieval", "TypeScript", "Ingests and searches embedded content")
+    }
 }
 
-Container_Boundary(engine_side, "Engine (@qvac/inference)") {
-    Component(logging, "Logging", "TypeScript", "Host, engine, and addon logs")
-    Component(dispatch, "Dispatch", "TypeScript", "Validate, route, stream, apply device defaults")
-    Component(plugin_registry, "Plugin Registry", "TypeScript", "Handlers keyed by modelType")
-    Component(plugins, "Plugins", "TypeScript/C++", "Built-in and custom addons")
-    Component(model_registry, "Model Registry", "TypeScript", "Loaded local model instances")
-    Component(distribution, "Model Distribution", "TypeScript", "HTTP, registry, Hyperdrive, local")
-    Component(rag, "RAG", "TypeScript", "HyperDB workspaces and vector search")
-}
+Rel_R(client, bridge, "Calls worker", "bare-rpc over bare-stow IPC")
+Rel_D(bridge, dispatch, "Forwards calls and abort signals")
+Rel_D(dispatch, state, "Tracks work")
+Rel_D(dispatch, plugins, "Routes model operations")
+Rel_D(dispatch, artifacts, "Resolves files")
+Rel_D(dispatch, rag, "Routes retrieval operations")
 
-Rel_D(api, rpc_client, "Serializes calls")
-Rel_D(rpc_client, dispatch, "Sends requests", "bare-rpc")
-Rel_U(logging, rpc_client, "Streams logs", "bare-rpc")
-Rel_D(dispatch, plugin_registry, "Looks up handler")
-Rel_D(plugin_registry, plugins, "Invokes handler")
-Rel_D(dispatch, model_registry, "Registers models")
-Rel_D(dispatch, distribution, "Fetches models")
-Rel_D(dispatch, rag, "Searches vectors")
-
-Lay_D(api, rpc_client)
-Lay_D(rpc_client, dispatch)
-Lay_L(logging, dispatch)
-Lay_D(dispatch, plugin_registry)
-Lay_R(plugin_registry, model_registry)
-Lay_R(model_registry, distribution)
-Lay_R(distribution, rag)
-Lay_D(plugin_registry, plugins)
-
+Lay_R(artifacts, state)
+Lay_R(state, plugins)
+Lay_R(plugins, rag)
 @enduml

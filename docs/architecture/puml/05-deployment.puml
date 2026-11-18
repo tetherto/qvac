@@ -2,27 +2,34 @@
 !include <C4/C4_Deployment>
 HIDE_STEREOTYPE()
 
-title QVAC SDK Family - Deployment Diagram
+title QVAC SDK - Deployment Topologies
 
-Deployment_Node(host_worker, "Host + Bare worker") {
-    Deployment_Node(host_proc, "Host process") {
-        Container(client, "Host Client", "TypeScript / Python")
+Deployment_Node(separate, "Separate worker process") {
+    Deployment_Node(host, "Application process") {
+        Container(hostClient, "Host Client", "Host runtime", "Owns the worker connection")
     }
-    Deployment_Node(worker_proc, "Bare worker") {
-        Container(worker, "Worker + @qvac/inference", "TypeScript/C++")
+    Deployment_Node(workerProcess, "Worker process") {
+        Container(sidecar, "Bare Worker", "Bare runtime", "Runs the inference engine")
     }
-    ContainerDb(store_hw, "Local Storage", "Models cache + RAG DB")
 }
 
-Deployment_Node(inproc, "In-process Bare") {
-    Deployment_Node(bare_app, "Bare Application") {
-        Container(engine, "@qvac/inference", "TypeScript/C++")
+Deployment_Node(embedded, "Embedded worker") {
+    Deployment_Node(app, "Application process") {
+        Container(embeddedClient, "Host Client", "Host runtime", "Owns the worklet connection")
+        Container(worklet, "Bare Worker", "BareKit worklet", "Runs the inference engine")
     }
-    ContainerDb(store_ip, "Local Storage", "Models cache + RAG DB")
 }
 
-Rel(client, worker, "RPC", "bare-rpc")
-Rel(worker, store_hw, "Reads/writes", "filesystem / HyperDB")
-Rel(engine, store_ip, "Reads/writes", "filesystem / HyperDB")
+Deployment_Node(direct, "Direct Bare") {
+    Deployment_Node(bareApp, "Application process") {
+        Container(appCode, "Application", "Bare", "Registers plugins and calls the engine")
+        Container(engine, "Inference Engine", "@qvac/inference", "Runs model operations")
+    }
+}
 
+Rel_D(hostClient, sidecar, "Calls worker across processes")
+Rel_D(embeddedClient, worklet, "Calls worker within the process")
+Rel_D(appCode, engine, "Calls engine in process")
+Lay_R(separate, embedded)
+Lay_R(embedded, direct)
 @enduml

@@ -2,25 +2,20 @@
 !include <C4/C4_Component>
 HIDE_STEREOTYPE()
 
-title QVAC SDK - RAG Components
+title QVAC SDK - RAG 0.10 Integration
 
-Container_Boundary(host, "Host") {
-    Component(rag_api, "RAG API", "TypeScript / Python", "Workspace lifecycle and retrieval operations")
+Container_Boundary(engine, "Inference Runtime") {
+    Component(adapter, "Retrieval Adapter", "TypeScript", "Provides a Corestore and an embeddings port")
+    Component(embeddings, "Embeddings Port", "TypeScript", "Embeds documents and queries in the configured space")
+    Component(rag, "RAG Core", "@qvac/rag", "Ingests documents and searches scoped namespaces")
+    Component(index, "Derived Vector Index", "TurboVec", "Provides optional per-namespace candidates")
+    ComponentDb(hyperdb, "RAG Records", "HyperDB on Corestore", "Stores namespace revisions, chunks and embeddings")
 }
 
-Container_Boundary(engine, "Engine") {
-    Component(handlers, "RAG Handlers", "TypeScript", "Chunk, ingest, search, delete, reindex")
-    Component(ws_mgr, "Workspace Manager", "TypeScript", "Open workspaces, bind embedding model")
-    ComponentDb(hyperdb, "HyperDB", "Corestore", "Vector storage")
-}
+Rel_D(adapter, rag, "Opens and calls retrieval")
+Rel_L(rag, embeddings, "Requests embeddings")
+Rel_D(rag, hyperdb, "Commits and reads records")
+Rel_R(rag, index, "Refreshes and searches candidate index")
 
-Container_Boundary(embed_model, "Embedding Model") {
-    Component(embed, "embed()", "Native Addon", "llama.cpp embeddings")
-}
-
-Rel(rag_api, handlers, "Calls")
-Rel(handlers, ws_mgr, "Uses")
-Rel(ws_mgr, hyperdb, "Persists to")
-Rel(handlers, embed, "Generates embeddings")
-
+Lay_L(hyperdb, index)
 @enduml

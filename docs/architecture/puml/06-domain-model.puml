@@ -1,82 +1,32 @@
 @startuml
-title Domain Model
+title Session, Request and Model Domain
+hide circle
+hide empty members
 
-top to bottom direction
+class "Caller Session" as Session {
+    sessionId
+}
+
+class Request {
+    requestId
+    kind
+}
+
+class "Model Lease" as Lease
+class "Loaded Model" as Model {
+    modelId
+    modelType
+    configuration
+}
 
 class Plugin {
-    modelType: string
-    displayName: string
-    addonPackage: string
-    handlers: Record<string, HandlerDef>
-    createModel(params): PluginModelResult
+    modelType
+    addonPackage
 }
 
-class Model {
-    modelId: string
-    modelType: string
-    config: object
-    name?: string
-}
-
-class ModelConstant {
-    name: string
-    src: string
-    modelId: string
-    blobCoreKey: string
-    expectedSize: number
-    sha256Checksum: string
-    addon: string
-}
-
-class ModelSource {
-    <<union>>
-    registry://path
-    pear://key/path
-    https://url
-    /local/path
-    ModelConstant object
-}
-
-class Message {
-    role: string
-    content: string
-}
-
-class Attachment {
-    path: string
-}
-
-class Tool {
-    name: string
-    parameters: object
-}
-
-class Response {
-    events: AsyncIterable
-    final: Promise
-}
-
-class RAGWorkspace {
-    workspace: string
-    embeddingModelId: string
-}
-
-class RAGDocument {
-    id: string
-    content: string
-    metadata: object
-}
-
+Session "1" -- "0..*" Request : owns
+Session "1" -- "0..*" Lease : holds
+Model "1" -- "1..*" Lease : retained by
+Request "0..*" --> "0..1" Model : targets
 Plugin "1" --> "0..*" Model : creates
-ModelSource "1" --> "1" Model : loads
-ModelConstant --|> ModelSource : is a
-
-Message "0..*" --> "0..*" Attachment : contains
-Message "0..*" ..> Model : input to (llm)
-Tool "0..*" ..> Model : registered with (llm)
-Model "1" --> "0..*" Response : produces
-
-RAGWorkspace "1" --> "1" Model : uses (embeddings)
-RAGWorkspace "1" --> "0..*" RAGDocument : stores
-
 @enduml
