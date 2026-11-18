@@ -505,8 +505,10 @@ The runnable examples the docs embed live in [`examples/`](examples/README.md).
 
 `:jvm-barekit:test` starts the worker and checks a heartbeat. The real-inference
 e2e for this client is the shared catalog in [`../sdk-e2e`](../sdk-e2e/README.md),
-which the JS and Python clients run as well; its Kotlin runner is an Android app
-in [`../sdk-e2e/runners/kotlin`](../sdk-e2e/runners/kotlin/README.md). Publishing
+which the JS and Python clients run as well; its Kotlin runner, in
+[`../sdk-e2e/runners/kotlin`](../sdk-e2e/runners/kotlin/README.md), is an Android
+app and a desktop program that hosts the worker through `:jvm-barekit` on Linux,
+macOS and Windows. Publishing
 requires a release tag, explicit dispatch, or an SDK release workflow.
 
 Central destinations require an in-memory signing key; local Maven
