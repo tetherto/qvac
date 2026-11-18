@@ -11,7 +11,10 @@ namespace qvac_lib_inference_addon_cpp {
 /// to keep long tasks from holding up short ones.
 ///
 /// The executor must outlive every task posted to it, until the task's Promise
-/// settles or its environment has been torn down.
+/// settles or its environment has been torn down. Every task that post()
+/// accepts must run, unless cancel() removes it first: an executor must not
+/// drop queued tasks, for example when it shuts down, or their Promises never
+/// settle and their environments can never finish tearing down.
 struct IAsyncTaskExecutor {
   IAsyncTaskExecutor() = default;
   IAsyncTaskExecutor(const IAsyncTaskExecutor&) = delete;
@@ -23,12 +26,16 @@ struct IAsyncTaskExecutor {
   /// Queues @p task to run once on one of the executor's threads. Returns a
   /// non-zero ticket that identifies the task for cancel(), or 0 when the task
   /// was not queued, in which case it never runs. Tickets are never reused, so
-  /// cancelling a finished task's ticket cannot remove a later task.
+  /// cancelling a finished task's ticket cannot remove a later task. Must not
+  /// throw: a failure, such as running out of memory for the queue, is
+  /// reported by returning 0.
   virtual std::uint64_t post(std::function<void()> task) noexcept = 0;
 
   /// Removes the task with @p ticket if it has not started, and destroys it
   /// without running it. Returns true when the task was removed. Returns false
-  /// when it has started or finished, or the ticket is unknown.
+  /// when it has started or finished, or the ticket is unknown. Called on the
+  /// JS thread from an environment teardown hook, so it must not throw or
+  /// block on the task.
   virtual bool cancel(std::uint64_t ticket) noexcept = 0;
 };
 

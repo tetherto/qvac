@@ -527,6 +527,10 @@ public:
   }
 
   std::function<void()> take() {
+    if (queue_.empty()) {
+      ADD_FAILURE() << "no task was posted to the executor";
+      return []() {};
+    }
     std::function<void()> task = std::move(queue_.front().task);
     queue_.pop_front();
     return task;
@@ -700,6 +704,43 @@ TEST(JsUtilsTest, JsAsyncTaskRunOnEnvTeardownWaitsForAStartedTask) {
       << "completion must finish the deferred teardown so env teardown ends";
   EXPECT_FALSE(deferred->settled.load())
       << "no promise/JS operation may run once env teardown has begun";
+}
+
+// Once the task has run, the executor is no longer needed: JS may destroy it
+// as soon as the Promise settles. The close callback that unregisters the
+// teardown hook runs later, so an env teardown in between must not call the
+// executor.
+TEST(JsUtilsTest, JsAsyncTaskRunOnEnvTeardownAfterSettlementLeavesTheExecutor) {
+  js_env_t env;
+  ManualExecutor executor;
+  resetMockJs();
+  // Restores immediate close callbacks for later tests even if an ASSERT
+  // below returns early.
+  struct DeferCloses {
+    DeferCloses() { mock_uv::deferClose = true; }
+    ~DeferCloses() {
+      mock_uv::deferClose = false;
+      mock_uv::runPendingCloses();
+    }
+  } deferCloses;
+
+  js::JsAsyncTask::runOn(&env, executor, []() {});
+  js_deferred_t* deferred = mock_js::lastCreatedDeferred;
+  js_deferred_teardown_t* teardown = mock_js::lastDeferredTeardownHandle;
+  ASSERT_NE(deferred, nullptr);
+  ASSERT_NE(teardown, nullptr);
+  executor.runNext();
+  ASSERT_TRUE(deferred->settled.load());
+  ASSERT_FALSE(teardown->finished.load())
+      << "the close callback should still be pending";
+
+  mock_js::lastDeferredTeardownCb(teardown, mock_js::lastDeferredTeardownData);
+  EXPECT_EQ(executor.cancelCalls, 0)
+      << "the teardown hook called the executor after the task had settled";
+
+  mock_uv::runPendingCloses();
+  EXPECT_TRUE(teardown->finished.load())
+      << "the close callback must finish the deferred teardown";
 }
 
 TEST(JsUtilsTest, JsAsyncTaskRunOnThrowsWhenTheExecutorRejectsTheTask) {

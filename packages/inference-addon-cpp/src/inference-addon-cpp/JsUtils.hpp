@@ -861,7 +861,10 @@ std::vector<CppType> toVector(js_env_t* env, Array array) {
 ///     [](js_env_t* env, const Result& result) { return toJs(env, result); });
 ///
 /// return js::JsAsyncTask::runOn(
-///     env, executor, []() { return heavyComputation(); }, toJs);
+///     env,
+///     executor,
+///     []() { return heavyComputation(); },
+///     [](js_env_t* env, const Result& result) { return toJs(env, result); });
 class JsAsyncTask {
   template <typename Result> struct CallbackData {
     using Work = std::function<Result()>;
@@ -1001,6 +1004,11 @@ class JsAsyncTask {
     // until the later uv close callback. This runs on the loop while the env
     // is pinned, preserving the teardown-safety contract.
     data->work = nullptr;
+    // The task has run, so there is nothing left to cancel. Dropping the
+    // executor before the Promise settles keeps a teardown hook that fires
+    // before the close callback from calling an executor that JS has already
+    // destroyed in reaction to the settlement.
+    data->executor = nullptr;
 
     // Once env teardown has begun, settling the promise would touch a dying
     // env; skip all JS work and just run the close/finish handshake below.

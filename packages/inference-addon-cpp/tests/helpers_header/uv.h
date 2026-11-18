@@ -6,6 +6,9 @@
 
 #pragma once
 
+#include <utility>
+#include <vector>
+
 struct uv_async_t {
   void* data;
   // Stored by the mocked uv_async_init so uv_async_send can dispatch the
@@ -32,8 +35,32 @@ inline void* uv_handle_get_data(uv_handle_t* handle) { return nullptr; }
 
 inline void uv_handle_set_data(uv_handle_t* handle, void* data) {}
 
+// Test hooks for close callbacks. A real loop runs them in a later phase, so a
+// test that needs the window between uv_close and its callback sets
+// deferClose, then runs the queued callbacks with runPendingCloses().
+namespace mock_uv {
+inline bool deferClose = false;
+inline std::vector<std::pair<uv_handle_t*, void (*)(uv_handle_t*)>>
+    pendingCloses;
+} // namespace mock_uv
+
 inline void uv_close(uv_handle_t* handle, void (*cb)(uv_handle_t*)) {
-  if (cb != nullptr) {
+  if (cb == nullptr) {
+    return;
+  }
+  if (mock_uv::deferClose) {
+    mock_uv::pendingCloses.emplace_back(handle, cb);
+    return;
+  }
+  cb(handle);
+}
+
+namespace mock_uv {
+inline void runPendingCloses() {
+  std::vector<std::pair<uv_handle_t*, void (*)(uv_handle_t*)>> closes;
+  closes.swap(pendingCloses);
+  for (auto& [handle, cb] : closes) {
     cb(handle);
   }
 }
+} // namespace mock_uv
