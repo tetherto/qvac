@@ -127,19 +127,32 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      # A change only to packages/*/docs/users/ is a documentation fix: it publishes no version, so it needs no
+      # version bump or CHANGELOG section. The rule lives in .github/scripts/lib/docs-only.mjs.
+      - name: Classify documentation-only changes
+        id: docs
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          node .github/scripts/docs-only.mjs "$BASE_SHA" "$HEAD_SHA"
+          if grep -q '^docs_only=true$' "$GITHUB_OUTPUT"; then
+            echo "::notice::Documentation-only change: no version bump or changelog section is required."
+          fi
       - id: pkg
         env:
           BASE_REF: ${{ github.base_ref }}
           PROJECTS: ${{ needs.select.outputs.projects }}
         run: node scripts/ci/release-guard.mjs
-      - if: steps.pkg.outputs.train == 'true'
+      - if: steps.pkg.outputs.train == 'true' && steps.docs.outputs.docs_only != 'true'
         uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           node-version: lts/*
-      - if: steps.pkg.outputs.train == 'true'
+      - if: steps.pkg.outputs.train == 'true' && steps.docs.outputs.docs_only != 'true'
         uses: tetherto/qvac-actions/setup-pnpm@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
       # From the merge base, so commits already on the train branch are not read as this PR's.
-      - if: steps.pkg.outputs.train == 'true'
+      - if: steps.pkg.outputs.train == 'true' && steps.docs.outputs.docs_only != 'true'
         env:
           BASE_REF: ${{ github.base_ref }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -147,7 +160,7 @@ jobs:
         run: |
           pnpm install --frozen-lockfile --ignore-scripts
           node .github/scripts/release-train.mjs resolve "$BASE_REF" "$(git merge-base "$BASE_SHA" "$HEAD_SHA")" "$HEAD_SHA" --check-npm
-      - if: steps.pkg.outputs.dir != ''
+      - if: steps.pkg.outputs.dir != '' && steps.docs.outputs.docs_only != 'true'
         uses: ./.github/actions/release-merge-guard
         with:
           base-ref: ${{ github.base_ref }}
@@ -157,12 +170,12 @@ jobs:
           package-json-path: ${{ steps.pkg.outputs.dir }}/package.json
           changelog-path: ${{ steps.pkg.outputs.dir }}/CHANGELOG.md
       # The section create-github-release.yml reads after publishing, read from the PR head before merge.
-      - if: steps.pkg.outputs.dir != ''
+      - if: steps.pkg.outputs.dir != '' && steps.docs.outputs.docs_only != 'true'
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           CHANGELOG: ${{ steps.pkg.outputs.dir }}/CHANGELOG.md
         run: git show "$HEAD_SHA:$CHANGELOG" > "$RUNNER_TEMP/changelog-head.md"
-      - if: steps.pkg.outputs.dir != ''
+      - if: steps.pkg.outputs.dir != '' && steps.docs.outputs.docs_only != 'true'
         uses: ./.github/actions/verify-changelog-notes
         with:
           changelog-path: ${{ runner.temp }}/changelog-head.md

@@ -1,0 +1,10 @@
+{
+  "title": "HTTP server",
+  "icon": "Server",
+  "pages": [
+    "index",
+    "connection",
+    "integration",
+    "openai-api"
+  ]
+}

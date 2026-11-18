@@ -1,0 +1,80 @@
+---
+title: subscribeServerLogs
+titleStyle: code
+description: Calls a handler with every server-side log — SDK server, all loaded models, and RAG — and returns a function that unsubscribes.
+binds:
+  - fn:subscribeServerLogs
+---
+
+Subscribes to every server-side log through one stream: the SDK server's logs, the addon logs of every loaded model, and RAG logs. It calls `handler` once per log line and returns an `unsubscribe` function. You do not need to know any log source IDs ahead of time; each line's `id` names its origin. It is built on [`loggingStream`](/sdk/reference/api/loggingStream) with the reserved `SDK_ALL_LOG_ID` source. See [Logging](/sdk/runtime/logging).
+
+## Signature
+
+```ts
+function subscribeServerLogs(handler: ServerLogHandler, options?: RPCOptions): () => void;
+```
+
+## Parameters
+
+| Parameter | Description | Type | Required |
+| --- | --- | --- | --- |
+| `handler` | Called with each log line, in order. | [`ServerLogHandler`](#serverloghandler) | Yes |
+| `options` | Transport options for the underlying stream. | [`RPCOptions`](#rpcoptions) | No |
+
+### `ServerLogHandler`
+
+```ts
+type ServerLogHandler = (log: LoggingStreamResponse) => void;
+```
+
+#### `LoggingStreamResponse`
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `type` | Always `"loggingStream"`. | `"loggingStream"` |
+| `id` | The line's origin: `SDK_LOG_ID`, a model ID, or a RAG workspace key. | `string` |
+| `level` | Log level. | `"error" \| "warn" \| "info" \| "debug" \| "off"` |
+| `namespace` | Namespace of the logger that emitted the line. | `string` |
+| `message` | The log message. | `string` |
+| `timestamp` | Worker time in milliseconds since the Unix epoch. | `number` |
+
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
+
+## Returns
+
+An `unsubscribe` function, `() => void`. Call it to stop receiving logs; the worker releases the subscription at once. A subscription opened as a session also ends when that session closes.
+
+The call itself does not throw. When the stream fails or `handler` throws, the error is written to the SDK client logger and the subscription ends.
+
+## Examples
+
+```ts
+import { subscribeServerLogs, loadModel, unloadModel, LLAMA_3_2_1B_INST_Q4_0 } from "@qvac/sdk";
+
+const unsubscribe = subscribeServerLogs((log) => {
+  console.log(`[${log.id}] [${log.level.toUpperCase()}] [${log.namespace}] ${log.message}`);
+});
+
+const modelId = await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0 });
+// ... use the model ...
+await unloadModel({ modelId });
+
+unsubscribe();
+```

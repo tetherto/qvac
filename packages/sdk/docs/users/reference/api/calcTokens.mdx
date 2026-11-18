@@ -1,0 +1,109 @@
+---
+title: calcTokens
+titleStyle: code
+description: Counts the tokens a prompt takes on a loaded language model, without running generation.
+binds:
+  - fn:calcTokens
+---
+
+Counts the tokens of a prompt with the tokenizer and chat template of a loaded `llamacpp-completion` (`llm`) model, so you can check prompt size before you call [`completion()`](/sdk/reference/api/completion). With `text` alone, the text is counted raw. With `history` or counted tools, the prompt is rendered with the model's chat template, the model's configured system prompt is added when the history has none, and `text`, when present, becomes the final user turn. It can run while the model is generating. See [Count tokens before generation](/sdk/ai-capabilities/text-generation#count-tokens-before-generation).
+
+## Signature
+
+```ts
+function calcTokens(params: CalcTokensClientParams, options?: RPCOptions): Promise<number>;
+```
+
+## Parameters
+
+| Parameter | Description | Type | Required |
+| --- | --- | --- | --- |
+| `params` | The model and the prompt to count. | [`CalcTokensClientParams`](#calctokensclientparams) | Yes |
+| `options` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
+
+### `CalcTokensClientParams`
+
+Pass `text`, a non-empty `history`, or both.
+
+| Option | Description | Type | Required | Default |
+| --- | --- | --- | --- | --- |
+| `modelId` | ID of a loaded `llamacpp-completion` (`llm`) model, as [`loadModel()`](/sdk/reference/api/loadModel) returned it. Not empty. | `string` | Yes | — |
+| `text` | Text to count. Counted raw when there is no `history` and no counted tool; otherwise rendered as the final user turn. | `string` | One of `text`, `history` | — |
+| `history` | Text-only conversation to render with the model's chat template, oldest message first. Not empty when `text` is omitted. | [`CalcTokensHistoryMessage`](#calctokenshistorymessage)`[]` | One of `text`, `history` | — |
+| `tools` | Tools to render into the prompt: all full [`Tool`](/sdk/reference/api/completion#tool) objects, or all [`ToolInput`](/sdk/reference/api/completion#toolinput) objects with Zod schemas. Counted only when the model was loaded with `modelConfig.tools: true`; otherwise ignored. Every supplied tool is counted. | [`Tool`](/sdk/reference/api/completion#tool)`[] \| ` [`ToolInput`](/sdk/reference/api/completion#toolinput)`[]` | No | — |
+| `toolSearch` | Limits rendered for the built-in `tool_search`, as on `completion()`. Used only when a tool sets `deferLoading`. Pass the same limits you pass to `completion()`. See [Deferred tool loading](/sdk/ai-capabilities/text-generation#deferred-tool-loading). | [`ToolSearchOptions`](#toolsearchoptions) | No | — |
+
+The count uses the model's load-time reasoning setting. A `completion()` request that names a tool in `generationParams.tool_choice` or overrides `generationParams.reasoning_budget` can render a different prompt, and so report a different `promptTokens`.
+
+#### `CalcTokensHistoryMessage`
+
+A [`HistoryMessage`](/sdk/reference/api/completion#historymessage) without media: attachments and media content parts are rejected. Use `completion()` for media.
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `role` | Message role: `"system"`, `"user"`, `"assistant"`, or `"tool"`. | `string` | Yes |
+| `content` | Message text. On a `user` message, it may instead be an ordered array of `{ type: "text", text }` parts. Required, except on an `assistant` message that carries `toolCalls`, where it may be `null` or omitted and reads as an empty string. | `string \| { type: "text"; text: string }[] \| null` | Yes |
+| `toolCalls` | On an `assistant` message only: the tool calls that turn made. | [`HistoryToolCall`](/sdk/reference/api/completion#historytoolcall)`[]` | No |
+| `toolCallId` | On a `tool` message only: the `id` of the call this result answers. | `string` | No |
+| `toolName` | On a `tool` message only: the name of the tool that produced the result. | `string` | No |
+
+#### `ToolSearchOptions`
+
+| Field | Description | Type | Required | Default |
+| --- | --- | --- | --- | --- |
+| `defaultLimit` | How many tool definitions one `tool_search` call loads when the model does not pass a `limit`. An integer from `1`; cannot exceed `maxLimit`. | `number` | No | `3`, or `maxLimit` when lower |
+| `maxLimit` | The most tool definitions one `tool_search` call can load. A larger `limit` from the model is lowered to it. An integer from `1`. | `number` | No | `8` |
+
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. See [Profiler](/sdk/runtime/profiler). | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
+
+## Returns
+
+A promise that resolves with the number of tokens in the prompt under the model's load-time settings: a non-negative integer. The call registers no request, so the promise carries no `requestId`.
+
+## Throws
+
+An error written as a code, such as `MODEL_NOT_FOUND`, is not exported as a class: it reaches the caller as an `Error` whose `name` is that code.
+
+| Error | When |
+| --- | --- |
+| `RequestValidationFailedError` | `params` fail validation, such as neither `text` nor a non-empty `history`, an unknown field, an attachment or media part in `history`, or a `toolSearch.defaultLimit` above `maxLimit`. |
+| `InvalidToolSchemaError` | `tools` starts with a full `Tool` object and a later entry is not a valid `Tool`. |
+| `InvalidToolsArrayError` | The first entry of `tools` is empty. |
+| `MODEL_NOT_FOUND` | No model with `modelId` is loaded. |
+| `MODEL_OPERATION_NOT_SUPPORTED` | The loaded model is not a language model. |
+| `InvalidResponseError` | The worker answers with an unexpected or malformed response. |
+
+## Examples
+
+```ts
+import { calcTokens, loadModel, QWEN3_600M_INST_Q4 } from "@qvac/sdk";
+
+const modelId = await loadModel({ modelSrc: QWEN3_600M_INST_Q4 });
+
+// Raw text: no chat template.
+const raw = await calcTokens({ modelId, text: "Summarize this conversation." });
+
+// Rendered prompt: the history through the chat template, with text as the final user turn.
+const rendered = await calcTokens({
+  modelId,
+  history: [{ role: "system", content: "You are a helpful assistant." }],
+  text: "Summarize this conversation.",
+});
+```

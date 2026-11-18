@@ -1,0 +1,205 @@
+{
+  "package": "@qvac/fixture-platform",
+  "exports": [
+    {
+      "name": "ENGINE_VERSION",
+      "kind": "variable",
+      "summary": "The version this package implements.",
+      "deprecated": null,
+      "source": "index.d.ts:29",
+      "type": "string"
+    },
+    {
+      "name": "legacyTranslate",
+      "kind": "function",
+      "summary": "",
+      "deprecated": "Use `translate`.",
+      "source": "index.d.ts:58",
+      "signatures": [
+        {
+          "text": "legacyTranslate(text: string): string",
+          "parameters": [
+            {
+              "name": "text",
+              "type": "string",
+              "optional": false,
+              "description": ""
+            }
+          ],
+          "returns": {
+            "type": "string",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "LoadMode",
+      "kind": "type",
+      "summary": "How a model is loaded.",
+      "deprecated": null,
+      "source": "index.d.ts:2",
+      "values": [
+        "\"eager\"",
+        "\"lazy\""
+      ]
+    },
+    {
+      "name": "LogLevel",
+      "kind": "enum",
+      "summary": "Engine log levels.",
+      "deprecated": null,
+      "source": "index.d.ts:23",
+      "values": [
+        "Error = 0",
+        "Info = 1"
+      ]
+    },
+    {
+      "name": "translate",
+      "kind": "function",
+      "summary": "Translates a text.",
+      "deprecated": null,
+      "source": "index.d.ts:37",
+      "signatures": [
+        {
+          "text": "translate(text: string, options: TranslateOptions): Promise<Translation>",
+          "parameters": [
+            {
+              "name": "text",
+              "type": "string",
+              "optional": false,
+              "description": "The text to translate."
+            },
+            {
+              "name": "options",
+              "type": "TranslateOptions",
+              "optional": false,
+              "description": "Where to translate it."
+            }
+          ],
+          "returns": {
+            "type": "Promise<Translation>",
+            "description": "The translation."
+          }
+        },
+        {
+          "text": "translate(texts: string[], options: TranslateOptions): Promise<Translation[]>",
+          "parameters": [
+            {
+              "name": "texts",
+              "type": "string[]",
+              "optional": false,
+              "description": "The texts to translate."
+            },
+            {
+              "name": "options",
+              "type": "TranslateOptions",
+              "optional": false,
+              "description": "Where to translate them."
+            }
+          ],
+          "returns": {
+            "type": "Promise<Translation[]>",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "TranslateOptions",
+      "kind": "interface",
+      "summary": "Options of `translate`.",
+      "deprecated": null,
+      "source": "index.d.ts:5",
+      "fields": [
+        {
+          "name": "from",
+          "type": "string",
+          "optional": true,
+          "description": "Source language; detected when omitted."
+        },
+        {
+          "name": "mode",
+          "type": "LoadMode",
+          "optional": true,
+          "description": "How the model is loaded."
+        },
+        {
+          "name": "to",
+          "type": "string",
+          "optional": false,
+          "description": "Target language, as a BCP 47 tag."
+        }
+      ]
+    },
+    {
+      "name": "Translation",
+      "kind": "type",
+      "summary": "The result of a translation.",
+      "deprecated": null,
+      "source": "index.d.ts:15",
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "optional": false,
+          "description": "The translated text."
+        },
+        {
+          "name": "tokens",
+          "type": "number",
+          "optional": false,
+          "description": "Tokens generated."
+        }
+      ]
+    },
+    {
+      "name": "Translator",
+      "kind": "class",
+      "summary": "A loaded translation model.",
+      "deprecated": null,
+      "source": "index.d.ts:46",
+      "signatures": [
+        {
+          "text": "new Translator(path: string): Translator",
+          "parameters": [
+            {
+              "name": "path",
+              "type": "string",
+              "optional": false,
+              "description": "Where the model is."
+            }
+          ],
+          "returns": {
+            "type": "Translator",
+            "description": ""
+          }
+        }
+      ],
+      "fields": [
+        {
+          "name": "path",
+          "type": "string",
+          "optional": false,
+          "description": "Where the model was loaded from."
+        }
+      ],
+      "methods": [
+        {
+          "name": "unload",
+          "signatures": [
+            {
+              "text": "unload(): Promise<void>",
+              "parameters": [],
+              "returns": {
+                "type": "Promise<void>",
+                "description": ""
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

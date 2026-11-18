@@ -35,8 +35,8 @@ export interface VersionedCollection {
   lines: Line[];
 }
 
-/** Every collection published as documentation lines, with those lines. */
-export function versionedCollections(): VersionedCollection[] {
+/** Every documented software with its lines, products and packages alike. */
+function documentedLines(): VersionedCollection[] {
   return collectionLines(source.getPages().map((page) => page.url)).map(
     (collection: CollectionLines) => {
       const software = getDocumentedSoftware(collection.path);
@@ -46,6 +46,16 @@ export function versionedCollections(): VersionedCollection[] {
       return { software, path: collection.path, lines: collection.lines };
     },
   );
+}
+
+/**
+ * Every collection published as documentation lines, with those lines: each
+ * product's collection. A package documented inside Ecosystem publishes lines
+ * too, but is not a collection: its current line is read as part of
+ * Ecosystem, and it has no artifacts of its own.
+ */
+export function versionedCollections(): VersionedCollection[] {
+  return documentedLines().filter((collection) => collection.software.kind === 'product');
 }
 
 /** The collection published at `path`, or null when it is not versioned. */
@@ -65,11 +75,17 @@ export function pagesOfLine(line: Line): Page[] {
     .sort((a, b) => a.url.localeCompare(b.url));
 }
 
-/** The pages of every collection that publishes no lines. */
+/**
+ * The pages of every collection that publishes no lines, with the current
+ * line of each package they hold. A package's other lines are left out, so a
+ * corpus never mixes two versions of one package.
+ */
 export function unversionedPages(): Page[] {
   const versioned = new Set(
-    versionedCollections().flatMap((collection) =>
-      collection.lines.flatMap((line) => line.urls),
+    documentedLines().flatMap((collection) =>
+      collection.lines
+        .filter((line) => collection.software.kind === 'product' || !line.current)
+        .flatMap((line) => line.urls),
     ),
   );
   return source

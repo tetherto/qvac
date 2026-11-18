@@ -8,6 +8,7 @@ import {
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getMDXComponents } from '@/mdx-components';
+import { apiComponentsFor } from '@/components/api-reference/line-components';
 import { SmartAnchor } from '@/components/mdx-smart-card';
 import type { AnchorHTMLAttributes } from "react";
 import { CopyPageButton, ViewOptions } from '@/components/page-actions';
@@ -84,6 +85,9 @@ export default async function Page(props: PageProps<'/[[...slug]]'>) {
       <DocsBody>
         <MDXContent
           components={getMDXComponents({
+            // The API data components, bound to this page's documentation
+            // line so they read that line's own contract and models.
+            ...apiComponentsFor(page.url),
             // Resolve relative markdown hrefs (e.g. `./foo.mdx`) to
             // their absolute docs URL server-side, then hand off to
             // `SmartAnchor` (a client component) which renders the

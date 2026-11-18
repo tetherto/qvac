@@ -137,9 +137,8 @@ const EXPECTED_TRAILS: { page: string; leadsTo: string; depth: number }[] = [
 
 /**
  * Pages that must carry no trail: every collection index and a cut line's
- * index. An inventory package version belongs here too — it is a root in its
- * own right, and so is its own index — but the inventory is built and not
- * published, so none exists to name.
+ * index. A package line's index inside Ecosystem belongs here too — it is the
+ * index of a root of its own — once a package is published.
  */
 const TRAILLESS = [
   'sdk',

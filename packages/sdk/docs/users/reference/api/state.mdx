@@ -1,0 +1,71 @@
+---
+title: state
+titleStyle: code
+description: Returns the current runtime lifecycle state.
+binds:
+  - fn:state
+---
+
+Returns the SDK runtime's current lifecycle state. It is the source of truth for whether the runtime accepts operations, so app logic can branch on it instead of tracking [`suspend()`](/sdk/reference/api/suspend) and [`resume()`](/sdk/reference/api/resume) calls itself. The lifecycle gate never blocks `state()`. See [Runtime lifecycle](/sdk/runtime/lifecycle).
+
+## Signature
+
+```ts
+function state(options?: RPCOptions): Promise<LifecycleState>;
+```
+
+## Parameters
+
+| Parameter | Description | Type | Required |
+| --- | --- | --- | --- |
+| `options` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
+
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
+
+## Returns
+
+A promise that resolves with a `LifecycleState`:
+
+| Value | Meaning |
+| --- | --- |
+| `"active"` | All SDK operations are accepted. |
+| `"suspending"` | `suspend()` is in progress. Operations other than `suspend()`, `resume()`, `state()`, and a session's `close()` are blocked. |
+| `"suspended"` | The runtime is paused. Only `suspend()`, `resume()`, `state()`, and a session's `close()` are accepted. |
+| `"resuming"` | `resume()` is in progress. Operations other than `suspend()`, `resume()`, `state()`, and a session's `close()` are still blocked. |
+
+A blocked operation throws `LIFECYCLE_OPERATION_BLOCKED`.
+
+## Throws
+
+| Error | When |
+| --- | --- |
+| `SessionNotOpenError` | `options.sessionId` names a session that is not open. |
+| `InvalidResponseError` | The worker answers with an unexpected response type. |
+
+## Examples
+
+```ts
+import { resume, state } from "@qvac/sdk";
+
+// Branch on lifecycle state before issuing work.
+if ((await state()) !== "active") {
+  await resume();
+}
+```

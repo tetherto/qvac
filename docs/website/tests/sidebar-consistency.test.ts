@@ -29,7 +29,6 @@ const PAGE_EXTENSIONS = ['.mdx', '.md']
  */
 function linePageTree (): Root {
   const children: Node[] = DOCUMENTED_SOFTWARE
-    .filter((software) => software.kind === 'collection')
     .flatMap((software) =>
       software.versions.map((line) => ({
         type: 'folder' as const,
@@ -82,8 +81,10 @@ function contentPaths (url: string): string[] {
 
   const paths = [cleanUrl]
 
+  // Every documented software — a product's collection or a package inside
+  // Ecosystem — holds its pages in line folders.
   const resolved = getVersionForPath('/' + cleanUrl)
-  if (resolved && resolved.software.kind === 'collection') {
+  if (resolved) {
     const { software, version } = resolved
     const collection = software.path.slice(1)
     const rest = cleanUrl
@@ -170,6 +171,23 @@ function resolvesToFolder (dir: string, name: string): boolean {
   return fs.existsSync(target) && fs.statSync(target).isDirectory()
 }
 
+describe('the unreleased line of a preview build', () => {
+  const sdkIndexes = (tree: Node[]) =>
+    tree
+      .filter((node): node is Extract<Node, { type: 'folder' }> => node.type === 'folder' && node.name === 'SDK')
+      .map((node) => node.index?.url)
+
+  it('gets a sidebar root of its own when its folder exists', () => {
+    const pageTree = linePageTree()
+    pageTree.children.push({ type: 'folder', $id: 'root:sdk/preview', name: 'preview', children: [] })
+    expect(sdkIndexes(buildCustomTree(pageTree))).toContain('/sdk/preview/')
+  })
+
+  it('gets none in a build without it', () => {
+    expect(sdkIndexes(buildCustomTree(linePageTree()))).not.toContain('/sdk/preview/')
+  })
+})
+
 describe('sidebar-consistency', () => {
   describe('entries declared in custom-tree', () => {
     const urls = [...new Set(collectUrls(buildCustomTree(linePageTree())))]
@@ -218,51 +236,6 @@ describe('sidebar-consistency', () => {
           ).toBe(collection)
         }
       }
-    })
-  })
-
-  describe('every inventory page resolves to a root', () => {
-    // The sidebar beside a page is the last root folder on the path Fumadocs
-    // finds by matching the pathname against the tree — page URL against page
-    // URL, with the pathname's trailing slash normalized away and the node's
-    // left as written. A page the tree names nowhere, or names at a URL
-    // carrying a slash, matches nothing, and the sidebar falls back to listing
-    // the roots: the reader opens a README and is shown the collections.
-    //
-    // The inventory is where that bites, because it is the one part of the
-    // tree whose entries are composed rather than read from a `meta.json`.
-    const tree = { $id: 'root', name: 'docs', children: buildCustomTree(linePageTree()) }
-    const urls = DOCUMENTED_SOFTWARE
-      .filter((software) => software.kind === 'package')
-      .flatMap((software) => [
-        software.path,
-        ...software.versions.map((version) => `${software.path}/${version.version}`),
-      ])
-
-    it.each(urls)('finds a sidebar for %s', (url) => {
-      for (const pathname of [url, `${url}/`]) {
-        const path = searchPath(tree.children, pathname) ?? []
-        expect(path.length, `${pathname} matches nothing in the tree`).toBeGreaterThan(0)
-        expect(
-          path.some((node) => node.type === 'folder' && node.root),
-          `${pathname} matches the tree but under no root, so the sidebar has nothing to scope to`,
-        ).toBe(true)
-      }
-    })
-
-    it('keeps versions out of the sidebar, leaving them to the switcher', () => {
-      // What a sidebar renders is a root's children; a root's own index is not
-      // an entry. So the versions may be named as indexes, and must not appear
-      // among any root's children.
-      const rendered = tree.children.flatMap((node) =>
-        node.type === 'folder' ? collectUrls(node.children) : [],
-      )
-
-      expect(
-        rendered.filter(
-          (url) => url.startsWith('/ecosystem/inventory/') && /\/v\d+\.\d+$/.test(url),
-        ),
-      ).toEqual([])
     })
   })
 

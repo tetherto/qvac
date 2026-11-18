@@ -120,9 +120,8 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 
 | Skill | Purpose | Use when |
 |-------|---------|----------|
-| [`qv-docs-update`](../qv-docs-update/SKILL.md) | Updates the docs website after a change to the SDK or CLI. | You added or changed a feature and the docs need to catch up. **Manual:** `/qv-docs-update` |
-| [`qv-docs-cutoff`](../qv-docs-cutoff/SKILL.md) | Opens the one documentation PR of a release cutoff: it publishes the line of the version being released, per collection the release moves. | A release cutoff: `qv-release-train` invokes it at step 6 after cutting the train branch, `qv-sdk-changelog` at step 8 of a single-package release. **Manual:** `/qv-docs-cutoff` to redo a cutoff's PR. |
-| [`qv-docs-line-cut`](../qv-docs-line-cut/SKILL.md) | Publishes the documentation line of the version being released, in each collection the release moves. | Step 3 of a cutoff, invoked by `qv-docs-cutoff`. Manual invocation is the out-of-band exception. |
+| [`qv-docs-update`](../qv-docs-update/SKILL.md) | Updates a package's documentation after a change to its code, for any software the docs website documents: regenerates the API facts and fixes the pages whose bindings drifted. | You added or changed a feature and the docs need to catch up. **Manual:** `/qv-docs-update` |
+| [`qv-docs-scaffold`](../qv-docs-scaffold/SKILL.md) | Creates an internal package's documentation for Ecosystem → Packages: versions file, required pages from the scaffolds, hand-written API reference, bindings. | A package the products are built on gets documented for the first time. **Manual:** `/qv-docs-scaffold` |
 
 ---
 
@@ -165,9 +164,8 @@ Rule nudge: `.cursor/rules/qip-triage.mdc`
 | Holepunch stack help | `qv-holepunch-dev` |
 | Generate NOTICE files | `qv-notice-generate` |
 | Reserve or inspect error code ranges | `qv-error-code-reserve` |
-| Update the docs website after an SDK/CLI change | `qv-docs-update` |
-| Open the docs PR of a release cutoff | `qv-docs-cutoff` |
-| Publish the docs line of a release | `qv-docs-line-cut` (invoked by `qv-docs-cutoff`) |
+| Update a package's docs after a code change | `qv-docs-update` |
+| Document an internal package for the first time | `qv-docs-scaffold` |
 | Check if a QIP is needed | `qv-qip-triage` |
 | Draft a QIP | `qv-qip-create` |
 | Review a QIP | `qv-qip-review` |

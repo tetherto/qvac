@@ -18,6 +18,10 @@ on:
   push:
     branches:
       - release-train-*
+    # A documentation-only push moves no version: its line is published by
+    # moving a pin (docs-pin-update.yml).
+    paths-ignore:
+      - "packages/*/docs/users/**"
 
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]

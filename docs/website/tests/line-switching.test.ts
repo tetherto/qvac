@@ -18,10 +18,8 @@ import {
   collectionOfPath,
   destinationsFor,
   lineTitle,
-  packageLines,
   type CollectionLines,
 } from '@/lib/lines'
-import { documentedSoftwareOfKind } from '@/lib/versions'
 
 const contentRoot = path.resolve(__dirname, '..', 'content', 'docs')
 
@@ -83,6 +81,31 @@ describe('the line label', () => {
   it('marks the current line and leaves every other bare', () => {
     expect(lineTitle('v0.17', true)).toBe('v0.17 (latest)')
     expect(lineTitle('v0.16', false)).toBe('v0.16')
+    expect(lineTitle('preview', false)).toBe('preview (unreleased)')
+  })
+})
+
+describe('the unreleased line of a preview build', () => {
+  const published = ['/sdk', '/sdk/quickstart']
+
+  it('is a line of its own, first, holding only its pages', () => {
+    const sdk = collectionLines([...published, '/sdk/preview', '/sdk/preview/quickstart']).find(
+      (collection) => collection.path === '/sdk',
+    )!
+    expect(sdk.lines[0]).toMatchObject({
+      version: 'preview',
+      current: false,
+      title: 'preview (unreleased)',
+      index: '/sdk/preview/',
+      urls: ['/sdk/preview', '/sdk/preview/quickstart'],
+    })
+    const current = sdk.lines.find((line) => line.current)!
+    expect(current.urls).toEqual(published)
+  })
+
+  it('is absent when the build did not materialize it', () => {
+    const sdk = collectionLines(published).find((collection) => collection.path === '/sdk')!
+    expect(sdk.lines.map((line) => line.version)).not.toContain('preview')
   })
 })
 
@@ -110,54 +133,38 @@ describe('switching lines', () => {
   })
 })
 
-describe('switching versions inside an inventory package', () => {
-  const packages = packageLines()
-  const published = new Set(contentUrls())
+describe('switching lines inside a package documented in Ecosystem', () => {
+  const pkg: CollectionLines = {
+    path: '/ecosystem/packages/translation-nmtcpp',
+    lines: [
+      {
+        version: 'v1.4',
+        current: true,
+        title: lineTitle('v1.4', true),
+        index: '/ecosystem/packages/translation-nmtcpp/',
+        urls: ['/ecosystem/packages/translation-nmtcpp', '/ecosystem/packages/translation-nmtcpp/usage'],
+      },
+      {
+        version: 'v1.3',
+        current: false,
+        title: lineTitle('v1.3', false),
+        index: '/ecosystem/packages/translation-nmtcpp/v1.3/',
+        urls: ['/ecosystem/packages/translation-nmtcpp/v1.3'],
+      },
+    ],
+  }
+  const ecosystemWide: CollectionLines = { path: '/ecosystem', lines: [] }
 
-  it('offers one entry per package version, and the index besides', () => {
-    for (const software of documentedSoftwareOfKind('package')) {
-      const found = packages.find((entry) => entry.path === software.path)
-      expect(found, `no switcher entries for ${software.path}`).toBeDefined()
-      expect(found?.lines.map((line) => line.title)).toEqual([
-        'All versions',
-        ...software.versions.map((version) => version.version),
-      ])
-    }
+  it('resolves a package page to the package, not to a shorter path around it', () => {
+    expect(collectionOfPath([ecosystemWide, pkg], '/ecosystem/packages/translation-nmtcpp/usage')).toBe(pkg)
   })
 
-  it('selects the index, so the control shows on the page a package is entered at', () => {
-    for (const software of packages) {
-      const index = software.lines[0]
-      expect(index.urls).toEqual([software.path])
-    }
-  })
-
-  it('lands on a page the site publishes, from the index and from a version', () => {
-    for (const software of packages) {
-      for (const line of software.lines) {
-        for (const pathname of line.urls) {
-          for (const { line: target, url } of destinationsFor(
-            software,
-            pathname,
-          )) {
-            const landed = url.replace(/\/$/, '') || '/'
-            expect(
-              published.has(landed),
-              `${pathname} → ${target.title} lands on ${url}, which is not published`,
-            ).toBe(true)
-            expect(target.urls).toEqual([landed])
-          }
-        }
-      }
-    }
-  })
-
-  it('claims every page of the packages it describes', () => {
-    for (const software of packages) {
-      for (const pathname of [...software.lines].flatMap((line) => line.urls)) {
-        expect(collectionOfPath(packages, pathname)?.path).toBe(software.path)
-      }
-    }
+  it('serves the newest line version-less and the others under their version', () => {
+    const fromCurrent = destinationsFor(pkg, '/ecosystem/packages/translation-nmtcpp/usage')
+    expect(fromCurrent.map(({ url }) => url)).toEqual([
+      '/ecosystem/packages/translation-nmtcpp/usage',
+      '/ecosystem/packages/translation-nmtcpp/v1.3/',
+    ])
   })
 })
 

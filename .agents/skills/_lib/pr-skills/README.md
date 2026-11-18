@@ -88,7 +88,7 @@ from the local `upstream` remote.
 
    `ownedPaths` are prefix-matched against changed-file paths to decide whether a PR is "owned" by this pod in the primary repo. Use trailing slashes.
 
-   `docPaths` (optional) are prefix-matched the same way. A PR that hits `docPaths` and misses `ownedPaths` is docs-only; with `--tiers` it renders under `### 📚 Docs` instead of mixing with impl.
+   `docPaths` (optional) are prefix-matched the same way. A PR that hits `docPaths` and touches no `ownedPaths` file outside them is docs-only, so a package's own documentation root (`packages/<pkg>/docs/users/`) can be a doc path inside an owned path; with `--tiers` it renders under `### 📚 Docs` instead of mixing with impl.
 
    `approvalLeads` (optional) GitHub logins whose formal `APPROVED` satisfies the team-lead gate and appear on `Reviews:`. They are not Core authors and are not ping targets.
 

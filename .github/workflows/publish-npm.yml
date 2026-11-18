@@ -4,7 +4,7 @@ name: Publish to npm
 on:
   push:
     branches: [release-*, "!release-train-*"]
-    paths: ["packages/**", "plugins/**"]
+    paths: ["packages/**", "plugins/**", "!packages/*/docs/users/**"]
   workflow_dispatch:
     inputs:
       packages:

@@ -1,0 +1,436 @@
+{
+  "//": "Written by `npm run docs:lock` in docs/website. Each entry is the surface hash of a symbol a page binds, at the page's last review.",
+  "pages": {
+    "ai-capabilities/batch-processing.mdx": {
+      "fn:batchCompletion": "4e393dcec6aa4d1f",
+      "fn:completion": "8b6ceb48058d9f36",
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:unloadModel": "038c4c8e3618e3bf"
+    },
+    "ai-capabilities/bci.mdx": {
+      "fn:bciTranscribe": "f2c662d47b7e3fb5",
+      "fn:bciTranscribeStream": "e91762dfe7a3898f",
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:unloadModel": "038c4c8e3618e3bf"
+    },
+    "ai-capabilities/decisions.mdx": {
+      "fn:cancel": "ba75edbb31a00e6b",
+      "fn:decide": "4e8c750e932ee503",
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:unloadModel": "038c4c8e3618e3bf"
+    },
+    "ai-capabilities/fine-tuning.mdx": {
+      "fn:finetune": "7060ec775b25d2d3",
+      "fn:getModelInfo": "89c7c55471ec7161",
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:unloadModel": "038c4c8e3618e3bf"
+    },
+    "ai-capabilities/image-classification.mdx": {
+      "fn:classify": "8b300a6de2343b5c",
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:unloadModel": "038c4c8e3618e3bf"
+    },
+    "ai-capabilities/image-embeddings.mdx": {
+      "fn:cancel": "ba75edbb31a00e6b",
+      "fn:embed": "7245cb93d9b17a9b",
+      "fn:embedBatch": "eec47c9b79b657a6",
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:unloadModel": "038c4c8e3618e3bf"
+    },
+    "ai-capabilities/image-generation.mdx": {
+      "fn:diffusion": "b3f01374331883e9",
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:unloadModel": "038c4c8e3618e3bf",
+      "fn:upscale": "ce5eb75c21d71fdf"
+    },
+    "ai-capabilities/multimodal-embeddings.mdx": {
+      "fn:cancel": "ba75edbb31a00e6b",
+      "fn:embed": "7245cb93d9b17a9b",
+      "fn:embedBatch": "eec47c9b79b657a6",
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:unloadModel": "038c4c8e3618e3bf"
+    },
+    "ai-capabilities/multimodal.mdx": {
+      "fn:completion": "8b6ceb48058d9f36",
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:unloadModel": "038c4c8e3618e3bf"
+    },
+    "ai-capabilities/music-generation.mdx": {
+      "fn:audioEdit": "67b2e0a0475eb413",
+      "fn:audioGen": "d1f30d3a1384a123",
+      "fn:audioUnderstand": "83808688968d1ec7",
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:unloadModel": "038c4c8e3618e3bf"
+    },
+    "ai-capabilities/ocr.mdx": {
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:ocr": "964d1b3b0b6b33a3",
+      "fn:unloadModel": "038c4c8e3618e3bf"
+    },
+    "ai-capabilities/rag.mdx": {
+      "fn:completion": "8b6ceb48058d9f36",
+      "fn:createVectorIndex": "7f1eca033d04ea13",
+      "fn:embed": "7245cb93d9b17a9b",
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:loadVectorIndex": "a4a7bf2248fc6ac9",
+      "fn:ragChunk": "4b461a0da9add091",
+      "fn:ragCloseWorkspace": "25b0894ae9771530",
+      "fn:ragDeleteEmbeddings": "a63d789c8550c5a6",
+      "fn:ragDeleteWorkspace": "ea52e39cc1c52b93",
+      "fn:ragIngest": "d85cd0f03dd586ed",
+      "fn:ragListWorkspaces": "963479ef4488c119",
+      "fn:ragReindex": "ff5c6fecf85a6cb2",
+      "fn:ragSaveEmbeddings": "37f2d01b76d116b3",
+      "fn:ragSearch": "58d59577770c7d83",
+      "fn:unloadModel": "038c4c8e3618e3bf"
+    },
+    "ai-capabilities/reranking.mdx": {
+      "fn:cancel": "ba75edbb31a00e6b",
+      "fn:embed": "7245cb93d9b17a9b",
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:rerank": "e85a20c8a7e7634c",
+      "fn:unloadModel": "038c4c8e3618e3bf"
+    },
+    "ai-capabilities/text-embeddings.mdx": {
+      "fn:embed": "7245cb93d9b17a9b",
+      "fn:embedBatch": "eec47c9b79b657a6",
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:unloadModel": "038c4c8e3618e3bf"
+    },
+    "ai-capabilities/text-generation.mdx": {
+      "fn:batchCompletion": "4e393dcec6aa4d1f",
+      "fn:completion": "8b6ceb48058d9f36",
+      "fn:deleteCache": "2b38a99480fdcfda",
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:unloadModel": "038c4c8e3618e3bf"
+    },
+    "ai-capabilities/text-to-speech.mdx": {
+      "fn:assessModelFit": "b36930588065f912",
+      "fn:cancel": "ba75edbb31a00e6b",
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:textToSpeech": "6a5dc5e39efdb409",
+      "fn:textToSpeechStream": "c19184775c5b0ab4",
+      "fn:unloadModel": "038c4c8e3618e3bf"
+    },
+    "ai-capabilities/transcription.mdx": {
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:transcribe": "4101d6a5bae00764",
+      "fn:transcribeStream": "8cea50093be21766",
+      "fn:unloadModel": "038c4c8e3618e3bf"
+    },
+    "ai-capabilities/translation.mdx": {
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:translate": "5e62ad95e77ae91a",
+      "fn:unloadModel": "038c4c8e3618e3bf"
+    },
+    "ai-capabilities/video-generation.mdx": {
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:unloadModel": "038c4c8e3618e3bf",
+      "fn:video": "19ebbfb515ed39b5"
+    },
+    "ai-capabilities/vla.mdx": {
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:unloadModel": "038c4c8e3618e3bf",
+      "fn:vla": "8d403e23d7a9ee42",
+      "fn:vlaHparams": "1a1133369a745179",
+      "fn:vlaPadState": "5978a48740c095a6",
+      "fn:vlaPreprocessImage": "e7ef410fca261798",
+      "fn:vlaSetEmbodiment": "6410ae3e83c520b7"
+    },
+    "ai-capabilities/voice-assistant.mdx": {
+      "fn:completion": "8b6ceb48058d9f36",
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:textToSpeech": "6a5dc5e39efdb409",
+      "fn:transcribeStream": "8cea50093be21766",
+      "fn:unloadModel": "038c4c8e3618e3bf"
+    },
+    "ai-capabilities/world-simulation.mdx": {
+      "fn:assessModelFit": "b36930588065f912",
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:unloadModel": "038c4c8e3618e3bf",
+      "fn:worldCreateScene": "7cf42c13c3e56f64",
+      "fn:worldStep": "758acd9c2d8b8295"
+    },
+    "configuration/index.mdx": {
+      "fn:loadModel": "42a447a4c4945b51"
+    },
+    "index.mdx": {
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:modelRegistryGetModel": "89513c0aecf276a0",
+      "fn:modelRegistryList": "2398d52615e6d0f7",
+      "fn:modelRegistrySearch": "f42f3586614d1fc4"
+    },
+    "kotlin-sdk.mdx": {
+      "fn:heartbeat": "ffffc55497bfd211"
+    },
+    "models/assess-model-fit.mdx": {
+      "fn:assessModelFit": "b36930588065f912",
+      "fn:downloadAsset": "abf315cacef08a7d",
+      "fn:getLoadedModelInfo": "5ddae5b39e3feef7",
+      "fn:loadModel": "42a447a4c4945b51"
+    },
+    "models/download-lifecycle.mdx": {
+      "fn:cancel": "ba75edbb31a00e6b",
+      "fn:deleteCache": "2b38a99480fdcfda",
+      "fn:downloadAsset": "abf315cacef08a7d",
+      "fn:loadModel": "42a447a4c4945b51"
+    },
+    "models/sharded-models.mdx": {
+      "fn:completion": "8b6ceb48058d9f36",
+      "fn:embed": "7245cb93d9b17a9b",
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:unloadModel": "038c4c8e3618e3bf"
+    },
+    "p2p-capabilities/rpc-servers.mdx": {
+      "fn:cancel": "ba75edbb31a00e6b",
+      "fn:discoverRpcServers": "e2d74f2ae175fb4c",
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:startRpcServer": "b99c334a13002ddc",
+      "fn:stopRpcServer": "2cac6b8459e8cf8a"
+    },
+    "reference/api/assessModelFit.mdx": {
+      "fn:assessModelFit": "b36930588065f912"
+    },
+    "reference/api/audioEdit.mdx": {
+      "fn:audioEdit": "67b2e0a0475eb413"
+    },
+    "reference/api/audioGen.mdx": {
+      "fn:audioGen": "d1f30d3a1384a123"
+    },
+    "reference/api/audioUnderstand.mdx": {
+      "fn:audioUnderstand": "83808688968d1ec7"
+    },
+    "reference/api/batchCompletion.mdx": {
+      "fn:batchCompletion": "4e393dcec6aa4d1f"
+    },
+    "reference/api/bciTranscribe.mdx": {
+      "fn:bciTranscribe": "f2c662d47b7e3fb5"
+    },
+    "reference/api/bciTranscribeStream.mdx": {
+      "fn:bciTranscribeStream": "e91762dfe7a3898f"
+    },
+    "reference/api/calcTokens.mdx": {
+      "fn:calcTokens": "43e723d80947a398"
+    },
+    "reference/api/cancel.mdx": {
+      "fn:cancel": "ba75edbb31a00e6b"
+    },
+    "reference/api/classify.mdx": {
+      "fn:classify": "8b300a6de2343b5c"
+    },
+    "reference/api/completion.mdx": {
+      "fn:completion": "8b6ceb48058d9f36"
+    },
+    "reference/api/createVectorIndex.mdx": {
+      "fn:createVectorIndex": "7f1eca033d04ea13"
+    },
+    "reference/api/decide.mdx": {
+      "fn:decide": "4e8c750e932ee503"
+    },
+    "reference/api/deleteCache.mdx": {
+      "fn:deleteCache": "2b38a99480fdcfda"
+    },
+    "reference/api/diffusion.mdx": {
+      "fn:diffusion": "b3f01374331883e9"
+    },
+    "reference/api/discoverRpcServers.mdx": {
+      "fn:discoverRpcServers": "e2d74f2ae175fb4c"
+    },
+    "reference/api/downloadAsset.mdx": {
+      "fn:downloadAsset": "abf315cacef08a7d"
+    },
+    "reference/api/embed.mdx": {
+      "fn:embed": "7245cb93d9b17a9b"
+    },
+    "reference/api/embedBatch.mdx": {
+      "fn:embedBatch": "eec47c9b79b657a6"
+    },
+    "reference/api/finetune.mdx": {
+      "fn:finetune": "7060ec775b25d2d3"
+    },
+    "reference/api/getLoadedModelInfo.mdx": {
+      "fn:getLoadedModelInfo": "5ddae5b39e3feef7"
+    },
+    "reference/api/getModelInfo.mdx": {
+      "fn:getModelInfo": "89c7c55471ec7161"
+    },
+    "reference/api/getSystemResources.mdx": {
+      "fn:getSystemResources": "79fad5b7cf3f44b7"
+    },
+    "reference/api/heartbeat.mdx": {
+      "fn:heartbeat": "ffffc55497bfd211"
+    },
+    "reference/api/invokePlugin.mdx": {
+      "fn:invokePlugin": "c9b07ec94983824c"
+    },
+    "reference/api/invokePluginStream.mdx": {
+      "fn:invokePluginStream": "bb6187269c1fabe2"
+    },
+    "reference/api/loadModel.mdx": {
+      "fn:loadModel": "42a447a4c4945b51"
+    },
+    "reference/api/loadVectorIndex.mdx": {
+      "fn:loadVectorIndex": "a4a7bf2248fc6ac9"
+    },
+    "reference/api/loggingStream.mdx": {
+      "fn:loggingStream": "8d4a6718e7f315fe"
+    },
+    "reference/api/modelRegistryGetModel.mdx": {
+      "fn:modelRegistryGetModel": "89513c0aecf276a0"
+    },
+    "reference/api/modelRegistryList.mdx": {
+      "fn:modelRegistryList": "2398d52615e6d0f7"
+    },
+    "reference/api/modelRegistrySearch.mdx": {
+      "fn:modelRegistrySearch": "f42f3586614d1fc4"
+    },
+    "reference/api/ocr.mdx": {
+      "fn:ocr": "964d1b3b0b6b33a3"
+    },
+    "reference/api/openSession.mdx": {
+      "fn:openSession": "859194c56d20ea62"
+    },
+    "reference/api/ragChunk.mdx": {
+      "fn:ragChunk": "4b461a0da9add091"
+    },
+    "reference/api/ragCloseWorkspace.mdx": {
+      "fn:ragCloseWorkspace": "25b0894ae9771530"
+    },
+    "reference/api/ragDeleteEmbeddings.mdx": {
+      "fn:ragDeleteEmbeddings": "a63d789c8550c5a6"
+    },
+    "reference/api/ragDeleteWorkspace.mdx": {
+      "fn:ragDeleteWorkspace": "ea52e39cc1c52b93"
+    },
+    "reference/api/ragIngest.mdx": {
+      "fn:ragIngest": "d85cd0f03dd586ed"
+    },
+    "reference/api/ragListWorkspaces.mdx": {
+      "fn:ragListWorkspaces": "963479ef4488c119"
+    },
+    "reference/api/ragReindex.mdx": {
+      "fn:ragReindex": "ff5c6fecf85a6cb2"
+    },
+    "reference/api/ragSaveEmbeddings.mdx": {
+      "fn:ragSaveEmbeddings": "37f2d01b76d116b3"
+    },
+    "reference/api/ragSearch.mdx": {
+      "fn:ragSearch": "58d59577770c7d83"
+    },
+    "reference/api/rerank.mdx": {
+      "fn:rerank": "e85a20c8a7e7634c"
+    },
+    "reference/api/resume.mdx": {
+      "fn:resume": "cefecb7d3618809f"
+    },
+    "reference/api/startRpcServer.mdx": {
+      "fn:startRpcServer": "b99c334a13002ddc"
+    },
+    "reference/api/state.mdx": {
+      "fn:state": "39b9c799800fbfbf"
+    },
+    "reference/api/stopRpcServer.mdx": {
+      "fn:stopRpcServer": "2cac6b8459e8cf8a"
+    },
+    "reference/api/subscribeServerLogs.mdx": {
+      "fn:subscribeServerLogs": "b274740e591b5eb3"
+    },
+    "reference/api/suspend.mdx": {
+      "fn:suspend": "b35ccc9a8edb5b99"
+    },
+    "reference/api/textToSpeech.mdx": {
+      "fn:textToSpeech": "6a5dc5e39efdb409"
+    },
+    "reference/api/textToSpeechStream.mdx": {
+      "fn:textToSpeechStream": "c19184775c5b0ab4"
+    },
+    "reference/api/transcribe.mdx": {
+      "fn:transcribe": "4101d6a5bae00764"
+    },
+    "reference/api/transcribeStream.mdx": {
+      "fn:transcribeStream": "8cea50093be21766"
+    },
+    "reference/api/translate.mdx": {
+      "fn:translate": "5e62ad95e77ae91a"
+    },
+    "reference/api/unloadModel.mdx": {
+      "fn:unloadModel": "038c4c8e3618e3bf"
+    },
+    "reference/api/upscale.mdx": {
+      "fn:upscale": "ce5eb75c21d71fdf"
+    },
+    "reference/api/video.mdx": {
+      "fn:video": "19ebbfb515ed39b5"
+    },
+    "reference/api/vla.mdx": {
+      "fn:vla": "8d403e23d7a9ee42"
+    },
+    "reference/api/vlaHparams.mdx": {
+      "fn:vlaHparams": "1a1133369a745179"
+    },
+    "reference/api/vlaPadState.mdx": {
+      "fn:vlaPadState": "5978a48740c095a6"
+    },
+    "reference/api/vlaPreprocessImage.mdx": {
+      "fn:vlaPreprocessImage": "e7ef410fca261798"
+    },
+    "reference/api/vlaSetEmbodiment.mdx": {
+      "fn:vlaSetEmbodiment": "6410ae3e83c520b7"
+    },
+    "reference/api/worldCreateScene.mdx": {
+      "fn:worldCreateScene": "7cf42c13c3e56f64"
+    },
+    "reference/api/worldStep.mdx": {
+      "fn:worldStep": "758acd9c2d8b8295"
+    },
+    "runtime/cancellation.mdx": {
+      "fn:cancel": "ba75edbb31a00e6b",
+      "fn:completion": "8b6ceb48058d9f36",
+      "fn:decide": "4e8c750e932ee503",
+      "fn:downloadAsset": "abf315cacef08a7d",
+      "fn:embed": "7245cb93d9b17a9b",
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:rerank": "e85a20c8a7e7634c",
+      "fn:transcribe": "4101d6a5bae00764"
+    },
+    "runtime/lifecycle.mdx": {
+      "fn:resume": "cefecb7d3618809f",
+      "fn:state": "39b9c799800fbfbf",
+      "fn:suspend": "b35ccc9a8edb5b99"
+    },
+    "runtime/logging.mdx": {
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:loggingStream": "8d4a6718e7f315fe",
+      "fn:subscribeServerLogs": "b274740e591b5eb3"
+    },
+    "runtime/profiler.mdx": {
+      "fn:completion": "8b6ceb48058d9f36",
+      "fn:downloadAsset": "abf315cacef08a7d",
+      "fn:embed": "7245cb93d9b17a9b",
+      "fn:getSystemResources": "79fad5b7cf3f44b7",
+      "fn:invokePlugin": "c9b07ec94983824c",
+      "fn:invokePluginStream": "bb6187269c1fabe2",
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:ocr": "964d1b3b0b6b33a3",
+      "fn:ragChunk": "4b461a0da9add091",
+      "fn:ragCloseWorkspace": "25b0894ae9771530",
+      "fn:ragDeleteEmbeddings": "a63d789c8550c5a6",
+      "fn:ragDeleteWorkspace": "ea52e39cc1c52b93",
+      "fn:ragIngest": "d85cd0f03dd586ed",
+      "fn:ragListWorkspaces": "963479ef4488c119",
+      "fn:ragReindex": "ff5c6fecf85a6cb2",
+      "fn:ragSaveEmbeddings": "37f2d01b76d116b3",
+      "fn:ragSearch": "58d59577770c7d83",
+      "fn:textToSpeech": "6a5dc5e39efdb409",
+      "fn:transcribe": "4101d6a5bae00764",
+      "fn:transcribeStream": "8cea50093be21766",
+      "fn:translate": "5e62ad95e77ae91a"
+    },
+    "runtime/sessions.mdx": {
+      "fn:cancel": "ba75edbb31a00e6b",
+      "fn:loadModel": "42a447a4c4945b51",
+      "fn:openSession": "859194c56d20ea62",
+      "fn:unloadModel": "038c4c8e3618e3bf"
+    }
+  }
+}

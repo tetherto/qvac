@@ -1,0 +1,143 @@
+---
+title: Fine-tuning
+icon: FlaskConical
+description: Adapting LLMs to domain-specific tasks via LoRA — i.e., train small adapter weights on custom datasets to specialize model behavior.
+schemaType: HowTo
+binds:
+  - fn:finetune
+  - fn:getModelInfo
+  - fn:loadModel
+  - fn:unloadModel
+---
+
+## Overview
+
+Fine-tuning trains a [LoRA](https://arxiv.org/abs/2106.09685) (Low-Rank Adaptation) adapter on top of an LLM base model, to be used at inference time with [completion](/sdk/ai-capabilities/text-generation).
+
+Load any supported LLM using `modelType: "llm"`. Then call `finetune()` with the dataset and training settings. Training can be done in two modes:
+
+- [SFT](#sft): chat-based; enable with `assistantLossOnly: true`.
+- [Causal](#causal): raw text; default (`assistantLossOnly: false`).
+
+The output is a small `.gguf` adapter file that you can pass to `completion()` via `modelConfig.lora`.
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/sdk/reference/api/loadModel)
+2. [`finetune()`](/sdk/reference/api/finetune)
+3. [`unloadModel()`](/sdk/reference/api/unloadModel)
+
+For how to use each function, see [SDK — API reference](/sdk/reference/api/).
+
+## Models
+
+You can load any `llama.cpp`-compatible [text-generation/chat](/sdk/ai-capabilities/text-generation) model that meets the following criteria:
+- **File format:** `*.gguf` (or use constants)
+- **Architecture:** `qwen3`, `qwen35` (Qwen3.5, Qwen3.6, and Qwen3.8 dense), `qwen35moe` (Qwen3.6-35B-A3B), `gemma3`, `gemma4`, or `bitnet`
+- **Quantization:** `F32`, `F16`, `Q4_0`, `Q8_0`, `TQ1_0`, or `TQ2_0`
+
+<Callout type="info">
+
+In QVAC, not every model compatible with text generation/chat is also compatible with fine-tuning. Only those that meet all the criteria above are. `finetune()` checks the quantization first and the architecture second, and reports only the first failure: a model that fails both shows the architecture error only after you fix the quantization.
+
+</Callout>
+
+For models available as constants, see [SDK — Models](/sdk#models). Most LLM constants are `Q4_K_M`, `Q6_K`, or `UD` (`*_K_XL`) quantizations and can't be fine-tuned as shipped. The fine-tunable constants are:
+- `QWEN3_600M_INST_Q4`, `QWEN3_1_7B_INST_Q4`, `QWEN3_1_7B_INST_Q4_SHARD`, and `QWEN3_4B_INST_Q4_SHARD` (`Q4_0`)
+- `QWEN3_5_0_8B_MULTIMODAL_Q8_0`, `QWEN3_5_2B_MULTIMODAL_Q8_0`, `GEMMA4_2B_MULTIMODAL_Q8_0`, `MEDGEMMA_4B_IT_Q8_0`, `MEDGEMMA_4B_IT_Q8_0_SHARD`, `HEALTHCARE_1_7B_MEDICAL_Q8_0`, `HEALTHCARE_4B_MEDICAL_Q8_0`, `MOE_35B_INST_Q8_0`, `TRANSLATEPSY_AFRISLM_0_8B_TRANSLATION_Q8_0`, `TRANSLATEPSY_AFRISLM_2B_TRANSLATION_Q8_0`, and `TRANSLATEPSY_AFRISLM_4B_TRANSLATION_Q8_0` (`Q8_0`)
+- `BITNET_0_7B_BASE_TQ2_0`, `BITNET_1B_BASE_TQ2_0`, and `BITNET_B1_58_3B_BASE_TQ2_0` (`TQ2_0`)
+
+To fine-tune another model, pass a local `Q4_0` or `Q8_0` GGUF of a supported architecture as `modelSrc` (for example, the `Q4_0` file from `unsloth/Qwen3.5-9B-GGUF`). The quantization check reads `general.file_type` from the GGUF header, not the file name: for example, `QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL` is rejected despite `Q8` in its name. To see the value `finetune()` checks, read `general.file_type` with `gguf-dump` (from the `gguf` Python package) or the GGUF metadata viewer on the file's Hugging Face page. Accepted values: `0` (F32), `1` (F16), `2` (Q4_0), `7` (Q8_0), `36` (TQ1_0), `37` (TQ2_0).
+
+## Training
+
+### Context length
+
+`finetune()` trains at `options.contextLength` tokens per sequence (default: `128`), not at the `ctx_size` you set in `loadModel()`. Training reloads the model with this context length; the original `loadModel()` context size does not cap it. Set it to fit your longest training row:
+- **SFT:** rows longer than `contextLength` are skipped without a warning. If every row is skipped, training can't start.
+- **Causal:** the dataset must contain at least `contextLength + 1 + max(contextLength / 2, 1)` tokens, using integer division. With the default `contextLength` of `128`, the minimum is `193` tokens.
+
+### SFT
+
+Supervised fine-tuning (SFT) teaches the model how to respond to prompts. Use it for chat tuning, instruction following, or any task where you want to shape assistant responses.
+
+**Dataset format:** JSONL where each line is a JSON object with a `messages` array. Supported roles: `system`, `user`, `assistant`, and `tool`. Example:
+
+```jsonl
+{"messages":[{"role":"system","content":"You are a helpful assistant."},{"role":"user","content":"What is 2+2?"},{"role":"assistant","content":"2+2 equals 4."}]}
+{"messages":[{"role":"user","content":"What is the capital of France?"},{"role":"assistant","content":"The capital of France is Paris."}]}
+```
+
+### Causal
+
+Causal fine-tuning adapts the model to a domain by training on raw text. Use it for domain adaptation, style transfer, or tasks where you want the model to better reflect specialized vocabulary, patterns, or tone.
+
+**Dataset format:** plain text file. Example:
+
+```
+This is sample training text.
+Another paragraph of content.
+```
+
+## Example
+
+The example trains on a small SFT dataset with a separate eval file. Save both next to the example, as `train.jsonl` and `eval.jsonl`, then swap in your own data — the example reads whatever those two files contain.
+
+<Tabs>
+<Tab value="train" label="train.jsonl" default>
+<WrapCode>
+
+```jsonl file=<rootDir>/packages/sdk/examples/finetune/train.jsonl title="train.jsonl" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="eval" label="eval.jsonl">
+<WrapCode>
+
+```jsonl file=<rootDir>/packages/sdk/examples/finetune/eval.jsonl title="eval.jsonl" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+The following script loads an LLM, runs fine-tuning on that dataset, and optionally demonstrates pause/resume when invoked with `--pause-resume`. The adapter and its checkpoints land in `./finetune-output`:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/finetune/llamacpp-finetune.js title="llamacpp-finetune.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/finetune/llamacpp-finetune.ts title="llamacpp-finetune.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/finetune.py title="finetune.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/Finetune.kt title="Finetune.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart), the [Python quickstart](/sdk/python-sdk#quickstart), or the [Kotlin quickstart](/sdk/kotlin-sdk#quickstart).
+</Callout>

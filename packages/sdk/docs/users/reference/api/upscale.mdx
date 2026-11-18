@@ -1,0 +1,111 @@
+---
+title: upscale
+titleStyle: code
+description: Upscales a PNG or JPEG image with a standalone ESRGAN model.
+binds:
+  - fn:upscale
+---
+
+Runs ESRGAN upscaling on any PNG or JPEG image, without running diffusion. The model must be loaded with `modelType: "diffusion"` and `modelConfig.mode: "upscale"`. The call returns immediately with promises for the upscaled PNG and the run statistics. To upscale images as part of a generation instead, use the `upscale` option of [`diffusion()`](/sdk/reference/api/diffusion). See [Image generation](/sdk/ai-capabilities/image-generation).
+
+## Signature
+
+```ts
+function upscale(params: UpscaleClientParams, options?: RPCOptions): UpscaleResult;
+```
+
+## Parameters
+
+| Parameter | Description | Type | Required |
+| --- | --- | --- | --- |
+| `params` | The model, the image, and the number of passes. | [`UpscaleClientParams`](#upscaleclientparams) | Yes |
+| `options` | Transport options for this call only. | [`RPCOptions`](#rpcoptions) | No |
+
+### `UpscaleClientParams`
+
+| Option | Description | Type | Required | Default |
+| --- | --- | --- | --- | --- |
+| `modelId` | ID of a model loaded with `modelType: "diffusion"` and `modelConfig.mode: "upscale"`. | `string` | Yes | — |
+| `image` | The source image as PNG or JPEG bytes. | `Uint8Array` | Yes | — |
+| `repeats` | Number of ESRGAN passes to run in sequence, a positive integer. Each pass multiplies the dimensions by the model's native scale factor; only the final image is emitted. | `number` | No | `1` |
+
+### `RPCOptions`
+
+| Option | Description | Type | Required |
+| --- | --- | --- | --- |
+| `timeout` | Per-call RPC timeout in milliseconds; overrides the default for this request only. Minimum `100`. | `number` | No |
+| `healthCheckTimeout` | Timeout in milliseconds for the health-check probe that precedes the call. Minimum `100`. | `number` | No |
+| `forceNewConnection` | When `true`, skip any cached RPC connection and open a fresh one for this call. | `boolean` | No |
+| `profiling` | Profiler settings for this call; override the global profiler settings. | [`PerCallProfiling`](#percallprofiling) | No |
+| `sessionId` | Caller session to run this call as. A [session handle](/sdk/reference/api/openSession) sets it and replaces any value you pass; when omitted, the call runs as the runtime owner. Not empty. | `string` | No |
+
+#### `PerCallProfiling`
+
+| Field | Description | Type | Required |
+| --- | --- | --- | --- |
+| `enabled` | Profile this call only. When omitted, the global profiler configuration applies. | `boolean` | No |
+| `includeServerBreakdown` | Include the server-side timing breakdown in the profiling payload. | `boolean` | No |
+| `includeResourceGauges` | Attach one local CPU, memory, and GPU resource sample to the operation event. | `boolean` | No |
+| `mode` | Detail level: `"summary"` keeps aggregates only, `"verbose"` keeps recent events. | `"summary" \| "verbose"` | No |
+
+## Returns
+
+An object, returned synchronously. The request starts when `upscale()` is called.
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `requestId` | Identifies this run. Pass it to [`cancel({ requestId })`](/sdk/reference/api/cancel) to stop delivery. | `string` |
+| `outputs` | Resolves with a single-element array holding the final upscaled PNG, at the source dimensions times `scale^repeats`. | `Promise<Uint8Array[]>` |
+| `stats` | Resolves with the run statistics, or `undefined` when the engine reports none. | `Promise<`[`UpscaleStats`](#upscalestats)` \| undefined>` |
+
+#### `UpscaleStats`
+
+Every field is optional.
+
+| Field | Description | Type |
+| --- | --- | --- |
+| `modelLoadMs` | Wall-clock time spent loading the upscaler model, in milliseconds. | `number` |
+| `upscaleMs` | Wall-clock time of the most recent upscale job, in milliseconds. | `number` |
+| `totalUpscaleMs` | Cumulative upscale time across all jobs, in milliseconds. | `number` |
+| `totalWallMs` | Total wall-clock time including model load and upscaling, in milliseconds. | `number` |
+| `totalUpscales` | Cumulative number of upscale calls. | `number` |
+| `totalImages` | Cumulative number of images produced. | `number` |
+| `totalPixels` | Cumulative number of pixels produced across all images. | `number` |
+| `width` | Width of the most recent emitted PNG. | `number` |
+| `height` | Height of the most recent emitted PNG. | `number` |
+| `repeats` | Number of ESRGAN passes of the most recent upscale job. | `number` |
+| `backendDevice` | Compute device the upscaler actually used. On Android, `"gpu"` falls back to `"cpu"`. | `"cpu" \| "gpu"` |
+
+## Throws
+
+`upscale()` does not throw. Errors reject `outputs` and `stats`.
+
+| Error | When |
+| --- | --- |
+| `ModelOperationNotSupportedError` | The model was not loaded with `modelConfig.mode: "upscale"`. |
+| `StreamEndedError` | The RPC stream closes without a terminal `done` chunk. |
+| `SessionNotOpenError` | `options.sessionId` names a session that is not open in the worker. |
+| `SessionInvalidatedError` | The call was made through a session handle whose session has ended. |
+
+## Examples
+
+```ts
+import { loadModel, upscale, REALESRGAN_X4PLUS_ANIME_6B } from "@qvac/sdk";
+import fs from "fs";
+
+const modelId = await loadModel({
+  modelSrc: REALESRGAN_X4PLUS_ANIME_6B,
+  modelType: "diffusion",
+  modelConfig: { mode: "upscale", upscaler: { tile_size: 128 } },
+});
+
+// Two passes of an x4 model: x16 in total.
+const { outputs, stats } = upscale({
+  modelId,
+  image: new Uint8Array(fs.readFileSync("input.png")),
+  repeats: 2,
+});
+const [upscaled] = await outputs;
+fs.writeFileSync("upscaled.png", upscaled!);
+console.log(await stats);
+```

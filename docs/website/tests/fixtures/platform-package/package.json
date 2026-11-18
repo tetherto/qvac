@@ -1,0 +1,6 @@
+{
+  "name": "@qvac/fixture-platform",
+  "version": "1.4.2",
+  "private": true,
+  "types": "index.d.ts"
+}

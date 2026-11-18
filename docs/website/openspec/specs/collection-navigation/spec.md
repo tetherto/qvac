@@ -136,29 +136,26 @@ The existing check that every sidebar URL resolves to a content file SHALL cover
 
 ### Requirement: Sidebar trees remain declared, and a versioned line declares its own
 
-The navigation of every collection SHALL be declared explicitly rather than inferred from the content directory layout, and section grouping within a collection MUST remain expressible, as it is today. An unversioned collection SHALL keep declaring its tree in the site source. A versioned collection SHALL declare each line's tree inside that line's own content folder, so that copying the folder copies the navigation, and each line MUST be able to order, group, add, and omit entries independently of every other line.
+The navigation of every collection SHALL be declared explicitly rather than inferred from the directory layout, and section grouping MUST remain expressible.
+
+- The site source SHALL declare the order of collections and every unversioned collection's tree.
+- Each versioned collection and each Ecosystem package SHALL declare its tree in `meta.json` files inside its package's `docs/users/` folder, so a line carries its own navigation from its pinned commit.
+- Each line MUST be able to order, group, add, and omit entries independently.
 
 #### Scenario: Every collection's navigation is declared, not generated
 
-- **WHEN** the site source and the content folders are inspected
+- **WHEN** the site source and the package documentation folders are inspected
 - **THEN** every collection's entries and their order are explicitly declared in one place or the other
-- **AND** no part of the navigation falls back to the directory layout's own ordering
 
-#### Scenario: A line's navigation lives with its content
+#### Scenario: A line's navigation comes from its commit
 
-- **WHEN** a versioned collection's navigation is inspected
-- **THEN** each line's entries are declared inside that line's content folder
-
-#### Scenario: Cutting a line carries its navigation
-
-- **WHEN** a line is cut by copying a line folder
-- **THEN** the new line's sidebar matches the folder it was copied from, with no further declaration
+- **WHEN** a line is materialized
+- **THEN** its sidebar is the one declared in that commit's documentation folder, with no declaration in the site source
 
 #### Scenario: Lines may differ in structure
 
 - **WHEN** one line orders, groups, or omits entries differently from another
 - **THEN** each line's sidebar reflects its own declaration
-- **AND** neither line's declaration is affected by the other
 
 ### Requirement: A departure does not shadow its target's own navigation
 
@@ -181,34 +178,28 @@ A collection's sidebar is also the structure the site resolves a page's own coll
 
 ### Requirement: The Ecosystem sidebar maps what QVAC publishes
 
-The Ecosystem sidebar SHALL present what the project publishes, whether or not this site documents it, grouped under separators. Above the groups it MUST offer the collection overview and the project's vision. It MUST carry a Products group reaching the SDK collection, the CLI collection, the page inside the CLI that documents using it as a model provider, and the assistant app. It MUST carry a Platform group reaching Fabric, the add-on catalogue, and the Software Inventory. It MUST carry a Research group reaching the model family and the datasets. An entry whose subject this site does not document MUST be a departure to where it is documented, rather than a page written to stand in for one.
+The Ecosystem sidebar SHALL present what the project publishes, grouped under separators. Above the groups it MUST offer the collection overview and the project's vision.
 
-#### Scenario: The sidebar is grouped under the three separators
+- **Products** MUST reach every versioned collection, the page inside the CLI that documents using it as a model provider, and the assistant app.
+- **Platform** MUST reach Fabric, and the Packages section once at least one package is listed.
+- **Research** MUST reach the model family and the datasets.
 
-- **WHEN** the Ecosystem sidebar is rendered
-- **THEN** its entries appear under the Products, Platform, and Research separators, in that order
-- **AND** the overview and the vision appear above the first separator
+An entry whose subject this site does not document MUST be a departure.
 
 #### Scenario: Products reaches the products
 
 - **WHEN** the Products group is read
-- **THEN** it offers the SDK collection, the CLI collection, the model-provider page inside the CLI, and the assistant app
+- **THEN** it offers every versioned collection, the model-provider page, and the assistant app
 
-#### Scenario: Platform reaches the platform
+#### Scenario: Platform reaches the packages
 
-- **WHEN** the Platform group is read
-- **THEN** it offers Fabric, the add-on catalogue, and the Software Inventory
-
-#### Scenario: Research reaches the research
-
-- **WHEN** the Research group is read
-- **THEN** it offers the model family and the datasets
+- **WHEN** the Platform group is read while at least one package is listed
+- **THEN** it offers Fabric and the Packages section
 
 #### Scenario: An undocumented subject is linked, not written
 
 - **WHEN** an entry names something this site holds no page for
 - **THEN** it is a departure to where that subject is published
-- **AND** no page is authored in this collection to stand in for it
 
 ### Requirement: The Resources sidebar holds what belongs to no release
 
@@ -300,4 +291,3 @@ The trail SHALL be checked against the rendered HTML, because the rules that sha
 
 - **WHEN** the last entry of a built trail carries a link
 - **THEN** the check fails and names the page
-

@@ -6,7 +6,7 @@ name: Publish to PyPI
 on:
   push:
     branches: [release-sdk-*]
-    paths: ["packages/sdk/**", "packages/sdk-python/**"]
+    paths: ["packages/sdk/**", "packages/sdk-python/**", "!packages/*/docs/users/**"]
   workflow_dispatch:
     inputs:
       publish_pypi_only:
