@@ -154,6 +154,56 @@ describe('responses: Codex tool loop', () => {
   })
 })
 
+describe('responses: streamed tool loop', () => {
+  it('streams one call whose id answers the next turn', async () => {
+    const res = await responses({
+      input: [readDeveloper, question],
+      tools: [readFileTool],
+      tool_choice: 'required',
+      stream: true
+    })
+    assert.equal(res.statusCode, 200, res.body)
+    const events = collectSSE(res.body).map((e) => e.data as any)
+    const streamed = events
+      .filter((e) => e?.type === 'response.output_item.done' && e.item?.type === 'function_call')
+      .map((e) => e.item)
+    const completed = events.find((e) => e?.type === 'response.completed')?.response
+    assert.ok(completed, 'stream ended with response.completed')
+    const calls = functionCalls(completed)
+    assert.equal(calls.length, 1, 'one call')
+    assert.deepEqual(
+      streamed.map((item) => [item.call_id, item.name, item.arguments]),
+      calls.map((item) => [item.call_id, item.name, item.arguments]),
+      'streamed call matches the completed response'
+    )
+    const text = events
+      .filter((e) => e?.type === 'response.output_text.delta')
+      .map((e) => e.delta)
+      .join('')
+    assert.doesNotMatch(text, /<\/?(tool_call|function)/, 'no tool-call markup in visible text')
+
+    const call = calls[0]
+    const next = await responses({
+      input: [
+        readDeveloper,
+        question,
+        {
+          type: 'function_call',
+          call_id: call.call_id,
+          name: call.name,
+          arguments: call.arguments
+        },
+        { type: 'function_call_output', call_id: call.call_id, output: runReadFile(call) }
+      ],
+      tools: [readFileTool]
+    })
+    assert.equal(next.statusCode, 200, next.body)
+    const body = next.json() as any
+    assert.equal(body.status, 'completed')
+    assert.match(body.output_text, /acme-widgets/)
+  })
+})
+
 describe('responses: Codex tool loop over stored turns', () => {
   it('answers from the tool result when the next turn chains previous_response_id', async () => {
     const first = await responses({

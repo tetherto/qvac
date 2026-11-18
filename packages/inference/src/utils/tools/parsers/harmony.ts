@@ -1,11 +1,10 @@
 // Harmony-style tool calls: `<|channel|>commentary to=functions.<name>
 // <|constrain|>json<|message|>{...}<|call|>`.
 import type { Tool, ToolCall, ToolCallError } from '@/schemas/index'
-import {
-  generateStableToolCallId,
-  validateToolArguments,
-  type ParserResult
-} from '@/utils/tools/shared'
+import { acceptToolCall, type ParserResult } from '@/utils/tools/shared'
+import { readStructured } from '@/utils/tools/repair'
+
+const OBJECT_TYPE: ReadonlySet<string> = new Set(['object'])
 
 const HARMONY_FRAME_RE =
   /to=functions\.([\w-]+)\s+<\|constrain\|>json<\|message\|>([\s\S]*?)(?=<\|call\|>|$)/g
@@ -27,16 +26,21 @@ export function parseHarmonyFormat(text: string, tools: Tool[]): ParserResult {
 
     if (!name || payload === undefined) continue
 
+    // Only a frame the model closed is complete enough to repair.
+    const closed = text.startsWith('<|call|>', m.index + raw.length)
     let parsedArgs: unknown
     try {
       parsedArgs = JSON.parse(payload)
     } catch (error) {
-      errors.push({
-        code: 'PARSE_ERROR',
-        message: `Failed to parse Harmony tool call JSON for ${name}: ${error instanceof Error ? error.message : String(error)}`,
-        raw
-      })
-      continue
+      parsedArgs = closed ? readStructured(payload, OBJECT_TYPE) : null
+      if (parsedArgs === null) {
+        errors.push({
+          code: 'PARSE_ERROR',
+          message: `Failed to parse Harmony tool call JSON for ${name}: ${error instanceof Error ? error.message : String(error)}`,
+          raw
+        })
+        continue
+      }
     }
 
     if (typeof parsedArgs !== 'object' || parsedArgs === null || Array.isArray(parsedArgs)) {
@@ -49,18 +53,9 @@ export function parseHarmonyFormat(text: string, tools: Tool[]): ParserResult {
     }
 
     const args = parsedArgs as Record<string, unknown>
-    const validation = validateToolArguments(name, args, tools)
-    if (!validation.isValid && validation.error) {
-      errors.push({ ...validation.error, raw })
-      continue
-    }
-
-    toolCalls.push({
-      id: generateStableToolCallId(name, args),
-      name,
-      arguments: args,
-      raw
-    })
+    const accepted = acceptToolCall({ name, arguments: args }, tools, raw)
+    if (accepted.error) errors.push(accepted.error)
+    else toolCalls.push(accepted.call)
   }
 
   // Defer `matched` to extraction so partial Harmony shapes fall through
