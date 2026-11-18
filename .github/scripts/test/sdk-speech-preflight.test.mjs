@@ -3,7 +3,15 @@ import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, cpSync } from 'node:fs'
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  rmSync,
+  cpSync,
+  utimesSync
+} from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
@@ -13,6 +21,8 @@ import {
   applyOverrides,
   packPackage,
   downloadArtifact,
+  extractArtifact,
+  collectNativeCrashes,
   prepareSpeechPreflight,
   verifySpeechPreflight
 } from '../../../packages/sdk/ci/speech-preflight.mjs'
@@ -285,4 +295,36 @@ test('rejects a bundled addon whose native binary is missing', (t) => {
   const workdir = packageFixture(root, 'bci-whispercpp', host)
   rmSync(join(workdir, 'prebuilds', host, 'qvac__bci-whispercpp.bare'))
   assert.throws(() => packPackage(workdir, root, host, process.env), /Missing native addon/)
+})
+
+test('Windows extraction uses the system ZIP-capable tar and a relative archive path', () => {
+  const destination = String.raw`C:\runner work\artifacts\fabric`
+  const env = { SystemRoot: String.raw`C:\Windows` }
+  const calls = []
+  extractArtifact(destination, env, 'win32', (...args) => calls.push(args))
+  assert.deepEqual(calls, [
+    [String.raw`C:\Windows\System32\tar.exe`, ['-xf', 'artifact.zip'], destination, env]
+  ])
+  assert.throws(() => extractArtifact(destination, {}, 'win32'), /system directory/)
+})
+
+test('Unix extraction resolves the archive in the artifact directory', () => {
+  const calls = []
+  extractArtifact('/tmp/artifact directory', {}, 'linux', (...args) => calls.push(args))
+  assert.deepEqual(calls, [['unzip', ['-q', 'artifact.zip'], '/tmp/artifact directory', {}]])
+})
+
+test('collects only fresh Bare crash reports from this run', (t) => {
+  const root = temporary(t)
+  const source = join(root, 'diagnostics')
+  const destination = join(root, 'reports')
+  assert.deepEqual(collectNativeCrashes(source, destination, Date.now()), [])
+  mkdirSync(source)
+  writeFileSync(join(source, 'bare-old.ips'), 'old')
+  utimesSync(join(source, 'bare-old.ips'), 0, 0)
+  const start = Date.now() - 1000
+  writeFileSync(join(source, 'bare-new.ips'), 'stack trace')
+  writeFileSync(join(source, 'unrelated.ips'), 'other process')
+  assert.deepEqual(collectNativeCrashes(source, destination, start), ['bare-new.ips'])
+  assert.equal(readFileSync(join(destination, 'bare-new.ips'), 'utf8'), 'stack trace')
 })

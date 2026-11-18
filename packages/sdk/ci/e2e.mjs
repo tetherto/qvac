@@ -436,11 +436,16 @@ async function main(family, env) {
   const tests = list('tests', env.CI_TESTS)
   const label = `${family}-${platform}`
   const reports = join(E2E, 'reports')
-  const { prepareSpeechPreflight, installSpeechPreflight, verifySpeechPreflight } =
-    await import('./speech-preflight.mjs')
+  const {
+    prepareSpeechPreflight,
+    installSpeechPreflight,
+    verifySpeechPreflight,
+    collectNativeCrashes
+  } = await import('./speech-preflight.mjs')
   const speechPreflight = family === 'desktop' ? await prepareSpeechPreflight(ROOT, env) : null
   let e = prepare(env, () => installSpeechPreflight(ROOT, env, speechPreflight))
   verifySpeechPreflight(E2E, speechPreflight)
+  const startedAt = Date.now()
   let status = 1
   try {
     if (family === 'python') pythonVenv(e)
@@ -503,6 +508,13 @@ async function main(family, env) {
             .filter((f) => f.endsWith('.snap'))
             .map((f) => join(dist, f))
         : []
+    if (speechPreflight && process.platform === 'darwin') {
+      collectNativeCrashes(
+        join(homedir(), 'Library/Logs/DiagnosticReports'),
+        join(reports, 'native-crashes'),
+        startedAt
+      )
+    }
     keepResults(join(SDK, 'test/results/e2e', label), [
       reports,
       join(E2E, 'consumer.log'),

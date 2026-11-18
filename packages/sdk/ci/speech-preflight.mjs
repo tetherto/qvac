@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
-import { basename, dirname, join, relative } from 'node:path'
+import { basename, dirname, join, relative, win32 } from 'node:path'
 import { tmpdir } from 'node:os'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -15,6 +15,7 @@ import {
   readFileSync,
   readdirSync,
   realpathSync,
+  statSync,
   writeFileSync
 } from 'node:fs'
 import {
@@ -128,10 +129,16 @@ export async function downloadArtifact(config, env, name, destination) {
   const archive = join(destination, 'artifact.zip')
   const response = await github(config, env, `actions/artifacts/${artifacts[0].id}/zip`)
   await pipeline(Readable.fromWeb(response.body), createWriteStream(archive))
-  if (process.platform === 'win32') {
-    command('tar', ['-xf', archive, '-C', destination], destination, env)
+  extractArtifact(destination, env)
+}
+
+export function extractArtifact(destination, env, platform = process.platform, execute = command) {
+  if (platform === 'win32') {
+    const windows = env.SystemRoot || env.SYSTEMROOT || env.windir
+    if (!windows) throw new Error('Windows system directory is unavailable')
+    execute(win32.join(windows, 'System32', 'tar.exe'), ['-xf', 'artifact.zip'], destination, env)
   } else {
-    command('unzip', ['-q', archive, '-d', destination], destination, env)
+    execute('unzip', ['-q', 'artifact.zip'], destination, env)
   }
 }
 
@@ -293,4 +300,15 @@ export function verifySpeechPreflight(e2e, provenance) {
   console.log(
     `Speech SDK preflight: verified ${provenance.host} payloads from ${provenance.sourceSha}`
   )
+}
+
+export function collectNativeCrashes(source, destination, startedAt) {
+  if (!existsSync(source)) return []
+  const reports = readdirSync(source).filter(
+    (name) =>
+      /^bare.*\.(ips|crash)$/i.test(name) && statSync(join(source, name)).mtimeMs >= startedAt
+  )
+  if (reports.length) mkdirSync(destination, { recursive: true })
+  for (const name of reports) cpSync(join(source, name), join(destination, name))
+  return reports
 }
