@@ -93,9 +93,9 @@ The `qvac bundle sdk` command allows you to select only the plugins you need in 
 
 The `qvac doctor` command validates that the current host can run `@qvac/sdk` and `@qvac/cli` before you hit runtime errors. It prints a human-readable report by default and exits `1` when any required check fails.
 
-<Card href="/sdk/system-requirements" title="System requirements">
-  Full host matrix, deploy targets, optional tools, exit codes, and JSON schema.
-</Card>
+The `qvac` CLI itself runs on desktops only. The SDK additionally targets Android and iOS via Expo/BareKit; those appear in the report as **deploy targets** with host-toolchain checks (`adb`, `xcodebuild`) but never cause a non-zero exit.
+
+See [`qvac doctor`](#qvac-doctor) for every check, the exit codes, and the JSON schema. For what QVAC requires from each platform, see [Platform support](/sdk/system-requirements).
 
 ## Reference
 
@@ -215,6 +215,92 @@ Run a preflight check of host system requirements.
 | --- | --- |
 | `--json` | Emit a machine-readable `DoctorReport` JSON. |
 | `-q, --quiet` | Set the exit code only; suppress human-readable output. |
+
+#### Required checks
+
+| Requirement | Notes |
+| --- | --- |
+| Node.js `^22.21.0 \|\| >=24.9.0` | Bundling (`qvac bundle sdk`) needs Node 22.21+ on the 22 line or 24.9+. Matches `engines.node` of `@qvac/cli`. |
+| Supported CLI host | `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`, `win32-x64`. `darwin-x64` passes this check, but QVAC no longer supports Intel Macs; see [Platform support](/sdk/system-requirements). The CLI cannot run on mobile; those are deploy targets only. |
+| Total RAM `>= 2 GB` (recommended `>= 4 GB`) | Below 4 GB, most LLMs will fail to load. |
+
+#### Recommended checks
+
+| Requirement | When it is needed |
+| --- | --- |
+| Available RAM `>= 2 GB` | Needed when loading a model. Checked via `os.availableMemory()` on Node 22+, falling back to `os.freemem()` on older Nodes. |
+| GPU acceleration | macOS: passes (Metal). Linux and Windows: runs `vulkaninfo --summary` and warns when no Vulkan driver is found. On Windows, the SDK's transcription, text-to-speech and audio generation need Vulkan `>= 1.4` even for CPU inference. |
+| Free disk `>= 5 GB` in the working directory | Model artifacts are typically multi-GB per model. Uses `fs.statfsSync` (Node 18.15+) with a   POSIX `df` fallback. |
+
+#### Deploy target checks
+
+These checks are informational. They never cause `qvac doctor` to exit non-zero. What is checked here is the host toolchain needed to install/deploy to each target class.
+
+| Target | Check | Status when missing |
+| --- | --- | --- |
+| `darwin-{arm64,x64}`, `linux-{arm64,x64}`, `win32-x64` | Listed under "Desktop"; native host flagged with `(native)`. | Always `pass`. Bundling for a desktop host other than the native one needs that host's addon platform packages installed; see [Electron](/resources/tutorials/electron). |
+| `android-arm64` | `adb --version` | `warn` — install [Android platform tools](https://developer.android.com/tools/releases/platform-tools) to deploy to devices. |
+| `ios-arm64` + simulators | `xcodebuild -version` (macOS only) | `warn` on macOS without Xcode, `info` on non-macOS hosts. |
+
+#### Optional tools
+
+<Callout type="info">
+  This section applies to the JS/TS client — the tools listed here are checked by `qvac doctor`, which today only covers the JS/TS stack. Python users can ignore it unless they also run the JS/TS SDK.
+</Callout>
+
+Only required if you use the corresponding feature. The checker warns when they are missing but does not fail.
+
+| Tool | Required for |
+| --- | --- |
+| `ffmpeg` | Microphone capture, transcription examples, and the built-in audio decoder. Install from [ffmpeg.org](https://ffmpeg.org/download.html). |
+| [Bare](https://bare.pears.com) runtime | Running the SDK under Bare directly. |
+
+#### Project checks
+
+<Callout type="info">
+  This section applies to the JS/TS client — the check below runs against `@qvac/sdk` in a Node.js/Bun project layout. Python users can ignore it unless they also run the JS/TS SDK.
+</Callout>
+
+| Check | Notes |
+| --- | --- |
+| `@qvac/sdk` resolvable from project | Resolved with `require.resolve('@qvac/sdk/package.json')` rooted at the working directory; hoisted installs (monorepos, Yarn/Bun workspaces) are correctly detected. |
+
+#### Exit codes
+
+- `0` — all required checks passed. Warnings, skips, and informational rows may still be present.
+- `1` — one or more required checks failed (unsupported Node version, unsupported CLI host, insufficient total RAM, ...). See the printed hints for remediation steps.
+
+#### JSON schema
+
+```ts
+interface DoctorReport {
+  ok: boolean;
+  platform: string;       // e.g. "darwin"
+  arch: string;           // e.g. "arm64"
+  nodeVersion: string;    // e.g. "20.19.5"
+  sections: Array<{
+    id: 'runtime' | 'hardware' | 'targets' | 'tools' | 'project';
+    title: string;
+    checks: Array<{
+      id: string;
+      label: string;
+      status: 'pass' | 'warn' | 'fail' | 'skip' | 'info';
+      severity: 'required' | 'recommended' | 'informational';
+      value?: string;
+      detail?: string;
+      hint?: string;
+    }>;
+  }>;
+}
+```
+
+##### Status semantics
+
+- `pass` — check ran and the requirement is satisfied.
+- `warn` — recommended requirement not met, or a deploy-target toolchain is missing; does not cause a non-zero exit.
+- `fail` — required check not met; causes exit code `1`.
+- `skip` — the check could not be executed on this host (missing Node API and no fallback, etc.).
+- `info` — informational row with no pass/fail judgment (e.g. iOS deploy target on a non-macOS host).
 
 ### `qvac app`
 
