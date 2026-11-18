@@ -184,11 +184,13 @@ export interface TextQuery {
 // `k` is the number of hits to return. With `perDocument`, every document's best
 // hit is seated before any document gets a second one, and no document gets
 // more than `perDocument`. When `scope.documentIds` lists at most `k` documents,
-// each one that has chunks gets a hit.
+// each one that has chunks gets a hit. Hits scoring below `minScore` are
+// dropped first, so a result can hold fewer than `k`.
 export type SearchParams = (VectorQuery | TextQuery) & {
   scope: SearchScope
   k: number
   perDocument?: number
+  minScore?: number
   // Checked between scan batches; an aborted search fails with OPERATION_CANCELLED.
   signal?: AbortSignal
 }
@@ -198,6 +200,7 @@ export type ScopedSearchParams = (VectorQuery | TextQuery) & {
   scope?: Partial<SearchScope>
   k: number
   perDocument?: number
+  minScore?: number
   signal?: AbortSignal
 }
 

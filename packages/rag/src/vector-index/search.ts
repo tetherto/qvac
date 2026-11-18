@@ -33,7 +33,8 @@ import type { SearchHit, SearchScope } from '../types.js'
 const MIN_EXTRA_CANDIDATES = 16
 
 // With `perDocument`, the pool starts at k × POOL_GROWTH candidates and grows by
-// that factor while the cap leaves fewer than k hits, up to MAX_POOL.
+// that factor while the cap leaves fewer than k hits, up to MAX_POOL. With
+// `minScore` too, growth stops once the last candidate falls below the floor.
 const POOL_GROWTH = 4
 const MAX_POOL = 4096
 
@@ -119,20 +120,22 @@ export async function indexSearch(
     return { hits: sortHits(hits, scope), available }
   }
 
-  const { perDocument } = options
+  const { perDocument, minScore } = options
   let pool = perDocument === undefined ? k : Math.max(k, Math.min(MAX_POOL, k * POOL_GROWTH))
   let ranked: SearchHit[]
   let selected: SearchHit[]
   for (;;) {
     const found = await candidates(pool)
     if (typeof found === 'string') return found
-    ranked = found.hits
+    ranked = minScore === undefined ? found.hits : found.hits.filter((hit) => hit.score >= minScore)
     if (perDocument === undefined) {
       selected = ranked.slice(0, k)
       break
     }
     selected = selectDiverse(ranked, k, perDocument)
-    if (selected.length === k || pool >= found.available || pool >= MAX_POOL) break
+    const last = found.hits[found.hits.length - 1]
+    const pastFloor = minScore !== undefined && (!last || last.score < minScore)
+    if (selected.length === k || pastFloor || pool >= found.available || pool >= MAX_POOL) break
     pool = Math.min(MAX_POOL, pool * POOL_GROWTH)
   }
 
@@ -150,7 +153,7 @@ export async function indexSearch(
         { namespace, documentIds: missing },
         query,
         missing.length,
-        { strict: false, perDocument: 1, signal: options.signal }
+        { strict: false, perDocument: 1, minScore, signal: options.signal }
       )
       selected = selectDiverse(sortHits(ranked.concat(best), scope), k, perDocument)
     }

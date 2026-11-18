@@ -24,6 +24,8 @@ export interface SearchOptions {
   signal?: AbortSignal
   // Caps hits per document and seats every document's best hit first.
   perDocument?: number
+  // Hits scoring below it are dropped before `perDocument` and `k` apply.
+  minScore?: number
 }
 
 interface Ranked {
@@ -53,10 +55,11 @@ export async function scanSearch(
   const vectors = new Float32Array(SCAN_BATCH_SIZE * dims)
   const batch: ChunkRecord[] = []
   const top: Ranked[] = []
-  const perDocument = options.perDocument
+  const { perDocument, minScore } = options
   const byDocument = new Map<string, Ranked[]>()
 
   function keep(score: number, chunk: ChunkRecord) {
+    if (minScore !== undefined && score < minScore) return
     if (perDocument === undefined) return offer(top, k, score, chunk)
     let kept = byDocument.get(chunk.documentId)
     if (!kept) {

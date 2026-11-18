@@ -153,6 +153,67 @@ both('a cap far above the chunk count returns at once', async (t) => {
   t.alike(contents(hits), ['a0'])
 })
 
+both('minScore drops hits below the floor before k applies', async (t) => {
+  const { rag, spaceId } = await openRag(t)
+  await rag.ingest({
+    namespace: 'ns',
+    documents: [scored('a', spaceId, [0.9, 0.5, 0.2]), scored('b', spaceId, [0.4, 0.1])]
+  })
+  const params = { scope: { namespace: 'ns' }, vector: QUERY, spaceId, k: 4 }
+
+  const hits = await rag.search({ ...params, minScore: 0.4 })
+  t.alike(contents(hits), ['a0', 'a1', 'b0'], 'a score equal to the floor is kept')
+  t.alike(contents(await rag.search({ ...params, minScore: 2 })), [], 'nothing clears the floor')
+
+  const handle = rag.scoped({ namespace: 'ns', documentIds: ['b'] })
+  const scoped = await handle.search({ vector: QUERY, spaceId, k: 4, minScore: 0.3 })
+  t.alike(contents(scoped), ['b0'], 'a scoped handle applies the floor too')
+})
+
+both('minScore with perDocument looks past a document above the floor', async (t) => {
+  const { rag, spaceId } = await openRag(t)
+  // 40 chunks from 0.99 down to 0.405, all above the floor.
+  const big = Array.from({ length: 40 }, (_, i) => 0.99 - i * 0.015)
+  await rag.ingest({
+    namespace: 'ns',
+    documents: [
+      scored('big', spaceId, big),
+      scored('b', spaceId, [0.38]),
+      scored('c', spaceId, [0.1])
+    ]
+  })
+  const params = { vector: QUERY, spaceId, k: 3, perDocument: 1, minScore: 0.3 }
+
+  const hits = await rag.search({ ...params, scope: { namespace: 'ns' } })
+  t.alike(contents(hits), ['big0', 'b0'], 'c is below the floor')
+  const again = await rag.search({ ...params, scope: { namespace: 'ns' } })
+  t.alike(contents(again), contents(hits), 'same query, same hits')
+
+  const listed = await rag.search({
+    ...params,
+    scope: { namespace: 'ns', documentIds: ['big', 'c'] }
+  })
+  t.alike(contents(listed), ['big0'], 'a listed document below the floor is not seated')
+})
+
+test('minScore must be a finite number', async (t) => {
+  const { rag, spaceId } = await openRag(t)
+  for (const minScore of [Number.NaN, Number.POSITIVE_INFINITY, '0.5']) {
+    await rejectsWithCode(
+      t,
+      rag.search({
+        scope: { namespace: 'ns' },
+        vector: QUERY,
+        spaceId,
+        k: 2,
+        minScore: minScore as number
+      }),
+      ERR_CODES.INVALID_INPUT,
+      `minScore ${String(minScore)}`
+    )
+  }
+})
+
 test('perDocument must be a positive integer', async (t) => {
   const { rag, spaceId } = await openRag(t)
   for (const perDocument of [0, -1, 1.5]) {

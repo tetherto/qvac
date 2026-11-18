@@ -468,6 +468,7 @@ export function createRag(options: CreateRagOptions): Rag {
     return await runSearch(handles, scope, query, request.k, {
       strict: true,
       perDocument: request.perDocument,
+      minScore: request.minScore,
       signal: request.signal
     })
   }
@@ -487,6 +488,7 @@ export function createRag(options: CreateRagOptions): Rag {
         return await runSearch(handles, narrowed, query, request.k, {
           strict: false,
           perDocument: request.perDocument,
+          minScore: request.minScore,
           signal: request.signal
         })
       }

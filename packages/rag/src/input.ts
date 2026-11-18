@@ -125,6 +125,7 @@ const searchSchema = z
     spaceId: z.string().min(1),
     k: z.number().int().positive(),
     perDocument: z.number().int().positive().optional(),
+    minScore: z.number().finite().optional(),
     signal: signalSchema.optional()
   })
   .strict()
@@ -135,6 +136,7 @@ const textSearchSchema = z
     query: z.string().min(1),
     k: z.number().int().positive(),
     perDocument: z.number().int().positive().optional(),
+    minScore: z.number().finite().optional(),
     signal: signalSchema.optional()
   })
   .strict()
@@ -314,6 +316,7 @@ export type ValidSearch = {
   scope: unknown
   k: number
   perDocument?: number
+  minScore?: number
   signal?: AbortSignal
 } & ({ vector: Float32Array; spaceId: string; query?: undefined } | { query: string })
 
@@ -321,8 +324,8 @@ export function parseSearch(params: unknown): ValidSearch {
   if (hasKey(params, 'query')) {
     const parsed = textSearchSchema.safeParse(params)
     if (!parsed.success) throw invalidInput(parsed.error)
-    const { scope, query, k, perDocument, signal } = parsed.data
-    return { scope, query, k, perDocument, signal }
+    const { scope, query, k, perDocument, minScore, signal } = parsed.data
+    return { scope, query, k, perDocument, minScore, signal }
   }
   const parsed = searchSchema.safeParse(params)
   if (!parsed.success) throw invalidInput(parsed.error)
@@ -332,6 +335,7 @@ export function parseSearch(params: unknown): ValidSearch {
     spaceId: parsed.data.spaceId,
     k: parsed.data.k,
     perDocument: parsed.data.perDocument,
+    minScore: parsed.data.minScore,
     signal: parsed.data.signal
   }
 }
