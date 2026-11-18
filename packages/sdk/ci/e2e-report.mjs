@@ -28,6 +28,26 @@ export const MODES = {
 const LANGUAGES = { [SDK]: 'js', '@qvac/sdk-python': 'python', 'sdk-kotlin': 'kotlin' }
 const PLATFORMS = ['linux', 'mac', 'windows', 'android', 'ios', 'electron', 'snap']
 const OS = { linux: 'linux', darwin: 'mac', win32: 'windows', android: 'android', ios: 'ios' }
+// A client's own folder: a smoke run takes the client when the PR changed it, or with CLIENTS on the PR.
+const CLIENT_DIRS = { python: 'packages/sdk-python/', kotlin: 'packages/sdk-kotlin/' }
+// What every client is generated from or talks to.
+const CLIENT_SOURCES = [
+  'packages/sdk/package.json',
+  'packages/sdk/scripts/export-contract.ts',
+  'packages/sdk/scripts/contract/',
+  'packages/sdk/src/schemas/',
+  'packages/sdk/src/plugin-ids.ts',
+  'packages/sdk/src/worker/',
+  'packages/sdk/src/server/rpc/',
+  'packages/sdk/src/commands/',
+  'packages/inference/package.json',
+  'packages/inference/src/surface.ts',
+  'packages/inference/src/schemas/',
+  'packages/inference/src/constants/',
+  'packages/inference/src/models/',
+  'packages/inference/src/errors/'
+]
+const CLIENTS = 'test-e2e-clients'
 export const languageOf = (row) => LANGUAGES[row.project]
 export function platformOf(row) {
   if (row.config.endsWith('-electron')) return 'electron'
@@ -385,7 +405,20 @@ export async function plan(env) {
   let devices = []
   const gh = github(env)
   const runUrl = runUrlOf(env)
-  if (mode === 'base') devices = mobile.filter(reported).map((r) => ({ ...r, suite }))
+  if (mode === 'base') {
+    // A full run takes every language; smoke takes JS and the clients the PR reaches.
+    const allClients =
+      suite !== 'smoke' || (event.pull_request.labels ?? []).some((l) => l.name === CLIENTS)
+    const changed = allClients ? [] : (await gh.all(`pulls/${pr}/files`)).map((f) => f.filename)
+    const everyLanguage =
+      allClients || changed.some((f) => CLIENT_SOURCES.some((source) => f.startsWith(source)))
+    const runs = (r) => {
+      const dir = CLIENT_DIRS[languageOf(r)]
+      return everyLanguage || !dir || changed.some((f) => f.startsWith(dir))
+    }
+    desktop = desktop.filter(runs)
+    devices = mobile.filter(runs).map((r) => ({ ...r, suite }))
+  }
   // A smoke run adds the tests the PR touched, on desktop and mobile, as main's resolve-impacted did.
   if (suite === 'smoke' && ['success', 'failure'].includes(env.IMPACTED)) {
     const found = impacted({
@@ -394,10 +427,7 @@ export async function plan(env) {
       json: env.IMPACTED_JSON || ''
     })
     if (found.include) {
-      const add = (r) =>
-        r.project === '@qvac/sdk'
-          ? { ...r, suite: encodeOptions(r.suite, { include: found.include }) }
-          : r
+      const add = (r) => ({ ...r, suite: encodeOptions(r.suite, { include: found.include }) })
       desktop = desktop.map(add)
       devices = devices.map(add)
     }
