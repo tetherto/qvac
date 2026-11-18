@@ -557,6 +557,19 @@ TEST(ParakeetEngineOptions, ForwardPrewarmAndLongForm) {
 
 // ── Streaming options ──────────────────────────────────────────────────────
 
+TEST(ParakeetStreamingOptions, ForwardAutomaticAndExplicitTdtChunkSizes) {
+  ParakeetConfig cfg;
+  cfg.modelType = ModelType::TDT;
+  EXPECT_EQ(
+      ParakeetModel::buildAsrStreamingOptions(cfg, SAMPLE_RATE_HZ).chunk_ms, 0);
+
+  const int requestedChunkMs = 5000;
+  cfg.streamingChunkMs = requestedChunkMs;
+  EXPECT_EQ(
+      ParakeetModel::buildAsrStreamingOptions(cfg, SAMPLE_RATE_HZ).chunk_ms,
+      requestedChunkMs);
+}
+
 TEST(ParakeetStreamingOptions, EnergyVadDefaultsMatchSpeechCpp) {
   const pkt::StreamingOptions fabric;
   const pkt::StreamingOptions built =
