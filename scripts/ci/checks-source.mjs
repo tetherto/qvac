@@ -7,7 +7,9 @@ import { appendFileSync, rmSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 
-const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { stdio: 'inherit', ...opts })
+// Windows' npm is npm.cmd, which Node only starts through a shell.
+const run = (cmd, args, opts = {}) =>
+  execFileSync(cmd, args, { stdio: 'inherit', shell: cmd === 'npm' && process.platform === 'win32', ...opts })
 const capture = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8' }).trim()
 const TRAIN = '.github/scripts/release-train.mjs'
 

@@ -8,11 +8,13 @@ import { appendFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 
 // The package's and its providers' native code (a consumer links its providers' prebuilds); package.json names the
-// addon and project.json holds the build commands and per-configuration settings.
+// addon and project.json holds the build commands and per-configuration settings. Linker maps, export lists and config
+// templates shape the module, and the ci/build-* and ci/verify-* scripts are the build commands' own steps.
 export const NATIVE =
-  /\.(c|cc|cpp|cxx|h|hh|hpp|hxx|inl|ipp|cu|cuh|m|mm|S|asm)$|(^|\/)CMakeLists\.txt$|\.cmake$|(^|\/)vcpkg(-configuration)?\.json$|\/vcpkg\/|(^|\/)(package|project)\.json$/
+  /\.(c|cc|cpp|cxx|h|hh|hpp|hxx|inl|ipp|cu|cuh|m|mm|S|asm|map|def)$|(^|\/)CMakeLists\.txt$|\.cmake$|\.cmake\.in$|(^|\/)exports\.txt$|(^|\/)vcpkg(-configuration)?\.json$|\/vcpkg\/|(^|\/)(package|project)\.json$|(^|\/)ci\/(build|verify)-[^/]+$/
 
-// Build inputs, every file: shared CMake and vcpkg code, toolchain pins, lockfile and install layout, and the CI code.
+// Build inputs, every file: shared CMake and vcpkg code, toolchain pins, lockfile and install layout, and the CI code
+// the build runs.
 export const INPUTS = [
   'cmake',
   'vcpkg-overlays',
@@ -20,6 +22,8 @@ export const INPUTS = [
   'pnpm-lock.yaml',
   'pnpm-workspace.yaml',
   'scripts/ci',
+  '.github/bare-toolchain',
+  '.github/scripts/check-linux-module-cxx-runtime.mjs',
   '.github/actions',
   '.github/config',
   '.github/workflows/_build.yml'
