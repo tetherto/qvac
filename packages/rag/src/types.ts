@@ -200,6 +200,8 @@ export interface SearchHit {
   documentId: string
   chunkId: string
   ordinal: number
+  // The document's generation the chunk belongs to; re-ingest bumps it.
+  generation: number
   content: string
   metadataJson?: string
   // The document's `metadata` from ingest, when it had any.

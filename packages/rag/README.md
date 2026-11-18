@@ -10,7 +10,7 @@ It ingests text, pre-chunked text or chunks with precomputed embeddings. Text is
 npm install @qvac/rag corestore
 ```
 
-On runtimes without a Node-style `crypto.createHash` (browser, React Native), install a compatible polyfill such as `crypto-browserify`.
+On runtimes without Node-style `crypto` (browser, React Native), install a polyfill such as `crypto-browserify` that provides `createHash` and either `randomBytes` or `getRandomValues`. Randomness is needed to create a namespace and on the first write to a namespace created by 0.10.0 or earlier.
 
 For indexed search on Bare, also install the optional peer:
 
@@ -151,7 +151,7 @@ Deletes the documents and their chunks in one batch. Unknown IDs are ignored. Re
 
 ### `search({ scope, vector, spaceId, k, signal? })` / `search({ scope, query, k, signal? })`
 
-A text `query` is embedded with the port's `embedQuery` and searched in the port's space, so it takes no `spaceId`. Returns up to `k` hits `{ namespace, documentId, chunkId, ordinal, content, metadataJson?, documentMetadata?, score }`, best first. `metadataJson` is the chunk's and `documentMetadata` is the document's `metadata` from ingest. `spaceId` is the space the query was embedded in; a different one fails with `EMBEDDING_SPACE_MISMATCH`, even when its dimensions match. The score is the dot product, or the cosine similarity for `cosine` spaces, computed from the stored float32 vectors either way. With the index, candidates come from TurboVec and are rescored exactly; a candidate HyperDB no longer maps to a current chunk is dropped. An aborted `signal` fails with `OPERATION_CANCELLED`; the scan checks it between batches, and a search waiting for an index to load or rebuild stops waiting, while the rebuild finishes for later searches. Equal scores rank in scope order for a `documentIds` list and in document ID order otherwise, with and without the index.
+A text `query` is embedded with the port's `embedQuery` and searched in the port's space, so it takes no `spaceId`. Returns up to `k` hits `{ namespace, documentId, chunkId, ordinal, generation, content, metadataJson?, documentMetadata?, score }`, best first. `metadataJson` is the chunk's and `documentMetadata` is the document's `metadata` from ingest. `generation` is the document version the chunk belongs to. `spaceId` is the space the query was embedded in; a different one fails with `EMBEDDING_SPACE_MISMATCH`, even when its dimensions match. The score is the dot product, or the cosine similarity for `cosine` spaces, computed from the stored float32 vectors either way. With the index, candidates come from TurboVec and are rescored exactly; a candidate HyperDB no longer maps to a current chunk is dropped. An aborted `signal` fails with `OPERATION_CANCELLED`; the scan checks it between batches, and a search waiting for an index to load or rebuild stops waiting, while the rebuild finishes for later searches. Equal scores rank in scope order for a `documentIds` list and in document ID order otherwise, with and without the index.
 
 `scope` is `{ namespace, documentIds? }`. Only chunks inside the scope are read and ranked, so a restricted search fills its top `k` from allowed documents. Search fails closed:
 
