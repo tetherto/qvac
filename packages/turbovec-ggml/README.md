@@ -53,7 +53,7 @@ Staged search is off for every new or loaded TurboVec index, so a search scores 
 - `search()`, `searchFiltered()`, and `prepareFilter()` perform full-scan retrieval.
 - `buildIvf()` enables approximate `searchIvf()` retrieval. IVF state is in-memory only and must be rebuilt after a mutation or snapshot load.
 - `write()` and `load()` persist all storage modes. Generic `f32`, `q8`, and `q4` additionally support `loadMmap()`, `loadWithDelta()`, `addLogged()`, `removeLogged()`, and `compactDelta()`.
-- Mutations invalidate prepared filters and IVF state.
+- Mutations invalidate prepared filters and IVF state. `buildIvf()` also disposes prepared filters: on TurboVec storage it regroups the stored rows by IVF list.
 - Call `dispose()` on indexes and prepared filters when finished. Disposal is idempotent.
 - Every call runs synchronously on the calling thread.
 
