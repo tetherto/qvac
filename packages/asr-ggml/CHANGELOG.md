@@ -30,6 +30,24 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
   `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.31.0` together.
 - This package needed no code change for the new fabric.
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.5.0` -> `1.7.0`
+  ([#5812](https://github.com/tetherto/qvac/pull/5812)). 1.6.0 lets runtime
+  stat values be strings (`RuntimeStatValue`), and 1.7.0 adds
+  `JsAsyncTask::runOn` for running async work on an addon-owned executor.
+  Compile-time only; no API or runtime behaviour change for this package.
+
+### Added
+
+- Load an optional shared-weight Core ML bundle for full TranscribePsy EU on
+  macOS 15 and iOS 18 or later.
+- Report cache-aware ASR streaming support in Parakeet backend information.
+
+### Fixed
+
+- Fall back to ggml when a Parakeet TDT Core ML sidecar cannot safely handle
+  an oversized input.
+- Default offline TDT push streams to 30-second decode windows and reject
+  explicitly shorter windows that can silently drop phrases.
 
 ## [0.12.2] - 2026-11-17
 
