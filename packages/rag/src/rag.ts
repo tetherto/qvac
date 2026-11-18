@@ -4,23 +4,12 @@ import qvacCrypto from '#crypto'
 
 import dbSpec from './db/hyperspec/hyperdb/index.js'
 import { QvacErrorRAG, ERR_CODES, toRagError } from './errors.js'
+import { FIRST_NATIVE_ID, encodeNativeId } from './db/encoding.js'
 import {
-  FIRST_NATIVE_ID,
-  MAX_NATIVE_ID,
-  decodeNativeId,
-  encodeNativeId,
-  encodeVector,
-  packNativeIds
-} from './db/encoding.js'
-import {
-  CHUNKS,
   DOCUMENTS,
-  MUTATIONS,
   NAMESPACES,
-  NATIVE_IDS,
   SPACES,
   TOMBSTONES,
-  type ChunkRecord,
   type DocumentRecord,
   type NamespaceRecord,
   type SpaceRecord,
@@ -49,6 +38,18 @@ import {
   type ValidTextChunk
 } from './input.js'
 import { intersectScope, parseScope } from './scope.js'
+import {
+  appendMutation,
+  checkChunks,
+  deleteDocument,
+  getNamespace,
+  newLineageId,
+  readNamespace,
+  storageOf,
+  withSnapshot,
+  withTransaction,
+  writeGeneration
+} from './writes.js'
 import { listDocumentPage, outOfScope, readDocumentPage } from './documents.js'
 import { checkQuery, scanSearch, throwIfAborted, type SearchQuery } from './search.js'
 import { computeSpaceId, parseEmbeddingSpace } from './space.js'
@@ -60,7 +61,6 @@ import {
   type IndexRegistry
 } from './vector-index/registry.js'
 import { indexSearch } from './vector-index/search.js'
-import { TURBOVEC_MAX_COMPONENT } from './vector-index/native.js'
 import type {
   Hypercore,
   HyperDBInstance,
@@ -77,7 +77,6 @@ import type {
   IngestedDocument,
   IngestOptions,
   IngestParams,
-  IndexStorage,
   IngestResult,
   ListDocumentsParams,
   NamespaceInfo,
@@ -452,14 +451,7 @@ export function createRag(options: CreateRagOptions): Rag {
         const document = await tx.get<DocumentRecord>(DOCUMENTS, { namespace, documentId })
         if (!document) continue
         // A spread push would exceed the argument limit on large documents.
-        for (const nativeId of await deleteGeneration(tx, document)) removed.push(nativeId)
-        await tx.delete(DOCUMENTS, { namespace, documentId })
-        await tx.insert(TOMBSTONES, {
-          namespace,
-          documentId,
-          generation: document.generation,
-          deletedAt: new Date()
-        })
+        for (const nativeId of await deleteDocument(tx, document)) removed.push(nativeId)
         deleted.push(documentId)
       }
       if (deleted.length === 0) return { deleted, revision: ns.revision }
@@ -722,7 +714,6 @@ async function commitDocument(
   if (previous?.contentHash === contentHash) {
     return { document: unchangedResult(previous), revision: ns.revision }
   }
-  const removed = previous ? await deleteGeneration(tx, previous) : []
   let last = previous?.generation ?? 0
   if (!previous) {
     const key = { namespace, documentId: document.id }
@@ -733,146 +724,21 @@ async function commitDocument(
     }
   }
   const generation = last + 1
-
-  let nextId = decodeNativeId(ns.nextNativeId)
-  if (MAX_NATIVE_ID - nextId + 1n < BigInt(document.chunks.length)) {
-    throw new QvacErrorRAG({ code: ERR_CODES.NATIVE_ID_EXHAUSTED, adds: namespace })
-  }
-
-  const added: bigint[] = []
-  for (let ordinal = 0; ordinal < document.chunks.length; ordinal++) {
-    const chunk = document.chunks[ordinal]
-    const nativeId = encodeNativeId(nextId)
-    added.push(nextId)
-    nextId++
-    await tx.insert(CHUNKS, {
-      namespace,
-      documentId: document.id,
-      generation,
-      ordinal,
-      chunkId: chunk.id,
-      content: chunk.content,
-      metadataJson: chunk.metadataJson,
-      nativeId,
-      vector: encodeVector(chunk.embedding)
-    })
-    await tx.insert(NATIVE_IDS, {
-      namespace,
-      nativeId,
-      documentId: document.id,
-      generation,
-      ordinal
-    })
-  }
-
-  await tx.insert(DOCUMENTS, {
-    namespace,
-    documentId: document.id,
-    generation,
-    chunkCount: document.chunks.length,
+  const { revision, removedChunks } = await writeGeneration(
+    tx,
+    indexes,
+    ns,
+    document,
     contentHash,
-    metadata: document.metadata,
-    updatedAt: new Date(),
-    revision: ns.revision + 1
-  })
-  const revision = await appendMutation(tx, ns, added, removed, encodeNativeId(nextId))
-  await indexes.prune(tx, namespace)
-  await tx.flush()
-  await indexes.apply(namespace, revision, added, () => concatEmbeddings(document), removed)
-
+    generation,
+    previous
+  )
   const result = { id: document.id, generation, chunkCount: document.chunks.length }
   return {
     document: previous
-      ? { ...result, status: 'replaced', removedChunks: removed.length }
+      ? { ...result, status: 'replaced', removedChunks }
       : { ...result, status: 'created' },
     revision
-  }
-}
-
-// Deletes a document's current chunks and their native IDs; returns the IDs.
-async function deleteGeneration(
-  tx: HyperDBTransaction,
-  document: DocumentRecord
-): Promise<bigint[]> {
-  const { namespace, documentId, generation } = document
-  const key = { namespace, documentId, generation }
-  const chunks = await tx.find<ChunkRecord>(CHUNKS, { gte: key, lte: key }).toArray()
-  const removed: bigint[] = []
-  for (const chunk of chunks) {
-    await tx.delete(CHUNKS, chunk)
-    await tx.delete(NATIVE_IDS, { namespace, nativeId: chunk.nativeId })
-    removed.push(decodeNativeId(chunk.nativeId))
-  }
-  return removed
-}
-
-async function appendMutation(
-  tx: HyperDBTransaction,
-  ns: NamespaceRecord,
-  added: bigint[],
-  removed: bigint[],
-  nextNativeId: Uint8Array
-): Promise<number> {
-  const revision = ns.revision + 1
-  await tx.insert(MUTATIONS, {
-    namespace: ns.name,
-    revision,
-    added: packNativeIds(added),
-    removed: packNativeIds(removed),
-    createdAt: new Date()
-  })
-  // Namespaces from before lineages existed get theirs on their first write.
-  const lineageId = ns.lineageId ?? newLineageId()
-  await tx.insert(NAMESPACES, { ...ns, revision, nextNativeId, lineageId })
-  return revision
-}
-
-function newLineageId(): Uint8Array {
-  if (qvacCrypto.randomBytes) return qvacCrypto.randomBytes(16)
-  if (qvacCrypto.getRandomValues) return qvacCrypto.getRandomValues(new Uint8Array(16))
-  throw new QvacErrorRAG({
-    code: ERR_CODES.DEPENDENCY_REQUIRED,
-    adds: 'crypto.randomBytes or crypto.getRandomValues is needed to create a namespace'
-  })
-}
-
-function concatEmbeddings(document: ValidDocument): Float32Array {
-  const dims = document.chunks[0]?.embedding.length ?? 0
-  const vectors = new Float32Array(document.chunks.length * dims)
-  document.chunks.forEach((chunk, i) => vectors.set(chunk.embedding, i * dims))
-  return vectors
-}
-
-function storageOf(ns: NamespaceRecord): IndexStorage {
-  return (ns.indexStorage as IndexStorage | undefined) ?? DEFAULT_INDEX_STORAGE
-}
-
-function checkChunks(
-  namespace: string,
-  ns: NamespaceRecord,
-  space: SpaceRecord,
-  document: ValidDocument
-): void {
-  const turbovec = storageOf(ns).startsWith('turbovec-')
-  for (const chunk of document.chunks) {
-    if (chunk.spaceId !== space.spaceId) {
-      throw new QvacErrorRAG({
-        code: ERR_CODES.EMBEDDING_SPACE_MISMATCH,
-        adds: `chunk '${chunk.id}' is in space ${chunk.spaceId}, namespace '${namespace}' is in ${space.spaceId}`
-      })
-    }
-    if (chunk.embedding.length !== space.dimensions) {
-      throw new QvacErrorRAG({
-        code: ERR_CODES.EMBEDDING_DIMENSION_MISMATCH,
-        adds: `chunk '${chunk.id}' has ${chunk.embedding.length} dimensions, namespace '${namespace}' expects ${space.dimensions}`
-      })
-    }
-    if (turbovec && chunk.embedding.some((value) => Math.abs(value) >= TURBOVEC_MAX_COMPONENT)) {
-      throw new QvacErrorRAG({
-        code: ERR_CODES.INVALID_INPUT,
-        adds: `chunk '${chunk.id}' has a component of magnitude 1e16 or more, which '${storageOf(ns)}' storage can't index`
-      })
-    }
   }
 }
 
@@ -901,56 +767,6 @@ function comparableMetadata(metadataJson: string | undefined): string | null {
   if (!parseRagMetadata(metadataJson)) return metadataJson
   const { indexedAt: _indexedAt, ...rest } = JSON.parse(metadataJson) as Record<string, unknown>
   return JSON.stringify(rest)
-}
-
-async function getNamespace(reader: HyperDBReader, name: string): Promise<NamespaceRecord> {
-  const ns = await reader.get<NamespaceRecord>(NAMESPACES, { name })
-  if (!ns) throw new QvacErrorRAG({ code: ERR_CODES.NAMESPACE_NOT_FOUND, adds: name })
-  return ns
-}
-
-async function readNamespace(
-  reader: HyperDBReader,
-  name: string
-): Promise<{ ns: NamespaceRecord; space: SpaceRecord }> {
-  const ns = await getNamespace(reader, name)
-  const space = await reader.get<SpaceRecord>(SPACES, { spaceId: ns.spaceId })
-  if (!space) {
-    throw new QvacErrorRAG({
-      code: ERR_CODES.DB_OPERATION_FAILED,
-      adds: `embedding space ${ns.spaceId} of namespace '${name}' is missing`
-    })
-  }
-  return { ns, space }
-}
-
-async function withSnapshot<T>(
-  db: HyperDBInstance,
-  operation: (reader: HyperDBReader) => Promise<T>
-): Promise<T> {
-  const snapshot = db.snapshot()
-  try {
-    return await operation(snapshot)
-  } catch (error) {
-    throw toRagError(error)
-  } finally {
-    await snapshot.close()
-  }
-}
-
-// Unflushed writes are dropped when the transaction closes.
-async function withTransaction<T>(
-  db: HyperDBInstance,
-  operation: (tx: HyperDBTransaction) => Promise<T>
-): Promise<T> {
-  const tx = await db.exclusiveTransaction()
-  try {
-    return await operation(tx)
-  } catch (error) {
-    throw toRagError(error)
-  } finally {
-    await tx.close()
-  }
 }
 
 function notReady(reason: string): QvacErrorRAG {
