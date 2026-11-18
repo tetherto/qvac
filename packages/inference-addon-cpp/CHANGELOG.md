@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.7.0] - 2026-11-18
 
 ### Added
 - `JsAsyncTask::runOn(env, executor, work)` and `JsAsyncTask::runOn(env, executor, work, marshal)` run the work on an `IAsyncTaskExecutor` the addon owns instead of starting a thread per task. They resolve and reject exactly as the matching `run()` overloads. The executor, declared in `AsyncTaskExecutor.hpp`, queues a task with `post()`, which returns a ticket that is never reused, and removes a task that has not started with `cancel(ticket)`. When the environment is torn down while the task is still queued, the task is cancelled on its executor and never runs, so teardown waits only for a task that has already started. When the executor does not accept the task, `runOn()` throws an `InternalError` `StatusError`. `run()` is unchanged.
