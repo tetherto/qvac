@@ -111,6 +111,23 @@ const scenarios = [
     expectLoadFailure: /load-mode must be one of/
   },
   {
+    // No CI fabric is built with Core ML FFN, so this load falls back. It checks
+    // that "true" is accepted; the unit tests check that it sets coreml_ffn.
+    name: 'coreml-ffn "true" is accepted and the load falls back',
+    overrides: {
+      'coreml-ffn': 'true',
+      n_predict: '16'
+    },
+    expectSuccess: true
+  },
+  {
+    name: 'coreml-ffn rejects unknown values with a clear error',
+    overrides: {
+      'coreml-ffn': 'maybe'
+    },
+    expectLoadFailure: /unknown value for coreml-ffn/
+  },
+  {
     name: 'Zero temperature produces deterministic output',
     overrides: {
       temp: '0',

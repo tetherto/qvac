@@ -149,6 +149,35 @@ void requirePollLevelsInRange(
   }
 }
 
+// fabric's --coreml-ffn takes no value, so the passthrough loop would read the
+// value of { "coreml-ffn": "true" } as the next argument and reject it. An
+// empty value is the flag form. Fabric itself falls back to Metal, with a
+// warning, when the build or the model cannot use the sidecar.
+void applyCoreMlFfn(
+    load_fit_normalization::ConfigMap& configFilemap, common_params& params) {
+  const auto it =
+      findOneOfAliasedKeys(configFilemap, {"coreml-ffn", "coreml_ffn"});
+  if (it == configFilemap.end()) {
+    return;
+  }
+  const std::string& value = it->second;
+  if (value.empty() || common_arg_utils::is_truthy(value)) {
+    params.coreml_ffn = true;
+  } else if (common_arg_utils::is_falsey(value)) {
+    params.coreml_ffn = false;
+  } else {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        string_format(
+            "%s: unknown value for %s: '%s'. Accepted (lower-case): on, "
+            "enabled, true, 1, off, disabled, false, 0.\n",
+            K_LEGACY_PARSER_NAME.data(),
+            it->first.c_str(),
+            value.c_str()));
+  }
+  configFilemap.erase(it);
+}
+
 // QVAC-24112: register remote RPC devices before backend selection runs.
 //
 // llama.cpp registers RPC endpoints from its own `--rpc` handler, which the
@@ -1421,6 +1450,8 @@ NormalizedLoad normalizeLoadForFit(
   if (deprecatedMode.has_value()) {
     params.load_mode = deprecatedMode.value();
   }
+
+  applyCoreMlFfn(configFilemap, params);
 
   // MedPsy ships only a Jinja chat template embedded in its GGUF; the non-jinja
   // fallback path used by llama.cpp does not execute the {%- set persona -%}

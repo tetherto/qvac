@@ -8,6 +8,10 @@
       "name": "qvac-fabric",
       "features": [
         {
+          "name": "coreml-ffn",
+          "platform": "osx"
+        },
+        {
           "name": "cuda-backend",
           "platform": "linux | (windows & x64)"
         },
