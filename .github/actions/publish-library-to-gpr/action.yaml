@@ -100,7 +100,7 @@ runs:
         PACKAGE_VERSION=$(node -p "require('./package.json').version")
         TAG="${{ steps.determine_tag.outputs.tag }}"
         PR_NUM=""
-        if [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ github.event_name }}" = "pull_request_target" ]; then
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
           PR_NUM="${{ github.event.pull_request.number }}"
         fi
 
@@ -154,7 +154,7 @@ runs:
 
         # normalize branch name across events
         BRANCH_NAME="$REF_NAME"
-        if [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "pull_request_target" ]]; then
+        if [[ "$EVENT_NAME" == "pull_request" ]]; then
           BRANCH_NAME="$HEAD_REF"
         fi
 
@@ -184,7 +184,7 @@ runs:
         fi
 
         # PR label "publish"
-        if [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "pull_request_target" ]]; then
+        if [[ "$EVENT_NAME" == "pull_request" ]]; then
           if [[ "${{ toJSON(github.event.pull_request.labels.*.name) }}" =~ "publish" ]]; then
             echo "✅ Publishing: PR has publish label"
             SHOULD_PUBLISH=true

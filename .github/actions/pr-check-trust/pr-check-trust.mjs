@@ -17,7 +17,7 @@ export function decide({
   label,
   labels
 }) {
-  if (event !== 'pull_request_target' && event !== 'pull_request') {
+  if (event !== 'workflow_run' && event !== 'pull_request') {
     return {
       allowed: true,
       level: 'notice',
@@ -113,7 +113,7 @@ async function api(path, token) {
 }
 
 async function main(env) {
-  const isPr = env.EVENT === 'pull_request_target' || env.EVENT === 'pull_request'
+  const isPr = env.EVENT === 'workflow_run' || env.EVENT === 'pull_request'
   const perm = await api(
     `/repos/${env.BASE_REPO}/collaborators/${encodeURIComponent(env.GITHUB_ACTOR)}/permission`,
     env.GH_TOKEN

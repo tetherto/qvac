@@ -1,14 +1,17 @@
 name: Label community PRs
 
 on:
-  pull_request_target:
-    types: [opened]
+  # Any PR checks run starting: main's copy labels the PR found by its head, checking out nothing. Labelling is
+  # idempotent, so every push and label event may run it.
+  workflow_run:
+    workflows: [PR checks]
+    types: [requested]
 
 permissions:
   pull-requests: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: true
 
 jobs:
@@ -21,12 +24,27 @@ jobs:
         env:
           APP_ID: ${{ secrets.APP_ID }}
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
         with:
           script: |
             const crypto = require('crypto');
 
+            // The open PR whose head is the triggering commit, from the API; nothing else in the trigger is read.
+            const { HEAD_SHA, HEAD_REPO, HEAD_BRANCH } = process.env;
+            const { data: pulls } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              head: `${HEAD_REPO.split('/')[0]}:${HEAD_BRANCH}`
+            });
+            const pr = pulls.length === 1 && pulls[0].head.sha === HEAD_SHA ? pulls[0] : null;
+            if (!pr) return;
+            if (pr.labels.some((l) => l.name === 'community-contribution')) return;
+
             // Skip bot authors — they are not external human contributors
-            if (context.payload.pull_request.user.type === 'Bot') return;
+            if (pr.user.type === 'Bot') return;
 
             // Build a JWT to authenticate as the GitHub App
             const now = Math.floor(Date.now() / 1000);
@@ -64,7 +82,7 @@ jobs:
             const { token } = await tokenRes.json();
 
             // Check org membership using the installation token (needs read:org scope)
-            const author = context.payload.pull_request.user.login;
+            const author = pr.user.login;
             const memberRes = await fetch(
               `https://api.github.com/orgs/tetherto/members/${author}`,
               { headers: ghHeaders(token), redirect: 'manual' }
@@ -78,7 +96,7 @@ jobs:
               await github.rest.issues.addLabels({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.payload.pull_request.number,
+                issue_number: pr.number,
                 labels: ['community-contribution']
               });
             } else {

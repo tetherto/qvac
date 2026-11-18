@@ -10,9 +10,21 @@ on:
         type: string
         required: true
       reuse:
-        description: Take a leg from an earlier run on this branch when its native code and build inputs are unchanged
+        description: Take a leg from an earlier run on this branch or PR when its native code and build inputs are unchanged
         type: boolean
         default: false
+      repository:
+        description: Repository of the commit to build, a PR's head; empty builds this run's own commit
+        type: string
+        default: ""
+      ref:
+        description: Commit to build, a PR's head SHA; empty builds this run's own commit
+        type: string
+        default: ""
+      pr:
+        description: PR number whose own earlier legs reuse may take; empty for a branch build
+        type: string
+        default: ""
 
 permissions: {}
 
@@ -36,8 +48,9 @@ jobs:
       - name: Checkout source
         uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.sha }}
+          allow-unsafe-pr-checkout: ${{ inputs.repository != '' && inputs.repository != github.repository }}
           path: src
           persist-credentials: "false"
       - id: plan
@@ -49,8 +62,9 @@ jobs:
           RUNNERS: ${{ toJSON(fromJSON(inputs.rows).*.runner) }}
           PROVIDERS: ${{ toJSON(fromJSON(inputs.rows).*.providers) }}
           SRC: src
-          REUSE: ${{ inputs.reuse && (github.event.pull_request.head.repo.full_name || github.repository) == github.repository }}
-          BRANCH: ${{ github.head_ref || github.ref_name }}
+          REUSE: ${{ inputs.reuse && (inputs.repository || github.repository) == github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          PR: ${{ inputs.pr }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           GH_TOKEN: ${{ github.token }}
         run: node .github/scripts/prebuild-reuse.mjs
@@ -85,8 +99,9 @@ jobs:
       - name: Checkout source
         uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.sha }}
+          allow-unsafe-pr-checkout: ${{ inputs.repository != '' && inputs.repository != github.repository }}
           path: src
           persist-credentials: "false"
       - if: runner.environment == 'github-hosted'

@@ -117,7 +117,7 @@ function route(overrides = {}) {
     "Route CI stages",
   );
   return runScript(script, {
-    EVENT_NAME: "pull_request_target",
+    EVENT_NAME: "workflow_run",
     PR_LABELS_JSON: "[]",
     HEAD_REPO: "tetherto/qvac",
     BASE_REPO: "tetherto/qvac",
@@ -215,7 +215,7 @@ function authorizePr(overrides = {}) {
     "Check authorization",
   );
   return runScript(script, {
-    EVENT: "pull_request_target",
+    EVENT: "pull_request",
     ACTION: "opened",
     HEAD_REPO: "outsider/qvac",
     BASE_REPO: "tetherto/qvac",
@@ -334,10 +334,23 @@ test("label-routed e2e: no stale-label synchronize run; checkout pinned to head 
     "a PR label must route only on its own labeled event",
   );
   assert.match(
-    read(".github/workflows/_desktop.yml"),
-    /ref:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha \|\| github\.sha\s*\}\}/,
-    "checkout must pin to the PR's head SHA",
+    read(".github/actions/workflow-run-pr/workflow-run-pr.mjs"),
+    /e\.event === 'labeled'/,
+    "a workflow_run build reads the applied label from the PR's labeled events",
   );
+  assert.match(
+    read(".github/workflows/_desktop.yml"),
+    /ref:\s*\$\{\{\s*inputs\.ref \|\| github\.sha\s*\}\}/,
+    "checkout must pin to the commit its caller names",
+  );
+  for (const name of ["pr-build-test.yml", "sdk-e2e.yml"]) {
+    const desktop = jobBlock(read(`.github/workflows/${name}`), "desktop");
+    assert.match(
+      desktop,
+      /ref:\s*\$\{\{ needs\.context\.outputs\.sha \}\}/,
+      `${name}: desktop must build the context job's pinned SHA`,
+    );
+  }
 });
 
 test("authorize-pr: drafts are denied before internal or fork trust checks", () => {
@@ -407,18 +420,34 @@ function jobBlock(source, job) {
     : source.slice(start, after + nextJob);
 }
 
-test("registry-server PR jobs depend on fork-approval for fork trust", () => {
+// On pull_request a fork's run gets no secrets, so the registry server's PR jobs must not need any: they hold none,
+// use no environment, and every secret-bearing job runs only on push or dispatch.
+test("registry-server PR jobs run on pull_request and hold no secrets", () => {
   const source = read(
     ".github/workflows/pr-models-validation-registry-server.yml",
   );
+  assert.match(onBlock(source), /^ {2}pull_request:/m);
   for (const job of ["detect-changes", "validate-json", "test"]) {
-    const block = jobBlock(source, job);
-    assert.match(
-      block,
-      /needs:[\s\S]*?\bfork-approval\b/,
-      `'${job}' must depend on fork-approval`,
+    const block = withoutComments(jobBlock(source, job));
+    assert.doesNotMatch(block, /secrets\.(?!GITHUB_TOKEN\b)/, `'${job}' must hold no secret`);
+    assert.doesNotMatch(block, /environment:/, `'${job}' must use no environment`);
+  }
+  for (const job of eachJob(source)) {
+    if (!/secrets\.(?!GITHUB_TOKEN\b)/.test(withoutComments(job.text))) continue;
+    // Directly, or by needing a job that does.
+    assert.ok(
+      /github\.event_name == 'push' \|\| github\.event_name == 'workflow_dispatch'/.test(job.text) ||
+        /\n {6}- (sync-staging|deploy-staging)\b/.test(job.text),
+      `'${job.name}' holds a secret, so it must run only on push or dispatch`,
     );
   }
+
+  // publish-registry-server's PR jobs need secrets, so its authorize admits only same-repo PRs.
+  const publish = jobBlock(read(".github/workflows/publish-registry-server.yml"), "authorize");
+  assert.match(
+    publish,
+    /allowed: \$\{\{ steps\.auth\.outputs\.allowed == 'true' && \(github\.event_name != 'pull_request' \|\| github\.event\.pull_request\.head\.repo\.full_name == github\.repository\) \}\}/,
+  );
 });
 
 function publicPrLabelPolicy(overrides = {}) {
@@ -433,7 +462,7 @@ function publicPrLabelPolicy(overrides = {}) {
   return runScript(
     `${policyBlock}\necho "failed=$failed" >> "$GITHUB_OUTPUT"\n`,
     {
-      EVENT_NAME: "pull_request_target",
+      EVENT_NAME: "pull_request",
       HEAD_REPO: "tetherto/qvac",
       BASE_REPO: "tetherto/qvac",
       PR_LABELS: "",
@@ -464,19 +493,22 @@ test("public-pr: trusted non-PR calls do not require verified", () => {
 });
 
 test("all ci-router callers re-run when a draft becomes ready", () => {
-  // The CI contract's pr-build-test.yml routes with ci-route-stages and must re-run on the draft->ready transition.
-  const workflowNames = [
-    "pr-build-test.yml",
-  ];
-
-  for (const workflowName of workflowNames) {
+  // pr-build-test.yml and sdk-e2e.yml route with ci-route-stages and run when PR checks is requested, so PR checks
+  // must start on the draft->ready transition and on a label.
+  for (const workflowName of ["pr-build-test.yml", "sdk-e2e.yml"]) {
     const source = read(`.github/workflows/${workflowName}`);
     assert.match(
       source,
       /uses:\s+\.\/\.github\/actions\/(ci-router|ci-route-stages)/,
     );
-    assert.match(source, /ready_for_review/);
+    assert.match(
+      onBlock(source),
+      /workflow_run:\n\s+workflows: \[PR checks\]\n\s+types: \[requested\]/,
+    );
   }
+  const gate = onBlock(read(".github/workflows/pr-checks.yml"));
+  assert.match(gate, /ready_for_review/);
+  assert.match(gate, /labeled/);
   assert.match(read(".github/workflows/pr-gate-merge.yml"), /ready_for_review/);
 });
 
@@ -522,7 +554,7 @@ function withoutComments(block) {
 }
 
 const FORK_CI_ENV_RE =
-  /environment:\s*\$\{\{[\s\S]*?event_name\s*==\s*'pull_request_target'[\s\S]*?head\.repo\.full_name\s*!=\s*github\.repository[\s\S]*?'fork-ci'[\s\S]*?\|\|\s*''\s*\}\}/;
+  /environment:\s*\$\{\{\s*inputs\.fork\s*&&\s*'fork-ci'\s*\|\|\s*''\s*\}\}/;
 
 test("reusable-fork-approval: fork-ci gate and status recording", () => {
   const source = read(".github/workflows/reusable-fork-approval.yml");
@@ -534,16 +566,19 @@ test("reusable-fork-approval: fork-ci gate and status recording", () => {
   assert.match(source, /context=qvac\/fork-verified/);
   assert.match(source, /GH_TOKEN:\s*\$\{\{\s*github\.token\s*\}\}/);
   assert.match(source, /statuses:\s*write/);
-  assert.match(
-    source,
-    /HEAD_SHA:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\}\}/,
-  );
+  assert.match(source, /HEAD_SHA:\s*\$\{\{\s*inputs\.head-sha\s*\}\}/);
   assert.match(source, /REPO:\s*\$\{\{\s*github\.repository\s*\}\}/);
   assert.doesNotMatch(
     source,
-    /run:[\s\S]*?\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\}\}/,
-    "fork-approval must not interpolate head.sha directly in run:",
+    /run:[\s\S]*?\$\{\{\s*inputs\.head-sha\s*\}\}/,
+    "fork-approval must not interpolate head-sha directly in run:",
   );
+  // The fork flag is the API's, from the caller's context job, never the trigger's payload.
+  for (const name of ["pr-build-test.yml", "sdk-e2e.yml"]) {
+    const gate = jobBlock(read(`.github/workflows/${name}`), "fork-approval");
+    assert.match(gate, /fork: \$\{\{ needs\.context\.outputs\.fork == 'true' \}\}/);
+    assert.match(gate, /head-sha: \$\{\{ needs\.context\.outputs\.sha \}\}/);
+  }
 });
 
 test("audit-called-out privileged checkouts are pinned to event head SHA", () => {
@@ -624,54 +659,36 @@ test("infer-base changes reach the required merge-guard status check", () => {
   );
 });
 
-test("merge guard fails closed when the PR was not authorized", () => {
+test("merge guard fails closed when a PR's builds did not run", () => {
   const source = read(".github/workflows/pr-gate-merge.yml");
   const guard = jobBlock(source, "qvac-merge-guard");
 
-  // The aggregate must wait on the full authorization chain so an unapproved
-  // fork cannot pass via skipped=success on the gated jobs.
-  assert.match(
-    guard,
-    /needs:[\s\S]*?\bfork-approval\b/,
-    "merge guard must depend on fork-approval",
-  );
-  assert.match(
-    guard,
-    /needs:[\s\S]*?\bauthorize\b/,
-    "merge guard must depend on authorize",
-  );
-  assert.match(
-    guard,
-    /needs:[\s\S]*?\bverify-cpp-tests\b/,
-    "merge guard must depend on verify-cpp-tests",
-  );
+  // An unapproved fork posts no prebuild or C++ test status, so the verify jobs must run for every PR and wait for
+  // those statuses: nothing but the changes filter may skip them.
+  for (const job of ["verify-prebuilds", "verify-cpp-tests"]) {
+    assert.match(guard, new RegExp(`needs:[\\s\\S]*?\\b${job}\\b`), `merge guard must depend on ${job}`);
+    const block = jobBlock(source, job);
+    assert.equal(jobCondition(block), "", `${job} must not be skippable by a job condition`);
+    assert.match(block, /needs: \[changes\]/);
+  }
+  assert.doesNotMatch(onBlock(source), /pull_request_target/);
 
-  // Each gated status input must require fork-approval success, authorize
-  // success, AND allowed == 'true' before a skip is treated as a pass.
-  for (const input of [
-    "sanity-checks-status",
-    "build-status",
-    "general-checks-status",
-    "cpp-tests-status",
+  // Each status input passes only on its job's success, or its skip where nothing was there to check.
+  for (const [input, job, skip] of [
+    ["sanity-checks-status", "sanity-checks", true],
+    ["build-status", "verify-prebuilds", true],
+    ["general-checks-status", "error-code-ranges", false],
+    ["cpp-tests-status", "verify-cpp-tests", true],
   ]) {
     const line = guard
       .split("\n")
       .find((l) => l.trim().startsWith(`${input}:`));
     assert.ok(line, `merge guard defines ${input}`);
-    assert.match(
-      line,
-      /needs\.fork-approval\.result == 'success'/,
-      `${input} must require fork-approval success (fail closed)`,
-    );
-    assert.match(
-      line,
-      /needs\.authorize\.result == 'success'/,
-      `${input} must require authorize success (fail closed)`,
-    );
-    assert.match(
-      line,
-      /needs\.authorize\.outputs\.allowed == 'true'/,
-      `${input} must require authorize to allow the PR (fail closed)`,
+    const results = [...line.matchAll(/needs\.([a-z-]+)\.result == '([a-z]+)'/g)].map((m) => `${m[1]}=${m[2]}`);
+    assert.deepEqual(
+      results.sort(),
+      [`${job}=success`, ...(skip ? [`${job}=skipped`] : [])].sort(),
+      `${input} must pass only on ${job}'s success${skip ? " or skip" : ""}`,
     );
   }
 });
@@ -997,6 +1014,7 @@ test("pr-build-test: every non-exempt job gates on trust", () => {
   const source = read(".github/workflows/pr-build-test.yml");
 
   const exempt = new Map([
+    ["context", "reads the PR from the API in a trusted sparse checkout; runs no PR code"],
     ["select", "checks out the trusted ref and installs with --ignore-scripts"],
     ["fork-approval", "is the gate"],
     ["route", "reads PR labels from a trusted sparse checkout; runs no PR code"],
@@ -1141,8 +1159,8 @@ test("merge guards accept intentionally skipped optional prebuilds", () => {
 });
 
 // --- fork-ci environment gating (QVAC-22799) --------------------------------
-// Every pull_request_target workflow that gates any job on authorize.outputs.allowed
-// must call reusable-fork-approval.yml, and every trust-gated job must depend on it.
+// Every workflow_run workflow runs the default branch's YAML with secrets for a PR's commit, so it must call
+// reusable-fork-approval.yml, and every trust-gated job must depend on it. No workflow may use pull_request_target.
 
 const FORK_CI_GATE_JOBS = new Set(["authorize", "ci-router", "fork-approval"]);
 
@@ -1172,7 +1190,7 @@ function eachJob(source) {
 /**
  * The `on:` block only. Selecting on a character window after `on:` (or on a
  * bare substring match) also catches prose in comments — several workflows
- * mention `pull_request_target` only to say they deliberately avoid it.
+ * name triggers only to say they deliberately avoid them.
  */
 function onBlock(source) {
   const match = source.match(/^on:[ \t]*$/m);
@@ -1190,16 +1208,19 @@ function onBlock(source) {
   return block.join("\n");
 }
 
-function pullRequestTargetWorkflows() {
-  const dir = join(root, ".github/workflows");
-  return readdirSync(dir)
-    .filter((n) => /\.ya?ml$/.test(n))
-    .map((n) => `.github/workflows/${n}`)
-    .filter((p) => /^\s{2}pull_request_target:/m.test(onBlock(read(p))));
+function privilegedPrWorkflows() {
+  return workflowPaths().filter((p) => /^\s{2}workflow_run:/m.test(onBlock(read(p))));
 }
 
+test("no workflow triggers on pull_request_target", () => {
+  const offenders = workflowPaths().filter((p) =>
+    /^\s{2}pull_request_target:/m.test(onBlock(read(p))),
+  );
+  assert.deepEqual(offenders, []);
+});
+
 /**
- * `pull_request_target` workflows that legitimately carry no fork-ci gate,
+ * `workflow_run` workflows that legitimately carry no fork-ci gate,
  * each with the reason it cannot execute fork-controlled code. Adding an entry
  * is a trust decision: it must be true that a fork PR cannot get code of its
  * own to run here, no matter what it puts in the branch.
@@ -1210,30 +1231,24 @@ function pullRequestTargetWorkflows() {
  */
 const FORK_CI_EXEMPT = new Map([
   [
-    ".github/workflows/check-approvals.yml",
-    "No checkout: runs the published @qvac/ci against PR metadata over the API. " +
-      "Also a required status check on main/release — gating it on fork-ci would " +
-      "deadlock fork PRs, since approval cannot complete until the check reports.",
-  ],
-  [
     ".github/workflows/on-pr-community-label.yml",
     "No checkout: actions/github-script applies a label via the API only.",
   ],
 ]);
 
 function forkCiTargets() {
-  return pullRequestTargetWorkflows().filter((p) => !FORK_CI_EXEMPT.has(p));
+  return privilegedPrWorkflows().filter((p) => !FORK_CI_EXEMPT.has(p));
 }
 
-test("fork-ci: every pull_request_target workflow is either gated or explicitly exempt", () => {
-  const unclassified = pullRequestTargetWorkflows().filter((p) => {
+test("fork-ci: every workflow_run workflow is either gated or explicitly exempt", () => {
+  const unclassified = privilegedPrWorkflows().filter((p) => {
     if (FORK_CI_EXEMPT.has(p)) return false;
     return !read(p).includes("reusable-fork-approval.yml");
   });
   assert.deepEqual(
     unclassified,
     [],
-    "new pull_request_target workflow with no fork-ci gate: add `needs: fork-approval` " +
+    "new workflow_run workflow with no fork-ci gate: add `needs: fork-approval` " +
       "or, if it genuinely cannot run fork code, add it to FORK_CI_EXEMPT with a reason",
   );
 });
@@ -1243,12 +1258,8 @@ test("fork-ci: exempt workflows never check out fork-controlled code", () => {
   for (const path of FORK_CI_EXEMPT.keys()) {
     const source = read(path);
     // The exemptions rest on these workflows never materialising the fork's
-    // tree. An explicit head ref would break that and re-open pwn-request.
-    if (
-      /ref:\s*\$\{\{\s*github\.event\.pull_request\.head\.(sha|ref)\s*\}\}/.test(
-        source,
-      )
-    ) {
+    // tree. Any checkout would break that and re-open pwn-request.
+    if (/checkout@|ref:\s*\$\{\{[^}]*head_(sha|branch)/.test(source)) {
       offenders.push(`${path}: checks out PR head while exempt from fork-ci`);
     }
   }
@@ -1256,12 +1267,12 @@ test("fork-ci: exempt workflows never check out fork-controlled code", () => {
 });
 
 test("fork-ci: every exempt workflow still exists and carries a reason", () => {
-  const known = new Set(pullRequestTargetWorkflows());
+  const known = new Set(privilegedPrWorkflows());
   const stale = [];
   for (const [path, reason] of FORK_CI_EXEMPT) {
     if (!known.has(path)) {
       stale.push(
-        `${path}: exempt but no longer a pull_request_target workflow — drop the entry`,
+        `${path}: exempt but no longer a workflow_run workflow — drop the entry`,
       );
     }
     if (!reason || reason.length < 20) {
@@ -1271,18 +1282,18 @@ test("fork-ci: every exempt workflow still exists and carries a reason", () => {
   assert.deepEqual(stale, []);
 });
 
-test("fork-ci: every pull_request_target verified-surface workflow has the fork-ci gate job", () => {
+test("fork-ci: every workflow_run verified-surface workflow has the fork-ci gate job", () => {
   const targets = forkCiTargets();
   // Floor, not an exact count: it only guards against the discovery globbing
   // silently matching nothing (which would make every assertion below vacuous).
   // Lower it deliberately when workflow families are retired or consolidated —
   // dropped from 20 when transcription-* merged into asr-ggml, then to 18 when
   // ocr-onnx CI was retired on main, and the floor dropped again when the
-  // per-package pull_request_target on-pr-<pkg> workflows were consolidated into
-  // on-pr-nx.yml, and once more when the last orchestrators, then the SDK
-  // e2e, moved to the CI contract's pr-build-test.yml.
+  // per-package on-pr-<pkg> workflows were consolidated into on-pr-nx.yml, and
+  // once more when the last orchestrators, then the SDK e2e, moved to the CI
+  // contract's pr-build-test.yml. pr-build-test.yml and sdk-e2e.yml remain.
   assert.ok(
-    targets.length >= 3,
+    targets.length >= 2,
     `found ${targets.length} fork-ci target workflows`,
   );
   for (const path of targets) {
@@ -1441,7 +1452,8 @@ test("authorize jobs: run after fork-approval and checkout authorize-pr from def
     for (const job of eachJob(src)) {
       if (!/\.\/\.github\/actions\/authorize-pr/.test(job.text)) continue;
       if (job.name !== "authorize" && job.name !== "resolve-config") continue;
-      if (!/\bneeds:[\s\S]*?\bfork-approval\b/.test(job.text)) {
+      const approvable = forkCiTargets().includes(`.github/workflows/${name}`);
+      if (approvable && !/\bneeds:[\s\S]*?\bfork-approval\b/.test(job.text)) {
         offenders.push(`${name}: job ${job.name} missing needs fork-approval`);
       }
       if (!/default_branch/.test(job.text)) {
@@ -1857,11 +1869,10 @@ test("release policy: no workflow or action calls nx's publish directly", () => 
 // C++ lint checks out the event's head commit, never a branch name that a later push can move under the job.
 test("cpp-lint resolves checkout from event head SHA, never branch ref", () => {
   const source = read(".github/workflows/_cpp-lint.yml");
-  assert.match(
-    source,
-    /ref:\s+\$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/,
-  );
+  assert.match(source, /ref:\s+\$\{\{ inputs\.ref \|\| github\.sha \}\}/);
   assert.doesNotMatch(source, /head\.ref\b|PR_HEAD_REF|env\.HEAD_REF/);
+  const caller = jobBlock(read(".github/workflows/pr-build-test.yml"), "cpp-lint");
+  assert.match(caller, /ref: \$\{\{ needs\.context\.outputs\.sha \}\}/);
 });
 
 // The text of every `run:` script in a workflow, block scalars included.
@@ -1939,7 +1950,7 @@ const CACHE_WORKFLOWS = [
 
 const UNTRUSTED_CACHE_EVENTS = [
   "pull_request",
-  "pull_request_target",
+  "workflow_run",
   "issue_comment",
 ];
 
@@ -1947,7 +1958,9 @@ const UNTRUSTED_CACHE_EVENTS = [
 // the caller's opt-in, the event and the default branch are all needed (QVAC-25269).
 const TRUSTED_GUARDS = [
   ["the caller's opt-in", "inputs.trusted"],
-  ["no pull_request_target event", "github.event_name != 'pull_request_target'"],
+  ["no workflow_run event", "github.event_name != 'workflow_run'"],
+  ["no caller ref", "inputs.ref == ''"],
+  ["no caller repository", "inputs.repository == ''"],
   ["no pull_request event", "github.event_name != 'pull_request'"],
   [
     "the default branch",
@@ -2006,9 +2019,11 @@ test("cache policy: contract cache writes happen only on a trusted run", () => {
     if (admitted.length) {
       offenders.push(`${path}: env.TRUSTED admits ${admitted.join(", ")}`);
     }
-    // A trusted event is not a trusted run if a caller can redirect what is checked out.
+    // A trusted event is not a trusted run if a caller can redirect what is checked out; env.TRUSTED requiring both
+    // inputs empty (TRUSTED_GUARDS) rules that out.
+    const pinned = trusted.includes("inputs.ref == ''") && trusted.includes("inputs.repository == ''");
     for (const checkout of steps.filter((s) => /actions\/checkout@/.test(s))) {
-      if (/inputs\.(ref|repository)\b/.test(checkout)) {
+      if (!pinned && /inputs\.(ref|repository)\b/.test(checkout)) {
         offenders.push(
           `${path}: a checkout takes a caller's ref or repository in a job that writes caches`,
         );

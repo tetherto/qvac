@@ -3,8 +3,9 @@ name: PR checks
 # Lint, typecheck, unit tests, generated files and dependency checks for the changed contract packages and dependents,
 # through Nx from the PR's own targets with no secrets, so forks get real results. The SDK pod (ci:sdk) runs sdk-checks.yml.
 on:
+  # labeled only starts PR build and test and SDK e2e, which run on this workflow being requested; jobs here skip.
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
     branches: [main, release-*, feature-*, tmp-*]
   workflow_dispatch:
     inputs:
@@ -16,12 +17,14 @@ on:
 permissions:
   contents: read
 
+# A label's run has its own group, so it never cancels the PR's checks.
 concurrency:
-  group: pr-checks-${{ github.event.pull_request.number || github.ref }}
+  group: pr-checks-${{ github.event.pull_request.number || github.ref }}${{ github.event.action == 'labeled' && format('-label-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 jobs:
   select:
+    if: github.event.action != 'labeled'
     uses: ./.github/workflows/_select-projects.yml
     with:
       targets: lint,typecheck,test:unit,verify:generated,verify:deps
@@ -30,6 +33,7 @@ jobs:
   # A range on a workspace package that excludes its workspace version makes pnpm install the npm copy instead, so a
   # bump updates its dependents' ranges in the same pull request.
   workspace-ranges:
+    if: github.event.action != 'labeled'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -46,6 +50,7 @@ jobs:
 
   # No git URLs and no dev or tmp prerelease pins in a contract package's dependencies.
   disallowed-deps:
+    if: github.event.action != 'labeled'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
