@@ -48,6 +48,10 @@
             "runner": "linux_ubuntu2204_x64_gpu",
             "setup": ["node22"],
             "labels": {
+              "test-e2e-smoke": "smoke",
+              "test-e2e-full": "",
+              "base:release-*": "",
+              "test-e2e-rerun-failed": "",
               "test-e2e-python": "smoke"
             }
           }
@@ -57,6 +61,10 @@
             "runner": "macos_arm64_gpu",
             "setup": ["node22"],
             "labels": {
+              "test-e2e-smoke": "smoke",
+              "test-e2e-full": "",
+              "base:release-*": "",
+              "test-e2e-rerun-failed": "",
               "test-e2e-python": "smoke"
             }
           }
@@ -66,6 +74,10 @@
             "runner": "win_2025_x64_gpu",
             "setup": ["node22"],
             "labels": {
+              "test-e2e-smoke": "smoke",
+              "test-e2e-full": "",
+              "base:release-*": "",
+              "test-e2e-rerun-failed": "",
               "test-e2e-python": "smoke"
             }
           }

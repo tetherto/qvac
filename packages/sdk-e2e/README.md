@@ -256,7 +256,7 @@ Each configuration names the labels that run it in `ci.labels`, and the suite ea
 | Configurations                                                 | Runs on                                          | Started by                                                                                                                                      |
 | -------------------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `linux-x64-gpu`, `darwin-arm64-gpu`, `win32-x64-gpu` (desktop) | the three GPU hosts                              | `test-e2e-smoke` (smoke suite), `test-e2e-full` (full catalog), `test-e2e-rerun-failed`, and every push to a PR into `release-*` (full catalog) |
-| `sdk-python`'s `linux-x64`, `darwin-arm64`, `win32-x64`        | the same hosts                                   | `test-e2e-python` (smoke suite)                                                                                                                 |
+| `sdk-python`'s `linux-x64`, `darwin-arm64`, `win32-x64`        | the same hosts                                   | the same labels as the desktop rows, when the run takes Python (see below), and `test-e2e-python` (smoke suite)                                 |
 | `*-electron`                                                   | the same hosts, the macOS one with a GUI session | a dispatch of `sdk-e2e.yml` naming `electron` in `platforms`                                                                                    |
 | `linux-x64-snap` (strict Snap)                                 | the Linux GPU host                               | a dispatch of `sdk-e2e.yml` naming `snap` in `platforms`                                                                                        |
 
@@ -289,7 +289,9 @@ gh workflow run sdk-e2e.yml --ref <branch> -f languages=js,kotlin -f platforms=a
 On a pull request, `sdk-e2e.yml`'s `plan` job (`packages/sdk/ci/e2e-report.mjs`) routes the run and its `report` job
 closes it:
 
-- `test-e2e-smoke` and `test-e2e-full` are base runs: they also run the sdk's Android and iOS apps, post one comment
+- `test-e2e-smoke` and `test-e2e-full` are base runs on Linux, Mac, Windows, Android and iOS. Full runs every
+  language. Smoke runs JS, and each client whose own folder the PR changed, or every client with `test-e2e-clients`
+  also on the PR. A base run posts one comment
   per leg that the report fills in with its failed tests, and record the failures in a hidden PR comment. A base run
   green on every leg sets `e2e-tested`.
 - `test-e2e-rerun-failed` reruns only the recorded failures, on the legs where they failed. The label removes itself,
@@ -302,8 +304,8 @@ A dispatch naming `android` or `ios` in `platforms` runs the JS app on both and 
 the consumer APK or IPA with the run id and broker baked in, starts it on a Device Farm pool from
 `SDK_ANDROID_DEVICE_FARM_POOLS` or `SDK_IOS_DEVICE_FARM_POOLS` (the dispatch's `pool` names one pool; empty prefers an
 available private pool), drives the catalog over MQTT once the device runs, and fails on any failed test. `filter`
-narrows it to comma-separated categories or testId prefixes. On a pull request, `test-e2e-smoke`, `test-e2e-full` and `test-e2e-rerun-failed` run the sdk's Android and iOS
-apps the same way, with the label's suite; the Kotlin app runs only by dispatch.
+narrows it to comma-separated categories or testId prefixes. On a pull request, the base runs and
+`test-e2e-rerun-failed` run the apps the same way, with the label's suite.
 
 ## Developing new tests
 

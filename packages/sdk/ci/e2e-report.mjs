@@ -28,6 +28,9 @@ export const MODES = {
 const LANGUAGES = { [SDK]: 'js', '@qvac/sdk-python': 'python', 'sdk-kotlin': 'kotlin' }
 const PLATFORMS = ['linux', 'mac', 'windows', 'android', 'ios', 'electron', 'snap']
 const OS = { linux: 'linux', darwin: 'mac', win32: 'windows', android: 'android', ios: 'ios' }
+// A client's own folder: a smoke run takes the client when the PR changed it, or with CLIENTS on the PR.
+const CLIENT_DIRS = { python: 'packages/sdk-python/', kotlin: 'packages/sdk-kotlin/' }
+const CLIENTS = 'test-e2e-clients'
 export const languageOf = (row) => LANGUAGES[row.project]
 export function platformOf(row) {
   if (row.config.endsWith('-electron')) return 'electron'
@@ -385,7 +388,19 @@ export async function plan(env) {
   let devices = []
   const gh = github(env)
   const runUrl = runUrlOf(env)
-  if (mode === 'base') devices = mobile.filter(reported).map((r) => ({ ...r, suite }))
+  if (mode === 'base') {
+    // A full run takes every language. Smoke takes JS, each client whose own folder the PR changed, and every client
+    // once the PR also carries test-e2e-clients, whenever that label was added.
+    const everyLanguage =
+      suite !== 'smoke' || (event.pull_request.labels ?? []).some((l) => l.name === CLIENTS)
+    const changed = everyLanguage ? [] : (await gh.all(`pulls/${pr}/files`)).map((f) => f.filename)
+    const runs = (r) => {
+      const dir = CLIENT_DIRS[languageOf(r)]
+      return everyLanguage || !dir || changed.some((f) => f.startsWith(dir))
+    }
+    desktop = desktop.filter(runs)
+    devices = mobile.filter(runs).map((r) => ({ ...r, suite }))
+  }
   // A smoke run adds the tests the PR touched, on desktop and mobile, as main's resolve-impacted did.
   if (suite === 'smoke' && ['success', 'failure'].includes(env.IMPACTED)) {
     const found = impacted({
@@ -394,10 +409,7 @@ export async function plan(env) {
       json: env.IMPACTED_JSON || ''
     })
     if (found.include) {
-      const add = (r) =>
-        r.project === '@qvac/sdk'
-          ? { ...r, suite: encodeOptions(r.suite, { include: found.include }) }
-          : r
+      const add = (r) => ({ ...r, suite: encodeOptions(r.suite, { include: found.include }) })
       desktop = desktop.map(add)
       devices = devices.map(add)
     }
