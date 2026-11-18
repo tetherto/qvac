@@ -8,9 +8,9 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- Build against `qvac-lib-inference-addon-cpp` 1.6.0, where a runtime stat
+- Build against `qvac-lib-inference-addon-cpp` 1.7.0, where a runtime stat
   value can also hold a string. The runtime stats use `RuntimeStatValue`, and
-  the dependency floor is now `1.6.0`
+  the dependency floor is now `1.7.0`
   ([#5731](https://github.com/tetherto/qvac/pull/5731)).
 
 ## [0.34.0] - 2026-11-16
