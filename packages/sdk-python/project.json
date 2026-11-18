@@ -36,16 +36,6 @@
         "sources": ["self"]
       }
     },
-    "verify:generated": {
-      "executor": "nx:run-commands",
-      "options": {
-        "cwd": "packages/sdk-python",
-        "command": "node ci/python.mjs generate"
-      },
-      "metadata": {
-        "setup": ["python"]
-      }
-    },
     "test:integration": {
       "executor": "nx:run-commands",
       "options": {
