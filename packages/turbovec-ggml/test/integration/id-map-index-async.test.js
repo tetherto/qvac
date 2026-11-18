@@ -24,6 +24,10 @@ const BUSY_DIM = 64
 const BUSY_LISTS = 128
 const BUSY_ITERS = 5
 const RESERVED_ID = 0xffffffffffffffffn
+// The fewest rows for which turning staged search on builds its cache, at a
+// dimension divisible by 32.
+const STAGED_ROWS = 32_768
+const STAGED_DIM = 256
 
 // Native errors are inference-addon-cpp StatusErrors: their `code` names the
 // addon and the error category.
@@ -255,7 +259,8 @@ test('IdMapIndex async: every index call returns a promise', async (t) => {
       await rejection(result)
     }
     const disposed = filter.dispose()
-    t.is(disposed, undefined, 'IdMapIndexFilter#dispose returns nothing')
+    t.ok(disposed instanceof Promise, 'IdMapIndexFilter#dispose returns a promise')
+    await disposed
     for (const index of loaded) await index.dispose()
   } finally {
     const dispose = idx.dispose()
@@ -356,6 +361,38 @@ test('IdMapIndex async: setStagedSearch applies to the searches queued after it'
   await on
   t.is(idx.stagedSearch, true, 'and is reported once applied')
   await idx.dispose()
+})
+
+// Turning staged search on builds its cache across the whole index: bulk
+// work, run on a worker thread like a build.
+test('IdMapIndex async: setStagedSearch leaves the JS thread free', async (t) => {
+  if (!SUPPORTS_TURBOVEC) {
+    t.pass('TurboVec needs a 64-bit target')
+    return
+  }
+  const idx = new IdMapIndex({ dim: STAGED_DIM, storage: 'turbovec-q4' })
+  const { vectors, ids } = randomBatch(STAGED_ROWS, STAGED_DIM, 31)
+  await idx.addWithIds(vectors, ids)
+  let ticks = 0
+  const timer = setInterval(() => {
+    ticks += 1
+  }, 1)
+  let immediateRan = false
+  setImmediate(() => {
+    immediateRan = true
+  })
+  try {
+    // Called on an idle index, so the call starts at once: on the JS thread
+    // it would finish before the event loop runs the immediate.
+    await idx.setStagedSearch(true)
+    t.ok(immediateRan, `the event loop ran while the cache was built (${ticks} timer ticks)`)
+    t.is(idx.stagedSearch, true, 'staged search is on')
+    const hits = await idx.search(randomBatch(1, STAGED_DIM, 32).vectors, 5)
+    t.is(hits.k, 5, 'and the index answers a search')
+  } finally {
+    clearInterval(timer)
+    await idx.dispose()
+  }
 })
 
 test('IdMapIndex async: an IVF build leaves the JS thread free', async (t) => {
@@ -460,6 +497,46 @@ test('IdMapIndex async: filters are freed before their index', { skip: IS_MOBILE
   await other.dispose()
   t.alike(frees, [...Array(held.length).fill('filter'), 'index'], 'after filters disposed mid-call')
 })
+
+test(
+  'IdMapIndex async: a filter dispose resolves once the native filter is freed',
+  { skip: IS_MOBILE },
+  async (t) => {
+    const frees = recordFrees(t)
+    const idx = await filledIndex()
+    const filter = await idx.prepareFilter(new BigUint64Array([1n]))
+    const search = idx.search(unitVec(0), 1)
+    const disposed = filter.dispose()
+    t.is(filter.dispose(), disposed, 'a second dispose returns the same promise')
+    t.alike(frees, [], 'the free waits behind the running search')
+    await disposed
+    t.alike(frees, ['filter'], 'and has happened once dispose resolves')
+    await search
+
+    // A mutation frees the index's filters at its turn in the queue.
+    const invalidated = await idx.prepareFilter(new BigUint64Array([2n]))
+    await idx.addWithIds(unitVec(5), new BigUint64Array([70n]))
+    const freed = invalidated.dispose()
+    t.ok(freed instanceof Promise, 'a filter the index already freed returns a promise')
+    t.is(await freed, undefined, 'which resolves')
+
+    const binding = require('../../binding')
+    const failure = new Error('free failed')
+    const failing = await idx.prepareFilter(new BigUint64Array([3n]))
+    const free = binding.idx_filter_dispose
+    binding.idx_filter_dispose = () => {
+      throw failure
+    }
+    let error = null
+    t.execution(() => {
+      error = rejection(failing.dispose())
+    }, 'a failing dispose does not throw synchronously')
+    t.is(await error, failure, 'and rejects with the error')
+    binding.idx_filter_dispose = free
+    // The native filter is freed by its handle's finalizer.
+    await idx.dispose()
+  }
+)
 
 test('IdMapIndex async: native async calls refuse a busy index', { skip: IS_MOBILE }, async (t) => {
   const binding = require('../../binding')

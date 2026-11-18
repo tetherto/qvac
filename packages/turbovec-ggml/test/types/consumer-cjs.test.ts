@@ -34,9 +34,11 @@ export async function checkAsyncTypes(index: IdMapIndex, query: Float32Array, id
   const loaded: SubIdMapIndex = await SubIdMapIndex.load('index.tvim')
   const added: void = await index.addWithIds(query, ids)
   const built: void = await index.buildIvf(1)
+  const staged: void = await index.setStagedSearch(true)
   const length: number = index.length
+  const filterFreed: Promise<void> = filter.dispose()
   const freed: void = await index.dispose()
-  return { hits, removed, present, filtered, loaded, added, built, length, freed }
+  return { hits, removed, present, filtered, loaded, added, built, staged, length, filterFreed, freed }
 }
 
 // The shape of an AbortSignal from bare-abort-controller, the DOM, or Node.

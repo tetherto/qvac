@@ -62,8 +62,8 @@ Staged search is off for every new or loaded TurboVec index, so a search scores 
   synchronous and never wait. `length`, `calibrated` and `stagedSearch` report
   the state after the last call that finished.
 - Call `dispose()` on indexes and prepared filters when finished. Disposal is
-  idempotent. An index's `dispose()` returns a promise that resolves once the
-  native index has been freed, and rejects if freeing it fails.
+  idempotent. Both return a promise that resolves once the native index or
+  filter has been freed, and rejects if freeing it fails.
 
 Native errors are inference-addon-cpp `StatusError`s, as in the other addons:
 `error.code` is `"[ TurboVec :: <category> ]"`. An error from the native index
@@ -95,8 +95,9 @@ try {
 - Calls on one index run one at a time, in call order, so a search started
   after an add sees it.
 - Across all indexes in the process, long work (adds, IVF builds, loads,
-  writes, compaction, `prepare()`, `prepareFilter()`, logged removes) runs on
-  one worker thread and the rest (searches, `remove()`) on another. A long
+  writes, compaction, `prepare()`, `prepareFilter()`, `setStagedSearch()`,
+  logged removes) runs on one worker thread and the rest (searches,
+  `remove()`) on another. A long
   build or a large allow-list therefore never holds up a search, but two
   builds take turns, and an add waits behind a build on another index. Each
   call runs on a single thread. The jobs run through inference-addon-cpp's

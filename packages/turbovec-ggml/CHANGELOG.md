@@ -14,8 +14,9 @@
   `IdMapIndexFilter#search()` and the static `load()`, `loadMmap()` and
   `loadWithDelta()`. Await each call; bad arguments reject instead of
   throwing. There is no synchronous variant.
-- `dispose()` on an index returns a promise that resolves once the native
-  index has been freed. The index cannot be used after the call; calls that
+- `dispose()` on an index or an `IdMapIndexFilter` returns a promise that
+  resolves once the native index or filter has been freed, and rejects if
+  freeing it fails. The index cannot be used after the call; calls that
   have not started reject, and a running call finishes first.
 - The `length`, `calibrated` and `stagedSearch` getters report the state after
   the last call that finished, and never wait for calls still in progress.
@@ -28,7 +29,8 @@
 ### Added
 
 - Calls on one index run one at a time, in call order. Across indexes, long
-  work (adds, builds, loads, writes, compaction, `prepareFilter()`) runs on
+  work (adds, builds, loads, writes, compaction, `prepareFilter()`,
+  `setStagedSearch()`) runs on
   one worker thread and searches on another, so a build or a large
   allow-list never holds up a search. Input arrays are copied when the call
   is made.

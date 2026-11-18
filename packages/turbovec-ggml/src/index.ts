@@ -2,6 +2,7 @@ const HANDLE = Symbol('IdMapIndex.handle')
 const FILTER_HANDLE = Symbol('IdMapIndexFilter.handle')
 const FILTER_OWNER = Symbol('IdMapIndexFilter.owner')
 const FILTER_REF = Symbol('IdMapIndexFilter.ref')
+const FILTER_RELEASED = Symbol('IdMapIndexFilter.released')
 const FILTERS = Symbol('IdMapIndex.filters')
 const FILTERS_PRUNE_AT = Symbol('IdMapIndex.filtersPruneAt')
 const QUEUE = Symbol('IdMapIndex.queue')
@@ -53,7 +54,6 @@ interface IdMapIndexBinding {
   idx_dim(handle: NativeHandle): number
   idx_bit_width(handle: NativeHandle): IdMapIndexBitWidth
   idx_calibrated(handle: NativeHandle): boolean
-  idx_set_staged(handle: NativeHandle, enabled: boolean): void
   idx_staged(handle: NativeHandle): boolean
   idx_abort_token_create(): AbortToken
   idx_abort_token_abort(token: AbortToken): void
@@ -115,6 +115,7 @@ interface IdMapIndexBinding {
     token: Token,
     borrow: boolean
   ): Promise<IdMapIndexSearchResult>
+  idx_set_staged_async(handle: NativeHandle, enabled: boolean, token: Token): Promise<void>
   idx_build_ivf_async(
     handle: NativeHandle,
     nLists: number,
@@ -410,7 +411,10 @@ function detachFilter(filter: IdMapIndexFilter) {
 export class IdMapIndexFilter {
   [FILTER_HANDLE]: NativeHandle | null = null;
   [FILTER_OWNER]: IdMapIndex | null = null;
-  [FILTER_REF]: WeakRef<IdMapIndexFilter> | null = null
+  [FILTER_REF]: WeakRef<IdMapIndexFilter> | null = null;
+  // Settles once the native filter has been freed. Already resolved when the
+  // owner freed it at a turn in its queue, which happens as it is detached.
+  [FILTER_RELEASED]: Promise<void> = Promise.resolve()
 
   private constructor() {
     throw new TypeError('IdMapIndexFilter instances must be created by IdMapIndex.prepareFilter()')
@@ -451,23 +455,21 @@ export class IdMapIndexFilter {
   }
 
   /**
-   * Release the prepared native filter. This operation is idempotent. While
-   * the owner has operations queued, the native filter is freed after they
-   * settle.
+   * Release the prepared native filter. The filter cannot be used after this
+   * call. While the owner has operations queued, the native filter is freed
+   * after they settle. Resolves once the native filter has been freed, and
+   * rejects if freeing it fails. This operation is idempotent: a later call
+   * returns the same promise.
    */
-  dispose() {
+  dispose(): Promise<void> {
     const detached = detachFilter(this)
     if (detached === null) {
-      return
+      return this[FILTER_RELEASED]
     }
     const { filterHandle, owner } = detached
-    if (owner !== null) {
-      // Freeing a filter the index created cannot fail; the promise is only
-      // the queue's.
-      releaseAfterQueue(owner, () => loadBinding().idx_filter_dispose(filterHandle)).catch(swallow)
-    } else {
-      loadBinding().idx_filter_dispose(filterHandle)
-    }
+    const release = () => loadBinding().idx_filter_dispose(filterHandle)
+    this[FILTER_RELEASED] = owner === null ? startNow(release) : releaseAfterQueue(owner, release)
+    return this[FILTER_RELEASED]
   }
 }
 
@@ -487,6 +489,8 @@ function createFilter(owner: IdMapIndex, handle: NativeHandle) {
   filter[FILTER_OWNER] = owner
   filter[FILTER_HANDLE] = handle
   filter[FILTER_REF] = new WeakRef(filter)
+  // Object.create() skips the class's field initializers.
+  filter[FILTER_RELEASED] = Promise.resolve()
   return filter
 }
 
@@ -812,7 +816,7 @@ export default class IdMapIndex {
         return this.registerFilter(filterHandle)
       },
       signal,
-      (filter) => filter.dispose()
+      (filter) => filter.dispose().catch(swallow)
     )
   }
 
@@ -990,8 +994,8 @@ export default class IdMapIndex {
     const signal = readSignal('setStagedSearch', options)
     return enqueue(
       this,
-      () => {
-        loadBinding().idx_set_staged(ensureHandle(this), enabled)
+      async (token) => {
+        await loadBinding().idx_set_staged_async(ensureHandle(this), enabled, token)
         this[STAGED] = enabled
       },
       signal
@@ -1063,7 +1067,8 @@ export default class IdMapIndex {
         continue
       }
       if (!now) {
-        filter.dispose()
+        // The caller learns of a failed free from the filter's own dispose().
+        filter.dispose().catch(swallow)
         continue
       }
       const detached = detachFilter(filter)

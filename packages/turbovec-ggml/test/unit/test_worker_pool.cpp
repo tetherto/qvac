@@ -3,6 +3,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <vector>
 
@@ -179,13 +180,17 @@ TEST(WorkerPool, CancellingOneTaskKeepsTheOthersInOrder) {
 // JsAsyncTask cancels by ticket, so a ticket from a finished task must never
 // name a later one.
 TEST(WorkerPool, NeverReusesATicket) {
+  // Declared before the pool, so every gate outlives the threads that open
+  // it: wait() can return while open() is still notifying.
+  std::vector<std::unique_ptr<Gate>> gates;
   WorkerPool pool(2);
   std::vector<std::uint64_t> tickets;
   for (int i = 0; i < 200; ++i) {
-    Gate done;
-    tickets.push_back(pool.post([&done]() { done.open(); }));
+    gates.push_back(std::make_unique<Gate>());
+    Gate* done = gates.back().get();
+    tickets.push_back(pool.post([done]() { done->open(); }));
     ASSERT_NE(tickets.back(), 0U);
-    done.wait();
+    done->wait();
   }
   std::sort(tickets.begin(), tickets.end());
   EXPECT_EQ(std::adjacent_find(tickets.begin(), tickets.end()), tickets.end())

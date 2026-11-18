@@ -5,6 +5,7 @@ const HANDLE = Symbol('IdMapIndex.handle');
 const FILTER_HANDLE = Symbol('IdMapIndexFilter.handle');
 const FILTER_OWNER = Symbol('IdMapIndexFilter.owner');
 const FILTER_REF = Symbol('IdMapIndexFilter.ref');
+const FILTER_RELEASED = Symbol('IdMapIndexFilter.released');
 const FILTERS = Symbol('IdMapIndex.filters');
 const FILTERS_PRUNE_AT = Symbol('IdMapIndex.filtersPruneAt');
 const QUEUE = Symbol('IdMapIndex.queue');
@@ -211,6 +212,9 @@ class IdMapIndexFilter {
     [FILTER_HANDLE] = null;
     [FILTER_OWNER] = null;
     [FILTER_REF] = null;
+    // Settles once the native filter has been freed. Already resolved when the
+    // owner freed it at a turn in its queue, which happens as it is detached.
+    [FILTER_RELEASED] = Promise.resolve();
     constructor() {
         throw new TypeError('IdMapIndexFilter instances must be created by IdMapIndex.prepareFilter()');
     }
@@ -237,24 +241,21 @@ class IdMapIndexFilter {
         }, signal);
     }
     /**
-     * Release the prepared native filter. This operation is idempotent. While
-     * the owner has operations queued, the native filter is freed after they
-     * settle.
+     * Release the prepared native filter. The filter cannot be used after this
+     * call. While the owner has operations queued, the native filter is freed
+     * after they settle. Resolves once the native filter has been freed, and
+     * rejects if freeing it fails. This operation is idempotent: a later call
+     * returns the same promise.
      */
     dispose() {
         const detached = detachFilter(this);
         if (detached === null) {
-            return;
+            return this[FILTER_RELEASED];
         }
         const { filterHandle, owner } = detached;
-        if (owner !== null) {
-            // Freeing a filter the index created cannot fail; the promise is only
-            // the queue's.
-            releaseAfterQueue(owner, () => loadBinding().idx_filter_dispose(filterHandle)).catch(swallow);
-        }
-        else {
-            loadBinding().idx_filter_dispose(filterHandle);
-        }
+        const release = () => loadBinding().idx_filter_dispose(filterHandle);
+        this[FILTER_RELEASED] = owner === null ? startNow(release) : releaseAfterQueue(owner, release);
+        return this[FILTER_RELEASED];
     }
 }
 exports.IdMapIndexFilter = IdMapIndexFilter;
@@ -273,6 +274,8 @@ function createFilter(owner, handle) {
     filter[FILTER_OWNER] = owner;
     filter[FILTER_HANDLE] = handle;
     filter[FILTER_REF] = new WeakRef(filter);
+    // Object.create() skips the class's field initializers.
+    filter[FILTER_RELEASED] = Promise.resolve();
     return filter;
 }
 function disposeIndex(index) {
@@ -449,7 +452,7 @@ class IdMapIndex {
                 throw new Error('IdMapIndex has been disposed');
             }
             return this.registerFilter(filterHandle);
-        }, signal, (filter) => filter.dispose());
+        }, signal, (filter) => filter.dispose().catch(swallow));
     }
     /**
      * Build deterministic in-memory IVF-flat search state. Mutations invalidate
@@ -571,8 +574,8 @@ class IdMapIndex {
             throw new TypeError('setStagedSearch: enabled must be a boolean');
         }
         const signal = readSignal('setStagedSearch', options);
-        return enqueue(this, () => {
-            loadBinding().idx_set_staged(ensureHandle(this), enabled);
+        return enqueue(this, async (token) => {
+            await loadBinding().idx_set_staged_async(ensureHandle(this), enabled, token);
             this[STAGED] = enabled;
         }, signal);
     }
@@ -635,7 +638,8 @@ class IdMapIndex {
                 continue;
             }
             if (!now) {
-                filter.dispose();
+                // The caller learns of a failed free from the filter's own dispose().
+                filter.dispose().catch(swallow);
                 continue;
             }
             const detached = detachFilter(filter);

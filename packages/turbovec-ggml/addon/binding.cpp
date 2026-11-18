@@ -763,18 +763,6 @@ js_value_t* idxCalibrated(js_env_t* env, js_callback_info_t* info) try {
 }
 TURBOVEC_CATCH
 
-// idxSetStaged(handle, enabled:boolean) -> undefined
-js_value_t* idxSetStaged(js_env_t* env, js_callback_info_t* info) try {
-  const Args argv = readArgs(env, info, 2, "(handle, enabled:boolean)");
-  const std::shared_ptr<IndexState> state = liveIndex(env, argv[0]);
-  if (!js::is<js::Boolean>(env, argv[1])) {
-    fail("InvalidArgument", "enabled must be a boolean");
-  }
-  checkStatus(state->idx->setStaged(js::Boolean(env, argv[1]).as<bool>(env)));
-  return js::Undefined::create(env);
-}
-TURBOVEC_CATCH
-
 js_value_t* idxStaged(js_env_t* env, js_callback_info_t* info) try {
   const Args argv = readArgs(env, info, 1, "handle");
   return js::Boolean::create(env, liveIndex(env, argv[0])->idx->staged());
@@ -1038,6 +1026,24 @@ idxSearchPreparedFilteredAsync(js_env_t* env, js_callback_info_t* info) try {
 }
 TURBOVEC_CATCH
 
+// idxSetStagedAsync(handle, enabled:boolean, token?) -> Promise<undefined>
+// Bulk work, not a flag update: switching staged search on builds its cache
+// across the whole index, and switching it off repacks the rows.
+js_value_t* idxSetStagedAsync(js_env_t* env, js_callback_info_t* info) try {
+  const Args argv = readArgs(env, info, 2, "(handle, enabled:boolean)");
+  std::shared_ptr<IndexState> state = liveIndex(env, argv[0]);
+  if (!js::is<js::Boolean>(env, argv[1])) {
+    fail("InvalidArgument", "enabled must be a boolean");
+  }
+  const bool enabled = js::Boolean(env, argv[1]).as<bool>(env);
+  return startBulk(
+      env,
+      std::move(state),
+      readToken(env, argv, 2),
+      [enabled](VectorIndex& idx) { return idx.setStaged(enabled); });
+}
+TURBOVEC_CATCH
+
 // idxBuildIvfAsync(handle, nLists, nIter, token?) -> Promise<undefined>
 js_value_t* idxBuildIvfAsync(js_env_t* env, js_callback_info_t* info) try {
   const Args argv =
@@ -1163,7 +1169,6 @@ js_value_t* turbovecGgmlExports(js_env_t* env, js_value_t* exports) {
   V("idx_dim", (idxIntGetter<&VectorIndex::dim>));
   V("idx_bit_width", (idxIntGetter<&VectorIndex::bitWidth>));
   V("idx_calibrated", idxCalibrated);
-  V("idx_set_staged", idxSetStaged);
   V("idx_staged", idxStaged);
   V("idx_abort_token_create", idxAbortTokenCreate);
   V("idx_abort_token_abort", idxAbortTokenAbort);
@@ -1178,6 +1183,7 @@ js_value_t* turbovecGgmlExports(js_env_t* env, js_value_t* exports) {
   V("idx_search_filtered_async", idxSearchFilteredAsync);
   V("idx_filter_create_async", idxFilterCreateAsync);
   V("idx_search_prepared_filtered_async", idxSearchPreparedFilteredAsync);
+  V("idx_set_staged_async", idxSetStagedAsync);
   V("idx_build_ivf_async", idxBuildIvfAsync);
   V("idx_search_ivf_async", idxSearchIvfAsync);
   V("idx_compact_async", idxCompactAsync);

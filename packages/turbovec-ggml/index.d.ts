@@ -2,6 +2,7 @@ declare const HANDLE: unique symbol;
 declare const FILTER_HANDLE: unique symbol;
 declare const FILTER_OWNER: unique symbol;
 declare const FILTER_REF: unique symbol;
+declare const FILTER_RELEASED: unique symbol;
 declare const FILTERS: unique symbol;
 declare const FILTERS_PRUNE_AT: unique symbol;
 declare const QUEUE: unique symbol;
@@ -73,6 +74,7 @@ export declare class IdMapIndexFilter {
     [FILTER_HANDLE]: NativeHandle | null;
     [FILTER_OWNER]: IdMapIndex | null;
     [FILTER_REF]: WeakRef<IdMapIndexFilter> | null;
+    [FILTER_RELEASED]: Promise<void>;
     private constructor();
     /**
      * Search with this prepared allowlist, queued behind the owner's other
@@ -81,11 +83,13 @@ export declare class IdMapIndexFilter {
      */
     search(queries: Float32Array, k: number, options?: IdMapIndexCallOptions): Promise<IdMapIndexSearchResult>;
     /**
-     * Release the prepared native filter. This operation is idempotent. While
-     * the owner has operations queued, the native filter is freed after they
-     * settle.
+     * Release the prepared native filter. The filter cannot be used after this
+     * call. While the owner has operations queued, the native filter is freed
+     * after they settle. Resolves once the native filter has been freed, and
+     * rejects if freeing it fails. This operation is idempotent: a later call
+     * returns the same promise.
      */
-    dispose(): void;
+    dispose(): Promise<void>;
 }
 type IdMapIndexClass<T extends IdMapIndex> = (abstract new (...args: never[]) => T) & {
     prototype: T;

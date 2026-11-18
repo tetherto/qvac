@@ -30,9 +30,11 @@ async function checkAsyncTypes(index, query, ids) {
     const loaded = await SubIdMapIndex.load('index.tvim');
     const added = await index.addWithIds(query, ids);
     const built = await index.buildIvf(1);
+    const staged = await index.setStagedSearch(true);
     const length = index.length;
+    const filterFreed = filter.dispose();
     const freed = await index.dispose();
-    return { hits, removed, present, filtered, loaded, added, built, length, freed };
+    return { hits, removed, present, filtered, loaded, added, built, staged, length, filterFreed, freed };
 }
 async function checkSignalTypes(index, query, signal) {
     const options = { signal };
