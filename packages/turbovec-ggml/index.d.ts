@@ -121,24 +121,26 @@ export default class IdMapIndex {
     addLogged(vectors: Float32Array, ids: BigUint64Array, deltaPath: string): void;
     /**
      * Top-k similarity search over row-major queries. Results are sorted
-     * by descending score, then ascending ID. TurboVec rotates queries without
-     * normalizing them and performs approximate rotated/quantized dot-product
-     * scoring. TurboVec query components require `abs(value) < 1e16`. Short rows
-     * use UINT64_MAX padding.
+     * by descending score, then ascending ID; TurboVec orders equal scores by
+     * stored row, which removals and `buildIvf()` reshuffle. TurboVec rotates
+     * queries without normalizing them and performs approximate rotated/quantized
+     * dot-product scoring. TurboVec query components require
+     * `abs(value) < 1e16`. Short rows use UINT64_MAX padding.
      */
     search(queries: Float32Array, k: number): IdMapIndexSearchResult;
     /** Exact search restricted to the supplied external IDs. */
     searchFiltered(queries: Float32Array, k: number, allowedIds: BigUint64Array): IdMapIndexSearchResult;
     /**
-     * Prepare an allowlist for repeated searches. Native mutation attempts
-     * invalidate all prepared filters created from this index. Call `dispose()`
-     * when done to release native filter memory promptly; dropped filters are
-     * reclaimed by GC.
+     * Prepare an allowlist for repeated searches. Native mutation attempts and
+     * `buildIvf()` invalidate all prepared filters created from this index. Call
+     * `dispose()` when done to release native filter memory promptly; dropped
+     * filters are reclaimed by GC.
      */
     prepareFilter(allowedIds: BigUint64Array): IdMapIndexFilter;
     /**
      * Build deterministic in-memory IVF-flat search state. Mutations invalidate
-     * it, and snapshots do not persist it.
+     * it, and snapshots do not persist it. Disposes every prepared filter, as a
+     * mutation does: on TurboVec storage the build regroups the rows by IVF list.
      */
     buildIvf(nLists: number, nIter?: number): void;
     /**
