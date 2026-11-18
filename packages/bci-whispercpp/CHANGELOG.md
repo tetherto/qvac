@@ -16,9 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- The core tests build against `qvac-lib-inference-addon-cpp` 1.6.0, where a
+- The core tests build against `qvac-lib-inference-addon-cpp` 1.7.0, where a
   stat value can also hold a string. They use `RuntimeStatValue`, and the
-  dependency floor is now `1.6.0`
+  dependency floor is now `1.7.0`
   ([#5730](https://github.com/tetherto/qvac/pull/5730)).
 
 ## [0.15.1] - 2026-11-10
