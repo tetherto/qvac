@@ -27,7 +27,7 @@ The class is also exported as `IdMapIndex` (with `IdMapIndexFilter`), from the
 package root and from the `@qvac/turbovec-ggml/idMapIndex` subpath, for both
 CommonJS and ESM.
 
-`vectors` contains row-major `Float32Array` data with one `dim`-sized row per ID. Queries use the same layout and may contain multiple rows. Search uses dot-product similarity; L2-normalize indexed vectors and queries first when cosine similarity is required. Results are ordered by descending score and then ascending ID. Short result rows are padded with the ID `UINT64_MAX`, which is reserved and cannot be added.
+`vectors` contains row-major `Float32Array` data with one `dim`-sized row per ID. Queries use the same layout and may contain multiple rows. Search uses dot-product similarity; L2-normalize indexed vectors and queries first when cosine similarity is required. Results are ordered by descending score and then ascending ID; TurboVec storage orders equal scores by stored row instead (insertion order, reshuffled by removals and `buildIvf()`). Short result rows are padded with the ID `UINT64_MAX`, which is reserved and cannot be added.
 
 ## Storage modes
 

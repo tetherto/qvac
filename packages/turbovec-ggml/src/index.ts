@@ -362,10 +362,11 @@ export default class IdMapIndex {
 
   /**
    * Top-k similarity search over row-major queries. Results are sorted
-   * by descending score, then ascending ID. TurboVec rotates queries without
-   * normalizing them and performs approximate rotated/quantized dot-product
-   * scoring. TurboVec query components require `abs(value) < 1e16`. Short rows
-   * use UINT64_MAX padding.
+   * by descending score, then ascending ID; TurboVec orders equal scores by
+   * stored row, which removals and `buildIvf()` reshuffle. TurboVec rotates
+   * queries without normalizing them and performs approximate rotated/quantized
+   * dot-product scoring. TurboVec query components require
+   * `abs(value) < 1e16`. Short rows use UINT64_MAX padding.
    */
   search(queries: Float32Array, k: number) {
     this.validateSearch('search', queries, k)

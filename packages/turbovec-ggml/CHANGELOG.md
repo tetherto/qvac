@@ -22,8 +22,11 @@
   build and refuses filters prepared before it. On every storage, a filter
   used after `buildIvf()` now throws `IdMapIndexFilter has been disposed`, so
   prepare filters again after building IVF state.
-- On TurboVec storage, IVF search scores far fewer blocks after the build, and
-  results with tied scores can come back in a different order.
+- On TurboVec storage, IVF search scores far fewer blocks after the build. The
+  build also reorders the stored rows, so any search after it can return tied
+  scores in a different order, and `write()` saves the rows in IVF list order.
+  TurboVec orders tied scores by stored row, not by ID; the README and the
+  `search()` docs now say so.
 
 ## [0.6.0] - 2026-11-16
 
