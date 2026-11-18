@@ -71,6 +71,12 @@ public:
     return false;
   }
 
+  /// Tasks posted but not started.
+  size_t queued() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return queue_.size();
+  }
+
 private:
   struct Queued {
     std::uint64_t ticket;
@@ -166,6 +172,13 @@ JSCATCH
 auto getCountedRuns(js_env_t* env, js_callback_info_t* /*info*/)
     -> js_value_t* try {
   return js::Number::create(env, countedRuns.load());
+}
+JSCATCH
+
+auto getSerialQueued(js_env_t* env, js_callback_info_t* /*info*/)
+    -> js_value_t* try {
+  return js::Number::create(
+      env, static_cast<int32_t>(serialExecutor().queued()));
 }
 JSCATCH
 
@@ -321,6 +334,7 @@ auto testJsAsyncTaskExports(js_env_t* env, js_value_t* exports) -> js_value_t* {
   V("startDoublingTaskOn", startDoublingTaskOn)
   V("countedPosted", getCountedPosted)
   V("countedRuns", getCountedRuns)
+  V("serialQueued", getSerialQueued)
 #undef V
 
   return exports;

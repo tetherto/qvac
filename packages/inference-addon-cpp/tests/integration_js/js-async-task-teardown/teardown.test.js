@@ -70,16 +70,24 @@ test('env terminated with a JsAsyncTask queued on an executor cancels the queued
 
   addon.resetGate()
   const thread = new Thread('./worker-executor-queued.js')
+  let terminated = false
 
-  await waitFor(() => addon.taskStarted() === 1, 'the gated task to start')
-  await waitFor(() => addon.countedPosted() === 1, 'the second task to be posted')
-  thread.terminate()
+  try {
+    await waitFor(() => addon.taskStarted() === 1, 'the gated task to start')
+    await waitFor(() => addon.countedPosted() === 1, 'the second task to be posted')
+    thread.terminate()
+    terminated = true
 
-  await delay(100)
-  t.is(addon.taskFinished(), 0, 'the started task is still blocked after terminate')
-
-  addon.releaseGate()
-  thread.join()
+    // The gate holds the executor's only thread, so the second task can leave
+    // the queue only by being cancelled. Waiting for that, rather than for a
+    // fixed delay, keeps a slow teardown from letting the task start.
+    await waitFor(() => addon.serialQueued() === 0, 'the queued task to be cancelled')
+    t.is(addon.taskFinished(), 0, 'the started task is still blocked after terminate')
+  } finally {
+    if (!terminated) thread.terminate()
+    addon.releaseGate()
+    thread.join()
+  }
 
   t.is(addon.taskFinished(), 1, 'the started task ran to completion under the dying env')
   t.is(addon.countedRuns(), 0, 'the queued task was cancelled and never ran')

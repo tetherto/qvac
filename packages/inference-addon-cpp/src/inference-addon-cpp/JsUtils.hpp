@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -894,6 +895,10 @@ class JsAsyncTask {
     /// returned. Loop-thread only.
     IAsyncTaskExecutor* executor = nullptr;
     std::uint64_t ticket = 0;
+    /// Set by the worker as it starts the task. Once set, the teardown hook
+    /// leaves the executor alone: the task can no longer be cancelled, and
+    /// the executor only has to stay alive while it holds or runs the task.
+    std::atomic<bool> started{false};
 
     CallbackData(
         js_env_t* e, js_deferred_t* d, uv_async_t* h, Work w, Marshal m)
@@ -912,12 +917,19 @@ class JsAsyncTask {
   /// A runOn() task that is still queued on its executor is cancelled
   /// instead: it will never run or send, so the hook closes the handle itself
   /// and the close callback finishes the teardown. Without that, a dying env
-  /// would wait for every task queued ahead of this one as well.
+  /// would wait for every task queued ahead of this one as well. A task that
+  /// has started is never cancelled, so the hook does not touch its executor:
+  /// the executor may already be gone once the task has run, even before
+  /// completion reaches the loop. If the task starts while the hook runs,
+  /// cancel() returns false, and the executor is alive because it is running
+  /// the task.
   template <typename Result>
   static void onEnvTeardown(js_deferred_teardown_t*, void* opaque) {
     auto* data = static_cast<CallbackData<Result>*>(opaque);
     data->envAlive = false;
-    if (data->executor != nullptr && data->executor->cancel(data->ticket)) {
+    if (data->executor != nullptr &&
+        !data->started.load(std::memory_order_acquire) &&
+        data->executor->cancel(data->ticket)) {
       uv_close(
           reinterpret_cast<uv_handle_t*>(data->async_handle),
           &JsAsyncTask::onCloseHandle<Result>);
@@ -929,6 +941,7 @@ class JsAsyncTask {
   /// CallbackData, so once the send is out the caller's frame is inert even
   /// if the loop finishes the teardown immediately.
   template <typename Result> static void execute(CallbackData<Result>* data) {
+    data->started.store(true, std::memory_order_release);
     try {
       data->result.emplace(data->work());
     } catch (...) {
@@ -1004,11 +1017,6 @@ class JsAsyncTask {
     // until the later uv close callback. This runs on the loop while the env
     // is pinned, preserving the teardown-safety contract.
     data->work = nullptr;
-    // The task has run, so there is nothing left to cancel. Dropping the
-    // executor before the Promise settles keeps a teardown hook that fires
-    // before the close callback from calling an executor that JS has already
-    // destroyed in reaction to the settlement.
-    data->executor = nullptr;
 
     // Once env teardown has begun, settling the promise would touch a dying
     // env; skip all JS work and just run the close/finish handshake below.
@@ -1053,6 +1061,27 @@ class JsAsyncTask {
         &JsAsyncTask::onCloseHandle<Result>);
   }
 
+  /// Settles a deferred whose promise is never returned to JavaScript, which
+  /// releases it: js.h requires every deferred to be settled. It resolves
+  /// rather than rejects, because nothing can observe the promise and a
+  /// rejection would be reported as unhandled.
+  static void
+  releaseUnreturned(js_env_t* env, js_deferred_t* deferred) noexcept {
+    js_value_t* undefined = nullptr;
+    if (js_get_undefined(env, &undefined) == 0) {
+      js_resolve_deferred(env, deferred, undefined);
+    }
+  }
+
+  /// Fails start() after its promise was created: the promise is never
+  /// returned, so its deferred is released before the error is thrown.
+  [[noreturn]] static void
+  failUnreturned(js_env_t* env, js_deferred_t* deferred, const char* message) {
+    releaseUnreturned(env, deferred);
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InternalError, message);
+  }
+
   /// Runs the task on @p executor, or on a new detached thread when it is
   /// nullptr.
   template <typename Result>
@@ -1070,9 +1099,8 @@ class JsAsyncTask {
     if (uv_async_init(loop, async_handle, &JsAsyncTask::onComplete<Result>) !=
         0) {
       delete async_handle;
-      throw qvac_errors::StatusError(
-          qvac_errors::general_error::InternalError,
-          "Failed to initialize async handle for JsAsyncTask");
+      failUnreturned(
+          env, deferred, "Failed to initialize async handle for JsAsyncTask");
     }
 
     auto* data = new CallbackData<Result>(
@@ -1090,53 +1118,52 @@ class JsAsyncTask {
             delete static_cast<CallbackData<Result>*>(async->data);
             delete async;
           });
-      throw qvac_errors::StatusError(
-          qvac_errors::general_error::InternalError,
+      failUnreturned(
+          env,
+          deferred,
           "Failed to register env teardown callback for JsAsyncTask");
     }
 
+    bool dispatched = false;
     if (executor != nullptr) {
-      std::uint64_t ticket = 0;
+      // Building the std::function argument may allocate, and throw, before
+      // post() runs.
       try {
-        // Building the std::function argument may allocate, and throw.
-        ticket =
+        const std::uint64_t ticket =
             executor->post([data]() { JsAsyncTask::execute<Result>(data); });
+        if (ticket != 0) {
+          // Written after post() returns, while the task may already be
+          // running: the worker never reads these fields, and completion, the
+          // teardown hook and the close callback all run on this loop thread,
+          // so none of them can run before this frame returns.
+          data->executor = executor;
+          data->ticket = ticket;
+          dispatched = true;
+        }
       } catch (...) {
-        ticket = 0;
       }
-      if (ticket == 0) {
-        // The task was not queued, so it never runs: run the close/finish
-        // handshake ourselves, as for a worker that failed to start.
-        uv_close(
-            reinterpret_cast<uv_handle_t*>(async_handle),
-            &JsAsyncTask::onCloseHandle<Result>);
-        throw qvac_errors::StatusError(
-            qvac_errors::general_error::InternalError,
-            "Failed to post work for JsAsyncTask to its executor");
+    } else {
+      try {
+        std::thread([data]() { JsAsyncTask::execute<Result>(data); }).detach();
+        dispatched = true;
+      } catch (...) {
       }
-      // Written after post() returns, while the task may already be running:
-      // the worker never reads these fields, and completion, the teardown
-      // hook and the close callback all run on this loop thread, so none of
-      // them can run before this frame returns.
-      data->executor = executor;
-      data->ticket = ticket;
-      return promise;
     }
 
-    try {
-      std::thread([data]() { JsAsyncTask::execute<Result>(data); }).detach();
-    } catch (...) {
-      // The worker never started, so nobody will ever send: run the
-      // close/finish handshake ourselves or the teardown registered above
+    if (!dispatched) {
+      // Nothing was queued or started, so nobody will ever send: run the
+      // close/finish handshake ourselves, or the teardown registered above
       // blocks unload forever.
       uv_close(
           reinterpret_cast<uv_handle_t*>(async_handle),
           &JsAsyncTask::onCloseHandle<Result>);
-      throw qvac_errors::StatusError(
-          qvac_errors::general_error::InternalError,
-          "Failed to start worker thread for JsAsyncTask");
+      failUnreturned(
+          env,
+          deferred,
+          executor != nullptr
+              ? "Failed to post work for JsAsyncTask to its executor"
+              : "Failed to start worker thread for JsAsyncTask");
     }
-
     return promise;
   }
 

@@ -513,7 +513,9 @@ Destruction upholds two guarantees:
 
 `run()` starts a detached thread for every task. `runOn(env, executor, work)` and `runOn(env, executor, work, marshal)` take the same work and marshal, but post the work to an `IAsyncTaskExecutor` (`AsyncTaskExecutor.hpp`) that the addon owns. An addon uses one to bound how many tasks run at once, or to keep long tasks from holding up short ones. The executor's `post()` returns a ticket, which is never reused, and `cancel(ticket)` removes a task that has not started. The ordering contract above holds unchanged, with one addition:
 
-- **A queued task does not hold up env teardown.** The teardown hook cancels a task that is still queued on its executor. That task never runs or settles, so the hook closes the task's handle itself, and the close callback finishes the deferred teardown. A dying env therefore waits only for a task that has already started, not for every task queued ahead of its own. When the executor does not accept the task, `runOn()` throws a `StatusError` and runs the same close handshake, so the registered teardown never blocks.
+- **A queued task does not hold up env teardown.** The teardown hook cancels a task that is still queued on its executor. That task never runs or settles, so the hook closes the task's handle itself, and the close callback finishes the deferred teardown. A dying env therefore waits only for a task that has already started, not for every task queued ahead of its own. The worker marks the task as started before it runs it, and the hook never calls the executor for a started task, so the executor only has to stay alive while it holds or runs a task.
+
+When the executor does not accept the task, `runOn()` throws a `StatusError`, as `run()` does when it cannot start its thread. Both run the same close handshake, so the registered teardown never blocks. The Promise they created is never returned, so they resolve it with `undefined` to release its deferred, because a rejection would be reported as unhandled.
 
 ### Bare Runtime Integration
 

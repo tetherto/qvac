@@ -16,3 +16,4 @@ exports.startCountedTaskOn = binding.startCountedTaskOn
 exports.startDoublingTaskOn = binding.startDoublingTaskOn
 exports.countedPosted = binding.countedPosted
 exports.countedRuns = binding.countedRuns
+exports.serialQueued = binding.serialQueued

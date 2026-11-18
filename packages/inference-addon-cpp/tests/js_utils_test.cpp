@@ -645,10 +645,11 @@ TEST(JsUtilsTest, JsAsyncTaskRunOnEnvTeardownCancelsAQueuedTask) {
   ManualExecutor executor;
   resetMockJs();
   std::atomic<bool> probeDestroyed{false};
-  auto probe = std::make_shared<DestroyProbe>(DestroyProbe{&probeDestroyed});
+  std::shared_ptr<DestroyProbe> probe(new DestroyProbe{&probeDestroyed});
   bool ran = false;
 
   js::JsAsyncTask::runOn(&env, executor, [probe, &ran]() { ran = true; });
+  ASSERT_FALSE(probeDestroyed.load()) << "the task must hold the captures";
   probe.reset();
   js_deferred_t* deferred = mock_js::lastCreatedDeferred;
   js_deferred_teardown_t* teardown = mock_js::lastDeferredTeardownHandle;
@@ -749,19 +750,66 @@ TEST(JsUtilsTest, JsAsyncTaskRunOnThrowsWhenTheExecutorRejectsTheTask) {
   executor.rejectPosts = true;
   resetMockJs();
   std::atomic<bool> probeDestroyed{false};
-  auto probe = std::make_shared<DestroyProbe>(DestroyProbe{&probeDestroyed});
+  std::shared_ptr<DestroyProbe> probe(new DestroyProbe{&probeDestroyed});
 
   EXPECT_THROW(
       js::JsAsyncTask::runOn(&env, executor, [probe]() {}),
       qvac_errors::StatusError);
+  EXPECT_FALSE(probeDestroyed.load())
+      << "the test still holds a reference to the probe";
   probe.reset();
 
   js_deferred_teardown_t* teardown = mock_js::lastDeferredTeardownHandle;
+  js_deferred_t* deferred = mock_js::lastCreatedDeferred;
   ASSERT_NE(teardown, nullptr);
+  ASSERT_NE(deferred, nullptr);
   EXPECT_TRUE(teardown->finished.load())
       << "a task that never ran must still finish its deferred teardown, or "
          "env teardown blocks forever";
   EXPECT_TRUE(probeDestroyed.load()) << "work captures were never destroyed";
+  // js.h releases a deferred only when it is settled. The promise was never
+  // returned, so it must be resolved quietly: a rejection would be reported
+  // as unhandled.
+  EXPECT_TRUE(deferred->settled.load())
+      << "the unreturned promise's deferred was never released";
+  EXPECT_FALSE(deferred->rejected);
+}
+
+// The executor only has to stay alive while it holds or runs the task. Once
+// the worker has run the task, the executor may be gone before completion
+// reaches the loop, so an env teardown in that window must not call it.
+TEST(JsUtilsTest, JsAsyncTaskRunOnEnvTeardownAfterTheTaskRanLeavesTheExecutor) {
+  js_env_t env;
+  ManualExecutor executor;
+  resetMockJs();
+  // Restores immediate completion for later tests even if an ASSERT below
+  // returns early.
+  struct DeferAsyncSends {
+    DeferAsyncSends() { mock_uv::deferAsyncSend = true; }
+    ~DeferAsyncSends() {
+      mock_uv::deferAsyncSend = false;
+      mock_uv::runPendingAsyncSends();
+    }
+  } deferAsyncSends;
+
+  js::JsAsyncTask::runOn(&env, executor, []() {});
+  js_deferred_t* deferred = mock_js::lastCreatedDeferred;
+  js_deferred_teardown_t* teardown = mock_js::lastDeferredTeardownHandle;
+  ASSERT_NE(deferred, nullptr);
+  ASSERT_NE(teardown, nullptr);
+  executor.runNext();
+  ASSERT_FALSE(deferred->settled.load())
+      << "completion should still be waiting for the loop";
+
+  mock_js::lastDeferredTeardownCb(teardown, mock_js::lastDeferredTeardownData);
+  EXPECT_EQ(executor.cancelCalls, 0)
+      << "the teardown hook called the executor after the task had run";
+
+  mock_uv::runPendingAsyncSends();
+  EXPECT_TRUE(teardown->finished.load())
+      << "completion must finish the deferred teardown";
+  EXPECT_FALSE(deferred->settled.load())
+      << "no promise/JS operation may run once env teardown has begun";
 }
 
 } // namespace qvac_lib_inference_addon_cpp::js_utils

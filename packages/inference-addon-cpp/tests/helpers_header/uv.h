@@ -24,10 +24,32 @@ uv_async_init(uv_loop_t* loop, uv_async_t* handle, void (*cb)(uv_async_t*)) {
   return 0;
 }
 
-inline int uv_async_send(uv_async_t* handle) {
-  if (handle->async_cb != nullptr) {
+// Test hooks for async sends. A real loop runs the completion callback later,
+// on the loop thread, so a test that needs the window between the send and
+// the callback sets deferAsyncSend, then runs the queued callbacks with
+// runPendingAsyncSends().
+namespace mock_uv {
+inline bool deferAsyncSend = false;
+inline std::vector<uv_async_t*> pendingAsyncSends;
+
+inline void runPendingAsyncSends() {
+  std::vector<uv_async_t*> sends;
+  sends.swap(pendingAsyncSends);
+  for (uv_async_t* handle : sends) {
     handle->async_cb(handle);
   }
+}
+} // namespace mock_uv
+
+inline int uv_async_send(uv_async_t* handle) {
+  if (handle->async_cb == nullptr) {
+    return 0;
+  }
+  if (mock_uv::deferAsyncSend) {
+    mock_uv::pendingAsyncSends.push_back(handle);
+    return 0;
+  }
+  handle->async_cb(handle);
   return 0;
 }
 
