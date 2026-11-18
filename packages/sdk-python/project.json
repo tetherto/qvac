@@ -51,8 +51,7 @@
               "test-e2e-smoke": "smoke",
               "test-e2e-full": "",
               "base:release-*": "",
-              "test-e2e-rerun-failed": "",
-              "test-e2e-python": "smoke"
+              "test-e2e-rerun-failed": ""
             }
           }
         },
@@ -64,8 +63,7 @@
               "test-e2e-smoke": "smoke",
               "test-e2e-full": "",
               "base:release-*": "",
-              "test-e2e-rerun-failed": "",
-              "test-e2e-python": "smoke"
+              "test-e2e-rerun-failed": ""
             }
           }
         },
@@ -77,8 +75,7 @@
               "test-e2e-smoke": "smoke",
               "test-e2e-full": "",
               "base:release-*": "",
-              "test-e2e-rerun-failed": "",
-              "test-e2e-python": "smoke"
+              "test-e2e-rerun-failed": ""
             }
           }
         }
