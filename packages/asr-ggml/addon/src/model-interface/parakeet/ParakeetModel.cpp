@@ -555,6 +555,9 @@ int ParakeetModel::resolveStreamingChunkMs(
     ModelType modelType, int configuredChunkMs) {
   if (configuredChunkMs > 0)
     return configuredChunkMs;
+  // The engine selects the default for the specific TDT variant.
+  if (modelType == ModelType::TDT)
+    return 0;
   if (modelType == ModelType::NEMOTRON)
     return ParakeetConfig::DEFAULT_NEMOTRON_STREAMING_CHUNK_MS;
   if (modelType == ModelType::RNNT)

@@ -17,7 +17,8 @@ function(qvac_addon_speech_engines)
   FetchContent_Declare(qvac_speech
     URL "https://github.com/${repository}/archive/${revision}.tar.gz"
     URL_HASH "SHA512=${checksum}"
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    # A new archive can predate the last build. Refresh source mtimes so Ninja recompiles it.
+    DOWNLOAD_EXTRACT_TIMESTAMP FALSE
     SOURCE_SUBDIR qvac-npm-engine-only
     PATCH_COMMAND "${GIT_EXECUTABLE}" apply "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/speech-local-logging.patch"
   )

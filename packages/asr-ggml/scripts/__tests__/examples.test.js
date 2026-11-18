@@ -5,6 +5,11 @@ const fs = require('node:fs')
 const path = require('node:path')
 const test = require('node:test')
 const { parseQuickstartArguments, USAGE } = require('../../examples/quickstart-arguments.js')
+const {
+  parseMicChunkMs,
+  buildMicChunkOptions,
+  loadDiarizedMicAsr
+} = require('../../examples/parakeet-diarized-mic-options.js')
 
 const packageRoot = path.resolve(__dirname, '..', '..')
 const examplesRoot = path.join(packageRoot, 'examples')
@@ -12,6 +17,7 @@ const relativeImportPattern = /require\(['"](\.[^'"]+)['"]\)/g
 const helperFiles = new Set([
   'constants.js',
   'ffmpeg.js',
+  'parakeet-diarized-mic-options.js',
   'parakeet-long-form-arguments.js',
   'parakeet-utils.js',
   'quickstart-arguments.js'
@@ -78,4 +84,43 @@ test('quickstart parses audio, model, and VAD paths in positional order', () => 
   assert.throws(() => parseQuickstartArguments(['a', 'b', 'c', 'd']), {
     message: USAGE
   })
+})
+
+test('diarized mic chunk overrides target separate sessions', () => {
+  const diarChunkMs = parseMicChunkMs('--chunk-ms', '2000')
+  assert.deepEqual(buildMicChunkOptions({ diarChunkMs }), {
+    asrOptions: {},
+    diarStreamingChunkMs: 2000
+  })
+  const asrChunkMs = parseMicChunkMs('--asr-chunk-ms', '80')
+  assert.deepEqual(buildMicChunkOptions({ asrChunkMs, diarChunkMs: 3000 }), {
+    asrOptions: { chunkMs: 80 },
+    diarStreamingChunkMs: 3000
+  })
+  assert.throws(() => parseMicChunkMs('--diar-chunk-ms', '80'))
+})
+
+test('diarized mic requires cache-aware ASR and unloads offline TDT', async () => {
+  for (const modelType of ['rnnt', 'nemotron', 'tdt']) {
+    const calls = []
+    const model = {
+      async load() {
+        calls.push('load')
+      },
+      getBackendInfo() {
+        return { modelType }
+      },
+      async unload() {
+        calls.push('unload')
+      }
+    }
+
+    if (modelType === 'tdt') {
+      await assert.rejects(loadDiarizedMicAsr(model), /requires a cache-aware ASR checkpoint/)
+      assert.deepEqual(calls, ['load', 'unload'])
+    } else {
+      await loadDiarizedMicAsr(model)
+      assert.deepEqual(calls, ['load'])
+    }
+  }
 })
