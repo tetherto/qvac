@@ -82,7 +82,7 @@ class ModelConfig(BaseModel):
     caption_enabled: bool = Field(False, description="Enable caption/subtitle mode")
     timestamps_enabled: bool = Field(True, description="Include timestamps in output")
     streaming: bool = Field(False, description="Enable streaming mode (duplex streaming session)")
-    streaming_chunk_ms: int = Field(320, gt=0, description="Streaming chunk size in milliseconds")
+    streaming_chunk_ms: Optional[int] = Field(None, gt=0, description="Decode window in milliseconds; omit for the model default")
     streaming_history_ms: Optional[int] = Field(None, gt=0, description="Sortformer rolling-history window in milliseconds")
     streaming_emit_partials: bool = Field(True, description="Emit partial hypotheses before chunk boundaries")
 
