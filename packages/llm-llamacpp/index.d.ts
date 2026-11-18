@@ -328,15 +328,16 @@ declare namespace LlmLlamacpp {
          * slot (llama-server's `--kv-unified`). With `parallel >= 2` it requires
          * `kv_unified_per_slot`, and `parallel x kv_unified_per_slot` must fit
          * `ctx_size`, so each slot keeps a fixed share of the pool. On MiniMax-M3
-         * and Qwen4exp a shared buffer turns sparse attention off. Default `false`;
-         * `no-kv-unified` is also accepted.
+         * a shared buffer turns sparse attention off. Default `'false'`. Also
+         * accepted as `kv-unified`; `no-kv-unified` turns it off.
          */
-        kv_unified?: boolean | "true" | "false" | "on" | "off" | "1" | "0";
+        kv_unified?: "true" | "false" | "on" | "off" | "1" | "0";
         /**
          * Context limit per slot (llama-server's `--kv-unified-per-slot`). With
          * `ctx_size` unset, the KV cache is sized to `parallel x
          * kv_unified_per_slot`; `ctx_size: 0` keeps the model's trained context.
-         * Default `0`, no limit beyond `ctx_size / parallel`.
+         * Default `0`, no limit beyond `ctx_size / parallel`. Also accepted as
+         * `kv-unified-per-slot`.
          */
         kv_unified_per_slot?: NumericLike;
         /**

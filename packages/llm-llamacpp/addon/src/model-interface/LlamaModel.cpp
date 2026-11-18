@@ -406,7 +406,14 @@ void LlamaModel::validateCheckpointBudget(ReloadableState& state) {
   const bool fullState = utils::needsFullStateSnapshot(
       llama_model_is_recurrent(mdl), llama_model_is_hybrid(mdl), isDeepSeekV4);
   const int32_t nSwa = llama_model_n_swa(mdl);
-  const uint32_t nCtxSeq = llama_n_ctx_seq(ctx);
+  // A sequence never outgrows kv_unified_per_slot; under kv_unified n_ctx_seq
+  // is the whole pool.
+  const uint32_t nCtxSeq =
+      params.kv_unified_per_slot > 0
+          ? std::min(
+                llama_n_ctx_seq(ctx),
+                static_cast<uint32_t>(params.kv_unified_per_slot))
+          : llama_n_ctx_seq(ctx);
   const bool slidingWindow = !fullState && utils::takesSlidingWindowCheckpoints(
                                                nSwa, params.swa_full, nCtxSeq);
   if (!fullState && !slidingWindow) {

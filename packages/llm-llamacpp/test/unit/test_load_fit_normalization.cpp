@@ -2058,14 +2058,20 @@ TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotKeepsExplicitContext) {
 TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotPoolOverflowIsRejected) {
   auto config = baseConfig();
   config["kv-unified-per-slot"] = "2000000000";
-  EXPECT_THROW(
-      static_cast<void>(lfn::normalizeLoadForFit(
-          "/tmp/model.gguf",
-          std::move(config),
-          metadata_,
-          {},
-          backend({.type = backend_selection::GPU, .name = "none"}))),
-      qvac_errors::StatusError);
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "none"})));
+    FAIL() << "a pool over the largest ctx-size must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr(
+            "parallel x kv-unified-per-slot (2 x 2000000000) exceeds"));
+  }
 }
 
 TEST_F(LoadFitNormalizationTest, UnknownBooleanValueIsRejected) {

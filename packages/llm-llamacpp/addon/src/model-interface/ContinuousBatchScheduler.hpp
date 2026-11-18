@@ -68,9 +68,11 @@ namespace qvac_lib_inference_addon_llama::batching {
     unsigned promptSize, unsigned promptKvSize, int nPredict,
     unsigned perSeqMaxTokens);
 
-/// Per-sequence hard ceiling, as llama-server's `n_ctx_slot()`: the slot's
-/// even share of the pool, `ctxTotalTokens / batchSize`, lowered to
-/// `kvUnifiedPerSlot` when that is positive.
+/// Per-sequence hard ceiling: the slot's even share of the pool,
+/// `ctxTotalTokens / batchSize`, lowered to `kvUnifiedPerSlot` when that is
+/// positive. Without kv_unified this is llama-server's `n_ctx_slot()`. With
+/// it the server starts from the whole pool, while the load here requires the
+/// caps to fit the pool, so both come to `kvUnifiedPerSlot`.
 [[nodiscard]] unsigned perSeqCeiling(
     unsigned ctxTotalTokens, size_t batchSize, int32_t kvUnifiedPerSlot);
 
@@ -803,7 +805,7 @@ private:
   common_params baseParams_;
   DriverFactory driverFactory_;
 
-  /// Per-seq hard ceiling = ctxTotalTokens / batchSize. Drives prompt-size
+  /// Per-seq hard ceiling, from `perSeqCeiling`. Drives prompt-size
   /// admission and per-request `prompt + n_predict` validation.
   unsigned perSeqMaxTokens_;
   MultiRequestBatcher batcher_;

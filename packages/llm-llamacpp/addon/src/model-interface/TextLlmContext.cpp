@@ -131,12 +131,16 @@ void TextLlmContext::initializeCommonState() {
           llama_model_is_recurrent(model),
           llama_model_is_hybrid(model),
           isDeepSeekV4);
+  // A sequence never outgrows its ceiling; under kv_unified n_ctx_seq is the
+  // whole pool.
   slidingWindowCheckpoints_ =
       (model != nullptr) && !needsFullStateSnapshot_ &&
       qvac_lib_inference_addon_llama::utils::takesSlidingWindowCheckpoints(
           llama_model_n_swa(model),
           params_.swa_full,
-          llama_n_ctx_seq(modelCtx_.lctx));
+          std::min(
+              llama_n_ctx_seq(modelCtx_.lctx),
+              static_cast<uint32_t>(ctxCeiling())));
   snapshotScope_ =
       qvac_lib_inference_addon_llama::utils::untrimmableSnapshotScope();
   requestRollback_.setScope(snapshotScope_);

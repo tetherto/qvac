@@ -360,7 +360,7 @@ config: { parallel: '4', kv_unified: 'true', kv_unified_per_slot: '2048' } // on
 
 - **Pool size** — with `ctx_size` unset, the pool is sized to `parallel x kv_unified_per_slot`, as llama-server does without `-c`. An explicit `ctx_size` is kept, and `ctx_size: 0` keeps the model's trained context.
 - **Only an even split** — with `parallel >= 2`, `kv_unified` requires `kv_unified_per_slot`, and `parallel x kv_unified_per_slot` must fit the pool, or the load fails with `InvalidArgument`. Admission checks each slot only against its own cap, so caps adding up to more than the pool would let the pool fill mid-decode and fail every request in progress. llama-server accepts that setup; the addon does not.
-- **What changes** — each slot gets the same context as with separate buffers. Sliding-window models keep one window cache of `min(C, n_swa x N + n_ubatch)` cells instead of `N` of `n_swa + n_ubatch`. MiniMax-M3 and Qwen4exp turn sparse attention off when more than one sequence shares the buffer, so keep separate buffers there.
+- **What changes** — each slot gets the same context as with separate buffers. Sliding-window models keep one window cache of `min(C, n_swa x N + n_ubatch)` cells instead of `N` of `min(C / N, n_swa + n_ubatch)`, about `(N - 1) x n_ubatch` fewer. Each slot's attention spans the shared buffer with the other slots masked out, so decoding can be slower than with separate buffers. MiniMax-M3 turns sparse attention off when more than one sequence shares the buffer, and Qwen4exp keeps it but its indexer takes more memory, so keep separate buffers on both.
 - **Without `kv_unified`** — `kv_unified_per_slot` still caps each slot and still sizes an unset `ctx_size`, again as llama-server does.
 
 ---

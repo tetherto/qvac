@@ -1341,25 +1341,27 @@ test(
       )
     }
 
-    // About 600 tokens: fits the 1024-cell pool but not one 512-token slot.
-    const longPrompt = [{ role: 'user', content: `Repeat: ${'apple '.repeat(600)}` }]
-    const error = await model
-      .run(longPrompt)
-      .then(collectText)
-      .then(
-        () => null,
-        (err) => err
-      )
-    t.comment(`long prompt: ${error?.message}`)
-    t.ok(
-      /(per-sequence cap|max context tokens) 512\b/.test(error?.message || ''),
-      'a prompt over one slot is rejected against the 512-token cap, not the pool'
-    )
+    await assertLongPromptCappedAt512(t, model)
+  }
+)
+
+// The cap applies without kv_unified too, below the even share: ctx_size 4096
+// gives 4096 to one slot or 2048 to each of two, lowered to 512.
+test(
+  'continuous batching: kv_unified_per_slot caps a slot below its even share',
+  { timeout: 600_000, skip: isMobile },
+  async (t) => {
+    for (const parallel of ['1', '2']) {
+      t.comment(`parallel ${parallel}`)
+      const model = await setupModel(t, { parallel, kv_unified_per_slot: '512' })
+      await assertLongPromptCappedAt512(t, model)
+      await model.unload()
+    }
   }
 )
 
 test(
-  'continuous batching: kv_unified without kv_unified_per_slot is rejected at load',
+  'continuous batching: kv_unified without an even split is rejected at load',
   { timeout: 600_000, skip: isMobile },
   async (t) => {
     await t.exception(
@@ -1367,5 +1369,27 @@ test(
       /requires kv_unified_per_slot/,
       'a shared pool with no per-slot cap is refused'
     )
+    await t.exception(
+      setupModel(t, { parallel: '2', kv_unified: 'true', kv_unified_per_slot: '4096' }),
+      /\(2 x 4096\) must fit ctx_size/,
+      'per-slot caps that overbook ctx_size are refused'
+    )
   }
 )
+
+// About 600 tokens, over the 512-token cap.
+async function assertLongPromptCappedAt512(t, model) {
+  const longPrompt = [{ role: 'user', content: `Repeat: ${'apple '.repeat(600)}` }]
+  const error = await model
+    .run(longPrompt)
+    .then(collectText)
+    .then(
+      () => null,
+      (err) => err
+    )
+  t.comment(`long prompt: ${error?.message}`)
+  t.ok(
+    /(per-sequence cap|max context tokens) 512\b/.test(error?.message || ''),
+    'a prompt over one slot is rejected against the 512-token cap'
+  )
+}
