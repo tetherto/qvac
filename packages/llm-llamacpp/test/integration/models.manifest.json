@@ -199,7 +199,11 @@
         "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/067b946cf014b7c697f3654f621d577a3e3afd1c/Llama-3.2-1B-Instruct-Q4_0.gguf"
       ],
       "sha256": "fa0390e7c043f89ae1847bd6682d748041a99d4ef3de0e0b27d33b6af97a8be8",
-      "bytes": 773025920
+      "bytes": 773025920,
+      "targets": [
+        "test:integration",
+        "test:backend"
+      ]
     },
     "llama-3.2-3b-instruct-q4_0.gguf": {
       "urls": [

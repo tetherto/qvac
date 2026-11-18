@@ -240,7 +240,9 @@ function sliceDirName (metaManifest, definition) {
   return metaManifest.name.replace('@', '').replace('/', '-') + '-' + definition.suffix
 }
 
-function stageSlice (definition, context) {
+// Also used by host-specific registry smoke tests. Release callers must use
+// slicePlatformPackages(), which validates the complete release matrix first.
+export function stageSlice (definition, context) {
   const { metaManifest, workdir, outDir, prebuildsDir } = context
   const sliceDir = path.join(outDir, sliceDirName(metaManifest, definition))
   const slicePrebuildsDir = path.join(sliceDir, 'prebuilds')
@@ -388,7 +390,7 @@ export function linkLocalPlatformPackages (options) {
   return linked
 }
 
-function assertFabricBackendPackages (prebuildsDir) {
+export function assertFabricBackendPackages (prebuildsDir) {
   for (const definition of FABRIC_BACKEND_DEFINITIONS) {
     const moduleName = mangledAddonName('@qvac/fabric-' + definition.suffix)
     const hostDir = path.join(prebuildsDir, 'linux-x64')
