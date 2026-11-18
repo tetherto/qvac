@@ -19,5 +19,8 @@
         "libuuid"
       ]
     }
+  ],
+  "overlay-ports": [
+    "vcpkg-overlays"
   ]
 }
