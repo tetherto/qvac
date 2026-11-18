@@ -895,9 +895,9 @@ class JsAsyncTask {
     /// returned. Loop-thread only.
     IAsyncTaskExecutor* executor = nullptr;
     std::uint64_t ticket = 0;
-    /// Set by the worker as it starts the task. Once set, the teardown hook
-    /// leaves the executor alone: the task can no longer be cancelled, and
-    /// the executor only has to stay alive while it holds or runs the task.
+    /// Set by the worker as it starts the task. Once the teardown hook sees
+    /// it, the hook leaves the executor alone: the task can no longer be
+    /// cancelled, and the executor may already have been destroyed.
     std::atomic<bool> started{false};
 
     CallbackData(
@@ -918,11 +918,12 @@ class JsAsyncTask {
   /// instead: it will never run or send, so the hook closes the handle itself
   /// and the close callback finishes the teardown. Without that, a dying env
   /// would wait for every task queued ahead of this one as well. A task that
-  /// has started is never cancelled, so the hook does not touch its executor:
-  /// the executor may already be gone once the task has run, even before
-  /// completion reaches the loop. If the task starts while the hook runs,
-  /// cancel() returns false, and the executor is alive because it is running
-  /// the task.
+  /// has started is never cancelled, so once the hook sees it started, it does
+  /// not touch the executor: an executor destroyed on this thread after
+  /// running the task may already be gone. A task that starts between the
+  /// check and cancel() makes cancel() return false; the executor is still
+  /// alive then, because the IAsyncTaskExecutor contract keeps it alive until
+  /// the task's Promise settles or its env has been torn down.
   template <typename Result>
   static void onEnvTeardown(js_deferred_teardown_t*, void* opaque) {
     auto* data = static_cast<CallbackData<Result>*>(opaque);
@@ -1118,6 +1119,9 @@ class JsAsyncTask {
             delete static_cast<CallbackData<Result>*>(async->data);
             delete async;
           });
+      // Registration fails when the env is already being destroyed, with a
+      // JavaScript exception pending, so the release may fail too. The
+      // deferred then goes away with the env.
       failUnreturned(
           env,
           deferred,

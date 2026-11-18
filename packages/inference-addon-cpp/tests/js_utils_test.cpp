@@ -670,9 +670,10 @@ TEST(JsUtilsTest, JsAsyncTaskRunOnEnvTeardownCancelsAQueuedTask) {
       << "no promise/JS operation may run once env teardown has begun";
 }
 
-// A task that has already started cannot be cancelled: the env waits for it,
+// A task the executor has taken from its queue, but not started yet, can no
+// longer be cancelled: cancel() returns false and the env waits for it,
 // exactly as for a run() task.
-TEST(JsUtilsTest, JsAsyncTaskRunOnEnvTeardownWaitsForAStartedTask) {
+TEST(JsUtilsTest, JsAsyncTaskRunOnEnvTeardownWaitsForATakenTask) {
   js_env_t env;
   ManualExecutor executor;
   resetMockJs();
@@ -701,6 +702,40 @@ TEST(JsUtilsTest, JsAsyncTaskRunOnEnvTeardownWaitsForAStartedTask) {
   started();
 
   EXPECT_TRUE(ran);
+  EXPECT_TRUE(teardown->finished.load())
+      << "completion must finish the deferred teardown so env teardown ends";
+  EXPECT_FALSE(deferred->settled.load())
+      << "no promise/JS operation may run once env teardown has begun";
+}
+
+// A task that is running when the env is torn down is not cancelled, and the
+// hook does not call the executor: the env waits for the task to finish.
+TEST(JsUtilsTest, JsAsyncTaskRunOnEnvTeardownWaitsForARunningTask) {
+  js_env_t env;
+  ManualExecutor executor;
+  resetMockJs();
+  bool teardownFinishedWhileRunning = true;
+
+  // The work fires the teardown hook itself, so the hook runs while the task
+  // has started and has not returned.
+  js::JsAsyncTask::runOn(&env, executor, [&teardownFinishedWhileRunning]() {
+    mock_js::lastDeferredTeardownCb(
+        mock_js::lastDeferredTeardownHandle,
+        mock_js::lastDeferredTeardownData);
+    teardownFinishedWhileRunning =
+        mock_js::lastDeferredTeardownHandle->finished.load();
+  });
+  js_deferred_t* deferred = mock_js::lastCreatedDeferred;
+  js_deferred_teardown_t* teardown = mock_js::lastDeferredTeardownHandle;
+  ASSERT_NE(deferred, nullptr);
+  ASSERT_NE(teardown, nullptr);
+
+  executor.runNext();
+
+  EXPECT_EQ(executor.cancelCalls, 0)
+      << "the teardown hook called the executor for a running task";
+  EXPECT_FALSE(teardownFinishedWhileRunning)
+      << "teardown finished while the task was still running";
   EXPECT_TRUE(teardown->finished.load())
       << "completion must finish the deferred teardown so env teardown ends";
   EXPECT_FALSE(deferred->settled.load())

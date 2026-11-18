@@ -10,12 +10,14 @@ namespace qvac_lib_inference_addon_cpp {
 /// per task. An addon uses an executor to bound how many tasks run at once, or
 /// to keep long tasks from holding up short ones.
 ///
-/// The executor must stay alive while it holds or runs a task: from post()
-/// until the task has returned or cancel() has removed it. JsAsyncTask does not
-/// call the executor for a task that has started. Every task that post()
-/// accepts must run, unless cancel() removes it first: an executor must not
-/// drop queued tasks, for example when it shuts down, or their Promises never
-/// settle and their environments can never finish tearing down.
+/// JsAsyncTask may call cancel() for a task until the task's completion has
+/// reached the JS thread, so the executor must outlive each task posted to it
+/// until the task's Promise settles or its environment has been torn down. An
+/// executor that is destroyed on the JS thread, once it holds no tasks and its
+/// threads have finished, meets this. Every task that post() accepts must run,
+/// unless cancel() removes it first: an executor must not drop queued tasks,
+/// for example when it shuts down, or their Promises never settle and their
+/// environments can never finish tearing down.
 struct IAsyncTaskExecutor {
   IAsyncTaskExecutor() = default;
   IAsyncTaskExecutor(const IAsyncTaskExecutor&) = delete;
