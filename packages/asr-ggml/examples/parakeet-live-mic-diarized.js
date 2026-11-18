@@ -56,7 +56,9 @@ const { setupLogger, validatePaths, pushableStream } = require('./parakeet-utils
 const {
   parseMicChunkMs,
   buildMicChunkOptions,
-  loadDiarizedMicAsr
+  startDiarizedMic,
+  finishDiarizedMic,
+  spawnMicCapture
 } = require('./parakeet-diarized-mic-options.js')
 
 const CAPTURE_CMD = 'sox -d -t raw -r 16000 -b 16 -c 1 -e signed-integer -L -'
@@ -181,39 +183,6 @@ async function main() {
     }
   })
 
-  await loadDiarizedMicAsr(asr)
-  await diar.load()
-  console.log('Listening (Ctrl-C to stop)...\n')
-
-  const captureCmd = args.capture && args.capture.length > 0 ? args.capture : CAPTURE_CMD
-  const [captureBin, ...captureArgs] = captureCmd.split(' ')
-  let child
-  try {
-    child = subprocess.spawn(captureBin, captureArgs, { stdio: ['ignore', 'pipe', 'pipe'] })
-  } catch (err) {
-    if (err && err.code === 'ENOENT') {
-      console.error(`\n'${captureBin}' not found on PATH.`)
-      console.error(
-        'Install sox (brew install sox / apt install sox / choco install sox / winget install ChrisBagwell.SoX).'
-      )
-    } else {
-      console.error(`\nFailed to spawn capture command: ${err.message}`)
-    }
-    addonLogging.releaseLogger()
-    process.exit(1)
-  }
-  child.on('error', (err) => {
-    console.error(`\nCapture command failed: ${err.message}`)
-    process.exit(1)
-  })
-
-  let firstAudioSeen = false
-  let stderrBuf = ''
-  child.stderr.on('data', (chunk) => {
-    stderrBuf += chunk.toString('utf8')
-    if (stderrBuf.length > 8192) stderrBuf = stderrBuf.slice(-8192)
-  })
-
   let lineOpen = false
   let lineSpeaker = null
   let lastSpeaker = -1
@@ -246,81 +215,72 @@ async function main() {
     }
   }
 
+  function updateDiarization(out) {
+    const items = Array.isArray(out) ? out : [out]
+    for (let i = items.length - 1; i >= 0; i--) {
+      const segment = items[i]
+      if (!segment || !segment.text || isSilenceText(segment.text)) continue
+      const id = parseSortformerSpeakerId(segment.text)
+      if (id >= 0) {
+        lastSpeaker = id
+        break
+      }
+    }
+  }
+
+  function updateTranscript(out) {
+    const items = Array.isArray(out) ? out : [out]
+    const { text, firstStartsWord } = buildSegmentText(items)
+    emitTranscript(lastSpeaker, text.trim(), firstStartsWord)
+  }
+
   const asrStream = pushableStream()
   const diarStream = pushableStream()
+  const asrSession = {
+    model: asr,
+    stream: asrStream,
+    options: asrOptions,
+    onUpdate: updateTranscript
+  }
+  const diarSession = { model: diar, stream: diarStream, onUpdate: updateDiarization }
+  const { child, runs } = await startDiarizedMic(asrSession, diarSession, () =>
+    spawnMicCapture(subprocess, args.capture || CAPTURE_CMD)
+  )
+  console.log('Listening (Ctrl-C to stop)...\n')
+
+  let firstAudioSeen = false
+  let stderrBuf = ''
+  child.stderr.on('data', (chunk) => {
+    stderrBuf += chunk.toString('utf8')
+    if (stderrBuf.length > 8192) stderrBuf = stderrBuf.slice(-8192)
+  })
   child.stdout.on('data', (chunk) => {
-    if (!firstAudioSeen) firstAudioSeen = true
     if (stopping) return
+    firstAudioSeen = true
     asrStream.push(chunk)
     diarStream.push(chunk)
   })
 
-  const diarRunPromise = (async () => {
-    const response = await diar.runStreaming(diarStream)
-    await response
-      .onUpdate((out) => {
-        const items = Array.isArray(out) ? out : [out]
-        // Update lastSpeaker from the latest non-silence segment in
-        // the batch. We tag the ASR transcript with whatever ID
-        // Sortformer reported; see the file header for the caveat
-        // about engine-side drift.
-        for (let i = items.length - 1; i >= 0; i--) {
-          const s = items[i]
-          if (!s || !s.text || isSilenceText(s.text)) continue
-          const id = parseSortformerSpeakerId(s.text)
-          if (id >= 0) {
-            lastSpeaker = id
-            break
-          }
-        }
-      })
-      .await()
-  })()
-
-  const asrRunPromise = (async () => {
-    const response = await asr.runStreaming(asrStream, asrOptions)
-    await response
-      .onUpdate((out) => {
-        const items = Array.isArray(out) ? out : [out]
-        const { text, firstStartsWord } = buildSegmentText(items)
-        emitTranscript(lastSpeaker, text.trim(), firstStartsWord)
-      })
-      .await()
-  })()
-
-  async function shutdown() {
+  async function shutdown(error) {
     if (stopping) return
     stopping = true
+    if (error) console.error(error.message)
     console.log('\nStopping...')
     try {
       child.kill('SIGTERM')
-    } catch (e) {
-      /* ignore */
+    } catch {
+      // The capture process may have already exited.
     }
-    asrStream.end()
-    diarStream.end()
-    try {
-      await Promise.all([asrRunPromise, diarRunPromise])
-    } catch (e) {
-      /* swallow */
-    }
+    await finishDiarizedMic([asrSession, diarSession], runs)
     flushLine()
-    try {
-      await asr.unload()
-    } catch (e) {
-      /* ignore */
-    }
-    try {
-      await diar.unload()
-    } catch (e) {
-      /* ignore */
-    }
     addonLogging.releaseLogger()
-    process.exit(0)
+    process.exit(error ? 1 : 0)
   }
 
-  process.once('SIGINT', shutdown)
-  process.once('SIGTERM', shutdown)
+  Promise.all(runs).catch(shutdown)
+  child.on('error', shutdown)
+  process.once('SIGINT', () => shutdown())
+  process.once('SIGTERM', () => shutdown())
   child.on('exit', (code, signal) => {
     if (!firstAudioSeen && !stopping) {
       console.error(

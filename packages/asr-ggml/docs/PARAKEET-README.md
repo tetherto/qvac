@@ -393,11 +393,7 @@ const audio = pushableStream()
 captureProcess.stdout.on('data', chunk => audio.push(chunk))
 captureProcess.on('exit', () => audio.end())
 
-const response = await model.runStreaming(audio, {
-  // optional per-call overrides; omitted fields fall back to the
-  // matching `parakeetConfig.streaming*` value used at load time
-  chunkMs: 2000
-})
+const response = await model.runStreaming(audio)
 
 await response
   .onUpdate(segments => {

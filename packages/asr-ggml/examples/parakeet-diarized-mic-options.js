@@ -19,14 +19,61 @@ function buildMicChunkOptions({ asrChunkMs, diarChunkMs }) {
   }
 }
 
-async function loadDiarizedMicAsr(model) {
-  await model.load()
-  if (model.getBackendInfo()?.supportsCacheAwareStreaming === true) return
-
-  await model.unload()
-  throw new Error(
-    'Diarized mic transcription requires a cache-aware ASR checkpoint. Use Parakeet Unified RNN-T or Nemotron with --asr-model.'
-  )
+function assertCacheAwareAsr(model) {
+  if (model.getBackendInfo()?.supportsCacheAwareStreaming !== true) {
+    throw new Error(
+      'Diarized mic transcription requires a cache-aware ASR checkpoint. Use Parakeet Unified RNN-T or Nemotron with --asr-model.'
+    )
+  }
 }
 
-module.exports = { parseMicChunkMs, buildMicChunkOptions, loadDiarizedMicAsr }
+async function finishDiarizedMic(sessions, runs) {
+  for (const { stream } of sessions) stream.end()
+  await Promise.allSettled(runs)
+  await Promise.allSettled(sessions.map(({ model }) => model.unload()))
+}
+
+async function startDiarizedMic(asr, diar, startCapture) {
+  const sessions = [asr, diar]
+  const runs = []
+  try {
+    await asr.model.load()
+    assertCacheAwareAsr(asr.model)
+    await diar.model.load()
+
+    for (const { model, stream, options, onUpdate } of sessions) {
+      const response = await model.runStreaming(stream, options)
+      const completion = response.onUpdate(onUpdate).await()
+      // The other session or capture can fail before the caller receives these promises.
+      completion.catch(() => {})
+      runs.push(completion)
+    }
+
+    return { child: startCapture(), runs }
+  } catch (error) {
+    await finishDiarizedMic(sessions, runs)
+    throw error
+  }
+}
+
+function spawnMicCapture(subprocess, command) {
+  const [binary, ...args] = command.split(' ')
+  try {
+    return subprocess.spawn(binary, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      throw new Error(
+        `'${binary}' not found on PATH. Install SoX (brew install sox / apt install sox / choco install sox / winget install ChrisBagwell.SoX).`
+      )
+    }
+    throw error
+  }
+}
+
+module.exports = {
+  parseMicChunkMs,
+  buildMicChunkOptions,
+  startDiarizedMic,
+  finishDiarizedMic,
+  spawnMicCapture
+}

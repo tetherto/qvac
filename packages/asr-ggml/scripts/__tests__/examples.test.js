@@ -8,7 +8,8 @@ const { parseQuickstartArguments, USAGE } = require('../../examples/quickstart-a
 const {
   parseMicChunkMs,
   buildMicChunkOptions,
-  loadDiarizedMicAsr
+  startDiarizedMic,
+  finishDiarizedMic
 } = require('../../examples/parakeet-diarized-mic-options.js')
 
 const packageRoot = path.resolve(__dirname, '..', '..')
@@ -100,6 +101,45 @@ test('diarized mic chunk overrides target separate sessions', () => {
   assert.throws(() => parseMicChunkMs('--diar-chunk-ms', '80'))
 })
 
+function micSession(name, calls, backendInfo = {}, options, startupError) {
+  const model = {
+    async load() {
+      calls.push(`${name} load`)
+    },
+    getBackendInfo() {
+      return backendInfo
+    },
+    async runStreaming(stream, receivedOptions) {
+      assert.equal(stream, session.stream)
+      assert.equal(receivedOptions, options)
+      calls.push(`${name} start`)
+      if (startupError) throw startupError
+      return {
+        onUpdate() {
+          return this
+        },
+        await() {
+          return Promise.resolve()
+        }
+      }
+    },
+    async unload() {
+      calls.push(`${name} unload`)
+    }
+  }
+  const session = {
+    model,
+    options,
+    onUpdate() {},
+    stream: {
+      end() {
+        calls.push(`${name} end`)
+      }
+    }
+  }
+  return session
+}
+
 test('diarized mic accepts Unified RNN-T and rejects offline RNN-T', async () => {
   for (const [modelType, supportsCacheAwareStreaming] of [
     ['rnnt', true],
@@ -108,24 +148,46 @@ test('diarized mic accepts Unified RNN-T and rejects offline RNN-T', async () =>
     ['tdt', false]
   ]) {
     const calls = []
-    const model = {
-      async load() {
-        calls.push('load')
-      },
-      getBackendInfo() {
-        return { modelType, supportsCacheAwareStreaming }
-      },
-      async unload() {
-        calls.push('unload')
-      }
-    }
+    const asr = micSession('asr', calls, { modelType, supportsCacheAwareStreaming })
+    const diar = micSession('diar', calls)
+    const start = () => startDiarizedMic(asr, diar, () => calls.push('capture'))
 
-    if (!supportsCacheAwareStreaming) {
-      await assert.rejects(loadDiarizedMicAsr(model), /requires a cache-aware ASR checkpoint/)
-      assert.deepEqual(calls, ['load', 'unload'])
+    if (supportsCacheAwareStreaming) {
+      const { runs } = await start()
+      assert.deepEqual(calls, ['asr load', 'diar load', 'asr start', 'diar start', 'capture'])
+      await finishDiarizedMic([asr, diar], runs)
     } else {
-      await loadDiarizedMicAsr(model)
-      assert.deepEqual(calls, ['load'])
+      await assert.rejects(start, /requires a cache-aware ASR checkpoint/)
+      assert.deepEqual(calls, ['asr load', 'asr end', 'diar end', 'asr unload', 'diar unload'])
     }
   }
+})
+
+test('an invalid Nemotron cadence closes the sessions before capture can start', async () => {
+  const calls = []
+  const cadence = parseMicChunkMs('--asr-chunk-ms', '1000')
+  const { asrOptions } = buildMicChunkOptions({ asrChunkMs: cadence })
+  const rejection = new Error('unsupported Nemotron chunk_ms')
+  const asr = micSession(
+    'asr',
+    calls,
+    { modelType: 'nemotron', supportsCacheAwareStreaming: true },
+    asrOptions,
+    rejection
+  )
+  const diar = micSession('diar', calls)
+
+  await assert.rejects(
+    startDiarizedMic(asr, diar, () => calls.push('capture')),
+    rejection
+  )
+  assert.deepEqual(calls, [
+    'asr load',
+    'diar load',
+    'asr start',
+    'asr end',
+    'diar end',
+    'asr unload',
+    'diar unload'
+  ])
 })
