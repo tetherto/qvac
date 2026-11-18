@@ -116,6 +116,8 @@ A dependency on the contract is a **provider**. Selection finds providers from t
 
 The provider rows build first. A package's build and C++ lint jobs then restore `prebuild-<provider>-<configuration>`, run the provider's `link:platform`, and run their target with `--exclude-task-dependencies`, so they never compile the provider. When a provider leg fails, no package build leg runs in that run, and every selected package's `qvac/prebuild-<key>` status reports failure. A provider posts its own status and `prebuilds-<slug>` bundle only from a run that selected it.
 
+`publish-npm.yml` selects with `released-providers`, so a consumer's release builds against the provider release its users install: selection returns no provider rows for it, and its build job installs it alone from npm (`scripts/ci/checks-source.mjs install published`), and runs its `build` with `--exclude-task-dependencies`. A provider's own release builds its rows as above.
+
 A dependency off the contract is built inside each job that needs it, through the target's own dependencies.
 
 `pr-checks.yml` fails a pull request when a workspace package's range on a provider, or on one of the provider's `#host-addon` platform packages, excludes the provider's workspace version (`scripts/ci/check-workspace-ranges.mjs`): pnpm would install the old release from npm instead of linking the workspace provider. Bump a provider's dependents' ranges with it.
@@ -127,7 +129,7 @@ A package's slug, in its release branches, tags and artifact names, is its direc
 ## Prebuilds
 
 - Each build job uploads `prebuild-<slug>-<configuration>`, holding `packages/<dir>/prebuilds` for every package it built or restored, providers included.
-- A build leg is reused from an earlier same-repository run on the branch, or on the default branch (where `cache-warm.yml` builds them), when the package's and its providers' native files, its row and the build inputs are unchanged. `.github/scripts/prebuild-reuse.mjs` keys the legs.
+- A build leg is reused from an earlier same-repository run on the branch, or on the default branch (where `cache-warm.yml` builds them), when its row, the package's and its providers' native files and the build inputs are unchanged. `.github/scripts/prebuild-reuse.mjs` keys the legs: native files include the linker maps, export lists and CMake config templates, and the `ci/build-*` and `ci/verify-*` scripts a build target runs; build inputs include every file of the shared CMake and vcpkg code, `pnpm-lock.yaml`, the Bare toolchain, `scripts/ci`, `.github/actions` and `_build.yml`. The publish groups build without reuse.
 - `pr-build-test.yml`'s merge job folds each package's own folder into `prebuilds-<slug>`, the bundle mobile tests install. The publish groups place only the package's own folder, so a dependency never ships inside it.
 - C++ and desktop test jobs restore `prebuild-<slug>-<platform>-<arch>`, run `link:platform` on what they restored, and run their target with `--exclude-task-dependencies`. Every platform and architecture a test configuration uses needs a build configuration.
 - A package without a `build` target restores no prebuilds: its C++, desktop and mobile rows run against the installed workspace and the package itself.
