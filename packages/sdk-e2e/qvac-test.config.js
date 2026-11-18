@@ -102,6 +102,20 @@ export default {
         },
         interpreter: 'node',
         args: ['runners/kotlin/scripts/device.mjs', 'run']
+      },
+      {
+        // The Kotlin SDK on a desktop JVM, with the worker in-process through
+        // sdk-kotlin's jvm-barekit. It shares the Android app's consumer, so
+        // it speaks MQTT itself too. See runners/kotlin/README.md.
+        name: 'kotlin-desktop',
+        platform: 'desktop-kotlin',
+        mode: 'mqtt',
+        prepare: {
+          interpreter: 'node',
+          args: ['runners/kotlin/scripts/desktop.mjs', 'prepare']
+        },
+        interpreter: 'node',
+        args: ['runners/kotlin/scripts/desktop.mjs', 'run']
       }
     ],
     mobile: {

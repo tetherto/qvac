@@ -1,6 +1,6 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
-// The catalog interpreter and the MQTT consumer, plain Kotlin apart from the Android app that hosts them.
+// The catalog interpreter and the MQTT consumer, shared by the Android app and the desktop program.
 plugins {
     id("org.jetbrains.kotlin.jvm")
 }
