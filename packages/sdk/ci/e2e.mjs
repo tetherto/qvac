@@ -106,7 +106,13 @@ export function mqttCerts(env) {
 
 // The npm installs main's e2e jobs made: registries, this commit's inference and test-suite as tarballs, the sdk
 // built, then the sdk-e2e consumer installed against it and built. pnpm's node_modules go first.
-export function prepare(env) {
+export function buildSdk(env, afterSdkBuild = () => {}, execute = run) {
+  execute('npm', ['install', '--ignore-scripts'], { cwd: SDK, env })
+  execute('npm', ['run', 'build'], { cwd: SDK, env })
+  afterSdkBuild()
+}
+
+export function prepare(env, afterSdkBuild = () => {}) {
   if (!env.GITHUB_TOKEN) throw new Error('GITHUB_TOKEN is empty; the @tetherto registry needs it')
   for (const dir of ['sdk', 'sdk-e2e', 'inference', 'test-suite']) {
     rmSync(join(ROOT, 'packages', dir, 'node_modules'), { recursive: true, force: true })
@@ -145,8 +151,7 @@ export function prepare(env) {
       env: { ...step, GITHUB_OUTPUT: '', [`${prefix}_DEPENDENCY_SPEC`]: spec }
     })
   }
-  run('npm', ['install', '--ignore-scripts'], { cwd: SDK, env })
-  run('npm', ['run', 'build'], { cwd: SDK, env })
+  buildSdk(env, afterSdkBuild)
   writeFileSync(join(E2E, '.npmrc'), npmrc)
   run('npm', ['install', '--install-links'], { cwd: E2E, env })
   run('npm', ['run', 'build'], { cwd: E2E, env })
@@ -431,7 +436,16 @@ async function main(family, env) {
   const tests = list('tests', env.CI_TESTS)
   const label = `${family}-${platform}`
   const reports = join(E2E, 'reports')
-  let e = prepare(env)
+  const {
+    prepareSpeechPreflight,
+    installSpeechPreflight,
+    verifySpeechPreflight,
+    collectNativeCrashes
+  } = await import('./speech-preflight.mjs')
+  const speechPreflight = family === 'desktop' ? await prepareSpeechPreflight(ROOT, env) : null
+  let e = prepare(env, () => installSpeechPreflight(ROOT, env, speechPreflight))
+  verifySpeechPreflight(E2E, speechPreflight)
+  const startedAt = Date.now()
   let status = 1
   try {
     if (family === 'python') pythonVenv(e)
@@ -494,6 +508,13 @@ async function main(family, env) {
             .filter((f) => f.endsWith('.snap'))
             .map((f) => join(dist, f))
         : []
+    if (speechPreflight && process.platform === 'darwin') {
+      collectNativeCrashes(
+        join(homedir(), 'Library/Logs/DiagnosticReports'),
+        join(reports, 'native-crashes'),
+        startedAt
+      )
+    }
     keepResults(join(SDK, 'test/results/e2e', label), [
       reports,
       join(E2E, 'consumer.log'),

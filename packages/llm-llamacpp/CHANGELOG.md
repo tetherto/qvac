@@ -12,6 +12,23 @@
   `ctx_size`; otherwise the load fails with `InvalidArgument`.
   `kv_unified_per_slot` also caps each slot without `kv_unified`.
 
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries
+  `qvac-fabric` `11739.3.0#1` -> `11739.4.0`
+  ([#5831](https://github.com/tetherto/qvac/pull/5831)): opt-in WebGPU builds,
+  mtmd-helper decode limits, Core ML FFN prefill for Qwen3.5 0.8B and 2B,
+  OpenCL fixes for device-side uploads, GROUP_NORM and long flash-attention
+  chunks, the XDNA fused decode and host-decode fallback, and TurboVec IVF
+  lists stored contiguously. The mobile dev and peer dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.31.0` with it.
+- `@qvac/fabric` 0.31 adds fields to `common_params_speculative_draft` and the
+  `mtmd_helper_*` structs, so it is not ABI-compatible with 0.30.x. The RPC
+  protocol stays at 117. Every addon loaded in one process must resolve the
+  same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.31.0` together.
+- This package needed no code change for the new fabric.
+
 ## [0.71.0] - 2026-11-16
 
 ### Changed
