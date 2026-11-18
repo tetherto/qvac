@@ -7,6 +7,10 @@
 //   keeps the `blk.*.nextn.*` MTP layers that the unsloth quants used
 //   elsewhere strip. The external-head tests attach that quant as
 //   `spec-draft-model` to unsloth's, which has no MTP layers.
+// - DSpark (`spec-type: 'draft-dspark'`) on LiquidAI's LFM2.5-1.2B-Instruct
+//   with its DSpark drafter (about 1 GB of models). It runs on mobile, where
+//   the models are pre-staged, and on desktop with
+//   QVAC_RUN_SPECULATIVE_DSPARK=1, which CI's GPU legs set.
 // - Opt-in, with models CI does not download:
 //   - QVAC_RUN_SPECULATIVE_DFLASH=1: DFlash (`spec-type: 'draft-dflash'`) on
 //     Qwen3-4B with AtomicChat's GGUF of z-lab's drafter (about 3 GB of
@@ -16,9 +20,6 @@
 //   - QVAC_RUN_SPECULATIVE_MTP_HEADS=1: external MTP heads on other models, a
 //     Gemma 4 assistant on Gemma 4 E2B and unsloth's MTP quant on its
 //     Qwen3.5-2B (about 6 GB of models).
-//   - QVAC_RUN_SPECULATIVE_DSPARK=1: DSpark (`spec-type: 'draft-dspark'`) on
-//     LiquidAI's LFM2.5-1.2B-Instruct with its DSpark drafter (about 1 GB of
-//     models).
 //
 // QVAC_SPECULATIVE_TOLERATE_DIVERGENCE=1 lets greedy output differ from plain
 // decoding and between runs, for GPU backends (e.g. RADV Vulkan) whose batched
@@ -36,8 +37,6 @@
 // prestage-ignore: gemma-4-E2B-it-assistant-Q8_0.gguf — opt-in via QVAC_RUN_SPECULATIVE_MTP_HEADS=1, desktop-only
 // prestage-ignore: Qwen3.5-2B-Q4_0.gguf — opt-in via QVAC_RUN_SPECULATIVE_MTP_HEADS=1, desktop-only
 // prestage-ignore: Qwen3.5-2B-MTP-Q4_0.gguf — opt-in via QVAC_RUN_SPECULATIVE_MTP_HEADS=1, desktop-only
-// prestage-ignore: LFM2.5-1.2B-Instruct-Q4_K_M.gguf — opt-in via QVAC_RUN_SPECULATIVE_DSPARK=1, desktop-only
-// prestage-ignore: LFM2.5-1.2B-Instruct-DSpark-Q8_0.gguf — opt-in via QVAC_RUN_SPECULATIVE_DSPARK=1, desktop-only
 
 const path = require('bare-path')
 const os = require('bare-os')
@@ -79,7 +78,7 @@ const LARGE_TARGET = 'Qwen3.8-27B-UD-Q4_K_XL.gguf'
 const skipDflash = optIn('QVAC_RUN_SPECULATIVE_DFLASH', 'DFlash on Qwen3-4B')
 const skipLarge = optIn('QVAC_RUN_SPECULATIVE_27B', 'Speculative decoding on Qwen3.8-27B')
 const skipMtpHeads = optIn('QVAC_RUN_SPECULATIVE_MTP_HEADS', 'External MTP heads')
-const skipDspark = optIn('QVAC_RUN_SPECULATIVE_DSPARK', 'DSpark on LFM2.5-1.2B')
+const skipDspark = isMobile ? false : optIn('QVAC_RUN_SPECULATIVE_DSPARK', 'DSpark on LFM2.5-1.2B')
 const DSPARK_DRAFT = 'LFM2.5-1.2B-Instruct-DSpark-Q8_0.gguf'
 const tolerateDivergence =
   platform === 'android' || readEnv('QVAC_SPECULATIVE_TOLERATE_DIVERGENCE') === '1'
