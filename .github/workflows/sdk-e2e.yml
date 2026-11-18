@@ -153,8 +153,8 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           sparse-checkout: |
             packages/sdk-e2e
-            packages/sdk/contract
             packages/sdk/src/client/api
+            packages/inference/src/models/registry/models.ts
             packages/inference/src/registry.ts
           sparse-checkout-cone-mode: "false"
           persist-credentials: "false"
