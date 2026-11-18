@@ -1,13 +1,15 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync, renameSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import {
   cxxRuntimeViolations,
+  fabricRuntimeViolations,
+  parseVersionedSymbols,
   xdnaRuntimeViolations,
   formatViolations,
   isForbiddenSymbol,
@@ -185,4 +187,79 @@ if (/xdna|cuda/.test(process.argv.at(-1).split('/').at(-1))) console.log('_ZSt9t
   const invalid = run('--xdna')
   assert.equal(invalid.status, 1, 'CUDA must retain its static-runtime check')
   assert.match(invalid.stdout, /libqvac-ggml-cuda\.so/)
+})
+
+const SHARED_RUNTIME = {
+  needed: ['qvac__fabric-linux-x64@0.bare', 'libc.so.6'],
+  undefinedSymbols: [
+    '__cxa_throw@QVAC_FABRIC_0',
+    '_Znwm@QVAC_FABRIC_0',
+    '__cxa_atexit@GLIBC_2.2.5'
+  ],
+  definedSymbols: ['bare_register'],
+  fabric: {
+    soname: 'qvac__fabric-linux-x64@0.bare',
+    symbols: ['__cxa_throw@@QVAC_FABRIC_0', '_Znwm@@QVAC_FABRIC_0']
+  }
+}
+
+test('shared Fabric validation accepts only versioned imports exported by the required provider', () => {
+  assert.deepEqual(fabricRuntimeViolations(SHARED_RUNTIME), { needed: [], symbols: [] })
+  for (const symbol of ['_Znwm', '_Znwm@OTHER', '_ZdlPv@QVAC_FABRIC_0']) {
+    assert.deepEqual(
+      fabricRuntimeViolations({ ...SHARED_RUNTIME, undefinedSymbols: [symbol] }).symbols,
+      [symbol]
+    )
+  }
+})
+
+test('shared Fabric validation rejects missing providers, private runtimes and empty imports', () => {
+  assert.ok(
+    fabricRuntimeViolations({ ...SHARED_RUNTIME, needed: ['libstdc++.so.6'] }).needed.length
+  )
+  assert.ok(
+    fabricRuntimeViolations({ ...SHARED_RUNTIME, fabric: { ...SHARED_RUNTIME.fabric, soname: '' } })
+      .needed.length
+  )
+  assert.ok(
+    fabricRuntimeViolations({ ...SHARED_RUNTIME, definedSymbols: ['__cxa_throw'] }).symbols.length
+  )
+  assert.ok(fabricRuntimeViolations({ ...SHARED_RUNTIME, undefinedSymbols: [] }).symbols.length)
+  assert.ok(
+    fabricRuntimeViolations({
+      ...SHARED_RUNTIME,
+      fabric: { ...SHARED_RUNTIME.fabric, symbols: ['__cxa_throw'] }
+    }).symbols.length
+  )
+})
+
+test('versioned symbols retain import and export versions', () => {
+  assert.deepEqual(
+    parseVersionedSymbols('__cxa_throw@@QVAC_FABRIC_0 T 123 10\n_Znwm@QVAC_FABRIC_0 U\n'),
+    ['__cxa_throw@@QVAC_FABRIC_0', '_Znwm@QVAC_FABRIC_0']
+  )
+})
+
+test('CLI verifies a real versioned Fabric provider and rejects an unresolved runtime import', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'fabric-runtime-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const compile = (args) => {
+    const result = spawnSync('cc', args, { cwd: dir, encoding: 'utf8' })
+    assert.equal(result.status, 0, result.stderr)
+  }
+  writeFileSync(join(dir, 'provider.c'), 'void __cxa_throw(void) {}')
+  writeFileSync(join(dir, 'provider.map'), 'QVAC_FABRIC_0 { global: __cxa_throw; local: *; };')
+  compile(['-shared', '-nostdlib', '-fPIC', 'provider.c', '-Wl,-soname,fabric.bare', '-Wl,--version-script=provider.map', '-o', 'fabric.bare'])
+  writeFileSync(join(dir, 'addon.c'), 'extern void __cxa_throw(void); void addon(void) { __cxa_throw(); }')
+  compile(['-shared', '-nostdlib', '-fPIC', 'addon.c', '-L.', '-l:fabric.bare', '-o', 'addon.bare'])
+  const checker = fileURLToPath(new URL('../check-linux-module-cxx-runtime.mjs', import.meta.url))
+  const check = () => spawnSync(process.execPath, [checker, '--fabric', join(dir, 'fabric.bare'), join(dir, 'consumer')], { encoding: 'utf8' })
+  mkdirSync(join(dir, 'consumer'))
+  renameSync(join(dir, 'addon.bare'), join(dir, 'consumer', 'addon.bare'))
+  let result = check()
+  assert.equal(result.status, 0, result.stdout + result.stderr)
+  compile(['-shared', '-nostdlib', '-fPIC', 'addon.c', '-o', 'consumer/addon.bare'])
+  result = check()
+  assert.equal(result.status, 1, result.stdout + result.stderr)
+  assert.match(result.stdout, /missing Fabric DT_NEEDED/)
 })
