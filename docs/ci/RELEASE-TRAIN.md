@@ -196,9 +196,8 @@ Before npm publish:
 - **`sdk-kotlin`**: `sdk-checks.yml`'s sdk-kotlin checks against the workspace
   `@qvac/sdk` and `@qvac/inference`: version lockstep, the generated client
   compiled for the JVM, and the generator, wire-vocabulary and JVM unit tests.
-  `publish-kotlin.yml` runs the release gates, every runtime profile, the Maven
-  publications and the consumer apps when it builds the Maven zips that attach
-  to the `@qvac/sdk` GitHub release.
+  `publish-kotlin.yml` builds every runtime profile's Maven zip and attaches
+  them to the `@qvac/sdk` GitHub release, with no tests of its own.
 - **`pear-e2e`**: `test-inference-pear-e2e.yml` on the train's
   `@qvac/inference` tarball, as `publish-npm.yml` runs it for an inference release. Pin upstream
   with the `PEAR_E2E_*_VERSION` repository variables.
@@ -209,8 +208,11 @@ After npm publish, `package-checks` runs again with every package installed
 from npm. Tags, the GitHub release, PyPI, the wheels and the Maven zips wait
 for it.
 
-On the release PR, outside `release-train.yml`: when the PR touches the SDK,
-`sdk-e2e.yml` runs the e2e legs its labels and `base:release-*` keys select.
+On the release PR, outside `release-train.yml`: when the PR touches the SDK or a
+client, `sdk-e2e.yml` runs the full e2e suite in every language on Linux, Mac,
+Windows, Android and iOS. Python installs the wheel PyPI gets and Kotlin builds
+against its Maven package, both built from the PR's commit. The release is
+tested by hand before it ships, so publishing does not wait for this run.
 
 ### Dry run
 
