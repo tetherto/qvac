@@ -25,6 +25,12 @@ const BUSY_LISTS = 128
 const BUSY_ITERS = 5
 const RESERVED_ID = 0xffffffffffffffffn
 
+// Native errors are inference-addon-cpp StatusErrors: their `code` names the
+// addon and the error category.
+function errorCode(category) {
+  return `[ TurboVec :: ${category} ]`
+}
+
 let tmpCounter = 0
 function tmpPath(name) {
   const pid = os.pid ? os.pid() : 0
@@ -365,7 +371,7 @@ test('IdMapIndex async: native async calls refuse a busy index', { skip: IS_MOBI
     dispose: () => binding.idx_dispose(handle)
   })) {
     const error = syncError(call)
-    t.is(error && error.code, 'Busy', `${name} is refused`)
+    t.is(error && error.code, errorCode('Busy'), `${name} is refused`)
   }
   t.is((await running).ids[0], 1n, 'the running job finishes')
   t.is(binding.idx_len(handle), N, 'the index is idle again')
@@ -380,6 +386,21 @@ test('IdMapIndex async: prepareFilter rejects when the index is disposed meanwhi
   t.is(error && error.message, 'IdMapIndex has been disposed', 'the filter is not handed out')
   await disposed
 })
+
+test(
+  'IdMapIndex async: a failed native call leaves the index idle',
+  { skip: IS_MOBILE },
+  async (t) => {
+    const binding = require('../../binding')
+    const handle = binding.idx_create({ dim: DIM, storage: 'f32' })
+    const { vectors, ids } = unitBatch()
+    await binding.idx_add_async(handle, vectors, ids)
+    const error = await rejection(binding.idx_add_async(handle, vectors, ids))
+    t.is(error && error.code, errorCode('DuplicateId'), 'a duplicate add rejects')
+    t.is(binding.idx_len(handle), N, 'and the index is idle again')
+    binding.idx_dispose(handle)
+  }
+)
 
 test('IdMapIndex async: inputs are copied when the call is made', async (t) => {
   const idx = new IdMapIndex({ dim: DIM, bitWidth: 32 })
@@ -546,6 +567,52 @@ test('IdMapIndex abort: a call waiting in the queue is skipped', async (t) => {
   t.is(signal.listenerCount, 0, 'no abort listener is left on the signal')
   await idx.dispose()
 })
+
+test('IdMapIndex abort: a call waiting on a worker thread is skipped', async (t) => {
+  // Another index's build holds the thread for long work. The add starts at
+  // once on its idle index, so it waits for that thread, not in the queue.
+  const busy = await busyIndex()
+  const idle = await filledIndex()
+  try {
+    const build = busy.buildIvf(BUSY_LISTS, BUSY_ITERS)
+    const controller = createController()
+    const add = rejection(
+      idle.addWithIds(unitVec(3), new BigUint64Array([70n]), { signal: controller.signal })
+    )
+    controller.abort()
+    t.is((await add)?.name, 'AbortError', 'the add rejects at once')
+    await build
+    // contains() runs after the add's native job has settled.
+    t.absent(await idle.contains(70n), 'the add never ran')
+    t.is(idle.length, N, 'the index is unchanged')
+  } finally {
+    await idle.dispose()
+    await busy.dispose()
+  }
+})
+
+test(
+  'IdMapIndex abort: works with a bare-abort-controller signal',
+  { skip: IS_MOBILE },
+  async (t) => {
+    const { AbortController } = require('bare-abort-controller')
+    const idx = await busyIndex()
+    try {
+      const build = idx.buildIvf(BUSY_LISTS, BUSY_ITERS)
+      const controller = new AbortController()
+      const search = rejection(idx.search(unitVec(0, BUSY_DIM), 1, { signal: controller.signal }))
+      controller.abort()
+      t.is((await search)?.name, 'AbortError', 'the queued search rejects with an AbortError')
+      await build
+      const again = await rejection(
+        idx.search(unitVec(0, BUSY_DIM), 1, { signal: controller.signal })
+      )
+      t.is(again?.name, 'AbortError', 'an already aborted signal rejects a new call')
+    } finally {
+      await idx.dispose()
+    }
+  }
+)
 
 test('IdMapIndex abort: a running build rejects at once but still finishes', async (t) => {
   const idx = await busyIndex()

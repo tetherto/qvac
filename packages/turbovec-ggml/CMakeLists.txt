@@ -12,15 +12,25 @@ qvac_addon_project_setup()
 # (dynamically linked, loaded once per process).
 qvac_addon_use_fabric()
 
+# Header-only: JsAsyncTask, the JS value helpers and StatusError.
+find_path(
+  QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsUtils.hpp"
+  REQUIRED)
+
 add_bare_module(turbovec-ggml EXPORTS)
 
 target_sources(
   ${turbovec-ggml}
   PRIVATE
-    ${PROJECT_SOURCE_DIR}/addon/AsyncJob.cpp
     ${PROJECT_SOURCE_DIR}/addon/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/VectorIndex.cpp
     ${PROJECT_SOURCE_DIR}/addon/WorkerPool.cpp
+)
+
+target_include_directories(
+  ${turbovec-ggml}
+  PRIVATE
+    ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
 )
 
 qvac_addon_link_fabric(${turbovec-ggml} ${qvac_fabric_target})

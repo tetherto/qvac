@@ -63,6 +63,7 @@
     "@qvac/fabric-android-arm64": "^0.30.1",
     "@qvac/fabric-ios": "^0.30.1",
     "@types/node": "^24.2.1",
+    "bare-abort-controller": "^1.1.2",
     "bare-fs": "^4.5.1",
     "bare-os": "^3.6.2",
     "bare-path": "^3.0.0",

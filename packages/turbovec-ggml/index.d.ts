@@ -102,8 +102,9 @@ type IdMapIndexClass<T extends IdMapIndex> = (abstract new (...args: never[]) =>
  * its native work on a worker thread owned by the addon, so the JS thread
  * stays free. Calls on one index run one at a time, in call order, so a
  * search made after an add sees that add. Across indexes, long work (adds,
- * builds, loads, writes, compaction) and searches run on two separate worker
- * threads, so a long build never holds up a search. Input arrays are copied
+ * builds, loads, writes, compaction, filter preparation) and searches run on
+ * two separate worker threads, so a long build never holds up a search. Input
+ * arrays are copied
  * when the call is made. Each call takes an optional `{ signal }`: see
  * {@link IdMapIndexCallOptions}.
  */
@@ -267,7 +268,8 @@ export default class IdMapIndex {
      * Release filters and native index resources. The index cannot be used
      * after this call, and calls that have not started reject. A call that is
      * running finishes first; the native index is freed after it. Resolves
-     * once the native index has been freed. This operation is idempotent.
+     * once the native index has been freed, and rejects if freeing it fails.
+     * This operation is idempotent.
      */
     dispose(): Promise<void>;
     private disposeFilters;

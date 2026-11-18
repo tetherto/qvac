@@ -21,6 +21,12 @@ const CALIBRATION_SEED = 0x5eed
 const N = 10
 const UINT64_MAX = (1n << 64n) - 1n
 
+// Native errors are inference-addon-cpp StatusErrors: their `code` names the
+// addon and the error category.
+function errorCode(category) {
+  return `[ TurboVec :: ${category} ]`
+}
+
 function unitVec(i) {
   const vector = new Float32Array(DIM)
   vector[i] = 1
@@ -462,7 +468,7 @@ test('IdMapIndex: native calls reject wrong argument types', { skip: IS_MOBILE }
   try {
     for (const [name, fn] of Object.entries(cases)) {
       const error = expectThrows(t, fn, `${name} is rejected`)
-      t.is(error && error.code, 'InvalidArgument', `${name} throws InvalidArgument`)
+      t.is(error && error.code, errorCode('InvalidArgument'), `${name} throws InvalidArgument`)
     }
   } finally {
     binding.idx_dispose(handle)
@@ -481,7 +487,7 @@ test('IdMapIndex: paths with a NUL character are rejected, not truncated', async
       () => idx.write(`${file}\0.junk`),
       'write rejects a NUL path'
     )
-    t.is(error && error.code, 'InvalidArgument', 'write rejects with InvalidArgument')
+    t.is(error && error.code, errorCode('InvalidArgument'), 'write rejects with InvalidArgument')
     t.absent(fs.existsSync(file), 'write did not create the truncated path')
 
     await idx.write(file)
@@ -492,7 +498,11 @@ test('IdMapIndex: paths with a NUL character are rejected, not truncated', async
     }
     for (const [name, load] of Object.entries(loaders)) {
       error = await expectRejects(t, load, `${name} rejects a NUL path`)
-      t.is(error && error.code, 'InvalidArgument', `${name} rejects with InvalidArgument`)
+      t.is(
+        error && error.code,
+        errorCode('InvalidArgument'),
+        `${name} rejects with InvalidArgument`
+      )
     }
     t.absent(fs.existsSync(delta), 'loadWithDelta did not bind the truncated delta path')
   } finally {

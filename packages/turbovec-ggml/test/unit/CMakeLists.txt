@@ -8,7 +8,12 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/WorkerPool.cpp
 )
 
-target_include_directories(addon-test PRIVATE ${CMAKE_SOURCE_DIR}/addon)
+target_include_directories(
+  addon-test
+  PRIVATE
+    ${CMAKE_SOURCE_DIR}/addon
+    ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
+)
 
 target_compile_features(addon-test PRIVATE cxx_std_20)
 

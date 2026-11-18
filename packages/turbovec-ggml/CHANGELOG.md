@@ -19,19 +19,34 @@
   have not started reject, and a running call finishes first.
 - The `length`, `calibrated` and `stagedSearch` getters report the state after
   the last call that finished, and never wait for calls still in progress.
+- Native errors are inference-addon-cpp `StatusError`s, as in the other
+  addons: `error.code` is `"[ TurboVec :: <category> ]"`, for example
+  `"[ TurboVec :: InvalidArgument ]"`, instead of the bare category. An
+  error from the native index keeps its category as `error.message`, for
+  example `"BadMagic"`.
 
 ### Added
 
 - Calls on one index run one at a time, in call order. Across indexes, long
-  work (adds, builds, loads, writes, compaction) runs on one worker thread
-  and searches on another, so a build never holds up a search. Input arrays
-  are copied when the call is made.
+  work (adds, builds, loads, writes, compaction, `prepareFilter()`) runs on
+  one worker thread and searches on another, so a build or a large
+  allow-list never holds up a search. Input arrays are copied when the call
+  is made.
 - Every call takes an optional `{ signal }` (`AbortSignal`, for example from
-  `bare-abort-controller`). A call that has not started when the signal
-  aborts is skipped. A running call rejects at once with `signal.reason`
-  while its native work runs to the end: a search's result is dropped, a
-  loaded index or prepared filter is freed, and a mutation still takes
-  effect.
+  `bare-abort-controller`, which callers install themselves). A call that has
+  not started when the signal aborts is skipped, including one already
+  waiting for a worker thread. A running call rejects at once with
+  `signal.reason` while its native work runs to the end: a search's result
+  is dropped, a loaded index or prepared filter is freed, and a mutation
+  still takes effect.
+
+### Changed
+
+- The addon runs its jobs through inference-addon-cpp's `JsAsyncTask`, on the
+  addon's own worker threads (`JsAsyncTask::runOn`), and reads its arguments
+  with inference-addon-cpp's JS helpers. Until the inference-addon-cpp
+  release that adds `runOn` is in the vcpkg registry, the build takes
+  inference-addon-cpp from an overlay port in `vcpkg-overlays/`.
 
 ## [0.6.0] - 2026-11-16
 

@@ -63,11 +63,13 @@ Staged search is off for every new or loaded TurboVec index, so a search scores 
   the state after the last call that finished.
 - Call `dispose()` on indexes and prepared filters when finished. Disposal is
   idempotent. An index's `dispose()` returns a promise that resolves once the
-  native index has been freed.
+  native index has been freed, and rejects if freeing it fails.
 
-Errors from the native index carry the fabric error category as their
-message: `InvalidArgument`, `DuplicateId`, `NotFound`, `IOError`, `BadMagic`,
-`BadVersion`, `OutOfMemory`, `PartialCompact`, `NotDurable` or `InternalError`.
+Native errors are inference-addon-cpp `StatusError`s, as in the other addons:
+`error.code` is `"[ TurboVec :: <category> ]"`. An error from the native index
+also carries its category as `error.message`: `InvalidArgument`,
+`DuplicateId`, `NotFound`, `IOError`, `BadMagic`, `BadVersion`,
+`OutOfMemory`, `PartialCompact`, `NotDurable` or `InternalError`.
 
 For retrieval over text, index embeddings from `GGMLBert` in
 [`@qvac/embed-llamacpp`](../embed-llamacpp): L2-normalize each document
@@ -77,6 +79,7 @@ query embedding.
 ## Threads, ordering and cancellation
 
 ```javascript
+// Bare has no built-in AbortSignal: install bare-abort-controller yourself.
 const { AbortSignal } = require('bare-abort-controller')
 
 const index = await IdMapIndex.load(snapshotPath)
@@ -92,21 +95,24 @@ try {
 - Calls on one index run one at a time, in call order, so a search started
   after an add sees it.
 - Across all indexes in the process, long work (adds, IVF builds, loads,
-  writes, compaction, `prepare()`, logged removes) runs on one worker thread
-  and the rest (searches, `prepareFilter()`, `remove()`) on another. A long
-  build therefore never holds up a search, but two builds take turns, and an
-  add waits behind a build on another index. Each call runs on a single
-  thread.
+  writes, compaction, `prepare()`, `prepareFilter()`, logged removes) runs on
+  one worker thread and the rest (searches, `remove()`) on another. A long
+  build or a large allow-list therefore never holds up a search, but two
+  builds take turns, and an add waits behind a build on another index. Each
+  call runs on a single thread. The jobs run through inference-addon-cpp's
+  `JsAsyncTask`, on these two threads.
 - Input arrays are copied when the call is made, including calls that wait
   behind other work on the same index, so they can be changed or transferred
   straight away. A large add holds one extra copy of its vectors until it
-  finishes, or two when it was queued behind other work.
+  finishes.
 - `dispose()` rejects the calls that have not started. A call that is running
   finishes, and the native index is freed after it. A `prepareFilter()` that
   was running when the index was disposed rejects.
 - Every call takes an optional `{ signal }`: an `AbortSignal`, such as one from
   `bare-abort-controller`. A call that has not started when the signal aborts
-  is skipped. A call that is running rejects at once with `signal.reason`, but
+  is skipped, including one that is already waiting for a worker thread
+  behind work on another index. A call that is running rejects at once with
+  `signal.reason`, but
   its native work runs to the end: a search's result is dropped, a loaded
   index or prepared filter is freed, and a mutation such as `addWithIds()` or
   `buildIvf()` still takes effect. Later calls on that index wait for the
