@@ -68,6 +68,31 @@ test('readDocument pages through one generation in ordinal order', async (t) => 
   t.is(past.nextOrdinal, null)
 })
 
+test('a hit read after its document is replaced fails with DOCUMENT_CHANGED', async (t) => {
+  const { rag, spaceId } = await openRag(t)
+  await rag.ingest({ namespace: 'ns', documents: [chunked('a', spaceId, 3)] })
+  const [hit] = await rag.search({
+    scope: { namespace: 'ns' },
+    vector: [1, 0, 0],
+    spaceId,
+    k: 1
+  })
+  t.is(hit.generation, 1, 'the hit carries its generation')
+
+  await rag.ingest({ namespace: 'ns', documents: [chunked('a', spaceId, 2)] })
+  await rejectsWithCode(
+    t,
+    rag.readDocument({
+      namespace: 'ns',
+      documentId: hit.documentId,
+      generation: hit.generation,
+      fromOrdinal: hit.ordinal
+    }),
+    ERR_CODES.DOCUMENT_CHANGED,
+    'replaced after the search'
+  )
+})
+
 test('readDocument fails with DOCUMENT_CHANGED once the generation moves on', async (t) => {
   const { rag, spaceId } = await openRag(t)
   await rag.ingest({ namespace: 'ns', documents: [chunked('a', spaceId, 4)] })
