@@ -66,7 +66,7 @@ export const pathTraversalHttpShardedFragment: TestDefinition = {
 export const pathTraversalHttpShardedDottedName: TestDefinition = {
   testId: 'path-traversal-http-sharded-dotted-name',
   params: { assetSrc: `${CLOSED_PORT}/models/model..v2-00001-of-00001.gguf` },
-  expectation: { validation: 'regex', pattern: '^(?![\\s\\S]*Path traversal)[\\s\\S]+$' },
+  expectation: { validation: 'throws-error', errorContains: 'Connection failed' },
   steps: downloadAssetRejects,
   metadata: { ...metadata, estimatedDurationMs: 15000 }
 }
