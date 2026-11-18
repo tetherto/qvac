@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
   `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.31.0` together.
 - This package needed no code change for the new fabric.
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.5.0` -> `1.7.0`
+  ([#5812](https://github.com/tetherto/qvac/pull/5812)). 1.6.0 lets runtime
+  stat values be strings (`RuntimeStatValue`), and 1.7.0 adds
+  `JsAsyncTask::runOn` for running async work on an addon-owned executor.
+  Compile-time only; no API or runtime behaviour change for this package.
 
 ## [0.10.2] - 2026-11-17
 
@@ -33,8 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Share the `@qvac/fabric` runtime and backend loader, retaining addon-local speech engines built against its headers.
 
-- Update the shared `speech-cpp` native dependency to `2026-11-11`
-  ([#5747](https://github.com/tetherto/qvac/pull/5747)).
+- Build the bundled speech engine from the source published as
+  `speech-cpp` `2026-11-18` (`5e1e4d34`).
 
 ### Fixed
 
