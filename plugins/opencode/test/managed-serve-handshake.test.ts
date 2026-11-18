@@ -53,6 +53,7 @@ test('provider config exposes the managed model with tools and the serve context
   assert.equal(model?.providerID, 'qvac')
   assert.equal(model?.name, 'Qwen 3.5 9B (local)')
   assert.equal(model?.capabilities.tools, true)
+  assert.deepEqual(model?.compatibility, { supportsPromptCacheKey: true })
   assert.equal(model?.limit.context, 16384)
   assert.ok((model?.limit.output ?? Infinity) <= 16384)
 })
