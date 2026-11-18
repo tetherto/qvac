@@ -14,6 +14,9 @@ inputs:
   dry-run:
     description: Check every slice and list what would publish, without publishing
     default: "false"
+  max-tarball-bytes:
+    description: Packed tarball budget in bytes; a slice over it warns and publishes first, largest first. Empty skips the check
+    default: ""
 
 runs:
   using: composite
@@ -24,4 +27,5 @@ runs:
         SLICES_DIR: ${{ inputs.slices-dir }}
         DIST_TAG: ${{ inputs.tag }}
         DRY_RUN: ${{ inputs.dry-run }}
+        MAX_TARBALL_BYTES: ${{ inputs.max-tarball-bytes }}
       run: node "$GITHUB_ACTION_PATH/npm-publish-platform-packages.mjs"
