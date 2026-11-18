@@ -72,14 +72,15 @@ overrides:
   "@qvac/audiogen-ggml-darwin-arm64": "-"
   "@qvac/audiogen-ggml-darwin-x64": "-"
   "@qvac/audiogen-ggml-win32-x64": "-"
-  # diffusion-cpp's desktop platform packages are not on npm until the split
-  # release publishes them. The workspace stages a source build with
-  # `npm run link:platform` instead.
-  "@qvac/diffusion-cpp-linux-x64": "-"
-  "@qvac/diffusion-cpp-linux-arm64": "-"
-  "@qvac/diffusion-cpp-darwin-arm64": "-"
-  "@qvac/diffusion-cpp-darwin-x64": "-"
-  "@qvac/diffusion-cpp-win32-x64": "-"
+  # Only the current workspace diffusion addon stages a source build with
+  # `npm run link:platform`. Older published fallbacks used by workspace
+  # consumers still need their own desktop packages. Update this selector
+  # alongside the workspace addon's version.
+  "@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-linux-x64": "-"
+  "@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-linux-arm64": "-"
+  "@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-darwin-arm64": "-"
+  "@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-darwin-x64": "-"
+  "@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-win32-x64": "-"
   # bare-make's LLVM resource packages find their own directory (clang's
   # resource dir) through require-asset, which needs 1.2.4 and a
   # bare-module-resolve with directory support (1.12.6). Older pins resolve it
