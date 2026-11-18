@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Installs this checkout's @qvac/sdk and @qvac/inference into packages/sdk-kotlin
 # in place of the registry versions, so the Kotlin SDK builds and tests against
-# this commit. A PR into a release branch pins an @qvac/sdk version that is not
-# on npm yet, so the registry install in :android-barekit:npmCi would fail.
+# this commit.
 #
 # Resets packages/sdk/package.json to its committed content before and after
 # the build, so uncommitted edits to that file are lost. Leaves the swapped
