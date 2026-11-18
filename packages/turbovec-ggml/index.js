@@ -209,10 +209,11 @@ class IdMapIndex {
     }
     /**
      * Top-k similarity search over row-major queries. Results are sorted
-     * by descending score, then ascending ID. TurboVec rotates queries without
-     * normalizing them and performs approximate rotated/quantized dot-product
-     * scoring. TurboVec query components require `abs(value) < 1e16`. Short rows
-     * use UINT64_MAX padding.
+     * by descending score, then ascending ID; TurboVec orders equal scores by
+     * stored row, which removals and `buildIvf()` reshuffle. TurboVec rotates
+     * queries without normalizing them and performs approximate rotated/quantized
+     * dot-product scoring. TurboVec query components require
+     * `abs(value) < 1e16`. Short rows use UINT64_MAX padding.
      */
     search(queries, k) {
         this.validateSearch('search', queries, k);
@@ -227,10 +228,10 @@ class IdMapIndex {
         return loadBinding().idx_search_filtered(ensureHandle(this), queries, k, allowedIds);
     }
     /**
-     * Prepare an allowlist for repeated searches. Native mutation attempts
-     * invalidate all prepared filters created from this index. Call `dispose()`
-     * when done to release native filter memory promptly; dropped filters are
-     * reclaimed by GC.
+     * Prepare an allowlist for repeated searches. Native mutation attempts and
+     * `buildIvf()` invalidate all prepared filters created from this index. Call
+     * `dispose()` when done to release native filter memory promptly; dropped
+     * filters are reclaimed by GC.
      */
     prepareFilter(allowedIds) {
         if (!(allowedIds instanceof BigUint64Array)) {
@@ -246,7 +247,8 @@ class IdMapIndex {
     }
     /**
      * Build deterministic in-memory IVF-flat search state. Mutations invalidate
-     * it, and snapshots do not persist it.
+     * it, and snapshots do not persist it. Disposes every prepared filter, as a
+     * mutation does: on TurboVec storage the build regroups the rows by IVF list.
      */
     buildIvf(nLists, nIter = 0) {
         if (!isPositiveInt32(nLists)) {
@@ -255,7 +257,12 @@ class IdMapIndex {
         if (!isNonNegativeInt32(nIter)) {
             throw new TypeError('buildIvf: nIter must be a non-negative int32');
         }
-        loadBinding().idx_build_ivf(ensureHandle(this), nLists, nIter);
+        try {
+            loadBinding().idx_build_ivf(ensureHandle(this), nLists, nIter);
+        }
+        finally {
+            this.disposeFilters();
+        }
     }
     /**
      * Search the IVF-flat candidate lists. `buildIvf()` must have run after the
