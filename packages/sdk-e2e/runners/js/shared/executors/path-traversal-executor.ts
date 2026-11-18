@@ -11,6 +11,7 @@ import {
   pathTraversalHttpShardedFragment,
   pathTraversalHttpShardedDottedName,
   pathTraversalHyperdriveLoad,
+  pathTraversalHyperdriveBackslashLoad,
   pathTraversalRagDeleteWorkspace
 } from '../../../../catalog/path-traversal-tests.js'
 
@@ -20,6 +21,7 @@ const pathTraversalTests = [
   pathTraversalHttpShardedFragment,
   pathTraversalHttpShardedDottedName,
   pathTraversalHyperdriveLoad,
+  pathTraversalHyperdriveBackslashLoad,
   pathTraversalRagDeleteWorkspace
 ] as const
 
@@ -47,6 +49,7 @@ export class PathTraversalExecutor extends BaseExecutor<typeof pathTraversalTest
     [pathTraversalHttpShardedFragment.testId]: this.downloadRejects.bind(this),
     [pathTraversalHttpShardedDottedName.testId]: this.downloadRejects.bind(this),
     [pathTraversalHyperdriveLoad.testId]: this.loadRejects.bind(this),
+    [pathTraversalHyperdriveBackslashLoad.testId]: this.loadRejects.bind(this),
     [pathTraversalRagDeleteWorkspace.testId]: this.deleteWorkspaceRejects.bind(this)
   }
 

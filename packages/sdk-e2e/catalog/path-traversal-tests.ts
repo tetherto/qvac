@@ -83,6 +83,19 @@ export const pathTraversalHyperdriveLoad: TestDefinition = {
   metadata
 }
 
+// The check must split on both separators: on Windows a `..\` drive path
+// escapes the cache like `../` does.
+export const pathTraversalHyperdriveBackslashLoad: TestDefinition = {
+  testId: 'path-traversal-hyperdrive-backslash-load',
+  params: {
+    modelSrc: `pear://${HYPERDRIVE_KEY}/models/..\\..\\..\\escape.gguf`,
+    modelType: 'llamacpp-completion'
+  },
+  expectation: { validation: 'throws-error', errorContains: 'Path traversal detected' },
+  steps: loadModelRejects,
+  metadata
+}
+
 // Deleting a workspace removes its directory; the name must not reach a sibling.
 // The target does not exist, so a regression deletes nothing.
 export const pathTraversalRagDeleteWorkspace: TestDefinition = {
@@ -99,5 +112,6 @@ export const pathTraversalTests = [
   pathTraversalHttpShardedFragment,
   pathTraversalHttpShardedDottedName,
   pathTraversalHyperdriveLoad,
+  pathTraversalHyperdriveBackslashLoad,
   pathTraversalRagDeleteWorkspace
 ]
