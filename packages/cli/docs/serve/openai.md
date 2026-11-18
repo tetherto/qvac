@@ -178,6 +178,28 @@ Consequences worth knowing:
 
 Tools without `defer_loading` behave exactly as before.
 
+## KV cache sessions
+
+`/v1/chat/completions` caches each conversation's prefix automatically, which
+covers plain follow-up turns. That lookup matches on the message history and
+misses once the history ends in a tool call and its results, so an agent loop
+re-reads the whole prompt on every step. `/v1/responses` has no automatic cache.
+
+Both endpoints accept a named cache session, which survives tool calls. Name it
+with one of, in order of precedence:
+
+1. the `X-QVAC-KV-Cache-Key` header (sent once),
+2. `metadata.qvac_kv_cache_key` in the body,
+3. OpenAI's `prompt_cache_key` in the body.
+
+A key must be a nonempty string of at most 512 UTF-8 bytes; anything else
+returns `400 invalid_kv_cache_key`. Keys are SHA-256 hashed before filesystem
+use, and the same key selects the same session on both endpoints. Use one key
+per conversation and resend it with the growing history. On a keyed request
+`usage.qvac_cache_tokens` reports SDK cache occupancy, not a count of reused
+tokens. Retention is described under
+[KV-cache retention](default.md#kv-cache-retention).
+
 ## `POST /v1/completions`
 
 Legacy (pre-chat) OpenAI text-completions endpoint, kept for compatibility with
