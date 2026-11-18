@@ -61,29 +61,24 @@ await fs.rm(generatedRoot, { recursive: true, force: true })
 await fs.mkdir(metadataDirectory, { recursive: true })
 
 // Bundle the checkout's packages/sdk. The worker build owns compiling it.
-const bundleSdkPath = ensureWorkspaceSdk(sdkRoot)
-const modulesRoot = bundleSdkPath ?? projectRoot
+ensureWorkspaceSdk(sdkRoot)
 // The bundler of the SDK being bundled: the installed @qvac/sdk can predate the workspace
 // SDK's built-in plugins, and bundles one it does not know as a custom plugin.
 const { bundleSdk } = await import(
-  bundleSdkPath
-    ? pathToFileURL(path.join(bundleSdkPath, 'dist', 'src', 'commands', 'index.js')).href
-    : '@qvac/sdk/commands'
+  pathToFileURL(path.join(sdkRoot, 'dist', 'src', 'commands', 'index.js')).href
 )
 
 // Split addons ship their native code in per-platform packages, installed at
 // each meta's version before bundling.
-await ensureHostPrebuilds(host, modulesRoot)
+await ensureHostPrebuilds(host, sdkRoot)
 
-// Resolve addons, prebuilds and the bundle from the tree the worker is built
-// from: the workspace SDK when present, else the installed @qvac/sdk. These
-// differ in the monorepo, where the worker comes from ../sdk but the Kotlin
-// runtime's own node_modules is a separate tree; for a standalone consumer they
-// are the same. ensureHostPrebuilds installs into this tree too.
+// Resolve addons, prebuilds and the bundle from the workspace SDK's tree, which
+// is separate from the Kotlin runtime's own node_modules. ensureHostPrebuilds
+// installs into this tree too.
 const bundle = await bundleSdk({
-  projectRoot: modulesRoot,
+  projectRoot: sdkRoot,
   configPath,
-  ...(bundleSdkPath !== undefined && { sdkPath: bundleSdkPath }),
+  sdkPath: sdkRoot,
   target: 'bare-kit',
   language: 'kotlin',
   languageOptions: isJvm ? { package: workerPackage, platform: 'jvm' } : { package: workerPackage },
@@ -92,15 +87,12 @@ const bundle = await bundleSdk({
   quiet: true
 })
 
-// The SDK package the bundle came from: the workspace checkout, or the
-// installed @qvac/sdk when this package is checked out on its own.
-const sdkPackageRoot = bundleSdkPath ?? packageDir(projectRoot, '@qvac/sdk')
 await Promise.all([
-  fs.copyFile(path.join(sdkPackageRoot, 'LICENSE'), path.join(metadataDirectory, 'LICENSE')),
-  fs.copyFile(path.join(sdkPackageRoot, 'NOTICE'), path.join(metadataDirectory, 'NOTICE'))
+  fs.copyFile(path.join(sdkRoot, 'LICENSE'), path.join(metadataDirectory, 'LICENSE')),
+  fs.copyFile(path.join(sdkRoot, 'NOTICE'), path.join(metadataDirectory, 'NOTICE'))
 ])
 
-const sdkPackage = JSON.parse(await fs.readFile(path.join(sdkPackageRoot, 'package.json'), 'utf8'))
+const sdkPackage = JSON.parse(await fs.readFile(path.join(sdkRoot, 'package.json'), 'utf8'))
 const addons = bundle.addons
 
 async function sha256(filePath) {
@@ -159,7 +151,6 @@ await fs.writeFile(
 console.log(`Prepared QVAC ${platform} runtime for ${host} with ${addons.length} addon(s)`)
 
 function ensureWorkspaceSdk(sdkDir) {
-  if (!fsSync.existsSync(path.join(sdkDir, 'package.json'))) return undefined
   const built = [
     path.join(sdkDir, 'dist', 'src', 'worker', 'index.js'),
     path.join(sdkDir, 'dist', 'src', 'commands', 'bundle', 'targets.js')
@@ -169,7 +160,6 @@ function ensureWorkspaceSdk(sdkDir) {
       stdio: 'inherit'
     })
   }
-  return sdkDir
 }
 
 function packageDir(modulesRoot, name) {

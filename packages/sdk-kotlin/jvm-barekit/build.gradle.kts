@@ -31,7 +31,6 @@ sourceSets {
 
 val workspaceSdk = runtimeRoot.dir("../sdk")
 val workspaceInference = runtimeRoot.dir("../inference")
-val hasWorkspaceSdk = workspaceSdk.file("package.json").asFile.exists()
 
 val prepareQvacJvmRuntime by tasks.registering(Exec::class) {
     description = "Bundle the QVAC worker for this desktop host"
@@ -48,13 +47,9 @@ val prepareQvacJvmRuntime by tasks.registering(Exec::class) {
         runtimeRoot.file("qvac.config.json"),
         runtimeRoot.file("scripts/prepare-runtime.mjs"),
     )
-    if (hasWorkspaceSdk) {
-        inputs.files(workspaceSdk.file("package.json"), workspaceSdk.file("LICENSE"), workspaceSdk.file("NOTICE"))
-        inputs.dir(workspaceSdk.dir("dist"))
-        inputs.dir(workspaceInference.dir("dist"))
-    } else {
-        inputs.dir(runtimeRoot.dir("node_modules/@qvac/sdk"))
-    }
+    inputs.files(workspaceSdk.file("package.json"), workspaceSdk.file("LICENSE"), workspaceSdk.file("NOTICE"))
+    inputs.dir(workspaceSdk.dir("dist"))
+    inputs.dir(workspaceInference.dir("dist"))
     outputs.dir(generatedRuntime)
 }
 

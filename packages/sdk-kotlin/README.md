@@ -145,26 +145,6 @@ To consume a checkout's artifacts the same way, publish locally with
 `./gradlew publishSdkToBuildRepository` and add
 `packages/sdk-kotlin/build/maven-repository` as the Maven repository.
 
-### Build from a standalone checkout
-
-`scripts/install-local.sh` makes a sparse clone of `packages/sdk-kotlin` at a
-release tag or branch, builds every Android runtime profile against the
-`@qvac/sdk` version the checkout pins, and prints the local Maven repository
-path with the Gradle snippet that consumes it:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/tetherto/qvac/sdk-v<version>/packages/sdk-kotlin/scripts/install-local.sh -o install-local.sh
-bash install-local.sh sdk-v<version>
-```
-
-Releases before `sdk-v0.23.0` do not build from a standalone checkout. The
-script checks for git, JDK 17, Node.js 22 and an Android SDK with NDK
-29.0.14206865 at `ANDROID_HOME` before cloning, names what is missing, and
-refuses a target directory that already exists. Without `packages/sdk` beside
-it the build skips the workspace worker build and bundles the installed
-`@qvac/sdk`, so the result matches the release assets built from the full
-monorepo.
-
 ### Consume the source checkout
 
 For SDK development, add the composite build:
