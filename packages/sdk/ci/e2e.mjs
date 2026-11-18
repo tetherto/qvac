@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// One leg of the e2e catalog on a desktop host: the sdk's desktop, electron and snap families and sdk-python's python
-// family. This commit's inference and test-suite are packed into the sdk and sdk-e2e npm installs, the consumer and the
-// producer run over MQTT, and the results are checked and compared with the newest dispatch run on the base branch.
+// One leg of the e2e catalog on a desktop host: the sdk's desktop, electron and snap families, sdk-python's python
+// family and sdk-kotlin's kotlin family. This commit's inference and test-suite are packed into the sdk and sdk-e2e npm
+// installs, the consumer and the producer run over MQTT, and the results are checked and compared with the newest
+// dispatch run on the base branch.
 // Usage: node ci/e2e.mjs <family|cache>.
 
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
@@ -24,9 +25,14 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 export const ROOT = fileURLToPath(new URL('../../..', import.meta.url))
 export const SDK = join(ROOT, 'packages/sdk')
 export const E2E = join(ROOT, 'packages/sdk-e2e')
-const FAMILIES = ['desktop', 'python', 'electron', 'snap']
+const FAMILIES = ['desktop', 'python', 'kotlin', 'electron', 'snap']
 // The package whose test:integration runs a family, which uploads <package>/test/results/e2e.
-const OWNERS = { python: join(ROOT, 'packages/sdk-python') }
+const OWNERS = {
+  python: join(ROOT, 'packages/sdk-python'),
+  kotlin: join(ROOT, 'packages/sdk-kotlin')
+}
+// The external consumer in sdk-e2e's qvac-test.config.js that runs a non-JS family.
+const EXTERNAL = { python: 'python', kotlin: 'kotlin-desktop' }
 const ownerOf = (family) => OWNERS[family] ?? SDK
 // Checked before any value reaches a command line, as main's run step did.
 export const SAFE_LIST = /^[A-Za-z0-9._-]+(,[A-Za-z0-9._-]+)*$/
@@ -302,6 +308,12 @@ function pythonVenv(env) {
   run(bin, ['-m', 'pip', 'install', '--force-reinstall', '--no-deps', join(dist, wheel)], { env })
 }
 
+// The Kotlin desktop program, with the client and its JVM worker host built from this checkout, the way a user gets
+// the experimental jvm-barekit. The worker bundles the sdk prepare built, so Gradle does not rebuild it.
+function kotlinDesktop(env) {
+  run('node', ['runners/kotlin/scripts/desktop.mjs', 'build', '--prebuilt-sdk'], { cwd: E2E, env })
+}
+
 // main's strict Snap steps: tooling, the LXD egress preflight, two revisions and the refresh test, install, interfaces.
 function snapBuild(env) {
   rmSync(join(E2E, '.npmrc'), { force: true })
@@ -362,13 +374,13 @@ function snapBuild(env) {
 
 // main's run step: the consumer in the background, the producer in the foreground for up to 60 minutes.
 async function consumerAndProducer({ env, runId, family, filter, options }) {
-  const external = family === 'python'
+  const external = EXTERNAL[family]
   const consumerArgs = [
     'qvac-test',
     external ? 'run:consumer:external' : `run:consumer:${family}`,
     `--runId=${runId}`,
     '--config=.',
-    ...(external ? ['--name=python'] : []),
+    ...(external ? [`--name=${external}`] : []),
     ...(family === 'electron' ? ['--skip-build'] : []),
     ...(family === 'snap' ? ['--skip-build', '--skip-snap-install'] : [])
   ]
@@ -461,7 +473,9 @@ async function main(family, env) {
   let status = 1
   try {
     if (family === 'python') pythonVenv(e)
-    if (family === 'desktop' || family === 'python') {
+    if (family === 'kotlin') kotlinDesktop(e)
+    // The bootstrap below runs the JS desktop consumer, on the worker this bundles.
+    if (family === 'desktop' || EXTERNAL[family]) {
       run('npm', ['run', 'bundle:sdk'], { cwd: E2E, env: e })
     }
     if (family === 'snap') {
@@ -479,12 +493,12 @@ async function main(family, env) {
     } else {
       e = modelCache(e)
       // As main: an exact hit already holds the desktop bootstrap's models.
-      if (env.MODELS_CACHE_HIT === 'true' && (family === 'desktop' || family === 'python')) {
+      if (env.MODELS_CACHE_HIT === 'true' && (family === 'desktop' || EXTERNAL[family])) {
         console.log('Models restored from the cache; skipping the bootstrap')
       } else {
         run(
           'npx',
-          ['qvac-test', `run:bootstrap:${family === 'python' ? 'desktop' : family}`, '--config=.'],
+          ['qvac-test', `run:bootstrap:${EXTERNAL[family] ? 'desktop' : family}`, '--config=.'],
           { cwd: E2E, env: e }
         )
       }

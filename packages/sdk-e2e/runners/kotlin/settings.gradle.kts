@@ -1,7 +1,8 @@
 // With -PqvacSdkRepository=<dir>, the Android app takes io.tether:qvac-sdk-android and
 // io.tether:qvac-sdk-kotlin from that Maven repository, as an app outside the monorepo does;
 // device.mjs build --maven publishes them there. Without it, this checkout's packages/sdk-kotlin is
-// a composite build, for local work on both.
+// a composite build, for local work on both. The desktop program needs the composite build: the
+// JVM worker host is not published.
 pluginManagement {
     repositories {
         google()
@@ -39,9 +40,11 @@ if (sdkRepository == null) {
         dependencySubstitution {
             substitute(module("io.tether:qvac-sdk-kotlin")).using(project(":"))
             substitute(module("io.tether:qvac-sdk-android")).using(project(":android-barekit"))
+            substitute(module("io.tether:qvac-sdk-jvm")).using(project(":jvm-barekit"))
         }
     }
 }
 
 include(":runner")
 include(":app")
+if (sdkRepository == null) include(":desktop")

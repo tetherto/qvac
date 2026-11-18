@@ -80,6 +80,10 @@ signing {
 // the SDK contract the generator exports from the sibling packages/sdk source,
 // which needs that package installed and @qvac/inference built.
 val sdkDirectory = projectDir.parentFile.resolve("sdk")
+val windows = System.getProperty("os.name").startsWith("Windows")
+val python = if (windows) "python" else "python3"
+extra["python"] = python
+extra["npm"] = if (windows) listOf("cmd", "/c", "npm") else listOf("npm")
 val generateContract = tasks.register<Exec>("generateContract") {
     inputs.files(fileTree("scripts") { include("*.py") })
     inputs.file("scripts/schema-type-names.json")
@@ -88,16 +92,16 @@ val generateContract = tasks.register<Exec>("generateContract") {
     inputs.files(fileTree(projectDir.parentFile.resolve("inference/dist")))
     outputs.dir(layout.buildDirectory.dir("generated/contract/kotlin"))
     mustRunAfter(":android-barekit:buildWorkspaceSdk")
-    commandLine("python3", "$projectDir/scripts/generate-contract.py")
+    commandLine(python, "$projectDir/scripts/generate-contract.py")
 }
 
 val testContractGenerator = tasks.register<Exec>("testContractGenerator") {
     dependsOn(generateContract)
-    commandLine("python3", "-m", "unittest", "discover", "-s", "$projectDir/scripts", "-p", "test_*.py")
+    commandLine(python, "-m", "unittest", "discover", "-s", "$projectDir/scripts", "-p", "test_*.py")
 }
 val checkWireLiterals = tasks.register<Exec>("checkWireLiterals") {
     dependsOn(generateContract)
-    commandLine("python3", "$projectDir/scripts/check-wire-literals.py")
+    commandLine(python, "$projectDir/scripts/check-wire-literals.py")
 }
 val testReleaseGate = tasks.register<Exec>("testReleaseGate") {
     commandLine("node", "--test", "$projectDir/scripts/platform-package.test.mjs")

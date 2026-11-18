@@ -14,6 +14,11 @@ expensive: it has to mean the same thing on every client.
 | `mobile-ios`, `mobile-android`                         | the mobile app               |
 | `desktop-python`                                       | the Python client on desktop |
 | `kotlin-android`                                       | the Kotlin client on Android |
+| `desktop-kotlin`                                       | the Kotlin client on desktop |
+
+`desktop-python` and `desktop-kotlin` carry no OS: each is one label on Linux,
+macOS and Windows alike. A coarse `desktop` entry does not cover them (see
+Matching), so a skip that applies to them names them.
 
 The OS is part of the name because such skips already exist in practice: OCR
 is off on iOS for ONNX/CoreML OOM, parakeet streaming is off on Android as
@@ -27,7 +32,8 @@ Every client names its own label. The runner builds it as `<family>-<os>` and pu
 ## Matching
 
 A leg registers with a label. A skip entry applies when it **equals** the
-label, or is a **segment prefix** of it:
+label, or is a **segment prefix** of it whose remaining segments are all
+operating systems:
 
 | catalog entry   | leg                | applies                          |
 | --------------- | ------------------ | -------------------------------- |
@@ -35,6 +41,7 @@ label, or is a **segment prefix** of it:
 | `desktop`       | `desktop-macos`    | yes — coarse entry, specific leg |
 | `desktop-macos` | `desktop-linux`    | no — different OS                |
 | `desktop`       | `desktopish-thing` | no — segments, not string prefix |
+| `desktop`       | `desktop-kotlin`   | no — a different client, not OS  |
 
 The coarse case is what keeps the two reconcilable test by test: a catalog
 entry of `desktop` goes on matching a leg that registers as `desktop-macos`,
