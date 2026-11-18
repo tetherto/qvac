@@ -1,0 +1,23 @@
+name: Prepare mobile prebuilds
+description: Check a package's prebuilds/ is present and its own, copy each mobile ABI from the one built, and drop desktop hosts.
+
+inputs:
+  workdir:
+    description: Package directory holding prebuilds/
+    required: true
+  expected-dirs:
+    description: Directories that must be present and hold this package's binary, space-separated
+    default: ""
+  source:
+    description: Where the prebuilds came from, for error messages
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        WORKDIR: ${{ inputs.workdir }}
+        EXPECTED_DIRS: ${{ inputs.expected-dirs }}
+        SOURCE: ${{ inputs.source }}
+      run: node "$GITHUB_ACTION_PATH/prebuilds-prepare-mobile.mjs"

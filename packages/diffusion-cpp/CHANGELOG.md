@@ -2,7 +2,25 @@
 
 ## [Unreleased]
 
-## [0.35.2] - 2026-11-13
+## [0.36.0] - 2026-11-17
+
+### Features
+
+- Add bounded automatic performance profiles for supported FLUX.2 Klein,
+  MiniMax-H3 and LTX-2.3 checkpoints and devices. Explicit caller settings take
+  precedence; `performance_profile: 'off'` retains current engine defaults
+  ([#5578](https://github.com/tetherto/qvac/pull/5578)).
+- Add optional video output bounds, enforced by generation and fit probes, and
+  recognize supported metadata-only checkpoints during fit assessment
+  ([#5578](https://github.com/tetherto/qvac/pull/5578)).
+
+### Changed
+
+- Require `stable-diffusion-cpp` `2026-11-01#1` from the existing default registry
+  ([#5578](https://github.com/tetherto/qvac/pull/5578),
+  [registry #496](https://github.com/tetherto/qvac-registry-vcpkg/pull/496)).
+
+## [0.35.2] - 2026-11-17
 
 ### Fixes
 
@@ -11,6 +29,11 @@
   field, and with flash attention enabled, large images such as SD 2.1 at
   768x768 came out as a mosaic
   ([#5722](https://github.com/tetherto/qvac/pull/5722)).
+
+### Changed
+
+- Require `inference-addon-cpp` 1.6.0 for the shared runtime-stat value type
+  ([#5812](https://github.com/tetherto/qvac/pull/5812)).
 
 ## [0.35.1] - 2026-11-09
 

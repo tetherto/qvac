@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-11-17
+
+### Changed
+
+- Require `inference-addon-cpp` 1.6.0 for the shared runtime-stat value type
+  ([#5812](https://github.com/tetherto/qvac/pull/5812)).
+
+- Share the `@qvac/fabric` runtime and backend loader, retaining addon-local speech engines built against its headers.
+
+- Update the shared `speech-cpp` native dependency to `2026-11-11`
+  ([#5747](https://github.com/tetherto/qvac/pull/5747)).
+
 ### Fixed
 
 - `encode()` / `encodePcm()` release every bare-ffmpeg object they create for
@@ -14,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   kept the input PCM, the encoded output and the native FFmpeg state in memory
   for the life of the process
   ([#5610](https://github.com/tetherto/qvac/pull/5610)).
+
 ## [0.10.1] - 2026-11-10
 
 ### Added

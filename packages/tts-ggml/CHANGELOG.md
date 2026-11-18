@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Share the `@qvac/fabric` runtime and backend loader, retaining addon-local speech engines built against its headers.
+
+- Update the shared `speech-cpp` native dependency to `2026-11-11`
+  ([#5747](https://github.com/tetherto/qvac/pull/5747)).
+
 ## [0.15.1] - 2026-11-10
 
 ## [0.15.0] - 2026-11-05

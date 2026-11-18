@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- `JsAsyncTask::runOn(env, executor, work)` and `JsAsyncTask::runOn(env, executor, work, marshal)` run the work on an `IAsyncTaskExecutor` the addon owns instead of starting a thread per task. They resolve and reject exactly as the matching `run()` overloads. The executor, declared in `AsyncTaskExecutor.hpp`, queues a task with `post()`, which returns a ticket that is never reused, and removes a task that has not started with `cancel(ticket)`. When the environment is torn down while the task is still queued, the task is cancelled on its executor and never runs, so teardown waits only for a task that has already started. When the executor does not accept the task, `runOn()` throws an `InternalError` `StatusError`. `run()` is unchanged.
+
+## [1.6.0] - 2026-11-17
+
+### Added
+- `RuntimeStats` values can be strings. The value type is now `RuntimeStatValue`, an alias for `std::variant<double, int64_t, std::string>`. `JsRuntimeStatsOutputHandler` emits a string stat as a JavaScript string and numeric stats as numbers, as before. `CppRuntimeStatsOutputHandler` logs string stats alongside numeric ones.
+
+### Breaking
+- Code that spells out the old value type `std::variant<double, int64_t>` no longer compiles against `RuntimeStats`. That covers stat pairs built with `std::make_pair(key, std::variant<double, int64_t>(value))` and pointers or references to that type taken from a `RuntimeStats` entry. Build pairs from the plain value (`std::make_pair(key, value)`) and use `RuntimeStatValue` where a type name is needed. A visitor that passes every alternative to a numeric API, such as a generic lambda calling `js::Number::create`, must handle `std::string` too. `std::get<double>`, `std::get<int64_t>` and `std::holds_alternative` work unchanged.
+
 ## [1.5.0] - 2026-10-13
 
 ### Added

@@ -66,7 +66,8 @@ export interface ParakeetConfig {
   /**
    * Indic CTC language id or Nemotron locale alias (for example `"en-US"`,
    * `"hi-IN"`, or `"auto"`). Empty selects `"auto"` for Nemotron and keeps
-   * full-vocabulary greedy decode for CTC.
+   * full-vocabulary greedy decode for CTC. Full TranscribePsy EU takes
+   * `"en"`, `"other"`, or `"auto"` (also when empty).
    */
   language?: string;
   /**
@@ -153,7 +154,7 @@ export interface ParakeetConfig {
   longFormContextFrames?: number;
   /**
    * Directory containing dynamically-loaded ggml backend libraries. Defaults
-   * to the package's own `prebuilds/` folder.
+   * to the backends the `@qvac/fabric` runtime ships.
    */
   backendsDir?: string;
   /**

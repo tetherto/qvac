@@ -73,3 +73,12 @@ npm test         # bare shared-runtime.test.js
 ```
 
 [file-deps]: https://docs.npmjs.com/cli/v10/configuring-npm/package-json#local-paths
+
+## Mixed speech and LLM runtime
+
+Build Fabric, LLM, and all four speech addons, then run `npm install` and
+`npm run test:speech` here. Each load order runs in a fresh Bare process.
+The test loads all speech bindings, runs Whisper and LLM inference concurrently,
+unloads and reloads each while the other remains alive, and checks that Linux
+maps one Fabric runtime. Set `QVAC_TEST_DEVICE=gpu` to exercise GPU placement;
+the default is CPU. Missing native builds or models fail the test.
