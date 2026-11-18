@@ -275,7 +275,8 @@ Snap). A dispatch of `sdk-e2e.yml` takes:
 It runs every configuration whose language and platform it names. Every leg builds `packages/inference` and
 `packages/test-suite` from the checkout and tests them together with the client, downloads its models in the run, and
 uploads its reports as `<package>-results-<configuration>`. The job summary compares them with the newest dispatch
-run's on the base branch; a failed test fails the leg.
+run's on the base branch; a failed test fails the leg. The Python leg installs the client from the wheel it builds, the
+same thin wheel PyPI gets.
 
 ```bash
 gh workflow run sdk-e2e.yml --ref <branch> -f languages=python -f platforms=mac -f suite=smoke
