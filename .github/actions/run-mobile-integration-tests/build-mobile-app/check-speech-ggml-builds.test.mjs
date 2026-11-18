@@ -93,3 +93,41 @@ test('parses --modules-dir', () => {
   assert.deepEqual(parseArgs(['--modules-dir', 'app/node_modules']), { modulesDir: 'app/node_modules' });
   assert.throws(() => parseArgs(['--platform']), /unknown argument --platform/);
 });
+
+test('shared speech addons require one resolvable Fabric installation', () => {
+  const addon = { id: '@qvac/asr-ggml@1', ggmlSpeech: null, runtime: 'fabric', fabricPath: '/app/node_modules/@qvac/fabric/package.json' };
+  assert.deepEqual(checkSpeechAddons([addon, { ...addon, id: '@qvac/tts-ggml@1' }]), { errors: [], warnings: [] });
+  assert.match(checkSpeechAddons([{ ...addon, fabricPath: null }]).errors.join('\n'), /cannot resolve/);
+  assert.match(checkSpeechAddons([addon, { ...addon, fabricPath: '/nested/fabric/package.json' }]).errors.join('\n'), /multiple @qvac\/fabric installations/);
+});
+
+test('installed speech packages resolve their own nested Fabric dependencies', (t) => {
+  const modules = path.join(tempDir(t), 'node_modules');
+  const fabric = { name: '@qvac/fabric', version: '0.30.1', exports: { './package': './package.json' } };
+  writePackage(path.join(modules, '@qvac/fabric'), fabric);
+  writePackage(path.join(modules, '@qvac/asr-ggml'), {
+    name: '@qvac/asr-ggml', version: '1.0.0', dependencies: { '@qvac/fabric': '^0.30.1' },
+  });
+  writePackage(path.join(modules, '@qvac/tts-ggml'), {
+    name: '@qvac/tts-ggml', version: '1.0.0', dependencies: { '@qvac/fabric': '^0.30.1' },
+  });
+  writePackage(path.join(modules, '@qvac/tts-ggml/node_modules/@qvac/fabric'), fabric);
+  const addons = findSpeechAddons(modules);
+  assert.equal(addons.length, 2);
+  assert.ok(addons.every((addon) => addon.fabricVersion === fabric.version));
+  assert.match(checkSpeechAddons(addons).errors.join('\n'), /multiple @qvac\/fabric installations/);
+});
+
+test('speech and LLM consumers must resolve the same Fabric installation', (t) => {
+  const modules = path.join(tempDir(t), 'node_modules');
+  const fabric = { name: '@qvac/fabric', version: '0.30.1', exports: { './package': './package.json' } };
+  writePackage(path.join(modules, '@qvac/fabric'), fabric);
+  writePackage(path.join(modules, '@qvac/asr-ggml'), {
+    name: '@qvac/asr-ggml', version: '1.0.0', dependencies: { '@qvac/fabric': '^0.30.1' },
+  });
+  writePackage(path.join(modules, '@qvac/llm-llamacpp'), {
+    name: '@qvac/llm-llamacpp', version: '1.0.0', dependencies: { '@qvac/fabric': '^0.30.1' },
+  });
+  writePackage(path.join(modules, '@qvac/llm-llamacpp/node_modules/@qvac/fabric'), fabric);
+  assert.match(checkSpeechAddons(findSpeechAddons(modules)).errors.join('\n'), /multiple @qvac\/fabric installations/);
+});

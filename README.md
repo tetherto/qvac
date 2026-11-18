@@ -329,3 +329,8 @@ Built something with QVAC? Add a badge to your README to show it and help others
 ```
 
 The full set of banners and light/dark and inline badge variants, with copy-paste snippets, lives in [BADGES.md](./docs/branding/BADGES.md).
+
+The native speech addons (`asr-ggml`, `tts-ggml`, `audiogen-ggml`, and
+`bci-whispercpp`) share the [`@qvac/fabric`](packages/fabric/README.md) npm
+runtime with LLM addons. Speech engines remain inside each addon and compile
+against Fabric’s headers; GPU backends are supplied and loaded by Fabric.

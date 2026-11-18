@@ -14,6 +14,7 @@ import { parseArgs } from 'node:util'
 
 import {
   SPEECH_ADDONS,
+  describeSpeechAddon,
   checkSpeechAddons,
   findSpeechAddons,
   summarizeSpeechAddons
@@ -22,9 +23,9 @@ import {
 // The speech addons in an installed tree, plus the package itself when it is one, as the app holds it.
 export function speechAddons(modulesDir, pkg = null) {
   const found = findSpeechAddons(modulesDir)
-  if (!pkg || !SPEECH_ADDONS.includes(pkg.name)) return found
+  if (!pkg || (!SPEECH_ADDONS.includes(pkg.name) && !pkg.dependencies?.['@qvac/fabric'])) return found
   return [
-    { id: `${pkg.name}@${pkg.version}`, ggmlSpeech: pkg.qvac?.['ggml-speech'] ?? null },
+    describeSpeechAddon(pkg, resolve(modulesDir, '..')),
     ...found
   ]
 }
