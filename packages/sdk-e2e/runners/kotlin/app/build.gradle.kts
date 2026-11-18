@@ -8,7 +8,7 @@ plugins {
 
 /**
  * Stages `assets/e2e` as one generated source directory, so AGP wires it only into tasks that read
- * assets: compiling the app needs neither npm nor the e2e package installed.
+ * assets: compiling and unit-testing the app need neither npm nor the e2e package installed.
  */
 abstract class StageE2eAssets : DefaultTask() {
     @get:InputDirectory
@@ -161,19 +161,16 @@ android {
         resources {
             // Both Paho jars carry an OSGi `bundle.properties` at the root; neither client reads it.
             excludes += setOf("bundle.properties")
-            // Paho finds its transports through ServiceLoader: the app's OkHttp WebSocket factory has
-            // to be appended to Paho's service file, not dropped in favour of it.
+            // Paho finds its transports through ServiceLoader: the runner's OkHttp WebSocket factory
+            // has to be appended to Paho's service file, not dropped in favour of it.
             merges += setOf("META-INF/services/**")
         }
     }
 }
 
 dependencies {
+    implementation(project(":runner"))
     // The version the -PqvacSdkRepository Maven repository holds; the composite build ignores it.
     implementation("io.tether:qvac-sdk-android:${providers.gradleProperty("qvacSdkVersion").getOrElse("local")}")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
-    implementation("org.eclipse.paho:org.eclipse.paho.mqttv5.client:1.2.5")
 }
