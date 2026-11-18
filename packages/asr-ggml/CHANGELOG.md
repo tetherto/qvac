@@ -14,12 +14,56 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries
+  `qvac-fabric` `11739.3.0#1` -> `11739.4.0`
+  ([#5831](https://github.com/tetherto/qvac/pull/5831)): opt-in WebGPU builds,
+  mtmd-helper decode limits, Core ML FFN prefill for Qwen3.5 0.8B and 2B,
+  OpenCL fixes for device-side uploads, GROUP_NORM and long flash-attention
+  chunks, the XDNA fused decode and host-decode fallback, and TurboVec IVF
+  lists stored contiguously. The mobile dev and peer dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.31.0` with it.
+- `@qvac/fabric` 0.31 adds fields to `common_params_speculative_draft` and the
+  `mtmd_helper_*` structs, so it is not ABI-compatible with 0.30.x. The RPC
+  protocol stays at 117. Every addon loaded in one process must resolve the
+  same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.31.0` together.
+- This package needed no code change for the new fabric.
+
+## [0.12.2] - 2026-11-17
+
+### Changed
+
+- Require `inference-addon-cpp` 1.6.0 for the shared runtime-stat value type
+  ([#5812](https://github.com/tetherto/qvac/pull/5812)).
+
+- Share the `@qvac/fabric` runtime and backend loader, retaining addon-local speech engines built against its headers.
+
 ### Added
 
 - Opt-in WebGPU source builds with backend identity reporting.
 - Whisper Core ML encoder activation with missing-sidecar fallback and native state reporting.
 - Optional MOSS token progress callbacks, typed runtime statistics and per-transcription encoder routing.
 - Optional batch diarization probability matrices, batch ASR token IDs and native Parakeet stage timings.
+- Core ML for the full TranscribePsy-250M-EU model on macOS and iOS. With its
+  English, adapter and gate encoder sidecars next to the GGUF, both language
+  routes and the gate run on Core ML in `run()` and `runStreaming()`; without
+  them the model runs on ggml as before
+  ([Fabric #432](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/432)).
+- `RuntimeStats.decoderUsedCoreml` after Parakeet jobs with offline
+  transcription: `1` when every transcription decoded on the Core ML TDT
+  decoder sidecar, `0` when any decoded on ggml.
+- `examples/parakeet-transcribepsy-transcribe.js` takes `--language` for the
+  full TranscribePsy EU model and reports whether the decoder ran on Core ML.
+
+### Changed
+
+- Update the shared `speech-cpp` native dependency to `2026-11-11`.
+- Full TranscribePsy EU streaming applies `parakeetConfig.language`. With
+  `"auto"`, a session buffers its first 20 s for the language gate before it
+  emits text, and a shorter one routes when the stream ends; `"en"` and
+  `"other"` emit without that delay.
 
 ## [0.12.1] - 2026-11-10
 

@@ -12,6 +12,7 @@
 #include <gtest/gtest.h>
 #include <whisper.h>
 
+#include "model-interface/ModuleBackendsDir.hpp"
 #include "model-interface/bci/BCIModel.hpp"
 
 namespace {
@@ -32,6 +33,14 @@ struct LoadState {
 };
 
 LoadState g_loadState;
+
+struct BackendLoads {
+  int fromFabric = 0;
+  int fromPath = 0;
+};
+
+BackendLoads g_backendLoads;
+constexpr int K_REPEATED_LOADS = 2;
 
 TestDevice* testDevice(ggml_backend_dev_t device) {
   return reinterpret_cast<TestDevice*>(device);
@@ -79,8 +88,13 @@ void __wrap_ggml_backend_dev_memory(
   *free = 1024U * 1024U;
   *total = 2U * 1024U * 1024U;
 }
-void __wrap_ggml_backend_load_all() {}
-void __wrap_ggml_backend_load_all_from_path(const char*) {}
+size_t __wrap_qvac_fabric_load_backends() {
+  ++g_backendLoads.fromFabric;
+  return 0;
+}
+void __wrap_ggml_backend_load_all_from_path(const char*) {
+  ++g_backendLoads.fromPath;
+}
 
 whisper_context* __wrap_whisper_init_from_file_with_params(
     const char*, whisper_context_params params) {
@@ -233,6 +247,30 @@ TEST_P(BCIModelLoadTest, SelectorTransitionsRecreateContextOnlyWhenChanged) {
   EXPECT_EQ(g_loadState.loads.back().gpu_device, 0);
   EXPECT_EQ(g_loadState.warmups, 4);
   EXPECT_TRUE(model.isLoaded());
+}
+
+TEST(BackendDirectory, ResolutionDoesNotInitializeBackends) {
+  const auto before = g_backendLoads;
+  qvac_lib_inference_addon_bci::resolveBackendsDir("");
+  qvac_lib_inference_addon_bci::resolveBackendsDir("explicit-backends");
+  EXPECT_EQ(g_backendLoads.fromFabric, before.fromFabric);
+  EXPECT_EQ(g_backendLoads.fromPath, before.fromPath);
+}
+
+TEST_P(BCIModelLoadTest, UnconfiguredBackendsComeFromFabricOncePerProcess) {
+  const auto before = g_backendLoads;
+  BCIModel first(config_);
+  ASSERT_NO_THROW(first.load());
+  const auto initialized = g_backendLoads;
+  EXPECT_GT(initialized.fromFabric, 0);
+  EXPECT_LE(initialized.fromFabric - before.fromFabric, 1);
+  EXPECT_EQ(initialized.fromPath, before.fromPath);
+  for (int load = 0; load < K_REPEATED_LOADS; ++load) {
+    BCIModel model(config_);
+    ASSERT_NO_THROW(model.load());
+  }
+  EXPECT_EQ(g_backendLoads.fromFabric, initialized.fromFabric);
+  EXPECT_EQ(g_backendLoads.fromPath, initialized.fromPath);
 }
 
 INSTANTIATE_TEST_SUITE_P(

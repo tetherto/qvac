@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries
+  `qvac-fabric` `11739.3.0#1` -> `11739.4.0`
+  ([#5831](https://github.com/tetherto/qvac/pull/5831)): opt-in WebGPU builds,
+  mtmd-helper decode limits, Core ML FFN prefill for Qwen3.5 0.8B and 2B,
+  OpenCL fixes for device-side uploads, GROUP_NORM and long flash-attention
+  chunks, the XDNA fused decode and host-decode fallback, and TurboVec IVF
+  lists stored contiguously. The mobile dev and peer dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.31.0` with it.
+- `@qvac/fabric` 0.31 adds fields to `common_params_speculative_draft` and the
+  `mtmd_helper_*` structs, so it is not ABI-compatible with 0.30.x. The RPC
+  protocol stays at 117. Every addon loaded in one process must resolve the
+  same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.31.0` together.
+- This package needed no code change for the new fabric.
+
+## [0.10.2] - 2026-11-17
+
+### Changed
+
+- Require `inference-addon-cpp` 1.6.0 for the shared runtime-stat value type
+  ([#5812](https://github.com/tetherto/qvac/pull/5812)).
+
+- Share the `@qvac/fabric` runtime and backend loader, retaining addon-local speech engines built against its headers.
+
+- Update the shared `speech-cpp` native dependency to `2026-11-11`
+  ([#5747](https://github.com/tetherto/qvac/pull/5747)).
+
 ### Fixed
 
 - `encode()` / `encodePcm()` release every bare-ffmpeg object they create for
@@ -14,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   kept the input PCM, the encoded output and the native FFmpeg state in memory
   for the life of the process
   ([#5610](https://github.com/tetherto/qvac/pull/5610)).
+
 ## [0.10.1] - 2026-11-10
 
 ### Added

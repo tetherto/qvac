@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 /**
  * Fail if a Linux prebuild (.so module or .bare addon) NEEDs a shared C++
- * runtime or leaves C++ runtime symbols undefined. See
+ * runtime or leaves C++ runtime symbols unresolved. See
  * lib/linux-module-cxx-runtime.mjs for the rule.
  *
  * Usage:
  *   node .github/scripts/check-linux-module-cxx-runtime.mjs <dir>...
  *
+ * --fabric <binary> verifies versioned imports against a shared Fabric provider.
  * --xdna validates the XDNA module against the system XRT/libstdc++ ABI.
  * Every .so and .bare under each <dir> is checked; finding none is an error.
  * NM and READELF override the tools, which default to llvm-nm and
@@ -17,6 +18,8 @@ import { readdirSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import {
   cxxRuntimeViolations,
+  fabricRuntimeViolations,
+  parseVersionedSymbols,
   xdnaRuntimeViolations,
   formatViolations,
   parseNeeded,
@@ -53,14 +56,22 @@ function listBinaries(dir) {
 // Opt in only for Fabric's XRT-linked module; all other modules retain the
 // static-runtime rule. XDNA's required system ABI is validated separately.
 const withXdna = process.argv.includes('--xdna')
-const dirs = process.argv.slice(2).filter((arg) => arg !== '--xdna')
+const args = process.argv.slice(2)
+const fabricIndex = args.indexOf('--fabric')
+const fabricFile = fabricIndex < 0 ? null : args[fabricIndex + 1]
+if (fabricIndex >= 0 && (!fabricFile || fabricFile.startsWith('--'))) {
+  throw new Error('--fabric requires the provider binary path')
+}
+if (fabricIndex >= 0) args.splice(fabricIndex, 2)
+const dirs = args.filter((arg) => arg !== '--xdna')
 if (dirs.length === 0) {
-  console.error('usage: check-linux-module-cxx-runtime.mjs <dir>...')
+  console.error('usage: check-linux-module-cxx-runtime.mjs [--fabric <binary>] <dir>...')
   process.exit(2)
 }
 
 const nm = pickTool(process.env.NM, ['llvm-nm', 'nm'])
 const readelf = pickTool(process.env.READELF, ['llvm-readelf', 'readelf'])
+const fabric = fabricFile ? readFabric(fabricFile) : null
 const files = dirs.flatMap(listBinaries)
 if (files.length === 0) {
   console.error(`::error::no .so or .bare files under ${dirs.join(', ')}`)
@@ -78,10 +89,17 @@ for (const file of files) {
     withXdna && basename(file) === 'libqvac-ggml-xdna.so'
       ? xdnaRuntimeViolations
       : cxxRuntimeViolations
-  const violations = check({
-    needed: parseNeeded(run(readelf, ['-d', file])),
-    undefinedSymbols: parseUndefined(run(nm, ['-D', '--undefined-only', '-P', file]))
-  })
+  const needed = parseNeeded(run(readelf, ['-d', file]))
+  const undefinedOutput = run(nm, ['-D', '--undefined-only', '-P', file])
+  const violations =
+    fabric && file.endsWith('.bare')
+      ? fabricRuntimeViolations({
+          needed,
+          undefinedSymbols: parseVersionedSymbols(undefinedOutput),
+          definedSymbols: parseVersionedSymbols(run(nm, ['-D', '--defined-only', '-P', file])),
+          fabric
+        })
+      : check({ needed, undefinedSymbols: parseUndefined(undefinedOutput) })
   if (violations.needed.length > 0 || violations.symbols.length > 0) {
     failures.push(formatViolations(file, violations))
   } else {
@@ -97,3 +115,18 @@ if (failures.length > 0) {
   process.exit(1)
 }
 console.log(`${files.length} Linux prebuilds pass C++ runtime ABI validation (${nm}, ${readelf})`)
+
+function readFabric(file) {
+  const dynamic = run(readelf, ['-d', file])
+  const violations = cxxRuntimeViolations({
+    needed: parseNeeded(dynamic),
+    undefinedSymbols: parseUndefined(run(nm, ['-D', '--undefined-only', '-P', file]))
+  })
+  if (violations.needed.length || violations.symbols.length) {
+    throw new Error(formatViolations(file, violations))
+  }
+  return {
+    soname: dynamic.match(/\(SONAME\)[^\n[]*\[([^\]\n]+)\]/)?.[1],
+    symbols: parseVersionedSymbols(run(nm, ['-D', '--defined-only', '-P', file]))
+  }
+}
