@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-18
+
 ### Changed
 
 - `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries
@@ -29,14 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `JsAsyncTask::runOn` for running async work on an addon-owned executor.
   Compile-time only; no API or runtime behaviour change for this package.
 
-## [0.10.2] - 2026-11-17
-
-### Changed
 
 - Require `inference-addon-cpp` 1.6.0 for the shared runtime-stat value type
   ([#5812](https://github.com/tetherto/qvac/pull/5812)).
 
-- Share the `@qvac/fabric` runtime and backend loader, retaining addon-local speech engines built against its headers.
+- Share the `@qvac/fabric` runtime and backend loader, retaining addon-local
+  speech engines built against its headers
+  ([#5808](https://github.com/tetherto/qvac/pull/5808)).
 
 - Build the bundled speech engine from the source published as
   `speech-cpp` `2026-11-18` (`5e1e4d34`).
