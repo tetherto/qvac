@@ -24,6 +24,10 @@ const embedsWithLoadedModel: Step[] = [
   { assert: { on: '$embedding', use: 'expectation' } }
 ]
 
+const unloadsLoadedModel: Step[] = [
+  { call: { method: 'unloadModel', params: { modelId: '$modelId?' } } }
+]
+
 const SHARDED_URL =
   'https://huggingface.co/opaninakuffo/gte-large-fp16-sharded/resolve/main/gte-large_fp16-00003-of-00005.gguf'
 const ARCHIVE_URL =
@@ -35,6 +39,7 @@ export const httpShardedEmbedLoad: TestDefinition = {
   expectation: { validation: 'type', expectedType: 'string' },
   suites: ['smoke'],
   steps: httpLoadSteps(),
+  finally: unloadsLoadedModel,
   metadata: { category: 'http', dependency: 'none', estimatedDurationMs: 300000 }
 }
 
@@ -43,6 +48,7 @@ export const httpShardedEmbedProgress: TestDefinition = {
   params: { modelType: 'llamacpp-embedding', modelUrl: SHARDED_URL },
   expectation: { validation: 'type', expectedType: 'string' },
   steps: httpProgressSteps(),
+  finally: unloadsLoadedModel,
   metadata: { category: 'http', dependency: 'none', estimatedDurationMs: 120000 }
 }
 
@@ -56,6 +62,7 @@ export const httpShardedEmbedInference: TestDefinition = {
   expectation: { validation: 'type', expectedType: 'array' },
   suites: ['smoke'],
   steps: httpLoadSteps(embedsWithLoadedModel),
+  finally: unloadsLoadedModel,
   metadata: { category: 'http', dependency: 'none', estimatedDurationMs: 300000 }
 }
 
@@ -64,6 +71,7 @@ export const httpArchiveEmbedLoad: TestDefinition = {
   params: { modelType: 'llamacpp-embedding', modelUrl: ARCHIVE_URL },
   expectation: { validation: 'type', expectedType: 'string' },
   steps: httpLoadSteps(),
+  finally: unloadsLoadedModel,
   metadata: { category: 'http', dependency: 'none', estimatedDurationMs: 300000 }
 }
 
@@ -72,6 +80,7 @@ export const httpArchiveEmbedProgress: TestDefinition = {
   params: { modelType: 'llamacpp-embedding', modelUrl: ARCHIVE_URL },
   expectation: { validation: 'type', expectedType: 'string' },
   steps: httpProgressSteps(),
+  finally: unloadsLoadedModel,
   metadata: { category: 'http', dependency: 'none', estimatedDurationMs: 300000 }
 }
 
@@ -84,6 +93,7 @@ export const httpArchiveEmbedInference: TestDefinition = {
   },
   expectation: { validation: 'type', expectedType: 'array' },
   steps: httpLoadSteps(embedsWithLoadedModel),
+  finally: unloadsLoadedModel,
   metadata: { category: 'http', dependency: 'none', estimatedDurationMs: 300000 }
 }
 
