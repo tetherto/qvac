@@ -449,18 +449,22 @@ Lab is an executable example for the eight phone-sized capabilities; Media and
 VLA have API/packaging tests because their current catalog packs are too large
 for the Pixel 8a matrix.
 
-Regenerate and verify the checked-in contract surface with:
+The contract surface is generated at build time and never committed:
+`generateContract` exports the SDK contract from the sibling `packages/sdk` and
+writes `build/generated/contract/kotlin`, which `commonMain` compiles. It needs
+`packages/sdk` installed and `@qvac/inference` built, and every compile runs it
+when its inputs changed. To run it, or the generator and wire-vocabulary checks,
+on their own:
 
 ```bash
 ./gradlew generateContract
-./gradlew checkContract
+./gradlew testContractGenerator checkWireLiterals
 ```
 
-Generation is deterministic and CI checks the checked-in output, Python
-generator tests, handwritten wire vocabulary (including the upstream VLA Zod
-schema), and Kotlin compilation. Unsupported schema constructs fail generation
-instead of silently degrading to an empty DTO. The generated schema namespace
-is large by design; edit the exporter/generator, never generated DTOs.
+`checkWireLiterals` checks the handwritten wire vocabulary, including the
+upstream VLA Zod schema. Unsupported schema constructs fail generation instead
+of silently degrading to an empty DTO. The generated schema namespace is large
+by design; edit the exporter/generator, never generated DTOs.
 
 ## Bare-RPC
 
