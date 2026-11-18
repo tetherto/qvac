@@ -24,13 +24,6 @@ if(NOT TARGET stable-diffusion::stable-diffusion)
         INTERFACE_INCLUDE_DIRECTORIES "${STABLE_DIFFUSION_INCLUDE_DIR}"
         INTERFACE_LINK_LIBRARIES      "ggml::ggml"
     )
-    # Built with the coreml feature: the UNet/TAE sidecars call into CoreML.
-    if(@SD_CPP_COREML@)
-        set_property(TARGET stable-diffusion::stable-diffusion APPEND PROPERTY
-            INTERFACE_LINK_LIBRARIES
-                "-framework CoreML" "-framework Foundation" "-framework Accelerate"
-        )
-    endif()
 endif()
 
 unset(_SD_CPP_PREFIX)

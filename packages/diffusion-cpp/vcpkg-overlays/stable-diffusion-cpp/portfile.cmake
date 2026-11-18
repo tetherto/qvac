@@ -35,12 +35,6 @@ vcpkg_check_features(
     FEATURES
         coreml SD_COREML
 )
-# Consumed by stable-diffusion-cppConfig.cmake.in: the static library needs
-# the CoreML frameworks on the consumer's link line.
-set(SD_CPP_COREML OFF)
-if("coreml" IN_LIST FEATURES)
-    set(SD_CPP_COREML ON)
-endif()
 
 set(SD_LTO OFF)
 if(VCPKG_TARGET_IS_WINDOWS)
@@ -69,15 +63,22 @@ vcpkg_cmake_install()
 # truth and vcpkg's misplaced-cmake-files check stays quiet.
 file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/lib/cmake"
                     "${CURRENT_PACKAGES_DIR}/debug/lib/cmake")
-configure_file(
-    "${CMAKE_CURRENT_LIST_DIR}/stable-diffusion-cppConfig.cmake.in"
-    "${CURRENT_PACKAGES_DIR}/share/stable-diffusion-cpp/stable-diffusion-cppConfig.cmake"
-    @ONLY
-)
 file(INSTALL
+    "${CMAKE_CURRENT_LIST_DIR}/stable-diffusion-cppConfig.cmake"
     "${CMAKE_CURRENT_LIST_DIR}/stable-diffusion-cppConfigVersion.cmake"
     DESTINATION "${CURRENT_PACKAGES_DIR}/share/stable-diffusion-cpp"
 )
+# The coreml sidecars call into Core ML from the static library, so
+# consumers need the frameworks on their link line.
+if("coreml" IN_LIST FEATURES)
+    file(APPEND "${CURRENT_PACKAGES_DIR}/share/stable-diffusion-cpp/stable-diffusion-cppConfig.cmake" [[
+
+set_property(TARGET stable-diffusion::stable-diffusion APPEND PROPERTY
+    INTERFACE_LINK_LIBRARIES
+        "-framework CoreML" "-framework Foundation" "-framework Accelerate"
+)
+]])
+endif()
 
 vcpkg_fixup_pkgconfig()
 
