@@ -5,6 +5,7 @@ import { estimateDisparity } from '@/plugins/builtin/ggml-stereo-depth/ops/estim
 import { stereoDepthPlugin } from '@/plugins/builtin/ggml-stereo-depth/plugin'
 import { ModelType, decodeFloat32Base64 } from '@/schemas/index'
 import { InferenceCancelledError, InvalidResponseError } from '@/errors/index'
+import { buildOperationEvent } from '@/profiling'
 
 const stats = { total_time_ms: 40, backend_id: 1, cpu_fallback_nodes: 0, weight_bytes: 196 }
 
@@ -18,9 +19,14 @@ function disparityMap(width: number, height: number) {
 
 type Infer = (left: Uint8Array, right: Uint8Array, options?: unknown) => Promise<unknown>
 
-function fixture(t: { teardown(cleanup: () => void): void }, id: string, infer: Infer) {
+function fixture(
+  t: { teardown(cleanup: () => void): void },
+  id: string,
+  infer: Infer,
+  runtimeStats: Partial<typeof stats> = stats
+) {
   registerModel(id, {
-    model: { infer, getRuntimeStats: () => stats } as unknown as AnyModel,
+    model: { infer, getRuntimeStats: () => runtimeStats } as unknown as AnyModel,
     path: '/tmp/bridgedepth-vits-f32.gguf',
     config: {},
     modelType: ModelType.ggmlStereoDepth
@@ -67,6 +73,36 @@ test('BridgeDepth op passes both views and RGB dimensions and returns the map wi
   t.alike((calls[1] as { options: unknown }).options, { width: 32, height: 32, channels: 3 })
   t.alike(stereoDepthPlugin.handlers['estimateDisparity']?.cancel, { scope: 'none' })
   t.is(stereoDepthPlugin.modelType, ModelType.ggmlStereoDepth)
+})
+
+test('BridgeDepth op omits stats when native reports none', async (t) => {
+  fixture(t, 'stereo-no-stats', async () => disparityMap(1, 1), {})
+  const result = await estimateDisparity({
+    type: 'estimateDisparity',
+    modelId: 'stereo-no-stats',
+    ...pair
+  })
+  t.absent('stats' in result)
+})
+
+test('BridgeDepth op result feeds the estimateDisparity profiling event', async (t) => {
+  fixture(t, 'stereo-profiling', async () => disparityMap(1, 1))
+  const result = await estimateDisparity({
+    type: 'estimateDisparity',
+    modelId: 'stereo-profiling',
+    ...pair
+  })
+  const event = buildOperationEvent(
+    'estimateDisparity',
+    'stereo-p',
+    0,
+    1,
+    { modelId: 'stereo-profiling' },
+    result
+  )
+  t.alike(event?.tags, { modelId: 'stereo-profiling' })
+  t.is(event?.gauges?.['totalTime'], 40)
+  t.is(typeof event?.gauges?.['modelExecutionTime'], 'number')
 })
 
 test('BridgeDepth op rejects mismatched RGB bytes and partial dimensions before native work', async (t) => {
