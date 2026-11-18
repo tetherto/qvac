@@ -207,8 +207,66 @@ export interface SearchHit {
   score: number
 }
 
+// `fromOrdinal` defaults to 0 and `limit` to 64 chunks, at most 1,024. Pass the
+// first page's `generation` on later pages: a document re-ingested or deleted
+// since then fails with DOCUMENT_CHANGED instead of mixing generations.
+export interface ReadDocumentParams {
+  namespace: string
+  documentId: string
+  generation?: number
+  fromOrdinal?: number
+  limit?: number
+}
+
+export type ScopedReadDocumentParams = Omit<ReadDocumentParams, 'namespace'>
+
+export interface DocumentChunk {
+  chunkId: string
+  ordinal: number
+  content: string
+  metadataJson?: string
+}
+
+export interface DocumentPage {
+  namespace: string
+  documentId: string
+  generation: number
+  chunkCount: number
+  metadata?: Record<string, unknown>
+  chunks: DocumentChunk[]
+  // The `fromOrdinal` of the next page; null after the last chunk.
+  nextOrdinal: number | null
+}
+
+// Documents come in document ID order. `after` is the previous page's `next`;
+// `limit` defaults to 100, at most 1,024.
+export interface ListDocumentsParams {
+  namespace: string
+  after?: string
+  limit?: number
+}
+
+export type ScopedListDocumentsParams = Omit<ListDocumentsParams, 'namespace'>
+
+export interface DocumentSummary {
+  documentId: string
+  generation: number
+  chunkCount: number
+  // The namespace revision that committed this generation, so sorting by it
+  // gives ingest order. 0 for documents written before revisions were recorded.
+  revision: number
+  metadata?: Record<string, unknown>
+}
+
+export interface DocumentListPage {
+  documents: DocumentSummary[]
+  next: string | null
+}
+
 export interface ScopedRag {
   search(params: ScopedSearchParams): Promise<SearchHit[]>
+  readDocument(params: ScopedReadDocumentParams): Promise<DocumentPage>
+  listDocuments(params?: ScopedListDocumentsParams): Promise<DocumentListPage>
 }
 
 export interface Rag {
@@ -218,5 +276,7 @@ export interface Rag {
   ingest(params: IngestParams, options?: IngestOptions): Promise<IngestResult>
   deleteDocuments(params: DeleteDocumentsParams): Promise<DeleteDocumentsResult>
   search(params: SearchParams): Promise<SearchHit[]>
+  readDocument(params: ReadDocumentParams): Promise<DocumentPage>
+  listDocuments(params: ListDocumentsParams): Promise<DocumentListPage>
   scoped(scope: SearchScope): ScopedRag
 }

@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "schema": [
     {
       "name": "spaces",
@@ -154,6 +154,12 @@
           "required": true,
           "type": "date",
           "version": 1
+        },
+        {
+          "name": "revision",
+          "required": false,
+          "type": "uint",
+          "version": 3
         }
       ]
     },

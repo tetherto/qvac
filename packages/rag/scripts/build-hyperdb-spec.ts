@@ -56,7 +56,10 @@ function buildRAGSchema(schemaDir: string = SCHEMA_DIR) {
       { name: 'chunkCount', type: 'uint', required: true },
       { name: 'contentHash', type: 'string', required: true },
       { name: 'metadata', type: 'json', required: false },
-      { name: 'updatedAt', type: 'date', required: true }
+      { name: 'updatedAt', type: 'date', required: true },
+      // The namespace revision that committed this generation. Absent on
+      // documents written before it was recorded; read as 0.
+      { name: 'revision', type: 'uint', required: false }
     ]
   })
 

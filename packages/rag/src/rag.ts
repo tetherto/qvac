@@ -35,7 +35,11 @@ import {
   parseDelete,
   parseIngest,
   parseIngestOptions,
+  parseListDocuments,
   parseNamespaceName,
+  parseReadDocument,
+  parseScopedListDocuments,
+  parseScopedReadDocument,
   parseSearch,
   type ParsedDocument,
   type ValidDocument,
@@ -43,6 +47,7 @@ import {
   type ValidTextChunk
 } from './input.js'
 import { intersectScope, parseScope } from './scope.js'
+import { listDocumentPage, outOfScope, readDocumentPage } from './documents.js'
 import { checkQuery, scanSearch, throwIfAborted, type SearchQuery } from './search.js'
 import { computeSpaceId, parseEmbeddingSpace } from './space.js'
 import { parseIndexOptions, parseIndexStorage } from './vector-index/options.js'
@@ -65,14 +70,20 @@ import type {
   CreateRagOptions,
   DeleteDocumentsParams,
   DeleteDocumentsResult,
+  DocumentListPage,
+  DocumentPage,
   IngestedDocument,
   IngestOptions,
   IngestParams,
   IndexStorage,
   IngestResult,
+  ListDocumentsParams,
   NamespaceInfo,
   Rag,
+  ReadDocumentParams,
+  ScopedListDocumentsParams,
   ScopedRag,
+  ScopedReadDocumentParams,
   ScopedSearchParams,
   SearchHit,
   SearchParams,
@@ -465,12 +476,48 @@ export function createRag(options: CreateRagOptions): Rag {
     })
   }
 
+  async function readDocument(params: ReadDocumentParams): Promise<DocumentPage> {
+    const { namespace, ...request } = parseReadDocument(params)
+    return await withSnapshot(database(), async (reader) => {
+      await getNamespace(reader, namespace)
+      return await readDocumentPage(reader, namespace, request)
+    })
+  }
+
+  async function listDocuments(params: ListDocumentsParams): Promise<DocumentListPage> {
+    const { namespace, ...request } = parseListDocuments(params)
+    return await withSnapshot(database(), async (reader) => {
+      await getNamespace(reader, namespace)
+      return await listDocumentPage(reader, namespace, request)
+    })
+  }
+
   // A handle's documents are granted, not chosen per request: an ID the
   // namespace no longer has is skipped, so the handle keeps working with what
   // remains and fails closed to no hits. Only the scope's shape can error.
+  // Reading a document outside the scope fails like reading a missing one.
   function scoped(scope: SearchScope): ScopedRag {
     const bound = parseScope(scope)
+    const { namespace, documentIds } = bound
     return {
+      async readDocument(params: ScopedReadDocumentParams): Promise<DocumentPage> {
+        const request = parseScopedReadDocument(params)
+        const instance = database()
+        if (documentIds !== undefined && !documentIds.includes(request.documentId)) {
+          throw outOfScope(namespace, request.documentId)
+        }
+        return await withSnapshot(instance, async (reader) => {
+          await getNamespace(reader, namespace)
+          return await readDocumentPage(reader, namespace, request)
+        })
+      },
+      async listDocuments(params?: ScopedListDocumentsParams): Promise<DocumentListPage> {
+        const request = parseScopedListDocuments(params)
+        return await withSnapshot(database(), async (reader) => {
+          await getNamespace(reader, namespace)
+          return await listDocumentPage(reader, namespace, request, documentIds)
+        })
+      },
       async search(params: ScopedSearchParams): Promise<SearchHit[]> {
         const request = parseSearch({ scope: undefined, ...params })
         const narrowed = intersectScope(bound, request.scope)
@@ -540,9 +587,15 @@ export function createRag(options: CreateRagOptions): Rag {
     ingest: (params, options) => track(() => ingest(params, options)),
     deleteDocuments: (params) => track(() => deleteDocuments(params)),
     search: (params) => track(() => search(params)),
+    readDocument: (params) => track(() => readDocument(params)),
+    listDocuments: (params) => track(() => listDocuments(params)),
     scoped: (scope) => {
       const handle = scoped(scope)
-      return { search: (params) => track(() => handle.search(params)) }
+      return {
+        search: (params) => track(() => handle.search(params)),
+        readDocument: (params) => track(() => handle.readDocument(params)),
+        listDocuments: (params) => track(() => handle.listDocuments(params))
+      }
     }
   }
 }
@@ -701,7 +754,8 @@ async function commitDocument(
     chunkCount: document.chunks.length,
     contentHash,
     metadata: document.metadata,
-    updatedAt: new Date()
+    updatedAt: new Date(),
+    revision: ns.revision + 1
   })
   const revision = await appendMutation(tx, ns, added, removed, encodeNativeId(nextId))
   await indexes.prune(tx, namespace)

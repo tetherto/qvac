@@ -36,6 +36,7 @@ export interface DocumentRecord {
   contentHash: string
   metadata?: Record<string, unknown>
   updatedAt: Date
+  revision?: number
 }
 
 export interface ChunkRecord {

@@ -160,9 +160,31 @@ A text `query` is embedded with the port's `embedQuery` and searched in the port
 - a document ID that isn't in the namespace fails with `DOCUMENT_OUT_OF_SCOPE`;
 - `documentIds: []` returns no hits.
 
+### `readDocument({ namespace, documentId, generation?, fromOrdinal?, limit? })`
+
+Reads a document's chunks in ordinal order, one page at a time. Returns `{ namespace, documentId, generation, chunkCount, metadata?, chunks, nextOrdinal }`; each chunk is `{ chunkId, ordinal, content, metadataJson? }`, without its vector. `fromOrdinal` defaults to 0 and `limit` to 64 chunks, at most 1,024. `nextOrdinal` is the next page's `fromOrdinal`, or `null` after the last chunk.
+
+Every page comes from one generation. Pass the first page's `generation` on later pages: if the document was re-ingested or deleted since, the read fails with `DOCUMENT_CHANGED` rather than mixing generations. Without `generation` the current one is read, and a document the namespace doesn't have fails with `DOCUMENT_OUT_OF_SCOPE`. To read around a hit, pass its `generation` and start a little before its `ordinal`:
+
+```ts
+await rag.readDocument({
+  namespace,
+  documentId: hit.documentId,
+  generation: hit.generation,
+  fromOrdinal: Math.max(0, hit.ordinal - 1),
+  limit: 3
+})
+```
+
+### `listDocuments({ namespace, after?, limit? })`
+
+Lists a namespace's documents in document ID order. Returns `{ documents, next }`; each entry is `{ documentId, generation, chunkCount, revision, metadata? }`. `limit` defaults to 100, at most 1,024. Pass `next` as `after` for the following page; it is `null` on the last one. `revision` is the namespace revision that committed the document's current generation, so sorting by it gives ingest order, for example to drop the oldest documents. Documents written by 0.10 report 0.
+
 ### `scoped(scope)`
 
-Returns `{ search }` bound to `scope`. The `scope` passed to its `search` is optional and is intersected with the bound one: it can narrow to fewer documents but never add a document or switch namespace. Its `search` takes the same `vector` and `spaceId`, or `query`, plus `k` and `signal`, as `search`. A handle never fails on document identity: an ID that the namespace does not have, whether it was never ingested or has since been deleted, is skipped, so a handle whose documents are gone returns no hits instead of an error. Only the shape of the scope can fail (`INVALID_SCOPE`), and a namespace that does not exist fails with `NAMESPACE_NOT_FOUND`.
+Returns `{ search, readDocument, listDocuments }` bound to `scope`. The `scope` passed to its `search` is optional and is intersected with the bound one: it can narrow to fewer documents but never add a document or switch namespace. Its `search` takes the same `vector` and `spaceId`, or `query`, plus `k` and `signal`, as `search`. A handle never fails on document identity: an ID that the namespace does not have, whether it was never ingested or has since been deleted, is skipped, so a handle whose documents are gone returns no hits instead of an error. Only the shape of the scope can fail (`INVALID_SCOPE`), and a namespace that does not exist fails with `NAMESPACE_NOT_FOUND`.
+
+Its `readDocument` and `listDocuments` take the same parameters without `namespace`. `readDocument` of a document outside the bound scope fails with `DOCUMENT_OUT_OF_SCOPE`, with the same message as a missing one, so a handle can't probe for documents it wasn't granted. `listDocuments` lists the whole namespace for a namespace-wide handle, and otherwise only the granted documents that still exist.
 
 ```ts
 const reader = rag.scoped({ namespace: 'handbook', documentIds: ['leave-policy', 'travel'] })
