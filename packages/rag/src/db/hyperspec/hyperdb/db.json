@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "offset": 0,
   "schema": [
     {
@@ -111,6 +111,21 @@
       "key": [
         "namespace",
         "documentId"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "droppedLineages",
+      "namespace": "rag",
+      "id": 7,
+      "type": 1,
+      "version": 3,
+      "versionField": null,
+      "indexes": [],
+      "schema": "@rag/droppedLineages",
+      "derived": false,
+      "key": [
+        "lineageId"
       ],
       "trigger": null
     }

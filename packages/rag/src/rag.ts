@@ -24,6 +24,9 @@ import {
 } from './embeddings.js'
 import {
   parseDelete,
+  parseDropNamespace,
+  parseExport,
+  parseImport,
   parseIngest,
   parseIngestOptions,
   parseListDocuments,
@@ -51,6 +54,9 @@ import {
   writeGeneration
 } from './writes.js'
 import { listDocumentPage, outOfScope, readDocumentPage } from './documents.js'
+import { dropNamespaceRows, listNamespaceSummaries } from './namespaces.js'
+import { exportFrames } from './transfer/export.js'
+import { importStream } from './transfer/import.js'
 import { checkQuery, scanSearch, throwIfAborted, type SearchQuery } from './search.js'
 import { computeSpaceId, parseEmbeddingSpace } from './space.js'
 import { parseIndexOptions, parseIndexStorage } from './vector-index/options.js'
@@ -74,12 +80,20 @@ import type {
   DeleteDocumentsResult,
   DocumentListPage,
   DocumentPage,
+  DropNamespaceParams,
+  DropNamespaceResult,
+  ExportNamespaceParams,
+  ExportOptions,
+  ImportNamespaceParams,
+  ImportOptions,
+  ImportResult,
   IngestedDocument,
   IngestOptions,
   IngestParams,
   IngestResult,
   ListDocumentsParams,
   NamespaceInfo,
+  NamespaceSummary,
   Rag,
   ReadDocumentParams,
   ScopedListDocumentsParams,
@@ -201,6 +215,9 @@ export function createRag(options: CreateRagOptions): Rag {
   let closed = false
   let closing: Promise<void> | null = null
   const inflight = new Set<Promise<unknown>>()
+  // Closers for the snapshots of open exports. An export lives as long as its
+  // consumer pulls, so close() ends them instead of waiting.
+  const exports = new Set<() => Promise<void>>()
 
   // A failed open is not cached, so ready() can be retried.
   function ready(): Promise<void> {
@@ -235,6 +252,7 @@ export function createRag(options: CreateRagOptions): Rag {
   async function drain(): Promise<void> {
     if (opening) await opening.catch(() => {})
     await Promise.allSettled(inflight)
+    await Promise.allSettled(Array.from(exports, (closeExport) => closeExport()))
     db = null
     indexes = null
     const releasing = release
@@ -493,6 +511,78 @@ export function createRag(options: CreateRagOptions): Rag {
     })
   }
 
+  // Bad input and a closed RAG throw here; everything else surfaces from the
+  // iteration. The stream reads one snapshot, so later commits don't show.
+  function exportNamespace(
+    params: ExportNamespaceParams,
+    options?: ExportOptions
+  ): AsyncIterable<Uint8Array> {
+    const { namespace, documentIds, signal } = parseExport(params, options)
+    const instance = database()
+    return { [Symbol.asyncIterator]: () => runExport(instance, namespace, documentIds, signal) }
+  }
+
+  async function* runExport(
+    instance: HyperDBInstance,
+    namespace: string,
+    documentIds: string[] | undefined,
+    signal: AbortSignal | undefined
+  ): AsyncGenerator<Uint8Array> {
+    const check = () => {
+      if (closed) throw notReady('it has been closed')
+      throwIfAborted(signal)
+    }
+    check()
+    await ensureLineage(instance, namespace)
+    const snapshot = instance.snapshot()
+    let open = true
+    const closeSnapshot = async () => {
+      if (!open) return
+      open = false
+      await snapshot.close()
+    }
+    exports.add(closeSnapshot)
+    try {
+      const { ns, space } = await readNamespace(snapshot, namespace)
+      yield* exportFrames(snapshot, ns, space, documentIds, check)
+    } catch (error) {
+      throw closed ? notReady('it has been closed') : toRagError(error)
+    } finally {
+      exports.delete(closeSnapshot)
+      await closeSnapshot().catch(() => {})
+    }
+  }
+
+  async function importNamespace(
+    params: ImportNamespaceParams,
+    options?: ImportOptions
+  ): Promise<ImportResult> {
+    const request = parseImport(params, options)
+    const target = {
+      instance: database(),
+      indexes: registry(),
+      namespace: request.namespace,
+      index: request.index
+    }
+    try {
+      return await importStream(target, request.source, request.options)
+    } catch (error) {
+      throw toRagError(error)
+    }
+  }
+
+  async function listNamespaces(): Promise<NamespaceSummary[]> {
+    return await withSnapshot(database(), listNamespaceSummaries)
+  }
+
+  async function dropNamespace(params: DropNamespaceParams): Promise<DropNamespaceResult> {
+    const name = parseDropNamespace(params)
+    const indexRegistry = registry()
+    const result = await withTransaction(database(), (tx) => dropNamespaceRows(tx, name))
+    await indexRegistry.drop(name, indexConfig)
+    return result
+  }
+
   // A handle's documents are granted, not chosen per request: an ID the
   // namespace no longer has is skipped, so the handle keeps working with what
   // remains and fails closed to no hits. Only the scope's shape can error.
@@ -590,6 +680,10 @@ export function createRag(options: CreateRagOptions): Rag {
     search: (params) => track(() => search(params)),
     readDocument: (params) => track(() => readDocument(params)),
     listDocuments: (params) => track(() => listDocuments(params)),
+    exportNamespace,
+    importNamespace: (params, options) => track(() => importNamespace(params, options)),
+    listNamespaces: () => track(() => listNamespaces()),
+    dropNamespace: (params) => track(() => dropNamespace(params)),
     scoped: (scope) => {
       const handle = scoped(scope)
       return {
@@ -709,6 +803,14 @@ async function commitDocument(
   contentHash: string
 ): Promise<Committed> {
   const ns = await getNamespace(tx, namespace)
+  // The namespace may have been dropped and re-created in another space.
+  const spaceId = document.chunks[0]?.spaceId
+  if (spaceId !== ns.spaceId) {
+    throw new QvacErrorRAG({
+      code: ERR_CODES.EMBEDDING_SPACE_MISMATCH,
+      adds: `namespace '${namespace}' is now in space ${ns.spaceId}`
+    })
+  }
   const previous = await tx.get<DocumentRecord>(DOCUMENTS, { namespace, documentId: document.id })
   // A concurrent call may have written the same content since findUnchanged.
   if (previous?.contentHash === contentHash) {
@@ -771,4 +873,15 @@ function comparableMetadata(metadataJson: string | undefined): string | null {
 
 function notReady(reason: string): QvacErrorRAG {
   return new QvacErrorRAG({ code: ERR_CODES.NOT_READY, adds: reason })
+}
+
+// An export names its namespace's lineage, so a namespace from before lineages
+// existed gets one first.
+async function ensureLineage(instance: HyperDBInstance, namespace: string): Promise<void> {
+  await withTransaction(instance, async (tx) => {
+    const ns = await getNamespace(tx, namespace)
+    if (ns.lineageId) return
+    await tx.insert(NAMESPACES, { ...ns, lineageId: newLineageId() })
+    await tx.flush()
+  })
 }

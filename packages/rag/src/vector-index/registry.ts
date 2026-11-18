@@ -81,6 +81,9 @@ export interface IndexRegistry {
     vectors: () => Float32Array,
     removed: bigint[]
   ): Promise<void>
+  // Forgets a dropped namespace's index and deletes its snapshot. A snapshot
+  // left behind never loads: a re-created namespace has another identity.
+  drop(namespace: string, config: IndexConfig): Promise<void>
   close(): Promise<void>
 }
 
@@ -375,6 +378,18 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     prunable.delete(namespace)
   }
 
+  async function drop(namespace: string, config: IndexConfig): Promise<void> {
+    for (const [key, entry] of entries) {
+      if (entry.namespace !== namespace) continue
+      while (entry.syncing) await entry.syncing.catch(() => {})
+      await entry.persisting
+      discard(entry)
+      entries.delete(key)
+    }
+    prunable.delete(namespace)
+    if (config.dir) await createSnapshotStore(config.dir, coreKey).remove(namespace)
+  }
+
   async function close(): Promise<void> {
     closed = true
     for (const entry of entries.values()) {
@@ -394,7 +409,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     }
   }
 
-  return { open, prune, apply, close }
+  return { open, prune, apply, drop, close }
 }
 
 function install(entry: Entry, native: NativeIndex, revision: number): void {
