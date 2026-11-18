@@ -36,6 +36,8 @@ jobs:
       tags: ci:addons,ci:sdk,ci:libs
       combine: verify=verify:generated+verify:deps+publish:pre
       packages: ${{ inputs.packages }}
+      # A consumer builds against the released @qvac/fabric its users install, never fabric from this commit.
+      released-providers: true
 
   logic:
     needs: select
@@ -143,7 +145,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/test-inference-pear-e2e.yml
 
-  # Providers build first, once per configuration; a provider's own release builds its rows here.
+  # A provider's own release builds its rows here; consumers build against their providers' npm release.
   providers:
     needs: [select, logic]
     if: toJSON(fromJSON(needs.select.outputs.matrices)['build:providers']) != '[]'
