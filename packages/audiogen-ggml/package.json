@@ -1,6 +1,6 @@
 {
   "name": "@qvac/audiogen-ggml",
-  "version": "0.10.2",
+  "version": "0.11.0",
   "description": "Audio generation (music) addon for qvac",
   "engines": {
     "bare": ">=1.19.0"
