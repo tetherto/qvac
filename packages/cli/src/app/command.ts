@@ -19,7 +19,7 @@ export async function runAppCli(args: string[]): Promise<void> {
     const { ensureAppBinary, resolveBaseUrl } = await import('@/app/binary')
     const { privateDir, privateTempDir, runBinary } = await import('@/app/run')
     const dir = await privateDir(
-      process.env['QVAC_APP_CLI_DIR'] || join(homedir(), '.qvac', 'app-cli')
+      process.env['QVAC_APP_CLI_DIR'] || join(homedir(), '.qvac', 'app-cli-bin')
     )
     const file = await ensureAppBinary({
       baseUrl: resolveBaseUrl(process.env['QVAC_APP_CLI_URL']),

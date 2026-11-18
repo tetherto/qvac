@@ -607,7 +607,7 @@ describe('qvac app', () => {
       assert.equal(r.code, 1)
       assert.equal(r.stdout, '')
       assert.ok(r.stderr.includes(`${baseUrl}/manifest.json`), r.stderr)
-      assert.ok(existsSync(join(home, '.qvac', 'app-cli')))
+      assert.ok(existsSync(join(home, '.qvac', 'app-cli-bin')))
     }
   )
 

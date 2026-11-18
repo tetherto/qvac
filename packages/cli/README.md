@@ -441,12 +441,12 @@ The app CLI calls itself `qvac-app` in its help and messages: where it says `qva
 qvac app [args...]
 ```
 
-On first use the command downloads the compressed binary for this host from `https://static.tether.dev/qv.ac/latest/cli`, verifies its SHA-256 and size against the published manifest, and caches it unpacked under `~/.qvac/app-cli`. It checks for a newer version at most once a day and keeps running the cached binary when that check fails.
+On first use the command downloads the compressed binary for this host from `https://static.tether.dev/qv.ac/latest/cli`, verifies its SHA-256 and size against the published manifest, and caches it unpacked under `~/.qvac/app-cli-bin`. It checks for a newer version at most once a day and keeps running the cached binary when that check fails.
 
 | Variable           | Description                                                     |
 | ------------------ | --------------------------------------------------------------- |
 | `QVAC_APP_CLI_URL` | Download location of the manifest and binaries (`https:` only). |
-| `QVAC_APP_CLI_DIR` | Cache directory (default: `~/.qvac/app-cli`).                   |
+| `QVAC_APP_CLI_DIR` | Cache directory (default: `~/.qvac/app-cli-bin`).               |
 
 ## Configuration
 
