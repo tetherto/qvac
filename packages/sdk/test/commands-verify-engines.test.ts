@@ -745,8 +745,10 @@ describe('verifyBundle engines.bare against the phone runtimes', () => {
         assert.ok(resolution?.resolved === true)
         return resolution.runtime
       }
-      // bare-kit-swift 2.3.0 ships Bare 1.37.1.
-      assert.equal(runtime('ios').version, '1.37.1')
+      // A minimum tracks the newest 2.x, and 2.3.0 ships Bare 1.37.1, so its Bare can only go up.
+      const ios = runtime('ios')
+      assert.ok(semver.gte(ios.packageVersion, '2.3.0'), ios.packageVersion)
+      assert.ok(semver.gte(ios.version, '1.37.1'), ios.version)
       // `0.2.+` tracks the newest 0.2.x, so its Bare can only go up.
       const android = runtime('android')
       assert.match(android.packageVersion, /^0\.2\.\d+$/)
