@@ -19,10 +19,12 @@ import {
   NAMESPACES,
   NATIVE_IDS,
   SPACES,
+  TOMBSTONES,
   type ChunkRecord,
   type DocumentRecord,
   type NamespaceRecord,
-  type SpaceRecord
+  type SpaceRecord,
+  type TombstoneRecord
 } from './db/records.js'
 import {
   EMBED_BATCH_SIZE,
@@ -300,7 +302,8 @@ export function createRag(options: CreateRagOptions): Rag {
         revision: 0,
         nextNativeId: encodeNativeId(FIRST_NATIVE_ID),
         createdAt: new Date(),
-        indexStorage: storage
+        indexStorage: storage,
+        lineageId: newLineageId()
       })
       await tx.flush()
       return { name, spaceId, revision: 0, index: { storage } }
@@ -451,6 +454,12 @@ export function createRag(options: CreateRagOptions): Rag {
         // A spread push would exceed the argument limit on large documents.
         for (const nativeId of await deleteGeneration(tx, document)) removed.push(nativeId)
         await tx.delete(DOCUMENTS, { namespace, documentId })
+        await tx.insert(TOMBSTONES, {
+          namespace,
+          documentId,
+          generation: document.generation,
+          deletedAt: new Date()
+        })
         deleted.push(documentId)
       }
       if (deleted.length === 0) return { deleted, revision: ns.revision }
@@ -714,7 +723,16 @@ async function commitDocument(
     return { document: unchangedResult(previous), revision: ns.revision }
   }
   const removed = previous ? await deleteGeneration(tx, previous) : []
-  const generation = previous ? previous.generation + 1 : 1
+  let last = previous?.generation ?? 0
+  if (!previous) {
+    const key = { namespace, documentId: document.id }
+    const tombstone = await tx.get<TombstoneRecord>(TOMBSTONES, key)
+    if (tombstone) {
+      last = tombstone.generation
+      await tx.delete(TOMBSTONES, key)
+    }
+  }
+  const generation = last + 1
 
   let nextId = decodeNativeId(ns.nextNativeId)
   if (MAX_NATIVE_ID - nextId + 1n < BigInt(document.chunks.length)) {
@@ -803,8 +821,19 @@ async function appendMutation(
     removed: packNativeIds(removed),
     createdAt: new Date()
   })
-  await tx.insert(NAMESPACES, { ...ns, revision, nextNativeId })
+  // Namespaces from before lineages existed get theirs on their first write.
+  const lineageId = ns.lineageId ?? newLineageId()
+  await tx.insert(NAMESPACES, { ...ns, revision, nextNativeId, lineageId })
   return revision
+}
+
+function newLineageId(): Uint8Array {
+  if (qvacCrypto.randomBytes) return qvacCrypto.randomBytes(16)
+  if (qvacCrypto.getRandomValues) return qvacCrypto.getRandomValues(new Uint8Array(16))
+  throw new QvacErrorRAG({
+    code: ERR_CODES.DEPENDENCY_REQUIRED,
+    adds: 'crypto.randomBytes or crypto.getRandomValues is needed to create a namespace'
+  })
 }
 
 function concatEmbeddings(document: ValidDocument): Float32Array {

@@ -6,6 +6,7 @@ export const DOCUMENTS = '@rag/documents'
 export const CHUNKS = '@rag/chunks'
 export const NATIVE_IDS = '@rag/nativeIds'
 export const MUTATIONS = '@rag/mutations'
+export const TOMBSTONES = '@rag/tombstones'
 
 export interface SpaceRecord {
   spaceId: string
@@ -26,6 +27,7 @@ export interface NamespaceRecord {
   nextNativeId: Uint8Array
   createdAt: Date
   indexStorage?: string
+  lineageId?: Uint8Array
 }
 
 export interface DocumentRecord {
@@ -65,4 +67,11 @@ export interface MutationRecord {
   added: Uint8Array
   removed: Uint8Array
   createdAt: Date
+}
+
+export interface TombstoneRecord {
+  namespace: string
+  documentId: string
+  generation: number
+  deletedAt: Date
 }

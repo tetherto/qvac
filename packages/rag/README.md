@@ -147,7 +147,7 @@ Returns `{ documents, skipped, cancelled, revision }`. Each entry in `documents`
 
 ### `deleteDocuments({ namespace, documentIds })`
 
-Deletes the documents and their chunks in one batch. Unknown IDs are ignored. Returns `{ deleted, revision }`.
+Deletes the documents and their chunks in one batch. Unknown IDs are ignored. Returns `{ deleted, revision }`. A deleted document's last generation is kept, so ingesting the same ID later continues at the next generation: a `generation` read before the delete never matches the new document.
 
 ### `search({ scope, vector, spaceId, k, signal? })` / `search({ scope, query, k, signal? })`
 

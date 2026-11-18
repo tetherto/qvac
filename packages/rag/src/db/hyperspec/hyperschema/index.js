@@ -67,12 +67,14 @@ const encoding1 = {
     c.uint.preencode(state, m.revision)
     c.buffer.preencode(state, m.nextNativeId)
     c.date.preencode(state, m.createdAt)
-    state.end++ // max flag is 1 so always one byte
+    state.end++ // max flag is 2 so always one byte
 
     if (version >= 2 && m.indexStorage) c.string.preencode(state, m.indexStorage)
+    if (version >= 3 && m.lineageId) c.buffer.preencode(state, m.lineageId)
   },
   encode(state, m) {
-    const flags = (version >= 2 && m.indexStorage) ? 1 : 0
+    const flags =
+      ((version >= 2 && m.indexStorage) ? 1 : 0) | ((version >= 3 && m.lineageId) ? 2 : 0)
 
     c.string.encode(state, m.name)
     c.string.encode(state, m.spaceId)
@@ -82,6 +84,7 @@ const encoding1 = {
     c.uint.encode(state, flags)
 
     if (version >= 2 && m.indexStorage) c.string.encode(state, m.indexStorage)
+    if (version >= 3 && m.lineageId) c.buffer.encode(state, m.lineageId)
   },
   decode(state) {
     const r0 = c.string.decode(state)
@@ -97,7 +100,8 @@ const encoding1 = {
       revision: r2,
       nextNativeId: r3,
       createdAt: r4,
-      indexStorage: (version >= 2 && (flags & 1) !== 0) ? c.string.decode(state) : null
+      indexStorage: (version >= 2 && (flags & 1) !== 0) ? c.string.decode(state) : null,
+      lineageId: (version >= 3 && (flags & 2) !== 0) ? c.buffer.decode(state) : null
     }
   }
 }
@@ -270,6 +274,35 @@ const encoding5 = {
   }
 }
 
+// @rag/tombstones
+const encoding6 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.namespace)
+    c.string.preencode(state, m.documentId)
+    c.uint.preencode(state, m.generation)
+    c.date.preencode(state, m.deletedAt)
+  },
+  encode(state, m) {
+    c.string.encode(state, m.namespace)
+    c.string.encode(state, m.documentId)
+    c.uint.encode(state, m.generation)
+    c.date.encode(state, m.deletedAt)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.string.decode(state)
+    const r2 = c.uint.decode(state)
+    const r3 = c.date.decode(state)
+
+    return {
+      namespace: r0,
+      documentId: r1,
+      generation: r2,
+      deletedAt: r3
+    }
+  }
+}
+
 function setVersion(v) {
   version = v
 }
@@ -305,6 +338,8 @@ function getEncoding(name) {
       return encoding4
     case '@rag/mutations':
       return encoding5
+    case '@rag/tombstones':
+      return encoding6
     default:
       throw new Error('Encoder not found ' + name)
   }
