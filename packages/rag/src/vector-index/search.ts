@@ -33,10 +33,15 @@ import type { SearchHit, SearchScope } from '../types.js'
 const MIN_EXTRA_CANDIDATES = 16
 
 // With `perDocument`, the pool starts at k × POOL_GROWTH candidates and grows by
-// that factor while the cap leaves fewer than k hits, up to MAX_POOL. With
-// `minScore` too, growth stops once the last candidate falls below the floor.
+// that factor while the cap leaves fewer than k hits. With `minScore` too,
+// growth stops once every candidate in the margin past the pool scores below
+// the floor: the margin is what absorbs quantization order, as for plain top k.
 const POOL_GROWTH = 4
 const MAX_POOL = 4096
+// Each round rereads its whole window by point lookups, which cost more per row
+// than the scan's range reads. Once the next window would reach 1/SCAN_SHARE of
+// the rows in scope, or can't grow past MAX_POOL, the exact scan answers instead.
+const SCAN_SHARE = 8
 
 // Index search with the same contract as `scanSearch`. The index proposes
 // candidates; every hit is then read back through `nativeIds` from the same
@@ -77,12 +82,16 @@ export async function indexSearch(
   const queryNorm = cosine ? norm(query.vector, 0, dims) : 1
   const stored = new Float32Array(dims)
 
+  const { perDocument, minScore } = options
+
   // The top `want` candidates, rescored exactly and sorted. Each call opens the
   // index last: a rebuild started by another search may dispose the native
   // index it replaces, so nothing awaits between the open and the native search.
   async function candidates(
     want: number
-  ): Promise<{ hits: SearchHit[]; available: number } | 'stale' | 'unavailable'> {
+  ): Promise<
+    { hits: SearchHit[]; available: number; pastFloor: boolean } | 'stale' | 'unavailable'
+  > {
     const index = await untilAborted(openIndex(), options.signal)
     if (!index) return 'unavailable'
     if (index.revision() !== revision) return 'stale'
@@ -90,7 +99,7 @@ export async function indexSearch(
       return 'unavailable'
     }
     const available = allowlist ? allowlist.length : index.native.length
-    if (available === 0) return { hits: [], available }
+    if (available === 0) return { hits: [], available, pastFloor: true }
 
     const vector = query.vector.slice()
     if (index.normalize) normalizeRows(vector, dims)
@@ -102,6 +111,8 @@ export async function indexSearch(
       return 'unavailable'
     }
     const hits: SearchHit[] = []
+    let margin = 0
+    let marginBelow = 0
     for (let slot = 0; slot < result.k; slot++) {
       const id = result.ids[slot]
       if (id === PADDING_ID) break
@@ -115,12 +126,16 @@ export async function indexSearch(
         score = denominator === 0 ? 0 : score / denominator
       }
       hits.push(toHit(chunk, score))
+      if (slot >= want) {
+        margin++
+        if (minScore !== undefined && score < minScore) marginBelow++
+      }
     }
     throwIfAborted(options.signal)
-    return { hits: sortHits(hits, scope), available }
+    const pastFloor = minScore !== undefined && margin > 0 && marginBelow === margin
+    return { hits: sortHits(hits, scope), available, pastFloor }
   }
 
-  const { perDocument, minScore } = options
   let pool = perDocument === undefined ? k : Math.max(k, Math.min(MAX_POOL, k * POOL_GROWTH))
   let ranked: SearchHit[]
   let selected: SearchHit[]
@@ -133,10 +148,12 @@ export async function indexSearch(
       break
     }
     selected = selectDiverse(ranked, k, perDocument)
-    const last = found.hits[found.hits.length - 1]
-    const pastFloor = minScore !== undefined && (!last || last.score < minScore)
-    if (selected.length === k || pastFloor || pool >= found.available || pool >= MAX_POOL) break
-    pool = Math.min(MAX_POOL, pool * POOL_GROWTH)
+    if (selected.length === k || found.pastFloor || pool >= found.available) break
+    const next = Math.min(MAX_POOL, pool * POOL_GROWTH)
+    if (next === pool || next * SCAN_SHARE >= found.available) {
+      return await scanSearch(reader, space, scope, query, k, options)
+    }
+    pool = next
   }
 
   // Listed documents the pool missed get their best chunk from an exact scan,

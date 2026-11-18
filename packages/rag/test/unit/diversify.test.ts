@@ -72,6 +72,22 @@ both('perDocument looks past a document that fills the top candidates', async (t
   t.alike(contents(hits), ['big0', 'b0', 'c0'])
 })
 
+both('perDocument fills k past a document longer than the largest pool', async (t) => {
+  const { rag, spaceId } = await openRag(t)
+  const long = Array.from({ length: 9000 }, (_, i) => 0.99 - i * 0.00005)
+  const small = Array.from({ length: 6 }, (_, i) => scored(`s${i}`, spaceId, [0.3 - i * 0.01]))
+  await rag.ingest({ namespace: 'ns', documents: [scored('long', spaceId, long), ...small] })
+
+  const hits = await rag.search({
+    scope: { namespace: 'ns' },
+    vector: QUERY,
+    spaceId,
+    k: 8,
+    perDocument: 2
+  })
+  t.alike(contents(hits), ['long0', 'long1', 's00', 's10', 's20', 's30', 's40', 's50'])
+})
+
 both('every listed document gets a hit when there are at most k of them', async (t) => {
   const { rag, spaceId } = await openRag(t)
   // More than the index's first candidate window (pool plus its margin).
