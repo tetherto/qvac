@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.31.1] - 2026-11-18
+
+### Fixed
+
+- `@qvac/fabric-android-arm64` is built with the Android NDK compiler again
+  ([#5847](https://github.com/tetherto/qvac/pull/5847)). 0.31.0 was built with
+  the LLVM runtime clang from `cmake-toolchains` 2.4.0, which kept `assert()`
+  and grew the package from 106 MB to 141 MB unpacked, and ggml's CPU backend
+  ran up to ~20x slower on device. Same `qvac-fabric` `11739.4.0` source; the
+  other platform packages are rebuilt unchanged.
+
 ## [0.31.0] - 2026-11-18
 
 ### Breaking

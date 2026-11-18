@@ -275,6 +275,14 @@
     {
       "name": "mmproj-Qwen3.5-0.8B-F16.gguf",
       "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf"
+    },
+    {
+      "name": "LFM2.5-1.2B-Instruct-Q4_K_M.gguf",
+      "url": "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF/resolve/8ed288026e23958ad9dfa92d53ed773a8eee7125/LFM2.5-1.2B-Instruct-Q4_K_M.gguf"
+    },
+    {
+      "name": "LFM2.5-1.2B-Instruct-DSpark-Q8_0.gguf",
+      "url": "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-DSpark-GGUF/resolve/9235d674d3bbda8a775ca42a4275d11a8c0ab008/LFM2.5-1.2B-Instruct-DSpark-Q8_0.gguf"
     }
   ],
   "runUnlimitedOcrPerfTest": [
