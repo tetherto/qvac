@@ -83,11 +83,9 @@ export default {
             : '../sdk-python/.venv/bin/python',
         args: ['-m', 'qvac_e2e.runner'],
         cwd: './runners/python',
+        // The client starts the worker bundled in the installed wheel, as a
+        // `pip install` user's does.
         env: {
-          // Point the Python client at the worker entry this suite generates,
-          // so it registers the same plugins as the JS legs. Python runs the
-          // entry without a bundle, on the Bare of the bare-sidecar wheel.
-          QVAC_WORKER_PATH: '../../qvac/worker.entry.mjs',
           QVAC_RESOURCE_PLATFORM: 'desktop-python'
         }
       },

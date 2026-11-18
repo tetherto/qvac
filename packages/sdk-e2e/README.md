@@ -64,15 +64,20 @@ full list.
 - Android: `adb` + USB-debuggable device.
 - Desktop: Node 22+.
 - Python: Node 22+, plus a virtualenv the config expects at
-  `packages/sdk-python/.venv` with the client installed from source:
+  `packages/sdk-python/.venv` with the wheel installed, as CI builds it:
 
   ```bash
   python3 -m venv packages/sdk-python/.venv
-  packages/sdk-python/.venv/bin/python -m pip install -e "packages/sdk-python[dev]"
+  packages/sdk-python/.venv/bin/python -m pip install build -e "packages/sdk-python[gen]"
+  packages/sdk-python/.venv/bin/python packages/sdk-python/scripts/generate.py
+  rm -rf packages/sdk-python/dist
+  packages/sdk-python/.venv/bin/python packages/sdk-python/scripts/build_wheel.py
+  packages/sdk-python/.venv/bin/python -m pip install --force-reinstall --no-deps packages/sdk-python/dist/*.whl
   ```
 
-  The leg runs the same worker bundle the desktop leg does, so
-  `npm run bundle:sdk` (part of `install:build:full`) has to have run.
+  The leg runs the worker bundled in the installed wheel, as a `pip install` user does.
+  `build_wheel.py` bundles the built `packages/sdk`, so rebuild the wheel after a change to the SDK or
+  the client.
 
 - Kotlin Android: `adb` + a USB-debuggable arm64 device, JDK 17, Python 3, and an Android SDK with NDK
   `29.0.14206865`. The `prepare` step builds the app from this checkout and installs it; `--skip-build`
@@ -275,7 +280,8 @@ Snap). A dispatch of `sdk-e2e.yml` takes:
 It runs every configuration whose language and platform it names. Every leg builds `packages/inference` and
 `packages/test-suite` from the checkout and tests them together with the client, restores its models from the model
 cache, and uploads its reports as `<package>-results-<configuration>`. The job summary compares them with the newest
-dispatch run's on the base branch; a failed test fails the leg.
+dispatch run's on the base branch; a failed test fails the leg. The Python leg installs the client from the wheel it
+builds, the same wheel PyPI gets, and runs on the worker bundled in it.
 
 ```bash
 gh workflow run sdk-e2e.yml --ref <branch> -f languages=python -f platforms=mac -f suite=smoke

@@ -283,17 +283,32 @@ const platformOf = (label) => {
       : 'linux'
 }
 
-// main's sdk-python-venv: the runner's own Python, 3.10 or later, in a venv the python consumer's config points at, with
-// the client generated from the SDK prepare built.
+// The runner's own Python, 3.10 or later, in the venv the python consumer's config points at. The client is generated
+// from the SDK prepare built, packed with its bundled worker into the wheel PyPI gets, and installed from that wheel,
+// whose worker the tests then run on.
 function pythonVenv(env) {
   const py = spawnSync('python3', ['--version']).status === 0 ? 'python3' : 'python'
   run(py, ['-c', 'import sys; assert sys.version_info[:2] >= (3, 10), sys.version'], { env })
-  const venv = join(ROOT, 'packages/sdk-python/.venv')
+  const pkg = join(ROOT, 'packages/sdk-python')
+  const venv = join(pkg, '.venv')
   run(py, ['-m', 'venv', venv], { env })
   const bin = join(venv, existsSync(join(venv, 'bin/python')) ? 'bin/python' : 'Scripts/python')
-  run(bin, ['-m', 'pip', 'install', '--upgrade', 'pip'], { env })
-  run(bin, ['-m', 'pip', 'install', '-e', `${join(ROOT, 'packages/sdk-python')}[gen,dev]`], { env })
-  run(bin, [join(ROOT, 'packages/sdk-python/scripts/generate.py')], { env })
+  run(bin, ['-m', 'pip', 'install', '--upgrade', 'pip', 'build'], { env })
+  run(bin, ['-m', 'pip', 'install', '-e', `${pkg}[gen]`], { env })
+  run(bin, [join(pkg, 'scripts/generate.py')], { env })
+  const dist = mkdtempSync(join(env.RUNNER_TEMP || tmpdir(), 'sdk-python-dist-'))
+  run(bin, [join(pkg, 'scripts/build_wheel.py'), '--out-dir', dist], { env })
+  const wheel = readdirSync(dist).find((f) => f.endsWith('.whl'))
+  if (!wheel) throw new Error(`build_wheel.py wrote no wheel to ${dist}`)
+  run(bin, ['-m', 'pip', 'install', '--force-reinstall', '--no-deps', join(dist, wheel)], { env })
+  run(
+    bin,
+    [
+      '-c',
+      'import pathlib, tetherto.qvac_sdk as p; d = pathlib.Path(p.__file__).parent; assert "site-packages" in str(d) and (d / "_worker").is_dir(), d; print("worker under test:", d / "_worker")'
+    ],
+    { env }
+  )
 }
 
 // main's strict Snap steps: tooling, the LXD egress preflight, two revisions and the refresh test, install, interfaces.
