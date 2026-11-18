@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- DSpark speculative decoding (`spec-type: 'draft-dspark'` with
+  `spec-draft-model`) and `spec-type: 'auto'`, which reads the type from the
+  draft model's header, as llama-server's `--spec-type draft-dspark -md` and
+  `-md` without `--spec-type`
+  ([#5694](https://github.com/tetherto/qvac/pull/5694)).
+
 ### Changed
 
 - `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries
@@ -23,6 +31,10 @@
   stat values be strings (`RuntimeStatValue`), and 1.7.0 adds
   `JsAsyncTask::runOn` for running async work on an addon-owned executor.
   Compile-time only; no API or runtime behaviour change for this package.
+- `assessFit` refuses a draft model or MTP head made for another model with
+  fabric's `common_speculative_draft_mismatch`, as the load does:
+  `the draft model does not match the model: <reason>`. It covers DFlash and
+  DSpark drafters too, not only external MTP heads.
 
 ## [0.71.0] - 2026-11-16
 
