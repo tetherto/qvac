@@ -27,7 +27,21 @@ import {
 } from '../../../scripts/ci/slice-platform-packages.mjs'
 import { toLocalTarballSpec } from './e2e-inference.mjs'
 
-export const PACKAGES = ['fabric', 'asr-ggml', 'tts-ggml', 'audiogen-ggml', 'bci-whispercpp']
+export const PACKAGES = [
+  'fabric',
+  'asr-ggml',
+  'tts-ggml',
+  'audiogen-ggml',
+  'bci-whispercpp',
+  'llm-llamacpp',
+  'embed-llamacpp',
+  'classification-ggml',
+  'translation-nmtcpp',
+  'ocr-ggml',
+  'turbovec-ggml',
+  'ggml-rpc-server',
+  'vla-ggml'
+]
 const HOSTS = new Set(['linux-x64', 'darwin-arm64', 'win32-x64'])
 const OMIT = new Set(['node_modules', 'prebuilds', 'build', 'dist', '.git'])
 const MAX_COMPARISON_FILES = 300

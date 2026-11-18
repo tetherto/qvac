@@ -10,6 +10,7 @@ import {
   readFileSync,
   rmSync,
   cpSync,
+  existsSync,
   utimesSync
 } from 'node:fs'
 import { join } from 'node:path'
@@ -27,7 +28,10 @@ import {
   verifySpeechPreflight
 } from '../../../packages/sdk/ci/speech-preflight.mjs'
 import { buildSdk } from '../../../packages/sdk/ci/e2e.mjs'
-import { expectedAddonFile } from '../../../scripts/ci/slice-platform-packages.mjs'
+import {
+  expectedAddonFile,
+  mangledAddonName
+} from '../../../scripts/ci/slice-platform-packages.mjs'
 
 const CONFIG = {
   repository: 'tetherto/qvac',
@@ -40,6 +44,12 @@ const RUN = {
   path: CONFIG.workflow,
   event: 'workflow_dispatch'
 }
+const BUNDLED = new Set(
+  PACKAGES.filter((slug) => {
+    const file = new URL(`../../../packages/${slug}/package.json`, import.meta.url)
+    return JSON.parse(readFileSync(file)).addon === true
+  })
+)
 const writeJson = (file, value) => writeFileSync(file, JSON.stringify(value))
 
 function temporary(t) {
@@ -175,7 +185,7 @@ function packageFixture(root, slug, host) {
   const workdir = join(root, 'packages', slug)
   mkdirSync(join(workdir, 'prebuilds', host), { recursive: true })
   const name = `@qvac/${slug}`
-  const bundled = slug === 'bci-whispercpp'
+  const bundled = BUNDLED.has(slug)
   writeJson(join(workdir, 'package.json'), {
     name,
     version: '0.0.1',
@@ -186,7 +196,7 @@ function packageFixture(root, slug, host) {
     ...(slug === 'fabric' ? {} : { dependencies: { '@qvac/fabric': '0.0.1' } })
   })
   writeFileSync(join(workdir, 'index.js'), 'module.exports = {}\n')
-  const addon = bundled ? 'qvac__bci-whispercpp.bare' : expectedAddonFile(name, host)
+  const addon = bundled ? `${mangledAddonName(name)}.bare` : expectedAddonFile(name, host)
   writeFileSync(join(workdir, 'prebuilds', host, addon), slug)
   return workdir
 }
@@ -235,12 +245,12 @@ test('packs and installs only the current host, then verifies the actual npm ins
   const root = temporary(t)
   const host = `${process.platform}-${process.arch}`
   const packages = packFixtures(root, host)
-  assert.equal(packages.length, PACKAGES.length * 2 - 1)
+  assert.equal(packages.length, PACKAGES.length * 2 - BUNDLED.size)
   assert.deepEqual(
     new Set(packages.map((p) => p.name)),
     new Set(
       PACKAGES.flatMap((slug) =>
-        slug === 'bci-whispercpp' ? [`@qvac/${slug}`] : [`@qvac/${slug}`, `@qvac/${slug}-${host}`]
+        BUNDLED.has(slug) ? [`@qvac/${slug}`] : [`@qvac/${slug}`, `@qvac/${slug}-${host}`]
       )
     )
   )
@@ -327,4 +337,27 @@ test('collects only fresh Bare crash reports from this run', (t) => {
   writeFileSync(join(source, 'unrelated.ips'), 'other process')
   assert.deepEqual(collectNativeCrashes(source, destination, start), ['bare-new.ips'])
   assert.equal(readFileSync(join(destination, 'bare-new.ips'), 'utf8'), 'stack trace')
+})
+
+test('the preflight replaces every SDK native consumer of Fabric, including non-speech addons', () => {
+  const sdk = JSON.parse(
+    readFileSync(new URL('../../../packages/sdk/package.json', import.meta.url))
+  )
+  for (const name of Object.keys(sdk.dependencies).filter((name) => name.startsWith('@qvac/'))) {
+    const file = new URL(
+      `../../../packages/${name.slice('@qvac/'.length)}/package.json`,
+      import.meta.url
+    )
+    if (!existsSync(file)) continue
+    const manifest = JSON.parse(readFileSync(file))
+    if (
+      manifest.dependencies?.['@qvac/fabric'] ||
+      manifest.optionalDependencies?.['@qvac/fabric']
+    ) {
+      assert.ok(
+        PACKAGES.includes(name.slice('@qvac/'.length)),
+        `${name} would retain a published binary against the overridden Fabric ABI`
+      )
+    }
+  }
 })
