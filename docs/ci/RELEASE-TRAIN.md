@@ -210,8 +210,10 @@ for it.
 
 On the release PR, outside `release-train.yml`: when the PR touches the SDK or a
 client, `sdk-e2e.yml` runs the full e2e suite in every language on Linux, Mac,
-Windows, Android and iOS. Python installs the wheel PyPI gets and Kotlin builds
-against its Maven package, both built from the PR's commit. The release is
+Windows, Android and iOS. Python installs the wheel PyPI gets and Kotlin on
+Android builds against its Maven package, both built from the PR's commit;
+Kotlin on desktop builds its experimental JVM worker host from the checkout,
+as users get it. The release is
 tested by hand before it ships, so publishing does not wait for this run.
 
 ### Dry run
