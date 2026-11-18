@@ -1,9 +1,5 @@
 import type { Tool, ToolCall, ToolCallError } from '@/schemas/index'
-import {
-  generateStableToolCallId,
-  validateToolArguments,
-  type ParserResult
-} from '@/utils/tools/shared'
+import { acceptToolCall, type ParserResult } from '@/utils/tools/shared'
 
 // Pythonic `[name(k=v), ...]` arrays. LFM 2.x is auto-routed; Llama-style
 // tokens are kept for callers that opt in via `completion({ toolDialect:
@@ -259,17 +255,9 @@ export function parsePythonicFormat(text: string, tools: Tool[]): ParserResult {
 
   for (const call of calls) {
     const raw = `${call.name}(${JSON.stringify(call.arguments)})`
-    const validation = validateToolArguments(call.name, call.arguments, tools)
-    if (!validation.isValid && validation.error) {
-      errors.push({ ...validation.error, raw })
-      continue
-    }
-    toolCalls.push({
-      id: generateStableToolCallId(call.name, call.arguments),
-      name: call.name,
-      arguments: call.arguments,
-      raw
-    })
+    const accepted = acceptToolCall({ name: call.name, arguments: call.arguments }, tools, raw)
+    if (accepted.error) errors.push(accepted.error)
+    else toolCalls.push(accepted.call)
   }
 
   return { matched: true, toolCalls, errors }

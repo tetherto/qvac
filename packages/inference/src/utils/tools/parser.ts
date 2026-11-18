@@ -8,9 +8,15 @@ import {
 import { parseHermesFormat } from '@/utils/tools/parsers/hermes'
 import { parsePythonicFormat } from '@/utils/tools/parsers/pythonic'
 import { parseHarmonyFormat } from '@/utils/tools/parsers/harmony'
-import { parseQwen35Format } from '@/utils/tools/parsers/qwen35'
+import { parseBareFunctionFormat, parseQwen35Format } from '@/utils/tools/parsers/qwen35'
 import { parseGemma4NativeFormat } from '@/utils/tools/parsers/gemma4native'
 import { parseDsmlFormat } from '@/utils/tools/parsers/dsml'
+
+const NO_MATCH: ParserResult = { matched: false, toolCalls: [], errors: [] }
+
+function parseQwenXmlFrames(text: string, tools: Tool[]): ParserResult {
+  return /<tool_call>\s*<function=/.test(text) ? parseQwen35Format(text, tools) : NO_MATCH
+}
 
 function pickFormatParsers(
   dialect: ToolDialect | undefined
@@ -19,9 +25,17 @@ function pickFormatParsers(
     case 'pythonic':
       return [parsePythonicFormat]
     case 'hermes':
-      // Hermes first so frame errors surface; JSON fallbacks then cover
-      // unknown JSON-payload models.
-      return [parseHermesFormat, parseGemmaFormat, parseLlamacppFormat]
+      // Qwen XML frames first: Qwen-family models resolved as hermes put
+      // `<function=…>` inside `<tool_call>`. Hermes next so its frame errors
+      // surface; JSON fallbacks cover unknown JSON-payload models; bare
+      // `<function=…>` last.
+      return [
+        parseQwenXmlFrames,
+        parseHermesFormat,
+        parseGemmaFormat,
+        parseLlamacppFormat,
+        parseBareFunctionFormat
+      ]
     case 'json':
       return [parseGemmaFormat, parseLlamacppFormat]
     case 'harmony':
