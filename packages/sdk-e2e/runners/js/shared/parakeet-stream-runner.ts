@@ -17,6 +17,7 @@ import { checkParakeetFlags } from './transcription-segments.js'
 
 export interface ParakeetStreamParams {
   chunkMs?: number
+  decodeChunkMs?: number
   emitPartials?: boolean
   trailingSilenceMs?: number
   /**
@@ -64,7 +65,7 @@ export async function runParakeetStreamHappy(
     session = await transcribeStream({
       modelId,
       parakeetStreamingConfig: {
-        chunkMs,
+        chunkMs: params.decodeChunkMs,
         ...(params.emitPartials !== undefined && {
           emitPartials: params.emitPartials
         })
@@ -126,7 +127,7 @@ export async function runParakeetStreamEou(
     session = await transcribeStream({
       modelId,
       parakeetStreamingConfig: {
-        chunkMs,
+        chunkMs: params.decodeChunkMs,
         ...(params.emitPartials !== undefined && {
           emitPartials: params.emitPartials
         })
@@ -191,7 +192,7 @@ export async function runParakeetStreamMetadata(
       modelId,
       metadata: true,
       parakeetStreamingConfig: {
-        chunkMs,
+        chunkMs: params.decodeChunkMs,
         ...(params.emitPartials !== undefined && {
           emitPartials: params.emitPartials
         })
@@ -325,7 +326,7 @@ export async function runParakeetStreamDestroyMidUtterance(
 
     firstSession = await transcribeStream({
       modelId,
-      parakeetStreamingConfig: { chunkMs }
+      parakeetStreamingConfig: { chunkMs: params.decodeChunkMs }
     })
 
     // Write exactly 2 chunks, then yank the session WITHOUT calling
@@ -347,7 +348,7 @@ export async function runParakeetStreamDestroyMidUtterance(
     secondSession = await transcribeStream({
       modelId,
       parakeetStreamingConfig: {
-        chunkMs,
+        chunkMs: params.decodeChunkMs,
         ...(params.emitPartials !== undefined && {
           emitPartials: params.emitPartials
         })
@@ -416,7 +417,7 @@ export async function runParakeetStreamIteratorThrow(
 
     throwingSession = await transcribeStream({
       modelId,
-      parakeetStreamingConfig: { chunkMs }
+      parakeetStreamingConfig: { chunkMs: params.decodeChunkMs }
     })
     await writeInChunks(throwingSession, speech, chunkSize, chunkMs)
     await writeInChunks(throwingSession, silence, chunkSize, chunkMs)
@@ -497,7 +498,7 @@ export async function runParakeetStreamIteratorThrow(
       recoverySession = await transcribeStream({
         modelId,
         parakeetStreamingConfig: {
-          chunkMs,
+          chunkMs: params.decodeChunkMs,
           ...(params.emitPartials !== undefined && {
             emitPartials: params.emitPartials
           })

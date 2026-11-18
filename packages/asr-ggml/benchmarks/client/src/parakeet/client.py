@@ -94,9 +94,10 @@ class ParakeetClient:
             "parakeetConfig": self.build_parakeet_config(),
             "sampleRate": self.model_cfg.sample_rate,
             "streaming": self.model_cfg.streaming,
-            "streamingChunkMs": self.model_cfg.streaming_chunk_ms,
             "streamingEmitPartials": self.model_cfg.streaming_emit_partials,
         }
+        if self.model_cfg.streaming_chunk_ms is not None:
+            config["streamingChunkMs"] = self.model_cfg.streaming_chunk_ms
         if self.model_cfg.streaming_history_ms:
             config["streamingHistoryMs"] = self.model_cfg.streaming_history_ms
         return config
