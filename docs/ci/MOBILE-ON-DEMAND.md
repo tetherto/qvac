@@ -471,12 +471,13 @@ and free.
 `@qvac/sdk` and `sdk-kotlin` are producer packages, and they run from `sdk-e2e.yml`,
 not `mobile-tests.yml`: their `test:mobile` builds the SDK e2e consumer app from
 `packages/sdk-e2e`, and the run drives it over MQTT from the runner instead of a
-test package on the device. Dispatch `sdk-e2e.yml` with `platform`:
+test package on the device. Dispatch `sdk-e2e.yml` with `android` or `ios` in
+`platforms` and the apps' languages in `languages`:
 
 - `pool` names one Device Farm pool from the `SDK_ANDROID_DEVICE_FARM_POOLS` or
   `SDK_IOS_DEVICE_FARM_POOLS` repository variable. Leave it empty to take an
   available private pool first, else a random public one.
-- `tests` takes comma-separated catalog categories or testId prefixes, not a
+- `filter` takes comma-separated catalog categories or testId prefixes, not a
   mocha `--grep`; empty runs the full catalog.
 - The app always builds this commit's `packages/sdk`, `packages/inference` and
   `packages/test-suite`.
@@ -484,8 +485,8 @@ test package on the device. Dispatch `sdk-e2e.yml` with `platform`:
   base branch, and `<package>-results-<configuration>` holds the reports.
 
 ```bash
-gh workflow run sdk-e2e.yml --ref <branch> -f platform=Android -f packages=@qvac/sdk
-gh workflow run sdk-e2e.yml --ref <branch> -f platform=Android -f packages=sdk-kotlin
+gh workflow run sdk-e2e.yml --ref <branch> -f languages=js -f platforms=android
+gh workflow run sdk-e2e.yml --ref <branch> -f languages=kotlin -f platforms=android
 ```
 
 ## PRs and Merge Guard

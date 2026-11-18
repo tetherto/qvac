@@ -23,6 +23,27 @@ export const MODES = {
   [RERUN]: 'rerun'
 }
 
+// Each e2e row is one language on one platform: the language is its project, the platform its configuration. The
+// configurations a project declares are the platforms that language runs on.
+const LANGUAGES = { [SDK]: 'js', '@qvac/sdk-python': 'python', 'sdk-kotlin': 'kotlin' }
+const PLATFORMS = ['linux', 'mac', 'windows', 'android', 'ios', 'electron', 'snap']
+const OS = { linux: 'linux', darwin: 'mac', win32: 'windows', android: 'android', ios: 'ios' }
+export const languageOf = (row) => LANGUAGES[row.project]
+export function platformOf(row) {
+  if (row.config.endsWith('-electron')) return 'electron'
+  if (row.config.endsWith('-snap')) return 'snap'
+  return OS[row.config.split('-')[0]]
+}
+// A dispatch's comma-separated languages or platforms, each one a name this router knows.
+export function names(input, value, known) {
+  const out = list(input, value).split(',').filter(Boolean)
+  const unknown = out.filter((n) => !known.includes(n))
+  if (unknown.length) {
+    throw new Error(`${input}: unknown ${unknown.join(', ')}; use ${known.join(', ')}`)
+  }
+  return out
+}
+
 export const keyOf = (row) => `${row.slug}/${row.config}`
 // The rows whose legs write results-*.json: the SDK's own e2e and its Device Farm app.
 export const reported = (row) => row.project === SDK
@@ -335,17 +356,10 @@ export async function plan(env) {
   const mobile = matrices['test:mobile'] ?? []
   const pr = event.pull_request?.number
   if (!pr) {
-    // A dispatch runs what its inputs select, Device Farm only on the platform it names, as main's test-sdk.yml.
-    const configs = {
-      Android: ['android-arm64'],
-      iOS: ['ios-arm64'],
-      both: ['android-arm64', 'ios-arm64']
-    }
-    // Empty packages runs the SDK alone; sdk-python and sdk-kotlin are opt-in, as on main.
-    const named = (r) => env.PACKAGES || r.project === SDK
-    const devices = mobile.filter(
-      (r) => named(r) && (configs[env.PLATFORM] ?? []).includes(r.config)
-    )
+    // A dispatch runs every row whose language and platform it names.
+    const languages = names('languages', env.LANGUAGES, Object.values(LANGUAGES))
+    const platforms = names('platforms', env.PLATFORMS, PLATFORMS)
+    const named = (r) => languages.includes(languageOf(r)) && platforms.includes(platformOf(r))
     const suite = env.SUITE === 'smoke' ? 'smoke' : ''
     const options = {
       exclude: list('exclude-suite', env.EXCLUDE_SUITE),
@@ -353,14 +367,12 @@ export async function plan(env) {
       inference: list('inference-version', env.INFERENCE_VERSION)
     }
     const tests = list('filter', env.FILTER)
-    // The dispatch's suite and options go to every Device Farm row and the SDK's desktop rows; sdk-python's rows keep
-    // the suite their label gives them.
     const withOptions = (r) => ({ ...r, suite: encodeOptions(suite, options), tests })
     return output(env, {
       mode: 'dispatch',
       suite,
-      desktop: labelled.filter(named).map((r) => (r.project === SDK ? withOptions(r) : r)),
-      mobile: devices.map(withOptions),
+      desktop: labelled.filter(named).map(withOptions),
+      mobile: mobile.filter(named).map(withOptions),
       report: [],
       comments: {}
     })

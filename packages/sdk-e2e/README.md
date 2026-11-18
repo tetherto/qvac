@@ -256,15 +256,31 @@ Each configuration names the labels that run it in `ci.labels`, and the suite ea
 | Configurations                                                 | Runs on                                          | Started by                                                                                                                                      |
 | -------------------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `linux-x64-gpu`, `darwin-arm64-gpu`, `win32-x64-gpu` (desktop) | the three GPU hosts                              | `test-e2e-smoke` (smoke suite), `test-e2e-full` (full catalog), `test-e2e-rerun-failed`, and every push to a PR into `release-*` (full catalog) |
-| `*-python` (the catalog on the Python client)                  | the same hosts                                   | `test-e2e-python` (smoke suite)                                                                                                                 |
-| `*-electron`                                                   | the same hosts, the macOS one with a GUI session | a dispatch of `sdk-e2e.yml` with `labels: electron` (full catalog)                                                                              |
-| `linux-x64-snap` (strict Snap)                                 | the Linux GPU host                               | a dispatch of `sdk-e2e.yml` with `labels: snap` (full catalog)                                                                                  |
+| `sdk-python`'s `linux-x64`, `darwin-arm64`, `win32-x64`        | the same hosts                                   | `test-e2e-python` (smoke suite)                                                                                                                 |
+| `*-electron`                                                   | the same hosts, the macOS one with a GUI session | a dispatch of `sdk-e2e.yml` naming `electron` in `platforms`                                                                                    |
+| `linux-x64-snap` (strict Snap)                                 | the Linux GPU host                               | a dispatch of `sdk-e2e.yml` naming `snap` in `platforms`                                                                                        |
 
-A dispatch of `sdk-e2e.yml` with `packages: @qvac/sdk` and `labels: test-e2e-smoke` (or any label
-above) runs the same configurations on a branch. Every leg builds `packages/inference` and
-`packages/test-suite` from the checkout and tests them together with `packages/sdk`, downloads its models
-in the run, and uploads its reports as `sdk-results-<configuration>`. The job summary compares them with
-the newest dispatch run's on the base branch; a failed test fails the leg.
+### A run by hand
+
+Each e2e configuration is one language on one platform: the language is its package (`sdk` is JS, `sdk-python` is
+Python, `sdk-kotlin` is Kotlin) and the platform is the configuration (Linux, Mac, Windows, Android, iOS, Electron,
+Snap). A dispatch of `sdk-e2e.yml` takes:
+
+- `languages`: comma-separated `js`, `python`, `kotlin`. Default all three.
+- `platforms`: comma-separated `linux`, `mac`, `windows`, `android`, `ios`, `electron`, `snap`. Default the first
+  five.
+- `suite`: `full` or `smoke`, plus `exclude-suite`, `include`, `filter` and `inference-version`, for every leg.
+- `pool` and `billing` for the Device Farm legs.
+
+It runs every configuration whose language and platform it names. Every leg builds `packages/inference` and
+`packages/test-suite` from the checkout and tests them together with the client, downloads its models in the run, and
+uploads its reports as `<package>-results-<configuration>`. The job summary compares them with the newest dispatch
+run's on the base branch; a failed test fails the leg.
+
+```bash
+gh workflow run sdk-e2e.yml --ref <branch> -f languages=python -f platforms=mac -f suite=smoke
+gh workflow run sdk-e2e.yml --ref <branch> -f languages=js,kotlin -f platforms=android
+```
 
 `scripts/impacted-tests.mjs` lists the testIds a change touches
 (`node scripts/impacted-tests.mjs --base main --head HEAD`); CI does not add them to a run.
@@ -281,12 +297,11 @@ closes it:
 
 ### Mobile
 
-Dispatch `sdk-e2e.yml` with `platform: Android` or `platform: iOS` and `packages: @qvac/sdk`, or
-`platform: Android` and `packages: sdk-kotlin` (the Kotlin app). The run builds the consumer APK or IPA with the run id and broker baked in,
-starts it on a Device Farm pool from `SDK_ANDROID_DEVICE_FARM_POOLS` or `SDK_IOS_DEVICE_FARM_POOLS`
-(the dispatch's `pool` names one pool; empty prefers an available private pool), drives the full catalog over MQTT once
-the device runs, and fails on any failed test. `tests` narrows it to comma-separated categories or testId
-prefixes. On a pull request, `test-e2e-smoke`, `test-e2e-full` and `test-e2e-rerun-failed` run the sdk's Android and iOS
+A dispatch naming `android` or `ios` in `platforms` runs the JS app on both and the Kotlin app on Android. The run builds
+the consumer APK or IPA with the run id and broker baked in, starts it on a Device Farm pool from
+`SDK_ANDROID_DEVICE_FARM_POOLS` or `SDK_IOS_DEVICE_FARM_POOLS` (the dispatch's `pool` names one pool; empty prefers an
+available private pool), drives the catalog over MQTT once the device runs, and fails on any failed test. `filter`
+narrows it to comma-separated categories or testId prefixes. On a pull request, `test-e2e-smoke`, `test-e2e-full` and `test-e2e-rerun-failed` run the sdk's Android and iOS
 apps the same way, with the label's suite; the Kotlin app runs only by dispatch.
 
 ## Developing new tests

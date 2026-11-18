@@ -16,19 +16,14 @@ on:
       - packages/sdk-kotlin/**
   workflow_dispatch:
     inputs:
-      packages:
-        description: Comma-separated SDK pod packages or directories; empty runs @qvac/sdk only, name sdk-python or sdk-kotlin to add them
+      languages:
+        description: "Comma-separated languages: js, python, kotlin"
         type: string
-        default: ""
-      labels:
-        description: Labels whose desktop configurations to run, e.g. electron; empty runs test-e2e-full's desktop ones
+        default: js,python,kotlin
+      platforms:
+        description: "Comma-separated platforms: linux, mac, windows, android, ios, electron, snap"
         type: string
-        default: ""
-      platform:
-        description: Device Farm platform; none runs the desktop configurations only
-        type: choice
-        options: [none, Android, iOS, both]
-        default: none
+        default: linux,mac,windows,android,ios
       suite:
         description: Test suite for every leg
         type: choice
@@ -66,7 +61,7 @@ permissions: {}
 # probe runs beside the smoke or full run instead of replacing it. Dispatches never cancel each other.
 concurrency:
   group: >-
-    sdk-e2e-${{ github.event.pull_request.number || github.run_id }}-${{ inputs.platform || 'none' }}-${{
+    sdk-e2e-${{ github.event.pull_request.number || github.run_id }}-${{
       github.event.action != 'labeled' && 'base'
       || (github.event.label.name == 'test-e2e-rerun-failed' && 'rerun')
       || (github.event.label.name == 'test-e2e-smoke' && 'base')
@@ -82,8 +77,9 @@ jobs:
     uses: ./.github/workflows/_select-projects.yml
     with:
       targets: test:integration,test:mobile
-      packages: ${{ inputs.packages }}
-      labels: ${{ github.event_name == 'workflow_dispatch' && (inputs.labels || 'test-e2e-full') || '' }}
+      # A dispatch selects every language's e2e configurations; plan keeps the languages and platforms it names.
+      packages: ${{ github.event_name == 'workflow_dispatch' && 'sdk,sdk-python,sdk-kotlin' || '' }}
+      labels: ${{ github.event_name == 'workflow_dispatch' && 'test-e2e-full,test-e2e-python,electron,snap' || '' }}
       tags: ci:sdk
 
   fork-approval:
@@ -206,8 +202,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           MATRICES: ${{ needs.select.outputs.matrices }}
-          PACKAGES: ${{ inputs.packages }}
-          PLATFORM: ${{ inputs.platform }}
+          LANGUAGES: ${{ inputs.languages }}
+          PLATFORMS: ${{ inputs.platforms }}
           SUITE: ${{ inputs.suite }}
           FILTER: ${{ inputs.filter }}
           EXCLUDE_SUITE: ${{ inputs.exclude-suite }}
