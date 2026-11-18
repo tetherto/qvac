@@ -14,7 +14,6 @@ The package keeps what every SDK client must do apart from how each client does 
 | ----------------------------- | -------------------------------------------------------------------------------------------------- |
 | [`catalog/`](./catalog)       | The client-neutral catalog: test definitions, platform skips, the resource table, platform policy  |
 | `catalog/resources/`          | The table and policy as JSON for clients that do not read TypeScript, and the recorded skip matrix |
-| `catalog/conformance/`        | The API-level corpus the JS, Python and Kotlin clients each run                                    |
 | [`runners/js/`](./runners/js) | The JS client: desktop, Electron, Snap and mobile consumers, and their executors                   |
 | `runners/python/`             | The Python client: an interpreter for the declarative bodies, and hand-written bodies for the rest |
 | `runners/kotlin/`             | The Kotlin client: an Android app that interprets the declarative bodies through the Kotlin SDK    |

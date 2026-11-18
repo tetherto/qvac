@@ -25,27 +25,6 @@
         "sources": ["self"]
       }
     },
-    "test:integration": {
-      "executor": "nx:run-commands",
-      "options": {
-        "cwd": "packages/sdk-kotlin",
-        "command": "node ci/conformance.mjs"
-      },
-      "configurations": {
-        "linux-x64-conformance": {
-          "ci": {
-            "runner": "ubuntu_latest",
-            "setup": ["python", "java", "android"],
-            "labels": {
-              "test-e2e-smoke": ""
-            }
-          }
-        }
-      },
-      "metadata": {
-        "timeoutMinutes": 90
-      }
-    },
     "test:mobile": {
       "executor": "nx:run-commands",
       "options": {

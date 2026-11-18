@@ -210,8 +210,7 @@ from npm. Tags, the GitHub release, PyPI, the wheels and the Maven zips wait
 for it.
 
 On the release PR, outside `release-train.yml`: when the PR touches the SDK,
-`sdk-e2e.yml` runs the e2e legs its labels and `base:release-*` keys select,
-including the Kotlin worker conformance leg.
+`sdk-e2e.yml` runs the e2e legs its labels and `base:release-*` keys select.
 
 ### Dry run
 

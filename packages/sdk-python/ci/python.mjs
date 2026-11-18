@@ -56,6 +56,5 @@ if (['format', 'lint', 'typecheck', 'unit'].includes(step)) {
     run(py, ['-m', 'mypy', 'scripts'])
     run(py, ['-m', 'mypy', 'tests'])
   }
-  // Mocked unit tests and transport tests; real-worker tests skip themselves with no worker built.
   if (step === 'unit') run(py, ['-m', 'pytest', 'tests/', '-v'])
 } else throw new Error('usage: python.mjs format | lint | typecheck | unit')

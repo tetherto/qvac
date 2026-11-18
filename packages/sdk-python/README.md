@@ -250,14 +250,14 @@ worker; hand-write per language only what is irreducibly client-side, and never
   Python once used `lingua`, JS `@qvac/langdetect-text`).
 - **Version lock-step.** This package's version *is* the `@qvac/sdk` version it
   was generated against.
-- **Conformance corpus.** `../sdk-e2e/catalog/conformance/cases.json` is run by both a
-  JS runner and `tests/test_conformance.py`, so the two clients are diffed
-  against the same cases.
+- **One e2e catalog.** The shared catalog in [`../sdk-e2e`](../sdk-e2e) is this
+  client's e2e suite, and the JS and Kotlin clients run the same definitions,
+  so every client is checked against the same cases.
 
 The irreducibly-client-side code (typed error classes, numpy marshaling, stream
 assembly, the notebook facade) is the only hand-written surface mirroring the JS
-client, and it's covered by the conformance corpus + real-worker tests rather
-than trusted to match.
+client. Unit tests cover it against a fake transport, and the shared catalog
+covers it against a real worker.
 
 ## Development
 
@@ -269,7 +269,7 @@ than trusted to match.
 python3 -m venv .venv
 .venv/bin/pip install -e ".[gen,dev]"
 .venv/bin/python3 scripts/generate.py           # export the contract, write _generated/
-.venv/bin/python3 -m pytest                     # unit + (with a built worker) real-model e2e
+.venv/bin/python3 -m pytest                     # unit tests
 ```
 
 Format, lint and typecheck (all run in CI):
@@ -284,5 +284,5 @@ black and ruff skip the gitignored `_generated/`; mypy follows the package's
 imports into it. Building the wheel or source package fails without it, and
 also when it was generated from a contract other than the SDK's current one.
 
-Real-model tests spawn a worker (`packages/sdk` built via `npm run build`, or
-`QVAC_POC_SDK_DIR`) and otherwise skip.
+The real-worker e2e for this client is the shared catalog; see
+[`../sdk-e2e/README.md`](../sdk-e2e/README.md) for running it on Python.
