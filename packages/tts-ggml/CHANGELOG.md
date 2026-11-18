@@ -29,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update the shared `speech-cpp` native dependency to `2026-11-11`
   ([#5747](https://github.com/tetherto/qvac/pull/5747)).
 
+### Fixed
+
+- The runtime stats tests build against `qvac-lib-inference-addon-cpp` 1.7.0,
+  where a stat value can also hold a string. They use `RuntimeStatValue`, and
+  the dependency floor is now `1.7.0`
+  ([#5729](https://github.com/tetherto/qvac/pull/5729)).
+
 ## [0.15.1] - 2026-11-10
 
 ## [0.15.0] - 2026-11-05
