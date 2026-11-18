@@ -57,8 +57,7 @@ on:
 
 permissions: {}
 
-# One group per kind of run, as main's on-pr-test-sdk.yml: a label this workflow ignores cancels nothing, and the Python
-# probe runs beside the smoke or full run instead of replacing it. Dispatches never cancel each other.
+# One group per kind of run: a label this workflow ignores cancels nothing. Dispatches never cancel each other.
 concurrency:
   group: >-
     sdk-e2e-${{ github.event.pull_request.number || github.run_id }}-${{
@@ -66,7 +65,6 @@ concurrency:
       || (github.event.label.name == 'test-e2e-rerun-failed' && 'rerun')
       || (github.event.label.name == 'test-e2e-smoke' && 'base')
       || (github.event.label.name == 'test-e2e-full' && 'base')
-      || (github.event.label.name == 'test-e2e-python' && 'probe')
       || format('ignored-{0}', github.event.label.name) }}
   cancel-in-progress: true
 
@@ -79,7 +77,7 @@ jobs:
       targets: test:integration,test:mobile
       # Every language's e2e configurations; plan keeps the languages and platforms the label or dispatch names.
       packages: sdk,sdk-python,sdk-kotlin
-      labels: ${{ github.event_name == 'workflow_dispatch' && 'test-e2e-full,test-e2e-python,electron,snap' || '' }}
+      labels: ${{ github.event_name == 'workflow_dispatch' && 'test-e2e-full,electron,snap' || '' }}
       tags: ci:sdk
 
   fork-approval:
@@ -133,7 +131,7 @@ jobs:
     needs: [route, trust]
     if: >-
       needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_verified_checks == 'true'
-      && contains(fromJSON('["test-e2e-smoke","test-e2e-python"]'), github.event.label.name)
+      && github.event.label.name == 'test-e2e-smoke'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -409,7 +407,7 @@ jobs:
   # a rerun checked to have run what it planned. Base-branch code only, as plan.
   report:
     needs: [plan, desktop, mobile]
-    if: always() && !cancelled() && contains(fromJSON('["base","probe","rerun"]'), needs.plan.outputs.mode)
+    if: always() && !cancelled() && contains(fromJSON('["base","rerun"]'), needs.plan.outputs.mode)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

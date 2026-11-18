@@ -261,7 +261,7 @@ Each configuration names the labels that run it in `ci.labels`, and the suite ea
 | Configurations                                                 | Runs on                                          | Started by                                                                                                                                      |
 | -------------------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `linux-x64-gpu`, `darwin-arm64-gpu`, `win32-x64-gpu` (desktop) | the three GPU hosts                              | `test-e2e-smoke` (smoke suite), `test-e2e-full` (full catalog), `test-e2e-rerun-failed`, and every push to a PR into `release-*` (full catalog) |
-| `sdk-python`'s `linux-x64`, `darwin-arm64`, `win32-x64`        | the same hosts                                   | the same labels as the desktop rows, when the run takes Python (see below), and `test-e2e-python` (smoke suite)                                 |
+| `sdk-python`'s `linux-x64`, `darwin-arm64`, `win32-x64`        | the same hosts                                   | the same labels as the desktop rows, when the run takes Python (see below)                                                                      |
 | `*-electron`                                                   | the same hosts, the macOS one with a GUI session | a dispatch of `sdk-e2e.yml` naming `electron` in `platforms`                                                                                    |
 | `linux-x64-snap` (strict Snap)                                 | the Linux GPU host                               | a dispatch of `sdk-e2e.yml` naming `snap` in `platforms`                                                                                        |
 
@@ -319,7 +319,8 @@ closes it:
   green on every leg sets `e2e-tested`.
 - `test-e2e-rerun-failed` reruns only the recorded failures, on the legs where they failed. The label removes itself,
   so add it again for each attempt; it starts nothing while the base run is still going or when the base is green.
-- `test-e2e-python` posts its comments but records nothing and never sets `e2e-tested`.
+- Every language's legs post their comments and record their failures the same way, so a rerun and `e2e-tested` cover
+  them all.
 
 ### Mobile
 
