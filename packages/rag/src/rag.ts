@@ -1,6 +1,4 @@
 import HyperDB from 'hyperdb'
-import { parseRagMetadata } from 'rag-extract/chunk'
-import qvacCrypto from '#crypto'
 
 import dbSpec from './db/hyperspec/hyperdb/index.js'
 import { QvacErrorRAG, ERR_CODES, toRagError } from './errors.js'
@@ -47,7 +45,9 @@ import {
   deleteDocument,
   getNamespace,
   newLineageId,
+  hashContent,
   readNamespace,
+  sameLineage,
   storageOf,
   withSnapshot,
   withTransaction,
@@ -335,6 +335,8 @@ export function createRag(options: CreateRagOptions): Rag {
     const { signal, onProgress } = parseIngestOptions(options)
     const instance = database()
     const indexRegistry = registry()
+    // Commits check the lineage, so a drop and re-create during embedding is caught.
+    await ensureLineage(instance, namespace)
     const { ns, space } = await withSnapshot(instance, (reader) => readNamespace(reader, namespace))
     const port = documents.some((entry) => entry.kind !== 'embedded')
       ? requireEmbedder(namespace, space)
@@ -391,7 +393,7 @@ export function createRag(options: CreateRagOptions): Rag {
           committed = await withTransaction(instance, (tx) =>
             signal?.aborted
               ? Promise.resolve(null)
-              : commitDocument(tx, indexRegistry, namespace, document, job.contentHash)
+              : commitDocument(tx, indexRegistry, ns, document, job.contentHash)
           )
         }
         if (!committed) return false
@@ -533,18 +535,30 @@ export function createRag(options: CreateRagOptions): Rag {
       throwIfAborted(signal)
     }
     check()
-    await ensureLineage(instance, namespace)
-    const snapshot = instance.snapshot()
     let open = true
+    let snapshot: HyperDBReader | null = null
     const closeSnapshot = async () => {
-      if (!open) return
+      if (!open || !snapshot) return
       open = false
       await snapshot.close()
     }
-    exports.add(closeSnapshot)
+    let reader: HyperDBReader
     try {
-      const { ns, space } = await readNamespace(snapshot, namespace)
-      yield* exportFrames(snapshot, ns, space, documentIds, check)
+      // Tracked until the snapshot is registered, so close() can't miss it.
+      reader = await track(async () => {
+        await ensureLineage(instance, namespace)
+        check()
+        const created = instance.snapshot()
+        snapshot = created
+        exports.add(closeSnapshot)
+        return created
+      })
+    } catch (error) {
+      throw closed ? notReady('it has been closed') : toRagError(error)
+    }
+    try {
+      const { ns, space } = await readNamespace(reader, namespace)
+      yield* exportFrames(reader, ns, space, documentIds, check)
     } catch (error) {
       throw closed ? notReady('it has been closed') : toRagError(error)
     } finally {
@@ -798,11 +812,18 @@ function toValidDocument(job: IngestJob, spaceId: string): ValidDocument {
 async function commitDocument(
   tx: HyperDBTransaction,
   indexes: IndexRegistry,
-  namespace: string,
+  started: NamespaceRecord,
   document: ValidDocument,
   contentHash: string
 ): Promise<Committed> {
+  const namespace = started.name
   const ns = await getNamespace(tx, namespace)
+  if (!sameLineage(ns.lineageId, started.lineageId)) {
+    throw new QvacErrorRAG({
+      code: ERR_CODES.NAMESPACE_NOT_FOUND,
+      adds: `namespace '${namespace}' was dropped while the ingest ran`
+    })
+  }
   // The namespace may have been dropped and re-created in another space.
   const spaceId = document.chunks[0]?.spaceId
   if (spaceId !== ns.spaceId) {
@@ -842,33 +863,6 @@ async function commitDocument(
       : { ...result, status: 'created' },
     revision
   }
-}
-
-// Text documents are hashed after chunking, so new chunking options are a
-// change. Vectors are hashed only when precomputed; a port's are fixed by its space.
-function hashContent(
-  spaceId: string,
-  metadata: Record<string, unknown> | undefined,
-  chunks: ValidTextChunk[],
-  vectors: Array<Float32Array | undefined>
-): string {
-  const hash = qvacCrypto.createHash('sha256')
-  hash.update(JSON.stringify(['qvac-rag-content-v1', spaceId, metadata ?? null]))
-  chunks.forEach((chunk, ordinal) => {
-    hash.update(JSON.stringify([chunk.id, chunk.content, comparableMetadata(chunk.metadataJson)]))
-    const vector = vectors[ordinal]
-    if (vector) hash.update(new Uint8Array(vector.buffer, vector.byteOffset, vector.byteLength))
-  })
-  return hash.digest('hex') as string
-}
-
-// rag-extract stamps every chunk with the time it was chunked, which would make
-// the same text a change on every ingest. Other metadata is compared as is.
-function comparableMetadata(metadataJson: string | undefined): string | null {
-  if (metadataJson === undefined) return null
-  if (!parseRagMetadata(metadataJson)) return metadataJson
-  const { indexedAt: _indexedAt, ...rest } = JSON.parse(metadataJson) as Record<string, unknown>
-  return JSON.stringify(rest)
 }
 
 function notReady(reason: string): QvacErrorRAG {

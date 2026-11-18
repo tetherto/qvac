@@ -22,6 +22,8 @@ import {
   checkChunks,
   deleteDocument,
   getNamespace,
+  hashContent,
+  sameLineage,
   withTransaction,
   writeGeneration
 } from '../writes.js'
@@ -164,13 +166,21 @@ async function run(
       } catch (error) {
         throw invalid(`document '${incoming.document.id}': ${(error as Error).message}`)
       }
-      if (signal?.aborted) return { documents, skipped, cancelled: true, revision }
-      record(await withTransaction(instance, (tx) => applyDocument(tx, target, header, incoming)))
+      checkContentHash(header, incoming)
+      // Checked once the lock is held, so an abort while waiting writes nothing.
+      const outcome = await withTransaction(instance, (tx) =>
+        signal?.aborted ? Promise.resolve(null) : applyDocument(tx, target, header, incoming)
+      )
+      if (!outcome) return { documents, skipped, cancelled: true, revision }
+      record(outcome)
     } else if (frame.type === FRAME.TOMBSTONE) {
       const tombstone = parse(tombstoneSchema, parseJson(frame.payload), 'delete record')
       counts.tombstones++
-      if (signal?.aborted) return { documents, skipped, cancelled: true, revision }
-      record(await withTransaction(instance, (tx) => applyTombstone(tx, target, header, tombstone)))
+      const outcome = await withTransaction(instance, (tx) =>
+        signal?.aborted ? Promise.resolve(null) : applyTombstone(tx, target, header, tombstone)
+      )
+      if (!outcome) return { documents, skipped, cancelled: true, revision }
+      record(outcome)
     } else if (frame.type === FRAME.TRAILER) {
       const trailer = parse(trailerSchema, parseJson(frame.payload), 'trailer')
       if (
@@ -246,7 +256,7 @@ async function prepareNamespace(
   }
 
   checkSpace(ns, header)
-  if (sameBytes(ns.lineageId, header.lineageId)) return ns
+  if (sameLineage(ns.lineageId, header.lineageId)) return ns
   const range = { gte: { namespace }, lte: { namespace } }
   const hasDocuments = (await tx.find(DOCUMENTS, range, { limit: 1 }).toArray()).length > 0
   const hasTombstones = (await tx.find(TOMBSTONES, range, { limit: 1 }).toArray()).length > 0
@@ -307,6 +317,19 @@ async function readDocument(
     document: { id: fields.id, metadata: fields.metadata, chunks },
     generation: fields.generation,
     contentHash: fields.contentHash
+  }
+}
+
+// Ingest hashes vectors only when they were given, not when a port embedded
+// the text, so either form matches.
+function checkContentHash(header: Header, { document, contentHash }: IncomingDocument): void {
+  const { id, metadata, chunks } = document
+  const vectors = chunks.map((chunk) => chunk.embedding)
+  if (
+    contentHash !== hashContent(header.spaceId, metadata, chunks, vectors) &&
+    contentHash !== hashContent(header.spaceId, metadata, chunks, [])
+  ) {
+    throw invalid(`document '${id}' does not match its content hash`)
   }
 }
 
@@ -393,7 +416,7 @@ async function applyTombstone(
 // The namespace may have been dropped and re-created since the import began.
 function checkTarget(ns: NamespaceRecord, header: Header): void {
   checkSpace(ns, header)
-  if (!sameBytes(ns.lineageId, header.lineageId)) throw lineageMismatch(ns.name)
+  if (!sameLineage(ns.lineageId, header.lineageId)) throw lineageMismatch(ns.name)
 }
 
 function checkSpace(ns: NamespaceRecord, header: Header): void {
@@ -410,10 +433,6 @@ function lineageMismatch(namespace: string): QvacErrorRAG {
     code: ERR_CODES.IMPORT_LINEAGE_MISMATCH,
     adds: `namespace '${namespace}' holds documents from another lineage; ingest the exported chunks instead`
   })
-}
-
-function sameBytes(a: Uint8Array | null | undefined, b: Uint8Array): boolean {
-  return !!a && a.byteLength === b.byteLength && toHex(a) === toHex(b)
 }
 
 function parse<T>(schema: z.ZodType<T>, value: unknown, what: string): T {

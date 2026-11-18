@@ -1,3 +1,4 @@
+import { parseRagMetadata } from 'rag-extract/chunk'
 import qvacCrypto from '#crypto'
 
 import { QvacErrorRAG, ERR_CODES, toRagError } from './errors.js'
@@ -239,4 +240,40 @@ export async function withTransaction<T>(
   } finally {
     await tx.close()
   }
+}
+
+export function sameLineage(
+  a: Uint8Array | null | undefined,
+  b: Uint8Array | null | undefined
+): boolean {
+  if (!a || !b || a.byteLength !== b.byteLength) return false
+  for (let i = 0; i < a.byteLength; i++) if (a[i] !== b[i]) return false
+  return true
+}
+
+// Text documents are hashed after chunking, so new chunking options are a
+// change. Vectors are hashed only when precomputed; a port's are fixed by its space.
+export function hashContent(
+  spaceId: string,
+  metadata: Record<string, unknown> | undefined,
+  chunks: Array<{ id: string; content: string; metadataJson?: string }>,
+  vectors: Array<Float32Array | undefined>
+): string {
+  const hash = qvacCrypto.createHash('sha256')
+  hash.update(JSON.stringify(['qvac-rag-content-v1', spaceId, metadata ?? null]))
+  chunks.forEach((chunk, ordinal) => {
+    hash.update(JSON.stringify([chunk.id, chunk.content, comparableMetadata(chunk.metadataJson)]))
+    const vector = vectors[ordinal]
+    if (vector) hash.update(new Uint8Array(vector.buffer, vector.byteOffset, vector.byteLength))
+  })
+  return hash.digest('hex') as string
+}
+
+// rag-extract stamps every chunk with the time it was chunked, which would make
+// the same text a change on every ingest. Other metadata is compared as is.
+function comparableMetadata(metadataJson: string | undefined): string | null {
+  if (metadataJson === undefined) return null
+  if (!parseRagMetadata(metadataJson)) return metadataJson
+  const { indexedAt: _indexedAt, ...rest } = JSON.parse(metadataJson) as Record<string, unknown>
+  return JSON.stringify(rest)
 }

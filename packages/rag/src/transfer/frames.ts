@@ -40,7 +40,15 @@ function decodeAscii(bytes: Uint8Array): string {
   return text
 }
 
-export function encodeFrame(type: number, payload: Uint8Array): Uint8Array {
+// Import refuses frames over MAX_FRAME_BYTES, so export fails rather than
+// write a stream that can't be restored.
+export function encodeFrame(type: number, payload: Uint8Array, what = 'a frame'): Uint8Array {
+  if (payload.byteLength > MAX_FRAME_BYTES) {
+    throw new QvacErrorRAG({
+      code: ERR_CODES.INVALID_INPUT,
+      adds: `${what} encodes to ${payload.byteLength} bytes, over the ${MAX_FRAME_BYTES} byte export limit`
+    })
+  }
   const frame = new Uint8Array(FRAME_HEAD_BYTES + payload.byteLength)
   const view = new DataView(frame.buffer)
   view.setUint32(0, payload.byteLength, true)
@@ -49,18 +57,18 @@ export function encodeFrame(type: number, payload: Uint8Array): Uint8Array {
   return frame
 }
 
-export function jsonFrame(type: number, value: unknown): Uint8Array {
-  return encodeFrame(type, encodeJson(value))
+export function jsonFrame(type: number, value: unknown, what?: string): Uint8Array {
+  return encodeFrame(type, encodeJson(value), what)
 }
 
 // [u32 LE JSON length][JSON][vector bytes]
-export function chunkFrame(fields: unknown, vector: Uint8Array): Uint8Array {
+export function chunkFrame(fields: unknown, vector: Uint8Array, what?: string): Uint8Array {
   const json = encodeJson(fields)
   const payload = new Uint8Array(4 + json.byteLength + vector.byteLength)
   new DataView(payload.buffer).setUint32(0, json.byteLength, true)
   payload.set(json, 4)
   payload.set(vector, 4 + json.byteLength)
-  return encodeFrame(FRAME.CHUNK, payload)
+  return encodeFrame(FRAME.CHUNK, payload, what)
 }
 
 export function splitChunkPayload(payload: Uint8Array): { fields: unknown; vector: Uint8Array } {
@@ -96,64 +104,63 @@ export interface FrameReader {
   close(): Promise<void>
 }
 
-// Holds at most one frame plus one source chunk.
+// Holds at most one frame plus one source chunk: bytes are copied into the
+// frame as they arrive.
 export function createFrameReader(source: AsyncIterable<Uint8Array>): FrameReader {
   const iterator = source[Symbol.asyncIterator]()
-  const pending: Uint8Array[] = []
-  let buffered = 0
+  let carry: Uint8Array | null = null
   let done = false
 
-  async function fill(bytes: number): Promise<boolean> {
-    while (buffered < bytes && !done) {
+  async function pull(): Promise<Uint8Array | null> {
+    while (!done) {
       const { value, done: finished } = await iterator.next()
       if (finished) {
         done = true
         break
       }
       if (!(value instanceof Uint8Array)) throw invalid('the source must yield Uint8Array chunks')
-      if (value.byteLength === 0) continue
-      pending.push(value)
-      buffered += value.byteLength
+      if (value.byteLength > 0) return value
     }
-    return buffered >= bytes
+    return null
   }
 
-  function take(bytes: number): Uint8Array {
-    const out = new Uint8Array(bytes)
-    let offset = 0
-    while (offset < bytes) {
-      const head = pending[0]
-      const used = Math.min(head.byteLength, bytes - offset)
-      out.set(head.subarray(0, used), offset)
-      offset += used
-      if (used === head.byteLength) pending.shift()
-      else pending[0] = head.subarray(used)
+  // Returns how many bytes arrived before the source ended.
+  async function read(out: Uint8Array): Promise<number> {
+    let got = 0
+    while (got < out.byteLength) {
+      if (!carry) carry = await pull()
+      if (!carry) break
+      const used = Math.min(carry.byteLength, out.byteLength - got)
+      out.set(carry.subarray(0, used), got)
+      got += used
+      carry = used === carry.byteLength ? null : carry.subarray(used)
     }
-    buffered -= bytes
-    return out
+    return got
   }
 
   return {
     async readMagic() {
-      if (!(await fill(MAGIC.byteLength))) throw invalid('not a QVRAGX1 stream')
-      const magic = take(MAGIC.byteLength)
-      if (!magic.every((byte, i) => byte === MAGIC[i])) throw invalid('not a QVRAGX1 stream')
+      const magic = new Uint8Array(MAGIC.byteLength)
+      const got = await read(magic)
+      if (got < magic.byteLength || !magic.every((byte, i) => byte === MAGIC[i])) {
+        throw invalid('not a QVRAGX1 stream')
+      }
     },
 
     async next() {
-      if (!(await fill(FRAME_HEAD_BYTES))) {
-        if (buffered === 0) return null
-        throw invalid('the stream ends inside a frame header')
-      }
-      const head = take(FRAME_HEAD_BYTES)
+      const head = new Uint8Array(FRAME_HEAD_BYTES)
+      const got = await read(head)
+      if (got === 0) return null
+      if (got < FRAME_HEAD_BYTES) throw invalid('the stream ends inside a frame header')
       const view = new DataView(head.buffer)
       const length = view.getUint32(0, true)
       const type = view.getUint8(4)
       if (length > MAX_FRAME_BYTES) {
         throw invalid(`a frame of ${length} bytes is over the ${MAX_FRAME_BYTES} byte limit`)
       }
-      if (!(await fill(length))) throw invalid('the stream ends inside a frame')
-      return { type, payload: take(length) }
+      const payload = new Uint8Array(length)
+      if ((await read(payload)) < length) throw invalid('the stream ends inside a frame')
+      return { type, payload }
     },
 
     async close() {

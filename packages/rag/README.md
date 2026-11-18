@@ -184,7 +184,7 @@ Lists a namespace's documents in document ID order. Returns `{ documents, next }
 
 Returns an `AsyncIterable<Uint8Array>` of the namespace in the `QVRAGX1` format: a header with the full embedding space, its `spaceId` and the namespace's lineage, then each document with its chunks (IDs, text, metadata and float32 vectors), then the delete records of deleted documents, then a trailer with counts. Native IDs, index snapshots and quantized vectors are not exported; the target builds its own index.
 
-The stream reads one database snapshot, so commits made while it runs don't appear in it, and it yields one chunk at a time: memory stays flat whatever the namespace size, and a slow consumer slows the export. With `documentIds`, only those documents and their delete records are exported; IDs the namespace doesn't have are left out. Bad input throws at the call; an aborted `signal` fails the iteration with `OPERATION_CANCELLED`, and `close()` ends an open export with `NOT_READY`.
+The stream reads one database snapshot, so commits made while it runs don't appear in it, and it yields one chunk at a time: memory stays flat whatever the namespace size, and a slow consumer slows the export. With `documentIds`, only those documents and their delete records are exported; IDs the namespace doesn't have are left out. Bad input throws at the call; an aborted `signal` fails the iteration with `OPERATION_CANCELLED`, and `close()` ends an open export with `NOT_READY`. A chunk or document that encodes to more than 64 MiB fails the iteration with `INVALID_INPUT`, since import would refuse it.
 
 ```ts
 const out = fs.createWriteStream('handbook.qvragx')
@@ -210,7 +210,7 @@ Documents keep their exported generation and commit one at a time, like `ingest`
 
 A delete record removes the target's document unless the target holds a newer generation (`deleted` in `documents`, or skipped as `superseded`), and is kept, so importing an older export later can't bring the document back.
 
-Each document is checked before it commits: contiguous ordinals, `dimensions × 4` vector bytes, finite components. A bad document, a stream cut short, a missing or wrong trailer, or a frame over 64 MiB fails with `IMPORT_INVALID`; documents committed before it stay, and a document is never committed in part. Memory holds one document's chunks at a time. `signal` is checked before each commit: an abort keeps what is committed and returns `cancelled: true`. `onProgress({ documents, deletes })` reports the documents and delete records read.
+Each document is checked before it commits: contiguous ordinals, `dimensions × 4` vector bytes, finite components, and a content hash that matches its text, metadata and, when the source document was ingested with vectors, its vectors. A bad document, a stream cut short, a missing or wrong trailer, or a frame over 64 MiB fails with `IMPORT_INVALID`; documents committed before it stay, and a document is never committed in part. Memory holds one document's chunks at a time. `signal` is checked before each commit, once the write lock is held: an abort keeps what is committed and returns `cancelled: true`. `onProgress({ documents, deletes })` reports the documents and delete records read.
 
 An export of a namespace that has since been dropped is refused with `IMPORT_LINEAGE_MISMATCH`, under any name.
 

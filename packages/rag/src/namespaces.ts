@@ -81,20 +81,23 @@ export async function dropNamespaceRows(
   return { name, documentCount, chunkCount }
 }
 
-// Reads in bounded batches; rows deleted in this transaction drop out of the
-// next find.
+// Reads in bounded batches, each starting past the last row of the one before:
+// a find with a limit inside the transaction can count rows already deleted in
+// it and come back empty.
 async function deleteAll<T extends object>(
   tx: HyperDBTransaction,
   collection: string,
-  range: object,
+  range: { gte: object; lte: object },
   visit?: (row: T) => void
 ): Promise<void> {
+  let batchRange: object = range
   for (;;) {
-    const rows = await tx.find<T>(collection, range, { limit: DELETE_BATCH }).toArray()
-    if (rows.length === 0) return
+    const rows = await tx.find<T>(collection, batchRange, { limit: DELETE_BATCH }).toArray()
     for (const row of rows) {
       visit?.(row)
       await tx.delete(collection, row)
     }
+    if (rows.length < DELETE_BATCH) return
+    batchRange = { gt: rows[rows.length - 1], lte: range.lte }
   }
 }

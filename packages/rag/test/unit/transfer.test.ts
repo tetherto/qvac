@@ -331,6 +331,21 @@ test('a corrupt stream fails with IMPORT_INVALID', async (t) => {
   new DataView(nan.buffer).setFloat32(chunk.end - 4, Number.NaN, true)
   await fails('nan-vector', nan, /non-finite/)
 
+  const text = bytes.slice()
+  const marker = Array.from('"content":"', (char) => char.charCodeAt(0))
+  let at = chunk.start
+  while (!marker.every((byte, i) => text[at + i] === byte)) at++
+  text[at + marker.length] ^= 1
+  await fails('tampered-text', text, /content hash/)
+
+  const vector = bytes.slice()
+  new DataView(vector.buffer).setFloat32(chunk.end - 4, 0.5, true)
+  await fails('tampered-vector', vector, /content hash/)
+  t.absent(
+    (await to.listNamespaces()).find((ns) => ns.name === 'tampered-text')?.documentCount,
+    'a document that fails its hash is not committed'
+  )
+
   const trailer = spans[spans.length - 1]
   const wrongCount = concat(
     bytes.subarray(0, trailer.start),
@@ -418,4 +433,20 @@ test('an aborted import stops before the next document', async (t) => {
     ['a']
   )
   t.alike(await ids(to), [['a', 1]])
+})
+
+test('an export read one byte at a time imports', async (t) => {
+  const { rag: from, spaceId } = await openRag(t)
+  await from.ingest({
+    namespace: 'ns',
+    documents: [one('a', spaceId, 'alpha'), one('b', spaceId, 'b')]
+  })
+  const bytes = await exportOf(from)
+  const to = await openTarget(t)
+  const result = await to.importNamespace({ namespace: 'ns', source: source(bytes, 1) })
+  t.is(result.cancelled, false)
+  t.alike(await ids(to), [
+    ['a', 1],
+    ['b', 1]
+  ])
 })

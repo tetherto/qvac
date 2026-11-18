@@ -179,3 +179,63 @@ test('dropNamespace and the transfer calls are not on scoped handles', async (t)
     t.is(handle[name], undefined, name)
   }
 })
+
+test('dropNamespace deletes past one batch of rows', async (t) => {
+  const { open } = await setup(t)
+  const rag = await open()
+  await rag.createNamespace({ name: 'ns', space: SPACE })
+  const documents = Array.from({ length: 1100 }, (_, i) =>
+    doc(`d${i}`, spaceId, [
+      [`d${i}a`, [1, 0, 0]],
+      [`d${i}b`, [0, 1, 0]]
+    ])
+  )
+  await rag.ingest({ namespace: 'ns', documents })
+
+  const dropped = await rag.dropNamespace({ name: 'ns' })
+  t.alike(dropped, { name: 'ns', documentCount: 1100, chunkCount: 2200 })
+
+  await rag.createNamespace({ name: 'ns', space: SPACE })
+  t.alike((await rag.listDocuments({ namespace: 'ns' })).documents, [], 'no document survives')
+  const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], spaceId, k: 5 })
+  t.alike(hits, [], 'no chunk survives')
+})
+
+test('an ingest that outlives a drop and re-create writes nothing', async (t) => {
+  const store = new Corestore(await tmp(t))
+  let release = () => {}
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  let started = () => {}
+  const embedding = new Promise<void>((resolve) => {
+    started = resolve
+  })
+  const rag = createRag({
+    corestore: store,
+    embeddings: {
+      space: SPACE,
+      async embedDocuments(texts) {
+        started()
+        await gate
+        return new Float32Array(texts.length * SPACE.dimensions).fill(0.5)
+      },
+      embedQuery: () => Promise.resolve(new Float32Array(SPACE.dimensions))
+    }
+  })
+  await rag.ready()
+  t.teardown(async () => {
+    await rag.close()
+    await store.close()
+  })
+  await rag.createNamespace({ name: 'ns', space: SPACE })
+
+  const pending = rag.ingest({ namespace: 'ns', documents: [{ id: 'old', text: 'old text' }] })
+  await embedding
+  await rag.dropNamespace({ name: 'ns' })
+  await rag.createNamespace({ name: 'ns', space: SPACE })
+  release()
+
+  await rejectsWithCode(t, pending, ERR_CODES.NAMESPACE_NOT_FOUND, 'stale ingest', /dropped/)
+  t.alike((await rag.listDocuments({ namespace: 'ns' })).documents, [])
+})

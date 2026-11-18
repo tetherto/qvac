@@ -48,13 +48,17 @@ export async function* exportFrames(
   let chunks = 0
   for await (const document of selectDocuments(reader, namespace, documentIds)) {
     check()
-    yield jsonFrame(FRAME.DOCUMENT, {
-      id: document.documentId,
-      generation: document.generation,
-      contentHash: document.contentHash,
-      ...(document.metadata ? { metadata: document.metadata } : {}),
-      chunkCount: document.chunkCount
-    })
+    yield jsonFrame(
+      FRAME.DOCUMENT,
+      {
+        id: document.documentId,
+        generation: document.generation,
+        contentHash: document.contentHash,
+        ...(document.metadata ? { metadata: document.metadata } : {}),
+        chunkCount: document.chunkCount
+      },
+      `document '${document.documentId}'`
+    )
     documents++
     const key = { namespace, documentId: document.documentId, generation: document.generation }
     for await (const chunk of reader.find<ChunkRecord>(CHUNKS, { gte: key, lte: key })) {
@@ -66,7 +70,8 @@ export async function* exportFrames(
           content: chunk.content,
           ...(chunk.metadataJson ? { metadataJson: chunk.metadataJson } : {})
         },
-        chunk.vector
+        chunk.vector,
+        `chunk ${chunk.ordinal} of document '${document.documentId}'`
       )
       chunks++
     }
