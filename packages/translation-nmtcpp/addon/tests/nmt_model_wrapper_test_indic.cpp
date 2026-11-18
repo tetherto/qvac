@@ -174,8 +174,8 @@ TEST_P(NmtCppModelWrapperTest, RuntimeStats_ResetClearsStats) {
   wrapper.reset();
   const auto afterReset = wrapper.runtimeStats();
   ASSERT_FALSE(afterReset.empty());
-  auto findStatByKey =
-      [&](const char* key) -> const std::variant<double, int64_t>* {
+  auto findStatByKey = [&](const char* key)
+      -> const qvac_lib_inference_addon_cpp::RuntimeStatValue* {
     const auto iterator = std::find_if(
         afterReset.begin(), afterReset.end(), [&](const auto& entry) {
           return entry.first == key;

@@ -11,24 +11,21 @@
 
 #include "BCIConfig.hpp"
 #include "NeuralProcessor.hpp"
-#include "model-interface/BCITypes.hpp"
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
+#include "model-interface/BCITypes.hpp"
 
 namespace qvac_lib_inference_addon_bci {
 
-#if defined(__ANDROID__) || defined(__linux__)
 /**
- * Registers the ggml backends shipped as separate modules. Static builds have
- * nothing to load and do not declare this.
+ * Registers the ggml backends once per process: those in `backendsDir` when it
+ * is set, otherwise the ones the @qvac/fabric runtime ships.
  */
 void ensureBackendsLoaded(const std::string& backendsDir);
-#endif
 
-class BCIModel
-    : public qvac_lib_inference_addon_cpp::model::IModel,
-      public qvac_lib_inference_addon_cpp::model::IModelCancel,
-      public qvac_lib_inference_addon_cpp::model::IModelAsyncLoad {
+class BCIModel : public qvac_lib_inference_addon_cpp::model::IModel,
+                 public qvac_lib_inference_addon_cpp::model::IModelCancel,
+                 public qvac_lib_inference_addon_cpp::model::IModelAsyncLoad {
 public:
   using OutputCallback = std::function<void(const Transcript&)>;
   using ValueType = float;
@@ -93,8 +90,8 @@ public:
   }
 
 private:
-  static bool configContextIsChanged(
-      const BCIConfig& oldCfg, const BCIConfig& newCfg);
+  static bool
+  configContextIsChanged(const BCIConfig& oldCfg, const BCIConfig& newCfg);
   void resetContext();
   void loadEmbedderIfNeeded();
   int injectNeuralMelAndRunWhisper(

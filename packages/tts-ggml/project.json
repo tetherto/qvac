@@ -75,7 +75,14 @@
     },
     "build": {
       "executor": "nx:run-commands",
-      "dependsOn": [],
+      "dependsOn": [
+        {
+          "projects": [
+            "@qvac/fabric"
+          ],
+          "target": "link:platform"
+        }
+      ],
       "options": {
         "cwd": "packages/tts-ggml",
         "parallel": false,
@@ -100,7 +107,7 @@
       },
       "configurations": {
         "linux-x64": {
-          "args": "--platform=linux --arch=x64 -D ENABLE_CUDA=ON",
+          "args": "--platform=linux --arch=x64",
           "ci": {
             "runner": "linux_ubuntu2204_x64"
           },
@@ -122,7 +129,7 @@
               "forwardAllArgs": false
             },
             {
-              "command": "node ../../.github/scripts/check-linux-module-cxx-runtime.mjs prebuilds/linux-x64",
+              "command": "node ../../.github/scripts/check-linux-module-cxx-runtime.mjs --fabric ../fabric/prebuilds/linux-x64/qvac__fabric-linux-x64.bare prebuilds/linux-x64",
               "forwardAllArgs": false
             }
           ]
@@ -150,7 +157,7 @@
               "forwardAllArgs": false
             },
             {
-              "command": "node ../../.github/scripts/check-linux-module-cxx-runtime.mjs prebuilds/linux-arm64",
+              "command": "node ../../.github/scripts/check-linux-module-cxx-runtime.mjs --fabric ../fabric/prebuilds/linux-arm64/qvac__fabric-linux-arm64.bare prebuilds/linux-arm64",
               "forwardAllArgs": false
             }
           ]
@@ -200,7 +207,7 @@
       },
       "inputs": [
         "default",
-        "!{projectRoot}/prebuilds/**"
+        "{workspaceRoot}/cmake/qvac-addon/**/*"
       ],
       "outputs": [
         "{projectRoot}/prebuilds"
@@ -223,7 +230,7 @@
         "parallel": false,
         "commands": [
           {
-            "command": "node ../../scripts/ci/cpp-lint-changed.mjs --base {args.diff-base} --generate \"pnpm exec bare-make generate -D ENABLE_VULKAN=OFF\"",
+            "command": "node ../../scripts/ci/cpp-lint-changed.mjs --base {args.diff-base} --generate \"pnpm exec bare-make generate\"",
             "forwardAllArgs": false
           }
         ]
@@ -237,7 +244,19 @@
       },
       "metadata": {
         "timeoutMinutes": 120
-      }
+      },
+      "dependsOn": [
+        {
+          "projects": [
+            "@qvac/fabric"
+          ],
+          "target": "link:platform"
+        }
+      ],
+      "inputs": [
+        "default",
+        "{workspaceRoot}/cmake/qvac-addon/**/*"
+      ]
     },
     "cpp:build": {
       "executor": "nx:run-commands",
@@ -258,7 +277,19 @@
             "runner": "linux_ubuntu2204_x64"
           }
         }
-      }
+      },
+      "dependsOn": [
+        {
+          "projects": [
+            "@qvac/fabric"
+          ],
+          "target": "link:platform"
+        }
+      ],
+      "inputs": [
+        "default",
+        "{workspaceRoot}/cmake/qvac-addon/**/*"
+      ]
     },
     "cpp:tests": {
       "executor": "nx:run-commands",

@@ -24,4 +24,4 @@ model:
   caption_enabled: false
   timestamps_enabled: true
   streaming: false
-  streaming_chunk_ms: 320
+  # Omit streaming_chunk_ms to use the TDT default of 30000 ms.
