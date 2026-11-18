@@ -220,7 +220,15 @@ describe('a cut against a copy of the tree', () => {
   it('opens the released line carrying every page the preserved line has, at the same paths', async () => {
     const opened = await pagesOf(path.join(root, 'content', 'docs', 'sdk', `(${NEXT})`));
     const preserved = await pagesOf(path.join(root, 'content', 'docs', 'sdk', CURRENT));
-    expect(preserved.filter((page) => !opened.includes(page))).toEqual([]);
+    // Temporary: the development line renames these pages. The cut that
+    // publishes it must add their 301s to public/_redirects; check-redirects
+    // fails that build until it does, since the old URLs are in its fixtures.
+    const RENAMED_IN_DEVELOPMENT_LINE = ['system-requirements.mdx'];
+    expect(
+      preserved.filter(
+        (page) => !opened.includes(page) && !RENAMED_IN_DEVELOPMENT_LINE.includes(page),
+      ),
+    ).toEqual([]);
   });
 
   it('leaves the development line in place, which is what makes the path stable', async () => {
