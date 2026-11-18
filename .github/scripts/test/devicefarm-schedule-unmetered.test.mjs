@@ -141,6 +141,18 @@ test('a run whose status never reads is not stopped', async () => {
   assert.equal(outputs(output)['metered-count'], '0')
 })
 
+test('a queued status that stops reading is not moved at the deadline', async () => {
+  const { env, output } = setup()
+  let reads = 0
+  const { aws, calls } = fakeAws({
+    statuses: { [name16]: ['SCHEDULING'] },
+    fail: { 'get-run': (a) => a[2] === 'arn:run/1' && ++reads > 1 }
+  })
+  await main(env, { aws, ...clock() })
+  assert.deepEqual(stops(calls), [])
+  assert.equal(outputs(output)['metered-count'], '0')
+})
+
 test('an invalid billing method fails before scheduling', async () => {
   const { env } = setup({ BILLING_METHOD: 'FREE' })
   const { aws, calls } = fakeAws()

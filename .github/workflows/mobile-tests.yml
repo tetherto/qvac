@@ -69,7 +69,7 @@ permissions: {}
 # One manual run per branch, package and platform, as main's per-addon workflows had; a fresh dispatch cancels the
 # one in flight so Device Farm runs never stack, while an Android and an iOS dispatch of one package run side by side.
 concurrency:
-  group: mobile-tests-${{ github.ref }}-${{ inputs.weekly && 'weekly' || inputs.packages || github.event.schedule }}-${{ inputs.platform }}
+  group: mobile-tests-${{ github.ref }}-${{ inputs.weekly && 'weekly' || inputs.packages || github.event.schedule }}-${{ inputs.weekly && 'both' || inputs.platform }}
   cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
 
 jobs:

@@ -129,7 +129,10 @@ export async function moveQueuedToMetered(runs, ctx, { checkSeconds, intervalMs,
       let status
       try {
         status = ctx.aws(['get-run', '--arn', run.arn]).run.status
-      } catch {}
+      } catch {
+        // Only a fresh queued status may move a run; an older one may since have got a slot.
+        last.delete(run)
+      }
       if (SLOT.includes(status)) console.log(`  ${run.name}: unmetered slot taken (${status})`)
       else if (status === 'PENDING_CONCURRENCY') toMetered(run, ctx)
       else {
