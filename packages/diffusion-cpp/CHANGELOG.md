@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.5.0` -> `1.7.0`
+  ([#5812](https://github.com/tetherto/qvac/pull/5812)). 1.6.0 lets runtime
+  stat values be strings (`RuntimeStatValue`), and 1.7.0 adds
+  `JsAsyncTask::runOn` for running async work on an addon-owned executor.
+  Compile-time only; no API or runtime behaviour change for this package.
+
 ## [0.36.0] - 2026-11-17
 
 ### Features
