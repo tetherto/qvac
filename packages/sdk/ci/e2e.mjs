@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// The sdk's test:integration, one leg of main's desktop, python, electron or snap family: this commit's inference and
-// test-suite packed into the sdk and sdk-e2e npm installs, the consumer and the producer over MQTT, the results checked
-// and compared with the newest dispatch run on the base branch. Usage: node ci/e2e.mjs <family|cache>.
+// One leg of the e2e catalog on a desktop host: the sdk's desktop, electron and snap families and sdk-python's python
+// family. This commit's inference and test-suite are packed into the sdk and sdk-e2e npm installs, the consumer and the
+// producer run over MQTT, and the results are checked and compared with the newest dispatch run on the base branch.
+// Usage: node ci/e2e.mjs <family|cache>.
 
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import {
@@ -17,13 +18,16 @@ import {
   appendFileSync
 } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 export const ROOT = fileURLToPath(new URL('../../..', import.meta.url))
 export const SDK = join(ROOT, 'packages/sdk')
 export const E2E = join(ROOT, 'packages/sdk-e2e')
 const FAMILIES = ['desktop', 'python', 'electron', 'snap']
+// The package whose test:integration runs a family, which uploads <package>/test/results/e2e.
+const OWNERS = { python: join(ROOT, 'packages/sdk-python') }
+const ownerOf = (family) => OWNERS[family] ?? SDK
 // Checked before any value reaches a command line, as main's run step did.
 export const SAFE_LIST = /^[A-Za-z0-9._-]+(,[A-Za-z0-9._-]+)*$/
 
@@ -517,7 +521,8 @@ async function main(family, env) {
         startedAt
       )
     }
-    keepResults(join(SDK, 'test/results/e2e', label), [
+    const owner = ownerOf(family)
+    keepResults(join(owner, 'test/results/e2e', label), [
       reports,
       join(E2E, 'consumer.log'),
       ...snaps
@@ -525,7 +530,7 @@ async function main(family, env) {
     await compareBaseline({
       env: e,
       workflow: 'sdk-e2e.yml',
-      artifact: `sdk-results-${env.CONFIG}`,
+      artifact: `${basename(owner)}-results-${env.CONFIG}`,
       reports,
       label
     })
