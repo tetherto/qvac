@@ -59,11 +59,18 @@ TEST(ParakeetStreamingGetters, ResolveDefaultsByDetectedModelType) {
   ParakeetConfig c = makeCpuTestConfig();
   c.streamingChunkMs = 0;
   c.streamingHistoryMs = -1;
+  c.modelType = ModelType::TDT;
   ParakeetModel m(c);
+  EXPECT_EQ(m.getStreamingChunkMs(), 0);
+
+  c.modelType = ModelType::SORTFORMER;
+  ParakeetModel sortformer(c);
   EXPECT_EQ(
-      m.getStreamingChunkMs(), ParakeetConfig::DEFAULT_STREAMING_CHUNK_MS);
+      sortformer.getStreamingChunkMs(),
+      ParakeetConfig::DEFAULT_STREAMING_CHUNK_MS);
   EXPECT_EQ(
-      m.getStreamingHistoryMs(), ParakeetConfig::DEFAULT_STREAMING_HISTORY_MS);
+      sortformer.getStreamingHistoryMs(),
+      ParakeetConfig::DEFAULT_STREAMING_HISTORY_MS);
 
   c.modelType = ModelType::NEMOTRON;
   ParakeetModel nemotron(c);

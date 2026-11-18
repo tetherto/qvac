@@ -36,6 +36,19 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   `JsAsyncTask::runOn` for running async work on an addon-owned executor.
   Compile-time only; no API or runtime behaviour change for this package.
 
+### Added
+
+- Load an optional shared-weight Core ML bundle for full TranscribePsy EU on
+  macOS 15 and iOS 18 or later.
+- Report cache-aware ASR streaming support in Parakeet backend information.
+
+### Fixed
+
+- Fall back to ggml when a Parakeet TDT Core ML sidecar cannot safely handle
+  an oversized input.
+- Default offline TDT push streams to 30-second decode windows and reject
+  explicitly shorter windows that can silently drop phrases.
+
 ## [0.12.2] - 2026-11-17
 
 ### Changed
