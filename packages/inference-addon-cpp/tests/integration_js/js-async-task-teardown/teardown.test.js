@@ -62,6 +62,29 @@ async function gatedTeardown(t, worker) {
   t.is(addon.taskFinished(), 1, 'worker ran to completion under the dying env')
 }
 
+// A runOn() task still queued on its executor when the env is terminated is
+// cancelled there: it never runs, and the teardown waits only for the task
+// that had already started.
+test('env terminated with a JsAsyncTask queued on an executor cancels the queued task', async (t) => {
+  t.timeout(60000)
+
+  addon.resetGate()
+  const thread = new Thread('./worker-executor-queued.js')
+
+  await waitFor(() => addon.taskStarted() === 1, 'the gated task to start')
+  await waitFor(() => addon.countedPosted() === 1, 'the second task to be posted')
+  thread.terminate()
+
+  await delay(100)
+  t.is(addon.taskFinished(), 0, 'the started task is still blocked after terminate')
+
+  addon.releaseGate()
+  thread.join()
+
+  t.is(addon.taskFinished(), 1, 'the started task ran to completion under the dying env')
+  t.is(addon.countedRuns(), 0, 'the queued task was cancelled and never ran')
+})
+
 test('runtime survives a terminate sweep across the worker completion window', async (t) => {
   t.timeout(60000)
 

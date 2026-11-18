@@ -30,6 +30,25 @@ test('JsAsyncTask resolves with the marshalled result', async (t) => {
   t.is(await addon.startDoublingTask(21), 42)
 })
 
+test('JsAsyncTask.runOn runs tasks on the executor in post order', async (t) => {
+  t.timeout(15000)
+
+  addon.resetGate()
+  const gated = addon.startGatedTaskOn()
+  const doubled = addon.startDoublingTaskOn(21)
+  let doubledSettled = false
+  doubled.then(() => {
+    doubledSettled = true
+  })
+
+  await new Promise((resolve) => setTimeout(resolve, 100))
+  t.is(doubledSettled, false, 'the task posted second waits for the gated one')
+
+  addon.releaseGate()
+  await gated
+  t.is(await doubled, 42, 'then resolves with its marshalled result')
+})
+
 test('JsAsyncTask rejects with the StatusError code of the worker', async (t) => {
   t.timeout(15000)
 

@@ -511,6 +511,10 @@ Destruction upholds two guarantees:
 - **Captures are released before the Promise settles.** Completion destroys the work functor first, marshals the result, then releases the marshal functor and the result, and only then settles. Otherwise an awaiting caller can proceed into `destroyInstance()` while the finished task still owns the addon and the (potentially multi-gigabyte) model it holds, deferring the free until a later libuv close callback. The close callback still clears the functors and the result as a fallback for paths where completion never runs, such as a worker thread that failed to start.
 - **Env teardown is deferred, not raced.** A dying env (worklet terminate, unload) marks the task's env dead but deliberately does not finish the deferred teardown; the loop keeps running until the worker is done and the close callback finishes the handshake. Once the env is marked dead, completion skips every JS operation, including `marshal`, and abandons the Promise — its env is going away with it.
 
+`run()` starts a detached thread for every task. `runOn(env, executor, work)` and `runOn(env, executor, work, marshal)` take the same work and marshal, but post the work to an `IAsyncTaskExecutor` (`AsyncTaskExecutor.hpp`) that the addon owns. An addon uses one to bound how many tasks run at once, or to keep long tasks from holding up short ones. The executor's `post()` returns a ticket, which is never reused, and `cancel(ticket)` removes a task that has not started. The ordering contract above holds unchanged, with one addition:
+
+- **A queued task does not hold up env teardown.** The teardown hook cancels a task that is still queued on its executor. That task never runs or settles, so the hook closes the task's handle itself, and the close callback finishes the deferred teardown. A dying env therefore waits only for a task that has already started, not for every task queued ahead of its own. When the executor does not accept the task, `runOn()` throws a `StatusError` and runs the same close handshake, so the registered teardown never blocks.
+
 ### Bare Runtime Integration
 
 #### Key Bare APIs Used

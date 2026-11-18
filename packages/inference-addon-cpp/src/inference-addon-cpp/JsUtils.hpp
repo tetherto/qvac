@@ -24,6 +24,7 @@
 #include <cassert>
 #endif
 
+#include "AsyncTaskExecutor.hpp"
 #include "Errors.hpp"
 
 static_assert(std::is_same_v<utf8_t, char> || std::is_same_v<utf8_t, unsigned char>,
@@ -844,6 +845,11 @@ std::vector<CppType> toVector(js_env_t* env, Array array) {
 /// abandoned, its env is going away with it. A rejection carries the same
 /// `code` and `message` as an error thrown through `JSCATCH`.
 ///
+/// `run()` starts a thread per task. `runOn()` posts the task to an
+/// `IAsyncTaskExecutor` the addon owns instead. A task still queued there when
+/// its env is torn down is cancelled, so the dying env waits only for a task
+/// that has already started.
+///
 /// @example
 /// return js::JsAsyncTask::run(env, []() {
 ///   heavyComputation();
@@ -853,6 +859,9 @@ std::vector<CppType> toVector(js_env_t* env, Array array) {
 ///     env,
 ///     []() { return heavyComputation(); },
 ///     [](js_env_t* env, const Result& result) { return toJs(env, result); });
+///
+/// return js::JsAsyncTask::runOn(
+///     env, executor, []() { return heavyComputation(); }, toJs);
 class JsAsyncTask {
   template <typename Result> struct CallbackData {
     using Work = std::function<Result()>;
@@ -878,6 +887,10 @@ class JsAsyncTask {
     Work work;
     Marshal marshal;
     std::optional<Result> result;
+    /// Set by runOn(): the executor the work was posted to, and the ticket it
+    /// returned. Loop-thread only.
+    IAsyncTaskExecutor* executor = nullptr;
+    std::uint64_t ticket = 0;
 
     CallbackData(
         js_env_t* e, js_deferred_t* d, uv_async_t* h, Work w, Marshal m)
@@ -892,9 +905,35 @@ class JsAsyncTask {
   /// the env's loop running until the worker is done, so the detached
   /// thread's uv_async_send always targets a live loop and the uv close
   /// callback finishes the teardown afterwards.
+  ///
+  /// A runOn() task that is still queued on its executor is cancelled
+  /// instead: it will never run or send, so the hook closes the handle itself
+  /// and the close callback finishes the teardown. Without that, a dying env
+  /// would wait for every task queued ahead of this one as well.
   template <typename Result>
-  static void onEnvTeardown(js_deferred_teardown_t*, void* data) {
-    static_cast<CallbackData<Result>*>(data)->envAlive = false;
+  static void onEnvTeardown(js_deferred_teardown_t*, void* opaque) {
+    auto* data = static_cast<CallbackData<Result>*>(opaque);
+    data->envAlive = false;
+    if (data->executor != nullptr && data->executor->cancel(data->ticket)) {
+      uv_close(
+          reinterpret_cast<uv_handle_t*>(data->async_handle),
+          &JsAsyncTask::onCloseHandle<Result>);
+    }
+  }
+
+  /// The worker side of every task, on a detached thread or an executor
+  /// thread. It owns nothing JS-facing: the work lives in loop-owned
+  /// CallbackData, so once the send is out the caller's frame is inert even
+  /// if the loop finishes the teardown immediately.
+  template <typename Result> static void execute(CallbackData<Result>* data) {
+    try {
+      data->result.emplace(data->work());
+    } catch (...) {
+      data->error = std::current_exception();
+    }
+    // Always safe: either the env is alive, or its teardown is blocked on
+    // this task's unfinished deferred teardown, keeping the loop running.
+    uv_async_send(data->async_handle);
   }
 
   static js_value_t* utf8(js_env_t* env, const std::string& text) {
@@ -932,7 +971,8 @@ class JsAsyncTask {
   }
 
   /// Loop-side end of every task, successful or aborted (settlement failure,
-  /// worker that never started): provides fallback destruction for the work,
+  /// worker that never started, task cancelled on its executor at env
+  /// teardown): provides fallback destruction for the work,
   /// then finishes the deferred teardown and frees the handle. Requires a
   /// registered teardown.
   template <typename Result> static void onCloseHandle(uv_handle_t* h) {
@@ -940,7 +980,8 @@ class JsAsyncTask {
     std::unique_ptr<CallbackData<Result>> data(
         static_cast<CallbackData<Result>*>(async->data));
     // Normally cleared by onComplete before promise settlement. This also
-    // handles thread-start failure, where completion never runs.
+    // handles the paths where completion never runs: a worker that failed to
+    // start, and a task cancelled on its executor.
     data->work = nullptr;
     data->marshal = nullptr;
     data->result.reset();
@@ -1004,9 +1045,12 @@ class JsAsyncTask {
         &JsAsyncTask::onCloseHandle<Result>);
   }
 
+  /// Runs the task on @p executor, or on a new detached thread when it is
+  /// nullptr.
   template <typename Result>
   static js_value_t* start(
-      js_env_t* env, typename CallbackData<Result>::Work work,
+      js_env_t* env, IAsyncTaskExecutor* executor,
+      typename CallbackData<Result>::Work work,
       typename CallbackData<Result>::Marshal marshal) {
     js_deferred_t* deferred;
     js_value_t* promise;
@@ -1043,20 +1087,36 @@ class JsAsyncTask {
           "Failed to register env teardown callback for JsAsyncTask");
     }
 
+    if (executor != nullptr) {
+      std::uint64_t ticket = 0;
+      try {
+        // Building the std::function argument may allocate, and throw.
+        ticket =
+            executor->post([data]() { JsAsyncTask::execute<Result>(data); });
+      } catch (...) {
+        ticket = 0;
+      }
+      if (ticket == 0) {
+        // The task was not queued, so it never runs: run the close/finish
+        // handshake ourselves, as for a worker that failed to start.
+        uv_close(
+            reinterpret_cast<uv_handle_t*>(async_handle),
+            &JsAsyncTask::onCloseHandle<Result>);
+        throw qvac_errors::StatusError(
+            qvac_errors::general_error::InternalError,
+            "Failed to post work for JsAsyncTask to its executor");
+      }
+      // Written after post() returns, while the task may already be running:
+      // the worker never reads these fields, and completion, the teardown
+      // hook and the close callback all run on this loop thread, so none of
+      // them can run before this frame returns.
+      data->executor = executor;
+      data->ticket = ticket;
+      return promise;
+    }
+
     try {
-      // The lambda owns nothing JS-facing: the work lives in loop-owned
-      // CallbackData, so once the send is out this frame's destruction is
-      // inert even if the loop finishes the teardown immediately.
-      std::thread([data]() {
-        try {
-          data->result.emplace(data->work());
-        } catch (...) {
-          data->error = std::current_exception();
-        }
-        // Always safe: either the env is alive, or its teardown is blocked on
-        // this task's unfinished deferred teardown, keeping the loop running.
-        uv_async_send(data->async_handle);
-      }).detach();
+      std::thread([data]() { JsAsyncTask::execute<Result>(data); }).detach();
     } catch (...) {
       // The worker never started, so nobody will ever send: run the
       // close/finish handshake ourselves or the teardown registered above
@@ -1078,11 +1138,53 @@ public:
   /// @param work Blocking operation to execute on a background thread
   /// @return JavaScript Promise that resolves when work completes
   template <typename Work> static js_value_t* run(js_env_t* env, Work&& work) {
+    return startVoid(env, nullptr, std::forward<Work>(work));
+  }
+
+  /// @brief Execute blocking work asynchronously and resolve the promise with
+  /// `marshal(env, result)`, called on the JS thread
+  template <typename Work, typename Marshal>
+  static js_value_t* run(js_env_t* env, Work&& work, Marshal&& marshal) {
+    return startValue(
+        env, nullptr, std::forward<Work>(work), std::forward<Marshal>(marshal));
+  }
+
+  /// @brief Like run(env, work), but posts the work to @p executor instead of
+  /// starting a thread
+  /// @details If the env is torn down while the work is still queued on
+  /// @p executor, the work is cancelled there and never runs. Throws a
+  /// `StatusError` when the executor does not accept the work.
+  template <typename Work>
+  static js_value_t*
+  runOn(js_env_t* env, IAsyncTaskExecutor& executor, Work&& work) {
+    return startVoid(env, &executor, std::forward<Work>(work));
+  }
+
+  /// @brief Like run(env, work, marshal), but posts the work to @p executor
+  /// instead of starting a thread
+  /// @details Same cancellation and errors as runOn(env, executor, work).
+  template <typename Work, typename Marshal>
+  static js_value_t* runOn(
+      js_env_t* env, IAsyncTaskExecutor& executor, Work&& work,
+      Marshal&& marshal) {
+    return startValue(
+        env,
+        &executor,
+        std::forward<Work>(work),
+        std::forward<Marshal>(marshal));
+  }
+
+private:
+  template <typename Work>
+  static js_value_t*
+  startVoid(js_env_t* env, IAsyncTaskExecutor* executor, Work&& work) {
     static_assert(
         std::is_void_v<std::invoke_result_t<Work&>>,
-        "work with a result uses JsAsyncTask::run(env, work, marshal)");
+        "work with a result takes a marshal: JsAsyncTask::run(env, work, "
+        "marshal) or JsAsyncTask::runOn(env, executor, work, marshal)");
     return start<std::monostate>(
         env,
+        executor,
         [work = std::forward<Work>(work)]() mutable {
           work();
           return std::monostate{};
@@ -1094,16 +1196,20 @@ public:
         });
   }
 
-  /// @brief Execute blocking work asynchronously and resolve the promise with
-  /// `marshal(env, result)`, called on the JS thread
   template <typename Work, typename Marshal>
-  static js_value_t* run(js_env_t* env, Work&& work, Marshal&& marshal) {
+  static js_value_t* startValue(
+      js_env_t* env, IAsyncTaskExecutor* executor, Work&& work,
+      Marshal&& marshal) {
     using Result = std::decay_t<std::invoke_result_t<Work&>>;
     static_assert(
         !std::is_void_v<Result>,
-        "work without a result uses JsAsyncTask::run(env, work)");
+        "work without a result takes no marshal: JsAsyncTask::run(env, work) "
+        "or JsAsyncTask::runOn(env, executor, work)");
     return start<Result>(
-        env, std::forward<Work>(work), std::forward<Marshal>(marshal));
+        env,
+        executor,
+        std::forward<Work>(work),
+        std::forward<Marshal>(marshal));
   }
 };
 
