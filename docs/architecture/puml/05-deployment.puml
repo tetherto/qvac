@@ -2,34 +2,40 @@
 !include <C4/C4_Deployment>
 HIDE_STEREOTYPE()
 
-title QVAC SDK - Deployment Topologies
+title QVAC SDK Family - Deployment Diagram
 
-Deployment_Node(separate, "Separate worker process") {
-    Deployment_Node(host, "Application process") {
-        Container(hostClient, "Host Client", "Host runtime", "Owns the worker connection")
+Deployment_Node(host_worker, "Separate worker process") {
+    Deployment_Node(host_proc, "Host process") {
+        Container(client, "Host Client", "TypeScript / Python / Kotlin")
     }
-    Deployment_Node(workerProcess, "Worker process") {
-        Container(sidecar, "Bare Worker", "Bare runtime", "Runs the inference engine")
+    Deployment_Node(worker_proc, "Worker process") {
+        Container(worker, "Worker + @qvac/inference", "TypeScript/C++")
     }
+    ContainerDb(store_hw, "Local Storage", "Models cache + RAG DB")
 }
 
-Deployment_Node(embedded, "Embedded worker") {
-    Deployment_Node(app, "Application process") {
-        Container(embeddedClient, "Host Client", "Host runtime", "Owns the worklet connection")
-        Container(worklet, "Bare Worker", "BareKit worklet", "Runs the inference engine")
+Deployment_Node(embedded, "Embedded BareKit worker") {
+    Deployment_Node(embedded_app, "Host process") {
+        Container(embedded_client, "Host Client", "TypeScript / Kotlin")
+        Container(worklet, "Worker + @qvac/inference", "BareKit worklet")
     }
+    ContainerDb(store_bk, "Local Storage", "Models cache + RAG DB")
 }
 
-Deployment_Node(direct, "Direct Bare") {
-    Deployment_Node(bareApp, "Application process") {
-        Container(appCode, "Application", "Bare", "Registers plugins and calls the engine")
-        Container(engine, "Inference Engine", "@qvac/inference", "Runs model operations")
+Deployment_Node(inproc, "In-process Bare") {
+    Deployment_Node(bare_app, "Bare Application") {
+        Container(engine, "@qvac/inference", "TypeScript/C++")
     }
+    ContainerDb(store_ip, "Local Storage", "Models cache + RAG DB")
 }
 
-Rel_D(hostClient, sidecar, "Calls worker across processes")
-Rel_D(embeddedClient, worklet, "Calls worker within the process")
-Rel_D(appCode, engine, "Calls engine in process")
-Lay_R(separate, embedded)
-Lay_R(embedded, direct)
+Rel_D(client, worker, "Calls worker", "bare-stow pipe / Android Binder")
+Rel_D(embedded_client, worklet, "Calls worker", "bare-stow over worklet IPC")
+Rel_D(worker, store_hw, "Reads/writes", "filesystem / HyperDB")
+Rel_D(worklet, store_bk, "Reads/writes", "filesystem / HyperDB")
+Rel_D(engine, store_ip, "Reads/writes", "filesystem / HyperDB")
+
+Lay_R(host_worker, embedded)
+Lay_R(embedded, inproc)
+
 @enduml

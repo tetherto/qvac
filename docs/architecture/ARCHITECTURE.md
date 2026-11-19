@@ -33,7 +33,7 @@ The registry supplies catalog data and model blobs through Holepunch. Direct HTT
 
 [PlantUML source](puml/02-container.puml)
 
-*Boxes show the host and worker runtime roles. Cylinders show persistent stores.*
+*Boxes show the host, worker, and engine roles. Cylinders show persistent stores. Grey boxes show model sources.*
 
 The host client owns the application-facing API and its connection to the worker. The worker owns the inference engine and performs model and retrieval I/O. The [deployment diagram](#deployment-diagram) shows which boundaries cross an OS process.
 
@@ -43,7 +43,7 @@ The host client owns the application-facing API and its connection to the worker
 
 [PlantUML source](puml/03-component-overview.puml)
 
-*The outer boundary is the worker. The inner boundary is the inference engine. Calls inside the worker stay in process.*
+*The host connects to the worker over IPC. Calls from the worker bridge into the inference engine stay in process.*
 
 The worker bridge adapts the language-neutral RPC contract to the engine's `send`, `stream`, and `duplex` entry points. Dispatch validates the caller and routes each operation to the engine subsystem that owns it.
 
@@ -104,11 +104,11 @@ A client timeout, cancellation, or early stream close can abort the correspondin
 
 ## Domain Model Diagram
 
-![Session, Request and Model Domain](puml/images/06-domain-model.png)
+![Domain Model](puml/images/06-domain-model.png)
 
 [PlantUML source](puml/06-domain-model.puml)
 
-*The relationships show which session owns a request and what keeps a loaded model alive.*
+*The relationships show model sources and plugins, inference inputs and outputs, and how sessions own requests and keep models loaded.*
 
 Calls without an explicit session run as the runtime owner. A caller session scopes requests by `(sessionId, requestId)`. Sessions loading the same configuration share one native model instance through leases. Releasing the last lease unloads the model. A reload requires sole ownership of the model's leases.
 
@@ -165,9 +165,9 @@ The loader accepts local paths, source URIs, descriptors, and generated model co
 
 [PlantUML source](puml/10-rag-components.puml)
 
-*The diagram shows the RAG 0.10 integration design and its storage boundary.*
+*The diagram shows the target RAG 0.10 integration and its storage boundary.*
 
-The caller supplies and owns the Corestore. The retrieval adapter also supplies an embeddings port for text ingest and queries. `@qvac/rag` stores documents, chunks, and vectors in HyperDB namespaces, each bound to one embedding space. Search is scoped to a namespace and can be restricted to a set of document IDs. A per-namespace TurboVec index supplies candidates for exact rescoring against the stored vectors. Exact search remains available when the index is unavailable. See the [RAG package design](../../packages/rag/README.md#api).
+The retrieval adapter supplies and owns the Corestore and provides an embeddings port for text ingest and queries. `@qvac/rag` stores documents, chunks, and vectors in HyperDB namespaces, each bound to one embedding space. Search is scoped to a namespace and can be restricted to a set of document IDs. A per-namespace TurboVec index supplies candidates for exact rescoring against the stored vectors. Exact search remains available when the index is unavailable. See the [RAG package design](../../packages/rag/README.md#api).
 
 ## Model Registry (Online Catalog)
 

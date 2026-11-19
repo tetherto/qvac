@@ -1,17 +1,18 @@
 @startuml
 title Plugin Invocation Flow
-hide footbox
 
-participant "Caller" as Caller
-participant "Engine Dispatch" as Dispatch
-participant "Runtime Registries" as State
-participant "Plugin Handler" as Handler
+participant "Client" as Client
+participant "Dispatch" as Dispatch
+participant "Plugin Registry" as PluginReg
+participant "Handler" as Handler
 
-Caller -> Dispatch : Invoke a model handler
-Dispatch -> State : Resolve loaded model and its plugin handler
-State --> Dispatch : Handler definition
-Dispatch -> Dispatch : Validate inputs and begin caller-scoped request
-Dispatch -> Handler : Execute with request context
-Handler --> Dispatch : Result or stream events
-Dispatch --> Caller : Validated output
+Client -> Dispatch : invokePlugin({ modelId, handler, params })
+Dispatch -> PluginReg : resolve handler
+PluginReg --> Dispatch : handler definition
+Dispatch -> Dispatch : validate input and register request in caller session
+Dispatch -> Handler : execute with session and abort signal
+Handler --> Dispatch : result
+Dispatch -> Dispatch : validate output
+Dispatch --> Client : result
+
 @enduml

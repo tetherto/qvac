@@ -1,28 +1,34 @@
 @startuml
 title Model Loading Flow
-hide footbox
 
-participant "Caller" as Caller
-participant "Load Handler" as Load
-participant "Artifact Cache" as Cache
-participant "Inference Plugin" as Plugin
+participant "Client" as Client
+participant "Handler" as Handler
+participant "Download" as Download
+participant "Plugin" as Plugin
 
-Caller -> Load : Load source and configuration
-Load -> Cache : Resolve local artifacts or fetch missing files
-Cache --> Load : Resolved artifact paths
+Client -> Handler : loadModel({ modelSrc, modelType })
+Handler -> Download : resolve and fetch source
 
-alt Resolved configuration already loaded
-    Load -> Load : Add the caller's lease
-else First load of this configuration
-    Load -> Plugin : Evaluate fit if enabled and supported
-    Plugin --> Load : Fit verdict
-    break Policy refuses the load
-        Load --> Caller : Model fit error
+note right of Download
+  Source is a model constant, HTTP URL,
+  registry entry, Hyperdrive path, or local file.
+end note
+
+Download --> Handler : model path
+alt Existing model with the resolved configuration
+    Handler -> Handler : add caller's lease under the model lock
+else First load of the resolved configuration
+    opt Fit check enabled and supported
+        Handler -> Plugin : assess fit using resolved files
+        Plugin --> Handler : fit verdict
+        break Policy refuses the load
+            Handler --> Client : model fit error
+        end
     end
-    Load -> Plugin : Create and load model
-    Plugin --> Load : Model instance
-    Load -> Load : Register model and caller lease
+    Handler -> Plugin : createModel(...)
+    Plugin -> Plugin : load native addon
+    Handler -> Handler : register model and caller lease
 end
+Handler --> Client : modelId
 
-Load --> Caller : Model ID
 @enduml

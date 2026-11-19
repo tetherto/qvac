@@ -2,21 +2,21 @@
 !include <C4/C4_Context>
 HIDE_STEREOTYPE()
 
-title QVAC SDK - System Context
+title QVAC SDK Family - System Context
 
-Person(dev, "Application Developer", "Integrates local AI into an application")
+Person(dev, "Application Developer", "Builds JS, Python, Kotlin, and Bare apps for desktop and mobile")
 
-System(sdk, "QVAC SDK", "Runs models and retrieves application data on the device")
+System(sdk, "QVAC SDK Family", "Local-first inference. JS, Python, Kotlin, and Bare entry points share one engine")
 
-System_Ext(http, "HTTP / CDN", "Model artifacts")
-System_Ext(p2p, "Holepunch Network", "QVAC Model Registry and Hyperdrive seeders")
-System_Ext(remote, "GGML RPC Servers", "Optional remote inference devices")
+System_Ext(registry, "QVAC Model Registry", "Catalog, search, and blob download")
+System_Ext(http, "HTTP / CDN", "Direct model file downloads")
+System_Ext(p2p, "Holepunch P2P Network", "Hyperswarm DHT and Hyperdrive seeders")
+System_Ext(rpc, "GGML RPC Servers", "Optional remote inference devices")
 
-Rel_D(dev, sdk, "Integrates inference and retrieval")
-Rel_D(sdk, http, "Downloads model artifacts", "HTTP(S)")
-Rel_D(sdk, p2p, "Discovers peers, queries catalog and syncs blobs", "Hyperswarm / Hypercore")
-Rel_D(sdk, remote, "Offloads model operations", "GGML RPC")
+Rel_D(dev, sdk, "Calls SDK API")
+Rel_L(sdk, registry, "Queries catalog and downloads", "Holepunch")
+Rel_D(sdk, http, "Downloads models", "HTTPS")
+Rel_R(sdk, p2p, "Discovers peers and syncs model blobs", "Hyperswarm / Hyperdrive")
+Rel_D(sdk, rpc, "Runs supported model operations on remote devices", "GGML RPC")
 
-Lay_R(http, p2p)
-Lay_R(p2p, remote)
 @enduml

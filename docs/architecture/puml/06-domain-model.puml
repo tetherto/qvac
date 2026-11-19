@@ -1,32 +1,97 @@
 @startuml
-title Session, Request and Model Domain
-hide circle
-hide empty members
+title Domain Model
 
-class "Caller Session" as Session {
-    sessionId
+top to bottom direction
+
+class Plugin {
+    modelType: string
+    displayName: string
+    addonPackage: string
+    handlers: Record<string, HandlerDef>
+    createModel(params): PluginModelResult
+}
+
+class Model {
+    modelId: string
+    modelType: string
+    config: object
+    name?: string
+}
+
+class CallerSession {
+    sessionId: string
 }
 
 class Request {
-    requestId
-    kind
+    requestId: string
+    kind: string
 }
 
-class "Model Lease" as Lease
-class "Loaded Model" as Model {
-    modelId
-    modelType
-    configuration
+class ModelLease
+
+class ModelConstant {
+    name: string
+    src: string
+    modelId: string
+    blobCoreKey: string
+    expectedSize: number
+    sha256Checksum: string
+    addon: string
 }
 
-class Plugin {
-    modelType
-    addonPackage
+class ModelSource {
+    <<union>>
+    registry://path
+    pear://key/path
+    https://url
+    /local/path
+    ModelConstant object
 }
 
-Session "1" -- "0..*" Request : owns
-Session "1" -- "0..*" Lease : holds
-Model "1" -- "1..*" Lease : retained by
-Request "0..*" --> "0..1" Model : targets
+class Message {
+    role: string
+    content: string | ContentPart[]
+}
+
+class Attachment {
+    path: string
+}
+
+class Tool {
+    name: string
+    parameters: object
+}
+
+class Response {
+    events: AsyncIterable
+    final: Promise
+}
+
+class RAGWorkspace {
+    workspace: string
+    embeddingModelId: string
+}
+
+class RAGDocument {
+    id: string
+    content: string
+    metadata: object
+}
+
 Plugin "1" --> "0..*" Model : creates
+CallerSession "1" -- "0..*" Request : owns
+CallerSession "1" -- "0..*" ModelLease : holds
+Model "1" -- "1..*" ModelLease : retained by
+Request "0..*" --> "0..1" Model : targets
+ModelSource "1" --> "1" Model : loads
+ModelConstant --|> ModelSource : is a
+
+Message "0..*" --> "0..*" Attachment : contains
+Message "0..*" ..> Model : input to (llm)
+Tool "0..*" ..> Model : registered with (llm)
+Model "1" --> "0..*" Response : produces
+
+RAGWorkspace "1" --> "1" Model : uses (embeddings)
+RAGWorkspace "1" --> "0..*" RAGDocument : stores
+
 @enduml
