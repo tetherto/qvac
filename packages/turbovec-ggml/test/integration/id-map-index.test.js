@@ -21,6 +21,12 @@ const CALIBRATION_SEED = 0x5eed
 const N = 10
 const UINT64_MAX = (1n << 64n) - 1n
 
+// Native errors are inference-addon-cpp StatusErrors: their `code` names the
+// addon and the error category.
+function errorCode(category) {
+  return `[ TurboVec :: ${category} ]`
+}
+
 function unitVec(i) {
   const vector = new Float32Array(DIM)
   vector[i] = 1
@@ -55,8 +61,19 @@ function expectThrows(t, fn, message) {
   }
 }
 
-function expectDisposedFilter(t, filter, message) {
-  const error = expectThrows(t, () => filter.search(new Float32Array([1, 0]), 1), message)
+async function expectRejects(t, fn, message) {
+  try {
+    await fn()
+    t.fail(message)
+    return null
+  } catch (error) {
+    t.pass(`${message}: ${error.message || error.code}`)
+    return error
+  }
+}
+
+async function expectDisposedFilter(t, filter, message) {
+  const error = await expectRejects(t, () => filter.search(new Float32Array([1, 0]), 1), message)
   t.is(
     error && error.message,
     'IdMapIndexFilter has been disposed',
@@ -96,7 +113,7 @@ function assertTvidHeader(t, file) {
   t.is(bytes[4], 4, 'tvid version 4')
 }
 
-function runRoundTrip(t, bitWidth) {
+async function runRoundTrip(t, bitWidth) {
   const idx = new IdMapIndex({ dim: DIM, bitWidth })
   const vectors = new Float32Array(N * DIM)
   const ids = new BigUint64Array(N)
@@ -106,51 +123,56 @@ function runRoundTrip(t, bitWidth) {
     ids[i] = BigInt(i) + (1n << 40n) + (1n << 62n)
   }
 
-  idx.addWithIds(vectors, ids)
+  await idx.addWithIds(vectors, ids)
   t.is(idx.length, N, `all vectors inserted (${bitWidth})`)
-  t.ok(idx.contains(ids[3]), `contains a known id (${bitWidth})`)
-  t.absent(idx.contains(999n), `absent id missing (${bitWidth})`)
+  t.ok(await idx.contains(ids[3]), `contains a known id (${bitWidth})`)
+  t.absent(await idx.contains(999n), `absent id missing (${bitWidth})`)
 
   for (let i = 0; i < N; i++) {
-    const out = idx.search(unitVec(i), 1)
+    const out = await idx.search(unitVec(i), 1)
     t.is(out.m, 1)
     t.is(out.k, 1)
     t.is(out.ids[0], ids[i], `query=${i} retrieves itself (${bitWidth})`)
     t.ok(Math.abs(out.scores[0] - 1) < 1e-5, `score is approximately one (${bitWidth})`)
   }
 
-  const padded = idx.search(unitVec(0), N + 4)
+  const padded = await idx.search(unitVec(0), N + 4)
   for (let i = N; i < N + 4; i++) {
     t.is(padded.ids[i], UINT64_MAX, `sentinel id at tail slot ${i} (${bitWidth})`)
     t.ok(padded.scores[i] < -3e38, `sentinel score at tail slot ${i} (${bitWidth})`)
   }
 
-  expectThrows(
+  await expectRejects(
     t,
     () => idx.addWithIds(unitVec(0), new BigUint64Array([ids[0]])),
-    `duplicate add should throw (${bitWidth})`
+    `duplicate add should reject (${bitWidth})`
   )
   t.is(idx.length, N, `length unchanged after rejected duplicate (${bitWidth})`)
 
-  t.is(idx.remove(ids[2]), true, `remove returns true for existing id (${bitWidth})`)
-  t.is(idx.remove(ids[2]), false, `remove returns false for missing id (${bitWidth})`)
-  t.absent(idx.contains(ids[2]), `removed id is absent (${bitWidth})`)
-  idx.compact()
-  idx.prepare()
+  t.is(await idx.remove(ids[2]), true, `remove resolves true for existing id (${bitWidth})`)
+  t.is(await idx.remove(ids[2]), false, `remove resolves false for missing id (${bitWidth})`)
+  t.absent(await idx.contains(ids[2]), `removed id is absent (${bitWidth})`)
+  t.is(idx.length, N - 1, `length follows the remove (${bitWidth})`)
+  await idx.compact()
+  await idx.prepare()
 
   const file = tmpPath(`id-map-index-roundtrip-${bitWidth}`)
   try {
-    idx.write(file)
+    await idx.write(file)
     assertTvimHeader(t, file, 2, bitWidth)
-    idx.dispose()
+    await idx.dispose()
 
-    const loaded = IdMapIndex.load(file)
+    const loaded = await IdMapIndex.load(file)
     t.is(loaded.dim, DIM, `dim restored (${bitWidth})`)
     t.is(loaded.bitWidth, bitWidth, `bitWidth restored (${bitWidth})`)
     t.is(loaded.length, N - 1, `length restored (${bitWidth})`)
-    t.absent(loaded.contains(ids[2]), `deletion persisted (${bitWidth})`)
-    t.is(loaded.search(unitVec(0), 1).ids[0], ids[0], `search works after reload (${bitWidth})`)
-    loaded.dispose()
+    t.absent(await loaded.contains(ids[2]), `deletion persisted (${bitWidth})`)
+    t.is(
+      (await loaded.search(unitVec(0), 1)).ids[0],
+      ids[0],
+      `search works after reload (${bitWidth})`
+    )
+    await loaded.dispose()
   } finally {
     if (fs.existsSync(file)) fs.unlinkSync(file)
   }
@@ -207,7 +229,7 @@ function normalizeInPlace(vector) {
   for (let i = 0; i < vector.length; i++) vector[i] /= norm
 }
 
-function runTurboVecRoundTrip(t, storage, bitWidth) {
+async function runTurboVecRoundTrip(t, storage, bitWidth) {
   const idx = new IdMapIndex({ dim: TURBOVEC_DIM, storage })
   const localN = 6
   const vectors = new Float32Array(localN * TURBOVEC_DIM)
@@ -222,22 +244,22 @@ function runTurboVecRoundTrip(t, storage, bitWidth) {
   let loaded = null
   try {
     t.is(idx.bitWidth, bitWidth, `${storage} bitWidth getter`)
-    idx.addWithIds(vectors, ids)
+    await idx.addWithIds(vectors, ids)
     for (let i = 0; i < localN; i++) {
       const query = vectors.subarray(i * TURBOVEC_DIM, (i + 1) * TURBOVEC_DIM)
-      t.is(idx.search(query, 1).ids[0], ids[i], `${storage} query=${i} retrieves itself`)
+      t.is((await idx.search(query, 1)).ids[0], ids[i], `${storage} query=${i} retrieves itself`)
     }
 
     const query = vectors.subarray(0, TURBOVEC_DIM)
     t.is(
-      idx.searchFiltered(query, 1, new BigUint64Array([ids[0]])).ids[0],
+      (await idx.searchFiltered(query, 1, new BigUint64Array([ids[0]]))).ids[0],
       ids[0],
       `${storage} filtered search works`
     )
-    idx.buildIvf(4, 0)
-    t.is(idx.searchIvf(query, 1, 4).ids[0], ids[0], `${storage} IVF search works`)
-    idx.write(file)
-    const addLoggedError = expectThrows(
+    await idx.buildIvf(4, 0)
+    t.is((await idx.searchIvf(query, 1, 4)).ids[0], ids[0], `${storage} IVF search works`)
+    await idx.write(file)
+    const addLoggedError = await expectRejects(
       t,
       () => idx.addLogged(query, new BigUint64Array([9999n]), delta),
       `${storage} addLogged should be rejected`
@@ -245,7 +267,7 @@ function runTurboVecRoundTrip(t, storage, bitWidth) {
     if (addLoggedError !== null) {
       t.is(addLoggedError.message, 'InvalidArgument', `${storage} addLogged error category`)
     }
-    const removeLoggedError = expectThrows(
+    const removeLoggedError = await expectRejects(
       t,
       () => idx.removeLogged(ids[0], delta),
       `${storage} removeLogged should be rejected`
@@ -254,12 +276,16 @@ function runTurboVecRoundTrip(t, storage, bitWidth) {
       t.is(removeLoggedError.message, 'InvalidArgument', `${storage} removeLogged error category`)
     }
     assertTv8Header(t, file, bitWidth)
-    expectThrows(t, () => IdMapIndex.loadMmap(file), `${storage} mmap load should be rejected`)
-    loaded = IdMapIndex.load(file)
-    t.is(loaded.search(query, 1).ids[0], ids[0], `${storage} reload search works`)
+    await expectRejects(
+      t,
+      () => IdMapIndex.loadMmap(file),
+      `${storage} mmap load should be rejected`
+    )
+    loaded = await IdMapIndex.load(file)
+    t.is((await loaded.search(query, 1)).ids[0], ids[0], `${storage} reload search works`)
   } finally {
-    if (loaded !== null) loaded.dispose()
-    idx.dispose()
+    if (loaded !== null) await loaded.dispose()
+    await idx.dispose()
     if (fs.existsSync(file)) fs.unlinkSync(file)
     removeDeltaArtifacts(delta)
   }
@@ -285,12 +311,12 @@ test('IdMapIndex: package root and ./idMapIndex subpath export the same class', 
 })
 
 for (const bitWidth of [4, 8, 32]) {
-  test(`IdMapIndex: ${bitWidth}-bit add + search + remove + persistence round-trip`, (t) => {
-    runRoundTrip(t, bitWidth)
+  test(`IdMapIndex: ${bitWidth}-bit add + search + remove + persistence round-trip`, async (t) => {
+    await runRoundTrip(t, bitWidth)
   })
 }
 
-test('IdMapIndex: TurboVec q4 add + search + persistence round-trip', (t) => {
+test('IdMapIndex: TurboVec q4 add + search + persistence round-trip', async (t) => {
   if (!SUPPORTS_TURBOVEC) {
     expectThrows(
       t,
@@ -299,10 +325,10 @@ test('IdMapIndex: TurboVec q4 add + search + persistence round-trip', (t) => {
     )
     return
   }
-  runTurboVecRoundTrip(t, 'turbovec-q4', 4)
+  await runTurboVecRoundTrip(t, 'turbovec-q4', 4)
 })
 
-test('IdMapIndex: TurboVec q2 add + search + persistence round-trip', (t) => {
+test('IdMapIndex: TurboVec q2 add + search + persistence round-trip', async (t) => {
   if (!SUPPORTS_TURBOVEC) {
     expectThrows(
       t,
@@ -311,10 +337,10 @@ test('IdMapIndex: TurboVec q2 add + search + persistence round-trip', (t) => {
     )
     return
   }
-  runTurboVecRoundTrip(t, 'turbovec-q2', 2)
+  await runTurboVecRoundTrip(t, 'turbovec-q2', 2)
 })
 
-test('IdMapIndex: validates production bit widths and TurboVec dimensions', (t) => {
+test('IdMapIndex: validates production bit widths and TurboVec dimensions', async (t) => {
   expectThrows(
     t,
     () => new IdMapIndex({ dim: DIM, bitWidth: 16 }),
@@ -352,9 +378,9 @@ test('IdMapIndex: validates production bit widths and TurboVec dimensions', (t) 
       const max = new IdMapIndex({ dim: 16384, storage })
       const vector = new Float32Array(16384)
       vector[0] = 1
-      max.addWithIds(vector, new BigUint64Array([16384n]))
-      t.is(max.search(vector, 1).ids[0], 16384n, `${storage} searches at maximum dimension`)
-      max.dispose()
+      await max.addWithIds(vector, new BigUint64Array([16384n]))
+      t.is((await max.search(vector, 1)).ids[0], 16384n, `${storage} searches at maximum dimension`)
+      await max.dispose()
     }
   }
   expectThrows(
@@ -422,57 +448,65 @@ test('IdMapIndex: native create takes dim and storage only', { skip: IS_MOBILE }
 })
 
 // Bare's typed getters do no type checking and can crash on a value of the
-// wrong type, so each native entry point must throw instead. Desktop-only for
-// the same reason as the test above.
+// wrong type, so each native entry point must throw instead, before it starts
+// any work. Desktop-only for the same reason as the test above.
 test('IdMapIndex: native calls reject wrong argument types', { skip: IS_MOBILE }, (t) => {
   const binding = require('../../binding')
   const handle = binding.idx_create({ dim: DIM, storage: 'f32' })
   const vector = new Float32Array(DIM)
   const cases = {
     'non-object create options': () => binding.idx_create(5),
-    'non-string load path': () => binding.idx_load(42),
-    'plain-array vectors': () => binding.idx_add(handle, [1, 2], new BigUint64Array(1)),
-    'number ids': () => binding.idx_add(handle, vector, 5),
-    'string k': () => binding.idx_search(handle, vector, 'x'),
-    'number id': () => binding.idx_remove(handle, 5),
+    'non-string load path': () => binding.idx_load_async(42),
+    'plain-array vectors': () => binding.idx_add_async(handle, [1, 2], new BigUint64Array(1)),
+    'number ids': () => binding.idx_add_async(handle, vector, 5),
+    'string k': () => binding.idx_search_async(handle, vector, 'x'),
+    'number id': () => binding.idx_remove_async(handle, 5),
     'number handle': () => binding.idx_len(5),
-    'missing handle': () => binding.idx_compact(),
-    'object filter handle': () => binding.idx_search_prepared_filtered(handle, {}, vector, 1)
+    'missing handle': () => binding.idx_compact_async(),
+    'object filter handle': () => binding.idx_search_prepared_filtered_async(handle, {}, vector, 1)
   }
   try {
     for (const [name, fn] of Object.entries(cases)) {
       const error = expectThrows(t, fn, `${name} is rejected`)
-      t.is(error && error.code, 'InvalidArgument', `${name} throws InvalidArgument`)
+      t.is(error && error.code, errorCode('InvalidArgument'), `${name} throws InvalidArgument`)
     }
   } finally {
     binding.idx_dispose(handle)
   }
 })
 
-test('IdMapIndex: paths with a NUL character are rejected, not truncated', (t) => {
+test('IdMapIndex: paths with a NUL character are rejected, not truncated', async (t) => {
   const file = tmpPath('id-map-index-nul-path')
   const delta = tmpDeltaPath('id-map-index-nul-path')
   const idx = new IdMapIndex({ dim: 2, bitWidth: 8 })
   try {
-    idx.addWithIds(new Float32Array([1, 0]), new BigUint64Array([11n]))
+    await idx.addWithIds(new Float32Array([1, 0]), new BigUint64Array([11n]))
 
-    let error = expectThrows(t, () => idx.write(`${file}\0.junk`), 'write rejects a NUL path')
-    t.is(error && error.code, 'InvalidArgument', 'write throws InvalidArgument')
+    let error = await expectRejects(
+      t,
+      () => idx.write(`${file}\0.junk`),
+      'write rejects a NUL path'
+    )
+    t.is(error && error.code, errorCode('InvalidArgument'), 'write rejects with InvalidArgument')
     t.absent(fs.existsSync(file), 'write did not create the truncated path')
 
-    idx.write(file)
+    await idx.write(file)
     const loaders = {
       load: () => IdMapIndex.load(`${file}\0.junk`),
       loadMmap: () => IdMapIndex.loadMmap(`${file}\0.junk`),
       loadWithDelta: () => IdMapIndex.loadWithDelta(file, `${delta}\0.junk`)
     }
     for (const [name, load] of Object.entries(loaders)) {
-      error = expectThrows(t, load, `${name} rejects a NUL path`)
-      t.is(error && error.code, 'InvalidArgument', `${name} throws InvalidArgument`)
+      error = await expectRejects(t, load, `${name} rejects a NUL path`)
+      t.is(
+        error && error.code,
+        errorCode('InvalidArgument'),
+        `${name} rejects with InvalidArgument`
+      )
     }
     t.absent(fs.existsSync(delta), 'loadWithDelta did not bind the truncated delta path')
   } finally {
-    idx.dispose()
+    await idx.dispose()
     if (fs.existsSync(file)) fs.unlinkSync(file)
     removeDeltaArtifacts(delta)
   }
@@ -514,7 +548,7 @@ test('IdMapIndex: root constructor preserves subclass semantics', (t) => {
   idx.dispose()
 })
 
-test('IdMapIndex: static loaders return the class they are called on', (t) => {
+test('IdMapIndex: static loaders resolve to the class they are called on', async (t) => {
   class ExtendedIdMapIndex extends IdMapIndex {
     extendedMethod() {
       return 'extended'
@@ -528,9 +562,9 @@ test('IdMapIndex: static loaders return the class they are called on', (t) => {
   let current = null
   try {
     const idx = new IdMapIndex({ dim: 2, bitWidth: 4 })
-    idx.addWithIds(new Float32Array([1, 0, 0, 1]), new BigUint64Array([11n, 22n]))
-    idx.write(snapshot)
-    idx.dispose()
+    await idx.addWithIds(new Float32Array([1, 0, 0, 1]), new BigUint64Array([11n, 22n]))
+    await idx.write(snapshot)
+    await idx.dispose()
 
     const loaders = {
       load: () => ExtendedIdMapIndex.load(snapshot),
@@ -538,59 +572,67 @@ test('IdMapIndex: static loaders return the class they are called on', (t) => {
       loadWithDelta: () => ExtendedIdMapIndex.loadWithDelta(snapshot, delta)
     }
     for (const [name, load] of Object.entries(loaders)) {
-      current = load()
+      current = await load()
       t.is(
         Object.getPrototypeOf(current),
         ExtendedIdMapIndex.prototype,
         `${name} keeps the subclass`
       )
       t.is(current.extendedMethod(), 'extended', `${name} exposes subclass methods`)
-      t.is(current.search(new Float32Array([0, 1]), 1).ids[0], 22n, `${name} result is searchable`)
-      current.dispose()
+      t.is(
+        (await current.search(new Float32Array([0, 1]), 1)).ids[0],
+        22n,
+        `${name} result is searchable`
+      )
+      await current.dispose()
       current = null
     }
 
-    current = IdMapIndex.load(snapshot)
+    current = await IdMapIndex.load(snapshot)
     t.is(Object.getPrototypeOf(current), IdMapIndex.prototype, 'base class load returns IdMapIndex')
-    current.dispose()
+    await current.dispose()
     current = null
 
     const { load } = IdMapIndex
-    current = load(snapshot)
+    current = await load(snapshot)
     t.is(
       Object.getPrototypeOf(current),
       IdMapIndex.prototype,
       'detached load falls back to IdMapIndex'
     )
   } finally {
-    if (current !== null) current.dispose()
+    if (current !== null) await current.dispose()
     if (fs.existsSync(snapshot)) fs.unlinkSync(snapshot)
     removeDeltaArtifacts(delta)
   }
 })
 
-test('IdMapIndex: dispose releases many prepared filters', (t) => {
+test('IdMapIndex: dispose releases many prepared filters', async (t) => {
   // 300 crosses several filter-pruning thresholds.
   const count = 300
   const idx = new IdMapIndex({ dim: 2, bitWidth: 8 })
   const filters = []
   try {
-    idx.addWithIds(new Float32Array([1, 0, 0, 1]), new BigUint64Array([11n, 22n]))
+    await idx.addWithIds(new Float32Array([1, 0, 0, 1]), new BigUint64Array([11n, 22n]))
     for (let i = 0; i < count; i++) {
-      filters.push(idx.prepareFilter(new BigUint64Array([22n])))
+      filters.push(await idx.prepareFilter(new BigUint64Array([22n])))
     }
     for (let i = 0; i < count; i += 2) {
       filters[i].dispose()
     }
-    t.is(filters[1].search(new Float32Array([0, 1]), 1).ids[0], 22n, 'live filter still searches')
+    t.is(
+      (await filters[1].search(new Float32Array([0, 1]), 1)).ids[0],
+      22n,
+      'live filter still searches'
+    )
   } finally {
-    idx.dispose()
+    await idx.dispose()
   }
 
   let disposed = 0
   for (const filter of filters) {
     try {
-      filter.search(new Float32Array([0, 1]), 1)
+      await filter.search(new Float32Array([0, 1]), 1)
     } catch (error) {
       if (error.message === 'IdMapIndexFilter has been disposed') disposed += 1
     }
@@ -617,132 +659,155 @@ test('IdMapIndex: CommonJS TypeScript default import works without interop', (t)
   )
 })
 
-test('IdMapIndex: rejects numeric arguments outside int32 range', (t) => {
+test('IdMapIndex: rejects numeric arguments outside int32 range', async (t) => {
   const tooLarge = 0x80000000
   expectThrows(t, () => new IdMapIndex({ dim: tooLarge }), 'oversized dim should be rejected')
   const idx = new IdMapIndex({ dim: 2 })
   let filter = null
   try {
-    idx.addWithIds(new Float32Array([1, 0]), new BigUint64Array([1n]))
-    filter = idx.prepareFilter(new BigUint64Array([1n]))
-    expectThrows(t, () => idx.search(new Float32Array([1, 0]), tooLarge), 'oversized k rejected')
-    expectThrows(
+    await idx.addWithIds(new Float32Array([1, 0]), new BigUint64Array([1n]))
+    filter = await idx.prepareFilter(new BigUint64Array([1n]))
+    await expectRejects(
+      t,
+      () => idx.search(new Float32Array([1, 0]), tooLarge),
+      'oversized k rejected'
+    )
+    await expectRejects(
       t,
       () => idx.searchFiltered(new Float32Array([1, 0]), tooLarge, new BigUint64Array([1n])),
       'oversized filtered k rejected'
     )
-    expectThrows(
+    await expectRejects(
       t,
       () => filter.search(new Float32Array([1, 0]), tooLarge),
       'oversized prepared-filter k rejected'
     )
-    expectThrows(t, () => idx.buildIvf(tooLarge, 0), 'oversized nLists rejected')
-    expectThrows(
+    await expectRejects(t, () => idx.buildIvf(tooLarge, 0), 'oversized nLists rejected')
+    await expectRejects(
       t,
       () => idx.searchIvf(new Float32Array([1, 0]), 1, tooLarge),
       'oversized nProbe rejected'
     )
   } finally {
     if (filter !== null) filter.dispose()
-    idx.dispose()
+    await idx.dispose()
   }
 })
 
-test('IdMapIndex: load APIs throw synchronously for invalid input', (t) => {
-  expectThrows(t, () => IdMapIndex.load(''), 'load invalid path throws')
-  expectThrows(t, () => IdMapIndex.loadMmap(''), 'loadMmap invalid path throws')
-  expectThrows(t, () => IdMapIndex.loadWithDelta('', ''), 'loadWithDelta invalid paths throw')
+test('IdMapIndex: load APIs reject invalid input', async (t) => {
+  await expectRejects(t, () => IdMapIndex.load(''), 'load invalid path rejects')
+  await expectRejects(t, () => IdMapIndex.loadMmap(''), 'loadMmap invalid path rejects')
+  await expectRejects(
+    t,
+    () => IdMapIndex.loadWithDelta('', ''),
+    'loadWithDelta invalid paths reject'
+  )
 })
 
-test('IdMapIndex: rejects mismatched empty-id add', (t) => {
+test('IdMapIndex: rejects mismatched empty-id add', async (t) => {
   const idx = new IdMapIndex({ dim: 2 })
-  expectThrows(
+  await expectRejects(
     t,
     () => idx.addWithIds(new Float32Array([1, 2]), new BigUint64Array()),
     'vectors with empty ids should be rejected'
   )
   t.is(idx.length, 0, 'failed add does not mutate')
-  idx.addWithIds(new Float32Array(), new BigUint64Array())
+  await idx.addWithIds(new Float32Array(), new BigUint64Array())
   t.is(idx.length, 0, 'empty add remains a no-op')
-  idx.dispose()
+  await idx.dispose()
 })
 
-test('IdMapIndex: BigInt id range edge cases', (t) => {
+test('IdMapIndex: BigInt id range edge cases', async (t) => {
   const idx = new IdMapIndex({ dim: 2 })
   const edge = (1n << 63n) + 7n
-  idx.addWithIds(new Float32Array([0.5, 0.5]), new BigUint64Array([edge]))
-  t.ok(idx.contains(edge), 'high-bit id round-trips')
-  t.is(idx.search(new Float32Array([0.5, 0.5]), 1).ids[0], edge, 'high-bit id surfaces')
-  expectThrows(
+  await idx.addWithIds(new Float32Array([0.5, 0.5]), new BigUint64Array([edge]))
+  t.ok(await idx.contains(edge), 'high-bit id round-trips')
+  t.is((await idx.search(new Float32Array([0.5, 0.5]), 1)).ids[0], edge, 'high-bit id surfaces')
+  await expectRejects(
     t,
     () => idx.addWithIds(new Float32Array([1, 0]), new BigUint64Array([UINT64_MAX])),
     'UINT64_MAX is reserved for padding'
   )
-  idx.dispose()
+  await idx.dispose()
 })
 
-test('IdMapIndex: filtered and prepared-filter searches restrict allowed ids', (t) => {
+test('IdMapIndex: filtered and prepared-filter searches restrict allowed ids', async (t) => {
   const idx = new IdMapIndex({ dim: 2, bitWidth: 4 })
   let filter = null
   try {
-    idx.addWithIds(new Float32Array([1, 0, 0, 1, 0.5, 0.5]), new BigUint64Array([11n, 22n, 33n]))
-    const out = idx.searchFiltered(new Float32Array([1, 0]), 2, new BigUint64Array([22n, 33n, 44n]))
+    await idx.addWithIds(
+      new Float32Array([1, 0, 0, 1, 0.5, 0.5]),
+      new BigUint64Array([11n, 22n, 33n])
+    )
+    const out = await idx.searchFiltered(
+      new Float32Array([1, 0]),
+      2,
+      new BigUint64Array([22n, 33n, 44n])
+    )
     t.is(out.ids[0], 33n, 'best allowed id wins')
     t.is(out.ids[1], 22n, 'lower-scoring allowed id follows')
 
-    filter = idx.prepareFilter(new BigUint64Array([22n, 33n]))
-    t.is(filter.search(new Float32Array([0, 1]), 1).ids[0], 22n, 'prepared filter is reusable')
-    idx.addWithIds(new Float32Array([0.25, 0.75]), new BigUint64Array([44n]))
-    expectDisposedFilter(t, filter, 'mutation invalidates prepared filter')
+    filter = await idx.prepareFilter(new BigUint64Array([22n, 33n]))
+    t.is(
+      (await filter.search(new Float32Array([0, 1]), 1)).ids[0],
+      22n,
+      'prepared filter is reusable'
+    )
+    await idx.addWithIds(new Float32Array([0.25, 0.75]), new BigUint64Array([44n]))
+    await expectDisposedFilter(t, filter, 'mutation invalidates prepared filter')
   } finally {
     if (filter !== null) filter.dispose()
-    idx.dispose()
+    await idx.dispose()
   }
 })
 
-test('IdMapIndex: every mutation path disposes prepared filters when required', (t) => {
+test('IdMapIndex: every mutation path disposes prepared filters when required', async (t) => {
   const snapshot = tmpPath('id-map-index-filter-invalidation-snapshot')
   const delta = tmpDeltaPath('id-map-index-filter-invalidation-delta')
   const idx = new IdMapIndex({ dim: 2, bitWidth: 4 })
   let filter = null
   try {
-    idx.addWithIds(new Float32Array([1, 0, 0, 1]), new BigUint64Array([11n, 22n]))
+    await idx.addWithIds(new Float32Array([1, 0, 0, 1]), new BigUint64Array([11n, 22n]))
 
-    filter = idx.prepareFilter(new BigUint64Array([11n]))
-    t.is(idx.remove(999n), false, 'missing plain remove is a no-op')
-    t.is(filter.search(new Float32Array([1, 0]), 1).ids[0], 11n, 'no-op remove preserves filter')
-    t.is(idx.remove(22n), true, 'plain remove mutates the index')
-    expectDisposedFilter(t, filter, 'successful remove invalidates prepared filter')
+    filter = await idx.prepareFilter(new BigUint64Array([11n]))
+    t.is(await idx.remove(999n), false, 'missing plain remove is a no-op')
+    t.is(
+      (await filter.search(new Float32Array([1, 0]), 1)).ids[0],
+      11n,
+      'no-op remove preserves filter'
+    )
+    t.is(await idx.remove(22n), true, 'plain remove mutates the index')
+    await expectDisposedFilter(t, filter, 'successful remove invalidates prepared filter')
 
-    filter = idx.prepareFilter(new BigUint64Array([11n]))
-    idx.compact()
-    expectDisposedFilter(t, filter, 'compact invalidates prepared filter')
+    filter = await idx.prepareFilter(new BigUint64Array([11n]))
+    await idx.compact()
+    await expectDisposedFilter(t, filter, 'compact invalidates prepared filter')
 
-    filter = idx.prepareFilter(new BigUint64Array([11n]))
-    idx.buildIvf(1, 0)
-    expectDisposedFilter(t, filter, 'IVF build invalidates prepared filter')
+    filter = await idx.prepareFilter(new BigUint64Array([11n]))
+    await idx.buildIvf(1, 0)
+    await expectDisposedFilter(t, filter, 'IVF build invalidates prepared filter')
 
-    idx.write(snapshot)
-    filter = idx.prepareFilter(new BigUint64Array([11n]))
-    idx.addLogged(new Float32Array([0.5, 0.5]), new BigUint64Array([33n]), delta)
-    expectDisposedFilter(t, filter, 'logged add invalidates prepared filter')
+    await idx.write(snapshot)
+    filter = await idx.prepareFilter(new BigUint64Array([11n]))
+    await idx.addLogged(new Float32Array([0.5, 0.5]), new BigUint64Array([33n]), delta)
+    await expectDisposedFilter(t, filter, 'logged add invalidates prepared filter')
 
-    filter = idx.prepareFilter(new BigUint64Array([11n]))
-    t.is(idx.removeLogged(999n, delta), false, 'missing logged remove returns false')
-    expectDisposedFilter(t, filter, 'logged remove invalidates prepared filter')
+    filter = await idx.prepareFilter(new BigUint64Array([11n]))
+    t.is(await idx.removeLogged(999n, delta), false, 'missing logged remove resolves false')
+    await expectDisposedFilter(t, filter, 'logged remove invalidates prepared filter')
 
-    filter = idx.prepareFilter(new BigUint64Array([11n]))
-    idx.compactDelta(snapshot, delta)
-    expectDisposedFilter(t, filter, 'delta compaction invalidates prepared filter')
+    filter = await idx.prepareFilter(new BigUint64Array([11n]))
+    await idx.compactDelta(snapshot, delta)
+    await expectDisposedFilter(t, filter, 'delta compaction invalidates prepared filter')
   } finally {
     if (filter !== null) filter.dispose()
-    idx.dispose()
+    await idx.dispose()
     if (fs.existsSync(snapshot)) fs.unlinkSync(snapshot)
     removeDeltaArtifacts(delta)
   }
 })
 
-test('IdMapIndex: TurboVec IVF build disposes prepared filters', (t) => {
+test('IdMapIndex: TurboVec IVF build disposes prepared filters', async (t) => {
   if (!SUPPORTS_TURBOVEC) {
     t.pass('TurboVec requires a 64-bit target')
     return
@@ -755,40 +820,44 @@ test('IdMapIndex: TurboVec IVF build disposes prepared filters', (t) => {
   const idx = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'turbovec-q4' })
   let filter = null
   try {
-    idx.addWithIds(vectors, ids)
-    filter = idx.prepareFilter(new BigUint64Array([ids[0], ids[rows - 1]]))
-    t.is(filter.search(query, 1).ids[0], ids[0], 'prepared filter works before the build')
-    idx.buildIvf(8, 0)
-    expectDisposedFilter(t, filter, 'TurboVec IVF build invalidates prepared filter')
+    await idx.addWithIds(vectors, ids)
+    filter = await idx.prepareFilter(new BigUint64Array([ids[0], ids[rows - 1]]))
+    t.is((await filter.search(query, 1)).ids[0], ids[0], 'prepared filter works before the build')
+    await idx.buildIvf(8, 0)
+    await expectDisposedFilter(t, filter, 'TurboVec IVF build invalidates prepared filter')
 
-    filter = idx.prepareFilter(new BigUint64Array([ids[0], ids[rows - 1]]))
-    t.is(filter.search(query, 1).ids[0], ids[0], 'a filter prepared after the build works')
-    t.is(idx.searchIvf(query, 1, 8).ids[0], ids[0], 'IVF search works after the build')
+    filter = await idx.prepareFilter(new BigUint64Array([ids[0], ids[rows - 1]]))
+    t.is((await filter.search(query, 1)).ids[0], ids[0], 'a filter prepared after the build works')
+    t.is((await idx.searchIvf(query, 1, 8)).ids[0], ids[0], 'IVF search works after the build')
   } finally {
     if (filter !== null) filter.dispose()
-    idx.dispose()
+    await idx.dispose()
   }
 })
 
-test('IdMapIndex: IVF build and search lifecycle', (t) => {
+test('IdMapIndex: IVF build and search lifecycle', async (t) => {
   const idx = new IdMapIndex({ dim: 2, bitWidth: 4 })
-  idx.addWithIds(
+  await idx.addWithIds(
     new Float32Array([1, 0, 0, 1, 0.5, 0.5, -1, 0]),
     new BigUint64Array([11n, 22n, 33n, 44n])
   )
-  expectThrows(
+  await expectRejects(
     t,
     () => idx.searchIvf(new Float32Array([1, 0]), 1, 1),
-    'IVF search before build should throw'
+    'IVF search before build should reject'
   )
-  idx.buildIvf(4, 0)
-  t.is(idx.searchIvf(new Float32Array([1, 0]), 2, 4).ids[0], 11n, 'IVF nearest id')
-  idx.addWithIds(new Float32Array([0.25, 0.75]), new BigUint64Array([55n]))
-  expectThrows(t, () => idx.searchIvf(new Float32Array([1, 0]), 1, 4), 'mutation invalidates IVF')
-  idx.dispose()
+  await idx.buildIvf(4, 0)
+  t.is((await idx.searchIvf(new Float32Array([1, 0]), 2, 4)).ids[0], 11n, 'IVF nearest id')
+  await idx.addWithIds(new Float32Array([0.25, 0.75]), new BigUint64Array([55n]))
+  await expectRejects(
+    t,
+    () => idx.searchIvf(new Float32Array([1, 0]), 1, 4),
+    'mutation invalidates IVF'
+  )
+  await idx.dispose()
 })
 
-test('IdMapIndex: v4 delta log replay and compaction', (t) => {
+test('IdMapIndex: v4 delta log replay and compaction', async (t) => {
   const snapshot = tmpPath('id-map-index-delta-snapshot')
   const delta = tmpDeltaPath('id-map-index-delta-log')
   let idx = null
@@ -796,118 +865,119 @@ test('IdMapIndex: v4 delta log replay and compaction', (t) => {
   let compacted = null
   try {
     idx = new IdMapIndex({ dim: 2, bitWidth: 4 })
-    idx.addWithIds(new Float32Array([1, 0, 0, 1]), new BigUint64Array([11n, 22n]))
-    idx.write(snapshot)
-    idx.addLogged(new Float32Array([0.5, 0.5]), new BigUint64Array([33n]), delta)
-    t.is(idx.removeLogged(11n, delta), true, 'logged remove returns true for existing id')
-    t.is(idx.removeLogged(44n, delta), false, 'logged remove returns false for absent id')
+    await idx.addWithIds(new Float32Array([1, 0, 0, 1]), new BigUint64Array([11n, 22n]))
+    await idx.write(snapshot)
+    await idx.addLogged(new Float32Array([0.5, 0.5]), new BigUint64Array([33n]), delta)
+    t.is(await idx.removeLogged(11n, delta), true, 'logged remove resolves true for existing id')
+    t.is(await idx.removeLogged(44n, delta), false, 'logged remove resolves false for absent id')
     assertTvidHeader(t, delta)
 
-    replayed = IdMapIndex.loadWithDelta(snapshot, delta)
-    t.absent(replayed.contains(11n), 'delta replay applies remove')
-    t.ok(replayed.contains(22n), 'delta replay keeps snapshot id')
-    t.ok(replayed.contains(33n), 'delta replay applies add')
-    expectThrows(
+    replayed = await IdMapIndex.loadWithDelta(snapshot, delta)
+    t.absent(await replayed.contains(11n), 'delta replay applies remove')
+    t.ok(await replayed.contains(22n), 'delta replay keeps snapshot id')
+    t.ok(await replayed.contains(33n), 'delta replay applies add')
+    await expectRejects(
       t,
       () => replayed.addWithIds(new Float32Array(), new BigUint64Array()),
       'delta-bound handle rejects an empty plain add'
     )
-    replayed.dispose()
+    await replayed.dispose()
     replayed = null
 
-    idx.compactDelta(snapshot, delta)
+    await idx.compactDelta(snapshot, delta)
     assertTvimHeader(t, snapshot, 2, 4)
     assertTvidHeader(t, delta)
-    idx.dispose()
+    await idx.dispose()
     idx = null
-    compacted = IdMapIndex.loadWithDelta(snapshot, delta)
-    t.absent(compacted.contains(11n), 'compacted snapshot excludes removed id')
-    t.ok(compacted.contains(33n), 'compacted snapshot includes logged add')
+    compacted = await IdMapIndex.loadWithDelta(snapshot, delta)
+    t.absent(await compacted.contains(11n), 'compacted snapshot excludes removed id')
+    t.ok(await compacted.contains(33n), 'compacted snapshot includes logged add')
   } finally {
-    if (idx !== null) idx.dispose()
-    if (replayed !== null) replayed.dispose()
-    if (compacted !== null) compacted.dispose()
+    if (idx !== null) await idx.dispose()
+    if (replayed !== null) await replayed.dispose()
+    if (compacted !== null) await compacted.dispose()
     if (fs.existsSync(snapshot)) fs.unlinkSync(snapshot)
     removeDeltaArtifacts(delta)
   }
 })
 
-test('IdMapIndex: stale delta writers retain catch-up on a missing remove', (t) => {
+test('IdMapIndex: stale delta writers retain catch-up on a missing remove', async (t) => {
   const snapshot = tmpPath('id-map-index-stale-writer-snapshot')
   const delta = tmpDeltaPath('id-map-index-stale-writer-log')
   let first = null
   let stale = null
   try {
     const seed = new IdMapIndex({ dim: 2, bitWidth: 4 })
-    seed.addWithIds(new Float32Array([1, 0]), new BigUint64Array([11n]))
-    seed.write(snapshot)
-    seed.dispose()
+    await seed.addWithIds(new Float32Array([1, 0]), new BigUint64Array([11n]))
+    await seed.write(snapshot)
+    await seed.dispose()
 
-    first = IdMapIndex.loadWithDelta(snapshot, delta)
-    stale = IdMapIndex.loadWithDelta(snapshot, delta)
-    first.addLogged(new Float32Array([0, 1]), new BigUint64Array([22n]), delta)
-    t.is(stale.removeLogged(999n, delta), false, 'missing remove returns false')
-    t.ok(stale.contains(22n), 'stale writer retains catch-up before missing remove')
+    first = await IdMapIndex.loadWithDelta(snapshot, delta)
+    stale = await IdMapIndex.loadWithDelta(snapshot, delta)
+    await first.addLogged(new Float32Array([0, 1]), new BigUint64Array([22n]), delta)
+    t.is(await stale.removeLogged(999n, delta), false, 'missing remove resolves false')
+    t.ok(await stale.contains(22n), 'stale writer retains catch-up before missing remove')
+    t.is(stale.length, 2, 'length includes the caught-up add')
   } finally {
-    if (first !== null) first.dispose()
-    if (stale !== null) stale.dispose()
+    if (first !== null) await first.dispose()
+    if (stale !== null) await stale.dispose()
     if (fs.existsSync(snapshot)) fs.unlinkSync(snapshot)
     removeDeltaArtifacts(delta)
   }
 })
 
-test('IdMapIndex: missing and corrupt delta logs', (t) => {
+test('IdMapIndex: missing and corrupt delta logs', async (t) => {
   const snapshot = tmpPath('id-map-index-delta-errors')
   const delta = tmpDeltaPath('id-map-index-delta-errors')
   let idx = null
   let loaded = null
   try {
     idx = new IdMapIndex({ dim: 2, bitWidth: 4 })
-    idx.addWithIds(new Float32Array([1, 0]), new BigUint64Array([11n]))
-    idx.write(snapshot)
-    loaded = IdMapIndex.loadWithDelta(snapshot, delta)
-    t.ok(loaded.contains(11n), 'missing delta log replays as empty')
-    loaded.addLogged(new Float32Array([0, 1]), new BigUint64Array([22n]), delta)
-    loaded.addLogged(new Float32Array([1, 0]), new BigUint64Array([23n]), delta)
-    loaded.dispose()
+    await idx.addWithIds(new Float32Array([1, 0]), new BigUint64Array([11n]))
+    await idx.write(snapshot)
+    loaded = await IdMapIndex.loadWithDelta(snapshot, delta)
+    t.ok(await loaded.contains(11n), 'missing delta log replays as empty')
+    await loaded.addLogged(new Float32Array([0, 1]), new BigUint64Array([22n]), delta)
+    await loaded.addLogged(new Float32Array([1, 0]), new BigUint64Array([23n]), delta)
+    await loaded.dispose()
     loaded = null
     const corrupt = fs.readFileSync(delta)
     corrupt[64] ^= 1
     fs.writeFileSync(delta, corrupt)
-    expectThrows(
+    await expectRejects(
       t,
       () => IdMapIndex.loadWithDelta(snapshot, delta),
-      'corrupt delta log should throw'
+      'corrupt delta log should reject'
     )
   } finally {
-    if (idx !== null) idx.dispose()
-    if (loaded !== null) loaded.dispose()
+    if (idx !== null) await idx.dispose()
+    if (loaded !== null) await loaded.dispose()
     if (fs.existsSync(snapshot)) fs.unlinkSync(snapshot)
     removeDeltaArtifacts(delta)
   }
 })
 
-test('IdMapIndex: rejects non-finite vectors and queries', (t) => {
+test('IdMapIndex: rejects non-finite vectors and queries', async (t) => {
   const idx = new IdMapIndex({ dim: 2, bitWidth: 8 })
-  expectThrows(
+  await expectRejects(
     t,
     () => idx.addWithIds(new Float32Array([1, Infinity]), new BigUint64Array([1n])),
     'non-finite vector should be rejected'
   )
-  idx.addWithIds(new Float32Array([1, 0]), new BigUint64Array([1n]))
-  expectThrows(
+  await idx.addWithIds(new Float32Array([1, 0]), new BigUint64Array([1n]))
+  await expectRejects(
     t,
     () => idx.search(new Float32Array([NaN, 0]), 1),
     'non-finite query should be rejected'
   )
-  idx.dispose()
+  await idx.dispose()
 
   if (SUPPORTS_TURBOVEC) {
     for (const storage of ['turbovec-q2', 'turbovec-q4']) {
       const turbovec = new IdMapIndex({ dim: 8, storage })
       const valid = new Float32Array(8)
       valid[0] = 1
-      expectThrows(
+      await expectRejects(
         t,
         () =>
           turbovec.addWithIds(
@@ -916,63 +986,71 @@ test('IdMapIndex: rejects non-finite vectors and queries', (t) => {
           ),
         `${storage} rejects finite components at the magnitude limit`
       )
-      turbovec.addWithIds(valid, new BigUint64Array([1n]))
-      expectThrows(
+      await turbovec.addWithIds(valid, new BigUint64Array([1n]))
+      await expectRejects(
         t,
         () => turbovec.search(new Float32Array([1e16, 0, 0, 0, 0, 0, 0, 0]), 1),
         `${storage} rejects finite query components at the magnitude limit`
       )
-      turbovec.dispose()
+      await turbovec.dispose()
     }
   }
 })
 
-test('IdMapIndex: mmap load is searchable and read-only', (t) => {
+test('IdMapIndex: mmap load is searchable and read-only', async (t) => {
   const file = tmpPath('id-map-index-mmap')
   let mmap = null
   try {
     const idx = new IdMapIndex({ dim: 2, bitWidth: 4 })
-    idx.addWithIds(new Float32Array([1, 0, 0, 1]), new BigUint64Array([11n, 22n]))
-    idx.write(file)
-    idx.dispose()
-    mmap = IdMapIndex.loadMmap(file)
-    t.is(mmap.search(new Float32Array([0, 1]), 1).ids[0], 22n, 'mmap search works')
-    expectThrows(
+    await idx.addWithIds(new Float32Array([1, 0, 0, 1]), new BigUint64Array([11n, 22n]))
+    await idx.write(file)
+    await idx.dispose()
+    mmap = await IdMapIndex.loadMmap(file)
+    t.is((await mmap.search(new Float32Array([0, 1]), 1)).ids[0], 22n, 'mmap search works')
+    await expectRejects(
       t,
       () => mmap.addWithIds(new Float32Array(), new BigUint64Array()),
       'mmap handle rejects an empty add'
     )
-    expectThrows(
+    await expectRejects(
       t,
       () => mmap.addWithIds(new Float32Array([0.5, 0.5]), new BigUint64Array([33n])),
       'mmap add should be rejected'
     )
-    expectThrows(t, () => mmap.remove(11n), 'mmap remove should be rejected')
+    await expectRejects(t, () => mmap.remove(11n), 'mmap remove should be rejected')
   } finally {
-    if (mmap !== null) mmap.dispose()
+    if (mmap !== null) await mmap.dispose()
     if (fs.existsSync(file)) fs.unlinkSync(file)
   }
 })
 
-test('IdMapIndex: dispose is deterministic and idempotent', (t) => {
+test('IdMapIndex: dispose is deterministic and idempotent', async (t) => {
   const idx = new IdMapIndex({ dim: 2, bitWidth: 4 })
-  idx.dispose()
-  idx.dispose()
-  expectThrows(t, () => idx.contains(1n), 'disposed contains should throw')
+  await idx.dispose()
+  await idx.dispose()
+  await expectRejects(t, () => idx.contains(1n), 'disposed contains should reject')
+  expectThrows(t, () => idx.length, 'disposed length should throw')
 })
 
-test('IdMapIndex: corrupt persistence file load fails', (t) => {
+test('IdMapIndex: corrupt persistence file load fails', async (t) => {
   const file = tmpPath('id-map-index-corrupt')
   try {
     fs.writeFileSync(file, new Uint8Array(32))
-    const error = expectThrows(t, () => IdMapIndex.load(file), 'corrupt tvim file should throw')
-    if (error !== null) t.is(error.message, 'BadMagic', 'load preserves native error category')
+    const error = await expectRejects(
+      t,
+      () => IdMapIndex.load(file),
+      'corrupt tvim file should reject'
+    )
+    if (error !== null) {
+      t.is(error.message, 'BadMagic', 'load preserves native error category')
+      t.is(error.code, errorCode('BadMagic'), 'and carries it in a StatusError code')
+    }
   } finally {
     if (fs.existsSync(file)) fs.unlinkSync(file)
   }
 })
 
-test(`IdMapIndex: TurboVec calibrates from a first add of ${AUTO_CALIBRATE_MIN_ROWS} rows`, (t) => {
+test(`IdMapIndex: TurboVec calibrates from a first add of ${AUTO_CALIBRATE_MIN_ROWS} rows`, async (t) => {
   if (!SUPPORTS_TURBOVEC) {
     t.pass('TurboVec requires a 64-bit target')
     return
@@ -991,44 +1069,46 @@ test(`IdMapIndex: TurboVec calibrates from a first add of ${AUTO_CALIBRATE_MIN_R
   let loaded = null
   try {
     t.is(idx.calibrated, false, 'a fresh index is uncalibrated')
-    idx.addWithIds(vectors, ids)
+    const add = idx.addWithIds(vectors, ids)
+    t.is(idx.calibrated, false, 'calibrated reports the state before the add finishes')
+    await add
     t.is(idx.calibrated, true, `a first add of ${AUTO_CALIBRATE_MIN_ROWS} rows calibrates`)
     const query = vectors.subarray(0, TURBOVEC_DIM)
-    t.is(idx.search(query, 1).ids[0], ids[0], 'a calibrated index retrieves a stored row')
-    idx.write(file)
-    loaded = IdMapIndex.load(file)
+    t.is((await idx.search(query, 1)).ids[0], ids[0], 'a calibrated index retrieves a stored row')
+    await idx.write(file)
+    loaded = await IdMapIndex.load(file)
     t.is(loaded.calibrated, true, 'the calibration survives a snapshot')
 
     const belowMin = AUTO_CALIBRATE_MIN_ROWS - 1
-    small.addWithIds(vectors.subarray(0, belowMin * TURBOVEC_DIM), ids.subarray(0, belowMin))
+    await small.addWithIds(vectors.subarray(0, belowMin * TURBOVEC_DIM), ids.subarray(0, belowMin))
     t.is(small.calibrated, false, 'a first add one row short of the minimum does not calibrate')
 
     const repeated = ids.slice()
     repeated[rows - 1] = repeated[0]
-    expectThrows(
+    await expectRejects(
       t,
       () => q2.addWithIds(vectors, repeated),
       'a first add with a repeated id is rejected'
     )
     t.is(q2.calibrated, false, 'a rejected first add does not calibrate')
-    q2.addWithIds(new Float32Array(0), new BigUint64Array(0))
+    await q2.addWithIds(new Float32Array(0), new BigUint64Array(0))
     t.is(q2.calibrated, false, 'an empty first add does not calibrate')
-    q2.addWithIds(vectors, ids)
+    await q2.addWithIds(vectors, ids)
     t.is(q2.calibrated, true, 'a q2 index still calibrates on its first rows')
 
-    plain.addWithIds(vectors, ids)
+    await plain.addWithIds(vectors, ids)
     t.is(plain.calibrated, false, 'other storages are never calibrated')
   } finally {
-    if (loaded !== null) loaded.dispose()
-    idx.dispose()
-    small.dispose()
-    q2.dispose()
-    plain.dispose()
+    if (loaded !== null) await loaded.dispose()
+    await idx.dispose()
+    await small.dispose()
+    await q2.dispose()
+    await plain.dispose()
     if (fs.existsSync(file)) fs.unlinkSync(file)
   }
 })
 
-test('IdMapIndex: TurboVec staged search is off until turned on', (t) => {
+test('IdMapIndex: TurboVec staged search is off until turned on', async (t) => {
   if (!SUPPORTS_TURBOVEC) {
     t.pass('TurboVec requires a 64-bit target')
     return
@@ -1039,23 +1119,24 @@ test('IdMapIndex: TurboVec staged search is off until turned on', (t) => {
   let loaded = null
   try {
     t.is(idx.stagedSearch, false, 'a new index has staged search off')
-    idx.setStagedSearch(true)
+    await idx.setStagedSearch(true)
     t.is(idx.stagedSearch, true, 'staged search can be turned on')
-    idx.addWithIds(normalizedPatternVec(0), new BigUint64Array([1n]))
-    t.is(idx.search(normalizedPatternVec(0), 1).ids[0], 1n, 'search works with it on')
-    idx.write(file)
-    loaded = IdMapIndex.load(file)
+    await idx.addWithIds(normalizedPatternVec(0), new BigUint64Array([1n]))
+    t.is((await idx.search(normalizedPatternVec(0), 1)).ids[0], 1n, 'search works with it on')
+    t.is(idx.stagedSearch, true, 'a mutation keeps the setting')
+    await idx.write(file)
+    loaded = await IdMapIndex.load(file)
     t.is(loaded.stagedSearch, false, 'a loaded index has staged search off')
-    idx.setStagedSearch(false)
+    await idx.setStagedSearch(false)
     t.is(idx.stagedSearch, false, 'staged search can be turned off again')
 
-    expectThrows(t, () => idx.setStagedSearch(1), 'a non-boolean is rejected')
-    expectThrows(t, () => plain.setStagedSearch(true), 'other storages reject it')
+    await expectRejects(t, () => idx.setStagedSearch(1), 'a non-boolean is rejected')
+    await expectRejects(t, () => plain.setStagedSearch(true), 'other storages reject it')
     t.is(plain.stagedSearch, false, 'other storages report it off')
   } finally {
-    if (loaded !== null) loaded.dispose()
-    idx.dispose()
-    plain.dispose()
+    if (loaded !== null) await loaded.dispose()
+    await idx.dispose()
+    await plain.dispose()
     if (fs.existsSync(file)) fs.unlinkSync(file)
   }
 })
