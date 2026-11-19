@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, rm, stat, unlink, utimes, writeFile } from 'node:fs/pro
 import { utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createNamedKvCacheRetention, folderUsage } from '@/serve/lib/responses-kv-cache'
+import { createNamedKvCacheRetention, folderUsage } from '@/serve/lib/named-kv-cache'
 
 const HOUR_MS = 60 * 60 * 1000
 

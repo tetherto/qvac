@@ -1729,6 +1729,31 @@ test('diffusion: VAE type selection does not depend on tag order or noise tags',
   t.is(ltxVae('audio_vae.safetensors', ['vae', 'VAE', 'audio']), 'LTX_2_3_AUDIO_VAE')
 })
 
+test('diffusion: MOSS-Image tokenizer.json — tokenizer tag names it after the model', (t) => {
+  const coreKey = Buffer.from('ee'.repeat(32), 'hex')
+
+  const { model, exportName } = processAndName({
+    path: 'OpenMOSS-Team/MOSS-Image-SFT/resolve/f972bd4b4b9e3852133cc5da954d87bc32cd8fb9/tokenizer/tokenizer.json',
+    source: 'hf',
+    engine: '@qvac/diffusion-cpp',
+    license: 'Apache-2.0',
+    name: '',
+    sizeBytes: 19989325,
+    sha256: 'ee'.repeat(32),
+    tags: ['tokenizer'],
+    blobBinding: {
+      coreKey,
+      blockOffset: 900,
+      blockLength: 10,
+      byteOffset: 9000000,
+      byteLength: 19989325
+    }
+  })
+
+  t.is(model.addon, 'diffusion')
+  t.is(exportName, 'MOSS_IMAGE_SFT_TOKENIZER')
+})
+
 // ---------------------------------------------------------------------------
 // Parakeet: English CTC vs Indic Conformer CTC
 // ---------------------------------------------------------------------------

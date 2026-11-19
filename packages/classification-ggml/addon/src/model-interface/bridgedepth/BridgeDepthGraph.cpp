@@ -2,10 +2,15 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <cstring>
 #include <fstream>
 #include <functional>
+#include <iterator>
 #include <map>
+#include <memory>
 #include <stdexcept>
+#include <string_view>
 #include <utility>
 
 #include <ggml-alloc.h>
@@ -21,21 +26,234 @@ namespace {
 
 constexpr size_t GRAPH_SIZE = 32768;
 constexpr size_t POS_CACHE_LIMIT = 8;
+// Host inputs that depend only on the padded size, defined with forward().
+struct HostConstants;
 // DINOv2 interpolate_offset: the pos-embed resize scale is (n + 0.1) / M.
 constexpr double POS_INTERPOLATE_OFFSET = 0.1;
 constexpr float MEAN_RGB[3] = {123.675f, 116.28f, 103.53f};
 constexpr float STD_RGB[3] = {58.395f, 57.12f, 57.375f};
 
+// The conv that writes the raw depth prior and the linear that reads it stay
+// F32 on every backend. The conv kernel reaches 1.9e3 (the ridge adapter is
+// folded into it) and its input 74, so single products pass the F16 range
+// while the sums stay near 2e4. With F16 columns CUDA runs the whole matmul
+// in half: inf on 4 of 27 ETH3D pairs, d1 0.59 to 4.09. The linear was not
+// seen to fail; it reads the same 2e4 values and is kept F32 as a guard.
+constexpr std::string_view DEPTH_PRIOR_CONV = "depth_feature_down.weight";
+constexpr std::string_view DEPTH_PRIOR_LINEAR = "stereo.dpn.prior_proj.weight";
+// ConvTranspose2d kernels, read by convTransposeKS as a matmul weight.
+constexpr std::string_view TRANSPOSED_CONV_0 =
+    "mono.depth_head.resize_layers.0.weight";
+constexpr std::string_view TRANSPOSED_CONV_1 =
+    "mono.depth_head.resize_layers.1.weight";
+// Conv1d kernel with one output channel: ggml [K, IC, 1] has two dims, so
+// the rank test of isLinearWeight alone would take it for a linear.
+constexpr std::string_view DPN_COST_CONV = "stereo.dpn.mlp.4.weight";
+
+// Token count that shapes the load-time support probes. The backends decide
+// from the op, the tensor types and the head dim, not from the count.
+constexpr int64_t PROBE_TOKENS = 64;
+// Most convs of the graph are 3x3.
+constexpr int64_t PROBE_KERNEL = 3;
+// Tensors the probes in chooseGpuPath create, inputs included: attention 4,
+// linear 3, im2col conv 6, direct conv 3, nmp logits 5. A probe added there
+// adds its tensors here; the probe context aborts when it runs out.
+constexpr size_t PROBE_TENSORS = 4 + 3 + 6 + 3 + 5;
+
 using T = ggml_tensor;
+
+// What the graph does differently when the selected device is a GPU. Every
+// field is false on the CPU, so the CPU graph and its numerics do not change.
+// Each choice is taken only when the device accepts the ops it needs, so a
+// backend that lacks one keeps the plain path instead of falling back to the
+// CPU per node.
+struct GpuPath {
+  // ViT blocks run ggml_flash_attn_ext instead of mul_mat + soft_max +
+  // mul_mat. Drops the [N, N, heads] logits tensor (713 MiB at 1436 x 992)
+  // and three copies per block. CUDA reads K and V as F16 in this kernel.
+  bool fusedVitAttention = false;
+  // nn.Linear weights are held as F16 on the device, converted from the F32
+  // file at load: the GGUF and its layout hash do not change. The matmul
+  // against an F16 weight is the fast kernel on CUDA, and Metal and Vulkan
+  // already staged these operands as half. On CUDA cuBLAS then also converts
+  // the activations to half and accumulates in half, so a linear whose input
+  // or output passes 65504 would give inf. Not seen on ETH3D or Middlebury.
+  // DEPTH_PRIOR_LINEAR is left out for that reason.
+  bool halfLinearWeights = false;
+  // conv2d writes its im2col as F16. The im2col is the largest tensor of the
+  // graph (785 MiB as F32 at 1436 x 992), so this halves the peak, and Vulkan
+  // no longer makes its own F16 copy of it for the matmul. Costs the
+  // precision the F32 im2col was introduced for, on GPUs only.
+  // DEPTH_PRIOR_CONV is left out.
+  bool halfIm2col = false;
+  // selfNmp attends over the N = 2 proposals of one pixel, so its logits
+  // matmul K^T Q is one N x N product per (head, pixel) with ne11 = N. Vulkan
+  // pads ne11 to its 64-wide tile when it stages src1: 349 MiB at
+  // 1436 x 992. The GPU path writes that product as repeat + broadcast
+  // multiply + sum_rows. Only the logits: the same form for attn x V
+  // measured 60 to 120 ms slower than the matmul on CUDA, Vulkan and Metal.
+  bool elementwiseNmpLogits = false;
+  // conv2d runs ggml_conv_2d_direct on kernels held as F16 on the device
+  // (converted at load like the linear weights) instead of im2col + mul_mat.
+  // No im2col tensor is written: the convs of a 1436 x 992 pair go from 281
+  // to 154 ms on CUDA and to 116 ms on Vulkan (T4), and the compute buffer
+  // from 861 to 796 MiB. Both read the image as F16 like the F16 im2col did;
+  // CUDA sums in F32. Only on the backends of hasTiledConv, and
+  // DEPTH_PRIOR_CONV is left out. Takes the place of halfIm2col there.
+  bool directConv = false;
+};
+
+// nn.Linear weights are the 2D tensors named "*.weight" in the converter
+// output; conv kernels are 3D or 4D except DPN_COST_CONV, norms and biases
+// 1D, and the rpe and pos-embed tables (2D, read by get_rows or on the host)
+// have other names.
+bool isLinearWeight(const T* t, const std::string& name) {
+  constexpr std::string_view suffix = ".weight";
+  return name != DEPTH_PRIOR_LINEAR && name != DPN_COST_CONV &&
+         t->type == GGML_TYPE_F32 && ggml_n_dims(t) == 2 &&
+         name.size() >= suffix.size() &&
+         name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+// Kernels of the convs that go through Impl::conv2d: 4D and not depthwise
+// (ggml [KW, KH, 1, C]). The two ConvTranspose kernels are 4D too and feed a
+// mul_mat, and DEPTH_PRIOR_CONV stays F32.
+bool isConvKernel(const T* t, const std::string& name) {
+  constexpr std::string_view suffix = ".weight";
+  return name != DEPTH_PRIOR_CONV && name != TRANSPOSED_CONV_0 &&
+         name != TRANSPOSED_CONV_1 && t->type == GGML_TYPE_F32 &&
+         ggml_n_dims(t) == 4 && t->ne[2] > 1 && name.size() >= suffix.size() &&
+         name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+bool isGpu(ggml_backend_t device) {
+  const auto type = ggml_backend_dev_type(ggml_backend_get_device(device));
+  return type == GGML_BACKEND_DEVICE_TYPE_GPU ||
+         type == GGML_BACKEND_DEVICE_TYPE_IGPU;
+}
+
+// Backends whose CONV_2D on an F16 kernel is a tiled GEMM: tensor cores on
+// CUDA, the conv2d_mm shader on Vulkan. Metal has the op too, but as one
+// thread per output element: the same pair goes from 2.6 to 5.8 s on an M5
+// Pro, and supports_op cannot tell the two apart. OpenCL was not measured and
+// keeps the im2col path.
+bool hasTiledConv(ggml_backend_t device) {
+  const char* registry = ggml_backend_reg_name(
+      ggml_backend_dev_backend_reg(ggml_backend_get_device(device)));
+  if (registry == nullptr)
+    return false;
+  const std::string_view name(registry);
+  return name == "CUDA" || name == "Vulkan";
+}
+
+// `vitDim` and `vitHeads` are the ViT embedding width and head count.
+GpuPath chooseGpuPath(
+    ggml_backend_t device, ggml_backend_t cpu, int64_t vitDim,
+    int64_t vitHeads) {
+  GpuPath path;
+  if (device == cpu || !isGpu(device))
+    return path;
+  // Probe nodes only carry shapes and types, nothing is allocated or run.
+  ggml_init_params ip{};
+  ip.mem_size = ggml_tensor_overhead() * PROBE_TENSORS;
+  ip.no_alloc = true;
+  std::unique_ptr<ggml_context, decltype(&ggml_free)> owned(
+      ggml_init(ip), ggml_free);
+  if (!owned)
+    throw ResourceError("BridgeDepth: probe context allocation failed");
+  ggml_context* ctx = owned.get();
+  auto f32 = [&](int64_t n0, int64_t n1, int64_t n2 = 1, int64_t n3 = 1) {
+    return ggml_new_tensor_4d(ctx, GGML_TYPE_F32, n0, n1, n2, n3);
+  };
+  auto supported = [&](const T* node) {
+    return ggml_backend_supports_op(device, node);
+  };
+
+  // Same operand shapes as vitBlock: [Dh, N, heads], no mask. CUDA and OpenCL
+  // take only a list of head dims, 64 (ViT-S) is on both.
+  const int64_t vitHead = vitDim / vitHeads;
+  T* q = f32(vitHead, PROBE_TOKENS, vitHeads);
+  T* k = f32(vitHead, PROBE_TOKENS, vitHeads);
+  T* v = f32(vitHead, PROBE_TOKENS, vitHeads);
+  path.fusedVitAttention =
+      supported(ggml_flash_attn_ext(ctx, q, k, v, nullptr, 1.0f, 0.0f, 0.0f));
+
+  // linear(): F16 weight [in, out] times F32 tokens.
+  T* weight = ggml_new_tensor_2d(ctx, GGML_TYPE_F16, vitDim, vitDim);
+  path.halfLinearWeights =
+      supported(ggml_mul_mat(ctx, weight, f32(vitDim, PROBE_TOKENS)));
+
+  // conv2d(): F16 im2col, then F16 columns times the F32 kernel.
+  T* kernel = f32(PROBE_KERNEL, PROBE_KERNEL, vitDim, vitDim);
+  T* col = ggml_im2col(
+      ctx,
+      kernel,
+      f32(PROBE_TOKENS, PROBE_TOKENS, vitDim),
+      1,
+      1,
+      0,
+      0,
+      1,
+      1,
+      true,
+      GGML_TYPE_F16);
+  path.halfIm2col =
+      supported(col) &&
+      supported(ggml_mul_mat(
+          ctx,
+          ggml_reshape_2d(
+              ctx, col, col->ne[0], col->ne[3] * col->ne[2] * col->ne[1]),
+          ggml_reshape_2d(
+              ctx,
+              kernel,
+              kernel->ne[0] * kernel->ne[1] * kernel->ne[2],
+              kernel->ne[3])));
+
+  // conv2d(): F16 kernel, F32 image.
+  T* kernel16 = ggml_new_tensor_4d(
+      ctx, GGML_TYPE_F16, PROBE_KERNEL, PROBE_KERNEL, vitDim, vitDim);
+  T* image = f32(PROBE_TOKENS, PROBE_TOKENS, vitDim);
+  path.directConv =
+      hasTiledConv(device) &&
+      supported(ggml_conv_2d_direct(ctx, kernel16, image, 1, 1, 1, 1, 1, 1));
+
+  // selfNmp(): k repeated over nq, times q broadcast over nk, summed over ne0.
+  T* pairs = ggml_repeat_4d(
+      ctx,
+      f32(vitHead, PROBE_TOKENS, 1, PROBE_TOKENS),
+      vitHead,
+      PROBE_TOKENS,
+      PROBE_TOKENS,
+      PROBE_TOKENS);
+  T* product =
+      ggml_mul(ctx, pairs, f32(vitHead, 1, PROBE_TOKENS, PROBE_TOKENS));
+  path.elementwiseNmpLogits = supported(pairs) && supported(product) &&
+                              supported(ggml_sum_rows(ctx, product));
+  return path;
+}
 
 // ---- small graph helpers, all tensors image-shaped are ggml [W, H, C, N] ----
 
+// [n0, n1, rest] -> [n1, n0, rest], where n0 and n1 may each span several
+// dims of x. Layout changes are written as this swap of the two leading dim
+// groups wherever the graph allows it: CUDA copies a transposed matrix batch
+// with a tiled kernel, about 3x faster than its copy of a general permute
+// (0.25 against 0.7 ms for 23 MB on a T4). The other backends copy either
+// form the same way.
+T* swapFront(ggml_context* ctx, T* x, int64_t n0, int64_t n1) {
+  const int64_t rest = ggml_nelements(x) / (n0 * n1);
+  return ggml_cont(
+      ctx, ggml_transpose(ctx, ggml_reshape_3d(ctx, x, n0, n1, rest)));
+}
+
 T* toChannelsFirst(ggml_context* ctx, T* x) { // [W,H,C,N] -> [C,W,H,N]
-  return ggml_cont(ctx, ggml_permute(ctx, x, 1, 2, 0, 3));
+  const int64_t w = x->ne[0], h = x->ne[1], c = x->ne[2], n = x->ne[3];
+  return ggml_reshape_4d(ctx, swapFront(ctx, x, w * h, c), c, w, h, n);
 }
 
 T* toChannelsLast(ggml_context* ctx, T* x) { // [C,W,H,N] -> [W,H,C,N]
-  return ggml_cont(ctx, ggml_permute(ctx, x, 2, 0, 1, 3));
+  const int64_t c = x->ne[0], w = x->ne[1], h = x->ne[2], n = x->ne[3];
+  return ggml_reshape_4d(ctx, swapFront(ctx, x, c, w * h), w, h, c, n);
 }
 
 T* layerNorm(ggml_context* ctx, T* x, T* w, T* b, float eps) {
@@ -50,11 +268,21 @@ T* linear(ggml_context* ctx, T* x, T* w, T* b) {
   if (ggml_is_contiguous(x) && x->ne[1] != ggml_nrows(x)) {
     const int64_t n1 = x->ne[1], n2 = x->ne[2], n3 = x->ne[3];
     x = ggml_mul_mat(ctx, w, ggml_reshape_2d(ctx, x, x->ne[0], ggml_nrows(x)));
-    x = ggml_reshape_4d(ctx, x, x->ne[0], n1, n2, n3);
-    return b ? ggml_add(ctx, x, b) : x;
+    // The bias goes on the product itself, before the reshape: CUDA folds an
+    // ADD that directly follows the MUL_MAT into the matmul.
+    x = b ? ggml_add(ctx, x, b) : x;
+    return ggml_reshape_4d(ctx, x, x->ne[0], n1, n2, n3);
   }
   x = ggml_mul_mat(ctx, w, x);
   return b ? ggml_add(ctx, x, b) : x;
+}
+
+// nn.Linear restricted to the output channels [c0, c0 + n). The rows of w and
+// b are taken as views, so a projection that holds q, k and v in one weight
+// gives them as separate tensors and nothing slices the activations.
+T* linearRows(ggml_context* ctx, T* x, T* w, T* b, int64_t c0, int64_t n) {
+  T* rows = ggml_view_2d(ctx, w, w->ne[0], n, w->nb[1], c0 * w->nb[1]);
+  return linear(ctx, x, rows, ggml_view_1d(ctx, b, n, c0 * b->nb[0]));
 }
 
 // Zero padding at the start of dim 0 or 1. Metal's PAD only pads at the end
@@ -70,17 +298,26 @@ T* addChannelBias(ggml_context* ctx, T* x, T* b) {
 }
 
 // ggml_conv_2d im2cols in F16 for any kernel type but BF16, which costs about
-// 1e-3 relative error per conv. Same op sequence with an F32 im2col.
-T* conv2d(ggml_context* ctx, T* x, T* w, T* b, int stride, int pad) {
+// 1e-3 relative error per conv. Same op sequence with the im2col type chosen
+// by the caller: F32 on the CPU, see GpuPath::halfIm2col for the GPUs.
+T* conv2dCol(
+    ggml_context* ctx, T* x, T* w, T* b, int stride, int pad,
+    ggml_type colType) {
   T* col = ggml_im2col(
-      ctx, w, x, stride, stride, pad, pad, 1, 1, true, GGML_TYPE_F32);
-  T* y = ggml_mul_mat(
-      ctx,
-      ggml_reshape_2d(
-          ctx, col, col->ne[0], col->ne[3] * col->ne[2] * col->ne[1]),
-      ggml_reshape_2d(ctx, w, w->ne[0] * w->ne[1] * w->ne[2], w->ne[3]));
-  y = ggml_reshape_4d(ctx, y, col->ne[1], col->ne[2], col->ne[3], w->ne[3]);
-  y = ggml_cont(ctx, ggml_permute(ctx, y, 0, 1, 3, 2)); // [OW, OH, OC, N]
+      ctx, w, x, stride, stride, pad, pad, 1, 1, true, colType); // [K,OW,OH,N]
+  const int64_t ow = col->ne[1], oh = col->ne[2], batch = col->ne[3];
+  T* kernel = ggml_reshape_2d(ctx, w, col->ne[0], w->ne[3]);
+  // One product per image: [OW*OH, OC] is that image in the output layout.
+  // A single product over the batch gives [OW, OH, N, OC] and needs a permute
+  // copy of the whole result.
+  T* y = nullptr;
+  for (int64_t i = 0; i < batch; ++i) {
+    T* cols =
+        ggml_view_2d(ctx, col, col->ne[0], ow * oh, col->nb[1], i * col->nb[3]);
+    T* image = ggml_reshape_4d(
+        ctx, ggml_mul_mat(ctx, cols, kernel), ow, oh, w->ne[3], 1);
+    y = y ? ggml_concat(ctx, y, image, 3) : image;
+  }
   return b ? addChannelBias(ctx, y, b) : y;
 }
 
@@ -124,6 +361,22 @@ T* conv1d(ggml_context* ctx, T* x, T* w, T* b, int pad) {
   return b ? ggml_add(ctx, y, ggml_reshape_3d(ctx, b, 1, b->ne[0], 1)) : y;
 }
 
+// ggml_concat along dim 0. CUDA runs a concat on dims 0 to 2 as one kernel
+// launch per ne3 slice, so a token tensor [C, N, W, H] pays H launches of a
+// few thousand elements each (3 ms at 360x248, against 0.4 ms for the same
+// bytes in one launch). With the tokens flattened there is a single slice.
+T* concatChannels(ggml_context* ctx, T* a, T* b) {
+  if (a->ne[3] == 1 || !ggml_is_contiguous(a) || !ggml_is_contiguous(b))
+    return ggml_concat(ctx, a, b, 0);
+  const int64_t n1 = a->ne[1], n2 = a->ne[2], n3 = a->ne[3];
+  T* y = ggml_concat(
+      ctx,
+      ggml_reshape_2d(ctx, a, a->ne[0], ggml_nrows(a)),
+      ggml_reshape_2d(ctx, b, b->ne[0], ggml_nrows(b)),
+      0);
+  return ggml_reshape_4d(ctx, y, y->ne[0], n1, n2, n3);
+}
+
 // Concatenates many tensors along `dim` as a balanced tree, so the copied
 // bytes grow like n log n instead of n^2 for a chain.
 T* concatAll(ggml_context* ctx, std::vector<T*> ts, int dim) {
@@ -137,23 +390,6 @@ T* concatAll(ggml_context* ctx, std::vector<T*> ts, int dim) {
     ts.swap(next);
   }
   return ts[0];
-}
-
-// Channel slice [c0, c0 + n) of a tensor whose ne0 is the channel dim.
-T* channelSlice(ggml_context* ctx, T* x, int64_t c0, int64_t n) {
-  return ggml_cont(
-      ctx,
-      ggml_view_4d(
-          ctx,
-          x,
-          n,
-          x->ne[1],
-          x->ne[2],
-          x->ne[3],
-          x->nb[1],
-          x->nb[2],
-          x->nb[3],
-          c0 * x->nb[0]));
 }
 
 T* bilinear(ggml_context* ctx, T* x, int64_t w, int64_t h, bool alignCorners) {
@@ -231,12 +467,13 @@ void padImageInto(const float* chw, int h, int w, Padding pad, float* out) {
   const int hDim = h + pad.top, wDim = w + pad.right;
   for (int c = 0; c < 3; ++c) {
     for (int y = 0; y < hDim; ++y) {
+      // Whole rows: a per-pixel loop over both images cost 33 ms a run at
+      // 1436 x 992 (T4 VM host).
       const int sy = std::max(y - pad.top, 0);
-      for (int x = 0; x < wDim; ++x) {
-        const int sx = std::min(x, w - 1);
-        out[(static_cast<size_t>(c) * hDim + y) * wDim + x] =
-            chw[(static_cast<size_t>(c) * h + sy) * w + sx];
-      }
+      const float* src = chw + (static_cast<size_t>(c) * h + sy) * w;
+      float* dst = out + (static_cast<size_t>(c) * hDim + y) * wDim;
+      std::copy_n(src, w, dst);
+      std::fill_n(dst + w, pad.right, src[w - 1]);
     }
   }
 }
@@ -303,6 +540,7 @@ struct BridgeDepthGraph::Impl {
   // Measure mode: stands in for wbuf.
   EmptyWeightBuffers emptyWeights;
   ggml_backend_sched_t sched = nullptr;
+  GpuPath gpu; // set once at load from the device
   int fallbackNodes = 0;
   // Measure mode: the weights have no data, run() sizes the graph instead of
   // computing it and records the result here.
@@ -311,6 +549,9 @@ struct BridgeDepthGraph::Impl {
   // Compute buffers and CPU workspace after the last run.
   BufferFootprint allocated;
   uint64_t measuredRunHostBytes = 0; // host inputs and outputs of one run
+  uint64_t measuredInputBytes = 0;   // the inputs alone
+  // The inputs a slot keeps for the measured size (HostConstants).
+  uint64_t measuredSlotConstantBytes = 0;
   uint64_t readBufferBytes = 0;      // largest tensor, the load read buffer
 
   int monoDepth = 12;
@@ -324,6 +565,15 @@ struct BridgeDepthGraph::Impl {
   int64_t posDim = 0;
   int64_t posRows = 0;
   std::map<std::pair<int, int>, std::vector<float>> posCache;
+  // What a padded input size keeps between runs, see sizeSlot().
+  struct SizeSlot {
+    int h = 0;
+    int w = 0;
+    int id = 0; // unique among the live slots, below SIZE_SLOT_LIMIT
+    std::unique_ptr<std::byte[]> arena; // graphArenaBytes()
+    std::shared_ptr<const HostConstants> constants;
+  };
+  std::vector<SizeSlot> sizeSlots; // most recently used first
   // Measure mode: bytes of the pos_embed table the last run resized, which
   // posCache keeps for the life of the model.
   uint64_t measuredPosTableBytes = 0;
@@ -345,6 +595,21 @@ struct BridgeDepthGraph::Impl {
       throw std::runtime_error("BridgeDepth: missing tensor " + name);
     }
     return t;
+  }
+
+  T* conv2d(ggml_context* ctx, T* x, T* w, T* b, int stride, int pad) const {
+    if (w->type == GGML_TYPE_F16) { // directConv, see isConvKernel
+      T* y = ggml_conv_2d_direct(ctx, w, x, stride, stride, pad, pad, 1, 1);
+      return b ? addChannelBias(ctx, y, b) : y;
+    }
+    return conv2dCol(
+        ctx,
+        x,
+        w,
+        b,
+        stride,
+        pad,
+        gpu.halfIm2col ? GGML_TYPE_F16 : GGML_TYPE_F32);
   }
 
   uint32_t kvU32(const char* key) const {
@@ -376,6 +641,8 @@ struct BridgeDepthGraph::Impl {
       T* t;
       const void* data;
       size_t bytes;
+      // Set instead of `data`: writes the F32 values of the input.
+      std::function<void(float*)> fill;
     };
     std::vector<Item> list;
     bool shapesOnly = false;
@@ -386,14 +653,27 @@ struct BridgeDepthGraph::Impl {
       ggml_set_name(t, name);
       ggml_set_input(t);
       if (shapesOnly) {
-        list.push_back({t, nullptr, ggml_nbytes(t)});
+        list.push_back({t, nullptr, ggml_nbytes(t), {}});
         return t;
       }
       if (bytes != ggml_nbytes(t)) {
         throw std::runtime_error(
             std::string("BridgeDepth: input size mismatch ") + name);
       }
-      list.push_back({t, data, bytes});
+      list.push_back({t, data, bytes, {}});
+      return t;
+    }
+    // An F32 input `fill` writes straight into the tensor when its buffer is
+    // host memory, which saves building it on the side and copying it over.
+    // `fill` must write every element: a staging buffer is not zeroed.
+    T* addFilled(
+        ggml_context* ctx, const char* name, std::function<void(float*)> fill,
+        int64_t n0, int64_t n1, int64_t n2, int64_t n3) {
+      T* t = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, n0, n1, n2, n3);
+      ggml_set_name(t, name);
+      ggml_set_input(t);
+      list.push_back(
+          {t, nullptr, ggml_nbytes(t), shapesOnly ? nullptr : std::move(fill)});
       return t;
     }
     T*
@@ -427,11 +707,13 @@ struct BridgeDepthGraph::Impl {
   };
   // One graph run: `build` creates inputs (registered with their host data) and
   // returns named outputs; every output is copied back in torch layout.
+  // `slot` gives the memory the graph is built in; null lets ggml allocate.
   std::map<std::string, HostTensor>
-  run(const std::function<Outputs(ggml_context*, Inputs&)>& build) {
+  run(const SizeSlot* slot,
+      const std::function<Outputs(ggml_context*, Inputs&)>& build) {
     ggml_init_params ip{};
-    ip.mem_size = ggml_tensor_overhead() * GRAPH_SIZE +
-                  ggml_graph_overhead_custom(GRAPH_SIZE, false);
+    ip.mem_size = graphArenaBytes();
+    ip.mem_buffer = slot ? slot->arena.get() : nullptr;
     ip.no_alloc = true;
     std::unique_ptr<ggml_context, decltype(&ggml_free)> owned(
         ggml_init(ip), ggml_free);
@@ -447,12 +729,26 @@ struct BridgeDepthGraph::Impl {
       ggml_set_output(t);
       ggml_build_forward_expand(gf, t);
     }
+    // The allocator keeps the plan of the last graph when the next one has
+    // the same node count and fits in it, which is the case between two
+    // sizes. A size would then get its addresses from whichever size ran
+    // before it and lose its CUDA graph capture each time that changes.
+    // `id` extra reshapes to the same shape (no work, no memory) give each
+    // slot its own node count, so every size is planned on its own.
+    if (slot && !outs.empty()) {
+      T* tail = outs.front().second;
+      for (int i = 0; i < slot->id; ++i)
+        tail = ggml_reshape_4d(
+            ctx, tail, tail->ne[0], tail->ne[1], tail->ne[2], tail->ne[3]);
+      ggml_build_forward_expand(gf, tail);
+    }
     if (measureOnly) {
       if (!measureSchedulerBuffers(sched, gf, backend, cpu, measured))
         throw ResourceError("BridgeDepth: graph measurement failed");
-      measuredRunHostBytes = 0;
+      measuredInputBytes = 0;
       for (const auto& item : inputs.list)
-        measuredRunHostBytes += item.bytes;
+        measuredInputBytes += item.bytes;
+      measuredRunHostBytes = measuredInputBytes;
       for (const auto& [name, t] : outs)
         measuredRunHostBytes += ggml_nbytes(t);
       return {};
@@ -462,9 +758,19 @@ struct BridgeDepthGraph::Impl {
       throw ResourceError("BridgeDepth: graph allocation failed");
     }
     for (auto& item : inputs.list) {
-      if (item.t->buffer)
-        ggml_backend_tensor_set(
-            item.t, item.data, 0, item.bytes); // unused inputs stay unallocated
+      if (!item.t->buffer)
+        continue; // unused inputs stay unallocated
+      if (!item.fill) {
+        ggml_backend_tensor_set(item.t, item.data, 0, item.bytes);
+      } else if (ggml_backend_buffer_is_host(item.t->buffer)) {
+        item.fill(static_cast<float*>(item.t->data));
+      } else {
+        // new[] without (): fill writes every element, so no zeroing pass
+        // over a buffer of up to tens of MB per run.
+        std::unique_ptr<float[]> staged(new float[item.bytes / sizeof(float)]);
+        item.fill(staged.get());
+        ggml_backend_tensor_set(item.t, staged.get(), 0, item.bytes);
+      }
     }
     if (ggml_backend_sched_graph_compute(sched, gf) != GGML_STATUS_SUCCESS) {
       throw std::runtime_error("BridgeDepth: graph compute failed");
@@ -498,6 +804,48 @@ struct BridgeDepthGraph::Impl {
     return result;
   }
 
+  static size_t graphArenaBytes() {
+    return ggml_tensor_overhead() * GRAPH_SIZE +
+           ggml_graph_overhead_custom(GRAPH_SIZE, false);
+  }
+
+  // The slot of one padded size, kept between runs. It holds two things.
+  // The memory the graph is built in: a size that builds its graph in the
+  // same memory gets the same node addresses every run, and the CUDA backend
+  // only replays its captured CUDA graph (one launch instead of one per
+  // kernel) when the nodes of a run match the run before, addresses included.
+  // Without it a capture happens whenever two runs happen to match and is
+  // thrown away by the next one, about 30 ms each on a T4. The backend keys
+  // its captures by the first node, so each size needs its own memory.
+  // And the host inputs that depend only on the size (masks, indices).
+  // Keyed by the padded size alone: a run with seedsOverride (test only)
+  // builds a slightly different graph in the same slot, so one size never
+  // holds two slots.
+  SizeSlot& sizeSlot(int hDim, int wDim) {
+    auto it = std::find_if(
+        sizeSlots.begin(), sizeSlots.end(), [&](const SizeSlot& s) {
+          return s.h == hDim && s.w == wDim;
+        });
+    if (it == sizeSlots.end()) {
+      if (sizeSlots.size() >= SIZE_SLOT_LIMIT)
+        sizeSlots.pop_back(); // least recently used
+      SizeSlot slot;
+      slot.h = hDim;
+      slot.w = wDim;
+      const auto idTaken = [&](const SizeSlot& s) { return s.id == slot.id; };
+      while (std::any_of(sizeSlots.begin(), sizeSlots.end(), idTaken))
+        ++slot.id;
+      // Not make_unique: it would zero the whole arena, and a run only
+      // touches the part its graph needs. new[] aligns to 16 bytes on 64-bit
+      // targets and 8 on 32-bit ones, which covers GGML_MEM_ALIGN on both.
+      slot.arena.reset(new std::byte[graphArenaBytes()]);
+      sizeSlots.push_back(std::move(slot));
+      it = std::prev(sizeSlots.end());
+    }
+    std::rotate(sizeSlots.begin(), it, std::next(it));
+    return sizeSlots.front();
+  }
+
   // interpolatePosEmbed for a ph x pw patch grid, cached per grid.
   const std::vector<float>& posEmbed(int ph, int pw) {
     auto it = posCache.find({ph, pw});
@@ -526,7 +874,8 @@ struct BridgeDepthGraph::Impl {
         ctx, x, weight(p + "norm1.weight"), weight(p + "norm1.bias"), 1e-6f);
     T* qkv = linear(
         ctx, h, weight(p + "attn.qkv.weight"), weight(p + "attn.qkv.bias"));
-    auto head = [&](int i) { // [Dh, Hh, N] view of q/k/v, then [Dh, N, Hh]
+    // q, k or v as a view of qkv: [Dh, Hh, N] permuted to [Dh, N, Hh].
+    auto head = [&](int i) {
       T* v = ggml_view_3d(
           ctx,
           qkv,
@@ -536,17 +885,25 @@ struct BridgeDepthGraph::Impl {
           dHead * sizeof(float),
           qkv->nb[1],
           i * dDim * sizeof(float));
-      return ggml_cont(ctx, ggml_permute(ctx, v, 0, 2, 1, 3));
+      return ggml_permute(ctx, v, 0, 2, 1, 3);
     };
-    T* q = head(0);
-    T* k = head(1);
-    T* v = head(2);
-    T* kq = ggml_mul_mat(ctx, k, q); // [Nk, Nq, Hh]
-    kq = ggml_soft_max_ext(
-        ctx, kq, nullptr, 1.0f / std::sqrt(static_cast<float>(dHead)), 0.0f);
-    T* vt = ggml_cont(ctx, ggml_transpose(ctx, v)); // [N, Dh, Hh]
-    T* o = ggml_mul_mat(ctx, vt, kq);               // [Dh, Nq, Hh]
-    o = ggml_cont(ctx, ggml_permute(ctx, o, 0, 2, 1, 3));
+    const float scale = 1.0f / std::sqrt(static_cast<float>(dHead));
+    T* o = nullptr;
+    if (gpu.fusedVitAttention) {
+      // The views go in without a copy, the kernels read them through their
+      // strides. The result is already [Dh, Hh, N].
+      o = ggml_flash_attn_ext(
+          ctx, head(0), head(1), head(2), nullptr, scale, 0.0f, 0.0f);
+    } else {
+      T* q = ggml_cont(ctx, head(0));
+      T* k = ggml_cont(ctx, head(1));
+      T* v = ggml_cont(ctx, head(2));
+      T* kq = ggml_mul_mat(ctx, k, q); // [Nk, Nq, Hh]
+      kq = ggml_soft_max_ext(ctx, kq, nullptr, scale, 0.0f);
+      T* vt = ggml_cont(ctx, ggml_transpose(ctx, v)); // [N, Dh, Hh]
+      o = ggml_mul_mat(ctx, vt, kq);                  // [Dh, Nq, Hh]
+      o = ggml_cont(ctx, ggml_permute(ctx, o, 0, 2, 1, 3));
+    }
     o = ggml_reshape_2d(ctx, o, dDim, nDim);
     o = linear(
         ctx, o, weight(p + "attn.proj.weight"), weight(p + "attn.proj.bias"));
@@ -694,13 +1051,14 @@ struct BridgeDepthGraph::Impl {
         1);
     outs.emplace_back("mono.dpt_out", dpt);
 
-    T* prior = conv2d(
+    T* prior = conv2dCol(
         ctx,
         dpt,
-        weight("depth_feature_down.weight"),
+        weight(std::string(DEPTH_PRIOR_CONV)),
         weight("depth_feature_down.bias"),
         4,
-        0);
+        0,
+        GGML_TYPE_F32);
     outs.emplace_back(
         "depth_prior", toChannelsFirst(ctx, prior)); // NHWC like torch
     return outs;
@@ -915,27 +1273,31 @@ struct BridgeDepthGraph::Impl {
     const int64_t cDim = x->ne[0], half = cDim / 2;
     T* xn = layerNorm(
         ctx, x, weight(p + "norm1.weight"), weight(p + "norm1.bias"), 1e-6f);
-    T* qk = ggml_concat(ctx, xn, context, 0);
-    T* q = linear(ctx, qk, weight(p + "q.weight"), weight(p + "q.bias"));
-    T* k = linear(ctx, qk, weight(p + "k.weight"), weight(p + "k.bias"));
-    T* v = linear(ctx, xn, weight(p + "v.weight"), weight(p + "v.bias"));
-    T* x1 = cswinAttention(
-        ctx,
-        channelSlice(ctx, q, 0, half),
-        channelSlice(ctx, k, 0, half),
-        channelSlice(ctx, v, 0, half),
-        maskCol,
-        weight(p + "attns.0.get_v.weight"),
-        0);
-    T* x2 = cswinAttention(
-        ctx,
-        channelSlice(ctx, q, half, half),
-        channelSlice(ctx, k, half, half),
-        channelSlice(ctx, v, half, half),
-        maskRow,
-        weight(p + "attns.1.get_v.weight"),
-        1);
-    T* a = ggml_concat(ctx, x1, x2, 0);
+    T* qk = concatChannels(ctx, xn, context);
+    // Branch 0 takes the first half of the q, k and v channels, branch 1 the
+    // second.
+    auto branch = [&](int idx, T* mask) {
+      auto halfOf = [&](T* in, const char* name) {
+        return linearRows(
+            ctx,
+            in,
+            weight(p + name + ".weight"),
+            weight(p + name + ".bias"),
+            idx * half,
+            half);
+      };
+      return cswinAttention(
+          ctx,
+          halfOf(qk, "q"),
+          halfOf(qk, "k"),
+          halfOf(xn, "v"),
+          mask,
+          weight(p + "attns." + std::to_string(idx) + ".get_v.weight"),
+          idx);
+    };
+    T* x1 = branch(0, maskCol);
+    T* x2 = branch(1, maskRow);
+    T* a = concatChannels(ctx, x1, x2);
     a = linear(ctx, a, weight(p + "proj.weight"), weight(p + "proj.bias"));
     x = ggml_add(ctx, x, a);
     T* h = layerNorm(
@@ -961,8 +1323,8 @@ struct BridgeDepthGraph::Impl {
         c->ne[2],
         c->ne[3]);
     T* cf = ggml_mul(ctx, f, c);
-    return ggml_concat(
-        ctx, ggml_concat(ctx, ggml_sin(ctx, cf), ggml_cos(ctx, cf), 0), c, 0);
+    return concatChannels(
+        ctx, concatChannels(ctx, ggml_sin(ctx, cf), ggml_cos(ctx, cf)), c);
   }
 
   // Head(in, hidden, out, 3): Linear, ReLU, Linear, ReLU, Linear.
@@ -1137,7 +1499,7 @@ struct BridgeDepthGraph::Impl {
     T* priorP = linear(
         ctx,
         ggml_reshape_2d(ctx, prior, prior->ne[0], hwDim),
-        weight(dp + "prior_proj.weight"),
+        weight(std::string(DEPTH_PRIOR_LINEAR)),
         weight(dp + "prior_proj.bias"));
     priorP = ggml_repeat_4d(
         ctx,
@@ -1148,7 +1510,10 @@ struct BridgeDepthGraph::Impl {
         1);
     T* x = ggml_concat(
         ctx, ggml_concat(ctx, corr, pos, 0), priorP, 0);  // [159, N, HW]
-    x = ggml_mul_mat(ctx, weight(pp + "proj.weight"), x); // [128, N, HW]
+    // Through linear(), which flattens the tokens to 2D: as [159, N, HW] the
+    // matmul has ne11 = N = 2, and Vulkan pads ne11 to its 64-wide tile when
+    // it stages src1, 433 MiB at 1436 x 992 for 14 MiB of data.
+    x = linear(ctx, x, weight(pp + "proj.weight"), nullptr); // [128, N, HW]
     x = ggml_reshape_4d(ctx, x, x->ne[0], nDim, wDim, hDim);
 
     T* context = ggml_relu(
@@ -1208,6 +1573,12 @@ struct BridgeDepthGraph::Impl {
   // Element count of each relative_position_index, in both modes.
   std::map<std::string, int64_t> rpeIndexElems;
 
+  // I32 row orders of windowPartition and windowReverse, see windowRowOrder.
+  struct WindowOrder {
+    T* partition;
+    T* reverse;
+  };
+
   struct AlignInputs {
     T* wIdx;     // [1, 1, W, 1] values 0..W-1
     T* rowBase;  // [1, 1, W, H] values h*W
@@ -1217,41 +1588,39 @@ struct BridgeDepthGraph::Impl {
                  // = 1
     T* maskOdd;  // [T, T, 1, nW] shifted-window mask plus self edges
     std::vector<T*> idxReadout, idxNmp, idxUpdate; // I32 [Tk*Tq] per layer
+    // By window size: stage 1 partitions its 1/4 grid and the 1/8 grid of the
+    // mono tokens with different windows.
+    std::map<int, WindowOrder> windows;
   };
-  // One AlignInputs per stage: wIdx, rowBase and the masks depend on the
-  // resolution and the window; avg32 and freqs are shared.
+  // One AlignInputs per stage: wIdx, rowBase, the masks and the window orders
+  // depend on the resolution and the window; avg32 and freqs are shared.
 
   // x [C, N, W, H] -> [C, win*win*N, nW], windows ordered (i, j) with j
-  // fastest.
-  T* windowPartition(ggml_context* ctx, T* x, int win) {
+  // fastest. In memory this swaps the window column j and the row hs inside
+  // the window, [(c, n, ws), j, hs, i] -> [(c, n, ws), hs, j, i], so whole
+  // rows of C*N*win values move. get_rows with the row order as an input
+  // copies them 3x faster than a permute copy on CUDA (0.5 against 1.4 ms for
+  // 46 MB on a T4). Over one 1436 x 992 run: CUDA -48 ms, Metal -87 ms,
+  // Vulkan +35 ms.
+  T* windowPartition(
+      ggml_context* ctx, T* x, int win, const WindowOrder& order) {
     const int64_t cDim = x->ne[0], nDim = x->ne[1], wPad = x->ne[2],
                   hPad = x->ne[3];
-    T* t = ggml_reshape_4d(
-        ctx,
-        x,
-        cDim * nDim * win,
-        wPad / win,
-        win,
-        hPad / win); // [(c,n,ws), j, hs, i]
-    t = ggml_cont(
-        ctx, ggml_permute(ctx, t, 0, 2, 1, 3)); // [(c,n,ws), hs, j, i]
+    const int64_t rowLen = cDim * nDim * win, rows = wPad * hPad / win;
+    T* t = ggml_get_rows(
+        ctx, ggml_reshape_2d(ctx, x, rowLen, rows), order.partition);
     return ggml_reshape_3d(
         ctx, t, cDim, nDim * win * win, (wPad / win) * (hPad / win));
   }
 
+  // The inverse: [(c, n, ws), hs, j, i] -> [(c, n, ws), j, hs, i].
   T* windowReverse(
       ggml_context* ctx, T* w, int64_t nDim, int64_t wPad, int64_t hPad,
-      int win) {
+      int win, const WindowOrder& order) {
     const int64_t cDim = w->ne[0];
-    T* t = ggml_reshape_4d(
-        ctx,
-        w,
-        cDim * nDim * win,
-        win,
-        wPad / win,
-        hPad / win); // [(c,n,ws), hs, j, i]
-    t = ggml_cont(
-        ctx, ggml_permute(ctx, t, 0, 2, 1, 3)); // [(c,n,ws), j, hs, i]
+    const int64_t rowLen = cDim * nDim * win, rows = wPad * hPad / win;
+    T* t = ggml_get_rows(
+        ctx, ggml_reshape_2d(ctx, w, rowLen, rows), order.reverse);
     return ggml_reshape_4d(ctx, t, cDim, nDim, wPad, hPad);
   }
 
@@ -1294,7 +1663,17 @@ struct BridgeDepthGraph::Impl {
   // v_rpe. q [C, Tq, nW], k and v [C, Tk, nW], table [3C, (2w-1)^2] with the 3C
   // laid out (head, {q, k, v}, c), idx I32 [Tk*Tq] already expanded over the M
   // query and N key tokens of a pixel, mask [Tk, Tq, 1, nW] or [Tk, Tq] or
-  // null. The rpe terms are batched products over (i, head) or (j, head).
+  // null. Returns [C, Tq, nW].
+  //
+  // Layouts. A matmul contracts ne0 of both operands. q k and attn v are one
+  // product per (head, window). The rpe tables have no window dim, so their
+  // products are one per (token, head) with the windows as the columns of the
+  // other operand; Vulkan runs a mul_mat whose operands differ in ne3 on the
+  // CPU, so the windows are not broadcast. Moving a tensor between the two
+  // forms is a copy. Each rpe product is written with the windows as its rows
+  // (the window operand first), so its result goes back with swapFront
+  // instead of a general permute, and attn v is written as attn^T-major
+  // [Tq, C] for the same reason. v is only ever read transposed.
   T* rpeAttention(
       ggml_context* ctx, T* q, T* k, T* v, T* table, T* idx, T* mask) {
     const int64_t cDim = q->ne[0], tokQ = q->ne[1], tokK = k->ne[1],
@@ -1304,9 +1683,26 @@ struct BridgeDepthGraph::Impl {
       t = ggml_reshape_4d(ctx, t, dHead, nHeads, t->ne[1], nW);
       return ggml_cont(ctx, ggml_permute(ctx, t, 0, 2, 1, 3));
     };
+    // [Dh, T, Hh, nW] -> [Dh, nW, T*Hh]: the windows as columns.
+    auto windowsAsCols = [&](T* t) {
+      const int64_t tok = t->ne[1];
+      return ggml_reshape_3d(
+          ctx,
+          ggml_cont(ctx, ggml_permute(ctx, t, 0, 2, 3, 1)),
+          dHead,
+          nW,
+          tok * nHeads);
+    };
     T* qh = toHeads(q);
     T* kh = toHeads(k);
-    T* vh = toHeads(v);
+    T* vt = ggml_reshape_4d(
+        ctx,
+        swapFront(ctx, v, cDim, tokK),
+        tokK,
+        dHead,
+        nHeads,
+        nW); // [Tk, Dh, Hh, nW]
+
     T* rDim =
         ggml_get_rows(ctx, table, idx); // [3C, Tk*Tq] = [(h, chunk, c), j, i]
     rDim = ggml_reshape_4d(ctx, rDim, dHead, 3, nHeads, tokK * tokQ);
@@ -1336,53 +1732,35 @@ struct BridgeDepthGraph::Impl {
         tokQ * nHeads); // [c, j, (i, h)]
     T* vRpe = ggml_reshape_3d(
         ctx,
-        ggml_cont(ctx, ggml_permute(ctx, chunk(2), 1, 3, 0, 2)),
+        ggml_cont(ctx, ggml_permute(ctx, chunk(2), 1, 2, 0, 3)),
         tokK,
         dHead,
-        tokQ * nHeads); // [j, c, (i, h)]
+        nHeads * tokQ); // [j, c, (h, i)]
 
-    // The rpe tables have no window dim. Vulkan runs mul_mat on the CPU when
-    // src0 and src1 differ in ne3, so the windows go into src1's ne1 instead
-    // of being broadcast: [inner, rows, nW] -> [inner, nW, rows].
-    auto windowsAsCols = [&](T* t, int64_t inner, int64_t rows) {
-      return ggml_cont(
-          ctx,
-          ggml_permute(
-              ctx, ggml_reshape_3d(ctx, t, inner, rows, nW), 0, 2, 1, 3));
-    };
     T* attn = ggml_mul_mat(ctx, kh, qh); // [Tk, Tq, Hh, nW]
-    T* qr = ggml_mul_mat(
-        ctx, kRpe, windowsAsCols(qh, dHead, tokQ * nHeads)); // [Tk, nW, Tq*Hh]
-    qr = ggml_cont(
-        ctx,
-        ggml_permute(
-            ctx, ggml_reshape_4d(ctx, qr, tokK, nW, tokQ, nHeads), 0, 3, 1, 2));
-    attn = ggml_add(ctx, attn, qr);
-    T* kr = ggml_mul_mat(
-        ctx, qRpe, windowsAsCols(kh, dHead, tokK * nHeads)); // [Tq, nW, Tk*Hh]
-    kr = ggml_cont(
-        ctx,
-        ggml_permute(
-            ctx, ggml_reshape_4d(ctx, kr, tokQ, nW, tokK, nHeads), 1, 3, 0, 2));
-    attn = ggml_add(ctx, attn, kr);
+    T* qr = ggml_mul_mat(ctx, windowsAsCols(qh), kRpe); // [nW, Tk, (Tq, Hh)]
+    qr = swapFront(ctx, qr, nW, tokK * tokQ * nHeads);  // [(Tk, Tq, Hh), nW]
+    attn =
+        ggml_add(ctx, attn, ggml_reshape_4d(ctx, qr, tokK, tokQ, nHeads, nW));
+    T* kr = ggml_mul_mat(ctx, windowsAsCols(kh), qRpe); // [nW, Tq, (Tk, Hh)]
+    kr = swapFront(ctx, kr, nW, tokQ * tokK * nHeads);  // [(Tq, Tk, Hh), nW]
+    kr = swapFront(ctx, kr, tokQ, tokK);                // [Tk, Tq, (Hh, nW)]
+    attn =
+        ggml_add(ctx, attn, ggml_reshape_4d(ctx, kr, tokK, tokQ, nHeads, nW));
     attn = ggml_soft_max_ext(
         ctx, attn, mask, 1.0f / std::sqrt(static_cast<float>(dHead)), 0.0f);
-    T* vt = ggml_cont(ctx, ggml_transpose(ctx, vh)); // [Tk, Dh, Hh, nW]
-    T* o = ggml_mul_mat(ctx, vt, attn);              // [Dh, Tq, Hh, nW]
-    T* vr = ggml_mul_mat(
-        ctx, vRpe, windowsAsCols(attn, tokK, tokQ * nHeads)); // [Dh, nW, Tq*Hh]
-    vr = ggml_cont(
+
+    T* o = ggml_mul_mat(ctx, attn, vt); // [Tq, Dh, Hh, nW]
+    o = swapFront(ctx, o, tokQ, cDim);  // [C, Tq, nW]
+    T* attnCols = ggml_reshape_3d(
         ctx,
-        ggml_permute(
-            ctx,
-            ggml_reshape_4d(ctx, vr, dHead, nW, tokQ, nHeads),
-            0,
-            3,
-            2,
-            1));
-    o = ggml_cont(ctx, ggml_permute(ctx, o, 0, 2, 1, 3)); // [Dh, Hh, Tq, nW]
-    o = ggml_add(ctx, o, vr);
-    return ggml_reshape_3d(ctx, o, cDim, tokQ, nW);
+        ggml_cont(ctx, ggml_permute(ctx, attn, 0, 3, 2, 1)),
+        tokK,
+        nW,
+        nHeads * tokQ);                        // [Tk, nW, (Hh, Tq)]
+    T* vr = ggml_mul_mat(ctx, attnCols, vRpe); // [nW, Dh, (Hh, Tq)]
+    vr = swapFront(ctx, vr, nW, cDim * tokQ);  // [(C, Tq), nW]
+    return ggml_add(ctx, o, ggml_reshape_3d(ctx, vr, cDim, tokQ, nW));
   }
 
   // CrossAttention. x [Cq, M, Wq, Hq] in winQ windows, context [Ckv, N, Wk, Hk]
@@ -1395,7 +1773,7 @@ struct BridgeDepthGraph::Impl {
   // multiple of 4, 1/8 grid of 2), and the check below guards that.
   T* crossAttention(
       ggml_context* ctx, T* x, T* context, const std::string& p, T* idx,
-      int winQ, int winK) {
+      int winQ, int winK, const AlignInputs& in) {
     const int64_t mDim = x->ne[1], wDim = x->ne[2], hDim = x->ne[3];
     const int64_t wPad = (wDim + winQ - 1) / winQ * winQ,
                   hPad = (hDim + winQ - 1) / winQ * winQ;
@@ -1407,14 +1785,16 @@ struct BridgeDepthGraph::Impl {
           "BridgeDepth: cross attention window grids differ in " + p);
     }
     T* q = linear(ctx, x, weight(p + "projq.weight"), weight(p + "projq.bias"));
-    T* kv = linear(
-        ctx, context, weight(p + "projkv.weight"), weight(p + "projkv.bias"));
     const int64_t cDim = q->ne[0];
-    T* k = channelSlice(ctx, kv, 0, cDim);
-    T* v = channelSlice(ctx, kv, cDim, cDim);
-    T* qw = windowPartition(ctx, padTokens(ctx, q, wPad, hPad), winQ);
-    T* kw = windowPartition(ctx, padTokens(ctx, k, wPadK, hPadK), winK);
-    T* vw = windowPartition(ctx, padTokens(ctx, v, wPadK, hPadK), winK);
+    T* kvW = weight(p + "projkv.weight"); // rows (k, v)
+    T* kvB = weight(p + "projkv.bias");
+    T* k = linearRows(ctx, context, kvW, kvB, 0, cDim);
+    T* v = linearRows(ctx, context, kvW, kvB, cDim, cDim);
+    const WindowOrder& orderQ = in.windows.at(winQ);
+    const WindowOrder& orderK = in.windows.at(winK);
+    T* qw = windowPartition(ctx, padTokens(ctx, q, wPad, hPad), winQ, orderQ);
+    T* kw = windowPartition(ctx, padTokens(ctx, k, wPadK, hPadK), winK, orderK);
+    T* vw = windowPartition(ctx, padTokens(ctx, v, wPadK, hPadK), winK, orderK);
     T* o = rpeAttention(
         ctx,
         qw,
@@ -1424,7 +1804,7 @@ struct BridgeDepthGraph::Impl {
         idx,
         nullptr);
     o = cropTokens(
-        ctx, windowReverse(ctx, o, mDim, wPad, hPad, winQ), wDim, hDim);
+        ctx, windowReverse(ctx, o, mDim, wPad, hPad, winQ, orderQ), wDim, hDim);
     return linear(ctx, o, weight(p + "proj.weight"), weight(p + "proj.bias"));
   }
 
@@ -1432,11 +1812,11 @@ struct BridgeDepthGraph::Impl {
   // fourier pos goes on whichever side is the stereo embedding.
   T* crossBlock(
       ggml_context* ctx, T* x, T* context, T* xPos, T* ctxPos,
-      const std::string& p, T* idx, int winQ, int winK) {
+      const std::string& p, T* idx, int winQ, int winK, const AlignInputs& in) {
     T* xn = layerNorm(
         ctx, x, weight(p + "norm1.weight"), weight(p + "norm1.bias"), 1e-6f);
     if (xPos)
-      xn = ggml_concat(ctx, xn, xPos, 0);
+      xn = concatChannels(ctx, xn, xPos);
     T* cn = layerNorm(
         ctx,
         context,
@@ -1444,9 +1824,9 @@ struct BridgeDepthGraph::Impl {
         weight(p + "norm_y.bias"),
         1e-6f);
     if (ctxPos)
-      cn = ggml_concat(ctx, cn, ctxPos, 0);
+      cn = concatChannels(ctx, cn, ctxPos);
     x = ggml_add(
-        ctx, x, crossAttention(ctx, xn, cn, p + "attn.", idx, winQ, winK));
+        ctx, x, crossAttention(ctx, xn, cn, p + "attn.", idx, winQ, winK, in));
     T* h = layerNorm(
         ctx, x, weight(p + "norm2.weight"), weight(p + "norm2.bias"), 1e-6f);
     h = linear(
@@ -1465,7 +1845,7 @@ struct BridgeDepthGraph::Impl {
     const int64_t nHeads = inferHeads, dHead = cDim / nHeads;
     T* xn = layerNorm(
         ctx, x, weight(p + "norm1.weight"), weight(p + "norm1.bias"), 1e-5f);
-    T* qk = ggml_concat(ctx, xn, pos, 0);
+    T* qk = concatChannels(ctx, xn, pos);
     T* q = linear(ctx, qk, weight(p + "q.weight"), weight(p + "q.bias"));
     T* k = linear(ctx, qk, weight(p + "k.weight"), weight(p + "k.bias"));
     T* v = linear(ctx, xn, weight(p + "v.weight"), weight(p + "v.bias"));
@@ -1473,7 +1853,29 @@ struct BridgeDepthGraph::Impl {
       t = ggml_reshape_4d(ctx, t, dHead, nHeads, nDim, hwDim);
       return ggml_cont(ctx, ggml_permute(ctx, t, 0, 2, 1, 3));
     };
-    T* kq = ggml_mul_mat(ctx, heads(k), heads(q)); // [Nk, Nq, Hh, HW]
+    T* kq = nullptr; // [Nk, Nq, Hh, HW]
+    if (gpu.elementwiseNmpLogits) {
+      // kq[nk, nq] = sum over d of k[d, nk] * q[d, nq], per (head, pixel):
+      // k repeated over nq, times q broadcast over nk, summed over ne0. The
+      // sum order differs from the matmul, so the CPU keeps the matmul.
+      const int64_t bDim = nHeads * hwDim;
+      T* pairs = ggml_repeat_4d(
+          ctx,
+          ggml_reshape_4d(ctx, heads(k), dHead, nDim, 1, bDim),
+          dHead,
+          nDim,
+          nDim,
+          bDim);
+      kq = ggml_sum_rows(
+          ctx,
+          ggml_mul(
+              ctx,
+              pairs,
+              ggml_reshape_4d(ctx, heads(q), dHead, 1, nDim, bDim)));
+      kq = ggml_reshape_4d(ctx, kq, nDim, nDim, nHeads, hwDim);
+    } else {
+      kq = ggml_mul_mat(ctx, heads(k), heads(q));
+    }
     kq = ggml_soft_max_ext(
         ctx, kq, nullptr, 1.0f / std::sqrt(static_cast<float>(dHead)), 0.0f);
     T* vt = ggml_cont(ctx, ggml_transpose(ctx, heads(v))); // [N, Dh, Hh, HW]
@@ -1488,33 +1890,31 @@ struct BridgeDepthGraph::Impl {
   // rpe terms, then the MLP. shift > 0 rolls by -shift before partitioning.
   T* swinNmp(
       ggml_context* ctx, T* x, T* pos, T* mask, int win, int shift,
-      const std::string& p, T* idx) {
+      const std::string& p, T* idx, const AlignInputs& in) {
     const int64_t cDim = x->ne[0], nDim = x->ne[1], wDim = x->ne[2],
                   hDim = x->ne[3];
     const int64_t wPad = (wDim + win - 1) / win * win,
                   hPad = (hDim + win - 1) / win * win;
     T* xn = layerNorm(
         ctx, x, weight(p + "norm1.weight"), weight(p + "norm1.bias"), 1e-6f);
-    xn = padTokens(ctx, ggml_concat(ctx, xn, pos, 0), wPad, hPad);
+    xn = padTokens(ctx, concatChannels(ctx, xn, pos), wPad, hPad);
     if (shift > 0)
       xn = ggml_roll(ctx, xn, 0, 0, -shift, -shift);
-    T* xw = windowPartition(ctx, xn, win); // [159, T, nW]
-    T* qkv = linear(
-        ctx,
-        xw,
-        weight(p + "attn.qkv.weight"),
-        weight(p + "attn.qkv.bias")); // [3C, T, nW]
+    const WindowOrder& order = in.windows.at(win);
+    T* xw = windowPartition(ctx, xn, win, order); // [159, T, nW]
+    T* qkvW = weight(p + "attn.qkv.weight");      // rows (q, k, v)
+    T* qkvB = weight(p + "attn.qkv.bias");
     T* o = rpeAttention(
         ctx,
-        channelSlice(ctx, qkv, 0, cDim),
-        channelSlice(ctx, qkv, cDim, cDim),
-        channelSlice(ctx, qkv, 2 * cDim, cDim),
+        linearRows(ctx, xw, qkvW, qkvB, 0, cDim),
+        linearRows(ctx, xw, qkvW, qkvB, cDim, cDim),
+        linearRows(ctx, xw, qkvW, qkvB, 2 * cDim, cDim),
         weight(p + "attn.relative_position_enc_table"),
         idx,
         mask);
     o = linear(
         ctx, o, weight(p + "attn.proj.weight"), weight(p + "attn.proj.bias"));
-    o = windowReverse(ctx, o, nDim, wPad, hPad, win);
+    o = windowReverse(ctx, o, nDim, wPad, hPad, win, order);
     if (shift > 0)
       o = ggml_roll(ctx, o, 0, 0, shift, shift);
     x = ggml_add(ctx, x, cropTokens(ctx, o, wDim, hDim));
@@ -1596,8 +1996,8 @@ struct BridgeDepthGraph::Impl {
         nDim,
         wDim,
         hDim);
-    T* feat = ggml_concat(
-        ctx, ggml_concat(ctx, f1, warped, 0), corr, 0); // [160, N, W, H]
+    T* feat = concatChannels(
+        ctx, concatChannels(ctx, f1, warped), corr); // [160, N, W, H]
     T* e = linear(
         ctx,
         feat,
@@ -1630,7 +2030,8 @@ struct BridgeDepthGraph::Impl {
           p + "readout.",
           in.idxReadout[l],
           windowSize,
-          windowSize);
+          windowSize,
+          in);
       stereo = selfNmp(ctx, stereo, pos, p + "attn.self_nmp.");
       stereo = swinNmp(
           ctx,
@@ -1640,7 +2041,8 @@ struct BridgeDepthGraph::Impl {
           windowSize,
           odd ? windowSize / 2 : 0,
           p + "attn.nmp.",
-          in.idxNmp[l]);
+          in.idxNmp[l],
+          in);
       mono = crossBlock(
           ctx,
           mono,
@@ -1650,7 +2052,8 @@ struct BridgeDepthGraph::Impl {
           p + "update.",
           in.idxUpdate[l],
           windowSize,
-          windowSize);
+          windowSize,
+          in);
     }
     stereo = layerNorm(
         ctx,
@@ -1757,7 +2160,8 @@ struct BridgeDepthGraph::Impl {
           p + "readout.",
           in.idxReadout[l],
           win,
-          winK);
+          winK,
+          in);
       stereo = swinNmp(
           ctx,
           stereo,
@@ -1766,7 +2170,8 @@ struct BridgeDepthGraph::Impl {
           win,
           odd ? win / 2 : 0,
           p + "attn.nmp.",
-          in.idxNmp[l]);
+          in.idxNmp[l],
+          in);
       mono = crossBlock(
           ctx,
           mono,
@@ -1776,7 +2181,8 @@ struct BridgeDepthGraph::Impl {
           p + "update.",
           in.idxUpdate[l],
           winK,
-          win);
+          win,
+          in);
     }
     stereo = layerNorm(
         ctx,
@@ -1855,11 +2261,16 @@ BridgeDepthGraph::BridgeDepthGraph(
   if (!f)
     throw std::runtime_error("BridgeDepth: cannot open " + ggufPath);
   const auto fileSize = static_cast<uint64_t>(f.tellg());
+  // The tensors as the file stores them, metadata only. m.wctx, made below,
+  // holds them as the device does.
+  ggml_context* fileCtxRaw = nullptr;
   gguf_init_params gp{};
   gp.no_alloc = true;
-  gp.ctx = &m.wctx;
+  gp.ctx = &fileCtxRaw;
   m.gctx = gguf_init_from_file(ggufPath.c_str(), gp);
-  if (!m.gctx || !m.wctx)
+  const std::unique_ptr<ggml_context, decltype(&ggml_free)> fileCtx(
+      fileCtxRaw, ggml_free);
+  if (!m.gctx || !fileCtx)
     throw std::runtime_error("BridgeDepth: invalid GGUF " + ggufPath);
 
   const int64_t archId = gguf_find_key(m.gctx, "general.architecture");
@@ -1912,24 +2323,52 @@ BridgeDepthGraph::BridgeDepthGraph(
         "BridgeDepth: unsupported hyperparameters; convert with "
         "scripts/convert-bridgedepth.py");
   }
-  const uint64_t layout = layoutFingerprint(m.gctx, m.wctx, kv);
+  const uint64_t layout = layoutFingerprint(m.gctx, fileCtx.get(), kv);
   if (layout != EXPECTED_LAYOUT) {
     throw std::runtime_error(
         "BridgeDepth: unsupported GGUF layout " + std::to_string(layout) +
         "; convert with scripts/convert-bridgedepth.py");
   }
 
+  // The layout check above pins this tensor as ggml [D, 3 * D], but the
+  // fingerprint can be forged, so it is checked before it is read.
+  constexpr const char* vitQkvName = "mono.pretrained.blocks.0.attn.qkv.weight";
+  const T* vitQkv = ggml_get_tensor(fileCtx.get(), vitQkvName);
+  if (vitQkv == nullptr || ggml_n_dims(vitQkv) != 2 ||
+      vitQkv->ne[1] != 3 * vitQkv->ne[0]) {
+    throw std::runtime_error(
+        std::string("BridgeDepth: missing or malformed tensor ") + vitQkvName);
+  }
+  m.gpu = chooseGpuPath(m.backend, m.cpu, vitQkv->ne[0], m.monoHeads);
+
+  // Device-side tensors, in file order: the file's type and shape, except
+  // the linear weights and conv kernels when the device takes them as F16.
+  const int64_t nTensors = gguf_get_n_tensors(m.gctx);
+  ggml_init_params wp{};
+  wp.mem_size = ggml_tensor_overhead() * static_cast<size_t>(nTensors);
+  wp.no_alloc = true;
+  m.wctx = ggml_init(wp);
+  if (!m.wctx)
+    throw ResourceError("BridgeDepth: weight context allocation failed");
   const uint64_t dataOff = gguf_get_data_offset(m.gctx);
-  for (int64_t i = 0; i < gguf_get_n_tensors(m.gctx); ++i) {
-    const T* t = ggml_get_tensor(m.wctx, gguf_get_tensor_name(m.gctx, i));
+  for (int64_t i = 0; i < nTensors; ++i) {
+    const char* name = gguf_get_tensor_name(m.gctx, i);
+    const T* stored = ggml_get_tensor(fileCtx.get(), name);
     const uint64_t off = gguf_get_tensor_offset(m.gctx, i);
     if (dataOff > fileSize || off > fileSize - dataOff ||
-        ggml_nbytes(t) > fileSize - dataOff - off) {
+        ggml_nbytes(stored) > fileSize - dataOff - off) {
       throw std::runtime_error(
-          std::string("BridgeDepth: truncated tensor ") +
-          gguf_get_tensor_name(m.gctx, i));
+          std::string("BridgeDepth: truncated tensor ") + name);
     }
-    m.readBufferBytes = std::max<uint64_t>(m.readBufferBytes, ggml_nbytes(t));
+    const bool half =
+        (m.gpu.halfLinearWeights && isLinearWeight(stored, name)) ||
+        (m.gpu.directConv && isConvKernel(stored, name));
+    T* t = ggml_new_tensor(
+        m.wctx, half ? GGML_TYPE_F16 : stored->type, GGML_MAX_DIMS, stored->ne);
+    ggml_set_name(t, name);
+    // A converted tensor needs its F32 bytes and the F16 copy at once.
+    m.readBufferBytes = std::max<uint64_t>(
+        m.readBufferBytes, ggml_nbytes(stored) + (half ? ggml_nbytes(t) : 0));
   }
 
   if (m.measureOnly) {
@@ -1941,16 +2380,30 @@ BridgeDepthGraph::BridgeDepthGraph(
       throw ResourceError("BridgeDepth: weight allocation failed");
     ggml_backend_buffer_set_usage(m.wbuf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
     std::vector<char> buf;
-    for (int64_t i = 0; i < gguf_get_n_tensors(m.gctx); ++i) {
-      T* t = ggml_get_tensor(m.wctx, gguf_get_tensor_name(m.gctx, i));
-      buf.resize(ggml_nbytes(t));
+    std::vector<ggml_fp16_t> halfBuf;
+    for (int64_t i = 0; i < nTensors; ++i) {
+      const char* name = gguf_get_tensor_name(m.gctx, i);
+      T* t = ggml_get_tensor(m.wctx, name);
+      const T* stored = ggml_get_tensor(fileCtx.get(), name);
+      buf.resize(ggml_nbytes(stored));
       f.seekg(
           static_cast<std::streamoff>(
               dataOff + gguf_get_tensor_offset(m.gctx, i)));
       f.read(buf.data(), static_cast<std::streamsize>(buf.size()));
       if (!f)
         throw std::runtime_error("BridgeDepth: short read on tensor data");
-      ggml_backend_tensor_set(t, buf.data(), 0, buf.size());
+      if (t->type == stored->type) {
+        ggml_backend_tensor_set(t, buf.data(), 0, buf.size());
+        continue;
+      }
+      // A linear weight or conv kernel: F32 in the file, F16 on the device.
+      halfBuf.resize(static_cast<size_t>(ggml_nelements(t)));
+      ggml_fp32_to_fp16_row(
+          reinterpret_cast<const float*>(buf.data()),
+          halfBuf.data(),
+          ggml_nelements(t));
+      ggml_backend_tensor_set(
+          t, halfBuf.data(), 0, halfBuf.size() * sizeof(ggml_fp16_t));
     }
   }
   T* pos = m.weight("mono.pretrained.pos_embed");
@@ -2059,18 +2512,24 @@ shiftWindowMask(int hPad, int wPad, int win, int shift, int n) {
   };
   const int tokens = win * win * n, nWx = wPad / win, nWy = hPad / win;
   std::vector<float> m(static_cast<size_t>(tokens) * tokens * nWx * nWy, 0.0f);
-  auto region = [&](int wi, int wj, int tok) {
-    const int p = tok / n, hs = p / win, ws = p % win;
-    return regionOf(wi * win + hs, hPad) * 3 + regionOf(wj * win + ws, wPad);
-  };
+  // Region and pixel of each token of the current window, so the pair loop
+  // below only compares: it runs over tokens^2 entries per window, 4.7 M at
+  // 1436 x 992.
+  std::vector<int> region(tokens), pixel(tokens);
   for (int wi = 0; wi < nWy; ++wi) {
     for (int wj = 0; wj < nWx; ++wj) {
+      for (int tok = 0; tok < tokens; ++tok) {
+        const int p = tok / n, hs = p / win, ws = p % win;
+        pixel[tok] = p;
+        region[tok] =
+            regionOf(wi * win + hs, hPad) * 3 + regionOf(wj * win + ws, wPad);
+      }
       float* base =
           m.data() + static_cast<size_t>(wi * nWx + wj) * tokens * tokens;
       for (int tq = 0; tq < tokens; ++tq) {
         for (int tk = 0; tk < tokens; ++tk) {
-          const bool sameRegion = region(wi, wj, tq) == region(wi, wj, tk);
-          const bool selfEdge = tq != tk && tq / n == tk / n;
+          const bool sameRegion = region[tq] == region[tk];
+          const bool selfEdge = tq != tk && pixel[tq] == pixel[tk];
           if (!sameRegion || selfEdge)
             base[tq * tokens + tk] = -INFINITY;
         }
@@ -2098,18 +2557,96 @@ std::vector<int32_t> expandRpeIndex(
   return out;
 }
 
+// Row order of the window partition of a wPad x hPad token grid, as get_rows
+// indices. A row is the (c, n, ws) run of one window row, so the source rows
+// are [j, hs, i] and the partitioned rows [hs, j, i] (j the window column, hs
+// the row inside the window, i the window row). `reverse` gives the order
+// that undoes the partition.
+std::vector<int32_t> windowRowOrder(int wPad, int hPad, int win, bool reverse) {
+  const int nWx = wPad / win, nWy = hPad / win;
+  std::vector<int32_t> out(static_cast<size_t>(nWx) * win * nWy);
+  for (int i = 0; i < nWy; ++i) {
+    for (int hs = 0; hs < win; ++hs) {
+      for (int j = 0; j < nWx; ++j) {
+        const int image = j + nWx * (hs + win * i);
+        const int windows = hs + win * (j + nWx * i);
+        if (reverse)
+          out[image] = windows;
+        else
+          out[windows] = image;
+      }
+    }
+  }
+  return out;
+}
+
 // Per-run host inputs of one alignment stage: pixel index, row base for the
 // get_rows gather, the two masks and the expanded rpe indices per layer. The
 // shapes are always set; the vectors stay empty in measure mode.
 struct AlignHost {
   std::vector<float> wIdx, rowBase, maskEven, maskOdd;
   std::vector<std::vector<int32_t>> idxReadout, idxNmp, idxUpdate;
+  // windowRowOrder per window size, with the row count (set in both modes).
+  struct WindowOrders {
+    std::vector<int32_t> partition, reverse;
+    int64_t rows = 0;
+  };
+  std::map<int, WindowOrders> windows;
   int wPad = 0, hPad = 0, T = 0;
   bool hasMaskEven = false;
   int64_t readoutElems = 0, nmpElems = 0, updateElems = 0;
 };
 
+struct HostConstants {
+  std::vector<float> mean, stdv, avg, arange, offsets, freqs;
+  std::vector<float> maskCol, maskRow, avg32;
+  AlignHost a0, a1; // stage 0 at 1/8 with N proposals, stage 1 at 1/4 with one
+};
+
+template <typename V> uint64_t heapBytes(const std::vector<V>& v) {
+  return static_cast<uint64_t>(v.capacity()) * sizeof(V);
+}
+
+// The element storage HostConstants holds, as allocated. Container headers
+// are left out, as for every other host buffer.
+uint64_t hostConstantsBytes(const HostConstants& c) {
+  uint64_t total = 0;
+  for (const std::vector<float>* v :
+       {&c.mean,
+        &c.stdv,
+        &c.avg,
+        &c.arange,
+        &c.offsets,
+        &c.freqs,
+        &c.maskCol,
+        &c.maskRow,
+        &c.avg32})
+    total += heapBytes(*v);
+  for (const AlignHost* a : {&c.a0, &c.a1}) {
+    for (const std::vector<float>* v :
+         {&a->wIdx, &a->rowBase, &a->maskEven, &a->maskOdd})
+      total += heapBytes(*v);
+    for (const auto* layers : {&a->idxReadout, &a->idxNmp, &a->idxUpdate}) {
+      for (const std::vector<int32_t>& v : *layers)
+        total += heapBytes(v);
+    }
+    for (const auto& [window, orders] : a->windows)
+      total += heapBytes(orders.partition) + heapBytes(orders.reverse);
+  }
+  return total;
+}
+
 } // namespace
+
+uint64_t BridgeDepthGraph::heldSizeSlotBytes() const {
+  uint64_t total = 0;
+  for (const Impl::SizeSlot& slot : impl_->sizeSlots) {
+    total += Impl::graphArenaBytes();
+    if (slot.constants)
+      total += hostConstantsBytes(*slot.constants);
+  }
+  return total;
+}
 
 std::vector<float> BridgeDepthGraph::infer(
     const float* left, const float* right, int h, int w,
@@ -2134,21 +2671,31 @@ BridgeDepthGraph::measure(int h, int w, const CallerHostBytes& caller) {
       m.measuredPosTableBytes;
   for (const auto& [name, elements] : m.rpeIndexElems)
     persistentBytes += static_cast<uint64_t>(elements) * sizeof(int32_t);
+  // What the size's slot keeps after the run, see heldSizeSlotBytes(). It
+  // does not exist yet while the weights load, so it adds to the job side.
+  const uint64_t slotBytes =
+      Impl::graphArenaBytes() + m.measuredSlotConstantBytes;
   // The run: every graph input and output on the host, the resized pos_embed
-  // already counted above, plus both views as planar floats and the unpadded
-  // disparity forward() returns.
+  // and the slot's inputs already counted above, plus both views as planar
+  // floats. The output is the padded map forward() cuts down in place and
+  // returns, so the disparity keeps the padded size.
   const uint64_t pixels = static_cast<uint64_t>(h) * w;
   const uint64_t planarViewFloats = 2ULL * 3 * pixels;
-  const uint64_t disparityBytes = pixels * sizeof(float);
-  const uint64_t runBytes = m.measuredRunHostBytes - m.measuredPosTableBytes +
-                            planarViewFloats * sizeof(float) + disparityBytes;
+  const Padding pad = computePadding(h, w, PAD_DIVISOR);
+  const uint64_t disparityBytes =
+      static_cast<uint64_t>(h + pad.top) * (w + pad.right) * sizeof(float);
+  const uint64_t runBytes = m.measuredRunHostBytes - m.measuredPosTableBytes -
+                            m.measuredSlotConstantBytes +
+                            planarViewFloats * sizeof(float);
   const uint64_t jobPeak = std::max(
       {caller.prepareBytes,
        runBytes,
        disparityBytes + caller.afterRunBytes,
        caller.outputBytes});
+  result.sizeSlotBytes = slotBytes;
   result.hostStagingBytes =
-      persistentBytes + std::max(m.readBufferBytes, caller.jobBytes + jobPeak);
+      persistentBytes +
+      std::max(m.readBufferBytes, slotBytes + caller.jobBytes + jobPeak);
   return result;
 }
 
@@ -2169,21 +2716,11 @@ std::vector<float> BridgeDepthGraph::Impl::forward(
       return {};
     return build();
   };
-  const std::vector<float> imgs = hostOnly([&] {
-    std::vector<float> both(2 * plane);
-    padImageInto(left, h, w, pad, both.data());
-    padImageInto(right, h, w, pad, both.data() + plane);
-    return both;
-  });
   const int ph = hDim / 8 * 7 / 14, pw = wDim / 8 * 7 / 14;
   const std::vector<float> noFloats;
   const std::vector<float>& pos = m.measureOnly ? noFloats : m.posEmbed(ph, pw);
   m.measuredPosTableBytes =
       static_cast<uint64_t>(m.posDim) * (1 + ph * pw) * sizeof(float);
-  const std::vector<float> mean =
-      hostOnly([] { return channelConst(MEAN_RGB); });
-  const std::vector<float> stdv =
-      hostOnly([] { return channelConst(STD_RGB); });
   const int h8 = hDim / 8, w8 = wDim / 8, nDim = m.numProposals;
   if (seedsOverride &&
       seedsOverride->size() != static_cast<size_t>(nDim) * h8 * w8) {
@@ -2192,249 +2729,321 @@ std::vector<float> BridgeDepthGraph::Impl::forward(
   }
   const int cDim = m.kvU32("bridgedepth.backbone.out_channels");
   const int per = cDim / m.costGroup;
-  const std::vector<float> avg = hostOnly([&] {
-    std::vector<float> out(static_cast<size_t>(cDim) * m.costGroup, 0.0f);
-    for (int g = 0; g < m.costGroup; ++g) {
-      for (int c = 0; c < per; ++c)
-        out[static_cast<size_t>(g) * cDim + static_cast<size_t>(g) * per + c] =
-            1.0f / per;
-    }
-    return out;
-  });
-  const std::vector<float> arange = hostOnly([&] {
-    std::vector<float> out(m.numDisp);
-    for (int i = 0; i < m.numDisp; ++i)
-      out[i] = static_cast<float>(i);
-    return out;
-  });
-  const std::vector<float> offsets = hostOnly([] {
-    std::vector<float> out(9);
-    for (int i = 0; i < 9; ++i)
-      out[i] = static_cast<float>(i - 4);
-    return out;
-  });
-  const std::vector<float> freqs = hostOnly([] {
-    std::vector<float> out(15);
-    for (int i = 0; i < 15; ++i)
-      out[i] = std::ldexp(1.0f, i);
-    return out;
-  });
-  const std::vector<float> maskCol =
-      hostOnly([&] { return selfEdgeMask(h8, nDim); });
-  const std::vector<float> maskRow =
-      hostOnly([&] { return selfEdgeMask(w8, nDim); });
-
-  // alignment host inputs, stage 0 at 1/8 with N proposals, stage 1 at 1/4 with
-  // one
-  auto rpeIndex = [&](const std::string& name,
-                      int pixQ,
-                      int pixK,
-                      int queryTokens,
-                      int keyTokens) -> std::vector<int32_t> {
-    auto elems = m.rpeIndexElems.find(name);
-    if (elems == m.rpeIndexElems.end())
-      throw std::runtime_error("BridgeDepth: missing " + name);
-    if (elems->second != static_cast<int64_t>(pixQ) * pixK)
-      throw std::runtime_error("BridgeDepth: unexpected rpe index size");
-    return hostOnly([&] {
-      return expandRpeIndex(
-          m.rpeIndexHost.at(name), pixQ, pixK, queryTokens, keyTokens);
-    });
-  };
-  auto alignHost = [&](int wGrid,
-                       int hGrid,
-                       int win,
-                       int n,
-                       const std::string& prefix,
-                       int layers,
-                       bool refine) {
-    AlignHost a;
-    const int pix = win * win, pixK = refine ? (win / 2) * (win / 2) : pix;
-    a.wPad = (wGrid + win - 1) / win * win;
-    a.hPad = (hGrid + win - 1) / win * win;
-    a.T = pix * n;
-    a.hasMaskEven = n > 1;
-    // Token counts of the expanded indices, see expandRpeIndex.
-    a.readoutElems = static_cast<int64_t>(pix) * n * pixK;
-    a.nmpElems = static_cast<int64_t>(pix) * n * pix * n;
-    a.updateElems = static_cast<int64_t>(pixK) * pix * n;
-    a.wIdx = hostOnly([&] {
-      std::vector<float> out(wGrid);
-      for (int x = 0; x < wGrid; ++x)
-        out[x] = static_cast<float>(x);
-      return out;
-    });
-    a.rowBase = hostOnly([&] {
-      std::vector<float> out(static_cast<size_t>(wGrid) * hGrid);
-      for (int y = 0; y < hGrid; ++y) {
-        for (int x = 0; x < wGrid; ++x)
-          out[static_cast<size_t>(y) * wGrid + x] =
-              static_cast<float>(y) * wGrid;
-      }
-      return out;
-    });
-    if (a.hasMaskEven)
-      a.maskEven = hostOnly([&] { return selfEdgeMask(pix, n); });
-    a.maskOdd = hostOnly(
-        [&] { return shiftWindowMask(a.hPad, a.wPad, win, win / 2, n); });
-    for (int l = 0; l < layers; ++l) {
-      const std::string p = prefix + std::to_string(l) + ".";
-      a.idxReadout.push_back(rpeIndex(
-          p + "readout.attn.relative_position_index", pix, pixK, n, 1));
-      a.idxNmp.push_back(rpeIndex(
-          p + "attn.nmp.attn.relative_position_index", pix, pix, n, n));
-      a.idxUpdate.push_back(
-          rpeIndex(p + "update.attn.relative_position_index", pixK, pix, 1, n));
-    }
-    return a;
-  };
   const int h4 = hDim / 4, w4 = wDim / 4;
-  const AlignHost a0 = alignHost(
-      w8, h8, m.windowSize, nDim, "align_0.layers.", m.numInferLayers, false);
-  const AlignHost a1 = alignHost(
-      w4,
-      h4,
-      m.refineWindowSize,
-      1,
-      "align_1.layers.",
-      m.numRefineLayers,
-      true);
   const int cGw = static_cast<int>(m.weight("stereo.gw.3.weight")->ne[3]),
             gCorr = 32, perG = cGw / gCorr;
-  const std::vector<float> avg32 = hostOnly([&] {
-    std::vector<float> out(static_cast<size_t>(cGw) * gCorr, 0.0f);
-    for (int g = 0; g < gCorr; ++g) {
-      for (int c = 0; c < perG; ++c)
-        out[static_cast<size_t>(g) * cGw + g * perG + c] = 1.0f / perG;
-    }
-    return out;
-  });
-
-  std::map<std::string, HostTensor> outsHost = m.run([&](ggml_context* ctx,
-                                                         Impl::Inputs& in) {
-    T* ti = in.add(ctx, "imgs", imgs, wDim, hDim, 3, 2);
-    T* tm = in.add(ctx, "mean", mean, 1, 1, 3, 1);
-    T* ts = in.add(ctx, "std", stdv, 1, 1, 3, 1);
-    T* tp = in.add(ctx, "pos", pos, m.posDim, 1 + ph * pw);
-    Impl::DpnInputs di;
-    di.avg = in.add(ctx, "avg", avg, cDim, m.costGroup);
-    di.arange = in.add(ctx, "arange", arange, 1, m.numDisp);
-    di.offsets = in.add(ctx, "offsets", offsets, 9);
-    di.freqs = in.add(ctx, "freqs", freqs, 15);
-    const int64_t colSide = static_cast<int64_t>(h8) * nDim;
-    const int64_t rowSide = static_cast<int64_t>(w8) * nDim;
-    di.maskCol = in.add(ctx, "mask_col", maskCol, colSide, colSide);
-    di.maskRow = in.add(ctx, "mask_row", maskRow, rowSide, rowSide);
-    if (seedsOverride)
-      di.seedsOverride = in.add(
-          ctx,
-          "seeds_override",
-          *seedsOverride,
-          nDim,
-          static_cast<int64_t>(h8) * w8);
-    T* avg32T = in.add(ctx, "avg32", avg32, cGw, gCorr);
-    auto alignInputs = [&](const AlignHost& a,
-                           int wGrid,
-                           int hGrid,
-                           int win,
-                           const std::string& s) {
-      Impl::AlignInputs ai;
-      ai.wIdx = in.add(ctx, ("w_idx" + s).c_str(), a.wIdx, 1, 1, wGrid, 1);
-      ai.rowBase =
-          in.add(ctx, ("row_base" + s).c_str(), a.rowBase, 1, 1, wGrid, hGrid);
-      ai.avg32 = avg32T;
-      ai.freqs = di.freqs;
-      ai.maskEven =
-          a.hasMaskEven
-              ? in.add(ctx, ("mask_even" + s).c_str(), a.maskEven, a.T, a.T)
-              : nullptr;
-      ai.maskOdd = in.add(
-          ctx,
-          ("mask_odd" + s).c_str(),
-          a.maskOdd,
-          a.T,
-          a.T,
-          1,
-          static_cast<int64_t>(a.wPad / win) * (a.hPad / win));
-      for (size_t l = 0; l < a.idxReadout.size(); ++l) {
-        const std::string sl = s + "_" + std::to_string(l);
-        ai.idxReadout.push_back(in.addI32(
-            ctx,
-            ("idx_readout" + sl).c_str(),
-            a.idxReadout[l],
-            a.readoutElems));
-        ai.idxNmp.push_back(
-            in.addI32(ctx, ("idx_nmp" + sl).c_str(), a.idxNmp[l], a.nmpElems));
-        ai.idxUpdate.push_back(in.addI32(
-            ctx, ("idx_update" + sl).c_str(), a.idxUpdate[l], a.updateElems));
+  // Measure mode builds each size once and keeps nothing.
+  Impl::SizeSlot* slot = m.measureOnly ? nullptr : &m.sizeSlot(hDim, wDim);
+  HostConstants built;
+  const HostConstants* constants = slot ? slot->constants.get() : nullptr;
+  if (constants == nullptr) {
+    built.mean = hostOnly([] { return channelConst(MEAN_RGB); });
+    built.stdv = hostOnly([] { return channelConst(STD_RGB); });
+    built.avg = hostOnly([&] {
+      std::vector<float> out(static_cast<size_t>(cDim) * m.costGroup, 0.0f);
+      for (int g = 0; g < m.costGroup; ++g) {
+        for (int c = 0; c < per; ++c)
+          out[static_cast<size_t>(g) * cDim + static_cast<size_t>(g) * per +
+              c] = 1.0f / per;
       }
-      return ai;
+      return out;
+    });
+    built.arange = hostOnly([&] {
+      std::vector<float> out(m.numDisp);
+      for (int i = 0; i < m.numDisp; ++i)
+        out[i] = static_cast<float>(i);
+      return out;
+    });
+    built.offsets = hostOnly([] {
+      std::vector<float> out(9);
+      for (int i = 0; i < 9; ++i)
+        out[i] = static_cast<float>(i - 4);
+      return out;
+    });
+    built.freqs = hostOnly([] {
+      std::vector<float> out(15);
+      for (int i = 0; i < 15; ++i)
+        out[i] = std::ldexp(1.0f, i);
+      return out;
+    });
+    built.maskCol = hostOnly([&] { return selfEdgeMask(h8, nDim); });
+    built.maskRow = hostOnly([&] { return selfEdgeMask(w8, nDim); });
+
+    // alignment host inputs, stage 0 at 1/8 with N proposals, stage 1 at 1/4
+    // with one
+    auto rpeIndex = [&](const std::string& name,
+                        int pixQ,
+                        int pixK,
+                        int queryTokens,
+                        int keyTokens) -> std::vector<int32_t> {
+      auto elems = m.rpeIndexElems.find(name);
+      if (elems == m.rpeIndexElems.end())
+        throw std::runtime_error("BridgeDepth: missing " + name);
+      if (elems->second != static_cast<int64_t>(pixQ) * pixK)
+        throw std::runtime_error("BridgeDepth: unexpected rpe index size");
+      return hostOnly([&] {
+        return expandRpeIndex(
+            m.rpeIndexHost.at(name), pixQ, pixK, queryTokens, keyTokens);
+      });
     };
-    const Impl::AlignInputs ai = alignInputs(a0, w8, h8, m.windowSize, "0");
-    const Impl::AlignInputs ai1 =
-        alignInputs(a1, w4, h4, m.refineWindowSize, "1");
-
-    T* leftImg = batchSlice(ctx, ti, 0);
-    Impl::Outputs mono = m.buildMono(ctx, leftImg, tm, ts, tp, ph, pw);
-    Impl::Outputs st = m.buildStereoFeatures(ctx, ti, tm, ts);
-    auto find = [](const Impl::Outputs& o, const char* k) {
-      for (auto& [n, t] : o)
-        if (n == k)
-          return t;
-      throw std::runtime_error(std::string("BridgeDepth: no output ") + k);
+    auto alignHost = [&](int wGrid,
+                         int hGrid,
+                         int win,
+                         int n,
+                         const std::string& prefix,
+                         int layers,
+                         bool refine) {
+      AlignHost a;
+      const int pix = win * win, pixK = refine ? (win / 2) * (win / 2) : pix;
+      a.wPad = (wGrid + win - 1) / win * win;
+      a.hPad = (hGrid + win - 1) / win * win;
+      a.T = pix * n;
+      a.hasMaskEven = n > 1;
+      // Token counts of the expanded indices, see expandRpeIndex.
+      a.readoutElems = static_cast<int64_t>(pix) * n * pixK;
+      a.nmpElems = static_cast<int64_t>(pix) * n * pix * n;
+      a.updateElems = static_cast<int64_t>(pixK) * pix * n;
+      a.wIdx = hostOnly([&] {
+        std::vector<float> out(wGrid);
+        for (int x = 0; x < wGrid; ++x)
+          out[x] = static_cast<float>(x);
+        return out;
+      });
+      a.rowBase = hostOnly([&] {
+        std::vector<float> out(static_cast<size_t>(wGrid) * hGrid);
+        for (int y = 0; y < hGrid; ++y) {
+          for (int x = 0; x < wGrid; ++x)
+            out[static_cast<size_t>(y) * wGrid + x] =
+                static_cast<float>(y) * wGrid;
+        }
+        return out;
+      });
+      if (a.hasMaskEven)
+        a.maskEven = hostOnly([&] { return selfEdgeMask(pix, n); });
+      a.maskOdd = hostOnly(
+          [&] { return shiftWindowMask(a.hPad, a.wPad, win, win / 2, n); });
+      auto addWindows = [&](int gridW, int gridH, int window) {
+        const int wPad = (gridW + window - 1) / window * window;
+        const int hPad = (gridH + window - 1) / window * window;
+        AlignHost::WindowOrders& o = a.windows[window];
+        o.rows = static_cast<int64_t>(wPad) * hPad / window;
+        o.partition =
+            hostOnly([&] { return windowRowOrder(wPad, hPad, window, false); });
+        o.reverse =
+            hostOnly([&] { return windowRowOrder(wPad, hPad, window, true); });
+      };
+      addWindows(wGrid, hGrid, win);
+      // The refine stage also partitions the mono tokens, at half the
+      // resolution with half the window.
+      if (refine)
+        addWindows(wGrid / 2, hGrid / 2, win / 2);
+      for (int l = 0; l < layers; ++l) {
+        const std::string p = prefix + std::to_string(l) + ".";
+        a.idxReadout.push_back(rpeIndex(
+            p + "readout.attn.relative_position_index", pix, pixK, n, 1));
+        a.idxNmp.push_back(rpeIndex(
+            p + "attn.nmp.attn.relative_position_index", pix, pix, n, n));
+        a.idxUpdate.push_back(rpeIndex(
+            p + "update.attn.relative_position_index", pixK, pix, 1, n));
+      }
+      return a;
     };
-    T* prior = find(mono, "depth_prior"); // [128, W8, H8, 1]
-    Impl::Outputs outs = m.buildDpn(
-        ctx,
-        find(st, "backbone.fmap1_1_8"),
-        find(st, "backbone.fmap2_1_8"),
-        prior,
-        di);
+    built.a0 = alignHost(
+        w8, h8, m.windowSize, nDim, "align_0.layers.", m.numInferLayers, false);
+    built.a1 = alignHost(
+        w4,
+        h4,
+        m.refineWindowSize,
+        1,
+        "align_1.layers.",
+        m.numRefineLayers,
+        true);
+    built.avg32 = hostOnly([&] {
+      std::vector<float> out(static_cast<size_t>(cGw) * gCorr, 0.0f);
+      for (int g = 0; g < gCorr; ++g) {
+        for (int c = 0; c < perG; ++c)
+          out[static_cast<size_t>(g) * cGw + g * perG + c] = 1.0f / perG;
+      }
+      return out;
+    });
 
-    T* disp = ggml_reshape_4d(ctx, find(outs, "dpn.proposal"), 1, nDim, w8, h8);
-    auto [embed, hpos] = m.hypothesisEmbedding(
-        ctx,
-        find(st, "concatconv1_1_8"),
-        find(st, "concatconv2_1_8"),
-        find(st, "gw1_1_8"),
-        find(st, "gw2_1_8"),
-        disp,
-        64.0f,
-        ai);
-    T* monoTok = ggml_reshape_4d(ctx, prior, prior->ne[0], 1, w8, h8);
-    Impl::Outputs al = m.buildAlign0(ctx, embed, monoTok, hpos, disp, ai);
-
-    T* dispEst = ggml_reshape_4d(ctx, find(al, "disp_est"), 1, 1, w4, h4);
-    auto [embed1, hpos1] = m.hypothesisEmbedding(
-        ctx,
-        find(st, "concatconv1_1_4"),
-        find(st, "concatconv2_1_4"),
-        find(st, "gw1_1_4"),
-        find(st, "gw2_1_4"),
-        dispEst,
-        128.0f,
-        ai1);
-    T* mono1 = ggml_reshape_4d(ctx, find(al, "align0.mono"), 128, 1, w8, h8);
-    // Only the final map is a graph output, so the allocator can reuse the
-    // memory of every intermediate.
-    return Impl::Outputs{
-        {"disp_final_padded",
-         find(
-             m.buildAlign1(ctx, embed1, mono1, hpos1, dispEst, ai1),
-             "disp_final_padded")}};
-  });
-
-  if (m.measureOnly)
-    return {};
-  // InputPadder.unpad: drop the top rows and the right columns.
-  const HostTensor& padded = outsHost.at("disp_final_padded");
-  std::vector<float> disparity(static_cast<size_t>(h) * w);
-  for (int y = 0; y < h; ++y) {
-    std::copy_n(
-        padded.data.data() + static_cast<size_t>(y + pad.top) * wDim,
-        w,
-        disparity.data() + static_cast<size_t>(y) * w);
+    if (slot) {
+      slot->constants = std::make_shared<const HostConstants>(std::move(built));
+      constants = slot->constants.get();
+    } else {
+      constants = &built;
+    }
   }
+  const std::vector<float>& mean = constants->mean;
+  const std::vector<float>& stdv = constants->stdv;
+  const std::vector<float>& avg = constants->avg;
+  const std::vector<float>& arange = constants->arange;
+  const std::vector<float>& offsets = constants->offsets;
+  const std::vector<float>& freqs = constants->freqs;
+  const std::vector<float>& maskCol = constants->maskCol;
+  const std::vector<float>& maskRow = constants->maskRow;
+  const std::vector<float>& avg32 = constants->avg32;
+  const AlignHost& a0 = constants->a0;
+  const AlignHost& a1 = constants->a1;
+  std::map<std::string, HostTensor> outsHost =
+      m.run(slot, [&](ggml_context* ctx, Impl::Inputs& in) {
+        T* ti = in.addFilled(
+            ctx,
+            "imgs",
+            [&](float* both) {
+              padImageInto(left, h, w, pad, both);
+              padImageInto(right, h, w, pad, both + plane);
+            },
+            wDim,
+            hDim,
+            3,
+            2);
+        T* tm = in.add(ctx, "mean", mean, 1, 1, 3, 1);
+        T* ts = in.add(ctx, "std", stdv, 1, 1, 3, 1);
+        T* tp = in.add(ctx, "pos", pos, m.posDim, 1 + ph * pw);
+        Impl::DpnInputs di;
+        di.avg = in.add(ctx, "avg", avg, cDim, m.costGroup);
+        di.arange = in.add(ctx, "arange", arange, 1, m.numDisp);
+        di.offsets = in.add(ctx, "offsets", offsets, 9);
+        di.freqs = in.add(ctx, "freqs", freqs, 15);
+        const int64_t colSide = static_cast<int64_t>(h8) * nDim;
+        const int64_t rowSide = static_cast<int64_t>(w8) * nDim;
+        di.maskCol = in.add(ctx, "mask_col", maskCol, colSide, colSide);
+        di.maskRow = in.add(ctx, "mask_row", maskRow, rowSide, rowSide);
+        if (seedsOverride)
+          di.seedsOverride = in.add(
+              ctx,
+              "seeds_override",
+              *seedsOverride,
+              nDim,
+              static_cast<int64_t>(h8) * w8);
+        T* avg32T = in.add(ctx, "avg32", avg32, cGw, gCorr);
+        auto alignInputs = [&](const AlignHost& a,
+                               int wGrid,
+                               int hGrid,
+                               int win,
+                               const std::string& s) {
+          Impl::AlignInputs ai;
+          ai.wIdx = in.add(ctx, ("w_idx" + s).c_str(), a.wIdx, 1, 1, wGrid, 1);
+          ai.rowBase = in.add(
+              ctx, ("row_base" + s).c_str(), a.rowBase, 1, 1, wGrid, hGrid);
+          ai.avg32 = avg32T;
+          ai.freqs = di.freqs;
+          ai.maskEven =
+              a.hasMaskEven
+                  ? in.add(ctx, ("mask_even" + s).c_str(), a.maskEven, a.T, a.T)
+                  : nullptr;
+          ai.maskOdd = in.add(
+              ctx,
+              ("mask_odd" + s).c_str(),
+              a.maskOdd,
+              a.T,
+              a.T,
+              1,
+              static_cast<int64_t>(a.wPad / win) * (a.hPad / win));
+          for (const auto& [window, o] : a.windows) {
+            const std::string sw = s + "_" + std::to_string(window);
+            ai.windows[window] = {
+                in.addI32(ctx, ("win_part" + sw).c_str(), o.partition, o.rows),
+                in.addI32(ctx, ("win_rev" + sw).c_str(), o.reverse, o.rows)};
+          }
+          for (size_t l = 0; l < a.idxReadout.size(); ++l) {
+            const std::string sl = s + "_" + std::to_string(l);
+            ai.idxReadout.push_back(in.addI32(
+                ctx,
+                ("idx_readout" + sl).c_str(),
+                a.idxReadout[l],
+                a.readoutElems));
+            ai.idxNmp.push_back(in.addI32(
+                ctx, ("idx_nmp" + sl).c_str(), a.idxNmp[l], a.nmpElems));
+            ai.idxUpdate.push_back(in.addI32(
+                ctx,
+                ("idx_update" + sl).c_str(),
+                a.idxUpdate[l],
+                a.updateElems));
+          }
+          return ai;
+        };
+        const Impl::AlignInputs ai = alignInputs(a0, w8, h8, m.windowSize, "0");
+        const Impl::AlignInputs ai1 =
+            alignInputs(a1, w4, h4, m.refineWindowSize, "1");
+
+        T* leftImg = batchSlice(ctx, ti, 0);
+        Impl::Outputs mono = m.buildMono(ctx, leftImg, tm, ts, tp, ph, pw);
+        Impl::Outputs st = m.buildStereoFeatures(ctx, ti, tm, ts);
+        auto find = [](const Impl::Outputs& o, const char* k) {
+          for (auto& [n, t] : o)
+            if (n == k)
+              return t;
+          throw std::runtime_error(std::string("BridgeDepth: no output ") + k);
+        };
+        T* prior = find(mono, "depth_prior"); // [128, W8, H8, 1]
+        Impl::Outputs outs = m.buildDpn(
+            ctx,
+            find(st, "backbone.fmap1_1_8"),
+            find(st, "backbone.fmap2_1_8"),
+            prior,
+            di);
+
+        T* disp =
+            ggml_reshape_4d(ctx, find(outs, "dpn.proposal"), 1, nDim, w8, h8);
+        auto [embed, hpos] = m.hypothesisEmbedding(
+            ctx,
+            find(st, "concatconv1_1_8"),
+            find(st, "concatconv2_1_8"),
+            find(st, "gw1_1_8"),
+            find(st, "gw2_1_8"),
+            disp,
+            64.0f,
+            ai);
+        T* monoTok = ggml_reshape_4d(ctx, prior, prior->ne[0], 1, w8, h8);
+        Impl::Outputs al = m.buildAlign0(ctx, embed, monoTok, hpos, disp, ai);
+
+        T* dispEst = ggml_reshape_4d(ctx, find(al, "disp_est"), 1, 1, w4, h4);
+        auto [embed1, hpos1] = m.hypothesisEmbedding(
+            ctx,
+            find(st, "concatconv1_1_4"),
+            find(st, "concatconv2_1_4"),
+            find(st, "gw1_1_4"),
+            find(st, "gw2_1_4"),
+            dispEst,
+            128.0f,
+            ai1);
+        T* mono1 =
+            ggml_reshape_4d(ctx, find(al, "align0.mono"), 128, 1, w8, h8);
+        // Only the final map is a graph output, so the allocator can reuse the
+        // memory of every intermediate. It stays padded: a crop in the graph
+        // would depend on the unpadded size, so two inputs of one padded size
+        // would build different graphs and lose the slot's CUDA graph replay.
+        return Impl::Outputs{
+            {"disp_final_padded",
+             find(
+                 m.buildAlign1(ctx, embed1, mono1, hpos1, dispEst, ai1),
+                 "disp_final_padded")}};
+      });
+
+  if (m.measureOnly) {
+    // Every input but the two views and the resized pos_embed comes from
+    // HostConstants, which a slot keeps. Measure runs take no seeds.
+    const uint64_t viewsBytes = 2ULL * plane * sizeof(float);
+    m.measuredSlotConstantBytes =
+        m.measuredInputBytes - viewsBytes - m.measuredPosTableBytes;
+    return {};
+  }
+  // InputPadder.unpad: drop the top rows and the right columns, in place in
+  // the buffer read back from the device, so the map is copied once. A row
+  // only moves towards the start and never onto a row still to be moved;
+  // memmove because a row can overlap its own old place. The buffer keeps
+  // its padded capacity, which measure() counts.
+  std::vector<float> disparity =
+      std::move(outsHost.at("disp_final_padded").data);
+  for (int y = 0; y < h; ++y) {
+    std::memmove(
+        disparity.data() + static_cast<size_t>(y) * w,
+        disparity.data() + static_cast<size_t>(y + pad.top) * wDim,
+        static_cast<size_t>(w) * sizeof(float));
+  }
+  disparity.resize(static_cast<size_t>(h) * w);
   return disparity;
 }
 

@@ -1,0 +1,24 @@
+--- a/engines/parakeet/include/parakeet/engine.h
++++ b/engines/parakeet/include/parakeet/engine.h
+@@ -365,6 +365,7 @@
+     // "ctc", "rnnt", "tdt", "eou", "nemotron", or "sortformer", reflecting
+     // the parakeet.model.type metadata of the loaded GGUF.
+     std::string model_type() const;
++    bool supports_cache_aware_streaming() const;
+
+     // Resolved primary compute device: CPU, GPU, or NPU (Hexagon).
+     // In auto mode n_gpu_layers and GPU availability determine CPU fallback.
+--- a/engines/parakeet/src/parakeet_engine.cpp
++++ b/engines/parakeet/src/parakeet_engine.cpp
+@@ -881,6 +881,11 @@
+ bool Engine::is_diarization_model() const {
+     return pimpl_->model.model_type == ParakeetModelType::SORTFORMER ||
+            pimpl_->model.model_type == ParakeetModelType::NEMOTRON_DIARIZATION;
++}
++
++bool Engine::supports_cache_aware_streaming() const {
++    return pimpl_->model.model_type == ParakeetModelType::NEMOTRON ||
++           pimpl_->model.unified_cfg.available;
+ }
+
+ bool Engine::is_transcription_model() const {

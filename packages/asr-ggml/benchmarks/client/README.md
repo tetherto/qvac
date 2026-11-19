@@ -139,7 +139,9 @@ and `timestamps_enabled`. Indic Conformer also requires a two-letter
   `caption_enabled`, `timestamps_enabled`, `streaming`, `streaming_chunk_ms`,
   `streaming_history_ms` (Sortformer only), `streaming_emit_partials` —
   streaming runs drive the addon's duplex `runStreaming()` session with these
-  ms-based controls
+  controls. Omit `streaming_chunk_ms` for the model’s native decode window. For
+  TDT v3, the default and minimum are 30,000 ms. The server writes 320 ms of PCM
+  at a time.
 
 ## Output
 
