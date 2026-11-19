@@ -2990,6 +2990,13 @@ class BatchCompletionStreamResponseEventsItemEventCompletionStatsStats(
             title="BatchCompletionStreamResponseEventsItemEventCompletionStatsStatsBackendDevice",
         ),
     ] = None
+    backend_name: Annotated[
+        str | None,
+        Field(
+            alias="backendName",
+            description="Backend families used by the primary model after loading and fitting, in lowercase. Multiple families are sorted and comma-separated. Optional with older addons.",
+        ),
+    ] = None
 
 
 class BatchCompletionStreamResponseEventsItemEventCompletionStats(GeneratedBaseModel):
@@ -3127,6 +3134,13 @@ class BatchCompletionStreamResponseStats(GeneratedBaseModel):
         Field(
             alias="backendDevice",
             title="BatchCompletionStreamResponseStatsBackendDevice",
+        ),
+    ] = None
+    backend_name: Annotated[
+        str | None,
+        Field(
+            alias="backendName",
+            description="Backend families used by the primary model after loading and fitting, in lowercase. Multiple families are sorted and comma-separated. Optional with older addons.",
         ),
     ] = None
 
@@ -5027,6 +5041,13 @@ class CompletionOrchestrateResponseEventsItemCompletionStatsStats(GeneratedBaseM
             title="CompletionOrchestrateResponseEventsItemCompletionStatsStatsBackendDevice",
         ),
     ] = None
+    backend_name: Annotated[
+        str | None,
+        Field(
+            alias="backendName",
+            description="Backend families used by the primary model after loading and fitting, in lowercase. Multiple families are sorted and comma-separated. Optional with older addons.",
+        ),
+    ] = None
 
 
 class CompletionOrchestrateResponseEventsItemCompletionStats(GeneratedBaseModel):
@@ -5750,6 +5771,13 @@ class CompletionStreamResponseEventsItemCompletionStatsStats(GeneratedBaseModel)
         Field(
             alias="backendDevice",
             title="CompletionStreamResponseEventsItemCompletionStatsStatsBackendDevice",
+        ),
+    ] = None
+    backend_name: Annotated[
+        str | None,
+        Field(
+            alias="backendName",
+            description="Backend families used by the primary model after loading and fitting, in lowercase. Multiple families are sorted and comma-separated. Optional with older addons.",
         ),
     ] = None
 
@@ -7911,6 +7939,13 @@ class EmbedResponseStats(GeneratedBaseModel):
             title="EmbedResponseStatsBackendDevice",
         ),
     ] = None
+    backend_name: Annotated[
+        str | None,
+        Field(
+            alias="backendName",
+            description="Backend families used by the primary model after loading and fitting, in lowercase. Multiple families are sorted and comma-separated. Optional with older addons. llama.cpp embedding models only.",
+        ),
+    ] = None
     context_size: Annotated[
         float | None,
         Field(
@@ -8111,6 +8146,13 @@ class EmbedBatchResponseStats(GeneratedBaseModel):
             alias="backendDevice",
             description="Compute backend used for inference. llama.cpp embedding models only.",
             title="EmbedBatchResponseStatsBackendDevice",
+        ),
+    ] = None
+    backend_name: Annotated[
+        str | None,
+        Field(
+            alias="backendName",
+            description="Backend families used by the primary model after loading and fitting, in lowercase. Multiple families are sorted and comma-separated. Optional with older addons. llama.cpp embedding models only.",
         ),
     ] = None
     context_size: Annotated[

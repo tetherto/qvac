@@ -99,3 +99,19 @@ test('embedRequestSchema: rejects empty-string requestId', (t) => {
   })
   t.is(result.success, false)
 })
+
+test('embedResponseSchema: preserves backendName and accepts older stats without it', (t) => {
+  for (const backendName of ['cpu', 'cuda', 'cuda,vulkan']) {
+    const result = embedResponseSchema.parse({
+      type: 'embed',
+      success: true,
+      embedding: [1, 0],
+      stats: { backendName }
+    })
+    t.is(result.stats?.backendName, backendName)
+  }
+  t.alike(embedStatsSchema.parse({ backendDevice: 'gpu' }), { backendDevice: 'gpu' })
+  for (const backendName of [1, null, ['cuda']]) {
+    t.is(embedStatsSchema.safeParse({ backendName }).success, false)
+  }
+})

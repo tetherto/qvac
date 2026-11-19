@@ -45,6 +45,32 @@ function depForTest(testId: string): string {
   return 'vla'
 }
 
+// Maps a raw ggml label from vlaHparams(), such as "MTL0" or "CUDA1", to the lowercase family
+// that run stats report, such as "metal" or "cuda". Mirrors the addon's own mapping.
+function backendFamily(label: string): string {
+  const family = label.toLowerCase().replace(/\d+$/, '')
+  if (family === 'mtl') return 'metal'
+  if (family === 'gpuopencl') return 'opencl'
+  return family
+}
+
+// Returns an error message, or undefined when the run's backendName is acceptable. Addons that
+// predate run-stats backendName omit the field, so its absence is not a failure here; the
+// backend-name- tests cover addons that must report it.
+function checkRunBackendName(
+  runBackendName: string | undefined,
+  hparamsBackendName: string | null | undefined
+): string | undefined {
+  if (runBackendName === undefined) return undefined
+  if (!/^[a-z](?:[a-z0-9_-]*[a-z_-])?$/.test(runBackendName)) {
+    return `Expected a lowercase backend family in VLA run stats, got ${JSON.stringify(runBackendName)}`
+  }
+  if (hparamsBackendName && backendFamily(hparamsBackendName) !== runBackendName) {
+    return `VLA run stats backendName ${runBackendName} disagrees with vlaHparams() backend ${hparamsBackendName}`
+  }
+  return undefined
+}
+
 export class VlaExecutor extends AbstractModelExecutor<typeof vlaTests> {
   pattern = /^vla-/
 
@@ -156,12 +182,14 @@ export class VlaExecutor extends AbstractModelExecutor<typeof vlaTests> {
   ): Promise<TestResult> {
     try {
       const modelId = await this.ensureModel(dep)
-      const { hparams } = await vlaHparams({ modelId })
+      const { hparams, backendName } = await vlaHparams({ modelId })
       const inputs = this.buildSyntheticInputs(hparams)
       const { actions, actionDim, chunkSize, stats } = await vla({
         modelId,
         ...inputs
       })
+      const backendMismatch = checkRunBackendName(stats?.backendName, backendName)
+      if (backendMismatch) return { passed: false, output: backendMismatch }
       // Surface a flat result shape to the test's `fn` so the assertions
       // in vla-tests.ts can stay framework-agnostic.
       return ValidationHelpers.validate(

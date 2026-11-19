@@ -311,6 +311,72 @@ test('contract finetune.response: validates terminal stats payload', (t) => {
   t.ok(contract.valid, `contract accepts terminal stats payload: ${contract.errors}`)
 })
 
+test('contract backendName: completion, batch, embed and embedBatch preserve optional string stats', (t) => {
+  for (const backendName of ['cpu', 'metal', 'cuda,vulkan']) {
+    const event = { type: 'completionStats', seq: 0, stats: { backendName } }
+    t.is(
+      contractValidate('completionStream.response', {
+        type: 'completionStream',
+        events: [event]
+      }).valid,
+      true
+    )
+    t.is(
+      contractValidate('batchCompletionStream.response', {
+        type: 'batchCompletionStream',
+        events: [{ id: 'one', event }],
+        stats: { backendName }
+      }).valid,
+      true
+    )
+    t.is(
+      contractValidate('embed.response', {
+        type: 'embed',
+        success: true,
+        embedding: [1, 0],
+        stats: { backendName }
+      }).valid,
+      true
+    )
+    t.is(
+      contractValidate('embedBatch.response', {
+        type: 'embedBatch',
+        success: true,
+        embedding: [[1, 0]],
+        stats: { backendName }
+      }).valid,
+      true
+    )
+  }
+  for (const backendName of [1, null, ['metal']]) {
+    t.is(
+      contractValidate('completionStream.response', {
+        type: 'completionStream',
+        events: [{ type: 'completionStats', seq: 0, stats: { backendName } }]
+      }).valid,
+      false
+    )
+    t.is(
+      contractValidate('embed.response', {
+        type: 'embed',
+        success: true,
+        embedding: [1, 0],
+        stats: { backendName }
+      }).valid,
+      false
+    )
+  }
+  t.is(
+    contractValidate('embed.response', {
+      type: 'embed',
+      success: true,
+      embedding: [1, 0],
+      stats: { backendDevice: 'gpu' }
+    }).valid,
+    true
+  )
+})
+
 test('contract diffusion request carries custom schedules and VAE tile sizes', (t) => {
   const request = {
     type: 'diffusionStream',
