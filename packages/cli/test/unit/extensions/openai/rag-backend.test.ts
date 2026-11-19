@@ -151,4 +151,26 @@ describe('createRagBackend', () => {
       await reopened.close()
     })
   })
+
+  it('lets two aliases for the same weights stay open side by side', async () => {
+    await withDir(async (dir) => {
+      const first = createRagBackend({ dir, embedTexts })
+      const second = createRagBackend({ dir, embedTexts })
+      await first.attach('vs_x', model, {
+        fileId: 'file-1',
+        fileName: 'moon.txt',
+        text: 'A moon in orbit.'
+      })
+      const other = { ...model, alias: 'embed-copy' }
+      await second.attach('vs_y', other, {
+        fileId: 'file-2',
+        fileName: 'oven.txt',
+        text: 'Preheat the oven.'
+      })
+      assert.equal((await first.search('vs_x', model, 'moon', 1))[0]?.fileId, 'file-1')
+      assert.equal((await second.search('vs_y', other, 'oven', 1))[0]?.fileId, 'file-2')
+      await first.close()
+      await second.close()
+    })
+  })
 })

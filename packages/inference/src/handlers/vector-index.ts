@@ -84,7 +84,11 @@ async function handleVectorIndexInternal(input: VectorIndexRequest): Promise<Vec
       return { ...base, operation: 'write', ...written }
     }
     case 'setStagedSearch':
-      return { ...base, operation: 'setStagedSearch', ...(await setVectorIndexStagedSearch(request)) }
+      return {
+        ...base,
+        operation: 'setStagedSearch',
+        ...(await setVectorIndexStagedSearch(request))
+      }
     case 'setIvf':
       return { ...base, operation: 'setIvf', ...(await setVectorIndexIvf(request)) }
     case 'dispose':

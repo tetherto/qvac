@@ -157,7 +157,11 @@ export async function loadVectorIndex(params: { path: string; sessionId?: string
   }
 }
 
-export async function addVectors(params: { indexId: string; ids: VectorIdWire[]; vectors: number[][] }) {
+export async function addVectors(params: {
+  indexId: string
+  ids: VectorIdWire[]
+  vectors: number[][]
+}) {
   const index = getIndex(params.indexId)
   if (params.ids.length !== params.vectors.length) {
     throw new VectorIndexInvalidVectorsError(

@@ -9,12 +9,7 @@ export { createStreamLogger } from './stream-logger'
 export { getServerLogger } from './server-logger'
 export { getClientLogger } from './client-logger'
 export type { Logger, LoggerOptions, LogTransport } from './types'
-export {
-  SDK_LOG_ID,
-  SDK_ALL_LOG_ID,
-  SDK_SERVER_NAMESPACE,
-  type AddonNamespace
-} from './namespaces'
+export { SDK_LOG_ID, SDK_ALL_LOG_ID, SDK_SERVER_NAMESPACE, type AddonNamespace } from './namespaces'
 export {
   registerAddonLogger,
   unregisterAddonLogger,

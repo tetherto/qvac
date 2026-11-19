@@ -70,7 +70,6 @@ export const ERROR_CODES = {
   INVALID_AUDIO_INPUT: 52422,
   AUDIO_ENCODE_FAILED: 52424,
 
-
   // Vector index (52,850-52,899)
   VECTOR_INDEX_PROVIDER_UNAVAILABLE: 52850,
   VECTOR_INDEX_NOT_FOUND: 52851,
@@ -439,7 +438,6 @@ const errorDefinitions: ErrorCodesMap = {
     message: (format: string, details?: string) =>
       `Failed to encode audio as ${format}${details ? `: ${details}` : ''}`
   },
-
 
   // Vector index
   [ERROR_CODES.VECTOR_INDEX_PROVIDER_UNAVAILABLE]: {

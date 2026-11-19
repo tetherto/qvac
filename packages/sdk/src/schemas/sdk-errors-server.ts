@@ -51,7 +51,6 @@ export const SDK_SERVER_ERROR_CODES = {
   INVALID_AUDIO_INPUT: 52422,
   AUDIO_ENCODE_FAILED: 52424,
 
-
   // Vector index (52,850-52,899)
   VECTOR_INDEX_PROVIDER_UNAVAILABLE: 52850,
   VECTOR_INDEX_NOT_FOUND: 52851,
@@ -355,7 +354,6 @@ const serverErrorDefinitions: ErrorCodesMap = {
     message: (format: string, details?: string) =>
       `Failed to encode audio as ${format}${details ? `: ${details}` : ''}`
   },
-
 
   // Vector index (52,850-52,899)
   [SDK_SERVER_ERROR_CODES.VECTOR_INDEX_PROVIDER_UNAVAILABLE]: {

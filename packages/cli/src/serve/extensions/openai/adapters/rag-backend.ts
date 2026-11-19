@@ -99,6 +99,15 @@ function modelKey(model: StoreRecord['embeddingModel']): string {
   return createHash('sha256').update(`${model.model}\0${model.revision}`).digest('hex').slice(0, 16)
 }
 
+// Folder per alias and weights: two servers that name the same weights
+// differently each get their own Corestore, which only one process can open.
+function storageKey(record: Pick<StoreRecord, 'embeddingAlias' | 'embeddingModel'>): string {
+  return createHash('sha256')
+    .update(`${record.embeddingAlias}\0${modelKey(record.embeddingModel)}`)
+    .digest('hex')
+    .slice(0, 16)
+}
+
 function describeModel(model: StoreRecord['embeddingModel']): string {
   return model.revision ? `${model.model}@${model.revision}` : model.model
 }
@@ -161,11 +170,9 @@ export function createRagBackend(
     await current.corestore.close()
   }
 
-  async function openRag(
-    embeddingModel: StoreRecord['embeddingModel'],
-    model: EmbeddingModelRef | null
-  ): Promise<OpenRag> {
-    const key = modelKey(embeddingModel)
+  async function openRag(record: StoreRecord, model: EmbeddingModelRef | null): Promise<OpenRag> {
+    const { embeddingModel } = record
+    const key = storageKey(record)
     const current = open.get(key)
     if (current && (model === null || current.port)) {
       if (model && current.port) current.port.sdkModelId = model.sdkModelId
@@ -246,7 +253,7 @@ export function createRagBackend(
           files: {}
         }
         assertModel(id, record, model)
-        const { rag, port } = await openRag(record.embeddingModel, model)
+        const { rag, port } = await openRag(record, model)
         await rag.createNamespace({ name: record.namespace, space: port!.space })
         const result = await rag.ingest({
           namespace: record.namespace,
@@ -262,7 +269,7 @@ export function createRagBackend(
         const record = await readStore(id)
         if (!record) return []
         assertModel(id, record, model)
-        const { rag } = await openRag(record.embeddingModel, model)
+        const { rag } = await openRag(record, model)
         const hits = await rag.search({ scope: { namespace: record.namespace }, query, k })
         return hits.map((hit) => {
           const filename = hit.documentMetadata?.['filename']
@@ -282,7 +289,7 @@ export function createRagBackend(
       serialize(async () => {
         const record = await readStore(id)
         if (!record) return false
-        const { rag } = await openRag(record.embeddingModel, null)
+        const { rag } = await openRag(record, null)
         await rag.deleteDocuments({
           namespace: record.namespace,
           documentIds: Object.keys(record.files)
