@@ -234,10 +234,15 @@ const historyMessageObjectSchema = z.object({
     .describe(
       'Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string. A user turn may instead pass an ordered array of text/media parts, so each image keeps its position in the turn.'
     ),
-  attachments: z
-    .array(attachmentSchema)
-    .optional()
-    .describe('Optional file attachments for multimodal models.'),
+  /**
+   * @deprecated Pass media as ordered `content` parts:
+   * `[{ type: 'text', text }, { type: 'media', path }]`.
+   */
+  attachments: z.array(attachmentSchema).optional().meta({
+    description:
+      "Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+    deprecated: true
+  }),
   toolCalls: z
     .array(historyToolCallSchema)
     .optional()
