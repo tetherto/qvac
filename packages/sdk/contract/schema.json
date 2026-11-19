@@ -709,6 +709,10 @@
                   }
                 ],
                 "description": "The resolved load of a llama.cpp verdict. Empty otherwise."
+              },
+              "reason": {
+                "description": "Why the model has no verdict. Present when `status` is `unknown`.",
+                "type": "string"
               }
             },
             "required": ["status", "devices", "stats"],
@@ -9951,6 +9955,10 @@
                           }
                         ],
                         "description": "The resolved load of a llama.cpp verdict. Empty otherwise."
+                      },
+                      "reason": {
+                        "description": "Why the model has no verdict. Present when `status` is `unknown`.",
+                        "type": "string"
                       }
                     },
                     "required": ["status", "devices", "stats"],

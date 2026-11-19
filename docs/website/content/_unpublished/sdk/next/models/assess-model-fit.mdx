@@ -55,6 +55,7 @@ Two fit-only fields describe a workload the load itself does not carry: `transcr
       status: "fits" | "does-not-fit" | "unknown",
       devices: [{ id, name, unified, usedBytes, freeBytes?, totalBytes? }],
       stats: { ctxSize, gpuLayers } | {},
+      reason?: string,
     },
   ],
 }
@@ -86,7 +87,9 @@ One entry per model, in input order: the engine addon's fit result, with that mo
 - `devices` — one row per device the load uses, the host last. `id` is the PCI bus ID where the backend reports one and the device name otherwise, so the same GPU matches across engines. `name` is the backend's device name, such as `CPU`, `CUDA0` or `MTL0`. `unified` marks memory the host owns. `usedBytes` is what the load takes there; `freeBytes` and `totalBytes` are what the device reported.
 - `stats` — for a llama.cpp model with a verdict, the context size and GPU layers the load resolves to: the ones the fitter settled on when it fits, the ones the load asked for when it does not. Empty for every other model.
 
-A model the SDK cannot size has `status: "unknown"`, no rows and empty `stats`.
+- `reason` — why the model has no verdict. Present when `status` is `unknown`.
+
+A model the SDK cannot size has `status: "unknown"`, no rows, empty `stats` and a `reason`.
 
 ### Errors
 

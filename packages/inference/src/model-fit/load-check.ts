@@ -2,9 +2,10 @@ import type { AbortSignal } from 'bare-abort-controller'
 
 import { getEngineLogger } from '@/logging/index'
 import type { Logger } from '@/logging/types'
-import { fitLoad, unknownFit, type FitLoadOptions, type LoadFit } from '@/model-fit/fit-load'
+import { fitLoad, unknownFit, type FitLoadOptions } from '@/model-fit/fit-load'
 import { describeAccounting, describePool } from '@/model-fit/describe'
 import { combineFits, USABLE_SHARE, type CombinedFit } from '@/model-fit/sum'
+import type { ModelFitModelResult } from '@/schemas/assess-model-fit'
 import type { CanonicalModelType, ModelFitProbe } from '@/schemas/index'
 
 export interface LoadCheckInput {
@@ -44,13 +45,13 @@ function refusalDetail(combined: CombinedFit): string {
 function report(
   logger: Logger,
   input: LoadCheckInput,
-  fit: LoadFit,
+  fit: ModelFitModelResult,
   combined: CombinedFit,
   detail: string | undefined
 ): void {
   const prefix = `[advisory-fit:${input.modelType}:${input.modelId}]`
   const accounting = describeAccounting(combined.pools, [
-    { label: input.modelType, devices: fit.result.devices }
+    { label: input.modelType, devices: fit.devices }
   ])
 
   if (combined.verdict === 'fits') {
@@ -65,7 +66,7 @@ function report(
   const line = `${prefix} no fit verdict: ${fit.reason ?? 'a device reported no free memory'}`
   // A model type with no fitter answers this on every load, so it stays at
   // `debug`; anywhere a fitter should have answered, `info` says why it did not.
-  if (fit.result.devices.length === 0 && fit.reason?.startsWith('no fitter') === true) {
+  if (fit.devices.length === 0 && fit.reason?.startsWith('no fitter') === true) {
     logger.debug(line)
     return
   }
@@ -85,7 +86,7 @@ export async function runLoadFitCheck(
 ): Promise<LoadCheck> {
   const logger = options.logger ?? getEngineLogger()
 
-  let fit: LoadFit
+  let fit: ModelFitModelResult
   try {
     fit = await fitLoad(
       input.modelType,
@@ -107,10 +108,10 @@ export async function runLoadFitCheck(
     } catch {
       // A failing logger must not turn the check into a load failure.
     }
-    return { probe: { verdict: 'unknown', pools: [], models: [unknownFit(message).result] } }
+    return { probe: { verdict: 'unknown', pools: [], models: [unknownFit(message)] } }
   }
 
-  const combined = combineFits([fit.result])
+  const combined = combineFits([fit])
   const detail = combined.verdict === 'does-not-fit' ? refusalDetail(combined) : undefined
 
   try {
@@ -120,7 +121,7 @@ export async function runLoadFitCheck(
   }
 
   return {
-    probe: { verdict: combined.verdict, pools: combined.pools, models: [fit.result] },
+    probe: { verdict: combined.verdict, pools: combined.pools, models: [fit] },
     ...(detail !== undefined && { detail })
   }
 }

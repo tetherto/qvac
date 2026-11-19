@@ -433,6 +433,12 @@ class ModelFitModelResult(GeneratedBaseModel):
         LlamaFitStats | dict[str, Any],
         Field(description="The resolved load of a llama.cpp verdict. Empty otherwise."),
     ]
+    reason: Annotated[
+        str | None,
+        Field(
+            description="Why the model has no verdict. Present when `status` is `unknown`."
+        ),
+    ] = None
 
 
 class AssessModelFitResponse(GeneratedBaseModel):
@@ -8665,6 +8671,12 @@ class ModelFitProbeModel(GeneratedBaseModel):
         ModelFitProbeLlamaStats | dict[str, Any],
         Field(description="The resolved load of a llama.cpp verdict. Empty otherwise."),
     ]
+    reason: Annotated[
+        str | None,
+        Field(
+            description="Why the model has no verdict. Present when `status` is `unknown`."
+        ),
+    ] = None
 
 
 class ModelFitProbe(GeneratedBaseModel):

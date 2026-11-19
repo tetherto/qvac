@@ -41,7 +41,8 @@ function withModelType(candidate: AssessModelFitInput['models'][number]) {
  *
  * @param input - The models, each as `loadModel` takes it.
  * @returns The verdict for the set, the memory pools it was judged on, and
- *   each model's addon result: its status, device rows and stats.
+ *   each model's addon result: its status, device rows and stats, and the
+ *   reason when its status is `unknown`.
  * @throws The error `loadModel` would throw for a load it refuses: no plugin
  *   for the model type, a config the plugin refuses, or a model the fitter
  *   cannot read.

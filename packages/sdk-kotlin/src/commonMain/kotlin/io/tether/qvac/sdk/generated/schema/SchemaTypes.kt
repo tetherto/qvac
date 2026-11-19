@@ -14198,6 +14198,7 @@ data class ModelFitModelResult(
     @SerialName("status") val `status`: ModelFitModelResultStatus,
     @SerialName("devices") val `devices`: List<ModelFitDevice>,
     @SerialName("stats") val `stats`: ModelFitModelResultStats,
+    @SerialName("reason") val `reason`: String? = null,
 )
 
 @Serializable
@@ -15899,6 +15900,7 @@ data class ModelFitProbeModel(
     @SerialName("status") val `status`: ModelFitProbeModelStatus,
     @SerialName("devices") val `devices`: List<ModelFitProbeDevice>,
     @SerialName("stats") val `stats`: ModelFitProbeModelStats,
+    @SerialName("reason") val `reason`: String? = null,
 )
 
 @Serializable

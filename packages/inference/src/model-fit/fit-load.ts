@@ -6,25 +6,22 @@ import type { ModelFitModelResult } from '@/schemas/assess-model-fit'
 import { ModelType } from '@/schemas/index'
 import type { FitLoad } from '@/schemas/plugin'
 
-/** The addon's `assessFit` result for one load, its status the model's verdict alone. */
-export interface LoadFit {
-  result: ModelFitModelResult
-  /** Why the status is `unknown`, for the log. */
-  reason?: string
-}
+/** Why a fitter that answered `unknown` gave no reason of its own. */
+export const ENGINE_UNSIZED = 'the engine fitter could not size this load'
 
 export interface FitLoadOptions {
   signal?: AbortSignal
   runFit?: typeof runFitDefault
 }
 
-export function unknownFit(reason: string): LoadFit {
-  return { result: { status: 'unknown', devices: [], stats: {} }, reason }
+export function unknownFit(reason: string): ModelFitModelResult {
+  return { status: 'unknown', devices: [], stats: {}, reason }
 }
 
 /**
  * The fitter's answer for one load, through the plugin of the engine that
- * would run it. Its status is the model's verdict alone, from `judgeAlone`.
+ * would run it. Its status is the model's verdict alone, from `judgeAlone`. An
+ * `unknown` answer always carries a reason.
  *
  * @throws The fitter's own error when it rejects the load, such as a model it
  *   cannot read or a request it refuses.
@@ -33,7 +30,7 @@ export async function fitLoad(
   modelType: string,
   load: FitLoad,
   options: FitLoadOptions = {}
-): Promise<LoadFit> {
+): Promise<ModelFitModelResult> {
   const { getPlugin } = await import('@/plugins/registry')
   const plugin = getPlugin(modelType)
   if (plugin?.fitRequest === undefined || plugin.assessFit === undefined) {
@@ -52,5 +49,8 @@ export async function fitLoad(
   )
   if (outcome.status === 'unknown') return unknownFit(`${outcome.reason}: ${outcome.message}`)
 
-  return { result: { ...outcome.fit, status: judgeAlone(outcome.fit) } }
+  const { fit } = outcome
+  return fit.status === 'unknown'
+    ? { ...fit, reason: ENGINE_UNSIZED }
+    : { ...fit, status: judgeAlone(fit) }
 }
