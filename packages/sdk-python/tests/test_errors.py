@@ -262,3 +262,52 @@ def test_transport_json_or_raise_uses_reconstruction():
         )
     with pytest.raises(RPCError):
         _json_or_raise(b'{"type":"error","message":"plain failure"}')
+
+
+def test_session_errors_reconstruct_with_typed_fields():
+    from tetherto.qvac_sdk.errors import (
+        ModelLeasedError,
+        ModelReconfiguredError,
+        OwnerOnlyError,
+        RagWorkspaceBusyError,
+        SessionIdConflictError,
+        SessionNotOpenError,
+    )
+
+    conflict = reconstruct_error(
+        _envelope(name="SESSION_ID_CONFLICT", typedFields={"sessionId": "s-1"})
+    )
+    assert isinstance(conflict, SessionIdConflictError)
+    assert conflict.session_id == "s-1"
+
+    not_open = reconstruct_error(
+        _envelope(name="SESSION_NOT_OPEN", typedFields={"sessionId": "s-2"})
+    )
+    assert isinstance(not_open, SessionNotOpenError)
+    assert not_open.session_id == "s-2"
+
+    leased = reconstruct_error(
+        _envelope(name="MODEL_LEASED", typedFields={"modelId": "m-1", "leaseCount": 2})
+    )
+    assert isinstance(leased, ModelLeasedError)
+    assert (leased.model_id, leased.lease_count) == ("m-1", 2)
+
+    owner_only = reconstruct_error(
+        _envelope(
+            name="OWNER_ONLY", typedFields={"operation": "close", "sessionId": "s-3"}
+        )
+    )
+    assert isinstance(owner_only, OwnerOnlyError)
+    assert (owner_only.operation, owner_only.session_id) == ("close", "s-3")
+
+    reconfigured = reconstruct_error(
+        _envelope(name="MODEL_RECONFIGURED", typedFields={"modelId": "m-2"})
+    )
+    assert isinstance(reconfigured, ModelReconfiguredError)
+    assert reconfigured.model_id == "m-2"
+
+    busy = reconstruct_error(
+        _envelope(name="RAG_WORKSPACE_BUSY", typedFields={"workspace": "default"})
+    )
+    assert isinstance(busy, RagWorkspaceBusyError)
+    assert busy.workspace == "default"

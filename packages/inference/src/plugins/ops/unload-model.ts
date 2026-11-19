@@ -1,21 +1,59 @@
 import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
-import { unregisterModel } from '@/runtime/model-registry'
+import { getModelEntry, releaseModelLease, unregisterModel } from '@/runtime/model-registry'
 import { getRequestRegistry } from '@/runtime/index'
+import { OWNER_SESSION_ID } from '@/runtime/session-id'
 import { unregisterAllLoggingStreams } from '@/runtime/logging-stream-registry'
 import { clearFinetuneRuntimeState } from '@/plugins/builtin/llamacpp-completion/ops/finetune'
 import { unregisterAddonLogger, getEngineLogger } from '@/logging/index'
 import { type UnloadModelParams, unloadModelParamsSchema } from '@/schemas/index'
 import { ModelNotLoadedError } from '@/errors/index'
-import { detectShardedModel } from '@/utils/index'
-import { getClearStorageTarget } from '@/utils/cache/paths'
+import { detectShardedModel, generateShardFilenames } from '@/utils/index'
+import { getClearStorageTarget, getShardedClearStorageTargets } from '@/utils/cache/paths'
+import { withModelWorkLock } from '@/runtime/model-work-lock'
 
 const logger = getEngineLogger()
 
-export async function unloadModel(params: UnloadModelParams) {
-  const { modelId, clearStorage } = unloadModelParamsSchema.parse(params)
-  const entry = unregisterModel(modelId)
+export interface UnloadModelResult {
+  /** The caller's lease was dropped. False when the caller held none. */
+  released: boolean
+  /** The model left memory. False while another session still holds a lease. */
+  unloaded: boolean
+}
 
+/**
+ * Releases the caller session's lease on the model. The model is torn down
+ * only when no lease remains; a session that never loaded the model cannot
+ * unload it from under the sessions that did.
+ *
+ * Runs under the model's load lock: a load of the same configuration that
+ * arrives during the teardown waits for it and then loads a fresh copy,
+ * instead of finding the id unregistered and loading a second native model
+ * while the first is still being freed.
+ */
+export async function unloadModel(params: UnloadModelParams): Promise<UnloadModelResult> {
+  const parsed = unloadModelParamsSchema.parse(params)
+  return withModelWorkLock(parsed.modelId, () => unloadModelLocked(parsed))
+}
+
+async function unloadModelLocked(params: UnloadModelParams): Promise<UnloadModelResult> {
+  const { modelId, clearStorage, sessionId = OWNER_SESSION_ID } = params
+
+  if (!getModelEntry(modelId)) {
+    throw new ModelNotLoadedError(modelId)
+  }
+
+  const remaining = releaseModelLease(modelId, sessionId)
+  if (remaining === null) {
+    logger.info(`Session ${sessionId} holds no lease on model ${modelId}; nothing released`)
+    return { released: false, unloaded: false }
+  }
+  if (remaining > 0) {
+    logger.info(`Model ${modelId} lease released by ${sessionId}; ${remaining} lease(s) remain`)
+    return { released: true, unloaded: false }
+  }
+
+  const entry = unregisterModel(modelId)
   if (!entry) {
     throw new ModelNotLoadedError(modelId)
   }
@@ -36,9 +74,19 @@ export async function unloadModel(params: UnloadModelParams) {
       const shardInfo = detectShardedModel(modelFileName)
 
       if (shardInfo.isSharded) {
-        const shardDir = path.dirname(modelPath)
-        await fsPromises.rm(shardDir, { recursive: true, force: true })
-        logger.info(`Sharded model storage cleared: ${shardDir}`)
+        // A local sharded model may sit in a folder with other files, so only
+        // its shards and tensors.txt go; a QVAC cache shard folder goes whole.
+        const modelFiles = [
+          ...generateShardFilenames(modelFileName),
+          `${shardInfo.baseFilename}.tensors.txt`
+        ]
+        for (const target of getShardedClearStorageTargets(modelPath, modelFiles)) {
+          await fsPromises.rm(target.path, {
+            recursive: target.kind === 'directory',
+            force: true
+          })
+          logger.info(`Sharded model storage cleared (${target.kind}): ${target.path}`)
+        }
       } else {
         const target = getClearStorageTarget(modelPath)
         await fsPromises.rm(target.path, {
@@ -54,4 +102,6 @@ export async function unloadModel(params: UnloadModelParams) {
 
     logger.info(`Model ${modelId} unloaded`)
   })
+
+  return { released: true, unloaded: true }
 }

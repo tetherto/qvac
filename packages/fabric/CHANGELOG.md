@@ -1,5 +1,126 @@
 # Changelog
 
+## [0.31.1] - 2026-11-18
+
+### Fixed
+
+- `@qvac/fabric-android-arm64` is built with the Android NDK compiler again
+  ([#5847](https://github.com/tetherto/qvac/pull/5847)). 0.31.0 was built with
+  the LLVM runtime clang from `cmake-toolchains` 2.4.0, which kept `assert()`
+  and grew the package from 106 MB to 141 MB unpacked, and ggml's CPU backend
+  ran up to ~20x slower on device. Same `qvac-fabric` `11739.4.0` source; the
+  other platform packages are rebuilt unchanged.
+
+## [0.31.0] - 2026-11-18
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11739.3.0#1` -> `11739.4.0`.
+  `common_params_speculative_draft` gains `n_auto`, and
+  `mtmd_helper_init_opt`, `mtmd_helper_video_init_params` and
+  `mtmd_helper_bitmap_wrapper` gain decode-limit and status fields, so native
+  consumers must rebuild against these headers. No op, type or RPC protocol
+  numbers change.
+- On a TurboVec index, `ggml_vec_index_build_ivf` now stores the rows in IVF
+  list order. Prepared filters made before the build are refused,
+  `ggml_vec_index_ids` reports the new order, and the next
+  `ggml_vec_index_sync` rewrites the whole file.
+
+### Added
+
+- Opt-in WebGPU backend build for shared speech and LLM consumers using `VCPKG_MANIFEST_FEATURES=webgpu`.
+- mtmd-helper decode limits (`max_audio_frames`, `max_image_pixels`,
+  `max_frame_pixels`), all off by default, with the failure reason in
+  `mtmd_helper_bitmap_wrapper.status`.
+- Core ML FFN prefill for Qwen3.5 0.8B and 2B, with the FFN split picked
+  automatically.
+
+### Fixed
+
+- OpenCL: uploads that convert on the device are serialized, GROUP_NORM
+  normalizes every batch item (also on Metal), the fused GROUP_NORM+MUL+ADD
+  path is fixed, and flash-attention query chunks above 4096 rows are offset
+  correctly. On Android, OpenCL stays loaded when the Vulkan module is not.
+- XDNA: the fused decode and the equal split work again for qwen35, and a
+  model whose in-projection or `attn_output` the decode GEMV cannot read is
+  sent to the host decode instead of failing.
+- TurboVec IVF search scores far fewer blocks, now that each list is stored
+  contiguously.
+
+## [0.30.1] - 2026-11-16
+
+### Fixed
+
+- `qvac-fabric` dependency bumped `11739.3.0` -> `11739.3.0#1`: the same
+  source, with the static symbol tables stripped from the Linux release backend
+  modules (`libqvac-ggml-*.so`). The `@qvac/fabric-linux-x64` tarball shrinks
+  by about 1.9 MB, back under npm's size limit. 0.30.0 reached npm only for
+  android-arm64, darwin-arm64, darwin-x64, ios and linux-arm64 (linux-x64 was
+  rejected with `E413 Payload Too Large`), so 0.30.1 is the first complete
+  0.30 release and carries the 0.30.0 changes below.
+
+## [0.30.0] - 2026-11-16
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11739.2.1` -> `11739.3.0`.
+  `GGML_OP_ROPE_FLUX` is appended to `ggml_op`, so existing op and type
+  numbers do not move. `common_params_speculative_draft` gains `n_short` and
+  `long_cost` mid-struct, which shifts the `common_params` layout, so native
+  consumers that use the `common` library must rebuild against these headers.
+- The RPC protocol moves from 116 to 117, so RPC clients and
+  `ggml-rpc-server` must move to this version together.
+
+### Added
+
+- `ggml_rope_flux`, the fused Flux RoPE from diffusion GGML, on CPU, Vulkan
+  and Metal. CUDA declines it, so callers build the unfused RoPE there.
+- Logical buffer-capacity queries `ggml_backend_buft_get_max_capacity` and
+  `ggml_backend_get_max_buffer_capacity`, with a Vulkan provider. Without a
+  provider they return the existing maximum buffer size.
+- DSpine draft models, run with `--spec-type draft-dflash`. The draft ubatch
+  must hold `-np * (--spec-draft-n-max + 1)` tokens, and the target head
+  must not be repacked or row-split (`--no-repack`, no `-sm row`).
+- `--spec-draft-n-short N` and `--spec-draft-long-cost R` for lattice
+  drafters (DFlash2, DSpine, LiliCorr). N must be 0 or at least
+  `--spec-draft-n-min`, and other drafters reject it.
+- Metal `IM2COL_3D`, used by the Wan video models.
+- OpenCL (Adreno) ops for the speech engines: `LEAKY_RELU`, `SIN`, `COS`,
+  `ARGMAX`, `COL2IM_1D`, and BF16 and Q8_0 rows in `GET_ROWS`. Chatterbox,
+  MOSS-Speech and ACE-Step no longer abort on these ops with the GPU on. The
+  conv paths (im2col, tall F16 matmuls, weight upload transposes) are faster.
+
+### Changed
+
+- A DFlash or DSpark draft model, or an external MTP head, that does not match
+  the model is now rejected before the fit with the reason (vocabulary, width,
+  target layer or block size), instead of aborting on a ggml assert. The error
+  text consumers see for a mismatched draft model changes.
+- Vulkan caps each buffer at the smaller of `maxBufferSize` and
+  `maxMemoryAllocationSize`: an op with a larger tensor goes to another
+  backend, and a larger allocation fails with a warning.
+
+### Fixed
+
+- The RPC device no longer offers the ragged and deferred gated delta net ops.
+  A Metal, Vulkan or OpenCL RPC server running qwen35 or qwen35moe layers no
+  longer aborts on `SSM_CONV_RAGGED`, and a model with any RPC layer uses the
+  equal split and ignores `LLAMA_GDN_DEFERRED`.
+- The CPU AMX matmul no longer writes out of bounds with a batched `src1`.
+- The CPU backend declines the `IM2COL_3D` inputs its kernel asserts on.
+
+## [0.29.2] - 2026-11-13
+
+### Fixed
+
+- `qvac-fabric` dependency bumped `11739.2.0#1` -> `11739.2.1`, which adds one
+  CPU backend fix (tetherto/qvac#5537): on Linux and Android, a CPU threadpool
+  with a `cpumask` no longer pins the thread that calls into ggml. The worker
+  threads ggml creates are still pinned, OpenMP workers only for the duration
+  of a graph, and NUMA mode still pins every compute thread. The build recipe
+  from 0.29.1 (CUDA K/V quant pairs, NVRTC fusion) is unchanged, and there is
+  no API, ABI or RPC change.
+
 ## [0.29.1] - 2026-11-12
 
 ### Changed

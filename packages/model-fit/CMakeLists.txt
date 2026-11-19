@@ -110,4 +110,4 @@ endif()
 # prebuild carries no vcruntime140/ucrtbase dependency. The CRT comes from the
 # vcpkg triplet (vcpkg-overlays/triplets/x64-windows.cmake, VCPKG_CRT_LINKAGE
 # static) and the bare-make toolchain; naming it explicitly here overrode both.
-# reusable-prebuilds.yml fails the win32 prebuild if those imports reappear.
+# The win32 build's Windows runtime check fails if those imports reappear.

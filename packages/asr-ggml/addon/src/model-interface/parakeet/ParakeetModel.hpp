@@ -128,6 +128,9 @@ public:
   // getBackendInfo().
   const std::string& getEncoderBackend() const { return encoder_backend_; }
   int getEncoderOnCoreml() const { return encoder_on_coreml_; }
+  bool supportsCacheAwareStreaming() const {
+    return supports_cache_aware_streaming_;
+  }
   void recordTranscriptionResult(const pkt::EngineResult& result);
   void recordDiarizationResult(const pkt::DiarizationResult& result);
   int getStreamingChunkMs() const {
@@ -384,6 +387,7 @@ private:
   // the 0/1 form for stats.
   std::string encoder_backend_ = "CPU";
   int encoder_on_coreml_ = 0;
+  bool supports_cache_aware_streaming_ = false;
 
   // ── Token / sentinel constants ─────────────────────────────────────────
   // The engine itself uses different vocab IDs internally; we surface only
@@ -476,6 +480,9 @@ private:
   int64_t totalEncodedFrames_ = 0;
   int64_t jobEncoderCalls_ = 0;
   int64_t jobCoremlEncoderCalls_ = 0;
+  // Offline transcriptions only: diarization has no TDT decoder.
+  int64_t jobTranscriptionCalls_ = 0;
+  int64_t jobCoremlDecoderCalls_ = 0;
   // Sortformer streaming: 1 once the v2.1 AOSC speaker cache drove a
   // session, 0 for the v1 sliding window.
   int64_t aoscActive_ = 0;

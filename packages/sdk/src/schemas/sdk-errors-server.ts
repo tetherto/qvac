@@ -64,6 +64,7 @@ export const SDK_SERVER_ERROR_CODES = {
   RAG_LIST_WORKSPACES_FAILED: 52809,
   RAG_CHUNK_FAILED: 52810,
   RAG_WORKSPACE_NOT_OPEN: 52811,
+  RAG_WORKSPACE_BUSY: 52812,
 
   // Vector index (52,850-52,899)
   VECTOR_INDEX_PROVIDER_UNAVAILABLE: 52850,
@@ -130,6 +131,13 @@ export const SDK_SERVER_ERROR_CODES = {
   LIFECYCLE_SUSPEND_FAILED: 53600,
   LIFECYCLE_RESUME_FAILED: 53601,
   LIFECYCLE_OPERATION_BLOCKED: 53602,
+
+  // Caller sessions and model leases (53,620-53,649)
+  SESSION_ID_CONFLICT: 53620,
+  SESSION_NOT_OPEN: 53621,
+  MODEL_LEASED: 53622,
+  OWNER_ONLY: 53623,
+  MODEL_RECONFIGURED: 53624,
 
   // Security (53,900-53,949)
   PATH_TRAVERSAL: 53900,
@@ -413,6 +421,11 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: 'RAG_WORKSPACE_NOT_OPEN',
     message: (workspace: string) => `RAG workspace '${workspace}' is not open`
   },
+  [SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_BUSY]: {
+    name: 'RAG_WORKSPACE_BUSY',
+    message: (workspace: string) =>
+      `RAG workspace '${workspace}' is running another session's operation; retry when it finishes`
+  },
 
   // Vector index (52,850-52,899)
   [SDK_SERVER_ERROR_CODES.VECTOR_INDEX_PROVIDER_UNAVAILABLE]: {
@@ -651,6 +664,31 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: 'LIFECYCLE_OPERATION_BLOCKED',
     message: (requestType: string, lifecycleState: string) =>
       `Operation "${requestType}" is blocked while runtime state is "${lifecycleState}"`
+  },
+
+  // Caller sessions and model leases (53,620-53,649)
+  [SDK_SERVER_ERROR_CODES.SESSION_ID_CONFLICT]: {
+    name: 'SESSION_ID_CONFLICT',
+    message: (sessionId: string) => `Session id "${sessionId}" is already open`
+  },
+  [SDK_SERVER_ERROR_CODES.SESSION_NOT_OPEN]: {
+    name: 'SESSION_NOT_OPEN',
+    message: (sessionId: string) => `Session "${sessionId}" is not open`
+  },
+  [SDK_SERVER_ERROR_CODES.MODEL_LEASED]: {
+    name: 'MODEL_LEASED',
+    message: (modelId: string, leaseCount: string) =>
+      `Model "${modelId}" is held by ${leaseCount} other session(s); it cannot be reconfigured while another session uses it`
+  },
+  [SDK_SERVER_ERROR_CODES.OWNER_ONLY]: {
+    name: 'OWNER_ONLY',
+    message: (operation: string, sessionId: string) =>
+      `Operation "${operation}" is reserved for the runtime owner; session "${sessionId}" cannot call it`
+  },
+  [SDK_SERVER_ERROR_CODES.MODEL_RECONFIGURED]: {
+    name: 'MODEL_RECONFIGURED',
+    message: (modelId: string) =>
+      `Model "${modelId}" was reconfigured after it was loaded and no longer has the configuration this load asks for; load it again once it is unloaded`
   },
 
   // Security (53,900-53,949)

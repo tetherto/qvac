@@ -15,7 +15,12 @@ import {
   getSingleFileCachePath
 } from '@/utils/cache/paths'
 import { buildBlobBinding } from '@/handlers/load-model/registry-download-utils'
-import { partialDownloadPath, tryAcquireDownloadLocks } from '@/handlers/load-model/download-lock'
+import {
+  holdsDownloadLockHere,
+  partialDownloadPath,
+  tryAcquireDownloadLocks,
+  waitForDownloadLocksHere
+} from '@/handlers/load-model/download-lock'
 import { getLegacyCompanionSetPaths } from '@/handlers/load-model/registry-companion-set'
 import {
   findLocallyCachedCoremlCompanionSet,
@@ -32,6 +37,9 @@ import { DeleteCacheFailedError, InvalidDeleteCacheParamsError } from '@/errors/
 import { getEngineLogger } from '@/logging/index'
 
 const logger = getEngineLogger()
+
+// How long a deletion waits for a download this process cancelled to finish its cleanup.
+const CANCELLED_DOWNLOAD_STOP_MS = 10_000
 
 type BlobRange = Pick<QVACBlobBinding, 'coreKey' | 'blockOffset' | 'blockLength'>
 type RegistryLease = Awaited<ReturnType<typeof acquireRegistryClient>>
@@ -90,17 +98,26 @@ function assertNotDownloading(modelSrc: string, cacheKeys: string[]): void {
 }
 
 // Other processes' downloads hold their locks; holding them blocks new ones mid-delete.
+// A download this process cancelled keeps its lock until its cleanup ends, so wait for it.
 async function lockOutOtherProcesses(
   modelSrc: string,
   cacheKeys: string[]
 ): Promise<AsyncDisposable> {
-  const lock = await tryAcquireDownloadLocks(cacheKeys)
-  if (!lock) {
-    throw new DeleteCacheFailedError(
-      `${modelSrc} is downloading in another process; try again once it finishes`
-    )
+  const deadline = Date.now() + CANCELLED_DOWNLOAD_STOP_MS
+  for (;;) {
+    if (!(await waitForDownloadLocksHere(cacheKeys, deadline - Date.now()))) {
+      throw new DeleteCacheFailedError(
+        `A cancelled download of ${modelSrc} is still stopping; try again shortly`
+      )
+    }
+    const lock = await tryAcquireDownloadLocks(cacheKeys)
+    if (lock) return lock
+    if (!holdsDownloadLockHere(cacheKeys)) {
+      throw new DeleteCacheFailedError(
+        `${modelSrc} is downloading in another process; try again once it finishes`
+      )
+    }
   }
-  return lock
 }
 
 // Every catalogued model whose own download writes one of these registry paths.

@@ -3,10 +3,17 @@ find_package(GTest CONFIG REQUIRED)
 add_executable(
   addon-test
   test_vector_index.cpp
+  test_worker_pool.cpp
   ${CMAKE_SOURCE_DIR}/addon/VectorIndex.cpp
+  ${CMAKE_SOURCE_DIR}/addon/WorkerPool.cpp
 )
 
-target_include_directories(addon-test PRIVATE ${CMAKE_SOURCE_DIR}/addon)
+target_include_directories(
+  addon-test
+  PRIVATE
+    ${CMAKE_SOURCE_DIR}/addon
+    ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
+)
 
 target_compile_features(addon-test PRIVATE cxx_std_20)
 

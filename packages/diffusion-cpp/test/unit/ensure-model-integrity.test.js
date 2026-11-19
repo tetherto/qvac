@@ -332,9 +332,14 @@ test('integration manifest pins integrity for every model', function (t) {
   )
   t.ok(Number.isInteger(manifest.cacheEpoch) && manifest.cacheEpoch > 0, 'cacheEpoch is positive')
 
+  // The CI contract's skip, warm and targets fields choose where an entry is fetched; its cache key hashes them too.
+  const contractFields = ['skip', 'targets', 'warm']
   for (const [name, entry] of Object.entries(manifest.models)) {
     t.is(
-      Object.keys(entry).sort().join(','),
+      Object.keys(entry)
+        .filter((key) => !contractFields.includes(key))
+        .sort()
+        .join(','),
       'bytes,group,sha256,urls',
       `${name} contains only cache-key-bearing fields`
     )

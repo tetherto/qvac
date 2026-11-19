@@ -6,6 +6,7 @@ settings:
 
 overrides:
   hyper-instrument>bare-v8: ^1.0.1
+  cmake-toolchains: 2.1.2
   '@electron/rebuild>@electron/node-gyp': 10.2.0-electron.2
   '@qvac/asr-ggml-linux-x64': '-'
   '@qvac/asr-ggml-linux-arm64': '-'
@@ -22,11 +23,17 @@ overrides:
   '@qvac/audiogen-ggml-darwin-arm64': '-'
   '@qvac/audiogen-ggml-darwin-x64': '-'
   '@qvac/audiogen-ggml-win32-x64': '-'
-  '@qvac/diffusion-cpp-linux-x64': '-'
-  '@qvac/diffusion-cpp-linux-arm64': '-'
-  '@qvac/diffusion-cpp-darwin-arm64': '-'
-  '@qvac/diffusion-cpp-darwin-x64': '-'
-  '@qvac/diffusion-cpp-win32-x64': '-'
+  '@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-linux-x64': '-'
+  '@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-linux-arm64': '-'
+  '@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-darwin-arm64': '-'
+  '@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-darwin-x64': '-'
+  '@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-win32-x64': '-'
+  llvm-runtime-resources-darwin>require-asset: ^1.2.4
+  llvm-runtime-resources-linux>require-asset: ^1.2.4
+  llvm-runtime-resources-win32>require-asset: ^1.2.4
+  require-asset>bare-module-resolve: ^1.12.6
+
+packageExtensionsChecksum: sha256-kQog5HGx1sNTynbdS2qIMzKO+sFk2zJrJJPNz6bRwf0=
 
 importers:
 
@@ -66,7 +73,7 @@ importers:
         specifier: ^5.0.35
         version: 5.0.62(zod@4.6.5)
       '@qvac/cli':
-        specifier: ^0.18.0
+        specifier: ^0.19.0
         version: link:../cli
     devDependencies:
       '@ai-sdk/openai-compatible':
@@ -74,7 +81,7 @@ importers:
         version: 3.0.71(zod@4.6.5)
       '@qvac/registry-client':
         specifier: ^0.5.0
-        version: 0.5.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)(corestore@7.11.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(hyperblobs@2.12.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(hyperdb@4.22.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(hyperswarm@4.17.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
+        version: 0.5.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)(corestore@7.11.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(hyperblobs@2.12.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(hyperdb@4.22.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(hyperswarm@4.17.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
@@ -102,6 +109,9 @@ importers:
       '@qvac/error':
         specifier: ^0.1.1
         version: 0.1.1
+      '@qvac/fabric':
+        specifier: ^0.31.0
+        version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -124,12 +134,27 @@ importers:
         specifier: ^4.2.2
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     devDependencies:
+      '@qvac/fabric-android-arm64':
+        specifier: ^0.31.0
+        version: 0.31.0
+      '@qvac/fabric-ios':
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/registry-client':
         specifier: ^0.6.1
         version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      bare:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+      bare-make:
+        specifier: ^2.1.0
+        version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
       bare-pack:
         specifier: ^3.0.0
         version: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+      bare-runtime:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       brittle:
         specifier: ^3.17.0
         version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
@@ -139,6 +164,12 @@ importers:
       cmake-npm:
         specifier: ^1.1.0
         version: 1.1.2
+      cmake-runtime:
+        specifier: ^4.1.1
+        version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      cmake-toolchains:
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -151,9 +182,18 @@ importers:
       eslint-plugin-import:
         specifier: ^2.32.0
         version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      llvm-runtime:
+        specifier: ^23.1.0
+        version: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       lunte:
         specifier: ^1.8.0
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      nasm-runtime:
+        specifier: ^3.2.0
+        version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      ninja-runtime:
+        specifier: ^1.13.1
+        version: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       prettier:
         specifier: ^3.6.2
         version: 3.9.6
@@ -166,12 +206,31 @@ importers:
       typescript-eslint:
         specifier: ^8.63.0
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3)
+    optionalDependencies:
+      '@qvac/fabric-darwin-arm64':
+        specifier: ^0.31.0
+        version: 0.31.0
+      '@qvac/fabric-darwin-x64':
+        specifier: ^0.31.0
+        version: 0.31.0
+      '@qvac/fabric-linux-arm64':
+        specifier: ^0.31.0
+        version: 0.31.0
+      '@qvac/fabric-linux-x64':
+        specifier: ^0.31.0
+        version: 0.31.0
+      '@qvac/fabric-win32-x64':
+        specifier: ^0.31.0
+        version: 0.31.0
 
   packages/bci-whispercpp:
     dependencies:
       '@qvac/error':
         specifier: ^0.1.0
         version: 0.1.1
+      '@qvac/fabric':
+        specifier: ^0.31.0
+        version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -185,21 +244,36 @@ importers:
         specifier: ^3.0.0
         version: 3.1.1
     devDependencies:
+      '@qvac/fabric-android-arm64':
+        specifier: ^0.31.0
+        version: 0.31.0
+      '@qvac/fabric-ios':
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/registry-client':
         specifier: ^0.6.0
         version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       '@types/node':
         specifier: ^22.15.3
         version: 22.20.1
+      bare:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
       bare-buffer:
         specifier: ^3.4.2
         version: 3.6.2
+      bare-make:
+        specifier: ^2.1.0
+        version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
       bare-os:
         specifier: ^3.6.2
         version: 3.9.3
       bare-process:
         specifier: ^4.2.2
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-runtime:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       brittle:
         specifier: ^3.17.0
         version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
@@ -209,6 +283,12 @@ importers:
       cmake-npm:
         specifier: ^1.1.0
         version: 1.1.2
+      cmake-runtime:
+        specifier: ^4.1.1
+        version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      cmake-toolchains:
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -221,9 +301,18 @@ importers:
       eslint-plugin-import:
         specifier: ^2.32.0
         version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      llvm-runtime:
+        specifier: ^23.1.0
+        version: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       lunte:
         specifier: ^1.8.0
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      nasm-runtime:
+        specifier: ^3.2.0
+        version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      ninja-runtime:
+        specifier: ^1.13.1
+        version: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       prettier:
         specifier: ^3.6.2
         version: 3.9.6
@@ -236,11 +325,27 @@ importers:
       typescript-eslint:
         specifier: ^8.63.0
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
+    optionalDependencies:
+      '@qvac/fabric-darwin-arm64':
+        specifier: ^0.31.0
+        version: 0.31.0
+      '@qvac/fabric-darwin-x64':
+        specifier: ^0.31.0
+        version: 0.31.0
+      '@qvac/fabric-linux-arm64':
+        specifier: ^0.31.0
+        version: 0.31.0
+      '@qvac/fabric-linux-x64':
+        specifier: ^0.31.0
+        version: 0.31.0
+      '@qvac/fabric-win32-x64':
+        specifier: ^0.31.0
+        version: 0.31.0
 
   packages/classification-ggml:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.29.0
+        specifier: ^0.31.0
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
@@ -271,20 +376,35 @@ importers:
         version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-ios':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
+      bare:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+      bare-make:
+        specifier: ^2.1.0
+        version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+      bare-runtime:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       cmake-bare:
         specifier: ^1.9.0
         version: 1.10.1
       cmake-npm:
         specifier: ^1.1.0
         version: 1.1.2
+      cmake-runtime:
+        specifier: ^4.1.1
+        version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      cmake-toolchains:
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -297,9 +417,18 @@ importers:
       eslint-plugin-import:
         specifier: ^2.32.0
         version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      llvm-runtime:
+        specifier: ^23.1.0
+        version: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       lunte:
         specifier: ^1.8.0
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      nasm-runtime:
+        specifier: ^3.2.0
+        version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      ninja-runtime:
+        specifier: ^1.13.1
+        version: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       prettier:
         specifier: ^3.6.2
         version: 3.9.6
@@ -314,20 +443,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
 
   packages/cli:
     dependencies:
@@ -347,7 +476,7 @@ importers:
         specifier: 8.5.2
         version: 8.5.2(@types/node@25.9.5)
       '@qvac/sdk':
-        specifier: ^0.23.0
+        specifier: ^0.24.0
         version: link:../sdk
       close-with-grace:
         specifier: ^2.1.0
@@ -398,6 +527,9 @@ importers:
       prettier-config-holepunch:
         specifier: ^2.0.0
         version: 2.0.0(prettier@3.9.6)
+      react-native-bare-kit:
+        specifier: ^0.17.1
+        version: 0.17.1(bare-abort-controller@1.1.2)(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)
       tsc-alias:
         specifier: ^1.8.17
         version: 1.9.1
@@ -432,6 +564,9 @@ importers:
       '@types/node':
         specifier: ^22.14.1
         version: 22.20.1
+      bare:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-abort-controller:
         specifier: ^1.1.2
         version: 1.1.2
@@ -441,6 +576,9 @@ importers:
       bare-process:
         specifier: ^4.2.2
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-runtime:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       brittle:
         specifier: ^3.13.1
         version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
@@ -493,6 +631,9 @@ importers:
       b4a:
         specifier: ^1.6.7
         version: 1.8.1
+      bare:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-crypto:
         specifier: ^1.15.3
         version: 1.15.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -500,14 +641,20 @@ importers:
         specifier: ^4.5.1
         version: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-https:
-        specifier: ^3.0.0
-        version: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+        specifier: ^4.0.0
+        version: 4.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+      bare-make:
+        specifier: ^2.1.0
+        version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       bare-os:
         specifier: ^3.7.1
         version: 3.9.3
       bare-process:
         specifier: ^4.2.2
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-runtime:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare-subprocess:
         specifier: ^6.1.0
         version: 6.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -526,6 +673,12 @@ importers:
       cmake-npm:
         specifier: ^1.1.0
         version: 1.1.2
+      cmake-runtime:
+        specifier: ^4.1.1
+        version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      cmake-toolchains:
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -538,9 +691,18 @@ importers:
       eslint-plugin-import:
         specifier: ^2.32.0
         version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      llvm-runtime:
+        specifier: ^23.1.0
+        version: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       lunte:
         specifier: ^1.8.4
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      nasm-runtime:
+        specifier: ^3.2.0
+        version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      ninja-runtime:
+        specifier: ^1.13.1
+        version: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       prettier:
         specifier: ^3.9.4
         version: 3.9.6
@@ -557,7 +719,7 @@ importers:
   packages/embed-llamacpp:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.29.0
+        specifier: ^0.31.0
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
@@ -570,14 +732,17 @@ importers:
         version: 3.1.1
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-ios':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
+      bare:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-crypto:
         specifier: ^1.15.3
         version: 1.15.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -585,14 +750,20 @@ importers:
         specifier: ^4.5.1
         version: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-https:
-        specifier: ^3.0.0
-        version: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+        specifier: ^4.0.0
+        version: 4.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+      bare-make:
+        specifier: ^2.1.0
+        version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       bare-os:
         specifier: ^3.6.2
         version: 3.9.3
       bare-process:
         specifier: ^4.2.2
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-runtime:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare-url:
         specifier: ^2.1.6
         version: 2.4.6
@@ -605,6 +776,12 @@ importers:
       cmake-npm:
         specifier: ^1.1.0
         version: 1.1.2
+      cmake-runtime:
+        specifier: ^4.1.1
+        version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      cmake-toolchains:
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -617,9 +794,18 @@ importers:
       eslint-plugin-import:
         specifier: ^2.32.0
         version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      llvm-runtime:
+        specifier: ^23.1.0
+        version: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       lunte:
         specifier: ^1.8.4
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      nasm-runtime:
+        specifier: ^3.2.0
+        version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      ninja-runtime:
+        specifier: ^1.13.1
+        version: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       prettier:
         specifier: ^3.9.4
         version: 3.9.6
@@ -634,20 +820,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
 
   packages/error:
     devDependencies:
@@ -672,18 +858,36 @@ importers:
 
   packages/fabric:
     devDependencies:
+      bare-make:
+        specifier: ^2.1.0
+        version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
       cmake-bare:
         specifier: ^1.9.0
         version: 1.10.1
       cmake-npm:
         specifier: ^1.1.0
         version: 1.1.2
+      cmake-runtime:
+        specifier: ^4.1.1
+        version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      cmake-toolchains:
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
+      llvm-runtime:
+        specifier: ^23.1.0
+        version: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       lunte:
         specifier: ^1.8.4
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      nasm-runtime:
+        specifier: ^3.2.0
+        version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      ninja-runtime:
+        specifier: ^1.13.1
+        version: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       prettier:
         specifier: ^3.9.6
         version: 3.9.6
@@ -694,7 +898,7 @@ importers:
   packages/ggml-rpc-server:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.29.0
+        specifier: ^0.31.0
         version: link:../fabric
       bare-net:
         specifier: ^2.3.2
@@ -704,14 +908,23 @@ importers:
         version: 3.1.1
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-ios':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
+      bare:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+      bare-make:
+        specifier: ^2.1.0
+        version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
+      bare-runtime:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       brittle:
         specifier: ^3.17.0
         version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
@@ -721,6 +934,12 @@ importers:
       cmake-npm:
         specifier: ^1.1.0
         version: 1.1.2
+      cmake-runtime:
+        specifier: ^4.1.1
+        version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      cmake-toolchains:
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -733,9 +952,18 @@ importers:
       eslint-plugin-import:
         specifier: ^2.32.0
         version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      llvm-runtime:
+        specifier: ^23.1.0
+        version: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       lunte:
         specifier: ^1.8.4
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      nasm-runtime:
+        specifier: ^3.2.0
+        version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      ninja-runtime:
+        specifier: ^1.13.1
+        version: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       prettier:
         specifier: ^3.9.6
         version: 3.9.6
@@ -750,20 +978,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
 
   packages/inference:
     dependencies:
@@ -804,8 +1032,8 @@ importers:
         specifier: ^4.6.2
         version: 4.6.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       bare-https:
-        specifier: ^3.0.0
-        version: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+        specifier: ^4.0.0
+        version: 4.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       bare-net:
         specifier: ^2.3.2
         version: 2.3.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -860,52 +1088,52 @@ importers:
         version: 0.12.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/audiogen-ggml':
         specifier: ^0.10.1
-        version: link:../audiogen-ggml
+        version: 0.10.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/bci-whispercpp':
         specifier: ^0.15.0
-        version: link:../bci-whispercpp
+        version: 0.15.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/classification-ggml':
         specifier: ^0.36.0
-        version: 0.36.0(@qvac/fabric-android-arm64@0.28.0)(@qvac/fabric-ios@0.28.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
+        version: 0.36.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/decoder-audio':
         specifier: ^0.9.0
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
         specifier: ^0.35.0
-        version: link:../diffusion-cpp
+        version: 0.35.1
       '@qvac/embed-llamacpp':
         specifier: ^0.56.0
-        version: link:../embed-llamacpp
+        version: 0.56.1
       '@qvac/ggml-rpc-server':
         specifier: ^0.9.0
-        version: link:../ggml-rpc-server
+        version: 0.9.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/langdetect-text':
         specifier: ^0.1.2
         version: 0.1.3
       '@qvac/llm-llamacpp':
         specifier: ^0.70.0
-        version: link:../llm-llamacpp
+        version: 0.70.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/ocr-ggml':
         specifier: ^0.33.0
-        version: link:../ocr-ggml
+        version: 0.33.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/translation-nmtcpp':
         specifier: ^0.25.0
-        version: link:../translation-nmtcpp
+        version: 0.25.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-fetch@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/tts-ggml':
         specifier: ^0.15.0
-        version: link:../tts-ggml
+        version: 0.15.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
       '@qvac/turbovec-ggml':
         specifier: ^0.5.0
-        version: link:../turbovec-ggml
+        version: 0.5.1
       '@qvac/vla-ggml':
         specifier: ^0.36.0
-        version: link:../vla-ggml
+        version: 0.36.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@types/brittle':
         specifier: ^3.5.0
         version: 3.5.0
       bare:
         specifier: 1.34.1 || >=1.35.1
-        version: 1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.34.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+        version: 1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-console:
         specifier: '*'
         version: 6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -974,7 +1202,7 @@ importers:
   packages/llm-llamacpp:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.29.0
+        specifier: ^0.31.0
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
@@ -990,26 +1218,35 @@ importers:
         version: 3.1.1
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-ios':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
+      bare:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-crypto:
         specifier: ^1.15.3
         version: 1.15.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
       bare-https:
-        specifier: ^3.0.0
-        version: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+        specifier: ^4.0.0
+        version: 4.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+      bare-make:
+        specifier: ^2.1.0
+        version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       bare-os:
         specifier: ^3.6.2
         version: 3.9.3
       bare-process:
         specifier: ^4.2.2
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-runtime:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare-subprocess:
         specifier: ^6.1.0
         version: 6.2.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1025,6 +1262,12 @@ importers:
       cmake-npm:
         specifier: ^1.1.0
         version: 1.1.2
+      cmake-runtime:
+        specifier: ^4.1.1
+        version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      cmake-toolchains:
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -1037,9 +1280,18 @@ importers:
       eslint-plugin-import:
         specifier: ^2.32.0
         version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      llvm-runtime:
+        specifier: ^23.1.0
+        version: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       lunte:
         specifier: ^1.8.4
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      nasm-runtime:
+        specifier: ^3.2.0
+        version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      ninja-runtime:
+        specifier: ^1.13.1
+        version: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       prettier:
         specifier: ^3.9.4
         version: 3.9.6
@@ -1054,20 +1306,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
 
   packages/logging:
     dependencies:
@@ -1100,14 +1352,14 @@ importers:
   packages/model-fit:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.24.0
-        version: 0.24.0(@qvac/fabric-android-arm64@0.24.0)(@qvac/fabric-ios@0.24.0)
+        specifier: ^0.31.0
+        version: link:../fabric
       bare-fs:
         specifier: ^4.5.1
         version: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-https:
-        specifier: ^3.0.0
-        version: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+        specifier: ^4.0.0
+        version: 4.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       bare-path:
         specifier: ^3.0.0
         version: 3.1.1
@@ -1116,14 +1368,23 @@ importers:
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.24.0
-        version: 0.24.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-ios':
-        specifier: ^0.24.0
-        version: 0.24.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
+      bare:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+      bare-make:
+        specifier: ^2.1.0
+        version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+      bare-runtime:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare-subprocess:
         specifier: ^6.1.0
         version: 6.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1136,6 +1397,15 @@ importers:
       cmake-bare:
         specifier: ^1.9.0
         version: 1.10.1
+      cmake-npm:
+        specifier: ^1.1.0
+        version: 1.1.2
+      cmake-runtime:
+        specifier: ^4.1.1
+        version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      cmake-toolchains:
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -1148,9 +1418,18 @@ importers:
       eslint-plugin-import:
         specifier: ^2.32.0
         version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      llvm-runtime:
+        specifier: ^23.1.0
+        version: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       lunte:
         specifier: ^1.8.4
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      nasm-runtime:
+        specifier: ^3.2.0
+        version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      ninja-runtime:
+        specifier: ^1.13.1
+        version: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       prettier:
         specifier: ^3.9.6
         version: 3.9.6
@@ -1165,20 +1444,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.24.0
-        version: 0.24.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.24.0
-        version: 0.24.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.24.0
-        version: 0.24.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.24.0
-        version: 0.24.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.24.0
-        version: 0.24.0
+        specifier: ^0.31.0
+        version: 0.31.0
 
   packages/ocr-ggml:
     dependencies:
@@ -1186,7 +1465,7 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/fabric':
-        specifier: ^0.29.0
+        specifier: ^0.31.0
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
@@ -1217,17 +1496,26 @@ importers:
         version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-ios':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/registry-client':
         specifier: ^0.4.0
         version: 0.4.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
+      bare:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+      bare-make:
+        specifier: ^2.1.0
+        version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+      bare-runtime:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare-stream:
         specifier: ^2.7.0
         version: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -1240,6 +1528,12 @@ importers:
       cmake-npm:
         specifier: ^1.1.0
         version: 1.1.2
+      cmake-runtime:
+        specifier: ^4.1.1
+        version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      cmake-toolchains:
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -1252,9 +1546,18 @@ importers:
       eslint-plugin-import:
         specifier: ^2.32.0
         version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      llvm-runtime:
+        specifier: ^23.1.0
+        version: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       lunte:
         specifier: ^1.8.0
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      nasm-runtime:
+        specifier: ^3.2.0
+        version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      ninja-runtime:
+        specifier: ^1.13.1
+        version: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       prettier:
         specifier: ^3.6.2
         version: 3.9.6
@@ -1269,20 +1572,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
 
   packages/qvac-ci:
     dependencies:
@@ -1332,13 +1635,13 @@ importers:
     devDependencies:
       '@qvac/turbovec-ggml':
         specifier: ^0.5.0
-        version: link:../turbovec-ggml
+        version: 0.5.1
       '@types/brittle':
         specifier: ^3.5.0
         version: 3.5.0
       bare:
         specifier: 1.34.1 || >=1.35.1
-        version: 1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.34.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+        version: 1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
       bare-abort-controller:
         specifier: ^1.1.2
         version: 1.1.2
@@ -1424,8 +1727,8 @@ importers:
         specifier: ^2.4.0
         version: 2.4.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       hyperdht:
-        specifier: ^6.23.0
-        version: 6.33.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+        specifier: ^6.36.0
+        version: 6.36.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       hyperdispatch:
         specifier: ^1.4.0
         version: 1.6.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1433,8 +1736,8 @@ importers:
         specifier: ^1.13.0
         version: 1.21.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       hyperswarm:
-        specifier: ^4.10.5
-        version: 4.17.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+        specifier: ^4.17.2
+        version: 4.17.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       hyperswarm-stats:
         specifier: ^1.3.0
         version: 1.3.1
@@ -1527,8 +1830,8 @@ importers:
         specifier: ^2.4.0
         version: 2.4.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       hyperswarm:
-        specifier: ^4.14.0
-        version: 4.17.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+        specifier: ^4.17.2
+        version: 4.17.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       hyperswarm-stats:
         specifier: ^1.3.0
         version: 1.3.1
@@ -1586,55 +1889,55 @@ importers:
         version: 0.12.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/audiogen-ggml':
         specifier: ^0.10.1
-        version: link:../audiogen-ggml
+        version: 0.10.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/bci-whispercpp':
         specifier: ^0.15.0
-        version: link:../bci-whispercpp
+        version: 0.15.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/classification-ggml':
         specifier: ^0.36.0
-        version: 0.36.0(@qvac/fabric-android-arm64@0.28.0)(@qvac/fabric-ios@0.28.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
+        version: 0.36.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/decoder-audio':
         specifier: ^0.9.0
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
         specifier: ^0.35.0
-        version: link:../diffusion-cpp
+        version: 0.35.1
       '@qvac/embed-llamacpp':
         specifier: ^0.56.0
-        version: link:../embed-llamacpp
+        version: 0.56.1
       '@qvac/error':
         specifier: ^0.1.1
         version: 0.1.1
       '@qvac/ggml-rpc-server':
         specifier: ^0.9.0
-        version: link:../ggml-rpc-server
+        version: 0.9.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/inference':
-        specifier: ^0.23.0
+        specifier: ^0.24.0
         version: link:../inference
       '@qvac/langdetect-text':
         specifier: ^0.1.2
         version: 0.1.3
       '@qvac/llm-llamacpp':
         specifier: ^0.70.0
-        version: link:../llm-llamacpp
+        version: 0.70.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/ocr-ggml':
         specifier: ^0.33.0
-        version: link:../ocr-ggml
+        version: 0.33.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/translation-nmtcpp':
         specifier: ^0.25.0
-        version: link:../translation-nmtcpp
+        version: 0.25.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-fetch@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/tts-ggml':
         specifier: ^0.15.0
-        version: link:../tts-ggml
+        version: 0.15.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
       '@qvac/turbovec-ggml':
         specifier: ^0.5.0
-        version: link:../turbovec-ggml
+        version: 0.5.1
       '@qvac/vla-ggml':
         specifier: ^0.36.0
-        version: link:../vla-ggml
+        version: 0.36.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-abort-controller:
         specifier: ^1.0.0
         version: 1.1.2
@@ -1881,7 +2184,7 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/fabric':
-        specifier: ^0.29.0
+        specifier: ^0.31.0
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
@@ -1906,20 +2209,29 @@ importers:
         version: 2.4.6
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-ios':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/registry-client':
         specifier: ^0.6.1
         version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
+      bare:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-fetch:
         specifier: ^3.0.1
         version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
+      bare-make:
+        specifier: ^2.1.0
+        version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+      bare-runtime:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare-stream:
         specifier: ^2.7.0
         version: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -1932,6 +2244,12 @@ importers:
       cmake-npm:
         specifier: ^1.1.2
         version: 1.1.2
+      cmake-runtime:
+        specifier: ^4.1.1
+        version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      cmake-toolchains:
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -1944,9 +2262,18 @@ importers:
       eslint-plugin-import:
         specifier: ^2.32.0
         version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      llvm-runtime:
+        specifier: ^23.1.0
+        version: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       lunte:
         specifier: ^1.8.0
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      nasm-runtime:
+        specifier: ^3.2.0
+        version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      ninja-runtime:
+        specifier: ^1.13.1
+        version: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       prettier:
         specifier: ^3.6.2
         version: 3.9.6
@@ -1961,26 +2288,29 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
 
   packages/tts-ggml:
     dependencies:
       '@qvac/error':
         specifier: ^0.1.0
         version: 0.1.1
+      '@qvac/fabric':
+        specifier: ^0.31.0
+        version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -1994,8 +2324,8 @@ importers:
         specifier: ^4.5.6
         version: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-https:
-        specifier: ^3.0.0
-        version: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+        specifier: ^4.0.0
+        version: 4.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       bare-os:
         specifier: ^3.8.0
         version: 3.9.3
@@ -2015,9 +2345,24 @@ importers:
       '@qvac/asr-ggml':
         specifier: 0.8.1
         version: 0.8.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      '@qvac/fabric-android-arm64':
+        specifier: ^0.31.0
+        version: 0.31.0
+      '@qvac/fabric-ios':
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/registry-client':
         specifier: ^0.6.1
         version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      bare:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+      bare-make:
+        specifier: ^2.1.0
+        version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+      bare-runtime:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       bare-subprocess:
         specifier: ^6.2.1
         version: 6.2.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -2030,6 +2375,12 @@ importers:
       cmake-npm:
         specifier: ^1.1.0
         version: 1.1.2
+      cmake-runtime:
+        specifier: ^4.1.1
+        version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      cmake-toolchains:
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -2048,9 +2399,18 @@ importers:
       husky:
         specifier: ^9.1.7
         version: 9.1.7
+      llvm-runtime:
+        specifier: ^23.1.0
+        version: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       lunte:
         specifier: ^1.8.0
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      nasm-runtime:
+        specifier: ^3.2.0
+        version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      ninja-runtime:
+        specifier: ^1.13.1
+        version: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       prettier:
         specifier: ^3.6.2
         version: 3.9.6
@@ -2063,25 +2423,50 @@ importers:
       typescript-eslint:
         specifier: ^8.63.0
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3)
+    optionalDependencies:
+      '@qvac/fabric-darwin-arm64':
+        specifier: ^0.31.0
+        version: 0.31.0
+      '@qvac/fabric-darwin-x64':
+        specifier: ^0.31.0
+        version: 0.31.0
+      '@qvac/fabric-linux-arm64':
+        specifier: ^0.31.0
+        version: 0.31.0
+      '@qvac/fabric-linux-x64':
+        specifier: ^0.31.0
+        version: 0.31.0
+      '@qvac/fabric-win32-x64':
+        specifier: ^0.31.0
+        version: 0.31.0
 
   packages/turbovec-ggml:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.29.0
+        specifier: ^0.31.0
         version: link:../fabric
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-ios':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
+      bare:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+      bare-abort-controller:
+        specifier: ^1.1.2
+        version: 1.1.2
       bare-fs:
         specifier: ^4.5.1
         version: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-make:
+        specifier: ^2.1.0
+        version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
       bare-os:
         specifier: ^3.6.2
         version: 3.9.3
@@ -2091,6 +2476,12 @@ importers:
       bare-process:
         specifier: ^4.2.2
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-runtime:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      bare-thread:
+        specifier: ^1.4.0
+        version: 1.4.0(bare-buffer@3.6.2)
       bare-url:
         specifier: ^2.1.6
         version: 2.5.4
@@ -2103,6 +2494,12 @@ importers:
       cmake-npm:
         specifier: ^1.1.0
         version: 1.1.2
+      cmake-runtime:
+        specifier: ^4.1.1
+        version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      cmake-toolchains:
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -2115,9 +2512,18 @@ importers:
       eslint-plugin-import:
         specifier: ^2.32.0
         version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      llvm-runtime:
+        specifier: ^23.1.0
+        version: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       lunte:
         specifier: ^1.8.4
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      nasm-runtime:
+        specifier: ^3.2.0
+        version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      ninja-runtime:
+        specifier: ^1.13.1
+        version: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       prettier:
         specifier: ^3.9.4
         version: 3.9.6
@@ -2132,20 +2538,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
 
   packages/vla-ggml:
     dependencies:
@@ -2153,7 +2559,7 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/fabric':
-        specifier: ^0.29.0
+        specifier: ^0.31.0
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
@@ -2169,20 +2575,26 @@ importers:
         version: 3.1.1
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-ios':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
+      bare:
+        specifier: ^1.36.0
+        version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-crypto:
         specifier: ^1.15.3
         version: 1.15.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
       bare-https:
-        specifier: ^3.0.0
-        version: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+        specifier: ^4.0.0
+        version: 4.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+      bare-make:
+        specifier: ^2.1.0
+        version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       bare-os:
         specifier: ^3.6.2
         version: 3.9.3
@@ -2201,6 +2613,12 @@ importers:
       cmake-npm:
         specifier: ^1.1.0
         version: 1.1.2
+      cmake-runtime:
+        specifier: ^4.1.1
+        version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      cmake-toolchains:
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -2213,9 +2631,18 @@ importers:
       eslint-plugin-import:
         specifier: ^2.32.0
         version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      llvm-runtime:
+        specifier: ^23.1.0
+        version: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       lunte:
         specifier: ^1.8.0
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      nasm-runtime:
+        specifier: ^3.2.0
+        version: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      ninja-runtime:
+        specifier: ^1.13.1
+        version: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       prettier:
         specifier: ^3.6.2
         version: 3.9.6
@@ -2230,28 +2657,28 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.29.0
-        version: 0.29.0
+        specifier: ^0.31.0
+        version: 0.31.0
 
   plugins/openclaw:
     dependencies:
       '@qvac/ai-sdk-provider':
-        specifier: ^0.11.0
+        specifier: ^0.12.0
         version: link:../../packages/ai-sdk-provider
       '@qvac/cli':
-        specifier: ^0.18.0
+        specifier: ^0.19.0
         version: link:../../packages/cli
     devDependencies:
       '@types/node':
@@ -2282,10 +2709,10 @@ importers:
         specifier: ^3.0.0
         version: 3.0.71(zod@4.4.3)
       '@qvac/ai-sdk-provider':
-        specifier: ^0.11.0
+        specifier: ^0.12.0
         version: link:../../packages/ai-sdk-provider
       '@qvac/cli':
-        specifier: ^0.18.0
+        specifier: ^0.19.0
         version: link:../../packages/cli
       ai:
         specifier: ^7.0.0
@@ -4845,12 +5272,29 @@ packages:
     resolution: {integrity: sha512-0z6FRBHpEsG4dSK+EhUuEA5YEKM2t5jGBooSH7dwoWeKR2KRHk/ChApoV+5Mjy5rLkoKNH1sJNiYmuT2bYKDXQ==}
     engines: {bare: '>=1.20.0'}
 
-  '@qvac/classification-ggml@0.36.0':
-    resolution: {integrity: sha512-MQtAsNyjBktIJvPWmR8cNzVXxCaVzGLQPbx91F6h7zclVAC9Rj0fZD6ZWDukQcl5ANUblXxXL4WjYJtYLtc+Pg==}
+  '@qvac/audiogen-ggml@0.10.1':
+    resolution: {integrity: sha512-U3Iyy+Iqeol9MzzYPThWC41B4ciAgsic0vulkT+NR7FZuY3bHzuuJYHHd4zvcwNeJZMijg69/192MlfC6IM8Jw==}
+    engines: {bare: '>=1.19.0'}
+    hasBin: true
+    peerDependencies:
+      '@qvac/audiogen-ggml-android-arm64': 0.10.1
+      '@qvac/audiogen-ggml-ios': 0.10.1
+    peerDependenciesMeta:
+      '@qvac/audiogen-ggml-android-arm64':
+        optional: true
+      '@qvac/audiogen-ggml-ios':
+        optional: true
+
+  '@qvac/bci-whispercpp@0.15.1':
+    resolution: {integrity: sha512-lTqU70eSrFRamsThehxonPGdLHZMGQ2ObfrdFLvfaDoE12Plj/pe3nnCfe/0wCDizdtWD0SfwoxPppH+xbGDcQ==}
+    engines: {bare: '>=1.24.0'}
+
+  '@qvac/classification-ggml@0.36.1':
+    resolution: {integrity: sha512-2umQWF01CzwMjR8c0y5SRk7WMuLAXCypuxPrX/zzbKGr0nhcJ+ZvKNHbmd+qYGZl7UFYxQSEqeYzsw0aK3CajA==}
     engines: {bare: '>=1.24.0'}
     peerDependencies:
-      '@qvac/fabric-android-arm64': ^0.28.0
-      '@qvac/fabric-ios': ^0.28.0
+      '@qvac/fabric-android-arm64': ^0.29.0
+      '@qvac/fabric-ios': ^0.29.0
     peerDependenciesMeta:
       '@qvac/fabric-android-arm64':
         optional: true
@@ -4860,147 +5304,155 @@ packages:
   '@qvac/diagnostics@0.1.2':
     resolution: {integrity: sha512-rpNekTUH3uIHPFqRRWcWXEHzW2CZbJJodLfCecVSkzvVXCOm5SLnlP2sxGVTWL7Q/umD68jnTiHMr4h6tP+jUw==}
 
-  '@qvac/error@0.1.1':
-    resolution: {integrity: sha512-Xv7p1wnC/JmsKimGrkvXlcq+AHsG1r33f+uayANuEYe5ThFi+FR3txnN2UPjulwBdDorEnger9/+9ftShAFOAw==}
-
-  '@qvac/fabric-android-arm64@0.24.0':
-    resolution: {integrity: sha512-+NYJyitqjfTL8p/AbSvwwwekO2+WvXb2vZd/BtL02e1+7GDmo7bu/oGkHGwsWBGSk49pZ158KDx2UFCsJbaJFw==}
-    engines: {bare: '>=1.24.0'}
-
-  '@qvac/fabric-android-arm64@0.28.0':
-    resolution: {integrity: sha512-LKvOdlFKFe5R+kL7dDZ37g9zlmY/vX6QSVNzSftrgfqHxZD+X/OhU8GiBXTxGr3QcALPJIiKTuWap+NEL5GA4A==}
-    engines: {bare: '>=1.24.0'}
-
-  '@qvac/fabric-android-arm64@0.29.0':
-    resolution: {integrity: sha512-PJG8yMsxRP724fHGW2YO4tu/xheCVnVYLF4SCn82741ABML7Cotgrf27DI0pD7I/85vOTEdSH+lNtyyit2NgUg==}
-    engines: {bare: '>=1.24.0'}
-
-  '@qvac/fabric-darwin-arm64@0.24.0':
-    resolution: {integrity: sha512-jrbfPdRLyp9h/QY3xTxJPzEzfkNM8IdLL66GvnXXBLSK15MaAszMMqwmFmjvg+eo/STyZxJ8n22PIXG1KY2L3A==}
+  '@qvac/diffusion-cpp-darwin-arm64@0.35.1':
+    resolution: {integrity: sha512-RFrbdbMRztrzf5CdcBFsm/AUsoPODbYOqxGzNurAQgwOJ9NnLf4wtqq63vlhtOKLHwUOzE/29b3MvGbeeIQCvw==}
     engines: {bare: '>=1.24.0'}
     cpu: [arm64]
     os: [darwin]
 
-  '@qvac/fabric-darwin-arm64@0.28.0':
-    resolution: {integrity: sha512-XjBsms8F0YsMC1jvLFuVRpbHpJt1ys38ggOb4l8N90SBdaBP+dIHL0qkmpZlokhHAyL2bHtfwpBnBu2QzmRC0w==}
-    engines: {bare: '>=1.24.0'}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@qvac/fabric-darwin-arm64@0.29.0':
-    resolution: {integrity: sha512-hGl6f2OBiB2Ndf14GP8POlvhn7kL8y2xsk6QkLjE0kn5oqFiXwLl3qmvGAJik1vxzjNJrsjzDeoWggrlezfbrw==}
-    engines: {bare: '>=1.24.0'}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@qvac/fabric-darwin-x64@0.24.0':
-    resolution: {integrity: sha512-+hSi+mvoUpRO21toY/AA2VT9lpCVq/ASqg6OBFAsfnsoK+tzwHskz4SSkpIeDRlDgQrWQlSqQCXyZukejWO8og==}
+  '@qvac/diffusion-cpp-darwin-x64@0.35.1':
+    resolution: {integrity: sha512-E3MLResrR8wViBh3eHv0nAm/Dn8Od8kT46ZguyMNj0mkZMy9o9PFP6taL1QezcvFsw4nkqaffd2lema9hdne7g==}
     engines: {bare: '>=1.24.0'}
     cpu: [x64]
     os: [darwin]
 
-  '@qvac/fabric-darwin-x64@0.28.0':
-    resolution: {integrity: sha512-lKATXqTcEMGy5ixQje2Sm+CPWqbkdegalgidx/E548k6fq5+xP8GXSMOA8Lf9kg7zZnyyeirpH67Vwe0dmhz7w==}
-    engines: {bare: '>=1.24.0'}
-    cpu: [x64]
-    os: [darwin]
-
-  '@qvac/fabric-darwin-x64@0.29.0':
-    resolution: {integrity: sha512-k0dgKXFNhmCkDLVePzaPHXh6I0TxVKdaKwZtQMCqHcqbe9uzEKXPo2XlkoAYCP+c9LdJOwbN6Uf3bQMZDkydgQ==}
-    engines: {bare: '>=1.24.0'}
-    cpu: [x64]
-    os: [darwin]
-
-  '@qvac/fabric-ios@0.24.0':
-    resolution: {integrity: sha512-VV1Lh+k0SZgpJLzL+B9KEH45GS4eXNpPXEN179nBXqxBokzUEWDvIHWH6andVBK1RvZmFXTPz40EyBgJb6recQ==}
-    engines: {bare: '>=1.24.0'}
-
-  '@qvac/fabric-ios@0.28.0':
-    resolution: {integrity: sha512-Z3/w6o8rr5xUXX7DK8+lTopv9/VPa6fa46vGoPKDMWim54HvTpLCttU1PO7SpF9sqkCPj2f2M0rpZvZfy9wRbg==}
-    engines: {bare: '>=1.24.0'}
-
-  '@qvac/fabric-ios@0.29.0':
-    resolution: {integrity: sha512-EgkEv4pnaiNwz7W6ru+oGdql5VTcDTB1mu9uoIFqcYjXzHZFqkonqe7Dp+pwmmth23nlJSeymDD+bw5Irjv8DQ==}
-    engines: {bare: '>=1.24.0'}
-
-  '@qvac/fabric-linux-arm64@0.24.0':
-    resolution: {integrity: sha512-HvoOZhOjdm1uHUg3oj867DuHriQJvbxWdnxYmps5zt9q5LmSZ0Lwp/yvPc4+IejI22AhLJ2xMuR56W8v1UQ3+g==}
+  '@qvac/diffusion-cpp-linux-arm64@0.35.1':
+    resolution: {integrity: sha512-6MmTu7yWuLUwKqzRCnRZ5k+P0+hGUkMG/peoS6P+v5ocYr60VrFDQz2ZPiQ/zj9k8q15MNENl4zsvJWKXIXA8Q==}
     engines: {bare: '>=1.24.0'}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@qvac/fabric-linux-arm64@0.28.0':
-    resolution: {integrity: sha512-S6U+cbMSWgZtxdjMs+4J4O53tNWvTZ4t5dmJdwNqhg5219Sp7ENrTruK/NlMBzK9XiPOZr/DuEeaJRzqvAPr5A==}
-    engines: {bare: '>=1.24.0'}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
-  '@qvac/fabric-linux-arm64@0.29.0':
-    resolution: {integrity: sha512-KsMTvtlJ1sNZrG23vdJLYwq18uExfV7NxOWGs51qc9iTCSWSn6iXcwIrXZkMRlfGqU2Yf9ZupRNpQUVAyeMmzA==}
-    engines: {bare: '>=1.24.0'}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
-  '@qvac/fabric-linux-x64@0.24.0':
-    resolution: {integrity: sha512-3GuvUuq/m7QcTyMjIW7F3IGvFYPzSmciPfJ+Lf5XhgjCvL0/CkF1MDeJR83xBiueyXCT70HylxrQ1lnbX1aKdg==}
+  '@qvac/diffusion-cpp-linux-x64@0.35.1':
+    resolution: {integrity: sha512-4oty2fIF6Tjj2TcMyAVy5gybpBWFBJKYXrAG+/1MqdHU+cSOLWbXKDLoY2M5nWJJsul7bQcWT6IFaXoEiKCQGQ==}
     engines: {bare: '>=1.24.0'}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@qvac/fabric-linux-x64@0.28.0':
-    resolution: {integrity: sha512-VTcH549abQwgGnAAJ19Qeqgbwy+/2JOYOBjxGSXjIY+Lw1mmT/vbTVsB5KEwTUlcAiz5AAOfz9EV+mKjtBIZ+A==}
-    engines: {bare: '>=1.24.0'}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
-  '@qvac/fabric-linux-x64@0.29.0':
-    resolution: {integrity: sha512-VV6piu2eE1oi/RbTuVL1EwFLMLNX1C6nTYHd+3VzOPy9ls5f/vROG73WxlAGk6gauQQY/6jxw5+K11clMvuNEA==}
-    engines: {bare: '>=1.24.0'}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
-  '@qvac/fabric-win32-x64@0.24.0':
-    resolution: {integrity: sha512-sbi7w3apxyoFoij3WZP+vqK883EuDvLiAoDWLZ5wMJwG3IEhpwDHr22+ryIMptbVLSMFxMAiBTBj4a2Vxp1mQg==}
+  '@qvac/diffusion-cpp-win32-x64@0.35.1':
+    resolution: {integrity: sha512-gqtW+Q81CFuwOQYA8XEg7EwvfGZXogZZu1dbb0uJtZUwZRAHuH2LD5xENj8pFkuEs+gIFYq1zYoZ/Nto5/jenQ==}
     engines: {bare: '>=1.24.0'}
     cpu: [x64]
     os: [win32]
 
-  '@qvac/fabric-win32-x64@0.28.0':
-    resolution: {integrity: sha512-gv/IuuL7+6oMmxlZCalUjXnaV5JQOKDhOUbHe1u6DkCHTvsCJc5hmXzlc8Wz6qk8WvK7YQoAwuzr0DGLECFRCg==}
-    engines: {bare: '>=1.24.0'}
-    cpu: [x64]
-    os: [win32]
-
-  '@qvac/fabric-win32-x64@0.29.0':
-    resolution: {integrity: sha512-TjEdHksjt6bR8z4YnuRPo61QLTH7dZCqv3LQPSrTZ43HVNyQQf2ZVe/s+m9KLTs1/STWT6trULJqlHspkCC0DQ==}
-    engines: {bare: '>=1.24.0'}
-    cpu: [x64]
-    os: [win32]
-
-  '@qvac/fabric@0.24.0':
-    resolution: {integrity: sha512-4iYzJBwaaxpSe9XCUHGUM2a96sKQt+m0PrAAmRC4Xdzo+e3DLcYbKFABjeJEuMjJwFaeq5zUnhlGmvS0tFeSrQ==}
+  '@qvac/diffusion-cpp@0.35.1':
+    resolution: {integrity: sha512-7WfaOgviAYIBxoUXlwr4eDwIx2vYK8M9+NtXFsJTz0zRIrHTb9yFlOH/QkS08s0jQEkJ9UyFgvIRSMlEx5Lvkw==}
     engines: {bare: '>=1.24.0'}
     peerDependencies:
-      '@qvac/fabric-android-arm64': 0.24.0
-      '@qvac/fabric-ios': 0.24.0
+      '@qvac/diffusion-cpp-android-arm64': 0.35.1
+      '@qvac/diffusion-cpp-ios': 0.35.1
+    peerDependenciesMeta:
+      '@qvac/diffusion-cpp-android-arm64':
+        optional: true
+      '@qvac/diffusion-cpp-ios':
+        optional: true
+
+  '@qvac/embed-llamacpp@0.56.1':
+    resolution: {integrity: sha512-GzL4VgH1awsFhGeHrexDEKuh682PRhw7BV9nVvZJOGc5XF4K1raaDuh+6moZLFgqshkggOtM4dBMhU2NDd6CRA==}
+    engines: {bare: '>=1.24.0'}
+    peerDependencies:
+      '@qvac/fabric-android-arm64': ^0.29.0
+      '@qvac/fabric-ios': ^0.29.0
     peerDependenciesMeta:
       '@qvac/fabric-android-arm64':
         optional: true
       '@qvac/fabric-ios':
         optional: true
 
-  '@qvac/fabric@0.28.0':
-    resolution: {integrity: sha512-tvLyy8vZMHdgZOeE4KC72YOd4WWmKDi0D+wTi5EdkLco4AEbG1awVOGCKiNS1ZYjffwQoE2t8VoiJVTgbDWfKQ==}
+  '@qvac/error@0.1.1':
+    resolution: {integrity: sha512-Xv7p1wnC/JmsKimGrkvXlcq+AHsG1r33f+uayANuEYe5ThFi+FR3txnN2UPjulwBdDorEnger9/+9ftShAFOAw==}
+
+  '@qvac/fabric-android-arm64@0.31.0':
+    resolution: {integrity: sha512-7/WcGf7+EzEH4F0H/w9ZHc4bjcH+DZ6EoGGRxZyNiYp8XXmjcbjoc/3hQhtb0D5PCervYlbaeEwmoElihbCQEQ==}
+    engines: {bare: '>=1.24.0'}
+
+  '@qvac/fabric-darwin-arm64@0.29.1':
+    resolution: {integrity: sha512-yTuAZkEtEKvLjRDyHgXWsLClM0v5wA31NrFw58JE/1ACQI4Q0MGQ0oSLRoom3zSp9VKjG67sIp7FuPD7t/dItA==}
+    engines: {bare: '>=1.24.0'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@qvac/fabric-darwin-arm64@0.31.0':
+    resolution: {integrity: sha512-QiCDKCOtaZ1ZtTW16H33pyriWVCf3TCtZDoC13ZY8ImQf6XNfOWiuWscWpBycrNAYSYFfY8K/818r4eXPMOd5A==}
+    engines: {bare: '>=1.24.0'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@qvac/fabric-darwin-x64@0.29.1':
+    resolution: {integrity: sha512-w+2g6PHVDdhTEJumhe7uMeDQwQsbe811fXvfesFTpQ1H6fbrXMMp7IgnHjcX2+ymbJRIB7210EdoMMEgbnMJUQ==}
+    engines: {bare: '>=1.24.0'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@qvac/fabric-darwin-x64@0.31.0':
+    resolution: {integrity: sha512-6n2LYgUG+zKJKdVNC9ynXsGtF1zFJrZ0HOVPRFSnFKCObid5aeab3waOqOsjKplKXgO4pPNyDww+tMUf6irAag==}
+    engines: {bare: '>=1.24.0'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@qvac/fabric-ios@0.31.0':
+    resolution: {integrity: sha512-FIbMjngBhW8yxjog/UECq/kzXLA0iHtI4aNtdRRuoK8bFemnRfs9tj5pexzwRYu/vRZ4ksYBqc3xk0iHlQ8Yqg==}
+    engines: {bare: '>=1.24.0'}
+
+  '@qvac/fabric-linux-arm64@0.29.1':
+    resolution: {integrity: sha512-VWWfYrDlkREhp4KmyoiFn3TBulVyy+SgkCqCznoj3Pgna+iuz87ANDKhMQAfj8aEtZWvP0DIjCqB3In9OM003g==}
+    engines: {bare: '>=1.24.0'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@qvac/fabric-linux-arm64@0.31.0':
+    resolution: {integrity: sha512-Uy/fV/uuhIdklHec6UXO0doM3nj6utXeti/jtEArFgQz3mDiCd9Eazdv7iMa07tfci5dRjh2bblv1jqlQMDqYg==}
+    engines: {bare: '>=1.24.0'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@qvac/fabric-linux-x64@0.29.1':
+    resolution: {integrity: sha512-Sh2axN0bWXb+m9nOeWVDSfC7q5SNMMn32KrQYHJcL5W2dZppVXJ/zpWUAtbB14mW7wqf4KkHYJUSNq4YHw4F3g==}
+    engines: {bare: '>=1.24.0'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@qvac/fabric-linux-x64@0.31.0':
+    resolution: {integrity: sha512-+HSL0ihvn0cI8WMOwZTfhy4+dVsutfkELbSYVlzxfQlFd38XAIIHJwWC/SNscatIGwDCjxIRlO5ivZDtAhfmFw==}
+    engines: {bare: '>=1.24.0'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@qvac/fabric-win32-x64@0.29.1':
+    resolution: {integrity: sha512-bRWOZkgC81uEK/xWW7502Nn1+1m8PBSezXpxe9KWiT9eJ4SZadirFA1+7/o7o7wuFn491pOenY0oIEWDcqWfNA==}
+    engines: {bare: '>=1.24.0'}
+    cpu: [x64]
+    os: [win32]
+
+  '@qvac/fabric-win32-x64@0.31.0':
+    resolution: {integrity: sha512-CcJToX5DG7xLcbfHBuBgshfiBIaRY4h7bjwPiclBlK+UrDleny7chS3gGI6GZv8yhPfFv6joN78ndPSNRrY1Ow==}
+    engines: {bare: '>=1.24.0'}
+    cpu: [x64]
+    os: [win32]
+
+  '@qvac/fabric@0.29.1':
+    resolution: {integrity: sha512-qmpt/D8pbNFzAvQN6SjuFXcR5j1N1Xgj3xN4hYts4WDgLSkMAQN0x2oDCfwJEgQqkmBQ2ZAJ1gr5rYgTDjz5pA==}
     engines: {bare: '>=1.24.0'}
     peerDependencies:
-      '@qvac/fabric-android-arm64': 0.28.0
-      '@qvac/fabric-ios': 0.28.0
+      '@qvac/fabric-android-arm64': 0.29.1
+      '@qvac/fabric-ios': 0.29.1
+    peerDependenciesMeta:
+      '@qvac/fabric-android-arm64':
+        optional: true
+      '@qvac/fabric-ios':
+        optional: true
+
+  '@qvac/ggml-rpc-server@0.9.1':
+    resolution: {integrity: sha512-UJZcW8aLb14ZCLDiygAeSeVBpMYuJ//2fQy4IYzmBF4NPcaSTtNuy0hwmk/svYfj+RkhR4bHHOGRKLU/J7jF8A==}
+    engines: {bare: '>=1.24.0'}
+    peerDependencies:
+      '@qvac/fabric-android-arm64': ^0.29.0
+      '@qvac/fabric-ios': ^0.29.0
     peerDependenciesMeta:
       '@qvac/fabric-android-arm64':
         optional: true
@@ -5019,8 +5471,32 @@ packages:
   '@qvac/langdetect-text@0.1.3':
     resolution: {integrity: sha512-VDvheNdJSmzdeHy/2GyYhPs76y26/n2v7/99sTJgQXJvmUuBIlfy0T4EK52w2eWeQAnmmBW7aQ9nGV/UF8m1Uw==}
 
+  '@qvac/llm-llamacpp@0.70.1':
+    resolution: {integrity: sha512-eXyhJqN/WCpPIsLWvF+d7MWtnxRRPNfEGs5GHt00qFBIpPoDX3PHObJwzVKVsDLDmEXb3Gsp+gkDnXIx9+PVog==}
+    engines: {bare: '>=1.24.0'}
+    peerDependencies:
+      '@qvac/fabric-android-arm64': ^0.29.0
+      '@qvac/fabric-ios': ^0.29.0
+    peerDependenciesMeta:
+      '@qvac/fabric-android-arm64':
+        optional: true
+      '@qvac/fabric-ios':
+        optional: true
+
   '@qvac/logging@0.1.1':
     resolution: {integrity: sha512-un8/b8JZBXRW/ljezFj3VGPxALhMvONeD62F/NHaU3TGs4SmdXWDcG65Aot+Bi4rIjaKQS5iY1P4WYGKU6Chew==}
+
+  '@qvac/ocr-ggml@0.33.1':
+    resolution: {integrity: sha512-NzPGs9qR4G4MDvXZMegDBaTtG8X1oSJAymFYvlfN9bTjLFZXMAxOs9Xxvvd7C6S+iO+MNinyortO4NgHvKwCbQ==}
+    engines: {bare: '>=1.19.0'}
+    peerDependencies:
+      '@qvac/fabric-android-arm64': ^0.29.0
+      '@qvac/fabric-ios': ^0.29.0
+    peerDependenciesMeta:
+      '@qvac/fabric-android-arm64':
+        optional: true
+      '@qvac/fabric-ios':
+        optional: true
 
   '@qvac/rag@0.9.0':
     resolution: {integrity: sha512-cjoYirg2jDcx6Gi7bxekXJJnm9iblWs9D5lFj+T3Icobr5TcNH8/p/1L5fgYs4Xeii4S8teqinN/w+eRSx8pYg==}
@@ -5055,6 +5531,57 @@ packages:
 
   '@qvac/response@0.1.2':
     resolution: {integrity: sha512-xWAsUyxOd7kqOayjFwUGOGiWlwQ8z6bzy5lOTUdI3uHGCAbdsqUMivpMymktd3ub+ZvF7F/iCM4dxdDCTISSdA==}
+
+  '@qvac/translation-nmtcpp@0.25.1':
+    resolution: {integrity: sha512-YuNpZeEibVhuQpgomshEBFbiLjohpgRLYFrxWEj8ZT2MwOcwADDvP6I6eXneZPdzdvEknwVdZLQO7/dZM36fXA==}
+    engines: {bare: '>=1.19.0'}
+    peerDependencies:
+      '@qvac/fabric-android-arm64': ^0.29.0
+      '@qvac/fabric-ios': ^0.29.0
+      bare-fetch: ^3.0.1
+    peerDependenciesMeta:
+      '@qvac/fabric-android-arm64':
+        optional: true
+      '@qvac/fabric-ios':
+        optional: true
+      bare-fetch:
+        optional: true
+
+  '@qvac/tts-ggml@0.15.1':
+    resolution: {integrity: sha512-7Jy4bR3mBbUEHqOjhK9n4wnMDkW40ErT2ayBMcldQ/PGneVTIAZAUZNrRaZ0VbRz+NWYNU7Swhz3RfW72baN3w==}
+    engines: {bare: '>=1.19.0'}
+    peerDependencies:
+      '@qvac/tts-ggml-android-arm64': 0.15.1
+      '@qvac/tts-ggml-ios': 0.15.1
+    peerDependenciesMeta:
+      '@qvac/tts-ggml-android-arm64':
+        optional: true
+      '@qvac/tts-ggml-ios':
+        optional: true
+
+  '@qvac/turbovec-ggml@0.5.1':
+    resolution: {integrity: sha512-wHCkRA6bltnSNzx4NGflC+XULTT5KqSFKnfzgmDvGNj91o2k5NR/TNW767O/b4pKu17uoLvJBcSVZcUSxZcBQg==}
+    engines: {bare: '>=1.24.0'}
+    peerDependencies:
+      '@qvac/fabric-android-arm64': ^0.29.0
+      '@qvac/fabric-ios': ^0.29.0
+    peerDependenciesMeta:
+      '@qvac/fabric-android-arm64':
+        optional: true
+      '@qvac/fabric-ios':
+        optional: true
+
+  '@qvac/vla-ggml@0.36.1':
+    resolution: {integrity: sha512-xDgXM4LaThxkuFmo6aStH90QWXGDtRbtXSCe/s14OIGKaY45XkWlUUPNql0EM+n7GHB/d5fBLQXNBI6v4RIqWg==}
+    engines: {bare: '>=1.24.0'}
+    peerDependencies:
+      '@qvac/fabric-android-arm64': ^0.29.0
+      '@qvac/fabric-ios': ^0.29.0
+    peerDependenciesMeta:
+      '@qvac/fabric-android-arm64':
+        optional: true
+      '@qvac/fabric-ios':
+        optional: true
 
   '@react-native/asset-utils@0.88.1':
     resolution: {integrity: sha512-BLb5FF7NgggGYiCsA7KKkK2qFhn0K+6iGXOI+4Ucd+G7Robzw9Gt4WsWwxLt+Od+G+/hyqfz8ASokyWFZ6VcLw==}
@@ -6195,6 +6722,9 @@ packages:
   bare-https@3.0.0:
     resolution: {integrity: sha512-W1GRSCzn+xXKf5bMcPs/hg6Ga1bxPqb7owGfS+tvlBQfPe5Q2STcanRuKZrgU60v5uKrhXH5cgWwM+DLqvXZgQ==}
 
+  bare-https@4.0.0:
+    resolution: {integrity: sha512-vLKYUY5OhNSwMCU8hImxeuTWJ+JKY4LAGda8xUAszhoQL/jiUrF0e8vdm1bz92EVw4ciZ7zXHYZNwz5hL7cYUg==}
+
   bare-inspect@3.1.4:
     resolution: {integrity: sha512-jfW5KRA84o3REpI6Vr4nbvMn+hqVAw8GU1mMdRwUsY5yJovQamxYeKGVKGqdzs+8ZbG4jRzGUXP/3Ji/DnqfPg==}
     engines: {bare: '>=1.18.0'}
@@ -6217,6 +6747,15 @@ packages:
 
   bare-logger@2.0.3:
     resolution: {integrity: sha512-U6K7NxHdeAHxEgHFDV8zXvgjgDZKQO6LlCrxQvUvlrZEVTnoezSImMWizi85rbZpVsbeI1ZWcLCRGnoIf5EV8Q==}
+
+  bare-make@2.1.2:
+    resolution: {integrity: sha512-d7gKVTKdHRS8cKMtawktY/vxbfXY9uaf3zGimPz4M7Okx12JlaYDrslhkUFZ5hmFO4iN3Kh1Ayo4kvNzLAZkFA==}
+    hasBin: true
+    peerDependencies:
+      bare-pipe: '*'
+    peerDependenciesMeta:
+      bare-pipe:
+        optional: true
 
   bare-mime@1.0.0:
     resolution: {integrity: sha512-lUOswzBkfqham4zjLDueKOd4Qj3gS56BiZ3q2f0g0adoFhF+HFNupvTUfZBWoicl7fWJ7Hp2RUZjmkY47dxxOQ==}
@@ -6392,86 +6931,86 @@ packages:
       bare-buffer:
         optional: true
 
-  bare-runtime-android-arm64@1.34.1:
-    resolution: {integrity: sha512-obrIct/Hr9kVhOjg4A6rA5cjDspkNBCcSjq4EOI3A/GoM4oR7OCBKB+3qL+p9RoTmy0WfE4exK4HlOSntDfyAQ==}
+  bare-runtime-android-arm64@1.37.1:
+    resolution: {integrity: sha512-lYF8/A5gnVy7dHKhNinbFIkCOdhiB7wYrs+xsVKAGd6UaUOYjkJY4FhEHsTsmI04Aux8Yt6E3exAFel3g46P3Q==}
     cpu: [arm64]
     os: [android]
     hasBin: true
 
-  bare-runtime-android-arm@1.34.1:
-    resolution: {integrity: sha512-gvX4EArLgLN6cchG6ju3EiPddGHnUfLLv6XEvjYZ4S91XKY73gTvC5oQsOokJoYIas5IZtL4DfVzfMUWkANOlw==}
+  bare-runtime-android-arm@1.37.1:
+    resolution: {integrity: sha512-97HUboxQpHJEarS+4UyaJPzdJ+tSoG3jP03xJYS4apYx6QNbEVVOKqOuDB5YwcKAiOyTmMvQob7KMeCIi1f46g==}
     cpu: [arm]
     os: [android]
     hasBin: true
 
-  bare-runtime-android-ia32@1.34.1:
-    resolution: {integrity: sha512-3+hkyhv12yk1XzTgWw1BYbgzMI1U8o9pmQr65bcoLLzOj41dRvGvR8B6mQC5U2yKiSqqNBFiEtZY0qqf2WB4iw==}
+  bare-runtime-android-ia32@1.37.1:
+    resolution: {integrity: sha512-oufGFNmHeHDoKLC81U6Ak5PU4DpwKqKRYCPTyoFNPEhPwb+oqmTdfZZY18Ly+JA8F+MJa3tuoPePVScv5/lmlQ==}
     cpu: [ia32]
     os: [android]
     hasBin: true
 
-  bare-runtime-android-x64@1.34.1:
-    resolution: {integrity: sha512-gxOPReRynj+P6JcOE/W4g+h3G1BY5npfbvlf2C64mD6vqZDTht21CBUvxKxa2/KyL/fQJgI9HrenZjQ5EyS6Nw==}
+  bare-runtime-android-x64@1.37.1:
+    resolution: {integrity: sha512-umAvRb19tZO/0lFx1fRcvm1//DJOZIdU8xbl+D2giVbeVqldv5vjzCfKZMpLzKXImyLHpVDgZM3wE0QSFDuyCA==}
     cpu: [x64]
     os: [android]
     hasBin: true
 
-  bare-runtime-darwin-arm64@1.34.1:
-    resolution: {integrity: sha512-XNkjZLPX/HLCJJFRyvXaCYTXjfN/J9hF7dyCLs+hSdOFcm834ovl07edWfqavbpv7QsaX7aIz8hz3kxhmv/DTw==}
+  bare-runtime-darwin-arm64@1.37.1:
+    resolution: {integrity: sha512-ShyZ8qc7jnbvfUTBB8x2wl1kITVR15ha9czK3dbipilXySv0YaEejpWmcQXy8b44Sutr4HtDBhnMMeVvP8uABA==}
     cpu: [arm64]
     os: [darwin]
     hasBin: true
 
-  bare-runtime-darwin-x64@1.34.1:
-    resolution: {integrity: sha512-ShX4GkAYIleGEMc9DzW/UWsRDVCTRhkZozfRcx/dpmlNO47I2SfEbQE4udNzWMcFo9qB6HZPo6uTdAhTWwCXfQ==}
+  bare-runtime-darwin-x64@1.37.1:
+    resolution: {integrity: sha512-ZdxsrtLst52fwv3H7mX2BdBUAiTD8aTuuzMx3CS/5ZM6kYZQ0n4arnz2b3YgIkrYg4WjJprfcGwyVolTVSdxhA==}
     cpu: [x64]
     os: [darwin]
     hasBin: true
 
-  bare-runtime-ios-arm64-simulator@1.34.1:
-    resolution: {integrity: sha512-8o3D6YVaLYu+UmcT3jx+Ffo10Zlwl0uRRraYgIjTbJePd+/SQvsa/9T871Ice0iiXaRuR6Wnm6klAbzLQ+qBGQ==}
+  bare-runtime-ios-arm64-simulator@1.37.1:
+    resolution: {integrity: sha512-dD1rW7DYfTVNvlGVSpnVE2x++3Dwy/RqDDA3I9y34j28Z5rps4UH9aiZt5mqCtKZjeTuRhfI7TSh4QpoioBcuw==}
     cpu: [arm64]
     os: [ios]
     hasBin: true
 
-  bare-runtime-ios-arm64@1.34.1:
-    resolution: {integrity: sha512-XgI9gXjeKaaVF67PkLjQRju1+yi4vU1OjSw/ytidwNZVWSIK+acHtJeOqxM0MAyNAB3nmVvOnjhj5o8PZ6Qtyg==}
+  bare-runtime-ios-arm64@1.37.1:
+    resolution: {integrity: sha512-GBSbH0KPOrwLGXWdwYCNop4tF265L8GUI7LMgysJZLpp2yjBAwpKpWh0kQeo5XPOfoQEC9awht/7U8I3MzuGvg==}
     cpu: [arm64]
     os: [ios]
     hasBin: true
 
-  bare-runtime-ios-x64-simulator@1.34.1:
-    resolution: {integrity: sha512-lgThu78iSa8avSOMmge8QijxKKSZfVBHF7l7+SGyOeQjLShNjMbgQzR2JKoemqjBlZlZHTNGzKMIAPaPO+0/3A==}
+  bare-runtime-ios-x64-simulator@1.37.1:
+    resolution: {integrity: sha512-52P4CA06cfHFVULABUR+Q1D5M2ZZ+FftfmhO0u+wUy4xdHp5xqxEWfcfzbDcl3LQ5BI2o3AjcXUMJjRR2jsaXA==}
     cpu: [x64]
     os: [ios]
     hasBin: true
 
-  bare-runtime-linux-arm64@1.34.1:
-    resolution: {integrity: sha512-0CAmcl6ffyw+dwLL4Ca5aPMuH2eEc8h7CWkHVaE/GZOb3Zr3Ranrx0md9ZKRB2G3FBQjirLfXsnB1PXqDB/Lpw==}
+  bare-runtime-linux-arm64@1.37.1:
+    resolution: {integrity: sha512-cGBpkHalNxpiz9xAvyDqkIiGLIxTxhpqLtsUIBVChWHQyossFSAN4/xT8vGs9FTVBvLGoYEiYzdwFKPUf6qzrA==}
     cpu: [arm64]
     os: [linux]
     hasBin: true
 
-  bare-runtime-linux-x64@1.34.1:
-    resolution: {integrity: sha512-Rk3lD48xBUW7IZKKE82IanYcc06r++Gaa29uh2pWU+3hQUBA/S+fIjl/5h6qly0H7oLRTbZ8y3Je0R6iprtx/w==}
+  bare-runtime-linux-x64@1.37.1:
+    resolution: {integrity: sha512-+pur/j1xN8TL0fbEn/1b5VEtXyRPPYss41qnpd8mTk0aqlFLXYKuV5DXVHcV1OpP4ZRhBPEpxXJVonAx/CslMw==}
     cpu: [x64]
     os: [linux]
     hasBin: true
 
-  bare-runtime-win32-arm64@1.34.1:
-    resolution: {integrity: sha512-G7aMaFsw8RqJOmPjzY4z9f5rAw9DjCURLmpwa3Qdxgkxh3SLnf0Js8YWaNCXz+ZifDN/dfJ+Tk724fazCNgm8w==}
+  bare-runtime-win32-arm64@1.37.1:
+    resolution: {integrity: sha512-TtrkZcH3U1Aviu2PsfOB8oej+ntZ89pOjkifm3nwoHDenMGvb+Q4SdDkl5W3ngqXNE43Sl3JoRRkgR/qhO2E6A==}
     cpu: [arm64]
     os: [win32]
     hasBin: true
 
-  bare-runtime-win32-x64@1.34.1:
-    resolution: {integrity: sha512-xlbdQyi7FIxF7SHJhlH2QvvG5ylh4lKTtBMaG6UwnQ7cP7tIq31Ra29TLFWHAne7+z4KPw22joeTFLXq2lXHyA==}
+  bare-runtime-win32-x64@1.37.1:
+    resolution: {integrity: sha512-O1Y3aegJtBnPIQpIsV0TkS5+Hvukv3yIxx0e2zxddvrAUuTyLBbPJVslCGNHxl4Nr84d3nUu9SsGx68zP6KL+g==}
     cpu: [x64]
     os: [win32]
     hasBin: true
 
-  bare-runtime@1.34.1:
-    resolution: {integrity: sha512-PGtdtGvp27guPSUNk5axdgnCsSCNUv/PBf5ST5rwV5k1RS+yCP0aQt25xdaTUA1ym29IPf2SYj7tX/ax8hMkiw==}
+  bare-runtime@1.37.1:
+    resolution: {integrity: sha512-IU6x9XqBBx2VnXtdxxPhyGWM8tCxKrM36FgwkydYC3fF7wzzSXUFTh5Fg73iyQmcBLxIIRG75XWug6DVQwj/2w==}
     hasBin: true
 
   bare-semver@1.1.0:
@@ -6596,6 +7135,15 @@ packages:
       bare-pipe:
         optional: true
 
+  bare-thread@1.4.0:
+    resolution: {integrity: sha512-WkLdv7BRdGlChAdM3rLPgM2/1kRHk2dlDyf1Jedfc2LbUjzY6kjJ2W5IHB0DfVjY0r+XdfpCk4PomcpINeBW6w==}
+    engines: {bare: '>=1.33.0'}
+    peerDependencies:
+      bare-buffer: '*'
+    peerDependenciesMeta:
+      bare-buffer:
+        optional: true
+
   bare-timers@3.2.1:
     resolution: {integrity: sha512-O+9e6Jol/BoYsQUzAFXG0gWUW1GWryFMblGcNBfi3smPrD3rJIKQwpw2FJARl2j/1VHne4a8YaHPK1cxDKfiYQ==}
     engines: {bare: '>=1.7.0'}
@@ -6611,6 +7159,10 @@ packages:
 
   bare-tls@3.1.13:
     resolution: {integrity: sha512-/4npvvjS1ocM9pNLFwbTLXZbpgtawuC7f98jM2ckUnajODVCdNZNImjWb5snI4L2Xe5vWGdwseMgt+PGCMSs4A==}
+    engines: {bare: '>=1.7.0'}
+
+  bare-tls@4.0.0:
+    resolution: {integrity: sha512-UR21jYB9vIMdhmCiNz24YXT8aisIv2ZpTt/kxg7sYPPXPSmPF9huHZOk/6hMXBLJF7ks41LFz5Siuh2m6s2NsQ==}
     engines: {bare: '>=1.7.0'}
 
   bare-tty@5.1.2:
@@ -6717,6 +7269,37 @@ packages:
       bare-events:
         optional: true
       bare-queue-microtask:
+        optional: true
+      bare-structured-clone:
+        optional: true
+      bare-timers:
+        optional: true
+      bare-url:
+        optional: true
+
+  bare@1.37.1:
+    resolution: {integrity: sha512-mrxHrreHg30ufuPtU6f6hXEDeWmf15bT9v310rCfjKcaVSnmGm27CifQf6HCZxF8yw0xRJQqwgV40vr+qA1Bdg==}
+    hasBin: true
+    peerDependencies:
+      bare-buffer: '*'
+      bare-console: '*'
+      bare-events: '*'
+      bare-queue-microtask: '*'
+      bare-runtime: '*'
+      bare-stream: '*'
+      bare-structured-clone: '*'
+      bare-timers: '*'
+      bare-url: '*'
+    peerDependenciesMeta:
+      bare-buffer:
+        optional: true
+      bare-console:
+        optional: true
+      bare-events:
+        optional: true
+      bare-queue-microtask:
+        optional: true
+      bare-stream:
         optional: true
       bare-structured-clone:
         optional: true
@@ -7065,6 +7648,60 @@ packages:
   cmake-npm@1.1.2:
     resolution: {integrity: sha512-CfN53Ov9usNBeaIsr8TtEQwwXeRZkJWZSoGe0qybr9bojxGlwTdxHk8LQwJFNypsSgFoYyOWUMjKGuahsiGifA==}
 
+  cmake-runtime-darwin-arm64@4.3.1:
+    resolution: {integrity: sha512-pBdTo2f7DL4GLFLmhotvKNVi+9ULy1d6CBM9Q1IxP/lbYzkF+ny1JnVGGzNX7SN65frkpUMLm2doSNYdCOqCng==}
+    cpu: [arm64]
+    os: [darwin]
+    hasBin: true
+
+  cmake-runtime-darwin-x64@4.3.1:
+    resolution: {integrity: sha512-d31IY4SJlT2WZ4M+V744x8QqK34eRnk5xXEKSljZgtJLu/SHotiRevtN6zwGo63LgJH2+B1NNAgQDmbklbGOdw==}
+    cpu: [x64]
+    os: [darwin]
+    hasBin: true
+
+  cmake-runtime-linux-arm64@4.3.1:
+    resolution: {integrity: sha512-Z9foV9sHZX/2VrEPPKGcZVmLeG4afL8hCMhPdsMBU0fJ4lZ7BXQI+uJl4MX97g5VC6yXsnvdl9z7+AWAb8wFhw==}
+    cpu: [arm64]
+    os: [linux]
+    hasBin: true
+
+  cmake-runtime-linux-x64@4.3.1:
+    resolution: {integrity: sha512-Gh00tH0h4fXNHJmorfG43pKbHaCoTAdq3JmStJ5QZAKoJG2Sx1KxQs7vKwun13fqTdbRyed7NLJ7WsfQAlQYZQ==}
+    cpu: [x64]
+    os: [linux]
+    hasBin: true
+
+  cmake-runtime-win32-arm64@4.3.1:
+    resolution: {integrity: sha512-2QT63uJzbtoNgwjvz2UY5M3VWBf+Mu4Jm9XltF3gec3IgH6dXhrYVs4FvIhcAtrSKqI5Ilh+LA6HGl3hlJEo/w==}
+    cpu: [arm64]
+    os: [win32]
+    hasBin: true
+
+  cmake-runtime-win32-x64@4.3.1:
+    resolution: {integrity: sha512-EP0ng/GKbcHrKw5hpdOMsKucC2OKyd0SP/jHKkCfeJIOe+nze+tFeHudKgWVwpOAehXxiLGmjzs6sBOJEJd0Gw==}
+    cpu: [x64]
+    os: [win32]
+    hasBin: true
+
+  cmake-runtime@4.3.1:
+    resolution: {integrity: sha512-EH5OO3OmCa676Y1OdLT6Q+Kg+SWYfkZQMjG1PFsdFbgn0Vxhs5UZGpXTgF9HnDMDgv9DEiUAzYEAB12z3768Pw==}
+    hasBin: true
+
+  cmake-toolchains@2.1.2:
+    resolution: {integrity: sha512-E9MfAe6JRCpQ2w8veL2xguguXVKYuCXuMllOii6wn3fzRhOTVbfPOy6nkNgfWxL89u7DDOAt54lQBBoFndNMAQ==}
+    peerDependencies:
+      cmake-runtime: ^3 || ^4
+      llvm-runtime: ^22 || ^23
+      musl-sysroot: '*'
+      nasm-runtime: ^2 || ^3
+      wasi-sysroot: '*'
+    peerDependenciesMeta:
+      musl-sysroot:
+        optional: true
+      wasi-sysroot:
+        optional: true
+
   cmake-vcpkg@1.2.0:
     resolution: {integrity: sha512-ZWcky6eaTEpGeb086JWM4UBQAbQsR7Gee3nsfrjK0MlLtrMtYi7rGuLJ1b1DUY0IOwscMUlNGdSuD/BzzsHlXw==}
 
@@ -7373,6 +8010,9 @@ packages:
 
   dht-rpc@6.27.0:
     resolution: {integrity: sha512-NsfgRlFDQnkA2+H+hJXMPLmBOn/TSIIc0cRMV8q42M4xc1uAXWtpvIIQsONF5tYcYC6px0bslrUGideN1h4S4A==}
+
+  dht-rpc@6.28.0:
+    resolution: {integrity: sha512-vOwuQKWbqvwRzxBJ+nwXXjI4d/4T0keKLDMjfq8C2KwM7xCBSToRIKYuwhrA9D5cV8Hxct1h1TLJ+O4e6Z+AgA==}
 
   diff@9.0.0:
     resolution: {integrity: sha512-svtcdpS8CgJyqAjEQIXdb3OjhFVVYjzGAPO8WGCmRbrml64SPw/jJD4GoE98aR7r25A0XcgrK3F02yw9R/vhQw==}
@@ -8415,6 +9055,10 @@ packages:
     resolution: {integrity: sha512-veSvVKptjPTu2di3q5IWI62ZDFzEmTj1QSTAkiXW/cg0+lgMUlwfVWB4dX+WI14xNb54vogVIjA/Ph3KiVuRJQ==}
     hasBin: true
 
+  hyperdht@6.36.0:
+    resolution: {integrity: sha512-rVRXq8stFtR0fScIdJqtWvaO7x8G3voUdw6vRypU4iFk5r67XMu4ge2q8VxJZdYosPKuU+G9r5+7/y93QN+wNQ==}
+    hasBin: true
+
   hyperdispatch@1.6.0:
     resolution: {integrity: sha512-9+kz137Ora0NSnMzQY82CbApOh3NzpjtxZ1uqlLuOnBvfJyPuC0q5J4dGS6AoGSF7eguwGWRjjPkd6sBvn9WEA==}
 
@@ -8435,6 +9079,9 @@ packages:
 
   hyperswarm@4.17.0:
     resolution: {integrity: sha512-oe86sK961Ueg7rvDN/veFwG8xH+Iv6vObPhGDkPJcDVxk/NduW41ZhAcVDnHzRbm7S0eLU7WaDUvehOYoKSpRQ==}
+
+  hyperswarm@4.17.2:
+    resolution: {integrity: sha512-yKTNgHjijwrmSj5neC2Lu5JyKDvj9gZK/zkVLySP6J2M7nF+uvFMoxzRlWKKjdySfZVHZXPLfhk4xAnpqibm5A==}
 
   iconv-lite@0.6.3:
     resolution: {integrity: sha512-4fCk79wshMdzMp2rH06qWrJE4iolqLhCUH+OiuIgU++RB0+94NlDL81atO7GX55uUKueo0txHNtvEyI6D7WdMw==}
@@ -9044,6 +9691,182 @@ packages:
   llm-splitter@0.2.0:
     resolution: {integrity: sha512-Yqi947Vk5Ps2YqhOV8K+RR6bseLhZLIVfovpWJH5cT7GE4Pca8/3iny/3oQ47scD7SfQd3whhxMfc+KgxTgDHA==}
 
+  llvm-runtime-clang-darwin-arm64@23.1.5:
+    resolution: {integrity: sha512-r5nFpFJYrwRXeWBwPCeGC3M6v+Nw2tutv9RHjhGi10JUDV5vmQchWbN2CdgNjbNtBtRzWsRXbGN9RsUBMrlXng==}
+    cpu: [arm64]
+    os: [darwin]
+    hasBin: true
+
+  llvm-runtime-clang-darwin-arm64@23.1.6-1:
+    resolution: {integrity: sha512-0c6tt08CLjq3jeweglH9UmkHciJSU1Sj4fe30Xg/RVK6phh0Nm6Bqk7xcGAAnM5eMRF6tDfRqWodbKppsk8H4A==}
+    cpu: [arm64]
+    os: [darwin]
+    hasBin: true
+
+  llvm-runtime-clang-darwin-x64@23.1.5:
+    resolution: {integrity: sha512-FS9cwPlch3efc7sLbV6faVHp/u3W1HHXQyvvjedrquqesDcgSSj7tFYRkrA7zglRJeAGEOfZoUv/3OVpVlXmZg==}
+    cpu: [x64]
+    os: [darwin]
+    hasBin: true
+
+  llvm-runtime-clang-darwin-x64@23.1.6-1:
+    resolution: {integrity: sha512-5TLp97gRAiNPCjGD37Ph23VjBhiSgyBh1otx51B7VYlo6KdyU6riy73MRaqr6+fYHOudAGcqWx98Y2NI1phuQg==}
+    cpu: [x64]
+    os: [darwin]
+    hasBin: true
+
+  llvm-runtime-clang-linux-arm64@23.1.5:
+    resolution: {integrity: sha512-Z/uCQeeNfLkgE3eq3HOAVue0VnNN9GxhqE2y35xZz8hWSrg9lv7iiCk94IFFG35qNkA5o3Xhwl1G5zVRFQhTPg==}
+    cpu: [arm64]
+    os: [linux]
+    hasBin: true
+
+  llvm-runtime-clang-linux-arm64@23.1.6-1:
+    resolution: {integrity: sha512-wDeBaXq0mP7LkQ70w0Fa3RBFacuRJpTShx2LXQ3g0WS50HrkxNQbp6+uk9Hls3Jq5lYC2ltnBoRF29BvC1JLCA==}
+    cpu: [arm64]
+    os: [linux]
+    hasBin: true
+
+  llvm-runtime-clang-linux-x64@23.1.5:
+    resolution: {integrity: sha512-xM57ebgHulP0N1kzchyiYzY9lWkJ4c3+xLUqXD7QRV2OAfvbRfHlTHnnV8cAk4Kplid1QCMJBvcH1UJdd0yphg==}
+    cpu: [x64]
+    os: [linux]
+    hasBin: true
+
+  llvm-runtime-clang-linux-x64@23.1.6-1:
+    resolution: {integrity: sha512-4kAOP+OymAVBf1mM11y8dN+b002cbXOalms0RETHGGimfq8xDK6Qtq/grHgwbO7GIVZWTiCC7ckwyIC61trvDA==}
+    cpu: [x64]
+    os: [linux]
+    hasBin: true
+
+  llvm-runtime-clang-win32-arm64@23.1.5:
+    resolution: {integrity: sha512-uOzr3DP7o/FTPwiUUw9Gk/ryWP0D7oEBcnGA5Ux5qDQg8Axuf9AkoRf4T7hXf07h4+1bP3DgENKBxKcQlC3X/A==}
+    cpu: [arm64]
+    os: [win32]
+    hasBin: true
+
+  llvm-runtime-clang-win32-arm64@23.1.6-1:
+    resolution: {integrity: sha512-n5JLauG3UAQn1PPE+zGKmGRyoH7mw5bFE91Izoa19HHHzG3dcGGj/YvpMxkyRV//1lfofrQyn68MAmua1H+x8w==}
+    cpu: [arm64]
+    os: [win32]
+    hasBin: true
+
+  llvm-runtime-clang-win32-x64@23.1.5:
+    resolution: {integrity: sha512-CJp0nBratsbHJTe6eFr25gkt1kZ+6wonA7rjkJZe0ogPpoXUwGSdDxz/oXQmlLEQmlkh5GYwcC4rhnWHSJjmoA==}
+    cpu: [x64]
+    os: [win32]
+    hasBin: true
+
+  llvm-runtime-clang-win32-x64@23.1.6-1:
+    resolution: {integrity: sha512-SasD6VRYYZ+A5O7rTFS/WnTMwgw4znsB0UyN3pYKEY7CTG7fuQlfcebuKBGed3OBVd2i8RL76Z4QrlELQxwBEQ==}
+    cpu: [x64]
+    os: [win32]
+    hasBin: true
+
+  llvm-runtime-lld-darwin-arm64@23.1.5:
+    resolution: {integrity: sha512-N/C5hEkreOgNfl5shsnZ23y7CSTrgSpv3I+ZuPz7lJYcfynnyCUNLJC5nezNuRDu3XPFmI6ULBoD7jbEDRoaDw==}
+    cpu: [arm64]
+    os: [darwin]
+    hasBin: true
+
+  llvm-runtime-lld-darwin-arm64@23.1.6-1:
+    resolution: {integrity: sha512-OfLRSRTJGNdQ0XxyVJ60qWunCdYOnz7XTK8FT/bbN7eQ50Q9yIZU5uDkRoHHjZMlxfKtXyoeVYdUW/nocrTmeg==}
+    cpu: [arm64]
+    os: [darwin]
+    hasBin: true
+
+  llvm-runtime-lld-darwin-x64@23.1.5:
+    resolution: {integrity: sha512-4qvAoHrpNLLBaDO++sWjTKUxzqUn7pD1vjzwTGTKT2vXlPP9W9b3NXV7VG68nqppopzzMdEZW+i+gtRI+fO+Yw==}
+    cpu: [x64]
+    os: [darwin]
+    hasBin: true
+
+  llvm-runtime-lld-darwin-x64@23.1.6-1:
+    resolution: {integrity: sha512-XARovnCSApVxrh/N3IxtCbrbf2xRus/OYoMsXrUtRxDaUiqm6j4iKEBCCS38JRlj/NQBiCm1dD/JiXjLchmh4g==}
+    cpu: [x64]
+    os: [darwin]
+    hasBin: true
+
+  llvm-runtime-lld-linux-arm64@23.1.5:
+    resolution: {integrity: sha512-G0d0BucNHWYh2EGglcvsNX5usA0tBfMA+ngJH/D60CGzlXFb0GGbaD0HE5HSYPxMKcSgkLKHQc1DscqieOZhQQ==}
+    cpu: [arm64]
+    os: [linux]
+    hasBin: true
+
+  llvm-runtime-lld-linux-arm64@23.1.6-1:
+    resolution: {integrity: sha512-MYFX9oxy5OEc2ff6r33Y6hkSvPyxpx+H12T+E/p3LHhe9Jacu4eMEYa4qz/VzRAnJ1UbfWNu3kv4yIRjzb5Vow==}
+    cpu: [arm64]
+    os: [linux]
+    hasBin: true
+
+  llvm-runtime-lld-linux-x64@23.1.5:
+    resolution: {integrity: sha512-o2ATHERhEw7M2qAoPcgg5n0bVpJVihOja96bb5ZqO82iCA9IQmsUEu3EYrTKFIRXoVSQ1FupK8SHCh+zEQhkFQ==}
+    cpu: [x64]
+    os: [linux]
+    hasBin: true
+
+  llvm-runtime-lld-linux-x64@23.1.6-1:
+    resolution: {integrity: sha512-pU+82dECAUHGi/Nf4yHhkMxHPSGOrei8NL5ahNjGGbxfHlYLjb6LIBDAQ67NtcJ7mqmOkLcukOWRRUlc1Tr2kg==}
+    cpu: [x64]
+    os: [linux]
+    hasBin: true
+
+  llvm-runtime-lld-win32-arm64@23.1.5:
+    resolution: {integrity: sha512-8jr2ZR2Gw9tAb6PKiw2+X8YW0Iw5w411hCikj4uhh+zNrtm5tBxCgnupMnOdFlpnuurU503gvHqujblcBI4KNg==}
+    cpu: [arm64]
+    os: [win32]
+    hasBin: true
+
+  llvm-runtime-lld-win32-arm64@23.1.6-1:
+    resolution: {integrity: sha512-Dn2BI8miPRXq6xuoh4OkGMVjbgz2RzO3F5OaS6X0jOPXIZlUxgXhk7J833fgiLjR1JMLhP1+ky3e8VhPzOuaTQ==}
+    cpu: [arm64]
+    os: [win32]
+    hasBin: true
+
+  llvm-runtime-lld-win32-x64@23.1.5:
+    resolution: {integrity: sha512-eO76ckLOk0albJct3AFV0l84kjKdF2CTJv0pOaSc1aJD7XQ1MKVr2xBjZZJctpuCT7PGuMB+0ZEbaw6dxRkUIw==}
+    cpu: [x64]
+    os: [win32]
+    hasBin: true
+
+  llvm-runtime-lld-win32-x64@23.1.6-1:
+    resolution: {integrity: sha512-F9rbZalVIoJfDPTJ1fyiBlrCDfstlbYVLOzLycs4mCL/8X+zH1FL2aZGoQ2XIajkw5S1y6t8f4590OYYvNkqGg==}
+    cpu: [x64]
+    os: [win32]
+    hasBin: true
+
+  llvm-runtime-resources-darwin@23.1.5:
+    resolution: {integrity: sha512-YQbf6qpCs2XB24dC76JWkJSNWBayXQWY7XNEZAVZ0vklb0/Vj0mLQM8QT2xwuik/kBBJhGPWveHmVIG/vOQTjA==}
+    os: [darwin]
+
+  llvm-runtime-resources-darwin@23.1.6-1:
+    resolution: {integrity: sha512-33C64LGCt8CKqxqH5Uaz6NXNuFnAWLwRuLSqp+PJ0DVCRI9luVCwt9ISdKk5htnmQXVgqYiyxv1MbbxWcYcguA==}
+    os: [darwin]
+
+  llvm-runtime-resources-linux@23.1.5:
+    resolution: {integrity: sha512-FhiYf9/FjOtm82/8fcS9jaIiZ6gOCGIJ92ujNzaGSRx6A3TEvpD8ZYCXJvSN7PvkH+wZNvYxVrQcd3ObDCDrBA==}
+    os: [linux]
+
+  llvm-runtime-resources-linux@23.1.6-1:
+    resolution: {integrity: sha512-7w3yA85D94YjGuDw3IZMfsU7apEyNsWjkgJh+saR2jgp7wajZpPAdAi62xBQ835aqNg4VxlvZMWc6rjKYtgeFA==}
+    os: [linux]
+
+  llvm-runtime-resources-win32@23.1.5:
+    resolution: {integrity: sha512-ChXi61/fYnZGmGQ5Mtcf3tMdS71N7az15CNRw1gOpuGxkCcMnQz4+SgCTWLCs6ALpDeYgw4obVs49f77Gvx9/Q==}
+    os: [win32]
+
+  llvm-runtime-resources-win32@23.1.6-1:
+    resolution: {integrity: sha512-IsElOxKPe83925c3GoyCtlVFlHBef2DIhgxDsApmdY9C5G72m1KP3JmfLylmEg7isjh6K+B9xY5FjN+qfGthHQ==}
+    os: [win32]
+
+  llvm-runtime@23.1.5:
+    resolution: {integrity: sha512-l+bVFeyTy5/cPQ3ZoZ62Ow5bv6hdIreXxmbDHre97BZB09rJKFXIGTfmUn9rho6Eu6e9r5a3w5YN8J0vlL74Sw==}
+    hasBin: true
+
+  llvm-runtime@23.1.6-1:
+    resolution: {integrity: sha512-tW/a8GNpm1kKJGxVyqAqVXMo98djz5nAFxFqzqVmN/vKzMTjPTF/rEqB+T1vr9fFyaNgDTlYYX3pxxth3q5OQA==}
+    hasBin: true
+
   locate-path@5.0.0:
     resolution: {integrity: sha512-t7hw9pI+WvuwNJXwk5zVHpyhIqzg2qTlklJOf0mVxGSbe3Fp2VieZcduNYjaLDoy6p9uGpQEGWG87WpMKlNq8g==}
     engines: {node: '>=8'}
@@ -9442,6 +10265,46 @@ packages:
     engines: {node: ^12.20.0 || ^14.18.0 || >=16.0.0}
     hasBin: true
 
+  nasm-runtime-darwin-arm64@3.2.0:
+    resolution: {integrity: sha512-5EdtIVe8+96sQQtHDDYp8dbQvfE0euu1rl7roFa/lqW1j6TAoAJJmXQ6hR8Gvajw84Up6mjqLYbZ41pDEeMAmA==}
+    cpu: [arm64]
+    os: [darwin]
+    hasBin: true
+
+  nasm-runtime-darwin-x64@3.2.0:
+    resolution: {integrity: sha512-qL+eLx1e1hfDpTqwAP+gO+J0Rv+NLjPTF5TjQ9NKLnV0MVZZPeSTcrkmA1HKf87nW7r7obCI2/eiFM+x6M/kLg==}
+    cpu: [x64]
+    os: [darwin]
+    hasBin: true
+
+  nasm-runtime-linux-arm64@3.2.0:
+    resolution: {integrity: sha512-j6uYtO+ILT49IcDHlcWRGQNSkWomBTahwtvUxnBZ7Lqfxlbbn81vcthtyDFX/TviFV/XNNHki6Z7n0utcs1j1g==}
+    cpu: [arm64]
+    os: [linux]
+    hasBin: true
+
+  nasm-runtime-linux-x64@3.2.0:
+    resolution: {integrity: sha512-xtZGaGmn8sOq6Qalh5/wjYw9Z0nDZHwk+shBwemnFzpJtV1+4Eci/6cG3VPLZEn2xMWH+K5EHEJ7nyVWVzLSiA==}
+    cpu: [x64]
+    os: [linux]
+    hasBin: true
+
+  nasm-runtime-win32-arm64@3.2.0:
+    resolution: {integrity: sha512-RfDpc9yasJhYvgCAU8fVgk02GXXeYA2fKxFNXDzbhkoOcPldL1rAu5UTuL6BFkH5VvE8i+7Sbu4IasnF62Zjmw==}
+    cpu: [arm64]
+    os: [win32]
+    hasBin: true
+
+  nasm-runtime-win32-x64@3.2.0:
+    resolution: {integrity: sha512-h6MY/7IipcVvitA88wR7KS3gd1dcW6WTVFIylqiZLJDySuvUKzlhHiGBb3BdDHCWq/ylox4NvsXt3oD+5uve7Q==}
+    cpu: [x64]
+    os: [win32]
+    hasBin: true
+
+  nasm-runtime@3.2.0:
+    resolution: {integrity: sha512-Jue51Ju2dlfZ2PtutWuSU6Dj3+T9NVO7tggRR20psdIK3+rC7nRs7EfRXNKo1PB7JMFZT70VU5XtnOZixNaH6w==}
+    hasBin: true
+
   nat-sampler@1.0.1:
     resolution: {integrity: sha512-yQvyNN7xbqR8crTKk3U8gRgpcV1Az+vfCEijiHu9oHHsnIl8n3x+yXNHl42M6L3czGynAVoOT9TqBfS87gDdcw==}
 
@@ -9459,6 +10322,46 @@ packages:
   negotiator@1.0.0:
     resolution: {integrity: sha512-8Ofs/AUQh8MaEcrlq5xOX0CQ9ypTF5dl78mjlMNfOK08fzpgTHQRQPBxcPlEtIw0yRpws+Zo/3r+5WRby7u3Gg==}
     engines: {node: '>= 0.6'}
+
+  ninja-runtime-darwin-arm64@1.13.2:
+    resolution: {integrity: sha512-oBtZXETijX09q6EtAgRrgiAPjPCuMpsBBwuSrq36WSrejixnOHznYrNEkZWUvdsKxmsAiRAXBB+ufJ+veKpQqA==}
+    cpu: [arm64]
+    os: [darwin]
+    hasBin: true
+
+  ninja-runtime-darwin-x64@1.13.2:
+    resolution: {integrity: sha512-LAXEEIVYNnWph3Vt6NZah9L2HlwNUvBJHshmQz+aq3fDm4zzB7XsMLheKmdBvKBVWFCZyhXWdT5MKcbEtsbGMQ==}
+    cpu: [x64]
+    os: [darwin]
+    hasBin: true
+
+  ninja-runtime-linux-arm64@1.13.2:
+    resolution: {integrity: sha512-lcyUu9/dltnqsSQnSt5bkEz85HZ8O3g9S/B9ovVuPk2OyuteBq1FVdj8rF14sCvjEC9+pkELYNEes+mYx35kww==}
+    cpu: [arm64]
+    os: [linux]
+    hasBin: true
+
+  ninja-runtime-linux-x64@1.13.2:
+    resolution: {integrity: sha512-bePoCSInA3QyvuJ/4/H6F9aLpThfve8D5vzt1G4HFPBIWE5l3umzazZUliWxWy2Z/pnTDBsQpvBUBOSB4P8f5A==}
+    cpu: [x64]
+    os: [linux]
+    hasBin: true
+
+  ninja-runtime-win32-arm64@1.13.2:
+    resolution: {integrity: sha512-YG+pUNPjXKgaeWBcjKzY0/4f2NTX2ORjLB2+bKB5XdDEtWxFUsIKlFVmKloSE75jVj1QG1zqYB6KnYNKTduQfw==}
+    cpu: [arm64]
+    os: [win32]
+    hasBin: true
+
+  ninja-runtime-win32-x64@1.13.2:
+    resolution: {integrity: sha512-e+HNsEW9I2PS7hqYfNO3P0YDDGWa90oZxQ67WOR5RXKPFUFHktS9kzs4aHd2w3zJRYPsM+vQsWCHg2CKpyzJYA==}
+    cpu: [x64]
+    os: [win32]
+    hasBin: true
+
+  ninja-runtime@1.13.2:
+    resolution: {integrity: sha512-HLUFoYSUPeKppVr2Ao7eZnTIwg+4U72cHUsBfSCTRddlTc9AgrcmjMYe9pOnQgNwuSuKdqDdXkE70GioBR2HkA==}
+    hasBin: true
 
   node-abi@4.37.0:
     resolution: {integrity: sha512-O9XXMXLeRHQtvh43NCah3y9N1K69tecOmu8Y5p2ay4iXvtpbQr0VaroJF9EmRVp3vkdoj3qn4IFfX+ZYtC94fw==}
@@ -9948,6 +10851,7 @@ packages:
   postcss-selector-parser@7.2.0:
     resolution: {integrity: sha512-Khh/tERVBn0I1499dvBSHY0pWJloMJWUxDsOBM0CCDPAcVZ10Jl2L1qy1f19uEX22spa8Mv7DCdEQJc0cGwBhQ==}
     engines: {node: '>=4'}
+    deprecated: Double-escapes CSS Modules class names (#362). Use 7.2.1.
 
   postcss@8.5.32:
     resolution: {integrity: sha512-LJlKCCAUFKOuZxipUdYw1NzIITEsPcgyOG9LkvRJvuKj/bRzbuRY0ARXvL0pWGpsZvn8jku+LMep2eU0seHp8g==}
@@ -10281,6 +11185,10 @@ packages:
 
   require-asset@1.2.2:
     resolution: {integrity: sha512-uc8nWKhqAxVD9Z4rST2b4yaemrC9Xb5vA1wlCz5AiCYnBYdwGRWNqFjneA5zRILzlo1MNrB63ry9+pc8wNR26w==}
+    engines: {bare: '>=1.10.0', node: '>=18'}
+
+  require-asset@1.2.4:
+    resolution: {integrity: sha512-wGqZYy8rDKHNvBJ4qmxM+34zatGwuGQhHpTxunnnjJkT29wO8vGfZQRCfN6hCR7qstENQbem4fAJ2XqwK3O8KQ==}
     engines: {bare: '>=1.10.0', node: '>=18'}
 
   require-directory@2.1.1:
@@ -11053,6 +11961,10 @@ packages:
 
   udx-native@1.20.7:
     resolution: {integrity: sha512-FNG0QpnSt0us2xbLP5mmG5Q0UKdLYjKHuh2eR9VrJSFmoZMzeszYLLhK12+iq5x3eq/rgoGG/lLwPn7IDAr6pg==}
+    engines: {bare: '>=1.17.4'}
+
+  udx-native@1.22.1:
+    resolution: {integrity: sha512-PZFCXyLWB3YeNc9Jd+HAWHNSJzmsDHc/llj/dEYwoCNE8z/8vm4dtXpFkch8qO5NzpxQerjbJu333D5B95ZjiA==}
     engines: {bare: '>=1.17.4'}
 
   uhyphen@0.2.0:
@@ -14987,9 +15899,36 @@ snapshots:
       - bare-buffer
       - react-native-b4a
 
-  '@qvac/classification-ggml@0.36.0(@qvac/fabric-android-arm64@0.28.0)(@qvac/fabric-ios@0.28.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))':
+  '@qvac/audiogen-ggml@0.10.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
     dependencies:
-      '@qvac/fabric': 0.28.0(@qvac/fabric-android-arm64@0.28.0)(@qvac/fabric-ios@0.28.0)
+      '@qvac/error': 0.1.1
+      '@qvac/infer-base': 0.8.0
+      '@qvac/logging': 0.1.1
+      bare-ffmpeg: 1.5.0
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-os: 3.9.3
+      bare-path: 3.1.1
+      bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
+
+  '@qvac/bci-whispercpp@0.15.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
+    dependencies:
+      '@qvac/error': 0.1.1
+      '@qvac/infer-base': 0.8.0
+      '@qvac/logging': 0.1.1
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-path: 3.1.1
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
+
+  '@qvac/classification-ggml@0.36.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))':
+    dependencies:
+      '@qvac/fabric': 0.29.1
       '@qvac/infer-base': 0.8.0
       '@qvac/logging': 0.1.1
       bare-env: 3.0.1
@@ -15000,13 +15939,11 @@ snapshots:
       bare-url: 2.5.4
       brittle: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
     optionalDependencies:
-      '@qvac/fabric-android-arm64': 0.28.0
-      '@qvac/fabric-darwin-arm64': 0.28.0
-      '@qvac/fabric-darwin-x64': 0.28.0
-      '@qvac/fabric-ios': 0.28.0
-      '@qvac/fabric-linux-arm64': 0.28.0
-      '@qvac/fabric-linux-x64': 0.28.0
-      '@qvac/fabric-win32-x64': 0.28.0
+      '@qvac/fabric-darwin-arm64': 0.29.1
+      '@qvac/fabric-darwin-x64': 0.29.1
+      '@qvac/fabric-linux-arm64': 0.29.1
+      '@qvac/fabric-linux-x64': 0.29.1
+      '@qvac/fabric-win32-x64': 0.29.1
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
@@ -15021,86 +15958,105 @@ snapshots:
       which-runtime: 1.4.0
     optional: true
 
+  '@qvac/diffusion-cpp-darwin-arm64@0.35.1':
+    optional: true
+
+  '@qvac/diffusion-cpp-darwin-x64@0.35.1':
+    optional: true
+
+  '@qvac/diffusion-cpp-linux-arm64@0.35.1':
+    optional: true
+
+  '@qvac/diffusion-cpp-linux-x64@0.35.1':
+    optional: true
+
+  '@qvac/diffusion-cpp-win32-x64@0.35.1':
+    optional: true
+
+  '@qvac/diffusion-cpp@0.35.1':
+    dependencies:
+      '@qvac/infer-base': 0.8.0
+      '@qvac/logging': 0.1.1
+      bare-path: 3.1.1
+    optionalDependencies:
+      '@qvac/diffusion-cpp-darwin-arm64': 0.35.1
+      '@qvac/diffusion-cpp-darwin-x64': 0.35.1
+      '@qvac/diffusion-cpp-linux-arm64': 0.35.1
+      '@qvac/diffusion-cpp-linux-x64': 0.35.1
+      '@qvac/diffusion-cpp-win32-x64': 0.35.1
+
+  '@qvac/embed-llamacpp@0.56.1':
+    dependencies:
+      '@qvac/fabric': 0.29.1
+      '@qvac/infer-base': 0.8.0
+      '@qvac/logging': 0.1.1
+      bare-path: 3.1.1
+    optionalDependencies:
+      '@qvac/fabric-darwin-arm64': 0.29.1
+      '@qvac/fabric-darwin-x64': 0.29.1
+      '@qvac/fabric-linux-arm64': 0.29.1
+      '@qvac/fabric-linux-x64': 0.29.1
+      '@qvac/fabric-win32-x64': 0.29.1
+
   '@qvac/error@0.1.1': {}
 
-  '@qvac/fabric-android-arm64@0.24.0': {}
+  '@qvac/fabric-android-arm64@0.31.0': {}
 
-  '@qvac/fabric-android-arm64@0.28.0':
+  '@qvac/fabric-darwin-arm64@0.29.1':
     optional: true
 
-  '@qvac/fabric-android-arm64@0.29.0': {}
-
-  '@qvac/fabric-darwin-arm64@0.24.0':
+  '@qvac/fabric-darwin-arm64@0.31.0':
     optional: true
 
-  '@qvac/fabric-darwin-arm64@0.28.0':
+  '@qvac/fabric-darwin-x64@0.29.1':
     optional: true
 
-  '@qvac/fabric-darwin-arm64@0.29.0':
+  '@qvac/fabric-darwin-x64@0.31.0':
     optional: true
 
-  '@qvac/fabric-darwin-x64@0.24.0':
+  '@qvac/fabric-ios@0.31.0': {}
+
+  '@qvac/fabric-linux-arm64@0.29.1':
     optional: true
 
-  '@qvac/fabric-darwin-x64@0.28.0':
+  '@qvac/fabric-linux-arm64@0.31.0':
     optional: true
 
-  '@qvac/fabric-darwin-x64@0.29.0':
+  '@qvac/fabric-linux-x64@0.29.1':
     optional: true
 
-  '@qvac/fabric-ios@0.24.0': {}
-
-  '@qvac/fabric-ios@0.28.0':
+  '@qvac/fabric-linux-x64@0.31.0':
     optional: true
 
-  '@qvac/fabric-ios@0.29.0': {}
-
-  '@qvac/fabric-linux-arm64@0.24.0':
+  '@qvac/fabric-win32-x64@0.29.1':
     optional: true
 
-  '@qvac/fabric-linux-arm64@0.28.0':
+  '@qvac/fabric-win32-x64@0.31.0':
     optional: true
 
-  '@qvac/fabric-linux-arm64@0.29.0':
-    optional: true
-
-  '@qvac/fabric-linux-x64@0.24.0':
-    optional: true
-
-  '@qvac/fabric-linux-x64@0.28.0':
-    optional: true
-
-  '@qvac/fabric-linux-x64@0.29.0':
-    optional: true
-
-  '@qvac/fabric-win32-x64@0.24.0':
-    optional: true
-
-  '@qvac/fabric-win32-x64@0.28.0':
-    optional: true
-
-  '@qvac/fabric-win32-x64@0.29.0':
-    optional: true
-
-  '@qvac/fabric@0.24.0(@qvac/fabric-android-arm64@0.24.0)(@qvac/fabric-ios@0.24.0)':
+  '@qvac/fabric@0.29.1':
     optionalDependencies:
-      '@qvac/fabric-android-arm64': 0.24.0
-      '@qvac/fabric-darwin-arm64': 0.24.0
-      '@qvac/fabric-darwin-x64': 0.24.0
-      '@qvac/fabric-ios': 0.24.0
-      '@qvac/fabric-linux-arm64': 0.24.0
-      '@qvac/fabric-linux-x64': 0.24.0
-      '@qvac/fabric-win32-x64': 0.24.0
+      '@qvac/fabric-darwin-arm64': 0.29.1
+      '@qvac/fabric-darwin-x64': 0.29.1
+      '@qvac/fabric-linux-arm64': 0.29.1
+      '@qvac/fabric-linux-x64': 0.29.1
+      '@qvac/fabric-win32-x64': 0.29.1
 
-  '@qvac/fabric@0.28.0(@qvac/fabric-android-arm64@0.28.0)(@qvac/fabric-ios@0.28.0)':
+  '@qvac/ggml-rpc-server@0.9.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
+    dependencies:
+      '@qvac/fabric': 0.29.1
+      bare-net: 2.3.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-path: 3.1.1
     optionalDependencies:
-      '@qvac/fabric-android-arm64': 0.28.0
-      '@qvac/fabric-darwin-arm64': 0.28.0
-      '@qvac/fabric-darwin-x64': 0.28.0
-      '@qvac/fabric-ios': 0.28.0
-      '@qvac/fabric-linux-arm64': 0.28.0
-      '@qvac/fabric-linux-x64': 0.28.0
-      '@qvac/fabric-win32-x64': 0.28.0
+      '@qvac/fabric-darwin-arm64': 0.29.1
+      '@qvac/fabric-darwin-x64': 0.29.1
+      '@qvac/fabric-linux-arm64': 0.29.1
+      '@qvac/fabric-linux-x64': 0.29.1
+      '@qvac/fabric-win32-x64': 0.29.1
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
 
   '@qvac/infer-base@0.4.2(bare-abort-controller@1.1.2)':
     dependencies:
@@ -15131,9 +16087,54 @@ snapshots:
     dependencies:
       tinyld: 1.3.4
 
+  '@qvac/llm-llamacpp@0.70.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
+    dependencies:
+      '@qvac/fabric': 0.29.1
+      '@qvac/infer-base': 0.8.0
+      '@qvac/logging': 0.1.1
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-path: 3.1.1
+    optionalDependencies:
+      '@qvac/fabric-darwin-arm64': 0.29.1
+      '@qvac/fabric-darwin-x64': 0.29.1
+      '@qvac/fabric-linux-arm64': 0.29.1
+      '@qvac/fabric-linux-x64': 0.29.1
+      '@qvac/fabric-win32-x64': 0.29.1
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
+
   '@qvac/logging@0.1.1':
     dependencies:
       bare-env: 3.0.1
+
+  '@qvac/ocr-ggml@0.33.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))':
+    dependencies:
+      '@qvac/error': 0.1.1
+      '@qvac/fabric': 0.29.1
+      '@qvac/infer-base': 0.8.0
+      '@qvac/logging': 0.1.1
+      bare-fetch: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-os: 3.9.3
+      bare-path: 3.1.1
+      bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-url: 2.5.4
+      brittle: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
+    optionalDependencies:
+      '@qvac/fabric-darwin-arm64': 0.29.1
+      '@qvac/fabric-darwin-x64': 0.29.1
+      '@qvac/fabric-linux-arm64': 0.29.1
+      '@qvac/fabric-linux-x64': 0.29.1
+      '@qvac/fabric-win32-x64': 0.29.1
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-events
+      - bare-pipe
+      - bare-tcp
+      - react-native-b4a
 
   '@qvac/rag@0.9.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)':
     dependencies:
@@ -15185,7 +16186,7 @@ snapshots:
       - react-native-b4a
       - sodium-javascript
 
-  '@qvac/registry-client@0.5.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)(corestore@7.11.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(hyperblobs@2.12.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(hyperdb@4.22.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(hyperswarm@4.17.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))':
+  '@qvac/registry-client@0.5.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)(corestore@7.11.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(hyperblobs@2.12.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(hyperdb@4.22.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(hyperswarm@4.17.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))':
     dependencies:
       '@qvac/error': 0.1.1
       '@qvac/registry-schema': 0.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(hyperdb@4.22.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
@@ -15199,7 +16200,7 @@ snapshots:
       hypercore-id-encoding: 1.3.0
       hypercore-stats: 2.4.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       hyperdb: 4.22.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      hyperswarm: 4.17.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      hyperswarm: 4.17.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       hyperswarm-stats: 1.3.1
       paparam: 1.10.1
       ready-resource: 1.2.0(bare-abort-controller@1.1.2)
@@ -15313,6 +16314,78 @@ snapshots:
   '@qvac/response@0.1.2':
     dependencies:
       bare-events: 2.4.2
+
+  '@qvac/translation-nmtcpp@0.25.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-fetch@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))':
+    dependencies:
+      '@qvac/error': 0.1.1
+      '@qvac/fabric': 0.29.1
+      '@qvac/infer-base': 0.8.0
+      '@qvac/logging': 0.1.1
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-os: 3.9.3
+      bare-path: 3.1.1
+      bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-url: 2.5.4
+    optionalDependencies:
+      '@qvac/fabric-darwin-arm64': 0.29.1
+      '@qvac/fabric-darwin-x64': 0.29.1
+      '@qvac/fabric-linux-arm64': 0.29.1
+      '@qvac/fabric-linux-x64': 0.29.1
+      '@qvac/fabric-win32-x64': 0.29.1
+      bare-fetch: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
+
+  '@qvac/tts-ggml@0.15.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))':
+    dependencies:
+      '@qvac/error': 0.1.1
+      '@qvac/infer-base': 0.8.0
+      '@qvac/langdetect-text': 0.1.3
+      '@qvac/logging': 0.1.1
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-https: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
+      bare-os: 3.9.3
+      bare-path: 3.1.1
+      bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-stream: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+      bare-url: 2.5.4
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-events
+      - bare-pipe
+      - react-native-b4a
+
+  '@qvac/turbovec-ggml@0.5.1':
+    dependencies:
+      '@qvac/fabric': 0.29.1
+    optionalDependencies:
+      '@qvac/fabric-darwin-arm64': 0.29.1
+      '@qvac/fabric-darwin-x64': 0.29.1
+      '@qvac/fabric-linux-arm64': 0.29.1
+      '@qvac/fabric-linux-x64': 0.29.1
+      '@qvac/fabric-win32-x64': 0.29.1
+
+  '@qvac/vla-ggml@0.36.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
+    dependencies:
+      '@qvac/error': 0.1.1
+      '@qvac/fabric': 0.29.1
+      '@qvac/infer-base': 0.8.0
+      '@qvac/logging': 0.1.1
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-path: 3.1.1
+    optionalDependencies:
+      '@qvac/fabric-darwin-arm64': 0.29.1
+      '@qvac/fabric-darwin-x64': 0.29.1
+      '@qvac/fabric-linux-arm64': 0.29.1
+      '@qvac/fabric-linux-x64': 0.29.1
+      '@qvac/fabric-win32-x64': 0.29.1
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
 
   '@react-native/asset-utils@0.88.1': {}
 
@@ -16332,9 +17405,9 @@ snapshots:
       hyper-instrument: 3.2.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
       hypercore-id-encoding: 1.3.0
       hyperdb: 4.22.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      hyperdht: 6.33.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      hyperdht: 6.36.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       hyperschema: 1.21.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      hyperswarm: 4.17.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      hyperswarm: 4.17.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       paparam: 1.10.1
       pino: 9.14.0
       protomux-rpc: 1.10.0(bare-abort-controller@1.1.2)
@@ -16830,9 +17903,9 @@ snapshots:
       - bare-url
       - react-native-b4a
 
-  bare-https@3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6):
+  bare-https@3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4):
     dependencies:
-      bare-http1: 4.6.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+      bare-http1: 4.6.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
       bare-tcp: 2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
       bare-tls: 3.1.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
     transitivePeerDependencies:
@@ -16843,11 +17916,11 @@ snapshots:
       - bare-url
       - react-native-b4a
 
-  bare-https@3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4):
+  bare-https@4.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6):
     dependencies:
-      bare-http1: 4.6.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
+      bare-http1: 4.6.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       bare-tcp: 2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
-      bare-tls: 3.1.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+      bare-tls: 4.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
@@ -16919,6 +17992,50 @@ snapshots:
       - bare-events
       - react-native-b4a
 
+  bare-make@2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6):
+    dependencies:
+      bare-env: 3.0.1
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-os: 3.9.3
+      bare-path: 3.1.1
+      cmake-runtime: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      cmake-toolchains: 2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
+      llvm-runtime: 23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      nasm-runtime: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      ninja-runtime: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      paparam: 1.15.0
+    optionalDependencies:
+      bare-pipe: 4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-url
+      - musl-sysroot
+      - react-native-b4a
+      - wasi-sysroot
+
+  bare-make@2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4):
+    dependencies:
+      bare-env: 3.0.1
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-os: 3.9.3
+      bare-path: 3.1.1
+      cmake-runtime: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      cmake-toolchains: 2.1.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
+      llvm-runtime: 23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      nasm-runtime: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      ninja-runtime: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      paparam: 1.15.0
+    optionalDependencies:
+      bare-pipe: 4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-url
+      - musl-sysroot
+      - react-native-b4a
+      - wasi-sysroot
+
   bare-mime@1.0.0: {}
 
   bare-module-lexer@1.6.3(bare-buffer@3.6.2)(bare-url@2.5.4):
@@ -16956,6 +18073,12 @@ snapshots:
       bare-semver: 1.1.0
     optionalDependencies:
       bare-url: 2.5.4
+
+  bare-module-resolve@1.12.6(bare-url@2.4.6):
+    dependencies:
+      bare-semver: 1.1.0
+    optionalDependencies:
+      bare-url: 2.4.6
 
   bare-module-resolve@1.12.6(bare-url@2.5.4):
     dependencies:
@@ -17193,236 +18316,236 @@ snapshots:
       - bare-events
       - react-native-b4a
 
-  bare-runtime-android-arm64@1.34.1(bare-url@2.4.6):
+  bare-runtime-android-arm64@1.37.1(bare-url@2.4.6):
     dependencies:
       require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-android-arm64@1.34.1(bare-url@2.5.4):
+  bare-runtime-android-arm64@1.37.1(bare-url@2.5.4):
     dependencies:
       require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-android-arm@1.34.1(bare-url@2.4.6):
+  bare-runtime-android-arm@1.37.1(bare-url@2.4.6):
     dependencies:
       require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-android-arm@1.34.1(bare-url@2.5.4):
+  bare-runtime-android-arm@1.37.1(bare-url@2.5.4):
     dependencies:
       require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-android-ia32@1.34.1(bare-url@2.4.6):
+  bare-runtime-android-ia32@1.37.1(bare-url@2.4.6):
     dependencies:
       require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-android-ia32@1.34.1(bare-url@2.5.4):
+  bare-runtime-android-ia32@1.37.1(bare-url@2.5.4):
     dependencies:
       require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-android-x64@1.34.1(bare-url@2.4.6):
+  bare-runtime-android-x64@1.37.1(bare-url@2.4.6):
     dependencies:
       require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-android-x64@1.34.1(bare-url@2.5.4):
+  bare-runtime-android-x64@1.37.1(bare-url@2.5.4):
     dependencies:
       require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-darwin-arm64@1.34.1(bare-url@2.4.6):
+  bare-runtime-darwin-arm64@1.37.1(bare-url@2.4.6):
     dependencies:
       require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-darwin-arm64@1.34.1(bare-url@2.5.4):
+  bare-runtime-darwin-arm64@1.37.1(bare-url@2.5.4):
     dependencies:
       require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-darwin-x64@1.34.1(bare-url@2.4.6):
+  bare-runtime-darwin-x64@1.37.1(bare-url@2.4.6):
     dependencies:
       require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-darwin-x64@1.34.1(bare-url@2.5.4):
+  bare-runtime-darwin-x64@1.37.1(bare-url@2.5.4):
     dependencies:
       require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-ios-arm64-simulator@1.34.1(bare-url@2.4.6):
+  bare-runtime-ios-arm64-simulator@1.37.1(bare-url@2.4.6):
     dependencies:
       require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-ios-arm64-simulator@1.34.1(bare-url@2.5.4):
+  bare-runtime-ios-arm64-simulator@1.37.1(bare-url@2.5.4):
     dependencies:
       require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-ios-arm64@1.34.1(bare-url@2.4.6):
+  bare-runtime-ios-arm64@1.37.1(bare-url@2.4.6):
     dependencies:
       require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-ios-arm64@1.34.1(bare-url@2.5.4):
+  bare-runtime-ios-arm64@1.37.1(bare-url@2.5.4):
     dependencies:
       require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-ios-x64-simulator@1.34.1(bare-url@2.4.6):
+  bare-runtime-ios-x64-simulator@1.37.1(bare-url@2.4.6):
     dependencies:
       require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-ios-x64-simulator@1.34.1(bare-url@2.5.4):
+  bare-runtime-ios-x64-simulator@1.37.1(bare-url@2.5.4):
     dependencies:
       require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-linux-arm64@1.34.1(bare-url@2.4.6):
+  bare-runtime-linux-arm64@1.37.1(bare-url@2.4.6):
     dependencies:
       require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-linux-arm64@1.34.1(bare-url@2.5.4):
+  bare-runtime-linux-arm64@1.37.1(bare-url@2.5.4):
     dependencies:
       require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-linux-x64@1.34.1(bare-url@2.4.6):
+  bare-runtime-linux-x64@1.37.1(bare-url@2.4.6):
     dependencies:
       require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-linux-x64@1.34.1(bare-url@2.5.4):
+  bare-runtime-linux-x64@1.37.1(bare-url@2.5.4):
     dependencies:
       require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-win32-arm64@1.34.1(bare-url@2.4.6):
+  bare-runtime-win32-arm64@1.37.1(bare-url@2.4.6):
     dependencies:
       require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-win32-arm64@1.34.1(bare-url@2.5.4):
+  bare-runtime-win32-arm64@1.37.1(bare-url@2.5.4):
     dependencies:
       require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-win32-x64@1.34.1(bare-url@2.4.6):
+  bare-runtime-win32-x64@1.37.1(bare-url@2.4.6):
     dependencies:
       require-asset: 1.2.2(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime-win32-x64@1.34.1(bare-url@2.5.4):
+  bare-runtime-win32-x64@1.37.1(bare-url@2.5.4):
     dependencies:
       require-asset: 1.2.2(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
-  bare-runtime@1.34.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6):
+  bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6):
     dependencies:
       bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-os: 3.9.3
       bare-path: 3.1.1
       bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-subprocess: 6.2.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-subprocess: 6.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     optionalDependencies:
-      bare-runtime-android-arm: 1.34.1(bare-url@2.4.6)
-      bare-runtime-android-arm64: 1.34.1(bare-url@2.4.6)
-      bare-runtime-android-ia32: 1.34.1(bare-url@2.4.6)
-      bare-runtime-android-x64: 1.34.1(bare-url@2.4.6)
-      bare-runtime-darwin-arm64: 1.34.1(bare-url@2.4.6)
-      bare-runtime-darwin-x64: 1.34.1(bare-url@2.4.6)
-      bare-runtime-ios-arm64: 1.34.1(bare-url@2.4.6)
-      bare-runtime-ios-arm64-simulator: 1.34.1(bare-url@2.4.6)
-      bare-runtime-ios-x64-simulator: 1.34.1(bare-url@2.4.6)
-      bare-runtime-linux-arm64: 1.34.1(bare-url@2.4.6)
-      bare-runtime-linux-x64: 1.34.1(bare-url@2.4.6)
-      bare-runtime-win32-arm64: 1.34.1(bare-url@2.4.6)
-      bare-runtime-win32-x64: 1.34.1(bare-url@2.4.6)
+      bare-runtime-android-arm: 1.37.1(bare-url@2.4.6)
+      bare-runtime-android-arm64: 1.37.1(bare-url@2.4.6)
+      bare-runtime-android-ia32: 1.37.1(bare-url@2.4.6)
+      bare-runtime-android-x64: 1.37.1(bare-url@2.4.6)
+      bare-runtime-darwin-arm64: 1.37.1(bare-url@2.4.6)
+      bare-runtime-darwin-x64: 1.37.1(bare-url@2.4.6)
+      bare-runtime-ios-arm64: 1.37.1(bare-url@2.4.6)
+      bare-runtime-ios-arm64-simulator: 1.37.1(bare-url@2.4.6)
+      bare-runtime-ios-x64-simulator: 1.37.1(bare-url@2.4.6)
+      bare-runtime-linux-arm64: 1.37.1(bare-url@2.4.6)
+      bare-runtime-linux-x64: 1.37.1(bare-url@2.4.6)
+      bare-runtime-win32-arm64: 1.37.1(bare-url@2.4.6)
+      bare-runtime-win32-x64: 1.37.1(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
       - bare-url
       - react-native-b4a
 
-  bare-runtime@1.34.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4):
+  bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4):
     dependencies:
       bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-os: 3.9.3
       bare-path: 3.1.1
       bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-subprocess: 6.2.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-subprocess: 6.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     optionalDependencies:
-      bare-runtime-android-arm: 1.34.1(bare-url@2.5.4)
-      bare-runtime-android-arm64: 1.34.1(bare-url@2.5.4)
-      bare-runtime-android-ia32: 1.34.1(bare-url@2.5.4)
-      bare-runtime-android-x64: 1.34.1(bare-url@2.5.4)
-      bare-runtime-darwin-arm64: 1.34.1(bare-url@2.5.4)
-      bare-runtime-darwin-x64: 1.34.1(bare-url@2.5.4)
-      bare-runtime-ios-arm64: 1.34.1(bare-url@2.5.4)
-      bare-runtime-ios-arm64-simulator: 1.34.1(bare-url@2.5.4)
-      bare-runtime-ios-x64-simulator: 1.34.1(bare-url@2.5.4)
-      bare-runtime-linux-arm64: 1.34.1(bare-url@2.5.4)
-      bare-runtime-linux-x64: 1.34.1(bare-url@2.5.4)
-      bare-runtime-win32-arm64: 1.34.1(bare-url@2.5.4)
-      bare-runtime-win32-x64: 1.34.1(bare-url@2.5.4)
+      bare-runtime-android-arm: 1.37.1(bare-url@2.5.4)
+      bare-runtime-android-arm64: 1.37.1(bare-url@2.5.4)
+      bare-runtime-android-ia32: 1.37.1(bare-url@2.5.4)
+      bare-runtime-android-x64: 1.37.1(bare-url@2.5.4)
+      bare-runtime-darwin-arm64: 1.37.1(bare-url@2.5.4)
+      bare-runtime-darwin-x64: 1.37.1(bare-url@2.5.4)
+      bare-runtime-ios-arm64: 1.37.1(bare-url@2.5.4)
+      bare-runtime-ios-arm64-simulator: 1.37.1(bare-url@2.5.4)
+      bare-runtime-ios-x64-simulator: 1.37.1(bare-url@2.5.4)
+      bare-runtime-linux-arm64: 1.37.1(bare-url@2.5.4)
+      bare-runtime-linux-x64: 1.37.1(bare-url@2.5.4)
+      bare-runtime-win32-arm64: 1.37.1(bare-url@2.5.4)
+      bare-runtime-win32-x64: 1.37.1(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
@@ -17645,6 +18768,15 @@ snapshots:
       - bare-buffer
       - react-native-b4a
 
+  bare-thread@1.4.0(bare-buffer@3.6.2):
+    dependencies:
+      bare-bundle: 1.11.0(bare-buffer@3.6.2)(bare-url@2.5.4)
+      bare-module-resolve: 1.12.6(bare-url@2.5.4)
+      bare-module-traverse: 2.7.4(bare-buffer@3.6.2)(bare-url@2.5.4)
+      bare-url: 2.5.4
+    optionalDependencies:
+      bare-buffer: 3.6.2
+
   bare-timers@3.2.1(bare-abort-controller@1.1.2):
     optionalDependencies:
       bare-abort-controller: 1.1.2
@@ -17660,6 +18792,16 @@ snapshots:
       - react-native-b4a
 
   bare-tls@3.1.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)):
+    dependencies:
+      bare-net: 2.3.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-stream: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-events
+      - react-native-b4a
+
+  bare-tls@4.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)):
     dependencies:
       bare-net: 2.3.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-stream: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -17806,9 +18948,9 @@ snapshots:
       - bare-events
       - react-native-b4a
 
-  bare@1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.34.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6):
+  bare@1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6):
     dependencies:
-      bare-runtime: 1.34.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      bare-runtime: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
     optionalDependencies:
       bare-buffer: 3.6.2
       bare-console: 6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -17817,13 +18959,37 @@ snapshots:
       bare-timers: 3.2.1(bare-abort-controller@1.1.2)
       bare-url: 2.4.6
 
-  bare@1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.34.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4):
+  bare@1.34.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4):
     dependencies:
-      bare-runtime: 1.34.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      bare-runtime: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
     optionalDependencies:
       bare-buffer: 3.6.2
       bare-console: 6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
       bare-events: 2.9.1(bare-abort-controller@1.1.2)
+      bare-structured-clone: 2.0.1
+      bare-timers: 3.2.1(bare-abort-controller@1.1.2)
+      bare-url: 2.5.4
+
+  bare@1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6):
+    dependencies:
+      bare-runtime: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+    optionalDependencies:
+      bare-buffer: 3.6.2
+      bare-console: 6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+      bare-events: 2.9.1(bare-abort-controller@1.1.2)
+      bare-stream: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+      bare-structured-clone: 2.0.1
+      bare-timers: 3.2.1(bare-abort-controller@1.1.2)
+      bare-url: 2.4.6
+
+  bare@1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4):
+    dependencies:
+      bare-runtime: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+    optionalDependencies:
+      bare-buffer: 3.6.2
+      bare-console: 6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+      bare-events: 2.9.1(bare-abort-controller@1.1.2)
+      bare-stream: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
       bare-structured-clone: 2.0.1
       bare-timers: 3.2.1(bare-abort-controller@1.1.2)
       bare-url: 2.5.4
@@ -17903,7 +19069,7 @@ snapshots:
       hypercore-id-encoding: 1.3.0
       hyperdb: 4.22.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       hyperschema: 1.21.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      hyperswarm: 4.17.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      hyperswarm: 4.17.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       paparam: 1.10.1
       pino: 9.14.0
       pino-bare: 0.0.1(bare-abort-controller@1.1.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -18339,6 +19505,164 @@ snapshots:
 
   cmake-npm@1.1.2: {}
 
+  cmake-runtime-darwin-arm64@4.3.1(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  cmake-runtime-darwin-arm64@4.3.1(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  cmake-runtime-darwin-x64@4.3.1(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  cmake-runtime-darwin-x64@4.3.1(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  cmake-runtime-linux-arm64@4.3.1(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  cmake-runtime-linux-arm64@4.3.1(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  cmake-runtime-linux-x64@4.3.1(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  cmake-runtime-linux-x64@4.3.1(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  cmake-runtime-win32-arm64@4.3.1(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  cmake-runtime-win32-arm64@4.3.1(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  cmake-runtime-win32-x64@4.3.1(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  cmake-runtime-win32-x64@4.3.1(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6):
+    dependencies:
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-os: 3.9.3
+      bare-path: 3.1.1
+      bare-subprocess: 5.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+    optionalDependencies:
+      cmake-runtime-darwin-arm64: 4.3.1(bare-url@2.4.6)
+      cmake-runtime-darwin-x64: 4.3.1(bare-url@2.4.6)
+      cmake-runtime-linux-arm64: 4.3.1(bare-url@2.4.6)
+      cmake-runtime-linux-x64: 4.3.1(bare-url@2.4.6)
+      cmake-runtime-win32-arm64: 4.3.1(bare-url@2.4.6)
+      cmake-runtime-win32-x64: 4.3.1(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-url
+      - react-native-b4a
+
+  cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4):
+    dependencies:
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-os: 3.9.3
+      bare-path: 3.1.1
+      bare-subprocess: 5.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+    optionalDependencies:
+      cmake-runtime-darwin-arm64: 4.3.1(bare-url@2.5.4)
+      cmake-runtime-darwin-x64: 4.3.1(bare-url@2.5.4)
+      cmake-runtime-linux-arm64: 4.3.1(bare-url@2.5.4)
+      cmake-runtime-linux-x64: 4.3.1(bare-url@2.5.4)
+      cmake-runtime-win32-arm64: 4.3.1(bare-url@2.5.4)
+      cmake-runtime-win32-x64: 4.3.1(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-url
+      - react-native-b4a
+
+  cmake-toolchains@2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)):
+    dependencies:
+      cmake-runtime: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      llvm-runtime: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      nasm-runtime: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+
+  cmake-toolchains@2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)):
+    dependencies:
+      cmake-runtime: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      llvm-runtime: 23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      nasm-runtime: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+
+  cmake-toolchains@2.1.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)):
+    dependencies:
+      cmake-runtime: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      llvm-runtime: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      nasm-runtime: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+
+  cmake-toolchains@2.1.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)):
+    dependencies:
+      cmake-runtime: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      llvm-runtime: 23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      nasm-runtime: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+
   cmake-vcpkg@1.2.0: {}
 
   cmd-shim@8.0.0: {}
@@ -18734,7 +20058,7 @@ snapshots:
       compact-encoding: 3.3.0
       dht-prom-alias-rpc: 2.1.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       hypercore-id-encoding: 1.3.0
-      hyperdht: 6.33.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      hyperdht: 6.36.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       protomux-rpc: 1.10.0(bare-abort-controller@1.1.2)
       protomux-rpc-client: 2.4.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
       ready-resource: 1.2.0(bare-abort-controller@1.1.2)
@@ -18781,6 +20105,27 @@ snapshots:
       streamx: 2.28.0(bare-abort-controller@1.1.2)
       time-ordered-set: 2.0.1
       udx-native: 1.20.7(bare-abort-controller@1.1.2)(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-url
+      - react-native-b4a
+      - sodium-javascript
+
+  dht-rpc@6.28.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4):
+    dependencies:
+      adaptive-timeout: 1.0.1
+      b4a: 1.8.1
+      bare-events: 2.9.1(bare-abort-controller@1.1.2)
+      compact-encoding: 3.3.0
+      compact-encoding-net: 1.3.0
+      fast-fifo: 1.3.2
+      kademlia-routing-table: 1.0.6(bare-abort-controller@1.1.2)
+      nat-sampler: 1.0.1
+      sodium-universal: 5.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+      streamx: 2.28.0(bare-abort-controller@1.1.2)
+      time-ordered-set: 2.0.1
+      udx-native: 1.22.1(bare-abort-controller@1.1.2)(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
@@ -20169,7 +21514,7 @@ snapshots:
       hyper-instrument: 2.3.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
       hypercore-id-encoding: 1.3.0
       hyperdrive: 13.3.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      hyperswarm: 4.17.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      hyperswarm: 4.17.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       listen-async: 1.0.0
       paparam: 1.10.1
       pino: 9.14.0
@@ -20607,6 +21952,34 @@ snapshots:
       - react-native-b4a
       - sodium-javascript
 
+  hyperdht@6.36.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4):
+    dependencies:
+      '@hyperswarm/secret-stream': 6.9.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+      b4a: 1.8.1
+      bare-events: 2.9.1(bare-abort-controller@1.1.2)
+      blind-relay: 1.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      bogon: 1.3.0
+      compact-encoding: 3.3.0
+      dht-rpc: 6.28.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      hypercore-crypto: 3.7.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+      hypercore-id-encoding: 1.3.0
+      hyperdht-address: 1.1.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      noise-curve-ed: 2.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+      noise-handshake: 4.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+      record-cache: 1.2.0
+      safety-catch: 1.0.3
+      signal-promise: 1.0.3
+      sodium-universal: 5.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+      streamx: 2.28.0(bare-abort-controller@1.1.2)
+      unslab: 1.3.0
+      xache: 1.3.0
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-url
+      - react-native-b4a
+      - sodium-javascript
+
   hyperdispatch@1.6.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2):
     dependencies:
       b4a: 1.8.1
@@ -20719,6 +22092,22 @@ snapshots:
       b4a: 1.8.1
       bare-events: 2.9.1(bare-abort-controller@1.1.2)
       hyperdht: 6.33.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      safety-catch: 1.0.3
+      shuffled-priority-queue: 2.1.0
+      streamx: 2.28.0(bare-abort-controller@1.1.2)
+      unslab: 1.3.0
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-url
+      - react-native-b4a
+      - sodium-javascript
+
+  hyperswarm@4.17.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4):
+    dependencies:
+      b4a: 1.8.1
+      bare-events: 2.9.1(bare-abort-controller@1.1.2)
+      hyperdht: 6.36.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       safety-catch: 1.0.3
       shuffled-priority-queue: 2.1.0
       streamx: 2.28.0(bare-abort-controller@1.1.2)
@@ -21293,6 +22682,602 @@ snapshots:
       wrap-ansi: 10.0.2
 
   llm-splitter@0.2.0: {}
+
+  llvm-runtime-clang-darwin-arm64@23.1.5(bare-url@2.4.6):
+    dependencies:
+      llvm-runtime-lld-darwin-arm64: 23.1.5(bare-url@2.4.6)
+      llvm-runtime-resources-darwin: 23.1.5(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-darwin-arm64@23.1.5(bare-url@2.5.4):
+    dependencies:
+      llvm-runtime-lld-darwin-arm64: 23.1.5(bare-url@2.5.4)
+      llvm-runtime-resources-darwin: 23.1.5(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-darwin-arm64@23.1.6-1(bare-url@2.4.6):
+    dependencies:
+      llvm-runtime-lld-darwin-arm64: 23.1.6-1(bare-url@2.4.6)
+      llvm-runtime-resources-darwin: 23.1.6-1(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-darwin-arm64@23.1.6-1(bare-url@2.5.4):
+    dependencies:
+      llvm-runtime-lld-darwin-arm64: 23.1.6-1(bare-url@2.5.4)
+      llvm-runtime-resources-darwin: 23.1.6-1(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-darwin-x64@23.1.5(bare-url@2.4.6):
+    dependencies:
+      llvm-runtime-lld-darwin-x64: 23.1.5(bare-url@2.4.6)
+      llvm-runtime-resources-darwin: 23.1.5(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-darwin-x64@23.1.5(bare-url@2.5.4):
+    dependencies:
+      llvm-runtime-lld-darwin-x64: 23.1.5(bare-url@2.5.4)
+      llvm-runtime-resources-darwin: 23.1.5(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-darwin-x64@23.1.6-1(bare-url@2.4.6):
+    dependencies:
+      llvm-runtime-lld-darwin-x64: 23.1.6-1(bare-url@2.4.6)
+      llvm-runtime-resources-darwin: 23.1.6-1(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-darwin-x64@23.1.6-1(bare-url@2.5.4):
+    dependencies:
+      llvm-runtime-lld-darwin-x64: 23.1.6-1(bare-url@2.5.4)
+      llvm-runtime-resources-darwin: 23.1.6-1(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-linux-arm64@23.1.5(bare-url@2.4.6):
+    dependencies:
+      llvm-runtime-lld-linux-arm64: 23.1.5(bare-url@2.4.6)
+      llvm-runtime-resources-linux: 23.1.5(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-linux-arm64@23.1.5(bare-url@2.5.4):
+    dependencies:
+      llvm-runtime-lld-linux-arm64: 23.1.5(bare-url@2.5.4)
+      llvm-runtime-resources-linux: 23.1.5(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-linux-arm64@23.1.6-1(bare-url@2.4.6):
+    dependencies:
+      llvm-runtime-lld-linux-arm64: 23.1.6-1(bare-url@2.4.6)
+      llvm-runtime-resources-linux: 23.1.6-1(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-linux-arm64@23.1.6-1(bare-url@2.5.4):
+    dependencies:
+      llvm-runtime-lld-linux-arm64: 23.1.6-1(bare-url@2.5.4)
+      llvm-runtime-resources-linux: 23.1.6-1(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-linux-x64@23.1.5(bare-url@2.4.6):
+    dependencies:
+      llvm-runtime-lld-linux-x64: 23.1.5(bare-url@2.4.6)
+      llvm-runtime-resources-linux: 23.1.5(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-linux-x64@23.1.5(bare-url@2.5.4):
+    dependencies:
+      llvm-runtime-lld-linux-x64: 23.1.5(bare-url@2.5.4)
+      llvm-runtime-resources-linux: 23.1.5(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-linux-x64@23.1.6-1(bare-url@2.4.6):
+    dependencies:
+      llvm-runtime-lld-linux-x64: 23.1.6-1(bare-url@2.4.6)
+      llvm-runtime-resources-linux: 23.1.6-1(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-linux-x64@23.1.6-1(bare-url@2.5.4):
+    dependencies:
+      llvm-runtime-lld-linux-x64: 23.1.6-1(bare-url@2.5.4)
+      llvm-runtime-resources-linux: 23.1.6-1(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-win32-arm64@23.1.5(bare-url@2.4.6):
+    dependencies:
+      llvm-runtime-lld-win32-arm64: 23.1.5(bare-url@2.4.6)
+      llvm-runtime-resources-win32: 23.1.5(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-win32-arm64@23.1.5(bare-url@2.5.4):
+    dependencies:
+      llvm-runtime-lld-win32-arm64: 23.1.5(bare-url@2.5.4)
+      llvm-runtime-resources-win32: 23.1.5(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-win32-arm64@23.1.6-1(bare-url@2.4.6):
+    dependencies:
+      llvm-runtime-lld-win32-arm64: 23.1.6-1(bare-url@2.4.6)
+      llvm-runtime-resources-win32: 23.1.6-1(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-win32-arm64@23.1.6-1(bare-url@2.5.4):
+    dependencies:
+      llvm-runtime-lld-win32-arm64: 23.1.6-1(bare-url@2.5.4)
+      llvm-runtime-resources-win32: 23.1.6-1(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-win32-x64@23.1.5(bare-url@2.4.6):
+    dependencies:
+      llvm-runtime-lld-win32-x64: 23.1.5(bare-url@2.4.6)
+      llvm-runtime-resources-win32: 23.1.5(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-win32-x64@23.1.5(bare-url@2.5.4):
+    dependencies:
+      llvm-runtime-lld-win32-x64: 23.1.5(bare-url@2.5.4)
+      llvm-runtime-resources-win32: 23.1.5(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-win32-x64@23.1.6-1(bare-url@2.4.6):
+    dependencies:
+      llvm-runtime-lld-win32-x64: 23.1.6-1(bare-url@2.4.6)
+      llvm-runtime-resources-win32: 23.1.6-1(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-clang-win32-x64@23.1.6-1(bare-url@2.5.4):
+    dependencies:
+      llvm-runtime-lld-win32-x64: 23.1.6-1(bare-url@2.5.4)
+      llvm-runtime-resources-win32: 23.1.6-1(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-darwin-arm64@23.1.5(bare-url@2.4.6):
+    dependencies:
+      llvm-runtime-clang-darwin-arm64: 23.1.5(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-darwin-arm64@23.1.5(bare-url@2.5.4):
+    dependencies:
+      llvm-runtime-clang-darwin-arm64: 23.1.5(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-darwin-arm64@23.1.6-1(bare-url@2.4.6):
+    dependencies:
+      llvm-runtime-clang-darwin-arm64: 23.1.6-1(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-darwin-arm64@23.1.6-1(bare-url@2.5.4):
+    dependencies:
+      llvm-runtime-clang-darwin-arm64: 23.1.6-1(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-darwin-x64@23.1.5(bare-url@2.4.6):
+    dependencies:
+      llvm-runtime-clang-darwin-x64: 23.1.5(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-darwin-x64@23.1.5(bare-url@2.5.4):
+    dependencies:
+      llvm-runtime-clang-darwin-x64: 23.1.5(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-darwin-x64@23.1.6-1(bare-url@2.4.6):
+    dependencies:
+      llvm-runtime-clang-darwin-x64: 23.1.6-1(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-darwin-x64@23.1.6-1(bare-url@2.5.4):
+    dependencies:
+      llvm-runtime-clang-darwin-x64: 23.1.6-1(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-linux-arm64@23.1.5(bare-url@2.4.6):
+    dependencies:
+      llvm-runtime-clang-linux-arm64: 23.1.5(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-linux-arm64@23.1.5(bare-url@2.5.4):
+    dependencies:
+      llvm-runtime-clang-linux-arm64: 23.1.5(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-linux-arm64@23.1.6-1(bare-url@2.4.6):
+    dependencies:
+      llvm-runtime-clang-linux-arm64: 23.1.6-1(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-linux-arm64@23.1.6-1(bare-url@2.5.4):
+    dependencies:
+      llvm-runtime-clang-linux-arm64: 23.1.6-1(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-linux-x64@23.1.5(bare-url@2.4.6):
+    dependencies:
+      llvm-runtime-clang-linux-x64: 23.1.5(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-linux-x64@23.1.5(bare-url@2.5.4):
+    dependencies:
+      llvm-runtime-clang-linux-x64: 23.1.5(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-linux-x64@23.1.6-1(bare-url@2.4.6):
+    dependencies:
+      llvm-runtime-clang-linux-x64: 23.1.6-1(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-linux-x64@23.1.6-1(bare-url@2.5.4):
+    dependencies:
+      llvm-runtime-clang-linux-x64: 23.1.6-1(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-win32-arm64@23.1.5(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-win32-arm64@23.1.5(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-win32-arm64@23.1.6-1(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-win32-arm64@23.1.6-1(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-win32-x64@23.1.5(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-win32-x64@23.1.5(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-win32-x64@23.1.6-1(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-lld-win32-x64@23.1.6-1(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-resources-darwin@23.1.5(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-resources-darwin@23.1.5(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-resources-darwin@23.1.6-1(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-resources-darwin@23.1.6-1(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-resources-linux@23.1.5(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-resources-linux@23.1.5(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-resources-linux@23.1.6-1(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-resources-linux@23.1.6-1(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-resources-win32@23.1.5(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-resources-win32@23.1.5(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-resources-win32@23.1.6-1(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime-resources-win32@23.1.6-1(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6):
+    dependencies:
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-os: 3.9.3
+      bare-path: 3.1.1
+      bare-subprocess: 6.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+    optionalDependencies:
+      llvm-runtime-clang-darwin-arm64: 23.1.5(bare-url@2.4.6)
+      llvm-runtime-clang-darwin-x64: 23.1.5(bare-url@2.4.6)
+      llvm-runtime-clang-linux-arm64: 23.1.5(bare-url@2.4.6)
+      llvm-runtime-clang-linux-x64: 23.1.5(bare-url@2.4.6)
+      llvm-runtime-clang-win32-arm64: 23.1.5(bare-url@2.4.6)
+      llvm-runtime-clang-win32-x64: 23.1.5(bare-url@2.4.6)
+      llvm-runtime-lld-darwin-arm64: 23.1.5(bare-url@2.4.6)
+      llvm-runtime-lld-darwin-x64: 23.1.5(bare-url@2.4.6)
+      llvm-runtime-lld-linux-arm64: 23.1.5(bare-url@2.4.6)
+      llvm-runtime-lld-linux-x64: 23.1.5(bare-url@2.4.6)
+      llvm-runtime-lld-win32-arm64: 23.1.5(bare-url@2.4.6)
+      llvm-runtime-lld-win32-x64: 23.1.5(bare-url@2.4.6)
+      llvm-runtime-resources-darwin: 23.1.5(bare-url@2.4.6)
+      llvm-runtime-resources-linux: 23.1.5(bare-url@2.4.6)
+      llvm-runtime-resources-win32: 23.1.5(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-url
+      - react-native-b4a
+
+  llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4):
+    dependencies:
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-os: 3.9.3
+      bare-path: 3.1.1
+      bare-subprocess: 6.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+    optionalDependencies:
+      llvm-runtime-clang-darwin-arm64: 23.1.5(bare-url@2.5.4)
+      llvm-runtime-clang-darwin-x64: 23.1.5(bare-url@2.5.4)
+      llvm-runtime-clang-linux-arm64: 23.1.5(bare-url@2.5.4)
+      llvm-runtime-clang-linux-x64: 23.1.5(bare-url@2.5.4)
+      llvm-runtime-clang-win32-arm64: 23.1.5(bare-url@2.5.4)
+      llvm-runtime-clang-win32-x64: 23.1.5(bare-url@2.5.4)
+      llvm-runtime-lld-darwin-arm64: 23.1.5(bare-url@2.5.4)
+      llvm-runtime-lld-darwin-x64: 23.1.5(bare-url@2.5.4)
+      llvm-runtime-lld-linux-arm64: 23.1.5(bare-url@2.5.4)
+      llvm-runtime-lld-linux-x64: 23.1.5(bare-url@2.5.4)
+      llvm-runtime-lld-win32-arm64: 23.1.5(bare-url@2.5.4)
+      llvm-runtime-lld-win32-x64: 23.1.5(bare-url@2.5.4)
+      llvm-runtime-resources-darwin: 23.1.5(bare-url@2.5.4)
+      llvm-runtime-resources-linux: 23.1.5(bare-url@2.5.4)
+      llvm-runtime-resources-win32: 23.1.5(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-url
+      - react-native-b4a
+
+  llvm-runtime@23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6):
+    dependencies:
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-os: 3.9.3
+      bare-path: 3.1.1
+      bare-subprocess: 6.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+    optionalDependencies:
+      llvm-runtime-clang-darwin-arm64: 23.1.6-1(bare-url@2.4.6)
+      llvm-runtime-clang-darwin-x64: 23.1.6-1(bare-url@2.4.6)
+      llvm-runtime-clang-linux-arm64: 23.1.6-1(bare-url@2.4.6)
+      llvm-runtime-clang-linux-x64: 23.1.6-1(bare-url@2.4.6)
+      llvm-runtime-clang-win32-arm64: 23.1.6-1(bare-url@2.4.6)
+      llvm-runtime-clang-win32-x64: 23.1.6-1(bare-url@2.4.6)
+      llvm-runtime-lld-darwin-arm64: 23.1.6-1(bare-url@2.4.6)
+      llvm-runtime-lld-darwin-x64: 23.1.6-1(bare-url@2.4.6)
+      llvm-runtime-lld-linux-arm64: 23.1.6-1(bare-url@2.4.6)
+      llvm-runtime-lld-linux-x64: 23.1.6-1(bare-url@2.4.6)
+      llvm-runtime-lld-win32-arm64: 23.1.6-1(bare-url@2.4.6)
+      llvm-runtime-lld-win32-x64: 23.1.6-1(bare-url@2.4.6)
+      llvm-runtime-resources-darwin: 23.1.6-1(bare-url@2.4.6)
+      llvm-runtime-resources-linux: 23.1.6-1(bare-url@2.4.6)
+      llvm-runtime-resources-win32: 23.1.6-1(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-url
+      - react-native-b4a
+
+  llvm-runtime@23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4):
+    dependencies:
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-os: 3.9.3
+      bare-path: 3.1.1
+      bare-subprocess: 6.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+    optionalDependencies:
+      llvm-runtime-clang-darwin-arm64: 23.1.6-1(bare-url@2.5.4)
+      llvm-runtime-clang-darwin-x64: 23.1.6-1(bare-url@2.5.4)
+      llvm-runtime-clang-linux-arm64: 23.1.6-1(bare-url@2.5.4)
+      llvm-runtime-clang-linux-x64: 23.1.6-1(bare-url@2.5.4)
+      llvm-runtime-clang-win32-arm64: 23.1.6-1(bare-url@2.5.4)
+      llvm-runtime-clang-win32-x64: 23.1.6-1(bare-url@2.5.4)
+      llvm-runtime-lld-darwin-arm64: 23.1.6-1(bare-url@2.5.4)
+      llvm-runtime-lld-darwin-x64: 23.1.6-1(bare-url@2.5.4)
+      llvm-runtime-lld-linux-arm64: 23.1.6-1(bare-url@2.5.4)
+      llvm-runtime-lld-linux-x64: 23.1.6-1(bare-url@2.5.4)
+      llvm-runtime-lld-win32-arm64: 23.1.6-1(bare-url@2.5.4)
+      llvm-runtime-lld-win32-x64: 23.1.6-1(bare-url@2.5.4)
+      llvm-runtime-resources-darwin: 23.1.6-1(bare-url@2.5.4)
+      llvm-runtime-resources-linux: 23.1.6-1(bare-url@2.5.4)
+      llvm-runtime-resources-win32: 23.1.6-1(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-url
+      - react-native-b4a
 
   locate-path@5.0.0:
     dependencies:
@@ -21938,6 +23923,128 @@ snapshots:
 
   napi-postinstall@0.3.4: {}
 
+  nasm-runtime-darwin-arm64@3.2.0(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  nasm-runtime-darwin-arm64@3.2.0(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  nasm-runtime-darwin-x64@3.2.0(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  nasm-runtime-darwin-x64@3.2.0(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  nasm-runtime-linux-arm64@3.2.0(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  nasm-runtime-linux-arm64@3.2.0(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  nasm-runtime-linux-x64@3.2.0(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  nasm-runtime-linux-x64@3.2.0(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  nasm-runtime-win32-arm64@3.2.0(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  nasm-runtime-win32-arm64@3.2.0(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  nasm-runtime-win32-x64@3.2.0(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  nasm-runtime-win32-x64@3.2.0(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.4(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6):
+    dependencies:
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-os: 3.9.3
+      bare-path: 3.1.1
+      bare-subprocess: 6.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+    optionalDependencies:
+      nasm-runtime-darwin-arm64: 3.2.0(bare-url@2.4.6)
+      nasm-runtime-darwin-x64: 3.2.0(bare-url@2.4.6)
+      nasm-runtime-linux-arm64: 3.2.0(bare-url@2.4.6)
+      nasm-runtime-linux-x64: 3.2.0(bare-url@2.4.6)
+      nasm-runtime-win32-arm64: 3.2.0(bare-url@2.4.6)
+      nasm-runtime-win32-x64: 3.2.0(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-url
+      - react-native-b4a
+
+  nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4):
+    dependencies:
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-os: 3.9.3
+      bare-path: 3.1.1
+      bare-subprocess: 6.2.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+    optionalDependencies:
+      nasm-runtime-darwin-arm64: 3.2.0(bare-url@2.5.4)
+      nasm-runtime-darwin-x64: 3.2.0(bare-url@2.5.4)
+      nasm-runtime-linux-arm64: 3.2.0(bare-url@2.5.4)
+      nasm-runtime-linux-x64: 3.2.0(bare-url@2.5.4)
+      nasm-runtime-win32-arm64: 3.2.0(bare-url@2.5.4)
+      nasm-runtime-win32-x64: 3.2.0(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-url
+      - react-native-b4a
+
   nat-sampler@1.0.1: {}
 
   natural-compare@1.4.0: {}
@@ -21947,6 +24054,128 @@ snapshots:
   negotiator@0.6.4: {}
 
   negotiator@1.0.0: {}
+
+  ninja-runtime-darwin-arm64@1.13.2(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  ninja-runtime-darwin-arm64@1.13.2(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  ninja-runtime-darwin-x64@1.13.2(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  ninja-runtime-darwin-x64@1.13.2(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  ninja-runtime-linux-arm64@1.13.2(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  ninja-runtime-linux-arm64@1.13.2(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  ninja-runtime-linux-x64@1.13.2(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  ninja-runtime-linux-x64@1.13.2(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  ninja-runtime-win32-arm64@1.13.2(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  ninja-runtime-win32-arm64@1.13.2(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  ninja-runtime-win32-x64@1.13.2(bare-url@2.4.6):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  ninja-runtime-win32-x64@1.13.2(bare-url@2.5.4):
+    dependencies:
+      require-asset: 1.2.2(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+    optional: true
+
+  ninja-runtime@1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6):
+    dependencies:
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-os: 3.9.3
+      bare-path: 3.1.1
+      bare-subprocess: 5.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+    optionalDependencies:
+      ninja-runtime-darwin-arm64: 1.13.2(bare-url@2.4.6)
+      ninja-runtime-darwin-x64: 1.13.2(bare-url@2.4.6)
+      ninja-runtime-linux-arm64: 1.13.2(bare-url@2.4.6)
+      ninja-runtime-linux-x64: 1.13.2(bare-url@2.4.6)
+      ninja-runtime-win32-arm64: 1.13.2(bare-url@2.4.6)
+      ninja-runtime-win32-x64: 1.13.2(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-url
+      - react-native-b4a
+
+  ninja-runtime@1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4):
+    dependencies:
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-os: 3.9.3
+      bare-path: 3.1.1
+      bare-subprocess: 5.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+    optionalDependencies:
+      ninja-runtime-darwin-arm64: 1.13.2(bare-url@2.5.4)
+      ninja-runtime-darwin-x64: 1.13.2(bare-url@2.5.4)
+      ninja-runtime-linux-arm64: 1.13.2(bare-url@2.5.4)
+      ninja-runtime-linux-x64: 1.13.2(bare-url@2.5.4)
+      ninja-runtime-win32-arm64: 1.13.2(bare-url@2.5.4)
+      ninja-runtime-win32-x64: 1.13.2(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-url
+      - react-native-b4a
 
   node-abi@4.37.0:
     dependencies:
@@ -23274,7 +25503,7 @@ snapshots:
 
   repl-swarm@2.3.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4):
     dependencies:
-      hyperdht: 6.33.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      hyperdht: 6.36.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       sodium-universal: 5.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-abort-controller
@@ -23298,14 +25527,26 @@ snapshots:
 
   require-asset@1.2.2(bare-url@2.4.6):
     dependencies:
-      bare-module-resolve: 1.12.4(bare-url@2.4.6)
+      bare-module-resolve: 1.12.6(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
     optional: true
 
   require-asset@1.2.2(bare-url@2.5.4):
     dependencies:
-      bare-module-resolve: 1.12.4(bare-url@2.5.4)
+      bare-module-resolve: 1.12.6(bare-url@2.5.4)
+    transitivePeerDependencies:
+      - bare-url
+
+  require-asset@1.2.4(bare-url@2.4.6):
+    dependencies:
+      bare-module-resolve: 1.12.6(bare-url@2.4.6)
+    transitivePeerDependencies:
+      - bare-url
+
+  require-asset@1.2.4(bare-url@2.5.4):
+    dependencies:
+      bare-module-resolve: 1.12.6(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
 
@@ -24284,6 +26525,17 @@ snapshots:
       - react-native-b4a
 
   udx-native@1.20.7(bare-abort-controller@1.1.2)(bare-url@2.5.4):
+    dependencies:
+      b4a: 1.8.1
+      bare-events: 2.9.1(bare-abort-controller@1.1.2)
+      require-addon: 1.2.0(bare-url@2.5.4)
+      streamx: 2.28.0(bare-abort-controller@1.1.2)
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-url
+      - react-native-b4a
+
+  udx-native@1.22.1(bare-abort-controller@1.1.2)(bare-url@2.5.4):
     dependencies:
       b4a: 1.8.1
       bare-events: 2.9.1(bare-abort-controller@1.1.2)

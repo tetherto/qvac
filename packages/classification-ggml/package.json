@@ -1,6 +1,6 @@
 {
   "name": "@qvac/classification-ggml",
-  "version": "0.39.0",
+  "version": "0.40.0",
   "description": "GGML vision addon for QVAC: MobileNet classification, MegaLoc image embeddings and BridgeDepth stereo disparity",
   "addon": true,
   "scripts": {
@@ -88,8 +88,16 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "^0.29.0",
-    "@qvac/fabric-ios": "^0.29.0",
+    "bare": "^1.36.0",
+    "bare-runtime": "^1.36.0",
+    "bare-make": "^2.1.0",
+    "cmake-toolchains": "^2.1.0",
+    "cmake-runtime": "^4.1.1",
+    "llvm-runtime": "^23.1.0",
+    "nasm-runtime": "^3.2.0",
+    "ninja-runtime": "^1.13.1",
+    "@qvac/fabric-android-arm64": "^0.31.0",
+    "@qvac/fabric-ios": "^0.31.0",
     "@types/node": "^24.2.1",
     "cmake-bare": "^1.9.0",
     "cmake-vcpkg": "^1.1.0",
@@ -106,7 +114,7 @@
     "bare-process": "^4.2.2"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.29.0",
+    "@qvac/fabric": "^0.31.0",
     "@qvac/infer-base": "^0.8.0",
     "@qvac/logging": "^0.1.0",
     "bare-env": "^3.0.0",
@@ -118,15 +126,15 @@
     "brittle": "^3.16.5"
   },
   "optionalDependencies": {
-    "@qvac/fabric-linux-x64": "^0.29.0",
-    "@qvac/fabric-linux-arm64": "^0.29.0",
-    "@qvac/fabric-darwin-arm64": "^0.29.0",
-    "@qvac/fabric-darwin-x64": "^0.29.0",
-    "@qvac/fabric-win32-x64": "^0.29.0"
+    "@qvac/fabric-linux-x64": "^0.31.0",
+    "@qvac/fabric-linux-arm64": "^0.31.0",
+    "@qvac/fabric-darwin-arm64": "^0.31.0",
+    "@qvac/fabric-darwin-x64": "^0.31.0",
+    "@qvac/fabric-win32-x64": "^0.31.0"
   },
   "peerDependencies": {
-    "@qvac/fabric-android-arm64": "^0.29.0",
-    "@qvac/fabric-ios": "^0.29.0"
+    "@qvac/fabric-android-arm64": "^0.31.0",
+    "@qvac/fabric-ios": "^0.31.0"
   },
   "peerDependenciesMeta": {
     "@qvac/fabric-android-arm64": {

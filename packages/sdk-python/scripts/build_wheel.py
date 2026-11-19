@@ -13,7 +13,7 @@ loads, and the `start()` that runs it on the Bare runtime of the `bare-sidecar`
 wheel. The wheel is tagged `py3-none-<platform>` for the current platform only
 (via hatch_build.py, driven by the QVAC_WHEEL_PLAT this script exports); models
 are never bundled. Publishing is release automation's job (per-OS runners; see
-build-sdk-python-fat-wheels.yml) -- this script only builds and verifies
+publish-pypi.yml) -- this script only builds and verifies
 locally.
 """
 

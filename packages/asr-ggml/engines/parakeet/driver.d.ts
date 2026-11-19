@@ -30,7 +30,8 @@ export interface ParakeetConfig {
     /**
      * Indic CTC language id or Nemotron locale alias (for example `"en-US"`,
      * `"hi-IN"`, or `"auto"`). Empty selects `"auto"` for Nemotron and keeps
-     * full-vocabulary greedy decode for CTC.
+     * full-vocabulary greedy decode for CTC. Full TranscribePsy EU takes
+     * `"en"`, `"other"`, or `"auto"` (also when empty).
      */
     language?: string;
     /**
@@ -39,10 +40,11 @@ export interface ParakeetConfig {
      */
     streaming?: boolean;
     /**
-     * Streaming chunk cadence. Defaults to 320 ms for Nemotron, 560 ms for the
-     * Unified RNN-T model, and 2000 ms for existing models. Nemotron supports
-     * 80, 160, 320, 560, or 1120 ms; Unified RNN-T supports 80, 160, 560, or
-     * 1040 ms and snaps any other value down to the nearest trained chunk.
+     * Decode window in milliseconds. Omit or set to 0 for the model default.
+     * Offline TDT push streams default to 30000 ms and require at least 30000 ms.
+     * Full TranscribePsy EU defaults to 2000 ms. Nemotron defaults to 320 ms
+     * (80, 160, 320, 560, or 1120 ms). Unified RNN-T defaults to 560 ms
+     * (80, 160, 560, or 1040 ms). Other Unified values snap down to a trained cadence.
      */
     streamingChunkMs?: number;
     /** Sortformer rolling-history window in ms (default: 30000). */
@@ -117,7 +119,7 @@ export interface ParakeetConfig {
     longFormContextFrames?: number;
     /**
      * Directory containing dynamically-loaded ggml backend libraries. Defaults
-     * to the package's own `prebuilds/` folder.
+     * to the backends the `@qvac/fabric` runtime ships.
      */
     backendsDir?: string;
     /**

@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import { z } from 'zod'
 import prettier from 'prettier'
-import { requestSchema, responseSchema } from '@qvac/inference/surface'
+import { OWNER_ONLY_OPERATIONS, requestSchema, responseSchema } from '@qvac/inference/surface'
 import { methodShapes, type MethodName } from './method-shapes'
 import { constantsRegistry } from './constants-registry'
 import { buildModelsRegistry } from './build-models-registry'
@@ -580,6 +580,18 @@ const progressByMethod: Partial<Record<MethodName, { condition: string; response
   }
 }
 
+/**
+ * Methods only the owner client may call: the ones the worker refuses from a
+ * session, and session management, since a session must not open or close
+ * sessions by naming their ids. Generated clients leave them off a session
+ * handle.
+ */
+const ownerOnlyMethods: ReadonlySet<string> = new Set([
+  ...OWNER_ONLY_OPERATIONS,
+  'openSession',
+  'closeSession'
+])
+
 export function buildContract() {
   const methodNames = (Object.keys(methodShapes) as MethodName[]).sort()
   const requestByType = collectByWireType(requestSchema.options, 'request')
@@ -680,6 +692,7 @@ export function buildContract() {
         callShape: callShapeByHandlerType[methodShapes[name]],
         requestSchema: `schema.json#/$defs/${name}.request`,
         responseSchema: `schema.json#/$defs/${name}.response`,
+        ...(ownerOnlyMethods.has(name) && { ownerOnly: true }),
         ...(progress && {
           progress: {
             condition: progress.condition,

@@ -1,10 +1,7 @@
 {
   "name": "@qvac/audiogen-ggml",
-  "version": "0.10.1",
+  "version": "0.11.0",
   "description": "Audio generation (music) addon for qvac",
-  "qvac": {
-    "ggml-speech": "2026-10-27#1"
-  },
   "engines": {
     "bare": ">=1.19.0"
   },
@@ -35,9 +32,7 @@
   "scripts": {
     "build": "npm run build:ts && npm run build:native",
     "build:native": "bare-make generate -D BUILD_FUZZING=OFF && bare-make build && bare-make install && npm run link:platform",
-    "build:native:cuda": "bare-make generate -D ENABLE_CUDA=ON -D BUILD_FUZZING=OFF && bare-make build && bare-make install && npm run link:platform",
     "link:platform": "node ../../scripts/ci/slice-platform-packages.mjs --link-local --workdir .",
-    "build:cuda": "npm run build:ts && npm run build:native:cuda",
     "build:ts": "tsc -p tsconfig.build.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "example": "bare examples/generate-music.js \"Upbeat pop rock with driving electric guitars and a catchy hook\"",
@@ -146,7 +141,17 @@
     "prettier-config-holepunch": "^2.0.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.63.0",
-    "cmake-npm": "^1.1.0"
+    "cmake-npm": "^1.1.0",
+    "bare": "^1.36.0",
+    "bare-runtime": "^1.36.0",
+    "bare-make": "^2.1.0",
+    "cmake-toolchains": "^2.1.0",
+    "cmake-runtime": "^4.1.1",
+    "llvm-runtime": "^23.1.0",
+    "nasm-runtime": "^3.2.0",
+    "ninja-runtime": "^1.13.1",
+    "@qvac/fabric-android-arm64": "^0.31.0",
+    "@qvac/fabric-ios": "^0.31.0"
   },
   "dependencies": {
     "@qvac/error": "^0.1.1",
@@ -156,17 +161,35 @@
     "bare-fs": "^4.5.6",
     "bare-os": "^3.8.0",
     "bare-path": "^3.0.0",
-    "bare-process": "^4.2.2"
+    "bare-process": "^4.2.2",
+    "@qvac/fabric": "^0.31.0"
   },
   "optionalDependencies": {
-    "@qvac/audiogen-ggml-linux-x64": "0.6.0",
-    "@qvac/audiogen-ggml-linux-arm64": "0.6.0",
-    "@qvac/audiogen-ggml-darwin-arm64": "0.6.0",
-    "@qvac/audiogen-ggml-darwin-x64": "0.6.0",
-    "@qvac/audiogen-ggml-win32-x64": "0.6.0"
+    "@qvac/audiogen-ggml-linux-x64": "0.10.2",
+    "@qvac/audiogen-ggml-linux-arm64": "0.10.2",
+    "@qvac/audiogen-ggml-darwin-arm64": "0.10.2",
+    "@qvac/audiogen-ggml-darwin-x64": "0.10.2",
+    "@qvac/audiogen-ggml-win32-x64": "0.10.2",
+    "@qvac/fabric-linux-x64": "^0.31.0",
+    "@qvac/fabric-linux-arm64": "^0.31.0",
+    "@qvac/fabric-darwin-arm64": "^0.31.0",
+    "@qvac/fabric-darwin-x64": "^0.31.0",
+    "@qvac/fabric-win32-x64": "^0.31.0"
   },
   "overrides": {
     "bare-module-lexer": "1.6.3"
   },
-  "types": "index.d.ts"
+  "types": "index.d.ts",
+  "peerDependencies": {
+    "@qvac/fabric-android-arm64": "^0.31.0",
+    "@qvac/fabric-ios": "^0.31.0"
+  },
+  "peerDependenciesMeta": {
+    "@qvac/fabric-android-arm64": {
+      "optional": true
+    },
+    "@qvac/fabric-ios": {
+      "optional": true
+    }
+  }
 }

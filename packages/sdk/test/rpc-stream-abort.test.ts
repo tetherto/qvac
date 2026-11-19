@@ -10,11 +10,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 process.env['QVAC_WORKER_PATH'] = path.resolve(__dirname, 'fixtures/stream-close-worker.mjs')
 
 async function load() {
-  const { stream, duplex, close } = await import('@/client/rpc/rpc-client')
+  const { send, stream, duplex, close } = await import('@/client/rpc/rpc-client')
   const { loggingStream } = await import('@/client/api/logging-stream')
   const { subscribeServerLogs } = await import('@/client/api/subscribe-logs')
   const { SDK_ALL_LOG_ID } = await import('@/logging')
-  return { stream, duplex, close, loggingStream, subscribeServerLogs, SDK_ALL_LOG_ID }
+  return { send, stream, duplex, close, loggingStream, subscribeServerLogs, SDK_ALL_LOG_ID }
 }
 
 function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
@@ -58,6 +58,17 @@ test('aborting a stream() parked on a quiet id ends it and closes the request on
   const result = await within(read, 2000, 'the pending read did not end on abort')
   t.ok(result.done, 'the pending read ends without an error and without another entry')
   t.is(await nextReport(), 'closed:quiet', 'the worker sees the stream closed')
+})
+
+test('a send() that times out cancels the request on the worker', async function (t) {
+  t.timeout(30_000)
+  const { send } = await load()
+
+  await t.exception(
+    send({ type: 'heartbeat' }, { timeout: 100 }),
+    OperationTimeoutError as unknown as new () => Error
+  )
+  t.is(await nextReport(), 'cancelled:heartbeat', 'the worker sees the request cancelled')
 })
 
 test('a stream() delivers responses until it is aborted', async function (t) {

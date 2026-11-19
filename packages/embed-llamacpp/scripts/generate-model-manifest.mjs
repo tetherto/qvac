@@ -354,6 +354,8 @@ export async function main() {
   try {
     for (const [name, entry] of Object.entries(manifest.models)) {
       if (args.only && args.only !== name) continue
+      // S3 entries are CI's; only Hugging Face URLs are pinned here.
+      if (!Array.isArray(entry.urls)) continue
       if (entry.sha256 && !args.force) {
         console.log(`skip ${name} (already pinned; use --force to recompute)`)
         continue

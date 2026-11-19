@@ -9,7 +9,16 @@ import {
 import type { LoadTimingStats } from '@/profiling/types'
 import { nowMs } from '@/profiling/clock'
 import { forwardBackendDiagnostics } from '@/profiling/backend-diagnostics'
-import { isModelLoaded, registerModel, type AnyModel } from '@/runtime/model-registry'
+import {
+  addModelLease,
+  getModelEntry,
+  isModelLoaded,
+  isModelReconfigured,
+  registerModel,
+  type AnyModel
+} from '@/runtime/model-registry'
+import { OWNER_SESSION_ID } from '@/runtime/session-id'
+import { withModelWorkLock } from '@/runtime/model-work-lock'
 import { startLogBuffering, stopLogBufferingWithTimeout } from '@/runtime/logging-stream-registry'
 import { detectShardedModel, checkAllShardsExist } from '@/utils/index'
 import {
@@ -18,6 +27,7 @@ import {
   ModelFileNotFoundInDirError,
   ModelFileLocateFailedError,
   ModelFitRefusedError,
+  ModelReconfiguredError,
   InferenceCancelledError
 } from '@/errors/index'
 import { ensureAddonLoggerReady, getPlugin } from '@/plugins/index'
@@ -38,27 +48,46 @@ export interface LoadModelResult {
 export interface LoadModelOptions {
   collectTiming?: boolean
   request?: { signal: AbortSignal; requestId: string }
+  /** Session that takes a lease on the model. Defaults to the owner session. */
+  sessionId?: string
 }
 
 export async function loadModel(
   params: LoadModelServerParams,
   options?: LoadModelOptions
 ): Promise<LoadModelResult> {
-  const {
-    modelId,
-    modelPath,
-    options: modelOptions,
-    artifacts,
-    modelName
-  } = loadModelServerParamsSchema.parse(params)
+  const parsed = loadModelServerParamsSchema.parse(params)
+  return withModelWorkLock(parsed.modelId, () => loadModelLocked(parsed, options), options?.request)
+}
+
+async function loadModelLocked(
+  params: LoadModelServerParams,
+  options?: LoadModelOptions
+): Promise<LoadModelResult> {
+  const { modelId, modelPath, options: modelOptions, artifacts, modelName } = params
   const { modelConfig, modelType: rawModelType, modelFitPolicy } = modelOptions
 
   // Normalize modelType to canonical form (handles aliases and custom types)
   const modelType = normalizeModelType(rawModelType)
 
-  // Check if model is already loaded
+  const sessionId = options?.sessionId ?? OWNER_SESSION_ID
+
+  // A cancel that landed while this load waited for another load of the same
+  // model must not take a lease the caller no longer wants.
+  if (options?.request?.signal.aborted === true) {
+    throw new InferenceCancelledError(options.request.requestId)
+  }
+
+  // An already loaded model is shared: the caller takes a lease on it. A
+  // session that holds no lease on a reconfigured model is refused: it asked
+  // for the configuration the id hashes, which the model no longer has.
   if (isModelLoaded(modelId)) {
-    logger.info(`${modelType} model ${modelId} is already loaded`)
+    const entry = getModelEntry(modelId)
+    if (entry && !entry.leases.has(sessionId) && isModelReconfigured(modelId)) {
+      throw new ModelReconfiguredError(modelId)
+    }
+    addModelLease(modelId, sessionId)
+    logger.info(`${modelType} model ${modelId} is already loaded; lease added for ${sessionId}`)
     return {}
   }
 
@@ -156,15 +185,19 @@ export async function loadModel(
         ? await resolveToolDialect(modelName, modelPath)
         : undefined
 
-    registerModel(modelId, {
-      model: result.model,
-      path: modelPath,
-      config: modelConfig,
-      modelType: modelType as CanonicalModelType,
-      name: modelName,
-      fitProbe,
-      toolDialect
-    })
+    registerModel(
+      modelId,
+      {
+        model: result.model,
+        path: modelPath,
+        config: modelConfig,
+        modelType: modelType as CanonicalModelType,
+        name: modelName,
+        fitProbe,
+        toolDialect
+      },
+      sessionId
+    )
 
     const loadResult: LoadModelResult =
       modelInitializationTimeMs !== undefined ? { timing: { modelInitializationTimeMs } } : {}

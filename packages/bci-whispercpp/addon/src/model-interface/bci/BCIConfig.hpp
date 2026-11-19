@@ -27,8 +27,6 @@ struct BCIConfig {
   std::map<std::string, JSValueVariant> whisperContextCfg;
   std::map<std::string, JSValueVariant> bciConfig;
 
-  // Directory scanned, as given, for the ggml `.so` modules
-  // (`configurationParams.backendsDir` from JS). Empty scans the addon's own.
   std::string backendsDir;
 
   // Explicit path to the BCI embedder weights file
