@@ -1,10 +1,7 @@
 {
   "name": "@qvac/asr-ggml",
-  "version": "0.12.1",
+  "version": "0.13.0",
   "description": "Multi-engine ASR (Whisper + NVIDIA Parakeet + MOSS-Transcribe-Diarize) inference addon for qvac on the Bare runtime",
-  "qvac": {
-    "ggml-speech": "2026-10-27#1"
-  },
   "engines": {
     "bare": ">=1.20.0"
   },
@@ -40,9 +37,7 @@
     "format": "prettier --write \"examples/**/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" \"binding.js\" \"addon-unavailable.js\"",
     "build": "npm run build:ts && npm run build:native",
     "build:native": "bare-make generate -D BUILD_FUZZING=OFF && bare-make build && bare-make install && npm run link:platform",
-    "build:native:cuda": "bare-make generate -D ASR_CUDA=ON -D BUILD_FUZZING=OFF && bare-make build && bare-make install && npm run link:platform",
     "link:platform": "node ../../scripts/ci/slice-platform-packages.mjs --link-local --workdir .",
-    "build:cuda": "npm run build:ts && npm run build:native:cuda",
     "build:ts": "tsc -p tsconfig.build.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "clean": "rm -rf build/ prebuilds/",
@@ -181,7 +176,7 @@
     "@types/node": "^22.15.3",
     "bare-buffer": "^3.4.2",
     "bare-ffmpeg": "^1.0.0-32",
-    "bare-https": "^3.0.0",
+    "bare-https": "^4.0.0",
     "bare-os": "^3.6.2",
     "bare-process": "^4.2.2",
     "bare-stream": "^2.7.0",
@@ -209,7 +204,9 @@
     "cmake-runtime": "^4.1.1",
     "llvm-runtime": "^23.1.0",
     "nasm-runtime": "^3.2.0",
-    "ninja-runtime": "^1.13.1"
+    "ninja-runtime": "^1.13.1",
+    "@qvac/fabric-android-arm64": "^0.31.0",
+    "@qvac/fabric-ios": "^0.31.0"
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
@@ -218,14 +215,20 @@
     "bare-fs": "^4.7.1",
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2",
-    "bare-url": "^2.4.5"
+    "bare-url": "^2.4.5",
+    "@qvac/fabric": "^0.31.0"
   },
   "optionalDependencies": {
-    "@qvac/asr-ggml-linux-x64": "0.8.0",
-    "@qvac/asr-ggml-linux-arm64": "0.8.0",
-    "@qvac/asr-ggml-darwin-arm64": "0.8.0",
-    "@qvac/asr-ggml-darwin-x64": "0.8.0",
-    "@qvac/asr-ggml-win32-x64": "0.8.0"
+    "@qvac/asr-ggml-linux-x64": "0.12.2",
+    "@qvac/asr-ggml-linux-arm64": "0.12.2",
+    "@qvac/asr-ggml-darwin-arm64": "0.12.2",
+    "@qvac/asr-ggml-darwin-x64": "0.12.2",
+    "@qvac/asr-ggml-win32-x64": "0.12.2",
+    "@qvac/fabric-linux-x64": "^0.31.0",
+    "@qvac/fabric-linux-arm64": "^0.31.0",
+    "@qvac/fabric-darwin-arm64": "^0.31.0",
+    "@qvac/fabric-darwin-x64": "^0.31.0",
+    "@qvac/fabric-win32-x64": "^0.31.0"
   },
   "exports": {
     "./package": "./package.json",
@@ -268,5 +271,17 @@
       "prettier --write",
       "lunte"
     ]
+  },
+  "peerDependencies": {
+    "@qvac/fabric-android-arm64": "^0.31.0",
+    "@qvac/fabric-ios": "^0.31.0"
+  },
+  "peerDependenciesMeta": {
+    "@qvac/fabric-android-arm64": {
+      "optional": true
+    },
+    "@qvac/fabric-ios": {
+      "optional": true
+    }
   }
 }

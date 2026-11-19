@@ -74,6 +74,7 @@ jobs:
       WORKDIR: src/${{ fromJSON(inputs.rows)[matrix.leg.i].dir }}
       NX_DAEMON: "false"
       NX_NO_CLOUD: "true"
+      pnpm_config_verify_deps_before_run: "false"
     steps:
       - name: Checkout actions
         uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
@@ -168,13 +169,22 @@ jobs:
       # XRT and IRON for fabric's XDNA backend, which any build of fabric from source compiles.
       - if: contains(fromJSON(inputs.rows)[matrix.leg.i].toolchain.hostSetup[format('{0}-{1}', fromJSON(inputs.rows)[matrix.leg.i].platform, fromJSON(inputs.rows)[matrix.leg.i].arch)], 'xdna') || contains(fromJSON(inputs.rows)[matrix.leg.i].setup, 'xdna')
         uses: ./.github/actions/setup-xdna
-      # The package and its workspace dependencies, so Nx builds a dependency the change touched from its sources.
+      # The package and its workspace dependencies, so Nx builds a dependency the change touched from its sources. A row
+      # that names a provider but restores none installs the package alone from npm, with the provider's release.
       - name: Install
         shell: bash
         working-directory: src
         env:
           NPM: ${{ fromJSON(inputs.rows)[matrix.leg.i].npm }}
-        run: pnpm install --frozen-lockfile --ignore-scripts --filter . --filter "$NPM..."
+          DIR: ${{ fromJSON(inputs.rows)[matrix.leg.i].dir }}
+          RELEASED: ${{ fromJSON(inputs.rows)[matrix.leg.i].provider != '' && fromJSON(inputs.rows)[matrix.leg.i].providers[0] == null }}
+        run: |
+          if [ "$RELEASED" = "true" ]; then
+            pnpm install --frozen-lockfile --ignore-scripts --filter .
+            node scripts/ci/checks-source.mjs install published "$DIR"
+          else
+            pnpm install --frozen-lockfile --ignore-scripts --filter . --filter "$NPM..."
+          fi
       - name: ci:system
         shell: bash
         working-directory: src
@@ -203,14 +213,14 @@ jobs:
             cp -R "$RUNNER_TEMP/providers/packages/$p/prebuilds" "packages/$p/"
           done
           pnpm exec nx run-many -t link:platform -p "$(printf 'packages/%s\n' "${list[@]}" | paste -sd, -)" --exclude-task-dependencies --outputStyle=stream
-      # With providers restored, nothing it depends on is built here.
+      # A package with a provider never builds it here: it links the prebuilds restored above, or the installed release.
       - name: Build
         shell: bash
         working-directory: src
         env:
           PROJECT: ${{ fromJSON(inputs.rows)[matrix.leg.i].project }}
           CONFIG: ${{ fromJSON(inputs.rows)[matrix.leg.i].config }}
-          PROVIDED: ${{ fromJSON(inputs.rows)[matrix.leg.i].providers[0] != null }}
+          PROVIDED: ${{ fromJSON(inputs.rows)[matrix.leg.i].provider != '' }}
         run: |
           exclude=()
           if [ "$PROVIDED" = "true" ]; then exclude=(--exclude-task-dependencies); fi

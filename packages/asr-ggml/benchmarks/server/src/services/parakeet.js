@@ -6,14 +6,7 @@ const fs = require('bare-fs')
 const { Readable } = require('bare-stream')
 const process = require('bare-process')
 const path = require('bare-path')
-const {
-  buildStreamingOptions,
-  chunkBytesForMs,
-  sliceBuffer,
-  containsTranscript,
-  collectAppendSegments,
-  joinSegments
-} = require('./parakeetStreaming')
+const { transcribeStreaming } = require('./parakeetStreaming')
 
 const ALLOWED_LIBS = ['@qvac/asr-ggml']
 
@@ -114,40 +107,10 @@ const transcribeBatch = async (modelInstance, audioBuffer) => {
   return { text, firstPartialMs: null }
 }
 
-// Streaming mode: a duplex runStreaming() session driven by the addon's
-// ms-based controls. firstPartialMs counts from just before the session
-// opens to the first update carrying a transcript segment — the engine
-// streams finalized per-chunk increments (a separate partial-hypothesis
-// channel is not implemented), so this is the first transcript output a
-// streaming consumer would see. The audio is fed as fast as the session
-// accepts it, without real-time pacing.
-const transcribeStreaming = async (modelInstance, audioBuffer, sampleRate, streamingOptions) => {
-  const chunkBytes = chunkBytesForMs(sampleRate, streamingOptions.chunkMs)
-  const audioStream = Readable.from(sliceBuffer(audioBuffer, chunkBytes))
-
-  const transcriptSegments = []
-  let firstPartialMs = null
-  const streamStart = process.hrtime()
-
-  const response = await modelInstance.runStreaming(audioStream, streamingOptions)
-
-  await response
-    .onUpdate((outputArr) => {
-      const items = Array.isArray(outputArr) ? outputArr : [outputArr]
-      if (firstPartialMs === null && containsTranscript(items)) {
-        firstPartialMs = elapsedMs(streamStart)
-      }
-      collectAppendSegments(transcriptSegments, items)
-    })
-    .await()
-
-  return { text: joinSegments(transcriptSegments), firstPartialMs }
-}
-
 const transcribeInputs = async (modelInstance, inputs, config) => {
   const streaming = config.streaming || false
   const sampleRate = config.sampleRate || DEFAULT_SAMPLE_RATE
-  const streamingOptions = buildStreamingOptions(config)
+  const nowMs = () => elapsedMs([0, 0])
 
   const outputs = []
   const firstPartialMs = []
@@ -157,13 +120,11 @@ const transcribeInputs = async (modelInstance, inputs, config) => {
     const audioBuffer = fs.readFileSync(resolvedAudioPath)
 
     if (streaming) {
-      logger.info(
-        `Processing ${audioFilePath} in streaming mode: ${JSON.stringify(streamingOptions)}`
-      )
+      logger.info(`Processing ${audioFilePath} in streaming mode`)
     }
 
     const result = streaming
-      ? await transcribeStreaming(modelInstance, audioBuffer, sampleRate, streamingOptions)
+      ? await transcribeStreaming(modelInstance, audioBuffer, sampleRate, config, nowMs)
       : await transcribeBatch(modelInstance, audioBuffer)
 
     logger.debug(`Transcription for ${audioFilePath}: text="${result.text.substring(0, 100)}"`)

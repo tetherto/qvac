@@ -3,21 +3,20 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const {
-  STREAMING_DEFAULT_CHUNK_MS,
   buildStreamingOptions,
   chunkBytesForMs,
   sliceBuffer,
   isTranscriptSegment,
   containsTranscript,
   collectAppendSegments,
-  joinSegments
+  joinSegments,
+  transcribeStreaming
 } = require('../src/services/parakeetStreaming')
 
 test('buildStreamingOptions applies the documented defaults', () => {
   const options = buildStreamingOptions({})
 
   assert.deepEqual(options, {
-    chunkMs: STREAMING_DEFAULT_CHUNK_MS,
     emitPartials: true
   })
 })
@@ -30,6 +29,40 @@ test('buildStreamingOptions forwards the ms-based controls', () => {
   })
 
   assert.deepEqual(options, { chunkMs: 480, emitPartials: false, historyMs: 30000 })
+})
+
+test('streaming PCM writes stay at 320 ms with or without a decode override', async () => {
+  const sampleRate = 16000
+  const writeBytes = chunkBytesForMs(sampleRate, 320)
+  for (const chunkMs of [undefined, 30000]) {
+    const config = chunkMs === undefined ? {} : { streamingChunkMs: chunkMs }
+    const expected =
+      chunkMs === undefined ? { emitPartials: true } : { emitPartials: true, chunkMs }
+    const model = {
+      async runStreaming(audio, options) {
+        assert.deepEqual(options, expected)
+        const sizes = []
+        for await (const chunk of audio) sizes.push(chunk.length)
+        assert.deepEqual(sizes, [writeBytes, 2])
+        return {
+          onUpdate(update) {
+            update({ text: 'test transcript', toAppend: true })
+            return this
+          },
+          await() {}
+        }
+      }
+    }
+
+    const result = await transcribeStreaming(
+      model,
+      new Uint8Array(writeBytes + 2),
+      sampleRate,
+      config,
+      () => 0
+    )
+    assert.deepEqual(result, { text: 'test transcript', firstPartialMs: 0 })
+  }
 })
 
 test('chunkBytesForMs sizes whole s16le samples', () => {

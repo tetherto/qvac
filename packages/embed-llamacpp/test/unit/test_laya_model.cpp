@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <any>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <functional>
@@ -86,8 +87,12 @@ std::string layaModelPath() {
 std::unordered_map<std::string, double> statsOf(const LayaModel& model) {
   std::unordered_map<std::string, double> stats;
   for (const auto& [key, value] : model.runtimeStats()) {
-    stats[key] =
-        std::visit([](auto v) { return static_cast<double>(v); }, value);
+    // String stats have no numeric value, so the map skips them.
+    if (const auto* number = std::get_if<double>(&value)) {
+      stats[key] = *number;
+    } else if (const auto* count = std::get_if<int64_t>(&value)) {
+      stats[key] = static_cast<double>(*count);
+    }
   }
   return stats;
 }
@@ -317,10 +322,13 @@ TEST_F(LayaModelTest, BatchRequestReturnsOneResultPerState) {
   EXPECT_EQ(res[1].at("answers").at("department").at("choice"), "billing");
 }
 
-// As fabric's test-laya: kernels are chosen by batch size, and flash attention
-// rounds K and V to f16, which turns their small differences into visible
-// steps (a 0.005 score drift on x86 CPU, 0.0015 on Vulkan). On the CPU without
-// flash attention a sequence answers the same alone and packed.
+// On the CPU without flash attention (which rounds K and V to f16, see
+// fabric's test-laya), packing never mixes sequences: a sequence at the start
+// of a batch, or packed with copies of itself, answers exactly as alone,
+// whatever follows it. Starting elsewhere in a batch changes how the kernels
+// round its values, by the same amount on every run and thread count: in this
+// layout the refund answer moves by 0.0011 on win32-x64 and 0.0004 on
+// linux-x64, and other layouts move the urgency score by up to 0.0063.
 TEST(LayaModelBatchTest, SameAnswerAloneAndInBatch) {
   const std::string path = layaModelPath();
   if (path.empty()) {
@@ -332,25 +340,35 @@ TEST(LayaModelBatchTest, SameAnswerAloneAndInBatch) {
   auto predict = [&](const std::string& request) {
     return json::parse(model.predict(request).json);
   };
+  const json ticket = json::parse(kTicketRequest);
+  const std::string state = ticket.at("state");
+  auto packed = [&](const std::vector<std::string>& states) {
+    return predict(
+        json{{"states", states}, {"questions", ticket.at("questions")}}.dump());
+  };
+  const std::string crash = "The app crashes on startup.";
+  const std::string thanks = "Thanks, all good.";
 
-  const json alone = predict(kTicketRequest);
-  json batch = json::parse(kTicketRequest);
-  batch["states"] = json::array(
-      {"The app crashes on startup.", batch.at("state"), "Thanks, all good."});
-  batch.erase("state");
-  const json packed = predict(batch.dump());
+  const json alone = predict(kTicketRequest).at("answers");
+  EXPECT_EQ(packed({state, crash, thanks}).at(0).at("answers"), alone);
+  const json copies = packed({state, state, state});
+  ASSERT_EQ(copies.size(), 3U);
+  for (const json& copy : copies) {
+    EXPECT_EQ(copy.at("answers"), alone);
+  }
 
-  const json& a = alone.at("answers");
-  const json& b = packed.at(1).at("answers");
-  EXPECT_EQ(a.at("department").at("choice"), b.at("department").at("choice"));
+  const json middle = packed({crash, state, thanks}).at(1).at("answers");
+  EXPECT_EQ(
+      middle.at("department").at("choice"),
+      alone.at("department").at("choice"));
   EXPECT_NEAR(
-      a.at("refund").at("noul").get<double>(),
-      b.at("refund").at("noul").get<double>(),
-      1e-3);
+      middle.at("refund").at("noul").get<double>(),
+      alone.at("refund").at("noul").get<double>(),
+      5e-3);
   EXPECT_NEAR(
-      a.at("urgency").at("score").get<double>(),
-      b.at("urgency").at("score").get<double>(),
-      1e-3);
+      middle.at("urgency").at("score").get<double>(),
+      alone.at("urgency").at("score").get<double>(),
+      5e-3);
 }
 
 TEST_F(LayaModelTest, InvalidJsonIsInvalidRequest) {
