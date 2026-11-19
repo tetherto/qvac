@@ -13,32 +13,35 @@ export function branchAllowed(ref, patterns) {
   return patterns.some((p) => (p.endsWith('*') ? ref.startsWith(p.slice(0, -1)) : ref === p))
 }
 
-// The one open PR whose head is the triggering commit, or why there is none.
+// The one open PR into a built base whose head is the triggering commit, or why there is none. PRs into other bases
+// are left out first, so one never blocks the other.
 export function matchPr(pulls, { headSha, headRepo, repo, branches }) {
-  if (pulls.length !== 1) return { skip: `${pulls.length} open pull requests for this branch` }
-  const [pr] = pulls
+  const built = pulls.filter(
+    (p) => same(p.base?.repo?.full_name, repo) && branchAllowed(p.base?.ref || '', branches)
+  )
+  if (built.length !== 1)
+    return { skip: `${built.length} open pull requests for this branch into a built base` }
+  const [pr] = built
   if (pr.head?.sha !== headSha) return { skip: `head moved from ${headSha} to ${pr.head?.sha}` }
   if (!same(pr.head?.repo?.full_name, headRepo)) return { skip: 'head repository does not match' }
-  if (!same(pr.base?.repo?.full_name, repo)) return { skip: 'base repository does not match' }
-  if (!branchAllowed(pr.base.ref, branches))
-    return { skip: `base ${pr.base.ref} is not built here` }
   return { pr }
 }
 
-// The label a run was triggered by: the newest label applied after the previous gate run on this commit and no later
-// than this run. With no previous gate run the commit was pushed; with one and no label, the PR was reopened or readied.
-export function triggerEvent({ gateRuns, labelEvents, createdAt, slackMs = 5000 }) {
-  const until = Date.parse(createdAt) + slackMs
-  const runs = gateRuns
-    .map((r) => Date.parse(r.created_at))
-    .filter((t) => t <= until)
-    .sort((a, b) => a - b)
-  if (runs.length < 2) return { action: 'synchronize', label: '' }
-  const since = runs[runs.length - 2]
+// The label a run was triggered by: the newest label applied between the gate run before the triggering one on this
+// commit and the triggering run. With no earlier gate run the commit was pushed; with one and no label, the PR was
+// reopened or readied. Timestamps are whole seconds, so a label in the earlier run's second still counts.
+export function triggerEvent({ gateRuns, labelEvents, trigger }) {
+  const prev = gateRuns
+    .filter((r) => r.id < trigger.id)
+    .sort((a, b) => a.id - b.id)
+    .pop()
+  if (!prev) return { action: 'synchronize', label: '' }
+  const since = Date.parse(prev.created_at)
+  const until = Date.parse(trigger.created_at)
   const label = labelEvents
     .filter((e) => {
       const t = Date.parse(e.created_at)
-      return t > since && t <= until
+      return t >= since && t <= until
     })
     .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))
     .pop()
@@ -142,13 +145,16 @@ async function main(env) {
   })
   if (!pr) return skip(why)
   const files = await gh.all(`repos/${repo}/pulls/${pr.number}/files`)
+  // The files are the PR's current ones, so they describe headSha only if the head did not move while they were read.
+  const after = await gh.get(`repos/${repo}/pulls/${pr.number}`)
+  if (after.head?.sha !== headSha) return skip(`head moved from ${headSha} to ${after.head?.sha}`)
   const prefixes = list(env.PATHS)
   if (prefixes.length && !files.some((f) => prefixes.some((p) => f.filename.startsWith(p))))
     return skip(`PR #${pr.number} changes nothing under ${prefixes.join(' ')}`)
   const fork = !same(pr.head.repo.full_name, repo)
 
-  // The gate's runs on this commit, from its own workflow file, and this run's creation time.
-  const self = await gh.get(`repos/${repo}/actions/runs/${env.GITHUB_RUN_ID}`)
+  // The gate's runs on this commit, from its own workflow file; the triggering one is named by the event.
+  const trigger = { id: Number(env.TRIGGER_ID), created_at: env.TRIGGER_CREATED_AT }
   const gateRuns = await gh.all(
     `repos/${repo}/actions/workflows/${env.GATE_WORKFLOW}/runs?event=pull_request&head_sha=${headSha}`,
     'workflow_runs'
@@ -156,7 +162,7 @@ async function main(env) {
   const labelEvents = (await gh.all(`repos/${repo}/issues/${pr.number}/events`)).filter(
     (e) => e.event === 'labeled' && e.label
   )
-  let { action, label } = triggerEvent({ gateRuns, labelEvents, createdAt: self.created_at })
+  let { action, label } = triggerEvent({ gateRuns, labelEvents, trigger })
   // A label this workflow does not route by reruns it as a push would.
   const routed = list(env.LABELS)
   if (label && routed.length && !routed.includes(label))
