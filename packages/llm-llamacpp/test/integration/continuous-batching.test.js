@@ -328,6 +328,19 @@ async function setupModelWithLogs(t, configOverrides = {}) {
   return { model, logs: specLogger.logs }
 }
 
+// Native log lines reach JS asynchronously, after the call that logged them
+// returns, so wait for a matching line before reading the last one.
+async function lastLogMatch(logs, re, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs
+  while (!logs.some((line) => re.test(line)) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  return logs
+    .map((line) => re.exec(line))
+    .filter(Boolean)
+    .pop()
+}
+
 async function setupMultimodalBatchModel(t, configOverrides = {}) {
   const [modelName, dirPath] = await ensureModel(MULTIMODAL_MODEL_CONFIG.llmModel)
   const [projModelName] = await ensureModel(MULTIMODAL_MODEL_CONFIG.projModel)
@@ -1334,17 +1347,6 @@ test(
       ctx_size: undefined
     })
 
-    // The last context fabric logs is the one the model runs on.
-    const nCtx = logs
-      .map((line) => /llama_context: n_ctx\s+=\s+(\d+)/.exec(line))
-      .filter(Boolean)
-      .pop()
-    t.is(
-      Number(nCtx?.[1]),
-      2 * KV_PER_SLOT_CAP,
-      'the pool is sized to parallel x kv_unified_per_slot'
-    )
-
     const cases = ['capital-france', 'sky-color'].map((id) => CASES.find((item) => item.id === id))
     const responses = await Promise.all(
       cases.map((item) => model.run(buildPrompt(item), runOptionsForCase(item)))
@@ -1357,6 +1359,14 @@ test(
         `${cases[idx].id} answered from the shared pool`
       )
     }
+
+    // The last context fabric logs is the one the model runs on.
+    const nCtx = await lastLogMatch(logs, /llama_context: n_ctx\s+=\s+(\d+)/)
+    t.is(
+      Number(nCtx?.[1]),
+      2 * KV_PER_SLOT_CAP,
+      'the pool is sized to parallel x kv_unified_per_slot'
+    )
 
     await assertGenerationStopsAtCap(t, model)
     await assertLongPromptRejectedAtCap(t, model)
