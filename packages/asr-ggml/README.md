@@ -79,7 +79,7 @@ GGUF metadata** — there is no `modelType` to pass.
 | **CTC** (`parakeet-ctc-0.6b`) | English | argmax CTC | ~700 MiB | Fast, no punctuation/capitalization |
 | **TDT** (`parakeet-tdt-0.6b-v3`) | ~25 | RNN-T greedy + duration | ~715 MiB | Recommended default; PnC + language auto-detect |
 | **Unified** (`parakeet-unified-en-0.6b`) | English | RNN-T | ~715 MiB | One checkpoint for batch and cache-aware streaming at 80/160/560/1040 ms; PnC |
-| **TranscribePsy EU** (`transcribepsy-250m-eu`) | 25 European | RNN-T greedy + duration | — | Full model with six CAFE adapters and a language gate embedded in one GGUF; `parakeetConfig.language` selects `en`, `other`, or `auto` |
+| **TranscribePsy EU** (`transcribepsy-250m-eu`) | 25 European | RNN-T greedy + duration | — | Full model with six CAFE adapters and a language gate embedded in one GGUF; `parakeetConfig.language` selects `en`, `other`, or `auto`; on Apple, optional Core ML sidecars run both routes and the gate |
 | **TranscribePsy EU-sub** (`transcribepsy-250m-eu-sub`) | 8 European | RNN-T greedy + duration | ~291 MiB | 254M distilled from TDT v3 for Dutch, English, French, German, Italian, Polish, Portuguese and Spanish; PnC; long recordings use the 60 s / 25 % windows it recommends; Core ML distribution runs encoder and decoder on the Neural Engine |
 | **EOU** (`parakeet-eou-120m-v1`) | English | RNN-T greedy + `<EOU>` | ~132 MiB | Streaming-trained; native end-of-turn token |
 | **Indic Conformer CTC** (`indic-conformer-ctc`) | Indic aggregate | argmax CTC + language mask | ~701 MiB | Multilingual Indic; set `parakeetConfig.language` (e.g. `"hi"`) |
@@ -89,7 +89,9 @@ GGUF metadata** — there is no `modelType` to pass.
 
 On macOS and iOS, TDT, Unified, EOU, and Sortformer v2.1 can also run their
 encoder on an optional Core ML sidecar, and TranscribePsy EU-sub's published Core ML
-distribution runs its encoder and TDT decoder on the Neural Engine. Nemotron 3
+distribution runs its encoder and TDT decoder on the Neural Engine. The full
+TranscribePsy EU model takes one sidecar for its English trunk, one for its
+adapters and one for its language gate. Nemotron 3
 Diarization and Sortformer v2.1 can run their whole network on Core ML
 diarizer sidecars. CTC and Indic Conformer CTC cannot use a sidecar with the
 pinned engine, and Sortformer v1 has none. See
@@ -106,10 +108,13 @@ converted from its NeMo checkpoint, CAFE adapters and language gate. Set
 `parakeetConfig.language` to `"en"` for the English trunk or `"other"` for
 the non-English adapters. `"auto"` (also the behavior when omitted) runs the
 gate on the first 20 seconds of audio and selects the route before transcription.
-All runtime weights are in the GGUF. The full model uses the native ggml
-encoder; the EU-sub Core ML sidecars do not contain its adapters. See the
+All runtime weights are in the GGUF, so every ggml backend runs it without
+other files. On macOS and iOS both routes and the gate also run on Core ML
+when the model's own sidecars sit next to the GGUF; the EU-sub sidecars do not
+contain its adapters and are rejected. See the
 [native conversion guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/parakeet/docs/models.md#transcribepsy)
-for checkpoint acquisition and conversion.
+for checkpoint acquisition and conversion, and
+[Core ML encoder sidecars](#core-ml-encoder-sidecars-apple) for the bundles.
 
 ### MOSS-Transcribe-Diarize (`engine: 'moss-transcribe'`)
 
@@ -145,8 +150,8 @@ language coverage, translation, and diarization.
 
 | If you need… | Use this model | Notes |
 | --- | --- | --- |
-| Default multilingual / English ASR (batch or duplex stream) | `parakeet-tdt-0.6b-v3` (q8_0 GGUF) | Recommended Parakeet default: ~25 languages, punctuation/capitalization, language auto-detect, low-latency streaming. |
-| TranscribePsy across 25 European languages | `transcribepsy-250m-eu` | Full model with embedded CAFE adapters and gate. Use `parakeetConfig.language: 'en'`, `'other'`, or `'auto'`; convert the checkpoint, adapters and gate into one GGUF. |
+| Default multilingual / English ASR (batch or duplex stream) | `parakeet-tdt-0.6b-v3` (q8_0 GGUF) | Recommended Parakeet default: ~25 languages, punctuation/capitalization, language auto-detect and [30-second streaming windows](#parakeet-tdt-streaming). |
+| TranscribePsy across 25 European languages | `transcribepsy-250m-eu` | Full model with embedded CAFE adapters and gate. Use `parakeetConfig.language: 'en'`, `'other'`, or `'auto'`; convert the checkpoint, adapters and gate into one GGUF. On Apple, its exported Core ML sidecars run both routes and the gate. |
 | Smallest multilingual model for phones (Dutch, English, French, German, Italian, Polish, Portuguese, Spanish) | `transcribepsy-250m-eu-sub` | 254M TDT distilled from `parakeet-tdt-0.6b-v3`: ~291 MiB q8_0, PnC, no language to set. Long recordings use the 60 s / 25 % windows the model recommends. On Apple, the Core ML distribution runs encoder and decoder on the Neural Engine. |
 | English batch and low-latency streaming with one checkpoint | `parakeet-unified-en-0.6b` | Standard RNN-T with punctuation and capitalization; use when multilingual TDT or native EOU tokens are not required. Streaming uses the native cache-aware encoder: `streamingChunkMs` accepts 80, 160, 560, or 1040 and `streamingRightLookaheadMs` 0, 80, 160, 240, 320, 560, or 1040, both snapped down to the nearest trained value. Defaults to 560 ms. |
 | Native end-of-turn for conversational / duplex English | `parakeet-eou-120m-v1` | Emits `<EOU>`; smallest Parakeet (~132 MiB). Pair with TDT when you need broader language coverage *and* EOU. |
@@ -169,29 +174,45 @@ language coverage, translation, and diarization.
 Always pass `config.engine` (or top-level `engine`) explicitly in library and
 SDK code — see [Engine Selection](#engine-selection).
 
+### Parakeet TDT streaming
+
+For Parakeet TDT v3, leave both the load-time and per-call decode windows
+unset to use the 30,000 ms default. The SDK fields are
+`modelConfig.streamingChunkMs` and `parakeetStreamingConfig.chunkMs`. When
+using the addon directly, leave `parakeetConfig.streamingChunkMs` unset or set
+it to `0`, and omit `chunkMs` in `runStreaming()`. Omitting only the per-call
+value inherits any explicit load-time override.
+Explicit decode windows below 30,000 ms are rejected for offline TDT models
+because they can drop phrases. Keep the default 10,000 ms left context and
+2,000 ms right lookahead. First output typically needs one decode window plus
+lookahead. You can still write small PCM chunks, and closing the stream flushes
+the remaining audio. Full TranscribePsy EU uses its own streaming defaults.
+
 ## Supported Platforms
 
 | Platform | Architecture | Min Version | Status | GPU Support |
 |----------|-------------|-------------|--------|-------------|
 | macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | Metal |
 | iOS | arm64 | 17.0+ | ✅ Tier 1 | Metal |
-| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan; CUDA (x64 prebuild; arm64 via `build:cuda` / `ASR_CUDA=ON`) |
+| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan; CUDA |
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno) |
-| Windows | x64 | 10+ | ✅ Tier 1 | Vulkan; CUDA via `build:cuda` / `ASR_CUDA=ON` |
+| Windows | x64 | 10+ | ✅ Tier 1 | Vulkan; CUDA |
 
 **Dependencies:**
 
 - `qvac-lib-inference-addon-cpp` — C++ addon framework (vcpkg port; version pinned in `vcpkg.json`)
-- `speech-cpp` — umbrella vcpkg port enabling the `whisper` and `parakeet` engine features plus each platform's GPU features
+- `@qvac/fabric` — the shared ggml runtime the addon links, with every GPU backend it ships (npm dependency)
+- Speech source — pinned native Whisper and Parakeet engines, built against npm Fabric headers
 - Bare runtime — see `engines.bare` in `package.json`
 - Linux requires Clang/LLVM 22 with libc++
 
-`ggml-speech` and `speech-cpp` are pinned with vcpkg `overrides` to the same
-versions in every speech addon (`@qvac/asr-ggml`, `@qvac/audiogen-ggml`,
-`@qvac/bci-whispercpp`, `@qvac/tts-ggml`), and `package.json` records the
-`ggml-speech` build as `qvac["ggml-speech"]`. The speech addons ship their ggml
-backends under the same file names, so an app that bundles several of them
-keeps one copy of each: use releases that record the same `ggml-speech`.
+The ggml runtime is the shared `@qvac/fabric` prebuild: the addon links it
+dynamically (`DT_NEEDED qvac__fabric-<host>@0.bare`), ships no ggml of its
+own, and shares one runtime in memory with every other fabric addon in the
+process. Speech engines are compiled into each addon from the checksum-pinned source in
+[`speech-source.json`](../../cmake/qvac-addon/speech-source.json), using only
+the headers shipped by `@qvac/fabric`. No speech or ggml vcpkg port is built. See
+[`packages/fabric/INTEGRATION.md`](../fabric/INTEGRATION.md).
 
 ## Installation
 
@@ -227,9 +248,10 @@ Do not depend on desktop platform packages directly. Supported installers are
 npm 7+, pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip
 the platform package and fail at require time, and at `bare-pack` time, naming
 the missing package. Each platform package is an ordinary Bare addon whose
-`prebuilds/<host>/` holds the native module and, next to it, the dynamically
-loaded ggml backends the module finds on its own. A source build becomes
-loadable once `npm run link:platform` (run by `npm run build:native`) stages it
+`prebuilds/<host>/` holds the native module. The ggml runtime it links and the
+dynamically loaded ggml backends ship in the matching `@qvac/fabric-<host>`
+platform package, which `@qvac/fabric` installs the same way. A source build
+becomes loadable once `npm run link:platform` (run by `npm run build:native`) stages it
 as the host's platform package in `node_modules/`.
 
 Mobile targets are cross-built, so no install host ever matches their `os`,
@@ -250,6 +272,10 @@ dependency, pinned to the exact `@qvac/asr-ggml` version:
   }
 }
 ```
+
+The runtime follows the same rule: Android and iOS apps also add
+`@qvac/fabric` and `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` as
+direct dependencies at the same exact version.
 
 ## Quickstart
 
@@ -626,7 +652,7 @@ Every verb has one signature and one meaning regardless of engine.
 | `unload()` / `destroy()` | Release the model / retire the instance. |
 | `getState()` | `{ configLoaded, weightsLoaded, destroyed }`. |
 | `getEngineType()` | `'whisper'` \| `'parakeet'` \| `'moss-transcribe'`. |
-| `getBackendInfo()` | `BackendInfo` or `null` before `load()`. |
+| `getBackendInfo()` | `BackendInfo` or `null` before `load()`. Parakeet reports `supportsCacheAwareStreaming` for the loaded checkpoint. |
 | `pause()` / `unpause()` | Always reject with `NOT_SUPPORTED` (6019). No engine implements a correct pause/resume. |
 
 Constructor options:
@@ -709,7 +735,7 @@ On an iOS device every unified row shares the app's own memory limit, `os_proc_a
 | `gpuLayers` | Greater than 0 requests the GPU stack, with the fallbacks a real load applies. Omitted, parakeet and MOSS project on the CPU and whisper on the GPU, matching what each load does. |
 | `backend` | Parakeet and MOSS: native backend selector, matching the load configuration. Explicit selection overrides `gpuLayers`. The projection covers one model; assess both models separately for speaker-attributed transcription. |
 | `marginBytes` | Free memory that must remain for the projection to count as fitting. Defaults to the engine's own headroom, which is 256 MiB for parakeet and MOSS. |
-| `backendsDir` | Directory scanned as given for the ggml backends, the same path a load reads. Unset scans next to the loaded module. |
+| `backendsDir` | Directory scanned as given for the ggml backends, the same path a load reads. Unset uses the backends the `@qvac/fabric` runtime ships. |
 | `vadModelPath` | Whisper: projected alongside the model; the VAD model or its weightless copy. Omitted means no VAD. |
 | `decoders` | Whisper: worst-case resident decoders, the `best_of` or `beam_size` the run will use. The KV cache and decode graph grow with it. |
 | `flashAttn`, `gpuDevice` | Whisper: as the load takes them. |
@@ -839,7 +865,7 @@ key is documented inline there, and any key outside it throws
 | Compute | `maxThreads`, `useGPU`, `backend`, `seed` |
 | Audio | `sampleRate` (16000), `channels` (1) |
 | Output | `captionEnabled`, `timestampsEnabled` |
-| Language | `language` — multilingual CTC id (e.g. `"hi"`); required for Indic Conformer GGUFs that advertise `parakeet.ctc.lang_*` ranges. Full TranscribePsy EU accepts `"en"` (trunk), `"other"` (CAFE adapters), or `"auto"` (gate; also the default when omitted). Ignored on monolingual CTC |
+| Language | `language` — multilingual CTC id (e.g. `"hi"`); required for Indic Conformer GGUFs that advertise `parakeet.ctc.lang_*` ranges. Full TranscribePsy EU accepts `"en"` (trunk), `"other"` (CAFE adapters), or `"auto"` (gate; also the default when omitted); with `"auto"` a `runStreaming()` session buffers its first 20 s for the gate before it emits text, and a shorter one routes when the stream ends. Ignored on monolingual CTC |
 | Streaming (ASR) | `streaming`, `streamingChunkMs`, `streamingEmitPartials`, `streamingEnergyVad`, `streamingEnergyVadThresholdDb`, `streamingEnergyVadWindowMs`, `streamingEnergyVadHangoverMs`, `streamingLeftContextMs`, `streamingRightLookaheadMs` |
 | Streaming diarization | `streamingHistoryMs`, `streamingSpeakerVad`, `streamingSpkCacheEnable`, `streamingSpkCacheLen`, `streamingFifoLen`, `streamingChunkLeftContextMs`, `streamingChunkRightContextMs`, `streamingSpkCacheUpdatePeriod` |
 | Diarization, offline and streaming | `diarizationThreshold`, `diarizationMinSegmentMs` (defaults: Sortformer 0.641 / 510 ms; Nemotron 3 0.5 / 200 ms) |
@@ -896,7 +922,7 @@ and one streaming chunk.
 | `maxThreads` | `0` | CPU threads (0 lets the engine pick). |
 | `useGPU` | `false` | Select a GPU automatically when `backend` is `auto`. |
 | `backend` | `auto` | Native selector: `cpu`, `cuda`, `vulkan`, `metal`, or an exact ggml device name such as `CUDA0`, `Vulkan0` or `MTL0`. Explicit selection overrides `useGPU` and fails at load if unavailable. |
-| `backendsDir` | next to the loaded module | Directory scanned as given for the dynamically loaded ggml backends. |
+| `backendsDir` | fabric's own | Directory scanned as given for the dynamically loaded ggml backends. Unset uses the directory the `@qvac/fabric` runtime loads its own backends from. |
 
 For example, `mossTranscribeConfig: { backend: 'cuda' }` requests CUDA even
 with the default `useGPU: false`; `{ backend: 'cpu', useGPU: true }` selects
@@ -947,35 +973,28 @@ device. Use the same `backend` in
 the Parakeet `assessFit` request. Core ML sidecars retain their existing
 native routing; selecting a ggml device does not control Core ML placement.
 
-GPU backends are selected per platform via `vcpkg.json` features; no
-`bare-make generate` flag is needed:
+GPU backends come with the `@qvac/fabric` runtime; the addon has no backend
+build option of its own and `speech-cpp` is built without backend features:
 
-- **Linux / Windows** — Vulkan (needs the [Vulkan SDK](https://vulkan.lunarg.com/) on the build host); the linux-x64 prebuild additionally bundles CUDA, see below
-- **Android** — Vulkan + OpenCL (Adreno) as dynamically-loaded `.so` backends shipped beside the prebuild
-- **macOS / iOS** — Metal, statically linked, plus the optional Parakeet
+- **Linux / Windows** — Vulkan, plus CUDA on linux-x64, linux-arm64 and win32-x64, as runtime-loaded modules next to the runtime
+- **Android** — Vulkan + OpenCL (Adreno) as dynamically-loaded `.so` backends shipped with `@qvac/fabric-android-arm64`
+- **macOS / iOS** — Metal, linked into the runtime, plus the optional Parakeet
   [Core ML encoder sidecars](#core-ml-encoder-sidecars-apple)
 
-**CUDA (Linux / Windows on NVIDIA)** needs `nvcc` on the build host, so it is
-gated behind the `ASR_CUDA` CMake option — supported on linux-x64,
-linux-arm64 and win32-x64. The published linux-x64 prebuild turns it on (the
-prebuild workflow installs the CUDA toolkit); elsewhere build it yourself
-with `npm run build:cuda` (or `bare-make generate -D ASR_CUDA=ON`). The
-option adds the `cuda` feature to the `speech-cpp` dependency and turns on
-`GGML_CUDA`. Every linux-x64 and linux-arm64 build, and win32-x64 with the
-cuda feature, uses ggml's hybrid dynamically-loaded backend mode: the
-per-arch CPU-variant and Vulkan backends ship as runtime-loaded modules
-(`.so` on Linux, `.dll` on Windows) next to the addon, the cuda builds add
-the CUDA module, and only that module depends on the CUDA runtime. Engaging
-CUDA requires the NVIDIA driver plus the CUDA 13 runtime libraries (cudart
-and cuBLAS) resolvable at load time; hosts that cannot resolve them —
-including CPU-only and non-NVIDIA machines — skip the module and fall back
-to Vulkan or CPU instead of failing to load the addon. CUDA is compiled
+**CUDA (Linux / Windows on NVIDIA)** comes with the `@qvac/fabric` runtime on
+linux-x64, linux-arm64 and win32-x64 as a runtime-loaded module (`.so` on
+Linux, `.dll` on Windows), next to the per-arch CPU-variant and Vulkan
+modules; only the CUDA module depends on the CUDA runtime. Engaging CUDA
+requires the NVIDIA driver plus the CUDA 13 runtime libraries (cudart and
+cuBLAS) resolvable at load time; hosts that cannot resolve them — including
+CPU-only and non-NVIDIA machines — skip the module and fall back to Vulkan or
+CPU instead of failing to load the addon. CUDA ships
 *alongside* Vulkan rather than replacing it; ggml registers CUDA ahead of
 Vulkan, so a `use_gpu` / `useGPU` request lands on CUDA when a supported
 device is present and falls back to Vulkan otherwise. Every engine reports
 the winner through `getBackendInfo()` as `backendId: 2` (`BackendId.CUDA`).
 
-On x64 a CUDA build's module targets **compute capability 7.5 and newer**,
+On x64 the CUDA module targets **compute capability 7.5 and newer**,
 with native code for Turing (7.5 — RTX 20xx, GTX 16xx, T4), Ampere (8.0, 8.6),
 Ada (8.9), Hopper (9.0) and Blackwell (12.0, 12.1). Anything newer JIT-compiles
 from the bundled 8.0 PTX on first use, a one-off compile the driver caches. On
@@ -986,10 +1005,7 @@ entirely, so they have no code path here: the backend skips such devices at
 registration and the addon falls back to Vulkan or CPU.
 
 The addon takes no direct CUDA linkage — the CUDA module carries its own CUDA
-`DT_NEEDED` entries, which is what makes the graceful fallback possible — and
-nvcc's clang host-compiler setup lives in
-`vcpkg-overlays/toolchains/linux-clang.cmake`, shared by every addon that
-compiles the CUDA backend.
+`DT_NEEDED` entries, which is what makes the graceful fallback possible.
 
 Every engine defaults to CPU: whisper needs `contextParams.use_gpu: true`,
 parakeet needs `parakeetConfig.useGPU: true` and moss-transcribe needs
@@ -1026,9 +1042,10 @@ additionally reports
 `gpuMemTotalMb` / `gpuMemFreeMb`. This differs from
 `RuntimeStats.backendDevice`, which is the native numeric device-class code.
 
-Optional source builds accept `-D ASR_WEBGPU=ON`. The manifest pins a compatible
-Dawn version and avoids its default X11/GL dependencies. `BackendId.WebGPU` is
-`5`. An unavailable explicit Parakeet/MOSS backend fails instead of silently
+The addon has no WebGPU build option of its own, and the `@qvac/fabric`
+runtime does not ship the Dawn WebGPU backend yet, so an explicit
+`backend: 'webgpu'` is rejected as an unavailable backend. `BackendId.WebGPU`
+is `5`. An unavailable explicit Parakeet/MOSS backend fails instead of silently
 falling back. Hexagon is not included in JavaScript package builds.
 
 The Apple `coreml` feature also enables Whisper's encoder, retaining native
@@ -1040,19 +1057,19 @@ Two paths matter on Android and Linux:
 
 - **`backendsDir`** (in `whisperConfig` / `parakeetConfig`) — directory
   scanned, as given, for dynamically-loaded ggml backend libraries (CUDA,
-  Vulkan, OpenCL, per-arch CPU variants). Unset scans the addon's own: the
-  directory its native module was loaded from
-  (`prebuilds/<host>/qvac__asr-ggml-<suffix>/` in a platform package, the
-  app's native library directory after `bare-link`). Pass a path only when
-  backend libraries ship somewhere else.
-  No-op on Apple, where backends are statically linked.
+  Vulkan, OpenCL, per-arch CPU variants). Unset uses the directory the
+  `@qvac/fabric` runtime loads its own backends from
+  (`prebuilds/<host>/qvac__fabric-<suffix>/` of the installed platform
+  package, or next to the runtime in a `bare-link`ed app). Pass a path only
+  when backend libraries ship somewhere else.
+  No-op on Apple, where backends are linked into the runtime.
 - **`openclCacheDir`** (parakeet) — persistent directory for ggml-opencl's
   compiled program-binary cache. Android-only; pass the host app's cache
   directory to avoid a cold `clBuildProgram` on every process start.
 
 ### Core ML encoder sidecars (Apple)
 
-The macOS and iOS prebuilds are built with the `speech-cpp` `coreml` feature,
+The macOS and iOS prebuilds enable Core ML,
 so a Parakeet model can run its FastConformer encoder on Apple Core ML (the
 Neural Engine) while mel preprocessing and the decoder or speaker head stay on
 the ggml backend. It is opt-in by presence: at `load()` the engine looks for a
@@ -1068,9 +1085,10 @@ ggml.
 
 | Model | Sidecar | Inputs it takes | Runs on ggml instead |
 | --- | --- | --- | --- |
-| TDT (`parakeet-tdt-0.6b-v3`) | `<stem>-encoder.mlmodelc` | any length: shorter inputs are zero-padded to the compiled shape, longer offline inputs are split into overlapping windows | only on fallback |
-| Unified (`parakeet-unified-en-0.6b`) | `<stem>-encoder.mlmodelc` | `run()`, padded or windowed like TDT | `runStreaming()`, which uses the cache-aware encoder |
+| TDT (`parakeet-tdt-0.6b-v3`) | `<stem>-encoder.mlmodelc` | inputs up to the compiled capacity (typically 15 s); shorter inputs are zero-padded | oversized inputs use ggml unless the export has a validated seam policy |
+| Unified (`parakeet-unified-en-0.6b`) | `<stem>-encoder.mlmodelc` | `run()`, padded to capacity or split into overlapping windows | `runStreaming()`, which uses the cache-aware encoder |
 | TranscribePsy (`transcribepsy-250m-eu-sub-coreml.gguf`, the encoder-less GGUF of the Core ML distribution) | `<stem>-encoder.mlmodelc` and `<stem>-decoder.mlmodelc` | any length: 15 s Neural Engine windows with 1.28 s of seam context; the TDT decoder runs on the Neural Engine as well | never: without its encoder sidecar that GGUF fails to load, since it carries no encoder weights. The full `transcribepsy-250m-eu-sub.gguf` behaves like TDT |
+| Full TranscribePsy EU (`transcribepsy-250m-eu`) | `<stem>-encoder.mlmodelc` (English trunk), `<stem>-encoder-other.mlmodelc` (adapters) and `<stem>-encoder-gate.mlmodelc` (language gate); optionally `<stem>-decoder.mlmodelc`. Streaming and unwindowed runs also need the FP32 programs: `<stem>-encoder-flexible.mlmodelc`, `<stem>-encoder-other-flexible.mlmodelc` and `<stem>-encoder-gate-flexible.mlmodelc`, plus on macOS the optional fixed `<stem>-encoder-fp32-<frames>.mlmodelc` and `<stem>-encoder-other-fp32-<frames>.mlmodelc` | `run()` of any length: 15 s Neural Engine windows for the selected route, and the first 20 s on the gate sidecar when `language` is `"auto"`. `runStreaming()` and `longFormWindowFrames < 0` use the FP32 programs, on the GPU on macOS when a fixed capacity fits and on Core ML CPU otherwise and on iOS. The decoder sidecar batches only long offline inputs with automatic windows | when a sidecar is missing, was exported for another model or route (EU-sub bundles included) or fails a prediction: the GGUF keeps the whole encoder |
 | EOU (`parakeet-eou-120m-v1`) | `<stem>-encoder.mlmodelc` | inputs of exactly the compiled mel length | every other length, including streaming windows of a different length |
 | Sortformer v2.1 + AOSC, whole network | `<stem>-diarizer-<frames>.mlmodelc`, one fixed capacity per bundle (410 frames covers the default AOSC slab and batch inputs up to 32.8 s) | batch inputs and AOSC steps of up to its capacity: the conformer encoder, speaker transformer and head run on Core ML, the smallest capacity that fits is used and padded rows are masked | longer batch inputs, and every call if the bundle fails |
 | Sortformer v2.1 + AOSC, encoder only | `<stem>-encoder.mlmodelc` (batch), `<stem>-encoder-bypass-pre-encode.mlmodelc` (AOSC) | used when no diarizer bundle covers the call. Batch: exactly the compiled length; AOSC: slabs up to the masked capacity (410 encoder frames for the default geometry) | other batch lengths, larger AOSC slabs; the speaker head always |
@@ -1079,6 +1097,19 @@ ggml.
 | Sortformer v1 | none | — | always |
 | Whisper | `<model-stem>-encoder.mlmodelc` beside the GGML model (for example, `ggml-tiny-encoder.mlmodelc` beside `ggml-tiny.bin`), enabled by `speech-cpp[whisper,coreml]` on Apple | the encoder's fixed mel window | when the matching sidecar is absent or cannot be loaded; the decoder always stays on ggml |
 | MOSS-Transcribe-Diarize | `moss-transcribe-diarize-encoder.mlmodelc` | every 30 s window: the audio encoder and adaptor run on Core ML, the decoder on ggml | only on fallback |
+
+On macOS 15 and iOS 18 or later, the full TranscribePsy EU model also accepts
+`<stem>-encoder-shared.mlmodelc` beside the GGUF. The engine discovers the
+bundle automatically and uses its named `en`, `other`, and `gate` functions
+in place of the three fixed encoder sidecars. An unavailable or incompatible
+shared bundle falls back to the separate sidecars, then to ggml when the GGUF
+contains encoder weights. Keep the FP32 programs for streaming and unwindowed
+runs. The engine source includes the exporter and merger described in the
+[shared-weight deployment guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/5e1e4d34ab39e86e3049590855cf3539da17e3fc/engines/parakeet/docs/transcribepsy-eu-coreml.md#shared-weight-runtime-deployment).
+
+For standard TDT, fixed-shape exports with `mel_valid_mask` isolate the
+padding on short clips. Legacy single-input sidecars still load and need
+re-exporting to get that padding mask.
 
 Diarizer bundles load on first use, and each capacity costs 190-220 MiB of
 weights. They pay off on base and Pro chips and iOS (1.4-2.7x over Metal on an
@@ -1100,18 +1131,34 @@ ggml with the flag set. For what a job actually did, read
 `RuntimeStats.encoderUsedCoreml`: `1` when every offline ASR transcription and
 batch diarization in the job ran its encoder on Core ML, `0` when any ran on
 ggml, such as a diarization longer than every staged diarizer bundle. A
-speaker-attributed job counts its transcription passes. The engine does not
-report per-call routing for streaming, so the field is absent after streaming
-jobs. Export sidecars with
+speaker-attributed job counts its transcription passes.
+`RuntimeStats.decoderUsedCoreml` reports the TDT decoder sidecar the same way:
+`1` when every offline transcription in the job decoded on Core ML, `0` when
+any decoded on ggml. `0` is the usual value for short inputs, because the
+engine batches the decoder on Core ML only once a recording splits into
+enough segments; jobs without an offline transcription omit the field. The
+addon does not collect per-segment routing for streaming, so both fields are
+absent after streaming jobs. Export sidecars with
 `engines/parakeet/scripts/export-encoder-coreml.py`, preferably from an `f16`
 or `f32` GGUF (a quantized source works, but its rounding is baked into the
 sidecar every tier shares), from the
 [`qvac-fabric-speech.cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp)
-tree at the ref `speech-cpp` pins; its
+tree at the ref `speech-source.json` pins; its
 [Parakeet backends guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/parakeet/docs/backends.md#core-ml-encoder-sidecar)
 has the per-model export commands. The
 [Core ML RTF lanes](#core-ml-apple-neural-engine-rtf-lanes) record what the
 TDT sidecar gains over Metal.
+
+The full TranscribePsy EU model reads two more switches from the process
+environment at `load()`. `PARAKEET_COREML_COMPUTE_UNITS` (`cpu_and_ane`, `all`,
+`cpu_and_gpu` or `cpu_only`) chooses where Core ML runs; the placements
+without the Neural Engine use the FP32 programs. `PARAKEET_COREML_ONLY=1`
+skips the ggml encoder weights once its three fixed sidecars load, which
+saves their memory and leaves no ggml fallback. Export its sidecars with
+`engines/parakeet/scripts/export-encoder-coreml-ane.py` (`--eu-route en`,
+`other` and `gate`) and `export-decoder-coreml-ane.py`; the
+[full-EU Core ML guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/parakeet/docs/transcribepsy-eu-coreml.md)
+has the commands for every bundle, the decoder policy and the measurements.
 
 MOSS-Transcribe-Diarize has its own switches: `MOSS_COREML_DISABLE=1` forces
 ggml, and `MOSS_COREML_COMPUTE_UNITS=cpu_and_gpu` keeps the encoder off the
@@ -1160,6 +1207,11 @@ gate from `qvac/TranscribePsy-250M-EU` following the
 Load the resulting `transcribepsy-250m-eu.gguf` through `files.model` with
 `config.engine: 'parakeet'`; set `config.parakeetConfig.language` to `"auto"`,
 `"en"`, or `"other"`. No separate adapter or gate files are needed at runtime.
+Its Core ML sidecars are not published yet: on Apple, export them from the
+model's GGUF (an `f16` one keeps quantization out of the bundles) as the
+[full-EU Core ML guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/parakeet/docs/transcribepsy-eu-coreml.md)
+describes and keep the compiled `.mlmodelc` directories next to the GGUF under
+the names in [Core ML encoder sidecars](#core-ml-encoder-sidecars-apple).
 
 **Parakeet**, converting NVIDIA `.nemo` yourself:
 
@@ -1230,12 +1282,8 @@ rationale.
   - Windows: Visual Studio 2019+ or Build Tools
 - **vcpkg** — clone it, run `bootstrap-vcpkg.sh`/`.bat`, and export
   `VCPKG_ROOT=/path/to/vcpkg`
-- Optional GPU SDKs: [Vulkan SDK](https://vulkan.lunarg.com/) on
-  Linux/Windows (`vulkan-tools libvulkan-dev vulkan-utility-libraries-dev
-  spirv-tools` on Ubuntu/Debian); Metal needs nothing on macOS/iOS; the
-  opt-in CUDA build additionally needs the
-  [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) (`nvcc`) on
-  Linux/Windows
+- No GPU SDK is needed to build: the backends are prebuilt in the
+  `@qvac/fabric` runtime that `npm install` fetches
 
 ### Build
 
@@ -1245,14 +1293,12 @@ cd qvac/packages/asr-ggml
 git submodule update --init --recursive
 npm install
 npm run build          # build:ts (TypeScript) + build:native (bare-make)
-npm run build:cuda     # same, with the CUDA backend compiled in (needs nvcc)
 ```
 
 `build:native` runs `bare-make generate`, `bare-make build`,
 `bare-make install` and `npm run link:platform`, which stages
 `prebuilds/<host>/` as `node_modules/@qvac/asr-ggml-<host>`: `#host-addon`
-only ever loads a platform package. `build:native:cuda` is the same chain with
-`-D ASR_CUDA=ON` on the generate step.
+only ever loads a platform package.
 
 ### Test
 
@@ -1318,7 +1364,7 @@ memory, and package development dependencies installed, run from this package:
 # Bound both dependency compilation and addon compilation.
 export VCPKG_MAX_CONCURRENCY=2 CMAKE_BUILD_PARALLEL_LEVEL=2
 npm run build:ts
-bare-make generate --build build-moss -D ASR_CUDA=ON -D BUILD_TESTING=OFF
+bare-make generate --build build-moss -D BUILD_TESTING=OFF
 bare-make build --build build-moss --parallel 2
 bare-make install --build build-moss
 npm run link:platform
@@ -1333,8 +1379,7 @@ QVAC_TEST_MOSS_TRANSCRIBE_BACKEND=vulkan INTEGRATION_TEST_TIMEOUT=1800 \
   bash test/integration/parakeet-run-tests.sh
 ```
 
-For a Vulkan-only Linux host, generate with `-D ASR_CUDA=OFF` and run only the
-Vulkan command. These checks must execute both default-prompt and hotword
+On a Vulkan-only Linux host run only the Vulkan command. These checks must execute both default-prompt and hotword
 transcription and assert the selected backend; an explicit backend run fails
 when a fixture is missing. Registry dry-runs, forwarding tests, and compilation
 alone do not validate packaged addon GPU inference. Run packaged validation on
@@ -1395,8 +1440,8 @@ Three things are worth knowing before touching these lanes:
   `models/coreml/` copy instead, staged by the matrix runner.
 - **The export is traced at one mel length.** That length is the TDT
   sidecar's fixed capacity: shorter utterances are zero-padded up to it and
-  longer ones are split into overlapping windows, so every length runs on the
-  ANE, but only a matching one runs as a single unpadded pass. The lanes'
+  longer ones use ggml unless the export has a validated seam policy. Only an
+  input matching the capacity runs as a single unpadded pass. The lanes'
   sidecar is therefore sized to the benchmark's own sample —
   `examples/samples/sample.raw` (20.13 s ⇒ `1 + 322137/160` = **2014** mel
   frames). Changing that sample means re-exporting, or the lane measures
@@ -1462,15 +1507,19 @@ Parakeet:
 
 - [`examples/parakeet-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-transcribe.js) — CTC, TDT, Unified, EOU, or Sortformer transcription
 - [`examples/parakeet-unified-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-unified-transcribe.js) — batch transcription with `parakeet-unified-en-0.6b`
-- [`examples/parakeet-transcribepsy-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-transcribepsy-transcribe.js) — TranscribePsy transcription with the model-recommended or explicit `--window-sec` / `--overlap` long-form windows, reporting whether the encoder ran on Core ML
+- [`examples/parakeet-transcribepsy-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-transcribepsy-transcribe.js) — TranscribePsy transcription with the model-recommended or explicit `--window-sec` / `--overlap` long-form windows and, for the full EU model, `--language auto|en|other`, reporting whether the encoder and the decoder ran on Core ML
 - [`examples/parakeet-indic-conformer-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-indic-conformer-transcribe.js) — Indic Conformer transcription with the required `--language <id>` option
 - [`examples/parakeet-diarized-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-diarized-transcribe.js) — Sortformer + ASR, "who said what"
 - [`examples/parakeet-streaming-metadata.js`](examples/parakeet-streaming-metadata.js) — native streaming tokens, finality, chunk indices and end-of-turn events as JSON
 - [`examples/nemotron-diarization.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/nemotron-diarization.js) — Nemotron 3 offline 8-speaker diarization
 - [`examples/parakeet-live-mic.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic.js) — live mic via the duplex streaming session
-- [`examples/parakeet-live-mic-diarized.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic-diarized.js) — live mic with speaker tags
-- [`examples/parakeet-live-mic-diarized-aosc.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic-diarized-aosc.js) — same, with the AOSC tuning knobs as CLI flags
+- [`examples/parakeet-live-mic-diarized.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic-diarized.js) — live mic with approximate speaker tags from the latest Sortformer result. Requires Parakeet Unified RNN-T or Nemotron for ASR
+- [`examples/parakeet-live-mic-diarized-aosc.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic-diarized-aosc.js) — same cache-aware ASR requirement, with the AOSC tuning knobs as CLI flags
 - [`examples/parakeet-decode-audio.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-decode-audio.js) — decode + transcribe any FFmpeg-supported container
+
+For either diarized mic example, set `--asr-chunk-ms` for the ASR checkpoint
+and `--diar-chunk-ms` for Sortformer. Omitting the ASR flag uses its trained
+default. The legacy `--chunk-ms` flag also sets the Sortformer window.
 
 MOSS-Transcribe-Diarize:
 
@@ -1550,3 +1599,7 @@ files are distributed under the **NVIDIA Open Model License**; see the
 upstream HuggingFace model cards for the per-checkpoint terms.
 
 For questions or issues, please open an issue on the GitHub repository.
+
+Shared ggml logging belongs to Fabric. Speech initialization preserves its
+callback; Whisper and Parakeet retain their engine-local log forwarding.
+Explicit `backendsDir` overrides remain supported; an unset value uses Fabric.

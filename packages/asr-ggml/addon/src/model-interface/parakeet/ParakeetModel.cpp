@@ -555,6 +555,9 @@ int ParakeetModel::resolveStreamingChunkMs(
     ModelType modelType, int configuredChunkMs) {
   if (configuredChunkMs > 0)
     return configuredChunkMs;
+  // The engine selects the default for the specific TDT variant.
+  if (modelType == ModelType::TDT)
+    return pkt::StreamingOptions::automatic_chunk_ms;
   if (modelType == ModelType::NEMOTRON)
     return ParakeetConfig::DEFAULT_NEMOTRON_STREAMING_CHUNK_MS;
   if (modelType == ModelType::RNNT)
@@ -576,6 +579,7 @@ void ParakeetModel::captureBackend() {
   encoder_backend_ = engine_->encoder_backend();
   encoder_on_coreml_ = engine_->encoder_on_coreml() ? 1 : 0;
   modelTypeName_ = engine_->model_type();
+  supports_cache_aware_streaming_ = engine_->supports_cache_aware_streaming();
 
   QLOG(
       logger::Priority::INFO,
@@ -727,6 +731,8 @@ void ParakeetModel::reset() {
   processed_time_ = 0.0f;
   jobEncoderCalls_ = 0;
   jobCoremlEncoderCalls_ = 0;
+  jobTranscriptionCalls_ = 0;
+  jobCoremlDecoderCalls_ = 0;
   cancelGeneration_.store(0, std::memory_order_relaxed);
   activeGeneration_.store(0, std::memory_order_relaxed);
 }
@@ -1005,6 +1011,9 @@ void ParakeetModel::recordTranscriptionResult(const pkt::EngineResult& result) {
   ++jobEncoderCalls_;
   if (result.encoder_used_coreml)
     ++jobCoremlEncoderCalls_;
+  ++jobTranscriptionCalls_;
+  if (result.decoder_used_coreml)
+    ++jobCoremlDecoderCalls_;
 }
 
 void ParakeetModel::recordDiarizationResult(
@@ -1479,6 +1488,12 @@ RuntimeStats ParakeetModel::runtimeStats() const {
         "encoderUsedCoreml",
         static_cast<int64_t>(
             jobCoremlEncoderCalls_ == jobEncoderCalls_ ? 1 : 0));
+  }
+  if (jobTranscriptionCalls_ > 0) {
+    stats.emplace_back(
+        "decoderUsedCoreml",
+        static_cast<int64_t>(
+            jobCoremlDecoderCalls_ == jobTranscriptionCalls_ ? 1 : 0));
   }
   if (isDiarization()) {
     stats.emplace_back("aoscActive", aoscActive_);
