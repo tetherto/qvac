@@ -36,6 +36,8 @@ The worker keys every request by its session and its `requestId`, so two session
 
 See [Cancellation](/sdk/runtime/cancellation) for the cancel forms themselves.
 
+Sessions share each model's admission slots, so one session's stalled request delays the requests another session queues behind it. The runtime owner bounds that with [deadlines](/sdk/runtime/deadlines) in the configuration.
+
 ## Model leases
 
 A loaded model records which sessions hold it.

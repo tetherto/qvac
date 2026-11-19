@@ -194,6 +194,8 @@ const run = completion({ modelId, history, stream: true, rpcOptions: { timeout: 
 
 A timeout also cancels the request on the worker, so the inference job stops.
 
+`timeout` is enforced by the client that sets it. To bound a request on the runtime itself, for every client and for the requests queued behind it, see [Deadlines](/sdk/runtime/deadlines).
+
 <Callout type="info">
 **Python:** `completion()` takes no per-call `timeout`, so this applies to the JS/TS SDK only.
 </Callout>

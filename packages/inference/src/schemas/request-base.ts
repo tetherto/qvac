@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { requestDeadlineSchema } from '@/schemas/deadlines'
 
 /**
  * Caller session identity. The SDK client stamps every request sent through a
@@ -44,7 +45,14 @@ export const sessionScopedRequestSchema = z.object({
 
 /** Base of every request schema that registers work the caller can cancel. */
 export const trackedRequestSchema = sessionScopedRequestSchema.extend({
-  requestId: requestIdSchema.optional()
+  requestId: requestIdSchema.optional(),
+  deadline: requestDeadlineSchema
+    .optional()
+    .describe(
+      'Deadlines the runtime enforces for this request. Each value can shorten the ' +
+        "runtime configuration's value for the same field, and never lengthens it. " +
+        'The SDK client copies it from `rpcOptions.deadline`.'
+    )
 })
 
 /**

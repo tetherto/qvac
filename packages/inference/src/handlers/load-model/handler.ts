@@ -146,6 +146,7 @@ export async function handleLoadModel(
     if (ctx.signal.aborted) {
       throw new InferenceCancelledError(requestId)
     }
+    ctx.startLoadDeadline()
 
     const configStr = canonicalConfigString(request.modelConfig)
     const modelHashInput = `${request.modelType}:${modelSrc}:${configStr}`
@@ -282,6 +283,8 @@ async function handleConfigReload(request: ReloadConfigRequest): Promise<LoadMod
     sessionId: resolveSessionId(request),
     kind: 'loadModel'
   })
+  // A reload downloads nothing, so its load deadline covers all of it.
+  ctx.startLoadDeadline()
   try {
     // Under the same lock as a load of this id: a session loading the same
     // configuration waits until the reload is done instead of taking a lease
