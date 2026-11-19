@@ -1,0 +1,32 @@
+name: Restore models
+description: Restores a package's model cache and never saves it. mode all restores the one entry models-cache-key named; per-model restores each entry the plan lists. Run `npm ci && npm run build` in .github/actions/models-cache after editing src/.
+inputs:
+  mode:
+    description: all or per-model, from models-cache-key
+    default: all
+  key:
+    description: "all: exact cache key"
+    default: ""
+  restore-keys:
+    description: "all: newline-separated fallback prefixes"
+    default: ""
+  paths:
+    description: "all: newline-separated directories"
+    default: ""
+  plan:
+    description: "per-model: path to the plan JSON"
+    default: ""
+  cache-root:
+    description: "per-model: the directory the plan must cache under, from models-cache-key"
+    default: ""
+  lookup-only:
+    description: "per-model: check which entries exist without downloading them"
+    default: "false"
+outputs:
+  cache-hit:
+    description: "'true' when nothing is left to download"
+  missing-models:
+    description: "per-model: JSON array of the models left to download"
+runs:
+  using: node24
+  main: dist/index.mjs

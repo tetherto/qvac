@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // The key hashes the manifest alone, or a modelCache's key files, so test or CI edits never throw models away.
 
-import { appendFileSync, existsSync, readFileSync } from 'node:fs'
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { basename, dirname, join, posix } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { manifestPlan } from '../models-cache/src/plan.mjs'
 
 // Same selection and destinations as models-download: no targets means test:integration, url entries land in test/model/<name>, warm: false ones are not cached.
 export function entriesFor(manifest, target) {
@@ -55,10 +56,18 @@ export function loadManifest(workdir, path = 'test/integration/models.manifest.j
   return { text, manifest: { models: text ? JSON.parse(text).models : {} } }
 }
 
+// metadata.modelCache.mode picks the cache: all (default) is one entry per package and target; per-model is one entry
+// per model, keyed by its content, so a leg restores only what it uses. A manifest package's plan comes from its
+// manifest; a modelCache directory's from its cache:models plan configuration, which the workflow runs.
 function main(env) {
-  const cache = modelCache(env.WORKDIR, env.TARGET)
+  const meta = modelCache(env.WORKDIR, env.TARGET)
+  const mode = meta?.mode ?? 'all'
+  const cache = meta?.path ? meta : null
   let r
+  let plan = ''
+  let root = env.WORKDIR
   if (cache) {
+    root = posix.normalize(posix.join(env.WORKDIR, cache.path)).replace(/\/+$/, '')
     const keyText = cache.keyFiles.map((f) => readFileSync(join(env.WORKDIR, f), 'utf8')).join('\0')
     r = resolveDirectory({
       cache,
@@ -78,10 +87,14 @@ function main(env) {
       version: env.VERSION
     })
     console.log(`${r.count} models, key ${r.key}`)
+    if (mode === 'per-model') {
+      plan = join(env.RUNNER_TEMP || '.', `models-plan-${basename(env.WORKDIR)}.json`)
+      writeFileSync(plan, JSON.stringify(manifestPlan(env.WORKDIR, entriesFor(manifest, env.TARGET))))
+    }
   }
   appendFileSync(
     env.GITHUB_OUTPUT,
-    `key=${r.key}\nrestore-prefix=${r.prefix}\nfill=${Boolean(cache)}\npaths<<EOF\n${r.paths.join('\n')}\nEOF\n`
+    `key=${r.key}\nrestore-prefix=${r.prefix}\nfill=${Boolean(cache)}\nmode=${mode}\nplan=${plan}\ncache-root=${root}\npaths<<EOF\n${r.paths.join('\n')}\nEOF\n`
   )
 }
 

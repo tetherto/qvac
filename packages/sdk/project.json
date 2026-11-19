@@ -214,8 +214,19 @@
         "timeoutMinutes": 360,
         "modelCache": {
           "path": "../sdk-e2e/.qvac-cache",
-          "keyFiles": ["../inference/src/models/registry/models.ts"]
+          "keyFiles": ["../inference/src/models/registry/models.ts"],
+          "mode": "per-model"
         }
+      }
+    },
+    "cache:models:plan": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk",
+        "command": "node ci/e2e.mjs plan"
+      },
+      "metadata": {
+        "secrets": ["GITHUB_TOKEN"]
       }
     },
     "cache:models": {

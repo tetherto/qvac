@@ -1,9 +1,10 @@
-// No @actions/* imports: also used by scripts/model-cache-plan.mjs and the tests.
+// The per-model cache's plan: one entry per cached path, keyed by its content. No @actions/* imports: models-cache-key
+// and packages/sdk-e2e/scripts/model-cache-plan.mjs build plans with it too.
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 
-const KEY_PREFIX = 'sdk-e2e-model-v1'
+const KEY_PREFIX = 'model-v1'
 
 const sha256 = (text) => createHash('sha256').update(text, 'utf8').digest('hex')
 
@@ -47,12 +48,12 @@ export function cachePaths(entry) {
   return entry.files.map((file) => file.path).sort()
 }
 
-/** Exact sizes: a truncated restore is not a hit. */
+/** Exact sizes where the plan knows them: a truncated restore is not a hit. */
 export function isComplete(entry, cwd = process.cwd()) {
   return entry.files.every((file) => {
     try {
       const stat = fs.statSync(path.resolve(cwd, file.path))
-      return stat.isFile() && stat.size === file.size
+      return stat.isFile() && (file.size === undefined || stat.size === file.size)
     } catch {
       return false
     }
@@ -74,6 +75,23 @@ export async function firstChecksumMismatch(entry, cwd = process.cwd()) {
     if ((await sha256File(path.resolve(cwd, file.path))) !== file.sha256) return file.path
   }
   return undefined
+}
+
+// A package's models.manifest.json entries, selected as models-download selects them: each with a sha256 is one entry
+// under the package directory; one without (an S3 directory or a URL) is left to models-download every run.
+export function manifestPlan(workdir, entries) {
+  const cached = entries.filter((e) => typeof e.sha256 === 'string' && !e.s3Prefix)
+  return {
+    version: 1,
+    cacheRoot: workdir,
+    entries: cached
+      .map((e) => {
+        const file = { path: `${workdir}/${e.dest}`, sha256: e.sha256, size: e.size }
+        return { contentId: e.sha256, path: file.path, files: [file], size: e.size ?? 0, models: [e.name] }
+      })
+      .sort((a, b) => (a.path < b.path ? -1 : 1)),
+    unresolved: entries.filter((e) => !cached.includes(e)).map((e) => e.name)
+  }
 }
 
 export function validatePlan(plan) {
