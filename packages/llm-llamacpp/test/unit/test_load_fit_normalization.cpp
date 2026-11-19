@@ -1,10 +1,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <filesystem>
 #include <iterator>
 #include <limits>
-#include <random>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
@@ -13,8 +11,6 @@
 #include <vector>
 
 #include <ggml-backend.h>
-#include <ggml.h>
-#include <gguf.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <inference-addon-cpp/Errors.hpp>
@@ -2082,8 +2078,8 @@ TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotPoolOverflowIsRejected) {
     EXPECT_THAT(
         error.what(),
         ::testing::HasSubstr(
-            "parallel x kv-unified-per-slot (2 x " + std::to_string(kPerSlot) +
-            ") exceeds"));
+            "n_parallel * kv_unified_per_slot (2 * " +
+            std::to_string(kPerSlot) + ") exceeds the largest context size"));
   }
 }
 
@@ -2102,12 +2098,13 @@ TEST_F(LoadFitNormalizationTest, NegativeKvUnifiedPerSlotIsRejected) {
     EXPECT_THAT(
         error.what(),
         ::testing::HasSubstr(
-            "kv-unified-per-slot must be 0 (no cap) or positive, got -512"));
+            "--kv-unified-per-slot must be 0 (no limit) or positive"));
   }
 }
 
-// The KV cache is unified; without a cap each slot gets its even share.
-TEST_F(LoadFitNormalizationTest, KvCacheIsUnified) {
+// The KV cache is unified and split evenly; fabric limits each sequence to its
+// share, or to kv-unified-per-slot when lower.
+TEST_F(LoadFitNormalizationTest, KvCacheIsUnifiedAndSplit) {
   for (const std::string parallel : {"1", "2"}) {
     auto config = baseConfig();
     config["parallel"] = parallel;
@@ -2118,78 +2115,10 @@ TEST_F(LoadFitNormalizationTest, KvCacheIsUnified) {
         {},
         backend({.type = backend_selection::GPU, .name = "none"}));
     EXPECT_TRUE(result.params.kv_unified) << "parallel=" << parallel;
+    EXPECT_TRUE(result.params.kv_unified_split) << "parallel=" << parallel;
     EXPECT_TRUE(result.fitSnapshot.kvUnified) << "parallel=" << parallel;
     EXPECT_EQ(result.params.kv_unified_per_slot, 0) << "parallel=" << parallel;
   }
-}
-
-// DeepSeek V4 and 4.1 keep one KV buffer per slot with several slots: fabric
-// sizes each of their per-sequence caches from n_ctx_seq.
-TEST_F(LoadFitNormalizationTest, DeepSeekV4KeepsKvBufferPerSlot) {
-  for (const std::string architecture : {"deepseek4", "deepseek41"}) {
-    const test_common::MockModelMetaData deepSeek{false, architecture};
-    for (const std::string parallel : {"1", "2"}) {
-      auto config = baseConfig();
-      config["parallel"] = parallel;
-      const auto result = lfn::normalizeLoadForFit(
-          "/tmp/model.gguf",
-          std::move(config),
-          deepSeek,
-          {},
-          backend({.type = backend_selection::GPU, .name = "none"}));
-      EXPECT_EQ(result.params.kv_unified, parallel == "1")
-          << architecture << ", parallel=" << parallel;
-    }
-  }
-}
-
-// Long RoPE factors keep one KV buffer per slot with several slots: fabric
-// picks them by n_ctx_seq. rope_freqs, when present, takes their place.
-TEST_F(LoadFitNormalizationTest, LongRopeFactorsKeepKvBufferPerSlot) {
-  struct Case {
-    std::vector<const char*> tensors;
-    bool unified;
-  };
-  const std::vector<Case> cases = {
-      {{"rope_factors_long.weight", "rope_factors_short.weight"}, false},
-      {{"rope_factors_long.weight", "rope_freqs.weight"}, true},
-      {{"token_embd.weight"}, true},
-  };
-  // Per-run name: test processes may run concurrently.
-  const auto path =
-      std::filesystem::temp_directory_path() /
-      ("qvac-long-rope-" + std::to_string(std::random_device{}()) + ".gguf");
-  for (const Case& testCase : cases) {
-    const size_t memSize =
-        testCase.tensors.size() * (ggml_tensor_overhead() + 64);
-    ggml_init_params initParams = {};
-    initParams.mem_size = memSize;
-    ggml_context* tensorCtx = ggml_init(initParams);
-    ASSERT_NE(tensorCtx, nullptr);
-    gguf_context* gguf = gguf_init_empty();
-    gguf_set_val_str(gguf, "general.architecture", "phi3");
-    for (const char* name : testCase.tensors) {
-      ggml_tensor* tensor = ggml_new_tensor_1d(tensorCtx, GGML_TYPE_F32, 4);
-      ggml_set_zero(tensor);
-      ggml_set_name(tensor, name);
-      gguf_add_tensor(gguf, tensor);
-    }
-    ASSERT_TRUE(gguf_write_to_file(gguf, path.string().c_str(), false));
-    gguf_free(gguf);
-    ggml_free(tensorCtx);
-
-    auto config = baseConfig();
-    const auto result = lfn::normalizeLoadForFit(
-        path.string(),
-        std::move(config),
-        metadata_,
-        {},
-        backend({.type = backend_selection::GPU, .name = "none"}));
-    EXPECT_EQ(result.params.kv_unified, testCase.unified)
-        << testCase.tensors.front() << ", " << testCase.tensors.back();
-  }
-  std::error_code errorCode;
-  std::filesystem::remove(path, errorCode);
 }
 
 TEST_F(LoadFitNormalizationTest, KvUnifiedIsNotAnOption) {

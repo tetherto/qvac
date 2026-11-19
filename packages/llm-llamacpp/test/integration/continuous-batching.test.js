@@ -1427,13 +1427,83 @@ test(
 // A conversation saved without a cap is longer than the cap set at the next
 // load, so its cache file fails when it loads: through the single-prompt cache
 // at parallel 1, through a slot at parallel 2.
+async function assertOverCapCacheRejected(t, setup, parallel, tag) {
+  t.comment(`${tag}, parallel ${parallel}`)
+  const key = path.join(os.tmpdir(), `qvac-over-cap-${tag}-${parallel}-${Date.now()}.bin`)
+  t.teardown(() => {
+    try {
+      fs.unlinkSync(key)
+    } catch {}
+  })
+
+  const writer = await setup(t, { parallel })
+  const longPrompt = [
+    { role: 'user', content: `Repeat: ${'apple '.repeat(KV_PER_SLOT_CAP + 100)}` }
+  ]
+  await collectText(await writer.run(longPrompt, { cacheKey: key }))
+  await writer.saveCache(key)
+  await writer.unload()
+
+  const reader = await setup(t, { parallel, kv_unified_per_slot: String(KV_PER_SLOT_CAP) })
+  const error = await reader
+    .run([{ role: 'user', content: 'Hi' }], { cacheKey: key })
+    .then(collectText)
+    .then(
+      () => null,
+      (err) => err
+    )
+  t.comment(`over-cap cache: ${error?.message}`)
+  t.ok(
+    new RegExp(`exceeds (current context size|the context limit of ${KV_PER_SLOT_CAP} )`).test(
+      error?.message || ''
+    ),
+    'the cache file is rejected when it loads'
+  )
+  await reader.unload()
+}
+
 test(
   'continuous batching: a cached prompt over kv_unified_per_slot fails at load',
   { timeout: 900_000, skip: isMobile },
   async (t) => {
     for (const parallel of ['1', '2']) {
+      await assertOverCapCacheRejected(t, setupModel, parallel, 'text')
+    }
+  }
+)
+
+test(
+  'continuous batching MTMD: a cached prompt over kv_unified_per_slot fails at load',
+  { timeout: 900_000, skip: skipHeavyPlatform },
+  async (t) => {
+    for (const parallel of ['1', '2']) {
+      await assertOverCapCacheRejected(t, setupMultimodalBatchModel, parallel, 'mtmd')
+    }
+  }
+)
+
+// Offsets in a cache file (fabric's sequence-state layout): a 12-byte header
+// whose last word is the token count, the ledger as the token list, then the
+// KV state, whose first word on a plain KV cache is its stream count, followed
+// per stream by a cell count and the cells.
+const CACHE_TOKEN_COUNT_OFFSET = 8
+const CACHE_LEDGER_OFFSET = 12
+
+function cacheStreamCountOffset(view) {
+  return CACHE_LEDGER_OFFSET + 4 * view.getUint32(CACHE_TOKEN_COUNT_OFFSET, true)
+}
+
+// An earlier version saved one KV stream per slot with parallel >= 2: such a
+// file still loads into the unified cache. It is made here from a current file
+// by declaring a second, empty stream, as a per-slot save of slot 0 writes it.
+// The model keeps no checkpoints, so the KV state ends the file.
+test(
+  'continuous batching: a cache file with one KV stream per slot still loads',
+  { timeout: 900_000, skip: isMobile },
+  async (t) => {
+    for (const parallel of ['1', '2']) {
       t.comment(`parallel ${parallel}`)
-      const key = path.join(os.tmpdir(), `qvac-over-cap-${parallel}-${Date.now()}.bin`)
+      const key = path.join(os.tmpdir(), `qvac-per-slot-streams-${parallel}-${Date.now()}.bin`)
       t.teardown(() => {
         try {
           fs.unlinkSync(key)
@@ -1441,119 +1511,35 @@ test(
       })
 
       const writer = await setupModel(t, { parallel })
-      const longPrompt = [
-        { role: 'user', content: `Repeat: ${'apple '.repeat(KV_PER_SLOT_CAP + 100)}` }
-      ]
-      await collectText(await writer.run(longPrompt, { cacheKey: key }))
+      const history = [{ role: 'user', content: 'Name a color.' }]
+      const answer = await collectText(await writer.run(history, { cacheKey: key }))
       await writer.saveCache(key)
       await writer.unload()
 
-      const reader = await setupModel(t, {
-        parallel,
-        kv_unified_per_slot: String(KV_PER_SLOT_CAP)
-      })
-      const error = await reader
-        .run([{ role: 'user', content: 'Hi' }], { cacheKey: key })
-        .then(collectText)
-        .then(
-          () => null,
-          (err) => err
-        )
-      t.comment(`over-cap cache: ${error?.message}`)
-      t.ok(
-        new RegExp(`exceeds (current context size|the context limit of ${KV_PER_SLOT_CAP} )`).test(
-          error?.message || ''
-        ),
-        'the cache file is rejected when it loads'
-      )
-      await reader.unload()
-    }
-  }
-)
+      const saved = fs.readFileSync(key)
+      const perSlot = new Uint8Array(saved.length + 4)
+      perSlot.set(saved)
+      const view = new DataView(perSlot.buffer)
+      t.is(view.getUint32(cacheStreamCountOffset(view), true), 1, 'the file holds one KV stream')
+      view.setUint32(cacheStreamCountOffset(view), 2, true)
+      fs.writeFileSync(key, perSlot)
 
-// Offsets in a cache file (fabric's sequence-state layout): a 12-byte header
-// whose last word is the token count, the ledger as the token list (word 7 is
-// the format mark), then the KV state, whose first word on a plain KV cache
-// is its stream count.
-const CACHE_TOKEN_COUNT_OFFSET = 8
-const CACHE_LEDGER_OFFSET = 12
-const CACHE_FORMAT_MARK_OFFSET = CACHE_LEDGER_OFFSET + 7 * 4
-
-function cacheStreamCountOffset(view) {
-  return CACHE_LEDGER_OFFSET + 4 * view.getUint32(CACHE_TOKEN_COUNT_OFFSET, true)
-}
-
-function readCacheWords(key) {
-  const bytes = fs.readFileSync(key)
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  return {
-    bytes,
-    view,
-    mark: view.getUint32(CACHE_FORMAT_MARK_OFFSET, true),
-    streams: view.getUint32(cacheStreamCountOffset(view), true)
-  }
-}
-
-// A file saved before the unified KV cache has format mark 0 and, with
-// parallel >= 2, one KV stream per slot. It starts the request cold and is
-// replaced by the next save; a current file fabric refuses still fails.
-test(
-  'continuous batching: a cache file from before the unified KV cache starts cold',
-  { timeout: 900_000, skip: isMobile },
-  async (t) => {
-    for (const parallel of ['1', '2']) {
-      t.comment(`parallel ${parallel}`)
-      const stamp = `${parallel}-${Date.now()}`
-      const oldKey = path.join(os.tmpdir(), `qvac-old-layout-${stamp}.bin`)
-      const badKey = path.join(os.tmpdir(), `qvac-bad-streams-${stamp}.bin`)
-      t.teardown(() => {
-        for (const key of [oldKey, badKey]) {
-          try {
-            fs.unlinkSync(key)
-          } catch {}
-        }
-      })
-
-      const writer = await setupModel(t, { parallel })
-      const history = [{ role: 'user', content: 'Name a color.' }]
-      await collectText(await writer.run(history, { cacheKey: oldKey }))
-      await writer.saveCache(oldKey)
-      await writer.unload()
-
-      const saved = readCacheWords(oldKey)
-      t.is(saved.mark, 1, 'a current file carries the format mark')
-      t.is(saved.streams, 1, 'a current file holds one KV stream')
-      saved.view.setUint32(cacheStreamCountOffset(saved.view), 2, true)
-      fs.writeFileSync(badKey, saved.bytes)
-      saved.view.setUint32(CACHE_FORMAT_MARK_OFFSET, 0, true)
-      fs.writeFileSync(oldKey, saved.bytes)
-
-      const { model: reader, logs } = await setupModelWithLogs(t, { parallel })
-      const output = await collectText(
-        await reader.run([{ role: 'user', content: 'Hi' }], { cacheKey: oldKey })
-      )
-      t.ok(output.length > 0, 'the request runs without the old file')
-      t.ok(
-        logs.some((line) => line.includes('was saved by an earlier version')),
-        'the old file is reported as a warning'
-      )
-      await reader.saveCache(oldKey)
-      const replaced = readCacheWords(oldKey)
-      t.is(replaced.mark, 1, 'the next save replaces the old file')
-      t.is(replaced.streams, 1, 'the replacement holds one KV stream')
-
-      const error = await reader
-        .run([{ role: 'user', content: 'Hi' }], { cacheKey: badKey })
-        .then(collectText)
-        .then(
-          () => null,
-          (err) => err
-        )
-      t.comment(`current file with two streams: ${error?.message}`)
-      t.ok(
-        /failed to load (cache|session file)/.test(error?.message || ''),
-        'a current file that fabric refuses still fails to load'
-      )
+      const reader = await setupModel(t, { parallel })
+      const followUp = [
+        ...history,
+        { role: 'assistant', content: answer },
+        { role: 'user', content: 'Name another.' }
+      ]
+      const response = await reader.run(followUp, { cacheKey: key })
+      const output = await collectText(response)
+      const stats = response.stats
+      const reused =
+        toNumber(stats?.CacheTokens) -
+        toNumber(stats?.promptTokens) -
+        toNumber(stats?.generatedTokens)
+      t.comment(`per-slot file: ${JSON.stringify(stats)}`)
+      t.ok(output.length > 0, 'the follow-up runs')
+      t.ok(reused > 0, `the follow-up reused ${reused} cached tokens`)
       await reader.unload()
     }
   }

@@ -80,13 +80,9 @@ TextLlmContext::~TextLlmContext() {
 }
 
 llama_pos TextLlmContext::ctxCeiling() const {
-  if (perSeqCtxCeiling_ > 0) {
-    return perSeqCtxCeiling_;
-  }
-  const auto nCtx = static_cast<llama_pos>(llama_n_ctx(modelCtx_.lctx));
-  return params_.kv_unified_per_slot > 0
-             ? std::min(nCtx, params_.kv_unified_per_slot)
-             : nCtx;
+  return perSeqCtxCeiling_ > 0
+             ? perSeqCtxCeiling_
+             : static_cast<llama_pos>(llama_n_ctx_seq(modelCtx_.lctx));
 }
 
 void TextLlmContext::initializeCommonState() {
@@ -131,16 +127,12 @@ void TextLlmContext::initializeCommonState() {
           llama_model_is_recurrent(model),
           llama_model_is_hybrid(model),
           isDeepSeekV4);
-  // When unified, n_ctx_seq is the whole pool; a sequence never outgrows
-  // its ceiling.
   slidingWindowCheckpoints_ =
       (model != nullptr) && !needsFullStateSnapshot_ &&
       qvac_lib_inference_addon_llama::utils::takesSlidingWindowCheckpoints(
           llama_model_n_swa(model),
           params_.swa_full,
-          std::min(
-              llama_n_ctx_seq(modelCtx_.lctx),
-              static_cast<uint32_t>(ctxCeiling())));
+          llama_n_ctx_seq(modelCtx_.lctx));
   snapshotScope_ =
       qvac_lib_inference_addon_llama::utils::untrimmableSnapshotScope();
   requestRollback_.setScope(snapshotScope_);
@@ -2051,6 +2043,15 @@ bool TextLlmContext::loadCache(
       stateTokens.data(),
       stateTokens.size(),
       &tokenCount);
+  if (loadedBytes == 0) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadSessionFile),
+        "TextLlmContext::loadCache: failed to load cache '" + cacheKey + "'");
+  }
+  // Cache files hold the target state only, like llama-server's slot files.
+  speculative::resetDraftSequence(modelCtx_.lctx, seqId_);
+
   // load already wrote KV; roll back unless we accept
   ScopeGuard restoredKvGuard([this]() noexcept {
     try {
@@ -2063,25 +2064,6 @@ bool TextLlmContext::loadCache(
     nPast_ = 0;
     clearCacheReconciliationState();
   });
-  if (loadedBytes == 0) {
-    // A failed restore can leave part of the state behind; the guard clears
-    // it. A file from before the unified KV cache may hold one KV stream per
-    // slot: it is a cold miss, and the next save replaces it.
-    if (cache::predatesUnifiedKv(stateTokens.data(), tokenCount)) {
-      QLOG_IF(
-          Priority::WARNING,
-          "[TextLlm] cache '" + cacheKey +
-              "' was saved by an earlier version and cannot be restored; "
-              "starting without it\n");
-      return false;
-    }
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnableToLoadSessionFile),
-        "TextLlmContext::loadCache: failed to load cache '" + cacheKey + "'");
-  }
-  // Cache files hold the target state only, like llama-server's slot files.
-  speculative::resetDraftSequence(modelCtx_.lctx, seqId_);
 
   stateTokens.resize(tokenCount);
   if (!cache::hasMarker(stateTokens.data(), stateTokens.size())) {

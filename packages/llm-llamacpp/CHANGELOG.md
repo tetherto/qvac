@@ -13,27 +13,18 @@
 ### Changed
 
 - The KV cache is unified, as llama-server's `--kv-unified`: the `parallel`
-  slots share one KV buffer instead of one each, and the addon limits each
-  slot to `ctx_size / parallel`. It is not configurable. With
-  `parallel >= 2`, DeepSeek V4 and V4.1 and models with long RoPE factors (for
-  example Phi-3) keep one buffer per slot, because fabric sizes their per-slot
-  caches or picks their RoPE factors from the buffer size
+  slots share one KV buffer instead of one each, and fabric limits each slot
+  to its share of the pool. It is not configurable
   ([#5832](https://github.com/tetherto/qvac/pull/5832)).
-- On the other models, with `parallel >= 2`: a slot gets exactly
-  `ctx_size / parallel` where fabric used to round it up to a multiple of 256;
-  MiniMax-M3 turns sparse attention off; and on Vulkan, with flash attention
-  off, or on CUDA older than Turing, decoding can be slower, because each
-  slot's attention spans the shared buffer
+- With `parallel >= 2`: a slot gets `ctx_size` (rounded up to a multiple of
+  256) divided by `parallel`, where its share used to be rounded up to a
+  multiple of 256; MiniMax-M3 turns sparse attention off; and on Vulkan, with
+  flash attention off, or on CUDA older than Turing, decoding can be slower,
+  because each slot's attention spans the shared buffer
   ([#5832](https://github.com/tetherto/qvac/pull/5832)).
-- A cache file saved by an earlier version with `parallel >= 2` holds one KV
-  stream per slot, which the shared buffer cannot restore. A file from an
-  earlier version that fails to restore now starts the request without it,
-  with a warning, and the next save replaces it. On the models that keep one
-  buffer per slot, cache files still load only at the `parallel` they were
-  saved with ([#5832](https://github.com/tetherto/qvac/pull/5832)).
-- With flash attention on CPU, Metal and CUDA (Turing or newer), attention
-  uses fabric's per-sequence KV-rows kernel, also at `parallel` 1
-  ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+- Cache files saved by earlier versions with `parallel >= 2` still load. Files
+  saved with `parallel >= 2` now hold one KV stream, which earlier versions
+  cannot restore ([#5832](https://github.com/tetherto/qvac/pull/5832)).
 
 ### Fixed
 

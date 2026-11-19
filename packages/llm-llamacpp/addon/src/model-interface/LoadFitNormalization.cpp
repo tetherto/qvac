@@ -3,10 +3,8 @@
 #include <algorithm>
 #include <cctype>
 #include <cinttypes>
-#include <filesystem>
 #include <initializer_list>
 #include <iterator>
-#include <limits>
 #include <mutex>
 #include <sstream>
 #include <stdexcept>
@@ -19,7 +17,6 @@
 #include <common/chat.h>
 #include <common/log.h>
 #include <ggml-backend.h>
-#include <gguf.h>
 #include <inference-addon-cpp/Errors.hpp>
 #ifdef __APPLE__
 #include <TargetConditionals.h>
@@ -457,39 +454,6 @@ uint32_t trainedContext(const ModelMetaData& metadata) {
   }
   const std::string key = *architecture + ".context_length";
   return metadata.tryGetU32(key.c_str()).value_or(0);
-}
-
-// Fabric takes n_ctx_seq, the whole pool when unified, as each sequence's
-// size: DeepSeek V4 and V4.1 size their per-sequence caches from it, and long
-// RoPE factors are chosen by it. With several slots these models keep one KV
-// buffer per slot, so each slot behaves as it would alone.
-bool keepsKvBufferPerSlot(
-    const std::string& modelPath, const ModelMetaData& metadata) {
-  // deepseek41 is matched here, not in isDeepSeekV4Architecture, which also
-  // picks DeepSeek V4's reasoning tags.
-  const auto architecture = metadata.tryGetString("general.architecture");
-  if (architecture.has_value() &&
-      (qvac_lib_inference_addon_llama::utils::isDeepSeekV4Architecture(
-           *architecture) ||
-       *architecture == "deepseek41")) {
-    return true;
-  }
-  std::error_code errorCode;
-  if (!std::filesystem::is_regular_file(modelPath, errorCode)) {
-    return false;
-  }
-  gguf_init_params ggufParams = {};
-  ggufParams.no_alloc = true;
-  gguf_context* gguf = gguf_init_from_file(modelPath.c_str(), ggufParams);
-  if (gguf == nullptr) {
-    return false;
-  }
-  // rope_freqs, when present, is used instead of the long/short factors.
-  const bool longRope =
-      gguf_find_tensor(gguf, "rope_factors_long.weight") >= 0 &&
-      gguf_find_tensor(gguf, "rope_freqs.weight") < 0;
-  gguf_free(gguf);
-  return longRope;
 }
 
 // Lambda form rather than a bare ::tolower: the value is caller-supplied and
@@ -2121,11 +2085,6 @@ NormalizedLoad normalizeLoadForFit(
     }
   }
 
-  // Keys reach fabric in unordered_map order, so a later fit-ctx can overwrite
-  // the marker ctx-size 0 leaves in fit_params_min_ctx.
-  const bool ctxSizeGiven =
-      configFilemap.contains("ctx-size") || configFilemap.contains("ctx_size");
-
   // transform json config into the format required by llama.cpp
   for (auto& keyValuePair : configFilemap) {
     configVector.push_back(std::string("--") + keyValuePair.first);
@@ -2136,19 +2095,6 @@ NormalizedLoad normalizeLoadForFit(
 
   auto ctxArg = common_params_parser_init(
       params, LLAMA_EXAMPLE_COMMON, [](int, char**) {});
-  // llama-server's --kv-unified-per-slot is not registered for
-  // LLAMA_EXAMPLE_COMMON, so fabric's server definition is used as it is.
-  // --kv-unified is not exposed: the addon decides it (keepsKvBufferPerSlot).
-  common_params serverDefaults;
-  auto serverArg = common_params_parser_init(
-      serverDefaults, LLAMA_EXAMPLE_SERVER, [](int, char**) {});
-  for (auto& opt : serverArg.options) {
-    if (std::ranges::any_of(opt.args, [](const char* name) {
-          return std::string_view(name) == "--kv-unified-per-slot";
-        })) {
-      ctxArg.options.push_back(std::move(opt));
-    }
-  }
 
   // disable warmup run
   params.warmup = false;
@@ -2319,39 +2265,21 @@ NormalizedLoad normalizeLoadForFit(
         "ctx_size to the model's trained context unless set explicitly\n");
   }
 
-  if (params.kv_unified_per_slot < 0) {
+  // All slots share one KV pool, each limited to its even share, or to
+  // kv-unified-per-slot when lower; fabric applies both limits.
+  params.kv_unified = true;
+  params.kv_unified_split = true;
+
+  // As llama-server: without ctx-size, kv-unified-per-slot sizes the KV pool
+  // to parallel x kv-unified-per-slot; ctx-size 0 keeps the trained context.
+  try {
+    static_cast<void>(common_params_size_kv_pool(params));
+  } catch (const std::invalid_argument& error) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         qvac_errors::general_error::toString(
             qvac_errors::general_error::InvalidArgument),
-        string_format(
-            "%s: kv-unified-per-slot must be 0 (no cap) or positive, got %d.\n",
-            K_LEGACY_PARSER_NAME.data(),
-            params.kv_unified_per_slot));
-  }
-  // All slots share one KV pool, unless keepsKvBufferPerSlot; either way each
-  // slot is capped at its even share, or at kv-unified-per-slot when lower.
-  params.kv_unified =
-      params.n_parallel < 2 || !keepsKvBufferPerSlot(modelPath, metadata);
-
-  // As llama-server: without ctx-size, kv-unified-per-slot sizes the KV pool
-  // to parallel x kv-unified-per-slot; ctx-size 0 keeps the trained context.
-  if (params.kv_unified_per_slot > 0 && params.n_ctx == 0 && !ctxSizeGiven) {
-    const int64_t pool =
-        static_cast<int64_t>(params.n_parallel) * params.kv_unified_per_slot;
-    if (pool > std::numeric_limits<int32_t>::max()) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          qvac_errors::general_error::toString(
-              qvac_errors::general_error::InvalidArgument),
-          string_format(
-              "%s: parallel x kv-unified-per-slot (%d x %d) exceeds the "
-              "largest ctx-size.\n",
-              K_LEGACY_PARSER_NAME.data(),
-              params.n_parallel,
-              params.kv_unified_per_slot));
-    }
-    params.n_ctx = static_cast<int32_t>(pool);
+        string_format("%s: %s.\n", K_LEGACY_PARSER_NAME.data(), error.what()));
   }
 
   const uint32_t parsedBatchPoll = params.cpuparams_batch.poll;

@@ -58,25 +58,6 @@ TEST(CacheLedger, RejectsMarkedCorruption) {
       std::runtime_error);
 }
 
-// Header word 7 tells a file saved before the unified KV cache, which may
-// hold one KV stream per slot, from a current one. Only a well-formed ledger
-// counts as the former.
-TEST(CacheLedger, TellsLedgersFromBeforeTheUnifiedKvCache) {
-  const cache::Ledger ledger = cache::fromTokens({1, 2, 3});
-  auto encoded = cache::serialize(ledger, 3, 3);
-  EXPECT_EQ(encoded[7], cache::LEDGER_UNIFIED_KV_MARK);
-  EXPECT_FALSE(cache::predatesUnifiedKv(encoded.data(), encoded.size()));
-
-  encoded[7] = 0;
-  EXPECT_NO_THROW((void)cache::deserialize(encoded.data(), encoded.size()));
-  EXPECT_TRUE(cache::predatesUnifiedKv(encoded.data(), encoded.size()));
-
-  encoded.back() ^= 1;
-  EXPECT_FALSE(cache::predatesUnifiedKv(encoded.data(), encoded.size()));
-  EXPECT_FALSE(cache::predatesUnifiedKv(encoded.data(), 0));
-  EXPECT_FALSE(cache::predatesUnifiedKv(nullptr, encoded.size()));
-}
-
 // Two spans near INT32_MAX must not wrap the int32 totals into a value that
 // matches the header: the sum is checked in 64 bits.
 TEST(CacheLedger, RejectsSpansThatOverflowTheTotals) {
