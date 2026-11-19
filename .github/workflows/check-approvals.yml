@@ -52,6 +52,7 @@ jobs:
                 and (.draft | not) and (.base.ref | test(env.BASES)))]
               | if length == 1 then .[0].number else "" end')
           [ -n "$number" ] || echo "::notice::No open non-draft PR at $HEAD_SHA to check"
+          [ -z "$number" ] || echo "PR #$number at $HEAD_SHA"
           echo "number=$number" >> "$GITHUB_OUTPUT"
 
       - name: Install @qvac/ci
