@@ -1,5 +1,80 @@
 # Changelog
 
+## [Unreleased]
+
+### Breaking
+
+- Every `IdMapIndex` call that reads or changes the index now returns a
+  promise and runs on a worker thread owned by the addon instead of the JS
+  thread, so a large IVF build, search or load no longer stalls every other
+  request in the process. This covers `addWithIds()`, `addLogged()`,
+  `remove()`, `removeLogged()`, `compact()`, `compactDelta()`, `contains()`,
+  `search()`, `searchFiltered()`, `prepareFilter()`, `buildIvf()`,
+  `searchIvf()`, `prepare()`, `write()`, `setStagedSearch()`,
+  `IdMapIndexFilter#search()` and the static `load()`, `loadMmap()` and
+  `loadWithDelta()`. Await each call; bad arguments reject instead of
+  throwing. There is no synchronous variant.
+- `dispose()` on an index or an `IdMapIndexFilter` returns a promise that
+  resolves once the native index or filter has been freed, and rejects if
+  freeing it fails. The index cannot be used after the call; calls that
+  have not started reject, and a running call finishes first.
+- The `length`, `calibrated` and `stagedSearch` getters report the state after
+  the last call that finished, and never wait for calls still in progress.
+- Native errors are inference-addon-cpp `StatusError`s, as in the other
+  addons: `error.code` is `"[ TurboVec :: <category> ]"`, for example
+  `"[ TurboVec :: InvalidArgument ]"`, instead of the bare category. An
+  error from the native index keeps its category as `error.message`, for
+  example `"BadMagic"`.
+
+### Added
+
+- Calls on one index run one at a time, in call order. Across indexes, long
+  work (adds, builds, loads, writes, compaction, `prepareFilter()`,
+  `setStagedSearch()`) runs on
+  one worker thread and searches on another, so a build or a large
+  allow-list never holds up a search. Input arrays are copied when the call
+  is made.
+- Every call takes an optional `{ signal }` (`AbortSignal`, for example from
+  `bare-abort-controller`, which callers install themselves). A call that has
+  not started when the signal aborts is skipped, including one already
+  waiting for a worker thread. A running call rejects at once with
+  `signal.reason` while its native work runs to the end: a search's result
+  is dropped, a loaded index or prepared filter is freed, and a mutation
+  still takes effect.
+
+### Changed
+
+- The addon runs its jobs through inference-addon-cpp's `JsAsyncTask`, on the
+  addon's own worker threads (`JsAsyncTask::runOn`), and reads its arguments
+  with inference-addon-cpp's JS helpers. The native build requires
+  `qvac-lib-inference-addon-cpp` 1.7.0 or newer.
+- The addon pins its native library in memory once its worker threads start,
+  as the other addons do: those threads outlive any one Bare environment, so
+  the library stays loaded when a worklet that used it ends.
+- `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries
+  `qvac-fabric` `11739.3.0#1` -> `11739.4.0`
+  ([#5831](https://github.com/tetherto/qvac/pull/5831)): opt-in WebGPU builds,
+  mtmd-helper decode limits, Core ML FFN prefill for Qwen3.5 0.8B and 2B,
+  OpenCL fixes for device-side uploads, GROUP_NORM and long flash-attention
+  chunks, the XDNA fused decode and host-decode fallback, and TurboVec IVF
+  lists stored contiguously. The mobile dev and peer dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.31.0` with it.
+- `@qvac/fabric` 0.31 adds fields to `common_params_speculative_draft` and the
+  `mtmd_helper_*` structs, so it is not ABI-compatible with 0.30.x. The RPC
+  protocol stays at 117. Every addon loaded in one process must resolve the
+  same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.31.0` together.
+- `buildIvf()` disposes every prepared filter, as the mutation methods do. On
+  TurboVec storage, fabric 0.31 stores the rows grouped by IVF list during the
+  build and refuses filters prepared before it. On every storage, a filter
+  used after `buildIvf()` now rejects with `IdMapIndexFilter has been disposed`, so
+  prepare filters again after building IVF state.
+- On TurboVec storage, IVF search scores far fewer blocks after the build. The
+  build also reorders the stored rows, so any search after it can return tied
+  scores in a different order, and `write()` saves the rows in IVF list order.
+  TurboVec orders tied scores by stored row, not by ID; the README and the
+  `search()` docs now say so.
+
 ## [0.6.0] - 2026-11-16
 
 ### Changed

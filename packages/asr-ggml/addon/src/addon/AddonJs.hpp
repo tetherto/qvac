@@ -62,27 +62,9 @@ namespace qvac::asrggml::addon_js {
 namespace js = qvac_lib_inference_addon_cpp::js;
 using qvac_lib_inference_addon_cpp::OutputQueue;
 
-// ── Native log forwarding ────────────────────────────────────────────────
-//
-// One process-wide install, shared by both engines. Hook choice:
-//   - ggml_log_set(forwardGgmlLog) covers ggml-origin lines in
-//     parakeet-only processes.
-//   - parakeet_log_set(forwardGgmlLog) routes speech-cpp's own parakeet
-//     lines ("[parakeet] ..." warnings, prewarm diagnostics), which otherwise
-//     go to stderr. It also re-applies the callback to ggml.
-//   - whisper_log_set(forwardGgmlLog) stores the callback in whisper's
-//     g_state.log_callback AND re-applies it to ggml -- both immediately and
-//     again inside whisper_backend_init_gpu() (src/whisper.cpp). A raw
-//     ggml_log_set alone would therefore be clobbered by whisper's init,
-//     while this order guarantees whisper-origin lines (whisper_model_load,
-//     "whisper_backend_init_gpu: using <name> backend", ...) and ggml-origin
-//     lines ("ggml_vulkan: Found N Vulkan devices ...") all land in the same
-//     forwardGgmlLog -> QLOG -> JsLogger pipe, whichever engine initializes
-//     later. There is no second callback left to clobber.
 inline void installNativeLogForwarderOnce() {
   static std::once_flag once;
   std::call_once(once, [] {
-    ggml_log_set(&forwardGgmlLog, nullptr);
     parakeet_log_set(&forwardGgmlLog, nullptr);
     whisper_log_set(&forwardGgmlLog, nullptr);
   });
@@ -1083,8 +1065,9 @@ JSCATCH
 //
 // Returns the backend the engine resolved at load() as a JS object:
 // `{ backendDevice, backendId, backendName, backendDescription,
-// encoderBackend, encoderOnCoreml }` (+ whisper-only extras
-// `gpuMemTotalMb`/`gpuMemFreeMb`, -1 = device does not report). The
+// encoderBackend, encoderOnCoreml }`. Parakeet also reports
+// `supportsCacheAwareStreaming`. Whisper reports `gpuMemTotalMb` and
+// `gpuMemFreeMb` (-1 = device does not report). The
 // description is the human-readable GPU name (e.g. "NVIDIA GeForce RTX
 // 3090") recovered from the ggml device registry; it is the
 // nvidia-smi-independent fallback the perf reporter uses on CI runners
@@ -1138,6 +1121,10 @@ inline js_value_t* getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
         env,
         "modelType",
         js::String::create(env, parakeetModel->getModelTypeName()));
+    result.setProperty(
+        env,
+        "supportsCacheAwareStreaming",
+        js::Boolean::create(env, parakeetModel->supportsCacheAwareStreaming()));
     return result;
   }
 

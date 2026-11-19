@@ -144,6 +144,8 @@ export interface BackendInfo {
      * `"nemotron-diarization"`).
      */
     modelType?: string;
+    /** Whether the loaded Parakeet checkpoint supports a cache-aware ASR stream. */
+    supportsCacheAwareStreaming?: boolean;
     gpuMemTotalMb?: number;
     gpuMemFreeMb?: number;
 }
@@ -182,6 +184,11 @@ export interface ParakeetRuntimeStats extends RuntimeStatsCore {
     gpuUnsupported: number;
     encoderOnCoreml: number;
     encoderUsedCoreml?: number;
+    /**
+     * After a job with offline transcription: 1 when every transcription
+     * decoded on the batched Core ML TDT decoder, 0 when any decoded on ggml.
+     */
+    decoderUsedCoreml?: number;
     segmentPlanMs?: number;
     assembleMs?: number;
     /** Sortformer only: 1 when the v2.1 AOSC speaker cache was active. */
