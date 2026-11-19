@@ -2,6 +2,7 @@ import test from 'brittle'
 import { AbortController } from 'bare-abort-controller'
 import { z } from 'zod'
 
+import { ModelFitRejectedError } from '@/errors/index'
 import type { Logger } from '@/logging/types'
 import { runLoadFitCheck, type LoadCheckInput } from '@/model-fit/load-check'
 import type { AddonFit, FitProbeRequest } from '@/model-fit/run/engine'
@@ -207,7 +208,10 @@ test('load check: a fitter that rejects is logged and the load goes ahead', asyn
           status: 'unknown',
           devices: [],
           stats: {},
-          reason: 'assessFit: the model cannot be read'
+          reason: new ModelFitRejectedError(
+            ModelType.llamacppCompletion,
+            'assessFit: the model cannot be read'
+          ).message
         }
       ]
     }

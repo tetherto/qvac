@@ -6,10 +6,12 @@ import path from 'bare-path'
 import { z } from 'zod'
 
 import {
+  ModelFitRejectedError,
   ModelTypeRequiredError,
   PluginLoadConfigValidationFailedError,
   PluginNotFoundError
 } from '@/errors/index'
+import { ERROR_CODES } from '@/schemas/errors'
 import { assessModelFit, noStubDetail } from '@/model-fit/assess'
 import { ENGINE_UNSIZED } from '@/model-fit/fit-load'
 import type { AddonFit } from '@/model-fit/run/engine'
@@ -110,14 +112,23 @@ test('assess: models that fit alone may not fit together', async (t) => {
   )
 })
 
-test('assess: a fitter that rejects makes the assessment throw', async (t) => {
+test('assess: a fitter that rejects throws a typed error carrying its message', async (t) => {
   const broken = modelFile('broken.gguf')
-  withPlugin(t, fakePlugin(new Map([[broken, new Error('assessFit: the model cannot be read')]])))
+  const rejection = new Error('assessFit: the model cannot be read')
+  withPlugin(t, fakePlugin(new Map([[broken, rejection]])))
 
-  await t.exception(
-    assessModelFit([{ modelSrc: broken, modelType: ModelType.llamacppCompletion }]),
-    /the model cannot be read/
-  )
+  try {
+    await assessModelFit([{ modelSrc: broken, modelType: ModelType.llamacppCompletion }])
+    t.fail('the assessment should throw')
+  } catch (error) {
+    t.ok(error instanceof ModelFitRejectedError)
+    t.is((error as ModelFitRejectedError).code, ERROR_CODES.MODEL_FIT_REJECTED)
+    t.is(
+      (error as Error).message,
+      `${ModelType.llamacppCompletion}: the engine fitter could not assess this load (assessFit: the model cannot be read)`
+    )
+    t.is((error as Error).cause, rejection)
+  }
 })
 
 test('assess: a transcription workload on an engine other than MOSS is unknown', async (t) => {

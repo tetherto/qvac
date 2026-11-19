@@ -92,9 +92,12 @@ fitter, a load the fitter cannot project, a model with no registry description
 that is not on disk, or a device that reported no free memory.
 
 A load that `loadModel` would refuse makes `assessModelFit` throw the same
-error: no plugin for the model type, a config the plugin's schema or
-`resolveConfig` refuses, or the engine fitter rejecting the load, such as a
-model it cannot read.
+error: no plugin for the model type, or a config the plugin's schema or
+`resolveConfig` refuses. An engine fitter that cannot assess the load, such as a
+model it cannot read or an engine that fails to run it, throws
+`MODEL_FIT_REJECTED` with the underlying message. A companion file, such as a
+projector, VAE or codec, does not load on its own and fails this way; assess the
+model that loads it, with the companion in its `modelConfig`.
 
 ## How the verdict is reached
 
