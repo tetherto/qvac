@@ -102,6 +102,16 @@ describe('modelFitResult', () => {
     assert.equal(withStats({ other: 1 }), false)
   })
 
+  it('carries the reason an unknown model has no verdict', () => {
+    const parsed = modelFitResult.parse({
+      object: 'model_fit',
+      verdict: 'unknown',
+      pools: [],
+      models: [{ model: 'a', status: 'unknown', devices: [], stats: {}, reason: 'no fitter' }]
+    })
+    assert.equal(parsed.models[0]?.reason, 'no fitter')
+  })
+
   it('passes through fields the SDK adds later', () => {
     const parsed = modelFitResult.parse({
       object: 'model_fit',
