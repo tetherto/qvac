@@ -137,40 +137,22 @@ export async function indexSearch(
     return { hits: sortHits(hits, scope), available, pastFloor }
   }
 
-  // A full selection is final when it seats k documents: anything the pool
-  // missed ranks below them. With second hits seated, every document in scope
-  // must already be in the pool, or one ranked lower would lose its seat.
-  async function noneUnseen(hits: SearchHit[], selected: SearchHit[]): Promise<boolean> {
-    const seated = new Set(selected.map((hit) => hit.documentId))
-    if (seated.size === k) return true
-    if (documents.length > 0 && documents.length <= k) return true
-    const seen = new Set(hits.map((hit) => hit.documentId))
-    if (documents.length > 0) {
-      return documents.every(
-        (document) => document.chunkCount === 0 || seen.has(document.documentId)
-      )
-    }
-    const range = { gte: { namespace }, lte: { namespace } }
-    for await (const document of reader.find<DocumentRecord>(DOCUMENTS, range)) {
-      if (document.chunkCount > 0 && !seen.has(document.documentId)) return false
-    }
-    return true
-  }
-
+  const listed = scope.documentIds === undefined ? null : documents
   let pool = perDocument === undefined ? k : Math.max(k, Math.min(MAX_POOL, k * POOL_GROWTH))
-  let ranked: SearchHit[]
   let selected: SearchHit[]
   for (;;) {
     const found = await candidates(pool)
     if (typeof found === 'string') return found
-    ranked = minScore === undefined ? found.hits : found.hits.filter((hit) => hit.score >= minScore)
+    const ranked =
+      minScore === undefined ? found.hits : found.hits.filter((hit) => hit.score >= minScore)
     if (perDocument === undefined) {
       selected = ranked.slice(0, k)
       break
     }
     selected = selectDiverse(ranked, k, perDocument)
     if (found.pastFloor || pool >= found.available) break
-    if (selected.length === k && (await noneUnseen(found.hits, selected))) break
+    const window = { hits: found.hits, ranked }
+    if (await selectionComplete(reader, namespace, listed, window, k, perDocument)) break
     const next = Math.min(MAX_POOL, pool * POOL_GROWTH)
     if (next === pool || next * SCAN_SHARE >= found.available) {
       return await scanSearch(reader, space, scope, query, k, options)
@@ -178,27 +160,75 @@ export async function indexSearch(
     pool = next
   }
 
-  // Listed documents the pool missed get their best chunk from an exact scan,
-  // so every one of them can be seated.
-  if (perDocument !== undefined && documents.length > 0 && documents.length <= k) {
-    const present = new Set(ranked.map((hit) => hit.documentId))
-    const missing = documents
-      .filter((document) => document.chunkCount > 0 && !present.has(document.documentId))
-      .map((document) => document.documentId)
-    if (missing.length > 0) {
-      const best = await scanSearch(
-        reader,
-        space,
-        { namespace, documentIds: missing },
-        query,
-        missing.length,
-        { strict: false, perDocument: 1, minScore, signal: options.signal }
-      )
-      selected = selectDiverse(sortHits(ranked.concat(best), scope), k, perDocument)
-    }
-  }
   await attachDocumentDetails(reader, namespace, selected)
   return selected
+}
+
+// Whether `selectDiverse` over the window equals the selection over the whole
+// scope. Hits outside the window score below all of it, so a document that may
+// hold more of them takes its next hit last in its round, and a document with
+// none in the window comes after every other in the first round. The window is
+// complete when k fills before any such turn comes up.
+async function selectionComplete(
+  reader: HyperDBReader,
+  namespace: string,
+  listed: DocumentRecord[] | null,
+  window: { hits: SearchHit[]; ranked: SearchHit[] },
+  k: number,
+  perDocument: number
+): Promise<boolean> {
+  const inWindow = countByDocument(window.hits)
+  const inRanked = countByDocument(window.ranked)
+  const chunkCounts = new Map(listed?.map((document) => [document.documentId, document.chunkCount]))
+
+  // A window hit below `minScore` puts the document's later chunks below it too.
+  async function mayHoldMore(documentId: string, count: number): Promise<boolean> {
+    if (count < (inWindow.get(documentId) ?? 0)) return false
+    let chunkCount = chunkCounts.get(documentId)
+    if (chunkCount === undefined) {
+      const document = await reader.get<DocumentRecord>(DOCUMENTS, { namespace, documentId })
+      chunkCount = document?.chunkCount ?? 0
+      chunkCounts.set(documentId, chunkCount)
+    }
+    return chunkCount > count
+  }
+
+  let chosen = 0
+  for (let round = 0; round < perDocument && chosen < k; round++) {
+    for (const [documentId, count] of inRanked) {
+      if (chosen === k) return true
+      if (round < count) chosen++
+      else if (round === count && (await mayHoldMore(documentId, count))) return false
+    }
+    if (round === 0 && chosen < k && (await anyOutside(reader, namespace, listed, inWindow))) {
+      return false
+    }
+  }
+  return true
+}
+
+// Insertion order is first appearance, which is the order `selectDiverse` seats in.
+function countByDocument(hits: SearchHit[]): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const hit of hits) counts.set(hit.documentId, (counts.get(hit.documentId) ?? 0) + 1)
+  return counts
+}
+
+// A namespace read stops at the first document with no hit in the window.
+async function anyOutside(
+  reader: HyperDBReader,
+  namespace: string,
+  listed: DocumentRecord[] | null,
+  inWindow: Map<string, number>
+): Promise<boolean> {
+  const outside = (document: DocumentRecord) =>
+    document.chunkCount > 0 && !inWindow.has(document.documentId)
+  if (listed) return listed.some(outside)
+  const range = { gte: { namespace }, lte: { namespace } }
+  for await (const document of reader.find<DocumentRecord>(DOCUMENTS, range)) {
+    if (outside(document)) return true
+  }
+  return false
 }
 
 // A query TurboVec can't rotate is still a valid query; the scan answers it.

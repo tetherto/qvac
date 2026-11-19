@@ -107,6 +107,23 @@ both('perDocument seats a document ranked below two long ones', async (t) => {
   t.alike(contents(hits), ['a0', 'a1', 'b0', 'c0'])
 })
 
+both('perDocument takes a later hit that ranks below the first window', async (t) => {
+  const { rag, spaceId } = await openRag(t)
+  const a = Array.from({ length: 40 }, (_, i) => 0.99 - i * 0.002)
+  await rag.ingest({
+    namespace: 'ns',
+    documents: [scored('a', spaceId, a), scored('b', spaceId, [0.985, 0.01])]
+  })
+
+  const scope = { namespace: 'ns' }
+  const hits = await rag.search({ scope, vector: QUERY, spaceId, k: 4, perDocument: 3 })
+  t.alike(contents(hits), ['a0', 'a1', 'b0', 'b1'], 'whole namespace')
+
+  const listed = { namespace: 'ns', documentIds: ['a', 'b'] }
+  const spread = await rag.search({ scope: listed, vector: QUERY, spaceId, k: 4, perDocument: 4 })
+  t.alike(contents(spread), ['a0', 'a1', 'b0', 'b1'], 'listed documents')
+})
+
 both('perDocument keeps the best documents among many', async (t) => {
   const { rag, spaceId } = await openRag(t)
   const best = [0.3, 0.7, 0.2, 0.9, 0.5, 0.8, 0.1, 0.6]
