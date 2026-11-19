@@ -210,6 +210,33 @@ test('resolve load: a source with no registry coordinates resolves no stub', asy
   t.is(resolved.reason, 'unresolvable-ref')
 })
 
+test('resolve load: a registry address names its catalog entry to the registry', async (t) => {
+  clearPlugins()
+  t.teardown(clearPlugins)
+  registerPlugin(companionPlugin(ModelType.llamacppCompletion))
+  const entry = smallestEntry(isSingleFile)
+  const looked: string[][] = []
+
+  const resolved = await resolveLoadFromStubs(
+    {
+      modelSrc: `registry://${entry.registrySource}/${entry.registryPath}`,
+      modelType: ModelType.llamacppCompletion,
+      modelConfig: {}
+    },
+    {
+      getEntry: async (registryPath, registrySource) => {
+        looked.push([registryPath, registrySource])
+        return null
+      }
+    }
+  )
+
+  t.alike(looked, [[entry.registryPath, entry.registrySource]])
+  t.is(resolved.status, 'no-stub')
+  if (resolved.status !== 'no-stub') return
+  t.is(resolved.reason, 'not-in-registry')
+})
+
 test('resolve load: a minimax pair on disk resolves to the artifacts its plugin loads', async (t) => {
   clearPlugins()
   t.teardown(clearPlugins)
