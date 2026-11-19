@@ -14,6 +14,8 @@ name: Fabric Nightly
 # To retry a red night, dispatch this workflow with force: true. Re-running
 # failed jobs only re-reports the same pr-build-test run.
 on:
+  push:
+    branches: [infra/fabric-nightly]
   schedule:
     - cron: "0 0 * * *"
   workflow_dispatch:
@@ -53,7 +55,7 @@ jobs:
         id: gate
         env:
           GH_TOKEN: ${{ github.token }}
-          FORCE: ${{ inputs.force || false }}
+          FORCE: ${{ inputs.force || github.event_name == 'push' }}
         run: |
           set -euo pipefail
           branch=$(jq -r '.branch' .github/fabric-nightly.json)
