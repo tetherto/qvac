@@ -107,7 +107,9 @@ async function fitCandidate(candidate: ModelFitCandidate): Promise<ModelFitModel
  * @throws {PluginNotFoundError} When no plugin handles the model type.
  * @throws {PluginLoadConfigValidationFailedError} When the plugin's schema
  *   refuses the config.
- * @throws The plugin's or the fitter's own error when either refuses the load.
+ * @throws {ModelFitRejectedError} When the fitter cannot assess the load, such
+ *   as a model it cannot read or an engine that fails to run it.
+ * @throws The plugin's own error when it refuses the load.
  */
 export async function assessModelFit(
   candidates: readonly ModelFitCandidate[]

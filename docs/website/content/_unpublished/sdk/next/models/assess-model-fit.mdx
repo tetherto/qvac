@@ -93,7 +93,7 @@ A model the SDK cannot size has `status: "unknown"`, no rows, empty `stats` and 
 
 ### Errors
 
-A load that [`loadModel()`](/sdk/reference/api#loadmodel) would refuse throws the same error: no plugin for the model type, a config the plugin refuses, or the engine fitter rejecting the load, such as a model it cannot read. A load that would start but cannot be sized is `unknown`.
+A load that [`loadModel()`](/sdk/reference/api#loadmodel) would refuse throws the same error: no plugin for the model type, or a config the plugin refuses. An engine fitter that cannot assess the load, such as a model it cannot read or an engine that fails to run it, throws `MODEL_FIT_REJECTED` with the underlying message. A companion file, such as a projector, VAE or codec, does not load on its own and fails this way; assess the model that loads it, with the companion in its `modelConfig`. A load that would start but cannot be sized is `unknown`.
 
 ## Where verdicts are available
 

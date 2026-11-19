@@ -44,8 +44,11 @@ function withModelType(candidate: AssessModelFitInput['models'][number]) {
  *   each model's addon result: its status, device rows and stats, and the
  *   reason when its status is `unknown`.
  * @throws The error `loadModel` would throw for a load it refuses: no plugin
- *   for the model type, a config the plugin refuses, or a model the fitter
- *   cannot read.
+ *   for the model type, or a config the plugin refuses.
+ * @throws {QvacErrorBase} With code `MODEL_FIT_REJECTED` when the engine
+ *   fitter cannot assess the load, such as a model it cannot read or an engine
+ *   that fails to run it. A companion file, such as a projector, VAE or codec,
+ *   does not load on its own: assess the model that loads it.
  */
 export async function assessModelFit(
   input: AssessModelFitInput,
