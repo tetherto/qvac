@@ -176,9 +176,11 @@ What each engine's rows cover:
 - **image classification and image embeddings**: the measured weights and the
   compute one image takes. MobileNet always runs on the CPU, so a
   classification load is one host row. A MegaLoc load is the selected device,
-  then the host.
+  then the host. Both read the model file itself, so they answer for files on
+  disk only.
 
-Everything else is `unknown`: `onnx-tts`, `ggml-vla`, a translation model not yet downloaded, MOSS-Speech, a TTS load with a LavaSR
+Everything else is `unknown`: `onnx-tts`, `ggml-vla`, a translation,
+classification or image-embedding model not yet downloaded, MOSS-Speech, a TTS load with a LavaSR
 enhancer or denoiser, a diffusion world load without a `sceneSrc`, a load naming
 an ESRGAN checkpoint not yet downloaded (the catalog's `.pth` checkpoints have no
 registry description), a split model, a multimodal completion load naming a

@@ -171,7 +171,11 @@ function stubSetFor(registryPath: string): FitStubSet | undefined {
  * Engines whose fitter sizes the files on disk and reads no registry
  * description, so a stub would be answered for as if it were the model.
  */
-const FILES_ONLY_ENGINES: ReadonlySet<CanonicalModelType> = new Set([ModelType.nmtcppTranslation])
+const FILES_ONLY_ENGINES: ReadonlySet<CanonicalModelType> = new Set([
+  ModelType.nmtcppTranslation,
+  ModelType.ggmlClassification,
+  ModelType.ggmlImageEmbedding
+])
 
 class NoStubError extends Error {
   reason: FitStubUnavailableReason
