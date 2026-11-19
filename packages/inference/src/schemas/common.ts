@@ -9,6 +9,7 @@ import {
 import { z } from 'zod'
 import type { AbortSignalLike } from '@/schemas/abort-signal'
 import { perCallProfilingSchema } from '@/schemas/profiling'
+import { requestDeadlineSchema } from '@/schemas/deadlines'
 import { heartbeatRequestSchema, heartbeatResponseSchema } from '@/schemas/heartbeat'
 import {
   getRuntimeCapabilitiesRequestSchema,
@@ -284,6 +285,14 @@ export const rpcOptionsSchema = z.object({
     .describe(
       'Caller session to run this request as. Set by a session handle; the ' +
         'transport copies it onto the request body.'
+    ),
+  deadline: requestDeadlineSchema
+    .optional()
+    .describe(
+      'Deadlines the runtime enforces for this call: `queueMs`, `idleMs`, `runMs` and, for ' +
+        '`loadModel`, `loadMs`. Each value can shorten the value the runtime configuration ' +
+        'sets for the same field, and never lengthens it. On expiry the call fails with ' +
+        '`DeadlineExceededError`. The transport copies it onto the request body.'
     )
 })
 

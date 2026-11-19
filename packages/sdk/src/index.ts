@@ -426,6 +426,8 @@ export {
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
+  DeadlineExceededError,
+  type DeadlineBoundary,
   TranslationFailedError,
   AudioEncodeFailedError,
   InvalidSeedFromParamsError,

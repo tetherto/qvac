@@ -40,6 +40,8 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("CONFIG_RELOAD_NOT_SUPPORTED", reportedCode, message, payload)
     class ServerContextOverflow(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("CONTEXT_OVERFLOW", reportedCode, message, payload)
+    class ServerDeadlineExceeded(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("DEADLINE_EXCEEDED", reportedCode, message, payload)
     class ServerDeleteCacheFailed(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("DELETE_CACHE_FAILED", reportedCode, message, payload)
     class ServerDownloadAssetFailed(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -332,6 +334,7 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "CONFIG_ALREADY_SET" && (code == null || code == 53351) -> QvacKnownException.ServerConfigAlreadySet(message, payload, code)
     name == "CONFIG_RELOAD_NOT_SUPPORTED" && (code == null || code == 52410) -> QvacKnownException.ServerConfigReloadNotSupported(message, payload, code)
     name == "CONTEXT_OVERFLOW" && (code == null || code == 52421) -> QvacKnownException.ServerContextOverflow(message, payload, code)
+    name == "DEADLINE_EXCEEDED" && (code == null || code == 52425) -> QvacKnownException.ServerDeadlineExceeded(message, payload, code)
     name == "DELETE_CACHE_FAILED" && (code == null || code == 53200) -> QvacKnownException.ServerDeleteCacheFailed(message, payload, code)
     name == "DOWNLOAD_ASSET_FAILED" && (code == null || code == 53007) -> QvacKnownException.ServerDownloadAssetFailed(message, payload, code)
     name == "DOWNLOAD_CANCELLED" && (code == null || code == 53001) -> QvacKnownException.ServerDownloadCancelled(message, payload, code)

@@ -50,6 +50,8 @@ A contract groups the operations whose schemas share a core. QVAC defines these 
 
 A contract with a dotted ID, such as `acme.diarization`, is defined by a third-party plugin rather than by QVAC. A third-party plugin can also provide a QVAC contract.
 
+Contract IDs are also the keys of the runtime's [deadline configuration](/sdk/runtime/deadlines#configuration).
+
 An optional operation appears in `operations` when every plugin that provides the contract implements it, and in `partialOperations` when only some do. With the default plugin set, `transcribeStream` is in `partialOperations`: Whisper and Parakeet stream, MOSS does not.
 
 ## Versions

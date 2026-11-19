@@ -15,6 +15,8 @@ import { sdcppConfigSchema } from '@/schemas/sdcpp-config'
 import { vlaConfigSchema } from '@/schemas/vla'
 import { runtimeContextSchema } from '@/schemas/runtime-context'
 import { modelFitPolicySchema } from '@/schemas/model-fit-policy'
+import { CAPABILITY_ID_PATTERN } from '@/schemas/capabilities'
+import { capabilityDeadlineSchema, loadDeadlineSchema } from '@/schemas/deadlines'
 
 // Alias keys for user convenience (maps to canonical types)
 const AliasKeys = {
@@ -249,6 +251,51 @@ export const qvacConfigSchema = z.object({
    * Defaults to false.
    */
   ragTurbovec: z.boolean().optional(),
+
+  /**
+   * Deadlines the runtime enforces on requests. Nothing is bounded unless it
+   * is set here or on the call (`rpcOptions.deadline`); a call can shorten a
+   * value set here and never lengthens it.
+   *
+   * `capabilities` is keyed by capability contract ID without the major
+   * version (`completion`, `image-generation`, `acme.diarization`). The
+   * `default` entry applies to every capability; an entry for one capability
+   * replaces `default` field by field, and `null` removes a default for that
+   * capability. A request maps to the contract that lists its operation.
+   *
+   * `load.loadMs` bounds a model load from the end of the download. It takes
+   * nothing from `capabilities.default`.
+   *
+   * @example
+   * ```json
+   * {
+   *   "deadlines": {
+   *     "capabilities": {
+   *       "default": { "queueMs": 120000, "idleMs": 60000 },
+   *       "completion": { "idleMs": 300000 },
+   *       "video-generation": { "idleMs": null }
+   *     },
+   *     "load": { "loadMs": 300000 }
+   *   }
+   * }
+   * ```
+   */
+  deadlines: z
+    .object({
+      capabilities: z
+        .record(
+          z
+            .string()
+            .regex(
+              CAPABILITY_ID_PATTERN,
+              'deadline keys must be capability IDs: lowercase words joined by hyphens, with dots between namespaces'
+            ),
+          capabilityDeadlineSchema
+        )
+        .optional(),
+      load: loadDeadlineSchema.optional()
+    })
+    .optional(),
 
   /**
    * Inert: we do not read this field. Plugins are registered

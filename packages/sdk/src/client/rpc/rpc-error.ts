@@ -9,6 +9,8 @@ import {
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
+  DeadlineExceededError,
+  type DeadlineBoundary,
   TranslationFailedError,
   AudioEncodeFailedError,
   InvalidSeedFromParamsError,
@@ -113,6 +115,8 @@ function readOptionalStringField(
 
 type ErrorReconstructor = (response: ErrorResponse) => Error
 
+const DEADLINE_BOUNDARIES: ReadonlySet<string> = new Set(['queue', 'load', 'run', 'idle'])
+
 /**
  * Map of server-thrown `QvacErrorBase` subclasses that need to survive
  * the RPC boundary as their original class — `err instanceof
@@ -202,6 +206,17 @@ const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
       readStringField(response.typedFields, 'kind', ''),
       readStringField(response.typedFields, 'modelId', ''),
       readStringField(response.typedFields, 'reason', response.message),
+      response.cause
+    )
+  },
+  DEADLINE_EXCEEDED: (response) => {
+    const boundary = readStringField(response.typedFields, 'boundary', 'run')
+    return new DeadlineExceededError(
+      readStringField(response.typedFields, 'requestId', ''),
+      DEADLINE_BOUNDARIES.has(boundary) ? (boundary as DeadlineBoundary) : 'run',
+      readOptionalNumberField(response.typedFields, 'timeoutMs') ?? 0,
+      readOptionalStringField(response.typedFields, 'capability'),
+      readOptionalStringField(response.typedFields, 'modelId'),
       response.cause
     )
   },

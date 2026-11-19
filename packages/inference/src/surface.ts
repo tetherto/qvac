@@ -212,6 +212,7 @@ export {
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
+  DeadlineExceededError,
   RequestValidationFailedError,
   SessionIdConflictError,
   SessionNotOpenError,
