@@ -13,7 +13,13 @@ import {
   type SpaceRecord
 } from '../db/records.js'
 import { checkStoredVector } from '../search.js'
-import { BIT_WIDTHS, loadNativeIndex, type NativeIndex, type NativeIndexModule } from './native.js'
+import {
+  BIT_WIDTHS,
+  loadNativeIndex,
+  type NativeIndex,
+  type NativeIndexModule,
+  type NativeSearchResult
+} from './native.js'
 import { createSnapshotStore, type SnapshotIdentity, type SnapshotStore } from './snapshots.js'
 import type { HyperDBInstance, HyperDBReader, HyperDBTransaction } from '../db/db-types.js'
 import type { IndexStorage } from '../types.js'
@@ -36,13 +42,19 @@ export interface IndexConfig {
 
 // A namespace index caught up to at least the revision a search reads.
 export interface OpenIndex {
-  native: NativeIndex
   normalize: boolean
   storage: IndexStorage
-  // The index's revision now; commits move it on between awaits.
+  // -1 once the index is replaced or dropped.
   revision(): number
-  // Drops an index whose native search failed; searches scan from then on.
-  fail(): void
+  // Upper bound on rows; TurboVec's `length` lags pending calls.
+  rows(): number
+  // 'stale' if the index moved past `revision` or was replaced meanwhile.
+  search(
+    revision: number,
+    query: Float32Array,
+    k: number,
+    allowlist: BigUint64Array | null
+  ): Promise<NativeSearchResult | 'stale' | 'unavailable'>
 }
 
 interface Entry {
@@ -54,6 +66,9 @@ interface Entry {
   identity: SnapshotIdentity | null
   normalize: boolean
   revision: number
+  rows: number
+  // False once a mutation failed and left the index half-applied.
+  settled: Promise<boolean>
   persistedRevision: number
   // Rows removed since the index was built, loaded or last compacted.
   tombstones: number
@@ -101,6 +116,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
   // Snapshot writes and removals of one namespace run in order, so a removal
   // never reads one sidecar and deletes another written in between.
   const disk = new Map<string, Promise<unknown>>()
+  const retiring = new Set<Promise<void>>()
   let closed = false
 
   function onDisk<T>(namespace: string, run: () => Promise<T>): Promise<T> {
@@ -126,6 +142,8 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
         identity: null,
         normalize: false,
         revision: 0,
+        rows: 0,
+        settled: SETTLED,
         persistedRevision: 0,
         tombstones: 0,
         syncing: null,
@@ -169,19 +187,44 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     }
     const native = entry.native as NativeIndex
     if (entry.needsPrepare) {
-      native.prepare()
       entry.needsPrepare = false
+      void native.prepare().catch(() => {})
     }
     return {
-      native,
       normalize: entry.normalize,
       storage: entry.identity?.storage ?? DEFAULT_INDEX_STORAGE,
-      revision: () => entry.revision,
-      fail: () => {
-        entry.broken = true
-        discard(entry)
-      }
+      revision: () => (entry.native === native ? entry.revision : -1),
+      rows: () => (entry.native === native ? entry.rows : 0),
+      search: (revision, query, k, allowlist) =>
+        searchAt(entry, native, revision, query, k, allowlist)
     }
+  }
+
+  async function searchAt(
+    entry: Entry,
+    native: NativeIndex,
+    revision: number,
+    query: Float32Array,
+    k: number,
+    allowlist: BigUint64Array | null
+  ): Promise<NativeSearchResult | 'stale' | 'unavailable'> {
+    // Check and call in one synchronous step, so no mutation slips between.
+    if (entry.native !== native || entry.revision !== revision) return 'stale'
+    const settled = entry.settled
+    let result: NativeSearchResult
+    try {
+      result = await (allowlist
+        ? native.searchFiltered(query, k, allowlist)
+        : native.search(query, k))
+    } catch {
+      // Disposed by a rebuild or close while the call waited.
+      if (entry.native !== native) return 'stale'
+      entry.broken = true
+      discard(entry)
+      return 'unavailable'
+    }
+    if (!(await settled)) return 'stale'
+    return result
   }
 
   async function sync(entry: Entry, module: NativeIndexModule): Promise<void> {
@@ -236,12 +279,12 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     if (!stored || stored.revision > revision) return
     let native: NativeIndex
     try {
-      native = module.load(stored.path)
+      native = await module.load(stored.path)
     } catch {
       return
     }
     if (native.dim !== identity.dimensions || native.bitWidth !== BIT_WIDTHS[identity.storage]) {
-      native.dispose()
+      retire(native)
       return
     }
     install(entry, native, stored.revision)
@@ -254,6 +297,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
   // reach the database's state.
   async function replay(entry: Entry, reader: HyperDBReader, target: number): Promise<boolean> {
     const namespace = entry.namespace
+    const native = entry.native as NativeIndex
     let expected = entry.revision + 1
     const stream = reader.find<MutationRecord>(MUTATIONS, {
       gte: { namespace, revision: expected },
@@ -262,22 +306,21 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     for await (const mutation of stream) {
       if (mutation.revision !== expected) return false
       const added = unpackNativeIds(mutation.added)
+      const present = await Promise.all(added.map((id) => native.contains(id)))
       const ids: bigint[] = []
       const vectors: Float32Array[] = []
-      const native = entry.native as NativeIndex
-      for (const id of added) {
-        if (native.contains(id)) continue
+      for (let i = 0; i < added.length; i++) {
+        if (present[i]) continue
         // Absent rows were removed by a later mutation in this range.
-        const vector = await readVector(reader, namespace, id)
+        const vector = await readVector(reader, namespace, added[i])
         if (vector) {
-          ids.push(id)
+          ids.push(added[i])
           vectors.push(vector)
         }
       }
-      removeRows(entry, native, unpackNativeIds(mutation.removed))
-      addRows(entry, native, ids, concat(vectors, native.dim))
-      compactIfNeeded(entry, native)
-      entry.revision = mutation.revision
+      const removed = unpackNativeIds(mutation.removed)
+      await applyRows(entry, native, mutation.revision, removed, ids, concat(vectors, native.dim))
+      if (entry.native !== native) return false
       expected++
     }
     return entry.revision === target
@@ -296,11 +339,11 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       const vectors = new Float32Array(REBUILD_BATCH_SIZE * dims)
       const ids = new BigUint64Array(REBUILD_BATCH_SIZE)
       let rows = 0
-      const flush = () => {
+      const flush = async () => {
         if (rows === 0) return
         const batch = vectors.subarray(0, rows * dims)
         if (entry.normalize) normalizeRows(batch, dims)
-        native.addWithIds(batch, ids.subarray(0, rows))
+        await native.addWithIds(batch, ids.subarray(0, rows))
         rows = 0
       }
       const namespace = entry.namespace
@@ -309,11 +352,11 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
         checkStoredVector(chunk, dims)
         decodeVectorInto(chunk.vector, vectors, rows * dims)
         ids[rows++] = decodeNativeId(chunk.nativeId)
-        if (rows === REBUILD_BATCH_SIZE) flush()
+        if (rows === REBUILD_BATCH_SIZE) await flush()
       }
-      flush()
+      await flush()
     } catch (error) {
-      native.dispose()
+      retire(native)
       throw error
     }
     install(entry, native, revision)
@@ -331,17 +374,23 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     for (const entry of entries.values()) {
       if (entry.namespace !== namespace || !entry.native || entry.syncing) continue
       if (entry.revision !== revision - 1) continue
+      const native = entry.native
       try {
-        removeRows(entry, entry.native, removed)
         rows ??= vectors()
-        addRows(entry, entry.native, added, entry.normalize ? rows.slice() : rows)
-        compactIfNeeded(entry, entry.native)
-        entry.revision = revision
+        await applyRows(
+          entry,
+          native,
+          revision,
+          removed,
+          added,
+          entry.normalize ? rows.slice() : rows
+        )
       } catch {
         // The commit is durable; the next search rebuilds from HyperDB.
-        discard(entry)
+        if (entry.native === native) discard(entry)
         continue
       }
+      if (entry.native !== native) continue
       if (entry.revision - entry.persistedRevision >= entry.snapshotEvery) {
         await persist(entry).catch(() => {})
       }
@@ -361,10 +410,11 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     if (!store || !native || !identity) return
     if (entry.revision <= entry.persistedRevision) return
     const revision = await onDisk(entry.namespace, () =>
-      store.write(identity, native, () => {
+      store.write(identity, (pathFor) => {
         // A rebuild may swap the index while the store awaits the filesystem.
         if (entry.native !== native) throw new Error('index replaced during snapshot')
-        return entry.revision
+        const revision = entry.revision
+        return { revision, written: writeSettled(native, pathFor(revision), entry.settled) }
       })
     )
     if (entry.native !== native || dropped.has(entry)) return
@@ -432,6 +482,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       discard(entry)
     }
     entries.clear()
+    await Promise.all(retiring)
   }
 
   async function withTransaction(run: (tx: HyperDBTransaction) => Promise<void>): Promise<void> {
@@ -443,43 +494,100 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     }
   }
 
+  function retire(native: NativeIndex): void {
+    const done = native.dispose().catch(() => {})
+    retiring.add(done)
+    void done.then(() => retiring.delete(done))
+  }
+
+  // Swap before disposing, so a search never finds a disposed index.
+  function install(entry: Entry, native: NativeIndex, revision: number): void {
+    const previous = entry.native
+    entry.native = native
+    entry.revision = revision
+    entry.rows = native.length
+    entry.settled = SETTLED
+    entry.tombstones = 0
+    entry.needsPrepare = true
+    if (previous && previous !== native) retire(previous)
+  }
+
+  function discard(entry: Entry): void {
+    const previous = entry.native
+    entry.native = null
+    entry.revision = 0
+    entry.rows = 0
+    entry.settled = SETTLED
+    entry.persistedRevision = 0
+    entry.tombstones = 0
+    if (previous) retire(previous)
+  }
+
   return { open, prune, apply, drop, close }
 }
 
-function install(entry: Entry, native: NativeIndex, revision: number): void {
-  if (entry.native && entry.native !== native) entry.native.dispose()
-  entry.native = native
-  entry.revision = revision
-  entry.tombstones = 0
-  entry.needsPrepare = true
-}
+const SETTLED = Promise.resolve(true)
 
-function discard(entry: Entry): void {
-  entry.native?.dispose()
-  entry.native = null
-  entry.revision = 0
-  entry.persistedRevision = 0
-  entry.tombstones = 0
-}
-
-function removeRows(entry: Entry, native: NativeIndex, ids: bigint[]): void {
-  for (const id of ids) {
-    if (native.remove(id)) entry.tombstones++
+// Issues `calls` in one synchronous step and moves the entry to `revision`,
+// so a later search sees all of them and an earlier one none.
+function issue(
+  entry: Entry,
+  native: NativeIndex,
+  revision: number,
+  calls: Array<() => Promise<unknown>>,
+  adds = 0
+): Promise<unknown[]> {
+  const outcomes = Promise.allSettled(calls.map((call) => call()))
+  if (entry.native === native) {
+    entry.revision = revision
+    entry.rows += adds
+    const previous = entry.settled
+    entry.settled = outcomes.then(
+      async (results) => (await previous) && results.every((r) => r.status === 'fulfilled')
+    )
   }
+  return outcomes.then((results) =>
+    results.map((result) => {
+      if (result.status === 'rejected') throw result.reason
+      return result.value
+    })
+  )
 }
 
-function compactIfNeeded(entry: Entry, native: NativeIndex): void {
+async function applyRows(
+  entry: Entry,
+  native: NativeIndex,
+  revision: number,
+  removed: bigint[],
+  added: bigint[],
+  vectors: Float32Array
+): Promise<void> {
+  const calls: Array<() => Promise<unknown>> = removed.map((id) => () => native.remove(id))
+  if (added.length > 0) {
+    if (entry.normalize) normalizeRows(vectors, native.dim)
+    calls.push(() => native.addWithIds(vectors, BigUint64Array.from(added)))
+  }
+  const results = await issue(entry, native, revision, calls, added.length)
+  if (entry.native !== native) return
+  if (entry.revision === revision) entry.rows = native.length
+  for (let i = 0; i < removed.length; i++) {
+    if (results[i] === true) entry.tombstones++
+  }
+  if (calls.length > 0) entry.needsPrepare = true
   if (entry.tombstones === 0 || entry.tombstones < native.length * COMPACT_SHARE) return
-  native.compact()
+  await issue(entry, native, entry.revision, [() => native.compact()])
+  if (entry.native !== native) return
   entry.tombstones = 0
   entry.needsPrepare = true
 }
 
-function addRows(entry: Entry, native: NativeIndex, ids: bigint[], vectors: Float32Array): void {
-  if (ids.length === 0) return
-  if (entry.normalize) normalizeRows(vectors, native.dim)
-  native.addWithIds(vectors, BigUint64Array.from(ids))
-  entry.needsPrepare = true
+async function writeSettled(
+  native: NativeIndex,
+  path: string,
+  settled: Promise<boolean>
+): Promise<void> {
+  await native.write(path)
+  if (!(await settled)) throw new Error('a mutation before the snapshot failed')
 }
 
 async function readVector(
