@@ -2234,6 +2234,60 @@ object Models {
         params = "3B",
     )
 
+    val BOTPSY_0_8B_TOOL_CALLING_BF16 = ModelConstant(
+        name = "BOTPSY_0_8B_TOOL_CALLING_BF16",
+        src = "registry://hf/qvac/BotPsy-0.8B-GGUFs/resolve/17bb36aa29c58fcde8e321aaaad3f2f7372aa655/botpsy-0.8b-bf16.gguf",
+        registryPath = "qvac/BotPsy-0.8B-GGUFs/resolve/17bb36aa29c58fcde8e321aaaad3f2f7372aa655/botpsy-0.8b-bf16.gguf",
+        registrySource = "hf",
+        blobCoreKey = "e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+        blobBlockOffset = 5574480,
+        blobBlockLength = 23144,
+        blobByteOffset = 365326121441,
+        modelId = "botpsy-0.8b-bf16.gguf",
+        expectedSize = 1516744160,
+        sha256Checksum = "a7f6b3b4e5c0c15e8b3caaf7b3814596c6d79251ca047f874d9a682e9a5127e8",
+        addon = "llm",
+        engine = "llamacpp-completion",
+        quantization = "bf16",
+        params = "0.8B",
+    )
+
+    val BOTPSY_0_8B_TOOL_CALLING_Q4_K_M = ModelConstant(
+        name = "BOTPSY_0_8B_TOOL_CALLING_Q4_K_M",
+        src = "registry://hf/qvac/BotPsy-0.8B-GGUFs/resolve/17bb36aa29c58fcde8e321aaaad3f2f7372aa655/botpsy-0.8b-q4_k_m-imat.gguf",
+        registryPath = "qvac/BotPsy-0.8B-GGUFs/resolve/17bb36aa29c58fcde8e321aaaad3f2f7372aa655/botpsy-0.8b-q4_k_m-imat.gguf",
+        registrySource = "hf",
+        blobCoreKey = "e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+        blobBlockOffset = 5597625,
+        blobBlockLength = 8077,
+        blobByteOffset = 366842885665,
+        modelId = "botpsy-0.8b-q4_k_m-imat.gguf",
+        expectedSize = 529296960,
+        sha256Checksum = "482db2dfdbc8ab7db3d3216fd8ef071d7381dd8547aff9933bc03312839d4d83",
+        addon = "llm",
+        engine = "llamacpp-completion",
+        quantization = "q4_k_m",
+        params = "0.8B",
+    )
+
+    val BOTPSY_0_8B_TOOL_CALLING_Q8_0 = ModelConstant(
+        name = "BOTPSY_0_8B_TOOL_CALLING_Q8_0",
+        src = "registry://hf/qvac/BotPsy-0.8B-GGUFs/resolve/17bb36aa29c58fcde8e321aaaad3f2f7372aa655/botpsy-0.8b-q8_0.gguf",
+        registryPath = "qvac/BotPsy-0.8B-GGUFs/resolve/17bb36aa29c58fcde8e321aaaad3f2f7372aa655/botpsy-0.8b-q8_0.gguf",
+        registrySource = "hf",
+        blobCoreKey = "e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+        blobBlockOffset = 5605703,
+        blobBlockLength = 12388,
+        blobByteOffset = 367372202753,
+        modelId = "botpsy-0.8b-q8_0.gguf",
+        expectedSize = 811843040,
+        sha256Checksum = "3ad45ab73cc5a45a200cda373f9cf7262741cc005b6e32b3a6221cb0c28e06be",
+        addon = "llm",
+        engine = "llamacpp-completion",
+        quantization = "q8_0",
+        params = "0.8B",
+    )
+
     val CLIP_VISION_H = ModelConstant(
         name = "CLIP_VISION_H",
         src = "registry://hf/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/06e001fc51048fb03433a6fb25334de7836704a5/split_files/clip_vision/clip_vision_h.safetensors",
@@ -2250,6 +2304,42 @@ object Models {
         engine = "sdcpp-generation",
         quantization = "",
         params = "",
+    )
+
+    val DEEPSEEK_V4_1_552B_A16B_DSPARK_Q8_0 = ModelConstant(
+        name = "DEEPSEEK_V4_1_552B_A16B_DSPARK_Q8_0",
+        src = "registry://hf/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/dspark-DeepSeek-V4.1-Flash-1017-Q8_0.gguf",
+        registryPath = "unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/dspark-DeepSeek-V4.1-Flash-1017-Q8_0.gguf",
+        registrySource = "hf",
+        blobCoreKey = "106dc5cf3342f0aea7c08503f9b0b8368ce829d32ff532477923de051eccddaa",
+        blobBlockOffset = 8020543,
+        blobBlockLength = 121719,
+        blobByteOffset = 525631623853,
+        modelId = "dspark-DeepSeek-V4.1-Flash-1017-Q8_0.gguf",
+        expectedSize = 7976914240,
+        sha256Checksum = "6ba6ac1b331c540691a209e7fc97dec2a24e295acb1e755c84c7d24a4373927a",
+        addon = "llm",
+        engine = "llamacpp-completion",
+        quantization = "q8_0",
+        params = "552B-A16B",
+    )
+
+    val DEEPSEEK_V4_1_552B_A16B_MULTIMODAL_Q4_K_M_SHARD = ModelConstant(
+        name = "DEEPSEEK_V4_1_552B_A16B_MULTIMODAL_Q4_K_M_SHARD",
+        src = "registry://s3/qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+        registryPath = "qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+        registrySource = "s3",
+        blobCoreKey = "e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+        blobBlockOffset = 3371179,
+        blobBlockLength = 734489,
+        blobByteOffset = 220930894785,
+        modelId = "DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+        expectedSize = 404686076192,
+        sha256Checksum = "c0732980fdcf264ef988d4b612dd8b5a25e82c7b614b41752346f815f0fd3e6b",
+        addon = "llm",
+        engine = "llamacpp-completion",
+        quantization = "q4_k_m",
+        params = "552B-A16B",
     )
 
     val DEEPSEEK_V4_304B_INST_UD_IQ2_M_SHARD = ModelConstant(
@@ -3726,6 +3816,24 @@ object Models {
         engine = "ggml-image-embedding",
         quantization = "f16-q6_k",
         params = "",
+    )
+
+    val MMPROJ_DEEPSEEK_V4_1_552B_A16B_MULTIMODAL_F16 = ModelConstant(
+        name = "MMPROJ_DEEPSEEK_V4_1_552B_A16B_MULTIMODAL_F16",
+        src = "registry://hf/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/mmproj-F16.gguf",
+        registryPath = "unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/mmproj-F16.gguf",
+        registrySource = "hf",
+        blobCoreKey = "106dc5cf3342f0aea7c08503f9b0b8368ce829d32ff532477923de051eccddaa",
+        blobBlockOffset = 8142263,
+        blobBlockLength = 14817,
+        blobByteOffset = 533608545005,
+        modelId = "mmproj-F16.gguf",
+        expectedSize = 971004064,
+        sha256Checksum = "dad8ad13f1d9a25757e121592d7b4f8ca83620d1172048004998b7c0b964b18e",
+        addon = "llm",
+        engine = "llamacpp-completion",
+        quantization = "f16",
+        params = "552B-A16B",
     )
 
     val MMPROJ_EMBEDDINGGEMMA_2_Q8_0 = ModelConstant(
@@ -8820,7 +8928,12 @@ object Models {
         BITNET_0_7B_BASE_TQ2_0,
         BITNET_1B_BASE_TQ2_0,
         BITNET_B1_58_3B_BASE_TQ2_0,
+        BOTPSY_0_8B_TOOL_CALLING_BF16,
+        BOTPSY_0_8B_TOOL_CALLING_Q4_K_M,
+        BOTPSY_0_8B_TOOL_CALLING_Q8_0,
         CLIP_VISION_H,
+        DEEPSEEK_V4_1_552B_A16B_DSPARK_Q8_0,
+        DEEPSEEK_V4_1_552B_A16B_MULTIMODAL_Q4_K_M_SHARD,
         DEEPSEEK_V4_304B_INST_UD_IQ2_M_SHARD,
         DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_SHARD,
         DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_TENSORS,
@@ -8903,6 +9016,7 @@ object Models {
         MEDGEMMA_4B_IT_Q8_0_SHARD,
         MEGALOC_F16,
         MEGALOC_MIXED,
+        MMPROJ_DEEPSEEK_V4_1_552B_A16B_MULTIMODAL_F16,
         MMPROJ_EMBEDDINGGEMMA_2_Q8_0,
         MMPROJ_GEMMA4_2B_MULTIMODAL_BF16,
         MMPROJ_GEMMA4_2B_MULTIMODAL_F16,
