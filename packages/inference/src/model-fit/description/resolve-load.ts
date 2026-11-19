@@ -224,7 +224,9 @@ export async function resolveLoadFromStubs(
 
   const resolveModelPath = async (src: ModelSrcInput): Promise<string> => {
     const location = srcString(src)
-    if (location !== '' && fs.existsSync(location)) return location
+    // Fitters take absolute paths only, while a load also takes one relative
+    // to the working directory.
+    if (location !== '' && fs.existsSync(location)) return path.resolve(location)
 
     const entry = catalogEntryFor(src)
     const cached = entry === undefined ? undefined : await cachedCatalogPath(entry)

@@ -140,6 +140,26 @@ test('resolve load: reads a source already on disk rather than fetching a stub',
   await resolved.release()
 })
 
+test('resolve load: a relative source on disk resolves to an absolute path', async (t) => {
+  clearPlugins()
+  t.teardown(clearPlugins)
+  registerPlugin(companionPlugin(ModelType.llamacppCompletion))
+  const model = scratchFile('model.gguf')
+  const companion = scratchFile('companion.gguf')
+
+  const resolved = await resolveLoadFromStubs({
+    modelSrc: path.relative(os.cwd(), model),
+    modelType: ModelType.llamacppCompletion,
+    modelConfig: { companionSrc: path.relative(os.cwd(), companion) }
+  })
+
+  t.is(resolved.status, 'resolved')
+  if (resolved.status !== 'resolved') return
+  t.is(resolved.modelPath, model)
+  t.is(resolved.artifacts['companionPath'], companion)
+  await resolved.release()
+})
+
 test('resolve load: takes the config and artifact keys from the plugin', async (t) => {
   clearPlugins()
   t.teardown(clearPlugins)
