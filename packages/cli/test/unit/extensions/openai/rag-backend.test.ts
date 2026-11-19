@@ -3,7 +3,11 @@ import assert from 'node:assert/strict'
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { createRagBackend, type EmbedTexts } from '@/serve/extensions/openai/adapters/rag-backend'
+import {
+  createRagBackend,
+  EmbeddingModelChangedError,
+  type EmbedTexts
+} from '@/serve/extensions/openai/adapters/rag-backend'
 
 const WORDS = ['planet', 'moon', 'orbit', 'recipe', 'flour', 'oven', 'river', 'bridge']
 
@@ -16,7 +20,7 @@ const embedTexts: EmbedTexts = (_modelId, texts) =>
     })
   )
 
-const model = { alias: 'embed', sdkModelId: 'model-1' }
+const model = { alias: 'embed', sdkModelId: 'model-1', model: 'gte-large.gguf', revision: 'abc123' }
 
 async function withDir(run: (dir: string) => Promise<void>) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'qvac-cli-rag-'))
@@ -103,6 +107,48 @@ describe('createRagBackend', () => {
       assert.equal(await second.delete('vs_c'), true)
       assert.deepEqual(await second.list(), [])
       await second.close()
+    })
+  })
+
+  it('rejects a store whose alias now points at other weights', async () => {
+    await withDir(async (dir) => {
+      const backend = createRagBackend({ dir, embedTexts })
+      await backend.attach('vs_d', model, {
+        fileId: 'file-1',
+        fileName: 'moon.txt',
+        text: 'A moon in orbit.'
+      })
+      const swapped = { ...model, revision: 'def456' }
+      await assert.rejects(backend.search('vs_d', swapped, 'moon', 1), EmbeddingModelChangedError)
+      await assert.rejects(
+        backend.attach('vs_d', swapped, { fileId: 'file-2', fileName: 'x.txt', text: 'orbit' }),
+        EmbeddingModelChangedError
+      )
+      await backend.close()
+    })
+  })
+
+  it('keeps stores written by another server on the same directory', async () => {
+    await withDir(async (dir) => {
+      const first = createRagBackend({ dir, embedTexts })
+      const second = createRagBackend({ dir, embedTexts })
+      assert.deepEqual(await first.list(), [])
+      assert.deepEqual(await second.list(), [])
+      await first.attach('vs_one', model, {
+        fileId: 'file-1',
+        fileName: 'moon.txt',
+        text: 'A moon in orbit.'
+      })
+      await first.close()
+      await second.attach('vs_two', model, {
+        fileId: 'file-2',
+        fileName: 'oven.txt',
+        text: 'Preheat the oven.'
+      })
+      await second.close()
+      const reopened = createRagBackend({ dir, embedTexts })
+      assert.deepEqual((await reopened.list()).sort(), ['vs_one', 'vs_two'])
+      await reopened.close()
     })
   })
 })

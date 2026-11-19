@@ -198,9 +198,18 @@ test('vector index: a provider with synchronous index methods still works', asyn
   await withProvider(
     async (calls, failures) => {
       const index = await createVectorIndex({ dim: 4, storage: 'q8' })
-      await index.add({ ids: [1, 2], vectors: [[1, 0, 0, 0], [0, 1, 0, 0]] })
+      await index.add({
+        ids: [1, 2],
+        vectors: [
+          [1, 0, 0, 0],
+          [0, 1, 0, 0]
+        ]
+      })
       const hits = await index.search({ query: [1, 0, 0, 0], k: 1 })
-      t.alike(hits.map((hit) => hit.id), ['1'])
+      t.alike(
+        hits.map((hit) => hit.id),
+        ['1']
+      )
       t.alike(await index.contains({ ids: [1, 3] }), [true, false])
       t.alike(await index.remove({ ids: [2] }), [true])
       await index.write({ path: tempSnapshotPath('sync') })
@@ -812,6 +821,38 @@ test('vector index: a mutation makes search scan in full until setIvf builds aga
         VectorIndexNotFoundError,
         'a disposed index rejects setIvf'
       )
+    },
+    { ivf: true }
+  )
+})
+
+test('vector index: an add racing an IVF build leaves the lists stale', async (t) => {
+  await withProvider(
+    async (calls) => {
+      const index = await createVectorIndex({ dim: 2 })
+      await index.add({
+        ids: ['1', '2'],
+        vectors: [
+          [1, 0],
+          [0, 1]
+        ]
+      })
+
+      const [set] = await Promise.all([
+        index.setIvf({ nLists: 2, nProbe: 1 }),
+        index.add({ ids: ['3'], vectors: [[1, 1]] })
+      ])
+      t.is(set.ivf?.built, true, 'the build reports the lists it built')
+      t.is(index.ivf?.built, false, 'the add that ran after it marks them stale')
+      t.is((await index.search({ query: [1, 0], k: 5 })).length, 3)
+      t.is(calls.searchIvf, 0, 'stale lists are never probed')
+
+      const [, hits] = await Promise.all([
+        index.remove({ ids: ['3'] }),
+        index.search({ query: [1, 0], k: 5 })
+      ])
+      t.is(hits.length, 2, 'a search queued behind a remove sees it applied')
+      t.is(calls.searchIvf, 0)
     },
     { ivf: true }
   )

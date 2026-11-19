@@ -20,6 +20,10 @@ import {
   type VectorStoreMeta
 } from '@/serve/core/stores/vector-stores'
 import {
+  EmbeddingModelChangedError,
+  type EmbeddingModelRef
+} from '@/serve/extensions/openai/adapters/rag-backend'
+import {
   vectorStoreToOpenAI,
   searchResultsToOpenAI,
   type VectorStoreRagInfo
@@ -313,12 +317,13 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       try {
         const results = await openai.ragBackend.search(
           id,
-          { alias: embedding.entry.alias, sdkModelId: embedding.sdkModelId },
+          embeddingModelRef(embedding),
           body.query,
           topK
         )
         return searchResultsToOpenAI(results, body.query)
       } catch (err) {
+        if (err instanceof EmbeddingModelChangedError) throwModelChanged(err)
         const message = err instanceof Error ? err.message : String(err)
         ctx.logger.error(`Vector store search error for "${id}": ${message}`)
         throw new HttpError(
@@ -403,12 +408,13 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       )
 
       try {
-        await openai.ragBackend.attach(
-          id,
-          { alias: embedding.entry.alias, sdkModelId: embedding.sdkModelId },
-          { fileId, fileName: record.fileName, text }
-        )
+        await openai.ragBackend.attach(id, embeddingModelRef(embedding), {
+          fileId,
+          fileName: record.fileName,
+          text
+        })
       } catch (err) {
+        if (err instanceof EmbeddingModelChangedError) throwModelChanged(err)
         const message = err instanceof Error ? err.message : String(err)
         ctx.logger.error(`Vector store ingest error for "${id}": ${message}`)
         throw new HttpError(
@@ -576,6 +582,24 @@ function mergeStoresAndWorkspaces(
 export function looksBinary(data: Buffer): boolean {
   const window = data.length > 8192 ? data.subarray(0, 8192) : data
   return window.includes(0)
+}
+
+function embeddingModelRef(embedding: EmbeddingResolutionOk): EmbeddingModelRef {
+  const src = embedding.entry.modelSrc
+  return {
+    alias: embedding.entry.alias,
+    sdkModelId: embedding.sdkModelId,
+    model: typeof src === 'string' ? src : src.src,
+    revision: typeof src === 'string' ? '' : src.sha256Checksum
+  }
+}
+
+function throwModelChanged(err: EmbeddingModelChangedError): never {
+  throw new HttpError(
+    400,
+    'embedding_model_mismatch',
+    `${err.message} Point the alias back at that model, or create a new vector store.`
+  )
 }
 
 interface EmbeddingResolutionOk {

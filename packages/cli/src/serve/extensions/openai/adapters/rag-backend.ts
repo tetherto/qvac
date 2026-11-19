@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto'
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { createHash, randomBytes } from 'node:crypto'
+import { mkdir, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import Corestore from 'corestore'
@@ -11,6 +11,24 @@ export const DEFAULT_VECTOR_STORE_DIR = path.join(os.homedir(), '.qvac', 'serve'
 export interface EmbeddingModelRef {
   alias: string
   sdkModelId: string
+  /** Stable identity of the weights behind the alias: their source and checksum. */
+  model: string
+  revision: string
+}
+
+/** The store was ingested with other weights than the alias now points at. */
+export class EmbeddingModelChangedError extends Error {
+  constructor(
+    readonly storeId: string,
+    readonly recorded: string,
+    readonly requested: string
+  ) {
+    super(
+      `Vector store "${storeId}" was ingested with embedding model "${recorded}", ` +
+        `but the alias now resolves to "${requested}".`
+    )
+    this.name = 'EmbeddingModelChangedError'
+  }
 }
 
 export interface VectorStoreFile {
@@ -48,16 +66,11 @@ export interface RagBackend {
   close: () => Promise<void>
 }
 
-interface ManifestStore {
+interface StoreRecord {
   namespace: string
   embeddingAlias: string
+  embeddingModel: { model: string; revision: string }
   files: Record<string, string>
-}
-
-interface Manifest {
-  version: 1
-  nextNamespace: number
-  stores: Record<string, ManifestStore>
 }
 
 interface OpenRag {
@@ -82,71 +95,90 @@ function flatten(rows: number[][]): Float32Array {
   return out
 }
 
-function aliasDir(baseDir: string, alias: string): string {
-  return path.join(baseDir, createHash('sha256').update(alias).digest('hex').slice(0, 16))
+function modelKey(model: StoreRecord['embeddingModel']): string {
+  return createHash('sha256').update(`${model.model}\0${model.revision}`).digest('hex').slice(0, 16)
+}
+
+function describeModel(model: StoreRecord['embeddingModel']): string {
+  return model.revision ? `${model.model}@${model.revision}` : model.model
 }
 
 // Each embedding model gets its own Corestore and RAG, since a RAG instance
-// binds one embedding space for its whole life.
+// binds one embedding space for its whole life. Each store has its own record
+// file, so servers sharing the directory never rewrite each other's stores.
 export function createRagBackend(
   options: { dir?: string; embedTexts?: EmbedTexts } = {}
 ): RagBackend {
   const baseDir = options.dir ?? DEFAULT_VECTOR_STORE_DIR
   const embedTexts = options.embedTexts ?? embedTextsWithSdk
-  const manifestPath = path.join(baseDir, 'stores.json')
+  const storesDir = path.join(baseDir, 'stores')
   const open = new Map<string, OpenRag>()
-  let manifest: Manifest | null = null
   let queue: Promise<unknown> = Promise.resolve()
 
-  // One operation at a time: the manifest and the RAG instances it opens are
-  // shared, and reopening an instance with a port must not race a search.
+  // One operation at a time: the RAG instances are shared, and reopening an
+  // instance with a port must not race a search.
   function serialize<T>(task: () => Promise<T>): Promise<T> {
     const run = queue.then(task, task)
     queue = run.catch(() => {})
     return run
   }
 
-  async function loadManifest(): Promise<Manifest> {
-    if (manifest) return manifest
+  function recordPath(id: string): string {
+    return path.join(storesDir, `${id}.json`)
+  }
+
+  async function readStore(id: string): Promise<StoreRecord | null> {
     try {
-      const parsed = JSON.parse(await readFile(manifestPath, 'utf8')) as Manifest
-      manifest = parsed.version === 1 ? parsed : { version: 1, nextNamespace: 0, stores: {} }
+      return JSON.parse(await readFile(recordPath(id), 'utf8')) as StoreRecord
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
-      manifest = { version: 1, nextNamespace: 0, stores: {} }
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null
+      throw err
     }
-    return manifest
   }
 
-  async function saveManifest(): Promise<void> {
-    await mkdir(baseDir, { recursive: true })
-    const tmp = `${manifestPath}.tmp`
-    await writeFile(tmp, JSON.stringify(manifest, null, 2))
-    await rename(tmp, manifestPath)
+  async function writeStore(id: string, record: StoreRecord): Promise<void> {
+    await mkdir(storesDir, { recursive: true })
+    const tmp = `${recordPath(id)}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`
+    await writeFile(tmp, JSON.stringify(record, null, 2))
+    await rename(tmp, recordPath(id))
   }
 
-  async function closeOpen(alias: string): Promise<void> {
-    const current = open.get(alias)
+  function assertModel(id: string, record: StoreRecord, model: EmbeddingModelRef): void {
+    const requested = { model: model.model, revision: model.revision }
+    if (modelKey(record.embeddingModel) === modelKey(requested)) return
+    throw new EmbeddingModelChangedError(
+      id,
+      describeModel(record.embeddingModel),
+      describeModel(requested)
+    )
+  }
+
+  async function closeOpen(key: string): Promise<void> {
+    const current = open.get(key)
     if (!current) return
-    open.delete(alias)
+    open.delete(key)
     await current.rag.close()
     await current.corestore.close()
   }
 
-  async function openRag(alias: string, model: EmbeddingModelRef | null): Promise<OpenRag> {
-    const current = open.get(alias)
+  async function openRag(
+    embeddingModel: StoreRecord['embeddingModel'],
+    model: EmbeddingModelRef | null
+  ): Promise<OpenRag> {
+    const key = modelKey(embeddingModel)
+    const current = open.get(key)
     if (current && (model === null || current.port)) {
       if (model && current.port) current.port.sdkModelId = model.sdkModelId
       return current
     }
-    await closeOpen(alias)
+    await closeOpen(key)
 
     let port: OpenRag['port'] = null
     if (model) {
       const probe = await embedTexts(model.sdkModelId, ['dimension probe'])
       const space: EmbeddingSpace = {
-        model: alias,
-        revision: '',
+        model: embeddingModel.model,
+        revision: embeddingModel.revision,
         dimensions: probe[0]?.length ?? 0,
         metric: 'cosine',
         normalized: false,
@@ -172,7 +204,7 @@ export function createRagBackend(
       }
     }
 
-    const dir = aliasDir(baseDir, alias)
+    const dir = path.join(baseDir, 'models', key)
     await mkdir(dir, { recursive: true })
     const corestore = new Corestore(path.join(dir, 'corestore'))
     const rag = createRag({
@@ -187,52 +219,51 @@ export function createRagBackend(
       throw err
     }
     const opened = { rag, corestore, port }
-    open.set(alias, opened)
+    open.set(key, opened)
     return opened
   }
 
   return {
     list: () =>
       serialize(async () => {
-        const m = await loadManifest()
-        return Object.keys(m.stores)
+        try {
+          const names = await readdir(storesDir)
+          return names.filter((n) => n.endsWith('.json')).map((n) => n.slice(0, -'.json'.length))
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code === 'ENOENT') return []
+          throw err
+        }
       }),
 
-    embeddingAlias: (id) =>
-      serialize(async () => {
-        const m = await loadManifest()
-        return m.stores[id]?.embeddingAlias ?? null
-      }),
+    embeddingAlias: (id) => serialize(async () => (await readStore(id))?.embeddingAlias ?? null),
 
     attach: (id, model, file) =>
       serialize(async () => {
-        const m = await loadManifest()
-        let store = m.stores[id]
-        if (!store) {
-          store = { namespace: `${id}-${m.nextNamespace}`, embeddingAlias: model.alias, files: {} }
+        const record: StoreRecord = (await readStore(id)) ?? {
+          namespace: `${id}-${randomBytes(4).toString('hex')}`,
+          embeddingAlias: model.alias,
+          embeddingModel: { model: model.model, revision: model.revision },
+          files: {}
         }
-        const { rag, port } = await openRag(store.embeddingAlias, model)
-        await rag.createNamespace({ name: store.namespace, space: port!.space })
+        assertModel(id, record, model)
+        const { rag, port } = await openRag(record.embeddingModel, model)
+        await rag.createNamespace({ name: record.namespace, space: port!.space })
         const result = await rag.ingest({
-          namespace: store.namespace,
+          namespace: record.namespace,
           documents: [{ id: file.fileId, text: file.text, metadata: { filename: file.fileName } }]
         })
-        if (!m.stores[id]) {
-          m.nextNamespace++
-          m.stores[id] = store
-        }
-        store.files[file.fileId] = file.fileName
-        await saveManifest()
+        record.files[file.fileId] = file.fileName
+        await writeStore(id, record)
         return { chunkCount: result.documents[0]?.chunkCount ?? 0 }
       }),
 
     search: (id, model, query, k) =>
       serialize(async () => {
-        const m = await loadManifest()
-        const store = m.stores[id]
-        if (!store) return []
-        const { rag } = await openRag(store.embeddingAlias, model)
-        const hits = await rag.search({ scope: { namespace: store.namespace }, query, k })
+        const record = await readStore(id)
+        if (!record) return []
+        assertModel(id, record, model)
+        const { rag } = await openRag(record.embeddingModel, model)
+        const hits = await rag.search({ scope: { namespace: record.namespace }, query, k })
         return hits.map((hit) => {
           const filename = hit.documentMetadata?.['filename']
           return {
@@ -240,7 +271,7 @@ export function createRagBackend(
             fileName:
               typeof filename === 'string'
                 ? filename
-                : (store.files[hit.documentId] ?? hit.documentId),
+                : (record.files[hit.documentId] ?? hit.documentId),
             content: hit.content,
             score: hit.score
           }
@@ -249,23 +280,21 @@ export function createRagBackend(
 
     delete: (id) =>
       serialize(async () => {
-        const m = await loadManifest()
-        const store = m.stores[id]
-        if (!store) return false
-        const { rag } = await openRag(store.embeddingAlias, null)
+        const record = await readStore(id)
+        if (!record) return false
+        const { rag } = await openRag(record.embeddingModel, null)
         await rag.deleteDocuments({
-          namespace: store.namespace,
-          documentIds: Object.keys(store.files)
+          namespace: record.namespace,
+          documentIds: Object.keys(record.files)
         })
         // The namespace itself stays; a store recreated under this id gets a new one.
-        delete m.stores[id]
-        await saveManifest()
+        await unlink(recordPath(id))
         return true
       }),
 
     close: () =>
       serialize(async () => {
-        for (const alias of [...open.keys()]) await closeOpen(alias)
+        for (const key of [...open.keys()]) await closeOpen(key)
       })
   }
 }
