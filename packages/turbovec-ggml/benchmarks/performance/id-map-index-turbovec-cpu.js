@@ -79,9 +79,10 @@ function nowMs() {
   return Number(process.hrtime.bigint()) / 1e6
 }
 
-function measureSync(fn) {
+// Times one call, including the wait for its promise to settle.
+async function measure(fn) {
   const start = nowMs()
-  const value = fn()
+  const value = await fn()
   return { ms: nowMs() - start, value }
 }
 
@@ -89,9 +90,9 @@ function median(values) {
   return values.slice().sort((a, b) => a - b)[Math.floor(values.length / 2)]
 }
 
-function measureMedianMs(fn) {
+async function measureMedianMs(fn) {
   const samples = []
-  for (let i = 0; i < MEASURED_RUNS; i++) samples.push(measureSync(fn).ms)
+  for (let i = 0; i < MEASURED_RUNS; i++) samples.push((await measure(fn)).ms)
   return median(samples)
 }
 
@@ -177,7 +178,7 @@ function assertV4Delta(delta) {
   }
 }
 
-function runCase(config, vectors, ids, queries, filterIds, deltaVectors) {
+async function runCase(config, vectors, ids, queries, filterIds, deltaVectors) {
   const { storage, bitWidth, supportsMmap, supportsDelta } = config
   const snapshot = path.join(TMP_DIR, `id-map-index-${storage}.tvim`)
   const delta = path.join(TMP_DIR, `id-map-index-${storage}.tvid`)
@@ -190,36 +191,36 @@ function runCase(config, vectors, ids, queries, filterIds, deltaVectors) {
   let filter = null
   try {
     idx = new IdMapIndex({ dim: DIM, bitWidth, storage })
-    const add = measureSync(() => idx.addWithIds(vectors, ids))
+    const add = await measure(() => idx.addWithIds(vectors, ids))
 
-    idx.search(queries.subarray(0, DIM * 8), K)
-    const fullScanResult = idx.search(queries, K)
-    const fullScanMs = measureMedianMs(() => idx.search(queries, K))
+    await idx.search(queries.subarray(0, DIM * 8), K)
+    const fullScanResult = await idx.search(queries, K)
+    const fullScanMs = await measureMedianMs(() => idx.search(queries, K))
 
-    const filterBuild = measureSync(() => {
-      filter = idx.prepareFilter(filterIds)
+    const filterBuild = await measure(async () => {
+      filter = await idx.prepareFilter(filterIds)
     })
-    filter.search(queries.subarray(0, DIM * 8), K)
-    const filterMs = measureMedianMs(() => filter.search(queries, K))
+    await filter.search(queries.subarray(0, DIM * 8), K)
+    const filterMs = await measureMedianMs(() => filter.search(queries, K))
 
-    const ivfBuild = measureSync(() => idx.buildIvf(IVF_LISTS, 1))
-    idx.searchIvf(queries.subarray(0, DIM * 8), K, IVF_NPROBE)
-    const ivfResult = idx.searchIvf(queries, K, IVF_NPROBE)
-    const ivfMs = measureMedianMs(() => idx.searchIvf(queries, K, IVF_NPROBE))
+    const ivfBuild = await measure(() => idx.buildIvf(IVF_LISTS, 1))
+    await idx.searchIvf(queries.subarray(0, DIM * 8), K, IVF_NPROBE)
+    const ivfResult = await idx.searchIvf(queries, K, IVF_NPROBE)
+    const ivfMs = await measureMedianMs(() => idx.searchIvf(queries, K, IVF_NPROBE))
 
-    const write = measureSync(() => idx.write(snapshot))
-    const load = measureSync(() => IdMapIndex.load(snapshot))
+    const write = await measure(() => idx.write(snapshot))
+    const load = await measure(() => IdMapIndex.load(snapshot))
     loaded = load.value
 
     let mmapLoadMs = 'n/a'
     let mmapFullScanQps = 'n/a'
     if (supportsMmap) {
-      const mmapLoad = measureSync(() => IdMapIndex.loadMmap(snapshot))
+      const mmapLoad = await measure(() => IdMapIndex.loadMmap(snapshot))
       mmap = mmapLoad.value
       mmapLoadMs = round(mmapLoad.ms, 2)
-      mmap.search(queries.subarray(0, DIM * 8), K)
+      await mmap.search(queries.subarray(0, DIM * 8), K)
       mmapFullScanQps = Math.round(
-        qps(QUERY_COUNT, measureMedianMs(() => mmap.search(queries, K)))
+        qps(QUERY_COUNT, await measureMedianMs(() => mmap.search(queries, K)))
       )
     }
 
@@ -228,11 +229,11 @@ function runCase(config, vectors, ids, queries, filterIds, deltaVectors) {
     let deltaKb = 'n/a'
     if (supportsDelta) {
       const deltaIds = createIds(DELTA_COUNT, 9000000 + bitWidth * 1000)
-      const added = measureSync(() => idx.addLogged(deltaVectors, deltaIds, delta))
+      const added = await measure(() => idx.addLogged(deltaVectors, deltaIds, delta))
       addLoggedUsPerVector = round((added.ms * 1000) / DELTA_COUNT, 2)
-      const removed = measureSync(() => {
+      const removed = await measure(async () => {
         for (let i = 0; i < DELTA_COUNT; i++) {
-          if (idx.removeLogged(ids[i], delta) !== true) {
+          if ((await idx.removeLogged(ids[i], delta)) !== true) {
             throw new Error(`removeLogged unexpectedly missed id ${ids[i]}`)
           }
         }
@@ -262,9 +263,9 @@ function runCase(config, vectors, ids, queries, filterIds, deltaVectors) {
     }
   } finally {
     if (filter !== null) filter.dispose()
-    if (loaded !== null) loaded.dispose()
-    if (mmap !== null) mmap.dispose()
-    if (idx !== null) idx.dispose()
+    if (loaded !== null) await loaded.dispose()
+    if (mmap !== null) await mmap.dispose()
+    if (idx !== null) await idx.dispose()
     cleanupFile(snapshot)
     cleanupDeltaArtifacts(delta)
   }
@@ -322,7 +323,7 @@ function toMarkdown(report) {
   return `${lines.join('\n')}\n`
 }
 
-function main() {
+async function main() {
   const arch = process.arch || 'unknown'
   if (arch !== 's390x' && !arch.includes('64')) {
     throw new Error(`TurboVec CPU benchmark requires a 64-bit target; detected ${arch}`)
@@ -339,14 +340,14 @@ function main() {
 
     console.log('Benchmarking JS brute-force baseline...')
     bruteForceSearch(vectors, ids, queries.subarray(0, DIM * 8), 8)
-    const bruteForceMs = measureMedianMs(() =>
+    const bruteForceMs = await measureMedianMs(() =>
       bruteForceSearch(vectors, ids, queries, QUERY_COUNT)
     )
 
     const results = []
     for (const config of STORAGE_CASES) {
       console.log(`Benchmarking storage=${config.storage}...`)
-      results.push(runCase(config, vectors, ids, queries, filterIds, deltaVectors))
+      results.push(await runCase(config, vectors, ids, queries, filterIds, deltaVectors))
     }
 
     const report = {
@@ -368,9 +369,7 @@ function main() {
   }
 }
 
-try {
-  main()
-} catch (error) {
+main().catch((error) => {
   console.error(error && error.stack ? error.stack : error)
   process.exit(1)
-}
+})

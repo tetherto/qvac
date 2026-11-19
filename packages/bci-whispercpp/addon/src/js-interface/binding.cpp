@@ -1,4 +1,5 @@
 #include <bare.h>
+#include <qvac-addon/fabric-bind.h>
 
 #include "src/addon/AddonJs.hpp"
 
@@ -7,6 +8,10 @@ auto qvac_lib_inference_addon_bci_exports(
     js_env_t* env,
     js_value_t* exports)
     -> js_value_t* { // NOLINT(readability-identifier-naming)
+  if (!qvacAddonBindFabric()) {
+    js_throw_error(env, nullptr, "failed to bind " QVAC_FABRIC_MODULE_NAME);
+    return nullptr;
+  }
 
 #define V(name, fn)                                                            \
   {                                                                            \
@@ -14,7 +19,7 @@ auto qvac_lib_inference_addon_bci_exports(
     if (js_create_function(env, name, -1, fn, nullptr, &val) != 0) {           \
       return nullptr;                                                          \
     }                                                                          \
-    if (js_set_named_property(env, exports, name, val) != 0) {               \
+    if (js_set_named_property(env, exports, name, val) != 0) {                 \
       return nullptr;                                                          \
     }                                                                          \
   }
@@ -35,6 +40,5 @@ auto qvac_lib_inference_addon_bci_exports(
   return exports;
 }
 
-BARE_MODULE(
-    qvac_lib_inference_addon_bci, qvac_lib_inference_addon_bci_exports)
+BARE_MODULE(qvac_lib_inference_addon_bci, qvac_lib_inference_addon_bci_exports)
 // NOLINTEND(cppcoreguidelines-macro-usage,readability-function-cognitive-complexity,modernize-use-trailing-return-type,readability-identifier-naming)
