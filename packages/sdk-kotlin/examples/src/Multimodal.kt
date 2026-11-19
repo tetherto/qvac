@@ -1,17 +1,17 @@
 // Kotlin port of packages/sdk/examples/llamacpp-multimodal.ts.
 //
 // Multimodal completion. Load a multimodal LLM together with its matching
-// projection model, then hang `attachments` off a user turn: one image first,
-// then both images in a single request so the model can compare them.
+// projection model, then pass images as ordered `QvacContentPart` values to
+// `QvacMessage.user()`: one image first, then two labeled images in a single
+// request so the text can name each one.
 //
 // The projection model goes in `modelConfig` as `projectionModelSrc`, the same
 // wire field as JS and Python; a `ModelConstant` is passed by its `.src`.
-// Attachments are typed `QvacAttachment` values on `QvacMessage.user()`.
 //
 // RUN: ./gradlew -p examples run -Pexample=Multimodal --args="<image path> [<second image path>]"
 
-import io.tether.qvac.sdk.QvacAttachment
 import io.tether.qvac.sdk.QvacClient
+import io.tether.qvac.sdk.QvacContentPart
 import io.tether.qvac.sdk.QvacMessage
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.completion
@@ -45,16 +45,18 @@ fun main(args: Array<String>): Unit = runBlocking {
         val modelId = client.loadWithProgress(
             Models.SMOLVLM2_500M_MULTIMODAL_Q8_0,
             modelConfig = buildJsonObject {
-                // An image is tiled into hundreds of context units before a
-                // single word of the prompt is counted, and the comparison
-                // below sends two at once.
+                // Each image takes hundreds of context tokens, and the
+                // comparison below sends two at once.
                 put("ctx_size", 8192)
                 put("projectionModelSrc", Models.MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0.src)
             },
         )
 
-        // Using one particular media
-        val history = listOf(QvacMessage.user("What's in this image?", listOf(QvacAttachment(imageFilePath))))
+        val history = listOf(
+            QvacMessage.user(
+                listOf(QvacContentPart.Media(imageFilePath), QvacContentPart.Text("What's in this image?")),
+            ),
+        )
         val run = client.completion.run(modelId = modelId, history = history)
 
         run.tokens.collect { print(it) }
@@ -63,7 +65,6 @@ fun main(args: Array<String>): Unit = runBlocking {
         println("\n▸ Performance Stats: ${final.stats?.raw}")
         println("▸ --------------------------------")
 
-        // Using multiple media
         if (args.size < 2) {
             println("▸ Only one image provided, terminating")
             return@runBlocking
@@ -71,10 +72,17 @@ fun main(args: Array<String>): Unit = runBlocking {
 
         val imageFilePath2 = args[1]
 
+        // Each image keeps its position in the turn, so the text can name the
+        // picture next to it.
         val history2 = listOf(
             QvacMessage.user(
-                "Compare the two newspaper articles",
-                listOf(QvacAttachment(imageFilePath), QvacAttachment(imageFilePath2)),
+                listOf(
+                    QvacContentPart.Text("Image A: "),
+                    QvacContentPart.Media(imageFilePath),
+                    QvacContentPart.Text("\nImage B: "),
+                    QvacContentPart.Media(imageFilePath2),
+                    QvacContentPart.Text("\nWhich image is a newspaper?"),
+                ),
             ),
         )
         val run2 = client.completion.run(modelId = modelId, history = history2)

@@ -18,8 +18,8 @@
 //
 // The prompts are built from the generated request types, so a misspelled field
 // or a wrong type is a compile error rather than a worker validation error.
-// Each prompt may also carry `tools`, `attachments` or `responseFormat`, as in
-// the JS example; they are left out here to keep the run fast.
+// Each prompt may also carry `tools`, media `content` parts or `responseFormat`,
+// as in the JS example; they are left out here to keep the run fast.
 //
 // RUN: ./gradlew -p examples run -Pexample=BatchCompletion
 
