@@ -7,8 +7,36 @@ const readline = require('node:readline')
 const { createHash } = require('node:crypto')
 
 const runtimeSymbol =
-  /^(?:__cxa_|__gxx_personality|__dynamic_cast$|_ZT[ISV](?:St|NSt|N10__cxxabiv1)|_Zn[wa]|_Zd[la]|_ZN[KVR]*(?:St|S[abiosd]|10__cxxabiv1)|_ZSt|_ZGVNSt)/
+  /^(?:__cxa_|__gxx_personality|__dynamic_cast$|_ZT[ISVT](?:St|NSt|N10__cxxabiv1)|_ZTC(?:St|NSt|N10__cxxabiv1)|_Zn[wa]|_Zd[la]|_ZN[KVR]*(?:St|S[abiosd]|10__cxxabiv1)|_ZSt|_ZGVNSt)/
 const systemSymbol = /^(?:__cxa_(?:atexit|finalize|thread_atexit_impl)$|_Unwind_)/
+// Itanium thunks encode this/vtable offsets before the underlying function.
+// Match that function's namespace, not std types in an unrelated XRT signature.
+const runtimeThunk =
+  /^_ZT(?:h[n]?\d+_|v[n]?\d+_[n]?\d+_|c(?:h[n]?\d+_|v[n]?\d+_[n]?\d+_){2})(?:N[KVR]*(?:St|S[abiosd]|10__cxxabiv1)|St)/
+const isRuntime = (symbol) =>
+  (runtimeSymbol.test(symbol) || runtimeThunk.test(symbol)) && !systemSymbol.test(symbol)
+
+function initializedBackend(line) {
+  const match = /calling init: (.+?)(?: \[\d+\])?\s*$/.exec(line)
+  if (!match) return null
+  return /(?:^|\/)(?:lib)?(?:qvac-)?(?:diffusion-|speech-)?ggml-[^/]+\.so(?:\.[0-9.]+)?$/.test(
+    match[1]
+  )
+    ? match[1]
+    : null
+}
+
+function workerResult(stdout) {
+  for (const line of stdout.split('\n')) {
+    try {
+      const result = JSON.parse(line)
+      if (result.kind === 'ggml-coexistence') return result
+    } catch {
+      // Native diagnostics can share stdout with the worker result.
+    }
+  }
+  return null
+}
 
 function parseBindings(trace) {
   const bindings = []
@@ -55,19 +83,17 @@ function checkBindings(bindings, { qvacClients, qvacProviders, privateClients, g
         failures.push(`${kind} client was not observed: ${client}`)
         continue
       }
-      const runtime = observed.filter(
-        (binding) => runtimeSymbol.test(binding.symbol) && !systemSymbol.test(binding.symbol)
-      )
+      const runtime = observed.filter((binding) => isRuntime(binding.symbol))
       if (kind !== 'private' && runtime.length === 0) {
         failures.push(`No C++ runtime bindings observed for ${kind} client: ${client}`)
       }
       for (const binding of observed) {
-        const isRuntime = runtimeSymbol.test(binding.symbol) && !systemSymbol.test(binding.symbol)
+        const runtime = isRuntime(binding.symbol)
         const fromQvac = qvacProviders.some((provider) => sameFile(binding.provider, provider))
         let bad = false
-        if (kind === 'qvac' && isRuntime) bad = !fromQvac
-        if (kind === 'gnu' && isRuntime) bad = path.basename(binding.provider) !== 'libstdc++.so.6'
-        if (kind === 'private' && (isRuntime || /^(?:ggml|gguf)_/.test(binding.symbol))) {
+        if (kind === 'qvac' && runtime) bad = !fromQvac
+        if (kind === 'gnu' && runtime) bad = path.basename(binding.provider) !== 'libstdc++.so.6'
+        if (kind === 'private' && (runtime || /^(?:ggml|gguf)_/.test(binding.symbol))) {
           bad = fromQvac
         }
         if (bad) {
@@ -114,11 +140,13 @@ async function main(args) {
   }
   fs.mkdirSync(options['report-dir'], { recursive: true })
   const results = []
+  const loadedArtifacts = new Set()
   for (const order of ['fabric-first', 'diffusion-first']) {
     const env = { ...process.env, LD_DEBUG: 'bindings,versions', LD_BIND_NOW: '1' }
     // Capture trace in stderr even if the caller configured another destination.
     delete env.LD_DEBUG_OUTPUT
     const bindings = []
+    const loadedBackends = new Set()
     const interested = [
       options.fabric,
       options.diffusion,
@@ -157,6 +185,8 @@ async function main(args) {
     // ROCm can generate enormous loader traces. Retain all non-binding
     // diagnostics, but only bindings for explicitly audited clients.
     for await (const line of readline.createInterface({ input: child.stderr })) {
+      const backend = initializedBackend(line)
+      if (backend) loadedBackends.add(backend)
       const [binding] = parseBindings(line)
       if (binding) {
         if (!clientCache.has(binding.client)) {
@@ -174,6 +204,9 @@ async function main(args) {
     clearTimeout(timer)
     fs.closeSync(trace)
     fs.closeSync(stdout)
+    const reported = workerResult(
+      fs.readFileSync(path.join(options['report-dir'], order + '.stdout.log'), 'utf8')
+    )
     const failures = checkBindings(bindings, {
       qvacClients: [options.fabric, ...options.qvacClients],
       qvacProviders: providers,
@@ -185,7 +218,20 @@ async function main(args) {
         `Worker failed: ${spawnError?.message || (timedOut ? 'timeout' : result.signal || result.status)}`
       )
     }
-    results.push({ order, ...result, bindings: bindings.length, failures })
+    if (!reported || reported.order !== order || typeof reported.hostExecutable !== 'string') {
+      failures.push('Worker completion/host identity was not reported')
+    } else {
+      loadedArtifacts.add(reported.hostExecutable)
+    }
+    for (const backend of loadedBackends) loadedArtifacts.add(backend)
+    results.push({
+      order,
+      ...result,
+      hostExecutable: reported?.hostExecutable || null,
+      loadedBackends: [...loadedBackends],
+      bindings: bindings.length,
+      failures
+    })
   }
   const artifacts = [
     ...new Set([
@@ -193,7 +239,8 @@ async function main(args) {
       options.diffusion,
       ...providers,
       ...options.gnuClients,
-      ...options.qvacClients
+      ...options.qvacClients,
+      ...loadedArtifacts
     ])
   ].map((file) => ({
     file,
@@ -219,7 +266,7 @@ async function main(args) {
   return results.some((result) => result.failures.length) ? 1 : 0
 }
 
-module.exports = { parseBindings, checkBindings }
+module.exports = { parseBindings, checkBindings, initializedBackend, workerResult }
 if (require.main === module) {
   main(process.argv.slice(2))
     .then((code) => {

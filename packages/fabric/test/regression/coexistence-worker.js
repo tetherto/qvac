@@ -22,16 +22,27 @@ function loadDiffusion() {
     throw new Error('Diffusion CPU selection returned ' + device)
   }
 }
+let count
 if (order === 'fabric-first') {
-  loadFabric()
+  count = loadFabric()
   loadDiffusion()
+  if (fabric.loadBackends() !== count) {
+    throw new Error('Fabric registry changed during first diffusion load')
+  }
 } else if (order === 'diffusion-first') {
   loadDiffusion()
-  loadFabric()
+  count = loadFabric()
 } else {
   throw new Error('Unknown load order: ' + order)
 }
-const count = fabric.loadBackends()
 loadDiffusion()
 if (fabric.loadBackends() !== count) throw new Error('Fabric registry changed after diffusion call')
-console.log(JSON.stringify({ order, fabricBackends: count, diffusionDevice: 'CPU' }))
+console.log(
+  JSON.stringify({
+    kind: 'ggml-coexistence',
+    order,
+    fabricBackends: count,
+    diffusionDevice: 'CPU',
+    hostExecutable: Bare.argv[0]
+  })
+)
