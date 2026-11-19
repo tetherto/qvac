@@ -825,6 +825,7 @@ data class BatchCompletionStreamRequestPromptsItem(
 data class BatchCompletionStreamRequestPromptsItemHistoryItem(
     @SerialName("role") val `role`: String,
     @SerialName("content") val `content`: BatchCompletionStreamRequestPromptsItemHistoryItemContent? = null,
+    @Deprecated("Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.")
     @SerialName("attachments") val `attachments`: List<BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem>? = null,
     @SerialName("toolCalls") val `toolCalls`: List<BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItem>? = null,
     @SerialName("toolCallId") val `toolCallId`: String? = null,
@@ -1338,6 +1339,7 @@ data class CompletionOrchestrateRequest(
 data class CompletionStreamRequestHistoryItem(
     @SerialName("role") val `role`: String,
     @SerialName("content") val `content`: CompletionStreamRequestHistoryItemContent? = null,
+    @Deprecated("Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.")
     @SerialName("attachments") val `attachments`: List<CompletionStreamRequestHistoryItemAttachmentsItem>? = null,
     @SerialName("toolCalls") val `toolCalls`: List<CompletionStreamRequestHistoryItemToolCallsItem>? = null,
     @SerialName("toolCallId") val `toolCallId`: String? = null,
