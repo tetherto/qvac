@@ -1,0 +1,4 @@
+{
+  global: qvac_test_log; qvac_test_abort;
+  local: *;
+};
