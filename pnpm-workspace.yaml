@@ -76,11 +76,11 @@ overrides:
   # `npm run link:platform`. Older published fallbacks used by workspace
   # consumers still need their own desktop packages. Update this selector
   # alongside the workspace addon's version.
-  "@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-linux-x64": "-"
-  "@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-linux-arm64": "-"
-  "@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-darwin-arm64": "-"
-  "@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-darwin-x64": "-"
-  "@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-win32-x64": "-"
+  "@qvac/diffusion-cpp@0.37.0>@qvac/diffusion-cpp-linux-x64": "-"
+  "@qvac/diffusion-cpp@0.37.0>@qvac/diffusion-cpp-linux-arm64": "-"
+  "@qvac/diffusion-cpp@0.37.0>@qvac/diffusion-cpp-darwin-arm64": "-"
+  "@qvac/diffusion-cpp@0.37.0>@qvac/diffusion-cpp-darwin-x64": "-"
+  "@qvac/diffusion-cpp@0.37.0>@qvac/diffusion-cpp-win32-x64": "-"
   # bare-make's LLVM resource packages find their own directory (clang's
   # resource dir) through require-asset, which needs 1.2.4 and a
   # bare-module-resolve with directory support (1.12.6). Older pins resolve it

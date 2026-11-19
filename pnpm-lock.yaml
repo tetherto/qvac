@@ -22,11 +22,11 @@ overrides:
   '@qvac/audiogen-ggml-darwin-arm64': '-'
   '@qvac/audiogen-ggml-darwin-x64': '-'
   '@qvac/audiogen-ggml-win32-x64': '-'
-  '@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-linux-x64': '-'
-  '@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-linux-arm64': '-'
-  '@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-darwin-arm64': '-'
-  '@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-darwin-x64': '-'
-  '@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-win32-x64': '-'
+  '@qvac/diffusion-cpp@0.37.0>@qvac/diffusion-cpp-linux-x64': '-'
+  '@qvac/diffusion-cpp@0.37.0>@qvac/diffusion-cpp-linux-arm64': '-'
+  '@qvac/diffusion-cpp@0.37.0>@qvac/diffusion-cpp-darwin-arm64': '-'
+  '@qvac/diffusion-cpp@0.37.0>@qvac/diffusion-cpp-darwin-x64': '-'
+  '@qvac/diffusion-cpp@0.37.0>@qvac/diffusion-cpp-win32-x64': '-'
   llvm-runtime-resources-darwin>require-asset: ^1.2.4
   llvm-runtime-resources-linux>require-asset: ^1.2.4
   llvm-runtime-resources-win32>require-asset: ^1.2.4
@@ -1108,7 +1108,7 @@ importers:
         version: 0.9.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/langdetect-text':
         specifier: ^0.1.2
-        version: 0.1.3
+        version: link:../langdetect-text
       '@qvac/llm-llamacpp':
         specifier: ^0.70.0
         version: 0.70.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1915,7 +1915,7 @@ importers:
         version: link:../inference
       '@qvac/langdetect-text':
         specifier: ^0.1.2
-        version: 0.1.3
+        version: link:../langdetect-text
       '@qvac/llm-llamacpp':
         specifier: ^0.70.0
         version: 0.70.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -2315,7 +2315,7 @@ importers:
         version: 0.8.0
       '@qvac/langdetect-text':
         specifier: ^0.1.2
-        version: 0.1.3
+        version: link:../langdetect-text
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1
@@ -5443,9 +5443,6 @@ packages:
 
   '@qvac/infer-base@0.8.0':
     resolution: {integrity: sha512-Z0dZXXQ56UsfgjXUFKCH6hU8Gs2BYCIXWB6q0cJkZ7MGXl3KX+Q/nIJ0OwfDf4m4z/ZgWItjVRnLYbpG0ssDNQ==}
-
-  '@qvac/langdetect-text@0.1.3':
-    resolution: {integrity: sha512-VDvheNdJSmzdeHy/2GyYhPs76y26/n2v7/99sTJgQXJvmUuBIlfy0T4EK52w2eWeQAnmmBW7aQ9nGV/UF8m1Uw==}
 
   '@qvac/llm-llamacpp@0.70.1':
     resolution: {integrity: sha512-eXyhJqN/WCpPIsLWvF+d7MWtnxRRPNfEGs5GHt00qFBIpPoDX3PHObJwzVKVsDLDmEXb3Gsp+gkDnXIx9+PVog==}
@@ -16013,10 +16010,6 @@ snapshots:
       bare-abort-controller: 1.1.2
       bare-events: 2.9.1(bare-abort-controller@1.1.2)
       bare-os: 3.9.3
-
-  '@qvac/langdetect-text@0.1.3':
-    dependencies:
-      tinyld: 1.3.4
 
   '@qvac/llm-llamacpp@0.70.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
     dependencies:
