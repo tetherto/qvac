@@ -55,16 +55,26 @@ export interface TurboVecIndexSearchResult {
   k: number
 }
 
+/**
+ * A native vector index. `@qvac/turbovec-ggml` 0.7 and later return a promise
+ * from every method, run calls on one index in call order, and reject calls
+ * still queued when `dispose()` runs. Earlier releases return their results
+ * directly; the adapter awaits both. `length` and `dim` stay synchronous and
+ * report the state after the last call that finished.
+ */
 export interface TurboVecIndex {
   readonly length: number
   readonly dim: number
-  addWithIds(vectors: Float32Array, ids: BigUint64Array): void
-  search(queries: Float32Array, k: number): TurboVecIndexSearchResult
-  contains(id: bigint): boolean
-  remove(id: bigint): boolean
-  prepare(): void
-  write(path: string): void
-  dispose(): void
+  addWithIds(vectors: Float32Array, ids: BigUint64Array): void | Promise<void>
+  search(
+    queries: Float32Array,
+    k: number
+  ): TurboVecIndexSearchResult | Promise<TurboVecIndexSearchResult>
+  contains(id: bigint): boolean | Promise<boolean>
+  remove(id: bigint): boolean | Promise<boolean>
+  prepare(): void | Promise<void>
+  write(path: string): void | Promise<void>
+  dispose(): void | Promise<void>
 }
 
 export interface TurboVecIndexProvider {
@@ -119,6 +129,29 @@ interface TimerRuntime {
 }
 
 const timerRuntime = globalThis as unknown as TimerRuntime
+
+/**
+ * Starts every call in one synchronous step, so an index that queues its calls
+ * runs them back to back and a search started meanwhile lands after all of
+ * them. A call that throws stops the calls after it. Waits for every started
+ * call to settle, then rethrows the first failure, so nothing is left running
+ * on the index when this rejects.
+ */
+async function runIndexCalls(calls: Array<() => unknown>): Promise<void> {
+  const started: unknown[] = []
+  for (const call of calls) {
+    try {
+      started.push(call())
+    } catch (error) {
+      started.push(Promise.reject(error))
+      break
+    }
+  }
+  const results = await Promise.allSettled(started)
+  for (const result of results) {
+    if (result.status === 'rejected') throw result.reason
+  }
+}
 
 export interface TurboVecAdapterInput extends HyperDBStorageInput {
   indexProvider: TurboVecIndexProvider
@@ -295,15 +328,24 @@ export class TurboVecAdapter extends BaseDBAdapter {
       return this._searchAllDocuments(query, queryVector, topK, signal)
     }
 
-    const candidateCount = Math.min(
-      this.index.length,
-      Math.max(topK, topK * this.candidateMultiplier)
-    )
-    const nativeResults = this.index.search(
-      new Float32Array(this._normalizeVector(queryVector)),
-      candidateCount
-    )
-    const candidateIds = this._resolveCandidateIds(nativeResults)
+    const index = this.index
+    const mappings = this.idToDocument
+    const candidateCount = Math.min(index.length, Math.max(topK, topK * this.candidateMultiplier))
+    let nativeResults: TurboVecIndexSearchResult
+    try {
+      nativeResults = await index.search(
+        new Float32Array(this._normalizeVector(queryVector)),
+        candidateCount
+      )
+    } catch (error) {
+      // A rebuild or recovery that swapped in a new index while this search
+      // waited disposed the old one, which rejects the calls still queued on it.
+      if (this.index !== index) {
+        return this._searchAllDocuments(query, queryVector, topK, signal)
+      }
+      throw error
+    }
+    const candidateIds = this._resolveCandidateIds(nativeResults, mappings)
     const [vectorMap, contentMap] = await this.storage.withSnapshot((snapshot) =>
       Promise.all([
         this.storage.getVectors(snapshot, candidateIds),
@@ -399,17 +441,23 @@ export class TurboVecAdapter extends BaseDBAdapter {
         this._assertWriterOwnership()
         return
       }
+      const liveIndex = this.index
       const ids = new BigUint64Array(docs.length)
       const vectors = new Float32Array(docs.length * docs[0].dimension)
       for (let index = 0; index < docs.length; index++) {
         const doc = docs[index]
         const nativeId = nativeIds[index]
         this._assertRuntimeMapping(nativeId.value, doc.id)
-        if (this.index.contains(nativeId.value)) this.index.remove(nativeId.value)
         ids[index] = nativeId.value
         vectors.set(this._normalizeVector(doc.vector), index * doc.dimension)
       }
-      this.index.addWithIds(vectors, ids)
+      // remove() reports a missing id as false, so an upsert needs no
+      // contains() round trip that would let a search land between the
+      // remove and the add.
+      await runIndexCalls([
+        ...Array.from(ids, (id) => () => liveIndex.remove(id)),
+        () => liveIndex.addWithIds(vectors, ids)
+      ])
       this.indexRevision = revision
       this._markDirty()
     } catch (error) {
@@ -445,7 +493,9 @@ export class TurboVecAdapter extends BaseDBAdapter {
         this._assertWriterOwnership()
         return
       }
-      for (const id of ids) this.index.remove(this._nativeIdForDocument(id).value)
+      const liveIndex = this.index
+      const nativeIds = ids.map((id) => this._nativeIdForDocument(id).value)
+      await runIndexCalls(nativeIds.map((nativeId) => () => liveIndex.remove(nativeId)))
       this.indexRevision = revision
       this._markDirty()
     } catch (error) {
@@ -511,13 +561,10 @@ export class TurboVecAdapter extends BaseDBAdapter {
         this.isInitialized = true
       }
     } catch (error) {
-      try {
-        this.index?.dispose()
-      } catch (disposeError) {
-        this.logger.warn('TurboVec index cleanup after open failure failed:', disposeError)
-      }
+      const index = this.index
       this.index = null
       this.idToDocument.clear()
+      await this._disposeIndex(index, 'TurboVec index cleanup after open failure failed:')
       try {
         this._releaseLock()
       } catch (lockError) {
@@ -543,13 +590,10 @@ export class TurboVecAdapter extends BaseDBAdapter {
     } catch (error) {
       this.logger.warn('TurboVec checkpoint during close failed:', error)
     } finally {
-      try {
-        this.index?.dispose()
-      } catch (error) {
-        this.logger.warn('TurboVec index disposal failed:', error)
-      }
+      const index = this.index
       this.index = null
       this.idToDocument.clear()
+      await this._disposeIndex(index, 'TurboVec index disposal failed:')
       try {
         this._releaseLock()
       } catch (error) {
@@ -578,6 +622,19 @@ export class TurboVecAdapter extends BaseDBAdapter {
     }
     this.databaseIdentity = identity
     this.checkpointWorkspaceDir = path.join(this.checkpointDir, `database-${identity}`)
+  }
+
+  /**
+   * Disposes an index the adapter no longer references. A failed dispose only
+   * leaks native memory, so it is logged rather than thrown.
+   */
+  private async _disposeIndex(index: TurboVecIndex | null, failureMessage: string): Promise<void> {
+    if (!index) return
+    try {
+      await index.dispose()
+    } catch (error) {
+      this.logger.warn(failureMessage, error)
+    }
   }
 
   private _closingError(): QvacErrorRAG {
@@ -726,16 +783,17 @@ export class TurboVecAdapter extends BaseDBAdapter {
             path.join(this.checkpointWorkspaceDir, manifest.snapshot)
           )
           if (loaded.dim !== dimension || loaded.length !== manifest.vectorCount) {
-            loaded.dispose()
+            await this._disposeIndex(loaded, 'TurboVec mismatched checkpoint disposal failed:')
             throw new QvacErrorRAG({
               code: ERR_CODES.DB_OPERATION_FAILED,
               adds: 'TurboVec checkpoint does not match its manifest'
             })
           }
-          this.index?.dispose()
+          const previous = this.index
           this.index = loaded
           this.activeStorage = manifest.storage
           this.indexRevision = manifest.revision
+          await this._disposeIndex(previous, 'TurboVec index disposal after recovery failed:')
           await this._loadRuntimeMappings()
           if (
             (currentRevision === manifest.revision &&
@@ -761,9 +819,10 @@ export class TurboVecAdapter extends BaseDBAdapter {
 
     const nextIndex = await this._createIndex(config.dimension)
     if (!nextIndex) {
-      this.index?.dispose()
+      const previous = this.index
       this.index = null
       this.idToDocument.clear()
+      await this._disposeIndex(previous, 'TurboVec index disposal before scanning failed:')
       this.indexRevision = await this.storage.withSnapshot((snapshot) =>
         this.storage.readCurrentRevision(snapshot)
       )
@@ -799,12 +858,12 @@ export class TurboVecAdapter extends BaseDBAdapter {
           values.set(this._normalizeVector(row.vector), index * config.dimension)
         }
         if (batch.length > 0) {
-          nextIndex.addWithIds(values, ids)
+          await nextIndex.addWithIds(values, ids)
         }
       }
-      nextIndex.prepare()
+      await nextIndex.prepare()
     } catch (error) {
-      nextIndex.dispose()
+      await this._disposeIndex(nextIndex, 'TurboVec unfinished rebuild disposal failed:')
       throw error
     }
 
@@ -812,17 +871,20 @@ export class TurboVecAdapter extends BaseDBAdapter {
       await this._persistMissingMappings(nativeIdsByDocument, nextMappings)
       this._assertWriterOwnership()
     } catch (error) {
-      nextIndex.dispose()
+      await this._disposeIndex(nextIndex, 'TurboVec unfinished rebuild disposal failed:')
       this.needsRecovery = true
       throw error
     }
 
-    this.index?.dispose()
+    // Install the new index before disposing the old one, so a search never
+    // finds the adapter pointing at a disposed index.
+    const previous = this.index
     this.index = nextIndex
     this.idToDocument = nextMappings
     this.indexRevision = currentRevision
     this.needsRecovery = false
     this.dirty = true
+    await this._disposeIndex(previous, 'TurboVec index disposal after rebuild failed:')
     return vectors.length
   }
 
@@ -879,22 +941,25 @@ export class TurboVecAdapter extends BaseDBAdapter {
           }
         }
 
-        // All HyperDB reads complete before the live index is touched. The
-        // synchronous section below cannot be observed halfway through by a search.
+        // All HyperDB reads complete before the live index is touched. The index
+        // calls below start in one synchronous step, so a search queued on the
+        // index sees either none or all of them. nextMappings only adds entries,
+        // and a native id always names the same document, so installing it first
+        // is safe for a search that still runs against the old contents.
         await this._persistMissingMappings(nativeIdsByDocument, nextMappings)
         this._assertWriterOwnership()
+        this.idToDocument = nextMappings
+        const liveIndex = this.index!
+        const calls: Array<() => unknown> = []
         for (const replay of replayDocuments) {
-          if (this.index!.contains(replay.nativeId.value)) {
-            this.index!.remove(replay.nativeId.value)
-          }
+          const nativeId = replay.nativeId.value
+          calls.push(() => liveIndex.remove(nativeId))
           if (replay.vector) {
-            this.index!.addWithIds(
-              new Float32Array(this._normalizeVector(replay.vector.vector)),
-              new BigUint64Array([replay.nativeId.value])
-            )
+            const values = new Float32Array(this._normalizeVector(replay.vector.vector))
+            calls.push(() => liveIndex.addWithIds(values, new BigUint64Array([nativeId])))
           }
         }
-        this.idToDocument = nextMappings
+        await runIndexCalls(calls)
         this.indexRevision = toRevision
         this.dirty = toRevision > fromRevision
         this.needsRecovery = false
@@ -910,8 +975,9 @@ export class TurboVecAdapter extends BaseDBAdapter {
   private async _ensureIndex(dimension: number): Promise<void> {
     if (this.index && this.index.dim === dimension) return
     if (this.indexUnavailable) return
-    this.index?.dispose()
+    const previous = this.index
     this.index = null
+    await this._disposeIndex(previous, 'TurboVec index disposal after a dimension change failed:')
     this.index = await this._createIndex(dimension)
     this.indexRevision = 0
     this.idToDocument.clear()
@@ -1006,11 +1072,14 @@ export class TurboVecAdapter extends BaseDBAdapter {
     })
   }
 
-  private _resolveCandidateIds(results: TurboVecIndexSearchResult): string[] {
+  private _resolveCandidateIds(
+    results: TurboVecIndexSearchResult,
+    mappings: Map<bigint, string>
+  ): string[] {
     const ids: string[] = []
     for (const nativeId of results.ids) {
       if (nativeId === UINT64_MAX) continue
-      const documentId = this.idToDocument.get(nativeId)
+      const documentId = mappings.get(nativeId)
       if (documentId) ids.push(documentId)
     }
     return ids
@@ -1089,26 +1158,33 @@ export class TurboVecAdapter extends BaseDBAdapter {
       return false
     }
     this._assertWriterOwnership()
+    // The manifest must describe the snapshot this call writes, so read the
+    // state it records before the first await.
+    const index = this.index
+    const revision = this.indexRevision
+    const storage = this.activeStorage
+    const databaseIdentity = this.databaseIdentity
     fs.mkdirSync(this.checkpointWorkspaceDir, { recursive: true })
     const checkpointId = `${this.lockOwner.slice(0, 12)}-${Date.now()}`
-    const snapshot = `index-${this.indexRevision}-${checkpointId}.tvim`
+    const snapshot = `index-${revision}-${checkpointId}.tvim`
     const snapshotPath = path.join(this.checkpointWorkspaceDir, snapshot)
     const temporarySnapshot = `${snapshotPath}.tmp`
     const manifestPath = this._manifestPath()
     const temporaryManifest = `${manifestPath}.tmp-${checkpointId}`
     let manifestInstalled = false
     try {
-      this.index.write(temporarySnapshot)
+      await index.write(temporarySnapshot)
       this._assertWriterOwnership()
       fs.renameSync(temporarySnapshot, snapshotPath)
 
       const manifest: CheckpointManifest = {
         version: MANIFEST_VERSION,
-        databaseIdentity: this.databaseIdentity,
-        revision: this.indexRevision,
-        vectorCount: this.index.length,
-        dimension: this.index.dim,
-        storage: this.activeStorage,
+        databaseIdentity,
+        revision,
+        // write() has settled, so length counts every call queued before it.
+        vectorCount: index.length,
+        dimension: index.dim,
+        storage,
         mappingVersion: ID_MAPPING_VERSION,
         snapshot
       }

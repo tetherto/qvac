@@ -4,7 +4,7 @@ import fs from 'bare-fs'
 import path from 'bare-path'
 import tmp from 'test-tmp'
 import HyperDB from 'hyperdb'
-import IdMapIndex from '@qvac/embed-llamacpp/idMapIndex'
+import IdMapIndex from '@qvac/turbovec-ggml'
 
 import {
   TurboVecAdapter,
@@ -60,9 +60,9 @@ function controllableAddFailureProvider() {
     index.addWithIds = (vectors, ids) => {
       if (control.failNextAdd) {
         control.failNextAdd = false
-        throw new Error('injected native add failure')
+        return Promise.reject(new Error('injected native add failure'))
       }
-      addWithIds(vectors, ids)
+      return addWithIds(vectors, ids)
     }
     return index
   }
@@ -70,8 +70,8 @@ function controllableAddFailureProvider() {
     create(options) {
       return wrap(new IdMapIndex(options))
     },
-    load(snapshotPath) {
-      return wrap(IdMapIndex.load(snapshotPath))
+    async load(snapshotPath) {
+      return wrap(await IdMapIndex.load(snapshotPath))
     }
   }
   return { provider, control }
@@ -91,8 +91,8 @@ function searchCountingIndexProvider() {
     create(options) {
       return wrap(new IdMapIndex(options))
     },
-    load(snapshotPath) {
-      return wrap(IdMapIndex.load(snapshotPath))
+    async load(snapshotPath) {
+      return wrap(await IdMapIndex.load(snapshotPath))
     }
   }
   return { provider, calls }
@@ -1739,7 +1739,7 @@ test('TurboVecAdapter prefetches replay data before mutating the live index', as
   const remove = internals.index.remove.bind(internals.index)
   internals.index.addWithIds = (vectors, ids) => {
     nativeMutations++
-    addWithIds(vectors, ids)
+    return addWithIds(vectors, ids)
   }
   internals.index.remove = (id) => {
     nativeMutations++
@@ -2038,8 +2038,8 @@ test('TurboVecAdapter fences a checkpoint after writer lock loss', async (t) => 
     index: TurboVecIndex
   }
   const write = internals.index.write.bind(internals.index)
-  internals.index.write = (snapshotPath) => {
-    write(snapshotPath)
+  internals.index.write = async (snapshotPath) => {
+    await write(snapshotPath)
     fs.renameSync(lockDir, stolenLockDir)
     fs.mkdirSync(lockDir)
     fs.writeFileSync(
@@ -2230,7 +2230,7 @@ test('TurboVecAdapter waits for async creation before queued mutations and close
       const dispose = index.dispose.bind(index)
       index.addWithIds = (vectors, ids) => {
         events.push('add')
-        add(vectors, ids)
+        return add(vectors, ids)
       }
       index.remove = (id) => {
         events.push('remove')
@@ -2238,7 +2238,7 @@ test('TurboVecAdapter waits for async creation before queued mutations and close
       }
       index.dispose = () => {
         events.push('dispose')
-        dispose()
+        return dispose()
       }
       return index
     },
@@ -2266,7 +2266,8 @@ test('TurboVecAdapter waits for async creation before queued mutations and close
     t.is((await saving)[0].status, 'fulfilled')
     t.is(await deleting, true)
     await closing
-    t.alike(events, ['create', 'add', 'remove', 'dispose'])
+    // An upsert removes the id before adding it, whether or not it is present.
+    t.alike(events, ['create', 'remove', 'add', 'remove', 'dispose'])
   } finally {
     gate.resolve()
     if (closing) await closing
@@ -2295,7 +2296,7 @@ test('TurboVecAdapter awaits async rebuilds and checkpoint loads during close', 
       const dispose = index.dispose.bind(index)
       index.dispose = () => {
         disposes++
-        dispose()
+        return dispose()
       }
       return index
     }
@@ -2419,3 +2420,125 @@ for (const unavailable of [false, true]) {
     }
   })
 }
+
+test('TurboVecAdapter search scans HyperDB when a rebuild disposes its index', async (t) => {
+  const directory = await tmp()
+  const store = new Corestore(path.join(directory, 'store'))
+  const adapter = new TurboVecAdapter({
+    store,
+    dbName: 'turbovec-search-dispose',
+    indexProvider,
+    checkpointDir: path.join(directory, 'index')
+  })
+  try {
+    await adapter.ready()
+    await adapter.saveEmbeddings([
+      { id: 'alpha', content: 'alpha', embeddingModelId: 'model', embedding: vector(8, 0) },
+      { id: 'beta', content: 'beta', embeddingModelId: 'model', embedding: vector(8, 1) }
+    ])
+
+    const internals = adapter as unknown as { index: TurboVecIndex }
+    const replaced = internals.index
+    const nativeSearch = replaced.search.bind(replaced)
+    const started = deferred()
+    const gate = deferred()
+    replaced.search = async (queries, k) => {
+      started.resolve()
+      await gate.promise
+      return nativeSearch(queries, k)
+    }
+
+    const searching = adapter.search('beta', vector(8, 1), { topK: 1 })
+    await started.promise
+    await adapter.reindex()
+    t.not(internals.index, replaced, 'the rebuild installs a new index')
+    gate.resolve()
+    t.is((await searching)[0]?.id, 'beta', 'the search falls back instead of rejecting')
+  } finally {
+    await adapter.close()
+    await store.close()
+  }
+})
+
+// An index in the style of @qvac/turbovec-ggml 0.5 and earlier, which returns
+// every result directly instead of a promise.
+function syncIndexProvider() {
+  const calls = { search: 0 }
+  function createSyncIndex(dim: number): TurboVecIndex {
+    const rows = new Map<bigint, Float32Array>()
+    return {
+      get length() {
+        return rows.size
+      },
+      dim,
+      addWithIds(vectors, ids) {
+        ids.forEach((id, row) => {
+          rows.set(id, vectors.slice(row * dim, (row + 1) * dim))
+        })
+      },
+      search(queries, k) {
+        calls.search++
+        const hits = Array.from(rows, ([id, values]) => ({
+          id,
+          score: values.reduce((sum, value, column) => sum + value * queries[column], 0)
+        }))
+          .sort((a, b) => b.score - a.score)
+          .slice(0, k)
+        const ids = new BigUint64Array(k).fill(0xffffffffffffffffn)
+        const scores = new Float32Array(k)
+        hits.forEach((hit, slot) => {
+          ids[slot] = hit.id
+          scores[slot] = hit.score
+        })
+        return { ids, scores, m: 1, k }
+      },
+      contains: (id) => rows.has(id),
+      remove: (id) => rows.delete(id),
+      prepare() {},
+      write() {
+        throw new Error('the synchronous test index does not write snapshots')
+      },
+      dispose() {
+        rows.clear()
+      }
+    }
+  }
+  const provider: TurboVecIndexProvider = {
+    create: (options) => createSyncIndex(options.dim),
+    load() {
+      throw new Error('the synchronous test index does not load snapshots')
+    }
+  }
+  return { provider, calls }
+}
+
+test('TurboVecAdapter still works with a synchronous index', async (t) => {
+  const directory = await tmp()
+  const store = new Corestore(path.join(directory, 'store'))
+  const sync = syncIndexProvider()
+  const adapter = new TurboVecAdapter({ store, indexProvider: sync.provider })
+  try {
+    await adapter.ready()
+    await adapter.saveEmbeddings([
+      { id: 'alpha', content: 'alpha', embeddingModelId: 'model', embedding: vector(8, 0) },
+      { id: 'beta', content: 'beta', embeddingModelId: 'model', embedding: vector(8, 1) }
+    ])
+    t.is((await adapter.search('alpha', vector(8, 0), { topK: 1 }))[0]?.id, 'alpha')
+
+    await adapter.saveEmbeddings([
+      { id: 'alpha', content: 'alpha moved', embeddingModelId: 'model', embedding: vector(8, 2) }
+    ])
+    t.is((await adapter.search('moved', vector(8, 2), { topK: 1 }))[0]?.id, 'alpha')
+
+    t.is(await adapter.deleteEmbeddings(['beta']), true)
+    const afterDelete = await adapter.search('beta', vector(8, 1), { topK: 2 })
+    t.absent(
+      afterDelete.find((result) => result.id === 'beta'),
+      'the deleted document is gone'
+    )
+    t.is(sync.calls.search, 3, 'every search used the native index')
+  } finally {
+    await adapter.close()
+    await store.close()
+  }
+})
