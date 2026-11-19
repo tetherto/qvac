@@ -6,7 +6,7 @@ import ImgStableDiffusion, {
 import {
   definePlugin,
   defineHandler,
-  sdcppConfigSchema,
+  sdcppLoadConfigSchema,
   diffusionRequestSchema,
   diffusionStreamResponseSchema,
   videoRequestSchema,
@@ -98,7 +98,7 @@ export const diffusionPlugin = definePlugin({
   modelType: ModelType.sdcppGeneration,
   displayName: 'Image Generation & Upscaling (stable-diffusion.cpp)',
   addonPackage: ADDON_DIFFUSION,
-  loadConfigSchema: sdcppConfigSchema,
+  loadConfigSchema: sdcppLoadConfigSchema,
   fitRequest: sdcppFitRequest,
   assessFit: diffusionAssessFit,
 

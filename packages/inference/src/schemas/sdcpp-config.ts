@@ -612,6 +612,31 @@ export type SdcppConfig = Omit<
   'control_net_cpu' | 'clip_on_cpu' | 'vae_on_cpu'
 >
 
+const PERFORMANCE_LIMIT_KEYS = [
+  'performance_max_width',
+  'performance_max_height',
+  'performance_max_frames'
+] as const
+
+// The addon rejects a context that declares only some output limits, so the
+// schema does too, naming the first missing one.
+export function refineSdcppPerformanceLimits(
+  config: Pick<SdcppConfig, (typeof PERFORMANCE_LIMIT_KEYS)[number]>,
+  ctx: z.RefinementCtx
+) {
+  const missing = PERFORMANCE_LIMIT_KEYS.filter((key) => config[key] === undefined)
+  if (missing.length === 0 || missing.length === PERFORMANCE_LIMIT_KEYS.length) return
+  ctx.addIssue({
+    code: 'custom',
+    path: [missing[0]!],
+    message:
+      'performance_max_width, performance_max_height and performance_max_frames ' +
+      'must be supplied together.'
+  })
+}
+
+export const sdcppLoadConfigSchema = sdcppConfigSchema.superRefine(refineSdcppPerformanceLimits)
+
 export const diffusionStatsSchema = z.object({
   modelLoadMs: z
     .number()
