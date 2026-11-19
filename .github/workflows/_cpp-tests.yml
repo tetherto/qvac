@@ -44,7 +44,7 @@ jobs:
       WORKDIR: src/${{ matrix.row.dir }}
       NX_DAEMON: "false"
       NX_NO_CLOUD: "true"
-      TRUSTED: ${{ inputs.trusted && inputs.ref == '' && inputs.repository == '' && github.event_name != 'workflow_run' && github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+      TRUSTED: ${{ inputs.trusted && inputs.ref == '' && inputs.repository == '' && github.event_name != 'workflow_run' && github.event_name != 'pull_request_target' && github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
     steps:
       - name: Checkout actions
         uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0

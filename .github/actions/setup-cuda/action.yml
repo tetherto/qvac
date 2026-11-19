@@ -62,7 +62,7 @@ runs:
     # x86_64 toolkit and fail with an exec format error deep in the build.
     #
     # Restore and save are split so only trusted events write.
-    # A `workflow_run` PR build runs with GITHUB_REF on the base branch, so a
+    # A `workflow_run` or `pull_request_target` PR build runs with GITHUB_REF on the base branch, so a
     # combined `actions/cache` let any authorized PR populate the entry that
     # main's privileged runs then restore, and cpp-lint reaches here with no
     # label at all. Windows uses a separate key so its x64 server toolkit

@@ -12,7 +12,7 @@ import {
   validatePlan
 } from './entries.mjs'
 
-// A13: only main saves. A workflow_run PR build also runs on refs/heads/main, hence the event check.
+// A13: only main saves. workflow_run and pull_request_target PR builds also run on refs/heads/main, hence the event check.
 const TRUSTED_EVENTS = new Set(['push', 'schedule', 'workflow_dispatch', 'merge_group'])
 const CONCURRENCY = 4
 

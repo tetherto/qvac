@@ -512,20 +512,20 @@ test("all ci-router callers re-run when a draft becomes ready", () => {
   assert.match(read(".github/workflows/pr-gate-merge.yml"), /ready_for_review/);
 });
 
-test("special workflows subscribe to ready and label events", () => {
-  for (const relativePath of [
-    ".github/workflows/check-approvals.yml",
-  ]) {
-    const source = read(relativePath);
-    assert.match(source, /ready_for_review/);
-    assert.match(source, /labeled/);
-  }
+test("check-approvals runs when PR checks is requested and reports a status", () => {
+  const source = read(".github/workflows/check-approvals.yml");
+  assert.match(
+    onBlock(source),
+    /workflow_run:\n\s+workflows: \[PR checks\]\n\s+types: \[requested\]/,
+  );
+  assert.doesNotMatch(source, /actions\/checkout/);
+  assert.match(source, /context='Check Approvals'/);
 });
 
 test("check-approvals no longer depends on verified and skips drafts", () => {
   const source = read(".github/workflows/check-approvals.yml");
   assert.doesNotMatch(source, /verified/);
-  assert.match(source, /!github\.event\.pull_request\.draft/);
+  assert.match(source, /\(\.draft \| not\)/);
 });
 
 function workflowPaths() {
@@ -1219,6 +1219,16 @@ test("no workflow triggers on pull_request_target", () => {
   assert.deepEqual(offenders, []);
 });
 
+// A workflow_run run is on the default branch's ref, so a cache save there poisons what every branch restores, as
+// pull_request_target's did.
+test("no workflow_run workflow can save to the Actions cache", () => {
+  const offenders = privilegedPrWorkflows().filter((p) => {
+    const source = read(p);
+    return !/^cache-mode: (read|none)$/m.test(source) || /^\s+cache-mode: (write|write-only)\b/m.test(source);
+  });
+  assert.deepEqual(offenders, []);
+});
+
 /**
  * `workflow_run` workflows that legitimately carry no fork-ci gate,
  * each with the reason it cannot execute fork-controlled code. Adding an entry
@@ -1233,6 +1243,10 @@ const FORK_CI_EXEMPT = new Map([
   [
     ".github/workflows/on-pr-community-label.yml",
     "No checkout: actions/github-script applies a label via the API only.",
+  ],
+  [
+    ".github/workflows/check-approvals.yml",
+    "No checkout: reads reviews and posts a comment and a status via the API only.",
   ],
 ]);
 

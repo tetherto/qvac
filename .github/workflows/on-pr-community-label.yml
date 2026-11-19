@@ -10,6 +10,9 @@ on:
 permissions:
   pull-requests: write
 
+# Runs on the default branch's ref, so a save would land in its cache; this workflow uses none.
+cache-mode: none
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: true
