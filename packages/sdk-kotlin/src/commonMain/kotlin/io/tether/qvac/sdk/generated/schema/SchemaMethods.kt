@@ -58,6 +58,8 @@ suspend fun QvacCaller.`getLoadedModelInfo`(request: io.tether.qvac.sdk.generate
 
 suspend fun QvacCaller.`getModelInfo`(request: io.tether.qvac.sdk.generated.schema.GetModelInfoRequest): io.tether.qvac.sdk.generated.schema.GetModelInfoResponse = callTyped(request)
 
+suspend fun QvacCaller.`getRuntimeCapabilities`(request: io.tether.qvac.sdk.generated.schema.GetRuntimeCapabilitiesRequest): io.tether.qvac.sdk.generated.schema.GetRuntimeCapabilitiesResponse = callTyped(request)
+
 suspend fun QvacCaller.`getSystemResources`(request: io.tether.qvac.sdk.generated.schema.GetSystemResourcesRequest): io.tether.qvac.sdk.generated.schema.GetSystemResourcesResponse = callTyped(request)
 
 suspend fun QvacCaller.`heartbeat`(request: io.tether.qvac.sdk.generated.schema.HeartbeatRequest): io.tether.qvac.sdk.generated.schema.HeartbeatResponse = callTyped(request)

@@ -16,6 +16,7 @@ import { handleDownloadAsset } from '@/handlers/download-asset'
 import { handleGetModelInfo } from '@/handlers/get-model-info'
 import { handleGetLoadedModelInfo } from '@/handlers/get-loaded-model-info'
 import { handleGetSystemResources } from '@/handlers/get-system-resources'
+import { handleGetRuntimeCapabilities } from '@/handlers/get-runtime-capabilities'
 import { handleAssessModelFit } from '@/handlers/assess-model-fit'
 import { handleHeartbeat } from '@/handlers/heartbeat'
 import { handleFinetune } from '@/handlers/finetune'
@@ -91,6 +92,7 @@ export const registry: Record<string, HandlerEntry> = {
   getModelInfo: { type: 'reply', handler: handleGetModelInfo },
   getLoadedModelInfo: { type: 'reply', handler: handleGetLoadedModelInfo },
   getSystemResources: { type: 'reply', handler: handleGetSystemResources },
+  getRuntimeCapabilities: { type: 'reply', handler: handleGetRuntimeCapabilities },
   assessModelFit: { type: 'reply', handler: handleAssessModelFit },
   pluginInvoke: { type: 'reply', handler: handlePluginInvoke },
   modelRegistryList: { type: 'reply', handler: handleModelRegistryList },
