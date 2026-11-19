@@ -1,8 +1,10 @@
 name: Fabric Nightly
 
-# Tests the head of the active qvac-fabric-llm.cpp branch against every
-# npm-runtime fabric consumer (fabric-consumers.json minus model-fit), desktop
-# only. The branch comes from .github/fabric-nightly.json, updated per rebase.
+# Tests the head of the active qvac-fabric-llm.cpp branch against every package
+# that links @qvac/fabric (minus model-fit) through one pr-build-test dispatch:
+# fabric builds from source as the provider, then each consumer builds and runs
+# its C++ and desktop tests. No mobile. The branch comes from
+# .github/fabric-nightly.json, updated per rebase.
 # Results are in this run's summary; there is no notification.
 #
 # The build runs with this repo's release secrets, so a head is built only when
@@ -10,7 +12,7 @@ name: Fabric Nightly
 # a PR whose final commit an org member other than its author approved.
 #
 # To retry a red night, dispatch this workflow with force: true. Re-running
-# failed jobs only re-reports the same child runs.
+# failed jobs only re-reports the same pr-build-test run.
 on:
   schedule:
     - cron: "0 0 * * *"
@@ -125,7 +127,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   # Points the qvac-fabric overlay port at the fabric SHA on a short-lived
-  # branch, the same way a fabric rollout Phase A PR does, then builds fabric.
+  # branch, the same way a fabric rollout Phase A PR does, then dispatches the
+  # build and tests on it.
   prepare:
     needs: gate
     if: needs.gate.outputs.run == 'true'
@@ -136,8 +139,7 @@ jobs:
       actions: write
     outputs:
       branch: ${{ steps.push.outputs.branch }}
-      head: ${{ steps.push.outputs.head }}
-      fabric_run_id: ${{ steps.dispatch.outputs.fabric_run_id }}
+      run_id: ${{ steps.dispatch.outputs.run_id }}
     env:
       GH_TOKEN: ${{ github.token }}
       SHA: ${{ needs.gate.outputs.sha }}
@@ -179,22 +181,32 @@ jobs:
           git push "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "HEAD:refs/heads/$branch"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
           echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-      - name: Dispatch on-pr-fabric
+      # Fabric is selected too, so its own lint and tests run beside the consumers'.
+      - name: Dispatch pr-build-test
         id: dispatch
         env:
           BRANCH: ${{ steps.push.outputs.branch }}
           HEAD_SHA: ${{ steps.push.outputs.head }}
         run: |
           set -euo pipefail
-          id=$(bash .github/scripts/fabric-nightly.sh dispatch on-pr-fabric.yml "$BRANCH" "$HEAD_SHA")
-          echo "fabric_run_id=$id" >> "$GITHUB_OUTPUT"
-          echo "on-pr-fabric: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$id"
+          packages=fabric
+          for f in packages/*/project.json; do
+            pkg=$(basename "$(dirname "$f")")
+            [ "$pkg" != model-fit ] || continue
+            if jq -e '[.targets[]?.dependsOn[]? | objects | select(.target == "link:platform") | .projects[]?] | index("@qvac/fabric")' "$f" >/dev/null; then
+              packages="$packages,$pkg"
+            fi
+          done
+          echo "packages: $packages"
+          id=$(bash .github/scripts/fabric-nightly.sh dispatch pr-build-test.yml "$BRANCH" "$HEAD_SHA" -f packages="$packages")
+          echo "run_id=$id" >> "$GITHUB_OUTPUT"
+          echo "pr-build-test: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$id"
 
-  build-fabric:
+  test:
     needs: prepare
     runs-on: ubuntu-latest
-    # Fabric prebuild jobs cap at 120 min each; the rest is runner queueing (~1h total when tested).
-    timeout-minutes: 300
+    # GitHub's job cap. A full dispatch took about 2h, mostly runner queueing.
+    timeout-minutes: 360
     permissions:
       contents: read
       actions: read
@@ -204,100 +216,14 @@ jobs:
           sparse-checkout: .github/scripts/fabric-nightly.sh
           sparse-checkout-cone-mode: false
           persist-credentials: false
-      # Waits for the artifact, not the whole run: a cpp-lint finding or the
-      # model-fit smoke must not hide every consumer result. The report still
-      # turns red when on-pr-fabric does not conclude success.
-      - name: Wait for fabric-prebuilds
+      - name: Wait for pr-build-test
         env:
           GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ needs.prepare.outputs.fabric_run_id }}
-        run: |
-          set -uo pipefail
-          errors=0
-          while :; do
-            if count=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts?name=fabric-prebuilds" --jq '.total_count') \
-              && status=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" --jq '.status'); then
-              errors=0
-              if [ "${count:-0}" -gt 0 ]; then
-                exit 0
-              fi
-              if [ "$status" = "completed" ]; then
-                echo "::error::on-pr-fabric run $RUN_ID completed without a fabric-prebuilds artifact"
-                exit 1
-              fi
-            else
-              errors=$((errors + 1))
-              if [ "$errors" -ge 10 ]; then
-                echo "::error::on-pr-fabric run $RUN_ID unreadable after $errors attempts"
-                exit 1
-              fi
-            fi
-            sleep 60
-          done
-
-  # on-pr carve-outs (classification-ggml, vla-ggml) are not built by on-pr-nx,
-  # so they get their own orchestrator. Desktop only: none of these
-  # orchestrators runs mobile tests.
-  test:
-    needs: [prepare, build-fabric]
-    runs-on: ubuntu-latest
-    # Covers consumer prebuilds then 130-min integration jobs, plus runner queueing.
-    timeout-minutes: 350
-    permissions:
-      contents: read
-      actions: write
-    outputs:
-      runs: ${{ steps.dispatch.outputs.runs }}
-    env:
-      GH_TOKEN: ${{ github.token }}
-      BRANCH: ${{ needs.prepare.outputs.branch }}
-      HEAD_SHA: ${{ needs.prepare.outputs.head }}
-      FABRIC_RUN_ID: ${{ needs.prepare.outputs.fabric_run_id }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          sparse-checkout: |
-            .github/fabric-consumers.json
-            .github/scripts/fabric-nightly.sh
-            packages/*/project.json
-          sparse-checkout-cone-mode: false
-          persist-credentials: false
-      - name: Dispatch consumer tests
-        id: dispatch
-        run: |
-          set -euo pipefail
-          nx='[]'
-          runs='[]'
-          for pkg in $(jq -r '.npm_runtime[] | select(. != "model-fit")' .github/fabric-consumers.json); do
-            carve=$(jq -r '.targets["on-pr"].options.ci.carveOut // false' "packages/$pkg/project.json")
-            if [ "$carve" != "true" ]; then
-              nx=$(jq -c --arg p "$pkg" '. + [$p]' <<<"$nx")
-              continue
-            fi
-            case "$pkg" in
-              classification-ggml) wf=on-pr-classification-ggml.yml ;;
-              vla-ggml) wf=on-pr-vla.yml ;;
-              *) echo "::error::$pkg is an on-pr carve-out with no orchestrator mapped here"; exit 1 ;;
-            esac
-            id=$(bash .github/scripts/fabric-nightly.sh dispatch "$wf" "$BRANCH" "$HEAD_SHA" -f fabric_run_id="$FABRIC_RUN_ID")
-            runs=$(jq -c --arg w "$wf" --argjson i "$id" '. + [{workflow: $w, id: $i}]' <<<"$runs")
-            # Written after every dispatch so a later failure keeps the runs already started.
-            echo "runs=$runs" >> "$GITHUB_OUTPUT"
-          done
-          echo "on-pr-nx packages: $nx"
-          id=$(bash .github/scripts/fabric-nightly.sh dispatch on-pr-nx.yml "$BRANCH" "$HEAD_SHA" -f packages="$nx" -f fabric_run_id="$FABRIC_RUN_ID")
-          runs=$(jq -c --argjson i "$id" '. + [{workflow: "on-pr-nx.yml", id: $i}]' <<<"$runs")
-          echo "runs=$runs" >> "$GITHUB_OUTPUT"
-      - name: Wait for consumer tests
-        env:
-          RUNS: ${{ steps.dispatch.outputs.runs }}
-        run: |
-          set -euo pipefail
-          # shellcheck disable=SC2046
-          bash .github/scripts/fabric-nightly.sh wait "$FABRIC_RUN_ID" $(jq -r '.[].id' <<<"$RUNS")
+          RUN_ID: ${{ needs.prepare.outputs.run_id }}
+        run: bash .github/scripts/fabric-nightly.sh wait "$RUN_ID"
 
   report:
-    needs: [gate, prepare, build-fabric, test]
+    needs: [gate, prepare, test]
     if: always() && needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -316,10 +242,8 @@ jobs:
           FABRIC_BRANCH: ${{ needs.gate.outputs.branch }}
           FABRIC_SHA: ${{ needs.gate.outputs.sha }}
           FABRIC_TAG: ${{ needs.gate.outputs.tag }}
-          FABRIC_RUN_ID: ${{ needs.prepare.outputs.fabric_run_id }}
-          BUILD_RESULT: ${{ needs.build-fabric.result }}
+          RUN_ID: ${{ needs.prepare.outputs.run_id }}
           TEST_RESULT: ${{ needs.test.result }}
-          TEST_RUNS: ${{ needs.test.outputs.runs || '[]' }}
         run: bash .github/scripts/fabric-nightly.sh report
 
   # A timed-out or cancelled nightly can leave dispatched runs going, including

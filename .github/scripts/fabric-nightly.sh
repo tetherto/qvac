@@ -56,22 +56,35 @@ wait_runs() {
   done
 }
 
-# Reads FABRIC_REPO, FABRIC_BRANCH, FABRIC_SHA, FABRIC_TAG, FABRIC_RUN_ID,
-# BUILD_RESULT, TEST_RESULT and TEST_RUNS (JSON array of {workflow, id}).
+# Reads FABRIC_REPO, FABRIC_BRANCH, FABRIC_SHA, FABRIC_TAG, RUN_ID and TEST_RESULT.
 report() {
-  local out=${GITHUB_STEP_SUMMARY:-/dev/stdout} failed=0 runs id workflow conclusion url
+  local out=${GITHUB_STEP_SUMMARY:-/dev/stdout} failed=0 conclusion url jobs name total bad
   local cov_dir
   cov_dir=$(mktemp -d)
-  runs=$(jq -c --arg id "${FABRIC_RUN_ID:-}" \
-    '(if $id == "" then [] else [{workflow: "on-pr-fabric.yml", id: ($id|tonumber)}] end) + (env.TEST_RUNS // "[]" | fromjson)' <<<'null')
 
   {
     echo "## Fabric nightly"
     echo
     echo "- Branch: \`$FABRIC_BRANCH\` at [\`${FABRIC_SHA:0:9}\`](https://github.com/$FABRIC_REPO/commit/$FABRIC_SHA)"
     echo "- Latest tag: \`${FABRIC_TAG:-none}\`"
-    echo
   } >>"$out"
+
+  if [ -z "${RUN_ID:-}" ]; then
+    printf '\nNo tests ran: pr-build-test was not dispatched. See the prepare job.\n' >>"$out"
+    return 1
+  fi
+  if read -r conclusion url < <(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq '"\(.conclusion // .status) \(.html_url)"'); then
+    echo "- pr-build-test: **$conclusion** ([run $RUN_ID]($url))" >>"$out"
+    [ "$conclusion" = "success" ] || failed=1
+  else
+    echo "- pr-build-test: _API error_ (run $RUN_ID)" >>"$out"
+    failed=1
+  fi
+  if [ "${TEST_RESULT:-}" != "success" ]; then
+    printf '\nThe wait ended with %s, so the run may still have been going. See the test job log.\n' "${TEST_RESULT:-unknown}" >>"$out"
+    failed=1
+  fi
+  echo >>"$out"
 
   if [ -n "${FABRIC_TAG:-}" ]; then
     {
@@ -86,74 +99,40 @@ report() {
     } >>"$out"
   fi
 
-  {
-    echo "### Runs"
-    echo
-    echo "| Workflow | Result | Run |"
-    echo "|---|---|---|"
-  } >>"$out"
-
-  for row in $(jq -c '.[]' <<<"$runs"); do
-    workflow=$(jq -r .workflow <<<"$row")
-    id=$(jq -r .id <<<"$row")
-    if ! read -r conclusion url < <(gh api "repos/$REPO/actions/runs/$id" --jq '"\(.conclusion // .status) \(.html_url)"'); then
-      echo "| $workflow | api-error | $id |" >>"$out"
-      failed=1
-      continue
+  echo "### Jobs" >>"$out"
+  echo >>"$out"
+  if jobs=$(gh api --paginate "repos/$REPO/actions/runs/$RUN_ID/jobs?per_page=30" \
+    --jq '.jobs[]
+      | select(.conclusion != "skipped")
+      | select(.name | test("^(providers|build|cpp-lint|cpp-tests|desktop) / "))
+      | select(.name | test(" / plan$") | not)
+      | "\(.conclusion // .status)\t[\(.name)](\(.html_url))"'); then
+    total=$(grep -c . <<<"$jobs" || true)
+    bad=$(grep -v '^success'$'\t' <<<"$jobs" || true)
+    echo "$(( total - $(grep -c . <<<"$bad" || true) )) of $total build and test jobs passed." >>"$out"
+    if [ -n "$bad" ]; then
+      printf '\n| Job | Result |\n|---|---|\n' >>"$out"
+      awk -F'\t' '{print "| " $2 " | " $1 " |"}' <<<"$bad" >>"$out"
     fi
-    [ "$conclusion" = "success" ] || failed=1
-    echo "| $workflow | $conclusion | [$id]($url) |" >>"$out"
-  done
-
-  if [ "${BUILD_RESULT:-}" != "success" ]; then
-    printf '\nNo consumer tests ran: on-pr-fabric did not publish fabric-prebuilds (%s).\n' "${BUILD_RESULT:-not started}" >>"$out"
-    failed=1
-  elif [ "${TEST_RESULT:-}" != "success" ]; then
-    printf '\nThe test job ended with %s, so some consumer runs may be missing above. See its log.\n' "${TEST_RESULT:-unknown}" >>"$out"
-    failed=1
+  else
+    echo "_Job list unavailable (API error)._" >>"$out"
   fi
-
-  {
-    echo
-    echo "### Test results"
-    echo
-    echo "| Workflow | Job | Result |"
-    echo "|---|---|---|"
-  } >>"$out"
-  for row in $(jq -c '.[]' <<<"${TEST_RUNS:-[]}"); do
-    workflow=$(jq -r .workflow <<<"$row")
-    id=$(jq -r .id <<<"$row")
-    if jobs=$(gh api --paginate "repos/$REPO/actions/runs/$id/jobs?per_page=100" \
-      --jq '.jobs[]
-        | select(.conclusion != "skipped")
-        | select(.name | test("^(prebuild|cpp-tests|run-integration-tests|integration-tests) /"))
-        | select(.name | test("Determine affected|runner_names|detect-reuse|/ merge$") | not)
-        | "| '"$workflow"' | [\(.name)](\(.html_url)) | \(.conclusion // .status) |"'); then
-      [ -z "$jobs" ] || echo "$jobs" >>"$out"
-    else
-      echo "| $workflow | _API error_ | |" >>"$out"
-    fi
-  done
 
   {
     echo
     echo "### C++ line coverage"
     echo
-    echo "| Workflow | Report | Lines |"
-    echo "|---|---|---|"
+    echo "| Report | Lines |"
+    echo "|---|---|"
   } >>"$out"
-  for row in $(jq -c '.[]' <<<"${TEST_RUNS:-[]}"); do
-    workflow=$(jq -r .workflow <<<"$row")
-    id=$(jq -r .id <<<"$row")
-    for name in $(gh api --paginate "repos/$REPO/actions/runs/$id/artifacts?per_page=100" \
-      --jq '.artifacts[] | select(.name | test("coverage")) | .name'); do
-      mkdir -p "$cov_dir/$id/$name"
-      gh run download "$id" --repo "$REPO" --name "$name" --dir "$cov_dir/$id/$name" >/dev/null 2>&1 || continue
-      while IFS= read -r summary; do
-        pct=$(awk '/^TOTAL/ {print $10}' "$summary")
-        [ -n "$pct" ] && echo "| $workflow | $name | $pct |" >>"$out"
-      done < <(find "$cov_dir/$id/$name" -name coverage-summary.txt)
-    done
+  for name in $(gh api --paginate "repos/$REPO/actions/runs/$RUN_ID/artifacts?per_page=100" \
+    --jq '.artifacts[] | select(.name | startswith("cpp-coverage-")) | .name'); do
+    mkdir -p "$cov_dir/$name"
+    gh run download "$RUN_ID" --repo "$REPO" --name "$name" --dir "$cov_dir/$name" >/dev/null 2>&1 || continue
+    while IFS= read -r summary; do
+      pct=$(awk '/^TOTAL/ {print $10}' "$summary")
+      [ -n "$pct" ] && echo "| ${name#cpp-coverage-} | $pct |" >>"$out"
+    done < <(find "$cov_dir/$name" -name coverage-summary.txt)
   done
 
   return "$failed"
