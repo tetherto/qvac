@@ -20,13 +20,13 @@ defaults are intentionally not duplicated here.
 Diffusion and video `modelConfig.performance_profile` delegates hardware selection
 to the diffusion addon. `off` retains baseline settings. Explicit
 `flash_attn`, `vae_conv_direct`, and `tensor_type_rules` settings take precedence.
-These controls require an addon release containing performance profiles.
 Temporal tiling remains unchanged: full-temporal decoding is already the native
 default, and an explicit `temporal_tiling` setting is preserved.
 
 LTX's automatic Metal F16 profile needs declared output limits:
 `performance_max_width: 512`, `performance_max_height: 320`, and
-`performance_max_frames: 97`. Declare all three together. The addon rejects
+`performance_max_frames: 97`. Declare all three or none: `loadModel` rejects a
+partial set before the model loads, naming the first missing limit. The addon rejects
 requests above these limits and selects F16 only for a validated model/device
 with sufficient free memory. Unbounded contexts retain their current precision.
 The SDK forwards these controls; it does not duplicate the hardware policy.

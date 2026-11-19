@@ -15,7 +15,7 @@ import {
 } from '@/schemas/transcription-config'
 import { bciConfigSchema } from '@/schemas/bci-config'
 import { ocrConfigSchema } from '@/schemas/ocr'
-import { sdcppConfigSchema } from '@/schemas/sdcpp-config'
+import { sdcppLoadConfigSchema } from '@/schemas/sdcpp-config'
 import { vlaConfigSchema } from '@/schemas/vla'
 import { decisionConfigSchema } from '@/schemas/decision'
 import { rerankConfigSchema } from '@/schemas/rerank'
@@ -53,7 +53,7 @@ export const MODEL_CONFIG_SCHEMAS: Partial<Record<CanonicalModelType, ZodSchema>
   [ModelType.parakeetTranscription]: parakeetRuntimeConfigSchema.passthrough(),
   [ModelType.mossTranscribe]: mossTranscribeConfigSchema,
   [ModelType.ggmlOcr]: ocrConfigSchema,
-  [ModelType.sdcppGeneration]: sdcppConfigSchema,
+  [ModelType.sdcppGeneration]: sdcppLoadConfigSchema,
   [ModelType.audiogenGgml]: audioGenConfigSchema,
   [ModelType.ggmlVla]: vlaConfigSchema,
   [ModelType.ggmlClassification]: classificationConfigSchema
