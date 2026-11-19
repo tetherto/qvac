@@ -311,9 +311,10 @@ declare namespace LlmLlamacpp {
          * server is ready to serve at full concurrency with no warm-up. It sizes
          * the native scheduler's worker pool one-to-one — that many OS threads are
          * created at load and held for the model's lifetime, idle or not — and the
-         * KV cache is split evenly across the slots (each gets `ctx_size /
-         * parallel` tokens, or `kv_unified_per_slot` if lower). Size it to the
-         * concurrency you actually intend to serve, not to a generous upper bound.
+         * slots share one KV cache, each limited to `ctx_size / parallel` tokens,
+         * or `kv_unified_per_slot` if lower. On MiniMax-M3, `parallel >= 2` turns
+         * sparse attention off. Size it to the concurrency you actually intend to
+         * serve, not to a generous upper bound.
          *
          * Range `1..256`. The upper bound is the engine's own sequence limit
          * (`LLAMA_MAX_SEQ`): a larger value is rejected up front rather than
@@ -324,20 +325,12 @@ declare namespace LlmLlamacpp {
          */
         parallel?: NumericLike;
         /**
-         * Keep every slot's KV cache in one shared buffer instead of one buffer per
-         * slot (llama-server's `--kv-unified`). With `parallel >= 2` it requires
-         * `kv_unified_per_slot`, and `parallel x kv_unified_per_slot` must fit
-         * `ctx_size`, so each slot keeps a fixed share of the pool. On MiniMax-M3
-         * a shared buffer turns sparse attention off. Default `'false'`. Also
-         * accepted as `kv-unified`; `no-kv-unified` turns it off.
-         */
-        kv_unified?: "true" | "false" | "on" | "off" | "1" | "0";
-        /**
          * Context limit per slot (llama-server's `--kv-unified-per-slot`). With
          * `ctx_size` unset, the KV cache is sized to `parallel x
          * kv_unified_per_slot`; `ctx_size: 0` keeps the model's trained context.
-         * Default `0`, no limit beyond `ctx_size / parallel`; a negative value is
-         * rejected. Also accepted as `kv-unified-per-slot`.
+         * `parallel x kv_unified_per_slot` must fit `ctx_size`. Default `0`, no
+         * limit beyond `ctx_size / parallel`; a negative value is rejected. Also
+         * accepted as `kv-unified-per-slot`.
          */
         kv_unified_per_slot?: NumericLike;
         /**

@@ -406,14 +406,9 @@ void LlamaModel::validateCheckpointBudget(ReloadableState& state) {
   const bool fullState = utils::needsFullStateSnapshot(
       llama_model_is_recurrent(mdl), llama_model_is_hybrid(mdl), isDeepSeekV4);
   const int32_t nSwa = llama_model_n_swa(mdl);
-  // A sequence never outgrows kv_unified_per_slot; under kv_unified n_ctx_seq
-  // is the whole pool.
-  const uint32_t nCtxSeq =
-      params.kv_unified_per_slot > 0
-          ? std::min(
-                llama_n_ctx_seq(ctx),
-                static_cast<uint32_t>(params.kv_unified_per_slot))
-          : llama_n_ctx_seq(ctx);
+  // n_ctx_seq is the whole shared pool; a sequence never outgrows its slot.
+  const uint32_t nCtxSeq = batching::perSeqCeiling(
+      llama_n_ctx(ctx), llama_n_seq_max(ctx), params.kv_unified_per_slot);
   const bool slidingWindow = !fullState && utils::takesSlidingWindowCheckpoints(
                                                nSwa, params.swa_full, nCtxSeq);
   if (!fullState && !slidingWindow) {
@@ -513,21 +508,17 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
       .vocab = mdl != nullptr ? llama_model_get_vocab(mdl) : nullptr,
       .speculative = state.llmContext_->getSpeculative(),
   };
-  // A unified pool is only split evenly: admission checks each slot against
+  // The shared pool is only split evenly: admission checks each slot against
   // its own cap, so caps adding up to more than the pool would let the pool
   // fill mid-decode and fail every request in progress.
-  if (cparams.kv_unified &&
-      (cparams.kv_unified_per_slot <= 0 ||
-       static_cast<uint64_t>(cparams.kv_unified_per_slot) * batchSize >
-           ctxTotalTokens)) {
+  if (cparams.kv_unified_per_slot > 0 &&
+      static_cast<uint64_t>(cparams.kv_unified_per_slot) * batchSize >
+          ctxTotalTokens) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
         string_format(
-            "[LlamaModel] kv_unified with parallel=%zu requires "
-            "kv_unified_per_slot, and parallel x kv_unified_per_slot "
-            "(%zu x %d) must fit ctx_size=%u; leave ctx_size unset to size "
-            "the pool to it",
-            batchSize,
+            "[LlamaModel] parallel x kv_unified_per_slot (%zu x %d) must fit "
+            "ctx_size=%u; leave ctx_size unset to size the pool to it",
             batchSize,
             cparams.kv_unified_per_slot,
             ctxTotalTokens));

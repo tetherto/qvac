@@ -70,9 +70,8 @@ namespace qvac_lib_inference_addon_llama::batching {
 
 /// Per-sequence hard ceiling: the slot's even share of the pool,
 /// `ctxTotalTokens / batchSize`, lowered to `kvUnifiedPerSlot` when that is
-/// positive. Without kv_unified this is llama-server's `n_ctx_slot()`. With
-/// it the server starts from the whole pool, while the load here requires the
-/// caps to fit the pool, so both come to `kvUnifiedPerSlot`.
+/// positive. The KV cache is one shared pool, so this ceiling, not the cache,
+/// keeps a slot to its share; the load requires the caps to fit the pool.
 [[nodiscard]] unsigned perSeqCeiling(
     unsigned ctxTotalTokens, size_t batchSize, int32_t kvUnifiedPerSlot);
 
@@ -310,8 +309,8 @@ public:
   /// @param maxChunkSize       Tokens fed per slot per step (typically
   /// n_batch).
   /// @param ctxTotalTokens     Whole-pool KV-cache size (== llama_n_ctx).
-  ///                            Partitioned uniformly across `batchSize`
-  ///                            slots; per-seq ceiling is `perSeqCeiling`.
+  ///                            Shared by the `batchSize` slots; per-seq
+  ///                            ceiling is `perSeqCeiling`.
   /// @param batchSize          Concurrent slots (== llama_n_seq_max).
   /// @param batchCapacity      Underlying llama_batch token capacity.
   /// @param baseParams          Baseline llama/common params copied into each

@@ -227,8 +227,7 @@ void MtmdLlmContext::initializeCommonState() {
           llama_model_is_recurrent(model),
           llama_model_is_hybrid(model),
           isDeepSeekV4);
-  // A sequence never outgrows its ceiling; under kv_unified n_ctx_seq is the
-  // whole pool.
+  // n_ctx_seq is the whole shared pool; a sequence never outgrows its ceiling.
   slidingWindowCheckpoints_ =
       (model != nullptr) && !needsFullStateSnapshot_ &&
       qvac_lib_inference_addon_llama::utils::takesSlidingWindowCheckpoints(

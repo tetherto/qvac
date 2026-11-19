@@ -2101,15 +2101,15 @@ NormalizedLoad normalizeLoadForFit(
 
   auto ctxArg = common_params_parser_init(
       params, LLAMA_EXAMPLE_COMMON, [](int, char**) {});
-  // llama-server's KV pool options are not registered for
-  // LLAMA_EXAMPLE_COMMON, so fabric's server definitions are used as they are.
+  // llama-server's --kv-unified-per-slot is not registered for
+  // LLAMA_EXAMPLE_COMMON, so fabric's server definition is used as it is.
+  // --kv-unified is not exposed: the KV cache is always unified.
   common_params serverDefaults;
   auto serverArg = common_params_parser_init(
       serverDefaults, LLAMA_EXAMPLE_SERVER, [](int, char**) {});
   for (auto& opt : serverArg.options) {
     if (std::ranges::any_of(opt.args, [](const char* name) {
-          return std::string_view(name) == "--kv-unified" ||
-                 std::string_view(name) == "--kv-unified-per-slot";
+          return std::string_view(name) == "--kv-unified-per-slot";
         })) {
       ctxArg.options.push_back(std::move(opt));
     }
@@ -2294,21 +2294,9 @@ NormalizedLoad normalizeLoadForFit(
             K_LEGACY_PARSER_NAME.data(),
             params.kv_unified_per_slot));
   }
-  // Rejected before the weights load; LlamaModel checks the caps against the
-  // final pool.
-  if (params.kv_unified && params.n_parallel >= 2 &&
-      params.kv_unified_per_slot == 0) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        qvac_errors::general_error::toString(
-            qvac_errors::general_error::InvalidArgument),
-        string_format(
-            "%s: kv_unified with parallel=%d requires kv_unified_per_slot; "
-            "leave ctx_size unset to size the pool to parallel x "
-            "kv_unified_per_slot.\n",
-            K_LEGACY_PARSER_NAME.data(),
-            params.n_parallel));
-  }
+  // All slots share one KV pool; each slot is capped at its even share, or at
+  // kv-unified-per-slot when lower.
+  params.kv_unified = true;
 
   // As llama-server: without ctx-size, kv-unified-per-slot sizes the KV pool
   // to parallel x kv-unified-per-slot; ctx-size 0 keeps the trained context.

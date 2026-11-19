@@ -1330,7 +1330,6 @@ test(
   async (t) => {
     const { model, logs } = await setupModelWithLogs(t, {
       parallel: '2',
-      kv_unified: 'true',
       kv_unified_per_slot: String(KV_PER_SLOT_CAP),
       ctx_size: undefined
     })
@@ -1365,20 +1364,15 @@ test(
 )
 
 // The cap sits below the even share of ctx_size 4096 (4096 for one slot, 2048
-// for two): without kv_unified, and with it under an explicit ctx_size larger
-// than the caps add up to.
+// for two), so the explicit ctx_size is larger than the caps add up to.
 test(
   'continuous batching: kv_unified_per_slot caps a slot below its even share',
   { timeout: 600_000, skip: isMobile },
   async (t) => {
-    for (const overrides of [
-      { parallel: '1' },
-      { parallel: '2' },
-      { parallel: '2', kv_unified: 'true' }
-    ]) {
-      t.comment(JSON.stringify(overrides))
+    for (const parallel of ['1', '2']) {
+      t.comment(`parallel ${parallel}`)
       const model = await setupModel(t, {
-        ...overrides,
+        parallel,
         kv_unified_per_slot: String(KV_PER_SLOT_CAP)
       })
       await assertGenerationStopsAtCap(t, model)
@@ -1407,18 +1401,18 @@ test(
 )
 
 test(
-  'continuous batching: kv_unified without an even split is rejected at load',
+  'continuous batching: per-slot caps that overbook the KV pool are rejected at load',
   { timeout: 600_000, skip: isMobile },
   async (t) => {
     await t.exception(
-      setupModel(t, { parallel: '2', kv_unified: 'true' }),
-      /requires kv_unified_per_slot/,
-      'a shared pool with no per-slot cap is refused'
-    )
-    await t.exception(
-      setupModel(t, { parallel: '2', kv_unified: 'true', kv_unified_per_slot: '4096' }),
+      setupModel(t, { parallel: '2', kv_unified_per_slot: '4096' }),
       /\(2 x 4096\) must fit ctx_size/,
       'per-slot caps that overbook ctx_size are refused'
+    )
+    await t.exception(
+      setupModel(t, { parallel: '2', kv_unified: 'false' }),
+      /invalid argument: --kv-unified/,
+      'kv_unified is not an option'
     )
   }
 )

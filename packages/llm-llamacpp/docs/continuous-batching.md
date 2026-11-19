@@ -58,7 +58,7 @@ const model = new LlmLlamacpp({
 })
 ```
 
-`parallel` maps to `n_seq_max` in llama.cpp. The KV cache is split uniformly: with `ctx_size: '8192'` and `parallel: '4'`, each slot gets a 2048-token window. Values less than 2 leave the single-prompt path active; batch `run()` calls throw `InvalidArgument` in that case.
+`parallel` maps to `n_seq_max` in llama.cpp. The slots share one KV cache, each limited to an even share: with `ctx_size: '8192'` and `parallel: '4'`, each slot gets a 2048-token window ([details](#one-shared-kv-pool)). Values less than 2 leave the single-prompt path active; batch `run()` calls throw `InvalidArgument` in that case.
 
 The accepted range is `1..256`. The ceiling is the engine's own sequence limit (`LLAMA_MAX_SEQ`), so anything above it is rejected when the instance is constructed — otherwise it would spawn the full thread pool and only then fail the model load, where llama.cpp swallows the real reason into a log line. `ctx_size / parallel` must also leave at least one token per slot, so a `parallel` too large for the context (or a `batch_size` smaller than `parallel`) is refused as an `InvalidArgument` naming the knobs involved.
 
@@ -352,16 +352,16 @@ With `parallel = N` and `ctx_size = C`, each slot gets `C / N` tokens, or `kv_un
 
 ### One shared KV pool
 
-By default each slot has its own KV buffer of `C / N` cells. `kv_unified: 'true'` keeps all slots in one buffer of `C` cells instead, like llama-server's `--kv-unified`, and `kv_unified_per_slot` caps each slot, like `--kv-unified-per-slot`:
+All slots keep their KV cache in one buffer of `C` cells, as llama-server's `--kv-unified`; this is not configurable. The addon, not the buffer, keeps each slot to `C / N`. `kv_unified_per_slot` lowers each slot's limit, like `--kv-unified-per-slot`:
 
 ```js
-config: { parallel: '4', kv_unified: 'true', kv_unified_per_slot: '2048' } // one 8192-cell pool, 2048 per slot
+config: { parallel: '4', kv_unified_per_slot: '2048' } // one 8192-cell pool, 2048 per slot
 ```
 
-- **Pool size** — with `ctx_size` unset, the pool is sized to `parallel x kv_unified_per_slot`, as llama-server does without `-c`. An explicit `ctx_size` is kept, and `ctx_size: 0` keeps the model's trained context.
-- **Only an even split** — with `parallel >= 2`, `kv_unified` requires `kv_unified_per_slot`, and `parallel x kv_unified_per_slot` must fit the pool, or the load fails with `InvalidArgument`. A missing cap is rejected before the weights load, and a negative `kv_unified_per_slot` is always rejected. Admission checks each slot only against its own cap, so caps adding up to more than the pool would let the pool fill mid-decode and fail every request in progress. llama-server accepts that setup; the addon does not.
-- **What changes** — each slot gets the same context as with separate buffers. Sliding-window models keep one window cache of `min(C, n_swa x N + n_ubatch)` cells instead of `N` of `min(C / N, n_swa + n_ubatch)`, about `(N - 1) x n_ubatch` fewer. Each slot's attention spans the shared buffer with the other slots masked out, so decoding can be slower than with separate buffers. MiniMax-M3 turns sparse attention off when more than one sequence shares the buffer, and Qwen4exp keeps it but its indexer takes more memory, so keep separate buffers on both.
-- **Without `kv_unified`** — `kv_unified_per_slot` still caps each slot and still sizes an unset `ctx_size`, again as llama-server does.
+- **Pool size** — with `ctx_size` unset and `kv_unified_per_slot` set, the pool is sized to `parallel x kv_unified_per_slot`, as llama-server does without `-c`. An explicit `ctx_size` is kept, and `ctx_size: 0` keeps the model's trained context.
+- **Only an even split** — `parallel x kv_unified_per_slot` must fit the pool, or the load fails with `InvalidArgument`, and a negative `kv_unified_per_slot` is rejected. Admission checks each slot only against its own limit, so limits adding up to more than the pool would let the pool fill mid-decode and fail every request in progress. llama-server accepts that setup; the addon does not.
+- **Attention** — with flash attention on CPU, Metal, and CUDA (Turing or newer), each slot attends only to its own cells. Elsewhere, including Vulkan, each slot's attention spans the shared buffer up to the highest used cell, with the other slots masked out.
+- **Model-specific** — sliding-window models keep one window cache of `min(C, n_swa x N + n_ubatch)` cells. With `parallel >= 2`, MiniMax-M3 turns sparse attention off, and Qwen4exp keeps it but its indexer takes more memory.
 
 ---
 

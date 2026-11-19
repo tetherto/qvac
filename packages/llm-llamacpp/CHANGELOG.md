@@ -4,16 +4,21 @@
 
 ### Added
 
-- `kv_unified` and `kv_unified_per_slot` load options, llama-server's
-  `--kv-unified` and `--kv-unified-per-slot`: the `parallel` slots can share
-  one KV buffer split evenly between them. With `ctx_size` unset, the KV cache
-  is sized to `parallel x kv_unified_per_slot`. With `parallel >= 2`,
-  `kv_unified` requires `kv_unified_per_slot`, and the caps must fit
-  `ctx_size`; otherwise the load fails with `InvalidArgument`. A negative
-  `kv_unified_per_slot` is rejected. `kv_unified_per_slot` also caps each slot
-  without `kv_unified`.
+- `kv_unified_per_slot` load option, llama-server's `--kv-unified-per-slot`:
+  caps each slot's context. With `ctx_size` unset, the KV cache is sized to
+  `parallel x kv_unified_per_slot`; otherwise the caps must fit `ctx_size`,
+  or the load fails with `InvalidArgument`. A negative value is rejected.
 
 ### Changed
+
+- The KV cache is always unified, as llama-server's `--kv-unified`: the
+  `parallel` slots share one KV buffer instead of one each, and the addon
+  limits each slot to `ctx_size / parallel`. It is not configurable. When
+  `ctx_size / parallel` is not a multiple of 256, a slot now gets exactly that
+  share; before, fabric rounded each slot up to a multiple of 256. With
+  `parallel >= 2`, MiniMax-M3 turns sparse attention off. With flash
+  attention on CPU, Metal and CUDA (Turing or newer), attention now uses
+  fabric's per-sequence KV-rows kernel, also at `parallel` 1.
 
 - `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries
   `qvac-fabric` `11739.3.0#1` -> `11739.4.0`
