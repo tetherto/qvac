@@ -488,6 +488,18 @@ test('an abort or close ends an import whose source stops sending', async (t) =>
   early.abort(new Error('stop'))
   await rejectsWithCode(t, rejected, ERR_CODES.OPERATION_CANCELLED, 'abort before the header')
 
+  const own = new AbortController()
+  async function* abortsItself(): AsyncGenerator<Uint8Array> {
+    yield bytes.subarray(0, spans[2].end)
+    own.abort(new Error('stop'))
+    await new Promise(() => {})
+  }
+  const selfAborted = await to.importNamespace(
+    { namespace: 'self', source: abortsItself() },
+    { signal: own.signal as AbortSignal }
+  )
+  t.is(selfAborted.cancelled, true, 'an abort raised by the source itself')
+
   const afterHeader = stalls(bytes.subarray(0, spans[0].end))
   const pending = to.importNamespace({ namespace: 'ns', source: afterHeader.source })
   await afterHeader.stalled

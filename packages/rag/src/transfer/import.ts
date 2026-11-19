@@ -25,7 +25,7 @@ import {
   withTransaction,
   writeGeneration
 } from '../writes.js'
-import { fromHex, toHex } from './export.js'
+import { fromHex } from './export.js'
 import {
   FORMAT_VERSION,
   FRAME,

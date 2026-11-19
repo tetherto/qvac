@@ -378,15 +378,21 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     prunable.delete(namespace)
   }
 
+  // Entries leave the map before any await, so a namespace re-created while
+  // an old snapshot write finishes gets a fresh entry, never the old index.
   async function drop(namespace: string, config: IndexConfig): Promise<void> {
+    const dropped: Entry[] = []
     for (const [key, entry] of entries) {
       if (entry.namespace !== namespace) continue
+      entries.delete(key)
+      dropped.push(entry)
+    }
+    prunable.delete(namespace)
+    for (const entry of dropped) {
       while (entry.syncing) await entry.syncing.catch(() => {})
       await entry.persisting
       discard(entry)
-      entries.delete(key)
     }
-    prunable.delete(namespace)
     if (config.dir) await createSnapshotStore(config.dir, coreKey).remove(namespace)
   }
 

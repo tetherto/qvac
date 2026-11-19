@@ -122,11 +122,11 @@ export function createFrameReader(source: AsyncIterable<Uint8Array>, stop?: Read
   async function nextChunk(): Promise<IteratorResult<Uint8Array>> {
     if (!stop) return await iterator.next()
     if (stop.stopped) throw cancelled()
-    const pending = iterator.next()
     try {
+      // `wake` is set first: the source may itself trigger the stop inside `next()`.
       return await new Promise<IteratorResult<Uint8Array>>((resolve, reject) => {
         stop.wake = () => reject(cancelled())
-        pending.then(resolve, reject)
+        iterator.next().then(resolve, reject)
       })
     } finally {
       stop.wake = null
