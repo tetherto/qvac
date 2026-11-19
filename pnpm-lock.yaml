@@ -80,7 +80,7 @@ importers:
         version: 3.0.71(zod@4.6.5)
       '@qvac/registry-client':
         specifier: ^0.5.0
-        version: 0.5.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(corestore@7.11.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(hyperblobs@2.12.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(hyperdb@4.22.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(hyperswarm@4.17.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
+        version: 0.5.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)(corestore@7.11.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(hyperblobs@2.12.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(hyperdb@4.22.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(hyperswarm@4.17.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
@@ -1938,6 +1938,9 @@ importers:
       bare-stream:
         specifier: 2.13.3
         version: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+      bare-type:
+        specifier: 1.4.0
+        version: 1.4.0
       bare-url:
         specifier: ^2.4.3
         version: 2.4.6
@@ -16052,10 +16055,10 @@ snapshots:
       - react-native-b4a
       - sodium-javascript
 
-  '@qvac/registry-client@0.5.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(corestore@7.11.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(hyperblobs@2.12.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(hyperdb@4.22.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(hyperswarm@4.17.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))':
+  '@qvac/registry-client@0.5.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)(corestore@7.11.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(hyperblobs@2.12.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(hyperdb@4.22.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(hyperswarm@4.17.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))':
     dependencies:
       '@qvac/error': 0.1.1
-      '@qvac/registry-schema': 0.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(hyperdb@4.22.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
+      '@qvac/registry-schema': 0.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(hyperdb@4.22.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
       b4a: 1.8.1
       bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-os: 3.9.3
@@ -16140,7 +16143,7 @@ snapshots:
       - bare-url
       - react-native-b4a
 
-  '@qvac/registry-schema@0.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(hyperdb@4.22.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))':
+  '@qvac/registry-schema@0.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(hyperdb@4.22.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))':
     dependencies:
       hyperdb: 4.22.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       hyperdispatch: 1.6.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -18525,7 +18528,7 @@ snapshots:
   bare-structured-clone@1.6.0:
     dependencies:
       bare-buffer: 3.6.2
-      bare-type: 1.1.0
+      bare-type: 1.4.0
       bare-url: 2.4.6
       compact-encoding: 3.3.0
     transitivePeerDependencies:
@@ -18721,7 +18724,7 @@ snapshots:
       bare-format: 1.0.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
       bare-inspect: 3.1.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
       bare-stylize: 0.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      bare-type: 1.1.0
+      bare-type: 1.4.0
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
