@@ -94,6 +94,7 @@ jobs:
           .github/scripts/test/install-scripts-policy.test.mjs
           .github/scripts/test/prebuild-status.test.mjs
           .github/scripts/test/publish-gate-policy.test.mjs
+          .github/scripts/test/platform-package-publish.test.mjs
           .github/scripts/test/publish-gpr-skip-policy.test.mjs
           .github/scripts/test/publish-branch-policy.test.mjs
           .github/scripts/test/runner-names.test.mjs
