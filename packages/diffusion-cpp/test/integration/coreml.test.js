@@ -37,6 +37,7 @@ test(
   { skip, timeout: 600000 },
   async (t) => {
     const files = await sidecarFiles()
+    const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-coreml-images-'))
     const messages = []
     binding.setLogger((_priority, message) => {
       messages.push(message)
@@ -95,7 +96,7 @@ test(
           'untiled decode executes Core ML; tiled decode uses ggml'
         )
         if (images[0]) {
-          fs.writeFileSync(path.join(modelDir, `coreml-sd2-tiled-${tiled}.png`), images[0])
+          fs.writeFileSync(path.join(outputDir, `coreml-sd2-tiled-${tiled}.png`), images[0])
         }
       }
     } finally {
@@ -103,6 +104,7 @@ test(
         await model.unload()
       } finally {
         binding.releaseLogger()
+        fs.rmSync(outputDir, { recursive: true, force: true })
       }
     }
   }
@@ -110,15 +112,35 @@ test(
 
 test('explicit invalid Core ML sidecars fail loading', { skip, timeout: 600000 }, async (t) => {
   const files = await sidecarFiles()
-  for (const key of ['coremlUnet', 'coremlTaeDecoder']) {
-    const model = new ImgStableDiffusion({
-      files: { ...files, [key]: path.join(modelDir, 'missing.mlmodelc') },
-      config: { device: 'cpu', prediction: 'eps' }
-    })
-    try {
-      await t.exception.all(() => model.load(), 'explicit selection does not silently fall back')
-    } finally {
-      await model.unload()
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-coreml-invalid-'))
+  const missingPath = path.join(directory, 'missing.mlmodelc')
+  const messages = []
+  binding.setLogger((_priority, message) => {
+    messages.push(message)
+    console.log(message)
+  })
+  try {
+    for (const key of ['coremlUnet', 'coremlTaeDecoder']) {
+      messages.length = 0
+      const model = new ImgStableDiffusion({
+        files: { ...files, [key]: missingPath },
+        config: { device: 'cpu', prediction: 'eps', verbosity: 2 }
+      })
+      const marker =
+        key === 'coremlUnet' ? 'coreml unet: failed to load' : 'coreml tae: failed to load'
+      try {
+        await t.exception.all(() => model.load(), 'explicit selection does not silently fall back')
+        await waitForLogEvidence(messages, [marker])
+        t.ok(
+          messages.some((message) => message.includes(marker)),
+          `${key} caused the load failure`
+        )
+      } finally {
+        await model.unload()
+      }
     }
+  } finally {
+    binding.releaseLogger()
+    fs.rmSync(directory, { recursive: true, force: true })
   }
 })

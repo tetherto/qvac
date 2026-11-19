@@ -332,6 +332,75 @@ export function parseSearch(params: unknown): ValidSearch {
   }
 }
 
+const MAX_PAGE = 1024
+
+const readFields = {
+  documentId: z.string().min(1),
+  generation: z.number().int().positive().optional(),
+  fromOrdinal: z.number().int().nonnegative().optional(),
+  limit: z.number().int().positive().max(MAX_PAGE).optional()
+}
+const readSchema = z.object({ namespace: z.string().min(1), ...readFields }).strict()
+const scopedReadSchema = z.object(readFields).strict()
+
+const listFields = {
+  after: z.string().min(1).optional(),
+  limit: z.number().int().positive().max(MAX_PAGE).optional()
+}
+const listSchema = z.object({ namespace: z.string().min(1), ...listFields }).strict()
+const scopedListSchema = z.object(listFields).strict().optional()
+
+export interface ValidRead {
+  documentId: string
+  generation?: number
+  fromOrdinal: number
+  limit: number
+}
+
+export interface ValidList {
+  after?: string
+  limit: number
+}
+
+export function parseReadDocument(params: unknown): ValidRead & { namespace: string } {
+  const parsed = readSchema.safeParse(params)
+  if (!parsed.success) throw invalidInput(parsed.error)
+  return { namespace: parsed.data.namespace, ...toValidRead(parsed.data) }
+}
+
+export function parseScopedReadDocument(params: unknown): ValidRead {
+  const parsed = scopedReadSchema.safeParse(params)
+  if (!parsed.success) throw invalidInput(parsed.error)
+  return toValidRead(parsed.data)
+}
+
+function toValidRead(data: {
+  documentId: string
+  generation?: number
+  fromOrdinal?: number
+  limit?: number
+}): ValidRead {
+  return {
+    documentId: data.documentId,
+    generation: data.generation,
+    fromOrdinal: data.fromOrdinal ?? 0,
+    limit: data.limit ?? 64
+  }
+}
+
+export function parseListDocuments(params: unknown): ValidList & { namespace: string } {
+  const parsed = listSchema.safeParse(params)
+  if (!parsed.success) throw invalidInput(parsed.error)
+  const { namespace, after, limit } = parsed.data
+  return { namespace, after, limit: limit ?? 100 }
+}
+
+export function parseScopedListDocuments(params: unknown): ValidList {
+  const parsed = scopedListSchema.safeParse(params)
+  if (!parsed.success) throw invalidInput(parsed.error)
+  return { after: parsed.data?.after, limit: parsed.data?.limit ?? 100 }
+}
+
 export function parseNamespaceName(name: unknown): string {
   const parsed = z.string().min(1).safeParse(name)
   if (!parsed.success) throw invalidInput(parsed.error)

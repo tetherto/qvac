@@ -160,7 +160,7 @@ class VideoStableDiffusion {
             llmVisionPath: this._files.llmVision || '',
             tokenizerPath: this._files.tokenizer || '',
             vaePath: this._files.vae || '',
-            // The shared native context reads these image-only paths as strings.
+            // Image-only sidecars and tiny-autoencoder overrides stay disabled in video mode.
             taesdPath: '',
             coremlUnetPath: '',
             coremlTaeDecoderPath: '',

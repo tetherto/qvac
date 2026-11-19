@@ -3,7 +3,7 @@
 // Pure helpers for the parakeet streaming benchmark path. No bare-* imports
 // so `node --test` can exercise them without the Bare runtime.
 
-const STREAMING_DEFAULT_CHUNK_MS = 320
+const PCM_WRITE_MS = 320
 const STREAMING_DEFAULT_EMIT_PARTIALS = true
 const BYTES_PER_S16LE_SAMPLE = 2
 const MS_PER_SECOND = 1000
@@ -18,9 +18,9 @@ const SILENCE_SENTINELS = new Set([
 
 const buildStreamingOptions = (config) => {
   const options = {
-    chunkMs: config.streamingChunkMs || STREAMING_DEFAULT_CHUNK_MS,
     emitPartials: config.streamingEmitPartials ?? STREAMING_DEFAULT_EMIT_PARTIALS
   }
+  if (config.streamingChunkMs !== undefined) options.chunkMs = config.streamingChunkMs
   if (config.streamingHistoryMs) {
     options.historyMs = config.streamingHistoryMs
   }
@@ -75,8 +75,29 @@ const joinSegments = (segments) => {
   return text.replace(/\s+/g, ' ').trim()
 }
 
+// Measure the first transcript from session startup. PCM writes are unpaced.
+async function transcribeStreaming(model, audioBuffer, sampleRate, config, nowMs) {
+  const audioStream = sliceBuffer(audioBuffer, chunkBytesForMs(sampleRate, PCM_WRITE_MS))
+  const streamingOptions = buildStreamingOptions(config)
+  const transcriptSegments = []
+  let firstPartialMs = null
+  const streamStart = nowMs()
+
+  const response = await model.runStreaming(audioStream, streamingOptions)
+  await response
+    .onUpdate((output) => {
+      const items = Array.isArray(output) ? output : [output]
+      if (firstPartialMs === null && containsTranscript(items)) {
+        firstPartialMs = nowMs() - streamStart
+      }
+      collectAppendSegments(transcriptSegments, items)
+    })
+    .await()
+
+  return { text: joinSegments(transcriptSegments), firstPartialMs }
+}
+
 module.exports = {
-  STREAMING_DEFAULT_CHUNK_MS,
   STREAMING_DEFAULT_EMIT_PARTIALS,
   buildStreamingOptions,
   chunkBytesForMs,
@@ -84,5 +105,6 @@ module.exports = {
   isTranscriptSegment,
   containsTranscript,
   collectAppendSegments,
-  joinSegments
+  joinSegments,
+  transcribeStreaming
 }

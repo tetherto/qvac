@@ -4,50 +4,35 @@
 
 ## [0.37.0] - 2026-11-19
 
-This release adds optional Core ML acceleration for SD 1.x/2.x image generation
-on macOS and iOS. Applications can select UNet and tiny-decoder sidecars
-independently while text encoding and scheduling continue to use ggml.
+### Features
 
-## New APIs
+- Add optional Core ML UNet and tiny-decoder sidecars for SD 1.x/2.x image
+  generation on macOS and iOS through `files.coremlUnet` and
+  `files.coremlTaeDecoder`. Text encoding and scheduling remain on ggml;
+  tiled decoding uses the ggml tiny autoencoder. See the
+  [Core ML guide](README.md#core-ml-sidecars-on-apple) for compatible exports
+  and compute policies ([#5857](https://github.com/tetherto/qvac/pull/5857)).
+- Expose `files.taesd` to replace the full VAE for encoding and decoding with
+  a tiny autoencoder. Core ML loads return `unknown` from `assessFit()`
+  because the ggml planner cannot size sidecar memory
+  ([#5857](https://github.com/tetherto/qvac/pull/5857)).
 
-`ImgStableDiffusion` accepts `files.coremlUnet` and `files.coremlTaeDecoder`
-as absolute paths to compiled `.mlmodelc` directories. `files.taesd` supplies
-optional ggml tiny-autoencoder weights for SD/SDXL; SDXS can use its built-in
-tiny autoencoder. For example, an SD 2.1-base UNet sidecar can be selected with:
+### Fixes
 
-```js
-const model = new ImgStableDiffusion({
-  files: {
-    model: '/models/stable-diffusion-v2-1-Q8_0.gguf',
-    taesd: '/models/taesd.safetensors',
-    coremlUnet: '/models/sd21base_unet_p6.mlmodelc',
-    coremlTaeDecoder: '/models/taesd_decoder.mlmodelc'
-  },
-  config: { prediction: 'eps' }
-})
-```
+- Check that workspace consumers retain matching desktop binary packages
+  when using a published diffusion fallback, while local source builds use
+  their staged binaries ([#5829](https://github.com/tetherto/qvac/pull/5829)).
 
-## Features
+### Changed
 
-Apple builds enable the engine's Core ML support. Untiled tiny-decoder work
-can run through Core ML, while tiled decoding uses the ggml tiny autoencoder.
-Explicit missing or unusable sidecars fail loading. `assessFit()` returns
-`unknown` with empty device rows for Core ML loads because the ggml planner
-cannot account for sidecar memory. See the
-[Core ML guide](README.md#core-ml-sidecars-on-apple) for supported exports,
-compute policies and generation limits.
-
-## Other
-
-Workspace dependency checks ensure that published diffusion fallbacks retain
-their matching desktop binary packages, while local source builds use their
-staged binaries. The native dependency floor advances to
-`stable-diffusion-cpp` `2026-11-01#2` without changing the registry baseline.
-
-## Pull Requests
-
-- [#5829](https://github.com/tetherto/qvac/pull/5829) - Retain desktop diffusion binaries for workspace consumers.
-- [#5857](https://github.com/tetherto/qvac/pull/5857) - Add Core ML sidecar support.
+- Require `stable-diffusion-cpp` `2026-11-01#2` for the Core ML sidecars,
+  retaining the existing registry baseline
+  ([#5857](https://github.com/tetherto/qvac/pull/5857)).
+- Raise the `qvac-lib-inference-addon-cpp` floor from `1.5.0` to `1.7.0`.
+  Version 1.6.0 supports string runtime-stat values, and 1.7.0 adds
+  `JsAsyncTask::runOn` for addon-owned executors. This compile-time update
+  does not change the package's API or runtime behavior
+  ([#5812](https://github.com/tetherto/qvac/pull/5812)).
 
 ## [0.36.0] - 2026-11-17
 

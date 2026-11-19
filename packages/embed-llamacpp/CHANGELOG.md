@@ -18,6 +18,11 @@
   same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
   `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.31.0` together.
 - This package needed no code change for the new fabric.
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.5.0` -> `1.7.0`
+  ([#5812](https://github.com/tetherto/qvac/pull/5812)). 1.6.0 lets runtime
+  stat values be strings (`RuntimeStatValue`), and 1.7.0 adds
+  `JsAsyncTask::runOn` for running async work on an addon-owned executor.
+  Compile-time only; no API or runtime behaviour change for this package.
 
 ## [0.57.0] - 2026-11-16
 

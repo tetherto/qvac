@@ -216,6 +216,7 @@ export function toHit(chunk: ChunkRecord, score: number): SearchHit {
     documentId: chunk.documentId,
     chunkId: chunk.chunkId,
     ordinal: chunk.ordinal,
+    generation: chunk.generation,
     content: chunk.content,
     score
   }

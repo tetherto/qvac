@@ -14,11 +14,12 @@ after a manifest update. The warm step and runtime verify every restored file
 and replace it when either pin does not match. Cache hits are never treated as
 integrity provenance; every restored file is checked.
 
-Every model declares a non-overlapping cache `group`: `base`, `ideogram`, or
-`ltx`, plus `coreml` for the Apple sidecars. CI restores and warms `base` on every self-hosted integration runner,
-adds `ideogram` only where the Ideogram test runs, and adds `ltx` only on the
-LTX runner. Each cache archives exact manifest-declared file paths, so generated
-outputs and platform-specific files are excluded.
+Every model declares a non-overlapping cache `group`: `base`, `ideogram`,
+`ltx`, `wan22`, or `coreml`. The `coreml` group contains the Apple sidecars.
+CI restores and warms `base` on every self-hosted integration runner, adds
+`ideogram` only where the Ideogram test runs, and adds `ltx` only on the
+LTX runner. Each cache archives exact manifest-declared file paths, so
+generated outputs and platform-specific files are excluded.
 
 To refresh pins from fresh downloads, run:
 

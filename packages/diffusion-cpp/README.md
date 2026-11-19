@@ -265,10 +265,16 @@ try {
 
 `coremlUnet` supports SD 1.x/2.x, including SDXS. Use the prediction type,
 resolution and prompt limits of the export. `coremlTaeDecoder` requires SDXS's
-built-in tiny autoencoder or `files.taesd` for SD/SDXL. Tiled decoding, encoding
-and circular padding use the ggml tiny autoencoder; its weights stay loaded.
+built-in tiny autoencoder or `files.taesd` for SD/SDXL. `files.taesd` replaces
+the full VAE for every encoding and decoding operation, so `files.vae` is
+unused when the tiny autoencoder loads. If the engine cannot load the tiny
+weights, it logs the failing path and retains the full VAE; with an explicit
+Core ML tiny decoder, the missing tiny autoencoder instead fails loading.
+Tiled decoding, encoding and circular padding use the ggml tiny autoencoder;
+its weights stay loaded.
 LoRAs and circular padding are rejected with a Core ML UNet. Explicit missing
-or unusable sidecars fail loading. Omit the sidecar options for a ggml load.
+or unusable sidecars fail loading. Core ML file options are rejected on
+platforms other than macOS and iOS. Omit the sidecar options for a ggml load.
 
 `SD_COREML_COMPUTE_UNITS` accepts `cpu_ne` (default), `all`, `cpu_gpu`, or `cpu`.
 These select eligible devices; they do not guarantee ANE execution. The first
@@ -477,9 +483,9 @@ All file paths must be absolute.
 | `files.t5Xxl`                   |       no | T5-XXL text encoder for SD3                                                 |
 | `files.llm`                     |       no | Qwen3 LLM text encoder for FLUX.2 [klein]                                   |
 | `files.vae`                     |       no | Separate VAE                                                                |
-| `files.taesd` | no | Optional ggml tiny autoencoder weights for SD/SDXL |
-| `files.coremlUnet` | no | Apple Core ML SD 1.x/2.x UNet `.mlmodelc` directory |
-| `files.coremlTaeDecoder` | no | Apple Core ML tiny decoder `.mlmodelc` directory |
+| `files.taesd`                   |       no | Tiny autoencoder for all encoding/decoding; overrides `files.vae`           |
+| `files.coremlUnet`              |       no | Apple Core ML SD 1.x/2.x UNet `.mlmodelc` directory                         |
+| `files.coremlTaeDecoder`        |       no | Apple Core ML tiny decoder `.mlmodelc` directory                            |
 | `files.esrgan`                  |       no | ESRGAN model for post-generation upscale                                    |
 | `files.highNoiseDiffusionModel` |       no | Wan 2.2 high-noise expert path; normally used by `VideoStableDiffusion`     |
 
@@ -1079,7 +1085,7 @@ fit.stats // {}
 
 Every number must be finite, whole and in range; anything else rejects.
 
-The engine chooses the placement, so it has to be given an unpinned configuration. A `config.mainGpu`, a `config.device` of `cpu`, a `paramsBackend` naming individual modules, or an OpenCL preference that does not name the first GPU is `status: "unknown"`.
+The engine chooses the placement, so it has to be given an unpinned configuration. A `config.mainGpu`, a `config.device` of `cpu`, a `paramsBackend` naming individual modules, an OpenCL preference that does not name the first GPU, or Core ML sidecars (`files.coremlUnet` / `files.coremlTaeDecoder`) on macOS/iOS is `status: "unknown"`.
 
 For standalone ESRGAN, use `mode: 'upscale'`, `files: { esrgan }` and the same config as `EsrganUpscaler`. This mode supports `device: 'cpu'`. `workload.width` and `height` describe the input image. The estimate includes weights, the tiled graph and full-image RAM buffers; smaller tiles do not remove full-image allocations.
 

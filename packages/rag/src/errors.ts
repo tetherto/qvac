@@ -17,7 +17,8 @@ export const ERR_CODES = Object.freeze({
   DOCUMENT_OUT_OF_SCOPE: 14023,
   EMBEDDING_SPACE_MISMATCH: 14024,
   NATIVE_ID_EXHAUSTED: 14025,
-  EMBEDDING_FAILED: 14027
+  EMBEDDING_FAILED: 14027,
+  DOCUMENT_CHANGED: 14028
 } as const)
 
 // Codes 0.9 raised and 0.10 does not. They stay registered: @qvac/error keeps
@@ -142,6 +143,10 @@ const definitions: ErrorCodesMap = {
   [ERR_CODES.EMBEDDING_FAILED]: {
     name: 'EMBEDDING_FAILED',
     message: (message) => `Embedding failed: ${message}`
+  },
+  [ERR_CODES.DOCUMENT_CHANGED]: {
+    name: 'DOCUMENT_CHANGED',
+    message: (message) => `Document changed: ${message}`
   }
 }
 

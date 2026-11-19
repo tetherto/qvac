@@ -1414,6 +1414,11 @@ also carries the default reply voice).  Select it with
 `moss-speech-codec-*.gguf` in the `modelDir`; `q8_0` is preferred over `bf16`
 when both are there.
 
+When both the language model and audio decoder run on the GPU and fit in
+device memory, MOSS-Speech keeps both loaded across replies. It returns to
+loading the stages separately when a long reply, custom voice, or prompt
+exceeds the available memory budget.
+
 ```js
 const assistant = new TTSGgml({
   engine: TTSGgml.ENGINE_MOSS_SPEECH,

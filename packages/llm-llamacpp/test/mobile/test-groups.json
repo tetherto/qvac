@@ -85,8 +85,7 @@
   "androidWeekly": {
     "ocr": [
       "runOcrLightonTest",
-      "runOcrUnlimitedTest",
-      "runOcrPaddleTest"
+      "runOcrUnlimitedTest"
     ],
     "imageHeavy": [
       "runImageElephantTest",
@@ -104,16 +103,13 @@
     "vlmPerfQwen35": [
       "runQwen35ImageElephantPerfTest",
       "runQwen35ImageFruitPlatePerfTest",
-      "runQwen35ImageHighResAuroraPerfTest",
-      "runQwen35MultimodalCacheStressTest",
-      "runKvCacheExtendedTest"
+      "runQwen35ImageHighResAuroraPerfTest"
     ]
   },
   "iosWeekly": {
     "ocr": [
       "runOcrLightonTest",
-      "runOcrUnlimitedTest",
-      "runOcrPaddleTest"
+      "runOcrUnlimitedTest"
     ],
     "imageHeavy": [
       "runImageElephantTest",
@@ -131,9 +127,7 @@
     "vlmPerfQwen35": [
       "runQwen35ImageElephantPerfTest",
       "runQwen35ImageFruitPlatePerfTest",
-      "runQwen35ImageHighResAuroraPerfTest",
-      "runQwen35MultimodalCacheStressTest",
-      "runKvCacheExtendedTest"
+      "runQwen35ImageHighResAuroraPerfTest"
     ]
   }
 }

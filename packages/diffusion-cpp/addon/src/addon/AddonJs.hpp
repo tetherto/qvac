@@ -100,7 +100,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   config.clipVisionPath = args.getMapEntry(1, "clipVisionPath");
   config.esrganPath = args.getMapEntry(1, "esrganPath");
   // LTX-2 (LTXAV) extras: audio VAE + text-embedding connectors. Empty for
-  // every non-LTX model (getMapEntry returns "" for absent keys).
+  // every non-LTX model (JS wrappers pass "" for unused paths).
   config.audioVaePath = args.getMapEntry(1, "audioVaePath");
   config.embeddingsConnectorsPath =
       args.getMapEntry(1, "embeddingsConnectorsPath");

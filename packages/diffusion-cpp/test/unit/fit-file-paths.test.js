@@ -76,7 +76,7 @@ test('Core ML sidecars and tiny autoencoder paths are mapped and validated', asy
     coremlUnet: '/models/unet.mlmodelc',
     coremlTaeDecoder: '/models/decoder.mlmodelc'
   }
-  assertFilePaths(files)
+  assertFilePaths(files, 'darwin')
   const paths = toFilePaths(files)
   t.is(paths.path, files.model, 'sidecars preserve the all-in-one model layout')
   for (const key of ['taesd', 'coremlUnet', 'coremlTaeDecoder']) {
@@ -90,13 +90,19 @@ test('Core ML sidecars and tiny autoencoder paths are mapped and validated', asy
   }
 })
 
-test('image load forwards Core ML sidecars and ggml tiny weights to the addon', async (t) => {
+test('image load forwards Core ML paths on Apple and rejects them on other platforms', async (t) => {
   const ImgStableDiffusion = require('../../index')
   const files = {
     model: '/models/sd.gguf',
     taesd: '/models/taesd.safetensors',
     coremlUnet: '/models/unet.mlmodelc',
     coremlTaeDecoder: '/models/decoder.mlmodelc'
+  }
+  if (!['darwin', 'ios'].includes(require('bare-os').platform())) {
+    await t.exception.all(() => new ImgStableDiffusion({ files, logger: null }), {
+      message: /supported only on macOS and iOS/
+    })
+    return
   }
   const model = new ImgStableDiffusion({ files, logger: null })
   let captured
@@ -113,4 +119,28 @@ test('image load forwards Core ML sidecars and ggml tiny weights to the addon', 
   } finally {
     await model.unload()
   }
+})
+
+test('Core ML paths are rejected on unsupported platforms before native load or fit', async (t) => {
+  const { assertFilePaths } = require('../../file-paths.js')
+  for (const key of ['coremlUnet', 'coremlTaeDecoder']) {
+    const files = { model: '/models/sd.gguf', [key]: '/models/sidecar.mlmodelc' }
+    for (const platform of ['linux', 'win32', 'android']) {
+      await t.exception.all(() => assertFilePaths(files, platform), {
+        message: `files.${key} is supported only on macOS and iOS`
+      })
+    }
+    for (const platform of ['darwin', 'ios']) {
+      assertFilePaths(files, platform)
+      t.pass(`${key} is accepted on ${platform}`)
+    }
+    if (!['darwin', 'ios'].includes(require('bare-os').platform())) {
+      const { assessFit } = require('../../fit')
+      await t.exception.all(assessFit({ files }), {
+        message: `files.${key} is supported only on macOS and iOS`
+      })
+    }
+  }
+  assertFilePaths({ model: '/models/sd.gguf', taesd: '/models/taesd.safetensors' }, 'linux')
+  t.pass('ggml tiny weights remain cross-platform')
 })

@@ -147,7 +147,7 @@ export interface DiffusionFiles {
   /** External tokenizer.json, required by MOSS-Image's Qwen3.5 encoder. */
   tokenizer?: string
   vae?: string
-  /** Optional ggml tiny autoencoder weights (SD/SDXL). */
+  /** Replaces the full VAE for all encoding and decoding (SD/SDXL). */
   taesd?: string
   /** Apple Core ML SD 1.x/2.x UNet sidecar (.mlmodelc directory). */
   coremlUnet?: string

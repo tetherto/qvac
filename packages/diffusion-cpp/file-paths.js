@@ -3,8 +3,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.assertAbsolute = assertAbsolute;
 exports.assertFilePaths = assertFilePaths;
 exports.toFilePaths = toFilePaths;
-/* eslint-disable @typescript-eslint/no-require-imports -- bare-path exposes a CommonJS export shape. */
+/* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
 const path = require("bare-path");
+const os = require("bare-os");
 const COMPANION_FILE_KEYS = [
     'clipL',
     'clipG',
@@ -35,11 +36,18 @@ function assertAbsolute(key, value) {
  * Rejects a file set the engine could only report as an opaque error. Shared
  * so a fit refuses the same paths a load refuses.
  */
-function assertFilePaths(files) {
+function assertFilePaths(files, hostPlatform = os.platform()) {
     assertAbsolute('model', files.model);
     for (const key of COMPANION_FILE_KEYS) {
         if (files[key] !== undefined) {
             assertAbsolute(key, files[key]);
+        }
+    }
+    if (hostPlatform !== 'darwin' && hostPlatform !== 'ios') {
+        for (const key of ['coremlUnet', 'coremlTaeDecoder']) {
+            if (files[key] !== undefined) {
+                throw new TypeError(`files.${key} is supported only on macOS and iOS`);
+            }
         }
     }
 }
