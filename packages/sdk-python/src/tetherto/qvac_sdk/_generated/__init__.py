@@ -80,7 +80,6 @@ from .models import (
     PluginInvokeResponse,
     PluginInvokeStreamRequest,
     PluginInvokeStreamResponse,
-    RagProgressResponse,
     RerankRequest,
     RerankResponse,
     ResumeRequest,
@@ -135,8 +134,6 @@ from .models.deleteCache import Request as DeleteCacheRequest
 from .models.embed import Request as EmbedRequest
 from .models.finetune import Request as FinetuneRequest
 from .models.loadModel import Request as LoadModelRequest
-from .models.rag import Request as RagRequest
-from .models.rag import Response as RagResponse
 from .models.translate import Request as TranslateRequest
 from .models.vectorIndex import Request as VectorIndexRequest
 from .models.vectorIndex import Response as VectorIndexResponse
@@ -221,9 +218,6 @@ __all__ = [
     "PluginInvokeResponse",
     "PluginInvokeStreamRequest",
     "PluginInvokeStreamResponse",
-    "RagProgressResponse",
-    "RagRequest",
-    "RagResponse",
     "RerankRequest",
     "RerankResponse",
     "ResumeRequest",

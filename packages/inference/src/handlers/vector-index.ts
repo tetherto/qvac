@@ -57,7 +57,7 @@ async function handleVectorIndexInternal(input: VectorIndexRequest): Promise<Vec
     case 'create': {
       const opened = await createVectorIndex(request)
       if (ctx.signal.aborted) {
-        disposeVectorIndex(opened)
+        await disposeVectorIndex(opened)
         throw new InferenceCancelledError(ctx.requestId)
       }
       return { ...base, operation: 'create', ...opened }
@@ -65,29 +65,29 @@ async function handleVectorIndexInternal(input: VectorIndexRequest): Promise<Vec
     case 'load': {
       const opened = await loadVectorIndex(request)
       if (ctx.signal.aborted) {
-        disposeVectorIndex(opened)
+        await disposeVectorIndex(opened)
         throw new InferenceCancelledError(ctx.requestId)
       }
       return { ...base, operation: 'load', ...opened }
     }
     case 'add':
-      return { ...base, operation: 'add', ...addVectors(request) }
+      return { ...base, operation: 'add', ...(await addVectors(request)) }
     case 'search':
-      return { ...base, operation: 'search', ...searchVectors(request) }
+      return { ...base, operation: 'search', ...(await searchVectors(request)) }
     case 'remove':
-      return { ...base, operation: 'remove', ...removeVectors(request) }
+      return { ...base, operation: 'remove', ...(await removeVectors(request)) }
     case 'contains':
-      return { ...base, operation: 'contains', ...containsVectors(request) }
+      return { ...base, operation: 'contains', ...(await containsVectors(request)) }
     case 'write': {
       const written = await writeVectorIndex(request)
       if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
       return { ...base, operation: 'write', ...written }
     }
     case 'setStagedSearch':
-      return { ...base, operation: 'setStagedSearch', ...setVectorIndexStagedSearch(request) }
+      return { ...base, operation: 'setStagedSearch', ...(await setVectorIndexStagedSearch(request)) }
     case 'setIvf':
-      return { ...base, operation: 'setIvf', ...setVectorIndexIvf(request) }
+      return { ...base, operation: 'setIvf', ...(await setVectorIndexIvf(request)) }
     case 'dispose':
-      return { ...base, operation: 'dispose', ...disposeVectorIndex(request) }
+      return { ...base, operation: 'dispose', ...(await disposeVectorIndex(request)) }
   }
 }

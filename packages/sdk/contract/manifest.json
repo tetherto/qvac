@@ -220,16 +220,6 @@
       "responseSchema": "schema.json#/$defs/pluginInvokeStream.response"
     },
     {
-      "name": "rag",
-      "callShape": "request-reply",
-      "requestSchema": "schema.json#/$defs/rag.request",
-      "responseSchema": "schema.json#/$defs/rag.response",
-      "progress": {
-        "condition": "request.withProgress === true && ['ingest', 'saveEmbeddings', 'reindex'].includes(request.operation)",
-        "responseSchema": "schema.json#/$defs/rag:progress.response"
-      }
-    },
-    {
       "name": "rerank",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/rerank.request",

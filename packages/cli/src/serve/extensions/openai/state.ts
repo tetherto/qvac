@@ -2,10 +2,9 @@ import type * as sdk from '@qvac/sdk'
 import type { DecideFn } from '@/serve/extensions/openai/adapters/decisions'
 import type { QvacContext } from '@/serve/core/context'
 import { createResponsesStore } from '@/serve/extensions/openai/adapters/responses-store'
-import { createChunkAttributionStore } from '@/serve/extensions/openai/adapters/chunk-attribution-store'
+import { createRagBackend, type RagBackend } from '@/serve/extensions/openai/adapters/rag-backend'
 import { createVectorStoresStore } from '@/serve/core/stores/vector-stores'
 import type { VectorStoresStore } from '@/serve/core/stores/vector-stores'
-import type { ChunkAttributionStore } from '@/serve/extensions/openai/adapters/chunk-attribution-store'
 import type { ResponsesStore } from '@/serve/extensions/openai/adapters/responses-store'
 import { createVideoJobsStore } from '@/serve/extensions/openai/video-jobs-store'
 import type { VideoJobsStore } from '@/serve/extensions/openai/video-jobs-store'
@@ -15,7 +14,7 @@ import { probeFfmpegAvailable } from '@/serve/lib/video-transcode'
 export interface OpenAIState {
   responsesStore: ResponsesStore
   vectorStores: VectorStoresStore
-  chunkAttributions: ChunkAttributionStore
+  ragBackend: RagBackend
   videoJobsStore: VideoJobsStore
   /** Set at server start: `true` when `ffmpeg` is on PATH (probed once).
    * Gates both video MP4 transcoding and audio mp3/opus/aac/flac encoding. */
@@ -45,6 +44,8 @@ declare module '@/serve/core/context' {
 export interface OpenAIExtensionOptions {
   decideOverride?: DecideFn
   transcribeOverride?: OpenAIState['transcribeOverride']
+  /** Test seam — where vector stores keep their data. */
+  vectorStoreDir?: string
 }
 
 export function openaiState(ctx: QvacContext): OpenAIState {
@@ -74,7 +75,9 @@ export async function createOpenAIState(
   const state: OpenAIState = {
     responsesStore: createResponsesStore(),
     vectorStores: createVectorStoresStore(),
-    chunkAttributions: createChunkAttributionStore(),
+    ragBackend: createRagBackend(
+      options?.vectorStoreDir !== undefined ? { dir: options.vectorStoreDir } : {}
+    ),
     videoJobsStore: createVideoJobsStore({
       onEvict: (job, reason) => {
         logger.warn(`video job evicted id=${job.id} reason=${reason} status=${job.status}`)

@@ -83,7 +83,7 @@ sequenceDiagram
     App->>SDK: Call close()
     SDK->>RPC: Close RPC client
     RPC->>Worker: Terminate worker process
-    Worker->>Worker: Cleanup (unload models, stop swarms, close RAG)
+    Worker->>Worker: Cleanup (unload models, stop swarms)
     Worker->>RPC: Exit
 ```
 

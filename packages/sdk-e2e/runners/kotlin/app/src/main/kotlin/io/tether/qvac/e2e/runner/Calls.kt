@@ -467,12 +467,7 @@ class Calls(
         return mapOf("path" to response["assetId"])
     }
 
-    // --- rag and vector index ---------------------------------------------------
-
-    private suspend fun rag(operation: String, params: Map<String, Any?>, failure: String): Map<String, Any?> {
-        val response = wire.send(params + mapOf("type" to "rag", "operation" to operation))
-        return Wire.requireSuccess(response, failure)
-    }
+    // --- vector index ----------------------------------------------------------
 
     private class OpenIndex(val dim: Any?, val storage: Any?, var length: Any?)
 
@@ -799,94 +794,3 @@ class Calls(
         "suspend" to { _ -> wire.send(mapOf("type" to "suspend")); mapOf("suspended" to true) },
         "resume" to { _ -> wire.send(mapOf("type" to "resume")); mapOf("resumed" to true) },
         "state" to { _ -> mapOf("state" to wire.send(mapOf("type" to "state"))["state"]) },
-        "ragIngest" to { p ->
-            val response = rag("ingest", p + ("chunk" to (p["chunk"] ?: true)) + ("requestId" to (p["requestId"] ?: Wire.requestId())), "RAG_SAVE_FAILED")
-            mapOf("processed" to response["processed"], "droppedIndices" to response["droppedIndices"])
-        },
-        "ragCloseWorkspace" to { p -> rag("closeWorkspace", p, "RAG_WORKSPACE_CLOSE_FAILED"); mapOf("closed" to true) },
-        "ragDeleteWorkspace" to { p -> rag("deleteWorkspace", p, "RAG_DELETE_FAILED"); mapOf("deleted" to true) },
-        "createVectorIndex" to { p ->
-            describeIndex(vectorIndex("create", mapOf("dim" to p["dim"], "storage" to (p["storage"] ?: "turbovec-q4"))))
-        },
-        "loadVectorIndex" to { p -> describeIndex(vectorIndex("load", mapOf("path" to p["path"]))) },
-        "vectorIndexAdd" to { p ->
-            val open = index(p["indexId"])
-            val response = vectorIndex("add", mapOf("indexId" to p["indexId"], "ids" to p["ids"], "vectors" to p["vectors"]))
-            open.length = response["length"]
-            mapOf("length" to open.length, "calibrated" to response["calibrated"], "stagedSearch" to response["stagedSearch"], "ivf" to response["ivf"])
-        },
-        "vectorIndexSearch" to { p ->
-            index(p["indexId"])
-            val nProbe = p["nProbe"]?.let { mapOf("nProbe" to it) } ?: emptyMap()
-            val response = vectorIndex("search", mapOf("indexId" to p["indexId"], "queries" to listOf(p["query"]), "k" to p["k"]) + nProbe)
-            mapOf("results" to (asList(response["results"]).firstOrNull() ?: emptyList<Any?>()))
-        },
-        "vectorIndexSetIvf" to { p ->
-            index(p["indexId"])
-            vectorIndex("setIvf", mapOf("indexId" to p["indexId"], "ivf" to p["ivf"]))
-        },
-        "vectorIndexSetStagedSearch" to { p ->
-            index(p["indexId"])
-            vectorIndex("setStagedSearch", mapOf("indexId" to p["indexId"], "enabled" to p["enabled"]))
-        },
-        "vectorIndexRemove" to { p ->
-            val open = index(p["indexId"])
-            val response = vectorIndex("remove", mapOf("indexId" to p["indexId"], "ids" to p["ids"]))
-            open.length = response["length"]
-            mapOf("removed" to response["removed"], "length" to open.length, "calibrated" to response["calibrated"], "stagedSearch" to response["stagedSearch"], "ivf" to response["ivf"])
-        },
-        "vectorIndexContains" to { p ->
-            index(p["indexId"])
-            mapOf("present" to vectorIndex("contains", mapOf("indexId" to p["indexId"], "ids" to p["ids"]))["present"])
-        },
-        "vectorIndexWrite" to { p ->
-            index(p["indexId"])
-            mapOf("path" to vectorIndex("write", mapOf("indexId" to p["indexId"], "path" to p["path"]))["path"])
-        },
-        "vectorIndexDispose" to { p ->
-            val id = p["indexId"]?.toString()
-            if (id == null || id !in indexes) {
-                mapOf("disposed" to false)
-            } else {
-                vectorIndex("dispose", mapOf("indexId" to id))
-                indexes.remove(id)
-                mapOf("disposed" to true)
-            }
-        },
-        "vectorIndexLength" to { p -> mapOf("length" to index(p["indexId"]).length) },
-        "invokePlugin" to { p ->
-            val response = wire.send(mapOf("type" to "pluginInvoke", "modelId" to p["modelId"], "handler" to p["handler"], "params" to p["params"]))
-            mapOf("result" to response["result"])
-        },
-        "transcribeStreamOpen" to ::transcribeStreamOpen,
-        "transcribeStreamWrite" to ::transcribeStreamWrite,
-        "transcribeStreamWriteChunks" to ::transcribeStreamWriteChunks,
-        "transcribeStreamWriteBytes" to ::transcribeStreamWriteBytes,
-        "transcribeStreamEnd" to { p -> session(p["sessionId"]).input.close(); mapOf("ended" to true) },
-        "transcribeStreamDestroy" to ::transcribeStreamDestroy,
-        "loggingStreamOpen" to ::loggingStreamOpen,
-        "loggingStreamMark" to { p ->
-            val state = logStream(p["streamId"])
-            state.cutoffMs = System.currentTimeMillis()
-            mapOf("markedAt" to state.cutoffMs)
-        },
-        "loggingStreamCollect" to ::loggingStreamCollect,
-        "loggingStreamClose" to ::loggingStreamClose,
-    )
-
-    val streams: Map<String, Fold> = mapOf(
-        "completion" to ::completion,
-        "translate" to ::translate,
-        "ocr" to ::ocr,
-        "transcribeStream" to ::transcribeStream,
-        "textToSpeech" to ::textToSpeech,
-        "batchCompletion" to ::batchCompletion,
-        "transcribeStreamDrain" to ::transcribeStreamDrain,
-        "invokePluginStream" to ::pluginStream,
-    )
-
-    private companion object {
-        /** The SDK server's own log stream, as the JS client names it. */
-        const val SDK_LOG_ID = "__engine__"
-    }
-}

@@ -78,15 +78,15 @@ test('manifest lists every method with its call shape', (t) => {
   }
 })
 
-test('progress block is present only on the 4 progress-capable methods', (t) => {
+test('progress block is present only on the 3 progress-capable methods', (t) => {
   const { schemaDocument, manifest } = buildContract()
   const defs = schemaDocument.$defs as Record<string, unknown>
 
-  const expected = new Set(['loadModel', 'downloadAsset', 'rag', 'finetune'])
+  const expected = new Set(['loadModel', 'downloadAsset', 'finetune'])
   const actual = new Set(
     manifest.methods.filter((method) => 'progress' in method).map((method) => method.name)
   )
-  t.alike(actual, expected, 'exactly loadModel/downloadAsset/rag/finetune carry a progress block')
+  t.alike(actual, expected, 'exactly loadModel/downloadAsset/finetune carry a progress block')
 
   for (const method of manifest.methods) {
     const progress = (method as { progress?: { condition: string; responseSchema: string } })

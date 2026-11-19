@@ -42,7 +42,6 @@ sealed class AnyRequest {
     data class OpenSessionRequest(val value: io.tether.qvac.sdk.generated.schema.OpenSessionRequest) : AnyRequest()
     data class PluginInvokeRequest(val value: io.tether.qvac.sdk.generated.schema.PluginInvokeRequest) : AnyRequest()
     data class PluginInvokeStreamRequest(val value: io.tether.qvac.sdk.generated.schema.PluginInvokeStreamRequest) : AnyRequest()
-    data class RagRequest(val value: io.tether.qvac.sdk.generated.schema.RagRequest) : AnyRequest()
     data class RerankRequest(val value: io.tether.qvac.sdk.generated.schema.RerankRequest) : AnyRequest()
     data class ResumeRequest(val value: io.tether.qvac.sdk.generated.schema.ResumeRequest) : AnyRequest()
     data class StartRpcServerRequest(val value: io.tether.qvac.sdk.generated.schema.StartRpcServerRequest) : AnyRequest()
@@ -72,7 +71,7 @@ internal object AnyRequestSerializer : KSerializer<AnyRequest> {
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"neuralData\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"metadata\":{\"type\":\"boolean\"},\"neuralData\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"base64\"},\"value\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"filePath\"},\"value\":{\"type\":\"string\"}}}]},\"type\":{\"type\":\"string\",\"const\":\"bciTranscribe\"},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"metadata\":{\"type\":\"boolean\"},\"type\":{\"type\":\"string\",\"const\":\"bciTranscribeStream\"},\"streamOpts\":{\"type\":\"object\",\"properties\":{\"windowTimesteps\":{\"type\":\"integer\"},\"hopTimesteps\":{\"type\":\"integer\"},\"emit\":{\"type\":\"string\",\"enum\":[\"delta\",\"full\"]}}},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"tools\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"type\",\"name\",\"description\",\"parameters\"]}},\"toolSearch\":{\"type\":\"object\",\"properties\":{\"defaultLimit\":{\"type\":\"integer\"},\"maxLimit\":{\"type\":\"integer\"}}},\"text\":{\"type\":\"string\"},\"history\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"role\"]}},\"type\":{\"type\":\"string\",\"const\":\"calcTokens\"},\"sessionId\":{\"type\":\"string\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"operation\",\"requestId\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"cancel\"},\"sessionId\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"request\"},\"requestId\":{\"type\":\"string\"},\"clearCache\":{\"type\":\"boolean\"}}},{\"type\":\"object\",\"required\":[\"type\",\"operation\",\"modelId\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"cancel\"},\"sessionId\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"broad\"},\"modelId\":{\"type\":\"string\"},\"kind\":{\"type\":\"string\",\"enum\":[\"completion\",\"batchCompletion\",\"embeddings\",\"imageEmbedding\",\"decision\",\"rerank\",\"transcribe\",\"translate\",\"diffusion\",\"world\",\"audiogen\",\"tts\",\"ocr\",\"classification\",\"vla\",\"plugin\",\"vectorIndex\",\"finetune\",\"loadModel\",\"downloadAsset\",\"modelRegistry\",\"rpcServer\",\"rpcDiscovery\",\"rag\"]}}}]}").jsonObject,
+        Json.parseToJsonElement("{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"operation\",\"requestId\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"cancel\"},\"sessionId\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"request\"},\"requestId\":{\"type\":\"string\"},\"clearCache\":{\"type\":\"boolean\"}}},{\"type\":\"object\",\"required\":[\"type\",\"operation\",\"modelId\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"cancel\"},\"sessionId\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"broad\"},\"modelId\":{\"type\":\"string\"},\"kind\":{\"type\":\"string\",\"enum\":[\"completion\",\"batchCompletion\",\"embeddings\",\"imageEmbedding\",\"decision\",\"rerank\",\"transcribe\",\"translate\",\"diffusion\",\"world\",\"audiogen\",\"tts\",\"ocr\",\"classification\",\"vla\",\"plugin\",\"vectorIndex\",\"finetune\",\"loadModel\",\"downloadAsset\",\"modelRegistry\",\"rpcServer\",\"rpcDiscovery\"]}}}]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"image\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"image\":{\"type\":\"string\"},\"topK\":{\"type\":\"integer\"},\"width\":{\"type\":\"integer\"},\"height\":{\"type\":\"integer\"},\"channels\":{\"type\":\"number\",\"const\":3},\"type\":{\"type\":\"string\",\"const\":\"classify\"},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"sessionId\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"closeSession\"},\"sessionId\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"history\",\"modelId\",\"stream\",\"type\"],\"properties\":{\"history\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"role\"]}},\"modelId\":{\"type\":\"string\"},\"kvCache\":{\"anyOf\":[{\"type\":\"boolean\"},{\"type\":\"string\"}]},\"prefill\":{\"type\":\"boolean\"},\"seedFrom\":{\"type\":\"string\"},\"tools\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"type\",\"name\",\"description\",\"parameters\"]}},\"toolSearch\":{\"type\":\"object\",\"properties\":{\"defaultLimit\":{\"type\":\"integer\"},\"maxLimit\":{\"type\":\"integer\"}}},\"stream\":{\"type\":\"boolean\"},\"generationParams\":{\"type\":\"object\",\"properties\":{\"temp\":{\"type\":\"number\"},\"top_p\":{\"type\":\"number\"},\"top_k\":{\"type\":\"number\"},\"predict\":{\"type\":\"number\"},\"seed\":{\"type\":\"number\"},\"frequency_penalty\":{\"type\":\"number\"},\"presence_penalty\":{\"type\":\"number\"},\"repeat_penalty\":{\"type\":\"number\"},\"reasoning_budget\":{\"type\":\"integer\"},\"tool_choice\":{\"type\":\"string\"},\"parallel_tool_calls\":{\"type\":\"boolean\"}}},\"captureThinking\":{\"type\":\"boolean\"},\"emitRawDeltas\":{\"type\":\"boolean\"},\"toolDialect\":{\"type\":\"string\",\"enum\":[\"hermes\",\"pythonic\",\"json\",\"harmony\",\"qwen35\",\"gemma4\",\"dsml\"]},\"responseFormat\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"}}},{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"json_object\"}}},{\"type\":\"object\",\"required\":[\"type\",\"json_schema\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"json_schema\"},\"json_schema\":{\"type\":\"object\",\"required\":[\"name\",\"schema\"]}}}]},\"requestId\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"completionOrchestrate\"},\"maxToolTurns\":{\"type\":\"integer\"},\"sessionId\":{\"type\":\"string\"}}}").jsonObject,
@@ -98,7 +97,6 @@ internal object AnyRequestSerializer : KSerializer<AnyRequest> {
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"sessionId\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"openSession\"},\"sessionId\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"modelId\",\"handler\",\"params\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"pluginInvoke\"},\"modelId\":{\"type\":\"string\"},\"handler\":{\"type\":\"string\"},\"params\":{},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"modelId\",\"handler\",\"params\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"pluginInvokeStream\"},\"modelId\":{\"type\":\"string\"},\"handler\":{\"type\":\"string\"},\"params\":{},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"oneOf\":[{\"type\":\"object\",\"required\":[\"documents\",\"type\",\"operation\"],\"properties\":{\"documents\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}]},\"chunkOpts\":{\"type\":\"object\",\"properties\":{\"chunkSize\":{\"type\":\"number\"},\"chunkOverlap\":{\"type\":\"number\"},\"chunkStrategy\":{\"type\":\"string\",\"enum\":[\"character\",\"paragraph\"]},\"splitStrategy\":{\"type\":\"string\",\"enum\":[\"character\",\"word\",\"token\",\"sentence\",\"line\"]}}},\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"operation\":{\"type\":\"string\",\"const\":\"chunk\"},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"modelId\",\"documents\",\"type\",\"operation\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"workspace\":{\"type\":\"string\"},\"documents\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}]},\"chunk\":{\"type\":\"boolean\"},\"chunkOpts\":{\"type\":\"object\",\"properties\":{\"chunkSize\":{\"type\":\"number\"},\"chunkOverlap\":{\"type\":\"number\"},\"chunkStrategy\":{\"type\":\"string\",\"enum\":[\"character\",\"paragraph\"]},\"splitStrategy\":{\"type\":\"string\",\"enum\":[\"character\",\"word\",\"token\",\"sentence\",\"line\"]}}},\"progressInterval\":{\"type\":\"number\"},\"onProgress\":{},\"withProgress\":{\"type\":\"boolean\"},\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"operation\":{\"type\":\"string\",\"const\":\"ingest\"},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"documents\",\"type\",\"operation\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"workspace\":{\"type\":\"string\"},\"documents\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"id\",\"content\",\"embedding\",\"embeddingModelId\"]}},\"progressInterval\":{\"type\":\"number\"},\"onProgress\":{},\"withProgress\":{\"type\":\"boolean\"},\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"operation\":{\"type\":\"string\",\"const\":\"saveEmbeddings\"},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"modelId\",\"query\",\"type\",\"operation\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"workspace\":{\"type\":\"string\"},\"query\":{\"type\":\"string\"},\"topK\":{\"type\":\"number\"},\"n\":{\"type\":\"number\"},\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"operation\":{\"type\":\"string\",\"const\":\"search\"},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"ids\",\"type\",\"operation\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"workspace\":{\"type\":\"string\"},\"ids\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"operation\":{\"type\":\"string\",\"const\":\"deleteEmbeddings\"},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"operation\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"workspace\":{\"type\":\"string\"},\"onProgress\":{},\"withProgress\":{\"type\":\"boolean\"},\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"operation\":{\"type\":\"string\",\"const\":\"reindex\"},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"operation\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"operation\":{\"type\":\"string\",\"const\":\"listWorkspaces\"},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"operation\"],\"properties\":{\"workspace\":{\"type\":\"string\"},\"deleteOnClose\":{\"type\":\"boolean\"},\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"operation\":{\"type\":\"string\",\"const\":\"closeWorkspace\"},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"workspace\",\"type\",\"operation\"],\"properties\":{\"workspace\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"operation\":{\"type\":\"string\",\"const\":\"deleteWorkspace\"},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}}]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"query\",\"documents\",\"modelId\",\"type\"],\"properties\":{\"query\":{\"type\":\"string\"},\"documents\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"modelId\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"rerank\"},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"resume\"},\"sessionId\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"host\":{\"type\":\"string\"},\"port\":{\"type\":\"integer\"},\"device\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}]},\"cache\":{\"type\":\"boolean\"},\"threads\":{\"type\":\"integer\"},\"expectRdma\":{\"type\":\"boolean\"},\"allowNonLoopbackHost\":{\"type\":\"boolean\"},\"discoveryTopic\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"startRpcServer\"},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
@@ -155,24 +153,23 @@ internal object AnyRequestSerializer : KSerializer<AnyRequest> {
             31 -> AnyRequest.OpenSessionRequest(input.json.decodeFromJsonElement(serializer<OpenSessionRequest>(), element))
             32 -> AnyRequest.PluginInvokeRequest(input.json.decodeFromJsonElement(serializer<PluginInvokeRequest>(), element))
             33 -> AnyRequest.PluginInvokeStreamRequest(input.json.decodeFromJsonElement(serializer<PluginInvokeStreamRequest>(), element))
-            34 -> AnyRequest.RagRequest(input.json.decodeFromJsonElement(serializer<RagRequest>(), element))
-            35 -> AnyRequest.RerankRequest(input.json.decodeFromJsonElement(serializer<RerankRequest>(), element))
-            36 -> AnyRequest.ResumeRequest(input.json.decodeFromJsonElement(serializer<ResumeRequest>(), element))
-            37 -> AnyRequest.StartRpcServerRequest(input.json.decodeFromJsonElement(serializer<StartRpcServerRequest>(), element))
-            38 -> AnyRequest.StateRequest(input.json.decodeFromJsonElement(serializer<StateRequest>(), element))
-            39 -> AnyRequest.StopRpcServerRequest(input.json.decodeFromJsonElement(serializer<StopRpcServerRequest>(), element))
-            40 -> AnyRequest.SuspendRequest(input.json.decodeFromJsonElement(serializer<SuspendRequest>(), element))
-            41 -> AnyRequest.TextToSpeechRequest(input.json.decodeFromJsonElement(serializer<TextToSpeechRequest>(), element))
-            42 -> AnyRequest.TextToSpeechStreamRequest(input.json.decodeFromJsonElement(serializer<TextToSpeechStreamRequest>(), element))
-            43 -> AnyRequest.TranscribeRequest(input.json.decodeFromJsonElement(serializer<TranscribeRequest>(), element))
-            44 -> AnyRequest.TranscribeStreamRequest(input.json.decodeFromJsonElement(serializer<TranscribeStreamRequest>(), element))
-            45 -> AnyRequest.TranslateRequest(input.json.decodeFromJsonElement(serializer<TranslateRequest>(), element))
-            46 -> AnyRequest.UnloadModelRequest(input.json.decodeFromJsonElement(serializer<UnloadModelRequest>(), element))
-            47 -> AnyRequest.UpscaleStreamRequest(input.json.decodeFromJsonElement(serializer<UpscaleStreamRequest>(), element))
-            48 -> AnyRequest.VectorIndexRequest(input.json.decodeFromJsonElement(serializer<VectorIndexRequest>(), element))
-            49 -> AnyRequest.VideoStreamRequest(input.json.decodeFromJsonElement(serializer<VideoStreamRequest>(), element))
-            50 -> AnyRequest.WorldSceneStreamRequest(input.json.decodeFromJsonElement(serializer<WorldSceneStreamRequest>(), element))
-            51 -> AnyRequest.WorldStepStreamRequest(input.json.decodeFromJsonElement(serializer<WorldStepStreamRequest>(), element))
+            34 -> AnyRequest.RerankRequest(input.json.decodeFromJsonElement(serializer<RerankRequest>(), element))
+            35 -> AnyRequest.ResumeRequest(input.json.decodeFromJsonElement(serializer<ResumeRequest>(), element))
+            36 -> AnyRequest.StartRpcServerRequest(input.json.decodeFromJsonElement(serializer<StartRpcServerRequest>(), element))
+            37 -> AnyRequest.StateRequest(input.json.decodeFromJsonElement(serializer<StateRequest>(), element))
+            38 -> AnyRequest.StopRpcServerRequest(input.json.decodeFromJsonElement(serializer<StopRpcServerRequest>(), element))
+            39 -> AnyRequest.SuspendRequest(input.json.decodeFromJsonElement(serializer<SuspendRequest>(), element))
+            40 -> AnyRequest.TextToSpeechRequest(input.json.decodeFromJsonElement(serializer<TextToSpeechRequest>(), element))
+            41 -> AnyRequest.TextToSpeechStreamRequest(input.json.decodeFromJsonElement(serializer<TextToSpeechStreamRequest>(), element))
+            42 -> AnyRequest.TranscribeRequest(input.json.decodeFromJsonElement(serializer<TranscribeRequest>(), element))
+            43 -> AnyRequest.TranscribeStreamRequest(input.json.decodeFromJsonElement(serializer<TranscribeStreamRequest>(), element))
+            44 -> AnyRequest.TranslateRequest(input.json.decodeFromJsonElement(serializer<TranslateRequest>(), element))
+            45 -> AnyRequest.UnloadModelRequest(input.json.decodeFromJsonElement(serializer<UnloadModelRequest>(), element))
+            46 -> AnyRequest.UpscaleStreamRequest(input.json.decodeFromJsonElement(serializer<UpscaleStreamRequest>(), element))
+            47 -> AnyRequest.VectorIndexRequest(input.json.decodeFromJsonElement(serializer<VectorIndexRequest>(), element))
+            48 -> AnyRequest.VideoStreamRequest(input.json.decodeFromJsonElement(serializer<VideoStreamRequest>(), element))
+            49 -> AnyRequest.WorldSceneStreamRequest(input.json.decodeFromJsonElement(serializer<WorldSceneStreamRequest>(), element))
+            50 -> AnyRequest.WorldStepStreamRequest(input.json.decodeFromJsonElement(serializer<WorldStepStreamRequest>(), element))
             else -> throw SerializationException("No matching AnyRequest variant")
         }
     }
@@ -212,7 +209,6 @@ internal object AnyRequestSerializer : KSerializer<AnyRequest> {
             is AnyRequest.OpenSessionRequest -> encoder.encodeSerializableValue(serializer<OpenSessionRequest>(), value.value)
             is AnyRequest.PluginInvokeRequest -> encoder.encodeSerializableValue(serializer<PluginInvokeRequest>(), value.value)
             is AnyRequest.PluginInvokeStreamRequest -> encoder.encodeSerializableValue(serializer<PluginInvokeStreamRequest>(), value.value)
-            is AnyRequest.RagRequest -> encoder.encodeSerializableValue(serializer<RagRequest>(), value.value)
             is AnyRequest.RerankRequest -> encoder.encodeSerializableValue(serializer<RerankRequest>(), value.value)
             is AnyRequest.ResumeRequest -> encoder.encodeSerializableValue(serializer<ResumeRequest>(), value.value)
             is AnyRequest.StartRpcServerRequest -> encoder.encodeSerializableValue(serializer<StartRpcServerRequest>(), value.value)
@@ -1222,7 +1218,7 @@ internal object CancelRequestSerializer : KSerializer<CancelRequest> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("CancelRequest")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"operation\",\"requestId\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"cancel\"},\"sessionId\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"request\"},\"requestId\":{\"type\":\"string\"},\"clearCache\":{\"type\":\"boolean\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"operation\",\"modelId\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"cancel\"},\"sessionId\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"broad\"},\"modelId\":{\"type\":\"string\"},\"kind\":{\"type\":\"string\",\"enum\":[\"completion\",\"batchCompletion\",\"embeddings\",\"imageEmbedding\",\"decision\",\"rerank\",\"transcribe\",\"translate\",\"diffusion\",\"world\",\"audiogen\",\"tts\",\"ocr\",\"classification\",\"vla\",\"plugin\",\"vectorIndex\",\"finetune\",\"loadModel\",\"downloadAsset\",\"modelRegistry\",\"rpcServer\",\"rpcDiscovery\",\"rag\"]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"operation\",\"modelId\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"cancel\"},\"sessionId\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"broad\"},\"modelId\":{\"type\":\"string\"},\"kind\":{\"type\":\"string\",\"enum\":[\"completion\",\"batchCompletion\",\"embeddings\",\"imageEmbedding\",\"decision\",\"rerank\",\"transcribe\",\"translate\",\"diffusion\",\"world\",\"audiogen\",\"tts\",\"ocr\",\"classification\",\"vla\",\"plugin\",\"vectorIndex\",\"finetune\",\"loadModel\",\"downloadAsset\",\"modelRegistry\",\"rpcServer\",\"rpcDiscovery\"]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): CancelRequest {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
@@ -1288,7 +1284,6 @@ enum class CancelRequestBroadKind {
     @SerialName("modelRegistry") `MODELREGISTRY`,
     @SerialName("rpcServer") `RPCSERVER`,
     @SerialName("rpcDiscovery") `RPCDISCOVERY`,
-    @SerialName("rag") `RAG`,
 }
 
 @Serializable
@@ -12636,294 +12631,6 @@ data class PluginInvokeStreamRequest(
     @SerialName("requestId") val `requestId`: String? = null,
 )
 
-@Serializable(with = RagRequestSerializer::class)
-sealed class RagRequest {
-    data class Chunk(val value: io.tether.qvac.sdk.generated.schema.RagRequestChunk) : RagRequest()
-    data class Ingest(val value: io.tether.qvac.sdk.generated.schema.RagRequestIngest) : RagRequest()
-    data class SaveEmbeddings(val value: io.tether.qvac.sdk.generated.schema.RagRequestSaveEmbeddings) : RagRequest()
-    data class Search(val value: io.tether.qvac.sdk.generated.schema.RagRequestSearch) : RagRequest()
-    data class DeleteEmbeddings(val value: io.tether.qvac.sdk.generated.schema.RagRequestDeleteEmbeddings) : RagRequest()
-    data class Reindex(val value: io.tether.qvac.sdk.generated.schema.RagRequestReindex) : RagRequest()
-    data class ListWorkspaces(val value: io.tether.qvac.sdk.generated.schema.RagRequestListWorkspaces) : RagRequest()
-    data class CloseWorkspace(val value: io.tether.qvac.sdk.generated.schema.RagRequestCloseWorkspace) : RagRequest()
-    data class DeleteWorkspace(val value: io.tether.qvac.sdk.generated.schema.RagRequestDeleteWorkspace) : RagRequest()
-}
-internal object RagRequestSerializer : KSerializer<RagRequest> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("RagRequest")
-    private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"documents\",\"type\",\"operation\"],\"properties\":{\"documents\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}]},\"chunkOpts\":{\"type\":\"object\",\"properties\":{\"chunkSize\":{\"type\":\"number\"},\"chunkOverlap\":{\"type\":\"number\"},\"chunkStrategy\":{\"type\":\"string\",\"enum\":[\"character\",\"paragraph\"]},\"splitStrategy\":{\"type\":\"string\",\"enum\":[\"character\",\"word\",\"token\",\"sentence\",\"line\"]}}},\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"operation\":{\"type\":\"string\",\"const\":\"chunk\"},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"documents\",\"type\",\"operation\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"workspace\":{\"type\":\"string\"},\"documents\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}]},\"chunk\":{\"type\":\"boolean\"},\"chunkOpts\":{\"type\":\"object\",\"properties\":{\"chunkSize\":{\"type\":\"number\"},\"chunkOverlap\":{\"type\":\"number\"},\"chunkStrategy\":{\"type\":\"string\",\"enum\":[\"character\",\"paragraph\"]},\"splitStrategy\":{\"type\":\"string\",\"enum\":[\"character\",\"word\",\"token\",\"sentence\",\"line\"]}}},\"progressInterval\":{\"type\":\"number\"},\"onProgress\":{},\"withProgress\":{\"type\":\"boolean\"},\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"operation\":{\"type\":\"string\",\"const\":\"ingest\"},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"documents\",\"type\",\"operation\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"workspace\":{\"type\":\"string\"},\"documents\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"id\",\"content\",\"embedding\",\"embeddingModelId\"]}},\"progressInterval\":{\"type\":\"number\"},\"onProgress\":{},\"withProgress\":{\"type\":\"boolean\"},\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"operation\":{\"type\":\"string\",\"const\":\"saveEmbeddings\"},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"query\",\"type\",\"operation\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"workspace\":{\"type\":\"string\"},\"query\":{\"type\":\"string\"},\"topK\":{\"type\":\"number\"},\"n\":{\"type\":\"number\"},\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"operation\":{\"type\":\"string\",\"const\":\"search\"},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"ids\",\"type\",\"operation\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"workspace\":{\"type\":\"string\"},\"ids\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"operation\":{\"type\":\"string\",\"const\":\"deleteEmbeddings\"},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"operation\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"workspace\":{\"type\":\"string\"},\"onProgress\":{},\"withProgress\":{\"type\":\"boolean\"},\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"operation\":{\"type\":\"string\",\"const\":\"reindex\"},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"operation\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"operation\":{\"type\":\"string\",\"const\":\"listWorkspaces\"},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"operation\"],\"properties\":{\"workspace\":{\"type\":\"string\"},\"deleteOnClose\":{\"type\":\"boolean\"},\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"operation\":{\"type\":\"string\",\"const\":\"closeWorkspace\"},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"workspace\",\"type\",\"operation\"],\"properties\":{\"workspace\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"operation\":{\"type\":\"string\",\"const\":\"deleteWorkspace\"},\"sessionId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
-    )
-    override fun deserialize(decoder: Decoder): RagRequest {
-        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
-        val element = input.decodeJsonElement()
-        return when (selectWireVariant(element, shapes)) {
-            0 -> RagRequest.Chunk(input.json.decodeFromJsonElement(serializer<RagRequestChunk>(), element))
-            1 -> RagRequest.Ingest(input.json.decodeFromJsonElement(serializer<RagRequestIngest>(), element))
-            2 -> RagRequest.SaveEmbeddings(input.json.decodeFromJsonElement(serializer<RagRequestSaveEmbeddings>(), element))
-            3 -> RagRequest.Search(input.json.decodeFromJsonElement(serializer<RagRequestSearch>(), element))
-            4 -> RagRequest.DeleteEmbeddings(input.json.decodeFromJsonElement(serializer<RagRequestDeleteEmbeddings>(), element))
-            5 -> RagRequest.Reindex(input.json.decodeFromJsonElement(serializer<RagRequestReindex>(), element))
-            6 -> RagRequest.ListWorkspaces(input.json.decodeFromJsonElement(serializer<RagRequestListWorkspaces>(), element))
-            7 -> RagRequest.CloseWorkspace(input.json.decodeFromJsonElement(serializer<RagRequestCloseWorkspace>(), element))
-            8 -> RagRequest.DeleteWorkspace(input.json.decodeFromJsonElement(serializer<RagRequestDeleteWorkspace>(), element))
-            else -> throw SerializationException("No matching RagRequest variant")
-        }
-    }
-    override fun serialize(encoder: Encoder, value: RagRequest) {
-        when (value) {
-            is RagRequest.Chunk -> encoder.encodeSerializableValue(serializer<RagRequestChunk>(), value.value)
-            is RagRequest.Ingest -> encoder.encodeSerializableValue(serializer<RagRequestIngest>(), value.value)
-            is RagRequest.SaveEmbeddings -> encoder.encodeSerializableValue(serializer<RagRequestSaveEmbeddings>(), value.value)
-            is RagRequest.Search -> encoder.encodeSerializableValue(serializer<RagRequestSearch>(), value.value)
-            is RagRequest.DeleteEmbeddings -> encoder.encodeSerializableValue(serializer<RagRequestDeleteEmbeddings>(), value.value)
-            is RagRequest.Reindex -> encoder.encodeSerializableValue(serializer<RagRequestReindex>(), value.value)
-            is RagRequest.ListWorkspaces -> encoder.encodeSerializableValue(serializer<RagRequestListWorkspaces>(), value.value)
-            is RagRequest.CloseWorkspace -> encoder.encodeSerializableValue(serializer<RagRequestCloseWorkspace>(), value.value)
-            is RagRequest.DeleteWorkspace -> encoder.encodeSerializableValue(serializer<RagRequestDeleteWorkspace>(), value.value)
-        }
-    }
-}
-
-@Serializable
-data class RagRequestChunk(
-    @SerialName("documents") val `documents`: RagRequestChunkDocuments,
-    @SerialName("chunkOpts") val `chunkOpts`: RagRequestChunkChunkOpts? = null,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "rag",
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("operation") val `operation`: String = "chunk",
-    @SerialName("sessionId") val `sessionId`: String? = null,
-    @SerialName("requestId") val `requestId`: String? = null,
-)
-
-@Serializable(with = RagRequestChunkDocumentsSerializer::class)
-sealed class RagRequestChunkDocuments {
-    data class Variant1(val value: String) : RagRequestChunkDocuments()
-    data class Variant2(val value: List<String>) : RagRequestChunkDocuments()
-}
-internal object RagRequestChunkDocumentsSerializer : KSerializer<RagRequestChunkDocuments> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("RagRequestChunkDocuments")
-    private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"type\":\"string\"}}").jsonObject,
-    )
-    override fun deserialize(decoder: Decoder): RagRequestChunkDocuments {
-        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
-        val element = input.decodeJsonElement()
-        return when (selectWireVariant(element, shapes)) {
-            0 -> RagRequestChunkDocuments.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> RagRequestChunkDocuments.Variant2(input.json.decodeFromJsonElement(serializer<List<String>>(), element))
-            else -> throw SerializationException("No matching RagRequestChunkDocuments variant")
-        }
-    }
-    override fun serialize(encoder: Encoder, value: RagRequestChunkDocuments) {
-        when (value) {
-            is RagRequestChunkDocuments.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is RagRequestChunkDocuments.Variant2 -> encoder.encodeSerializableValue(serializer<List<String>>(), value.value)
-        }
-    }
-}
-
-@Serializable
-data class RagRequestChunkChunkOpts(
-    @SerialName("chunkSize") val `chunkSize`: Double? = null,
-    @SerialName("chunkOverlap") val `chunkOverlap`: Double? = null,
-    @SerialName("chunkStrategy") val `chunkStrategy`: RagRequestChunkChunkOptsChunkStrategy? = null,
-    @SerialName("splitStrategy") val `splitStrategy`: RagRequestChunkChunkOptsSplitStrategy? = null,
-)
-
-@Serializable
-enum class RagRequestChunkChunkOptsChunkStrategy {
-    @SerialName("character") `CHARACTER`,
-    @SerialName("paragraph") `PARAGRAPH`,
-}
-
-@Serializable
-enum class RagRequestChunkChunkOptsSplitStrategy {
-    @SerialName("character") `CHARACTER`,
-    @SerialName("word") `WORD`,
-    @SerialName("token") `TOKEN`,
-    @SerialName("sentence") `SENTENCE`,
-    @SerialName("line") `LINE`,
-}
-
-@Serializable
-data class RagRequestIngest(
-    @SerialName("modelId") val `modelId`: String,
-    @SerialName("workspace") val `workspace`: String? = null,
-    @SerialName("documents") val `documents`: RagRequestIngestDocuments,
-    @SerialName("chunk") val `chunk`: Boolean? = null,
-    @SerialName("chunkOpts") val `chunkOpts`: RagRequestIngestChunkOpts? = null,
-    @SerialName("progressInterval") val `progressInterval`: Double? = null,
-    @SerialName("onProgress") val `onProgress`: JsonElement? = null,
-    @SerialName("withProgress") val `withProgress`: Boolean? = null,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "rag",
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("operation") val `operation`: String = "ingest",
-    @SerialName("sessionId") val `sessionId`: String? = null,
-    @SerialName("requestId") val `requestId`: String? = null,
-)
-
-@Serializable(with = RagRequestIngestDocumentsSerializer::class)
-sealed class RagRequestIngestDocuments {
-    data class Variant1(val value: String) : RagRequestIngestDocuments()
-    data class Variant2(val value: List<String>) : RagRequestIngestDocuments()
-}
-internal object RagRequestIngestDocumentsSerializer : KSerializer<RagRequestIngestDocuments> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("RagRequestIngestDocuments")
-    private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"type\":\"string\"}}").jsonObject,
-    )
-    override fun deserialize(decoder: Decoder): RagRequestIngestDocuments {
-        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
-        val element = input.decodeJsonElement()
-        return when (selectWireVariant(element, shapes)) {
-            0 -> RagRequestIngestDocuments.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> RagRequestIngestDocuments.Variant2(input.json.decodeFromJsonElement(serializer<List<String>>(), element))
-            else -> throw SerializationException("No matching RagRequestIngestDocuments variant")
-        }
-    }
-    override fun serialize(encoder: Encoder, value: RagRequestIngestDocuments) {
-        when (value) {
-            is RagRequestIngestDocuments.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is RagRequestIngestDocuments.Variant2 -> encoder.encodeSerializableValue(serializer<List<String>>(), value.value)
-        }
-    }
-}
-
-@Serializable
-data class RagRequestIngestChunkOpts(
-    @SerialName("chunkSize") val `chunkSize`: Double? = null,
-    @SerialName("chunkOverlap") val `chunkOverlap`: Double? = null,
-    @SerialName("chunkStrategy") val `chunkStrategy`: RagRequestIngestChunkOptsChunkStrategy? = null,
-    @SerialName("splitStrategy") val `splitStrategy`: RagRequestIngestChunkOptsSplitStrategy? = null,
-)
-
-@Serializable
-enum class RagRequestIngestChunkOptsChunkStrategy {
-    @SerialName("character") `CHARACTER`,
-    @SerialName("paragraph") `PARAGRAPH`,
-}
-
-@Serializable
-enum class RagRequestIngestChunkOptsSplitStrategy {
-    @SerialName("character") `CHARACTER`,
-    @SerialName("word") `WORD`,
-    @SerialName("token") `TOKEN`,
-    @SerialName("sentence") `SENTENCE`,
-    @SerialName("line") `LINE`,
-}
-
-@Serializable
-data class RagRequestSaveEmbeddings(
-    @SerialName("modelId") val `modelId`: String? = null,
-    @SerialName("workspace") val `workspace`: String? = null,
-    @SerialName("documents") val `documents`: List<RagRequestSaveEmbeddingsDocumentsItem>,
-    @SerialName("progressInterval") val `progressInterval`: Double? = null,
-    @SerialName("onProgress") val `onProgress`: JsonElement? = null,
-    @SerialName("withProgress") val `withProgress`: Boolean? = null,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "rag",
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("operation") val `operation`: String = "saveEmbeddings",
-    @SerialName("sessionId") val `sessionId`: String? = null,
-    @SerialName("requestId") val `requestId`: String? = null,
-)
-
-@Serializable
-data class RagRequestSaveEmbeddingsDocumentsItem(
-    @SerialName("id") val `id`: String,
-    @SerialName("content") val `content`: String,
-    @SerialName("embedding") val `embedding`: List<Double>,
-    @SerialName("embeddingModelId") val `embeddingModelId`: String,
-    @SerialName("metadata") val `metadata`: Map<String, JsonElement>? = null,
-)
-
-@Serializable
-data class RagRequestSearch(
-    @SerialName("modelId") val `modelId`: String,
-    @SerialName("workspace") val `workspace`: String? = null,
-    @SerialName("query") val `query`: String,
-    @SerialName("topK") val `topK`: Double? = null,
-    @SerialName("n") val `n`: Double? = null,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "rag",
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("operation") val `operation`: String = "search",
-    @SerialName("sessionId") val `sessionId`: String? = null,
-    @SerialName("requestId") val `requestId`: String? = null,
-)
-
-@Serializable
-data class RagRequestDeleteEmbeddings(
-    @SerialName("modelId") val `modelId`: String? = null,
-    @SerialName("workspace") val `workspace`: String? = null,
-    @SerialName("ids") val `ids`: List<String>,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "rag",
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("operation") val `operation`: String = "deleteEmbeddings",
-    @SerialName("sessionId") val `sessionId`: String? = null,
-    @SerialName("requestId") val `requestId`: String? = null,
-)
-
-@Serializable
-data class RagRequestReindex(
-    @SerialName("modelId") val `modelId`: String? = null,
-    @SerialName("workspace") val `workspace`: String? = null,
-    @SerialName("onProgress") val `onProgress`: JsonElement? = null,
-    @SerialName("withProgress") val `withProgress`: Boolean? = null,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "rag",
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("operation") val `operation`: String = "reindex",
-    @SerialName("sessionId") val `sessionId`: String? = null,
-    @SerialName("requestId") val `requestId`: String? = null,
-)
-
-@Serializable
-data class RagRequestListWorkspaces(
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "rag",
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("operation") val `operation`: String = "listWorkspaces",
-    @SerialName("sessionId") val `sessionId`: String? = null,
-    @SerialName("requestId") val `requestId`: String? = null,
-)
-
-@Serializable
-data class RagRequestCloseWorkspace(
-    @SerialName("workspace") val `workspace`: String? = null,
-    @SerialName("deleteOnClose") val `deleteOnClose`: Boolean? = null,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "rag",
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("operation") val `operation`: String = "closeWorkspace",
-    @SerialName("sessionId") val `sessionId`: String? = null,
-    @SerialName("requestId") val `requestId`: String? = null,
-)
-
-@Serializable
-data class RagRequestDeleteWorkspace(
-    @SerialName("workspace") val `workspace`: String,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "rag",
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("operation") val `operation`: String = "deleteWorkspace",
-    @SerialName("sessionId") val `sessionId`: String? = null,
-    @SerialName("requestId") val `requestId`: String? = null,
-)
-
 @Serializable
 data class RerankRequest(
     @SerialName("query") val `query`: String,
@@ -13963,8 +13670,6 @@ sealed class AnyResponse {
     data class OpenSessionResponse(val value: io.tether.qvac.sdk.generated.schema.OpenSessionResponse) : AnyResponse()
     data class PluginInvokeResponse(val value: io.tether.qvac.sdk.generated.schema.PluginInvokeResponse) : AnyResponse()
     data class PluginInvokeStreamResponse(val value: io.tether.qvac.sdk.generated.schema.PluginInvokeStreamResponse) : AnyResponse()
-    data class RagResponse(val value: io.tether.qvac.sdk.generated.schema.RagResponse) : AnyResponse()
-    data class RagProgressResponse(val value: io.tether.qvac.sdk.generated.schema.RagProgressResponse) : AnyResponse()
     data class RerankResponse(val value: io.tether.qvac.sdk.generated.schema.RerankResponse) : AnyResponse()
     data class ResumeResponse(val value: io.tether.qvac.sdk.generated.schema.ResumeResponse) : AnyResponse()
     data class StartRpcServerResponse(val value: io.tether.qvac.sdk.generated.schema.StartRpcServerResponse) : AnyResponse()
@@ -14023,8 +13728,6 @@ internal object AnyResponseSerializer : KSerializer<AnyResponse> {
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\",\"sessionId\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"openSession\"},\"success\":{\"type\":\"boolean\"},\"sessionId\":{\"type\":\"string\"},\"error\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"result\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"pluginInvoke\"},\"requestId\":{\"type\":\"string\"},\"result\":{}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"result\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"pluginInvokeStream\"},\"requestId\":{\"type\":\"string\"},\"result\":{},\"done\":{\"type\":\"boolean\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"success\",\"operation\",\"chunks\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"success\":{\"type\":\"boolean\"},\"error\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"chunk\"},\"chunks\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"id\",\"content\"]}}}},{\"type\":\"object\",\"required\":[\"type\",\"success\",\"operation\",\"processed\",\"droppedIndices\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"success\":{\"type\":\"boolean\"},\"error\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"ingest\"},\"processed\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"status\"]}},\"droppedIndices\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}}},{\"type\":\"object\",\"required\":[\"type\",\"success\",\"operation\",\"processed\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"success\":{\"type\":\"boolean\"},\"error\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"saveEmbeddings\"},\"processed\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"status\"]}}}},{\"type\":\"object\",\"required\":[\"type\",\"success\",\"operation\",\"results\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"success\":{\"type\":\"boolean\"},\"error\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"search\"},\"results\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"id\",\"content\",\"score\"]}}}},{\"type\":\"object\",\"required\":[\"type\",\"success\",\"operation\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"success\":{\"type\":\"boolean\"},\"error\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"deleteEmbeddings\"}}},{\"type\":\"object\",\"required\":[\"type\",\"success\",\"operation\",\"result\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"success\":{\"type\":\"boolean\"},\"error\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"reindex\"},\"result\":{\"type\":\"object\",\"required\":[\"reindexed\"],\"properties\":{\"reindexed\":{\"type\":\"boolean\"},\"details\":{\"type\":\"object\"}}}}},{\"type\":\"object\",\"required\":[\"type\",\"success\",\"operation\",\"workspaces\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"success\":{\"type\":\"boolean\"},\"error\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"listWorkspaces\"},\"workspaces\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"name\",\"open\"]}}}},{\"type\":\"object\",\"required\":[\"type\",\"success\",\"operation\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"success\":{\"type\":\"boolean\"},\"error\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"closeWorkspace\"}}},{\"type\":\"object\",\"required\":[\"type\",\"success\",\"operation\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"success\":{\"type\":\"boolean\"},\"error\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"deleteWorkspace\"}}}]}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"operation\",\"workspace\",\"stage\",\"current\",\"total\",\"timestamp\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"rag:progress\"},\"operation\":{\"type\":\"string\",\"enum\":[\"ingest\",\"saveEmbeddings\",\"reindex\"]},\"workspace\":{\"type\":\"string\"},\"stage\":{\"type\":\"string\"},\"current\":{\"type\":\"number\"},\"total\":{\"type\":\"number\"},\"timestamp\":{\"type\":\"number\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"scores\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"rerank\"},\"scores\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"resume\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"serverId\",\"url\",\"rdmaCapable\",\"type\"],\"properties\":{\"serverId\":{\"type\":\"string\"},\"url\":{\"type\":\"string\"},\"rdmaCapable\":{\"type\":\"boolean\"},\"type\":{\"type\":\"string\",\"const\":\"startRpcServer\"}}}").jsonObject,
@@ -14084,25 +13787,23 @@ internal object AnyResponseSerializer : KSerializer<AnyResponse> {
             34 -> AnyResponse.OpenSessionResponse(input.json.decodeFromJsonElement(serializer<OpenSessionResponse>(), element))
             35 -> AnyResponse.PluginInvokeResponse(input.json.decodeFromJsonElement(serializer<PluginInvokeResponse>(), element))
             36 -> AnyResponse.PluginInvokeStreamResponse(input.json.decodeFromJsonElement(serializer<PluginInvokeStreamResponse>(), element))
-            37 -> AnyResponse.RagResponse(input.json.decodeFromJsonElement(serializer<RagResponse>(), element))
-            38 -> AnyResponse.RagProgressResponse(input.json.decodeFromJsonElement(serializer<RagProgressResponse>(), element))
-            39 -> AnyResponse.RerankResponse(input.json.decodeFromJsonElement(serializer<RerankResponse>(), element))
-            40 -> AnyResponse.ResumeResponse(input.json.decodeFromJsonElement(serializer<ResumeResponse>(), element))
-            41 -> AnyResponse.StartRpcServerResponse(input.json.decodeFromJsonElement(serializer<StartRpcServerResponse>(), element))
-            42 -> AnyResponse.StateResponse(input.json.decodeFromJsonElement(serializer<StateResponse>(), element))
-            43 -> AnyResponse.StopRpcServerResponse(input.json.decodeFromJsonElement(serializer<StopRpcServerResponse>(), element))
-            44 -> AnyResponse.SuspendResponse(input.json.decodeFromJsonElement(serializer<SuspendResponse>(), element))
-            45 -> AnyResponse.TextToSpeechResponse(input.json.decodeFromJsonElement(serializer<TextToSpeechResponse>(), element))
-            46 -> AnyResponse.TextToSpeechStreamResponse(input.json.decodeFromJsonElement(serializer<TextToSpeechStreamResponse>(), element))
-            47 -> AnyResponse.TranscribeResponse(input.json.decodeFromJsonElement(serializer<TranscribeResponse>(), element))
-            48 -> AnyResponse.TranscribeStreamResponse(input.json.decodeFromJsonElement(serializer<TranscribeStreamResponse>(), element))
-            49 -> AnyResponse.TranslateResponse(input.json.decodeFromJsonElement(serializer<TranslateResponse>(), element))
-            50 -> AnyResponse.UnloadModelResponse(input.json.decodeFromJsonElement(serializer<UnloadModelResponse>(), element))
-            51 -> AnyResponse.UpscaleStreamResponse(input.json.decodeFromJsonElement(serializer<UpscaleStreamResponse>(), element))
-            52 -> AnyResponse.VectorIndexResponse(input.json.decodeFromJsonElement(serializer<VectorIndexResponse>(), element))
-            53 -> AnyResponse.VideoStreamResponse(input.json.decodeFromJsonElement(serializer<VideoStreamResponse>(), element))
-            54 -> AnyResponse.WorldSceneStreamResponse(input.json.decodeFromJsonElement(serializer<WorldSceneStreamResponse>(), element))
-            55 -> AnyResponse.WorldStepStreamResponse(input.json.decodeFromJsonElement(serializer<WorldStepStreamResponse>(), element))
+            37 -> AnyResponse.RerankResponse(input.json.decodeFromJsonElement(serializer<RerankResponse>(), element))
+            38 -> AnyResponse.ResumeResponse(input.json.decodeFromJsonElement(serializer<ResumeResponse>(), element))
+            39 -> AnyResponse.StartRpcServerResponse(input.json.decodeFromJsonElement(serializer<StartRpcServerResponse>(), element))
+            40 -> AnyResponse.StateResponse(input.json.decodeFromJsonElement(serializer<StateResponse>(), element))
+            41 -> AnyResponse.StopRpcServerResponse(input.json.decodeFromJsonElement(serializer<StopRpcServerResponse>(), element))
+            42 -> AnyResponse.SuspendResponse(input.json.decodeFromJsonElement(serializer<SuspendResponse>(), element))
+            43 -> AnyResponse.TextToSpeechResponse(input.json.decodeFromJsonElement(serializer<TextToSpeechResponse>(), element))
+            44 -> AnyResponse.TextToSpeechStreamResponse(input.json.decodeFromJsonElement(serializer<TextToSpeechStreamResponse>(), element))
+            45 -> AnyResponse.TranscribeResponse(input.json.decodeFromJsonElement(serializer<TranscribeResponse>(), element))
+            46 -> AnyResponse.TranscribeStreamResponse(input.json.decodeFromJsonElement(serializer<TranscribeStreamResponse>(), element))
+            47 -> AnyResponse.TranslateResponse(input.json.decodeFromJsonElement(serializer<TranslateResponse>(), element))
+            48 -> AnyResponse.UnloadModelResponse(input.json.decodeFromJsonElement(serializer<UnloadModelResponse>(), element))
+            49 -> AnyResponse.UpscaleStreamResponse(input.json.decodeFromJsonElement(serializer<UpscaleStreamResponse>(), element))
+            50 -> AnyResponse.VectorIndexResponse(input.json.decodeFromJsonElement(serializer<VectorIndexResponse>(), element))
+            51 -> AnyResponse.VideoStreamResponse(input.json.decodeFromJsonElement(serializer<VideoStreamResponse>(), element))
+            52 -> AnyResponse.WorldSceneStreamResponse(input.json.decodeFromJsonElement(serializer<WorldSceneStreamResponse>(), element))
+            53 -> AnyResponse.WorldStepStreamResponse(input.json.decodeFromJsonElement(serializer<WorldStepStreamResponse>(), element))
             else -> throw SerializationException("No matching AnyResponse variant")
         }
     }
@@ -14145,8 +13846,6 @@ internal object AnyResponseSerializer : KSerializer<AnyResponse> {
             is AnyResponse.OpenSessionResponse -> encoder.encodeSerializableValue(serializer<OpenSessionResponse>(), value.value)
             is AnyResponse.PluginInvokeResponse -> encoder.encodeSerializableValue(serializer<PluginInvokeResponse>(), value.value)
             is AnyResponse.PluginInvokeStreamResponse -> encoder.encodeSerializableValue(serializer<PluginInvokeStreamResponse>(), value.value)
-            is AnyResponse.RagResponse -> encoder.encodeSerializableValue(serializer<RagResponse>(), value.value)
-            is AnyResponse.RagProgressResponse -> encoder.encodeSerializableValue(serializer<RagProgressResponse>(), value.value)
             is AnyResponse.RerankResponse -> encoder.encodeSerializableValue(serializer<RerankResponse>(), value.value)
             is AnyResponse.ResumeResponse -> encoder.encodeSerializableValue(serializer<ResumeResponse>(), value.value)
             is AnyResponse.StartRpcServerResponse -> encoder.encodeSerializableValue(serializer<StartRpcServerResponse>(), value.value)
@@ -19897,229 +19596,6 @@ data class PluginInvokeStreamResponse(
     @SerialName("result") val `result`: JsonElement,
     @SerialName("done") val `done`: Boolean? = null,
 )
-
-@Serializable(with = RagResponseSerializer::class)
-sealed class RagResponse {
-    data class Chunk(val value: io.tether.qvac.sdk.generated.schema.RagResponseChunk) : RagResponse()
-    data class Ingest(val value: io.tether.qvac.sdk.generated.schema.RagResponseIngest) : RagResponse()
-    data class SaveEmbeddings(val value: io.tether.qvac.sdk.generated.schema.RagResponseSaveEmbeddings) : RagResponse()
-    data class Search(val value: io.tether.qvac.sdk.generated.schema.RagResponseSearch) : RagResponse()
-    data class DeleteEmbeddings(val value: io.tether.qvac.sdk.generated.schema.RagResponseDeleteEmbeddings) : RagResponse()
-    data class Reindex(val value: io.tether.qvac.sdk.generated.schema.RagResponseReindex) : RagResponse()
-    data class ListWorkspaces(val value: io.tether.qvac.sdk.generated.schema.RagResponseListWorkspaces) : RagResponse()
-    data class CloseWorkspace(val value: io.tether.qvac.sdk.generated.schema.RagResponseCloseWorkspace) : RagResponse()
-    data class DeleteWorkspace(val value: io.tether.qvac.sdk.generated.schema.RagResponseDeleteWorkspace) : RagResponse()
-}
-internal object RagResponseSerializer : KSerializer<RagResponse> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("RagResponse")
-    private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\",\"operation\",\"chunks\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"success\":{\"type\":\"boolean\"},\"error\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"chunk\"},\"chunks\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"id\",\"content\"]}}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\",\"operation\",\"processed\",\"droppedIndices\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"success\":{\"type\":\"boolean\"},\"error\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"ingest\"},\"processed\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"status\"]}},\"droppedIndices\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\",\"operation\",\"processed\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"success\":{\"type\":\"boolean\"},\"error\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"saveEmbeddings\"},\"processed\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"status\"]}}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\",\"operation\",\"results\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"success\":{\"type\":\"boolean\"},\"error\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"search\"},\"results\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"id\",\"content\",\"score\"]}}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\",\"operation\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"success\":{\"type\":\"boolean\"},\"error\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"deleteEmbeddings\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\",\"operation\",\"result\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"success\":{\"type\":\"boolean\"},\"error\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"reindex\"},\"result\":{\"type\":\"object\",\"required\":[\"reindexed\"],\"properties\":{\"reindexed\":{\"type\":\"boolean\"},\"details\":{\"type\":\"object\"}}}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\",\"operation\",\"workspaces\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"success\":{\"type\":\"boolean\"},\"error\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"listWorkspaces\"},\"workspaces\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"name\",\"open\"]}}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\",\"operation\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"success\":{\"type\":\"boolean\"},\"error\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"closeWorkspace\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\",\"operation\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"rag\"},\"success\":{\"type\":\"boolean\"},\"error\":{\"type\":\"string\"},\"operation\":{\"type\":\"string\",\"const\":\"deleteWorkspace\"}}}").jsonObject,
-    )
-    override fun deserialize(decoder: Decoder): RagResponse {
-        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
-        val element = input.decodeJsonElement()
-        return when (selectWireVariant(element, shapes)) {
-            0 -> RagResponse.Chunk(input.json.decodeFromJsonElement(serializer<RagResponseChunk>(), element))
-            1 -> RagResponse.Ingest(input.json.decodeFromJsonElement(serializer<RagResponseIngest>(), element))
-            2 -> RagResponse.SaveEmbeddings(input.json.decodeFromJsonElement(serializer<RagResponseSaveEmbeddings>(), element))
-            3 -> RagResponse.Search(input.json.decodeFromJsonElement(serializer<RagResponseSearch>(), element))
-            4 -> RagResponse.DeleteEmbeddings(input.json.decodeFromJsonElement(serializer<RagResponseDeleteEmbeddings>(), element))
-            5 -> RagResponse.Reindex(input.json.decodeFromJsonElement(serializer<RagResponseReindex>(), element))
-            6 -> RagResponse.ListWorkspaces(input.json.decodeFromJsonElement(serializer<RagResponseListWorkspaces>(), element))
-            7 -> RagResponse.CloseWorkspace(input.json.decodeFromJsonElement(serializer<RagResponseCloseWorkspace>(), element))
-            8 -> RagResponse.DeleteWorkspace(input.json.decodeFromJsonElement(serializer<RagResponseDeleteWorkspace>(), element))
-            else -> throw SerializationException("No matching RagResponse variant")
-        }
-    }
-    override fun serialize(encoder: Encoder, value: RagResponse) {
-        when (value) {
-            is RagResponse.Chunk -> encoder.encodeSerializableValue(serializer<RagResponseChunk>(), value.value)
-            is RagResponse.Ingest -> encoder.encodeSerializableValue(serializer<RagResponseIngest>(), value.value)
-            is RagResponse.SaveEmbeddings -> encoder.encodeSerializableValue(serializer<RagResponseSaveEmbeddings>(), value.value)
-            is RagResponse.Search -> encoder.encodeSerializableValue(serializer<RagResponseSearch>(), value.value)
-            is RagResponse.DeleteEmbeddings -> encoder.encodeSerializableValue(serializer<RagResponseDeleteEmbeddings>(), value.value)
-            is RagResponse.Reindex -> encoder.encodeSerializableValue(serializer<RagResponseReindex>(), value.value)
-            is RagResponse.ListWorkspaces -> encoder.encodeSerializableValue(serializer<RagResponseListWorkspaces>(), value.value)
-            is RagResponse.CloseWorkspace -> encoder.encodeSerializableValue(serializer<RagResponseCloseWorkspace>(), value.value)
-            is RagResponse.DeleteWorkspace -> encoder.encodeSerializableValue(serializer<RagResponseDeleteWorkspace>(), value.value)
-        }
-    }
-}
-
-@Serializable
-data class RagResponseChunk(
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "rag",
-    @SerialName("success") val `success`: Boolean,
-    @SerialName("error") val `error`: String? = null,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("operation") val `operation`: String = "chunk",
-    @SerialName("chunks") val `chunks`: List<RagResponseChunkChunksItem>,
-)
-
-@Serializable
-data class RagResponseChunkChunksItem(
-    @SerialName("id") val `id`: String,
-    @SerialName("content") val `content`: String,
-)
-
-@Serializable
-data class RagResponseIngest(
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "rag",
-    @SerialName("success") val `success`: Boolean,
-    @SerialName("error") val `error`: String? = null,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("operation") val `operation`: String = "ingest",
-    @SerialName("processed") val `processed`: List<RagResponseIngestProcessedItem>,
-    @SerialName("droppedIndices") val `droppedIndices`: List<Double>,
-)
-
-@Serializable
-data class RagResponseIngestProcessedItem(
-    @SerialName("status") val `status`: RagResponseIngestProcessedItemStatus,
-    @SerialName("id") val `id`: String? = null,
-    @SerialName("error") val `error`: String? = null,
-)
-
-@Serializable
-enum class RagResponseIngestProcessedItemStatus {
-    @SerialName("fulfilled") `FULFILLED`,
-    @SerialName("rejected") `REJECTED`,
-}
-
-@Serializable
-data class RagResponseSaveEmbeddings(
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "rag",
-    @SerialName("success") val `success`: Boolean,
-    @SerialName("error") val `error`: String? = null,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("operation") val `operation`: String = "saveEmbeddings",
-    @SerialName("processed") val `processed`: List<RagResponseSaveEmbeddingsProcessedItem>,
-)
-
-@Serializable
-data class RagResponseSaveEmbeddingsProcessedItem(
-    @SerialName("status") val `status`: RagResponseSaveEmbeddingsProcessedItemStatus,
-    @SerialName("id") val `id`: String? = null,
-    @SerialName("error") val `error`: String? = null,
-)
-
-@Serializable
-enum class RagResponseSaveEmbeddingsProcessedItemStatus {
-    @SerialName("fulfilled") `FULFILLED`,
-    @SerialName("rejected") `REJECTED`,
-}
-
-@Serializable
-data class RagResponseSearch(
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "rag",
-    @SerialName("success") val `success`: Boolean,
-    @SerialName("error") val `error`: String? = null,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("operation") val `operation`: String = "search",
-    @SerialName("results") val `results`: List<RagResponseSearchResultsItem>,
-)
-
-@Serializable
-data class RagResponseSearchResultsItem(
-    @SerialName("id") val `id`: String,
-    @SerialName("content") val `content`: String,
-    @SerialName("score") val `score`: Double,
-)
-
-@Serializable
-data class RagResponseDeleteEmbeddings(
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "rag",
-    @SerialName("success") val `success`: Boolean,
-    @SerialName("error") val `error`: String? = null,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("operation") val `operation`: String = "deleteEmbeddings",
-)
-
-@Serializable
-data class RagResponseReindex(
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "rag",
-    @SerialName("success") val `success`: Boolean,
-    @SerialName("error") val `error`: String? = null,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("operation") val `operation`: String = "reindex",
-    @SerialName("result") val `result`: RagResponseReindexResult,
-)
-
-@Serializable
-data class RagResponseReindexResult(
-    @SerialName("reindexed") val `reindexed`: Boolean,
-    @SerialName("details") val `details`: Map<String, JsonElement>? = null,
-)
-
-@Serializable
-data class RagResponseListWorkspaces(
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "rag",
-    @SerialName("success") val `success`: Boolean,
-    @SerialName("error") val `error`: String? = null,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("operation") val `operation`: String = "listWorkspaces",
-    @SerialName("workspaces") val `workspaces`: List<RagResponseListWorkspacesWorkspacesItem>,
-)
-
-@Serializable
-data class RagResponseListWorkspacesWorkspacesItem(
-    @SerialName("name") val `name`: String,
-    @SerialName("open") val `open`: Boolean,
-)
-
-@Serializable
-data class RagResponseCloseWorkspace(
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "rag",
-    @SerialName("success") val `success`: Boolean,
-    @SerialName("error") val `error`: String? = null,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("operation") val `operation`: String = "closeWorkspace",
-)
-
-@Serializable
-data class RagResponseDeleteWorkspace(
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "rag",
-    @SerialName("success") val `success`: Boolean,
-    @SerialName("error") val `error`: String? = null,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("operation") val `operation`: String = "deleteWorkspace",
-)
-
-@Serializable
-data class RagProgressResponse(
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "rag:progress",
-    @SerialName("operation") val `operation`: RagProgressResponseOperation,
-    @SerialName("workspace") val `workspace`: String,
-    @SerialName("stage") val `stage`: String,
-    @SerialName("current") val `current`: Double,
-    @SerialName("total") val `total`: Double,
-    @SerialName("timestamp") val `timestamp`: Double,
-)
-
-@Serializable
-enum class RagProgressResponseOperation {
-    @SerialName("ingest") `INGEST`,
-    @SerialName("saveEmbeddings") `SAVEEMBEDDINGS`,
-    @SerialName("reindex") `REINDEX`,
-}
 
 @Serializable
 data class RerankResponse(

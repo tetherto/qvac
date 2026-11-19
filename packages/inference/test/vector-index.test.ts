@@ -51,7 +51,7 @@ async function withProvider(
     lastIvfArgs: ProviderLastIvfArgs,
     gates: ProviderGates
   ) => Promise<void>,
-  options: { ivf?: boolean } = {}
+  options: { ivf?: boolean; sync?: boolean } = {}
 ) {
   clearPlugins()
   const { provider, calls, failures, failRemoveId, lastIvfArgs, gates } =
@@ -192,6 +192,33 @@ test('vector index: create, add, search, contains, remove, dispose round trip', 
       'a disposed index is gone from the worker'
     )
   })
+})
+
+test('vector index: a provider with synchronous index methods still works', async (t) => {
+  await withProvider(
+    async (calls, failures) => {
+      const index = await createVectorIndex({ dim: 4, storage: 'q8' })
+      await index.add({ ids: [1, 2], vectors: [[1, 0, 0, 0], [0, 1, 0, 0]] })
+      const hits = await index.search({ query: [1, 0, 0, 0], k: 1 })
+      t.alike(hits.map((hit) => hit.id), ['1'])
+      t.alike(await index.contains({ ids: [1, 3] }), [true, false])
+      t.alike(await index.remove({ ids: [2] }), [true])
+      await index.write({ path: tempSnapshotPath('sync') })
+      t.is(calls.write, 1)
+
+      failures.search = true
+      await expectRejects(
+        t,
+        () => index.search({ query: [1, 0, 0, 0], k: 1 }),
+        VectorIndexFailedError,
+        'a synchronous throw still surfaces as VectorIndexFailedError'
+      )
+
+      await index.dispose()
+      t.is(calls.dispose, 1)
+    },
+    { sync: true }
+  )
 })
 
 test('vector index: row length mismatches fail before any request is sent', async (t) => {
@@ -353,7 +380,7 @@ test('vector index: closing a session disposes the indexes it opened and no othe
     t.is(calls.dispose, 1, 'the session index is released')
     t.is(getOpenVectorIndexCount(), 1)
     t.is(
-      disposeVectorIndex({ indexId: created.indexId }).disposed,
+      (await disposeVectorIndex({ indexId: created.indexId })).disposed,
       false,
       'the session index is gone'
     )

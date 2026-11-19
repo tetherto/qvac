@@ -13,7 +13,6 @@ import { calcTokensTests } from './calc-tokens-tests.js'
 import { transcriptionTests } from './transcription-tests.js'
 import { transcribeStreamEventsTests } from './transcribe-stream-events-tests.js'
 import { embeddingTests } from './embedding-tests.js'
-import { ragTests } from './rag-tests.js'
 import { vectorIndexTests } from './vector-index-tests.js'
 import { translationIndicTransTests } from './translation-indictrans-tests.js'
 import { translationBergamotTests } from './translation-bergamot-tests.js'
@@ -595,10 +594,7 @@ const catalog: TestDefinition[] = [
   ...embeddingTests,
   ...embeddingGemma2Tests,
 
-  // RAG tests
-  ...ragTests,
-
-  // Vector index tests (embed + TurboVec index, no RAG workspace)
+  // Vector index tests (embed + TurboVec index)
   ...vectorIndexTests,
 
   // Translation: IndicTrans2 (EN↔HI)

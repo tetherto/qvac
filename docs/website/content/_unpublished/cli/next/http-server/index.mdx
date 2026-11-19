@@ -2438,11 +2438,11 @@ Defaults: **1 h TTL**, **256 MB** total cap, **256 files** cap, oldest-first evi
 
 ### Vector stores
 
-OpenAI-compatible vector-store endpoints backed by the SDK's RAG primitives. Each vector store maps 1:1 to a RAG workspace.
+OpenAI-compatible vector-store endpoints backed by [`@qvac/rag`](https://www.npmjs.com/package/@qvac/rag). Stores keep their data under `~/.qvac/serve/vector-stores`, so they survive a restart; metadata such as `name` and `expires_after` stays in memory.
 
 #### `GET /v1/vector_stores`
 
-List all stores (merged with on-disk RAG workspaces).
+List all stores, including stores that only exist on disk.
 
 #### `POST /v1/vector_stores`
 
@@ -2458,15 +2458,15 @@ Update `name`, `expires_after`, or `metadata`.
 
 #### `DELETE /v1/vector_stores/:id`
 
-Delete the store and the underlying RAG workspace.
+Delete the store and its ingested files.
 
 #### `POST /v1/vector_stores/:id/search`
 
-Embed `query` and run top-K similarity search.
+Embed `query` and run top-K similarity search (`max_num_results`, default 5).
 
 #### `POST /v1/vector_stores/:id/files`
 
-Attach a previously-uploaded `/v1/files` entry (UTF-8 text content).
+Attach a previously-uploaded `/v1/files` entry (UTF-8 text content). Attaching the same `file_id` again replaces its chunks.
 
 **End-to-end ingest + search:**
 
@@ -2502,11 +2502,11 @@ Once a vector store has been ingested with a particular embedding model, subsequ
 #### File ingest constraints
 
 - Files attached via `POST /v1/vector_stores/:id/files` must be **UTF-8 text** (e.g. `.txt`, `.md`, `.json`). Binary uploads (PDF / PNG / DOCX) are rejected with `400 unsupported_file_type` — no built-in document conversion is performed.
-- Once attached, the file is removed from the in-memory file store. The chunks are persisted by the underlying RAG workspace; only the original `file_id` and `filename` are kept as attribution metadata so search hits can carry them.
+- Once attached, the file is removed from the in-memory file store. Its chunks are stored on disk under its `file_id`, with its `filename`, so search hits can carry both.
 
 #### Search results
 
-Search returns OpenAI-shaped `vector_store.search_results.page` objects. Each chunk's `attributes` include the originating `file_id` and `filename` when they were attached through the file flow.
+Search returns OpenAI-shaped `vector_store.search_results.page` objects. Each hit carries the `file_id` and `filename` of the file it came from.
 
 ### Videos
 

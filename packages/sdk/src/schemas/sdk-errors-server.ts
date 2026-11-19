@@ -51,20 +51,6 @@ export const SDK_SERVER_ERROR_CODES = {
   INVALID_AUDIO_INPUT: 52422,
   AUDIO_ENCODE_FAILED: 52424,
 
-  // RAG Operations (52,800-52,999)
-  RAG_SAVE_FAILED: 52800,
-  RAG_SEARCH_FAILED: 52801,
-  RAG_DELETE_FAILED: 52802,
-  RAG_UNKNOWN_OPERATION: 52803,
-  RAG_HYPERDB_FAILED: 52804,
-  RAG_WORKSPACE_MODEL_MISMATCH: 52805,
-  RAG_WORKSPACE_NOT_FOUND: 52806,
-  RAG_WORKSPACE_IN_USE: 52807,
-  RAG_WORKSPACE_CLOSE_FAILED: 52808,
-  RAG_LIST_WORKSPACES_FAILED: 52809,
-  RAG_CHUNK_FAILED: 52810,
-  RAG_WORKSPACE_NOT_OPEN: 52811,
-  RAG_WORKSPACE_BUSY: 52812,
 
   // Vector index (52,850-52,899)
   VECTOR_INDEX_PROVIDER_UNAVAILABLE: 52850,
@@ -370,62 +356,6 @@ const serverErrorDefinitions: ErrorCodesMap = {
       `Failed to encode audio as ${format}${details ? `: ${details}` : ''}`
   },
 
-  // RAG Operations (52,800-52,999)
-  [SDK_SERVER_ERROR_CODES.RAG_SAVE_FAILED]: {
-    name: 'RAG_SAVE_FAILED',
-    message: (details?: string) => `Failed to save embeddings${details ? `: ${details}` : ''}`
-  },
-  [SDK_SERVER_ERROR_CODES.RAG_SEARCH_FAILED]: {
-    name: 'RAG_SEARCH_FAILED',
-    message: (details?: string) => `Failed to search embeddings${details ? `: ${details}` : ''}`
-  },
-  [SDK_SERVER_ERROR_CODES.RAG_DELETE_FAILED]: {
-    name: 'RAG_DELETE_FAILED',
-    message: (details?: string) => `Failed to delete embeddings${details ? `: ${details}` : ''}`
-  },
-  [SDK_SERVER_ERROR_CODES.RAG_UNKNOWN_OPERATION]: {
-    name: 'RAG_UNKNOWN_OPERATION',
-    message: (operation: string) => `Unknown RAG operation: ${operation}`
-  },
-  [SDK_SERVER_ERROR_CODES.RAG_HYPERDB_FAILED]: {
-    name: 'RAG_HYPERDB_FAILED',
-    message: (details: string) => `HyperDB RAG operation failed: ${details}`
-  },
-  [SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_MODEL_MISMATCH]: {
-    name: 'RAG_WORKSPACE_MODEL_MISMATCH',
-    message: (workspace: string, existingModelId: string, newModelId: string) =>
-      `Workspace "${workspace}" is configured for model "${existingModelId}", but you're trying to use model "${newModelId}". Use a different workspace or the same model`
-  },
-  [SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_NOT_FOUND]: {
-    name: 'RAG_WORKSPACE_NOT_FOUND',
-    message: (workspace: string) => `RAG workspace not found: ${workspace}`
-  },
-  [SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_IN_USE]: {
-    name: 'RAG_WORKSPACE_IN_USE',
-    message: (workspace: string) =>
-      `RAG workspace '${workspace}' is currently in use. Close it first.`
-  },
-  [SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_CLOSE_FAILED]: {
-    name: 'RAG_WORKSPACE_CLOSE_FAILED',
-    message: (details?: string) => `Failed to close RAG workspace${details ? `: ${details}` : ''}`
-  },
-  [SDK_SERVER_ERROR_CODES.RAG_LIST_WORKSPACES_FAILED]: {
-    name: 'RAG_LIST_WORKSPACES_FAILED',
-    message: (details?: string) => `Failed to list RAG workspaces${details ? `: ${details}` : ''}`
-  },
-  [SDK_SERVER_ERROR_CODES.RAG_CHUNK_FAILED]: {
-    name: 'RAG_CHUNK_FAILED',
-    message: (details?: string) => `Failed to chunk documents${details ? `: ${details}` : ''}`
-  },
-  [SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_NOT_OPEN]: {
-    name: 'RAG_WORKSPACE_NOT_OPEN',
-    message: (workspace: string) => `RAG workspace '${workspace}' is not open`
-  },
-  [SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_BUSY]: {
-    name: 'RAG_WORKSPACE_BUSY',
-    message: (workspace: string) =>
-      `RAG workspace '${workspace}' is running another session's operation; retry when it finishes`
-  },
 
   // Vector index (52,850-52,899)
   [SDK_SERVER_ERROR_CODES.VECTOR_INDEX_PROVIDER_UNAVAILABLE]: {

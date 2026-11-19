@@ -24,7 +24,6 @@ import { KvCacheExecutor } from '../shared/executors/kv-cache-executor.js'
 import { EmbeddingExecutor } from '../shared/executors/embedding-executor.js'
 import { TranscriptionExecutor } from '../shared/executors/node/transcription-executor.js'
 import { TranscribeStreamEventsExecutor } from '../shared/executors/node/transcribe-stream-events-executor.js'
-import { RagExecutor } from '../shared/executors/node/rag-executor.js'
 import { VectorIndexExecutor } from '../shared/executors/vector-index-executor.js'
 import { OcrExecutor } from '../shared/executors/node/ocr-executor.js'
 import { VlaExecutor } from '../shared/executors/vla-executor.js'
@@ -151,7 +150,6 @@ export const executor = createExecutor({
     new TranscriptionExecutor(resources),
     new TranscribeStreamEventsExecutor(resources),
     new EmbeddingExecutor(resources),
-    new RagExecutor(resources),
     new VectorIndexExecutor(resources),
     new ModelInfoExecutor(resources),
     new ModelFitExecutor(resources),

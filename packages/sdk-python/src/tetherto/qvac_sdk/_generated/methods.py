@@ -85,9 +85,6 @@ from . import (
     PluginInvokeResponse,
     PluginInvokeStreamRequest,
     PluginInvokeStreamResponse,
-    RagProgressResponse,
-    RagRequest,
-    RagResponse,
     RerankRequest,
     RerankResponse,
     ResumeRequest,
@@ -419,28 +416,6 @@ async def plugin_invoke_stream(
         yield PluginInvokeStreamResponse.model_validate(chunk)
 
 
-async def rag(transport: Transport, params: RagRequest) -> RagResponse:
-    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    return RagResponse.model_validate(await transport.call(payload))
-
-
-async def rag_with_progress(
-    transport: Transport, params: RagRequest
-) -> AsyncIterator[RagProgressResponse | RagResponse]:
-    # Progress events and the terminal reply both arrive through the
-    # same stream, distinguished only by each payload's own `type` —
-    # call_stream already falls back cleanly to a single terminal
-    # chunk if the server ends up replying unary instead (e.g. an
-    # operation that doesn't support progress for this method).
-    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload["withProgress"] = True
-    async for chunk in transport.call_stream(payload):
-        if chunk.get("type") == "rag:progress":
-            yield RagProgressResponse.model_validate(chunk)
-        else:
-            yield RagResponse.model_validate(chunk)
-
-
 async def rerank(transport: Transport, params: RerankRequest) -> RerankResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     return RerankResponse.model_validate(await transport.call(payload))
@@ -599,8 +574,6 @@ __all__ = [
     "open_session",
     "plugin_invoke",
     "plugin_invoke_stream",
-    "rag",
-    "rag_with_progress",
     "rerank",
     "resume",
     "start_rpc_server",

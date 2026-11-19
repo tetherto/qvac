@@ -59,7 +59,6 @@ _CODE_SESSION_NOT_OPEN = _CODES["SESSION_NOT_OPEN"]
 _CODE_MODEL_LEASED = _CODES["MODEL_LEASED"]
 _CODE_OWNER_ONLY = _CODES["OWNER_ONLY"]
 _CODE_MODEL_RECONFIGURED = _CODES["MODEL_RECONFIGURED"]
-_CODE_RAG_WORKSPACE_BUSY = _CODES["RAG_WORKSPACE_BUSY"]
 _CODE_SESSION_INVALIDATED = _CODES["SESSION_INVALIDATED"]
 _CODE_MODEL_HANDLE_INVALIDATED = _CODES["MODEL_HANDLE_INVALIDATED"]
 _CODE_MODEL_SRC_TYPE_MISMATCH = _CODES["MODEL_SRC_TYPE_MISMATCH"]
@@ -565,25 +564,6 @@ class ModelReconfiguredError(QvacError):
         )
 
 
-class RagWorkspaceBusyError(QvacError):
-    """A RAG operation on a workspace that another session's operation is using."""
-
-    def __init__(
-        self, workspace: str, *, cause: Any = None, message: str | None = None
-    ) -> None:
-        self.workspace = workspace
-        super().__init__(
-            message
-            or (
-                f"RAG workspace '{workspace}' is running another session's "
-                "operation; retry when it finishes"
-            ),
-            name="RAG_WORKSPACE_BUSY",
-            code=_CODE_RAG_WORKSPACE_BUSY,
-            cause=cause,
-        )
-
-
 class SessionInvalidatedError(QvacError):
     """A call on a `Session` after it was closed or its runtime was shut down.
     Raised locally, before any wire traffic."""
@@ -873,21 +853,12 @@ def _reconstruct_model_reconfigured(response: dict[str, Any]) -> QvacError:
     )
 
 
-def _reconstruct_rag_workspace_busy(response: dict[str, Any]) -> QvacError:
-    return RagWorkspaceBusyError(
-        _str_field(_typed_fields(response), "workspace"),
-        cause=response.get("cause"),
-        message=_opt_str(response, "message"),
-    )
-
-
 _RECONSTRUCTORS: dict[str, Callable[[dict[str, Any]], QvacError]] = {
     "SESSION_ID_CONFLICT": _reconstruct_session_id_conflict,
     "SESSION_NOT_OPEN": _reconstruct_session_not_open,
     "MODEL_LEASED": _reconstruct_model_leased,
     "OWNER_ONLY": _reconstruct_owner_only,
     "MODEL_RECONFIGURED": _reconstruct_model_reconfigured,
-    "RAG_WORKSPACE_BUSY": _reconstruct_rag_workspace_busy,
     "INFERENCE_CANCELLED": _reconstruct_inference_cancelled,
     "REQUEST_ID_CONFLICT": _reconstruct_request_id_conflict,
     "REQUEST_NOT_FOUND": _reconstruct_request_not_found,
@@ -963,7 +934,6 @@ __all__ = [
     "ModelLeasedError",
     "ModelReconfiguredError",
     "OwnerOnlyError",
-    "RagWorkspaceBusyError",
     "SessionInvalidatedError",
     "ModelHandleInvalidatedError",
     "reconstruct_error",

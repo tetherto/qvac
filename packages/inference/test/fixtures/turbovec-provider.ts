@@ -3,11 +3,12 @@
 // tests can assert the native index is actually consulted.
 import fs from 'bare-fs'
 import { z } from 'zod'
-import type { TurboVecIndex, TurboVecIndexProvider } from '@qvac/rag'
+import type {
+  TurboVecIndexProvider,
+  TurboVecIndexSearchResult as SearchResult
+} from '@/plugins/turbovec-index'
 import { registerPlugin } from '@/plugins'
 import type { IndexWithControls } from '@/plugins/turbovec-backend'
-
-type SearchResult = ReturnType<TurboVecIndex['search']>
 
 type FakeIndex = IndexWithControls & {
   // Mirrors the real IdMapIndex getter that a loaded snapshot exposes; the
@@ -17,9 +18,14 @@ type FakeIndex = IndexWithControls & {
 
 /**
  * With `ivf: true`, `searchIvf` throws on stale lists as the native index
- * does, so tests catch an adapter that probes them.
+ * does, so tests catch an adapter that probes them. Index methods return
+ * promises as `@qvac/turbovec-ggml` 0.7 does; `sync: true` returns values
+ * directly, as 0.5 does.
  */
-export function observableIndexProvider({ ivf = false }: { ivf?: boolean } = {}) {
+export function observableIndexProvider({
+  ivf = false,
+  sync = false
+}: { ivf?: boolean; sync?: boolean } = {}) {
   const calls = {
     create: 0,
     load: 0,
@@ -148,7 +154,7 @@ export function observableIndexProvider({ ivf = false }: { ivf?: boolean } = {})
         return paddedRows(queries, k)
       }
     }
-    return index
+    return sync ? index : asAsync(index)
   }
 
   const provider: TurboVecIndexProvider = {
@@ -166,6 +172,33 @@ export function observableIndexProvider({ ivf = false }: { ivf?: boolean } = {})
     }
   }
   return { provider, calls, failures, failRemoveId, lastIvfArgs, gates }
+}
+
+const INDEX_METHODS = [
+  'addWithIds',
+  'search',
+  'contains',
+  'remove',
+  'prepare',
+  'write',
+  'dispose',
+  'buildIvf',
+  'searchIvf'
+] as const
+
+// Each call settles after a microtask, so a caller that forgets to await sees
+// a pending promise instead of the result, and native failures reject.
+function asAsync(index: FakeIndex): FakeIndex {
+  const methods = index as unknown as Record<string, ((...args: unknown[]) => unknown) | undefined>
+  for (const name of INDEX_METHODS) {
+    const method = methods[name]
+    if (!method) continue
+    methods[name] = async (...args: unknown[]) => {
+      await Promise.resolve()
+      return method.apply(index, args)
+    }
+  }
+  return index
 }
 
 export function registerProviderPlugin(modelType: string, provider: TurboVecIndexProvider) {

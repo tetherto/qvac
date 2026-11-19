@@ -44,7 +44,6 @@ export const methodShapes = {
   openSession: 'reply',
   pluginInvoke: 'reply',
   pluginInvokeStream: 'stream',
-  rag: 'reply',
   resume: 'reply',
   state: 'reply',
   suspend: 'reply',

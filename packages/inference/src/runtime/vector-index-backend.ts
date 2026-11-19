@@ -20,23 +20,23 @@ export interface OpenVectorIndex {
   /** Null while IVF is off; undefined when the provider has no IVF search. */
   readonly ivf: VectorIndexIvfState | null | undefined
   /** Returns the setting as the native index reports it afterwards. */
-  setStagedSearch(enabled: boolean): boolean
+  setStagedSearch(enabled: boolean): Promise<boolean>
   /** Turns IVF search on with `settings`, building its lists now, or off with null. */
-  setIvf(settings: VectorIndexIvfSettings | null): VectorIndexIvfState | null
+  setIvf(settings: VectorIndexIvfSettings | null): Promise<VectorIndexIvfState | null>
   /** Adds `ids.length` vectors of `dim` components each, atomically. */
-  add(vectors: Float32Array, ids: BigUint64Array): void
+  add(vectors: Float32Array, ids: BigUint64Array): Promise<void>
   /**
    * One hit list per query row, ordered by descending score; never padded.
    * With built IVF state it scans the `nProbe` nearest lists, `nProbe`
    * defaulting to the setting; otherwise it scans every entry. Throws when
    * `nProbe` is given while IVF is off.
    */
-  search(queries: Float32Array, k: number, nProbe: number | undefined): VectorIndexHit[][]
-  contains(id: bigint): boolean
+  search(queries: Float32Array, k: number, nProbe: number | undefined): Promise<VectorIndexHit[][]>
+  contains(id: bigint): Promise<boolean>
   /** Returns whether the id was present. */
-  remove(id: bigint): boolean
-  write(path: string): void
-  dispose(): void
+  remove(id: bigint): Promise<boolean>
+  write(path: string): Promise<void>
+  dispose(): Promise<void>
 }
 
 export interface VectorIndexBackend {

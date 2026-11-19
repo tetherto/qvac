@@ -43,9 +43,12 @@ function getIndex(indexId: string): OpenVectorIndex {
 // layer; wrap them so the caller receives a coded error with the original
 // message preserved as cause. `describe` adds caller context to the message
 // and is evaluated at throw time, so it can report progress made so far.
-function runBackend<T>(action: () => T, describe?: (detail: string) => string): T {
+async function runBackend<T>(
+  action: () => Promise<T>,
+  describe?: (detail: string) => string
+): Promise<T> {
   try {
-    return action()
+    return await action()
   } catch (error) {
     failBackend(error, describe)
   }
@@ -82,8 +85,7 @@ async function openVectorIndex(
 /**
  * Snapshot paths are used as given when absolute. A relative path resolves
  * against the QVAC data directory (the parent of the configured cache
- * directory), the same root that holds the RAG workspace stores, so the
- * same relative path works on every platform.
+ * directory), so the same relative path works on every platform.
  */
 export function resolveVectorIndexPath(snapshotPath: string): string {
   if (path.isAbsolute(snapshotPath)) return snapshotPath
@@ -155,7 +157,7 @@ export async function loadVectorIndex(params: { path: string; sessionId?: string
   }
 }
 
-export function addVectors(params: { indexId: string; ids: VectorIdWire[]; vectors: number[][] }) {
+export async function addVectors(params: { indexId: string; ids: VectorIdWire[]; vectors: number[][] }) {
   const index = getIndex(params.indexId)
   if (params.ids.length !== params.vectors.length) {
     throw new VectorIndexInvalidVectorsError(
@@ -164,21 +166,24 @@ export function addVectors(params: { indexId: string; ids: VectorIdWire[]; vecto
   }
   const vectors = flattenRows(params.vectors, index.dim, 'vectors')
   const ids = toNativeIds(params.ids)
-  runBackend(() => index.add(vectors, ids))
+  await runBackend(() => index.add(vectors, ids))
   return { length: index.length, ...indexState(index) }
 }
 
-export function setVectorIndexStagedSearch(params: { indexId: string; enabled: boolean }) {
+export async function setVectorIndexStagedSearch(params: { indexId: string; enabled: boolean }) {
   const index = getIndex(params.indexId)
-  return runBackend(() => ({ stagedSearch: index.setStagedSearch(params.enabled) }))
+  return { stagedSearch: await runBackend(() => index.setStagedSearch(params.enabled)) }
 }
 
-export function setVectorIndexIvf(params: { indexId: string; ivf: VectorIndexIvfSettings | null }) {
+export async function setVectorIndexIvf(params: {
+  indexId: string
+  ivf: VectorIndexIvfSettings | null
+}) {
   const index = getIndex(params.indexId)
-  return runBackend(() => ({ ivf: index.setIvf(params.ivf) }))
+  return { ivf: await runBackend(() => index.setIvf(params.ivf)) }
 }
 
-export function searchVectors(params: {
+export async function searchVectors(params: {
   indexId: string
   queries: number[][]
   k: number
@@ -186,7 +191,7 @@ export function searchVectors(params: {
 }) {
   const index = getIndex(params.indexId)
   const queries = flattenRows(params.queries, index.dim, 'queries')
-  const results = runBackend(() => index.search(queries, params.k, params.nProbe))
+  const results = await runBackend(() => index.search(queries, params.k, params.nProbe))
   return { results }
 }
 
@@ -198,12 +203,12 @@ export function searchVectors(params: {
  * which is why the handle documents its own `length` as of the last call that
  * reported one.
  */
-export function removeVectors(params: { indexId: string; ids: VectorIdWire[] }) {
+export async function removeVectors(params: { indexId: string; ids: VectorIdWire[] }) {
   const index = getIndex(params.indexId)
   const removed: boolean[] = []
   for (const id of params.ids) {
     removed.push(
-      runBackend(
+      await runBackend(
         () => index.remove(BigInt(id)),
         (detail) =>
           `remove applied ${removed.length} of ${params.ids.length} ids before failing: ${detail}`
@@ -213,9 +218,12 @@ export function removeVectors(params: { indexId: string; ids: VectorIdWire[] }) 
   return { removed, length: index.length, ...indexState(index) }
 }
 
-export function containsVectors(params: { indexId: string; ids: VectorIdWire[] }) {
+export async function containsVectors(params: { indexId: string; ids: VectorIdWire[] }) {
   const index = getIndex(params.indexId)
-  const present = params.ids.map((id) => runBackend(() => index.contains(BigInt(id))))
+  const present: boolean[] = []
+  for (const id of params.ids) {
+    present.push(await runBackend(() => index.contains(BigInt(id))))
+  }
   return { present }
 }
 
@@ -230,19 +238,19 @@ export async function writeVectorIndex(params: { indexId: string; path: string }
       error
     )
   }
-  runBackend(() => index.write(snapshotPath))
+  await runBackend(() => index.write(snapshotPath))
   return { path: snapshotPath }
 }
 
 // Disposing an unknown id is not an error: the caller may retry after a
 // worker restart, and the memory it refers to is already gone.
-export function disposeVectorIndex(params: { indexId: string }) {
+export async function disposeVectorIndex(params: { indexId: string }) {
   const tracked = indexes.get(params.indexId)
   if (!tracked) return { disposed: false }
   // Drop the entry only once the backend confirms. Deleting first would strand
   // a failed dispose: the retry would find nothing and report success, and
   // `disposeAllVectorIndexes` could not reach it at shutdown either.
-  runBackend(() => tracked.index.dispose())
+  await runBackend(() => tracked.index.dispose())
   indexes.delete(params.indexId)
   return { disposed: true }
 }
@@ -257,12 +265,12 @@ export function getOpenVectorIndexCount() {
  * shutdown. An index whose dispose fails stays registered and is released at
  * shutdown. Returns the ids released.
  */
-export function disposeSessionVectorIndexes(sessionId: string): string[] {
+export async function disposeSessionVectorIndexes(sessionId: string): Promise<string[]> {
   const released: string[] = []
   for (const [indexId, tracked] of indexes) {
     if (tracked.sessionId !== sessionId) continue
     try {
-      tracked.index.dispose()
+      await tracked.index.dispose()
       indexes.delete(indexId)
       released.push(indexId)
     } catch (error) {
@@ -279,7 +287,7 @@ export async function disposeAllVectorIndexes() {
   await Promise.allSettled(pendingIndexes)
   for (const [indexId, { index }] of indexes) {
     try {
-      index.dispose()
+      await index.dispose()
     } catch (error) {
       getEngineLogger().warn(`Failed to dispose vector index '${indexId}' during cleanup:`, error)
     }
