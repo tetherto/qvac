@@ -191,6 +191,29 @@ test('resolve load: a translation source not on disk fetches no stub', async (t)
   t.is(resolved.reason, 'files-only-engine')
 })
 
+for (const modelType of [ModelType.ggmlClassification, ModelType.ggmlImageEmbedding]) {
+  test(`resolve load: a ${modelType} source not on disk fetches no stub`, async (t) => {
+    clearPlugins()
+    t.teardown(clearPlugins)
+    registerPlugin(companionPlugin(modelType))
+
+    const resolved = await resolveLoadFromStubs({
+      modelSrc: {
+        src: 'registry://s3/models/model.gguf',
+        sha256Checksum: 'a'.repeat(64),
+        registryPath: 'models/model.gguf',
+        registrySource: 's3'
+      },
+      modelType,
+      modelConfig: {}
+    })
+
+    t.is(resolved.status, 'no-stub')
+    if (resolved.status !== 'no-stub') return
+    t.is(resolved.reason, 'files-only-engine')
+  })
+}
+
 test('resolve load: a translation source on disk is read directly', async (t) => {
   clearPlugins()
   t.teardown(clearPlugins)

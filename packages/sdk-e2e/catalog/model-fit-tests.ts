@@ -55,6 +55,8 @@ export const modelFitTtsSupertonic = assessCase('tts-supertonic', 'tts-supertoni
 export const modelFitWhisper = assessCase('whisper', 'whisper', true)
 export const modelFitBci = assessCase('bci', 'bci', true)
 export const modelFitTranslation = assessCase('translation', 'bergamot-en-fr', false)
+export const modelFitClassification = assessCase('classification', 'classification', false)
+export const modelFitImageEmbedding = assessCase('image-embedding', 'image-embedding', false)
 
 export const modelFitProbeLlm = probeCase('llm', 'llm', true)
 export const modelFitProbeEmbeddings = probeCase('embeddings', 'embeddings', true)
@@ -72,6 +74,8 @@ export const modelFitProbeDiffusionEsrgan = probeCase(
 export const modelFitProbeUpscaler = probeCase('upscaler', 'upscaler', true)
 export const modelFitProbeOcr = probeCase('ocr', 'ocr', true)
 export const modelFitProbeTranslation = probeCase('translation', 'bergamot-en-fr', true)
+export const modelFitProbeClassification = probeCase('classification', 'classification', true)
+export const modelFitProbeImageEmbedding = probeCase('image-embedding', 'image-embedding', true)
 
 /**
  * Two measured engines assessed as one set, so their rows from two addons are
@@ -101,7 +105,9 @@ export const modelFitAssessTests = [
   modelFitOcr,
   modelFitWhisper,
   modelFitBci,
-  modelFitTranslation
+  modelFitTranslation,
+  modelFitClassification,
+  modelFitImageEmbedding
 ]
 
 export const modelFitProbeTests = [
@@ -116,7 +122,9 @@ export const modelFitProbeTests = [
   modelFitProbeDiffusionEsrgan,
   modelFitProbeUpscaler,
   modelFitProbeOcr,
-  modelFitProbeTranslation
+  modelFitProbeTranslation,
+  modelFitProbeClassification,
+  modelFitProbeImageEmbedding
 ]
 
 export const modelFitTests = [...modelFitAssessTests, modelFitTogether, ...modelFitProbeTests]
