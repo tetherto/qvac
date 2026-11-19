@@ -292,7 +292,7 @@ export interface ImportProgress {
 }
 
 export interface ImportOptions {
-  // Checked before each document commits.
+  // Checked before each document commits; also ends a wait on the source.
   signal?: AbortSignal
   onProgress?: (progress: ImportProgress) => void
 }

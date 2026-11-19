@@ -218,6 +218,9 @@ export function createRag(options: CreateRagOptions): Rag {
   // Closers for the snapshots of open exports. An export lives as long as its
   // consumer pulls, so close() ends them instead of waiting.
   const exports = new Set<() => Promise<void>>()
+  // Halts for running imports: close() stops their reads instead of waiting on
+  // a source that may never send again.
+  const imports = new Set<() => void>()
 
   // A failed open is not cached, so ready() can be retried.
   function ready(): Promise<void> {
@@ -251,6 +254,7 @@ export function createRag(options: CreateRagOptions): Rag {
 
   async function drain(): Promise<void> {
     if (opening) await opening.catch(() => {})
+    for (const halt of imports) halt()
     await Promise.allSettled(inflight)
     await Promise.allSettled(Array.from(exports, (closeExport) => closeExport()))
     db = null
@@ -576,12 +580,16 @@ export function createRag(options: CreateRagOptions): Rag {
       instance: database(),
       indexes: registry(),
       namespace: request.namespace,
-      index: request.index
+      index: request.index,
+      onClose: (halt: () => void) => {
+        imports.add(halt)
+        return () => imports.delete(halt)
+      }
     }
     try {
       return await importStream(target, request.source, request.options)
     } catch (error) {
-      throw toRagError(error)
+      throw closed ? notReady('it has been closed') : toRagError(error)
     }
   }
 

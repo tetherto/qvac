@@ -3,7 +3,7 @@ import { AbortController } from 'bare-abort-controller'
 
 import { ERR_CODES, createRag } from '../../src/index.js'
 import { NAMESPACES, type NamespaceRecord } from '../../src/db/records.js'
-import { FRAME, jsonFrame } from '../../src/transfer/frames.js'
+import { FRAME, MAGIC, jsonFrame } from '../../src/transfer/frames.js'
 import { SPACE, doc, inspect, mutate, openRag, rejectsWithCode, type Test } from './helpers.js'
 import type { EmbeddedDocumentInput, Rag } from '../../src/types.js'
 
@@ -433,6 +433,66 @@ test('an aborted import stops before the next document', async (t) => {
     ['a']
   )
   t.alike(await ids(to), [['a', 1]])
+})
+
+// Sends `bytes`, then never sends again. `stalled` resolves once the importer
+// asks for more.
+function stalls(bytes: Uint8Array): {
+  source: AsyncIterable<Uint8Array>
+  stalled: Promise<void>
+} {
+  let reached = () => {}
+  const stalled = new Promise<void>((resolve) => {
+    reached = resolve
+  })
+  async function* source(): AsyncGenerator<Uint8Array> {
+    yield bytes
+    reached()
+    await new Promise(() => {})
+  }
+  return { source: source(), stalled }
+}
+
+test('an abort or close ends an import whose source stops sending', async (t) => {
+  const { rag: from, spaceId } = await openRag(t)
+  await from.ingest({
+    namespace: 'ns',
+    documents: [one('a', spaceId, 'a'), one('b', spaceId, 'b')]
+  })
+  const bytes = await exportOf(from)
+  const spans = frames(bytes)
+  const to = await openTarget(t)
+
+  const afterFirst = stalls(bytes.subarray(0, spans[2].end))
+  const controller = new AbortController()
+  const aborted = to.importNamespace(
+    { namespace: 'ns', source: afterFirst.source },
+    { signal: controller.signal as AbortSignal }
+  )
+  await afterFirst.stalled
+  controller.abort(new Error('stop'))
+  const result = await aborted
+  t.is(result.cancelled, true, 'abort while waiting on the source')
+  t.alike(
+    result.documents.map((entry) => entry.id),
+    ['a']
+  )
+
+  const beforeHeader = stalls(MAGIC)
+  const early = new AbortController()
+  const rejected = to.importNamespace(
+    { namespace: 'other', source: beforeHeader.source },
+    { signal: early.signal as AbortSignal }
+  )
+  await beforeHeader.stalled
+  early.abort(new Error('stop'))
+  await rejectsWithCode(t, rejected, ERR_CODES.OPERATION_CANCELLED, 'abort before the header')
+
+  const afterHeader = stalls(bytes.subarray(0, spans[0].end))
+  const pending = to.importNamespace({ namespace: 'ns', source: afterHeader.source })
+  await afterHeader.stalled
+  await to.close()
+  t.is((await pending).cancelled, true, 'close() returns and ends the import')
 })
 
 test('an export read one byte at a time imports', async (t) => {

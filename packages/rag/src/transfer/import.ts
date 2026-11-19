@@ -34,7 +34,8 @@ import {
   parseJson,
   splitChunkPayload,
   type Frame,
-  type FrameReader
+  type FrameReader,
+  type ReadStop
 } from './frames.js'
 import type { ValidChunk, ValidDocument } from '../input.js'
 import type { HyperDBInstance, HyperDBTransaction } from '../db/db-types.js'
@@ -52,6 +53,8 @@ export interface ImportTarget {
   namespace: string
   // The caller's `index` option, checked once the header gives the dimensions.
   index: unknown
+  // Registers a callback that close() runs; returns its unregister.
+  onClose: (halt: () => void) => () => void
 }
 
 interface Header {
@@ -109,15 +112,29 @@ const trailerSchema = z.object({
 // ingest. Everything that can be checked without the documents is checked
 // before the first write; a bad document later fails the import and leaves
 // earlier ones committed, as ingest does.
+//
+// An abort or close() also ends a read the source never answers: before the
+// header is applied it throws, after it the import returns cancelled.
 export async function importStream(
   target: ImportTarget,
   source: AsyncIterable<Uint8Array>,
   options: ImportOptions
 ): Promise<ImportResult> {
-  const frames = createFrameReader(source)
+  const stop: ReadStop = { stopped: false, wake: null }
+  function halt(): void {
+    stop.stopped = true
+    stop.wake?.()
+  }
+  const { signal } = options
+  signal?.addEventListener('abort', halt)
+  const unregister = target.onClose(halt)
+  if (signal?.aborted) halt()
+  const frames = createFrameReader(source, stop)
   try {
-    return await run(target, frames, options)
+    return await run(target, frames, stop, options)
   } finally {
+    signal?.removeEventListener('abort', halt)
+    unregister()
     await frames.close().catch(() => {})
   }
 }
@@ -125,7 +142,8 @@ export async function importStream(
 async function run(
   target: ImportTarget,
   frames: FrameReader,
-  { signal, onProgress }: ImportOptions
+  stop: ReadStop,
+  { onProgress }: ImportOptions
 ): Promise<ImportResult> {
   const { instance, namespace } = target
   await frames.readMagic()
@@ -152,52 +170,63 @@ async function run(
     onProgress?.({ documents: counts.documents, deletes: counts.tombstones })
   }
 
-  for (;;) {
-    const frame = await frames.next()
-    if (!frame) throw invalid('the stream ends before its trailer')
-    if (frame.type === FRAME.DOCUMENT) {
-      const incoming = await readDocument(frame, frames, header, seen)
-      counts.documents++
-      counts.chunks += incoming.document.chunks.length
-      try {
-        checkChunks(namespace, prepared, spaceRecord, incoming.document)
-      } catch (error) {
-        throw invalid(`document '${incoming.document.id}': ${(error as Error).message}`)
-      }
-      checkContentHash(header, incoming)
-      // Checked once the lock is held, so an abort while waiting writes nothing.
-      const outcome = await withTransaction(instance, (tx) =>
-        signal?.aborted ? Promise.resolve(null) : applyDocument(tx, target, header, incoming)
-      )
-      if (!outcome) return { documents, skipped, cancelled: true, revision }
-      record(outcome)
-    } else if (frame.type === FRAME.TOMBSTONE) {
-      const tombstone = parse(tombstoneSchema, parseJson(frame.payload), 'delete record')
-      counts.tombstones++
-      const outcome = await withTransaction(instance, (tx) =>
-        signal?.aborted ? Promise.resolve(null) : applyTombstone(tx, target, header, tombstone)
-      )
-      if (!outcome) return { documents, skipped, cancelled: true, revision }
-      record(outcome)
-    } else if (frame.type === FRAME.TRAILER) {
-      const trailer = parse(trailerSchema, parseJson(frame.payload), 'trailer')
-      if (
-        trailer.documents !== counts.documents ||
-        trailer.chunks !== counts.chunks ||
-        trailer.tombstones !== counts.tombstones
-      ) {
-        throw invalid(
-          `the trailer counts ${JSON.stringify(trailer)}, the stream held ${JSON.stringify(counts)}`
+  try {
+    return await apply()
+  } catch (error) {
+    if (error instanceof QvacErrorRAG && error.code === ERR_CODES.OPERATION_CANCELLED) {
+      return { documents, skipped, cancelled: true, revision }
+    }
+    throw error
+  }
+
+  async function apply(): Promise<ImportResult> {
+    for (;;) {
+      const frame = await frames.next()
+      if (!frame) throw invalid('the stream ends before its trailer')
+      if (frame.type === FRAME.DOCUMENT) {
+        const incoming = await readDocument(frame, frames, header, seen)
+        counts.documents++
+        counts.chunks += incoming.document.chunks.length
+        try {
+          checkChunks(namespace, prepared, spaceRecord, incoming.document)
+        } catch (error) {
+          throw invalid(`document '${incoming.document.id}': ${(error as Error).message}`)
+        }
+        checkContentHash(header, incoming)
+        // Checked once the lock is held, so an abort while waiting writes nothing.
+        const outcome = await withTransaction(instance, (tx) =>
+          stop.stopped ? Promise.resolve(null) : applyDocument(tx, target, header, incoming)
         )
+        if (!outcome) return { documents, skipped, cancelled: true, revision }
+        record(outcome)
+      } else if (frame.type === FRAME.TOMBSTONE) {
+        const tombstone = parse(tombstoneSchema, parseJson(frame.payload), 'delete record')
+        counts.tombstones++
+        const outcome = await withTransaction(instance, (tx) =>
+          stop.stopped ? Promise.resolve(null) : applyTombstone(tx, target, header, tombstone)
+        )
+        if (!outcome) return { documents, skipped, cancelled: true, revision }
+        record(outcome)
+      } else if (frame.type === FRAME.TRAILER) {
+        const trailer = parse(trailerSchema, parseJson(frame.payload), 'trailer')
+        if (
+          trailer.documents !== counts.documents ||
+          trailer.chunks !== counts.chunks ||
+          trailer.tombstones !== counts.tombstones
+        ) {
+          throw invalid(
+            `the trailer counts ${JSON.stringify(trailer)}, the stream held ${JSON.stringify(counts)}`
+          )
+        }
+        if (await frames.next()) throw invalid('the stream continues after its trailer')
+        return { documents, skipped, cancelled: false, revision }
+      } else if (frame.type === FRAME.CHUNK) {
+        throw invalid('a chunk frame outside a document')
+      } else if (frame.type === FRAME.HEADER) {
+        throw invalid('a second header')
+      } else {
+        throw invalid(`unknown frame type ${frame.type}`)
       }
-      if (await frames.next()) throw invalid('the stream continues after its trailer')
-      return { documents, skipped, cancelled: false, revision }
-    } else if (frame.type === FRAME.CHUNK) {
-      throw invalid('a chunk frame outside a document')
-    } else if (frame.type === FRAME.HEADER) {
-      throw invalid('a second header')
-    } else {
-      throw invalid(`unknown frame type ${frame.type}`)
     }
   }
 }

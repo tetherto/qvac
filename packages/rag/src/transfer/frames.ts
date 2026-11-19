@@ -104,16 +104,38 @@ export interface FrameReader {
   close(): Promise<void>
 }
 
+// Ends a read the source never answers. `halt()` sets `stopped` and calls
+// `wake`, which the reader sets while it waits on the source.
+export interface ReadStop {
+  stopped: boolean
+  wake: (() => void) | null
+}
+
 // Holds at most one frame plus one source chunk: bytes are copied into the
-// frame as they arrive.
-export function createFrameReader(source: AsyncIterable<Uint8Array>): FrameReader {
+// frame as they arrive. Once `stop` is halted, reads fail with
+// OPERATION_CANCELLED, including one already waiting on the source.
+export function createFrameReader(source: AsyncIterable<Uint8Array>, stop?: ReadStop): FrameReader {
   const iterator = source[Symbol.asyncIterator]()
   let carry: Uint8Array | null = null
   let done = false
 
+  async function nextChunk(): Promise<IteratorResult<Uint8Array>> {
+    if (!stop) return await iterator.next()
+    if (stop.stopped) throw cancelled()
+    const pending = iterator.next()
+    try {
+      return await new Promise<IteratorResult<Uint8Array>>((resolve, reject) => {
+        stop.wake = () => reject(cancelled())
+        pending.then(resolve, reject)
+      })
+    } finally {
+      stop.wake = null
+    }
+  }
+
   async function pull(): Promise<Uint8Array | null> {
     while (!done) {
-      const { value, done: finished } = await iterator.next()
+      const { value, done: finished } = await nextChunk()
       if (finished) {
         done = true
         break
@@ -163,12 +185,20 @@ export function createFrameReader(source: AsyncIterable<Uint8Array>): FrameReade
       return { type, payload }
     },
 
+    // A source stuck in `next()` can't finish `return()` either, so a stopped
+    // reader doesn't wait for it.
     async close() {
       if (done) return
       done = true
-      await iterator.return?.()
+      const returning = Promise.resolve(iterator.return?.())
+      if (stop?.stopped) returning.catch(() => {})
+      else await returning
     }
   }
+}
+
+function cancelled(): QvacErrorRAG {
+  return new QvacErrorRAG({ code: ERR_CODES.OPERATION_CANCELLED })
 }
 
 export function invalid(message: string): QvacErrorRAG {
