@@ -25,6 +25,7 @@ interface PluginManifest {
           readonly input?: readonly string[]
           readonly compat?: {
             readonly requiresStringContent?: boolean
+            readonly supportsPromptCacheKey?: boolean
           }
         }[]
       }
@@ -129,14 +130,14 @@ test('openclaw.plugin.json declares static QVAC model catalog rows', () => {
   assert.deepEqual(
     manifest.modelCatalog?.providers?.qvac?.models?.map((model) => model.compat),
     [
-      { requiresStringContent: true },
-      { requiresStringContent: true },
-      { requiresStringContent: true },
-      { requiresStringContent: true },
-      { requiresStringContent: true },
-      { requiresStringContent: true },
-      { requiresStringContent: true },
-      { requiresStringContent: true }
+      { requiresStringContent: true, supportsPromptCacheKey: true },
+      { requiresStringContent: true, supportsPromptCacheKey: true },
+      { requiresStringContent: true, supportsPromptCacheKey: true },
+      { requiresStringContent: true, supportsPromptCacheKey: true },
+      { requiresStringContent: true, supportsPromptCacheKey: true },
+      { requiresStringContent: true, supportsPromptCacheKey: true },
+      { requiresStringContent: true, supportsPromptCacheKey: true },
+      { requiresStringContent: true, supportsPromptCacheKey: true }
     ]
   )
   assert.equal(Object.hasOwn(manifest.configSchema?.properties ?? {}, 'configPath'), false)
