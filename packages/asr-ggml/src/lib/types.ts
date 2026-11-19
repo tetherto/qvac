@@ -156,6 +156,8 @@ export interface BackendInfo {
    * `"nemotron-diarization"`).
    */
   modelType?: string;
+  /** Whether the loaded Parakeet checkpoint supports a cache-aware ASR stream. */
+  supportsCacheAwareStreaming?: boolean;
   gpuMemTotalMb?: number;
   gpuMemFreeMb?: number;
 }

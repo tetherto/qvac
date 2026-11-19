@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-18
+
 ### Changed
 
 - `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries
@@ -24,10 +26,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.31.0` together.
 - This package needed no code change for the new fabric.
 
-- Share the `@qvac/fabric` runtime and backend loader, retaining addon-local speech engines built against its headers.
+- Share the `@qvac/fabric` runtime and backend loader, retaining addon-local
+  speech engines built against its headers
+  ([#5808](https://github.com/tetherto/qvac/pull/5808)).
 
-- Update the shared `speech-cpp` native dependency to `2026-11-11`
-  ([#5747](https://github.com/tetherto/qvac/pull/5747)).
+- Build the bundled TTS engine from the source published as
+  `speech-cpp` `2026-11-18`. MOSS-Speech keeps the language model and
+  decoder loaded across replies when both fit on the GPU.
+
+### Fixed
+
+- The runtime stats tests build against `qvac-lib-inference-addon-cpp` 1.7.0,
+  where a stat value can also hold a string. They use `RuntimeStatValue`, and
+  the dependency floor is now `1.7.0`
+  ([#5729](https://github.com/tetherto/qvac/pull/5729)).
 
 ## [0.15.1] - 2026-11-10
 

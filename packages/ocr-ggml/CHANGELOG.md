@@ -23,6 +23,13 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.31.0` together.
 - This package needed no code change for the new fabric.
 
+### Fixed
+
+- Build against `qvac-lib-inference-addon-cpp` 1.7.0, where a runtime stat
+  value can also hold a string. The runtime stats use `RuntimeStatValue`, and
+  the dependency floor is now `1.7.0`
+  ([#5731](https://github.com/tetherto/qvac/pull/5731)).
+
 ## [0.34.0] - 2026-11-16
 
 ### Changed

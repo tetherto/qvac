@@ -595,11 +595,16 @@ qvac_lib_inference_addon_cpp::RuntimeStats TranslationModel::runtimeStats()
       return {
           std::make_pair(
               "totalTokens",
-              std::variant<double, int64_t>(static_cast<int64_t>(totalTokens))),
-          std::make_pair("totalTime", std::variant<double, int64_t>(totalTime)),
+              qvac_lib_inference_addon_cpp::RuntimeStatValue(
+                  static_cast<int64_t>(totalTokens))),
           std::make_pair(
-              "decodeTime", std::variant<double, int64_t>(decodeTime)),
-          std::make_pair("TPS", std::variant<double, int64_t>(tps))};
+              "totalTime",
+              qvac_lib_inference_addon_cpp::RuntimeStatValue(totalTime)),
+          std::make_pair(
+              "decodeTime",
+              qvac_lib_inference_addon_cpp::RuntimeStatValue(decodeTime)),
+          std::make_pair(
+              "TPS", qvac_lib_inference_addon_cpp::RuntimeStatValue(tps))};
     }
 
     return {};
@@ -628,14 +633,22 @@ qvac_lib_inference_addon_cpp::RuntimeStats TranslationModel::runtimeStats()
     return {
         std::make_pair(
             "totalTokens",
-            std::variant<double, int64_t>(static_cast<int64_t>(totalTokens))),
+            qvac_lib_inference_addon_cpp::RuntimeStatValue(
+                static_cast<int64_t>(totalTokens))),
         std::make_pair(
             "totalTime",
-            std::variant<double, int64_t>(encodeTime + decodeTime)),
-        std::make_pair("encodeTime", std::variant<double, int64_t>(encodeTime)),
-        std::make_pair("decodeTime", std::variant<double, int64_t>(decodeTime)),
-        std::make_pair("TTFT", std::variant<double, int64_t>(ttft)),
-        std::make_pair("TPS", std::variant<double, int64_t>(tps))};
+            qvac_lib_inference_addon_cpp::RuntimeStatValue(
+                encodeTime + decodeTime)),
+        std::make_pair(
+            "encodeTime",
+            qvac_lib_inference_addon_cpp::RuntimeStatValue(encodeTime)),
+        std::make_pair(
+            "decodeTime",
+            qvac_lib_inference_addon_cpp::RuntimeStatValue(decodeTime)),
+        std::make_pair(
+            "TTFT", qvac_lib_inference_addon_cpp::RuntimeStatValue(ttft)),
+        std::make_pair(
+            "TPS", qvac_lib_inference_addon_cpp::RuntimeStatValue(tps))};
   }
 
   return {};

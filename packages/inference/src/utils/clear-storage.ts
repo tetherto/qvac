@@ -12,10 +12,46 @@ export function resolveClearStorageTarget(
   const relativePath = normalizedPath.slice(normalizedCache.length + 1)
   const parts = relativePath.split('/')
 
-  if (parts.length === 3 && (parts[0] === 'sets' || parts[0] === 'onnx') && parts[1] && parts[2]) {
+  if (
+    parts.length === 3 &&
+    (parts[0] === 'sets' || parts[0] === 'onnx') &&
+    parts.every(isNamedSegment)
+  ) {
     const lastSlash = normalizedPath.lastIndexOf('/')
     return { path: normalizedPath.slice(0, lastSlash), kind: 'directory' }
   }
 
   return { path: modelPath, kind: 'file' }
+}
+
+/**
+ * Whether a sharded model sits directly in a cache shard directory,
+ * `<cache>/sharded/<key>/`. That directory holds one model, so it is the only
+ * one `clearStorage` may remove whole. Backslashes count as separators only
+ * when `sep` is one (Windows), and dot segments never match.
+ */
+export function isCacheShardPath(
+  modelPath: string,
+  modelsCacheDir: string,
+  sep: string = '/'
+): boolean {
+  const toSlashes = (p: string) => (sep === '\\' ? p.replace(/\\/g, '/') : p)
+  const normalizedCache = toSlashes(modelsCacheDir).replace(/\/+$/, '')
+  const normalizedPath = toSlashes(modelPath)
+
+  if (!normalizedPath.startsWith(`${normalizedCache}/`)) {
+    return false
+  }
+
+  const parts = normalizedPath.slice(normalizedCache.length + 1).split('/')
+  return parts.length === 3 && parts[0] === 'sharded' && parts.every(isNamedSegment)
+}
+
+/**
+ * Whether a path segment names an entry. `.`, `..` and empty segments do not:
+ * `<cache>/sets/../<file>` would otherwise make `<cache>/sets/..`, the whole
+ * cache, a directory target.
+ */
+function isNamedSegment(part: string): boolean {
+  return part !== '' && part !== '.' && part !== '..'
 }

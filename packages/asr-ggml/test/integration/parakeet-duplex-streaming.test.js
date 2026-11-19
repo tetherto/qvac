@@ -55,7 +55,10 @@ const {
 const { samplesDir } = getTestPaths()
 
 const SAMPLE_RATE = 16000
-const STREAM_CHUNK_MS = 1000
+const UNIFIED_CHUNK_MS = 1000
+const TDT_CHUNK_MS = 30000
+const TDT_LOOKAHEAD_MS = 2000
+const UNSAFE_TDT_CHUNK_MS = 5000
 const FEED_CHUNK_MS = 500
 const MIN_STREAMING_AUDIO_MS = 4000
 
@@ -67,6 +70,14 @@ function loadAudioSample() {
   const audio = new Float32Array(pcm.length)
   for (let i = 0; i < pcm.length; i++) audio[i] = pcm[i] / 32768.0
   return audio
+}
+
+function repeatAudioToReach(audio, durationMs) {
+  const minSamples = Math.ceil((durationMs * SAMPLE_RATE) / 1000)
+  const copies = Math.ceil(minSamples / audio.length)
+  const repeated = new Float32Array(copies * audio.length)
+  for (let i = 0; i < copies; i++) repeated.set(audio, i * audio.length)
+  return repeated
 }
 
 function pushableStream() {
@@ -170,7 +181,7 @@ async function runDuplexStreamingTest(t, modelType) {
         engine: 'parakeet',
         parakeetConfig: {
           streaming: true,
-          streamingChunkMs: STREAM_CHUNK_MS,
+          ...(modelType === 'unified' ? { streamingChunkMs: UNIFIED_CHUNK_MS } : {}),
           maxThreads: 4,
           useGPU: GPU_ONLY_USE_GPU
         }
@@ -179,14 +190,15 @@ async function runDuplexStreamingTest(t, modelType) {
 
     try {
       await model.load()
+      t.is(model.getBackendInfo().supportsCacheAwareStreaming, modelType === 'unified')
 
-      console.log(`[${modelType}/duplex] audio duration: ${(audioDurationMs / 1000).toFixed(2)}s`)
-      console.log(
-        `[${modelType}/duplex] feed chunk: ${FEED_CHUNK_MS}ms; session chunk: ${STREAM_CHUNK_MS}ms`
-      )
+      const input =
+        modelType === 'tdt'
+          ? repeatAudioToReach(audio, TDT_CHUNK_MS + TDT_LOOKAHEAD_MS + MIN_STREAMING_AUDIO_MS)
+          : audio
 
       const startTime = Date.now()
-      const { segments, firstSegmentTime, lastChunkPushedTime } = await feedAndCollect(model, audio)
+      const { segments, firstSegmentTime, lastChunkPushedTime } = await feedAndCollect(model, input)
       const totalElapsed = Date.now() - startTime
 
       const transcript = segments
@@ -291,7 +303,6 @@ function streamingTdt(modelPath, extra = {}) {
       engine: 'parakeet',
       parakeetConfig: {
         streaming: true,
-        streamingChunkMs: STREAM_CHUNK_MS,
         maxThreads: 4,
         useGPU: GPU_ONLY_USE_GPU,
         ...extra
@@ -338,6 +349,10 @@ test(
 
       await withModel(streamingTdt(modelPath, { prewarm: true }), async (model) => {
         t.is(model.getBackendInfo().modelType, 'tdt', 'getBackendInfo reports the model type')
+        await t.exception(
+          model.runStreaming(pushableStream(), { chunkMs: UNSAFE_TDT_CHUNK_MS }),
+          /chunk_ms >= 30000/
+        )
         const stream = pushableStream()
         const duplex = await model.runStreaming(stream, { emitEnergyVad: true })
         checkEnergyVadEvents(t, await collectAllUpdates(duplex, stream, audio), 'duplex')

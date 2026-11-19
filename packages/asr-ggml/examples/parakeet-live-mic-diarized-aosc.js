@@ -3,7 +3,7 @@
 /**
  * Live-mic transcription + diarization example with full AOSC control.
  *
- * This is the v2.1-focused counterpart of `examples/live-mic-diarized.js`.
+ * This is the v2.1-focused counterpart of `examples/parakeet-live-mic-diarized.js`.
  * Both files share the same duplex pattern (two `runStreaming()`
  * sessions fanned from a single sox capture, with the ASR transcript
  * tagged by the latest Sortformer speaker_id). What this file adds is
@@ -43,11 +43,16 @@
  * that introduced this feature in qvac-fabric-speech.cpp (PR #22
  * commit e6ba38c, PR #24 commit 08df2e7).
  *
+ * Use a cache-aware ASR checkpoint (Parakeet Unified RNN-T or Nemotron).
+ * Speaker tags use the latest Sortformer result as a live approximation.
+ * Set the ASR cadence with --asr-chunk-ms and Sortformer cadence with
+ * --diar-chunk-ms. The legacy --chunk-ms flag sets the Sortformer cadence.
+ *
  * Usage:
- *   bare examples/live-mic-diarized-aosc.js \
- *        --asr-model <ctc-or-tdt-gguf> \
+ *   bare examples/parakeet-live-mic-diarized-aosc.js \
+ *        --asr-model <unified-or-nemotron-gguf> \
  *        --diar-model <v2.1-sortformer-gguf> \
- *        [--accumulate] [--chunk-ms <ms>] [--capture "<sox cmd>"] \
+ *        [--accumulate] [--asr-chunk-ms <ms>] [--diar-chunk-ms <ms>] [--capture "<sox cmd>"] \
  *        [--spk-cache-enable {true|false}] [--spk-cache-len <rows>] \
  *        [--fifo-len <rows>] [--chunk-left-context-ms <ms>] \
  *        [--chunk-right-context-ms <ms>] [--spk-cache-update-period <count>]
@@ -67,6 +72,13 @@ const subprocess = require('bare-subprocess')
 const ASRGgml = require('../index.js')
 const addonLogging = require('../addonLogging.js')
 const { setupLogger, validatePaths, pushableStream } = require('./parakeet-utils.js')
+const {
+  parseMicChunkMs,
+  buildMicChunkOptions,
+  startDiarizedMic,
+  finishDiarizedMic,
+  spawnMicCapture
+} = require('./parakeet-diarized-mic-options.js')
 
 const CAPTURE_CMD = 'sox -d -t raw -r 16000 -b 16 -c 1 -e signed-integer -L -'
 
@@ -128,7 +140,6 @@ function parseArgs() {
     diarModel: null,
     accumulate: false,
     capture: null,
-    chunkMs: null,
     spkCacheEnable: undefined,
     spkCacheLen: null,
     fifoLen: null,
@@ -143,9 +154,9 @@ function parseArgs() {
     else if (a === '--diar-model' || a === '-d') args.diarModel = argv[++i]
     else if (a === '--accumulate') args.accumulate = true
     else if (a === '--capture' || a === '-c') args.capture = argv[++i]
-    else if (a === '--chunk-ms') {
-      const v = parsePositiveInt(argv[++i])
-      if (v !== null && v >= 200) args.chunkMs = v
+    else if (a === '--asr-chunk-ms') args.asrChunkMs = parseMicChunkMs(a, argv[++i])
+    else if (a === '--diar-chunk-ms' || a === '--chunk-ms') {
+      args.diarChunkMs = parseMicChunkMs(a, argv[++i])
     } else if (a === '--spk-cache-enable') {
       const v = parseBoolFlag(argv[++i])
       if (v !== undefined) args.spkCacheEnable = v
@@ -161,10 +172,10 @@ function parseArgs() {
   return args
 }
 
-function buildDiarConfig(args) {
+function buildDiarConfig(args, diarStreamingChunkMs) {
   const config = {
     streaming: true,
-    streamingChunkMs: args.chunkMs ?? 2000,
+    streamingChunkMs: diarStreamingChunkMs,
     useGPU: true
   }
   if (args.spkCacheEnable !== undefined) config.streamingSpkCacheEnable = args.spkCacheEnable
@@ -195,9 +206,10 @@ function describeAoscConfig(config) {
 
 async function main() {
   const args = parseArgs()
+  const { asrOptions, diarStreamingChunkMs } = buildMicChunkOptions(args)
   if (!args.asrModel || !args.diarModel) {
     console.error(
-      'Usage: bare examples/live-mic-diarized-aosc.js --asr-model <gguf> --diar-model <v2.1-gguf> [--accumulate] [--chunk-ms <ms>] [--capture "<sox cmd>"] [--spk-cache-enable {true|false}] [--spk-cache-len <rows>] [--fifo-len <rows>] [--chunk-left-context-ms <ms>] [--chunk-right-context-ms <ms>] [--spk-cache-update-period <count>]'
+      'Usage: bare examples/parakeet-live-mic-diarized-aosc.js --asr-model <unified-or-nemotron-gguf> --diar-model <v2.1-gguf> [--accumulate] [--asr-chunk-ms <ms>] [--diar-chunk-ms <ms>] [--capture "<sox cmd>"] [--spk-cache-enable {true|false}] [--spk-cache-len <rows>] [--fifo-len <rows>] [--chunk-left-context-ms <ms>] [--chunk-right-context-ms <ms>] [--spk-cache-update-period <count>]'
     )
     process.exit(1)
   }
@@ -219,7 +231,7 @@ async function main() {
   console.log(`Loading ASR: ${asrPath}`)
   console.log(`Loading DIAR: ${diarPath}`)
 
-  const diarConfig = buildDiarConfig(args)
+  const diarConfig = buildDiarConfig(args, diarStreamingChunkMs)
   console.log(`AOSC config: ${describeAoscConfig(diarConfig)}`)
 
   const asr = new ASRGgml({
@@ -227,8 +239,6 @@ async function main() {
     config: {
       engine: 'parakeet',
       parakeetConfig: {
-        streaming: true,
-        streamingChunkMs: args.chunkMs ?? 2000,
         useGPU: true
       }
     }
@@ -236,39 +246,6 @@ async function main() {
   const diar = new ASRGgml({
     files: { model: diarPath },
     config: { engine: 'parakeet', parakeetConfig: diarConfig }
-  })
-
-  await asr.load()
-  await diar.load()
-  console.log('Listening (Ctrl-C to stop)...\n')
-
-  const captureCmd = args.capture && args.capture.length > 0 ? args.capture : CAPTURE_CMD
-  const [captureBin, ...captureArgs] = captureCmd.split(' ')
-  let child
-  try {
-    child = subprocess.spawn(captureBin, captureArgs, { stdio: ['ignore', 'pipe', 'pipe'] })
-  } catch (err) {
-    if (err && err.code === 'ENOENT') {
-      console.error(`\n'${captureBin}' not found on PATH.`)
-      console.error(
-        'Install sox (brew install sox / apt install sox / choco install sox / winget install ChrisBagwell.SoX).'
-      )
-    } else {
-      console.error(`\nFailed to spawn capture command: ${err.message}`)
-    }
-    addonLogging.releaseLogger()
-    process.exit(1)
-  }
-  child.on('error', (err) => {
-    console.error(`\nCapture command failed: ${err.message}`)
-    process.exit(1)
-  })
-
-  let firstAudioSeen = false
-  let stderrBuf = ''
-  child.stderr.on('data', (chunk) => {
-    stderrBuf += chunk.toString('utf8')
-    if (stderrBuf.length > 8192) stderrBuf = stderrBuf.slice(-8192)
   })
 
   let lineOpen = false
@@ -303,80 +280,72 @@ async function main() {
     }
   }
 
+  function updateDiarization(out) {
+    const items = Array.isArray(out) ? out : [out]
+    for (let i = items.length - 1; i >= 0; i--) {
+      const segment = items[i]
+      if (!segment || !segment.text || isSilenceText(segment.text)) continue
+      const id = parseSortformerSpeakerId(segment.text)
+      if (id >= 0) {
+        lastSpeaker = id
+        break
+      }
+    }
+  }
+
+  function updateTranscript(out) {
+    const items = Array.isArray(out) ? out : [out]
+    const { text, firstStartsWord } = buildSegmentText(items)
+    emitTranscript(lastSpeaker, text.trim(), firstStartsWord)
+  }
+
   const asrStream = pushableStream()
   const diarStream = pushableStream()
+  const asrSession = {
+    model: asr,
+    stream: asrStream,
+    options: asrOptions,
+    onUpdate: updateTranscript
+  }
+  const diarSession = { model: diar, stream: diarStream, onUpdate: updateDiarization }
+  const { child, runs } = await startDiarizedMic(asrSession, diarSession, () =>
+    spawnMicCapture(subprocess, args.capture || CAPTURE_CMD)
+  )
+  console.log('Listening (Ctrl-C to stop)...\n')
+
+  let firstAudioSeen = false
+  let stderrBuf = ''
+  child.stderr.on('data', (chunk) => {
+    stderrBuf += chunk.toString('utf8')
+    if (stderrBuf.length > 8192) stderrBuf = stderrBuf.slice(-8192)
+  })
   child.stdout.on('data', (chunk) => {
-    if (!firstAudioSeen) firstAudioSeen = true
     if (stopping) return
+    firstAudioSeen = true
     asrStream.push(chunk)
     diarStream.push(chunk)
   })
 
-  const streamingConfig = {}
-  if (args.chunkMs !== null) streamingConfig.chunkMs = args.chunkMs
-
-  const diarRunPromise = (async () => {
-    const response = await diar.runStreaming(diarStream, streamingConfig)
-    await response
-      .onUpdate((out) => {
-        const items = Array.isArray(out) ? out : [out]
-        for (let i = items.length - 1; i >= 0; i--) {
-          const s = items[i]
-          if (!s || !s.text || isSilenceText(s.text)) continue
-          const id = parseSortformerSpeakerId(s.text)
-          if (id >= 0) {
-            lastSpeaker = id
-            break
-          }
-        }
-      })
-      .await()
-  })()
-
-  const asrRunPromise = (async () => {
-    const response = await asr.runStreaming(asrStream, streamingConfig)
-    await response
-      .onUpdate((out) => {
-        const items = Array.isArray(out) ? out : [out]
-        const { text, firstStartsWord } = buildSegmentText(items)
-        emitTranscript(lastSpeaker, text.trim(), firstStartsWord)
-      })
-      .await()
-  })()
-
-  async function shutdown() {
+  async function shutdown(error) {
     if (stopping) return
     stopping = true
+    if (error) console.error(error.message)
     console.log('\nStopping...')
     try {
       child.kill('SIGTERM')
-    } catch (e) {
-      /* ignore */
+    } catch {
+      // The capture process may have already exited.
     }
-    asrStream.end()
-    diarStream.end()
-    try {
-      await Promise.all([asrRunPromise, diarRunPromise])
-    } catch (e) {
-      /* swallow */
-    }
+    await finishDiarizedMic([asrSession, diarSession], runs)
     flushLine()
-    try {
-      await asr.unload()
-    } catch (e) {
-      /* ignore */
-    }
-    try {
-      await diar.unload()
-    } catch (e) {
-      /* ignore */
-    }
     addonLogging.releaseLogger()
-    process.exit(0)
+    process.exit(error ? 1 : 0)
   }
 
-  process.once('SIGINT', shutdown)
-  process.once('SIGTERM', shutdown)
+  Promise.all(runs).catch(shutdown)
+  child.on('error', shutdown)
+  process.once('SIGINT', () => shutdown())
+  process.once('SIGTERM', () => shutdown())
   child.on('exit', (code, signal) => {
     if (!firstAudioSeen && !stopping) {
       console.error(

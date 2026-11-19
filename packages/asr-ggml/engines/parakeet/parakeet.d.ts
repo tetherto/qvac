@@ -23,8 +23,11 @@ export interface ParakeetConfigurationParams {
     language?: string;
     streaming?: boolean;
     /**
-     * Model-specific when omitted: Nemotron 320 ms, Unified RNN-T 560 ms,
-     * existing models 2000 ms.
+     * Decode window in milliseconds. Omit or set to 0 for the model default.
+     * Offline TDT push streams default to 30000 ms and require at least 30000 ms.
+     * Full TranscribePsy EU defaults to 2000 ms. Nemotron defaults to 320 ms
+     * (80, 160, 320, 560, or 1120 ms). Unified RNN-T defaults to 560 ms
+     * (80, 160, 560, or 1040 ms). Other Unified values snap down to a trained cadence.
      */
     streamingChunkMs?: number;
     streamingHistoryMs?: number;

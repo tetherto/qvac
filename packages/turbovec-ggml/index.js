@@ -5,8 +5,16 @@ const HANDLE = Symbol('IdMapIndex.handle');
 const FILTER_HANDLE = Symbol('IdMapIndexFilter.handle');
 const FILTER_OWNER = Symbol('IdMapIndexFilter.owner');
 const FILTER_REF = Symbol('IdMapIndexFilter.ref');
+const FILTER_RELEASED = Symbol('IdMapIndexFilter.released');
 const FILTERS = Symbol('IdMapIndex.filters');
 const FILTERS_PRUNE_AT = Symbol('IdMapIndex.filtersPruneAt');
+const QUEUE = Symbol('IdMapIndex.queue');
+const PENDING = Symbol('IdMapIndex.pending');
+const DIM = Symbol('IdMapIndex.dim');
+const BIT_WIDTH = Symbol('IdMapIndex.bitWidth');
+const LENGTH = Symbol('IdMapIndex.length');
+const CALIBRATED = Symbol('IdMapIndex.calibrated');
+const STAGED = Symbol('IdMapIndex.staged');
 const INT32_MAX = 0x7fffffff;
 // Dropped filters leave dead WeakRefs behind. Pruning once the set doubles
 // keeps prepareFilter amortized O(1) instead of rescanning on every call.
@@ -30,12 +38,6 @@ function loadBinding() {
     binding ??= require('./binding');
     return binding;
 }
-function releaseFilter(owner, filter) {
-    const ref = filter[FILTER_REF];
-    if (ref !== null) {
-        owner[FILTERS].delete(ref);
-    }
-}
 function isPositiveInt32(value) {
     return Number.isInteger(value) && value > 0 && value <= INT32_MAX;
 }
@@ -47,12 +49,127 @@ function requireNonEmptyPath(value, name) {
         throw new TypeError(`${name} must be a non-empty string`);
     }
 }
+function readSignal(name, options) {
+    if (options === undefined) {
+        return undefined;
+    }
+    if (options === null || typeof options !== 'object') {
+        throw new TypeError(`${name}: options must be an object`);
+    }
+    const { signal } = options;
+    if (signal === undefined) {
+        return undefined;
+    }
+    if (signal === null ||
+        typeof signal !== 'object' ||
+        typeof signal.aborted !== 'boolean' ||
+        typeof signal.addEventListener !== 'function' ||
+        typeof signal.removeEventListener !== 'function') {
+        throw new TypeError(`${name}: options.signal must be an AbortSignal`);
+    }
+    return signal;
+}
+// The caller's own reason, passed through as fetch() does: an AbortError or
+// TimeoutError unless they aborted with something else. Typed as Error for
+// the code that throws it.
+function abortReason(signal) {
+    if (signal.reason !== undefined) {
+        return signal.reason;
+    }
+    const error = new Error('The operation was aborted');
+    error.name = 'AbortError';
+    return error;
+}
 function ensureHandle(index) {
     const handle = index[HANDLE];
     if (handle === null) {
         throw new Error('IdMapIndex has been disposed');
     }
     return handle;
+}
+function swallow() { }
+// Calls `run` now; a synchronous throw becomes a rejection.
+function startNow(run) {
+    return new Promise((resolve) => {
+        resolve(run());
+    });
+}
+// The abort token for a call with `signal`, or undefined without one.
+function abortToken(signal) {
+    return signal === undefined ? undefined : loadBinding().idx_abort_token_create();
+}
+// Rejects with the signal's reason once it aborts, without waiting for
+// `result`, and sets `token`, so a native job that has not started yet is
+// skipped. A value `result` still produces after that is passed to
+// `discard`, so resources such as a loaded index or a prepared filter are
+// freed.
+function raceAbort(result, signal, token, discard) {
+    return new Promise((resolve, reject) => {
+        const onAbort = () => {
+            loadBinding().idx_abort_token_abort(token);
+            reject(abortReason(signal));
+            result.then(discard ?? swallow, swallow);
+        };
+        signal.addEventListener('abort', onAbort, { once: true });
+        result.finally(() => signal.removeEventListener('abort', onAbort)).then(resolve, reject);
+    });
+}
+// Runs operations on one index one at a time, in call order. Each runs once
+// every earlier operation, and every native free queued before it, has
+// settled, so `run` always finds no worker holding the index. On an idle
+// index `run` starts now, so the native job holds the index before the
+// caller's next statement (a `dispose()` right after lets it finish). An
+// operation whose signal aborts while it waits, here or on a worker thread,
+// is skipped. `run` gets the call's abort token to pass to the native call.
+function enqueue(index, run, signal, discard) {
+    ensureHandle(index);
+    if (signal?.aborted) {
+        return Promise.reject(abortReason(signal));
+    }
+    const token = abortToken(signal);
+    const guarded = () => {
+        if (signal?.aborted) {
+            throw abortReason(signal);
+        }
+        return run(token);
+    };
+    const result = index[PENDING] === 0 ? startNow(guarded) : index[QUEUE].then(guarded);
+    index[PENDING] += 1;
+    const settled = () => {
+        index[PENDING] -= 1;
+    };
+    index[QUEUE] = result.then(settled, settled);
+    return signal === undefined || token === undefined
+        ? result
+        : raceAbort(result, signal, token, discard);
+}
+// Whether a call made now waits behind earlier ones. The native call takes
+// its array inputs when it starts; a call that waits starts later, so its
+// inputs are copied here, at call time, by snapshot(): the caller may change
+// or transfer them once the call returns. The native call then keeps those
+// private copies instead of copying them again (the binding's `borrow`).
+// Must be read in the same synchronous step as the `enqueue()` it feeds.
+function waitsInQueue(index) {
+    return index[PENDING] !== 0;
+}
+function snapshot(index, array) {
+    return waitsInQueue(index) ? array.slice() : array;
+}
+// Frees a native handle once everything queued on `owner` has settled, or
+// now when nothing is. A queued free counts as pending work until it has
+// run, so a later free, such as the index's own, always runs after it. The
+// returned promise rejects when the free throws.
+function releaseAfterQueue(owner, release) {
+    if (owner[PENDING] === 0) {
+        return startNow(release);
+    }
+    owner[PENDING] += 1;
+    const done = () => {
+        owner[PENDING] -= 1;
+    };
+    const released = owner[QUEUE].then(release);
+    owner[QUEUE] = released.then(done, done);
+    return released;
 }
 function normalizeStorageOptions(options) {
     const { bitWidth, storage } = options;
@@ -74,45 +191,82 @@ function normalizeStorageOptions(options) {
     }
     return STORAGE_BY_BIT_WIDTH[width];
 }
+// Unlinks a filter from its owner and returns its native handle, or null
+// when it was already disposed.
+function detachFilter(filter) {
+    const filterHandle = filter[FILTER_HANDLE];
+    if (filterHandle === null) {
+        return null;
+    }
+    const owner = filter[FILTER_OWNER];
+    const ref = filter[FILTER_REF];
+    if (owner !== null && ref !== null) {
+        owner[FILTERS].delete(ref);
+    }
+    filter[FILTER_HANDLE] = null;
+    filter[FILTER_OWNER] = null;
+    filter[FILTER_REF] = null;
+    return { filterHandle, owner };
+}
 class IdMapIndexFilter {
     [FILTER_HANDLE] = null;
     [FILTER_OWNER] = null;
     [FILTER_REF] = null;
+    // Settles once the native filter has been freed. Already resolved when the
+    // owner freed it at a turn in its queue, which happens as it is detached.
+    [FILTER_RELEASED] = Promise.resolve();
     constructor() {
         throw new TypeError('IdMapIndexFilter instances must be created by IdMapIndex.prepareFilter()');
     }
-    /** Search with this prepared allowlist. Mutating the owner invalidates the filter. */
-    search(queries, k) {
-        if (!(queries instanceof Float32Array)) {
-            throw new TypeError('IdMapIndexFilter.search: queries must be a Float32Array');
-        }
-        if (!isPositiveInt32(k)) {
-            throw new TypeError('IdMapIndexFilter.search: k must be a positive int32');
-        }
+    /**
+     * Search with this prepared allowlist, queued behind the owner's other
+     * operations. Rejects when an earlier mutation of the owner disposed the
+     * filter: every mutation invalidates the owner's filters.
+     */
+    async search(queries, k, options) {
+        validateFilterSearch('IdMapIndexFilter.search', queries, k);
+        const signal = readSignal('IdMapIndexFilter.search', options);
         const owner = this[FILTER_OWNER];
-        const filterHandle = this[FILTER_HANDLE];
-        if (owner === null || filterHandle === null) {
+        if (owner === null || this[FILTER_HANDLE] === null) {
             throw new Error('IdMapIndexFilter has been disposed');
         }
-        return loadBinding().idx_search_prepared_filtered(ensureHandle(owner), filterHandle, queries, k);
+        const borrow = waitsInQueue(owner);
+        const input = snapshot(owner, queries);
+        return enqueue(owner, (token) => {
+            const filterHandle = this[FILTER_HANDLE];
+            if (this[FILTER_OWNER] === null || filterHandle === null) {
+                throw new Error('IdMapIndexFilter has been disposed');
+            }
+            return loadBinding().idx_search_prepared_filtered_async(ensureHandle(owner), filterHandle, input, k, token, borrow);
+        }, signal);
     }
-    /** Release the prepared native filter. This operation is idempotent. */
+    /**
+     * Release the prepared native filter. The filter cannot be used after this
+     * call. While the owner has operations queued, the native filter is freed
+     * after they settle. Resolves once the native filter has been freed, and
+     * rejects if freeing it fails. This operation is idempotent: a later call
+     * returns the same promise.
+     */
     dispose() {
-        const filterHandle = this[FILTER_HANDLE];
-        if (filterHandle === null) {
-            return;
+        const detached = detachFilter(this);
+        if (detached === null) {
+            return this[FILTER_RELEASED];
         }
-        const owner = this[FILTER_OWNER];
-        loadBinding().idx_filter_dispose(filterHandle);
-        this[FILTER_HANDLE] = null;
-        this[FILTER_OWNER] = null;
-        if (owner !== null) {
-            releaseFilter(owner, this);
-        }
-        this[FILTER_REF] = null;
+        const { filterHandle, owner } = detached;
+        const release = () => loadBinding().idx_filter_dispose(filterHandle);
+        this[FILTER_RELEASED] = owner === null ? startNow(release) : releaseAfterQueue(owner, release);
+        return this[FILTER_RELEASED];
     }
 }
 exports.IdMapIndexFilter = IdMapIndexFilter;
+function validateFilterSearch(name, queries, k) {
+    if (!(queries instanceof Float32Array)) {
+        throw new TypeError(`${name}: queries must be a Float32Array`);
+    }
+    if (!isPositiveInt32(k)) {
+        throw new TypeError(`${name}: k must be a positive int32`);
+    }
+}
 // A dropped filter needs no JS finalizer: its handle is a native external
 // whose own finalizer frees the native filter once the handle is collected.
 function createFilter(owner, handle) {
@@ -120,7 +274,12 @@ function createFilter(owner, handle) {
     filter[FILTER_OWNER] = owner;
     filter[FILTER_HANDLE] = handle;
     filter[FILTER_REF] = new WeakRef(filter);
+    // Object.create() skips the class's field initializers.
+    filter[FILTER_RELEASED] = Promise.resolve();
     return filter;
+}
+function disposeIndex(index) {
+    return index.dispose();
 }
 /**
  * CPU vector index with fixed dimensionality and stable uint64 external IDs.
@@ -129,6 +288,16 @@ function createFilter(owner, handle) {
  * queries before search. TurboVec normalizes indexed vectors while quantizing,
  * then restores their magnitude with a per-vector scale; it does not normalize
  * queries.
+ *
+ * Every method that reads or changes the index returns a promise and runs
+ * its native work on a worker thread owned by the addon, so the JS thread
+ * stays free. Calls on one index run one at a time, in call order, so a
+ * search made after an add sees that add. Across indexes, long work (adds,
+ * builds, loads, writes, compaction, filter preparation) and searches run on
+ * two separate worker threads, so a long build never holds up a search. Input
+ * arrays are copied
+ * when the call is made. Each call takes an optional `{ signal }`: see
+ * {@link IdMapIndexCallOptions}.
  */
 class IdMapIndex {
     static Filter = IdMapIndexFilter;
@@ -137,6 +306,16 @@ class IdMapIndex {
     [HANDLE] = null;
     [FILTERS] = new Set();
     [FILTERS_PRUNE_AT] = MIN_FILTERS_PRUNE_AT;
+    [QUEUE] = Promise.resolve();
+    [PENDING] = 0;
+    // Kept in JS so the getters never reach the native index while a worker
+    // holds it. `dim` and `bitWidth` are fixed; the rest are read again after
+    // each call that can change them.
+    [DIM] = 0;
+    [BIT_WIDTH] = 8;
+    [LENGTH] = 0;
+    [CALIBRATED] = false;
+    [STAGED] = false;
     constructor(options) {
         const { dim } = options ?? {};
         if (!isPositiveInt32(dim)) {
@@ -147,19 +326,33 @@ class IdMapIndex {
             throw new RangeError('IdMapIndex: TurboVec dim must be divisible by 8 and no greater than 16384');
         }
         this[HANDLE] = loadBinding().idx_create({ dim, storage });
+        this.readState();
     }
-    static load(path) {
+    static async load(path, options) {
         requireNonEmptyPath(path, 'IdMapIndex.load: path');
-        return IdMapIndex.fromHandle(this, loadBinding().idx_load(path));
+        const signal = readSignal('IdMapIndex.load', options);
+        return IdMapIndex.startLoad(this, signal, (token) => loadBinding().idx_load_async(path, token));
     }
-    static loadMmap(path) {
+    static async loadMmap(path, options) {
         requireNonEmptyPath(path, 'IdMapIndex.loadMmap: path');
-        return IdMapIndex.fromHandle(this, loadBinding().idx_load_mmap(path));
+        const signal = readSignal('IdMapIndex.loadMmap', options);
+        return IdMapIndex.startLoad(this, signal, (token) => loadBinding().idx_load_mmap_async(path, token));
     }
-    static loadWithDelta(snapshotPath, deltaPath) {
+    static async loadWithDelta(snapshotPath, deltaPath, options) {
         requireNonEmptyPath(snapshotPath, 'IdMapIndex.loadWithDelta: snapshotPath');
         requireNonEmptyPath(deltaPath, 'IdMapIndex.loadWithDelta: deltaPath');
-        return IdMapIndex.fromHandle(this, loadBinding().idx_load_with_delta(snapshotPath, deltaPath));
+        const signal = readSignal('IdMapIndex.loadWithDelta', options);
+        return IdMapIndex.startLoad(this, signal, (token) => loadBinding().idx_load_with_delta_async(snapshotPath, deltaPath, token));
+    }
+    static startLoad(ctor, signal, start) {
+        if (signal?.aborted) {
+            return Promise.reject(abortReason(signal));
+        }
+        const token = abortToken(signal);
+        const loaded = startNow(() => start(token)).then((handle) => IdMapIndex.fromHandle(ctor, handle));
+        return signal === undefined || token === undefined
+            ? loaded
+            : raceAbort(loaded, signal, token, disposeIndex);
     }
     // `ctor` is the class a loader was called on. A detached call such as
     // `const { load } = IdMapIndex` has no class, so it falls back to IdMapIndex.
@@ -171,6 +364,9 @@ class IdMapIndex {
         instance[HANDLE] = handle;
         instance[FILTERS] = new Set();
         instance[FILTERS_PRUNE_AT] = MIN_FILTERS_PRUNE_AT;
+        instance[QUEUE] = Promise.resolve();
+        instance[PENDING] = 0;
+        instance.readState();
         return instance;
     }
     /**
@@ -178,34 +374,32 @@ class IdMapIndex {
      * must contain `ids.length * dim` finite components. TurboVec additionally
      * requires `abs(component) < 1e16`. UINT64_MAX is reserved.
      */
-    addWithIds(vectors, ids) {
+    async addWithIds(vectors, ids, options) {
         this.validateBatch('addWithIds', vectors, ids);
-        try {
-            loadBinding().idx_add(ensureHandle(this), vectors, ids);
-        }
-        finally {
-            this.disposeFilters();
-        }
+        const signal = readSignal('addWithIds', options);
+        const borrow = waitsInQueue(this);
+        const rows = snapshot(this, vectors);
+        const keys = snapshot(this, ids);
+        return enqueue(this, (token) => this.mutate(() => loadBinding().idx_add_async(ensureHandle(this), rows, keys, token, borrow)), signal);
     }
     /**
      * Add vectors and append a durable v4 delta record. The index must first be
-     * loaded from or successfully written to a snapshot. Delta logs are
-     * state-bound and support one evolving writer; stale writers may catch up,
-     * and that catch-up remains applied even if this add throws. A complete
-     * record may also remain applied after a durability error, leaving the
-     * handle requiring a reload. Store delta logs on a local filesystem with
-     * reliable cooperative locking. TurboVec storage does not support logged
-     * mutations.
+     * loaded from or successfully written to a snapshot, and then takes only
+     * logged mutations. Delta logs are state-bound and support one evolving
+     * writer; stale writers may catch up, and that catch-up remains applied
+     * even if this add rejects. A complete record may also remain applied after
+     * a durability error, leaving the index requiring a reload. Store delta
+     * logs on a local filesystem with reliable cooperative locking. TurboVec
+     * storage does not support logged mutations.
      */
-    addLogged(vectors, ids, deltaPath) {
+    async addLogged(vectors, ids, deltaPath, options) {
         this.validateBatch('addLogged', vectors, ids);
         requireNonEmptyPath(deltaPath, 'addLogged: deltaPath');
-        try {
-            loadBinding().idx_add_logged(ensureHandle(this), vectors, ids, deltaPath);
-        }
-        finally {
-            this.disposeFilters();
-        }
+        const signal = readSignal('addLogged', options);
+        const borrow = waitsInQueue(this);
+        const rows = snapshot(this, vectors);
+        const keys = snapshot(this, ids);
+        return enqueue(this, (token) => this.mutate(() => loadBinding().idx_add_logged_async(ensureHandle(this), rows, keys, deltaPath, token, borrow)), signal);
     }
     /**
      * Top-k similarity search over row-major queries. Results are sorted
@@ -215,119 +409,143 @@ class IdMapIndex {
      * dot-product scoring. TurboVec query components require
      * `abs(value) < 1e16`. Short rows use UINT64_MAX padding.
      */
-    search(queries, k) {
+    async search(queries, k, options) {
         this.validateSearch('search', queries, k);
-        return loadBinding().idx_search(ensureHandle(this), queries, k);
+        const signal = readSignal('search', options);
+        const borrow = waitsInQueue(this);
+        const input = snapshot(this, queries);
+        return enqueue(this, (token) => loadBinding().idx_search_async(ensureHandle(this), input, k, token, borrow), signal);
     }
     /** Exact search restricted to the supplied external IDs. */
-    searchFiltered(queries, k, allowedIds) {
+    async searchFiltered(queries, k, allowedIds, options) {
         this.validateSearch('searchFiltered', queries, k);
         if (!(allowedIds instanceof BigUint64Array)) {
             throw new TypeError('searchFiltered: allowedIds must be a BigUint64Array');
         }
-        return loadBinding().idx_search_filtered(ensureHandle(this), queries, k, allowedIds);
+        const signal = readSignal('searchFiltered', options);
+        const borrow = waitsInQueue(this);
+        const input = snapshot(this, queries);
+        const allowed = snapshot(this, allowedIds);
+        return enqueue(this, (token) => loadBinding().idx_search_filtered_async(ensureHandle(this), input, k, allowed, token, borrow), signal);
     }
     /**
      * Prepare an allowlist for repeated searches. Native mutation attempts and
      * `buildIvf()` invalidate all prepared filters created from this index. Call
      * `dispose()` when done to release native filter memory promptly; dropped
-     * filters are reclaimed by GC.
+     * filters are reclaimed by GC. A filter that finishes after `signal` aborts
+     * is disposed.
      */
-    prepareFilter(allowedIds) {
+    async prepareFilter(allowedIds, options) {
         if (!(allowedIds instanceof BigUint64Array)) {
             throw new TypeError('prepareFilter: allowedIds must be a BigUint64Array');
         }
-        const filter = createFilter(this, loadBinding().idx_filter_create(ensureHandle(this), allowedIds));
-        this[FILTERS].add(filter[FILTER_REF]);
-        if (this[FILTERS].size >= this[FILTERS_PRUNE_AT]) {
-            this.pruneFilters();
-            this[FILTERS_PRUNE_AT] = Math.max(MIN_FILTERS_PRUNE_AT, this[FILTERS].size * 2);
-        }
-        return filter;
+        const signal = readSignal('prepareFilter', options);
+        const borrow = waitsInQueue(this);
+        const allowed = snapshot(this, allowedIds);
+        return enqueue(this, async (token) => {
+            const filterHandle = await loadBinding().idx_filter_create_async(ensureHandle(this), allowed, token, borrow);
+            // dispose() ran while the filter was being built. Free the filter now,
+            // while the index is still alive: fabric requires the index to outlive
+            // its filters, and the index is freed once this operation settles.
+            if (this[HANDLE] === null) {
+                loadBinding().idx_filter_dispose(filterHandle);
+                throw new Error('IdMapIndex has been disposed');
+            }
+            return this.registerFilter(filterHandle);
+        }, signal, (filter) => filter.dispose().catch(swallow));
     }
     /**
      * Build deterministic in-memory IVF-flat search state. Mutations invalidate
      * it, and snapshots do not persist it. Disposes every prepared filter, as a
      * mutation does: on TurboVec storage the build regroups the rows by IVF list.
+     * A build that has started runs to the end even when `signal` aborts.
      */
-    buildIvf(nLists, nIter = 0) {
+    async buildIvf(nLists, nIter = 0, options) {
         if (!isPositiveInt32(nLists)) {
             throw new TypeError('buildIvf: nLists must be a positive int32');
         }
         if (!isNonNegativeInt32(nIter)) {
             throw new TypeError('buildIvf: nIter must be a non-negative int32');
         }
-        try {
-            loadBinding().idx_build_ivf(ensureHandle(this), nLists, nIter);
-        }
-        finally {
-            this.disposeFilters();
-        }
+        const signal = readSignal('buildIvf', options);
+        return enqueue(this, async (token) => {
+            try {
+                await loadBinding().idx_build_ivf_async(ensureHandle(this), nLists, nIter, token);
+            }
+            finally {
+                // At this call's turn, once the native build is done: fabric refuses
+                // TurboVec filters prepared before the build.
+                this.disposeFilters(true);
+            }
+        }, signal);
     }
     /**
      * Search the IVF-flat candidate lists. `buildIvf()` must have run after the
      * latest mutation or load. Higher `nProbe` generally improves recall.
      */
-    searchIvf(queries, k, nProbe) {
+    async searchIvf(queries, k, nProbe, options) {
         this.validateSearch('searchIvf', queries, k);
         if (!isPositiveInt32(nProbe)) {
             throw new TypeError('searchIvf: nProbe must be a positive int32');
         }
-        return loadBinding().idx_search_ivf(ensureHandle(this), queries, k, nProbe);
+        const signal = readSignal('searchIvf', options);
+        const borrow = waitsInQueue(this);
+        const input = snapshot(this, queries);
+        return enqueue(this, (token) => loadBinding().idx_search_ivf_async(ensureHandle(this), input, k, nProbe, token, borrow), signal);
     }
-    /** Remove an ID, returning false when it is not present. */
-    remove(id) {
+    /** Remove an ID, resolving to false when it is not present. */
+    async remove(id, options) {
         this.validateId('remove', id);
-        const removed = loadBinding().idx_remove(ensureHandle(this), id);
-        if (removed) {
-            this.disposeFilters();
-        }
-        return removed;
+        const signal = readSignal('remove', options);
+        return enqueue(this, async (token) => {
+            const removed = await loadBinding().idx_remove_async(ensureHandle(this), id, token);
+            if (removed) {
+                this.afterMutation();
+            }
+            return removed;
+        }, signal);
     }
     /**
-     * Remove an ID and append a durable v4 delta record. Returns false when the
-     * ID is absent. Stale-writer catch-up may still mutate the handle when this
-     * method returns false or throws, and a complete record may remain applied
-     * after a durability error. The same binding and reload rules as
+     * Remove an ID and append a durable v4 delta record. Resolves to false when
+     * the ID is absent. Stale-writer catch-up may still mutate the index when
+     * this resolves to false or rejects, and a complete record may remain
+     * applied after a durability error. The same binding and reload rules as
      * `addLogged()` apply.
      */
-    removeLogged(id, deltaPath) {
+    async removeLogged(id, deltaPath, options) {
         this.validateId('removeLogged', id);
         requireNonEmptyPath(deltaPath, 'removeLogged: deltaPath');
-        try {
-            return loadBinding().idx_remove_logged(ensureHandle(this), id, deltaPath);
-        }
-        finally {
-            this.disposeFilters();
-        }
+        const signal = readSignal('removeLogged', options);
+        return enqueue(this, (token) => this.mutate(() => loadBinding().idx_remove_logged_async(ensureHandle(this), id, deltaPath, token)), signal);
     }
-    /** Physically reclaim tombstoned slots. Rejected on delta-bound handles. */
-    compact() {
-        try {
-            loadBinding().idx_compact(ensureHandle(this));
-        }
-        finally {
-            this.disposeFilters();
-        }
+    /** Physically reclaim tombstoned slots. Rejected on delta-bound indexes. */
+    async compact(options) {
+        const signal = readSignal('compact', options);
+        return enqueue(this, (token) => this.mutate(() => loadBinding().idx_compact_async(ensureHandle(this), token)), signal);
     }
-    /** Return whether the index contains an external ID. */
-    contains(id) {
+    /** Resolve to whether the index contains an external ID. */
+    async contains(id, options) {
         this.validateId('contains', id);
-        return loadBinding().idx_contains(ensureHandle(this), id);
+        const signal = readSignal('contains', options);
+        // A hash lookup: run on the JS thread at this call's turn in the queue,
+        // when no worker holds the index.
+        return enqueue(this, () => loadBinding().idx_contains(ensureHandle(this), id), signal);
     }
     /** Best-effort warmup of TurboVec rotation and codebook state. */
-    prepare() {
-        loadBinding().idx_prepare(ensureHandle(this));
+    async prepare(options) {
+        const signal = readSignal('prepare', options);
+        return enqueue(this, (token) => loadBinding().idx_prepare_async(ensureHandle(this), token), signal);
     }
     /**
      * Persist a checksummed v2 snapshot for f32/q4/q8, or a v8 snapshot for
-     * TurboVec (v3 for an index loaded from a v3 snapshot). Delta-bound handles
+     * TurboVec (v3 for an index loaded from a v3 snapshot). Delta-bound indexes
      * must use `compactDelta()`. A NotDurable error means replacement succeeded
      * but parent-directory durability was not confirmed.
      */
-    write(path) {
+    async write(path, options) {
         requireNonEmptyPath(path, 'write: path');
-        loadBinding().idx_write(ensureHandle(this), path);
+        const signal = readSignal('write', options);
+        return enqueue(this, (token) => loadBinding().idx_write_async(ensureHandle(this), path, token), signal);
     }
     /**
      * Write a fresh snapshot and reset its matching v4 delta log. A
@@ -335,74 +553,140 @@ class IdMapIndex {
      * reset could not be confirmed. TurboVec storage does not support delta
      * compaction and is rejected with `InvalidArgument`.
      */
-    compactDelta(snapshotPath, deltaPath) {
+    async compactDelta(snapshotPath, deltaPath, options) {
         requireNonEmptyPath(snapshotPath, 'compactDelta: snapshotPath');
         requireNonEmptyPath(deltaPath, 'compactDelta: deltaPath');
-        try {
-            loadBinding().idx_compact_delta(ensureHandle(this), snapshotPath, deltaPath);
-        }
-        finally {
-            this.disposeFilters();
-        }
-    }
-    /** Number of live entries. */
-    get length() {
-        return loadBinding().idx_len(ensureHandle(this));
-    }
-    /** Vector dimensionality. */
-    get dim() {
-        return loadBinding().idx_dim(ensureHandle(this));
-    }
-    /** Effective storage bit width. */
-    get bitWidth() {
-        return loadBinding().idx_bit_width(ensureHandle(this));
+        const signal = readSignal('compactDelta', options);
+        return enqueue(this, (token) => this.mutate(() => loadBinding().idx_compact_delta_async(ensureHandle(this), snapshotPath, deltaPath, token)), signal);
     }
     /**
-     * Whether a TurboVec index holds a TQ+ calibration. A fresh TurboVec index
-     * calibrates from its first `addWithIds()` batch when that batch has at
-     * least 1,000 rows; other storages are never calibrated.
+     * Turn TurboVec staged search on or off for the searches queued after this
+     * call. On, a search of 32,768 or more vectors scans a compressed form
+     * first and scores only a shortlist: several times faster per query, but
+     * it can miss some of the best matches, especially at small k. It applies
+     * only at a dimension divisible by 32, on hosts that support it, and never
+     * to an index loaded from a v3 snapshot; elsewhere the setting is kept but
+     * every search scans in full. Rejects for non-TurboVec storage. Not saved
+     * in snapshots.
      */
-    get calibrated() {
-        return loadBinding().idx_calibrated(ensureHandle(this));
-    }
-    /**
-     * Whether staged search is turned on. Off for every new or loaded index.
-     * Reports the setting, not whether a search runs in stages: see
-     * `setStagedSearch()`.
-     */
-    get stagedSearch() {
-        return loadBinding().idx_staged(ensureHandle(this));
-    }
-    /**
-     * Turn TurboVec staged search on or off. On, a search of 32,768 or more
-     * vectors scans a compressed form first and scores only a shortlist: several
-     * times faster per query, but it can miss some of the best matches,
-     * especially at small k. It applies only at a dimension divisible by 32, on
-     * hosts that support it, and never to an index loaded from a v3 snapshot;
-     * elsewhere the setting is kept but every search scans in full. Throws for
-     * non-TurboVec storage. Not saved in snapshots.
-     */
-    setStagedSearch(enabled) {
+    async setStagedSearch(enabled, options) {
         if (typeof enabled !== 'boolean') {
             throw new TypeError('setStagedSearch: enabled must be a boolean');
         }
-        loadBinding().idx_set_staged(ensureHandle(this), enabled);
+        const signal = readSignal('setStagedSearch', options);
+        return enqueue(this, async (token) => {
+            await loadBinding().idx_set_staged_async(ensureHandle(this), enabled, token);
+            this[STAGED] = enabled;
+        }, signal);
     }
-    /** Release filters and native index resources. This operation is idempotent. */
+    /** Number of live entries after the last call that finished. */
+    get length() {
+        ensureHandle(this);
+        return this[LENGTH];
+    }
+    /** Vector dimensionality. */
+    get dim() {
+        ensureHandle(this);
+        return this[DIM];
+    }
+    /** Effective storage bit width. */
+    get bitWidth() {
+        ensureHandle(this);
+        return this[BIT_WIDTH];
+    }
+    /**
+     * Whether a TurboVec index holds a TQ+ calibration, as of the last call
+     * that finished. A fresh TurboVec index calibrates from its first
+     * `addWithIds()` batch when that batch has at least 1,000 rows; other
+     * storages are never calibrated.
+     */
+    get calibrated() {
+        ensureHandle(this);
+        return this[CALIBRATED];
+    }
+    /**
+     * Whether staged search is turned on, as of the last `setStagedSearch()`
+     * that finished. Off for every new or loaded index. Reports the setting,
+     * not whether a search runs in stages: see `setStagedSearch()`.
+     */
+    get stagedSearch() {
+        ensureHandle(this);
+        return this[STAGED];
+    }
+    /**
+     * Release filters and native index resources. The index cannot be used
+     * after this call, and calls that have not started reject. A call that is
+     * running finishes first; the native index is freed after it. Resolves
+     * once the native index has been freed, and rejects if freeing it fails.
+     * This operation is idempotent.
+     */
     dispose() {
+        const handle = this[HANDLE];
+        if (handle === null) {
+            return this[QUEUE].then(swallow);
+        }
+        this.disposeFilters(false);
+        this[HANDLE] = null;
+        return releaseAfterQueue(this, () => loadBinding().idx_dispose(handle));
+    }
+    // Frees every prepared filter. `now` is for a call's own turn in the queue,
+    // when no worker holds the index; otherwise each free waits its turn.
+    disposeFilters(now) {
+        for (const ref of this[FILTERS]) {
+            const filter = ref.deref();
+            if (filter === undefined) {
+                continue;
+            }
+            if (!now) {
+                // The caller learns of a failed free from the filter's own dispose().
+                filter.dispose().catch(swallow);
+                continue;
+            }
+            const detached = detachFilter(filter);
+            if (detached !== null) {
+                loadBinding().idx_filter_dispose(detached.filterHandle);
+            }
+        }
+        this[FILTERS].clear();
+    }
+    // Reads the cached state back from the native index. Called at a turn in
+    // the queue, or before the index is shared, when no worker holds it.
+    readState() {
         const handle = this[HANDLE];
         if (handle === null) {
             return;
         }
-        this.disposeFilters();
-        loadBinding().idx_dispose(handle);
-        this[HANDLE] = null;
+        const native = loadBinding();
+        this[DIM] = native.idx_dim(handle);
+        this[BIT_WIDTH] = native.idx_bit_width(handle);
+        this[LENGTH] = native.idx_len(handle);
+        this[CALIBRATED] = native.idx_calibrated(handle);
+        this[STAGED] = native.idx_staged(handle);
     }
-    disposeFilters() {
-        for (const ref of this[FILTERS]) {
-            ref.deref()?.dispose();
+    // After a mutation: prepared filters no longer match the index, and the
+    // cached state may have changed.
+    afterMutation() {
+        this.disposeFilters(true);
+        this.readState();
+    }
+    // Runs a native mutation, then invalidates prepared filters whether or not
+    // it succeeded: a failed mutation may still have changed the index.
+    async mutate(start) {
+        try {
+            return await start();
         }
-        this[FILTERS].clear();
+        finally {
+            this.afterMutation();
+        }
+    }
+    registerFilter(handle) {
+        const filter = createFilter(this, handle);
+        this[FILTERS].add(filter[FILTER_REF]);
+        if (this[FILTERS].size >= this[FILTERS_PRUNE_AT]) {
+            this.pruneFilters();
+            this[FILTERS_PRUNE_AT] = Math.max(MIN_FILTERS_PRUNE_AT, this[FILTERS].size * 2);
+        }
+        return filter;
     }
     pruneFilters() {
         for (const ref of this[FILTERS]) {
