@@ -76,7 +76,7 @@ memory pools it was judged on: `host` for the host's memory, and one pool per
 GPU with its own memory, keyed by the GPU's `id`. Each carries what the set takes
 from it and the lowest free and total figures reported for it.
 
-`models` holds one entry per model, in input order: the engine addon's own
+`models` holds one entry per model, in input order: the engine addon's
 `assessFit` result. `status` is that model's verdict alone, `devices` has one row
 per device its load uses with the host last. For a llama.cpp model with a
 verdict, `stats` holds the context size and GPU layers the load resolves to: the
@@ -111,12 +111,18 @@ The SDK groups the rows of every model into pools. Every unified row joins the
 host pool; any other row joins the pool of its `id`. A pool's use is the sum of
 its rows' `usedBytes`. Its free memory is the lowest figure reported for it.
 
-For a single model, `verdict` is that model's `status`: the fitter applies the
-engine's own margin to its devices. For several models:
+A model's `status` is its verdict alone. The fitter applies the engine's own
+margin to each device apart, so a model whose rows share one pool, such as a
+Metal GPU and the CPU drawing on the host's memory, can fit every device and
+still overflow the pool. Its `status` is `does-not-fit` when its rows in one pool
+use more than 90% of that pool's free memory. A row alone in its pool, such as a
+discrete GPU, keeps the fitter's answer.
+
+For a single model, `verdict` is that model's `status`. For several models:
 
 ```text
 any pool uses more than 90% of its free memory  → does-not-fit
-any model's fitter says does-not-fit            → does-not-fit
+any model does not fit alone                    → does-not-fit
 otherwise, any model unknown or any pool with
   no free figure                                → unknown
 otherwise                                       → fits

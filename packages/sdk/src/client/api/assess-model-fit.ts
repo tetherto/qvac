@@ -29,7 +29,10 @@ function withModelType(candidate: AssessModelFitInput['models'][number]) {
  *
  * Each model's engine fitter runs against the registry's weightless description
  * of the model, or the model itself when it is on disk. The memory each load
- * takes is summed per device and compared against what is free.
+ * takes is summed per memory pool and compared against what is free. Each
+ * model's status is its verdict alone, which counts its rows that share one
+ * pool, such as a Metal GPU and the CPU, together. A single model's verdict is
+ * its status; a set does not fit when any model does not fit alone.
  *
  * `unknown` is the answer for a load that would start but cannot be sized: an
  * engine with no fitter, a load the fitter cannot project, a model with no

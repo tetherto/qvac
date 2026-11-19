@@ -4,7 +4,7 @@ import { getEngineLogger } from '@/logging/index'
 import type { Logger } from '@/logging/types'
 import { fitLoad, unknownFit, type FitLoadOptions, type LoadFit } from '@/model-fit/fit-load'
 import { describeAccounting, describePool } from '@/model-fit/describe'
-import { combineFits, type CombinedFit } from '@/model-fit/sum'
+import { combineFits, USABLE_SHARE, type CombinedFit } from '@/model-fit/sum'
 import type { CanonicalModelType, ModelFitProbe } from '@/schemas/index'
 
 export interface LoadCheckInput {
@@ -35,7 +35,7 @@ export interface LoadCheck {
 /** The pools the load overflows, or the fitter's own refusal when none does. */
 function refusalDetail(combined: CombinedFit): string {
   const over = combined.pools.filter(
-    (pool) => pool.freeBytes !== undefined && pool.usedBytes > pool.freeBytes
+    (pool) => pool.freeBytes !== undefined && pool.usedBytes > pool.freeBytes * USABLE_SHARE
   )
   if (over.length === 0) return 'the engine fitter projects it will not fit its devices'
   return `needs ${over.map(describePool).join(', ')}`

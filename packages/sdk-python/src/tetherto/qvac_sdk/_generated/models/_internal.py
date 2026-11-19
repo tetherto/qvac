@@ -419,7 +419,7 @@ class ModelFitModelResult(GeneratedBaseModel):
     status: Annotated[
         ModelFitModelResultStatus,
         Field(
-            description="The engine fitter's verdict for this model alone.",
+            description="This model's verdict alone: the engine fitter's, and `does-not-fit` when its rows sharing one memory pool take more than 90% of that pool's free memory.",
             title="ModelFitModelResultStatus",
         ),
     ]
@@ -8660,7 +8660,7 @@ class ModelFitProbeModel(GeneratedBaseModel):
     status: Annotated[
         ModelFitProbeModelStatus,
         Field(
-            description="The engine fitter's verdict for this model alone.",
+            description="This model's verdict alone: the engine fitter's, and `does-not-fit` when its rows sharing one memory pool take more than 90% of that pool's free memory.",
             title="ModelFitProbeModelStatus",
         ),
     ]
