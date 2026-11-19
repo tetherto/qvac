@@ -1471,6 +1471,94 @@ test(
   }
 )
 
+// Offsets in a cache file (fabric's sequence-state layout): a 12-byte header
+// whose last word is the token count, the ledger as the token list (word 7 is
+// the format mark), then the KV state, whose first word on a plain KV cache
+// is its stream count.
+const CACHE_TOKEN_COUNT_OFFSET = 8
+const CACHE_LEDGER_OFFSET = 12
+const CACHE_FORMAT_MARK_OFFSET = CACHE_LEDGER_OFFSET + 7 * 4
+
+function cacheStreamCountOffset(view) {
+  return CACHE_LEDGER_OFFSET + 4 * view.getUint32(CACHE_TOKEN_COUNT_OFFSET, true)
+}
+
+function readCacheWords(key) {
+  const bytes = fs.readFileSync(key)
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  return {
+    bytes,
+    view,
+    mark: view.getUint32(CACHE_FORMAT_MARK_OFFSET, true),
+    streams: view.getUint32(cacheStreamCountOffset(view), true)
+  }
+}
+
+// A file saved before the unified KV cache has format mark 0 and, with
+// parallel >= 2, one KV stream per slot. It starts the request cold and is
+// replaced by the next save; a current file fabric refuses still fails.
+test(
+  'continuous batching: a cache file from before the unified KV cache starts cold',
+  { timeout: 900_000, skip: isMobile },
+  async (t) => {
+    for (const parallel of ['1', '2']) {
+      t.comment(`parallel ${parallel}`)
+      const stamp = `${parallel}-${Date.now()}`
+      const oldKey = path.join(os.tmpdir(), `qvac-old-layout-${stamp}.bin`)
+      const badKey = path.join(os.tmpdir(), `qvac-bad-streams-${stamp}.bin`)
+      t.teardown(() => {
+        for (const key of [oldKey, badKey]) {
+          try {
+            fs.unlinkSync(key)
+          } catch {}
+        }
+      })
+
+      const writer = await setupModel(t, { parallel })
+      const history = [{ role: 'user', content: 'Name a color.' }]
+      await collectText(await writer.run(history, { cacheKey: oldKey }))
+      await writer.saveCache(oldKey)
+      await writer.unload()
+
+      const saved = readCacheWords(oldKey)
+      t.is(saved.mark, 1, 'a current file carries the format mark')
+      t.is(saved.streams, 1, 'a current file holds one KV stream')
+      saved.view.setUint32(cacheStreamCountOffset(saved.view), 2, true)
+      fs.writeFileSync(badKey, saved.bytes)
+      saved.view.setUint32(CACHE_FORMAT_MARK_OFFSET, 0, true)
+      fs.writeFileSync(oldKey, saved.bytes)
+
+      const { model: reader, logs } = await setupModelWithLogs(t, { parallel })
+      const output = await collectText(
+        await reader.run([{ role: 'user', content: 'Hi' }], { cacheKey: oldKey })
+      )
+      t.ok(output.length > 0, 'the request runs without the old file')
+      t.ok(
+        logs.some((line) => line.includes('was saved by an earlier version')),
+        'the old file is reported as a warning'
+      )
+      await reader.saveCache(oldKey)
+      const replaced = readCacheWords(oldKey)
+      t.is(replaced.mark, 1, 'the next save replaces the old file')
+      t.is(replaced.streams, 1, 'the replacement holds one KV stream')
+
+      const error = await reader
+        .run([{ role: 'user', content: 'Hi' }], { cacheKey: badKey })
+        .then(collectText)
+        .then(
+          () => null,
+          (err) => err
+        )
+      t.comment(`current file with two streams: ${error?.message}`)
+      t.ok(
+        /failed to load (cache|session file)/.test(error?.message || ''),
+        'a current file that fabric refuses still fails to load'
+      )
+      await reader.unload()
+    }
+  }
+)
+
 // A short prompt after filler words, leaving about 100 tokens under the cap, so
 // a long answer runs into it.
 async function assertGenerationStopsAtCap(t, model) {

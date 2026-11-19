@@ -2746,25 +2746,6 @@ bool MtmdLlmContext::loadCache(
       stateTokens.data(),
       stateTokens.size(),
       &tokenCount);
-  if (loadedBytes == 0) {
-    // A file from before the unified KV cache may hold one KV stream per
-    // slot: it is a cold miss, and the next save replaces it.
-    if (cache::predatesUnifiedKv(stateTokens.data(), tokenCount)) {
-      QLOG_IF(
-          Priority::WARNING,
-          "[MtmdLlm] cache '" + cacheKey +
-              "' was saved by an earlier version and cannot be restored; "
-              "starting without it\n");
-      return false;
-    }
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnableToLoadSessionFile),
-        "MtmdLlmContext::loadCache: failed to load cache '" + cacheKey + "'");
-  }
-  // Cache files hold the target state only, like llama-server's slot files.
-  speculative::resetDraftSequence(modelCtx_.lctx, seqId_);
-
   // `llama_state_seq_load_file` has already restored this sequence's KV cells.
   // Every validation below runs after that restore, and the scheduler installs
   // its per-slot cleanup guard only once this function returns, so any throw in
@@ -2782,6 +2763,26 @@ bool MtmdLlmContext::loadCache(
     current_ = {};
     clearCacheReconciliationState();
   });
+  if (loadedBytes == 0) {
+    // A file from before the unified KV cache may hold one KV stream per
+    // slot: it is a cold miss, and the next save replaces it. A failed
+    // restore can leave part of the state behind, so the guard clears it.
+    if (cache::predatesUnifiedKv(stateTokens.data(), tokenCount)) {
+      QLOG_IF(
+          Priority::WARNING,
+          "[MtmdLlm] cache '" + cacheKey +
+              "' was saved by an earlier version and cannot be restored; "
+              "starting without it\n");
+      return false;
+    }
+    restoredKvGuard.dismiss();
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadSessionFile),
+        "MtmdLlmContext::loadCache: failed to load cache '" + cacheKey + "'");
+  }
+  // Cache files hold the target state only, like llama-server's slot files.
+  speculative::resetDraftSequence(modelCtx_.lctx, seqId_);
 
   stateTokens.resize(tokenCount);
   if (!cache::hasMarker(stateTokens.data(), stateTokens.size())) {

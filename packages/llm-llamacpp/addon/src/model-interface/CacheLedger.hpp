@@ -24,10 +24,11 @@ namespace qvac_lib_inference_addon_llama::cache {
 // manifest.  Keep the marker positive: llama_token is signed on some builds.
 inline constexpr llama_token LEDGER_MAGIC = 0x514c4447; // "QLDG"
 inline constexpr llama_token LEDGER_VERSION = 1;
-// Header word 7. Ledgers written before the KV cache became unified hold 0;
-// their state may carry one KV stream per slot, which fabric cannot restore
-// into the unified cache. Readers that predate it ignore the word.
-inline constexpr llama_token LEDGER_KV_LAYOUT = 1;
+// Header word 7: a format mark, set by every version since the KV cache
+// became unified, whatever layout the state has. Ledgers written before hold
+// 0; their state may carry one KV stream per slot, which fabric cannot
+// restore into the unified cache. Readers that predate it ignore the word.
+inline constexpr llama_token LEDGER_UNIFIED_KV_MARK = 1;
 inline constexpr size_t LEDGER_HEADER_WORDS = 8;
 inline constexpr size_t LEDGER_ENTRY_WORDS = 5;
 // Process-local checkpoints kept per sequence on models that cannot trim a KV
@@ -394,7 +395,7 @@ serialize(const Ledger& ledger, llama_pos nPast, llama_pos cacheTokens) {
   out[4] = static_cast<llama_token>(ledger.entries.size());
   out[5] = 0;
   out[6] = 0;
-  out[7] = LEDGER_KV_LAYOUT;
+  out[7] = LEDGER_UNIFIED_KV_MARK;
   size_t cursor = LEDGER_HEADER_WORDS;
   for (const Entry& entry : ledger.entries) {
     const uint64_t id = static_cast<uint64_t>(entry.identity);
@@ -488,7 +489,7 @@ inline DecodedLedger deserialize(const llama_token* words, size_t count) {
 }
 
 /// True for a well-formed ledger written before the KV cache became unified
-/// (see `LEDGER_KV_LAYOUT`).
+/// (see `LEDGER_UNIFIED_KV_MARK`).
 inline bool predatesUnifiedKv(const llama_token* words, size_t count) {
   if (!hasMarker(words, count) || count < LEDGER_HEADER_WORDS ||
       words[7] != 0) {

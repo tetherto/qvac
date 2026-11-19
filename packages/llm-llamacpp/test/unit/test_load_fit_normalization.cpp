@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <iterator>
 #include <limits>
+#include <random>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
@@ -2122,21 +2123,23 @@ TEST_F(LoadFitNormalizationTest, KvCacheIsUnified) {
   }
 }
 
-// DeepSeek V4 keeps one KV buffer per slot with several slots: fabric sizes
-// each of its per-sequence caches from n_ctx_seq.
+// DeepSeek V4 and 4.1 keep one KV buffer per slot with several slots: fabric
+// sizes each of their per-sequence caches from n_ctx_seq.
 TEST_F(LoadFitNormalizationTest, DeepSeekV4KeepsKvBufferPerSlot) {
-  const test_common::MockModelMetaData deepSeekV4{false, "deepseek4"};
-  for (const std::string parallel : {"1", "2"}) {
-    auto config = baseConfig();
-    config["parallel"] = parallel;
-    const auto result = lfn::normalizeLoadForFit(
-        "/tmp/model.gguf",
-        std::move(config),
-        deepSeekV4,
-        {},
-        backend({.type = backend_selection::GPU, .name = "none"}));
-    EXPECT_EQ(result.params.kv_unified, parallel == "1")
-        << "parallel=" << parallel;
+  for (const std::string architecture : {"deepseek4", "deepseek41"}) {
+    const test_common::MockModelMetaData deepSeek{false, architecture};
+    for (const std::string parallel : {"1", "2"}) {
+      auto config = baseConfig();
+      config["parallel"] = parallel;
+      const auto result = lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          deepSeek,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}));
+      EXPECT_EQ(result.params.kv_unified, parallel == "1")
+          << architecture << ", parallel=" << parallel;
+    }
   }
 }
 
@@ -2152,8 +2155,10 @@ TEST_F(LoadFitNormalizationTest, LongRopeFactorsKeepKvBufferPerSlot) {
       {{"rope_factors_long.weight", "rope_freqs.weight"}, true},
       {{"token_embd.weight"}, true},
   };
+  // Per-run name: test processes may run concurrently.
   const auto path =
-      std::filesystem::temp_directory_path() / "qvac-long-rope-test.gguf";
+      std::filesystem::temp_directory_path() /
+      ("qvac-long-rope-" + std::to_string(std::random_device{}()) + ".gguf");
   for (const Case& testCase : cases) {
     const size_t memSize =
         testCase.tensors.size() * (ggml_tensor_overhead() + 64);

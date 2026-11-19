@@ -64,7 +64,7 @@ TEST(CacheLedger, RejectsMarkedCorruption) {
 TEST(CacheLedger, TellsLedgersFromBeforeTheUnifiedKvCache) {
   const cache::Ledger ledger = cache::fromTokens({1, 2, 3});
   auto encoded = cache::serialize(ledger, 3, 3);
-  EXPECT_EQ(encoded[7], cache::LEDGER_KV_LAYOUT);
+  EXPECT_EQ(encoded[7], cache::LEDGER_UNIFIED_KV_MARK);
   EXPECT_FALSE(cache::predatesUnifiedKv(encoded.data(), encoded.size()));
 
   encoded[7] = 0;

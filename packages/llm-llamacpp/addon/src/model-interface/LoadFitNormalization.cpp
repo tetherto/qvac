@@ -465,10 +465,12 @@ uint32_t trainedContext(const ModelMetaData& metadata) {
 // buffer per slot, so each slot behaves as it would alone.
 bool keepsKvBufferPerSlot(
     const std::string& modelPath, const ModelMetaData& metadata) {
+  // Fabric builds the DeepSeek V4 cache for deepseek41 too.
   const auto architecture = metadata.tryGetString("general.architecture");
   if (architecture.has_value() &&
-      qvac_lib_inference_addon_llama::utils::isDeepSeekV4Architecture(
-          *architecture)) {
+      (qvac_lib_inference_addon_llama::utils::isDeepSeekV4Architecture(
+           *architecture) ||
+       *architecture == "deepseek41")) {
     return true;
   }
   std::error_code errorCode;
@@ -2135,7 +2137,7 @@ NormalizedLoad normalizeLoadForFit(
       params, LLAMA_EXAMPLE_COMMON, [](int, char**) {});
   // llama-server's --kv-unified-per-slot is not registered for
   // LLAMA_EXAMPLE_COMMON, so fabric's server definition is used as it is.
-  // --kv-unified is not exposed: the KV cache is always unified.
+  // --kv-unified is not exposed: the addon decides it (keepsKvBufferPerSlot).
   common_params serverDefaults;
   auto serverArg = common_params_parser_init(
       serverDefaults, LLAMA_EXAMPLE_SERVER, [](int, char**) {});

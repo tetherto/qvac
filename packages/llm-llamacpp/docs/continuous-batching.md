@@ -58,7 +58,7 @@ const model = new LlmLlamacpp({
 })
 ```
 
-`parallel` maps to `n_seq_max` in llama.cpp. The slots share one KV cache, each limited to an even share: with `ctx_size: '8192'` and `parallel: '4'`, each slot gets a 2048-token window ([details](#one-shared-kv-pool)). Values less than 2 leave the single-prompt path active; batch `run()` calls throw `InvalidArgument` in that case.
+`parallel` maps to `n_seq_max` in llama.cpp. The slots share one KV cache (except on DeepSeek V4 and V4.1 and models with long RoPE factors; see below), each limited to an even share: with `ctx_size: '8192'` and `parallel: '4'`, each slot gets a 2048-token window ([details](#one-shared-kv-pool)). Values less than 2 leave the single-prompt path active; batch `run()` calls throw `InvalidArgument` in that case.
 
 The accepted range is `1..256`. The ceiling is the engine's own sequence limit (`LLAMA_MAX_SEQ`), so anything above it is rejected when the instance is constructed — otherwise it would spawn the full thread pool and only then fail the model load, where llama.cpp swallows the real reason into a log line. `ctx_size / parallel` must also leave at least one token per slot, so a `parallel` too large for the context (or a `batch_size` smaller than `parallel`) is refused as an `InvalidArgument` naming the knobs involved.
 
@@ -352,7 +352,7 @@ With `parallel = N` and `ctx_size = C`, each slot gets `C / N` tokens, or `kv_un
 
 ### One shared KV pool
 
-All slots keep their KV cache in one buffer of `C` cells, as llama-server's `--kv-unified`; this is not configurable. The addon, not the buffer, keeps each slot to `C / N`. With `parallel >= 2`, two kinds of model keep one buffer per slot instead, because fabric reads each slot's size from the buffer: DeepSeek V4, which sizes its per-slot caches from it, and models with long RoPE factors (for example Phi-3), which choose them by it. `kv_unified_per_slot` lowers each slot's limit, like `--kv-unified-per-slot`:
+All slots keep their KV cache in one buffer of `C` cells, as llama-server's `--kv-unified`; this is not configurable. The addon, not the buffer, keeps each slot to `C / N`. With `parallel >= 2`, two kinds of model keep one buffer per slot instead, because fabric reads each slot's size from the buffer: DeepSeek V4 and V4.1, which size their per-slot caches from it, and models with long RoPE factors (for example Phi-3), which choose them by it. `kv_unified_per_slot` lowers each slot's limit, like `--kv-unified-per-slot`:
 
 ```js
 config: { parallel: '4', kv_unified_per_slot: '2048' } // one 8192-cell pool, 2048 per slot
@@ -362,7 +362,7 @@ config: { parallel: '4', kv_unified_per_slot: '2048' } // one 8192-cell pool, 20
 - **Only an even split** — with `parallel >= 2`, `parallel x kv_unified_per_slot` must fit the pool, or the load fails with `InvalidArgument`, and a negative `kv_unified_per_slot` is rejected. Admission checks each slot only against its own limit, so limits adding up to more than the pool would let the pool fill mid-decode and fail every request in progress. llama-server accepts that setup; the addon does not.
 - **Attention** — with flash attention on CPU, Metal, and CUDA (Turing or newer), each slot attends only to its own cells. Elsewhere, including Vulkan, each slot's attention spans the shared buffer up to the highest used cell, with the other slots masked out, so decoding can be slower than with one buffer per slot. Slots sharing the buffer are not isolated from each other, so do not treat one model instance as a boundary between callers that do not trust each other.
 - **Model-specific** — sliding-window models keep one window cache of `min(C, n_swa x N + n_ubatch)` cells. With `parallel >= 2`, MiniMax-M3 turns sparse attention off, and Qwen4exp keeps it but its indexer takes more memory.
-- **Cache files** — a file saved by an earlier version with `parallel >= 2` holds one KV stream per slot, which the shared buffer cannot restore. A file from an earlier version that fails to restore starts the request without it, with a warning, and the next save replaces it. DeepSeek V4 and models with long RoPE factors still load such files when `parallel` is unchanged.
+- **Cache files** — a file saved by an earlier version with `parallel >= 2` holds one KV stream per slot, which the shared buffer cannot restore. A file from an earlier version that fails to restore starts the request without it, with a warning, and the next save replaces it. The models that keep one buffer per slot still save one KV stream per slot, so their cache files load only at the `parallel` they were saved with, as before; a file this version saved at another `parallel` fails with `UnableToLoadSessionFile`.
 
 ---
 
