@@ -1,7 +1,6 @@
 import qvacCrypto from '#crypto'
 
 import type { IndexStorage } from '../types.js'
-import type { NativeIndex } from './native.js'
 
 // What a snapshot was taken of. A snapshot is used only when every field
 // matches the namespace, so a namespace re-created under the same name, or a
@@ -25,11 +24,18 @@ export interface StoredSnapshot {
   revision: number
 }
 
+export interface SnapshotWrite {
+  revision: number
+  written: Promise<void>
+}
+
 export interface SnapshotStore {
   read(identity: SnapshotIdentity): Promise<StoredSnapshot | null>
-  // `revision` is read right before the synchronous native write, so the file
-  // and its sidecar always describe the same state. Returns that revision.
-  write(identity: SnapshotIdentity, index: NativeIndex, revision: () => number): Promise<number>
+  // `start` must read the revision and start the native write synchronously.
+  write(
+    identity: SnapshotIdentity,
+    start: (pathFor: (revision: number) => string) => SnapshotWrite
+  ): Promise<number>
 }
 
 interface FileSystem {
@@ -85,14 +91,21 @@ export function createSnapshotStore(dir: string, coreKey: string): SnapshotStore
       return { path: `${root}/${sidecar.file}`, revision: sidecar.revision }
     },
 
-    async write(identity, index, current) {
+    async write(identity, start) {
       const files = await fileSystem()
       await files.mkdir(root, { recursive: true })
       const name = base(identity.namespace)
       const previous = await readSidecar(identity.namespace)
-      const revision = current()
-      const file = `${name}.${revision}.tvec`
-      index.write(`${root}/${file}`)
+      const fileFor = (revision: number) => `${name}.${revision}.tvec`
+      const { revision, written } = start((revision) => `${root}/${fileFor(revision)}`)
+      const file = fileFor(revision)
+      try {
+        await written
+      } catch (error) {
+        // Keep the file if the sidecar still names it.
+        if (previous?.file !== file) await files.unlink(`${root}/${file}`).catch(() => {})
+        throw error
+      }
 
       const sidecar: Sidecar = { version: 1, ...identity, revision, file }
       const sidecarPath = `${root}/${name}.json`
