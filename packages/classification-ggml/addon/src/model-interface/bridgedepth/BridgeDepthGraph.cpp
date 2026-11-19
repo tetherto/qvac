@@ -46,6 +46,9 @@ constexpr std::string_view TRANSPOSED_CONV_0 =
     "mono.depth_head.resize_layers.0.weight";
 constexpr std::string_view TRANSPOSED_CONV_1 =
     "mono.depth_head.resize_layers.1.weight";
+// Conv1d kernel with one output channel: ggml [K, IC, 1] has two dims, so
+// the rank test of isLinearWeight alone would take it for a linear.
+constexpr std::string_view DPN_COST_CONV = "stereo.dpn.mlp.4.weight";
 
 // Token count that shapes the load-time support probes. The backends decide
 // from the op, the tensor types and the head dim, not from the count.
@@ -101,12 +104,14 @@ struct GpuPath {
 };
 
 // nn.Linear weights are the 2D tensors named "*.weight" in the converter
-// output; conv kernels are 3D or 4D, norms and biases 1D, and the rpe and
-// pos-embed tables (2D, read by get_rows or on the host) have other names.
+// output; conv kernels are 3D or 4D except DPN_COST_CONV, norms and biases
+// 1D, and the rpe and pos-embed tables (2D, read by get_rows or on the host)
+// have other names.
 bool isLinearWeight(const T* t, const std::string& name) {
   constexpr std::string_view suffix = ".weight";
-  return name != DEPTH_PRIOR_LINEAR && t->type == GGML_TYPE_F32 &&
-         ggml_n_dims(t) == 2 && name.size() >= suffix.size() &&
+  return name != DEPTH_PRIOR_LINEAR && name != DPN_COST_CONV &&
+         t->type == GGML_TYPE_F32 && ggml_n_dims(t) == 2 &&
+         name.size() >= suffix.size() &&
          name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0;
 }
 
