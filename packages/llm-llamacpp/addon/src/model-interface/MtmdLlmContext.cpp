@@ -227,7 +227,8 @@ void MtmdLlmContext::initializeCommonState() {
           llama_model_is_recurrent(model),
           llama_model_is_hybrid(model),
           isDeepSeekV4);
-  // n_ctx_seq is the whole shared pool; a sequence never outgrows its ceiling.
+  // When unified, n_ctx_seq is the whole pool; a sequence never outgrows
+  // its ceiling.
   slidingWindowCheckpoints_ =
       (model != nullptr) && !needsFullStateSnapshot_ &&
       qvac_lib_inference_addon_llama::utils::takesSlidingWindowCheckpoints(
@@ -2746,6 +2747,16 @@ bool MtmdLlmContext::loadCache(
       stateTokens.size(),
       &tokenCount);
   if (loadedBytes == 0) {
+    // A file from before the unified KV cache may hold one KV stream per
+    // slot: it is a cold miss, and the next save replaces it.
+    if (cache::predatesUnifiedKv(stateTokens.data(), tokenCount)) {
+      QLOG_IF(
+          Priority::WARNING,
+          "[MtmdLlm] cache '" + cacheKey +
+              "' was saved by an earlier version and cannot be restored; "
+              "starting without it\n");
+      return false;
+    }
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnableToLoadSessionFile),

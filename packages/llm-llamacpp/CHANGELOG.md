@@ -8,25 +8,35 @@
   caps each slot's context. With `ctx_size` unset, the KV cache is sized to
   `parallel x kv_unified_per_slot`. With `parallel >= 2`, the caps must fit
   `ctx_size`, or the load fails with `InvalidArgument`. A negative value is
-  rejected.
+  rejected ([#5832](https://github.com/tetherto/qvac/pull/5832)).
 
 ### Changed
 
-- The KV cache is always unified, as llama-server's `--kv-unified`: the
-  `parallel` slots share one KV buffer instead of one each, and the addon
-  limits each slot to `ctx_size / parallel`. It is not configurable. When
-  `ctx_size / parallel` is not a multiple of 256, a slot now gets exactly that
-  share; before, fabric rounded each slot up to a multiple of 256. With
-  `parallel >= 2`, MiniMax-M3 turns sparse attention off. With flash
-  attention on CPU, Metal and CUDA (Turing or newer), attention now uses
-  fabric's per-sequence KV-rows kernel, also at `parallel` 1.
+- The KV cache is unified, as llama-server's `--kv-unified`: the `parallel`
+  slots share one KV buffer instead of one each, and the addon limits each
+  slot to `ctx_size / parallel`. It is not configurable. With
+  `parallel >= 2`, DeepSeek V4 and models with long RoPE factors (for example
+  Phi-3) keep one buffer per slot, because fabric sizes their per-slot caches
+  or picks their RoPE factors from the buffer size
+  ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+- On the other models, with `parallel >= 2`: a slot gets exactly
+  `ctx_size / parallel` where fabric used to round it up to a multiple of 256;
+  MiniMax-M3 turns sparse attention off; and on Vulkan, with flash attention
+  off, or on CUDA older than Turing, decoding can be slower, because each
+  slot's attention spans the shared buffer.
+- A cache file saved by an earlier version with `parallel >= 2` holds one KV
+  stream per slot, which the shared buffer cannot restore. A file from an
+  earlier version that fails to restore now starts the request without it,
+  with a warning, and the next save replaces it.
+- With flash attention on CPU, Metal and CUDA (Turing or newer), attention
+  uses fabric's per-sequence KV-rows kernel, also at `parallel` 1.
 
 ### Fixed
 
 - With `parallel >= 2`, loading a cached prompt longer than a slot's limit
   (`ctx_size / parallel`, or `kv_unified_per_slot` if lower) now fails when
   the cache loads, as documented. The check compared against the whole
-  context.
+  context ([#5832](https://github.com/tetherto/qvac/pull/5832)).
 
 ## [0.72.0] - 2026-11-18
 

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cinttypes>
+#include <filesystem>
 #include <initializer_list>
 #include <iterator>
 #include <limits>
@@ -18,6 +19,7 @@
 #include <common/chat.h>
 #include <common/log.h>
 #include <ggml-backend.h>
+#include <gguf.h>
 #include <inference-addon-cpp/Errors.hpp>
 #ifdef __APPLE__
 #include <TargetConditionals.h>
@@ -455,6 +457,36 @@ uint32_t trainedContext(const ModelMetaData& metadata) {
   }
   const std::string key = *architecture + ".context_length";
   return metadata.tryGetU32(key.c_str()).value_or(0);
+}
+
+// Fabric takes n_ctx_seq, the whole pool when unified, as each sequence's
+// size: DeepSeek V4 sizes its per-sequence caches from it, and long RoPE
+// factors are chosen by it. With several slots these models keep one KV
+// buffer per slot, so each slot behaves as it would alone.
+bool keepsKvBufferPerSlot(
+    const std::string& modelPath, const ModelMetaData& metadata) {
+  const auto architecture = metadata.tryGetString("general.architecture");
+  if (architecture.has_value() &&
+      qvac_lib_inference_addon_llama::utils::isDeepSeekV4Architecture(
+          *architecture)) {
+    return true;
+  }
+  std::error_code errorCode;
+  if (!std::filesystem::is_regular_file(modelPath, errorCode)) {
+    return false;
+  }
+  gguf_init_params ggufParams = {};
+  ggufParams.no_alloc = true;
+  gguf_context* gguf = gguf_init_from_file(modelPath.c_str(), ggufParams);
+  if (gguf == nullptr) {
+    return false;
+  }
+  // rope_freqs, when present, is used instead of the long/short factors.
+  const bool longRope =
+      gguf_find_tensor(gguf, "rope_factors_long.weight") >= 0 &&
+      gguf_find_tensor(gguf, "rope_freqs.weight") < 0;
+  gguf_free(gguf);
+  return longRope;
 }
 
 // Lambda form rather than a bare ::tolower: the value is caller-supplied and
@@ -2294,9 +2326,10 @@ NormalizedLoad normalizeLoadForFit(
             K_LEGACY_PARSER_NAME.data(),
             params.kv_unified_per_slot));
   }
-  // All slots share one KV pool; each slot is capped at its even share, or at
-  // kv-unified-per-slot when lower.
-  params.kv_unified = true;
+  // All slots share one KV pool, unless keepsKvBufferPerSlot; either way each
+  // slot is capped at its even share, or at kv-unified-per-slot when lower.
+  params.kv_unified =
+      params.n_parallel < 2 || !keepsKvBufferPerSlot(modelPath, metadata);
 
   // As llama-server: without ctx-size, kv-unified-per-slot sizes the KV pool
   // to parallel x kv-unified-per-slot; ctx-size 0 keeps the trained context.

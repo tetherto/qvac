@@ -1409,11 +1409,65 @@ test(
       /\(2 x 4096\) must fit ctx_size/,
       'per-slot caps that overbook ctx_size are refused'
     )
+  }
+)
+
+test(
+  'continuous batching: kv_unified is not an option',
+  { timeout: 600_000, skip: isMobile },
+  async (t) => {
     await t.exception(
       setupModel(t, { parallel: '2', kv_unified: 'false' }),
       /invalid argument: --kv-unified/,
-      'kv_unified is not an option'
+      'kv_unified is rejected as an invalid argument'
     )
+  }
+)
+
+// A conversation saved without a cap is longer than the cap set at the next
+// load, so its cache file fails when it loads: through the single-prompt cache
+// at parallel 1, through a slot at parallel 2.
+test(
+  'continuous batching: a cached prompt over kv_unified_per_slot fails at load',
+  { timeout: 900_000, skip: isMobile },
+  async (t) => {
+    for (const parallel of ['1', '2']) {
+      t.comment(`parallel ${parallel}`)
+      const key = path.join(os.tmpdir(), `qvac-over-cap-${parallel}-${Date.now()}.bin`)
+      t.teardown(() => {
+        try {
+          fs.unlinkSync(key)
+        } catch {}
+      })
+
+      const writer = await setupModel(t, { parallel })
+      const longPrompt = [
+        { role: 'user', content: `Repeat: ${'apple '.repeat(KV_PER_SLOT_CAP + 100)}` }
+      ]
+      await collectText(await writer.run(longPrompt, { cacheKey: key }))
+      await writer.saveCache(key)
+      await writer.unload()
+
+      const reader = await setupModel(t, {
+        parallel,
+        kv_unified_per_slot: String(KV_PER_SLOT_CAP)
+      })
+      const error = await reader
+        .run([{ role: 'user', content: 'Hi' }], { cacheKey: key })
+        .then(collectText)
+        .then(
+          () => null,
+          (err) => err
+        )
+      t.comment(`over-cap cache: ${error?.message}`)
+      t.ok(
+        new RegExp(`exceeds (current context size|the context limit of ${KV_PER_SLOT_CAP} )`).test(
+          error?.message || ''
+        ),
+        'the cache file is rejected when it loads'
+      )
+      await reader.unload()
+    }
   }
 )
 

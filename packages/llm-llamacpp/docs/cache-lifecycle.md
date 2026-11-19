@@ -493,7 +493,7 @@ The file is a standard llama.cpp sequence-state file
 | Part | Contents |
 |---|---|
 | llama.cpp header | magic, format version, number of tokens that follow |
-| ledger, stored as the token list | `QLDG` marker, ledger version, `nPast`, KV-cell count, entry count, a checksum over the entries, one reserved word; then five words per entry: kind (text token or media span), identity (the token id, or a hash of the media) in two words, positions, KV cells |
+| ledger, stored as the token list | `QLDG` marker, ledger version, `nPast`, KV-cell count, entry count, a checksum over the entries, a KV-layout word (1; 0 in files saved before the KV cache became unified); then five words per entry: kind (text token or media span), identity (the token id, or a hash of the media) in two words, positions, KV cells |
 | sequence state | the sequence's complete memory: every KV cell, and the recurrent state on hybrid and recurrent models (on DeepSeek V4: the sliding window, the compressed rows and the compressor states) |
 | checkpoint section (full-state models with a checkpoint) | `QCKP` marker, section version, checkpoint count (at most 2: the newest, and the newest user-turn one when older); per checkpoint, oldest first: its `nPast`, a flags word (version 2: whether it ends at a user message), its ledger in the format above (which gives its KV-cell count), its partial state and a hash of that state; a checksum over everything but the state bytes |
 
@@ -505,7 +505,10 @@ not a prefix of the loaded ledger is skipped with a warning and the state
 still loads. The pre-request snapshot is never written, nor is a speculative
 draft context's state (as in llama-server's slot files). A load checks the ledger
 against the state it describes: a corrupt current-format file is an error
-(`UnableToLoadSessionFile`), and a file without a ledger is a cold miss.
+(`UnableToLoadSessionFile`), and a file without a ledger is a cold miss. A
+file whose KV-layout word is 0 and whose state fabric cannot restore is a
+cold miss too, logged as a warning: saved with `parallel >= 2`, it may hold
+one KV stream per slot ([details](./continuous-batching.md#one-shared-kv-pool)).
 
 ### How a write is done
 

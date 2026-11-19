@@ -1,5 +1,6 @@
 #include "CacheManager.hpp"
 
+#include <algorithm>
 #include <filesystem>
 #include <system_error>
 
@@ -233,6 +234,20 @@ bool CacheManager::loadCache() {
       stateTokens.size(),
       &nTokenCount);
   if (loadedBytes == 0) {
+    // A file from before the unified KV cache may hold one KV stream per
+    // slot: it is a cold miss, and the next save replaces it. The failed
+    // restore may have cleared the sequence, so nothing set aside is kept.
+    if (cache::predatesUnifiedKv(stateTokens.data(), nTokenCount)) {
+      QLOG_IF(
+          Priority::WARNING,
+          string_format(
+              "%s: session file '%s' was saved by an earlier version and "
+              "cannot be restored; starting without it\n",
+              __func__,
+              sessionPath_.c_str()));
+      resetStateCallback_(true);
+      return false;
+    }
     std::string errorMsg = string_format(
         "%s: failed to load session file '%s'\n",
         __func__,
@@ -297,14 +312,19 @@ bool CacheManager::acceptLoadedState(
             source.c_str(),
             ex.what()));
   }
-  if (llmContext_->getNPast() > llama_n_ctx(ctx)) {
+  // The same ceiling the context generates against: n_ctx, or
+  // kv_unified_per_slot when lower.
+  const int32_t perSlot = llmContext_->getParams().kv_unified_per_slot;
+  const auto nCtx = static_cast<llama_pos>(llama_n_ctx(ctx));
+  const llama_pos ceiling = perSlot > 0 ? std::min(nCtx, perSlot) : nCtx;
+  if (llmContext_->getNPast() > ceiling) {
     std::string errorMsg = string_format(
-        "%s: cache file '%s' contains %zu tokens, which exceeds the current "
-        "context size of %d tokens\n",
+        "%s: cache file '%s' contains %zu tokens, which exceeds the context "
+        "limit of %d tokens\n",
         __func__,
         source.c_str(),
         static_cast<size_t>(llmContext_->getNPast()),
-        llama_n_ctx(ctx));
+        ceiling);
     throw qvac_errors::StatusError(
         ADDON_ID, toString(ContextLengthExeeded), errorMsg);
   }
