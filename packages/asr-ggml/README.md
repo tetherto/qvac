@@ -150,7 +150,7 @@ language coverage, translation, and diarization.
 
 | If you need… | Use this model | Notes |
 | --- | --- | --- |
-| Default multilingual / English ASR (batch or duplex stream) | `parakeet-tdt-0.6b-v3` (q8_0 GGUF) | Recommended Parakeet default: ~25 languages, punctuation/capitalization, language auto-detect, low-latency streaming. |
+| Default multilingual / English ASR (batch or duplex stream) | `parakeet-tdt-0.6b-v3` (q8_0 GGUF) | Recommended Parakeet default: ~25 languages, punctuation/capitalization, language auto-detect and [30-second streaming windows](#parakeet-tdt-streaming). |
 | TranscribePsy across 25 European languages | `transcribepsy-250m-eu` | Full model with embedded CAFE adapters and gate. Use `parakeetConfig.language: 'en'`, `'other'`, or `'auto'`; convert the checkpoint, adapters and gate into one GGUF. On Apple, its exported Core ML sidecars run both routes and the gate. |
 | Smallest multilingual model for phones (Dutch, English, French, German, Italian, Polish, Portuguese, Spanish) | `transcribepsy-250m-eu-sub` | 254M TDT distilled from `parakeet-tdt-0.6b-v3`: ~291 MiB q8_0, PnC, no language to set. Long recordings use the 60 s / 25 % windows the model recommends. On Apple, the Core ML distribution runs encoder and decoder on the Neural Engine. |
 | English batch and low-latency streaming with one checkpoint | `parakeet-unified-en-0.6b` | Standard RNN-T with punctuation and capitalization; use when multilingual TDT or native EOU tokens are not required. Streaming uses the native cache-aware encoder: `streamingChunkMs` accepts 80, 160, 560, or 1040 and `streamingRightLookaheadMs` 0, 80, 160, 240, 320, 560, or 1040, both snapped down to the nearest trained value. Defaults to 560 ms. |
@@ -173,6 +173,20 @@ language coverage, translation, and diarization.
 
 Always pass `config.engine` (or top-level `engine`) explicitly in library and
 SDK code — see [Engine Selection](#engine-selection).
+
+### Parakeet TDT streaming
+
+For Parakeet TDT v3, leave both the load-time and per-call decode windows
+unset to use the 30,000 ms default. The SDK fields are
+`modelConfig.streamingChunkMs` and `parakeetStreamingConfig.chunkMs`. When
+using the addon directly, leave `parakeetConfig.streamingChunkMs` unset or set
+it to `0`, and omit `chunkMs` in `runStreaming()`. Omitting only the per-call
+value inherits any explicit load-time override.
+Explicit decode windows below 30,000 ms are rejected for offline TDT models
+because they can drop phrases. Keep the default 10,000 ms left context and
+2,000 ms right lookahead. First output typically needs one decode window plus
+lookahead. You can still write small PCM chunks, and closing the stream flushes
+the remaining audio. Full TranscribePsy EU uses its own streaming defaults.
 
 ## Supported Platforms
 
@@ -638,7 +652,7 @@ Every verb has one signature and one meaning regardless of engine.
 | `unload()` / `destroy()` | Release the model / retire the instance. |
 | `getState()` | `{ configLoaded, weightsLoaded, destroyed }`. |
 | `getEngineType()` | `'whisper'` \| `'parakeet'` \| `'moss-transcribe'`. |
-| `getBackendInfo()` | `BackendInfo` or `null` before `load()`. |
+| `getBackendInfo()` | `BackendInfo` or `null` before `load()`. Parakeet reports `supportsCacheAwareStreaming` for the loaded checkpoint. |
 | `pause()` / `unpause()` | Always reject with `NOT_SUPPORTED` (6019). No engine implements a correct pause/resume. |
 
 Constructor options:
@@ -1055,7 +1069,7 @@ Two paths matter on Android and Linux:
 
 ### Core ML encoder sidecars (Apple)
 
-The macOS and iOS prebuilds are built with the `speech-cpp` `coreml` feature,
+The macOS and iOS prebuilds enable Core ML,
 so a Parakeet model can run its FastConformer encoder on Apple Core ML (the
 Neural Engine) while mel preprocessing and the decoder or speaker head stay on
 the ggml backend. It is opt-in by presence: at `load()` the engine looks for a
@@ -1071,8 +1085,8 @@ ggml.
 
 | Model | Sidecar | Inputs it takes | Runs on ggml instead |
 | --- | --- | --- | --- |
-| TDT (`parakeet-tdt-0.6b-v3`) | `<stem>-encoder.mlmodelc` | any length: shorter inputs are zero-padded to the compiled shape, longer offline inputs are split into overlapping windows | only on fallback |
-| Unified (`parakeet-unified-en-0.6b`) | `<stem>-encoder.mlmodelc` | `run()`, padded or windowed like TDT | `runStreaming()`, which uses the cache-aware encoder |
+| TDT (`parakeet-tdt-0.6b-v3`) | `<stem>-encoder.mlmodelc` | inputs up to the compiled capacity (typically 15 s); shorter inputs are zero-padded | oversized inputs use ggml unless the export has a validated seam policy |
+| Unified (`parakeet-unified-en-0.6b`) | `<stem>-encoder.mlmodelc` | `run()`, padded to capacity or split into overlapping windows | `runStreaming()`, which uses the cache-aware encoder |
 | TranscribePsy (`transcribepsy-250m-eu-sub-coreml.gguf`, the encoder-less GGUF of the Core ML distribution) | `<stem>-encoder.mlmodelc` and `<stem>-decoder.mlmodelc` | any length: 15 s Neural Engine windows with 1.28 s of seam context; the TDT decoder runs on the Neural Engine as well | never: without its encoder sidecar that GGUF fails to load, since it carries no encoder weights. The full `transcribepsy-250m-eu-sub.gguf` behaves like TDT |
 | Full TranscribePsy EU (`transcribepsy-250m-eu`) | `<stem>-encoder.mlmodelc` (English trunk), `<stem>-encoder-other.mlmodelc` (adapters) and `<stem>-encoder-gate.mlmodelc` (language gate); optionally `<stem>-decoder.mlmodelc`. Streaming and unwindowed runs also need the FP32 programs: `<stem>-encoder-flexible.mlmodelc`, `<stem>-encoder-other-flexible.mlmodelc` and `<stem>-encoder-gate-flexible.mlmodelc`, plus on macOS the optional fixed `<stem>-encoder-fp32-<frames>.mlmodelc` and `<stem>-encoder-other-fp32-<frames>.mlmodelc` | `run()` of any length: 15 s Neural Engine windows for the selected route, and the first 20 s on the gate sidecar when `language` is `"auto"`. `runStreaming()` and `longFormWindowFrames < 0` use the FP32 programs, on the GPU on macOS when a fixed capacity fits and on Core ML CPU otherwise and on iOS. The decoder sidecar batches only long offline inputs with automatic windows | when a sidecar is missing, was exported for another model or route (EU-sub bundles included) or fails a prediction: the GGUF keeps the whole encoder |
 | EOU (`parakeet-eou-120m-v1`) | `<stem>-encoder.mlmodelc` | inputs of exactly the compiled mel length | every other length, including streaming windows of a different length |
@@ -1083,6 +1097,19 @@ ggml.
 | Sortformer v1 | none | — | always |
 | Whisper | `<model-stem>-encoder.mlmodelc` beside the GGML model (for example, `ggml-tiny-encoder.mlmodelc` beside `ggml-tiny.bin`), enabled by `speech-cpp[whisper,coreml]` on Apple | the encoder's fixed mel window | when the matching sidecar is absent or cannot be loaded; the decoder always stays on ggml |
 | MOSS-Transcribe-Diarize | `moss-transcribe-diarize-encoder.mlmodelc` | every 30 s window: the audio encoder and adaptor run on Core ML, the decoder on ggml | only on fallback |
+
+On macOS 15 and iOS 18 or later, the full TranscribePsy EU model also accepts
+`<stem>-encoder-shared.mlmodelc` beside the GGUF. The engine discovers the
+bundle automatically and uses its named `en`, `other`, and `gate` functions
+in place of the three fixed encoder sidecars. An unavailable or incompatible
+shared bundle falls back to the separate sidecars, then to ggml when the GGUF
+contains encoder weights. Keep the FP32 programs for streaming and unwindowed
+runs. The engine source includes the exporter and merger described in the
+[shared-weight deployment guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/5e1e4d34ab39e86e3049590855cf3539da17e3fc/engines/parakeet/docs/transcribepsy-eu-coreml.md#shared-weight-runtime-deployment).
+
+For standard TDT, fixed-shape exports with `mel_valid_mask` isolate the
+padding on short clips. Legacy single-input sidecars still load and need
+re-exporting to get that padding mask.
 
 Diarizer bundles load on first use, and each capacity costs 190-220 MiB of
 weights. They pay off on base and Pro chips and iOS (1.4-2.7x over Metal on an
@@ -1413,8 +1440,8 @@ Three things are worth knowing before touching these lanes:
   `models/coreml/` copy instead, staged by the matrix runner.
 - **The export is traced at one mel length.** That length is the TDT
   sidecar's fixed capacity: shorter utterances are zero-padded up to it and
-  longer ones are split into overlapping windows, so every length runs on the
-  ANE, but only a matching one runs as a single unpadded pass. The lanes'
+  longer ones use ggml unless the export has a validated seam policy. Only an
+  input matching the capacity runs as a single unpadded pass. The lanes'
   sidecar is therefore sized to the benchmark's own sample —
   `examples/samples/sample.raw` (20.13 s ⇒ `1 + 322137/160` = **2014** mel
   frames). Changing that sample means re-exporting, or the lane measures
@@ -1486,9 +1513,13 @@ Parakeet:
 - [`examples/parakeet-streaming-metadata.js`](examples/parakeet-streaming-metadata.js) — native streaming tokens, finality, chunk indices and end-of-turn events as JSON
 - [`examples/nemotron-diarization.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/nemotron-diarization.js) — Nemotron 3 offline 8-speaker diarization
 - [`examples/parakeet-live-mic.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic.js) — live mic via the duplex streaming session
-- [`examples/parakeet-live-mic-diarized.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic-diarized.js) — live mic with speaker tags
-- [`examples/parakeet-live-mic-diarized-aosc.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic-diarized-aosc.js) — same, with the AOSC tuning knobs as CLI flags
+- [`examples/parakeet-live-mic-diarized.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic-diarized.js) — live mic with approximate speaker tags from the latest Sortformer result. Requires Parakeet Unified RNN-T or Nemotron for ASR
+- [`examples/parakeet-live-mic-diarized-aosc.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic-diarized-aosc.js) — same cache-aware ASR requirement, with the AOSC tuning knobs as CLI flags
 - [`examples/parakeet-decode-audio.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-decode-audio.js) — decode + transcribe any FFmpeg-supported container
+
+For either diarized mic example, set `--asr-chunk-ms` for the ASR checkpoint
+and `--diar-chunk-ms` for Sortformer. Omitting the ASR flag uses its trained
+default. The legacy `--chunk-ms` flag also sets the Sortformer window.
 
 MOSS-Transcribe-Diarize:
 

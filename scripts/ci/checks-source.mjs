@@ -3,7 +3,7 @@
 // up alone as main's pod checks did (npm, its sdk-source:workspace script, the train's tarballs, or none for self);
 // check installs it and runs each target. Usage: resolve | install <source> <dir> [tarballs] | check <source> <dir> <project> <targets> [tarballs]
 
-import { appendFileSync, rmSync } from 'node:fs'
+import { appendFileSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 
@@ -12,6 +12,16 @@ const run = (cmd, args, opts = {}) =>
   execFileSync(cmd, args, { stdio: 'inherit', shell: cmd === 'npm' && process.platform === 'win32', ...opts })
 const capture = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8' }).trim()
 const TRAIN = '.github/scripts/release-train.mjs'
+const BARE_TOOLCHAIN_LOCK = new URL('../../.github/bare-toolchain/package-lock.json', import.meta.url)
+
+// npm skips the workspace lockfile, so pin cmake-toolchains to the Bare toolchain's: 2.2+ builds Android without the NDK
+// compiler. npm rejects an override that differs from a direct dependency, so a direct one gets the same version.
+function pinCmakeToolchains(manifest, version) {
+  for (const deps of ['dependencies', 'devDependencies', 'optionalDependencies'])
+    if (manifest[deps]?.['cmake-toolchains']) manifest[deps]['cmake-toolchains'] = version
+  manifest.overrides = { ...manifest.overrides, 'cmake-toolchains': version }
+  return manifest
+}
 
 function resolve(env) {
   let train = env.TRAIN_INPUT || ''
@@ -55,6 +65,9 @@ function install([source, dir, tarballs]) {
     if (!tarballs) throw new Error('the train source needs the tarball directory')
     run('node', [TRAIN, 'stage', dir, tarballs])
   }
+  const version = JSON.parse(readFileSync(BARE_TOOLCHAIN_LOCK, 'utf8')).packages['node_modules/cmake-toolchains'].version
+  const manifest = join(dir, 'package.json')
+  writeFileSync(manifest, `${JSON.stringify(pinCmakeToolchains(JSON.parse(readFileSync(manifest, 'utf8')), version), null, 2)}\n`)
   // --ignore-scripts: a dependency's lifecycle script would run with the registry token in reach.
   run('npm', ['install', '--ignore-scripts'], { cwd: dir })
   if (source !== 'npm') run('npm', ['run', '--if-present', `sdk-source:${source}`], { cwd: dir })

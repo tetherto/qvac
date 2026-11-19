@@ -127,7 +127,7 @@ class TestModelConfig:
         config = ModelConfig(path=str(model_path))
 
         assert config.streaming is False
-        assert config.streaming_chunk_ms == 320
+        assert config.streaming_chunk_ms is None
         assert config.streaming_history_ms is None
         assert config.streaming_emit_partials is True
 
