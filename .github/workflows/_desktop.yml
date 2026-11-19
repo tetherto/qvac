@@ -156,6 +156,18 @@ jobs:
         run: |
           dirs=$(printf "%s\n" packages/*/prebuilds | sed "s|/prebuilds$||" | paste -sd, -)
           pnpm exec nx run-many -t link:platform -p "$dirs" --exclude-task-dependencies --outputStyle=stream
+      - name: "diag: kv-cache folder before the tests"
+        if: always() && !cancelled()
+        shell: bash
+        run: |
+          base="${USERPROFILE:-$HOME}/.qvac"
+          echo "runner=$RUNNER_NAME host=$(hostname) user=$(whoami) now=$(date -u +%FT%TZ)"
+          echo "== $base/kv-cache"
+          ls -laR "$base/kv-cache" 2>&1 || true
+          echo "== seed-* folders"
+          find "$base/kv-cache" -maxdepth 3 -iname 'seed-*' -exec ls -la {} \; 2>&1 || true
+          echo "== top of $base"
+          ls -la "$base" 2>&1 || true
       - name: ${{ matrix.row.target }}
         shell: bash
         working-directory: src
@@ -204,6 +216,18 @@ jobs:
             if [ -n "${!value_var}" ]; then export "$name=${!value_var}"; fi
           done
           pnpm exec nx run-many -t "$TARGET" -p "$PROJECT" -c "$CONFIG" --exclude-task-dependencies --outputStyle=stream
+      - name: "diag: kv-cache folder after the tests"
+        if: always() && !cancelled()
+        shell: bash
+        run: |
+          base="${USERPROFILE:-$HOME}/.qvac"
+          echo "runner=$RUNNER_NAME host=$(hostname) user=$(whoami) now=$(date -u +%FT%TZ)"
+          echo "== $base/kv-cache"
+          ls -laR "$base/kv-cache" 2>&1 || true
+          echo "== seed-* folders"
+          find "$base/kv-cache" -maxdepth 3 -iname 'seed-*' -exec ls -la {} \; 2>&1 || true
+          echo "== top of $base"
+          ls -la "$base" 2>&1 || true
       # Diagnostic: the addon's DLL imports, for when LoadLibrary misses one.
       - if: failure() && runner.os == 'Windows'
         shell: powershell
