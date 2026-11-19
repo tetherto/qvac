@@ -1995,6 +1995,9 @@ importers:
       bare-stream:
         specifier: 2.13.3
         version: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+      bare-type:
+        specifier: 1.4.0
+        version: 1.4.0
       bare-url:
         specifier: ^2.4.3
         version: 2.4.6
@@ -18620,7 +18623,7 @@ snapshots:
   bare-structured-clone@1.6.0:
     dependencies:
       bare-buffer: 3.6.2
-      bare-type: 1.1.0
+      bare-type: 1.4.0
       bare-url: 2.4.6
       compact-encoding: 3.3.0
     transitivePeerDependencies:
@@ -18825,7 +18828,7 @@ snapshots:
       bare-format: 1.0.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
       bare-inspect: 3.1.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
       bare-stylize: 0.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      bare-type: 1.1.0
+      bare-type: 1.4.0
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
