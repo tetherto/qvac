@@ -60,11 +60,22 @@ function srcString(modelSrc: ModelSrcInput): string {
 
 /**
  * The stub ref a source carries, or `undefined` where it names no registry
- * artifact. A catalog constant carries the checksum and coordinates; a bare
- * string names a location and nothing the registry can be asked about.
+ * artifact. A catalog constant carries the checksum and coordinates. A
+ * `registry://` address, such as the companion source a plugin derives, takes
+ * them from its catalog entry. Any other string names a location and nothing
+ * the registry can be asked about.
  */
 function stubRefFor(modelSrc: ModelSrcInput) {
-  if (typeof modelSrc === 'string') return undefined
+  if (typeof modelSrc === 'string') {
+    const entry = catalogEntryFor(modelSrc)
+    if (entry === undefined) return undefined
+    return {
+      name: entry.name,
+      sha256Checksum: entry.sha256Checksum,
+      registryPath: entry.registryPath,
+      registrySource: entry.registrySource
+    }
+  }
   const { sha256Checksum, registryPath, registrySource } = modelSrc
   if (sha256Checksum === undefined || registryPath === undefined) return undefined
   return {
