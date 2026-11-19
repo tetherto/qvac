@@ -149,6 +149,12 @@
       "responseSchema": "schema.json#/$defs/getModelInfo.response"
     },
     {
+      "name": "getRuntimeCapabilities",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/getRuntimeCapabilities.request",
+      "responseSchema": "schema.json#/$defs/getRuntimeCapabilities.response"
+    },
+    {
       "name": "getSystemResources",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/getSystemResources.request",

@@ -8,11 +8,13 @@
  *   node .github/scripts/check-linux-module-cxx-runtime.mjs <dir>...
  *
  * --fabric <binary> verifies versioned imports against a shared Fabric provider.
+ * --fabric-host <linux-arch> resolves that provider from the installed Fabric package.
  * --xdna validates the XDNA module against the system XRT/libstdc++ ABI.
  * Every .so and .bare under each <dir> is checked; finding none is an error.
  * NM and READELF override the tools, which default to llvm-nm and
  * llvm-readelf, then nm and readelf.
  */
+import { resolveFabricBinary } from './lib/resolve-fabric-binary.mjs'
 import { spawnSync } from 'node:child_process'
 import { readdirSync } from 'node:fs'
 import { basename, join } from 'node:path'
@@ -58,14 +60,20 @@ function listBinaries(dir) {
 const withXdna = process.argv.includes('--xdna')
 const args = process.argv.slice(2)
 const fabricIndex = args.indexOf('--fabric')
-const fabricFile = fabricIndex < 0 ? null : args[fabricIndex + 1]
+let fabricFile = fabricIndex < 0 ? null : args[fabricIndex + 1]
 if (fabricIndex >= 0 && (!fabricFile || fabricFile.startsWith('--'))) {
   throw new Error('--fabric requires the provider binary path')
 }
 if (fabricIndex >= 0) args.splice(fabricIndex, 2)
+const hostIndex = args.indexOf('--fabric-host')
+if (hostIndex >= 0) {
+  if (fabricFile) throw new Error('--fabric and --fabric-host are mutually exclusive')
+  fabricFile = resolveFabricBinary(process.cwd(), args[hostIndex + 1])
+  args.splice(hostIndex, 2)
+}
 const dirs = args.filter((arg) => arg !== '--xdna')
 if (dirs.length === 0) {
-  console.error('usage: check-linux-module-cxx-runtime.mjs [--fabric <binary>] <dir>...')
+  console.error('usage: check-linux-module-cxx-runtime.mjs [--fabric <binary> | --fabric-host <linux-arch>] <dir>...')
   process.exit(2)
 }
 

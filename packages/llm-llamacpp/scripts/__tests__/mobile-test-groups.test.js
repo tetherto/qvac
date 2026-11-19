@@ -68,6 +68,8 @@ test('benchmark shards and desktop-only tests are exempt from coverage', () => {
   assert.equal(isOverrideOnly('runBenchmarkPerf4bQ80F16Test'), true)
   assert.equal(isOverrideOnly('runFinetuningMoeTest'), true)
   assert.equal(isOverrideOnly('runXdnaTest'), true)
+  assert.equal(isOverrideOnly('runKvCacheExtendedTest'), true)
+  assert.equal(isOverrideOnly('runQwen35MultimodalCacheStressTest'), true)
   assert.equal(isOverrideOnly('runBrandNewTest'), false)
   assert.deepEqual(
     validateTestGroups(groups, [

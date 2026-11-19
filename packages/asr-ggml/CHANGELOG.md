@@ -14,6 +14,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-18
+
 ### Changed
 
 - `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries
@@ -49,14 +51,13 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 - Default offline TDT push streams to 30-second decode windows and reject
   explicitly shorter windows that can silently drop phrases.
 
-## [0.12.2] - 2026-11-17
-
-### Changed
 
 - Require `inference-addon-cpp` 1.6.0 for the shared runtime-stat value type
   ([#5812](https://github.com/tetherto/qvac/pull/5812)).
 
-- Share the `@qvac/fabric` runtime and backend loader, retaining addon-local speech engines built against its headers.
+- Share the `@qvac/fabric` runtime and backend loader, retaining addon-local
+  speech engines built against its headers
+  ([#5808](https://github.com/tetherto/qvac/pull/5808)).
 
 ### Added
 

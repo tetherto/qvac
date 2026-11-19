@@ -8972,6 +8972,64 @@ class GetModelInfoResponse(GeneratedBaseModel):
     ]
 
 
+class GetRuntimeCapabilitiesRequest(GeneratedBaseModel):
+    type: Literal["getRuntimeCapabilities"] = "getRuntimeCapabilities"
+    session_id: Annotated[
+        str | None,
+        Field(
+            alias="sessionId",
+            description="Identifier of the caller session this request belongs to. Omitted for requests made by the runtime owner.",
+            min_length=1,
+        ),
+    ] = None
+
+
+class GetRuntimeCapabilitiesResponseCapabilitiesItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    id: Annotated[
+        str,
+        Field(
+            description="Capability contract ID, such as `transcription`. IDs without a dot are defined by QVAC; a dotted ID names a contract a third-party plugin defines."
+        ),
+    ]
+    version: Annotated[
+        int,
+        Field(
+            description="Major version of the contract. A consumer that requires `id@version` matches only this exact pair.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ]
+    operations: Annotated[
+        list[str],
+        Field(
+            description="Operations every registered provider of this contract implements. Always includes the contract's required operations."
+        ),
+    ]
+    partial_operations: Annotated[
+        list[str],
+        Field(
+            alias="partialOperations",
+            description="Optional operations that only some registered providers implement. A call can still fail for a model whose plugin lacks the operation.",
+        ),
+    ]
+
+
+class GetRuntimeCapabilitiesResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["getRuntimeCapabilities"] = "getRuntimeCapabilities"
+    capabilities: Annotated[
+        list[GetRuntimeCapabilitiesResponseCapabilitiesItem],
+        Field(
+            description="Capability contracts the registered plugins provide, sorted by ID and then version. Built from plugin registration only: it does not load models or check addons, model files, resources or permissions."
+        ),
+    ]
+
+
 class GetSystemResourcesRequest(GeneratedBaseModel):
     sample: bool | None = None
     type: Literal["getSystemResources"] = "getSystemResources"
@@ -14561,7 +14619,7 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
         int | None,
         Field(
             alias="streamingChunkMs",
-            description="Streaming chunk cadence in ms. Defaults to 320 for Nemotron and 2000 for existing models. Nemotron supports 80, 160, 320, 560, or 1120.",
+            description="Streaming decode window in ms. Omit to use the model default. Offline TDT push streams, including Parakeet TDT v3, default to 30000 and require at least 30000. Full TranscribePsy EU defaults to 2000. Nemotron defaults to 320 and supports 80, 160, 320, 560, or 1120.",
             gt=0,
             le=9007199254740991,
         ),
@@ -32024,6 +32082,7 @@ class Request(
         | Request_5
         | GetLoadedModelInfoRequest
         | GetModelInfoRequest
+        | GetRuntimeCapabilitiesRequest
         | GetSystemResourcesRequest
         | HeartbeatRequest
         | Request_6
@@ -32079,6 +32138,7 @@ class Request(
         | Request_5
         | GetLoadedModelInfoRequest
         | GetModelInfoRequest
+        | GetRuntimeCapabilitiesRequest
         | GetSystemResourcesRequest
         | HeartbeatRequest
         | Request_6
@@ -32171,6 +32231,7 @@ class Response(
         | FinetuneProgressResponse
         | GetLoadedModelInfoResponse
         | GetModelInfoResponse
+        | GetRuntimeCapabilitiesResponse
         | GetSystemResourcesResponse
         | HeartbeatResponse
         | LoadModelResponse
@@ -32230,6 +32291,7 @@ class Response(
         | FinetuneProgressResponse
         | GetLoadedModelInfoResponse
         | GetModelInfoResponse
+        | GetRuntimeCapabilitiesResponse
         | GetSystemResourcesResponse
         | HeartbeatResponse
         | LoadModelResponse
