@@ -76,7 +76,7 @@ The Pear client selects a `pear-runtime` bundle from the applicable directory lo
 
 [PlantUML source](puml/05-deployment.puml)
 
-*The three topologies show a separate worker process, a worklet embedded in the application process, and a direct engine call in Bare.*
+*Process boundaries show where the host, Android service, and worker run. Arrows identify the IPC path for each deployment.*
 
 | Platform | Worker placement | Client-to-worker path |
 |---|---|---|
@@ -84,11 +84,12 @@ The Pear client selects a `pear-runtime` bundle from the applicable directory lo
 | Python | Separate Bare subprocess | bare-stow over the `bare-sidecar` wheel's IPC pipe |
 | Pear with `@qvac/sdk/pear` | Worker launched by the registered Pear runtime | bare-stow over the Pear worker pipe |
 | Expo / React Native | BareKit worklet in the app process | bare-stow over worklet IPC |
-| Kotlin Android | BareKit worklet in the app process or an app-private service process | Worklet IPC locally. The isolated service adds an Android Binder hop ahead of the worker connection |
+| Kotlin Android (embedded) | BareKit worklet in the app process | bare-stow over worklet IPC |
+| Kotlin Android (bound service) | BareKit worklet in the app-private `:qvac_worker` process | Android Binder to `QvacWorkerService`, then bare-stow over worklet IPC |
 | Kotlin desktop JVM (experimental) | BareKit worklet inside the JVM process | bare-stow over worklet IPC |
 | Direct Bare | Engine inside the Bare application | In-process calls |
 
-Worker-backed clients speak bare-rpc over the framed channel using their language's implementation. See the [Android service transport](../../packages/sdk-kotlin/README.md#android) and [desktop JVM host](../../packages/sdk-kotlin/README.md#desktop-jvm).
+TypeScript, Python, and Kotlin use their language's bare-rpc implementation for the worker connection. See the [Android service transport](../../packages/sdk-kotlin/README.md#android) and [desktop JVM host](../../packages/sdk-kotlin/README.md#desktop-jvm).
 
 ## RPC Communication Flow
 
@@ -98,7 +99,7 @@ Worker-backed clients speak bare-rpc over the framed channel using their languag
 
 *The harness owns launch and channel lifetime. Control frames carry worker state. Data frames carry bare-rpc calls and replies.*
 
-The worker registers its plugins and binds the RPC endpoint before the harness reports `ready` to the client. The client can then initialize the worker configuration over RPC before serving application calls. Bare-stow frames both the RPC byte stream and the lifecycle signals, including `ready`, `error`, `exit`, and `terminate`. The SDK contract supports request/reply, server streaming, and duplex calls.
+The worker registers its plugins and binds the RPC endpoint before the harness reports `ready`. The host then sends `__init_config` with its runtime context and home directory, along with any custom configuration. Application calls start after the worker acknowledges initialization. Bare-stow frames both the RPC byte stream and the lifecycle signals, including `ready`, `error`, `exit`, and `terminate`. The SDK contract supports request/reply, server streaming, and duplex calls.
 
 A client timeout, cancellation, or early stream close can abort the corresponding request in the engine. During an orderly shutdown the harness sends `terminate`, and the worker closes the engine, draining work and releasing models, registry leases, and retrieval resources. Host adapters supervise shutdown and stop an unresponsive worker.
 
@@ -155,17 +156,23 @@ A plugin operation inherits the calling session and abort signal. The plugin can
 
 *The flow shows how the engine resolves artifacts and either reuses a loaded model or loads a new one.*
 
-The loader accepts local paths, source URIs, descriptors, and generated model constants. Downloads write to partial files and move them into place after verification. Per-resource file locks let processes sharing the models directory coordinate downloads and deletion. The runtime serializes native loads of one resolved configuration and registers the model after the load succeeds.
+The loader accepts local paths, source URIs, descriptors, and generated model constants. Downloads write to partial files and move them into place after verification. Per-resource file locks let processes sharing the models directory coordinate downloads and deletion. The runtime serializes loads by model ID. A reload leaves that ID tied to the original configuration. While the model is reconfigured, a caller without a lease who requests the original configuration receives `ModelReconfiguredError`.
 
 `assessModelFit` runs each supported addon's fitter in the engine process. It uses a local file or a weightless registry description and sums estimated allocations by memory pool when evaluating several models. At load time the fitter uses the resolved files. `modelFitPolicy` can log the verdict, refuse an oversized load, or skip the check. See [Model Fit Assessment](../../packages/sdk/docs/assess-model-fit.md) and [Model Cache](../../packages/inference/docs/model-cache.md).
 
 ## RAG Component Diagram
 
+### Current SDK
+
+The inference engine uses `@qvac/rag` 0.9. The engine opens a dedicated Corestore and storage adapter for each workspace. The workspace binds to the embedding model used for ingest and search. See the [workspace manager](../../packages/inference/src/rag/rag-workspace-manager.ts).
+
+### Target integration with RAG 0.10
+
 ![RAG 0.10 Integration](puml/images/10-rag-components.png)
 
 [PlantUML source](puml/10-rag-components.puml)
 
-*The diagram shows the target RAG 0.10 integration and its storage boundary.*
+*The runtime boundary encloses the retrieval adapter, embedding model, and storage.*
 
 The retrieval adapter supplies and owns the Corestore and provides an embeddings port for text ingest and queries. `@qvac/rag` stores documents, chunks, and vectors in HyperDB namespaces, each bound to one embedding space. Search is scoped to a namespace and can be restricted to a set of document IDs. A per-namespace TurboVec index supplies candidates for exact rescoring against the stored vectors. Exact search remains available when the index is unavailable. See the [RAG package design](../../packages/rag/README.md#api).
 

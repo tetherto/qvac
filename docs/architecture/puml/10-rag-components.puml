@@ -22,7 +22,6 @@ Rel_D(adapter, rag, "Opens and calls retrieval")
 Rel_L(rag, embeddings, "Requests embeddings")
 Rel_L(embeddings, embed, "Runs the embedding model")
 Rel_D(rag, hyperdb, "Commits and reads records")
-Rel_R(rag, index, "Refreshes and searches candidate index")
+Rel_D(rag, index, "Refreshes and searches candidate index")
 
-Lay_L(hyperdb, index)
 @enduml

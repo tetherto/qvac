@@ -14,12 +14,10 @@ group Launch
     Worker -> Worker : Bind bare-rpc to the IPC stream
     Worker --> Host : ready [bare-stow control]
     Host --> Client : Ready IPC handle
-    opt Host supplies configuration
-        Client -> Host : Initialize worker configuration
-        Host -> Worker : Configuration RPC [bare-stow data]
-        Worker --> Host : Configuration accepted [bare-stow data]
-        Host --> Client : Initialization complete
-    end
+    Client -> Host : __init_config RPC
+    Host -> Worker : Initialize with runtimeContext, homeDir,\nand optional config [bare-stow data]
+    Worker --> Host : Initialization succeeds [bare-stow data]
+    Host --> Client : Initialization complete
 end
 
 group Call
