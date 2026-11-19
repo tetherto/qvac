@@ -2010,6 +2010,81 @@ test('TurboVecAdapter reports an uncertain save after post-commit lock loss', as
   await store.close()
 })
 
+const lockLossCases = [
+  { operation: 'save', reacquire: false },
+  { operation: 'delete', reacquire: false },
+  { operation: 'save', reacquire: true }
+]
+for (const { operation, reacquire } of lockLossCases) {
+  const scenario = reacquire ? 'loses and reacquires the lock' : 'loses the lock'
+  test(`TurboVecAdapter rejects a ${operation} when an async index mutation ${scenario}`, async (t) => {
+    const directory = await tmp()
+    const store = new Corestore(path.join(directory, 'store'))
+    const adapter = new TurboVecAdapter({
+      store,
+      indexProvider,
+      checkpointDir: path.join(directory, 'index')
+    })
+    await adapter.ready()
+    await adapter.saveEmbeddings([
+      { id: 'alpha', content: 'alpha', embeddingModelId: 'model', embedding: vector(8, 0) }
+    ])
+
+    const lockDir = path.join(checkpointWorkspaceDir(adapter), 'writer.lock')
+    const displacedLockDir = `${lockDir}.displaced`
+    const internals = adapter as unknown as {
+      index: TurboVecIndex
+      writerFenced: boolean
+      needsRecovery: boolean
+      _assertWriterOwnership(): void
+      _tryRecoverFromFence(): boolean
+    }
+    const { index } = internals
+    const loseLock = () => {
+      installForeignWriter(lockDir, displacedLockDir)
+      if (reacquire) {
+        t.exception(() => internals._assertWriterOwnership(), /lock ownership was lost/)
+        removeTestWriterLocks(lockDir, displacedLockDir)
+        t.is(internals._tryRecoverFromFence(), true)
+      }
+    }
+    try {
+      if (operation === 'save') {
+        const addWithIds = index.addWithIds.bind(index)
+        index.addWithIds = async (vectors, ids) => {
+          await addWithIds(vectors, ids)
+          loseLock()
+        }
+        const [saved] = await adapter.saveEmbeddings([
+          { id: 'beta', content: 'beta', embeddingModelId: 'model', embedding: vector(8, 1) }
+        ])
+        t.is(saved.status, 'rejected')
+        t.ok(saved.error?.includes('lock ownership was lost'))
+      } else {
+        const remove = index.remove.bind(index)
+        index.remove = async (id) => {
+          const removed = await remove(id)
+          loseLock()
+          return removed
+        }
+        const [deleted] = await Promise.allSettled([adapter.deleteEmbeddings(['alpha'])])
+        t.is(deleted.status, 'rejected')
+        if (deleted.status === 'rejected') {
+          t.ok(String(deleted.reason).includes('lock ownership was lost'))
+        }
+      }
+
+      t.is(adapter.revision, 1, 'the former writer does not advance its index revision')
+      t.is(internals.writerFenced, !reacquire)
+      t.is(internals.needsRecovery, true)
+    } finally {
+      await adapter.close()
+      if (fs.existsSync(displacedLockDir)) removeTestWriterLocks(lockDir, displacedLockDir)
+      await store.close()
+    }
+  })
+}
+
 test('TurboVecAdapter fences a checkpoint after writer lock loss', async (t) => {
   const tmpDir = await tmp()
   const store = new Corestore(path.join(tmpDir, 'store'))
@@ -2460,6 +2535,43 @@ test('TurboVecAdapter search scans HyperDB when a rebuild disposes its index', a
   }
 })
 
+test('TurboVecAdapter scans when a delete changes the search snapshot revision', async (t) => {
+  const directory = await tmp()
+  const store = new Corestore(path.join(directory, 'store'))
+  const adapter = new TurboVecAdapter({ store, indexProvider, candidateMultiplier: 1 })
+  const started = deferred()
+  const gate = deferred()
+  try {
+    await adapter.ready()
+    await adapter.saveEmbeddings([
+      { id: 'alpha', content: 'alpha', embeddingModelId: 'model', embedding: vector(8, 0) },
+      { id: 'beta', content: 'beta', embeddingModelId: 'model', embedding: vector(8, 1) }
+    ])
+
+    const { index } = adapter as unknown as { index: TurboVecIndex }
+    const search = index.search.bind(index)
+    index.search = async (queries, k) => {
+      const results = await search(queries, k)
+      started.resolve()
+      await gate.promise
+      return results
+    }
+
+    const searching = adapter.search('alpha', vector(8, 0), { topK: 1 })
+    await started.promise
+    await adapter.deleteEmbeddings(['alpha'])
+    gate.resolve()
+    t.alike(
+      (await searching).map(({ id }) => id),
+      ['beta']
+    )
+  } finally {
+    gate.resolve()
+    await adapter.close()
+    await store.close()
+  }
+})
+
 // An index in the style of @qvac/turbovec-ggml 0.5 and earlier, which returns
 // every result directly instead of a promise.
 function syncIndexProvider() {
@@ -2511,6 +2623,50 @@ function syncIndexProvider() {
   }
   return { provider, calls }
 }
+
+test('TurboVecAdapter awaits removes before adding vectors during upsert and replay', async (t) => {
+  const directory = await tmp()
+  const store = new Corestore(path.join(directory, 'store'))
+  const { provider } = syncIndexProvider()
+  const writer = new TurboVecAdapter({ store, indexProvider: provider })
+  const reader = new TurboVecAdapter({ store, indexProvider: provider })
+  try {
+    await writer.ready()
+    await writer.saveEmbeddings([
+      { id: 'alpha', content: 'alpha', embeddingModelId: 'model', embedding: vector(8, 0) },
+      { id: 'beta', content: 'beta', embeddingModelId: 'model', embedding: vector(8, 1) }
+    ])
+    await reader.ready()
+
+    const indexes = [writer, reader].map(
+      (adapter) => (adapter as unknown as { index: TurboVecIndex }).index
+    )
+    for (const index of indexes) {
+      const remove = index.remove.bind(index)
+      const addWithIds = index.addWithIds.bind(index)
+      index.remove = async (id) => {
+        await Promise.resolve()
+        return remove(id)
+      }
+      index.addWithIds = (vectors, ids) => Promise.resolve(addWithIds(vectors, ids))
+    }
+
+    const [saved] = await writer.saveEmbeddings([
+      { id: 'alpha', content: 'alpha moved', embeddingModelId: 'model', embedding: vector(8, 2) }
+    ])
+    t.is(saved.status, 'fulfilled')
+    t.is((await writer.search('moved', vector(8, 2), { topK: 1 }))[0]?.id, 'alpha')
+    t.is((await reader.search('moved', vector(8, 2), { topK: 1 }))[0]?.id, 'alpha')
+    t.alike(
+      indexes.map(({ length }) => length),
+      [2, 2]
+    )
+  } finally {
+    await reader.close()
+    await writer.close()
+    await store.close()
+  }
+})
 
 test('TurboVecAdapter still works with a synchronous index', async (t) => {
   const directory = await tmp()

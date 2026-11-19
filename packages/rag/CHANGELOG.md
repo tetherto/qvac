@@ -12,9 +12,9 @@ This patch makes `TurboVecAdapter` work with `@qvac/turbovec-ggml` 0.7, where ev
 
 `TurboVecAdapter` awaits every index call: search, add, remove, prepare, write and dispose. A failed add or remove marks the index for a rebuild again, as it did with synchronous indexes. A checkpoint waits for the snapshot write to finish before it renames the file into place.
 
-### Searches during a rebuild
+### Searches during index updates
 
-A rebuild disposes the index it replaces, and turbovec 0.7 rejects calls still queued on a disposed index. A search that was waiting on the old index now scans HyperDB instead of failing. Upserts and journal replays start all their native calls in one step, so a concurrent search sees the index before or after the whole change, never with a document removed and not yet added back.
+A rebuild disposes the index it replaces, and turbovec 0.7 rejects calls still queued on a disposed index. A search that was waiting on the old index now scans HyperDB instead of failing. Upserts and journal replays wait for each remove to finish before adding vectors. Searches scan HyperDB while an index mutation is in progress or when native candidates come from a different revision than the HyperDB snapshot.
 
 ## Changed
 

@@ -14,7 +14,7 @@ import {
   type PreparedDocument,
   type VectorRecord
 } from './HyperDBStorage.js'
-import type { HyperDBTransaction } from './db-types.js'
+import type { HyperDBReader, HyperDBTransaction } from './db-types.js'
 import { QvacErrorRAG, ERR_CODES } from '../../errors.js'
 import { scoreDocuments } from '../../utils/helper.js'
 import type {
@@ -130,29 +130,6 @@ interface TimerRuntime {
 
 const timerRuntime = globalThis as unknown as TimerRuntime
 
-/**
- * Starts every call in one synchronous step, so an index that queues its calls
- * runs them back to back and a search started meanwhile lands after all of
- * them. A call that throws stops the calls after it. Waits for every started
- * call to settle, then rethrows the first failure, so nothing is left running
- * on the index when this rejects.
- */
-async function runIndexCalls(calls: Array<() => unknown>): Promise<void> {
-  const started: unknown[] = []
-  for (const call of calls) {
-    try {
-      started.push(call())
-    } catch (error) {
-      started.push(Promise.reject(error))
-      break
-    }
-  }
-  const results = await Promise.allSettled(started)
-  for (const result of results) {
-    if (result.status === 'rejected') throw result.reason
-  }
-}
-
 export interface TurboVecAdapterInput extends HyperDBStorageInput {
   indexProvider: TurboVecIndexProvider
   checkpointDir?: string
@@ -180,6 +157,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
   private index: TurboVecIndex | null = null
   private indexUnavailable = false
   private indexRevision = 0
+  private indexMutationInProgress = false
   private activeStorage: TurboVecIndexStorage | null = null
   private idToDocument = new Map<bigint, string>()
   private operationTail: Promise<void> = Promise.resolve()
@@ -192,6 +170,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
   private lockHeartbeat: TimerHandle | null = null
   private ownsLock = false
   private writerFenced = false
+  private writerLockGeneration = 0
   private readonly lockOwner: string
   private readonly indexProvider: TurboVecIndexProvider
   private readonly storage: HyperDBStorage
@@ -302,6 +281,8 @@ export class TurboVecAdapter extends BaseDBAdapter {
     if (signal?.aborted) {
       throw new QvacErrorRAG({ code: ERR_CODES.OPERATION_CANCELLED })
     }
+    const scan = (snapshot: HyperDBReader) =>
+      this._searchAllDocuments(snapshot, query, queryVector, topK, signal)
 
     const visibleRevision = await this.storage.withSnapshot((snapshot) =>
       this.storage.readCurrentRevision(snapshot)
@@ -310,7 +291,8 @@ export class TurboVecAdapter extends BaseDBAdapter {
     if (
       (visibleRevision !== this.indexRevision || this.needsRecovery) &&
       this.index &&
-      !this.writerFenced
+      !this.writerFenced &&
+      !this.indexMutationInProgress
     ) {
       try {
         await this._scheduleRefresh()
@@ -321,14 +303,16 @@ export class TurboVecAdapter extends BaseDBAdapter {
     }
     if (
       !this.index ||
-      this.index.length === 0 ||
+      this.indexMutationInProgress ||
       this.needsRecovery ||
-      this.indexRevision < visibleRevision
+      this.indexRevision < visibleRevision ||
+      this.index.length === 0
     ) {
-      return this._searchAllDocuments(query, queryVector, topK, signal)
+      return this.storage.withSnapshot(scan)
     }
 
     const index = this.index
+    const indexRevision = this.indexRevision
     const mappings = this.idToDocument
     const candidateCount = Math.min(index.length, Math.max(topK, topK * this.candidateMultiplier))
     let nativeResults: TurboVecIndexSearchResult
@@ -341,23 +325,27 @@ export class TurboVecAdapter extends BaseDBAdapter {
       // A rebuild or recovery that swapped in a new index while this search
       // waited disposed the old one, which rejects the calls still queued on it.
       if (this.index !== index) {
-        return this._searchAllDocuments(query, queryVector, topK, signal)
+        return this.storage.withSnapshot(scan)
       }
       throw error
     }
     const candidateIds = this._resolveCandidateIds(nativeResults, mappings)
-    const [vectorMap, contentMap] = await this.storage.withSnapshot((snapshot) =>
-      Promise.all([
+    return this.storage.withSnapshot(async (snapshot) => {
+      const [revision, vectorMap, contentMap] = await Promise.all([
+        this.storage.readCurrentRevision(snapshot),
         this.storage.getVectors(snapshot, candidateIds),
         this.storage.getDocumentContents(snapshot, candidateIds)
       ])
-    )
+      if (signal?.aborted) {
+        throw new QvacErrorRAG({ code: ERR_CODES.OPERATION_CANCELLED })
+      }
 
-    if (signal?.aborted) {
-      throw new QvacErrorRAG({ code: ERR_CODES.OPERATION_CANCELLED })
-    }
-
-    return scoreDocuments(query, queryVector, candidateIds, vectorMap, contentMap, topK)
+      // HyperDB can commit a change while native search is still running.
+      if (revision !== indexRevision || this.index !== index || this.needsRecovery) {
+        return scan(snapshot)
+      }
+      return scoreDocuments(query, queryVector, candidateIds, vectorMap, contentMap, topK)
+    })
   }
 
   private async _saveEmbeddings(
@@ -412,9 +400,11 @@ export class TurboVecAdapter extends BaseDBAdapter {
     nativeIds: NativeId[],
     revision: number
   ): Promise<void> {
+    const lockGeneration = this.writerLockGeneration
     try {
       this._assertWriterOwnership()
       await this._ensureIndex(docs[0].dimension)
+      this._assertWriterOwnership(lockGeneration)
       if (!this.index) {
         for (let index = 0; index < docs.length; index++) {
           this._assertRuntimeMapping(nativeIds[index].value, docs[index].id)
@@ -438,7 +428,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
             adds: `TurboVec could not replay the committed revision gap ${this.indexRevision + 1}-${revision}`
           })
         }
-        this._assertWriterOwnership()
+        this._assertWriterOwnership(lockGeneration)
         return
       }
       const liveIndex = this.index
@@ -451,14 +441,10 @@ export class TurboVecAdapter extends BaseDBAdapter {
         ids[index] = nativeId.value
         vectors.set(this._normalizeVector(doc.vector), index * doc.dimension)
       }
-      // remove() reports a missing id as false, so an upsert needs no
-      // contains() round trip that would let a search land between the
-      // remove and the add.
-      await runIndexCalls([
-        ...Array.from(ids, (id) => () => liveIndex.remove(id)),
-        () => liveIndex.addWithIds(vectors, ids)
-      ])
-      this.indexRevision = revision
+      await this._mutateIndex(revision, async () => {
+        for (const id of ids) await liveIndex.remove(id)
+        await liveIndex.addWithIds(vectors, ids)
+      })
       this._markDirty()
     } catch (error) {
       this.needsRecovery = true
@@ -468,6 +454,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
   }
 
   private async _applyDeletedDocuments(ids: string[], revision: number): Promise<void> {
+    const lockGeneration = this.writerLockGeneration
     try {
       this._assertWriterOwnership()
       if (!this.index) {
@@ -490,18 +477,33 @@ export class TurboVecAdapter extends BaseDBAdapter {
             adds: `TurboVec could not replay the committed revision gap ${this.indexRevision + 1}-${revision}`
           })
         }
-        this._assertWriterOwnership()
+        this._assertWriterOwnership(lockGeneration)
         return
       }
       const liveIndex = this.index
-      const nativeIds = ids.map((id) => this._nativeIdForDocument(id).value)
-      await runIndexCalls(nativeIds.map((nativeId) => () => liveIndex.remove(nativeId)))
-      this.indexRevision = revision
+      await this._mutateIndex(revision, async () => {
+        for (const id of ids) await liveIndex.remove(this._nativeIdForDocument(id).value)
+      })
       this._markDirty()
     } catch (error) {
       this.needsRecovery = true
       this.logger.error('TurboVec delete failed after HyperDB commit; rebuild required:', error)
       throw this._postCommitSyncError('delete', error)
+    }
+  }
+
+  private async _mutateIndex(revision: number, mutate: () => Promise<void>): Promise<void> {
+    const lockGeneration = this.writerLockGeneration
+    this.indexMutationInProgress = true
+    try {
+      await mutate()
+      this._assertWriterOwnership(lockGeneration)
+      this.indexRevision = revision
+    } catch (error) {
+      this.needsRecovery = true
+      throw error
+    } finally {
+      this.indexMutationInProgress = false
     }
   }
 
@@ -686,27 +688,25 @@ export class TurboVecAdapter extends BaseDBAdapter {
     return refresh
   }
 
-  private _searchAllDocuments(
+  private async _searchAllDocuments(
+    snapshot: HyperDBReader,
     query: string,
     queryVector: number[],
     topK: number,
     signal?: AbortSignal
   ): Promise<SearchResult[]> {
-    return this.storage.withSnapshot(async (snapshot) => {
-      // Scan both full tables once and in parallel. Looking up each document
-      // separately would add one read per document and churn the cache.
-      const [vectors, documents] = await Promise.all([
-        this.storage.findEntries<VectorRecord>(snapshot, this.storage.vectorsTable),
-        this.storage.findEntries<DocumentRecord>(snapshot, this.storage.documentsTable)
-      ])
-      if (signal?.aborted) {
-        throw new QvacErrorRAG({ code: ERR_CODES.OPERATION_CANCELLED })
-      }
-      const ids = vectors.map((entry) => entry.docId)
-      const vectorMap = new Map(vectors.map((entry) => [entry.docId, entry.vector]))
-      const contentMap = new Map(documents.map((entry) => [entry.id, entry.content]))
-      return scoreDocuments(query, queryVector, ids, vectorMap, contentMap, topK)
-    })
+    // Scan both tables in parallel to avoid one read per document.
+    const [vectors, documents] = await Promise.all([
+      this.storage.findEntries<VectorRecord>(snapshot, this.storage.vectorsTable),
+      this.storage.findEntries<DocumentRecord>(snapshot, this.storage.documentsTable)
+    ])
+    if (signal?.aborted) {
+      throw new QvacErrorRAG({ code: ERR_CODES.OPERATION_CANCELLED })
+    }
+    const ids = vectors.map((entry) => entry.docId)
+    const vectorMap = new Map(vectors.map((entry) => [entry.docId, entry.vector]))
+    const contentMap = new Map(documents.map((entry) => [entry.id, entry.content]))
+    return scoreDocuments(query, queryVector, ids, vectorMap, contentMap, topK)
   }
 
   private async _ensureNativeIdRecord(
@@ -892,6 +892,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
     if (!this.index || fromRevision === toRevision) {
       return Promise.resolve(fromRevision === toRevision)
     }
+    const lockGeneration = this.writerLockGeneration
     return this.storage.withSnapshot(async (snapshot) => {
       const mutations = await this.storage.findEntries<MutationRecord>(
         snapshot,
@@ -941,26 +942,20 @@ export class TurboVecAdapter extends BaseDBAdapter {
           }
         }
 
-        // All HyperDB reads complete before the live index is touched. The index
-        // calls below start in one synchronous step, so a search queued on the
-        // index sees either none or all of them. nextMappings only adds entries,
-        // and a native id always names the same document, so installing it first
-        // is safe for a search that still runs against the old contents.
         await this._persistMissingMappings(nativeIdsByDocument, nextMappings)
-        this._assertWriterOwnership()
+        this._assertWriterOwnership(lockGeneration)
         this.idToDocument = nextMappings
         const liveIndex = this.index!
-        const calls: Array<() => unknown> = []
-        for (const replay of replayDocuments) {
-          const nativeId = replay.nativeId.value
-          calls.push(() => liveIndex.remove(nativeId))
-          if (replay.vector) {
-            const values = new Float32Array(this._normalizeVector(replay.vector.vector))
-            calls.push(() => liveIndex.addWithIds(values, new BigUint64Array([nativeId])))
+        await this._mutateIndex(toRevision, async () => {
+          for (const replay of replayDocuments) {
+            const nativeId = replay.nativeId.value
+            await liveIndex.remove(nativeId)
+            if (replay.vector) {
+              const values = new Float32Array(this._normalizeVector(replay.vector.vector))
+              await liveIndex.addWithIds(values, new BigUint64Array([nativeId]))
+            }
           }
-        }
-        await runIndexCalls(calls)
-        this.indexRevision = toRevision
+        })
         this.dirty = toRevision > fromRevision
         this.needsRecovery = false
         return true
@@ -1330,6 +1325,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
       try {
         this._writeLockRecord(lockPath, false)
         this.ownsLock = true
+        this.writerLockGeneration++
         this._startLockHeartbeat(lockPath)
         return
       } catch (error) {
@@ -1428,7 +1424,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
     }
   }
 
-  private _assertWriterOwnership(): void {
+  private _assertWriterOwnership(lockGeneration = this.writerLockGeneration): void {
     if (!this.checkpointWorkspaceDir) return
     const lockPath = path.join(this.checkpointWorkspaceDir, 'writer.lock')
     if (this.writerFenced || !this.ownsLock) {
@@ -1441,6 +1437,10 @@ export class TurboVecAdapter extends BaseDBAdapter {
     }
     if (result.record.owner !== this.lockOwner) {
       this._fenceWriter()
+      throw this._lockLostError()
+    }
+    if (lockGeneration !== this.writerLockGeneration) {
+      // A later acquisition does not restore ownership to an in-flight write.
       throw this._lockLostError()
     }
   }
