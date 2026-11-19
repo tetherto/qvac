@@ -3,6 +3,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { completion, type CompletionStats } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
+import { InvalidKvCacheKeyError, withNamedKvCache } from '@/serve/lib/named-kv-cache'
 import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
 import { accumulateUsage, formatToolErrors } from '@/serve/core/completion'
 import {
@@ -49,8 +50,11 @@ function prepare(req: FastifyRequest, body: Parameters<typeof toSdkChatArgs>[0])
   const sdkModelId = req.qvacModel!.sdkModelId
   let sdk: SdkChatArgs
   try {
-    sdk = toSdkChatArgs(body)
+    sdk = toSdkChatArgs(body, req.raw.rawHeaders)
   } catch (err) {
+    if (err instanceof InvalidKvCacheKeyError) {
+      throw new HttpError(400, 'invalid_kv_cache_key', err.message)
+    }
     if (err instanceof InvalidResponseFormatError) {
       throw new HttpError(400, 'invalid_response_format', err.message)
     }
@@ -116,6 +120,15 @@ function formatStats(stats: CompletionStats | undefined): string {
   return parts.length > 0 ? ` ${parts.join(' ')}` : ''
 }
 
+// What the named cache holds after the last turn; unkeyed requests report nothing.
+function cacheOccupancy(
+  p: PreparedRequest,
+  lastTurn: DrainedOpenAICompletion
+): { cacheTokens?: number } {
+  const cacheTokens = lastTurn.stats?.cacheTokens
+  return p.kvCache !== undefined && cacheTokens !== undefined ? { cacheTokens } : {}
+}
+
 const descriptions = {
   completion: `
 OpenAI-compatible chat completion. Accepts a chat-style \`messages\` array,
@@ -151,6 +164,20 @@ again, so the response only carries tool calls the client can execute.
 or validate is dropped, so the response carries \`finish_reason: "stop"\` and no
 \`tool_calls\`. The server log records the count and error codes
 (\`toolerrors=N (PARSE_ERROR)\`); OpenAI has no response field for them.
+
+**KV cache**: every request caches its conversation prefix automatically, so a
+plain follow-up turn only prefills the new tail. That lookup misses after a tool
+call, so an agent loop re-reads the whole prompt on each step. To keep the cache
+across tool calls, name a session: send \`X-QVAC-KV-Cache-Key: <session-key>\`
+(once), or \`metadata.qvac_kv_cache_key\`, or OpenAI's \`prompt_cache_key\`, in
+that order of precedence. Keys must be nonempty strings of at most 512 UTF-8
+bytes (otherwise \`400 invalid_kv_cache_key\`) and are SHA-256 hashed before
+filesystem use. Reuse the key with the same conversation's growing history on
+every request. A \`prompt_cache_key\` is scoped to the messages up to the first
+user turn, so one key per user still caches each conversation separately. Named caches follow the automatic cache's retention (24-hour idle
+TTL, 4 GiB LRU quota) and \`DELETE /qvac/v1/kv_cache\` reclaims them. On a keyed
+request, SDK cache occupancy is reported as \`usage.qvac_cache_tokens\`; this is
+not a per-request count of reused tokens.
 
 **Ignored params** (warned, not rejected): \`logit_bias\`, \`n\`, \`user\`,
 \`seed\`, \`logprobs\`, \`top_logprobs\`, \`frequency_penalty\`,
@@ -194,15 +221,18 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         `  chat model=${prepared.modelAlias} messages=${body.messages.length} stream=${streaming}` +
           `${prepared.tools ? ` tools=${prepared.tools.length}` : ''}` +
           `${prepared.generationParams ? ` genParams=${JSON.stringify(prepared.generationParams)}` : ''}` +
-          `${prepared.responseFormat ? ` responseFormat=${prepared.responseFormat.type}` : ''}`
+          `${prepared.responseFormat ? ` responseFormat=${prepared.responseFormat.type}` : ''}` +
+          `${prepared.kvCache !== undefined ? ' kvCache=named' : ''}`
       )
 
-      if (streaming) {
-        const includeUsage = body.stream_options?.include_usage === true
-        await runStreaming(req, reply, prepared, includeUsage)
-        return
-      }
-      await runBlocking(req, reply, prepared)
+      await withNamedKvCache(prepared.kvCache, reply.raw, app.qvac.logger, async () => {
+        if (streaming) {
+          const includeUsage = body.stream_options?.include_usage === true
+          await runStreaming(req, reply, prepared, includeUsage)
+          return
+        }
+        await runBlocking(req, reply, prepared)
+      })
     }
   )
 }
@@ -231,8 +261,9 @@ async function runBlocking(
         // Auto-cache keys on the conversation prefix so a follow-up turn only
         // prefills the new tail instead of the whole history. The SDK normalizes
         // out think blocks before hashing, so a client that round-trips plain
-        // assistant text still hits the cache.
-        kvCache: true,
+        // assistant text still hits the cache. That lookup misses once the
+        // history ends in tool results, which a named session does not.
+        kvCache: p.kvCache ?? true,
         ...(p.tools !== undefined ? { tools: p.tools } : {}),
         ...(p.generationParams !== undefined ? { generationParams: p.generationParams } : {}),
         ...(p.responseFormat !== undefined ? { responseFormat: p.responseFormat } : {})
@@ -270,6 +301,7 @@ async function runBlocking(
         toolCalls,
         completionTokens,
         ...(stats?.promptTokens !== undefined ? { promptTokens: stats.promptTokens } : {}),
+        ...cacheOccupancy(p, drained),
         finishReason
       })
     )
@@ -320,8 +352,8 @@ async function runStreaming(
         history: turnHistory,
         stream: true,
         captureThinking: true,
-        // See runBlocking: auto-cache the conversation prefix for cross-turn reuse.
-        kvCache: true,
+        // See runBlocking: a named session, or auto-cache on the conversation prefix.
+        kvCache: p.kvCache ?? true,
         ...(p.tools !== undefined ? { tools: p.tools } : {}),
         ...(p.generationParams !== undefined ? { generationParams: p.generationParams } : {}),
         ...(p.responseFormat !== undefined ? { responseFormat: p.responseFormat } : {})
@@ -371,7 +403,8 @@ async function runStreaming(
     if (includeUsage) {
       const usage = buildUsage({
         completionTokens,
-        ...(stats?.promptTokens !== undefined ? { promptTokens: stats.promptTokens } : {})
+        ...(stats?.promptTokens !== undefined ? { promptTokens: stats.promptTokens } : {}),
+        ...cacheOccupancy(p, drained)
       })
       sendSSE(raw, chatCompletionUsageChunk({ id, created, model: p.modelAlias, usage }))
     }
