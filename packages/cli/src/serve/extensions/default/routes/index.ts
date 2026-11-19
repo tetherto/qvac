@@ -1,4 +1,5 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
+import bci from '@/serve/extensions/default/routes/bci'
 import chatBatch from '@/serve/extensions/default/routes/chat-batch'
 import classifications from '@/serve/extensions/default/routes/classifications'
 import kvCache from '@/serve/extensions/default/routes/kv-cache'
@@ -25,5 +26,6 @@ export const routes: readonly FastifyPluginAsyncZod[] = [
   registry,
   upscale,
   music,
-  world
+  world,
+  bci
 ]
