@@ -95,6 +95,8 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
   // flush ends a HyperDB transaction, so pruning rides on the next one instead
   // of the commit that triggered the snapshot.
   const prunable = new Map<string, number>()
+  // A dropped entry's late write must not prune a re-created namespace.
+  const dropped = new WeakSet<Entry>()
   let closed = false
 
   function entryFor(namespace: string, config: IndexConfig): Entry {
@@ -348,7 +350,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       if (entry.native !== native) throw new Error('index replaced during snapshot')
       return entry.revision
     })
-    if (entry.native !== native) return
+    if (entry.native !== native || dropped.has(entry)) return
     entry.persistedRevision = Math.max(entry.persistedRevision, revision)
     prunable.set(entry.namespace, Math.max(prunable.get(entry.namespace) ?? 0, revision))
   }
@@ -381,14 +383,15 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
   // Entries leave the map before any await, so a namespace re-created while
   // an old snapshot write finishes gets a fresh entry, never the old index.
   async function drop(namespace: string, config: IndexConfig): Promise<void> {
-    const dropped: Entry[] = []
+    const detached: Entry[] = []
     for (const [key, entry] of entries) {
       if (entry.namespace !== namespace) continue
       entries.delete(key)
-      dropped.push(entry)
+      dropped.add(entry)
+      detached.push(entry)
     }
     prunable.delete(namespace)
-    for (const entry of dropped) {
+    for (const entry of detached) {
       while (entry.syncing) await entry.syncing.catch(() => {})
       await entry.persisting
       discard(entry)
