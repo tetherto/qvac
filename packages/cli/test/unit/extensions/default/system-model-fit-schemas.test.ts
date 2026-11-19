@@ -10,7 +10,8 @@ import {
   modelFitResult
 } from '@/serve/extensions/default/schemas/model-fit'
 import { systemQuery, systemResult } from '@/serve/extensions/default/schemas/system'
-import { mergeConfig, toHttpError } from '@/serve/extensions/default/routes/model-fit'
+import { toHttpError } from '@/serve/extensions/default/routes/model-fit'
+import { FitInputError, mergeConfig } from '@/serve/core/fit'
 import { errorResponses } from '@/serve/lib/error-responses'
 
 function issuePaths(input: unknown): string[] {
@@ -189,6 +190,16 @@ describe('toHttpError', () => {
     assert.equal(err.status, 400)
     assert.equal(err.code, 'invalid_model_config')
     assert.equal(err.message, 'ctx_size: expected number')
+  })
+
+  it('makes an unknown model a 404 and a non-constant companion source a 400', () => {
+    const notFound = toHttpError(new FitInputError('model_not_found', 'no such model'))
+    assert.equal(notFound.status, 404)
+    assert.equal(notFound.code, 'model_not_found')
+
+    const badSrc = toHttpError(new FitInputError('invalid_model_src', 'not a constant'))
+    assert.equal(badSrc.status, 400)
+    assert.equal(badSrc.code, 'invalid_model_src')
   })
 
   it('keeps every other failure a 500', () => {
