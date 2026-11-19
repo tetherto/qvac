@@ -36,7 +36,7 @@ assessModelFit({
 
 The models, at least one, assessed as if loaded at the same time. Each takes the same parameters as [`loadModel()`](/sdk/reference/api#loadmodel):
 
-- `modelSrc` — the model, as `loadModel()` takes it. A catalog constant resolves to the registry's weightless description of the model; a path already on disk is read directly.
+- `modelSrc` — the model, as `loadModel()` takes it. A path on disk is read directly, and so is a catalog constant whose files are already downloaded to the models cache. Any other catalog constant resolves to the registry's weightless description of the model.
 - `modelType` — optional. The engine that would run the load, inferred from `modelSrc` when omitted, as `loadModel()` infers it. Required only where the source names no engine.
 - `modelConfig` — optional. The config `loadModel()` would be given, including the companion model sources a compound load needs.
 
