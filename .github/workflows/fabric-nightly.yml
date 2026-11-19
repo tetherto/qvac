@@ -143,6 +143,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       SHA: ${{ needs.gate.outputs.sha }}
+      BRANCH: ${{ needs.gate.outputs.branch }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -153,9 +154,18 @@ jobs:
           port=packages/fabric/vcpkg-overlays/ports/qvac-fabric
           rm -rf "$port"
           mkdir -p "$port"
-          for f in $(gh api "repos/$REGISTRY_REPO/contents/ports/qvac-fabric" --jq '.[] | select(.type == "file") | .name'); do
-            gh api -H 'Accept: application/vnd.github.raw' "repos/$REGISTRY_REPO/contents/ports/qvac-fabric/$f" > "$port/$f"
+          # The registry head carries the newest port for the active build line; pin it for this run.
+          ref=$(gh api "repos/$REGISTRY_REPO/commits/HEAD" --jq '.sha')
+          files=$(gh api "repos/$REGISTRY_REPO/contents/ports/qvac-fabric?ref=$ref" --jq '.[] | select(.type == "file") | .name')
+          for f in $files; do
+            gh api -H 'Accept: application/vnd.github.raw' "repos/$REGISTRY_REPO/contents/ports/qvac-fabric/$f?ref=$ref" > "$port/$f"
           done
+          version=$(jq -r '.version // ."version-semver" // empty' "$port/vcpkg.json")
+          echo "qvac-fabric port $version from $REGISTRY_REPO@${ref:0:9}"
+          if [[ "$BRANCH" =~ ^temp-([0-9]+)$ ]] && [[ "$version" != "${BASH_REMATCH[1]}."* ]]; then
+            echo "::error::the registry port is $version, not on the $BRANCH build line; update .github/fabric-nightly.json or the registry"
+            exit 1
+          fi
           if [ "$(grep -cE '^\s*REF ' "$port/portfile.cmake")" != 1 ] || [ "$(grep -cE '^\s*SHA512 ' "$port/portfile.cmake")" != 1 ]; then
             echo "::error::the registry portfile no longer has exactly one REF and one SHA512 line"
             exit 1
@@ -181,11 +191,11 @@ jobs:
           git push "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "HEAD:refs/heads/$branch"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
           echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-      # Fabric is selected too, so its own lint and tests run beside the consumers'.
+      # Fabric is selected too, so its build and C++ lint report on their own.
       - name: Dispatch pr-build-test
         id: dispatch
         env:
-          BRANCH: ${{ steps.push.outputs.branch }}
+          NIGHTLY_BRANCH: ${{ steps.push.outputs.branch }}
           HEAD_SHA: ${{ steps.push.outputs.head }}
         run: |
           set -euo pipefail
@@ -198,14 +208,46 @@ jobs:
             fi
           done
           echo "packages: $packages"
-          id=$(bash .github/scripts/fabric-nightly.sh dispatch pr-build-test.yml "$BRANCH" "$HEAD_SHA" -f packages="$packages")
+          id=$(bash .github/scripts/fabric-nightly.sh dispatch pr-build-test.yml "$NIGHTLY_BRANCH" "$HEAD_SHA" -f packages="$packages")
           echo "run_id=$id" >> "$GITHUB_OUTPUT"
           echo "pr-build-test: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$id"
 
+  # pr-build-test can outlast one job's 360-min cap (providers, builds and
+  # desktop tests cap at 180 each), so the wait hands over to a second job.
   test:
     needs: prepare
     runs-on: ubuntu-latest
-    # GitHub's job cap. A full dispatch took about 2h, mostly runner queueing.
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      pending: ${{ steps.wait.outputs.pending }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/scripts/fabric-nightly.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Wait for pr-build-test
+        id: wait
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ needs.prepare.outputs.run_id }}
+        run: |
+          set -uo pipefail
+          timeout 340m bash .github/scripts/fabric-nightly.sh wait "$RUN_ID"
+          rc=$?
+          if [ "$rc" = 124 ]; then
+            echo "pending=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          exit "$rc"
+
+  test-more:
+    needs: [prepare, test]
+    if: needs.test.outputs.pending == 'true'
+    runs-on: ubuntu-latest
     timeout-minutes: 360
     permissions:
       contents: read
@@ -216,14 +258,14 @@ jobs:
           sparse-checkout: .github/scripts/fabric-nightly.sh
           sparse-checkout-cone-mode: false
           persist-credentials: false
-      - name: Wait for pr-build-test
+      - name: Keep waiting for pr-build-test
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ needs.prepare.outputs.run_id }}
         run: bash .github/scripts/fabric-nightly.sh wait "$RUN_ID"
 
   report:
-    needs: [gate, prepare, test]
+    needs: [gate, prepare, test, test-more]
     if: always() && needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -243,7 +285,7 @@ jobs:
           FABRIC_SHA: ${{ needs.gate.outputs.sha }}
           FABRIC_TAG: ${{ needs.gate.outputs.tag }}
           RUN_ID: ${{ needs.prepare.outputs.run_id }}
-          TEST_RESULT: ${{ needs.test.result }}
+          TEST_RESULT: ${{ needs.test.outputs.pending == 'true' && needs.test-more.result || needs.test.result }}
         run: bash .github/scripts/fabric-nightly.sh report
 
   # A timed-out or cancelled nightly can leave dispatched runs going, including

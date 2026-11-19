@@ -58,7 +58,7 @@ wait_runs() {
 
 # Reads FABRIC_REPO, FABRIC_BRANCH, FABRIC_SHA, FABRIC_TAG, RUN_ID and TEST_RESULT.
 report() {
-  local out=${GITHUB_STEP_SUMMARY:-/dev/stdout} failed=0 conclusion url jobs name total bad
+  local out=${GITHUB_STEP_SUMMARY:-/dev/stdout} failed=0 conclusion url jobs name total bad tested passed
   local cov_dir
   cov_dir=$(mktemp -d)
 
@@ -101,18 +101,24 @@ report() {
 
   echo "### Jobs" >>"$out"
   echo >>"$out"
+  # Counts build and test jobs; lists every failed job, so a select or trust failure still shows.
   if jobs=$(gh api --paginate "repos/$REPO/actions/runs/$RUN_ID/jobs?per_page=30" \
     --jq '.jobs[]
       | select(.conclusion != "skipped")
-      | select(.name | test("^(providers|build|cpp-lint|cpp-tests|desktop) / "))
       | select(.name | test(" / plan$") | not)
-      | "\(.conclusion // .status)\t[\(.name)](\(.html_url))"'); then
-    total=$(grep -c . <<<"$jobs" || true)
+      | "\(.conclusion // .status)\t\(.name | test("^(providers|build|cpp-lint|cpp-tests|desktop) / "))\t[\(.name)](\(.html_url))"'); then
+    tested=$(awk -F'\t' '$2 == "true"' <<<"$jobs")
+    total=$(grep -c . <<<"$tested" || true)
+    passed=$(grep -c '^success'$'\t' <<<"$tested" || true)
     bad=$(grep -v '^success'$'\t' <<<"$jobs" || true)
-    echo "$(( total - $(grep -c . <<<"$bad" || true) )) of $total build and test jobs passed." >>"$out"
+    if [ "$total" -eq 0 ]; then
+      echo "No build or test job ran." >>"$out"
+    else
+      echo "$passed of $total build and test jobs passed." >>"$out"
+    fi
     if [ -n "$bad" ]; then
       printf '\n| Job | Result |\n|---|---|\n' >>"$out"
-      awk -F'\t' '{print "| " $2 " | " $1 " |"}' <<<"$bad" >>"$out"
+      awk -F'\t' '{print "| " $3 " | " $1 " |"}' <<<"$bad" >>"$out"
     fi
   else
     echo "_Job list unavailable (API error)._" >>"$out"
