@@ -10,7 +10,8 @@ import {
   generateShardFilenames,
   calculatePercentage
 } from '@/utils/index'
-import { getSingleFileCachePath } from '@/utils/cache/paths'
+import { getSingleFileCachePath, hasFileOfSize } from '@/utils/cache/paths'
+import { acceptsLegacyFlatCache } from '@/utils/cache/layout'
 import { getModelByPath, type RegistryItem } from '@/models/registry/index'
 import { acquireRegistryClient, type RegistryWait } from '@/runtime/registry-client'
 import { getRuntimeContext } from '@/runtime/state'
@@ -296,16 +297,6 @@ async function downloadShardedFilesFromRegistry(
   return getShardPath(cacheKey, shards[0]!.filename)
 }
 
-// A size check only: the single-file path validates the file before using it.
-async function hasFileOfSize(path: string, expectedSize: number): Promise<boolean> {
-  if (expectedSize <= 0) return false
-  try {
-    return (await fsPromises.stat(path)).size === expectedSize
-  } catch {
-    return false
-  }
-}
-
 export async function downloadModelFromRegistry(
   registryPath: string,
   registrySource: string,
@@ -504,7 +495,7 @@ export async function downloadModelFromRegistry(
         return await downloadCompanionSetFromRegistry({
           companionSet: modelMetadata.companionSet,
           downloadKey,
-          allowLegacyFlatCache: modelMetadata.addon === 'nmt',
+          allowLegacyFlatCache: acceptsLegacyFlatCache(modelMetadata.addon),
           progressCallback: ctx.broadcastProgress,
           signal: ctx.signal,
           hooks: companionHooks,
