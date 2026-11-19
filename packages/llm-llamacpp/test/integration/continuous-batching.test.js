@@ -1562,8 +1562,8 @@ async function assertGenerationStopsAtCap(t, model) {
   t.comment(`generation to the cap: ${JSON.stringify(stats)}`)
   t.is(stats?.stopReason, 'contextOverflow', 'a generation that fills the slot reports it')
   t.ok(output.length > 0, 'a generation stopped by the cap keeps its tokens')
-  // In the cap tests the even share is 2048 or more, so this shows the cap
-  // stopped it.
+  // Below the even share of ctx_size 4096 this shows the cap stopped it; in the
+  // shared-pool test the share equals the cap, so either limit fits.
   t.ok(used < 2 * KV_PER_SLOT_CAP, `the generation stopped at the cap (${used} tokens)`)
 }
 

@@ -167,8 +167,8 @@ struct SubmitRequest {
   /// slot reuses its pre-built base sampler; otherwise the scheduler
   /// builds a per-request override sampler via
   /// `applyGenerationParamsToContext`. The merged `n_predict` is enforced
-  /// strictly against the scheduler's per-seq ceiling (`ctxTotalTokens /
-  /// batchSize`); requests with `prompt + n_predict` over that ceiling
+  /// strictly against the scheduler's per-seq ceiling (`perSeqCeiling`);
+  /// requests with `prompt + n_predict` over that ceiling
   /// are rejected at admission rather than silently truncated.
   GenerationParams overrides;
   StreamCallbacks streams;

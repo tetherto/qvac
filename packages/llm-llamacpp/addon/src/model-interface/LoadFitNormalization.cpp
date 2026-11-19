@@ -2369,6 +2369,28 @@ NormalizedLoad normalizeLoadForFit(
             K_LEGACY_PARSER_NAME.data()));
     params.n_ctx = kMinNCtx;
   }
+  // The batch scheduler refuses caps that overbook the pool; with an explicit
+  // ctx-size the pool fabric creates (padded to 256) is known here, so fit
+  // checks refuse the same config. ctx-size 0 is checked once the context
+  // exists.
+  if (params.n_parallel >= 2 && params.kv_unified_per_slot > 0 &&
+      params.n_ctx > 0) {
+    const int64_t pool = GGML_PAD(static_cast<int64_t>(params.n_ctx), 256);
+    if (static_cast<int64_t>(params.n_parallel) * params.kv_unified_per_slot >
+        pool) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          string_format(
+              "%s: parallel x kv_unified_per_slot (%d x %d) must fit "
+              "ctx_size=%lld; leave ctx_size unset to size the pool to it.\n",
+              K_LEGACY_PARSER_NAME.data(),
+              params.n_parallel,
+              params.kv_unified_per_slot,
+              static_cast<long long>(pool)));
+    }
+  }
   if (params.rope_freq_base != 0.0) {
     QLOG_IF(
         Priority::WARNING,

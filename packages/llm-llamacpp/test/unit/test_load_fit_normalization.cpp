@@ -2083,6 +2083,30 @@ TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotPoolOverflowIsRejected) {
   }
 }
 
+// With an explicit ctx-size, caps that overbook the pool fabric creates (padded
+// to 256) are refused before the model loads (baseConfig has parallel 2).
+TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotOverbookingIsRejected) {
+  const auto normalize = [this](const std::string& perSlot) {
+    auto config = baseConfig();
+    config["ctx-size"] = "1000";
+    config["kv-unified-per-slot"] = perSlot;
+    return lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "none"}));
+  };
+  EXPECT_EQ(normalize("512").params.kv_unified_per_slot, 512);
+  try {
+    static_cast<void>(normalize("513"));
+    FAIL() << "caps that overbook the pool must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(), ::testing::HasSubstr("(2 x 513) must fit ctx_size=1024"));
+  }
+}
+
 TEST_F(LoadFitNormalizationTest, NegativeKvUnifiedPerSlotIsRejected) {
   auto config = baseConfig();
   config["kv-unified-per-slot"] = "-512";

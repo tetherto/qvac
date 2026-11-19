@@ -1,5 +1,6 @@
 #include "CacheManager.hpp"
 
+#include <algorithm>
 #include <filesystem>
 #include <system_error>
 
@@ -298,19 +299,22 @@ bool CacheManager::acceptLoadedState(
             source.c_str(),
             ex.what()));
   }
-  // The same limit the context generates against.
+  // The same limit the context generates against, on positions and KV cells
+  // (they diverge for M-RoPE images).
   const unsigned ceiling =
       qvac_lib_inference_addon_llama::batching::perSeqCeiling(
           llama_n_ctx(ctx),
           llama_n_seq_max(ctx),
           llmContext_->getParams().kv_unified_per_slot);
-  if (llmContext_->getNPast() > static_cast<llama_pos>(ceiling)) {
+  const llama_pos used =
+      std::max(llmContext_->getNPast(), llmContext_->getCacheTokens());
+  if (used > static_cast<llama_pos>(ceiling)) {
     std::string errorMsg = string_format(
         "%s: cache file '%s' contains %zu tokens, which exceeds the context "
         "limit of %u tokens\n",
         __func__,
         source.c_str(),
-        static_cast<size_t>(llmContext_->getNPast()),
+        static_cast<size_t>(used),
         ceiling);
     throw qvac_errors::StatusError(
         ADDON_ID, toString(ContextLengthExeeded), errorMsg);

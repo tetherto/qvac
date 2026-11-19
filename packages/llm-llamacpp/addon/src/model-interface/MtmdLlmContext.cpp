@@ -1456,8 +1456,9 @@ llama_pos MtmdLlmContext::removeLastNTokens(llama_pos count) {
 }
 
 llama_pos MtmdLlmContext::ctxCeiling() const {
-  // As llama-server's n_ctx_slot(), computed by the addon: the slot's even
-  // share of the pool, or kv_unified_per_slot when lower.
+  // The slot's even share of the pool, or kv_unified_per_slot when lower.
+  // llama-server caps a slot at kv_unified_per_slot only; the even share is the
+  // addon's, so slots cannot overbook the pool.
   return perSeqCtxCeiling_ > 0 ? perSeqCtxCeiling_
                                : static_cast<llama_pos>(batching::perSeqCeiling(
                                      llama_n_ctx(modelCtx_.lctx),
@@ -2644,7 +2645,8 @@ void MtmdLlmContext::acceptRestoredState(
             "': " + ex.what());
   }
 
-  if (getNPast() > ctxCeiling()) {
+  // Positions and KV cells diverge for M-RoPE images; both must fit the slot.
+  if (getNPast() > ctxCeiling() || getCacheTokens() > ctxCeiling()) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(ContextLengthExeeded),

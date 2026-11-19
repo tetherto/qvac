@@ -36,7 +36,8 @@
 
 - Loading a cached prompt longer than a slot's limit (`ctx_size / parallel`,
   or `kv_unified_per_slot` if lower) now fails when the cache loads, as
-  documented. The check compared against the whole context
+  documented. The check compared against the whole context, and now also
+  counts the KV cells a multimodal prompt takes
   ([#5832](https://github.com/tetherto/qvac/pull/5832)).
 
 ## [0.72.0] - 2026-11-18

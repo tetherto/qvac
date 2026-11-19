@@ -81,8 +81,9 @@ TextLlmContext::~TextLlmContext() {
 }
 
 llama_pos TextLlmContext::ctxCeiling() const {
-  // As llama-server's n_ctx_slot(), computed by the addon: the slot's even
-  // share of the pool, or kv_unified_per_slot when lower.
+  // The slot's even share of the pool, or kv_unified_per_slot when lower.
+  // llama-server caps a slot at kv_unified_per_slot only; the even share is the
+  // addon's, so slots cannot overbook the pool.
   return perSeqCtxCeiling_ > 0 ? perSeqCtxCeiling_
                                : static_cast<llama_pos>(batching::perSeqCeiling(
                                      llama_n_ctx(modelCtx_.lctx),
