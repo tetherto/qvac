@@ -19,6 +19,7 @@ export {
   type ToolCallWithCall
 } from '@/schemas/tools'
 export * from '@/schemas/heartbeat'
+export * from '@/schemas/capabilities'
 export * from '@/schemas/model-ops'
 export * from '@/schemas/download-asset'
 export * from '@/schemas/embed'

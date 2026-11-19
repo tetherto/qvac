@@ -10,6 +10,7 @@ import type { ModelSrcInput } from '@/schemas/model-src-utils'
 import type { RuntimeContext } from '@/schemas/runtime-context'
 import type { AbortSignalLike } from '@/schemas/abort-signal'
 import { trackedRequestSchema } from '@/schemas/request-base'
+import { capabilityContractRuntimeSchema, type CapabilityContract } from '@/schemas/capabilities'
 
 /**
  * Granularity at which the addon can cancel.
@@ -233,6 +234,15 @@ export interface QvacPlugin<
    */
   assessFit?: (request: never) => Promise<ModelFitModelResult>
   handlers: Record<string, PluginHandlerDefinition>
+  /**
+   * The capability contracts this plugin provides. Reference an entry of
+   * `CAPABILITY_CONTRACTS` to provide a QVAC contract; a contract QVAC does
+   * not define needs a dotted ID, such as `acme.diarization`. Every required
+   * operation needs a handler of the same name, and a handler belongs to at
+   * most one contract ID. A plugin without `provides` serves only
+   * `pluginInvoke` and adds nothing to `getRuntimeCapabilities`.
+   */
+  provides?: readonly CapabilityContract[] | undefined
   logging?: PluginLogging | undefined
   capabilities?: QvacPluginCapabilities | undefined
   /** When true, skips file-existence validation for modelPath. Use for plugins that derive paths from config. */
@@ -391,6 +401,7 @@ export const pluginDefinitionRuntimeSchema = z
     fitRequest: functionRuntimeSchema.optional(),
     assessFit: functionRuntimeSchema.optional(),
     handlers: z.record(z.string(), pluginHandlerDefinitionRuntimeSchema),
+    provides: z.array(capabilityContractRuntimeSchema).optional(),
     logging: z
       .object({
         module: z.unknown().optional(),

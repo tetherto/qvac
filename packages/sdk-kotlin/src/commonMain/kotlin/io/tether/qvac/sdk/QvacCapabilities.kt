@@ -14,6 +14,8 @@ import io.tether.qvac.sdk.generated.schema.GetLoadedModelInfoRequest
 import io.tether.qvac.sdk.generated.schema.GetLoadedModelInfoResponse
 import io.tether.qvac.sdk.generated.schema.GetModelInfoRequest
 import io.tether.qvac.sdk.generated.schema.GetModelInfoResponse
+import io.tether.qvac.sdk.generated.schema.GetRuntimeCapabilitiesRequest
+import io.tether.qvac.sdk.generated.schema.GetRuntimeCapabilitiesResponse
 import io.tether.qvac.sdk.generated.schema.GetSystemResourcesRequest
 import io.tether.qvac.sdk.generated.schema.GetSystemResourcesResponse
 import io.tether.qvac.sdk.generated.schema.LoadModelCustomPluginRequest
@@ -202,6 +204,10 @@ class QvacSystem internal constructor(
     suspend fun resources(includeUsageSnapshot: Boolean = false): GetSystemResourcesResponse {
         return client.getSystemResources(GetSystemResourcesRequest(sample = includeUsageSnapshot))
     }
+
+    /** The capability contracts the runtime's registered plugins provide, with the major version of each. */
+    suspend fun runtimeCapabilities(): GetRuntimeCapabilitiesResponse =
+        client.getRuntimeCapabilities(GetRuntimeCapabilitiesRequest())
 }
 
 class QvacRaw internal constructor(
