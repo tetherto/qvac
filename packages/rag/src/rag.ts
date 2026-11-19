@@ -19,10 +19,12 @@ import {
   NAMESPACES,
   NATIVE_IDS,
   SPACES,
+  TOMBSTONES,
   type ChunkRecord,
   type DocumentRecord,
   type NamespaceRecord,
-  type SpaceRecord
+  type SpaceRecord,
+  type TombstoneRecord
 } from './db/records.js'
 import {
   EMBED_BATCH_SIZE,
@@ -35,7 +37,11 @@ import {
   parseDelete,
   parseIngest,
   parseIngestOptions,
+  parseListDocuments,
   parseNamespaceName,
+  parseReadDocument,
+  parseScopedListDocuments,
+  parseScopedReadDocument,
   parseSearch,
   type ParsedDocument,
   type ValidDocument,
@@ -43,6 +49,7 @@ import {
   type ValidTextChunk
 } from './input.js'
 import { intersectScope, parseScope } from './scope.js'
+import { listDocumentPage, outOfScope, readDocumentPage } from './documents.js'
 import {
   checkQuery,
   scanSearch,
@@ -71,14 +78,20 @@ import type {
   CreateRagOptions,
   DeleteDocumentsParams,
   DeleteDocumentsResult,
+  DocumentListPage,
+  DocumentPage,
   IngestedDocument,
   IngestOptions,
   IngestParams,
   IndexStorage,
   IngestResult,
+  ListDocumentsParams,
   NamespaceInfo,
   Rag,
+  ReadDocumentParams,
+  ScopedListDocumentsParams,
   ScopedRag,
+  ScopedReadDocumentParams,
   ScopedSearchParams,
   SearchHit,
   SearchParams,
@@ -295,7 +308,8 @@ export function createRag(options: CreateRagOptions): Rag {
         revision: 0,
         nextNativeId: encodeNativeId(FIRST_NATIVE_ID),
         createdAt: new Date(),
-        indexStorage: storage
+        indexStorage: storage,
+        lineageId: newLineageId()
       })
       await tx.flush()
       return { name, spaceId, revision: 0, index: { storage } }
@@ -446,6 +460,12 @@ export function createRag(options: CreateRagOptions): Rag {
         // A spread push would exceed the argument limit on large documents.
         for (const nativeId of await deleteGeneration(tx, document)) removed.push(nativeId)
         await tx.delete(DOCUMENTS, { namespace, documentId })
+        await tx.insert(TOMBSTONES, {
+          namespace,
+          documentId,
+          generation: document.generation,
+          deletedAt: new Date()
+        })
         deleted.push(documentId)
       }
       if (deleted.length === 0) return { deleted, revision: ns.revision }
@@ -473,12 +493,48 @@ export function createRag(options: CreateRagOptions): Rag {
     })
   }
 
+  async function readDocument(params: ReadDocumentParams): Promise<DocumentPage> {
+    const { namespace, ...request } = parseReadDocument(params)
+    return await withSnapshot(database(), async (reader) => {
+      await getNamespace(reader, namespace)
+      return await readDocumentPage(reader, namespace, request)
+    })
+  }
+
+  async function listDocuments(params: ListDocumentsParams): Promise<DocumentListPage> {
+    const { namespace, ...request } = parseListDocuments(params)
+    return await withSnapshot(database(), async (reader) => {
+      await getNamespace(reader, namespace)
+      return await listDocumentPage(reader, namespace, request)
+    })
+  }
+
   // A handle's documents are granted, not chosen per request: an ID the
   // namespace no longer has is skipped, so the handle keeps working with what
   // remains and fails closed to no hits. Only the scope's shape can error.
+  // Reading a document outside the scope fails like reading a missing one.
   function scoped(scope: SearchScope): ScopedRag {
     const bound = parseScope(scope)
+    const { namespace, documentIds } = bound
     return {
+      async readDocument(params: ScopedReadDocumentParams): Promise<DocumentPage> {
+        const request = parseScopedReadDocument(params)
+        const instance = database()
+        if (documentIds !== undefined && !documentIds.includes(request.documentId)) {
+          throw outOfScope(namespace, request.documentId)
+        }
+        return await withSnapshot(instance, async (reader) => {
+          await getNamespace(reader, namespace)
+          return await readDocumentPage(reader, namespace, request)
+        })
+      },
+      async listDocuments(params?: ScopedListDocumentsParams): Promise<DocumentListPage> {
+        const request = parseScopedListDocuments(params)
+        return await withSnapshot(database(), async (reader) => {
+          await getNamespace(reader, namespace)
+          return await listDocumentPage(reader, namespace, request, documentIds)
+        })
+      },
       async search(params: ScopedSearchParams): Promise<SearchHit[]> {
         const request = parseSearch({ scope: undefined, ...params })
         const narrowed = intersectScope(bound, request.scope)
@@ -550,9 +606,15 @@ export function createRag(options: CreateRagOptions): Rag {
     ingest: (params, options) => track(() => ingest(params, options)),
     deleteDocuments: (params) => track(() => deleteDocuments(params)),
     search: (params) => track(() => search(params)),
+    readDocument: (params) => track(() => readDocument(params)),
+    listDocuments: (params) => track(() => listDocuments(params)),
     scoped: (scope) => {
       const handle = scoped(scope)
-      return { search: (params) => track(() => handle.search(params)) }
+      return {
+        search: (params) => track(() => handle.search(params)),
+        readDocument: (params) => track(() => handle.readDocument(params)),
+        listDocuments: (params) => track(() => handle.listDocuments(params))
+      }
     }
   }
 }
@@ -671,7 +733,16 @@ async function commitDocument(
     return { document: unchangedResult(previous), revision: ns.revision }
   }
   const removed = previous ? await deleteGeneration(tx, previous) : []
-  const generation = previous ? previous.generation + 1 : 1
+  let last = previous?.generation ?? 0
+  if (!previous) {
+    const key = { namespace, documentId: document.id }
+    const tombstone = await tx.get<TombstoneRecord>(TOMBSTONES, key)
+    if (tombstone) {
+      last = tombstone.generation
+      await tx.delete(TOMBSTONES, key)
+    }
+  }
+  const generation = last + 1
 
   let nextId = decodeNativeId(ns.nextNativeId)
   if (MAX_NATIVE_ID - nextId + 1n < BigInt(document.chunks.length)) {
@@ -711,7 +782,8 @@ async function commitDocument(
     chunkCount: document.chunks.length,
     contentHash,
     metadata: document.metadata,
-    updatedAt: new Date()
+    updatedAt: new Date(),
+    revision: ns.revision + 1
   })
   const revision = await appendMutation(tx, ns, added, removed, encodeNativeId(nextId))
   await indexes.prune(tx, namespace)
@@ -759,8 +831,19 @@ async function appendMutation(
     removed: packNativeIds(removed),
     createdAt: new Date()
   })
-  await tx.insert(NAMESPACES, { ...ns, revision, nextNativeId })
+  // Namespaces from before lineages existed get theirs on their first write.
+  const lineageId = ns.lineageId ?? newLineageId()
+  await tx.insert(NAMESPACES, { ...ns, revision, nextNativeId, lineageId })
   return revision
+}
+
+function newLineageId(): Uint8Array {
+  if (qvacCrypto.randomBytes) return qvacCrypto.randomBytes(16)
+  if (qvacCrypto.getRandomValues) return qvacCrypto.getRandomValues(new Uint8Array(16))
+  throw new QvacErrorRAG({
+    code: ERR_CODES.DEPENDENCY_REQUIRED,
+    adds: 'crypto.randomBytes or crypto.getRandomValues is needed to create a namespace'
+  })
 }
 
 function concatEmbeddings(document: ValidDocument): Float32Array {
