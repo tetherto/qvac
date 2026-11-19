@@ -8740,6 +8740,39 @@
     "link": "https://huggingface.co/qvac/MedPsy-4B-GGUF"
   },
   {
+    "source": "https://huggingface.co/qvac/BotPsy-0.8B-GGUFs/resolve/17bb36aa29c58fcde8e321aaaad3f2f7372aa655/botpsy-0.8b-bf16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "BotPsy 0.8B tool-calling and agentic text-generation model from QVAC.",
+    "quantization": "bf16",
+    "params": "0.8B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "tool-calling", "botpsy", "qwen3.5", "function-calling", "agent", "instruct"],
+    "notes": "Unquantized export of qvac/BotPsy-0.8B. Trained and evaluated in thinking mode; the embedded chat template defaults to non-thinking. Ships without the base model's MTP layers.",
+    "link": "https://huggingface.co/qvac/BotPsy-0.8B-GGUFs"
+  },
+  {
+    "source": "https://huggingface.co/qvac/BotPsy-0.8B-GGUFs/resolve/17bb36aa29c58fcde8e321aaaad3f2f7372aa655/botpsy-0.8b-q4_k_m-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "BotPsy 0.8B tool-calling and agentic text-generation model from QVAC.",
+    "quantization": "q4_k_m",
+    "params": "0.8B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "tool-calling", "botpsy", "qwen3.5", "function-calling", "agent", "instruct"],
+    "notes": "Importance-matrix Q4_K_M quantization of qvac/BotPsy-0.8B. Trained and evaluated in thinking mode; the embedded chat template defaults to non-thinking. Ships without the base model's MTP layers.",
+    "link": "https://huggingface.co/qvac/BotPsy-0.8B-GGUFs"
+  },
+  {
+    "source": "https://huggingface.co/qvac/BotPsy-0.8B-GGUFs/resolve/17bb36aa29c58fcde8e321aaaad3f2f7372aa655/botpsy-0.8b-q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "BotPsy 0.8B tool-calling and agentic text-generation model from QVAC.",
+    "quantization": "q8_0",
+    "params": "0.8B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "tool-calling", "botpsy", "qwen3.5", "function-calling", "agent", "instruct"],
+    "notes": "Q8_0 quantization of qvac/BotPsy-0.8B, the recommended file. Trained and evaluated in thinking mode; the embedded chat template defaults to non-thinking. Ships without the base model's MTP layers.",
+    "link": "https://huggingface.co/qvac/BotPsy-0.8B-GGUFs"
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-07-03/Cangjie5_TC.tsv",
     "engine": "@qvac/tts-ggml",
     "description": "Cangjie5 traditional Chinese input table (hanzi -> Cangjie codes) used for Chatterbox multilingual Chinese (zh) tokenization",

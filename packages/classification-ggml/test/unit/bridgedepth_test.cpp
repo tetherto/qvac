@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include <ggml-backend.h>
 #include <ggml.h>
 #include <gguf.h>
 #include <gtest/gtest.h>
@@ -397,11 +398,12 @@ protected:
 };
 
 // Torch and ggml break top-k ties in the DPN differently; feeding the
-// reference seeds isolates every other op. Measured 2026-11-04: CPU 99.99%
-// within 0.05 px (M5 Pro and x86), CUDA 99.93% (T4), Metal 99.75% (M5 Pro),
-// Vulkan 99.63% (T4). Metal and Vulkan stage F32 matmul operands as half in
-// shared memory (Vulkan when the device has fp16 or coopmat2), so their gate
-// is 99% within 0.2 px; both measure 99.8% or more there.
+// reference seeds isolates every other op. The CPU runs F32 throughout and
+// measures 99.99% within 0.05 px (M5 Pro and x86, 2026-11-04). The GPU
+// backends hold the linear weights and the conv im2col as F16 and run the ViT
+// attention fused, so their gate is 99% within 0.2 px. Measured 2026-11-12
+// within 0.05 / 0.2 px: Metal 99.74% / 99.85% (M5 Pro), CUDA 99.59% / 99.79%
+// (T4), Vulkan 99.72% / 99.85% (T4).
 TEST_F(BridgeDepthReference, MatchesTorchWithReferenceSeeds) {
   classification_ggml::GgmlBackends backends(backend_, "", 4, "test");
   bd::BridgeDepthGraph graph(modelPath_, backends.device(), backends.cpu());
@@ -416,20 +418,26 @@ TEST_F(BridgeDepthReference, MatchesTorchWithReferenceSeeds) {
   ASSERT_EQ(disparity.size(), reference_.size());
   const int deviceId =
       classification_ggml::backendId(ggml_backend_name(backends.device()));
-  const bool halfGemm = deviceId == 1 || deviceId == 3;
+  const bool onCpu =
+      ggml_backend_dev_type(ggml_backend_get_device(backends.device())) ==
+      GGML_BACKEND_DEVICE_TYPE_CPU;
   std::printf(
       "%s reference seeds: %.5f within 0.05 px, %.5f within 0.2 px\n",
       ggml_backend_name(backends.device()),
       within(disparity, 0.05),
       within(disparity, 0.2));
-  if (halfGemm) {
-    EXPECT_GE(within(disparity, 0.2), 0.99);
-  } else {
+  if (onCpu) {
     EXPECT_GE(within(disparity, 0.05), 0.999);
+  } else {
+    EXPECT_GE(within(disparity, 0.2), 0.99);
   }
   // A GPU op that falls back to the CPU keeps parity and only costs speed.
-  // OpenCL lacks ops this graph needs and is left out.
-  if (deviceId == 1 || deviceId == 2 || deviceId == 3) {
+  // OpenCL lacks ops this graph needs and is left out. Ids from
+  // classification_ggml::backendId.
+  constexpr int metalId = 1;
+  constexpr int cudaId = 2;
+  constexpr int vulkanId = 3;
+  if (deviceId == metalId || deviceId == cudaId || deviceId == vulkanId) {
     EXPECT_EQ(graph.cpuFallbackNodes(), 0);
   }
 }
