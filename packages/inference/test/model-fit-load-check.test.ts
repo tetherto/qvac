@@ -106,14 +106,16 @@ test('load check: a load within free memory fits', async (t) => {
   t.ok(records[0]?.message.includes('projected to fit'))
 })
 
-test('load check: the fitter verdict stands for a single load, however close to free memory', async (t) => {
+test('load check: a load the fitter passes does not fit when it overflows the host pool', async (t) => {
   withPlugin(t)
   const { logger } = recordingLogger()
   const { runFit } = runReturning({ status: 'completed', fit: fit('fits', 31) })
 
   const check = await runLoadFitCheck(INPUT, { logger, runFit })
 
-  t.is(check.probe.verdict, 'fits')
+  t.is(check.probe.verdict, 'does-not-fit')
+  t.is(check.probe.models[0]?.status, 'does-not-fit', 'the status is the verdict alone')
+  t.is(check.detail, 'needs host 31744 MiB of 32768 MiB free')
 })
 
 test('load check: a load over free memory does not fit, and says where', async (t) => {

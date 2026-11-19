@@ -1,11 +1,12 @@
 import type { AbortSignal } from 'bare-abort-controller'
 
 import { runFit as runFitDefault } from '@/model-fit/run/run'
+import { judgeAlone } from '@/model-fit/sum'
 import type { ModelFitModelResult } from '@/schemas/assess-model-fit'
 import { ModelType } from '@/schemas/index'
 import type { FitLoad } from '@/schemas/plugin'
 
-/** The addon's `assessFit` result for one load. */
+/** The addon's `assessFit` result for one load, its status the model's verdict alone. */
 export interface LoadFit {
   result: ModelFitModelResult
   /** Why the status is `unknown`, for the log. */
@@ -23,7 +24,7 @@ export function unknownFit(reason: string): LoadFit {
 
 /**
  * The fitter's answer for one load, through the plugin of the engine that
- * would run it.
+ * would run it. Its status is the model's verdict alone, from `judgeAlone`.
  *
  * @throws The fitter's own error when it rejects the load, such as a model it
  *   cannot read or a request it refuses.
@@ -51,5 +52,5 @@ export async function fitLoad(
   )
   if (outcome.status === 'unknown') return unknownFit(`${outcome.reason}: ${outcome.message}`)
 
-  return { result: outcome.fit }
+  return { result: { ...outcome.fit, status: judgeAlone(outcome.fit) } }
 }

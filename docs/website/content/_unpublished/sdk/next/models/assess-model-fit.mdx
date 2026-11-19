@@ -62,12 +62,12 @@ Two fit-only fields describe a workload the load itself does not carry: `transcr
 
 ### `verdict`
 
-The verdict for every model loaded together. For a single model it is that model's `status`, with the engine's own margin applied by its fitter. For several models:
+The verdict for every model loaded together. For a single model it is that model's `status`. For several models:
 
 | Verdict | Meaning |
 | --- | --- |
-| `fits` | Every model's fitter reached a verdict, and on every device the summed memory is within 90% of what is free. |
-| `does-not-fit` | A fitter projects its load will not fit, or on some device the summed memory exceeds 90% of what is free. |
+| `fits` | Every model fits alone, and in every pool the summed memory is within 90% of what is free. |
+| `does-not-fit` | A model does not fit alone, or in some pool the summed memory exceeds 90% of what is free. |
 | `unknown` | A model got no verdict, or a device reported no free memory. |
 
 `does-not-fit` wins over `unknown`: when one model is `unknown` and another overflows a device, the set does not fit.
@@ -80,9 +80,9 @@ The memory pools the verdict was judged on: `host` for the host's memory, and on
 
 ### `models`
 
-One entry per model, in input order: the engine addon's own fit result.
+One entry per model, in input order: the engine addon's fit result, with that model's verdict alone as its `status`.
 
-- `status` — that model's verdict alone.
+- `status` — that model's verdict alone. A fitter judges each device apart, with the engine's own margin. A model whose rows share one pool, such as a Metal GPU and the CPU drawing on the host's memory, does not fit when that pool's summed memory exceeds 90% of what is free. A row alone in its pool, such as a discrete GPU, keeps the fitter's answer.
 - `devices` — one row per device the load uses, the host last. `id` is the PCI bus ID where the backend reports one and the device name otherwise, so the same GPU matches across engines. `name` is the backend's device name, such as `CPU`, `CUDA0` or `MTL0`. `unified` marks memory the host owns. `usedBytes` is what the load takes there; `freeBytes` and `totalBytes` are what the device reported.
 - `stats` — for a llama.cpp model with a verdict, the context size and GPU layers the load resolves to: the ones the fitter settled on when it fits, the ones the load asked for when it does not. Empty for every other model.
 
