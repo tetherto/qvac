@@ -1,5 +1,6 @@
 import test from 'brittle'
 import { createEstimateDisparityCall } from '@/client/api/estimate-disparity'
+import { summarizeRequest } from '@/logging/utils'
 import { InvalidResponseError, RequestValidationFailedError } from '@/utils/errors-client'
 import { InferenceCancelledError } from '@/utils/errors-server'
 import { encodeFloat32Base64 } from '@qvac/inference/surface'
@@ -59,6 +60,29 @@ test('stereo client sends raw RGB dimensions with both views', async (t) => {
   t.is(sent['width'], 32)
   t.is(sent['height'], 40)
   t.is(sent['channels'], 3)
+})
+
+test('stereo request logs image lengths and optional dimensions', (t) => {
+  const request = {
+    type: 'estimateDisparity' as const,
+    modelId: 'm',
+    requestId: 'stereo-call',
+    left: 'AQID',
+    right: 'BAUGBwg='
+  }
+  const summary = {
+    type: 'estimateDisparity',
+    modelId: 'm',
+    left: '[4 base64 chars]',
+    right: '[8 base64 chars]'
+  }
+
+  t.alike(summarizeRequest(request), summary)
+  t.alike(summarizeRequest({ ...request, width: 32, height: 40, channels: 3 }), {
+    ...summary,
+    width: 32,
+    height: 40
+  })
 })
 
 test('stereo client rejects invalid pairs before RPC and malformed replies', async (t) => {
