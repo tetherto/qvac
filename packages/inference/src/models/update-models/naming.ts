@@ -448,6 +448,10 @@ function generateDiffusionName({
     return `${name}_VAE`
   }
 
+  // A tokenizer (tagged 'tokenizer') is named after its model like a VAE,
+  // since its filename is generic
+  if (tags.includes('tokenizer')) return `${cleanPart(modelName)}_TOKENIZER`
+
   // Extract family name from filename
   let family = filename
     .replace(/\.\w+$/, '')
