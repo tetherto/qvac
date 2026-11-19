@@ -6,8 +6,10 @@ import { chatCompletionsBody, toSdkChatArgs } from '@/serve/extensions/openai/sc
 import { toSdkResponsesArgs } from '@/serve/extensions/openai/schemas/responses'
 import { buildUsage } from '@/serve/extensions/openai/adapters/chat-shapes'
 
-function cacheKey(key: string) {
-  return `responses-${createHash('sha256').update(key).digest('hex')}`
+function cacheKey(key: string, scope?: unknown[]) {
+  const hash = createHash('sha256').update(key)
+  if (scope) hash.update('\0').update(JSON.stringify(scope))
+  return `responses-${hash.digest('hex')}`
 }
 
 const HEADER = ['X-QVAC-KV-Cache-Key', 'header-session']
@@ -17,6 +19,17 @@ describe('namedKvCacheKey', () => {
     assert.equal(namedKvCacheKey([], {}), undefined)
     assert.equal(namedKvCacheKey(['Content-Type', 'application/json'], { metadata: {} }), undefined)
     assert.equal(namedKvCacheKey([], { metadata: null }), undefined)
+    assert.equal(namedKvCacheKey([], { prompt_cache_key: null }), undefined)
+  })
+
+  it('applies the scope to prompt_cache_key only', () => {
+    const body = { metadata: { qvac_kv_cache_key: 'metadata-session' } }
+    assert.equal(namedKvCacheKey(HEADER, {}, 'scope'), cacheKey('header-session'))
+    assert.equal(namedKvCacheKey([], body, 'scope'), cacheKey('metadata-session'))
+    assert.notEqual(
+      namedKvCacheKey([], { prompt_cache_key: 'user' }, 'a'),
+      namedKvCacheKey([], { prompt_cache_key: 'user' }, 'b')
+    )
   })
 
   it('prefers the header, then metadata, then prompt_cache_key', () => {
@@ -70,13 +83,25 @@ describe('toSdkChatArgs: KV cache key', () => {
     assert.equal(args({}).kvCache, undefined)
     assert.equal(args({ metadata: { team: 'a' } }).kvCache, undefined)
     assert.equal(args({ metadata: null }).kvCache, undefined)
+    assert.equal(args({ prompt_cache_key: null }).kvCache, undefined)
   })
 
   it('reads the key from each source in order of precedence', () => {
     const body = { metadata: { qvac_kv_cache_key: 'metadata-session' }, prompt_cache_key: 'prompt' }
     assert.equal(args(body, HEADER).kvCache, cacheKey('header-session'))
     assert.equal(args(body).kvCache, cacheKey('metadata-session'))
-    assert.equal(args({ prompt_cache_key: 'prompt' }).kvCache, cacheKey('prompt'))
+    assert.equal(args({ prompt_cache_key: 'prompt' }).kvCache, cacheKey('prompt', messages))
+  })
+
+  it('gives each conversation its own session under one prompt_cache_key', () => {
+    const system = { role: 'system', content: 'be brief' }
+    const a = [system, { role: 'user', content: 'name a fruit' }]
+    const b = [system, { role: 'user', content: 'name a colour' }]
+    const key = { prompt_cache_key: 'user-1' }
+    assert.equal(args({ ...key, messages: a }).kvCache, cacheKey('user-1', a))
+    assert.notEqual(args({ ...key, messages: a }).kvCache, args({ ...key, messages: b }).kvCache)
+    const later = [...a, { role: 'assistant', content: 'apple' }, { role: 'user', content: 'more' }]
+    assert.equal(args({ ...key, messages: later }).kvCache, args({ ...key, messages: a }).kvCache)
   })
 
   it('rejects an invalid key', () => {
@@ -107,9 +132,14 @@ describe('toSdkChatArgs: KV cache key', () => {
     assert.equal(followUp.history.at(-1)?.toolCallId, 'call_1')
   })
 
-  it('selects the same session as a Responses request with that key', () => {
-    const responses = toSdkResponsesArgs({ model: 'm', input: 'hello', prompt_cache_key: 'shared' })
-    assert.equal(args({ prompt_cache_key: 'shared' }).kvCache, responses.kvCache)
+  it('selects the same session as a Responses request with that header or metadata key', () => {
+    const metadata = { qvac_kv_cache_key: 'shared' }
+    const responses = toSdkResponsesArgs({ model: 'm', input: 'hello', metadata })
+    assert.equal(args({ metadata }).kvCache, responses.kvCache)
+    assert.equal(
+      args({}, HEADER).kvCache,
+      toSdkResponsesArgs({ model: 'm', input: 'hi' }, HEADER).kvCache
+    )
   })
 })
 

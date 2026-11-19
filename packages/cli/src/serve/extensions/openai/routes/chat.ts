@@ -173,7 +173,8 @@ across tool calls, name a session: send \`X-QVAC-KV-Cache-Key: <session-key>\`
 that order of precedence. Keys must be nonempty strings of at most 512 UTF-8
 bytes (otherwise \`400 invalid_kv_cache_key\`) and are SHA-256 hashed before
 filesystem use. Reuse the key with the same conversation's growing history on
-every request. Named caches follow the automatic cache's retention (24-hour idle
+every request. A \`prompt_cache_key\` is scoped to the messages up to the first
+user turn, so one key per user still caches each conversation separately. Named caches follow the automatic cache's retention (24-hour idle
 TTL, 4 GiB LRU quota) and \`DELETE /qvac/v1/kv_cache\` reclaims them. On a keyed
 request, SDK cache occupancy is reported as \`usage.qvac_cache_tokens\`; this is
 not a per-request count of reused tokens.

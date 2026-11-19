@@ -194,9 +194,13 @@ with one of, in order of precedence:
 
 A key must be a nonempty string of at most 512 UTF-8 bytes; anything else
 returns `400 invalid_kv_cache_key`. Keys are SHA-256 hashed before filesystem
-use, and the same key selects the same session on both endpoints. Use one key
-per conversation and resend it with the growing history: conversations that
-share a key share one cache, which keeps only their common prefix. The QVAC
+use. Use one key per conversation and resend it with the growing history: a
+cache holds one conversation, so conversations that share a key re-read their
+whole prompt each time they alternate. A header or metadata key selects the same
+session on both endpoints. On `/v1/chat/completions` a `prompt_cache_key` is
+combined with the messages up to the first user turn, so a client that sends one
+key per user, as OpenAI suggests, still gets a cache per conversation;
+`prompt_cache_key: null` counts as absent. The QVAC
 plugins for OpenCode and OpenClaw have the host send its session id as
 `prompt_cache_key`; the pi coding agent does so only when
 `PI_CACHE_RETENTION=long` is set. On a keyed request

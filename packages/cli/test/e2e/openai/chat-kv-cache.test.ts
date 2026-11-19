@@ -38,8 +38,13 @@ function server(t: Parameters<typeof createServer>[0], retention?: Retention) {
   })
 }
 
-function cacheKey(key: string) {
-  return `responses-${createHash('sha256').update(key).digest('hex')}`
+const MESSAGES = [{ role: 'user', content: 'hello' }]
+
+// A `prompt_cache_key` is scoped to the conversation opening; other sources are not.
+function cacheKey(key: string, scoped = false) {
+  const hash = createHash('sha256').update(key)
+  if (scoped) hash.update('\0').update(JSON.stringify(MESSAGES))
+  return `responses-${hash.digest('hex')}`
 }
 
 function stubRun(stats?: CompletionStats, toolCalls: ToolCall[] = []): CompletionRun {
@@ -59,7 +64,6 @@ function stubRun(stats?: CompletionStats, toolCalls: ToolCall[] = []): Completio
 
 type SeenRequest = Parameters<typeof completion>[0]
 
-const MESSAGES = [{ role: 'user', content: 'hello' }]
 const TOOLS = [
   {
     type: 'function',
@@ -104,8 +108,9 @@ describe('serve: chat completions KV cache', () => {
           }
         })
         assert.equal(res.statusCode, 200, res.payload)
-        assert.equal(seen[0]?.kvCache, cacheKey('session-a'))
-        assert.deepEqual(retention, { acquired: [cacheKey('session-a')], released: 1 })
+        const expected = cacheKey('session-a', source === 'prompt_cache_key')
+        assert.equal(seen[0]?.kvCache, expected)
+        assert.deepEqual(retention, { acquired: [expected], released: 1 })
         assert.deepEqual(usageOf(res.payload, stream), {
           prompt_tokens: 144,
           qvac_cache_tokens: 128,
@@ -193,7 +198,7 @@ describe('serve: chat completions KV cache', () => {
         assert.equal(second.statusCode, 200, second.payload)
         assert.deepEqual(
           seen.map((p) => p.kvCache),
-          [cacheKey('tool-session'), cacheKey('tool-session')]
+          [cacheKey('tool-session', true), cacheKey('tool-session', true)]
         )
         assert.equal(seen[1]!.history.at(-1)?.toolCallId, 'call_1')
       }
@@ -260,7 +265,25 @@ describe('serve: chat completions KV cache', () => {
       payload: { model: 'test-llm', messages: MESSAGES, prompt_cache_key: 'session-a' }
     })
     assert.equal(res.statusCode >= 500, true, res.payload)
-    assert.deepEqual(retention, { acquired: [cacheKey('session-a')], released: 1 })
+    assert.deepEqual(retention, { acquired: [cacheKey('session-a', true)], released: 1 })
+  })
+
+  it('ignores a null prompt_cache_key', { timeout: 15000 }, async (t) => {
+    const app = await server(t)
+    await app.ready()
+    const seen: SeenRequest[] = []
+    openaiState(app.qvac).completionOverride = (params) => {
+      seen.push(params)
+      return stubRun()
+    }
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/chat/completions',
+      headers: JSON_HEADERS,
+      payload: { model: 'test-llm', messages: MESSAGES, prompt_cache_key: null }
+    })
+    assert.equal(res.statusCode, 200, res.payload)
+    assert.equal(seen[0]?.kvCache, true)
   })
 
   it(

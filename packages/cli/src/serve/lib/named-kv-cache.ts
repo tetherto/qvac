@@ -26,9 +26,11 @@ function headerValues(rawHeaders: readonly string[], name: string): string[] {
 }
 
 // The SDK cache key a request names, or undefined when it names none.
+// `promptCacheKeyScope` narrows a `prompt_cache_key` to one conversation.
 export function namedKvCacheKey(
   rawHeaders: readonly string[],
-  body: { metadata?: Record<string, unknown> | null | undefined; prompt_cache_key?: unknown }
+  body: { metadata?: Record<string, unknown> | null | undefined; prompt_cache_key?: unknown },
+  promptCacheKeyScope?: string
 ): string | undefined {
   // Node joins a repeated header into "a, b", which would hash to an unrelated session.
   const fromHeader = headerValues(rawHeaders, 'x-qvac-kv-cache-key')
@@ -40,18 +42,19 @@ export function namedKvCacheKey(
   // not skipped. Validate before trimming/hashing so padding and multibyte
   // strings cannot bypass the limit.
   const fromMetadata = body.metadata?.['qvac_kv_cache_key']
-  const key: unknown =
-    fromHeader.length > 0
-      ? fromHeader[0]
-      : fromMetadata !== undefined
-        ? fromMetadata
-        : body.prompt_cache_key
+  const explicit: unknown = fromHeader.length > 0 ? fromHeader[0] : fromMetadata
+  // OpenAI clients send `prompt_cache_key: null` to mean "none".
+  const key = explicit !== undefined ? explicit : (body.prompt_cache_key ?? undefined)
   if (key === undefined) return undefined
   if (typeof key !== 'string' || Buffer.byteLength(key, 'utf8') > 512 || key.trim().length === 0) {
     throw new InvalidKvCacheKeyError()
   }
   // Never give an opaque caller key to the SDK's filesystem cache layout.
-  return `${NAMED_KV_CACHE_PREFIX}${crypto.createHash('sha256').update(key).digest('hex')}`
+  const hash = crypto.createHash('sha256').update(key)
+  if (explicit === undefined && promptCacheKeyScope !== undefined) {
+    hash.update('\0').update(promptCacheKeyScope)
+  }
+  return `${NAMED_KV_CACHE_PREFIX}${hash.digest('hex')}`
 }
 
 const GiB = 1024 ** 3

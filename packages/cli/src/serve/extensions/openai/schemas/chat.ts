@@ -42,7 +42,7 @@ export const chatCompletionsBody = z
     prompt_cache_key: z
       .unknown()
       .optional()
-      .describe('Names a KV cache session; a string of at most 512 UTF-8 bytes.'),
+      .describe('Names a KV cache session, per conversation; a string of at most 512 UTF-8 bytes.'),
     stream_options: z.object({ include_usage: z.boolean().optional() }).passthrough().optional()
   })
   .passthrough()
@@ -265,6 +265,14 @@ export interface SdkChatArgs {
   stream: boolean
 }
 
+// OpenAI suggests one `prompt_cache_key` per user, and a cache holds one
+// conversation: conversations sharing it would evict each other every turn.
+// The messages up to the first user turn stay fixed while a conversation grows.
+function conversationOpening(messages: readonly { role: string }[]): string {
+  const firstUser = messages.findIndex((message) => message.role === 'user')
+  return JSON.stringify(firstUser === -1 ? messages : messages.slice(0, firstUser + 1))
+}
+
 export function toSdkChatArgs(
   body: ChatCompletionsBody,
   rawHeaders: readonly string[] = []
@@ -272,7 +280,7 @@ export function toSdkChatArgs(
   const responseFmt = extractResponseFormat(body as Record<string, unknown>)
   const tools = openaiToolsToSdk(body.tools as Parameters<typeof openaiToolsToSdk>[0])
   return {
-    kvCache: namedKvCacheKey(rawHeaders, body),
+    kvCache: namedKvCacheKey(rawHeaders, body, conversationOpening(body.messages)),
     history: openaiMessagesToHistory(body.messages as OpenAIMessage[]),
     tools,
     generationParams: withParallelToolCalls(
