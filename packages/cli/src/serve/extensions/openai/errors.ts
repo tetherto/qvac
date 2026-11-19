@@ -16,5 +16,6 @@ export const OPENAI_FIELD_CODES: Record<string, string> = {
   voice: 'missing_voice',
   mask: 'mask_not_supported',
   size: 'invalid_size',
-  seconds: 'invalid_seconds'
+  seconds: 'invalid_seconds',
+  training_file: 'missing_training_file'
 }

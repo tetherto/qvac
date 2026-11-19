@@ -7,6 +7,7 @@
 export const QVAC_EXTENSION_ENDPOINTS = new Set<string>([
   'GET /v1/audio/models',
   'GET /v1/audio/voices',
+  'GET /v1/fine_tuning/jobs/{fine_tuning_job_id}/content',
   'GET /v1/models/catalog',
   'GET /v1/models/catalog/{id}'
 ])

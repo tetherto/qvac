@@ -41,6 +41,7 @@ private text or metadata; these warnings do not copy that content into server lo
 | `GET`    | `/v1/videos/{id}`                | Get video job status and progress                                                                           |
 | `GET`    | `/v1/videos/{id}/content`        | Download rendered video (`video/mp4` or `video/avi`)                                                        |
 | `DELETE` | `/v1/videos/{id}`                | Cancel and remove a video job                                                                               |
+| `POST`   | `/v1/fine_tuning/jobs`           | Fine-tuning jobs and their `/{id}` routes, admin-only; see [below](#fine-tuning-jobs-v1fine_tuningjobs)     |
 | `POST`   | `/v1/files`                      | Upload a file into the in-memory store (used by image URL responses + vector stores)                        |
 | `GET`    | `/v1/files`                      | List in-memory files                                                                                        |
 | `GET`    | `/v1/files/{id}`                 | File metadata                                                                                               |
@@ -1072,3 +1073,51 @@ Two generation modes:
 | 404  | `video_not_found`         | Unknown job id                                                                                                                                                                     |
 | 501  | `unsupported_variant`     | `GET …/content?variant=` other than `video`                                                                                                                                        |
 | 503  | `model_not_ready`         | Model not loaded yet                                                                                                                                                               |
+
+## Fine-tuning jobs (`/v1/fine_tuning/jobs`)
+
+LoRA fine-tuning of a `chat` (llama.cpp) model, backed by the SDK's
+`finetune()`. **Admin-only:** every route answers `403 admin_disabled` unless the
+server starts with `--enable-admin`.
+
+| Method | Path                                | Notes                                             |
+| ------ | ----------------------------------- | ------------------------------------------------- |
+| `POST` | `/v1/fine_tuning/jobs`              | Start a job; returns it `queued`                  |
+| `GET`  | `/v1/fine_tuning/jobs`              | List jobs, newest first (`after`, `limit`)        |
+| `GET`  | `/v1/fine_tuning/jobs/{id}`         | Get a job                                         |
+| `POST` | `/v1/fine_tuning/jobs/{id}/cancel`  | Cancel a queued, running or paused job            |
+| `POST` | `/v1/fine_tuning/jobs/{id}/pause`   | Pause a running job at a checkpoint               |
+| `POST` | `/v1/fine_tuning/jobs/{id}/resume`  | Resume a paused job from its checkpoint           |
+| `GET`  | `/v1/fine_tuning/jobs/{id}/events`  | Status changes and per-step metrics, newest first |
+| `GET`  | `/v1/fine_tuning/jobs/{id}/content` | Download the trained adapter (GGUF)               |
+
+1. Upload chat-format JSONL with `POST /v1/files` and `purpose=fine-tune`. Each
+   line is `{"messages": [{"role", "content"}, ...]}` with at least one
+   assistant message.
+2. `POST /v1/fine_tuning/jobs` with `model` and `training_file` (and optionally
+   `validation_file`). The server checks every line, copies the bytes into the
+   job and returns it `queued`.
+3. Poll `GET /v1/fine_tuning/jobs/{id}` or read `.../events` until `succeeded`.
+4. Download the adapter from `.../content` and apply it with `config.lora` on a
+   `serve.models` entry.
+
+Only `method.type: "supervised"` is accepted. `n_epochs` and `batch_size` map to
+the SDK; `learning_rate_multiplier` must be `"auto"`. The `qvac` object takes
+`learning_rate`, `lora_rank`, `lora_alpha`, `lora_modules` and `context_length`.
+
+One job per model at a time (`409 model_busy`); training holds the model
+exclusively, so chat on that alias waits. `pause` keeps a checkpoint that
+`resume` continues from; `cancel` deletes it. Jobs, checkpoints and adapters are
+in memory and a temp directory, and a restart loses them.
+
+| HTTP | `error.code`                                                     | When                                                        |
+| ---- | ---------------------------------------------------------------- | ----------------------------------------------------------- |
+| 400  | `invalid_file_purpose`                                           | Dataset not uploaded with `purpose: "fine-tune"`            |
+| 400  | `invalid_training_file` / `invalid_validation_file`              | A line is not a chat example; the message names the line    |
+| 400  | `unsupported_method` / `unsupported_parameter`                   | Non-supervised method, numeric multiplier, `integrations`   |
+| 403  | `admin_disabled` / `origin_not_allowed`                          | Admin opt-in off, or a browser origin outside the allowlist |
+| 404  | `file_not_found` / `job_not_found`                               | Unknown dataset or job id                                   |
+| 409  | `model_busy`                                                     | The model already has a queued, running or paused job       |
+| 409  | `job_not_cancellable` / `job_not_pausable` / `job_not_resumable` | The job's status does not allow the action                  |
+| 409  | `job_not_succeeded`                                              | Adapter requested before the job succeeded                  |
+| 410  | `adapter_missing`                                                | The adapter file is gone from the temp directory            |

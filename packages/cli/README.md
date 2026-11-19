@@ -401,7 +401,7 @@ See [Decisions API](docs/serve/openai.md#post-v1decisions) for setup and request
 | `--cors-origin <origin>`         | Trust an exact HTTP(S) CORS origin (repeatable; wildcard is not allowed).                                                            |
 | `--allowed-host <host>`          | Accept this `Host` header besides loopback names, IP addresses and the bind host; `.example.com` covers subdomains (repeatable).     |
 | `--allow-any-host`               | Accept any `Host` header, turning off DNS-rebinding protection.                                                                      |
-| `--enable-admin`                 | Allow the admin-only routes (runtime suspend/resume). Needs `--api-key` on a non-loopback bind, even with `--allow-unauthenticated`. |
+| `--enable-admin`                 | Allow the admin routes (suspend/resume, fine-tuning). Needs `--api-key` on a non-loopback bind, even with `--allow-unauthenticated`. |
 | `--public-base-url <url>`        | Externally reachable origin required for image `response_format=url`.                                                                |
 | `--docs`                         | Mount Swagger UI at `/docs` and add same-port loopback CORS origins.                                                                 |
 | `--no-lazy-load`                 | Disable lazy loading; a request for an unloaded model returns `503 model_not_loaded`.                                                |

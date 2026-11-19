@@ -44,7 +44,7 @@ export interface StartServerOptions {
   allowedHosts?: string[] | undefined
   /** Accept any Host header, turning off the DNS-rebinding check. */
   allowAnyHost?: boolean | undefined
-  /** Allow the admin-only routes, such as runtime suspend and resume. */
+  /** Allow the admin-only routes: runtime suspend and resume, fine-tuning jobs. */
   enableAdmin?: boolean | undefined
   publicBaseUrl?: string | undefined
   verbose?: boolean | undefined
@@ -168,7 +168,7 @@ export async function startServer(options: StartServerOptions): Promise<FastifyI
   }
   if (app.qvac.serveConfig.enableAdmin) {
     app.qvac.logger.warn(
-      'admin endpoints enabled: any client that passes auth can suspend and resume the runtime'
+      'admin endpoints enabled: any client that passes auth can suspend and resume the runtime and run fine-tuning jobs'
     )
   }
 

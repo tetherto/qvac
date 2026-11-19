@@ -43,6 +43,7 @@ At the moment, the OpenAI-compatible extension supports the following QVAC AI ca
 * RAG — via [Files](#files) (`/v1/files`) and [Vector stores](#vector-stores) (`/v1/vector_stores`).
 * [Image generation](#images) — via `/v1/images/generations` and `/v1/images/edits`.
 * [Video generation](#videos) — via `/v1/videos`.
+* [Fine-tuning](#fine-tuning) — via `/v1/fine_tuning/jobs`: LoRA adapters for a chat model, behind `--enable-admin`.
 * Transcription — via [Audio](#audio) (`/v1/audio/transcriptions`).
 * Text-to-speech — via [Audio](#audio) (`/v1/audio/speech`).
 * Translation (audio-to-English only) — via [Audio](#audio) (`/v1/audio/translations`, Whisper translate task).
@@ -235,7 +236,7 @@ Relevant options are summarized below; run `qvac serve --help` for the exact gen
 | `--cors-origin <origin>` | Add a trusted CORS origin (repeatable; no wildcard) |
 | `--allowed-host <host>` | Accept this `Host` header besides loopback, IP addresses and the bind host (repeatable) |
 | `--allow-any-host` | Accept any `Host` header (turns off DNS-rebinding protection) |
-| `--enable-admin` | Allow the admin-only routes (runtime suspend/resume); needs a key off loopback |
+| `--enable-admin` | Allow the admin-only routes (runtime suspend/resume, fine-tuning jobs); needs a key off loopback |
 | `--public-base-url <url>` | Externally reachable origin required for image `response_format=url` |
 | `--docs` | Mount Swagger UI at `/docs` and add same-port loopback CORS origins (requires a fixed `--port`) |
 | `--ready-fd <fd>` | Write `QVAC_SERVE_READY {"port":…,"pid":…}` to this inherited descriptor once listening |
@@ -1368,6 +1369,14 @@ Served by the `--openai` extension. All endpoints follow the [OpenAI API](https:
 | | `GET` | [`/v1/videos/:id`](#get-v1videosid) |
 | | `GET` | [`/v1/videos/:id/content`](#get-v1videosidcontent) |
 | | `DELETE` | [`/v1/videos/:id`](#delete-v1videosid) |
+| [Fine-tuning](#fine-tuning) | `POST` | [`/v1/fine_tuning/jobs`](#post-v1fine_tuningjobs) |
+| | `GET` | [`/v1/fine_tuning/jobs`](#get-v1fine_tuningjobs) |
+| | `GET` | [`/v1/fine_tuning/jobs/:id`](#get-v1fine_tuningjobsid) |
+| | `POST` | [`/v1/fine_tuning/jobs/:id/cancel`](#pause-resume-and-cancel) |
+| | `POST` | [`/v1/fine_tuning/jobs/:id/pause`](#pause-resume-and-cancel) |
+| | `POST` | [`/v1/fine_tuning/jobs/:id/resume`](#pause-resume-and-cancel) |
+| | `GET` | [`/v1/fine_tuning/jobs/:id/events`](#get-v1fine_tuningjobsidevents) |
+| | `GET` | [`/v1/fine_tuning/jobs/:id/content`](#get-v1fine_tuningjobsidcontent) |
 
 <Callout type="info">
 All multipart endpoints (`/v1/audio/*`, `/v1/images/edits`, `/v1/files`) cap the request body at **100 MB**.
@@ -2707,6 +2716,125 @@ Abort the job (if still `queued` / `in_progress`) and drop its rendered assets.
 | 502 | `transcode_failed` | ffmpeg failed or timed out (retry with `?format=avi`). |
 | 503 | `transcode_unavailable` | `?format=mp4` requested but ffmpeg is not on the server's `PATH`. |
 | 503 | `model_not_ready` | Model not loaded yet. |
+
+### Fine-tuning
+
+OpenAI-compatible LoRA fine-tuning backed by the SDK's `finetune()`. **Admin-only:** every route answers `403 admin_disabled` unless the server starts with `--enable-admin`. Creating a job returns at once with `status: "queued"`; training runs in the background. The trained adapter is a GGUF file you download from the job.
+
+Only supervised fine-tuning of `chat` (llama.cpp) models is supported. Datasets come from [`POST /v1/files`](#post-v1files), never from paths on the server.
+
+```bash
+qvac serve openai --enable-admin
+```
+
+#### Dataset
+
+Chat-format JSONL, one example per line, each with at least one assistant message — the format OpenAI uses for supervised fine-tuning:
+
+```json
+{"messages":[{"role":"user","content":"Capital of Japan?"},{"role":"assistant","content":"Tokyo."}]}
+```
+
+Upload it with `purpose=fine-tune`:
+
+```bash
+curl http://localhost:11435/v1/files -F purpose=fine-tune -F file=@train.jsonl
+```
+
+The server checks every line when the job is created and copies the bytes into the job, so the upload may expire while training runs.
+
+#### `POST /v1/fine_tuning/jobs`
+
+```bash
+curl http://localhost:11435/v1/fine_tuning/jobs \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "my-llm",
+    "training_file": "file-abc123",
+    "validation_file": "file-def456",
+    "method": { "type": "supervised", "supervised": { "hyperparameters": { "n_epochs": 2 } } },
+    "qvac": { "learning_rate": 0.0001, "lora_modules": "attn_q,attn_k,attn_v,attn_o" }
+  }'
+```
+
+| Field | Notes |
+| --- | --- |
+| `model` | A `chat` alias from `serve.models`. Loaded on demand like any other route. |
+| `training_file` | File id uploaded with `purpose: "fine-tune"`. |
+| `validation_file` | Optional; same format. Without it no validation runs. |
+| `method` | `type` must be `supervised`. `supervised.hyperparameters` wins over the legacy top-level `hyperparameters`. |
+| `hyperparameters.n_epochs` / `batch_size` | Integer or `"auto"` (the SDK default). |
+| `hyperparameters.learning_rate_multiplier` | Only `"auto"`: there is no base rate to multiply. Use `qvac.learning_rate`. |
+| `seed` | LoRA initialization seed; random when omitted, reported on the job. |
+| `suffix`, `metadata` | Echoed on the job. |
+| `qvac` | `learning_rate`, `lora_rank`, `lora_alpha`, `lora_modules`, `context_length`: training options OpenAI's shape has no field for. |
+
+The response is a `fine_tuning.job` object. `fine_tuned_model` stays `null` and `result_files` stays empty: the adapter is not registered as a model.
+
+One job per model at a time: a second job on a model that already has a queued, running or paused job answers `409 model_busy`. Jobs on different models run side by side. Training holds the model exclusively, so chat requests on the same alias wait until the job finishes or pauses.
+
+#### `GET /v1/fine_tuning/jobs/:id`
+
+`status` moves `queued` → `running` → `succeeded` / `failed` / `cancelled`. A job waiting for the model stays `queued` until training takes its first step. `estimated_finish` follows the trainer's ETA while running. A failed job carries `error: { code: "fine_tuning_failed", message }`.
+
+#### `GET /v1/fine_tuning/jobs`
+
+List jobs, newest first. Cursor pagination via `after` and `limit` (default `20`, max `100`).
+
+#### `GET /v1/fine_tuning/jobs/:id/events`
+
+Status changes (`type: "message"`) and one `type: "metrics"` event per training step, newest first, paged with `after` / `limit`. Metrics carry `data.step`, `data.epoch` and either `train_loss` / `train_mean_token_accuracy` or `valid_loss` / `valid_mean_token_accuracy`. The last 1000 events per job are kept.
+
+#### Pause, resume and cancel
+
+- `POST /v1/fine_tuning/jobs/:id/pause` stops a `running` job at a checkpoint and answers once the trainer has stopped (`status: "paused"`), or after 30 s with the job still `running`.
+- `POST /v1/fine_tuning/jobs/:id/resume` continues a `paused` job from its checkpoint, loading the model again if it was unloaded.
+- `POST /v1/fine_tuning/jobs/:id/cancel` stops a `queued`, `running` or `paused` job and deletes its checkpoints. A cancelled job cannot resume.
+
+#### `GET /v1/fine_tuning/jobs/:id/content`
+
+Download the adapter of a `succeeded` job as `application/octet-stream`:
+
+```bash
+curl http://localhost:11435/v1/fine_tuning/jobs/ftjob-abc123/content --output adapter.gguf
+```
+
+Apply it by declaring a model with `config.lora` set to the file:
+
+```json
+{
+  "serve": {
+    "models": {
+      "my-llm-tuned": { "model": "QWEN3_600M_INST_Q4", "config": { "lora": "/abs/path/adapter.gguf" } }
+    }
+  }
+}
+```
+
+Jobs, checkpoints and adapters live in memory and a temp directory, so a restart loses them; download the adapter once the job succeeds. The store keeps 256 jobs and drops the oldest, cancelling it if it still runs.
+
+#### Errors
+
+| HTTP | `error.code` | When |
+| --- | --- | --- |
+| 400 | `missing_model` / `missing_training_file` | Required field absent. |
+| 400 | `invalid_model_type` | Alias is not a `chat` model. |
+| 400 | `invalid_file_purpose` | The dataset was not uploaded with `purpose: "fine-tune"`. |
+| 400 | `invalid_training_file` / `invalid_validation_file` | A line is not a chat example; the message names the line. |
+| 400 | `unsupported_method` | `method.type` is `dpo` or `reinforcement`. |
+| 400 | `unsupported_parameter` | Numeric `learning_rate_multiplier`, or non-empty `integrations`. |
+| 403 | `admin_disabled` | Server started without `--enable-admin`. |
+| 403 | `origin_not_allowed` | Browser request from an origin outside the CORS allowlist. |
+| 404 | `model_not_found` | `model` is not declared under `serve.models`. |
+| 404 | `file_not_found` | Unknown or expired dataset file id. |
+| 404 | `job_not_found` | Unknown job id. |
+| 409 | `model_busy` | The model already has a queued, running or paused job. |
+| 409 | `job_not_cancellable` / `job_not_pausable` / `job_not_resumable` | The job's status does not allow the action. |
+| 409 | `job_not_succeeded` | `/content` before the job succeeded. |
+| 410 | `adapter_missing` | The adapter file is gone from the server's temp directory. |
+| 500 | `pause_failed` | The SDK could not pause the job. |
+| 503 | `runtime_suspended` | The runtime is suspended. |
+| 503 | `model_not_loaded` / `model_load_failed` / `model_load_timeout` | The model could not be loaded. |
 
 ### Request cancellation
 

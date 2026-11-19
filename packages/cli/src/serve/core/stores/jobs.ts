@@ -29,6 +29,8 @@ export interface JobsStore<T extends { id: string }> {
   get: (id: string) => T | undefined
   delete: (id: string) => boolean
   list: (opts?: ListJobsOptions) => JobsPage<T>
+  /** Every stored job, oldest first. */
+  values: () => T[]
   size: () => number
 }
 
@@ -95,6 +97,10 @@ export function createJobsStore<T extends { id: string }>(
         lastId: slice[slice.length - 1]?.id ?? null,
         hasMore: start + slice.length < all.length
       }
+    },
+
+    values(): T[] {
+      return Array.from(jobs.values())
     },
 
     size(): number {

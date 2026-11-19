@@ -4,6 +4,7 @@ import chat from '@/serve/extensions/openai/routes/chat'
 import completions from '@/serve/extensions/openai/routes/completions'
 import decisions from '@/serve/extensions/openai/routes/decisions'
 import embeddings from '@/serve/extensions/openai/routes/embeddings'
+import fineTuning from '@/serve/extensions/openai/routes/fine-tuning'
 import files from '@/serve/extensions/openai/routes/files'
 import images from '@/serve/extensions/openai/routes/images'
 import modelsCatalog from '@/serve/extensions/openai/routes/models-catalog'
@@ -20,6 +21,7 @@ export const routes: readonly FastifyPluginAsyncZod[] = [
   decisions,
   embeddings,
   files,
+  fineTuning,
   images,
   modelsCatalog,
   models,

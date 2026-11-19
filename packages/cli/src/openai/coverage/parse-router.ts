@@ -13,7 +13,8 @@ const PARAM_NAME_BY_PATH_PREFIX: Array<{ test: RegExp; name: string }> = [
   { test: /\/v1\/vector_stores\/:id\/files$/, name: 'vector_store_id' },
   { test: /\/v1\/vector_stores\/:id$/, name: 'vector_store_id' },
   { test: /\/v1\/videos\/:id\/content$/, name: 'video_id' },
-  { test: /\/v1\/videos\/:id$/, name: 'video_id' }
+  { test: /\/v1\/videos\/:id$/, name: 'video_id' },
+  { test: /\/v1\/fine_tuning\/jobs\/:id(\/[a-z]+)?$/, name: 'fine_tuning_job_id' }
 ]
 
 function normalizeParams(path: string): string {

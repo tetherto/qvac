@@ -18,6 +18,8 @@ export const TAG_DESCRIPTIONS: Record<string, string> = {
     'Stable Diffusion-style image generation. `response_format=url` requires the server to be started with `--public-base-url`.',
   Videos:
     'Async text-to-video generation backed by SDK `video({ mode: "txt2vid" })`. POST creates a job (returns immediately with `status: queued`); poll `GET /v1/videos/{id}` then fetch bytes from `GET /v1/videos/{id}/content`. **Job store is in-memory only** — jobs and rendered bytes are lost on restart.',
+  'Fine-tuning':
+    'LoRA fine-tuning jobs on chat models, backed by SDK `finetune()`. **Admin-only:** every route needs `--enable-admin`. Datasets come from `POST /v1/files`; the adapter downloads from `GET /v1/fine_tuning/jobs/{id}/content`. Jobs are in-memory and lost on restart.',
   Files:
     '**Ephemeral in-memory store.** Uploaded files are dropped from the store on successful attach to a vector store. Not durable across restarts.',
   'Vector Stores':

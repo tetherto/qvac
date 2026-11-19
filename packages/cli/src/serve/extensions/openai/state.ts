@@ -11,12 +11,26 @@ import { createVideoJobsStore } from '@/serve/extensions/openai/video-jobs-store
 import type { VideoJobsStore } from '@/serve/extensions/openai/video-jobs-store'
 import { tearDownJob } from '@/serve/extensions/openai/routes/videos'
 import { probeFfmpegAvailable } from '@/serve/lib/video-transcode'
+import { randomBytes } from 'node:crypto'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  createFineTuningJobsStore,
+  type FineTuningJobsStore
+} from '@/serve/extensions/openai/fine-tuning-jobs-store'
+import {
+  tearDownFineTuningJob,
+  type FineTuningOperations
+} from '@/serve/extensions/openai/routes/fine-tuning'
 
 export interface OpenAIState {
   responsesStore: ResponsesStore
   vectorStores: VectorStoresStore
   chunkAttributions: ChunkAttributionStore
   videoJobsStore: VideoJobsStore
+  fineTuningJobs: FineTuningJobsStore
+  /** Temp directory holding every fine-tuning job's datasets, checkpoints and adapter. */
+  fineTuningRoot: string
   /** Set at server start: `true` when `ffmpeg` is on PATH (probed once).
    * Gates both video MP4 transcoding and audio mp3/opus/aac/flac encoding. */
   ffmpegAvailable: boolean
@@ -34,6 +48,8 @@ export interface OpenAIState {
   videoOverride?: typeof sdk.video
   /** Test seam — overrides `cancel()` from `@qvac/sdk` when set. */
   cancelOverride?: typeof sdk.cancel
+  /** Test seam — overrides `finetune()` from `@qvac/sdk` when set. */
+  fineTuningOverride?: FineTuningOperations
 }
 
 declare module '@/serve/core/context' {
@@ -81,6 +97,13 @@ export async function createOpenAIState(
         tearDownJob(ctx, job)
       }
     }),
+    fineTuningJobs: createFineTuningJobsStore({
+      onEvict: (job, reason) => {
+        logger.warn(`fine-tuning job evicted id=${job.id} reason=${reason} status=${job.status}`)
+        void tearDownFineTuningJob(ctx, job)
+      }
+    }),
+    fineTuningRoot: join(tmpdir(), `qvac-serve-fine-tuning-${randomBytes(6).toString('hex')}`),
     ffmpegAvailable,
     ...(options?.decideOverride !== undefined ? { decideOverride: options.decideOverride } : {}),
     ...(options?.transcribeOverride !== undefined
@@ -92,5 +115,9 @@ export async function createOpenAIState(
 }
 
 export function openaiBanners(state: OpenAIState): string[] {
-  return [state.responsesStore.bannerLine(), state.videoJobsStore.bannerLine()]
+  return [
+    state.responsesStore.bannerLine(),
+    state.videoJobsStore.bannerLine(),
+    state.fineTuningJobs.bannerLine()
+  ]
 }
