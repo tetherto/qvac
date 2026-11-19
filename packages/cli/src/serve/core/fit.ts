@@ -93,6 +93,15 @@ export function resolveFitCandidate(serveConfig: ServeConfig, candidate: FitCand
   )
 }
 
+/** The SDK model type a name resolves to, or `undefined` when it names no model. */
+export function fitModelType(serveConfig: ServeConfig, model: string): string | undefined {
+  const alias = resolveModelAlias(serveConfig, model)
+  if (alias) return alias.sdkType
+  const constant = loadModelConstants().get(model)
+  if (constant) return resolveExplicitServeModel(constant.engine || constant.addon, {}).sdkType
+  return undefined
+}
+
 /** Whether the SDK refused the load because of a value in its config. */
 export function isInvalidModelConfig(err: unknown): boolean {
   // Matched by code: the SDK does not export `PluginLoadConfigValidationFailedError`.

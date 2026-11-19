@@ -9,6 +9,7 @@ This package is published to npm as **`@qvac/cli`** and lives in the QVAC monore
 - [Installation](#installation)
 - [Command Reference](#command-reference)
   - [`doctor`](#doctor)
+  - [`fit`](#fit)
   - [`configure`](#configure)
   - [`bundle sdk`](#bundle-sdk)
   - [`verify deps`](#verify-deps)
@@ -108,6 +109,73 @@ qvac doctor --json
 
 # Fail-fast in a script (exit 1 on any required check)
 qvac doctor --quiet || exit 1
+```
+
+### `fit`
+
+Check whether one model, or several loaded together, fit this machine's memory
+before anything is downloaded. Each model's engine fitter runs against the
+registry's weightless description of the model, tens of KB, or against the
+model's own files when it is already downloaded. The answer is the one
+`POST /qvac/v1/models/fit` gives for the same input.
+
+```bash
+qvac fit [options] [models...]
+```
+
+Each model is an SDK model constant name, such as `QWEN3_8B_INST_Q4_K_M`, or a
+`serve.models` alias from the config file.
+
+**Options:**
+
+| Flag                         | Description                                                                                         |
+| ---------------------------- | --------------------------------------------------------------------------------------------------- |
+| `--set <[target:]key=value>` | Config to judge with, for one model or model type, or for every model without a target. Repeatable. |
+| `--catalog`                  | Judge every SDK model on its own, and list the models with no verdict apart, each with its reason.  |
+| `--json`                     | Output the answer as JSON, in the shape the `models/fit` route returns.                             |
+| `-c, --config <path>`        | Config file with `serve.models` aliases (default: auto-detect `qvac.config.*`).                     |
+
+A `--set` target is a model, or a model type such as `llamacpp-completion` for
+every model of that type. A model's own setting wins over its type's, and its
+type's over one for every model. A dotted key nests (`contextParams.n_ctx=4096`).
+A value is read as JSON when it parses (`8192`, `true`, `["a"]`) and as a string
+otherwise. A companion source, such as `projectionModelSrc`, names an SDK model
+constant.
+
+**Output:** each model's verdict alone, the context and GPU layers a language
+model was judged at, and the memory it takes on each device against what is
+free. An `unknown` model shows why it has no verdict. Then the verdict, with
+what the models take from each memory pool: for one model its own, for several
+all of them loaded together. A Metal GPU and the CPU share one pool, the host's
+memory.
+
+**Exit status:** `0` fits, `2` does not fit, `3` unknown, `1` error. Catalog
+mode exits `0` once every model is judged.
+
+**What to pass:**
+
+- A language model is judged at the SDK's default context of 1024 tokens unless
+  `ctx_size` is set. `--set ctx_size=0` reports the longest context that fits.
+- A model made of several parts needs its companion files and engine in its
+  config: a TTS model needs `ttsEngine`, a translation model its `engine` and a
+  language pair (`from`, `to`). A translation model is judged once downloaded.
+- A companion file on its own, such as a projector, VAE or codec, cannot be
+  judged. It fails with `MODEL_FIT_REJECTED`; judge the model that loads it.
+
+**Examples:**
+
+```bash
+# One model at 8K context
+qvac fit QWEN3_8B_INST_Q4_K_M --set ctx_size=8192
+
+# Two models loaded together, the larger at the longest context that fits
+qvac fit QWEN3_8B_INST_Q4_K_M QWEN3_600M_INST_Q4 --set QWEN3_8B_INST_Q4_K_M:ctx_size=0
+
+# A translation model with its language pair
+qvac fit BERGAMOT_DE_EN --set engine=Bergamot --set from=de --set to=en
+
+# Every SDK model, language models at the longest context that fits, as JSON
+qvac fit --catalog --set llamacpp-completion:ctx_size=0 --json
 ```
 
 ### `configure`

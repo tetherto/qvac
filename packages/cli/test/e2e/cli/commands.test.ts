@@ -36,7 +36,7 @@ describe('cli: version & help', () => {
   it('--help lists commands', async () => {
     const r = await runCli(['--help'])
     assert.equal(r.code, 0)
-    for (const cmd of ['bundle', 'verify', 'serve']) {
+    for (const cmd of ['bundle', 'verify', 'serve', 'fit']) {
       assert.ok(r.output.includes(cmd), `missing ${cmd}`)
     }
   })
@@ -55,6 +55,20 @@ describe('cli: version & help', () => {
     for (const s of ['--port', '--api-key', '--cors', 'OpenAI-compatible', 'Deprecated']) {
       assert.ok(r.output.includes(s), `missing ${s}`)
     }
+  })
+
+  it('fit --help shows options and exit codes', async () => {
+    const r = await runCli(['fit', '--help'])
+    assert.equal(r.code, 0)
+    for (const s of ['--set', '--catalog', '--json', '--config', '2 does not fit']) {
+      assert.ok(r.output.includes(s), `missing ${s}`)
+    }
+  })
+
+  it('fit with no model and no --catalog is a usage error', async () => {
+    const r = await runCli(['fit'])
+    assert.equal(r.code, 1)
+    assert.match(r.stderr, /Name at least one model, or pass --catalog/)
   })
 
   it('bundle sdk --help shows options', async () => {
