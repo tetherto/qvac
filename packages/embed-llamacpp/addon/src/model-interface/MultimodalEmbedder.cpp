@@ -184,9 +184,9 @@ decodeOptions(const mtmd_context* mctx, const MediaLimits& limits) {
   const int sampleRate = mtmd_get_audio_sample_rate(mctx);
   if (sampleRate > 0) {
     const auto rate = static_cast<uint64_t>(sampleRate);
-    constexpr uint64_t MAX = std::numeric_limits<uint64_t>::max();
-    opt.max_audio_frames = limits.maxAudioSeconds > (MAX - 1) / rate
-                               ? MAX
+    constexpr uint64_t maxFrames = std::numeric_limits<uint64_t>::max();
+    opt.max_audio_frames = limits.maxAudioSeconds > (maxFrames - 1) / rate
+                               ? maxFrames
                                : limits.maxAudioSeconds * rate + 1;
   }
   return opt;
