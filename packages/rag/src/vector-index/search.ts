@@ -195,6 +195,7 @@ async function selectionComplete(
 
   let chosen = 0
   for (let round = 0; round < perDocument && chosen < k; round++) {
+    const before = chosen
     for (const [documentId, count] of inRanked) {
       if (chosen === k) return true
       if (round < count) chosen++
@@ -203,6 +204,8 @@ async function selectionComplete(
     if (round === 0 && chosen < k && (await anyOutside(reader, namespace, listed, inWindow))) {
       return false
     }
+    // Every document is out of window hits; later rounds can't change anything.
+    if (chosen === before) break
   }
   return true
 }
