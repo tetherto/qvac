@@ -12,18 +12,9 @@ import {
   pathTraversalHttpShardedDottedName,
   pathTraversalHyperdriveLoad,
   pathTraversalHyperdriveBackslashLoad,
-  pathTraversalRagDeleteWorkspace
+  pathTraversalRagDeleteWorkspace,
+  pathTraversalTests
 } from '../../../../catalog/path-traversal-tests.js'
-
-const pathTraversalTests = [
-  pathTraversalHttpShardedLoad,
-  pathTraversalHttpShardedQuery,
-  pathTraversalHttpShardedFragment,
-  pathTraversalHttpShardedDottedName,
-  pathTraversalHyperdriveLoad,
-  pathTraversalHyperdriveBackslashLoad,
-  pathTraversalRagDeleteWorkspace
-] as const
 
 interface LoadParams {
   modelSrc: string
