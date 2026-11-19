@@ -2,7 +2,12 @@
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { parseBindings, checkBindings } = require('../regression/coexistence')
+const {
+  parseBindings,
+  checkBindings,
+  initializedBackend,
+  workerResult
+} = require('../regression/coexistence')
 
 const policy = {
   qvacClients: ['/build/fabric.bare'],
@@ -81,7 +86,9 @@ test('checks GNU abbreviated std names and libc++ ABI typeinfo', () => {
   for (const symbol of [
     '_ZNSaIcED1Ev',
     '_ZTINSt3__19exceptionE',
-    '_ZTVN10__cxxabiv117__class_type_infoE'
+    '_ZTVN10__cxxabiv117__class_type_infoE',
+    '_ZTTNSt3__113basic_ostreamIcNS_11char_traitsIcEEEE',
+    '_ZTCNSt3__113basic_ostreamIcNS_11char_traitsIcEEEE0_NS_9basic_iosIcS2_EE'
   ]) {
     const bindings = parseBindings(
       trace +
@@ -89,4 +96,46 @@ test('checks GNU abbreviated std names and libc++ ABI typeinfo', () => {
     )
     assert.match(checkBindings(bindings, policy).join('\n'), /xdna.so:/)
   }
+})
+
+test('checks standard library thunks while excluding XRT thunks', () => {
+  for (const symbol of [
+    '_ZThn8_NSt3__113basic_ostreamIcNS_11char_traitsIcEEED1Ev',
+    '_ZTv0_n24_NSoD1Ev',
+    '_ZTch0_v0_n24_NSt3__113basic_ostreamIcNS_11char_traitsIcEEED1Ev'
+  ]) {
+    const bindings = parseBindings(
+      trace +
+        `\n123: binding file /build/xdna.so [0] to /build/fabric.bare [0]: normal symbol \`${symbol}'`
+    )
+    assert.match(checkBindings(bindings, policy).join('\n'), /xdna.so:/)
+  }
+  const bindings = parseBindings(
+    trace +
+      "\n123: binding file /build/xdna.so [0] to /build/libxrt_coreutil.so.2 [0]: normal symbol `_ZThn8_N3xrt6deviceD1Ev'"
+  )
+  assert.deepEqual(checkBindings(bindings, policy), [])
+})
+
+test('records backend initialization paths rather than arbitrary loader messages', () => {
+  for (const file of [
+    '/build/libqvac-ggml-cpu-x64.so',
+    '/build/libqvac-diffusion-ggml-vulkan.so',
+    '/build/libqvac-speech-ggml-cuda.so',
+    '/build/libggml-base.so.0'
+  ]) {
+    assert.equal(initializedBackend('123: calling init: ' + file), file)
+  }
+  assert.equal(initializedBackend('123: calling init: /lib/libstdc++.so.6'), null)
+  assert.equal(initializedBackend('123: calling fini: /build/libqvac-ggml-cuda.so'), null)
+})
+
+test('worker completion identifies the actual native host despite mixed stdout', () => {
+  const result = {
+    kind: 'ggml-coexistence',
+    order: 'fabric-first',
+    hostExecutable: '/runtime/bin/bare'
+  }
+  assert.deepEqual(workerResult('native diagnostics\n' + JSON.stringify(result) + '\n'), result)
+  assert.equal(workerResult('native diagnostics only'), null)
 })

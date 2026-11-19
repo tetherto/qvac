@@ -116,8 +116,11 @@ fails this requested audit rather than silently passing. A private static CUDA
 runtime needs additional binary inspection: locally bound symbols do not appear
 in a loader trace. Existing module runtime guards remain necessary.
 
-The report directory contains a JSON summary with input binary SHA256 hashes,
-stdout for each worker, and loader diagnostics. Binding lines are retained only for audited clients to bound trace
+The report directory contains a JSON summary with SHA256 hashes of the addons,
+runtime providers, actual native Bare host, and backend modules observed during
+loader initialization. Each order records its host and loaded backend paths.
+It also contains stdout for each worker and loader diagnostics. Binding lines
+are retained only for audited clients to bound trace
 size when ROCm dependencies are present. Errors, version diagnostics, and worker
 output remain available. A 60-second deadline per order prevents loader or
 driver hangs from leaving the test running indefinitely.
