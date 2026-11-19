@@ -460,12 +460,13 @@ uint32_t trainedContext(const ModelMetaData& metadata) {
 }
 
 // Fabric takes n_ctx_seq, the whole pool when unified, as each sequence's
-// size: DeepSeek V4 sizes its per-sequence caches from it, and long RoPE
-// factors are chosen by it. With several slots these models keep one KV
+// size: DeepSeek V4 and V4.1 size their per-sequence caches from it, and long
+// RoPE factors are chosen by it. With several slots these models keep one KV
 // buffer per slot, so each slot behaves as it would alone.
 bool keepsKvBufferPerSlot(
     const std::string& modelPath, const ModelMetaData& metadata) {
-  // Fabric builds the DeepSeek V4 cache for deepseek41 too.
+  // deepseek41 is matched here, not in isDeepSeekV4Architecture, which also
+  // picks DeepSeek V4's reasoning tags.
   const auto architecture = metadata.tryGetString("general.architecture");
   if (architecture.has_value() &&
       (qvac_lib_inference_addon_llama::utils::isDeepSeekV4Architecture(

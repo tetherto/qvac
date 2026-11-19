@@ -2764,9 +2764,9 @@ bool MtmdLlmContext::loadCache(
     clearCacheReconciliationState();
   });
   if (loadedBytes == 0) {
-    // A file from before the unified KV cache may hold one KV stream per
-    // slot: it is a cold miss, and the next save replaces it. A failed
-    // restore can leave part of the state behind, so the guard clears it.
+    // A failed restore can leave part of the state behind; the guard clears
+    // it. A file from before the unified KV cache may hold one KV stream per
+    // slot: it is a cold miss, and the next save replaces it.
     if (cache::predatesUnifiedKv(stateTokens.data(), tokenCount)) {
       QLOG_IF(
           Priority::WARNING,
@@ -2775,7 +2775,6 @@ bool MtmdLlmContext::loadCache(
               "starting without it\n");
       return false;
     }
-    restoredKvGuard.dismiss();
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnableToLoadSessionFile),
