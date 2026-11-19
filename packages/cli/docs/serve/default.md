@@ -1161,7 +1161,7 @@ endpoints.
 | `stream`  | `boolean` | No       | Call a streaming handler and answer with SSE (default false) |
 
 ```bash
-curl -sS http://localhost:11434/qvac/v1/plugins/echo-plugin/invoke \
+curl -sS http://localhost:11435/qvac/v1/plugins/echo-plugin/invoke \
   -H "Authorization: Bearer $QVAC_API_KEY" -H "Content-Type: application/json" \
   -d '{"model": "echo", "handler": "echo", "params": {"text": "hi"}}'
 ```
