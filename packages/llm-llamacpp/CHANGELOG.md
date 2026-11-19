@@ -14,15 +14,20 @@
 
 - With `parallel >= 2` the KV cache is unified, as llama-server's
   `--kv-unified`: the slots share one KV buffer instead of one each, and the
-  addon limits each slot to its share of the pool. Fabric uses the same split
-  for the long RoPE factor choice and DeepSeek V4's per-sequence caches. It is
-  not configurable ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+  addon limits each slot to its share of the pool. It is not configurable
+  ([#5832](https://github.com/tetherto/qvac/pull/5832)).
 - With `parallel >= 2`: a slot gets `ctx_size` (rounded up to a multiple of
   256) divided by `parallel`, where its share used to be rounded up to a
   multiple of 256; MiniMax-M3 turns sparse attention off; and on Vulkan, with
   flash attention off, or on CUDA older than Turing, decoding can be slower,
   because each slot's attention spans the shared buffer
   ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+- Known issues with `parallel >= 2`, until fabric gets the slot limit:
+  DeepSeek V4 and V4.1 size each per-sequence cache to the whole buffer, so
+  those caches take `parallel` times the memory and a load that fit before can
+  run out of memory; models with long RoPE factors (for example Phi-3) use the
+  long factors whenever `ctx_size` exceeds the model's original context, so
+  their output changes ([#5832](https://github.com/tetherto/qvac/pull/5832)).
 - Cache files saved by earlier versions with `parallel >= 2` still load. Files
   saved with `parallel >= 2` now hold one KV stream, which earlier versions
   cannot restore ([#5832](https://github.com/tetherto/qvac/pull/5832)).

@@ -2294,11 +2294,9 @@ NormalizedLoad normalizeLoadForFit(
             K_LEGACY_PARSER_NAME.data(),
             params.kv_unified_per_slot));
   }
-  // Several slots share one KV pool, each limited to its even share (the
-  // addon's slot limit, which fabric also uses for RoPE factors and
-  // per-sequence caches). One slot has the same layout either way.
+  // Several slots share one KV pool, each limited to its even share by the
+  // addon. One slot has the same layout either way.
   params.kv_unified = params.n_parallel >= 2;
-  params.kv_unified_split = params.kv_unified;
 
   // As llama-server: without ctx-size, kv-unified-per-slot sizes the KV pool
   // to parallel x kv-unified-per-slot; ctx-size 0 keeps the trained context.

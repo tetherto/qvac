@@ -2116,8 +2116,6 @@ TEST_F(LoadFitNormalizationTest, KvCacheIsUnifiedWithSeveralSlots) {
         backend({.type = backend_selection::GPU, .name = "none"}));
     const bool unified = parallel != "1";
     EXPECT_EQ(result.params.kv_unified, unified) << "parallel=" << parallel;
-    EXPECT_EQ(result.params.kv_unified_split, unified)
-        << "parallel=" << parallel;
     EXPECT_EQ(result.fitSnapshot.kvUnified, unified) << "parallel=" << parallel;
     EXPECT_EQ(result.params.kv_unified_per_slot, 0) << "parallel=" << parallel;
   }

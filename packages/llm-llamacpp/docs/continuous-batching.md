@@ -352,7 +352,7 @@ With `parallel = N` and `ctx_size = C`, each slot gets `C / N` tokens, or `kv_un
 
 ### One shared KV pool
 
-With `parallel >= 2`, all slots keep their KV cache in one buffer of `C` cells, as llama-server's `--kv-unified`; this is not configurable. Like llama-server's per-slot limit, the addon keeps each slot to `C / N`. It passes that split to fabric (`kv_unified_split`), which uses it where one sequence's context matters: the choice of long RoPE factors and the size of DeepSeek V4's per-sequence caches. `kv_unified_per_slot` lowers each slot's limit, like `--kv-unified-per-slot`:
+With `parallel >= 2`, all slots keep their KV cache in one buffer of `C` cells, as llama-server's `--kv-unified`; this is not configurable. Like llama-server's per-slot limit, the addon keeps each slot to `C / N`. `kv_unified_per_slot` lowers each slot's limit, like `--kv-unified-per-slot`:
 
 ```js
 config: { parallel: '4', kv_unified_per_slot: '2048' } // one 8192-cell pool, 2048 per slot
@@ -362,6 +362,9 @@ config: { parallel: '4', kv_unified_per_slot: '2048' } // one 8192-cell pool, 20
 - **Only an even split** — with `parallel >= 2`, `parallel x kv_unified_per_slot` must fit the pool, or the load fails with `InvalidArgument`, and a negative `kv_unified_per_slot` is rejected. Admission checks each slot only against its own limit, so limits adding up to more than the pool would let the pool fill mid-decode and fail every request in progress. llama-server accepts that setup; the addon does not.
 - **Attention** — with flash attention on CPU, Metal, and CUDA (Turing or newer), each slot attends only to its own cells. Elsewhere, including Vulkan, each slot's attention spans the shared buffer up to the highest used cell, with the other slots masked out, so decoding can be slower than with one buffer per slot. Slots sharing the buffer are not isolated from each other, so do not treat one model instance as a boundary between callers that do not trust each other.
 - **Model-specific** — sliding-window models keep one window cache of `min(C, n_swa x N + n_ubatch)` cells. With `parallel >= 2`, MiniMax-M3 turns sparse attention off, and Qwen4exp keeps it but its indexer takes more memory.
+- **Known issues with `parallel >= 2`** — fabric takes the whole buffer as one sequence's context in two places, until a fabric change gives it the slot limit:
+  - DeepSeek V4 and V4.1 keep one cache per sequence and size each to the whole buffer, so those caches take `parallel` times the memory. A load that fits with one buffer per slot can run out of memory.
+  - Models with long RoPE factors (for example Phi-3) use the long factors whenever `C` exceeds the model's original context, even though each slot stays within it, so their output changes.
 - **Cache files** — a file saved by an earlier version with `parallel >= 2` holds one KV stream per slot; fabric restores it into the shared buffer. A file saved now holds one stream, which earlier versions cannot restore at `parallel >= 2`.
 
 ---
