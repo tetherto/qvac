@@ -5,10 +5,14 @@ import { getEngineLogger } from '@/logging/index'
 import { describeAccounting } from '@/model-fit/describe'
 import type { FitStubUnavailableReason } from '@/model-fit/description/fetch'
 import { resolveLoadFromStubs } from '@/model-fit/description/resolve-load'
-import { fitLoad, unknownFit, type LoadFit } from '@/model-fit/fit-load'
+import { fitLoad, unknownFit } from '@/model-fit/fit-load'
 import { combineFits } from '@/model-fit/sum'
 import { getConfig } from '@/runtime/state'
-import type { AssessModelFitResult, ModelFitCandidate } from '@/schemas/assess-model-fit'
+import type {
+  AssessModelFitResult,
+  ModelFitCandidate,
+  ModelFitModelResult
+} from '@/schemas/assess-model-fit'
 import { isCanonicalModelType, normalizeModelType } from '@/schemas/index'
 import { inferModelTypeFromModelSrc, type ModelSrcInput } from '@/schemas/model-src-utils'
 import { detectShardedModel } from '@/utils/shard-utils'
@@ -52,7 +56,7 @@ export function noStubDetail(reason: FitStubUnavailableReason, message?: string)
  * The fitter's answer for one candidate, run against the model on disk or the
  * registry's weightless description of it.
  */
-async function fitCandidate(candidate: ModelFitCandidate): Promise<LoadFit> {
+async function fitCandidate(candidate: ModelFitCandidate): Promise<ModelFitModelResult> {
   const modelType = modelTypeOf(candidate)
   if (!isCanonicalModelType(modelType)) throw new PluginNotFoundError(modelType)
 
@@ -108,14 +112,13 @@ async function fitCandidate(candidate: ModelFitCandidate): Promise<LoadFit> {
 export async function assessModelFit(
   candidates: readonly ModelFitCandidate[]
 ): Promise<AssessModelFitResult> {
-  const fits: LoadFit[] = []
-  for (const candidate of candidates) fits.push(await fitCandidate(candidate))
+  const models: ModelFitModelResult[] = []
+  for (const candidate of candidates) models.push(await fitCandidate(candidate))
 
-  const models = fits.map((fit) => fit.result)
   const { verdict, pools } = combineFits(models)
-  const rows = fits.map((fit, index) => {
-    const why = fit.reason === undefined ? '' : ` (${fit.reason})`
-    return { label: `model ${index + 1} ${fit.result.status}${why}`, devices: fit.result.devices }
+  const rows = models.map((model, index) => {
+    const why = model.reason === undefined ? '' : ` (${model.reason})`
+    return { label: `model ${index + 1} ${model.status}${why}`, devices: model.devices }
   })
   getEngineLogger().info(`[model-fit] ${verdict} — ${describeAccounting(pools, rows)}`)
   return { verdict, pools, models }

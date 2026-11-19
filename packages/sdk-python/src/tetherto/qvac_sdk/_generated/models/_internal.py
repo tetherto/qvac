@@ -433,6 +433,12 @@ class ModelFitModelResult(GeneratedBaseModel):
         LlamaFitStats | dict[str, Any],
         Field(description="The resolved load of a llama.cpp verdict. Empty otherwise."),
     ]
+    reason: Annotated[
+        str | None,
+        Field(
+            description="Why the model has no verdict, or why devices that each fit do not fit together. Present when `status` is `unknown`, and when it is `does-not-fit` because devices sharing one memory pool overflow it."
+        ),
+    ] = None
 
 
 class AssessModelFitResponse(GeneratedBaseModel):
@@ -8674,6 +8680,12 @@ class ModelFitProbeModel(GeneratedBaseModel):
         ModelFitProbeLlamaStats | dict[str, Any],
         Field(description="The resolved load of a llama.cpp verdict. Empty otherwise."),
     ]
+    reason: Annotated[
+        str | None,
+        Field(
+            description="Why the model has no verdict, or why devices that each fit do not fit together. Present when `status` is `unknown`, and when it is `does-not-fit` because devices sharing one memory pool overflow it."
+        ),
+    ] = None
 
 
 class ModelFitProbe(GeneratedBaseModel):

@@ -72,23 +72,23 @@ function sumPools(devices: readonly AddonFitDevice[]): PoolSum[] {
 }
 
 /**
- * One model's verdict alone. An addon judges each device apart with its
- * engine's margin, so a model whose rows share one pool, such as a Metal GPU
- * and the CPU drawing on the host's memory, can fit each device and still
- * overflow the pool. Such a model does not fit when the shared pool takes more
- * than `USABLE_SHARE` of its free memory. A row alone in its pool keeps the
- * addon's answer.
+ * The pool two or more of a model's rows share and overflow, if any. An addon
+ * judges each device apart with its engine's margin, so a model whose rows
+ * share one pool, such as a Metal GPU and the CPU drawing on the host's memory,
+ * can fit each device and still take more than `USABLE_SHARE` of the pool's
+ * free memory. A row alone in its pool keeps the addon's answer.
  */
-export function judgeAlone(model: ModelAnswer): ModelFitVerdict {
-  if (model.status !== 'fits') return model.status
-  const shared = sumPools(model.devices).filter((pool) => pool.rows > 1)
-  return shared.some(isOver) ? 'does-not-fit' : 'fits'
+export function sharedPoolOverflow(model: ModelAnswer): ModelFitPool | undefined {
+  const overflowing = sumPools(model.devices).find((pool) => pool.rows > 1 && isOver(pool))
+  if (overflowing === undefined) return undefined
+  const { rows: _rows, ...pool } = overflowing
+  return pool
 }
 
 /**
  * Sums what a set of models takes on each memory pool and judges the set
- * against what is free. Each model's `status` is its verdict alone, from
- * `judgeAlone`.
+ * against what is free. Each model's `status` is its verdict alone, which
+ * counts a `sharedPoolOverflow` as `does-not-fit`.
  *
  * One model's verdict is its `status`. A set does not fit when any pool takes
  * more than `USABLE_SHARE` of its free memory or any model does not fit alone.

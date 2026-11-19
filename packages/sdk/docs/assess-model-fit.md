@@ -82,7 +82,9 @@ per device its load uses with the host last. For a llama.cpp model with a
 verdict, `stats` holds the context size and GPU layers the load resolves to: the
 ones the fitter settled on when it fits, the ones the load asked for when it does
 not. It is empty for every other model. A model the SDK cannot size has
-`status: 'unknown'`, no rows and empty `stats`.
+`status: 'unknown'`, no rows, empty `stats` and a `reason` saying why. A model
+that does not fit because devices sharing one pool overflow it also carries a
+`reason`, naming the pool and what it needs of its free memory.
 
 `unknown` means the SDK cannot say. Show it as "can't say", never as "no". It is
 the answer for a load that would start but cannot be sized: an engine with no

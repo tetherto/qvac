@@ -709,6 +709,10 @@
                   }
                 ],
                 "description": "The resolved load of a llama.cpp verdict. Empty otherwise."
+              },
+              "reason": {
+                "description": "Why the model has no verdict, or why devices that each fit do not fit together. Present when `status` is `unknown`, and when it is `does-not-fit` because devices sharing one memory pool overflow it.",
+                "type": "string"
               }
             },
             "required": ["status", "devices", "stats"],
@@ -9954,6 +9958,10 @@
                           }
                         ],
                         "description": "The resolved load of a llama.cpp verdict. Empty otherwise."
+                      },
+                      "reason": {
+                        "description": "Why the model has no verdict, or why devices that each fit do not fit together. Present when `status` is `unknown`, and when it is `does-not-fit` because devices sharing one memory pool overflow it.",
+                        "type": "string"
                       }
                     },
                     "required": ["status", "devices", "stats"],

@@ -115,6 +115,10 @@ test('load check: a load the fitter passes does not fit when it overflows the ho
 
   t.is(check.probe.verdict, 'does-not-fit')
   t.is(check.probe.models[0]?.status, 'does-not-fit', 'the status is the verdict alone')
+  t.is(
+    check.probe.models[0]?.reason,
+    'devices sharing one pool need more than 90% of its free memory: host 31744 MiB of 32768 MiB free'
+  )
   t.is(check.detail, 'needs host 31744 MiB of 32768 MiB free')
 })
 
@@ -141,7 +145,7 @@ test('load check: the fitter refusing the load does not fit', async (t) => {
   t.is(check.detail, 'the engine fitter projects it will not fit its devices')
 })
 
-test('load check: a run with no answer is unknown, with the reason logged', async (t) => {
+test('load check: a run with no answer is unknown, with the reason logged and reported', async (t) => {
   withPlugin(t)
   const { logger, records } = recordingLogger()
   const { runFit } = runReturning({ status: 'unknown', reason: 'timeout', message: 'slow' })
@@ -152,7 +156,7 @@ test('load check: a run with no answer is unknown, with the reason logged', asyn
     probe: {
       verdict: 'unknown',
       pools: [],
-      models: [{ status: 'unknown', devices: [], stats: {} }]
+      models: [{ status: 'unknown', devices: [], stats: {}, reason: 'timeout: slow' }]
     }
   })
   t.is(records[0]?.level, 'info')
@@ -198,7 +202,14 @@ test('load check: a fitter that rejects is logged and the load goes ahead', asyn
     probe: {
       verdict: 'unknown',
       pools: [],
-      models: [{ status: 'unknown', devices: [], stats: {} }]
+      models: [
+        {
+          status: 'unknown',
+          devices: [],
+          stats: {},
+          reason: 'assessFit: the model cannot be read'
+        }
+      ]
     }
   })
   t.is(records[0]?.level, 'warn')
