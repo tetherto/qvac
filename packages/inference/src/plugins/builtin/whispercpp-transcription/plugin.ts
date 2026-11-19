@@ -1,4 +1,5 @@
 import ASRGgml from '@qvac/asr-ggml'
+import { CAPABILITY_CONTRACTS } from '@/schemas/capabilities'
 import {
   definePlugin,
   defineHandler,
@@ -79,6 +80,7 @@ export const whisperPlugin = definePlugin({
     return { model }
   },
 
+  provides: [CAPABILITY_CONTRACTS.transcription],
   handlers: {
     transcribe: defineHandler({
       requestSchema: transcribeRequestSchema,

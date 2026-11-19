@@ -1,3 +1,4 @@
+import { CAPABILITY_CONTRACTS } from '@/schemas/capabilities'
 import ImgStableDiffusion, {
   EsrganUpscaler,
   VideoStableDiffusion,
@@ -499,6 +500,12 @@ export const diffusionPlugin = definePlugin({
     return { model }
   },
 
+  provides: [
+    CAPABILITY_CONTRACTS.imageGeneration,
+    CAPABILITY_CONTRACTS.imageUpscaling,
+    CAPABILITY_CONTRACTS.videoGeneration,
+    CAPABILITY_CONTRACTS.worldSimulation
+  ],
   handlers: {
     diffusionStream: defineHandler({
       requestSchema: diffusionRequestSchema,

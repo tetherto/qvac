@@ -98,6 +98,7 @@ export interface QvacSession {
   getModelInfo: Api['getModelInfo']
   getLoadedModelInfo: Api['getLoadedModelInfo']
   getSystemResources: Api['getSystemResources']
+  getRuntimeCapabilities: Api['getRuntimeCapabilities']
   assessModelFit: Api['assessModelFit']
   heartbeat: Api['heartbeat']
   loggingStream: Api['loggingStream']
@@ -272,6 +273,7 @@ function createSessionHandle(record: SessionRecord, name: string | undefined): Q
     getModelInfo: (params, options) => api.getModelInfo(params, withSession(options)),
     getLoadedModelInfo: (params, options) => api.getLoadedModelInfo(params, withSession(options)),
     getSystemResources: (input, options) => api.getSystemResources(input, withSession(options)),
+    getRuntimeCapabilities: (options) => api.getRuntimeCapabilities(withSession(options)),
     assessModelFit: (input, options) => api.assessModelFit(input, withSession(options)),
     heartbeat: (options) => api.heartbeat(withSession(options)),
     loggingStream: (params, options) => api.loggingStream(params, withSession(options)),

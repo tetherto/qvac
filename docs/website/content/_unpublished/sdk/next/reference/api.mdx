@@ -14,7 +14,7 @@ description: One-page reference of all public functions and objects exported by 
 > **Fields intentionally omitted**: parameter descriptions, return field descriptions
 > (covered by IDE hover and `.d.ts` declarations).
 >
-> **Scope**: 55 functions in `packages/sdk/client/api/` plus the `profiler` object.
+> **Scope**: 56 functions in `packages/sdk/client/api/` plus the `profiler` object.
 
 ---
 
@@ -929,6 +929,36 @@ function getModelInfo(params: GetModelInfoParams, options?: RPCOptions): Promise
 **Throws**:
 
 - `QvacErrorBase` — When the response type is invalid (`InvalidResponseError`) or the RPC layer fails.
+
+---
+
+### `getRuntimeCapabilities`
+
+List the capability contracts the runtime's registered plugins provide,
+with the major version of each. A consumer checks for the `id` and
+`version` it was built against before loading a model.
+
+The report reads plugin registration only. It loads no model, and it does
+not check addons, model files, resources or permissions, so a listed
+operation can still fail for a given model. An operation in
+`partialOperations` is implemented by only some of the contract's plugins.
+
+**Signature**:
+
+```ts
+function getRuntimeCapabilities(options?: RPCOptions): Promise<RuntimeCapability[]>;
+```
+
+**Throws**:
+
+- `InvalidResponseError` — If the worker returns a different response type.
+- `Error` — If the RPC request fails.
+
+**Example**:
+```ts
+const capabilities = await getRuntimeCapabilities()
+const canTranscribe = capabilities.some((c) => c.id === 'transcription' && c.version === 1)
+```
 
 ---
 

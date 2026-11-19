@@ -1,0 +1,111 @@
+---
+title: Runtime capabilities
+sidebarTitle: Capabilities
+icon: ListChecks
+description: Check which capability contracts, and which major version of each, a runtime provides before loading a model.
+schemaType: HowTo
+---
+
+## Overview
+
+An app built and released separately from the runtime it talks to cannot assume which operations that runtime serves: the runtime may have been assembled with a reduced plugin set, or with plugins from another vendor. [`getRuntimeCapabilities()`](/sdk/reference/api#getruntimecapabilities) lists the capability contracts the runtime's registered plugins provide, so the app can check for the contracts it needs before it loads a model.
+
+Each entry names a contract and its major version:
+
+```ts
+{
+  id: string                  // for example 'transcription'
+  version: number             // major version, from 1
+  operations: string[]        // every plugin that provides the contract implements these
+  partialOperations: string[] // only some of those plugins implement these
+}
+```
+
+The list is sorted by `id` and then `version`. A session handle has the same method and gets the same list.
+
+## Contracts
+
+A contract groups the operations whose schemas share a core. QVAC defines these contracts, all at major 1:
+
+| ID | Operations | Optional operations |
+| --- | --- | --- |
+| `completion` | `completionStream` | `batchCompletionStream`, `calcTokens` |
+| `fine-tuning` | `finetune` | |
+| `translation` | `translate` | |
+| `embedding` | `embed`, `embedBatch` | |
+| `reranking` | `rerank` | |
+| `decision` | `decide` | |
+| `classification` | `classify` | |
+| `transcription` | `transcribe` | `transcribeStream` |
+| `bci-transcription` | `bciTranscribe` | `bciTranscribeStream` |
+| `text-to-speech` | `textToSpeech` | `textToSpeechStream` |
+| `ocr` | `ocrStream` | |
+| `image-generation` | `diffusionStream` | |
+| `image-upscaling` | `upscaleStream` | |
+| `video-generation` | `videoStream` | |
+| `world-simulation` | `worldStepStream`, `worldSceneStream` | |
+| `audio-generation` | `audioGenStream` | `audioEditStream` |
+| `audio-understanding` | `audioUnderstand` | |
+| `vision-language-action` | `vlaRun`, `vlaHparams`, `vlaSetEmbodiment` | |
+
+A contract with a dotted ID, such as `acme.diarization`, is defined by a third-party plugin rather than by QVAC. A third-party plugin can also provide a QVAC contract.
+
+An optional operation appears in `operations` when every plugin that provides the contract implements it, and in `partialOperations` when only some do. With the default plugin set, `transcribeStream` is in `partialOperations`: Whisper and Parakeet stream, MOSS does not.
+
+## Versions
+
+Match on `id` and `version` together. A contract's major increases only on a change that breaks callers, such as removing an operation or changing a field's type, so code written against `transcription@1` works with every runtime that reports `transcription@1`. New optional fields and new optional operations do not change the major, and neither do SDK or addon releases.
+
+A runtime can report two majors of one contract while its plugins migrate between them.
+
+## Limits
+
+The list comes from plugin registration only. It loads no model, and it does not check:
+
+- that a plugin's native addon loads on this device;
+- that model files exist, or that the device has the memory to load them;
+- which operations a particular model supports. A diffusion model, for example, still refuses `videoStream` although its plugin provides `video-generation`.
+
+A call can therefore still fail with an error such as `ModelOperationNotSupportedError`.
+
+## Example
+
+The following script lists the contracts the runtime provides and checks for the ones the app needs:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/runtime-capabilities.js title="runtime-capabilities.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/runtime-capabilities.ts title="runtime-capabilities.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/runtime_capabilities.py title="runtime_capabilities.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="kotlin" label="Kotlin">
+<WrapCode>
+
+```kotlin file=<rootDir>/packages/sdk-kotlin/examples/src/RuntimeCapabilities.kt title="RuntimeCapabilities.kt" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart), the [Python quickstart](/sdk/python-sdk#quickstart), or the [Kotlin quickstart](/sdk/kotlin-sdk#quickstart).
+</Callout>
