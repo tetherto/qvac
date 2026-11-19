@@ -1,6 +1,7 @@
 import { decodeNativeId, decodeVectorInto, encodeNativeId } from '../db/encoding.js'
 import {
   CHUNKS,
+  DOCUMENTS,
   NATIVE_IDS,
   type ChunkRecord,
   type DocumentRecord,
@@ -136,6 +137,26 @@ export async function indexSearch(
     return { hits: sortHits(hits, scope), available, pastFloor }
   }
 
+  // A full selection is final when it seats k documents: anything the pool
+  // missed ranks below them. With second hits seated, every document in scope
+  // must already be in the pool, or one ranked lower would lose its seat.
+  async function noneUnseen(hits: SearchHit[], selected: SearchHit[]): Promise<boolean> {
+    const seated = new Set(selected.map((hit) => hit.documentId))
+    if (seated.size === k) return true
+    if (documents.length > 0 && documents.length <= k) return true
+    const seen = new Set(hits.map((hit) => hit.documentId))
+    if (documents.length > 0) {
+      return documents.every(
+        (document) => document.chunkCount === 0 || seen.has(document.documentId)
+      )
+    }
+    const range = { gte: { namespace }, lte: { namespace } }
+    for await (const document of reader.find<DocumentRecord>(DOCUMENTS, range)) {
+      if (document.chunkCount > 0 && !seen.has(document.documentId)) return false
+    }
+    return true
+  }
+
   let pool = perDocument === undefined ? k : Math.max(k, Math.min(MAX_POOL, k * POOL_GROWTH))
   let ranked: SearchHit[]
   let selected: SearchHit[]
@@ -148,7 +169,8 @@ export async function indexSearch(
       break
     }
     selected = selectDiverse(ranked, k, perDocument)
-    if (selected.length === k || found.pastFloor || pool >= found.available) break
+    if (found.pastFloor || pool >= found.available) break
+    if (selected.length === k && (await noneUnseen(found.hits, selected))) break
     const next = Math.min(MAX_POOL, pool * POOL_GROWTH)
     if (next === pool || next * SCAN_SHARE >= found.available) {
       return await scanSearch(reader, space, scope, query, k, options)

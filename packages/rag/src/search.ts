@@ -11,7 +11,8 @@ import type { HyperDBReader } from './db/db-types.js'
 import { selectDiverse } from './diversify.js'
 import type { SearchCitation, SearchHit, SearchScope } from './types.js'
 
-// Rows decoded and scored per step; memory stays bounded by this and k.
+// Rows decoded and scored per step. Memory stays bounded by this and by k (with
+// `perDocument`, k documents of at most `perDocument` hits each).
 export const SCAN_BATCH_SIZE = 256
 
 export interface SearchQuery {
@@ -35,7 +36,10 @@ interface Ranked {
 
 // Exact scan over the chunks inside `scope`. Out-of-scope rows are never read,
 // so only allowed chunks compete for the top k. With `perDocument`, each
-// document keeps its own top `perDocument`, so the selection is exact too.
+// document keeps its own top `perDocument`, and only the k documents with the
+// best first hits are held: when k documents exist the selection seats exactly
+// their best hits, and when fewer exist every one is held. Chunks arrive grouped
+// by document, so a document is complete when the next one starts.
 export async function scanSearch(
   reader: HyperDBReader,
   space: SpaceRecord,
@@ -56,17 +60,32 @@ export async function scanSearch(
   const batch: ChunkRecord[] = []
   const top: Ranked[] = []
   const { perDocument, minScore } = options
-  const byDocument = new Map<string, Ranked[]>()
+  const rank = documentRank(scope)
+  const held: Ranked[][] = []
+  let current: Ranked[] = []
+  let currentId: string | null = null
+
+  // Keeps `held` to the k documents whose best hits rank first, best first.
+  function settle() {
+    const kept = current
+    current = []
+    if (kept.length === 0) return
+    const best = kept[0].hit
+    if (held.length === k && compareHits(best, held[k - 1][0].hit, rank) >= 0) return
+    let at = held.length
+    while (at > 0 && compareHits(best, held[at - 1][0].hit, rank) < 0) at--
+    held.splice(at, 0, kept)
+    if (held.length > k) held.pop()
+  }
 
   function keep(score: number, chunk: ChunkRecord) {
+    if (perDocument !== undefined && chunk.documentId !== currentId) {
+      settle()
+      currentId = chunk.documentId
+    }
     if (minScore !== undefined && score < minScore) return
     if (perDocument === undefined) return offer(top, k, score, chunk)
-    let kept = byDocument.get(chunk.documentId)
-    if (!kept) {
-      kept = []
-      byDocument.set(chunk.documentId, kept)
-    }
-    offer(kept, Math.min(k, perDocument), score, chunk)
+    offer(current, Math.min(k, perDocument), score, chunk)
   }
 
   function scoreBatch() {
@@ -94,12 +113,13 @@ export async function scanSearch(
     }
   }
   scoreBatch()
+  settle()
   throwIfAborted(options.signal)
 
   let hits = top.map((entry) => entry.hit)
   if (perDocument !== undefined) {
     const ranked: SearchHit[] = []
-    for (const kept of byDocument.values()) for (const entry of kept) ranked.push(entry.hit)
+    for (const kept of held) for (const entry of kept) ranked.push(entry.hit)
     hits = selectDiverse(sortHits(ranked, scope), k, perDocument)
   }
   await attachDocumentDetails(reader, scope.namespace, hits)
@@ -109,8 +129,12 @@ export async function scanSearch(
 // Score first; ties go by the scope's document order for a document list and by
 // key order (document ID, then ordinal) otherwise, which is the scan's order.
 export function sortHits(hits: SearchHit[], scope: SearchScope): SearchHit[] {
-  const rank = new Map(scope.documentIds?.map((documentId, i) => [documentId, i]))
+  const rank = documentRank(scope)
   return hits.sort((a, b) => compareHits(a, b, rank))
+}
+
+function documentRank(scope: SearchScope): Map<string, number> {
+  return new Map(scope.documentIds?.map((documentId, i) => [documentId, i]))
 }
 
 function compareHits(a: SearchHit, b: SearchHit, rank: Map<string, number>): number {

@@ -88,6 +88,43 @@ both('perDocument fills k past a document longer than the largest pool', async (
   t.alike(contents(hits), ['long0', 'long1', 's00', 's10', 's20', 's30', 's40', 's50'])
 })
 
+both('perDocument seats a document ranked below two long ones', async (t) => {
+  const { rag, spaceId } = await openRag(t)
+  const a = Array.from({ length: 40 }, (_, i) => 0.99 - i * 0.002)
+  const b = Array.from({ length: 40 }, (_, i) => 0.985 - i * 0.002)
+  await rag.ingest({
+    namespace: 'ns',
+    documents: [scored('a', spaceId, a), scored('b', spaceId, b), scored('c', spaceId, [0.1])]
+  })
+
+  const hits = await rag.search({
+    scope: { namespace: 'ns' },
+    vector: QUERY,
+    spaceId,
+    k: 4,
+    perDocument: 2
+  })
+  t.alike(contents(hits), ['a0', 'a1', 'b0', 'c0'])
+})
+
+both('perDocument keeps the best documents among many', async (t) => {
+  const { rag, spaceId } = await openRag(t)
+  const best = [0.3, 0.7, 0.2, 0.9, 0.5, 0.8, 0.1, 0.6]
+  await rag.ingest({
+    namespace: 'ns',
+    documents: best.map((score, i) => scored(`d${i}`, spaceId, [score, score - 0.05]))
+  })
+
+  const hits = await rag.search({
+    scope: { namespace: 'ns' },
+    vector: QUERY,
+    spaceId,
+    k: 3,
+    perDocument: 2
+  })
+  t.alike(contents(hits), ['d30', 'd50', 'd10'])
+})
+
 both('every listed document gets a hit when there are at most k of them', async (t) => {
   const { rag, spaceId } = await openRag(t)
   // More than the index's first candidate window (pool plus its margin).
