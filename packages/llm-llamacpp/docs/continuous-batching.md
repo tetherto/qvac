@@ -352,7 +352,7 @@ With `parallel = N` and `ctx_size = C`, each slot gets `C / N` tokens, or `kv_un
 
 ### One shared KV pool
 
-All slots keep their KV cache in one buffer of `C` cells, as llama-server's `--kv-unified`; this is not configurable. Fabric limits each slot to `C / N` (`kv_unified_split`), and uses that limit for what depends on one sequence's context, such as the choice of long RoPE factors and the size of DeepSeek V4's per-sequence caches. `kv_unified_per_slot` lowers each slot's limit, like `--kv-unified-per-slot`:
+With `parallel >= 2`, all slots keep their KV cache in one buffer of `C` cells, as llama-server's `--kv-unified`; this is not configurable. Like llama-server's per-slot limit, the addon keeps each slot to `C / N`. It passes that split to fabric (`kv_unified_split`), which uses it where one sequence's context matters: the choice of long RoPE factors and the size of DeepSeek V4's per-sequence caches. `kv_unified_per_slot` lowers each slot's limit, like `--kv-unified-per-slot`:
 
 ```js
 config: { parallel: '4', kv_unified_per_slot: '2048' } // one 8192-cell pool, 2048 per slot

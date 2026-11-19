@@ -12,10 +12,11 @@
 
 ### Changed
 
-- The KV cache is unified, as llama-server's `--kv-unified`: the `parallel`
-  slots share one KV buffer instead of one each, and fabric limits each slot
-  to its share of the pool. It is not configurable
-  ([#5832](https://github.com/tetherto/qvac/pull/5832)).
+- With `parallel >= 2` the KV cache is unified, as llama-server's
+  `--kv-unified`: the slots share one KV buffer instead of one each, and the
+  addon limits each slot to its share of the pool. Fabric uses the same split
+  for the long RoPE factor choice and DeepSeek V4's per-sequence caches. It is
+  not configurable ([#5832](https://github.com/tetherto/qvac/pull/5832)).
 - With `parallel >= 2`: a slot gets `ctx_size` (rounded up to a multiple of
   256) divided by `parallel`, where its share used to be rounded up to a
   multiple of 256; MiniMax-M3 turns sparse attention off; and on Vulkan, with

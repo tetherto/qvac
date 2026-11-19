@@ -2078,8 +2078,8 @@ TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotPoolOverflowIsRejected) {
     EXPECT_THAT(
         error.what(),
         ::testing::HasSubstr(
-            "n_parallel * kv_unified_per_slot (2 * " +
-            std::to_string(kPerSlot) + ") exceeds the largest context size"));
+            "parallel x kv-unified-per-slot (2 x " + std::to_string(kPerSlot) +
+            ") exceeds"));
   }
 }
 
@@ -2098,13 +2098,13 @@ TEST_F(LoadFitNormalizationTest, NegativeKvUnifiedPerSlotIsRejected) {
     EXPECT_THAT(
         error.what(),
         ::testing::HasSubstr(
-            "--kv-unified-per-slot must be 0 (no limit) or positive"));
+            "kv-unified-per-slot must be 0 (no cap) or positive, got -512"));
   }
 }
 
-// The KV cache is unified and split evenly; fabric limits each sequence to its
-// share, or to kv-unified-per-slot when lower.
-TEST_F(LoadFitNormalizationTest, KvCacheIsUnifiedAndSplit) {
+// Several slots share one KV pool, split evenly; one slot has the same layout
+// either way and keeps a per-slot cache.
+TEST_F(LoadFitNormalizationTest, KvCacheIsUnifiedWithSeveralSlots) {
   for (const std::string parallel : {"1", "2"}) {
     auto config = baseConfig();
     config["parallel"] = parallel;
@@ -2114,9 +2114,11 @@ TEST_F(LoadFitNormalizationTest, KvCacheIsUnifiedAndSplit) {
         metadata_,
         {},
         backend({.type = backend_selection::GPU, .name = "none"}));
-    EXPECT_TRUE(result.params.kv_unified) << "parallel=" << parallel;
-    EXPECT_TRUE(result.params.kv_unified_split) << "parallel=" << parallel;
-    EXPECT_TRUE(result.fitSnapshot.kvUnified) << "parallel=" << parallel;
+    const bool unified = parallel != "1";
+    EXPECT_EQ(result.params.kv_unified, unified) << "parallel=" << parallel;
+    EXPECT_EQ(result.params.kv_unified_split, unified)
+        << "parallel=" << parallel;
+    EXPECT_EQ(result.fitSnapshot.kvUnified, unified) << "parallel=" << parallel;
     EXPECT_EQ(result.params.kv_unified_per_slot, 0) << "parallel=" << parallel;
   }
 }
