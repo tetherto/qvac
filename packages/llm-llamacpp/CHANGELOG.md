@@ -1,21 +1,14 @@
 # Changelog
 
-## [0.72.0] - 2026-11-18
-
-### Added
-
-- DSpark speculative decoding (`spec-type: 'draft-dspark'` with
-  `spec-draft-model`) and `spec-type: 'auto'`, which reads the type from the
-  draft model's header, as llama-server's `--spec-type draft-dspark -md` and
-  `-md` without `--spec-type`
-  ([#5694](https://github.com/tetherto/qvac/pull/5694)).
+## [Unreleased]
 
 ### Added
 
 - `kv_unified_per_slot` load option, llama-server's `--kv-unified-per-slot`:
   caps each slot's context. With `ctx_size` unset, the KV cache is sized to
-  `parallel x kv_unified_per_slot`; otherwise the caps must fit `ctx_size`,
-  or the load fails with `InvalidArgument`. A negative value is rejected.
+  `parallel x kv_unified_per_slot`. With `parallel >= 2`, the caps must fit
+  `ctx_size`, or the load fails with `InvalidArgument`. A negative value is
+  rejected.
 
 ### Changed
 
@@ -27,6 +20,25 @@
   `parallel >= 2`, MiniMax-M3 turns sparse attention off. With flash
   attention on CPU, Metal and CUDA (Turing or newer), attention now uses
   fabric's per-sequence KV-rows kernel, also at `parallel` 1.
+
+### Fixed
+
+- With `parallel >= 2`, loading a cached prompt longer than a slot's limit
+  (`ctx_size / parallel`, or `kv_unified_per_slot` if lower) now fails when
+  the cache loads, as documented. The check compared against the whole
+  context.
+
+## [0.72.0] - 2026-11-18
+
+### Added
+
+- DSpark speculative decoding (`spec-type: 'draft-dspark'` with
+  `spec-draft-model`) and `spec-type: 'auto'`, which reads the type from the
+  draft model's header, as llama-server's `--spec-type draft-dspark -md` and
+  `-md` without `--spec-type`
+  ([#5694](https://github.com/tetherto/qvac/pull/5694)).
+
+### Changed
 
 - `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries
   `qvac-fabric` `11739.3.0#1` -> `11739.4.0`
@@ -51,12 +63,6 @@
   fabric's `common_speculative_draft_mismatch`, as the load does:
   `the draft model does not match the model: <reason>`. It covers DFlash and
   DSpark drafters too, not only external MTP heads.
-
-### Fixed
-
-- Loading a cached prompt longer than a slot's limit (`ctx_size / parallel`,
-  or `kv_unified_per_slot` if lower) now fails when the cache loads, as
-  documented. The check compared against the whole context.
 
 ## [0.71.0] - 2026-11-16
 
