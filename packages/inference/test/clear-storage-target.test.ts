@@ -160,6 +160,6 @@ test('unloadModel clearStorage on a cached sharded model removes only its shard 
 
   await unloadModel({ modelId, clearStorage: true })
 
-  t.absent(fs.existsSync(shardDir), 'the model\'s shard folder is removed')
+  t.absent(fs.existsSync(shardDir), "the model's shard folder is removed")
   t.ok(fs.existsSync(path.join(otherDir, SHARD)), 'another cached sharded model survives')
 })
