@@ -19,6 +19,9 @@ const COMPANION_FILE_KEYS = [
   'llmVision',
   'tokenizer',
   'vae',
+  'taesd',
+  'coremlUnet',
+  'coremlTaeDecoder',
   'esrgan',
   'highNoiseDiffusionModel',
   'uncondModel',
@@ -61,6 +64,9 @@ export interface DiffusionFilePaths {
   llmPath: string
   llmVisionPath: string
   tokenizerPath: string
+  taesdPath: string
+  coremlUnetPath: string
+  coremlTaeDecoderPath: string
   vaePath: string
   clipVisionPath: string
   esrganPath: string
@@ -92,6 +98,9 @@ export function toFilePaths(files: DiffusionFiles & DiffusionVideoFiles): Diffus
     llmVisionPath: files.llmVision || '',
     tokenizerPath: files.tokenizer || '',
     vaePath: files.vae || '',
+    taesdPath: files.taesd || '',
+    coremlUnetPath: files.coremlUnet || '',
+    coremlTaeDecoderPath: files.coremlTaeDecoder || '',
     clipVisionPath: files.clipVision || '',
     esrganPath: files.esrgan || '',
     audioVaePath: files.audioVae || '',

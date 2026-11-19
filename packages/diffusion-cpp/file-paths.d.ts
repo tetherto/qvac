@@ -23,6 +23,9 @@ export interface DiffusionFilePaths {
     llmPath: string;
     llmVisionPath: string;
     tokenizerPath: string;
+    taesdPath: string;
+    coremlUnetPath: string;
+    coremlTaeDecoderPath: string;
     vaePath: string;
     clipVisionPath: string;
     esrganPath: string;
