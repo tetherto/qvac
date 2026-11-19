@@ -374,6 +374,8 @@ llama.cpp load with a verdict, empty otherwise. An `unknown` entry carries a `re
 it has no verdict, and so does a `does-not-fit` from a shared pool, naming the pool. A row's `id`
 is the PCI bus ID where the backend reports one, so the same GPU matches across engines.
 
+`qvac fit` answers the same question from the terminal, with the same answer for the same input.
+
 ```bash
 curl -sS http://localhost:11435/qvac/v1/models/fit \
   -H "Content-Type: application/json" \

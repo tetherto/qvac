@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { MMPROJ_QWEN3_8_27B_MULTIMODAL_F16, QWEN3_600M_INST_Q4 } from '@qvac/sdk'
 import { parseServeConfig } from '@/serve/core/config'
-import { FitInputError, resolveFitCandidate } from '@/serve/core/fit'
+import { FitInputError, fitModelType, resolveFitCandidate } from '@/serve/core/fit'
 
 const serveConfig = parseServeConfig(
   {
@@ -24,6 +24,14 @@ function inputError(run: () => unknown): FitInputError {
   }
   assert.fail('expected a FitInputError')
 }
+
+describe('fitModelType', () => {
+  it('names the model type of an alias or a constant, and nothing for an unknown name', () => {
+    assert.equal(fitModelType(serveConfig, 'my-llm'), 'llamacpp-completion')
+    assert.equal(fitModelType(serveConfig, 'QWEN3_600M_INST_Q4'), 'llamacpp-completion')
+    assert.equal(fitModelType(serveConfig, 'nope'), undefined)
+  })
+})
 
 describe('resolveFitCandidate', () => {
   it('assesses an alias with its own config, the candidate config merged over it', () => {
