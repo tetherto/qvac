@@ -7,10 +7,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.41.0] - 2026-11-19
 
 ### Changed
 
+- BridgeDepth runs faster and takes less GPU memory on GPU backends. The ViT
+  attention runs fused, linear weights are held as F16 on the device, the
+  convs run as F16 direct convs on CUDA and Vulkan and through an F16 im2col
+  on other GPUs, and the graph copies less between layouts. Each padded input
+  size keeps its graph memory and host inputs between calls, up to 4 sizes,
+  so a CUDA graph is captured once per size and replayed. The CPU output does
+  not change. GPU output moves within the tests' 0.2 px gate
+  ([#5774](https://github.com/tetherto/qvac/pull/5774)).
+- `assessFit` counts the host memory a BridgeDepth input size keeps between
+  calls, about 29 MB at 1280x720. The host row grows by the graph memory,
+  about 15 MB, since the masks and indices were already counted for the run.
+  The verdict counts the slot of one size; a caller that cycles through sizes
+  holds one per size, up to 4
+  ([#5774](https://github.com/tetherto/qvac/pull/5774)).
 - `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries
   `qvac-fabric` `11739.3.0#1` -> `11739.4.0`
   ([#5831](https://github.com/tetherto/qvac/pull/5831)): opt-in WebGPU builds,

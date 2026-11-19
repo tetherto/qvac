@@ -28,7 +28,11 @@ test('scoped handle searches only its bound scope', async (t) => {
   const { rag } = await setup(t)
   const reader = rag.scoped({ namespace: 'ns', documentIds: ['b', 'c'] })
 
-  t.alike(Object.keys(reader), ['search'], 'the handle exposes search only')
+  t.alike(
+    Object.keys(reader),
+    ['search', 'readDocument', 'listDocuments'],
+    'the handle exposes reads only'
+  )
   t.alike(ids(await reader.search(query)), ['b', 'c'])
 })
 

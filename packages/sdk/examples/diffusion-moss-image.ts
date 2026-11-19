@@ -1,23 +1,24 @@
-import { close, diffusion, loadModel, unloadModel } from '@qvac/sdk'
+import {
+  close,
+  diffusion,
+  loadModel,
+  unloadModel,
+  MOSS_IMAGE_SFT_5B_BF16,
+  MOSS_IMAGE_SFT_TOKENIZER,
+  MOSS_IMAGE_VAE,
+  QWEN3_5_9B_MULTIMODAL_Q4_K_M
+} from '@qvac/sdk'
 import fs from 'fs'
 import path from 'path'
 
 // Generate a poster from a MOSS-Image JSON layout prompt.
-// Use the pinned model revisions from the diffusion addon's MOSS-Image downloader.
 // Model terms (Apache-2.0): https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT
 
-const HF = 'https://huggingface.co'
-const mossRepo = `${HF}/Comfy-Org/MOSS-Image/resolve/530a4c94f92c35ef6818b1b035a983fe9dcf5f54`
 const outputDir = process.argv[2] || '.'
-const diffusionModelSrc =
-  process.argv[3] || `${mossRepo}/diffusion_models/moss_image_sft_bf16.safetensors`
-const llmModelSrc =
-  process.argv[4] ||
-  `${HF}/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf`
-const vaeModelSrc = process.argv[5] || `${mossRepo}/vae/flux2-vae_small.safetensors`
-const tokenizerSrc =
-  process.argv[6] ||
-  `${HF}/OpenMOSS-Team/MOSS-Image-SFT/resolve/f972bd4b4b9e3852133cc5da954d87bc32cd8fb9/tokenizer/tokenizer.json`
+const diffusionModelSrc = modelSource(process.argv[3]) || MOSS_IMAGE_SFT_5B_BF16
+const llmModelSrc = modelSource(process.argv[4]) || QWEN3_5_9B_MULTIMODAL_Q4_K_M
+const vaeModelSrc = modelSource(process.argv[5]) || MOSS_IMAGE_VAE
+const tokenizerSrc = modelSource(process.argv[6]) || MOSS_IMAGE_SFT_TOKENIZER
 
 const usage =
   'Usage: node --import tsx examples/diffusion-moss-image.ts [outputDir] [model] [llm] [vae] [tokenizer]'
@@ -25,7 +26,7 @@ const usage =
 if (process.argv.includes('--help')) {
   console.log(usage)
   console.log(
-    '▸ Defaults download pinned Hugging Face weights. Model overrides accept paths or URLs.'
+    '▸ Defaults download the MOSS-Image registry models. Model overrides accept paths or URLs.'
   )
   process.exit(0)
 }
@@ -59,7 +60,8 @@ const layout = {
   bbox_format: 'yxyx'
 }
 
-function modelSource(source: string) {
+function modelSource(source: string | undefined) {
+  if (!source) return undefined
   return /^https?:\/\//.test(source) ? source : path.resolve(source)
 }
 
@@ -71,12 +73,12 @@ const lastPercent = new Map<string, number>()
 try {
   console.log('▸ Loading MOSS-Image...')
   modelId = await loadModel({
-    modelSrc: modelSource(diffusionModelSrc),
+    modelSrc: diffusionModelSrc,
     modelType: 'sdcpp-generation',
     modelConfig: {
-      llmModelSrc: modelSource(llmModelSrc),
-      vaeModelSrc: modelSource(vaeModelSrc),
-      tokenizerSrc: modelSource(tokenizerSrc),
+      llmModelSrc,
+      vaeModelSrc,
+      tokenizerSrc,
       flash_attn: true
     },
     onProgress: (progress) => {

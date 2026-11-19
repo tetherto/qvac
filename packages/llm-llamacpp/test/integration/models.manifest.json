@@ -255,20 +255,6 @@
       "sha256": "75e2a133676a82189b10fb1c55b5b32aedc6ede796dd6d8d7c1f901d20ebc7df",
       "bytes": 825245568
     },
-    "PaddleOCR-VL-1.5.gguf": {
-      "urls": [
-        "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/cc977c16989848c264d813ec1705cb181b7a21ee/PaddleOCR-VL-1.5.gguf"
-      ],
-      "sha256": "299051d54faa065abc505cc39b8383ea338fd3020c775ea3e0ba514a7022328c",
-      "bytes": 935768992
-    },
-    "PaddleOCR-VL-1.5-mmproj.gguf": {
-      "urls": [
-        "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/cc977c16989848c264d813ec1705cb181b7a21ee/PaddleOCR-VL-1.5-mmproj.gguf"
-      ],
-      "sha256": "e7f1a72400fba517046f90d964e2fa0f4dac7781ee3b1bc5d2022f5f8cecbd87",
-      "bytes": 881770496
-    },
     "google_gemma-4-E2B-it-Q4_K_M.gguf": {
       "urls": [
         "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/google_gemma-4-E2B-it-Q4_K_M.gguf"

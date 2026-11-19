@@ -9,6 +9,10 @@ on:
       - "scripts/agent-setup.sh"
       - ".claude/skills/setup/**"
       - ".github/workflows/on-pr-shared-ci-infra.yml"
+      - ".github/workflows/_build.yml"
+      - ".github/scripts/lib/resolve-fabric-binary.mjs"
+      - ".github/scripts/test/released-provider-install.test.mjs"
+      - ".github/scripts/test/resolve-fabric-binary.test.mjs"
       - ".github/actions/cache-models/**"
       - ".github/actions/run-mobile-integration-tests/seed-and-presign-models/**"
       - ".github/actions/run-mobile-integration-tests/setup/**"
@@ -20,6 +24,9 @@ on:
       - ".github/actions/select-prebuild-symbols-verifier/**"
       - ".github/scripts/devicefarm-pool-run.mjs"
       - ".github/scripts/test/devicefarm-slot-wait.test.mjs"
+      - ".github/scripts/devicefarm-schedule-unmetered.mjs"
+      - ".github/scripts/test/devicefarm-schedule-unmetered.test.mjs"
+      - ".github/workflows/_mobile.yml"
       - ".github/actions/sdk-e2e-model-cache/**"
       - "scripts/perf-report/**"
       - "scripts/ci/**"
@@ -76,6 +83,8 @@ jobs:
       # sdk-e2e, the script's only caller, runs only on label or dispatch.
       - name: Run Device Farm slot wait unit tests
         run: node --test .github/scripts/test/devicefarm-slot-wait.test.mjs
+      - name: Run Device Farm unmetered scheduling unit tests
+        run: node --test .github/scripts/test/devicefarm-schedule-unmetered.test.mjs
       - name: Run SDK e2e model cache action unit tests
         run: node --test .github/actions/sdk-e2e-model-cache/test/*.test.mjs
       # The runner executes the committed dist/, not src/.
@@ -123,6 +132,12 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
+      - name: Set up pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # 4.1.0
+        with:
+          run_install: false
+      - name: Test release provider installation and resolution
+        run: node --test .github/scripts/test/released-provider-install.test.mjs .github/scripts/test/resolve-fabric-binary.test.mjs
       - name: Run CI script unit tests
         run: node --test scripts/ci/__tests__/*.test.cjs
       - name: Validate shared agent configuration
