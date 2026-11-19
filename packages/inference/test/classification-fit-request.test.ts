@@ -1,4 +1,5 @@
 import test from 'brittle'
+import path from 'bare-path'
 
 import { classificationFitRequest } from '@/plugins/builtin/ggml-classification/fit'
 import { imageEmbeddingFitRequest } from '@/plugins/builtin/ggml-image-embedding/fit'
@@ -24,6 +25,14 @@ test('classification: a config modelPath wins over the load model', (t) => {
   )
 
   t.is(requestOf(plan)?.['modelPath'], '/custom/mobilenet.gguf')
+})
+
+test('classification: a relative config modelPath is made absolute', (t) => {
+  const plan = classificationFitRequest(
+    load('/models/mobilenet.gguf', { modelPath: 'custom/mobilenet.gguf' })
+  )
+
+  t.is(requestOf(plan)?.['modelPath'], path.resolve('custom/mobilenet.gguf'))
 })
 
 test('classification: a load with no model path is unknown', (t) => {

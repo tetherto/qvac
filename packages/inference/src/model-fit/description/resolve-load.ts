@@ -1,4 +1,5 @@
 import fs from 'bare-fs'
+import path from 'bare-path'
 
 import { PluginLoadConfigValidationFailedError, PluginNotFoundError } from '@/errors/index'
 import type { TtsFitWorkload } from '@/schemas/assess-model-fit'
@@ -143,7 +144,9 @@ export async function resolveLoadFromStubs(
 
   const resolveModelPath = async (src: ModelSrcInput): Promise<string> => {
     const location = srcString(src)
-    if (location !== '' && fs.existsSync(location)) return location
+    // Fitters take absolute paths only, while a load also takes one relative
+    // to the working directory.
+    if (location !== '' && fs.existsSync(location)) return path.resolve(location)
     if (FILES_ONLY_ENGINES.has(load.modelType)) throw new NoStubError('files-only-engine')
 
     const ref = stubRefFor(src)
