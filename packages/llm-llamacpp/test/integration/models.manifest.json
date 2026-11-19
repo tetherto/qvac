@@ -92,6 +92,20 @@
       "bytes": 1256787360,
       "warm": false
     },
+    "LFM2.5-1.2B-Instruct-Q4_K_M.gguf": {
+      "urls": [
+        "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF/resolve/8ed288026e23958ad9dfa92d53ed773a8eee7125/LFM2.5-1.2B-Instruct-Q4_K_M.gguf"
+      ],
+      "sha256": "b1b3de114215d9507409a662a501a631095a479a419584e8a2ded6304b19b4f5",
+      "bytes": 730895168
+    },
+    "LFM2.5-1.2B-Instruct-DSpark-Q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-DSpark-GGUF/resolve/9235d674d3bbda8a775ca42a4275d11a8c0ab008/LFM2.5-1.2B-Instruct-DSpark-Q8_0.gguf"
+      ],
+      "sha256": "9f2fd36f4ea26e66b2732cefead2586d90220d829d70e63de8030e3878d49ef5",
+      "bytes": 316669472
+    },
     "Qwen3.5-0.8B-Q4_0.gguf": {
       "urls": [
         "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q4_0.gguf"
@@ -240,20 +254,6 @@
       ],
       "sha256": "75e2a133676a82189b10fb1c55b5b32aedc6ede796dd6d8d7c1f901d20ebc7df",
       "bytes": 825245568
-    },
-    "PaddleOCR-VL-1.5.gguf": {
-      "urls": [
-        "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/cc977c16989848c264d813ec1705cb181b7a21ee/PaddleOCR-VL-1.5.gguf"
-      ],
-      "sha256": "299051d54faa065abc505cc39b8383ea338fd3020c775ea3e0ba514a7022328c",
-      "bytes": 935768992
-    },
-    "PaddleOCR-VL-1.5-mmproj.gguf": {
-      "urls": [
-        "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/cc977c16989848c264d813ec1705cb181b7a21ee/PaddleOCR-VL-1.5-mmproj.gguf"
-      ],
-      "sha256": "e7f1a72400fba517046f90d964e2fa0f4dac7781ee3b1bc5d2022f5f8cecbd87",
-      "bytes": 881770496
     },
     "google_gemma-4-E2B-it-Q4_K_M.gguf": {
       "urls": [

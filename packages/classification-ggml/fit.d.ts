@@ -30,6 +30,8 @@ export interface ClassificationFitRequest {
      * 1280x720 is the largest size the model runs at (720x1280 for a portrait
      * pair, which measures the same). A larger input is downsampled to fit
      * inside it and sized that way, plus the host buffers at the input size.
+     * The host row counts what this size keeps between calls; a caller that
+     * cycles through sizes holds that for each size, up to 4.
      */
     workload?: ClassificationFitWorkload;
 }

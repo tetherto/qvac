@@ -1,6 +1,6 @@
 {
   "name": "@qvac/bci-whispercpp",
-  "version": "0.15.1",
+  "version": "0.16.0",
   "description": "Brain-Computer Interface (BCI) neural signal transcription addon for qvac, powered by whisper.cpp",
   "addon": true,
   "engines": {
@@ -107,8 +107,8 @@
     "llvm-runtime": "^23.1.0",
     "nasm-runtime": "^3.2.0",
     "ninja-runtime": "^1.13.1",
-    "@qvac/fabric-android-arm64": "^0.30.1",
-    "@qvac/fabric-ios": "^0.30.1"
+    "@qvac/fabric-android-arm64": "^0.31.0",
+    "@qvac/fabric-ios": "^0.31.0"
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
@@ -116,7 +116,7 @@
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0",
-    "@qvac/fabric": "^0.30.1"
+    "@qvac/fabric": "^0.31.0"
   },
   "exports": {
     "./package": "./package.json",
@@ -138,15 +138,15 @@
   },
   "types": "index.d.ts",
   "optionalDependencies": {
-    "@qvac/fabric-linux-x64": "^0.30.1",
-    "@qvac/fabric-linux-arm64": "^0.30.1",
-    "@qvac/fabric-darwin-arm64": "^0.30.1",
-    "@qvac/fabric-darwin-x64": "^0.30.1",
-    "@qvac/fabric-win32-x64": "^0.30.1"
+    "@qvac/fabric-linux-x64": "^0.31.0",
+    "@qvac/fabric-linux-arm64": "^0.31.0",
+    "@qvac/fabric-darwin-arm64": "^0.31.0",
+    "@qvac/fabric-darwin-x64": "^0.31.0",
+    "@qvac/fabric-win32-x64": "^0.31.0"
   },
   "peerDependencies": {
-    "@qvac/fabric-android-arm64": "^0.30.1",
-    "@qvac/fabric-ios": "^0.30.1"
+    "@qvac/fabric-android-arm64": "^0.31.0",
+    "@qvac/fabric-ios": "^0.31.0"
   },
   "peerDependenciesMeta": {
     "@qvac/fabric-android-arm64": {
