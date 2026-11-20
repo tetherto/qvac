@@ -14,11 +14,14 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-11-20
+
 ### Fixed
 
 - Update the native speech source to the revision published as `speech-cpp`
   `2026-11-19`, isolating valid standard Parakeet TDT encoder frames from
-  right-padding in batch and push-stream transcription.
+  right-padding in batch and push-stream transcription
+  ([#5884](https://github.com/tetherto/qvac/pull/5884)).
 
 ## [0.13.0] - 2026-11-18
 
