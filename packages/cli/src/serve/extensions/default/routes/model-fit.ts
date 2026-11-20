@@ -1,11 +1,20 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import type { z } from 'zod'
-import { assessModelFit, SDK_CLIENT_ERROR_CODES, SDK_SERVER_ERROR_CODES } from '@qvac/sdk'
+import {
+  assessModelFit,
+  renameLegacyModelConfigKeys,
+  SDK_CLIENT_ERROR_CODES,
+  SDK_SERVER_ERROR_CODES
+} from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 import { errorResponses } from '@/serve/lib/error-responses'
 import type { ServeConfig } from '@/serve/core/config/types'
 import { loadModelConstants } from '@/serve/core/config/constants'
-import { resolveExplicitServeModel, resolveModelAlias } from '@/serve/core/config/models'
+import {
+  resolveExplicitServeModel,
+  resolveModelAlias,
+  warnLegacyKey
+} from '@/serve/core/config/models'
 import { isModelSrcKey, resolveNestedModelSrcConstants } from '@/serve/core/config/nested-model-src'
 import {
   MAX_FIT_MODELS,
@@ -27,7 +36,7 @@ device and compared against what is free.
 
 Each entry in \`models\` names a \`serve.models\` alias or an SDK model constant.
 An alias is assessed with the config it would load with; \`modelConfig\` is
-merged over it key by key, nested objects included, so \`{"ctx_size": 32768}\`
+merged over it key by key, nested objects included, so \`{"ctxSize": 32768}\`
 asks about a longer context and leaves the rest of the alias's config as is. Model
 sources cannot be given here: companion sources in \`modelConfig\` must name
 constants, so a request never makes the server read a path or URL of its
@@ -101,23 +110,32 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
   )
 }
 
-function resolveCandidate(serveConfig: ServeConfig, candidate: FitCandidate): ResolvedCandidate {
-  const requested = candidate.modelConfig ?? {}
+function resolveOverrides(sdkType: string, candidate: FitCandidate): Record<string, unknown> {
+  const requested = renameLegacyModelConfigKeys(
+    sdkType,
+    candidate.modelConfig ?? {},
+    warnLegacyKey,
+    'modelConfig'
+  )
   assertConstantSources(requested, 'modelConfig')
-  const overrides = resolveNestedModelSrcConstants(requested)
+  return resolveNestedModelSrcConstants(requested)
+}
 
+function resolveCandidate(serveConfig: ServeConfig, candidate: FitCandidate): ResolvedCandidate {
   const alias = resolveModelAlias(serveConfig, candidate.model)
   if (alias) {
     return {
       modelSrc: alias.modelSrc,
       modelType: alias.sdkType as ModelType,
-      modelConfig: mergeConfig(alias.config, overrides)
+      modelConfig: mergeConfig(alias.config, resolveOverrides(alias.sdkType, candidate))
     }
   }
 
   const constant = loadModelConstants().get(candidate.model)
   if (constant) {
-    const resolved = resolveExplicitServeModel(constant.engine || constant.addon, overrides)
+    const engine = constant.engine || constant.addon
+    const { sdkType } = resolveExplicitServeModel(engine, {})
+    const resolved = resolveExplicitServeModel(engine, resolveOverrides(sdkType, candidate))
     return {
       modelSrc: constant,
       modelType: resolved.sdkType as ModelType,

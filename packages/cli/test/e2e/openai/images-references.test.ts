@@ -82,11 +82,11 @@ for (const [model, config] of Object.entries(models)) {
         const request = requests[0]!
         assert.equal(request.modelId, `loaded-${model}`)
         if (images.length === 1) {
-          assert.deepEqual(request.init_image, images[0])
-          assert.equal(request.init_images, undefined)
+          assert.deepEqual(request.initImage, images[0])
+          assert.equal(request.initImages, undefined)
         } else {
-          assert.deepEqual(request.init_images, images)
-          assert.equal(request.init_image, undefined)
+          assert.deepEqual(request.initImages, images)
+          assert.equal(request.initImage, undefined)
         }
         assert.deepEqual(response.json<{ data: { b64_json: string }[] }>().data, [
           { b64_json: output.toString('base64') }

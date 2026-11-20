@@ -12,7 +12,7 @@ const UPSCALE_CONFIG = {
       [ALIAS]: {
         model: 'REALESRGAN_X4PLUS_ANIME_6B',
         preload: true,
-        config: { mode: 'upscale', device: 'cpu', upscaler: { tile_size: 64 } }
+        config: { mode: 'upscale', device: 'cpu', upscaler: { tileSize: 64 } }
       }
     }
   }

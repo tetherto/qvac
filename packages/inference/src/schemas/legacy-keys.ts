@@ -863,6 +863,15 @@ export function renameLegacyCompletionParams<P extends object>(
   return renameLegacyKeys(params, COMPLETION_PARAMS_KEYS, warn) as CamelCaseCompletionParams<P>
 }
 
+/**
+ * Moves each deprecated key of a `modelConfig` to its camelCase name.
+ *
+ * @param modelType - The model type the config belongs to, canonical or alias.
+ * @param modelConfig - The config to rename. It is never mutated.
+ * @param warn - Called with the dotted path of each deprecated key and its replacement.
+ * @param path - The path prefix reported to `warn`.
+ * @returns The config with every key camelCase.
+ */
 export function renameLegacyModelConfigKeys<T>(
   modelType: unknown,
   modelConfig: T,
@@ -947,6 +956,13 @@ export function renameLegacyConfigKeys<T>(config: T, warn: LegacyKeyWarn): T {
   return (changed ? { ...config, deviceDefaults: renamed } : config) as T
 }
 
+/**
+ * Creates a warn callback for {@link renameLegacyModelConfigKeys} that reports each
+ * deprecated key once per process.
+ *
+ * @param log - Receives one message per deprecated key, naming its replacement.
+ * @returns The warn callback.
+ */
 export function createLegacyKeyWarner(log: (message: string) => void): LegacyKeyWarn {
   const warned = new Set<string>()
   return (legacyPath, replacementPath) => {

@@ -156,18 +156,18 @@ describe('extractVideoCreateParams', () => {
       'neutral-alias',
       h3Config
     )
-    assert.equal(params.video_frames, 124)
+    assert.equal(params.videoFrames, 124)
     assert.equal(params.fps, undefined)
     assert.equal(
       extractVideoCreateParams({ prompt: 'Coffee', seconds: '1' }, undefined, 'm', h3Config)
-        .video_frames,
+        .videoFrames,
       22
     )
   })
 
   it('preserves omitted H3 defaults and invalid explicit FPS for SDK validation', () => {
     const minimal = extractVideoCreateParams({ prompt: 'Coffee' }, undefined, 'm', h3Config)
-    assert.equal(minimal.video_frames, undefined)
+    assert.equal(minimal.videoFrames, undefined)
     assert.equal(minimal.fps, undefined)
     const invalid = extractVideoCreateParams(
       { prompt: 'Coffee', seconds: '5', fps: 16 },
@@ -176,7 +176,7 @@ describe('extractVideoCreateParams', () => {
       h3Config
     )
     assert.equal(invalid.fps, 16)
-    assert.equal(invalid.video_frames, 124)
+    assert.equal(invalid.videoFrames, 124)
   })
 
   it('does not infer H3 from the alias, incomplete configuration or another layout', () => {
@@ -192,7 +192,7 @@ describe('extractVideoCreateParams', () => {
           undefined,
           'minimax-h3',
           config
-        ).video_frames,
+        ).videoFrames,
         81
       )
     }
@@ -205,7 +205,7 @@ describe('extractVideoCreateParams', () => {
     assert.equal(params.prompt, 'a cat surfing')
     assert.equal(params.width, undefined)
     assert.equal(params.height, undefined)
-    assert.equal(params.video_frames, undefined)
+    assert.equal(params.videoFrames, undefined)
     assert.equal(params.fps, undefined)
   })
 
@@ -215,15 +215,15 @@ describe('extractVideoCreateParams', () => {
     assert.equal(params.height, 832)
   })
 
-  it('translates seconds → video_frames using default fps', () => {
+  it('translates seconds → videoFrames using default fps', () => {
     const params = extractVideoCreateParams({ prompt: 'p', seconds: '4' }, undefined, 'm')
-    assert.equal(params.video_frames, 4 * DEFAULT_FPS + 1)
+    assert.equal(params.videoFrames, 4 * DEFAULT_FPS + 1)
   })
 
-  it('translates seconds → video_frames using explicit fps', () => {
+  it('translates seconds → videoFrames using explicit fps', () => {
     const params = extractVideoCreateParams({ prompt: 'p', seconds: '2', fps: 24 }, undefined, 'm')
     assert.equal(params.fps, 24)
-    assert.equal(params.video_frames, 49)
+    assert.equal(params.videoFrames, 49)
   })
 
   it('passes through seed and steps when present', () => {
@@ -232,13 +232,27 @@ describe('extractVideoCreateParams', () => {
     assert.equal(params.steps, 1)
   })
 
+  it('maps negative_prompt, cfg_scale and flow_shift onto the SDK keys', () => {
+    const params = extractVideoCreateParams(
+      { prompt: 'p', negative_prompt: 'blurry', cfg_scale: 6, flow_shift: 3 },
+      undefined,
+      'm'
+    ) as Record<string, unknown>
+    assert.equal(params['negativePrompt'], 'blurry')
+    assert.equal(params['cfgScale'], 6)
+    assert.equal(params['flowShift'], 3)
+    for (const key of ['negative_prompt', 'cfg_scale', 'flow_shift']) {
+      assert.equal(key in params, false, key)
+    }
+  })
+
   describe('img2vid mode', () => {
     const initImage = new Uint8Array([0x89, 0x50, 0x4e, 0x47])
 
-    it('returns mode=img2vid with init_image when initImage is provided', () => {
+    it('returns mode=img2vid with initImage when an init image is provided', () => {
       const params = extractVideoCreateParams({ prompt: 'turns and smiles' }, initImage, 'm')
       assert.equal(params.mode, 'img2vid')
-      assert.equal((params as Record<string, unknown>)['init_image'], initImage)
+      assert.equal((params as Record<string, unknown>)['initImage'], initImage)
       assert.equal(params.prompt, 'turns and smiles')
     })
 

@@ -163,7 +163,7 @@ describe('serve: context overflow errors', () => {
 
         assert.equal(body.error.code, 'context_length_exceeded')
         assert.equal(body.error.type, 'invalid_request_error')
-        assert.match(body.error.message, /shorten.*input.*ctx_size/i)
+        assert.match(body.error.message, /shorten.*input.*ctxSize/i)
         assert.ok(!body.error.message.includes('private native diagnostic'))
         assert.deepEqual(loggedErrors, [], 'expected input errors must not log native diagnostics')
       })
