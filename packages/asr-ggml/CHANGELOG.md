@@ -14,6 +14,12 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Fixed
+
+- Update the native speech source to the revision published as `speech-cpp`
+  `2026-11-19`, isolating valid standard Parakeet TDT encoder frames from
+  right-padding in batch and push-stream transcription.
+
 ## [0.13.0] - 2026-11-18
 
 ### Changed
