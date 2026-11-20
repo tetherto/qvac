@@ -164,9 +164,9 @@ jobs:
           done
           version=$(jq -r '.version // ."version-semver" // empty' "$port/vcpkg.json")
           echo "qvac-fabric port $version from $REGISTRY_REPO@${ref:0:9}"
+          # A new rebase is tested before its port is published, so this only warns.
           if [[ "$BRANCH" =~ ^temp-([0-9]+)$ ]] && [[ "$version" != "${BASH_REMATCH[1]}."* ]]; then
-            echo "::error::the registry port is $version, not on the $BRANCH build line; update .github/fabric-nightly.json or the registry"
-            exit 1
+            echo "::warning::building $BRANCH with the $version registry port; a fabric build failure may come from the port, not the fabric commit"
           fi
           if [ "$(grep -cE '^\s*REF ' "$port/portfile.cmake")" != 1 ] || [ "$(grep -cE '^\s*SHA512 ' "$port/portfile.cmake")" != 1 ]; then
             echo "::error::the registry portfile no longer has exactly one REF and one SHA512 line"
