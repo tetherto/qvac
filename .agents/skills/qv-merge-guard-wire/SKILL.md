@@ -25,7 +25,7 @@ disable-model-invocation: true
 3. **A new producer workflow**, only if steps 1 and 2 needed one:
    - `pull_request`: no workflow-level `paths` or `paths-ignore`, and add its `name` to `pr-gate-merge.yml`'s `workflow_run.workflows`;
    - `workflow_run`: a `run-name` with the PR head commit, and a last job running `gh workflow run pr-gate-merge.yml -f pr=<n> -f sha=<head>`.
-4. **Check:** `node --test .github/scripts/test/ci-trust-policy.test.mjs` fails on a workflow the guard does not listen to, a `paths` filter, or a job pattern that matches no job.
+4. **Check:** `node --test .github/scripts/test/ci-trust-policy.test.mjs` fails on a PR workflow that is neither required nor in `ADVISORY_WORKFLOWS`, a workflow the guard does not listen to, a `paths` filter, or a job pattern that matches no job. A PR workflow that should not gate goes in `ADVISORY_WORKFLOWS` with its reason.
 5. **Verify after merge:** the rules run from `main`, so open a PR touching the rule's paths and confirm the guard's run summary lists the check; force it to fail once and confirm the status goes red and names it.
 
 ## Rules

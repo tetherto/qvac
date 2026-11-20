@@ -5,6 +5,11 @@
   checks:
     - { workflow: pr-checks.yml, job: error-code-ranges }
 
+- name: CI definitions
+  patterns: [".github/**", "scripts/ci/**"]
+  checks:
+    - { workflow: security-baseline.yml, job: policy-tests }
+
 - name: Addon packages
   patterns: ["packages/**", "cmake/qvac-addon/**"]
   checks:

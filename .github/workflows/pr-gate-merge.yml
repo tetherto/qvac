@@ -3,7 +3,7 @@ name: Merge Guard
 # Posts qvac-merge-guard / validate-pr from .github/merge-rules.yml. See docs/ci/MERGE-GUARD.md.
 on:
   workflow_run:
-    workflows: [PR checks, SDK checks]
+    workflows: [PR checks, SDK checks, Security baseline]
     types: [completed]
   workflow_dispatch:
     inputs:

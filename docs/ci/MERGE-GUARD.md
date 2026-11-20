@@ -9,12 +9,14 @@ flowchart LR
   subgraph PR["pull_request: PR code, no secrets"]
     PC[PR checks]
     SC[SDK checks]
+    SB[Security baseline]
   end
   subgraph WR["workflow_run: main's copy, fork-ci gate"]
     BT[PR build and test]
   end
   PC -- completed --> G
   SC -- completed --> G
+  SB -- completed --> G
   BT -- "merge-guard job: gh workflow run" --> G
   C["/merge-guard comment"] --> G
   G["Merge Guard: validate-pr<br/>main's rules and evaluator, API only"] --> S["status qvac-merge-guard / validate-pr<br/>on the PR head"]
@@ -48,7 +50,7 @@ The guard decides on job results, never on commit statuses: a workflow with `sta
 - `job`: the job's check-run name. `*` matches a matrix leg or a called workflow's job, for example `checks (*)` or `select / *`.
 - `skipped: pass`: a job that skips because nothing it covers changed counts as passed. Pair it with a check that fails when the selection itself fails, as `select` and `selected` do, so a broken selection never reads as nothing to check.
 
-Today the file requires the error-code reservations on every PR; each package's PR checks, prebuild and C++ test verdict, for addon packages; and the pod rules, release guard and per-package checks for the SDK pod, the packages tagged `ci:sdk`.
+Today the file requires the error-code reservations on every PR; the CI policy tests when `.github/` or `scripts/ci/` changes; each package's PR checks, disallowed dependencies, and prebuild and C++ test verdict, for addon packages; and the pod rules, release guard and per-package checks for the SDK pod, the packages tagged `ci:sdk`.
 
 ## Producers
 
@@ -56,6 +58,7 @@ Today the file requires the error-code reservations on every PR; each package's 
 | --- | --- | --- |
 | `PR checks` (`pr-checks.yml`) | `pull_request`: `select`, then `checks (<package>)` (lint, typecheck, unit, generated files, dependencies, bundler requires) for the changed `ci:addons` and `ci:libs` packages; `error-code-ranges` on every PR | jobs on the PR head |
 | `SDK checks` (`sdk-checks.yml`) | `pull_request`: `pod-rules`, `release-guard`, `select`, `checks (<package>)` | jobs on the PR head |
+| `Security baseline` (`security-baseline.yml`) | `pull_request`: `policy-tests`, the CI policy tests, plus the org's secret scan and CodeQL | jobs on the PR head |
 | `PR build and test` (`pr-build-test.yml`) | `workflow_run` from `main`, after the `fork-ci` approval for forks | `selected`, and one `status <package>` job per package |
 
 In `PR build and test`:
@@ -63,6 +66,10 @@ In `PR build and test`:
 - `selected` fails when the run refused the PR (a fork PR that changes `.github/`) or package selection failed.
 - `status <package>` fails when the package's prebuild or C++ tests failed. A build or C++ test that routing skipped (no label, and not a baseline package) is a success; any other skip fails closed. `.github/scripts/prebuild-status/lib.mjs` lists the packages it checks (`PREBUILD_KEYS`, `CPP_TEST_KEYS`).
 - The `merge-guard` job starts the guard with the PR number once the status jobs are done, so desktop tests and the perf report do not hold it up. This run's own completion event names `main`'s commit, not the PR's.
+
+## Is my check gating?
+
+A PR workflow gates merges when `.github/merge-rules.yml` names it. Every other workflow that runs on PRs is listed in `ADVISORY_WORKFLOWS` in `.github/scripts/test/ci-trust-policy.test.mjs`, with the reason it does not gate. A new PR workflow in neither place fails `policy-tests`, and so the guard, until it is added to one of them.
 
 ## Adding a required check
 
@@ -75,7 +82,7 @@ In `PR build and test`:
 | Add a new `pull_request` producer | Give it no workflow-level `paths` or `paths-ignore` (filter in its jobs, so it runs for every commit), and add its `name` to `pr-gate-merge.yml`'s `workflow_run.workflows` |
 | Add a new `workflow_run` producer | Set a `run-name` carrying the PR head commit, and end with a job that runs `gh workflow run pr-gate-merge.yml -f pr=<n> -f sha=<head>` |
 
-`ci-trust-policy.test.mjs` fails a rule that names a workflow the guard does not listen to, a `pull_request` producer with a `paths` filter, or a job pattern no job matches. `CODEOWNERS` gives `.github/merge-rules.yml` to `@tetherto/qvac-internal-merge`.
+`ci-trust-policy.test.mjs` fails a PR workflow that is neither required nor advisory, a rule that names a workflow the guard does not listen to, a `pull_request` producer with a `paths` filter, or a job pattern no job matches. `CODEOWNERS` gives `.github/merge-rules.yml` to `@tetherto/qvac-internal-merge`.
 
 ## Testing a change
 

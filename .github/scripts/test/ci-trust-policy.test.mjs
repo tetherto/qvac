@@ -518,7 +518,7 @@ test("all ci-router callers re-run when a draft becomes ready", () => {
   assert.match(gate, /labeled/);
   assert.match(
     onBlock(read(".github/workflows/pr-gate-merge.yml")),
-    /workflow_run:\n\s+workflows: \[PR checks, SDK checks\]\n\s+types: \[completed\]/,
+    /workflow_run:\n\s+workflows: \[PR checks, SDK checks, Security baseline\]\n\s+types: \[completed\]/,
   );
 });
 
@@ -822,7 +822,8 @@ function onBlock(source) {
     const inline = source.match(/^on:.*$/m);
     return inline ? inline[0] : "";
   }
-  const start = source.indexOf(match[0]) + match[0].length;
+  // match.index, not indexOf: a comment line can contain "on:" earlier.
+  const start = match.index + match[0].length;
   const lines = source.slice(start).split("\n");
   const block = [];
   for (const line of lines) {
@@ -1833,6 +1834,48 @@ test("merge rules: every producer can start Merge Guard", () => {
       // A run for every commit, so a missing result means not done yet rather than never.
       assert.doesNotMatch(on, /^\s+paths(-ignore)?:/m, `${file} must not filter by paths at the trigger`);
     }
+  }
+});
+
+// PR workflows Merge Guard does not require, and why. A PR workflow is either named in .github/merge-rules.yml or listed
+// here, so adding one means deciding whether it blocks merges. See docs/ci/MERGE-GUARD.md.
+const ADVISORY_WORKFLOWS = new Map([
+  ["bare-majors.yml", "Reports bare majors behind latest; advisory by design."],
+  ["bare-toolchain.yml", "Exercises a bare toolchain lock bump on every OS."],
+  ["check-approvals.yml", "Posts Check Approvals, which the ruleset requires on its own."],
+  ["docs-website-health-check.yml", "Probes the published docs site."],
+  ["docs-website-pr-checks.yml", "Builds the docs website."],
+  ["gate-selftest.yml", "Self-tests the prebuild symbol gate."],
+  ["license-compliance.yml", "Org license baseline, in shadow mode."],
+  ["notice-drift.yml", "Checks NOTICE files are in sync."],
+  ["on-pr-close.yml", "Cleans up after a closed PR; not a check."],
+  ["on-pr-community-label.yml", "Labels community PRs; not a check."],
+  ["on-pr-shared-ci-infra.yml", "Exercises shared CI infrastructure changes."],
+  ["pr-models-validation-registry-server.yml", "Registry-server model validation."],
+  ["publish-registry-server.yml", "Registry-server publish dry run."],
+  ["release-train.yml", "Release train checks on its own branches."],
+  ["sdk-e2e.yml", "SDK end-to-end suites."],
+  ["sdk-scheduled-checks.yml", "Tripwires on what users install from npm."],
+  ["test-inference-pear-e2e.yml", "Pear e2e for @qvac/inference; gates its release."],
+  ["workflow-security.yml", "Org workflow-security audit, in shadow mode."],
+]);
+
+test("merge rules: every PR workflow is required or listed as advisory", () => {
+  const required = new Set(mergeRules().flatMap((rule) => rule.checks.map((c) => c.workflow)));
+  const prWorkflows = readdirSync(join(root, ".github/workflows")).filter(
+    (file) =>
+      file !== "pr-gate-merge.yml" &&
+      /^\s+(pull_request|workflow_run|merge_group):/m.test(onBlock(read(`.github/workflows/${file}`))),
+  );
+  const unwired = prWorkflows.filter((file) => !required.has(file) && !ADVISORY_WORKFLOWS.has(file));
+  assert.deepEqual(
+    unwired,
+    [],
+    "add each to a rule in .github/merge-rules.yml, or to ADVISORY_WORKFLOWS with the reason; see docs/ci/MERGE-GUARD.md",
+  );
+  for (const file of ADVISORY_WORKFLOWS.keys()) {
+    assert.ok(prWorkflows.includes(file), `${file} is listed as advisory but is not a PR workflow`);
+    assert.ok(!required.has(file), `${file} is both required and advisory`);
   }
 });
 
