@@ -18,6 +18,7 @@
   - [SequenceDriver and TextLlmContext](#sequencedriver-and-textllmcontext)
 - [Queued vs active requests](#queued-vs-active-requests)
 - [Per-sequence context caps](#per-sequence-context-caps)
+  - [One shared KV pool](#one-shared-kv-pool)
 - [Sequence ids and streaming](#sequence-ids-and-streaming)
 - [Cache per slot](#cache-per-slot)
 - [KV reuse: single-prompt vs batch](#kv-reuse-single-prompt-vs-batch)
@@ -57,7 +58,7 @@ const model = new LlmLlamacpp({
 })
 ```
 
-`parallel` maps to `n_seq_max` in llama.cpp. The KV cache is split uniformly: with `ctx_size: '8192'` and `parallel: '4'`, each slot gets a 2048-token window. Values less than 2 leave the single-prompt path active; batch `run()` calls throw `InvalidArgument` in that case.
+`parallel` maps to `n_seq_max` in llama.cpp. The slots share one KV cache, each limited to an even share: with `ctx_size: '8192'` and `parallel: '4'`, each slot gets a 2048-token window ([details](#one-shared-kv-pool)). Values less than 2 leave the single-prompt path active; batch `run()` calls throw `InvalidArgument` in that case.
 
 The accepted range is `1..256`. The ceiling is the engine's own sequence limit (`LLAMA_MAX_SEQ`), so anything above it is rejected when the instance is constructed — otherwise it would spawn the full thread pool and only then fail the model load, where llama.cpp swallows the real reason into a log line. `ctx_size / parallel` must also leave at least one token per slot, so a `parallel` too large for the context (or a `batch_size` smaller than `parallel`) is refused as an `InvalidArgument` naming the knobs involved.
 
@@ -242,7 +243,7 @@ Completion is not the only terminal: `failGroupLocked` also settles a group, wit
 **Per-sequence context cap:**
 
 ```
-perSeqMaxTokens_ = ctxTotalTokens / batchSize
+perSeqMaxTokens_ = min(ctxTotalTokens / batchSize, kv_unified_per_slot)  // the cap only when set
 ```
 
 This is enforced at admission — every check throws `InvalidArgument` before any state is mutated — and there are four of them, not one:
@@ -342,12 +343,29 @@ slot freed, BatchGroup updated
 
 ## Per-sequence context caps
 
-With `parallel = N` and `ctx_size = C`, each slot gets `C / N` tokens. This affects:
+With `parallel = N` and `ctx_size = C`, each slot gets `C / N` tokens, or `kv_unified_per_slot` if that is lower. Below, `C / N` stands for whichever applies. This affects:
 
 - **Admission** — a generating prompt must leave room to generate, so it is rejected once it *reaches* `C / N`; a prefill-only prompt may fill it exactly and is rejected only above it. Either way the rejection is `InvalidArgument` before any tokens are staged.
 - **KV cells** — the physical cell span (`getKvCellsUsed()` plus the plan's KV tokens) is checked against `C / N` independently of the token count, because M-RoPE media consumes more cells than positions.
 - **Budget check** — when `n_predict > 0`, `max(prompt_tokens, prompt_kv_cells) + n_predict` must fit within `C / N`; requests that exceed it are rejected at admission rather than truncated silently. A non-positive `n_predict` (e.g. `predict: -1`) has no budget to check and is admitted, then stops at the slot ceiling with `contextOverflow`.
-- **Cache loading** — the overflow check on cached prompts uses `C / N` as the ceiling.
+- **Cache loading** — a cached prompt is rejected when its positions or its KV cells exceed `C / N`.
+
+### One shared KV pool
+
+With `parallel >= 2`, all slots keep their KV cache in one buffer of `C` cells, as llama-server's `--kv-unified`; this is not configurable. llama-server lets one slot fill the buffer unless `--kv-unified-per-slot` caps it; the addon keeps each slot to its even share, `C / N`. `kv_unified_per_slot` lowers each slot's limit, like `--kv-unified-per-slot`:
+
+```js
+config: { parallel: '4', kv_unified_per_slot: '2048' } // one 8192-cell pool, 2048 per slot
+```
+
+- **Pool size** — with `ctx_size` unset and `kv_unified_per_slot` set, the pool is sized to `parallel x kv_unified_per_slot`, as llama-server does without `-c`. An explicit `ctx_size` is kept, and `ctx_size: 0` keeps the model's trained context. With `ctx_size` unset or `0`, auto-fit picks the context of the whole pool, not of each slot, so each slot gets that context divided by `N`; when memory is short and `ctx_size` is unset, fit can lower the pool to `fit-ctx` (4096 by default). Set `ctx_size` to `N x` a slot size, or set `kv_unified_per_slot`, to get that slot size.
+- **Only an even split** — with `parallel >= 2`, `parallel x kv_unified_per_slot` must fit the pool (`C` rounded up to a multiple of 256), or the load fails with `InvalidArgument`; with an explicit `ctx_size` this is checked before the model loads. A negative `kv_unified_per_slot` is rejected at any `parallel`. Admission checks each slot only against its own limit, so limits adding up to more than the pool would let the pool fill mid-decode and fail every request in progress. llama-server accepts that setup; the addon does not.
+- **Attention** — with flash attention on CPU, Metal, and CUDA (Turing or newer), each slot attends only to its own cells. Elsewhere, including Vulkan, each slot's attention spans the shared buffer up to the highest used cell, with the other slots masked out, so decoding can be slower than with one buffer per slot. Slots sharing the buffer are not isolated from each other, so do not treat one model instance as a boundary between callers that do not trust each other.
+- **Model-specific** — sliding-window models keep one window cache of `min(C, n_swa x N + n_ubatch)` cells. With `parallel >= 2`, MiniMax-M3 turns sparse attention off, and Qwen4exp keeps it but its indexer takes more memory.
+- **Known issues with `parallel >= 2`** — fabric takes the whole buffer as one sequence's context in two places, until a fabric change gives it the slot limit:
+  - DeepSeek V4 and V4.1 keep one cache per sequence and size each to the whole buffer, so those caches take `parallel` times the memory. A load that fits with one buffer per slot can run out of memory.
+  - Models with long RoPE factors (for example Phi-3) use the long factors whenever `C` exceeds the model's original context, even though each slot stays within it, so their output changes.
+- **Cache files** — a file saved by an earlier version with `parallel >= 2` holds one KV stream per slot; fabric restores it into the shared buffer. A file saved now holds one stream (DeepSeek V4 and V4.1 keep one per slot), which earlier versions cannot restore at `parallel >= 2`. A file longer than the slot limit fails its request with `ContextLengthExeeded`; raise the limit or delete it. Any other file that fails to load fails its request with `UnableToLoadSessionFile`; delete it, and the next request on that `cacheKey` runs without it.
 
 ---
 

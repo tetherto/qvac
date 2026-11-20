@@ -94,19 +94,6 @@ bool persistedCacheBackingStoreMissing(const std::string& cacheKey) {
   return isParentDirectoryMissing(cacheKey) || isFileMissingOrEmpty(cacheKey);
 }
 
-/// Partition the whole-context KV pool uniformly across slots. Mirrors
-/// llama.cpp's `server` example which uses `n_ctx_slot = n_ctx /
-/// n_parallel` as the per-sequence hard ceiling.
-unsigned perSeqCeiling(unsigned ctxTotalTokens, size_t batchSize) {
-  bool valid = ctxTotalTokens > 0 && batchSize > 0;
-  if (!valid) {
-    throw std::invalid_argument(
-        "ContinuousBatchScheduler: ctxTotalTokens and batchSize must be "
-        ">= 1");
-  }
-  return ctxTotalTokens / static_cast<unsigned>(batchSize);
-}
-
 /// Terminal reason a driver should record for a scheduler-imposed stop.
 /// `ContextOverflow` survives `stopReasonAfterRequestRollback`, so a recurrent
 /// driver rolls back the current request.
@@ -149,6 +136,20 @@ bool generationBudgetExceeded(
          budgetSize + static_cast<unsigned>(nPredict) > perSeqMaxTokens;
 }
 
+unsigned perSeqCeiling(
+    unsigned ctxTotalTokens, size_t batchSize, int32_t kvUnifiedPerSlot) {
+  bool valid = ctxTotalTokens > 0 && batchSize > 0;
+  if (!valid) {
+    throw std::invalid_argument(
+        "ContinuousBatchScheduler: ctxTotalTokens and batchSize must be "
+        ">= 1");
+  }
+  const unsigned share = ctxTotalTokens / static_cast<unsigned>(batchSize);
+  return kvUnifiedPerSlot > 0
+             ? std::min(share, static_cast<unsigned>(kvUnifiedPerSlot))
+             : share;
+}
+
 TimedDecodeResult timeDecodeStep(
     llama_context* ctx, llama_batch& batch, const SchedulerDecodeFunc& decode,
     const SchedulerSynchronizeFunc& synchronize) {
@@ -170,7 +171,8 @@ ContinuousBatchScheduler::ContinuousBatchScheduler(
     : shared_(shared), baseSampling_(baseParams.sampling),
       baseNPredict_(baseParams.n_predict), baseParams_(baseParams),
       driverFactory_(std::move(driverFactory)),
-      perSeqMaxTokens_(perSeqCeiling(ctxTotalTokens, batchSize)),
+      perSeqMaxTokens_(perSeqCeiling(
+          ctxTotalTokens, batchSize, baseParams.kv_unified_per_slot)),
       batcher_(maxChunkSize, perSeqMaxTokens_, batchSize),
       batch_(batchCapacity, 0, static_cast<int32_t>(batchSize)),
       slots_(batchSize), decodeFunc_(llama_decode),
@@ -707,7 +709,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
             std::to_string(promptKvSize) +
             " KV cells exceeds per-sequence cap " +
             std::to_string(perSeqMaxTokens_) +
-            " (ctxTotalTokens / n_parallel)");
+            " (ctx_size / parallel, or kv_unified_per_slot if lower)");
   }
   if (!request.prefill && promptSize >= perSeqMaxTokens_) {
     throw qvac_errors::StatusError(
@@ -719,7 +721,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
             " tokens leaves no room under "
             "per-sequence cap " +
             std::to_string(perSeqMaxTokens_) +
-            " (ctxTotalTokens / n_parallel)");
+            " (ctx_size / parallel, or kv_unified_per_slot if lower)");
   }
   if (request.prefill && promptSize > perSeqMaxTokens_) {
     throw qvac_errors::StatusError(
@@ -729,7 +731,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
         "ContinuousBatchScheduler::submit: prefill prompt of " +
             std::to_string(promptSize) + " tokens exceeds per-sequence cap " +
             std::to_string(perSeqMaxTokens_) +
-            " (ctxTotalTokens / n_parallel)");
+            " (ctx_size / parallel, or kv_unified_per_slot if lower)");
   }
   if (!request.prefill &&
       generationBudgetExceeded(
@@ -743,7 +745,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
             std::to_string(promptKvSize) +
             " KV cells exceeds per-sequence cap " +
             std::to_string(perSeqMaxTokens_) +
-            " (ctxTotalTokens / n_parallel)");
+            " (ctx_size / parallel, or kv_unified_per_slot if lower)");
   }
 
   StreamCallbacks streamsLocal = std::move(request.streams);
