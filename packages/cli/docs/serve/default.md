@@ -52,8 +52,9 @@ Uploads are capped at 100 MB per file and 10 files per request.
 ## KV-cache retention
 
 `/v1/chat/completions` caches each conversation's prefix under `~/.qvac/kv-cache`, so a
-follow-up turn only prefills the new tail. It is the only endpoint that does: `/v1/responses`
-and `/v1/completions` run uncached, so they leave nothing here to reclaim. That directory
+follow-up turn only prefills the new tail. `/v1/chat/completions` and `/v1/responses` can
+also name a cache session, which keeps the cache across tool calls (see
+[KV cache sessions](openai.md#kv-cache-sessions)); `/v1/completions` runs uncached. That directory
 grows on the order of hundreds of megabytes per conversation, **but it is bounded** — you do
 not need a sweeper of your own:
 
@@ -65,10 +66,10 @@ not need a sweeper of your own:
 
 Caches held by an in-flight request are never evicted.
 
-**Responses caches follow the same policy.** `/v1/responses` names one cache per
-conversation key (`responses-<sha256>`); serve applies the same quota and TTL to those,
-counted separately, and the endpoint below reclaims them too. The quota and the endpoint
-only delete Responses caches this server has used, since other processes may share the
+**Named caches follow the same policy.** `/v1/chat/completions` and `/v1/responses` name
+one cache per conversation key (`responses-<sha256>`); serve applies the same quota and TTL
+to those, counted separately, and the endpoint below reclaims them too. The quota and the
+endpoint only delete the named caches this server has used, since other processes may share the
 directory; the TTL applies to all of them. A cache that any running QVAC process is using
 (it holds a lease file under `.responses-leases`) is never deleted. Any other caller-owned named
 cache — `completion({ kvCache: "my-session" })` through the SDK — is exempt from both, and

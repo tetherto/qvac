@@ -4,6 +4,7 @@ import { writeFile, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { HistoryContent, HistoryContentPart, Tool } from '@qvac/sdk'
+import { namedKvCacheKey } from '@/serve/lib/named-kv-cache'
 import {
   chatMessage,
   responseFormat,
@@ -37,6 +38,11 @@ export const chatCompletionsBody = z
     temperature: z.number().optional(),
     top_p: z.number().optional(),
     max_tokens: z.number().int().optional(),
+    metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+    prompt_cache_key: z
+      .unknown()
+      .optional()
+      .describe('Names a KV cache session, per conversation; a string of at most 512 UTF-8 bytes.'),
     stream_options: z.object({ include_usage: z.boolean().optional() }).passthrough().optional()
   })
   .passthrough()
@@ -250,6 +256,8 @@ async function writeMediaParts(
 export type ChatCompletionsBody = z.infer<typeof chatCompletionsBody>
 
 export interface SdkChatArgs {
+  /** The named cache session the request selected; undefined means auto-cache. */
+  kvCache: string | undefined
   history: ChatHistoryItem[]
   tools: Tool[] | undefined
   generationParams: GenerationParams | undefined
@@ -257,10 +265,22 @@ export interface SdkChatArgs {
   stream: boolean
 }
 
-export function toSdkChatArgs(body: ChatCompletionsBody): SdkChatArgs {
+// OpenAI suggests one `prompt_cache_key` per user, and a cache holds one
+// conversation: conversations sharing it would evict each other every turn.
+// The messages up to the first user turn stay fixed while a conversation grows.
+function conversationOpening(messages: readonly { role: string }[]): string {
+  const firstUser = messages.findIndex((message) => message.role === 'user')
+  return JSON.stringify(firstUser === -1 ? messages : messages.slice(0, firstUser + 1))
+}
+
+export function toSdkChatArgs(
+  body: ChatCompletionsBody,
+  rawHeaders: readonly string[] = []
+): SdkChatArgs {
   const responseFmt = extractResponseFormat(body as Record<string, unknown>)
   const tools = openaiToolsToSdk(body.tools as Parameters<typeof openaiToolsToSdk>[0])
   return {
+    kvCache: namedKvCacheKey(rawHeaders, body, conversationOpening(body.messages)),
     history: openaiMessagesToHistory(body.messages as OpenAIMessage[]),
     tools,
     generationParams: withParallelToolCalls(
