@@ -1,4 +1,5 @@
 import TranslationNmtcpp, { type TranslationNmtcppFiles } from '@qvac/translation-nmtcpp'
+import { CAPABILITY_CONTRACTS } from '@/schemas/capabilities'
 import {
   definePlugin,
   defineHandler,
@@ -75,6 +76,7 @@ export const nmtPlugin = definePlugin({
     return { model }
   },
 
+  provides: [CAPABILITY_CONTRACTS.translation],
   handlers: {
     translate: defineHandler({
       requestSchema: translateRequestSchema,

@@ -225,6 +225,15 @@ object QvacMethods {
         progressCondition = null,
         ownerOnly = false,
     )
+    val getRuntimeCapabilities = QvacMethodDescriptor(
+        name = "getRuntimeCapabilities",
+        callShape = QvacCallShape.REQUEST_REPLY,
+        requestType = "GetRuntimeCapabilitiesRequest",
+        responseType = "GetRuntimeCapabilitiesResponse",
+        progressResponseType = null,
+        progressCondition = null,
+        ownerOnly = false,
+    )
     val getSystemResources = QvacMethodDescriptor(
         name = "getSystemResources",
         callShape = QvacCallShape.REQUEST_REPLY,
@@ -511,6 +520,7 @@ object QvacMethods {
         finetune,
         getLoadedModelInfo,
         getModelInfo,
+        getRuntimeCapabilities,
         getSystemResources,
         heartbeat,
         loadModel,

@@ -1,4 +1,5 @@
 import ASRGgml from '@qvac/asr-ggml'
+import { CAPABILITY_CONTRACTS } from '@/schemas/capabilities'
 import {
   definePlugin,
   defineHandler,
@@ -57,6 +58,7 @@ export const mossTranscribePlugin = definePlugin({
     return createMossTranscribeModel(params)
   },
 
+  provides: [CAPABILITY_CONTRACTS.transcription],
   handlers: {
     transcribe: defineHandler({
       requestSchema: transcribeRequestSchema,
