@@ -1,5 +1,148 @@
 # Changelog
 
+## [0.11.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/rag/v/0.11.0
+
+`@qvac/rag` 0.11.0 adds what an app needs around search: reading documents back, listing them, moving whole namespaces between stores, and keeping one long document from crowding out the rest of a result. Search hits now carry citation details. Data written by 0.10.0 opens without migration.
+
+## Search Across Documents, With Citations
+
+`perDocument` spreads the `k` hits across documents: every document's best hit is taken before any document gets a second one, and no document gets more than `perDocument`. When `scope.documentIds` lists at most `k` documents, each listed document that has chunks gets a hit. `minScore` drops weak hits first, so a result can hold fewer than `k`.
+
+```typescript
+const hits = await rag.search({
+  scope: { namespace: 'handbook' },
+  query,
+  k: 8,
+  perDocument: 2,
+  minScore: 0.4
+})
+// hits[0] → { documentId: 'manual', ordinal: 12, generation: 3, chunkCount: 40,
+//             citation: { title: 'Manual', page: 7 }, score: 0.82, ... }
+```
+
+Every hit now reports its document's `generation`, how many chunks that generation has, and a `citation` with `title`, `page`, `sourceUrl`, `sourcePath` and `mimeType` where the document metadata or the chunk's `rag-extract` metadata holds them.
+
+## Read and List Documents
+
+`readDocument` returns a document's chunks in order, a page at a time, so a hit can be expanded into its surrounding text. Passing the first page's `generation` on later pages makes the read fail with `DOCUMENT_CHANGED` if the document was re-ingested or deleted in between, instead of mixing two versions. `listDocuments` pages through a namespace in document ID order; each entry's `revision` gives ingest order.
+
+```typescript
+const page = await rag.readDocument({
+  namespace: 'handbook',
+  documentId: 'manual',
+  fromOrdinal: 4,
+  limit: 3
+})
+// → { generation: 3, chunkCount: 40, chunks: [{ chunkId, ordinal: 4, content }, ...], nextOrdinal: 7 }
+
+const { documents, next } = await rag.listDocuments({ namespace: 'handbook', limit: 100 })
+```
+
+Scoped handles from `rag.scoped(scope)` gain both calls, limited to their scope. Deleting a document now keeps its last generation, so ingesting the same ID again continues the numbering instead of reusing it.
+
+## Export, Import, List and Drop Namespaces
+
+`exportNamespace` streams a namespace, or some of its documents, as bytes that `importNamespace` reads into another store, with no re-embedding. Imports keep generations and deletes, report what they skipped and why, and can be stopped with an `AbortSignal` or by closing the RAG. `listNamespaces` reports each namespace's space, index storage and counts, and `dropNamespace` deletes a namespace with its index snapshot.
+
+```typescript
+const backup = rag.exportNamespace({ namespace: 'handbook' }) // AsyncIterable<Uint8Array>
+const result = await other.importNamespace({ namespace: 'handbook', source: backup })
+// → { documents: [{ id, generation, status: 'created' }], skipped: [], cancelled: false, revision }
+
+await rag.listNamespaces() // [{ name, spaceId, space, index, revision, documentCount, chunkCount }]
+await rag.dropNamespace({ name: 'handbook' }) // { name, documentCount, chunkCount }
+```
+
+A namespace only imports into one from the same history: a malformed stream fails with `IMPORT_INVALID`, and a non-empty namespace with a different history fails with `IMPORT_LINEAGE_MISMATCH`.
+
+## [0.10.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/rag/v/0.10.0
+
+`@qvac/rag` 0.10.0 is a rewrite. The package is now a small embedded store for document chunks and their embeddings, built on HyperDB, with search that only ever looks inside the scope you grant it. It can chunk and embed text through an embeddings port you supply, keeps an optional TurboVec index per namespace, and skips documents whose content has not changed. It runs on Bare and Node.
+
+## Breaking Changes
+
+The `RAG` class and its adapter system are replaced by a `createRag()` factory. Storage, chunking and LLM answer generation are no longer bundled together: `@qvac/rag` stores and searches, and you call your LLM with the hits yourself.
+
+Before:
+
+```typescript
+import { RAG, HyperDBAdapter } from '@qvac/rag'
+
+const rag = new RAG({ dbAdapter: new HyperDBAdapter({ store }), embeddingFunction })
+await rag.ready()
+await rag.saveEmbeddings([{ id: 'a', content, embedding, embeddingModelId: 'm' }])
+const results = await rag.search(query)
+```
+
+After:
+
+```typescript
+import { createRag } from '@qvac/rag'
+
+const rag = createRag({ corestore: store })
+await rag.ready()
+const { spaceId } = await rag.createNamespace({ name: 'docs', space })
+await rag.ingest({
+  namespace: 'docs',
+  documents: [{ id: 'a', chunks: [{ content, embedding, spaceId }] }]
+})
+const hits = await rag.search({ scope: { namespace: 'docs' }, vector, spaceId, k: 5 })
+```
+
+Every namespace is pinned to one embedding space, identified by a `spaceId` hash of the model, dimensions, metric and encodings. Precomputed chunks and vector queries must carry that `spaceId`, so vectors from different models never mix. Search reads only the namespace and document IDs in its `scope`, and fails closed on a missing namespace, an unknown scope key or a document outside the namespace. `rag.scoped(scope)` returns a search handle that can narrow its scope but never widen it.
+
+The following exports are removed: `RAG`, `HyperDBAdapter`, `TurboVecAdapter` and its types, `BaseDBAdapter`, `LLMChunkAdapter`, `BaseChunkAdapter`, `BaseLlmAdapter`, `HttpLlmAdapter`, `QvacLlmAdapter`, and the embedding and document zod schemas. `ERR_CODES` drops the codes those classes used (`LLM_REQUIRED`, `GENERATION_FAILED`, `CHUNKING_FAILED` and others); their numbers are not reused.
+
+0.10.0 uses a new HyperDB schema and does not migrate data written by 0.9.x. Re-ingest your documents into a fresh Corestore.
+
+## Text Ingest Through an Embeddings Port
+
+Pass an embeddings port to `createRag()` and `ingest()` accepts plain text or pre-chunked text as well as precomputed vectors. Text is chunked with `rag-extract`, embedded in batches, and committed one document at a time. Ingest reports progress, can be cancelled with an `AbortSignal` without losing the documents already committed, and `search()` accepts a text `query`.
+
+```typescript
+const rag = createRag({ corestore, embeddings: port })
+await rag.ready()
+await rag.createNamespace({ name: 'handbook', space: port.space })
+
+const { documents, skipped, cancelled } = await rag.ingest(
+  { namespace: 'handbook', documents: [{ id: 'leave-policy', text }] },
+  { signal, onProgress: ({ stage, done, total }) => {} }
+)
+const hits = await rag.search({ scope: { namespace: 'handbook' }, query: 'leave days', k: 5 })
+```
+
+## Indexed Search With TurboVec
+
+On Bare, when the optional peer `@qvac/turbovec-ggml` is installed and loads, each namespace gets a TurboVec index derived from HyperDB, and candidates are rescored exactly against the stored vectors. Pass `index.dir` to keep snapshots between runs, and pick `q8` (default), `f32`, `turbovec-q4` or `turbovec-q2` storage per namespace. On Node, or without the peer, search falls back to an exact scan.
+
+```typescript
+const rag = createRag({ corestore, index: { dir: './rag-index', snapshotEvery: 256 } })
+const { index } = await rag.createNamespace({
+  name: 'docs',
+  space,
+  index: { storage: 'turbovec-q4' }
+})
+```
+
+The README lists measured memory use: about 320 MiB to open a 100,000-chunk namespace from a snapshot, and about 1 GiB the first time it is built without one.
+
+## Unchanged Documents Are Skipped on Re-ingest
+
+Re-ingesting a document whose content has not changed writes nothing and does not call the embeddings port. Each ingested document now reports a `status` of `created`, `replaced` (with the number of chunks removed) or `unchanged`.
+
+```typescript
+const { documents } = await rag.ingest({ namespace: 'docs', documents: [{ id: 'a', text }] })
+// [{ id: 'a', generation: 2, chunkCount: 3, status: 'replaced', removedChunks: 4 }]
+```
+
+## Bug Fixes
+
+`@qvac/rag` can now be imported on Node.js as well as Bare.
+
 ## [0.9.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/rag/v/0.9.0
