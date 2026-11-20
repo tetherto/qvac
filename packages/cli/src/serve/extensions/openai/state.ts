@@ -2,7 +2,11 @@ import type * as sdk from '@qvac/sdk'
 import type { DecideFn } from '@/serve/extensions/openai/adapters/decisions'
 import type { QvacContext } from '@/serve/core/context'
 import { createResponsesStore } from '@/serve/extensions/openai/adapters/responses-store'
-import { createRagBackend, type RagBackend } from '@/serve/extensions/openai/adapters/rag-backend'
+import {
+  createRagBackend,
+  vectorStoreDirFor,
+  type RagBackend
+} from '@/serve/extensions/openai/adapters/rag-backend'
 import { createVectorStoresStore } from '@/serve/core/stores/vector-stores'
 import type { VectorStoresStore } from '@/serve/core/stores/vector-stores'
 import type { ResponsesStore } from '@/serve/extensions/openai/adapters/responses-store'
@@ -75,9 +79,9 @@ export async function createOpenAIState(
   const state: OpenAIState = {
     responsesStore: createResponsesStore(),
     vectorStores: createVectorStoresStore(),
-    ragBackend: createRagBackend(
-      options?.vectorStoreDir !== undefined ? { dir: options.vectorStoreDir } : {}
-    ),
+    ragBackend: createRagBackend({
+      dir: options?.vectorStoreDir ?? vectorStoreDirFor(ctx.serveConfig.cacheDirectory)
+    }),
     videoJobsStore: createVideoJobsStore({
       onEvict: (job, reason) => {
         logger.warn(`video job evicted id=${job.id} reason=${reason} status=${job.status}`)

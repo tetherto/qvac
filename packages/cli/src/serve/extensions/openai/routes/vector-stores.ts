@@ -64,9 +64,9 @@ Vector search over the store's files with \`@qvac/rag\`.
 default embedding (or a single embedding alias) must resolve, or the request
 fails with \`no_embedding_model_configured\` / \`ambiguous_embedding_model\`.
 
-**Embedding-model mismatch**: if the store was ingested under a different
-embedding alias, requests are rejected with \`embedding_model_mismatch\` to
-prevent silent precision loss.
+**Embedding-model mismatch**: if the store was ingested with other weights or
+another load config (such as pooling), requests are rejected with
+\`embedding_model_mismatch\` to prevent silent precision loss.
 
 **Ignored params** (logged, not rejected): \`filters\`, \`ranking_options\`,
 \`rewrite_query\`. Only \`max_num_results\` (default 5) is forwarded.
@@ -590,8 +590,20 @@ function embeddingModelRef(embedding: EmbeddingResolutionOk): EmbeddingModelRef 
     alias: embedding.entry.alias,
     sdkModelId: embedding.sdkModelId,
     model: typeof src === 'string' ? src : src.src,
-    revision: typeof src === 'string' ? '' : src.sha256Checksum
+    revision: typeof src === 'string' ? '' : src.sha256Checksum,
+    config: stableJson(embedding.entry.config)
   }
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableJson(v)}`).join(',')}}`
+  }
+  return JSON.stringify(value)
 }
 
 function throwModelChanged(err: EmbeddingModelChangedError): never {

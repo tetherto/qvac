@@ -116,6 +116,30 @@ for (const operation of ['create', 'load'] as const) {
   })
 }
 
+test('vectorIndex: a search cancelled while the provider runs reports the cancel', async (t) => {
+  await withProvider(async (_calls, _failures, _failRemoveId, _lastIvfArgs, gates) => {
+    const index = await createVectorIndex({ dim: 2 })
+    await index.add({ ids: ['1'], vectors: [[1, 0]] })
+    let finishSearch = () => {}
+    gates.search = new Promise<void>((resolve) => {
+      finishSearch = resolve
+    })
+    const requestId = 'vi-cancel-search'
+    const pending = handleVectorIndex({
+      type: 'vectorIndex',
+      operation: 'search',
+      indexId: index.indexId,
+      queries: [[1, 0]],
+      k: 1,
+      requestId
+    })
+    await new Promise<void>((resolve) => setTimeout(resolve, 5))
+    t.is(getRequestRegistry().cancel({ requestId }), 1, 'the search is in flight and cancellable')
+    finishSearch()
+    await expectRejects(t, () => pending, InferenceCancelledError, 'the search reports the cancel')
+  })
+})
+
 test('createVectorIndex: rejects when no plugin provides a vector index', async (t) => {
   clearPlugins()
   // A plugin without the capability keeps dispatch ready but leaves no provider.
@@ -856,6 +880,17 @@ test('vector index: an add racing an IVF build leaves the lists stale', async (t
     },
     { ivf: true }
   )
+})
+
+test('vector index: a contains batch is answered as one operation', async (t) => {
+  await withProvider(async () => {
+    const index = await createVectorIndex({ dim: 2 })
+    const [present] = await Promise.all([
+      index.contains({ ids: ['1', '1'] }),
+      index.add({ ids: ['1'], vectors: [[1, 0]] })
+    ])
+    t.alike(present, [false, false], 'the add lands after the whole batch')
+  })
 })
 
 test('vector index: setIvf(null) turns IVF off and nProbe then rejects', async (t) => {

@@ -62,11 +62,16 @@ export function observableIndexProvider({
   // than the whole batch; that is what exposes partial application.
   const failRemoveId: { id: bigint | null } = { id: null }
 
-  // Promises an open waits on before it returns, so a test can act while the
-  // native open is in flight.
-  const gates: { create: Promise<void> | null; load: Promise<void> | null } = {
+  // Promises a call waits on before it returns, so a test can act while the
+  // native call is in flight. `search` only gates the async index.
+  const gates: {
+    create: Promise<void> | null
+    load: Promise<void> | null
+    search: Promise<void> | null
+  } = {
     create: null,
-    load: null
+    load: null,
+    search: null
   }
 
   function fail(call: string): never {
@@ -154,7 +159,14 @@ export function observableIndexProvider({
         return paddedRows(queries, k)
       }
     }
-    return sync ? index : asAsync(index)
+    if (sync) return index
+    const asyncIndex = asAsync(index)
+    const search = asyncIndex.search
+    asyncIndex.search = async (queries, k) => {
+      if (gates.search) await gates.search
+      return search(queries, k)
+    }
+    return asyncIndex
   }
 
   const provider: TurboVecIndexProvider = {

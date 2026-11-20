@@ -32,7 +32,8 @@ export interface OpenVectorIndex {
    * `nProbe` is given while IVF is off.
    */
   search(queries: Float32Array, k: number, nProbe: number | undefined): Promise<VectorIndexHit[][]>
-  contains(id: bigint): Promise<boolean>
+  /** Answers the whole batch as one operation, so a concurrent add lands before or after it. */
+  contains(ids: bigint[]): Promise<boolean[]>
   /** Returns whether the id was present. */
   remove(id: bigint): Promise<boolean>
   write(path: string): Promise<void>

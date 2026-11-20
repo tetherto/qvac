@@ -171,7 +171,12 @@ function openIndex(
         }
         return toHitRows(await index.search(queries, k))
       }),
-    contains: (id) => exclusive(async () => await index.contains(id)),
+    contains: (ids) =>
+      exclusive(async () => {
+        const present: boolean[] = []
+        for (const id of ids) present.push(await index.contains(id))
+        return present
+      }),
     remove: (id) =>
       exclusive(async () => {
         const removed = await index.remove(id)

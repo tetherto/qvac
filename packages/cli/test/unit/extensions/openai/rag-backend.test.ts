@@ -1,11 +1,12 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { chmod, mkdtemp, readdir, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import {
   createRagBackend,
   EmbeddingModelChangedError,
+  vectorStoreDirFor,
   type EmbedTexts
 } from '@/serve/extensions/openai/adapters/rag-backend'
 
@@ -20,7 +21,13 @@ const embedTexts: EmbedTexts = (_modelId, texts) =>
     })
   )
 
-const model = { alias: 'embed', sdkModelId: 'model-1', model: 'gte-large.gguf', revision: 'abc123' }
+const model = {
+  alias: 'embed',
+  sdkModelId: 'model-1',
+  model: 'gte-large.gguf',
+  revision: 'abc123',
+  config: '{"pooling":"mean"}'
+}
 
 async function withDir(run: (dir: string) => Promise<void>) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'qvac-cli-rag-'))
@@ -110,7 +117,7 @@ describe('createRagBackend', () => {
     })
   })
 
-  it('rejects a store whose alias now points at other weights', async () => {
+  it('rejects a store whose alias now points at other weights or config', async () => {
     await withDir(async (dir) => {
       const backend = createRagBackend({ dir, embedTexts })
       await backend.attach('vs_d', model, {
@@ -118,12 +125,16 @@ describe('createRagBackend', () => {
         fileName: 'moon.txt',
         text: 'A moon in orbit.'
       })
-      const swapped = { ...model, revision: 'def456' }
-      await assert.rejects(backend.search('vs_d', swapped, 'moon', 1), EmbeddingModelChangedError)
-      await assert.rejects(
-        backend.attach('vs_d', swapped, { fileId: 'file-2', fileName: 'x.txt', text: 'orbit' }),
-        EmbeddingModelChangedError
-      )
+      for (const swapped of [
+        { ...model, revision: 'def456' },
+        { ...model, config: '{"pooling":"cls"}' }
+      ]) {
+        await assert.rejects(backend.search('vs_d', swapped, 'moon', 1), EmbeddingModelChangedError)
+        await assert.rejects(
+          backend.attach('vs_d', swapped, { fileId: 'file-2', fileName: 'x.txt', text: 'orbit' }),
+          EmbeddingModelChangedError
+        )
+      }
       await backend.close()
     })
   })
@@ -152,7 +163,7 @@ describe('createRagBackend', () => {
     })
   })
 
-  it('lets two aliases for the same weights stay open side by side', async () => {
+  it('lets two servers write different stores at the same time', async () => {
     await withDir(async (dir) => {
       const first = createRagBackend({ dir, embedTexts })
       const second = createRagBackend({ dir, embedTexts })
@@ -161,16 +172,97 @@ describe('createRagBackend', () => {
         fileName: 'moon.txt',
         text: 'A moon in orbit.'
       })
-      const other = { ...model, alias: 'embed-copy' }
-      await second.attach('vs_y', other, {
+      await second.attach('vs_y', model, {
         fileId: 'file-2',
         fileName: 'oven.txt',
         text: 'Preheat the oven.'
       })
       assert.equal((await first.search('vs_x', model, 'moon', 1))[0]?.fileId, 'file-1')
-      assert.equal((await second.search('vs_y', other, 'oven', 1))[0]?.fileId, 'file-2')
+      assert.equal((await second.search('vs_y', model, 'oven', 1))[0]?.fileId, 'file-2')
       await first.close()
       await second.close()
     })
+  })
+
+  it('removes the store data from disk on delete', async () => {
+    await withDir(async (dir) => {
+      const backend = createRagBackend({ dir, embedTexts })
+      await backend.attach('vs_e', model, {
+        fileId: 'file-1',
+        fileName: 'moon.txt',
+        text: 'A moon in orbit.'
+      })
+      assert.equal(await backend.delete('vs_e'), true)
+      assert.deepEqual(await readdir(path.join(dir, 'stores')), [])
+      await backend.close()
+    })
+  })
+
+  it('ingests nothing when the store record cannot be written', async (t) => {
+    if (process.getuid?.() === 0) return t.skip('root ignores directory permissions')
+    await withDir(async (dir) => {
+      const backend = createRagBackend({ dir, embedTexts })
+      await backend.attach('vs_f', model, {
+        fileId: 'file-1',
+        fileName: 'moon.txt',
+        text: 'A moon in orbit.'
+      })
+      const storeDir = path.join(dir, 'stores', 'vs_f')
+      await chmod(storeDir, 0o500)
+      try {
+        await assert.rejects(
+          backend.attach('vs_f', model, {
+            fileId: 'file-2',
+            fileName: 'oven.txt',
+            text: 'Preheat the oven.'
+          })
+        )
+      } finally {
+        await chmod(storeDir, 0o700)
+      }
+      const hits = await backend.search('vs_f', model, 'oven moon orbit', 5)
+      assert.deepEqual(
+        hits.map((hit) => hit.fileId),
+        ['file-1']
+      )
+      await backend.close()
+    })
+  })
+
+  it('does not hold up other stores or reads while one store ingests', async () => {
+    await withDir(async (dir) => {
+      let release = () => {}
+      const held = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      const slow: EmbedTexts = async (modelId, texts) => {
+        if (texts.some((text) => text.includes('river'))) await held
+        return embedTexts(modelId, texts)
+      }
+      const backend = createRagBackend({ dir, embedTexts: slow })
+      await backend.attach('vs_g', model, {
+        fileId: 'file-1',
+        fileName: 'moon.txt',
+        text: 'A moon in orbit.'
+      })
+      const ingesting = backend.attach('vs_h', model, {
+        fileId: 'file-2',
+        fileName: 'river.txt',
+        text: 'The bridge crosses the river.'
+      })
+      assert.ok((await backend.list()).includes('vs_g'))
+      assert.equal(await backend.embeddingAlias('vs_g'), 'embed')
+      assert.equal((await backend.search('vs_g', model, 'moon', 1))[0]?.fileId, 'file-1')
+      release()
+      await ingesting
+      await backend.close()
+    })
+  })
+
+  it('keeps vector stores next to the configured model cache', () => {
+    assert.equal(
+      vectorStoreDirFor('/data/qvac/models'),
+      path.join('/data/qvac', 'serve', 'vector-stores')
+    )
   })
 })

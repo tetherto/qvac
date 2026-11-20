@@ -72,8 +72,11 @@ async function handleVectorIndexInternal(input: VectorIndexRequest): Promise<Vec
     }
     case 'add':
       return { ...base, operation: 'add', ...(await addVectors(request)) }
-    case 'search':
-      return { ...base, operation: 'search', ...(await searchVectors(request)) }
+    case 'search': {
+      const found = await searchVectors(request)
+      if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
+      return { ...base, operation: 'search', ...found }
+    }
     case 'remove':
       return { ...base, operation: 'remove', ...(await removeVectors(request)) }
     case 'contains':

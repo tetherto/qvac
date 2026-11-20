@@ -224,10 +224,7 @@ export async function removeVectors(params: { indexId: string; ids: VectorIdWire
 
 export async function containsVectors(params: { indexId: string; ids: VectorIdWire[] }) {
   const index = getIndex(params.indexId)
-  const present: boolean[] = []
-  for (const id of params.ids) {
-    present.push(await runBackend(() => index.contains(BigInt(id))))
-  }
+  const present = await runBackend(() => index.contains(params.ids.map((id) => BigInt(id))))
   return { present }
 }
 
