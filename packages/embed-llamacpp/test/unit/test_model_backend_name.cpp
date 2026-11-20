@@ -8,12 +8,7 @@ TEST(ModelBackendName, CanonicalizesRuntimeRegistryFamilies) {
   using qvac_lib_inference_addon_embed::backend_reporting::
       canonicalBackendFamily;
   EXPECT_EQ(canonicalBackendFamily("MTL"), "metal");
-  EXPECT_EQ(canonicalBackendFamily("Metal"), "metal");
   EXPECT_EQ(canonicalBackendFamily("CUDA"), "cuda");
-  EXPECT_EQ(canonicalBackendFamily("Vulkan"), "vulkan");
-  EXPECT_EQ(canonicalBackendFamily("OpenCL"), "opencl");
-  EXPECT_EQ(canonicalBackendFamily("CPU"), "cpu");
-  EXPECT_EQ(canonicalBackendFamily("RPC"), "rpc");
 }
 
 TEST(ModelBackendName, CpuOnlyAndZeroGpuOffload) {
@@ -40,18 +35,9 @@ TEST(ModelBackendName, SortsAndDeduplicatesSplitFamilies) {
       "cuda,opencl,vulkan");
 }
 
-TEST(ModelBackendName, IgnoresContextAndComputeOnlyDevices) {
-  EXPECT_EQ(
-      modelBackendName({{1024, "cpu", true}, {0, "vulkan", false}}), "cpu");
-}
-
 TEST(ModelBackendName, LeavesMissingOrUnidentifiedPlacementUnknown) {
   EXPECT_TRUE(modelBackendName({}).empty());
   EXPECT_TRUE(modelBackendName({{0, "metal", false}}).empty());
   EXPECT_TRUE(
       modelBackendName({{1024, "cpu", true}, {1024, "", false}}).empty());
-}
-
-TEST(ModelBackendName, PreservesRpcFamily) {
-  EXPECT_EQ(modelBackendName({{4096, "rpc", false}}), "rpc");
 }

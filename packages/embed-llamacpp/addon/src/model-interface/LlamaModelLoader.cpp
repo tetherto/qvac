@@ -587,9 +587,6 @@ void LlamaModelLoader::init(LlamaModelSetup& setup) {
       runtimeModelBackendName(ctx_);
   {
     std::lock_guard lock(runtimeBackendMutex_);
-    if (!backendName.empty()) {
-      runtimeBackendDevice_ = backendName == "cpu" ? 0 : 1;
-    }
     runtimeBackendName_ = std::move(backendName);
   }
 

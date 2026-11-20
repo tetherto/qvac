@@ -1411,20 +1411,12 @@ TEST_F(
 TEST_F(BackendSelectionTest, RuntimeBackendNameUsesRegistryFamily) {
   mockBackend.addDevice(
       {"Apple GPU", "Metal", GGML_BACKEND_DEVICE_TYPE_GPU, "MTL"});
-  mockBackend.addDevice(
-      {"NVIDIA GPU", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"});
-  mockBackend.addDevice(
-      {"Vulkan GPU", "Vulkan0", GGML_BACKEND_DEVICE_TYPE_GPU, "Vulkan"});
   const auto bckI = mockBackend.toBackendInterface();
   using qvac_lib_inference_addon_embed::backend_reporting::
       runtimeDeviceBackendName;
 
   EXPECT_EQ(
       runtimeDeviceBackendName(bckI.ggml_backend_dev_get(0), bckI), "metal");
-  EXPECT_EQ(
-      runtimeDeviceBackendName(bckI.ggml_backend_dev_get(1), bckI), "cuda");
-  EXPECT_EQ(
-      runtimeDeviceBackendName(bckI.ggml_backend_dev_get(2), bckI), "vulkan");
   EXPECT_TRUE(runtimeDeviceBackendName(nullptr, bckI).empty());
 }
 

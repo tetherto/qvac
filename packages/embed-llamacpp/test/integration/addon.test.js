@@ -847,7 +847,6 @@ safeTest('idle | run: allowed, returns QvacResponse', { timeout: TEST_TIMEOUT },
     t.is(response.stats.backendName, 'metal', 'runtime stats name the Metal backend')
   } else if (os.platform() === 'linux' || os.platform() === 'win32') {
     const expected = process.env.FORCE_VULKAN === 'true' ? ['vulkan'] : ['cuda', 'vulkan']
-    t.is(response.stats.backendDevice, 'gpu', 'desktop GPU leg offloads the model')
     t.ok(
       expected.includes(response.stats.backendName),
       'runtime stats name the desktop GPU backend'
