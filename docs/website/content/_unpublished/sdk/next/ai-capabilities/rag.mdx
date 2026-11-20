@@ -35,7 +35,7 @@ Regarding vector storage, you may use:
 - **External vector DB:** use [`embed()`](/sdk/reference/api#embed) to generate vectors and store them wherever you want (e.g., MongoDB, LanceDB, ChromaDB, SQLite-Vector). Choose this when you need custom persistence, filtering, or integration with an existing database.
 - **Built-in TurboVec index with your own document store:** use [`embed()`](/sdk/reference/api#embed) for vectors and [`createVectorIndex()`](/sdk/reference/api#createvectorindex) for on-device nearest-neighbour search. QVAC indexes the vectors; your documents stay in whatever store you already have, and results come back as the ids you assigned. Snapshots can be saved and reopened with [`loadVectorIndex()`](/sdk/reference/api#loadvectorindex).
 
-For a managed document store with chunking, ingestion and search, use the standalone [`@qvac/rag`](https://www.npmjs.com/package/@qvac/rag) package with `embed()` as its embedder.
+For a managed document store with chunking, ingestion and search, use the standalone [`@qvac/rag`](https://www.npmjs.com/package/@qvac/rag) package with `embed()` as its embedder. Coming from the `rag*` functions of SDK 0.24 and earlier? See [Migrate from the SDK RAG API](/resources/rag-migration).
 
 <Callout type="info">
   **Important:** when using an external vector DB, make sure its schema matches
