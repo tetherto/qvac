@@ -15,7 +15,7 @@ on:
         description: The PR head the caller ran for; groups evaluations of one commit
         type: string
         default: ""
-  # /merge-guard from a member re-runs it for the PR head.
+  # /merge-guard from a member re-runs it for the PR head; /merge-guard accept <sha> also accepts a fork's .github/ edits.
   issue_comment:
     types: [created]
 

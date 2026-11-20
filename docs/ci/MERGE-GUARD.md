@@ -31,7 +31,7 @@ flowchart LR
 
 It never waits. A check whose producer has not finished is pending, and that producer's completion starts the guard again; the producer to finish last triggers the final result. One evaluation runs per head commit at a time (`cancel-in-progress`), and one started for a commit the PR has moved past posts nothing. A member's `/merge-guard` comment on the PR starts an evaluation of its head, for example if GitHub dropped an event.
 
-A fork PR that changes `.github/` fails the guard: its `pull_request` runs use its own workflow files, so it could rewrite the checks it is judged on. A maintainer re-raises it from a branch.
+A fork PR that changes `.github/` fails the guard: its `pull_request` runs use its own workflow files, so it could rewrite the checks it is judged on. Someone with write access who has reviewed those changes comments `/merge-guard accept <sha>` with the PR head commit, and the guard then evaluates that commit normally. A new push needs a new accept.
 
 The guard decides on job results, never on commit statuses: a workflow with `statuses: write`, including a same-repo PR's edited `pull_request` workflow, could post any status. `qvac/pr-build-test` links the PR to its build run for people; the guard ignores it.
 

@@ -136,6 +136,19 @@ async function findPr(gh, env, event) {
   return { pr }
 }
 
+// A `/merge-guard accept <sha>` naming the PR head, from someone with write access. author_association can't decide
+// it: a private org member reads as CONTRIBUTOR to this token.
+async function acceptedBy(gh, env, pr) {
+  const repo = env.GITHUB_REPOSITORY
+  for (const c of await gh.all(`repos/${repo}/issues/${pr.number}/comments`)) {
+    const sha = /^\/merge-guard accept ([0-9a-f]{7,40})\b/.exec(c.body?.trim() ?? '')?.[1]
+    if (!sha || !pr.head.sha.startsWith(sha)) continue
+    const { permission } = await gh.get(`repos/${repo}/collaborators/${encodeURIComponent(c.user.login)}/permission`)
+    if (['admin', 'write'].includes(permission)) return true
+  }
+  return false
+}
+
 // pull_request runs by head SHA; workflow_run runs by the head SHA in their run-name.
 async function producerRuns(gh, env, file, pr) {
   const repo = env.GITHUB_REPOSITORY
@@ -202,11 +215,13 @@ async function main(env) {
     producer: runs[c.workflow][0]?.name ?? c.workflow,
     ...resolveCheck(c, runs[c.workflow])
   }))
-  // A fork PR's pull_request runs use its own workflow files, so it could replace the checks it is judged on.
+  // A fork PR's pull_request runs use its own workflow files, so it could replace the checks it is judged on. Someone
+  // with write access who has reviewed them accepts that one commit with `/merge-guard accept <sha>`.
   const forkEditsCi = pr.head.repo?.full_name !== env.GITHUB_REPOSITORY && files.some((f) => f.startsWith('.github/'))
-  const result = forkEditsCi
-    ? { state: 'failure', description: 'fork PRs that change .github/ are not accepted; a maintainer re-raises them from a branch' }
-    : verdict(resolved)
+  const result =
+    forkEditsCi && !(await acceptedBy(gh, env, pr))
+      ? { state: 'failure', description: `fork PR changes .github/; after review, a maintainer comments /merge-guard accept ${sha.slice(0, 7)}` }
+      : verdict(resolved)
   appendFileSync(env.GITHUB_STEP_SUMMARY, summary(pr, rules, resolved, result))
 
   const now = await gh.get(`repos/${env.GITHUB_REPOSITORY}/pulls/${pr.number}`)
