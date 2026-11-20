@@ -70,7 +70,11 @@ const modelResult = z.looseObject({
       }),
       z.object({}).strict()
     ])
-    .describe('The resolved load of a llama.cpp verdict. Empty otherwise.')
+    .describe('The resolved load of a llama.cpp verdict. Empty otherwise.'),
+  reason: z
+    .string()
+    .optional()
+    .describe('Why the model has no verdict. Present when `status` is `unknown`.')
 })
 
 export const modelFitResult = z.looseObject({
