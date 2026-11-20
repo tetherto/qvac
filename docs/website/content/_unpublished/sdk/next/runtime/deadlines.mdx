@@ -30,7 +30,7 @@ The four runtime deadlines measure:
 - **`queueMs`**: the wait for an admission slot on the model.
 - **`loadMs`**: a model load, from the end of the download. It includes the wait for another load or unload of the same model to finish. Read only by `loadModel()`.
 - **`runMs`**: the request from the moment it is admitted to its end. The wait for a slot is not counted.
-- **`idleMs`**: the time since the request last made progress. A response sent to the caller counts as progress, and so does a native progress event the caller does not receive, such as a fine-tuning step. For a call that returns a single reply, the idle deadline starts at the first progress event, so the time to that reply is bounded by `runMs` only.
+- **`idleMs`**: the time since the request last made progress. A response sent to the caller counts as progress, and so does a native progress event the caller does not receive, such as a fine-tuning step, or a token or audio chunk of a call made with `stream: false`. For a call that returns a single reply, the idle deadline starts at the first progress event, so the time to that reply is bounded by `runMs` only.
 
 A completion that runs tools on the caller's side stops its `runMs` and `idleMs` while it waits for a tool result, and starts both afresh for the next model turn.
 

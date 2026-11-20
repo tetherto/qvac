@@ -184,3 +184,31 @@ test('a deadline that passes while the runtime is suspended expires on resume', 
   t.is(clock.error?.boundary, 'run')
   t.is(clock.error?.timeoutMs, 60_000)
 })
+
+test('within: settled work keeps its outcome, pending work fails at the deadline', async (t) => {
+  const clock = new DeadlineClock(
+    { runMs: 40 },
+    { requestId: 'r-within' },
+    { idleFromAdmission: false }
+  )
+  t.teardown(() => clock.close())
+  clock.admitted()
+
+  t.is(await clock.within(Promise.resolve('reply')), 'reply')
+  const handlerError = new Error('handler failed')
+  let thrown: unknown
+  try {
+    await clock.within(Promise.reject(handlerError))
+  } catch (error) {
+    thrown = error
+  }
+  t.is(thrown, handlerError, "the work's own error is not replaced")
+
+  const never = new Promise<string>(() => {})
+  await t.exception(clock.within(never), DeadlineExceededError as unknown as new () => Error)
+  await t.exception(
+    clock.within(never),
+    DeadlineExceededError as unknown as new () => Error,
+    'work started after the deadline fails at once'
+  )
+})

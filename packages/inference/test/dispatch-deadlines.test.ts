@@ -10,6 +10,7 @@ import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-r
 import { getRequestRegistry } from '@/runtime/index'
 import { clearSessions, openSession } from '@/runtime/session-registry'
 import { startFinetune } from '@/plugins/builtin/llamacpp-completion/ops/finetune'
+import { llmPlugin } from '@/plugins/builtin/llamacpp-completion/plugin'
 import { DeadlineClock } from '@/runtime/deadlines'
 import { DeadlineExceededError } from '@/errors'
 import { ModelType } from '@/schemas'
@@ -326,6 +327,55 @@ test('finetune stats restart the idle deadline when the caller asked for no prog
     t.is(clock.error, undefined, 'stats every 20ms keep a 70ms idle deadline from passing')
     model.finish()
     t.is((await run).status, 'COMPLETED')
+  } finally {
+    unbind()
+    clock.close()
+    unregisterModel(modelId)
+  }
+})
+
+test('a completion with stream: false counts each buffered token as progress', async (t) => {
+  const modelId = 'buffered-completion-idle'
+  registerModel(modelId, {
+    model: {
+      run: () => ({
+        iterate: async function* (): AsyncGenerator<string> {
+          for (let n = 0; n < 10; n++) {
+            await sleep(20)
+            yield `t${n} `
+          }
+        },
+        await: () => Promise.resolve(),
+        cancel: () => Promise.resolve(),
+        stats: {}
+      }),
+      addon: { cancel: () => Promise.resolve() }
+    } as unknown as AnyModel,
+    path: '/tmp/model.gguf',
+    config: {},
+    modelType: ModelType.llamacppCompletion
+  })
+  const clock = new DeadlineClock(
+    { idleMs: 70 },
+    { requestId: 'buffered', capability: 'completion', modelId },
+    { idleFromAdmission: true }
+  )
+  const unbind = getRequestRegistry().bindDeadline('buffered', undefined, clock)
+  try {
+    const handler = llmPlugin.handlers.completionStream.handler as unknown as (
+      request: unknown
+    ) => AsyncGenerator<{ done?: boolean }>
+    const frames: { done?: boolean }[] = []
+    for await (const frame of handler({
+      modelId,
+      requestId: 'buffered',
+      history: [{ role: 'user', content: 'hello', attachments: [] }],
+      stream: false
+    })) {
+      frames.push(frame)
+    }
+    t.is(frames.length, 1, 'the caller receives one frame after 200ms of generation')
+    t.is(clock.error, undefined, 'tokens every 20ms keep a 70ms idle deadline from passing')
   } finally {
     unbind()
     clock.close()
