@@ -32,15 +32,12 @@ from tetherto.qvac_sdk import (
     load_model,
     unload_model,
 )
-
-HF = "https://huggingface.co"
-MOSS_REPO = (
-    f"{HF}/Comfy-Org/MOSS-Image/resolve/530a4c94f92c35ef6818b1b035a983fe9dcf5f54"
+from tetherto.qvac_sdk.models import (
+    MOSS_IMAGE_SFT_5B_BF16,
+    MOSS_IMAGE_SFT_TOKENIZER,
+    MOSS_IMAGE_VAE,
+    QWEN3_5_9B_MULTIMODAL_Q4_K_M,
 )
-DIFFUSION_MODEL_SRC = f"{MOSS_REPO}/diffusion_models/moss_image_sft_bf16.safetensors"
-LLM_MODEL_SRC = f"{HF}/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf"
-VAE_MODEL_SRC = f"{MOSS_REPO}/vae/flux2-vae_small.safetensors"
-TOKENIZER_SRC = f"{HF}/OpenMOSS-Team/MOSS-Image-SFT/resolve/f972bd4b4b9e3852133cc5da954d87bc32cd8fb9/tokenizer/tokenizer.json"
 
 WIDTH = 1024
 HEIGHT = 1024
@@ -108,16 +105,22 @@ async def main() -> int:
             "[output-dir] [model] [llm] [vae] [tokenizer]"
         )
         print(
-            "▸ Defaults download pinned Hugging Face weights. "
+            "▸ Defaults download the MOSS-Image registry models. "
             "Model overrides accept paths or URLs."
         )
         return 0
 
     output_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(".")
-    diffusion_model_src = sys.argv[2] if len(sys.argv) > 2 else DIFFUSION_MODEL_SRC
-    llm_model_src = sys.argv[3] if len(sys.argv) > 3 else LLM_MODEL_SRC
-    vae_model_src = sys.argv[4] if len(sys.argv) > 4 else VAE_MODEL_SRC
-    tokenizer_src = sys.argv[5] if len(sys.argv) > 5 else TOKENIZER_SRC
+    diffusion_model_src = (
+        model_source(sys.argv[2]) if len(sys.argv) > 2 else MOSS_IMAGE_SFT_5B_BF16
+    )
+    llm_model_src = (
+        model_source(sys.argv[3]) if len(sys.argv) > 3 else QWEN3_5_9B_MULTIMODAL_Q4_K_M
+    )
+    vae_model_src = model_source(sys.argv[4]) if len(sys.argv) > 4 else MOSS_IMAGE_VAE
+    tokenizer_src = (
+        model_source(sys.argv[5]) if len(sys.argv) > 5 else MOSS_IMAGE_SFT_TOKENIZER
+    )
 
     async with Client() as client:
         t = client.transport
@@ -127,12 +130,12 @@ async def main() -> int:
             print("▸ Loading MOSS-Image...")
             model_id = await load_model(
                 t,
-                model_src=model_source(diffusion_model_src),
+                model_src=diffusion_model_src,
                 model_type="sdcpp-generation",
                 model_config={
-                    "llmModelSrc": model_source(llm_model_src),
-                    "vaeModelSrc": model_source(vae_model_src),
-                    "tokenizerSrc": model_source(tokenizer_src),
+                    "llmModelSrc": llm_model_src,
+                    "vaeModelSrc": vae_model_src,
+                    "tokenizerSrc": tokenizer_src,
                     "flash_attn": True,
                 },
                 on_progress=print_progress,
