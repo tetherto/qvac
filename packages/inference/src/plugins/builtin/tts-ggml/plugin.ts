@@ -498,7 +498,7 @@ function createChatterboxModel(
     ...(config.seed !== undefined ? { seed: config.seed } : {}),
     config: {
       language: config.language ?? 'en',
-      ...(config.useGPU !== undefined ? { useGPU: config.useGPU } : {}),
+      ...(config.useGpu !== undefined ? { useGPU: config.useGpu } : {}),
       ...(config.outputSampleRate !== undefined
         ? { outputSampleRate: config.outputSampleRate }
         : {}),
@@ -580,7 +580,7 @@ function createSupertonicModel(
       // Supertonic defaults to CPU, but the addon rejects a stated `useGPU`
       // that contradicts `nGpuLayers`. Deriving the default from the layer
       // count keeps `nGpuLayers: 99` on its own usable instead of throwing.
-      useGPU: config.useGPU ?? (config.nGpuLayers !== undefined && config.nGpuLayers !== 0),
+      useGPU: config.useGpu ?? (config.nGpuLayers !== undefined && config.nGpuLayers !== 0),
       ...(config.outputSampleRate !== undefined
         ? { outputSampleRate: config.outputSampleRate }
         : {}),
@@ -645,7 +645,7 @@ function createParlerModel(
     ...(config.minNewTokens !== undefined ? { minNewTokens: config.minNewTokens } : {}),
     ...(config.normalizeNumbers !== undefined ? { normalizeNumbers: config.normalizeNumbers } : {}),
     config: {
-      ...(config.useGPU !== undefined ? { useGPU: config.useGPU } : {}),
+      ...(config.useGpu !== undefined ? { useGPU: config.useGpu } : {}),
       ...(config.outputSampleRate !== undefined
         ? { outputSampleRate: config.outputSampleRate }
         : {}),
@@ -714,7 +714,7 @@ function createCosyvoice3Model(
     ...(config.nGpuLayers !== undefined ? { nGpuLayers: config.nGpuLayers } : {}),
     ...(config.seed !== undefined ? { seed: config.seed } : {}),
     config: {
-      ...(config.useGPU !== undefined ? { useGPU: config.useGPU } : {}),
+      ...(config.useGpu !== undefined ? { useGPU: config.useGpu } : {}),
       ...(config.outputSampleRate !== undefined
         ? { outputSampleRate: config.outputSampleRate }
         : {}),
@@ -764,7 +764,7 @@ function createAudio8Model(
     ...(config.nGpuLayers !== undefined ? { nGpuLayers: config.nGpuLayers } : {}),
     ...(config.seed !== undefined ? { seed: config.seed } : {}),
     config: {
-      ...(config.useGPU !== undefined ? { useGPU: config.useGPU } : {}),
+      ...(config.useGpu !== undefined ? { useGPU: config.useGpu } : {}),
       ...(config.outputSampleRate !== undefined
         ? { outputSampleRate: config.outputSampleRate }
         : {}),
@@ -827,7 +827,7 @@ function createMossModel(
     ...(config.seed !== undefined ? { seed: config.seed } : {}),
     config: {
       language: config.language ?? 'en',
-      ...(config.useGPU !== undefined ? { useGPU: config.useGPU } : {}),
+      ...(config.useGpu !== undefined ? { useGPU: config.useGpu } : {}),
       ...ggmlBackendConfig(config)
     },
     logger,
@@ -857,7 +857,7 @@ function createMossBatchModel(
     ...(config.nGpuLayers !== undefined ? { nGpuLayers: config.nGpuLayers } : {}),
     ...(config.seed !== undefined ? { seed: config.seed } : {}),
     config: {
-      ...(config.useGPU !== undefined ? { useGPU: config.useGPU } : {}),
+      ...(config.useGpu !== undefined ? { useGPU: config.useGpu } : {}),
       ...ggmlBackendConfig(config)
     },
     logger,

@@ -310,7 +310,7 @@ test('resolve load: a minimax pair on disk resolves to the artifacts its plugin 
   await resolved.release()
 })
 
-test('resolve load: a minimax load naming both useGPU and device throws as the load does', async (t) => {
+test('resolve load: a minimax load naming both useGpu and device throws as the load does', async (t) => {
   clearPlugins()
   t.teardown(clearPlugins)
   registerPlugin(audioGenPlugin)
@@ -322,7 +322,7 @@ test('resolve load: a minimax load naming both useGPU and device throws as the l
         engine: 'minimax',
         lmModelSrc: scratchFile('mm3-lm-q8.gguf'),
         synthModelSrc: scratchFile('mm3-synth-q8.gguf'),
-        useGPU: true,
+        useGpu: true,
         device: 'gpu'
       }
     }),

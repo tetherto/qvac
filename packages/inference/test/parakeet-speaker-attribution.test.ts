@@ -25,7 +25,7 @@ function resolveContext(calls: unknown[]): ResolveContext {
 test('buildParakeetConfig: swaps the resolved diarization path in for the model source', (t) => {
   const config: ParakeetConfig = {
     backend: 'cpu',
-    useGPU: false,
+    useGpu: false,
     speakerAttribution: {
       modelSrc: 'sortformer-4spk-v1.q8_0.gguf',
       mergeSameSpeaker: false,
@@ -77,7 +77,7 @@ test('buildParakeetReloadConfig: leaves the loaded diarization model alone', (t)
   // new source with, so the attribution stays as the load set it.
   t.alike(
     buildParakeetReloadConfig({
-      maxThreads: 2,
+      threads: 2,
       speakerAttribution: { modelSrc: 'sortformer.gguf', mergeSameSpeaker: true }
     }),
     { parakeetConfig: { maxThreads: 2 } }

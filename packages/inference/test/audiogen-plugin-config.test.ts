@@ -30,7 +30,7 @@ test('AudioGen plugin resolves all config-owned model sources', async (t) => {
       lmModelSrc: 'lm.gguf',
       ditModelSrc: 'dit.gguf',
       vaeModelSrc: 'vae.gguf',
-      useGPU: true,
+      useGpu: true,
       inferenceSteps: 8
     },
     context
@@ -38,7 +38,7 @@ test('AudioGen plugin resolves all config-owned model sources', async (t) => {
 
   t.alike(resolvedSources, ['text-encoder.gguf', 'lm.gguf', 'dit.gguf', 'vae.gguf'])
   t.is(maxActiveResolutions, 1, 'large AudioGen artifacts resolve sequentially')
-  t.alike(result.config, { useGPU: true, inferenceSteps: 8 })
+  t.alike(result.config, { useGpu: true, inferenceSteps: 8 })
   t.alike(result.artifacts, {
     textEncModelPath: '/resolved/text-encoder.gguf',
     lmModelPath: '/resolved/lm.gguf',
@@ -63,7 +63,7 @@ test('AudioGen plugin resolves the MiniMax LM and synthesis sources', async (t) 
       engine: 'minimax',
       lmModelSrc: 'minimax-lm.gguf',
       synthModelSrc: 'minimax-synth.gguf',
-      useGPU: true,
+      useGpu: true,
       inferenceSteps: 12,
       cfgScale: 1.8
     },
@@ -73,7 +73,7 @@ test('AudioGen plugin resolves the MiniMax LM and synthesis sources', async (t) 
   t.alike(resolvedSources, ['minimax-lm.gguf', 'minimax-synth.gguf'])
   t.alike(result.config, {
     engine: 'minimax',
-    useGPU: true,
+    useGpu: true,
     inferenceSteps: 12,
     cfgScale: 1.8
   })
@@ -114,7 +114,7 @@ test('AudioGen plugin defaults to ACE-Step and forwards all four artifacts', (t)
   const result = audioGenPlugin.createModel({
     modelId: 'acestep-model',
     modelPath: '',
-    modelConfig: { useGPU: false },
+    modelConfig: { useGpu: false },
     artifacts: {
       textEncModelPath: '/resolved/text-encoder.gguf',
       lmModelPath: '/resolved/lm.gguf',
@@ -154,12 +154,12 @@ test('AudioGen plugin hands the ACE-Step backends and stage dump directory to th
       lmModelSrc: 'lm.gguf',
       ditModelSrc: 'dit.gguf',
       vaeModelSrc: 'vae.gguf',
-      useGPU: true,
+      useGpu: true,
       ...placement
     },
     context
   )
-  t.alike(resolved.config, { useGPU: true, ...placement })
+  t.alike(resolved.config, { useGpu: true, ...placement })
 
   const result = audioGenPlugin.createModel({
     modelId: 'acestep-placement-model',
@@ -198,7 +198,7 @@ test('AudioGen plugin creates a MiniMax engine from resolved artifacts', (t) => 
     modelPath: '',
     modelConfig: {
       engine: 'minimax',
-      useGPU: false,
+      useGpu: false,
       inferenceSteps: 12,
       cfgScale: 1.8
     },
@@ -265,7 +265,7 @@ test('AudioGen load config survives device-default resolution', (t) => {
     lmModelSrc: 'lm.gguf',
     ditModelSrc: 'dit.gguf',
     vaeModelSrc: 'vae.gguf',
-    useGPU: true
+    useGpu: true
   }
   const resolved = resolveModelConfigWithContext(
     ModelType.audiogenGgml,

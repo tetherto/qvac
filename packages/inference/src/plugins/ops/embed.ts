@@ -13,6 +13,7 @@ import type { EmbedResponse } from '@/utils/addon-responses'
 import { getRequestRegistry, withRequestContext } from '@/runtime/index'
 import { generateRandomRequestId } from '@/runtime/request-id'
 import { getEngineLogger } from '@/logging/index'
+import { LEGACY_EMBED_STATS_KEYS, withLegacyResponseKeys } from '@/schemas/legacy-response-keys'
 
 export interface EmbedResult {
   embedding: number[] | number[][]
@@ -134,17 +135,24 @@ export async function embed(
   }
   const modelExecutionMs = nowMs() - modelStart
 
-  const stats: EmbedStats = {
-    ...(response.stats?.total_time_ms !== undefined && { totalTime: response.stats.total_time_ms }),
-    ...(response.stats?.tokens_per_second !== undefined && {
-      tokensPerSecond: response.stats.tokens_per_second
-    }),
-    ...(response.stats?.total_tokens !== undefined && { totalTokens: response.stats.total_tokens }),
-    ...(response.stats?.backendDevice !== undefined && {
-      backendDevice: response.stats.backendDevice
-    }),
-    ...(response.stats?.context_size !== undefined && { contextSize: response.stats.context_size })
-  }
+  const stats: EmbedStats = withLegacyResponseKeys(
+    {
+      ...(response.stats?.total_time_ms !== undefined && {
+        totalTime: response.stats.total_time_ms
+      }),
+      ...(response.stats?.tokens_per_second !== undefined && {
+        tokensPerSecond: response.stats.tokens_per_second
+      }),
+      ...(response.stats?.total_tokens !== undefined && {
+        totalTokens: response.stats.total_tokens
+      }),
+      ...(response.stats?.backendDevice !== undefined && {
+        backendDevice: response.stats.backendDevice
+      }),
+      ...(response.stats?.context_size !== undefined && { ctxSize: response.stats.context_size })
+    },
+    LEGACY_EMBED_STATS_KEYS
+  )
 
   const embeddingsArray = rawEmbeddings[0]
 

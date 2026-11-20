@@ -14,20 +14,20 @@ test('parakeetRuntimeConfigSchema: accepts empty config', (t) => {
 
 test('parakeetRuntimeConfigSchema: accepts streaming + GPU options', (t) => {
   const result = parakeetRuntimeConfigSchema.parse({
-    useGPU: true,
+    useGpu: true,
     streaming: true,
     streamingChunkMs: 1000,
     streamingHistoryMs: 30000,
     streamingEmitPartials: false,
-    maxThreads: 4,
+    threads: 4,
     seed: 42
   })
-  t.is(result.useGPU, true)
+  t.is(result.useGpu, true)
   t.is(result.streaming, true)
   t.is(result.streamingChunkMs, 1000)
   t.is(result.streamingHistoryMs, 30000)
   t.is(result.streamingEmitPartials, false)
-  t.is(result.maxThreads, 4)
+  t.is(result.threads, 4)
   t.is(result.seed, 42)
 })
 
@@ -217,7 +217,7 @@ test('parakeetRuntimeConfigSchema: accepts the native backend selector', (t) => 
   }
   t.exception(() => parakeetRuntimeConfigSchema.parse({ backend: 1 }), 'a non-string selector')
   t.ok(
-    parakeetLoadConfigSchema.safeParse({ useGPU: false, backend: 'cuda' }).success,
+    parakeetLoadConfigSchema.safeParse({ useGpu: false, backend: 'cuda' }).success,
     'the strict load schema accepts the selector'
   )
 })

@@ -44,11 +44,11 @@ export function mossTranscribeFitRequest(load: FitLoad): FitRequestPlan {
     ...(workload.prompt !== undefined && { prompt: workload.prompt }),
     ...(workload.hotwords !== undefined && { hotwords: workload.hotwords }),
     ...(workload.maxNewTokens !== undefined && { maxNewTokens: workload.maxNewTokens }),
-    gpuLayers: gpuLayersFromGate(config.useGPU),
+    gpuLayers: gpuLayersFromGate(config.useGpu),
     // An explicit selector projects on that device and overrides the GPU gate,
     // as it does at load; a missing device rejects the fit.
     ...(config.backend !== undefined && { backend: config.backend }),
-    ...(config.maxThreads !== undefined && { threads: config.maxThreads }),
+    ...(config.threads !== undefined && { threads: config.threads }),
     ...(config.backendsDir !== undefined && { backendsDir: config.backendsDir })
   }
   return { request }
@@ -113,11 +113,11 @@ export function parakeetFitRequest(load: FitLoad): FitRequestPlan {
   const request: ParakeetFitRequest = {
     engine: 'parakeet',
     modelPath: load.modelPath,
-    gpuLayers: gpuLayersFromGate(config.useGPU),
+    gpuLayers: gpuLayersFromGate(config.useGpu),
     // An explicit selector projects on that device and overrides the GPU gate,
     // as it does at load; a missing device rejects the fit.
     ...(config.backend !== undefined && { backend: config.backend }),
-    ...(config.maxThreads !== undefined && { threads: config.maxThreads }),
+    ...(config.threads !== undefined && { threads: config.threads }),
     // The long-form window bounds the offline encoder graph the projection
     // sizes, so an explicit window (or the one-pass sentinel) reaches the fit.
     ...(config.longFormWindowFrames !== undefined && {

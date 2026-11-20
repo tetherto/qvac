@@ -56,8 +56,8 @@ export function audioEditStream(
         ...(referenceAudio && { referenceAudio }),
         ...(request.vocalLanguage !== undefined && { vocalLanguage: request.vocalLanguage }),
         ...(request.bpm !== undefined && { bpm: request.bpm }),
-        ...(request.keyscale !== undefined && { keyscale: request.keyscale }),
-        ...(request.timesignature !== undefined && { timesignature: request.timesignature }),
+        ...(request.keyScale !== undefined && { keyscale: request.keyScale }),
+        ...(request.timeSignature !== undefined && { timesignature: request.timeSignature }),
         ...(request.augmentCaptionWithMetadata !== undefined && {
           augmentCaptionWithMetadata: request.augmentCaptionWithMetadata
         }),

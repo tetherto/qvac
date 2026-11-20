@@ -235,6 +235,49 @@ test('renameLegacyDiffusionParams and renameLegacyVideoParams: client params', (
   )
 })
 
+test('renameLegacyRequestKeys: one spelling for NMT, TTS, audio-gen and OCR', (t) => {
+  const { warn } = collectWarnings()
+  const load = (modelType: string, modelConfig: Record<string, unknown>) =>
+    renameLegacyRequestKeys({ type: 'loadModel', modelType, modelConfig }, warn).modelConfig
+
+  t.alike(
+    load('nmt', {
+      engine: 'Bergamot',
+      beamsize: 2,
+      repetitionpenalty: 1.1,
+      topk: 5,
+      pivotModel: { modelSrc: 'p', norepeatngramsize: 3, topp: 0.9 }
+    }),
+    {
+      engine: 'Bergamot',
+      beamSize: 2,
+      repeatPenalty: 1.1,
+      topK: 5,
+      pivotModel: { modelSrc: 'p', noRepeatNgramSize: 3, topP: 0.9 }
+    }
+  )
+  for (const modelType of ['parakeet', 'moss-transcribe', 'tts', 'audiogen']) {
+    t.alike(load(modelType, { useGPU: true }), { useGpu: true }, modelType)
+  }
+  for (const modelType of ['parakeet', 'moss-transcribe']) {
+    t.alike(load(modelType, { maxThreads: 4 }), { threads: 4 }, `${modelType} threads`)
+  }
+  t.alike(load('ocr', { nThreads: 4 }), { threads: 4 })
+  t.alike(
+    renameLegacyRequestKeys(
+      {
+        type: 'audioGenStream',
+        modelId: 'a',
+        caption: 'c',
+        keyscale: 'C minor',
+        timesignature: '4'
+      },
+      warn
+    ),
+    { type: 'audioGenStream', modelId: 'a', caption: 'c', keyScale: 'C minor', timeSignature: '4' }
+  )
+})
+
 test('renameLegacyRequestKeys: completion generation params and response format', (t) => {
   const { warn } = collectWarnings()
   const request = renameLegacyRequestKeys(

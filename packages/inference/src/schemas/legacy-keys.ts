@@ -1,3 +1,4 @@
+import type { z } from 'zod'
 import {
   ModelTypeAliases,
   normalizeModelType,
@@ -10,6 +11,7 @@ import type { DecisionConfigInput } from '@/schemas/decision'
 import type { RerankConfigInput } from '@/schemas/rerank'
 import type { WhisperConfig } from '@/schemas/transcription-config'
 import type { BciConfig } from '@/schemas/bci-config'
+import type { nmtConfigBaseSchema } from '@/schemas/translation-config'
 import type {
   DiffusionClientParams,
   SdcppConfig,
@@ -438,6 +440,53 @@ export type LegacyVideoClientParams = (
 ) &
   LegacyVideoKeys
 
+export interface LegacyUseGpuConfig {
+  /** @deprecated Use `useGpu`. */
+  useGPU?: boolean
+}
+
+export interface LegacyGgmlTranscriptionConfig extends LegacyUseGpuConfig {
+  /** @deprecated Use `threads`. */
+  maxThreads?: number
+}
+
+export interface LegacyNmtGenerationParams {
+  /** @deprecated Use `beamSize`. */
+  beamsize?: number
+  /** @deprecated Use `lengthPenalty`. */
+  lengthpenalty?: number
+  /** @deprecated Use `maxLength`. */
+  maxlength?: number
+  /** @deprecated Use `repeatPenalty`. */
+  repetitionpenalty?: number
+  /** @deprecated Use `noRepeatNgramSize`. */
+  norepeatngramsize?: number
+  /** @deprecated Use `topK`. */
+  topk?: number
+  /** @deprecated Use `topP`. */
+  topp?: number
+}
+
+type NmtConfigInput = z.input<typeof nmtConfigBaseSchema>
+
+type NmtPivotModel = NonNullable<Extract<NmtConfigInput, { engine: 'Bergamot' }>['pivotModel']>
+
+export interface LegacyNmtConfig extends LegacyNmtGenerationParams {
+  pivotModel?: NmtPivotModel & LegacyNmtGenerationParams
+}
+
+export interface LegacyOcrConfig {
+  /** @deprecated Use `threads`. */
+  nThreads?: number
+}
+
+export interface LegacyAudioGenParams {
+  /** @deprecated Use `keyScale`. */
+  keyscale?: string
+  /** @deprecated Use `timeSignature`. */
+  timesignature?: string
+}
+
 export type LegacyModelConfigs = {
   'llamacpp-completion': LegacyLlmConfig
   'llamacpp-decision': LegacyEmbedLlamacppConfig<DecisionConfigInput>
@@ -445,6 +494,12 @@ export type LegacyModelConfigs = {
   'whispercpp-transcription': LegacyWhisperConfig
   'bci-whispercpp-transcription': LegacyBciConfig
   'sdcpp-generation': LegacySdcppConfig
+  'nmtcpp-translation': LegacyNmtConfig
+  'parakeet-transcription': LegacyGgmlTranscriptionConfig
+  'moss-transcribe': LegacyGgmlTranscriptionConfig
+  'tts-ggml': LegacyUseGpuConfig
+  'audiogen-ggml': LegacyUseGpuConfig
+  'ggml-ocr': LegacyOcrConfig
 }
 
 type CanonicalOf<T> = T extends keyof typeof ModelTypeAliases ? (typeof ModelTypeAliases)[T] : T
@@ -714,13 +769,44 @@ const VIDEO_PARAMS_KEYS: LegacyKeySpec = {
   }
 }
 
+const USE_GPU_CONFIG_KEYS: LegacyKeySpec = { renames: { useGPU: 'useGpu' } }
+
+const GGML_TRANSCRIPTION_CONFIG_KEYS: LegacyKeySpec = {
+  renames: { useGPU: 'useGpu', maxThreads: 'threads' }
+}
+
+const NMT_GENERATION_RENAMES = {
+  beamsize: 'beamSize',
+  lengthpenalty: 'lengthPenalty',
+  maxlength: 'maxLength',
+  repetitionpenalty: 'repeatPenalty',
+  norepeatngramsize: 'noRepeatNgramSize',
+  topk: 'topK',
+  topp: 'topP'
+}
+
+const NMT_CONFIG_KEYS: LegacyKeySpec = {
+  renames: NMT_GENERATION_RENAMES,
+  nested: { pivotModel: { renames: NMT_GENERATION_RENAMES } }
+}
+
+const AUDIO_GEN_PARAMS_KEYS: LegacyKeySpec = {
+  renames: { keyscale: 'keyScale', timesignature: 'timeSignature' }
+}
+
 export const LEGACY_MODEL_CONFIG_KEYS: Partial<Record<CanonicalModelType, LegacyKeySpec>> = {
   'llamacpp-completion': LLM_CONFIG_KEYS,
   'llamacpp-decision': EMBED_LLAMACPP_CONFIG_KEYS,
   'llamacpp-rerank': EMBED_LLAMACPP_CONFIG_KEYS,
   'whispercpp-transcription': WHISPER_CONFIG_KEYS,
   'bci-whispercpp-transcription': BCI_CONFIG_KEYS,
-  'sdcpp-generation': SDCPP_CONFIG_KEYS
+  'sdcpp-generation': SDCPP_CONFIG_KEYS,
+  'nmtcpp-translation': NMT_CONFIG_KEYS,
+  'parakeet-transcription': GGML_TRANSCRIPTION_CONFIG_KEYS,
+  'moss-transcribe': GGML_TRANSCRIPTION_CONFIG_KEYS,
+  'tts-ggml': USE_GPU_CONFIG_KEYS,
+  'audiogen-ggml': USE_GPU_CONFIG_KEYS,
+  'ggml-ocr': { renames: { nThreads: 'threads' } }
 }
 
 export const LEGACY_REQUEST_KEYS: Readonly<Record<string, LegacyKeySpec>> = {
@@ -728,7 +814,16 @@ export const LEGACY_REQUEST_KEYS: Readonly<Record<string, LegacyKeySpec>> = {
   completionOrchestrate: COMPLETION_PARAMS_KEYS,
   batchCompletionStream: { nested: { prompts: COMPLETION_PARAMS_KEYS } },
   diffusionStream: DIFFUSION_PARAMS_KEYS,
-  videoStream: VIDEO_PARAMS_KEYS
+  videoStream: VIDEO_PARAMS_KEYS,
+  audioGenStream: AUDIO_GEN_PARAMS_KEYS,
+  audioEditStream: AUDIO_GEN_PARAMS_KEYS
+}
+
+export function renameLegacyAudioGenParams<P extends object>(
+  params: P & LegacyAudioGenParams,
+  warn: LegacyKeyWarn
+): P {
+  return renameLegacyKeys(params, AUDIO_GEN_PARAMS_KEYS, warn) as P
 }
 
 export function renameLegacyDiffusionParams(

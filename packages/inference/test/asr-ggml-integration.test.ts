@@ -228,8 +228,8 @@ test('whisperConfigSchema accepts mainGpu and rejects conflicting selectors', (t
 
 test('buildParakeetEngineConfig removes undefined addon fields', (t) => {
   const config = buildParakeetEngineConfig({
-    useGPU: true,
-    maxThreads: undefined
+    useGpu: true,
+    threads: undefined
   })
 
   t.alike(config, {
@@ -243,7 +243,7 @@ test('buildParakeetEngineConfig removes undefined addon fields', (t) => {
 test('buildParakeetEngineConfig forwards Indic Conformer language', (t) => {
   const config = buildParakeetEngineConfig({
     language: 'hi',
-    useGPU: true
+    useGpu: true
   })
 
   t.alike(config, {
