@@ -226,11 +226,15 @@ Windows source validation with MSVC 14.44, LLVM 23.1.4 and `/MTd` passes the
 CPU allocate/free, logger and abort tests. A Release DLL whole-archiving
 llama/common/mtmd against the shared core also links and loads successfully.
 
-The additional C++ stream/vector acceptance probe remains **failing** under
+The additional C++ stream/vector probe remains **failing** under
 `/MTd`: a caller-owned vector is passed into `Uint8BufferStreamBuf`, and the
 core reports `__acrt_first_block == header` during DLL teardown. The no-stream
 control passes. This is separate from the fixed linker/export collision.
-Keep this boundary out of any claim that Windows ownership is fully validated.
+The current LLM addon loads from disk and rejects weight streaming. Its old
+`initFromMemory` helper has no production callers in this checkout, so this
+probe does not establish a failure in the active model-loading path. The
+exported `llama_model_load_from_buffer` API still calls this constructor across
+the new fabric/core DLL boundary and would have the same ownership problem.
 The probe is source-only and instruments the core with a test CRT report hook;
 it is not the installed-port test and is not run by the current CI target.
 Run it in a VS developer shell, with native CMake/Ninja/clang-cl executables:
@@ -248,6 +252,59 @@ The report hook terminates the child with status 86 on any CRT assertion,
 including assertions after `main` returns; checking a counter in `main` would
 miss this failure. The hook does not change allocation behavior and is never
 compiled into shipped core libraries.
+
+### Windows shared CRT experiment
+
+`windows-shared-crt` evaluates a common Windows runtime using `/MDd` in Debug
+and `/MD` in Release. It does not change production triplets, addon flags,
+registry pins, or the existing `/MTd` baseline. Both builds use the actual
+shared-core source checkout and a real CPU backend. A separate DLL
+whole-archives llama/common/mtmd, matching fabric's archive layout, while a
+client executable checks typed exceptions, `exception_ptr`, stream RTTI and
+allocation/destruction across DLL boundaries. This DLL is a link/ownership
+control; it is not the actual Bare addon.
+
+In a VS developer shell with native CMake/Ninja/clang-cl executables:
+
+```powershell
+$source = 'packages/fabric/test/regression/windows-shared-crt'
+cmake -S $source -B build/windows-shared-crt-debug -G Ninja `
+  -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl `
+  -DQVAC_FABRIC_SOURCE_DIR=C:/path/to/fabric
+cmake --build build/windows-shared-crt-debug --parallel 6
+ctest --test-dir build/windows-shared-crt-debug --output-on-failure
+
+cmake -S $source -B build/windows-shared-crt-release -G Ninja `
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl `
+  -DQVAC_FABRIC_SOURCE_DIR=C:/path/to/fabric `
+  -DMSVC_REDIST_DIR='C:/path/to/VS/VC/Redist/MSVC/toolset-version'
+cmake --build build/windows-shared-crt-release --parallel 6
+ctest --test-dir build/windows-shared-crt-release --output-on-failure
+cmake --install build/windows-shared-crt-release --prefix build/windows-crt-package `
+  --component crt-experiment
+& ./build/windows-crt-package/bin/runtime_boundary.exe
+```
+
+Debug additionally runs the original stream/vector probe with its fatal CRT
+assertion hook. Release copies the toolset's redistributable runtime DLLs into
+the executable directory and installs a standalone test bundle. Its runtime
+test verifies that `msvcp140.dll` and `vcruntime140.dll` actually loaded from
+that directory, so a globally installed redistributable cannot mask failure.
+The OS-provided UCRT remains a system dependency on supported modern Windows.
+Debug runtime DLLs are used only on the development machine and are never
+included in the distributable bundle. This is a manual experiment, outside the
+current installed-port CI target. Production adoption still needs consistent
+consumer/dependency flags, runtime staging, Bare DLL lookup and CI policy work.
+
+Validated with MSVC 14.44 and LLVM 23.1.4 against source `f89291d9c`:
+all six Debug tests pass, including the stream/vector probe that fails under
+`/MTd`. The Release C++ boundary test passes both in the build tree and in the
+installed bundle with `PATH` restricted to the Windows system directory.
+`msvcp140.dll`, `vcruntime140.dll` and `vcruntime140_1.dll` report loading from
+the bundle. PE imports confirm that the caller, fabric-like DLL, core and CPU
+backend use the shared runtime. The existing four Linux boundary tests also
+pass after making the probe's intentionally throwing C-linkage function
+explicitly `noexcept(false)`, as required by Windows `/EHsc` assumptions.
 
 The strict runtime-binding audit remains required: versioned imports alone
 have not eliminated Bare's allocator interposition. Windows stream/vector
