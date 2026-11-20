@@ -53,7 +53,7 @@ test('resolve load: reads a source already on disk rather than fetching a stub',
   const resolved = await resolveLoadFromStubs({
     modelSrc: model,
     modelType: ModelType.llamacppCompletion,
-    modelConfig: { ctx_size: 4096 }
+    modelConfig: { ctxSize: 4096 }
   })
 
   t.is(resolved.status, 'resolved')
@@ -72,13 +72,13 @@ test('resolve load: takes the config and artifact keys from the plugin', async (
   const resolved = await resolveLoadFromStubs({
     modelSrc: model,
     modelType: ModelType.llamacppCompletion,
-    modelConfig: { ctx_size: 4096, companionSrc: companion }
+    modelConfig: { ctxSize: 4096, companionSrc: companion }
   })
 
   t.is(resolved.status, 'resolved')
   if (resolved.status !== 'resolved') return
   t.alike(resolved.artifacts, { companionPath: companion }, 'keyed as the engine reads it')
-  t.alike(resolved.modelConfig, { ctx_size: 4096 }, 'the source field is stripped')
+  t.alike(resolved.modelConfig, { ctxSize: 4096 }, 'the source field is stripped')
   await resolved.release()
 })
 

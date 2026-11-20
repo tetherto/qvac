@@ -82,12 +82,12 @@ test('loadModelOptionsToRequestSchema: points misplaced LLM config fields to mod
     loadModelOptionsToRequestSchema.parse({
       modelSrc: 'model.gguf',
       modelType: 'llm',
-      ctx_size: 2048
+      ctxSize: 2048
     })
-    t.fail('expected misplaced ctx_size to fail validation')
+    t.fail('expected misplaced ctxSize to fail validation')
   } catch (error) {
     t.ok(error instanceof Error)
-    t.ok(error instanceof Error && error.message.includes('modelConfig.ctx_size'))
+    t.ok(error instanceof Error && error.message.includes('modelConfig.ctxSize'))
   }
 })
 

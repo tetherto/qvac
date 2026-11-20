@@ -56,7 +56,7 @@ export type ContextOverflowSizes = {
   cachedTokens?: number
   /** Total the failing guard reported, in `ctxSize` units; the guards trigger on `>=`, so it can equal the window. */
   requiredTokens?: number
-  /** Effective per-request ceiling: `ctx_size` split across slots at `parallel > 1`. */
+  /** Effective per-request ceiling: `ctxSize` split across slots at `parallel > 1`. */
   ctxSize?: number
 }
 

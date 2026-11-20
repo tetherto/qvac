@@ -7,26 +7,25 @@ import { embedFitRequest } from '@/plugins/builtin/llamacpp-embedding/fit'
 import type { FitRequestPlan } from '@/schemas/plugin'
 
 const COMPLETION_CONFIG = {
-  ctx_size: 4096,
-  gpu_layers: 99,
+  ctxSize: 4096,
+  gpuLayers: 99,
   device: 'gpu',
-  system_prompt: 'You are a helpful assistant.',
-  image_tile_mode: 'sequential',
-  temp: 0.8,
-  top_k: 40,
-  top_p: 0.9,
+  systemPrompt: 'You are a helpful assistant.',
+  imageTileMode: 'sequential',
+  temperature: 0.8,
+  topK: 40,
+  topP: 0.9,
   seed: -1,
   predict: -1,
-  repeat_penalty: 1.1,
+  repeatPenalty: 1.1,
   tools: false,
-  stop_sequences: ['</s>'],
-  n_discarded: 0,
+  stopSequences: ['</s>'],
   parallel: 2,
-  load_mode: 'mmap',
-  'cache-type-k': 'q8_0',
-  'cache-type-v': 'q8_0',
-  'main-gpu': 0,
-  'split-mode': 'layer',
+  loadMode: 'mmap',
+  cacheTypeK: 'q8_0',
+  cacheTypeV: 'q8_0',
+  mainGpu: 0,
+  splitMode: 'layer',
   openclCacheDir: '/tmp/opencl'
 }
 
@@ -55,7 +54,7 @@ function llmRequest(plan: FitRequestPlan): LlmLlamacpp.FitRequest | undefined {
 }
 
 test('completion: forwards the whole resolved load to its own engine', (t) => {
-  const request = llmRequest(completion({ threads: 8, 'cpu-mask': 'ff' }))
+  const request = llmRequest(completion({ threads: 8, cpuMask: 'ff' }))
 
   t.ok(request)
   const config = request?.config ?? {}
@@ -73,12 +72,12 @@ test('completion: the checkpoint and prompt-cache keys stay out of the fit reque
   const config =
     llmRequest(
       completion({
-        cache_checkpoints: 2,
-        cache_checkpoints_max_bytes: 1073741824,
-        cache_checkpoint_storage: 'disk',
-        cache_checkpoint_dir: '/data/cache',
-        cache_ram_mib: 512,
-        cache_share_across_keys: true
+        cacheCheckpoints: 2,
+        cacheCheckpointsMaxBytes: 1073741824,
+        cacheCheckpointStorage: 'disk',
+        cacheCheckpointDir: '/data/cache',
+        cacheRamMib: 512,
+        cacheShareAcrossKeys: true
       })
     )?.config ?? {}
 
@@ -92,14 +91,14 @@ test('completion: the checkpoint and prompt-cache keys stay out of the fit reque
 })
 
 test('completion: the image limit stays out of the fit request', (t) => {
-  const config = llmRequest(completion({ 'image-max-megapixels': 20 }))?.config ?? {}
+  const config = llmRequest(completion({ imageMaxMegapixels: 20 }))?.config ?? {}
 
   t.absent('image-max-megapixels' in config)
   t.is(config['ctx_size'], '4096')
 })
 
-test('completion: a symbolic main-gpu travels as written', (t) => {
-  t.is(llmRequest(completion({ 'main-gpu': 'dedicated' }))?.config?.['main-gpu'], 'dedicated')
+test('completion: a symbolic mainGpu travels as written', (t) => {
+  t.is(llmRequest(completion({ mainGpu: 'dedicated' }))?.config?.['main-gpu'], 'dedicated')
 })
 
 test('completion: a multimodal load is unknown', (t) => {
@@ -122,7 +121,7 @@ test('completion: a split model is unknown', (t) => {
 })
 
 test('completion: an RPC load is unknown', (t) => {
-  t.ok('unknown' in completion({ 'rpc-servers': '10.0.0.2:50052,10.0.0.3:50052' }))
+  t.ok('unknown' in completion({ rpcServers: '10.0.0.2:50052,10.0.0.3:50052' }))
 })
 
 test('completion: the speculative keys and the draft model path reach the fit', (t) => {
@@ -130,7 +129,7 @@ test('completion: the speculative keys and the draft model path reach the fit', 
     llmRequest(
       llmFitRequest({
         modelPath: '/models/model.gguf',
-        modelConfig: { ...COMPLETION_CONFIG, spec_type: 'draft-dflash', spec_draft_n_max: 7 },
+        modelConfig: { ...COMPLETION_CONFIG, specType: 'draft-dflash', specDraftNMax: 7 },
         artifacts: { draftModelPath: '/models/dflash.gguf' },
         isShardedModel: false
       })
@@ -146,7 +145,7 @@ test('completion: an external MTP head reaches the fit as spec_draft_model', (t)
     llmRequest(
       llmFitRequest({
         modelPath: '/models/model.gguf',
-        modelConfig: { ...COMPLETION_CONFIG, spec_type: 'draft-mtp' },
+        modelConfig: { ...COMPLETION_CONFIG, specType: 'draft-mtp' },
         artifacts: { draftModelPath: '/models/mtp-head.gguf' },
         isShardedModel: false
       })
@@ -157,7 +156,7 @@ test('completion: an external MTP head reaches the fit as spec_draft_model', (t)
 })
 
 test('completion: no draft model artifact sends no spec_draft_model to the fit', (t) => {
-  const config = llmRequest(completion({ spec_type: 'draft-mtp' }))?.config ?? {}
+  const config = llmRequest(completion({ specType: 'draft-mtp' }))?.config ?? {}
 
   t.is(config['spec_type'], 'draft-mtp')
   t.absent('spec_draft_model' in config)

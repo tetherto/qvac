@@ -12,8 +12,11 @@ import {
   type Tool,
   type ToolCallEvent,
   type ToolCallWithCall,
-  type RPCOptions
+  type RPCOptions,
+  type CamelCaseCompletionParams,
+  renameLegacyCompletionParams
 } from '@qvac/inference/surface'
+import { warnLegacyKey } from '@/utils/legacy-keys'
 import { CompletionFailedError, InferenceCancelledError } from '@/utils/errors-server'
 import { getMcpToolsWithHandlers } from '@/utils/mcp-adapter'
 import { validateTools, type ToolHandlerMap, type ToolInput } from '@/utils/tool-helpers'
@@ -134,6 +137,10 @@ type CompletionParams = Omit<CompletionClientParams, 'tools'> & {
  * ```
  */
 export function completion(params: CompletionParams): CompletionRun {
+  return runCompletion(renameLegacyCompletionParams(params, warnLegacyKey))
+}
+
+function runCompletion(params: CamelCaseCompletionParams<CompletionParams>): CompletionRun {
   // Stable identity for this run, generated client-side so it's
   // available synchronously the moment we return — before the first
   // network round-trip and therefore before the user could possibly

@@ -17,6 +17,6 @@ export function getResponseFormatJsonSchema(responseFormat: ResponseFormat): str
     case 'json_object':
       return JSON.stringify({ type: 'object' })
     case 'json_schema':
-      return JSON.stringify(responseFormat.json_schema.schema)
+      return JSON.stringify(responseFormat.jsonSchema.schema)
   }
 }

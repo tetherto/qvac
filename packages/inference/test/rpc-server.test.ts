@@ -46,14 +46,18 @@ function fixture(overrides: Partial<RpcServerDependencies> = {}) {
 const serving = { host: '10.0.0.2', allowNonLoopbackHost: true, discoveryTopic: 'test' }
 
 test('RPC config preserves endpoint, device and split-weight order', (t) => {
-  const input = {
-    'rpc-servers': '10.0.0.3:50052,10.0.0.2:50052',
-    devices: 'RPC1,RPC0',
-    'tensor-split': '3,1',
-    'split-mode': 'layer'
-  }
-  const output = transformLlmConfig(llmConfigSchema.parse(input))
-  for (const [key, value] of Object.entries(input)) t.is(output[key], value)
+  const output = transformLlmConfig(
+    llmConfigSchema.parse({
+      rpcServers: '10.0.0.3:50052,10.0.0.2:50052',
+      devices: 'RPC1,RPC0',
+      tensorSplit: '3,1',
+      splitMode: 'layer'
+    })
+  )
+  t.is(output['rpc-servers'], '10.0.0.3:50052,10.0.0.2:50052')
+  t.is(output['devices'], 'RPC1,RPC0')
+  t.is(output['tensor-split'], '3,1')
+  t.is(output['split-mode'], 'layer')
   t.absent(
     'rpc-servers' in transformLlmConfig(llmConfigSchema.parse({})),
     'local config stays local'

@@ -13,7 +13,7 @@ export interface LlmStats {
   // out; 0 when no tools were sent.
   toolDefinitionsDropped?: number
   // Speculative decoding: draft tokens proposed and accepted; set only when
-  // the model was loaded with `spec_type`.
+  // the model was loaded with `specType`.
   draftTokens?: number
   draftAcceptedTokens?: number
   backendDevice?: 'cpu' | 'gpu' | 'npu'

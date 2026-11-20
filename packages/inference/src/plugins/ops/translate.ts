@@ -78,12 +78,12 @@ export function isAfrican(code: string | undefined) {
 
 // Per-call sampling overrides applied to LLM translate. Greedy + fixed seed
 // makes output reproducible across calls; bounded predict prevents a runaway
-// from accumulating into the KV cache and overflowing ctx_size on a later
+// from accumulating into the KV cache and overflowing ctxSize on a later
 // call; repeat_penalty > 1 breaks single-token echo loops (e.g. greedy
 // continuation of "bank" → "bank\nbank\n…").
 //
-// Skipped for AfriqueGemma: that model relies on load-time `stop_sequences`
-// and a `repeat_penalty` of 1 — applying these per-call values causes "\n"
+// Skipped for AfriqueGemma: that model relies on load-time `stopSequences`
+// and a `repeatPenalty` of 1 — applying these per-call values causes "\n"
 // to be penalised, defeats the stop, and lets the model run to `predict`.
 // AfriqueGemma callers must set decoding via `modelConfig` at load time.
 type LlmTranslateGenerationParams = Required<
