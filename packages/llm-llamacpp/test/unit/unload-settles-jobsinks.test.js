@@ -2,6 +2,7 @@
 
 const test = require('brittle')
 const LlmLlamacpp = require('../../index.js')
+const { LlamaInterface } = require('../../addon.js')
 
 function createStub(defaultImpl = () => {}) {
   let impl = defaultImpl
@@ -74,4 +75,33 @@ test('unload() settles in-flight concurrent responses instead of hanging', async
     'Model was unloaded',
     'the rejection must report that the model was unloaded'
   )
+})
+
+test('LlamaInterface.unload() waits for asynchronous binding cleanup', async (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    let finishDestroy
+    const destroyed = new Promise((resolve) => {
+      finishDestroy = resolve
+    })
+    const binding = {
+      createInstance: () => ({}),
+      destroyInstance: () => destroyed
+    }
+    const addon = new LlamaInterface(
+      binding,
+      { path: '/tmp/test.gguf', projectionPath: '', config: {} },
+      () => {}
+    )
+
+    let settled = false
+    const unloading = addon.unload().then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    t.absent(settled, `cleanup is still pending, iteration ${iteration + 1}`)
+
+    finishDestroy()
+    await unloading
+    t.ok(settled, `cleanup finished before unload resolved, iteration ${iteration + 1}`)
+  }
 })
