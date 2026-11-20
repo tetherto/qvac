@@ -155,6 +155,7 @@ test('buildAsrBackendDiagnostics: maps the addon backend verdict', (t) => {
 })
 
 test('buildAsrBackendDiagnostics: every GPU backend id resolves', (t) => {
+  t.is(ASR_BACKEND_IDS.WebGPU, 5, 'ASR 0.13 WebGPU backend id is preserved')
   for (const [name, id] of Object.entries(ASR_BACKEND_IDS)) {
     if (name === 'CPU' || name === 'Other') continue
     const d = buildAsrBackendDiagnostics({ backendDevice: 1, backendId: id })

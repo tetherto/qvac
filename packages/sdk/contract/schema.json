@@ -28524,6 +28524,7 @@
           "type": "object",
           "properties": {
             "chunkMs": {
+              "description": "Streaming decode window in ms. Omit to inherit streamingChunkMs from modelConfig, or the native model default when neither is set. Offline TDT push streams default to 30000 and reject windows below 30000; this is independent of the size of audio writes. Cache-aware models use their own cadence.",
               "type": "integer",
               "exclusiveMinimum": 0,
               "maximum": 9007199254740991
