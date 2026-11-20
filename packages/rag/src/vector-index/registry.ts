@@ -412,7 +412,8 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       discard(entry)
     }
     const { dir } = config
-    if (!dir) return
+    // Snapshots exist only where the addon loads; this also keeps Node off bare-fs.
+    if (!dir || !(await loadNativeIndex())) return
     const store = createSnapshotStore(dir, coreKey)
     await onDisk(namespace, () => store.remove(namespace, createdAt))
   }
