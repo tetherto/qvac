@@ -871,6 +871,14 @@ def tool_call_shape(value: Any, args: dict[str, Any]) -> StepResult:
             f"declared: [{', '.join(sorted(declared))}]"
         )
 
+    # `exclusive`: every call must be to a declared tool, as a forced tool_choice demands.
+    if args.get("exclusive") is True and len(valid) != len(calls):
+        got = ", ".join(str(call.get("name") or "<unnamed>") for call in calls)
+        return StepResult.fail(
+            f"a tool call is outside the declared tools. Got: [{got}], "
+            f"declared: [{', '.join(sorted(declared))}]"
+        )
+
     match = next((call for call in valid if call.get("name") == args.get("name")), None)
     if match is not None:
         call_args = match.get("arguments") or {}
@@ -884,6 +892,61 @@ def tool_call_shape(value: Any, args: dict[str, Any]) -> StepResult:
     return StepResult.ok(
         "tool call(s): " + ", ".join(str(call.get("name")) for call in valid)
     )
+
+
+def tool_call_or_error(value: Any, args: dict[str, Any]) -> StepResult:
+    """A structured call to a declared tool, or an explicit error; never prose alone."""
+    run = value if isinstance(value, dict) else {}
+    error = run.get("error")
+    if error:
+        return StepResult.ok(f"explicit error: {(error or {}).get('message', '')}")
+    declared = set(args.get("declared") or [])
+    calls = run.get("toolCalls") or []
+    valid = [call for call in calls if call.get("name") in declared]
+    if valid:
+        return StepResult.ok(
+            "tool call(s): " + ", ".join(str(call.get("name")) for call in valid)
+        )
+    names = ", ".join(str(call.get("name") or "<unnamed>") for call in calls)
+    return StepResult.fail(
+        f"no call to a declared tool and no error (got {len(calls)} call(s): "
+        f"[{names}]); text: {str(run.get('text') or '')[:200]}"
+    )
+
+
+def streamed_tool_calls_match_final(value: Any, args: dict[str, Any]) -> StepResult:
+    """The `toolCall` events are the final's tool calls, and no markup leaks."""
+    run = value if isinstance(value, dict) else {}
+    events = run.get("events") or []
+    streamed = [
+        event.get("call") or {} for event in events if event.get("type") == "toolCall"
+    ]
+    final = run.get("toolCalls") or []
+    if not final:
+        return StepResult.fail("the final carries no tool call")
+    if len(streamed) != len(final):
+        return StepResult.fail(
+            f"{len(streamed)} toolCall event(s) but {len(final)} final tool call(s)"
+        )
+    for index, call in enumerate(final):
+        event = streamed[index]
+        for field in ("id", "name", "arguments"):
+            if event.get(field) != call.get(field):
+                return StepResult.fail(
+                    f"call[{index}].{field}: event {event.get(field)!r} "
+                    f"!= final {call.get(field)!r}"
+                )
+    content = "".join(
+        str(event.get("text") or "")
+        for event in events
+        if event.get("type") == "contentDelta"
+    )
+    leaked = [marker for marker in args.get("forbidden") or [] if marker in content]
+    if leaked:
+        return StepResult.fail(
+            f"visible content carries tool markup {leaked}: {content[:200]}"
+        )
+    return StepResult.ok(f"{len(final)} call(s) streamed as in the final")
 
 
 def text_block_shape(value: Any, args: dict[str, Any]) -> StepResult:
@@ -1045,6 +1108,8 @@ ASSERTIONS: dict[str, Callable[[Any, dict[str, Any]], StepResult]] = {
     "nonEmptyText": non_empty_text,
     "errorMatches": error_matches,
     "toolCallShape": tool_call_shape,
+    "toolCallOrError": tool_call_or_error,
+    "streamedToolCallsMatchFinal": streamed_tool_calls_match_final,
     "textBlockShape": text_block_shape,
     "timingStatsPresent": timing_stats_present,
     "producedAudio": produced_audio,

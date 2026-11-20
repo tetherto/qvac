@@ -44,6 +44,9 @@ class ChecksTest {
         val calls = listOf(mapOf("name" to "get_weather", "arguments" to mapOf("city" to "Paris")))
         assertTrue(tool(calls, mapOf("declared" to listOf("get_weather"), "name" to "get_weather", "argKeys" to listOf("city"))).passed)
         assertFalse(tool(emptyList<Any?>(), mapOf("declared" to listOf("get_weather"))).passed)
+        val mixed = calls + mapOf("name" to "get_time", "arguments" to emptyMap<String, Any?>())
+        assertTrue(tool(mixed, mapOf("declared" to listOf("get_weather"))).passed)
+        assertFalse(tool(mixed, mapOf("declared" to listOf("get_weather"), "exclusive" to true)).passed)
 
         val moss = Assertions.named.getValue("mossSoundEffect")
         val pcm = List(48000) { if (it % 2 == 0) 0.1 else -0.1 }
