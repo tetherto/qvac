@@ -7,7 +7,7 @@ import { withNativeKeys } from '@/utils/native-keys'
 
 type Artifacts = Record<string, string> | undefined
 
-const SD_NATIVE_KEYS = {
+export const SD_NATIVE_KEYS = {
   mainGpu: 'main-gpu',
   samplerRng: 'sampler_rng',
   vaeAutoCpuFallback: 'vae_auto_cpu_fallback',
