@@ -4,6 +4,7 @@ import { TOOL_SEARCH_NAME } from '@/utils/tools/defer'
 import { completionEventSchema } from '@/schemas/completion-event'
 import { REASONING_BUDGET_MAX } from '@/schemas/llamacpp-config'
 import { trackedRequestSchema } from '@/schemas/request-base'
+import type { WithLegacyCompletionParams } from '@/schemas/legacy-keys'
 
 export { completionStatsSchema, type CompletionStats } from '@/schemas/completion-event'
 
@@ -76,40 +77,40 @@ const kvCacheSchema = z.union([
 
 export const generationParamsSchema = z
   .object({
-    temp: z.number().optional().describe('Sampling temperature (typically 0–2).'),
-    top_p: z.number().optional().describe('Top-p (nucleus) sampling cutoff (0–1).'),
-    top_k: z.number().optional().describe('Top-k sampling — keep only the top K tokens.'),
+    temperature: z.number().optional().describe('Sampling temperature (typically 0–2).'),
+    topP: z.number().optional().describe('Top-p (nucleus) sampling cutoff (0–1).'),
+    topK: z.number().optional().describe('Top-k sampling — keep only the top K tokens.'),
     predict: z
       .number()
       .optional()
       .describe('Max tokens to predict. `-1` = until stop token, `-2` = until context filled.'),
     seed: z.number().optional().describe('Random seed for reproducibility.'),
-    frequency_penalty: z
+    frequencyPenalty: z
       .number()
       .optional()
       .describe('Penalty applied to tokens based on frequency so far.'),
-    presence_penalty: z
+    presencePenalty: z
       .number()
       .optional()
       .describe('Penalty applied to tokens that have already appeared.'),
-    repeat_penalty: z.number().optional().describe('Penalty applied to repeated tokens.'),
-    reasoning_budget: z
+    repeatPenalty: z.number().optional().describe('Penalty applied to repeated tokens.'),
+    reasoningBudget: z
       .number()
       .int()
       .min(-1)
       .max(REASONING_BUDGET_MAX)
       .optional()
       .describe(
-        "Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards."
+        "Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoningBudget` config but scoped to a single `run()` call; the prior value is restored afterwards."
       ),
-    tool_choice: z
+    toolChoice: z
       .string()
       .min(1)
       .optional()
       .describe(
         'Controls tool calling for a request that declares `tools`, in the OpenAI style. `"auto"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `"required"` forces a tool call; `"none"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `"required"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.'
       ),
-    parallel_tool_calls: z
+    parallelToolCalls: z
       .boolean()
       .optional()
       .describe(
@@ -125,17 +126,17 @@ type ToolChoiceTool = { type: 'function'; name: string; deferLoading?: boolean |
 export function refineToolChoiceMatchesTools(
   data: {
     tools?: ToolChoiceTool[] | undefined
-    generationParams?: { tool_choice?: string | undefined } | undefined
+    generationParams?: { toolChoice?: string | undefined } | undefined
   },
   ctx: z.RefinementCtx
 ): void {
-  const toolChoice = data.generationParams?.tool_choice
+  const toolChoice = data.generationParams?.toolChoice
   if (toolChoice === undefined || TOOL_CHOICE_MODES.has(toolChoice)) {
     if (toolChoice === 'required' && !(data.tools && data.tools.length > 0)) {
       ctx.addIssue({
         code: 'custom',
-        message: 'generationParams.tool_choice "required" needs at least one tool.',
-        path: ['generationParams', 'tool_choice']
+        message: 'generationParams.toolChoice "required" needs at least one tool.',
+        path: ['generationParams', 'toolChoice']
       })
     }
     return
@@ -149,8 +150,8 @@ export function refineToolChoiceMatchesTools(
   if (!named) {
     ctx.addIssue({
       code: 'custom',
-      message: `generationParams.tool_choice names "${toolChoice}", which is not one of the declared tools.`,
-      path: ['generationParams', 'tool_choice']
+      message: `generationParams.toolChoice names "${toolChoice}", which is not one of the declared tools.`,
+      path: ['generationParams', 'toolChoice']
     })
     return
   }
@@ -159,8 +160,8 @@ export function refineToolChoiceMatchesTools(
   if (named.deferLoading === true) {
     ctx.addIssue({
       code: 'custom',
-      message: `generationParams.tool_choice names "${toolChoice}", which sets deferLoading. Force "${TOOL_SEARCH_NAME}" instead, or drop deferLoading from that tool.`,
-      path: ['generationParams', 'tool_choice']
+      message: `generationParams.toolChoice names "${toolChoice}", which sets deferLoading. Force "${TOOL_SEARCH_NAME}" instead, or drop deferLoading from that tool.`,
+      path: ['generationParams', 'toolChoice']
     })
   }
 }
@@ -193,7 +194,7 @@ export const responseFormatSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('json_schema'),
-      json_schema: z
+      jsonSchema: z
         .object({
           name: z
             .string()
@@ -347,7 +348,7 @@ export const completionParamsSchema = z.object({
   kvCache: kvCacheSchema
     .optional()
     .describe(
-      'KV cache configuration — `true` to auto-generate a cache key from history, a string to use a custom key, or `false`/`undefined` to avoid a persistent cache key. Keyless requests reuse a model-wide shared prefix only when the model loads with `cache_share_across_keys: true`.'
+      'KV cache configuration — `true` to auto-generate a cache key from history, a string to use a custom key, or `false`/`undefined` to avoid a persistent cache key. Keyless requests reuse a model-wide shared prefix only when the model loads with `cacheShareAcrossKeys: true`.'
     ),
   prefill: z
     .boolean()
@@ -358,7 +359,7 @@ export const completionParamsSchema = z.object({
     .min(1, 'seedFrom cannot be empty string')
     .optional()
     .describe(
-      'Name of another caller-managed cache to start this chat from, such as a primed system prompt and tools. On the first turn of a chat whose `kvCache` key has no cache yet, the model reads that cache and reuses the prefix it shares with the prompt, so only the rest is processed; the source is never written. Ignored once the chat has a cache. Needs a string `kvCache` other than itself. Refused when no cache of that name exists for this model and system prompt, or when the model was not loaded with `cache_share_across_keys: true`, which is off by default.'
+      'Name of another caller-managed cache to start this chat from, such as a primed system prompt and tools. On the first turn of a chat whose `kvCache` key has no cache yet, the model reads that cache and reuses the prefix it shares with the prompt, so only the rest is processed; the source is never written. Ignored once the chat has a cache. Needs a string `kvCache` other than itself. Refused when no cache of that name exists for this model and system prompt, or when the model was not loaded with `cacheShareAcrossKeys: true`, which is off by default.'
     )
 })
 
@@ -434,7 +435,7 @@ function refinePrefill(
   data: {
     prefill?: boolean | undefined
     kvCache?: boolean | string | undefined
-    generationParams?: { tool_choice?: string | undefined } | undefined
+    generationParams?: { toolChoice?: string | undefined } | undefined
   },
   ctx: z.RefinementCtx
 ): void {
@@ -446,12 +447,12 @@ function refinePrefill(
       path: ['kvCache']
     })
   }
-  const choice = data.generationParams?.tool_choice
+  const choice = data.generationParams?.toolChoice
   if (choice !== undefined && choice !== 'auto' && choice !== 'none') {
     ctx.addIssue({
       code: 'custom',
-      message: 'prefill cannot be combined with a forced tool_choice.',
-      path: ['generationParams', 'tool_choice']
+      message: 'prefill cannot be combined with a forced toolChoice.',
+      path: ['generationParams', 'toolChoice']
     })
   }
 }
@@ -559,7 +560,9 @@ export type GenerationParams = z.infer<typeof generationParamsSchema>
 export type CompletionParams = z.infer<typeof completionParamsSchema>
 export type ToolDialect = z.infer<typeof toolDialectSchema>
 export type ResponseFormat = z.infer<typeof responseFormatSchema>
-export type CompletionClientParams = z.input<typeof completionClientParamsSchema>
+export type CompletionClientParams = WithLegacyCompletionParams<
+  z.input<typeof completionClientParamsSchema>
+>
 export type CompletionStreamRequest = z.infer<typeof completionStreamRequestSchema>
 export type CompletionStreamResponse = z.infer<typeof completionStreamResponseSchema>
 export type CompletionOrchestrateRequest = z.infer<typeof completionOrchestrateRequestSchema>

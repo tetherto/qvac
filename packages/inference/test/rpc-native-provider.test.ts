@@ -103,7 +103,7 @@ for (const cleanup of [close, cleanupForTerminate]) {
       registerModel('rpc-cleanup-consumer', {
         path: 'rpc-cleanup-fixture',
         modelType: ModelType.llamacppCompletion,
-        config: { 'rpc-servers': server.url },
+        config: { rpcServers: server.url },
         model: {
           async load() {},
           async run() {

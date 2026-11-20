@@ -6,6 +6,7 @@ import { getEngineLogger } from '@/logging/index'
 
 const logger = getEngineLogger()
 
+// Keys as `modelConfigIdentity` spells them, since the folder hashes that form.
 const KV_CACHE_POLICY_DEFAULTS: Readonly<Record<string, unknown>> = {
   cache_share_across_keys: false,
   verbosity: 0

@@ -10,10 +10,16 @@ import { handleLoadModel } from '@/handlers/load-model/handler'
 import { clearPlugins, registerPlugin, unregisterPlugin } from '@/plugins'
 import { deleteCache, getCacheFilePath, resolveCacheFilePath } from '@/plugins/ops/kv-cache-utils'
 import { unregisterModel } from '@/runtime/model-registry'
-import { ModelType } from '@/schemas'
+import { ModelType, modelConfigIdentity } from '@/schemas'
 import type { LoadModelResponse, Request } from '@/schemas'
 import type { QvacPlugin } from '@/schemas/plugin'
-import { __kvCacheDirIdTestHooks, kvCacheDirIdFor, kvCacheIdentityConfig } from '@/utils/index'
+import {
+  __kvCacheDirIdTestHooks,
+  canonicalConfigString,
+  generateShortHash,
+  kvCacheDirIdFor,
+  kvCacheIdentityConfig
+} from '@/utils/index'
 import { getQvacPath } from '@/utils/qvac-paths'
 import { makeFakePlugin } from './fixtures/fake-plugin'
 import { useTestCacheDir } from './fixtures/test-cache'
@@ -93,7 +99,7 @@ test('kvCacheIdentityConfig pins sent policy keys to their defaults and drops ru
   t.is(kvCacheIdentityConfig(undefined), undefined)
 })
 
-test('kv cache folder: a real load that omits cache_share_across_keys shares its folder with a sharing-on load', async (t) => {
+test('kv cache folder: a real load that omits cacheShareAcrossKeys shares its folder with a sharing-on load', async (t) => {
   useTestCacheDir()
   clearPlugins()
   registerPlugin(makeFakePlugin(ModelType.llamacppCompletion))
@@ -103,17 +109,60 @@ test('kv cache folder: a real load that omits cache_share_across_keys shares its
   })
   const modelSrc = writeModelFile()
 
-  const defaultId = await loadThroughDispatch(modelSrc, { ctx_size: 2048 })
+  const defaultId = await loadThroughDispatch(modelSrc, { ctxSize: 2048 })
   t.teardown(() => unregisterModel(defaultId))
   const sharingId = await loadThroughDispatch(modelSrc, {
-    ctx_size: 2048,
-    cache_share_across_keys: true
+    ctxSize: 2048,
+    cacheShareAcrossKeys: true
   })
   t.teardown(() => unregisterModel(sharingId))
 
   t.not(sharingId, defaultId, 'sharing stays part of the loaded model identity')
   t.is(kvCacheDirIdFor(defaultId), defaultId, 'a default load keeps its folder of today')
   t.is(kvCacheDirIdFor(sharingId), defaultId, 'turning sharing on reads the same folder')
+})
+
+test('modelConfigIdentity spells each renamed key, nested ones included, as before the rename', (t) => {
+  t.alike(modelConfigIdentity('llm', { ctxSize: 2048, cacheShareAcrossKeys: true, verbosity: 0 }), {
+    ctx_size: 2048,
+    cache_share_across_keys: true,
+    verbosity: 0
+  })
+  t.alike(modelConfigIdentity('whisper', { threads: 4, vadParams: { speechPadMs: 30 } }), {
+    n_threads: 4,
+    vad_params: { speech_pad_ms: 30 }
+  })
+  const custom = { someKey: 1 }
+  t.is(modelConfigIdentity(PLUGIN_TYPE, custom), custom, 'a type without renames keeps its config')
+  t.is(modelConfigIdentity('llm', undefined), undefined)
+})
+
+test('kv cache folder: a camelCase load keeps the model id and folder of its previous spelling', async (t) => {
+  useTestCacheDir()
+  clearPlugins()
+  registerPlugin(makeFakePlugin(ModelType.llamacppCompletion))
+  t.teardown(async () => {
+    await close()
+    clearPlugins()
+  })
+  const modelSrc = writeModelFile()
+
+  const modelId = await loadThroughDispatch(modelSrc, { ctxSize: 1536, flashAttention: 'on' })
+  t.teardown(() => unregisterModel(modelId))
+
+  // The config the previous release hashed for this load, its defaults included.
+  const previousConfig = {
+    ctx_size: 1536,
+    'flash-attn': 'on',
+    device: 'gpu',
+    image_tile_mode: 'sequential',
+    cache_share_across_keys: false
+  }
+  const previousId = generateShortHash(
+    `${ModelType.llamacppCompletion}:${modelSrc}:${canonicalConfigString(previousConfig)}`
+  )
+  t.is(modelId, previousId, 'the model id is the one the previous spelling gave')
+  t.is(kvCacheDirIdFor(modelId), previousId, 'the KV cache folder is the one caches were saved in')
 })
 
 test('kv cache folder: a real load keeps its folder of today with or without verbosity', async (t) => {
@@ -126,9 +175,9 @@ test('kv cache folder: a real load keeps its folder of today with or without ver
   })
   const modelSrc = writeModelFile()
 
-  const quietId = await loadThroughDispatch(modelSrc, { ctx_size: 2560, verbosity: 0 })
+  const quietId = await loadThroughDispatch(modelSrc, { ctxSize: 2560, verbosity: 0 })
   t.teardown(() => unregisterModel(quietId))
-  const unsetId = await loadThroughDispatch(modelSrc, { ctx_size: 2560 })
+  const unsetId = await loadThroughDispatch(modelSrc, { ctxSize: 2560 })
   t.teardown(() => unregisterModel(unsetId))
 
   t.is(kvCacheDirIdFor(quietId), quietId, 'a load that sends verbosity 0 keeps its folder')

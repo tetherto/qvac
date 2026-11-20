@@ -4,6 +4,7 @@ import fs from 'bare-fs'
 import os from 'bare-os'
 import path from 'bare-path'
 import { send, stream, close } from '@/dispatch'
+import { loadModel } from '@/api/load-model'
 import { registerPlugin, clearPlugins } from '@/plugins'
 import { ModelType } from '@/schemas'
 import type { Request, Response } from '@/schemas'
@@ -147,6 +148,27 @@ test('send rejects an invalid load config value at the validation guard', async 
       'device-default resolution parses the config, so its failure is a request validation failure'
     )
     t.ok((error as Error).message.includes('pooling'), 'the message names the field')
+  } finally {
+    await close()
+    clearPlugins()
+  }
+})
+
+test('loadModel renames a legacy config key before validating it', async function (t) {
+  clearPlugins()
+  registerPlugin(makeFakePlugin(ModelType.llamacppCompletion))
+  try {
+    await loadModel({
+      modelType: ModelType.llamacppCompletion,
+      modelSrc: 'model.gguf',
+      modelConfig: { ctx_size: 'large' }
+    } as unknown as Parameters<typeof loadModel>[0])
+    t.fail('expected loadModel to reject a non-numeric context size')
+  } catch (error) {
+    t.ok(error instanceof RequestValidationFailedError)
+    const message = (error as Error).message
+    t.ok(message.includes('ctxSize'), 'the value is validated under its camelCase name')
+    t.absent(message.includes('ctx_size'), 'the legacy name is not refused as unknown')
   } finally {
     await close()
     clearPlugins()

@@ -309,7 +309,7 @@ export function loadedToolNames(history: readonly HistoryMessage[]): Set<string>
   return loaded
 }
 
-// `tool_choice` mode words and the empty name: the addon rejects a prompt that
+// `toolChoice` mode words and the empty name: the addon rejects a prompt that
 // declares a tool under one of these, since it could never be selected by name.
 const UNSELECTABLE_NAMES = new Set(['', 'auto', 'none', 'required'])
 

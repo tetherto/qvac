@@ -4,8 +4,156 @@ import {
   type CanonicalModelType
 } from '@/schemas/model-types'
 import { inferModelTypeFromModelSrc } from '@/schemas/model-src-utils'
+import type { LlmConfigInput } from '@/schemas/llamacpp-config'
+import type { GenerationParams, ResponseFormat } from '@/schemas/completion-stream'
 
-export type LegacyModelConfigs = {}
+export interface LegacyLlmConfig {
+  /** @deprecated Use `ctxSize`. */
+  ctx_size?: LlmConfigInput['ctxSize']
+  /** @deprecated Use `temperature`. */
+  temp?: LlmConfigInput['temperature']
+  /** @deprecated Use `topP`. */
+  top_p?: LlmConfigInput['topP']
+  /** @deprecated Use `topK`. */
+  top_k?: LlmConfigInput['topK']
+  /** @deprecated Use `gpuLayers`. */
+  gpu_layers?: LlmConfigInput['gpuLayers']
+  /** @deprecated Use `systemPrompt`. */
+  system_prompt?: LlmConfigInput['systemPrompt']
+  /** @deprecated Use `loadMode`. */
+  load_mode?: LlmConfigInput['loadMode']
+  /** @deprecated Use `presencePenalty`. */
+  presence_penalty?: LlmConfigInput['presencePenalty']
+  /** @deprecated Use `frequencyPenalty`. */
+  frequency_penalty?: LlmConfigInput['frequencyPenalty']
+  /** @deprecated Use `repeatPenalty`. */
+  repeat_penalty?: LlmConfigInput['repeatPenalty']
+  /** @deprecated Use `stopSequences`. */
+  stop_sequences?: LlmConfigInput['stopSequences']
+  /** @deprecated Use `cacheCheckpoints`. */
+  cache_checkpoints?: LlmConfigInput['cacheCheckpoints']
+  /** @deprecated Use `cacheCheckpointsMaxBytes`. */
+  cache_checkpoints_max_bytes?: LlmConfigInput['cacheCheckpointsMaxBytes']
+  /** @deprecated Use `cacheCheckpointStorage`. */
+  cache_checkpoint_storage?: LlmConfigInput['cacheCheckpointStorage']
+  /** @deprecated Use `cacheCheckpointDir`. */
+  cache_checkpoint_dir?: LlmConfigInput['cacheCheckpointDir']
+  /** @deprecated Use `cacheShareAcrossKeys`. */
+  cache_share_across_keys?: LlmConfigInput['cacheShareAcrossKeys']
+  /** @deprecated Use `cacheRamMib`. */
+  cache_ram_mib?: LlmConfigInput['cacheRamMib']
+  /** @deprecated Use `cacheTypeK`. */
+  'cache-type-k'?: LlmConfigInput['cacheTypeK']
+  /** @deprecated Use `cacheTypeV`. */
+  'cache-type-v'?: LlmConfigInput['cacheTypeV']
+  /** @deprecated Use `mainGpu`. */
+  'main-gpu'?: LlmConfigInput['mainGpu']
+  /** @deprecated Use `rpcServers`. */
+  'rpc-servers'?: LlmConfigInput['rpcServers']
+  /** @deprecated Use `splitMode`. */
+  'split-mode'?: LlmConfigInput['splitMode']
+  /** @deprecated Use `flashAttention`. */
+  'flash-attn'?: LlmConfigInput['flashAttention']
+  /** @deprecated Use `tensorSplit`. */
+  'tensor-split'?: LlmConfigInput['tensorSplit']
+  /** @deprecated Use `batchSize`. */
+  'batch-size'?: LlmConfigInput['batchSize']
+  /** @deprecated Use `ubatchSize`. */
+  'ubatch-size'?: LlmConfigInput['ubatchSize']
+  /** @deprecated Use `cpuMoe`. */
+  'cpu-moe'?: LlmConfigInput['cpuMoe']
+  /** @deprecated Use `nCpuMoe`. */
+  'n-cpu-moe'?: LlmConfigInput['nCpuMoe']
+  /** @deprecated Use `kvOffload`. */
+  'kv-offload'?: LlmConfigInput['kvOffload']
+  /** @deprecated Use `imageMaxTokens`. */
+  'image-max-tokens'?: LlmConfigInput['imageMaxTokens']
+  /** @deprecated Use `imageMinTokens`. */
+  'image-min-tokens'?: LlmConfigInput['imageMinTokens']
+  /** @deprecated Use `imageMaxMegapixels`. */
+  'image-max-megapixels'?: LlmConfigInput['imageMaxMegapixels']
+  /** @deprecated Use `threadsBatch`. */
+  'threads-batch'?: LlmConfigInput['threadsBatch']
+  /** @deprecated Use `cpuMask`. */
+  'cpu-mask'?: LlmConfigInput['cpuMask']
+  /** @deprecated Use `cpuMaskBatch`. */
+  'cpu-mask-batch'?: LlmConfigInput['cpuMaskBatch']
+  /** @deprecated Use `overrideTensor`. */
+  'override-tensor'?: LlmConfigInput['overrideTensor']
+  /** @deprecated Use `nCpuFfn`. */
+  'n-cpu-ffn'?: LlmConfigInput['nCpuFfn']
+  /** @deprecated Use `moeCacheMib`. */
+  'moe-cache-mib'?: LlmConfigInput['moeCacheMib']
+  /** @deprecated Use `prefetchWeights`. */
+  'prefetch-weights'?: LlmConfigInput['prefetchWeights']
+  /** @deprecated Use `tensorReadLazy`. */
+  'tensor-read-lazy'?: LlmConfigInput['tensorReadLazy']
+  /** @deprecated Use `coremlFfn`. */
+  'coreml-ffn'?: LlmConfigInput['coremlFfn']
+  /** @deprecated Use `coremlFfnSplit`. */
+  'coreml-ffn-split'?: LlmConfigInput['coremlFfnSplit']
+  /** @deprecated Use `coremlFfnCache`. */
+  'coreml-ffn-cache'?: LlmConfigInput['coremlFfnCache']
+  /** @deprecated Use `fitTarget`. */
+  'fit-target'?: LlmConfigInput['fitTarget']
+  /** @deprecated Use `fitCtx`. */
+  'fit-ctx'?: LlmConfigInput['fitCtx']
+  /** @deprecated Use `reasoningBudget`. */
+  reasoning_budget?: LlmConfigInput['reasoningBudget']
+  /** @deprecated Use `specType`. */
+  spec_type?: LlmConfigInput['specType']
+  /** @deprecated Use `specDraftNMax`. */
+  spec_draft_n_max?: LlmConfigInput['specDraftNMax']
+  /** @deprecated Use `specDraftNMin`. */
+  spec_draft_n_min?: LlmConfigInput['specDraftNMin']
+  /** @deprecated Use `specDraftPMin`. */
+  spec_draft_p_min?: LlmConfigInput['specDraftPMin']
+  /** @deprecated Use `imageTileMode`. */
+  image_tile_mode?: LlmConfigInput['imageTileMode']
+  /** @deprecated Use `imageNoUpscale`. */
+  image_no_upscale?: LlmConfigInput['imageNoUpscale']
+  /** @deprecated Use `mmprojUseGpu`. */
+  'mmproj-use-gpu'?: LlmConfigInput['mmprojUseGpu']
+}
+
+export interface LegacyGenerationParams {
+  /** @deprecated Use `temperature`. */
+  temp?: GenerationParams['temperature']
+  /** @deprecated Use `topP`. */
+  top_p?: GenerationParams['topP']
+  /** @deprecated Use `topK`. */
+  top_k?: GenerationParams['topK']
+  /** @deprecated Use `frequencyPenalty`. */
+  frequency_penalty?: GenerationParams['frequencyPenalty']
+  /** @deprecated Use `presencePenalty`. */
+  presence_penalty?: GenerationParams['presencePenalty']
+  /** @deprecated Use `repeatPenalty`. */
+  repeat_penalty?: GenerationParams['repeatPenalty']
+  /** @deprecated Use `reasoningBudget`. */
+  reasoning_budget?: GenerationParams['reasoningBudget']
+  /** @deprecated Use `toolChoice`. */
+  tool_choice?: GenerationParams['toolChoice']
+  /** @deprecated Use `parallelToolCalls`. */
+  parallel_tool_calls?: GenerationParams['parallelToolCalls']
+}
+
+type JsonSchemaResponseFormat = Extract<ResponseFormat, { type: 'json_schema' }>
+
+export type LegacyJsonSchemaResponseFormat = Omit<JsonSchemaResponseFormat, 'jsonSchema'> & {
+  /** @deprecated Use `jsonSchema`. */
+  json_schema: JsonSchemaResponseFormat['jsonSchema']
+}
+
+export type WithLegacyCompletionParams<P> = Omit<P, 'generationParams' | 'responseFormat'> & {
+  generationParams?:
+    (NonNullable<P[Extract<keyof P, 'generationParams'>]> & LegacyGenerationParams) | undefined
+  responseFormat?:
+    P[Extract<keyof P, 'responseFormat'>] | LegacyJsonSchemaResponseFormat | undefined
+}
+
+export type LegacyModelConfigs = {
+  'llamacpp-completion': LegacyLlmConfig
+}
 
 type CanonicalOf<T> = T extends keyof typeof ModelTypeAliases ? (typeof ModelTypeAliases)[T] : T
 
@@ -27,9 +175,92 @@ export type LegacyKeySpec = {
  */
 export type LegacyKeyWarn = (legacyPath: string, replacementPath: string, ignored?: boolean) => void
 
-export const LEGACY_MODEL_CONFIG_KEYS: Partial<Record<CanonicalModelType, LegacyKeySpec>> = {}
+const LLM_CONFIG_KEYS: LegacyKeySpec = {
+  renames: {
+    ctx_size: 'ctxSize',
+    temp: 'temperature',
+    top_p: 'topP',
+    top_k: 'topK',
+    gpu_layers: 'gpuLayers',
+    system_prompt: 'systemPrompt',
+    load_mode: 'loadMode',
+    presence_penalty: 'presencePenalty',
+    frequency_penalty: 'frequencyPenalty',
+    repeat_penalty: 'repeatPenalty',
+    stop_sequences: 'stopSequences',
+    cache_checkpoints: 'cacheCheckpoints',
+    cache_checkpoints_max_bytes: 'cacheCheckpointsMaxBytes',
+    cache_checkpoint_storage: 'cacheCheckpointStorage',
+    cache_checkpoint_dir: 'cacheCheckpointDir',
+    cache_share_across_keys: 'cacheShareAcrossKeys',
+    cache_ram_mib: 'cacheRamMib',
+    'cache-type-k': 'cacheTypeK',
+    'cache-type-v': 'cacheTypeV',
+    'main-gpu': 'mainGpu',
+    'rpc-servers': 'rpcServers',
+    'split-mode': 'splitMode',
+    'flash-attn': 'flashAttention',
+    'tensor-split': 'tensorSplit',
+    'batch-size': 'batchSize',
+    'ubatch-size': 'ubatchSize',
+    'cpu-moe': 'cpuMoe',
+    'n-cpu-moe': 'nCpuMoe',
+    'kv-offload': 'kvOffload',
+    'image-max-tokens': 'imageMaxTokens',
+    'image-min-tokens': 'imageMinTokens',
+    'image-max-megapixels': 'imageMaxMegapixels',
+    'threads-batch': 'threadsBatch',
+    'cpu-mask': 'cpuMask',
+    'cpu-mask-batch': 'cpuMaskBatch',
+    'override-tensor': 'overrideTensor',
+    'n-cpu-ffn': 'nCpuFfn',
+    'moe-cache-mib': 'moeCacheMib',
+    'prefetch-weights': 'prefetchWeights',
+    'tensor-read-lazy': 'tensorReadLazy',
+    'coreml-ffn': 'coremlFfn',
+    'coreml-ffn-split': 'coremlFfnSplit',
+    'coreml-ffn-cache': 'coremlFfnCache',
+    'fit-target': 'fitTarget',
+    'fit-ctx': 'fitCtx',
+    reasoning_budget: 'reasoningBudget',
+    spec_type: 'specType',
+    spec_draft_n_max: 'specDraftNMax',
+    spec_draft_n_min: 'specDraftNMin',
+    spec_draft_p_min: 'specDraftPMin',
+    image_tile_mode: 'imageTileMode',
+    image_no_upscale: 'imageNoUpscale',
+    'mmproj-use-gpu': 'mmprojUseGpu'
+  }
+}
 
-export const LEGACY_REQUEST_KEYS: Readonly<Record<string, LegacyKeySpec>> = {}
+const COMPLETION_PARAMS_KEYS: LegacyKeySpec = {
+  nested: {
+    generationParams: {
+      renames: {
+        temp: 'temperature',
+        top_p: 'topP',
+        top_k: 'topK',
+        frequency_penalty: 'frequencyPenalty',
+        presence_penalty: 'presencePenalty',
+        repeat_penalty: 'repeatPenalty',
+        reasoning_budget: 'reasoningBudget',
+        tool_choice: 'toolChoice',
+        parallel_tool_calls: 'parallelToolCalls'
+      }
+    },
+    responseFormat: { renames: { json_schema: 'jsonSchema' } }
+  }
+}
+
+export const LEGACY_MODEL_CONFIG_KEYS: Partial<Record<CanonicalModelType, LegacyKeySpec>> = {
+  'llamacpp-completion': LLM_CONFIG_KEYS
+}
+
+export const LEGACY_REQUEST_KEYS: Readonly<Record<string, LegacyKeySpec>> = {
+  completionStream: COMPLETION_PARAMS_KEYS,
+  completionOrchestrate: COMPLETION_PARAMS_KEYS,
+  batchCompletionStream: { nested: { prompts: COMPLETION_PARAMS_KEYS } }
+}
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -83,6 +314,18 @@ export function renameLegacyKeys<T>(
   return renameObject(value, spec, warn, path) as T
 }
 
+export type CamelCaseCompletionParams<P> = Omit<P, 'generationParams' | 'responseFormat'> & {
+  generationParams?: GenerationParams | undefined
+  responseFormat?: ResponseFormat | undefined
+}
+
+export function renameLegacyCompletionParams<P extends object>(
+  params: P,
+  warn: LegacyKeyWarn
+): CamelCaseCompletionParams<P> {
+  return renameLegacyKeys(params, COMPLETION_PARAMS_KEYS, warn) as CamelCaseCompletionParams<P>
+}
+
 export function renameLegacyModelConfigKeys<T>(
   modelType: unknown,
   modelConfig: T,
@@ -92,6 +335,34 @@ export function renameLegacyModelConfigKeys<T>(
   if (typeof modelType !== 'string') return modelConfig
   const spec = LEGACY_MODEL_CONFIG_KEYS[normalizeModelType(modelType) as CanonicalModelType]
   return spec ? renameLegacyKeys(modelConfig, spec, warn, path) : modelConfig
+}
+
+function withPreviousKeys(value: unknown, spec: LegacyKeySpec): unknown {
+  if (Array.isArray(value)) return value.map((item) => withPreviousKeys(item, spec))
+  if (!isPlainObject(value)) return value
+  const previous = new Map(Object.entries(spec.renames ?? {}).map(([legacy, key]) => [key, legacy]))
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => {
+      const childSpec = spec.nested?.[key]
+      return [previous.get(key) ?? key, childSpec ? withPreviousKeys(item, childSpec) : item]
+    })
+  )
+}
+
+/**
+ * The model config with each renamed key under its spelling before the
+ * camelCase rename. Model ids and KV cache folders hash this form, so a load
+ * keeps the id and the saved caches it had in earlier releases. It outlives the
+ * deprecated keys: removing them must keep this mapping.
+ */
+export function modelConfigIdentity(
+  modelType: string,
+  modelConfig: Record<string, unknown> | undefined
+): Record<string, unknown> | undefined {
+  const spec = LEGACY_MODEL_CONFIG_KEYS[normalizeModelType(modelType) as CanonicalModelType]
+  return spec
+    ? (withPreviousKeys(modelConfig, spec) as Record<string, unknown> | undefined)
+    : modelConfig
 }
 
 function renameLoadModelConfig<T extends Record<string, unknown>>(
