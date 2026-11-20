@@ -41,7 +41,7 @@ fun main(): Unit = runBlocking {
     try {
         val modelId = client.loadWithProgress(
             Models.QWEN3_600M_INST_Q4,
-            modelConfig = buildJsonObject { put("ctx_size", 4096) },
+            modelConfig = buildJsonObject { put("ctxSize", 4096) },
         )
         println("▸ Model loaded: $modelId")
 

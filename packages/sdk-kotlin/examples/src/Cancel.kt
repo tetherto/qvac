@@ -39,7 +39,7 @@ fun main(): Unit = runBlocking {
             source = model.src,
             modelType = model.engine,
             modelName = model.name,
-            modelConfig = buildJsonObject { put("ctx_size", 4096) },
+            modelConfig = buildJsonObject { put("ctxSize", 4096) },
         )
         val modelId = loaded.modelId ?: error(loaded.error ?: "loadModel failed")
 

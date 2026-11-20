@@ -63,7 +63,7 @@ fun main(args: Array<String>): Unit = runBlocking {
                 put("lmModelSrc", Models.AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0.src)
                 put("ditModelSrc", Models.AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M.src)
                 put("vaeModelSrc", Models.AUDIOGEN_VAE_BF16.src)
-                put("useGPU", true)
+                put("useGpu", true)
             },
         )
         println("▸ Model loaded: $modelId")
@@ -99,7 +99,7 @@ fun main(args: Array<String>): Unit = runBlocking {
 
             val result = description ?: error("AudioUnderstand stream ended without a description")
             println("▸ Caption: ${result.caption}")
-            println("▸ ${result.bpm} BPM, ${result.keyscale}, ${result.timesignature}")
+            println("▸ ${result.bpm} BPM, ${result.keyScale}, ${result.timeSignature}")
             println("▸ Vocal language: ${result.vocalLanguage}")
             // The LM's duration is an estimate; the recovered codes fix the true length.
             println("▸ Estimated duration: %.1f s".format(result.duration))

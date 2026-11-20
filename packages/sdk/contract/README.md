@@ -36,6 +36,13 @@ registry` (`ModelType`, `Verbosity`, `PluginId`,
 - `numeric-constants.json` — the SDK's numeric public vocabularies, name to
   number.
 
+- `legacy-keys.json` — request and `loadModel` model-config keys the worker
+  still accepts under their legacy spelling for one release, renaming each
+  with a deprecation warning. Keyed by the `schema.json` title of the object
+  that owns them, each entry maps a legacy key to its current key. Generated
+  clients use it for deprecated aliases. Built from `LEGACY_REQUEST_KEYS` and
+  `LEGACY_MODEL_CONFIG_KEYS` in `@qvac/inference`.
+
 Write them with:
 
 ```bash

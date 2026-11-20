@@ -163,8 +163,8 @@ class AndroidContractInstrumentationTest {
                     captureThinking = false,
                     generationParams = CompletionStreamRequestGenerationParams(
                         predict = 16.0,
-                        reasoning_budget = 0,
-                        temp = 0.0,
+                        reasoningBudget = 0,
+                        temperature = 0.0,
                     ),
                     history = listOf(CompletionStreamRequestHistoryItem(role = "user", content = CompletionStreamRequestHistoryItemContent.Variant1("Reply with exactly CPU_OK"))),
                     modelId = requireNotNull(modelId),
@@ -258,7 +258,7 @@ class AndroidContractInstrumentationTest {
             client.completion.stream(
                 CompletionStreamRequest(
                     captureThinking = false,
-                    generationParams = CompletionStreamRequestGenerationParams(predict = 16.0, temp = 0.0),
+                    generationParams = CompletionStreamRequestGenerationParams(predict = 16.0, temperature = 0.0),
                     history = listOf(
                         CompletionStreamRequestHistoryItem(
                             role = "user",

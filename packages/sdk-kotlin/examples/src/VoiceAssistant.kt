@@ -70,21 +70,21 @@ private const val SYSTEM_PROMPT =
 // on its own echo. These defaults are deliberately conservative:
 //   - threshold 0.6: less sensitive than Silero's default; avoids triggering
 //     on TTS reverb bleeding into the mic or low-level background noise.
-//   - min_speech_duration_ms 300: drops short clicks/breaths and stray words.
-//   - min_silence_duration_ms 700: requires a longer quiet tail before
+//   - minSpeechDurationMs 300: drops short clicks/breaths and stray words.
+//   - minSilenceDurationMs 700: requires a longer quiet tail before
 //     committing a segment. Crucial for preventing self-hearing feedback loops
 //     where Whisper hallucinates content from near-silent audio.
-//   - max_speech_duration_s 15: caps runaway utterances.
-//   - speech_pad_ms 200: padding improves accuracy on utterance edges.
-// If the assistant cuts you off mid-sentence, raise min_silence_duration_ms.
+//   - maxSpeechDurationS 15: caps runaway utterances.
+//   - speechPadMs 200: padding improves accuracy on utterance edges.
+// If the assistant cuts you off mid-sentence, raise minSilenceDurationMs.
 // If it keeps hallucinating / talking to itself, raise threshold to 0.7 and/or
-// min_silence_duration_ms to 900.
+// minSilenceDurationMs to 900.
 private val VAD_PARAMS = buildJsonObject {
     put("threshold", 0.6)
-    put("min_speech_duration_ms", 300)
-    put("min_silence_duration_ms", 700)
-    put("max_speech_duration_s", 15.0)
-    put("speech_pad_ms", 200)
+    put("minSpeechDurationMs", 300)
+    put("minSilenceDurationMs", 700)
+    put("maxSpeechDurationS", 15.0)
+    put("speechPadMs", 200)
 }
 
 // Short grace period after TTS playback before we start listening again.
@@ -184,15 +184,15 @@ fun main(): Unit = runBlocking {
             Models.WHISPER_TINY,
             buildJsonObject {
                 put("vadModelSrc", Models.VAD_SILERO_5_1_2.src)
-                put("audio_format", "f32le")
+                put("audioFormat", "f32le")
                 put("strategy", "greedy")
-                put("n_threads", 4)
+                put("threads", 4)
                 put("language", "en")
-                put("no_timestamps", true)
-                put("suppress_blank", true)
-                put("suppress_nst", true)
+                put("noTimestamps", true)
+                put("suppressBlank", true)
+                put("suppressNst", true)
                 put("temperature", 0.0)
-                put("vad_params", VAD_PARAMS)
+                put("vadParams", VAD_PARAMS)
             },
         )
         modelIds += asrModelId
@@ -200,7 +200,7 @@ fun main(): Unit = runBlocking {
         println("▸ Loading Llama 3.2 1B...")
         val llmModelId = client.loadModel(
             Models.LLAMA_3_2_1B_INST_Q4_0,
-            buildJsonObject { put("ctx_size", 4096) },
+            buildJsonObject { put("ctxSize", 4096) },
         )
         modelIds += llmModelId
 

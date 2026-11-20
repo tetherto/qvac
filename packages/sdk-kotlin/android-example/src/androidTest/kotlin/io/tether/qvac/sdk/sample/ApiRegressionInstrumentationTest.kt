@@ -130,7 +130,7 @@ class ApiRegressionInstrumentationTest {
             Models.REALESRGAN_X4PLUS_ANIME_6B.engine, modelConfig = buildJsonObject {
                 put("mode", "upscale")
                 put("device", "cpu")
-                putJsonObject("upscaler") { put("threads", 2); put("tile_size", 32) }
+                putJsonObject("upscaler") { put("threads", 2); put("tileSize", 32) }
             })
         assertTrue(loaded.error, loaded.success)
         val id = requireNotNull(loaded.modelId)
@@ -211,7 +211,7 @@ class ApiRegressionInstrumentationTest {
             LoadModelSrcRequest.LlamacppCompletion(LoadModelSrcRequestLlamacppCompletion(
                 modelSrc = Models.QWEN3_600M_INST_Q4.src,
                 modelConfig = LoadModelSrcRequestLlamacppCompletionModelConfig(
-                    ctx_size = 2048.0, device = device, gpu_layers = if (device == "gpu") 99.0 else 0.0, reasoning_budget = -1,
+                    ctxSize = 2048.0, device = device, gpuLayers = if (device == "gpu") 99.0 else 0.0, reasoningBudget = -1,
                 ),
             )),
         ))

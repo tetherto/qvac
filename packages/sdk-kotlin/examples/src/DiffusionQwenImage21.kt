@@ -3,13 +3,13 @@
 // Qwen-Image-2.1 in split layout: a diffusion model, a Qwen3-VL LLM text
 // encoder, its vision projector and the 2.1 VAE, all handed to one load call
 // through `modelConfig`. Two reference images go in order through
-// `init_images`, and the prompt asks for an RGBA image with a transparent
+// `initImages`, and the prompt asks for an RGBA image with a transparent
 // background.
 //
 // TypeScript's `diffusion()` takes each reference as raw bytes and base64-encodes
 // them on the way to the worker. The typed `DiffusionStreamRequest` carries the
 // encoded strings, so the example encodes the files with `java.util.Base64`.
-// `sampling_method` is a generated enum (`DiffusionStreamRequestSamplingMethod`),
+// `samplingMethod` is a generated enum (`DiffusionStreamRequestSamplingMethod`),
 // so a misspelled sampler fails at compile time instead of at the worker. The
 // returned `QvacMediaRun` splits progress (`events` Flow) from the images and
 // stats (`final` Deferred), as TypeScript does. The Turbo fields are nullable
@@ -111,7 +111,7 @@ fun main(args: Array<String>): Unit = runBlocking {
                 put("llmModelSrc", modelSource(llmModelSrc))
                 put("vaeModelSrc", modelSource(vaeModelSrc))
                 put("projectionModelSrc", modelSource(projectionModelSrc))
-                put("flash_attn", true)
+                put("flashAttention", true)
             },
         )
         println("▸ Model loaded: $modelId")
@@ -123,13 +123,13 @@ fun main(args: Array<String>): Unit = runBlocking {
                 DiffusionStreamRequest(
                     modelId = modelId,
                     prompt = prompt,
-                    init_images = initImages,
+                    initImages = initImages,
                     width = 512,
                     height = 512,
                     steps = if (turbo) null else 30,
-                    cfg_scale = if (turbo) 1.0 else 6.0,
-                    custom_sigmas = if (turbo) TURBO_SIGMAS else null,
-                    sampling_method = DiffusionStreamRequestSamplingMethod.EULER,
+                    cfgScale = if (turbo) 1.0 else 6.0,
+                    customSigmas = if (turbo) TURBO_SIGMAS else null,
+                    samplingMethod =DiffusionStreamRequestSamplingMethod.EULER,
                     seed = 42,
                 ),
             )

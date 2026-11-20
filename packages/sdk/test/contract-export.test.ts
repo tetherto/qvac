@@ -9,6 +9,7 @@ import {
   renderRegistryEngineManifest
 } from '../scripts/contract/build-contract'
 import { buildModelsRegistry } from '../scripts/contract/build-models-registry'
+import { buildLegacyKeys } from '../scripts/contract/build-legacy-keys'
 import { constantsRegistry } from '../scripts/contract/constants-registry'
 import { PLUGIN_MOSS_TRANSCRIBE } from '../src/plugin-ids'
 import { methodShapes } from '../scripts/contract/method-shapes'
@@ -459,6 +460,50 @@ test('diffusion performance options survive the generated load contract', functi
     { vaeConvDirect: 'false' }
   ]) {
     t.absent(validate({ ...request, modelConfig: { ...modelConfig, ...override } }))
+  }
+})
+
+test('legacy keys name titled request objects and their camelCase properties', (t) => {
+  const { schemaDocument } = buildContract()
+  const legacyKeys = buildLegacyKeys(schemaDocument.$defs)
+  const nodes: JsonSchema[] = []
+  for (const def of Object.values(schemaDocument.$defs)) collectTitleableNodes(def, nodes)
+  const byTitle = new Map(
+    nodes.map(function (node) {
+      return [node['title'], node] as const
+    })
+  )
+
+  t.is(legacyKeys['CompletionStreamRequestGenerationParams']?.['temp'], 'temperature')
+  t.alike(legacyKeys['CompletionStreamRequestResponseFormatJsonSchema'], {
+    json_schema: 'jsonSchema'
+  })
+  t.is(legacyKeys['LoadModelSrcRequestLlamacppCompletionModelConfig']?.['ctx_size'], 'ctxSize')
+  t.is(
+    legacyKeys['LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams']?.[
+      'min_speech_duration_ms'
+    ],
+    'minSpeechDurationMs'
+  )
+  t.is(
+    legacyKeys['ReloadConfigRequestModelConfig']?.['n_threads'],
+    'threads',
+    'a reload, whose modelType is an enum of whisper and its alias, gets the whisper keys'
+  )
+  t.is(legacyKeys['ReloadConfigRequestModelConfigContextParams']?.['flash_attn'], 'flashAttention')
+  t.is(legacyKeys['ReloadConfigRequestModelConfigVadParams']?.['speech_pad_ms'], 'speechPadMs')
+  t.is(
+    legacyKeys['ReloadConfigRequestModelConfigMiscConfig']?.['caption_enabled'],
+    'captionEnabled'
+  )
+
+  for (const [title, renames] of Object.entries(legacyKeys)) {
+    const properties = byTitle.get(title)?.['properties'] as JsonSchema | undefined
+    t.ok(properties, `${title} is an object schema in schema.json`)
+    for (const [legacyKey, key] of Object.entries(renames)) {
+      t.ok(properties !== undefined && key in properties, `${title}.${key} exists`)
+      t.absent(properties !== undefined && legacyKey in properties, `${title}.${legacyKey} is gone`)
+    }
   }
 })
 

@@ -67,7 +67,7 @@ fun main(args: Array<String>): Unit = runBlocking {
                     add(s2Audio)
                 }
                 put("streamChunkTokens", 25)
-                put("useGPU", true)
+                put("useGpu", true)
             },
         )
         val modelId = loaded.modelId ?: error(loaded.error ?: "loadModel failed")

@@ -174,9 +174,9 @@ private suspend fun QvacClient.runInference(modelId: String, hp: QvacVlaHparams)
     result.stats?.let { s ->
         println(
             "▸ Timing: vision=%.0fms ode=%.0fms total=%.0fms".format(
-                s.ms("vision_ms"),
-                s.ms("ode_ms"),
-                s.ms("total_ms"),
+                s.ms("visionMs"),
+                s.ms("odeMs"),
+                s.ms("totalTime"),
             ),
         )
     }

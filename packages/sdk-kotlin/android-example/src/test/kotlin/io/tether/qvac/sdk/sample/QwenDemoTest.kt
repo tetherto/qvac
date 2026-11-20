@@ -62,7 +62,7 @@ class QwenDemoTest {
         val request = transport.requests.single()
         assertEquals("llamacpp-completion", request["modelType"]?.jsonPrimitive?.content)
         assertEquals(QwenModel.NAME, request["modelName"]?.jsonPrimitive?.content)
-        assertEquals("-1", request["modelConfig"]?.jsonObject?.get("reasoning_budget")?.jsonPrimitive?.content)
+        assertEquals("-1", request["modelConfig"]?.jsonObject?.get("reasoningBudget")?.jsonPrimitive?.content)
     }
 
     @Test
@@ -131,7 +131,7 @@ class QwenDemoTest {
         assertEquals(12.5, result.tokensPerSecond)
         assertEquals("eos", result.stopReason)
         assertEquals("-1", transport.requests.single()["generationParams"]?.jsonObject
-            ?.get("reasoning_budget")?.jsonPrimitive?.content)
+            ?.get("reasoningBudget")?.jsonPrimitive?.content)
         assertEquals(
             -1.0,
             transport.requests.single()["generationParams"]

@@ -54,7 +54,7 @@ fun main(): Unit = runBlocking {
                     AssessModelFitRequestModelsItem(
                         modelSrc = model.toFitSource(),
                         modelType = AssessModelFitRequestModelsItemModelType.LLAMACPPCOMPLETION,
-                        modelConfig = mapOf("ctx_size" to JsonPrimitive(CONTEXT_TOKENS)),
+                        modelConfig = mapOf("ctxSize" to JsonPrimitive(CONTEXT_TOKENS)),
                     )
                 },
             ),
