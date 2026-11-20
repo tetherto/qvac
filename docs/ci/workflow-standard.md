@@ -114,7 +114,7 @@ A package that links another package's native build depends on that package's `l
 
 A dependency on the contract is a **provider**. Selection finds providers from these `dependsOn` entries, never by name, and returns them as their own build rows (`build:providers`), one per configuration that the selected `build` and `cpp:lint` rows use. A configuration the provider does not define fails selection, naming the provider, the package and the configuration. A selected provider's own build rows join its provider rows, so each configuration builds once per run.
 
-The provider rows build first. A package's build and C++ lint jobs then restore `prebuild-<provider>-<configuration>`, run the provider's `link:platform`, and run their target with `--exclude-task-dependencies`, so they never compile the provider. When a provider leg fails, no package build leg runs in that run, and every selected package's `qvac/prebuild-<key>` status reports failure. A provider posts its own status and `prebuilds-<slug>` bundle only from a run that selected it.
+The provider rows build first. A package's build and C++ lint jobs then restore `prebuild-<provider>-<configuration>`, run the provider's `link:platform`, and run their target with `--exclude-task-dependencies`, so they never compile the provider. When a provider leg fails, no package build leg runs in that run, and every selected package's `status <package>` job fails. A provider gets its own `status` job and `prebuilds-<slug>` bundle only from a run that selected it.
 
 `publish-npm.yml` selects with `released-providers`, so a consumer's release builds against the provider release its users install: selection returns no provider rows for it, and its build job installs it alone from npm (`scripts/ci/checks-source.mjs install published`), and runs its `build` with `--exclude-task-dependencies`. A provider's own release builds its rows as above.
 
@@ -143,7 +143,7 @@ A package's slug, in its release branches, tags and artifact names, is its direc
 - **Fork PRs:** `fork-approval` waits on the `fork-ci` environment for a fork, as the API reports it. The run summary lists the PR's changed files before the approval. A fork PR that changes anything under `.github/` is refused, and its status says so. PR-code checkouts of a fork set `allow-unsafe-pr-checkout`, pinned to the SHA, without persisted credentials.
 - **Gating:** every job that holds secrets, OIDC or runs pull-request code needs `trust` and runs only when `needs.trust.outputs.allowed == 'true'`; `trust` needs `fork-approval`.
 - **Permissions:** both workflows set `permissions: {}` and `cache-mode: read`. Jobs that run PR code get `contents: read`, plus `id-token: write` where they use AWS. Only jobs that run no PR code post statuses or start Merge Guard (`actions: write`).
-- **Results:** `qvac/pr-build-test` and `qvac/sdk-e2e` on the PR head link to the run, next to `qvac/prebuild-<key>` and `qvac/cpp-tests-<key>`. The build jobs do not appear in the PR's Checks tab.
+- **Results:** `qvac/pr-build-test` and `qvac/sdk-e2e` on the PR head link to the run, and the Merge Guard summary links each required job. The build jobs do not appear in the PR's Checks tab.
 - **Labels:** applying a label starts `PR checks` again, which starts both. The `context` job tells a label's run from a push's by the PR's latest `labeled` event since the previous `PR checks` run on that commit.
 - **Re-runs:** re-running `PR checks` does not start them again; re-run the workflow itself.
 

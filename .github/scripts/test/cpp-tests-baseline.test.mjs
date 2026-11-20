@@ -74,8 +74,8 @@ test("pr-build-test runs the baseline rows when the labels are absent, and only 
   assert.match(cppTests, /needs\.route\.outputs\.run_cpp_tests == 'true' \|\| fromJSON\(needs\.select\.outputs\.matrices\)\['cpp:tests:baseline'\]\[0\] != null/);
   assert.match(cppTests, /run_cpp_tests == 'true' && fromJSON\(needs\.select\.outputs\.matrices\)\['cpp:tests'\] \|\| fromJSON\(needs\.select\.outputs\.matrices\)\['cpp:tests:baseline'\]/);
   // A package the baseline run did not test must not read as a pass it never earned.
-  assert.match(status, /CPP_TEST_RESULT: \$\{\{ \(needs\.route\.outputs\.run_cpp_tests == 'true' \|\| matrix\.project\.cppBaseline\) && needs\.cpp-tests\.result \|\| 'skipped' \}\}/);
-  assert.match(status, /PREBUILD_RESULT: \$\{\{ \(needs\.route\.outputs\.run_prebuilds == 'true' \|\| matrix\.project\.cppBaseline\) && /);
+  assert.match(status, /RESULT: \$\{\{ \(needs\.route\.outputs\.run_cpp_tests == 'true' \|\| matrix\.project\.cppBaseline\) && needs\.cpp-tests\.result \|\| 'skipped' \}\}/);
+  assert.match(status, /RESULT: \$\{\{ \(needs\.route\.outputs\.run_prebuilds == 'true' \|\| matrix\.project\.cppBaseline\) && /);
 });
 
 test("select-projects emits baseline rows for the opted-in package alone", async () => {

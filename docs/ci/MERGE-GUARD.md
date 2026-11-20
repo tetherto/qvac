@@ -31,7 +31,7 @@ It never waits. A check whose producer has not finished is pending, and that pro
 
 A fork PR that changes `.github/` fails the guard: its `pull_request` runs use its own workflow files, so it could rewrite the checks it is judged on. A maintainer re-raises it from a branch.
 
-The guard decides on job results, never on commit statuses: a workflow with `statuses: write`, including a same-repo PR's edited `pull_request` workflow, could post any status. The `qvac/prebuild-*`, `qvac/cpp-tests-*` and `qvac/pr-build-test` statuses are for people reading the PR.
+The guard decides on job results, never on commit statuses: a workflow with `statuses: write`, including a same-repo PR's edited `pull_request` workflow, could post any status. `qvac/pr-build-test` links the PR to its build run for people; the guard ignores it.
 
 ## The rules
 
@@ -61,7 +61,7 @@ Today the file requires the error-code reservations on every PR; each package's 
 In `PR build and test`:
 
 - `selected` fails when the run refused the PR (a fork PR that changes `.github/`) or package selection failed.
-- `status <package>` posts `qvac/prebuild-<dir>` and `qvac/cpp-tests-<dir>` and fails when either is a failure. A build or C++ test that routing skipped (no label, and not a baseline package) is a success; any other skip fails closed. `.github/scripts/prebuild-status/lib.mjs` holds that mapping and the `PREBUILD_KEYS` and `CPP_TEST_KEYS` lists.
+- `status <package>` fails when the package's prebuild or C++ tests failed. A build or C++ test that routing skipped (no label, and not a baseline package) is a success; any other skip fails closed. `.github/scripts/prebuild-status/lib.mjs` lists the packages it checks (`PREBUILD_KEYS`, `CPP_TEST_KEYS`).
 - The `merge-guard` job starts the guard with the PR number once the status jobs are done, so desktop tests and the perf report do not hold it up. This run's own completion event names `main`'s commit, not the PR's.
 
 ## Adding a required check

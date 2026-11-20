@@ -679,93 +679,27 @@ test("merge guard cancels superseded in-flight runs", () => {
   );
 });
 
-test("publish-cpp-test-status stamps its run URL into target_url", () => {
-  const workflowDirectory = join(root, ".github/workflows");
-  const offenders = readdirSync(workflowDirectory)
-    .filter((name) => /^on-pr-.*\.yml$/.test(name))
-    .filter((name) => {
-      const text = readFileSync(join(workflowDirectory, name), "utf8");
-      if (!text.includes("\n  publish-cpp-test-status:\n")) return false;
-      // Scoped to the job: the same file's publish-prebuild-status would
-      // otherwise satisfy the shared-script and RUN_URL checks on its behalf.
-      const job = jobBlock(text, "publish-cpp-test-status");
-      const hasRunUrl =
-        /RUN_URL:\s*\$\{\{ github\.server_url \}\}\/\$\{\{ github\.repository \}\}\/actions\/runs\/\$\{\{ github\.run_id \}\}/.test(
-          job,
-        );
-      const hasContext = /CONTEXT:\s*qvac\/cpp-tests-/.test(job);
-      const hasKind = /KIND:\s*cpp-tests/.test(job);
-      const runsScript =
-        /run:\s*node \.github\/scripts\/prebuild-status\/publish\.mjs/.test(
-          job,
-        );
-      // A producer may force RUN_CPP_TESTS to 'true' for baseline packages, but it
-      // must still fall back to ci-router's decision.
-      const hasSkipGuard =
-        /CPP_TEST_RESULT:\s*\$\{\{ needs\.cpp-tests(?:-coverage)?\.result \}\}/.test(
-          job,
-        ) &&
-        /CI_ROUTER_RESULT:\s*\$\{\{ needs\.ci-router\.result \}\}/.test(job) &&
-        /RUN_CPP_TESTS:\s*\$\{\{[^\n]*needs\.ci-router\.outputs\.run_cpp_tests \}\}/.test(
-          job,
-        );
-      return !(
-        hasRunUrl &&
-        hasContext &&
-        hasKind &&
-        runsScript &&
-        hasSkipGuard
-      );
-    });
-  assert.deepEqual(
-    offenders,
-    [],
-    "every on-pr publish-cpp-test-status must run publish.mjs with KIND=cpp-tests, RUN_URL, CONTEXT, and the ci-router skip guard",
-  );
-
-  const publish = read(".github/scripts/prebuild-status/publish.mjs");
-  assert.match(
-    publish,
-    /'cpp-tests': \{ resultEnv: 'CPP_TEST_RESULT', runFlagEnv: 'RUN_CPP_TESTS' \}/,
-    "publish.mjs maps the cpp-tests kind to CPP_TEST_RESULT + RUN_CPP_TESTS",
-  );
-});
-
-// pr-build-test.yml is not an on-pr-* file, so the two scans above miss it. Its
-// status job posts both contexts and must meet the same bar, with ci-route-stages's
-// result and run flags as the skip guard.
-test("pr-build-test status stamps its run URL and keeps the routing skip guard", () => {
+// Merge Guard reads the status job's result, so a failure-induced skip must fail it.
+test("pr-build-test status fails closed and keeps the routing skip guard", () => {
   const job = jobBlock(read(".github/workflows/pr-build-test.yml"), "status");
-  assert.match(
-    job,
-    /RUN_URL:\s*\$\{\{ github\.server_url \}\}\/\$\{\{ github\.repository \}\}\/actions\/runs\/\$\{\{ github\.run_id \}\}/,
-  );
+  assert.doesNotMatch(job, /statuses: write/, "the status job posts nothing");
   assert.match(job, /CI_ROUTER_RESULT:\s*\$\{\{ needs\.route\.result \}\}/);
-  assert.match(job, /CONTEXT:\s*qvac\/prebuild-/);
   // A cpp:tests baseline package runs without the labels; every other package still reads the router's own flag.
   assert.match(
     job,
-    /RUN_PREBUILDS:\s*\$\{\{ \(needs\.route\.outputs\.run_prebuilds == 'true' \|\| matrix\.project\.cppBaseline\) && 'true' \|\| needs\.route\.outputs\.run_prebuilds \}\}/,
-  );
-  assert.match(job, /CONTEXT:\s*qvac\/cpp-tests-/);
-  assert.match(job, /KIND:\s*cpp-tests/);
-  assert.match(
-    job,
-    /CPP_TEST_RESULT:\s*\$\{\{ \(needs\.route\.outputs\.run_cpp_tests == 'true' \|\| matrix\.project\.cppBaseline\) && needs\.cpp-tests\.result \|\| 'skipped' \}\}/,
+    /RUN:\s*\$\{\{ \(needs\.route\.outputs\.run_prebuilds == 'true' \|\| matrix\.project\.cppBaseline\) && 'true' \|\| needs\.route\.outputs\.run_prebuilds \}\}/,
   );
   assert.match(
     job,
-    /RUN_CPP_TESTS:\s*\$\{\{ \(needs\.route\.outputs\.run_cpp_tests == 'true' \|\| matrix\.project\.cppBaseline\) && 'true' \|\| needs\.route\.outputs\.run_cpp_tests \}\}/,
+    /RESULT:\s*\$\{\{ \(needs\.route\.outputs\.run_cpp_tests == 'true' \|\| matrix\.project\.cppBaseline\) && needs\.cpp-tests\.result \|\| 'skipped' \}\}/,
   );
-  assert.equal(
-    [
-      ...job.matchAll(
-        /run:\s*node \.github\/scripts\/prebuild-status\/publish\.mjs/g,
-      ),
-    ].length,
-    2,
-    "both contexts go through the shared publish script",
+  assert.match(
+    job,
+    /RUN:\s*\$\{\{ \(needs\.route\.outputs\.run_cpp_tests == 'true' \|\| matrix\.project\.cppBaseline\) && 'true' \|\| needs\.route\.outputs\.run_cpp_tests \}\}/,
   );
+  // Only a deliberate no-label skip passes.
+  assert.match(job, /\[ "\$RESULT" = skipped \] && \[ "\$CI_ROUTER_RESULT" = success \] && \[ "\$RUN" = false \] && exit 0/);
+  assert.match(job, /run: \*verdict/);
 });
 
 test("pr-build-test: every non-exempt job gates on trust", () => {
@@ -810,76 +744,6 @@ test("pr-build-test: every non-exempt job gates on trust", () => {
   for (const job of exempt.keys()) {
     assert.ok(jobNames.includes(job), `exempt job '${job}' still exists`);
   }
-});
-
-test("publish-prebuild-status stamps its run URL into target_url", () => {
-  const workflowDirectory = join(root, ".github/workflows");
-  const offenders = readdirSync(workflowDirectory)
-    .filter((name) => /^on-pr-.*\.yml$/.test(name))
-    .filter((name) => {
-      const text = readFileSync(join(workflowDirectory, name), "utf8");
-      if (!text.includes("publish-prebuild-status")) return false;
-      // A publish job must define RUN_URL from github.run_id, pass its context,
-      // and delegate to the shared publish script (which stamps target_url), so
-      // Merge Guard can bind the status to this run.
-      const hasRunUrl =
-        /RUN_URL:\s*\$\{\{ github\.server_url \}\}\/\$\{\{ github\.repository \}\}\/actions\/runs\/\$\{\{ github\.run_id \}\}/.test(
-          text,
-        );
-      const hasContext = /CONTEXT:\s*qvac\/prebuild-/.test(text);
-      const runsScript =
-        /run:\s*node \.github\/scripts\/prebuild-status\/publish\.mjs/.test(
-          text,
-        );
-      // A skipped prebuild must be distinguishable from a failure-induced skip,
-      // so the publish job forwards ci-router's result + run_prebuilds decision.
-      const hasSkipGuard =
-        /CI_ROUTER_RESULT:\s*\$\{\{ needs\.ci-router\.result \}\}/.test(text) &&
-        /RUN_PREBUILDS:\s*\$\{\{ needs\.ci-router\.outputs\.run_prebuilds \}\}/.test(
-          text,
-        );
-      return !(hasRunUrl && hasContext && runsScript && hasSkipGuard);
-    });
-  assert.deepEqual(
-    offenders,
-    [],
-    "every on-pr publish-prebuild-status must run the shared publish script with RUN_URL, CONTEXT, and the ci-router skip guard",
-  );
-
-  // The shared script is what actually stamps the run URL into target_url.
-  const publish = read(".github/scripts/prebuild-status/publish.mjs");
-  assert.match(
-    publish,
-    /target_url=\$\{runUrl\}/,
-    "publish.mjs stamps the run URL into the status target_url",
-  );
-
-  // Fail-closed on failure-induced skips: publish.mjs forwards ci-router's
-  // result + run_prebuilds, and the shared decision only trusts a skip that was
-  // ci-router's deliberate no-label choice (not a skip caused by an upstream
-  // failure). Otherwise a crashed label-detection job would read as a green
-  // prebuild to Merge Guard.
-  assert.match(
-    publish,
-    /resolvePublishState\(\s*process\.env\[kind\.resultEnv\],\s*process\.env\.REUSE_HIT,\s*process\.env\.CI_ROUTER_RESULT,\s*process\.env\[kind\.runFlagEnv\],?\s*\)/,
-    "publish.mjs passes ci-router result + the kind's run flag into the state decision",
-  );
-  assert.match(
-    publish,
-    /prebuild: \{ resultEnv: 'PREBUILD_RESULT', runFlagEnv: 'RUN_PREBUILDS' \}/,
-    "publish.mjs maps the prebuild kind to PREBUILD_RESULT + RUN_PREBUILDS",
-  );
-  assert.match(
-    publish,
-    /const kindName = process\.env\.KIND \|\| 'prebuild'/,
-    "publish.mjs defaults to the prebuild kind so existing publishers are unchanged",
-  );
-  const lib = read(".github/scripts/prebuild-status/lib.mjs");
-  assert.match(
-    lib,
-    /ciRouterResult === 'success' && runPrebuilds === 'false'/,
-    "resolvePublishState only treats a skip as success for a legit no-label skip",
-  );
 });
 
 test("infer-base publishes only after its generated artifacts check", () => {
