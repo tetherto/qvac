@@ -47,6 +47,14 @@ export class EmbeddingModelChangedError extends Error {
   }
 }
 
+/** Another server on the same directory has the store open. */
+export class VectorStoreInUseError extends Error {
+  constructor(readonly storeId: string) {
+    super(`Vector store "${storeId}" is in use by another server.`)
+    this.name = 'VectorStoreInUseError'
+  }
+}
+
 export interface VectorStoreFile {
   fileId: string
   fileName: string
@@ -77,7 +85,10 @@ export interface RagBackend {
     query: string,
     k: number
   ) => Promise<VectorStoreHit[]>
-  /** Deletes the store and its data. Returns false when it held none. */
+  /**
+   * Deletes the store and its data. Returns false when it held none, and
+   * throws VectorStoreInUseError while another server has it open.
+   */
   delete: (id: string) => Promise<boolean>
   close: () => Promise<void>
 }
@@ -249,6 +260,19 @@ export function createRagBackend(
     return opened
   }
 
+  // A Corestore has one opener at a time, so opening it fails while another
+  // server holds the store. Any other failure leaves a broken store deletable.
+  async function assertNotOpenElsewhere(id: string): Promise<void> {
+    const corestore = new Corestore(path.join(storeDir(id), 'corestore'))
+    try {
+      await corestore.ready()
+    } catch (err) {
+      if (/could not be locked/i.test((err as Error).message)) throw new VectorStoreInUseError(id)
+    } finally {
+      await corestore.close().catch(() => {})
+    }
+  }
+
   async function removeStore(id: string): Promise<void> {
     await closeOpen(id)
     await rm(storeDir(id), { recursive: true, force: true })
@@ -336,6 +360,7 @@ export function createRagBackend(
       serialize(id, async () => {
         if (!(await readStore(id))) return false
         await closeOpen(id)
+        await assertNotOpenElsewhere(id)
         // Move the folder out of the listing first: the store is gone even if
         // removing its data fails, and the next listing retries the removal.
         const deleted = path.join(

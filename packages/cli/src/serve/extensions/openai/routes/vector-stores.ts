@@ -21,6 +21,7 @@ import {
 } from '@/serve/core/stores/vector-stores'
 import {
   EmbeddingModelChangedError,
+  VectorStoreInUseError,
   type EmbeddingModelRef
 } from '@/serve/extensions/openai/adapters/rag-backend'
 import {
@@ -56,7 +57,7 @@ is created on the first \`POST /v1/vector_stores/{id}/files\`.
   updateById:
     'Patch `name` / `expires_after` / `metadata` on the in-memory metadata record. If the store exists only on disk, a local metadata record is materialized first.',
   deleteById:
-    'Delete both the in-memory metadata record AND the ingested files. If removing the files from disk fails, the request fails but the store is already gone; the leftover data is removed on a later request.',
+    'Delete both the in-memory metadata record AND the ingested files. Rejected with `vector_store_in_use` (409) while another server on the same data directory has the store open. If removing the files from disk fails, the request fails but the store is already gone; the leftover data is removed on a later request.',
   search: `
 Vector search over the store's files with \`@qvac/rag\`.
 
@@ -260,6 +261,9 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         try {
           await openai.ragBackend.delete(id)
         } catch (err) {
+          if (err instanceof VectorStoreInUseError) {
+            throw new HttpError(409, 'vector_store_in_use', err.message)
+          }
           const message = err instanceof Error ? err.message : String(err)
           ctx.logger.error(`Failed to delete the files of vector store "${id}": ${message}`)
           throw new HttpError(

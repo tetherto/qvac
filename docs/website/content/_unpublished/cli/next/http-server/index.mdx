@@ -2458,7 +2458,7 @@ Update `name`, `expires_after`, or `metadata`.
 
 #### `DELETE /v1/vector_stores/:id`
 
-Delete the store and its ingested files.
+Delete the store and its ingested files. Returns `409 vector_store_in_use` while another server on the same data directory has the store open.
 
 #### `POST /v1/vector_stores/:id/search`
 

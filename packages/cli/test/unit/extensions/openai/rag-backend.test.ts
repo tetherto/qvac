@@ -6,6 +6,7 @@ import path from 'node:path'
 import {
   createRagBackend,
   EmbeddingModelChangedError,
+  VectorStoreInUseError,
   vectorStoreDirFor,
   type EmbedTexts
 } from '@/serve/extensions/openai/adapters/rag-backend'
@@ -195,6 +196,27 @@ describe('createRagBackend', () => {
       assert.equal(await backend.delete('vs_e'), true)
       assert.deepEqual(await readdir(path.join(dir, 'stores')), [])
       await backend.close()
+    })
+  })
+
+  it('refuses to delete a store another server has open', async () => {
+    await withDir(async (dir) => {
+      const first = createRagBackend({ dir, embedTexts })
+      const second = createRagBackend({ dir, embedTexts })
+      await first.attach('vs_h', model, {
+        fileId: 'file-1',
+        fileName: 'moon.txt',
+        text: 'A moon in orbit.'
+      })
+
+      await assert.rejects(second.delete('vs_h'), VectorStoreInUseError)
+      const hits = await first.search('vs_h', model, 'moon', 1)
+      assert.equal(hits[0]?.fileId, 'file-1')
+
+      await first.close()
+      assert.equal(await second.delete('vs_h'), true)
+      assert.deepEqual(await readdir(path.join(dir, 'stores')), [])
+      await second.close()
     })
   })
 
