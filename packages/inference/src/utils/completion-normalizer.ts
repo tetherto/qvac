@@ -7,14 +7,38 @@ import type {
   ToolCall
 } from '@/schemas/index'
 import { parseToolCalls } from '@/utils/tools/index'
+import {
+  BARE_FUNCTION_CLOSE,
+  BARE_FUNCTION_OPEN,
+  bareFunctionNameLength
+} from '@/utils/tools/parsers/qwen35'
 
 type NormalizerState =
-  'content' | 'thinkingFraming' | 'toolFraming' | 'contentFraming' | 'afterThinkingTool'
+  | 'content'
+  | 'thinkingFraming'
+  | 'toolFraming'
+  | 'contentFraming'
+  | 'afterThinkingTool'
+  | 'afterTool'
 
 type FrameSpec = {
   open: string
   close: string
+  // An opener that is also ordinary text: it frames a call only once a valid
+  // `NAME>` follows, and a frame that recovers nothing is returned as text.
+  bare?: boolean
 }
+
+const BARE_FUNCTION_FRAME: FrameSpec = {
+  open: BARE_FUNCTION_OPEN,
+  close: BARE_FUNCTION_CLOSE,
+  bare: true
+}
+
+// Special-token-shaped markers a template emits after a call (`<|tool_response>`,
+// `<|start|>assistant`); they say nothing about whether the call was made.
+const PROTOCOL_TOKEN = /^(?:<\|[^<>\s]{0,40}>(?:assistant)?|<[^<>\s|]{1,40}\|>|<｜[^<>]{0,40}>)/
+const MAX_PENDING_PROTOCOL_TOKEN = 48
 
 export const MAX_TOOL_FRAME_CHARS = 1_048_576
 
@@ -44,7 +68,7 @@ const DSML_INVOKE_FRAMES: readonly FrameSpec[] = [' ', '\n', '\t', '\r'].map((se
 
 const DIALECT_SPECS: Record<Dialect, DialectSpec> = {
   hermes: {
-    toolFrames: [{ open: '<tool_call>', close: '</tool_call>' }]
+    toolFrames: [{ open: '<tool_call>', close: '</tool_call>' }, BARE_FUNCTION_FRAME]
   },
   // No streaming framing — tool calls are only recovered at finalization.
   json: {
@@ -79,7 +103,7 @@ const DIALECT_SPECS: Record<Dialect, DialectSpec> = {
   },
   qwen35: {
     // Same <tool_call>…</tool_call> framing as hermes; inner content is XML.
-    toolFrames: [{ open: '<tool_call>', close: '</tool_call>' }]
+    toolFrames: [{ open: '<tool_call>', close: '</tool_call>' }, BARE_FUNCTION_FRAME]
   },
   gemma4: {
     toolFrames: [{ open: '<|tool_call>', close: '<tool_call|>' }],
@@ -115,6 +139,13 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   // `parseToolCalls` can match its own dialect markers.
   let toolCallBuffer = ''
   let activeToolFrame: FrameSpec | null = null
+  let bareNameSeen = false
+
+  // Only a call at the end of the turn is made: one followed by more prose was
+  // an example. A closed frame's calls wait here until the turn ends or only
+  // whitespace, protocol tokens or another frame has followed.
+  let trailingCalls: { raw: string; calls: ToolCall[] } | null = null
+  const demotedToolCallKeys = new Set<string>()
 
   // Thinking frame: tracks which frame's close marker we're scanning for
   // (could be the built-in `<think>` or a dialect-specific frame like
@@ -157,6 +188,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   let thinkingFramingTail = ''
   let contentFramingTail = ''
   let afterThinkingToolTail = ''
+  let afterToolTail = ''
 
   const streamedToolCallKeys = new Set<string>()
 
@@ -258,7 +290,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
 
   function emitFinalToolCall(events: CompletionEvent[], call: ToolCall) {
     const key = getToolCallKey(call)
-    if (streamedToolCallKeys.has(key)) return
+    if (streamedToolCallKeys.has(key) || demotedToolCallKeys.has(key)) return
     events.push({ type: 'toolCall', seq: nextSeq(), call })
   }
 
@@ -290,6 +322,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     toolCallBuffer = marker
     activeToolFrame = spec
     toolFrameOpenedInThinking = fromThinking
+    bareNameSeen = false
     state = 'toolFraming'
   }
 
@@ -349,6 +382,17 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
       }
     }
 
+    if (frame.bare && toolCalls.length === 0 && errors.length === 0) {
+      emitContent(events, raw)
+      return
+    }
+
+    if (closed && toolCalls.length > 0 && !openedInThinking) {
+      trailingCalls = { raw, calls: toolCalls }
+      state = 'afterTool'
+      return
+    }
+
     for (const call of toolCalls) emitMadeCall(events, call)
 
     if (toolCalls.length === 0) {
@@ -374,8 +418,15 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   }
 
   function abandonToolFrame(events: CompletionEvent[]) {
-    const { raw } = takeToolFrame()
+    const { raw, frame, openedInThinking } = takeToolFrame()
     state = 'content'
+    if (frame?.bare && openedInThinking) {
+      emitThinking(events, raw)
+      activeThinkingFrame = BUILTIN_THINKING
+      state = 'thinkingFraming'
+      return
+    }
+    if (frame?.bare) return emitContent(events, raw)
 
     events.push({
       type: 'toolError',
@@ -400,6 +451,76 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
         return contentFramingTail
       case 'afterThinkingTool':
         return afterThinkingToolTail
+      case 'afterTool':
+        return afterToolTail
+    }
+  }
+
+  // A bare opener not followed by `NAME>` was text; `rest` is what came after it.
+  function releaseBareOpener(events: CompletionEvent[], rest: string) {
+    const { frame, openedInThinking } = takeToolFrame()
+    const opener = frame?.open ?? ''
+    if (openedInThinking) {
+      trimThinkingStart = false
+      emitThinking(events, opener)
+      activeThinkingFrame = BUILTIN_THINKING
+      state = 'thinkingFraming'
+    } else {
+      state = 'content'
+      emitContent(events, opener)
+    }
+    return rest
+  }
+
+  function releaseTrailingCalls(events: CompletionEvent[]) {
+    const held = trailingCalls
+    trailingCalls = null
+    for (const call of held?.calls ?? []) emitMadeCall(events, call)
+  }
+
+  function demoteTrailingCalls(events: CompletionEvent[]) {
+    const held = trailingCalls
+    trailingCalls = null
+    if (!held) return
+    for (const call of held.calls) demotedToolCallKeys.add(getToolCallKey(call))
+    emitContent(events, held.raw)
+  }
+
+  function stepAfterTool(events: CompletionEvent[], buf: string) {
+    let rest = buf
+    for (;;) {
+      const trimmed = rest.trimStart()
+      if (!trimmed) {
+        afterToolTail = rest
+        return ''
+      }
+      const opener = toolOpeners.find((m) => trimmed.startsWith(m))
+      if (opener) {
+        releaseTrailingCalls(events)
+        openToolFrame(opener, markerToEntry.get(opener)!.spec, false)
+        return trimmed.slice(opener.length)
+      }
+      // A split opener (`<|channel|>comm…`) must not be taken for a protocol token.
+      if (toolOpeners.some((m) => m.startsWith(trimmed))) {
+        afterToolTail = rest
+        return ''
+      }
+      const token = PROTOCOL_TOKEN.exec(trimmed)
+      if (token) {
+        rest = trimmed.slice(token[0].length)
+        continue
+      }
+      if (
+        trimmed[0] === '<' &&
+        !trimmed.includes('>') &&
+        trimmed.length < MAX_PENDING_PROTOCOL_TOKEN
+      ) {
+        afterToolTail = rest
+        return ''
+      }
+      demoteTrailingCalls(events)
+      state = 'content'
+      return rest
     }
   }
 
@@ -409,6 +530,17 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
       state = 'content'
       return buf
     }
+    if (activeToolFrame.bare && !bareNameSeen) {
+      const rest = toolCallBuffer.slice(activeToolFrame.open.length) + buf
+      const nameLength = bareFunctionNameLength(rest)
+      if (nameLength < 0) return releaseBareOpener(events, rest)
+      if (nameLength === 0) {
+        toolCallBuffer += buf
+        return ''
+      }
+      bareNameSeen = true
+    }
+
     const close = activeToolFrame.close
     const hit = buf.indexOf(close)
 
@@ -523,8 +655,14 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     toolFramingTail = ''
     contentFramingTail = ''
     afterThinkingToolTail = ''
+    afterToolTail = ''
 
     while (buf.length > 0) {
+      if (state === 'afterTool') {
+        buf = stepAfterTool(events, buf)
+        continue
+      }
+
       if (state === 'toolFraming') {
         buf = stepToolFraming(events, buf)
         continue
@@ -643,6 +781,15 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     }
   }
 
+  // The turn ended with the calls still held: they were made, unless it failed.
+  function settleTrailingCalls(events: CompletionEvent[], failed: boolean) {
+    if (state !== 'afterTool') return
+    afterToolTail = ''
+    if (failed) demoteTrailingCalls(events)
+    else releaseTrailingCalls(events)
+    state = 'content'
+  }
+
   // The turn ended right after a call inside `<think>`: it was made, unless
   // the turn failed. A partial marker buffered after it stays reasoning.
   function settleHeldCalls(events: CompletionEvent[], failed: boolean) {
@@ -685,6 +832,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     const naturalStop = opts?.stopReason === 'eos' || opts?.stopReason === 'stopSequence'
 
     drainTails(events)
+    settleTrailingCalls(events, failed)
     closeOpenFrames(events, failed)
     settleHeldCalls(events, failed)
     // The block never closed, so every call left in it was made. A cancelled

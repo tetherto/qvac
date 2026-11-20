@@ -245,11 +245,50 @@ test('valid framed tool call: emits toolCall, no content for markup', (t) => {
     baseConfig({ capabilities: TEXT_PARSE_CAPS, tools: [ECHO_TOOL] })
   )
   const toolJson = JSON.stringify({ name: 'echo', arguments: { msg: 'hi' } })
-  const events = [...pushAll(n, [`Before <tool_call>${toolJson}</tool_call> After`]), ...n.finish()]
+  const events = [...pushAll(n, [`Before <tool_call>${toolJson}</tool_call>\n`]), ...n.finish()]
 
   const toolEvents = events.filter((e) => e.type === 'toolCall')
   t.is(toolEvents.length, 1)
-  t.alike(texts(events, 'contentDelta'), ['Before ', ' After'])
+  t.alike(texts(events, 'contentDelta'), ['Before '])
+})
+
+test('a framed call followed by more prose is an example: shown, not made', (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({ capabilities: TEXT_PARSE_CAPS, tools: [ECHO_TOOL] })
+  )
+  const frame = `<tool_call>${JSON.stringify({ name: 'echo', arguments: { msg: 'hi' } })}</tool_call>`
+  const events = [...pushAll(n, [`Call it like ${frame} and wait.`]), ...n.finish()]
+
+  t.is(events.filter((e) => e.type === 'toolCall').length, 0)
+  t.is(events.filter((e) => e.type === 'toolError').length, 0)
+  t.is(texts(events, 'contentDelta').join(''), `Call it like ${frame} and wait.`)
+})
+
+test('a demoted example is not made again from the final parse', (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({ capabilities: TEXT_PARSE_CAPS, tools: [ECHO_TOOL] })
+  )
+  const call = { name: 'echo', arguments: { msg: 'hi' } }
+  const events = [
+    ...pushAll(n, [`Like <tool_call>${JSON.stringify(call)}</tool_call> this.`]),
+    ...n.finish({ toolCalls: [{ id: 'call_x', ...call }] })
+  ]
+  t.is(events.filter((e) => e.type === 'toolCall').length, 0)
+})
+
+test('calls separated by whitespace and protocol tokens are all made', (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({ capabilities: TEXT_PARSE_CAPS, tools: [ECHO_TOOL] })
+  )
+  const frame = (msg: string) =>
+    `<tool_call>${JSON.stringify({ name: 'echo', arguments: { msg } })}</tool_call>`
+  const events = [
+    ...pushAll(n, [`${frame('a')}\n`, '<|im_', 'end|>', `\n${frame('b')}`, '\n']),
+    ...n.finish()
+  ]
+  const calls = events.flatMap((e) => (e.type === 'toolCall' ? [e.call.arguments] : []))
+  t.alike(calls, [{ msg: 'a' }, { msg: 'b' }])
+  t.is(texts(events, 'contentDelta').join(''), '')
 })
 
 test('invalid framed tool call: emits toolError and fails open as content', (t) => {
@@ -445,10 +484,13 @@ test('dedupe: repeated identical calls from same source are preserved', (t) => {
   const nFramed = createCompletionNormalizer(
     baseConfig({ capabilities: TEXT_PARSE_CAPS, tools: [ECHO_TOOL] })
   )
-  const framedEvents = pushAll(nFramed, [
-    `<tool_call>${toolJson}</tool_call>`,
-    `<tool_call>${toolJson}</tool_call>`
-  ])
+  const framedEvents = [
+    ...pushAll(nFramed, [
+      `<tool_call>${toolJson}</tool_call>`,
+      `<tool_call>${toolJson}</tool_call>`
+    ]),
+    ...nFramed.finish()
+  ]
   t.is(
     framedEvents.filter((e) => e.type === 'toolCall').length,
     2,
@@ -466,7 +508,7 @@ test('cross-token marker: <tool_call> split across pushes is still detected', (t
   const toolJson = JSON.stringify({ name: 'echo', arguments: { msg: 'hi' } })
 
   const events = [
-    ...pushAll(n, ['Before <tool_', 'call>', toolJson, '</tool_', 'call> After']),
+    ...pushAll(n, ['Before <tool_', 'call>', toolJson, '</tool_', 'call>']),
     ...n.finish()
   ]
 
@@ -476,7 +518,7 @@ test('cross-token marker: <tool_call> split across pushes is still detected', (t
     'frame detected despite split markers'
   )
   const content = texts(events, 'contentDelta').join('')
-  t.is(content, 'Before  After', 'no marker bytes leak into content')
+  t.is(content, 'Before ', 'no marker bytes leak into content')
 })
 
 test('cross-token marker: <think> split across pushes still strips correctly', (t) => {
@@ -502,7 +544,7 @@ test('pythonic streaming: wrapped frame emits toolCall mid-stream', (t) => {
   )
 
   const text = `<|tool_call_start|>[get_weather(city="Paris", country="FR")]<|tool_call_end|>`
-  const events = pushAll(n, [text])
+  const events = [...pushAll(n, [text]), ...n.finish()]
 
   const tools = events.filter((e) => e.type === 'toolCall')
   t.is(tools.length, 1)
@@ -521,11 +563,10 @@ test('pythonic streaming: wrapped marker split across pushes still detected', (t
     })
   )
 
-  const events = pushAll(n, [
-    '<|tool_',
-    `call_start|>[get_weather(city="Lima")]<|tool_call_`,
-    'end|>'
-  ])
+  const events = [
+    ...pushAll(n, ['<|tool_', `call_start|>[get_weather(city="Lima")]<|tool_call_`, 'end|>']),
+    ...n.finish()
+  ]
 
   const tools = events.filter((e) => e.type === 'toolCall')
   t.is(tools.length, 1, 'wrapped pythonic frame detected across split markers')
@@ -907,10 +948,13 @@ test('qwen35 streaming: marker split across pushes still detected', (t) => {
       toolDialect: 'qwen35'
     })
   )
-  const events = pushAll(n, [
-    '<tool_',
-    'call><function=get_weather><parameter=city>Lima</parameter></function></tool_call>'
-  ])
+  const events = [
+    ...pushAll(n, [
+      '<tool_',
+      'call><function=get_weather><parameter=city>Lima</parameter></function></tool_call>'
+    ]),
+    ...n.finish()
+  ]
   const toolEvents = events.filter((e) => e.type === 'toolCall')
   t.is(toolEvents.length, 1, 'qwen35 frame detected across split marker')
 })
@@ -989,18 +1033,18 @@ test('dsml streaming: tool frame emits toolCall mid-stream', (t) => {
   t.absent(contentJoined.includes('｜DSML｜'), 'raw DSML must not leak into content')
 })
 
-test('dsml streaming: content around the tool frame is preserved', (t) => {
+test('dsml streaming: content before the tool frame is preserved', (t) => {
   const n = createCompletionNormalizer(dsmlConfig())
   const events = [
     ...pushAll(n, [
       'Let me check. ',
       `<｜DSML｜tool_calls><｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`,
-      ' Done.'
+      '\n'
     ]),
     ...n.finish()
   ]
   t.is(events.filter((e) => e.type === 'toolCall').length, 1)
-  t.is(texts(events, 'contentDelta').join(''), 'Let me check.  Done.')
+  t.is(texts(events, 'contentDelta').join(''), 'Let me check. ')
 })
 
 test('dsml streaming: markers split across pushes still detected', (t) => {
@@ -1083,13 +1127,16 @@ test('dsml streaming: reasoning is captured and kept out of content', (t) => {
 
 test('dsml streaming: wrapper-less invoke is framed and emits toolCall mid-stream', (t) => {
   const n = createCompletionNormalizer(dsmlConfig())
-  const events = pushAll(n, [
-    '<｜DSML｜invoke name="get_weather">',
-    '<｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter>',
-    '</｜DSML｜invoke>'
-  ])
+  const events = [
+    ...pushAll(n, [
+      '<｜DSML｜invoke name="get_weather">',
+      '<｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter>',
+      '</｜DSML｜invoke>'
+    ]),
+    ...n.finish()
+  ]
   const toolEvents = events.filter((e) => e.type === 'toolCall')
-  t.is(toolEvents.length, 1, 'wrapper-less invoke emits toolCall before finish')
+  t.is(toolEvents.length, 1, 'wrapper-less invoke emits toolCall')
   t.is((toolEvents[0] as { call: { name: string } }).call.name, 'get_weather')
   t.alike((toolEvents[0] as { call: { arguments: unknown } }).call.arguments, { city: 'Tokyo' })
   t.is(texts(events, 'contentDelta').join(''), '', 'no markup leaks into contentDelta')
