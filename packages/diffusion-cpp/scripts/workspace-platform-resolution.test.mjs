@@ -30,8 +30,6 @@ const importers = entries(sections.get('importers').block, 2)
 const snapshots = entries(sections.get('snapshots').block, 2)
 const packages = entries(sections.get('packages').block, 2)
 
-// A release train takes the packages outside it out of the workspace, and the
-// lockfile then has no importer for them.
 const workspace = readFileSync(new URL('pnpm-workspace.yaml', root), 'utf8')
 
 for (const consumer of ['inference', 'sdk']) {
