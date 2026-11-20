@@ -61,13 +61,11 @@ function pickStats(raw: unknown): VlaStats | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const r = raw as Record<string, unknown>
   const out: VlaStats = {}
-  if (typeof r['vision_ms'] === 'number') out.vision_ms = r['vision_ms']
-  if (typeof r['prefill_compute_ms'] === 'number') out.prefill_compute_ms = r['prefill_compute_ms']
-  if (typeof r['prefill_total_ms'] === 'number') out.prefill_total_ms = r['prefill_total_ms']
-  if (typeof r['smollm2_compute_ms'] === 'number') out.smollm2_compute_ms = r['smollm2_compute_ms']
-  if (typeof r['smollm2_total_ms'] === 'number') out.smollm2_total_ms = r['smollm2_total_ms']
-  if (typeof r['ode_ms'] === 'number') out.ode_ms = r['ode_ms']
-  if (typeof r['total_ms'] === 'number') out.total_ms = r['total_ms']
+  if (typeof r['vision_ms'] === 'number') out.visionMs = r['vision_ms']
+  if (typeof r['prefill_compute_ms'] === 'number') out.prefillComputeMs = r['prefill_compute_ms']
+  if (typeof r['prefill_total_ms'] === 'number') out.prefillTotalMs = r['prefill_total_ms']
+  if (typeof r['ode_ms'] === 'number') out.odeMs = r['ode_ms']
+  if (typeof r['total_ms'] === 'number') out.totalTime = r['total_ms']
   if (typeof r['backendDevice'] === 'number') out.backendDevice = r['backendDevice']
   return Object.keys(out).length > 0 ? out : undefined
 }

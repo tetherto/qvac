@@ -136,33 +136,33 @@ export const finetuneStatusSchema = z.enum(finetuneStatusValues)
 
 export const finetuneProgressSchema = z
   .object({
-    is_train: z.boolean(),
+    isTrain: z.boolean(),
     loss: z.union([z.number(), z.nan()]).nullable(),
-    loss_uncertainty: z.union([z.number(), z.nan()]).nullable(),
+    lossUncertainty: z.union([z.number(), z.nan()]).nullable(),
     accuracy: z.union([z.number(), z.nan()]).nullable(),
-    accuracy_uncertainty: z.union([z.number(), z.nan()]).nullable(),
-    global_steps: z.number().int().min(0),
-    current_epoch: z.number().int().min(0),
-    current_batch: z.number().int().min(0),
-    total_batches: z.number().int().min(0),
-    elapsed_ms: z.number().min(0),
-    eta_ms: z.number().min(0)
+    accuracyUncertainty: z.union([z.number(), z.nan()]).nullable(),
+    globalSteps: z.number().int().min(0),
+    currentEpoch: z.number().int().min(0),
+    currentBatch: z.number().int().min(0),
+    totalBatches: z.number().int().min(0),
+    elapsedMs: z.number().min(0),
+    etaMs: z.number().min(0)
   })
   .strict()
 
 export const finetuneStatsSchema = z
   .object({
-    train_loss: z.number().optional(),
-    train_loss_uncertainty: z.union([z.number(), z.nan()]).nullable().optional(),
-    val_loss: z.number().optional(),
-    val_loss_uncertainty: z.union([z.number(), z.nan()]).nullable().optional(),
-    train_accuracy: z.number().optional(),
-    train_accuracy_uncertainty: z.union([z.number(), z.nan()]).nullable().optional(),
-    val_accuracy: z.number().optional(),
-    val_accuracy_uncertainty: z.union([z.number(), z.nan()]).nullable().optional(),
-    learning_rate: z.number().optional(),
-    global_steps: z.number().int().min(0),
-    epochs_completed: z.number().int().min(0)
+    trainLoss: z.number().optional(),
+    trainLossUncertainty: z.union([z.number(), z.nan()]).nullable().optional(),
+    valLoss: z.number().optional(),
+    valLossUncertainty: z.union([z.number(), z.nan()]).nullable().optional(),
+    trainAccuracy: z.number().optional(),
+    trainAccuracyUncertainty: z.union([z.number(), z.nan()]).nullable().optional(),
+    valAccuracy: z.number().optional(),
+    valAccuracyUncertainty: z.union([z.number(), z.nan()]).nullable().optional(),
+    learningRate: z.number().optional(),
+    globalSteps: z.number().int().min(0),
+    epochsCompleted: z.number().int().min(0)
   })
   .strict()
 

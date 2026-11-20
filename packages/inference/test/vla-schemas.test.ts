@@ -276,25 +276,13 @@ test('vlaHparamsSchema: rejects unknown stateInputMode', (t) => {
 // vlaStatsSchema
 // ============================================
 
-test("vlaStatsSchema: accepts addon's full RuntimeStats shape", (t) => {
+test('vlaStatsSchema: accepts the full timing set', (t) => {
   const result = vlaStatsSchema.safeParse({
-    vision_ms: 12.3,
-    smollm2_compute_ms: 4.5,
-    smollm2_total_ms: 7.1,
-    ode_ms: 2.2,
-    total_ms: 25.6,
-    backendDevice: 1
-  })
-  t.is(result.success, true)
-})
-
-test('vlaStatsSchema: accepts architecture-neutral prefill_* timings', (t) => {
-  const result = vlaStatsSchema.safeParse({
-    vision_ms: 12.3,
-    prefill_compute_ms: 4.5,
-    prefill_total_ms: 7.1,
-    ode_ms: 2.2,
-    total_ms: 25.6,
+    visionMs: 12.3,
+    prefillComputeMs: 4.5,
+    prefillTotalMs: 7.1,
+    odeMs: 2.2,
+    totalTime: 25.6,
     backendDevice: 1
   })
   t.is(result.success, true)
@@ -401,7 +389,7 @@ test('vlaRunResponseSchema: accepts response with stats', (t) => {
     actions,
     actionDim: 7,
     chunkSize: 50,
-    stats: { total_ms: 200 }
+    stats: { totalTime: 200 }
   })
   t.is(result.success, true)
 })
@@ -699,7 +687,7 @@ test('vla plugin: registers and dispatches vlaRun', async function (t) {
         actions,
         actionDim: 3,
         chunkSize: 1,
-        stats: { total_ms: 42 }
+        stats: { totalTime: 42 }
       }
     },
     async function () {
@@ -798,7 +786,7 @@ test('vlaRun op: decodes base64 inputs and forwards typed arrays to model.run', 
         return {
           await: async () => ({
             actions: expectedActions,
-            stats: { total_ms: 100 }
+            stats: { total_ms: 100, prefill_total_ms: 7, smollm2_total_ms: 7 }
           })
         }
       },
@@ -835,7 +823,7 @@ test('vlaRun op: decodes base64 inputs and forwards typed arrays to model.run', 
 
       t.is(result.actionDim, 3)
       t.is(result.chunkSize, 1)
-      t.is(result.stats?.total_ms, 100)
+      t.alike(result.stats, { totalTime: 100, prefillTotalMs: 7 })
       // Round-trip the actions base64 by decoding here (mirrors what the
       // client does).
       const actionsB64 = result.actions
