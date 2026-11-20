@@ -1,5 +1,6 @@
 import type { ServeExtension } from '@/serve/core/extensions'
 import { routes } from '@/serve/extensions/default/routes'
+import { BCI_FIELD_CODES } from '@/serve/extensions/default/schemas/bci'
 import { CHAT_BATCH_FIELD_CODES } from '@/serve/extensions/default/schemas/chat-batch'
 import { CLASSIFICATIONS_FIELD_CODES } from '@/serve/extensions/default/schemas/classifications'
 import { MODEL_FIT_FIELD_CODES } from '@/serve/extensions/default/schemas/model-fit'
@@ -32,7 +33,8 @@ const defaultExtension: ServeExtension = {
     ...REGISTRY_FIELD_CODES,
     ...UPSCALE_FIELD_CODES,
     ...MUSIC_FIELD_CODES,
-    ...WORLD_FIELD_CODES
+    ...WORLD_FIELD_CODES,
+    ...BCI_FIELD_CODES
   },
   // lunte-disable-next-line require-await
   setup: async (ctx) => createDefaultState(ctx, tearDownMusicJob),

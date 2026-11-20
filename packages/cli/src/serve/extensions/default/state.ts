@@ -23,6 +23,8 @@ export interface DefaultState {
   cancelOverride?: typeof sdk.cancel
   worldCreateSceneOverride?: typeof sdk.worldCreateScene
   worldStepOverride?: typeof sdk.worldStep
+  bciTranscribeOverride?: typeof sdk.bciTranscribe
+  bciTranscribeStreamOverride?: typeof sdk.bciTranscribeStream
 }
 
 declare module '@/serve/core/context' {
