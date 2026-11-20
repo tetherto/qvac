@@ -1,6 +1,8 @@
 import test from 'brittle'
 import type { QVACModelEntry, QVACRegistryClient } from '@qvac/registry-client'
 import { models, type RegistryItem } from '@/models/registry/models'
+import { generateShortHash } from '@/utils/formatting'
+import { getModelCacheLayout, getSingleFileCacheName } from '@/utils/cache/layout'
 import fs from 'bare-fs'
 import path from 'bare-path'
 import os from 'bare-os'
@@ -87,15 +89,74 @@ test('Core ML companions: Apple TDT uses one GGUF constant and a colocated encod
   )
 })
 
-test('Core ML companions: EOU source name is mapped to the GGUF-derived name', async (t) => {
-  const set = await findCoremlCompanionSet(
-    client(bundle('parakeet_realtime_eou_120m-v1-encoder')),
-    primary('parakeet-eou-120m-v1.q8_0.gguf'),
-    'ios'
-  )
+// The registry publishes an EOU encoder bundle compiled for one fixed input
+// length that EOU's default streaming windows never match, so no EOU GGUF
+// stages it.
+const EOU_BUNDLE = 'parakeet_realtime_eou_120m-v1-encoder'
+const APPLE_PLATFORMS = ['darwin', 'ios']
 
-  t.ok(set)
-  t.is(set!.files[1]!.targetName, 'parakeet-eou-120m-v1-encoder.mlmodelc/analytics/coremldata.bin')
+test('Core ML companions: EOU GGUFs load without the published EOU bundle', async (t) => {
+  const published = client(bundle(EOU_BUNDLE))
+  // The catalog's name, and the name EOU GGUFs carried before the 2026-09-30
+  // refresh, which the SDK used to map to that bundle.
+  for (const filename of [
+    'parakeet_realtime_eou_120m-v1.q8_0.gguf',
+    'parakeet-eou-120m-v1.q8_0.gguf'
+  ]) {
+    const model = primary(filename)
+    for (const platform of APPLE_PLATFORMS) {
+      t.absent(
+        getCoremlSidecarSpec(model.registryPath, 's3', platform),
+        `${filename} on ${platform} has no sidecar spec`
+      )
+      t.absent(
+        await findCoremlCompanionSet(published, model, platform),
+        `${filename} on ${platform} stages no companion set`
+      )
+    }
+  }
+})
+
+test('Core ML companions: no catalog model stages the EOU bundle', (t) => {
+  const eouModels = models.filter((entry) => entry.name.startsWith('PARAKEET_EOU_120M_V1_'))
+  t.ok(eouModels.length > 0, 'the catalog lists EOU GGUFs')
+  for (const model of eouModels) {
+    const single = getSingleFileCacheName(model.registryPath, generateShortHash)
+    for (const platform of APPLE_PLATFORMS) {
+      t.absent(
+        getCoremlSidecarSpec(model.registryPath, model.registrySource, platform),
+        `${model.name} on ${platform} has no sidecar spec`
+      )
+      t.absent(
+        findCatalogCoremlCompanionSet(model, platform),
+        `${model.name} on ${platform} has no companion set`
+      )
+      t.is(
+        getModelCacheLayout(model, platform, generateShortHash)?.path,
+        single,
+        `${model.name} on ${platform} is cached as its GGUF alone`
+      )
+    }
+  }
+
+  // The bundle's catalog rows may retire. While any remain, no catalog
+  // model's companion set may include them.
+  const isEouComponent = (registryPath: string) =>
+    registryPath.startsWith(`${ROOT}${EOU_BUNDLE}.mlmodelc/`)
+  if (!models.some((entry) => isEouComponent(entry.registryPath))) {
+    t.comment('the catalog no longer lists the EOU bundle')
+    return
+  }
+  const staged: string[] = []
+  for (const model of models) {
+    for (const platform of APPLE_PLATFORMS) {
+      const set = findCatalogCoremlCompanionSet(model, platform)
+      if (set?.files.some((file) => isEouComponent(file.registryPath))) {
+        staged.push(`${model.name} on ${platform}`)
+      }
+    }
+  }
+  t.alike(staged, [], 'no companion set includes the EOU bundle')
 })
 
 test('Core ML companions: Sortformer stages both batch and AOSC bundles', async (t) => {
