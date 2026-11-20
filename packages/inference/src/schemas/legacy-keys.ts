@@ -6,6 +6,8 @@ import {
 import { inferModelTypeFromModelSrc } from '@/schemas/model-src-utils'
 import type { LlmConfigInput } from '@/schemas/llamacpp-config'
 import type { GenerationParams, ResponseFormat } from '@/schemas/completion-stream'
+import type { DecisionConfigInput } from '@/schemas/decision'
+import type { RerankConfigInput } from '@/schemas/rerank'
 
 export interface LegacyLlmConfig {
   /** @deprecated Use `ctxSize`. */
@@ -151,8 +153,27 @@ export type WithLegacyCompletionParams<P> = Omit<P, 'generationParams' | 'respon
     P[Extract<keyof P, 'responseFormat'>] | LegacyJsonSchemaResponseFormat | undefined
 }
 
+export interface LegacyEmbedLlamacppConfig<C extends DecisionConfigInput | RerankConfigInput> {
+  /** @deprecated Use `gpuLayers`. */
+  gpu_layers?: C['gpuLayers']
+  /** @deprecated Use `batchSize`. */
+  batch_size?: C['batchSize']
+  /** @deprecated Use `threadsBatch`. */
+  'threads-batch'?: C['threadsBatch']
+  /** @deprecated Use `flashAttention`. */
+  flash_attn?: C['flashAttention']
+  /** @deprecated Use `mainGpu`. */
+  'main-gpu'?: C['mainGpu']
+  /** @deprecated Use `splitMode`. */
+  'split-mode'?: C['splitMode']
+  /** @deprecated Use `tensorSplit`. */
+  'tensor-split'?: C['tensorSplit']
+}
+
 export type LegacyModelConfigs = {
   'llamacpp-completion': LegacyLlmConfig
+  'llamacpp-decision': LegacyEmbedLlamacppConfig<DecisionConfigInput>
+  'llamacpp-rerank': LegacyEmbedLlamacppConfig<RerankConfigInput>
 }
 
 type CanonicalOf<T> = T extends keyof typeof ModelTypeAliases ? (typeof ModelTypeAliases)[T] : T
@@ -252,8 +273,22 @@ const COMPLETION_PARAMS_KEYS: LegacyKeySpec = {
   }
 }
 
+const EMBED_LLAMACPP_CONFIG_KEYS: LegacyKeySpec = {
+  renames: {
+    gpu_layers: 'gpuLayers',
+    batch_size: 'batchSize',
+    'threads-batch': 'threadsBatch',
+    flash_attn: 'flashAttention',
+    'main-gpu': 'mainGpu',
+    'split-mode': 'splitMode',
+    'tensor-split': 'tensorSplit'
+  }
+}
+
 export const LEGACY_MODEL_CONFIG_KEYS: Partial<Record<CanonicalModelType, LegacyKeySpec>> = {
-  'llamacpp-completion': LLM_CONFIG_KEYS
+  'llamacpp-completion': LLM_CONFIG_KEYS,
+  'llamacpp-decision': EMBED_LLAMACPP_CONFIG_KEYS,
+  'llamacpp-rerank': EMBED_LLAMACPP_CONFIG_KEYS
 }
 
 export const LEGACY_REQUEST_KEYS: Readonly<Record<string, LegacyKeySpec>> = {

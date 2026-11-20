@@ -128,6 +128,25 @@ test('renameLegacyRequestKeys: an LLM load with legacy keys loads the same confi
   t.ok(warnings.some(([legacyPath]) => legacyPath === 'modelConfig.flash-attn'))
 })
 
+test('renameLegacyRequestKeys: decision and rerank loads take the shared spellings', (t) => {
+  const { warn } = collectWarnings()
+  for (const modelType of ['llamacpp-decision', 'llamacpp-rerank']) {
+    const renamed = renameLegacyRequestKeys(
+      {
+        type: 'loadModel',
+        modelType,
+        modelConfig: { gpu_layers: 10, batch_size: 512, flash_attn: 'off', 'split-mode': 'none' }
+      },
+      warn
+    )
+    t.alike(
+      renamed.modelConfig,
+      { gpuLayers: 10, batchSize: 512, flashAttention: 'off', splitMode: 'none' },
+      modelType
+    )
+  }
+})
+
 test('renameLegacyRequestKeys: completion generation params and response format', (t) => {
   const { warn } = collectWarnings()
   const request = renameLegacyRequestKeys(

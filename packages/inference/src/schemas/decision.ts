@@ -161,12 +161,12 @@ export const decideResponseSchema = z.object({
 export const decisionConfigBaseSchema = z
   .object({
     device: z.enum(['cpu', 'gpu']).optional().describe("Compute device. Default 'gpu'."),
-    gpu_layers: z
+    gpuLayers: z
       .number()
       .int()
       .optional()
       .describe('Layers to offload. Unset lets the addon choose placement.'),
-    batch_size: z
+    batchSize: z
       .number()
       .int()
       .positive()
@@ -195,12 +195,12 @@ export const decisionConfigBaseSchema = z
       .int()
       .optional()
       .describe('CPU threads, at most the CPU count. Zero or below uses all logical CPUs.'),
-    'threads-batch': z
+    threadsBatch: z
       .number()
       .int()
       .optional()
       .describe('Batch CPU threads. Unset uses threads; zero or below uses all logical CPUs.'),
-    flash_attn: z
+    flashAttention: z
       .enum(['on', 'off', 'auto'])
       .optional()
       .describe('Flash attention mode. Default auto.'),
@@ -211,12 +211,12 @@ export const decisionConfigBaseSchema = z
       .max(3)
       .optional()
       .describe('Native log level: 0 error, 1 warn, 2 info, 3 debug.'),
-    'main-gpu': z
+    mainGpu: z
       .union([z.number().int().nonnegative(), z.enum(['integrated', 'dedicated'])])
       .optional()
       .describe('GPU index or device class.'),
-    'split-mode': z.enum(['none', 'layer']).optional().describe('Multi-GPU split mode.'),
-    'tensor-split': z.string().optional().describe('Per-GPU tensor split proportions.'),
+    splitMode: z.enum(['none', 'layer']).optional().describe('Multi-GPU split mode.'),
+    tensorSplit: z.string().optional().describe('Per-GPU tensor split proportions.'),
     openclCacheDir: z
       .string()
       .optional()
