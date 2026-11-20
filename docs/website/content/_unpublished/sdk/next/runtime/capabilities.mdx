@@ -8,7 +8,7 @@ schemaType: HowTo
 
 ## Overview
 
-An app built and released separately from the runtime it talks to cannot assume which operations that runtime serves: the runtime may have been assembled with a reduced plugin set, or with plugins from another vendor. [`getRuntimeCapabilities()`](/sdk/reference/api#getruntimecapabilities) lists the capability contracts the runtime's registered plugins provide, so the app can check for the contracts it needs before it loads a model.
+An app built and released separately from the runtime it talks to cannot assume which operations that runtime serves: the runtime may have been assembled with a reduced plugin set, or with plugins from another vendor. [`getRuntimeCapabilities()`](/sdk/reference/api#getruntimecapabilities) lists the capability contracts the runtime's registered plugins declare, so the app can check for the contracts it needs before it loads a model.
 
 Each entry names a contract and its major version:
 
@@ -21,7 +21,7 @@ Each entry names a contract and its major version:
 }
 ```
 
-The list is sorted by `id` and then `version`. A session handle has the same method and gets the same list.
+The list is sorted by `id` and then `version`. A session handle has the same method and gets the same list. An empty list means the request succeeded and no registered plugin declares a contract. A runtime released before `getRuntimeCapabilities` rejects the request with an error instead, so treat an error as "capabilities unknown", not as "nothing available".
 
 ## Contracts
 
@@ -52,13 +52,15 @@ A contract with a dotted ID, such as `acme.diarization`, is defined by a third-p
 
 Contract IDs are also the keys of the runtime's [deadline configuration](/sdk/runtime/deadlines#configuration).
 
-An optional operation appears in `operations` when every plugin that provides the contract implements it, and in `partialOperations` when only some do. With the default plugin set, `transcribeStream` is in `partialOperations`: Whisper and Parakeet stream, MOSS does not.
+An optional operation appears in `operations` when every plugin that provides the contract implements it, and in `partialOperations` when only some do. With the default plugin set, `transcribeStream` is in `partialOperations`: Whisper and Parakeet stream, MOSS does not. A call goes to the plugin of the model it names, so `transcribeStream` on a MOSS model still fails.
+
+A contract names operations, not the inputs a provider accepts. `embedding@1` is provided by both a text embedding plugin and an image embedding plugin, so the model you load decides whether text or images work.
 
 ## Versions
 
-Match on `id` and `version` together. A contract's major increases only on a change that breaks callers, such as removing an operation or changing a field's type, so code written against `transcription@1` works with every runtime that reports `transcription@1`. New optional fields and new optional operations do not change the major, and neither do SDK or addon releases.
+Match on `id` and `version` together. A contract's major increases only on a change that breaks callers, such as removing an operation or changing a field's type. New optional fields and new optional operations do not change the major, and neither do SDK or addon releases.
 
-A runtime can report two majors of one contract while its plugins migrate between them.
+An entry means that a registered plugin declares that major. The runtime checks that the plugin has a handler for each required operation, called the way the contract calls it, but not what the handler returns. When two majors of one contract are listed, each is a separate declaration: a call reaches the major that the plugin of the selected model serves.
 
 ## Limits
 
@@ -69,6 +71,8 @@ The list comes from plugin registration only. It loads no model, and it does not
 - which operations a particular model supports. A diffusion model, for example, still refuses `videoStream` although its plugin provides `video-generation`.
 
 A call can therefore still fail with an error such as `ModelOperationNotSupportedError`.
+
+A plugin that declares no contracts is not listed, and its operations can still be called as before.
 
 ## Example
 

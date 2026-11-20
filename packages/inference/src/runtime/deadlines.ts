@@ -4,6 +4,7 @@ import { DeadlineExceededError, type DeadlineBoundary } from '@/errors/index'
 import { onResume } from '@/runtime/runtime-lifecycle'
 import { getModelEntry } from '@/runtime/model-registry'
 import { getPlugin } from '@/plugins/index'
+import { resolveCapabilityDeclaration } from '@/plugins/capabilities'
 import type { Logger } from '@/logging/types'
 
 /** The deadlines in force for one request, after config and call are combined. */
@@ -40,11 +41,14 @@ type DeadlineSource =
 function invokedCapability(modelId: string, handler: string): string | undefined {
   const modelType = getModelEntry(modelId)?.local.modelType
   const plugin = modelType === undefined ? undefined : getPlugin(modelType)
-  const contract = (plugin?.provides ?? []).find(
-    (candidate) =>
-      candidate.operations.includes(handler) || candidate.optionalOperations.includes(handler)
-  )
-  return contract?.id
+  for (const declaration of plugin?.provides ?? []) {
+    const contract = resolveCapabilityDeclaration(declaration)
+    if (typeof contract === 'string') continue
+    if (contract.operations.includes(handler) || contract.optionalOperations.includes(handler)) {
+      return contract.id
+    }
+  }
+  return undefined
 }
 
 function deadlineSource(request: Request): DeadlineSource {

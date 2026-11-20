@@ -22,13 +22,32 @@ export const CAPABILITY_ID_PATTERN = new RegExp(
  *
  * The major changes only on an incompatible change to an operation's schema
  * or behaviour, so a consumer that requires `id@version` matches only that
- * exact pair.
+ * exact pair. Adding an optional operation keeps the major.
  */
 export interface CapabilityContract {
   readonly id: string
   readonly version: number
   readonly operations: readonly string[]
   readonly optionalOperations: readonly string[]
+}
+
+/**
+ * A contract a plugin declares in `QvacPlugin.provides`.
+ *
+ * For a QVAC ID the runtime takes the operations from its own
+ * `CAPABILITY_CONTRACTS` entry and ignores any lists given here, so a plugin
+ * built against an earlier table keeps registering after QVAC adds an optional
+ * operation. Pass the `CAPABILITY_CONTRACTS` entry itself.
+ *
+ * A dotted ID names a contract the plugin defines, so `operations` is
+ * required. Providers of one dotted ID and major must list the same required
+ * operations; their optional operations may differ.
+ */
+export interface CapabilityDeclaration {
+  readonly id: string
+  readonly version: number
+  readonly operations?: readonly string[] | undefined
+  readonly optionalOperations?: readonly string[] | undefined
 }
 
 function contract(
@@ -103,8 +122,9 @@ export const capabilityContractRuntimeSchema = z.object({
     .min(1, 'capability version must be at least 1'),
   operations: z
     .array(operationNameSchema)
-    .min(1, 'a capability contract needs at least one required operation'),
-  optionalOperations: z.array(operationNameSchema)
+    .min(1, 'a capability contract needs at least one required operation')
+    .optional(),
+  optionalOperations: z.array(operationNameSchema).optional()
 })
 
 export const runtimeCapabilitySchema = z.object({
@@ -119,7 +139,9 @@ export const runtimeCapabilitySchema = z.object({
     .int()
     .min(1)
     .describe(
-      'Major version of the contract. A consumer that requires `id@version` matches only this exact pair.'
+      'Major version of the contract. A consumer that requires `id@version` matches only this exact pair. ' +
+        'An entry means a registered plugin declares this major; when two majors of one ID are listed, ' +
+        'a call reaches whichever one the plugin of the selected model serves.'
     ),
   operations: z
     .array(z.string())
@@ -129,7 +151,7 @@ export const runtimeCapabilitySchema = z.object({
   partialOperations: z
     .array(z.string())
     .describe(
-      'Optional operations that only some registered providers implement. A call can still fail for a model whose plugin lacks the operation.'
+      'Optional operations that only some registered providers implement. A call uses the plugin of the selected model, so it fails when that plugin lacks the operation.'
     )
 })
 
@@ -144,8 +166,9 @@ export const getRuntimeCapabilitiesResponseSchema = z.object({
   capabilities: z
     .array(runtimeCapabilitySchema)
     .describe(
-      'Capability contracts the registered plugins provide, sorted by ID and then version. ' +
-        'Built from plugin registration only: it does not load models or check addons, model files, resources or permissions.'
+      'Capability contracts the registered plugins declare, sorted by ID and then version. ' +
+        'Built from plugin registration only: it does not load models or check addons, model files, resources or permissions. ' +
+        'An empty list means no registered plugin declares a contract.'
     )
 })
 

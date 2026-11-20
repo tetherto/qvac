@@ -1,6 +1,6 @@
 {
   "name": "@qvac/diffusion-cpp",
-  "version": "0.36.0",
+  "version": "0.37.1",
   "description": "stable-diffusion.cpp addon for qvac image/video generation",
   "imports": {
     "#host-addon": {
@@ -144,7 +144,6 @@
     "bare-crypto": "^1.15.3",
     "bare-zlib": "^1.4.1",
     "bare-fs": "^4.5.1",
-    "bare-os": "^3.7.1",
     "bare-process": "^4.2.2",
     "bare-subprocess": "^6.1.0",
     "bare-url": "^2.1.6",
@@ -174,14 +173,15 @@
   "dependencies": {
     "@qvac/infer-base": "^0.8.0",
     "@qvac/logging": "^0.1.0",
-    "bare-path": "^3.0.0"
+    "bare-path": "^3.0.0",
+    "bare-os": "^3.7.1"
   },
   "optionalDependencies": {
-    "@qvac/diffusion-cpp-linux-x64": "0.36.0",
-    "@qvac/diffusion-cpp-linux-arm64": "0.36.0",
-    "@qvac/diffusion-cpp-darwin-arm64": "0.36.0",
-    "@qvac/diffusion-cpp-darwin-x64": "0.36.0",
-    "@qvac/diffusion-cpp-win32-x64": "0.36.0"
+    "@qvac/diffusion-cpp-linux-x64": "0.37.1",
+    "@qvac/diffusion-cpp-linux-arm64": "0.37.1",
+    "@qvac/diffusion-cpp-darwin-arm64": "0.37.1",
+    "@qvac/diffusion-cpp-darwin-x64": "0.37.1",
+    "@qvac/diffusion-cpp-win32-x64": "0.37.1"
   },
   "engines": {
     "bare": ">=1.24.0"

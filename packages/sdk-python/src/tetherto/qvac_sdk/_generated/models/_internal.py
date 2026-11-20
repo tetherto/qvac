@@ -9183,7 +9183,7 @@ class GetRuntimeCapabilitiesResponseCapabilitiesItem(GeneratedBaseModel):
     version: Annotated[
         int,
         Field(
-            description="Major version of the contract. A consumer that requires `id@version` matches only this exact pair.",
+            description="Major version of the contract. A consumer that requires `id@version` matches only this exact pair. An entry means a registered plugin declares this major; when two majors of one ID are listed, a call reaches whichever one the plugin of the selected model serves.",
             ge=1,
             le=9007199254740991,
         ),
@@ -9198,7 +9198,7 @@ class GetRuntimeCapabilitiesResponseCapabilitiesItem(GeneratedBaseModel):
         list[str],
         Field(
             alias="partialOperations",
-            description="Optional operations that only some registered providers implement. A call can still fail for a model whose plugin lacks the operation.",
+            description="Optional operations that only some registered providers implement. A call uses the plugin of the selected model, so it fails when that plugin lacks the operation.",
         ),
     ]
 
@@ -9211,7 +9211,7 @@ class GetRuntimeCapabilitiesResponse(GeneratedBaseModel):
     capabilities: Annotated[
         list[GetRuntimeCapabilitiesResponseCapabilitiesItem],
         Field(
-            description="Capability contracts the registered plugins provide, sorted by ID and then version. Built from plugin registration only: it does not load models or check addons, model files, resources or permissions."
+            description="Capability contracts the registered plugins declare, sorted by ID and then version. Built from plugin registration only: it does not load models or check addons, model files, resources or permissions. An empty list means no registered plugin declares a contract."
         ),
     ]
 
