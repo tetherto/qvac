@@ -10,23 +10,10 @@ import type {
   DecisionRequest,
   DecisionResult
 } from '@/schemas/index'
+import { toNativeEmbedLlamacppConfig } from '@/plugins/ops/embed-llamacpp-config'
 
 export function transformDecisionConfig(config: DecisionConfig): LayaConfig {
-  const { pollBatch, ...nativeConfig } = config
-  const transformed: LayaConfig = {
-    ...Object.fromEntries(
-      Object.entries(nativeConfig)
-        .filter(([, value]) => value !== undefined)
-        .map(([key, value]) => [key, String(value)])
-    ),
-    device: config.device
-  }
-
-  if (pollBatch !== undefined) {
-    transformed['poll-batch'] = `${pollBatch}`
-  }
-
-  return transformed
+  return { ...toNativeEmbedLlamacppConfig(config), device: config.device }
 }
 
 function transformDecisionQuestion(question: DecisionQuestion): NativeLayaQuestion {

@@ -43,15 +43,15 @@ test('Rerank responses carry finite scores, including negative ones', (t) => {
 test('Reranker config maps to native keys and rejects options the reranker fixes', (t) => {
   const config = {
     device: 'gpu' as const,
-    gpu_layers: 99,
-    batch_size: 4096,
+    gpuLayers: 99,
+    batchSize: 4096,
     backend: ['cuda' as const, 'vulkan' as const],
     poll: 10,
     pollBatch: 20,
     threads: 0,
-    'threads-batch': -1,
-    flash_attn: 'off' as const,
-    'main-gpu': 'dedicated' as const
+    threadsBatch: -1,
+    flashAttention: 'off' as const,
+    mainGpu: 'dedicated' as const
   }
   t.alike(transformRerankConfig(rerankConfigSchema.parse(config)), {
     device: 'gpu',
@@ -66,18 +66,18 @@ test('Reranker config maps to native keys and rejects options the reranker fixes
     'main-gpu': 'dedicated'
   })
   t.alike(
-    transformRerankConfig(rerankConfigSchema.parse({ device: 'cpu', batch_size: undefined })),
+    transformRerankConfig(rerankConfigSchema.parse({ device: 'cpu', batchSize: undefined })),
     {
       device: 'cpu'
     }
   )
   for (const bad of [
     { device: 'cuda' },
-    { ctx_size: 512 },
+    { ctxSize: 512 },
     { pooling: 'rank' },
     { backend: [] },
     { threads: 1.5 },
-    { 'split-mode': 'row' }
+    { splitMode: 'row' }
   ]) {
     t.absent(rerankConfigSchema.safeParse(bad).success, JSON.stringify(bad))
   }
