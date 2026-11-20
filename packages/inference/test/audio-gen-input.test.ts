@@ -438,7 +438,7 @@ test('audioGen plugin operation forwards caption augmentation and frozen codes a
     modelId,
     caption: 'energetic cumbia with brass stabs',
     bpm: 98,
-    keyscale: 'A minor',
+    keyScale: 'A minor',
     augmentCaptionWithMetadata: true,
     audioCodes: [12095, 63487, 12741]
   })) {

@@ -21,8 +21,11 @@ import {
   type AudioUnderstandClientParams,
   type AudioUnderstandRequest,
   type AudioUnderstandResult,
-  type InferenceBackendDiagnostics
+  type InferenceBackendDiagnostics,
+  type LegacyAudioGenParams,
+  renameLegacyAudioGenParams
 } from '@/schemas/index'
+import { warnLegacyKey } from '@/runtime/legacy-keys'
 import { stream } from '@/dispatch'
 import { parseClientInput } from '@/api/parse-input'
 import { generateRandomRequestId } from '@/runtime/request-id'
@@ -127,8 +130,11 @@ function concatenateChunks(chunks: Uint8Array[]) {
  * const { pcm, sampleRate, channels, bitsPerSample } = await audio;
  * ```
  */
-export function audioGen(params: AudioGenClientParams): AudioGenResult {
-  const parsed = parseClientInput(audioGenClientParamsSchema, params)
+export function audioGen(params: AudioGenClientParams & LegacyAudioGenParams): AudioGenResult {
+  const parsed = parseClientInput(
+    audioGenClientParamsSchema,
+    renameLegacyAudioGenParams(params, warnLegacyKey)
+  )
   const requestId = generateRandomRequestId()
   const request: AudioGenStreamRequest = {
     ...parsed,
@@ -147,7 +153,7 @@ export function audioGen(params: AudioGenClientParams): AudioGenResult {
  *
  * @param params - Loaded model ID, the source audio, the ordered `operations`, and optional run
  *   controls that apply to every operation: `seed`, a timbre `referenceAudio`, the prompt
- *   metadata (`vocalLanguage`, `bpm`, `keyscale`, `timesignature`, `augmentCaptionWithMetadata`),
+ *   metadata (`vocalLanguage`, `bpm`, `keyScale`, `timeSignature`, `augmentCaptionWithMetadata`),
  *   the Repaint DCW controls, and per-run `inferenceSteps` and `shift`.
  * @returns The same run shape as `audioGen()`: `requestId`, `progressStream`, `audio`, `chunkStream`, `encoded`, `stats`, and `diagnostics`.
  *
@@ -165,8 +171,11 @@ export function audioGen(params: AudioGenClientParams): AudioGenResult {
  * const { pcm, sampleRate, channels, bitsPerSample } = await run.audio;
  * ```
  */
-export function audioEdit(params: AudioEditClientParams): AudioGenResult {
-  const parsed = parseClientInput(audioEditClientParamsSchema, params)
+export function audioEdit(params: AudioEditClientParams & LegacyAudioGenParams): AudioGenResult {
+  const parsed = parseClientInput(
+    audioEditClientParamsSchema,
+    renameLegacyAudioGenParams(params, warnLegacyKey)
+  )
   const requestId = generateRandomRequestId()
   const request: AudioEditStreamRequest = {
     ...parsed,
@@ -188,7 +197,7 @@ export function audioEdit(params: AudioEditClientParams): AudioGenResult {
  * @example
  * ```typescript
  * const run = audioUnderstand({ modelId, sourceAudio: "/path/to/song.wav" });
- * const { caption, bpm, keyscale, audioCodes } = await run.description;
+ * const { caption, bpm, keyScale, audioCodes } = await run.description;
  * ```
  */
 export function audioUnderstand(params: AudioUnderstandClientParams): AudioUnderstandResult {

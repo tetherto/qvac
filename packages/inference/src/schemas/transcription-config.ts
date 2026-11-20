@@ -314,7 +314,7 @@ export type ParakeetSpeakerAttributionConfig = z.infer<
 >
 
 const PARAKEET_BACKEND_DESCRIPTION =
-  'Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `opencl`, `metal`, or an exact ggml device name such as `CUDA0` or `MTL0`. An explicit selection overrides `useGPU` and the load fails if it is unavailable instead of falling back. Applies to the speaker-attribution diarization model too, and reaches `assessModelFit`.'
+  'Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `opencl`, `metal`, or an exact ggml device name such as `CUDA0` or `MTL0`. An explicit selection overrides `useGpu` and the load fails if it is unavailable instead of falling back. Applies to the speaker-attribution diarization model too, and reaches `assessModelFit`.'
 
 export const parakeetRuntimeConfigSchema = z.object({
   maxThreads: z
@@ -322,7 +322,7 @@ export const parakeetRuntimeConfigSchema = z.object({
     .int()
     .optional()
     .describe('CPU threads; `0` defers to hardware concurrency. Default 4.'),
-  useGPU: z.boolean().optional().describe('Enable the ggml GPU backend. Default false.'),
+  useGpu: z.boolean().optional().describe('Enable the ggml GPU backend. Default false.'),
   backend: z.string().optional().describe(PARAKEET_BACKEND_DESCRIPTION),
   speakerAttribution: parakeetSpeakerAttributionConfigSchema
     .optional()
@@ -592,7 +592,7 @@ export const mossTranscribeConfigSchema = z
       .nonnegative()
       .optional()
       .describe('CPU threads; 0 lets the engine choose.'),
-    useGPU: z
+    useGpu: z
       .boolean()
       .optional()
       .describe(
@@ -602,7 +602,7 @@ export const mossTranscribeConfigSchema = z
       .string()
       .optional()
       .describe(
-        'Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `metal`, or an exact ggml device name such as `CUDA0`. An explicit selection overrides `useGPU` and the load fails if it is unavailable.'
+        'Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `metal`, or an exact ggml device name such as `CUDA0`. An explicit selection overrides `useGpu` and the load fails if it is unavailable.'
       ),
     backendsDir: z
       .string()

@@ -69,9 +69,9 @@ export function ttsFitRequest(load: FitLoad): FitRequestPlan {
   }
 
   // The explicit backend selector resolves the same device the load would, so
-  // the projection lands on that device rather than on the `useGPU` policy's.
+  // the projection lands on that device rather than on the `useGpu` policy's.
   const common: TtsCommon = {
-    nGpuLayers: gpuLayersFromCount(config.useGPU, config.nGpuLayers),
+    nGpuLayers: gpuLayersFromCount(config.useGpu, config.nGpuLayers),
     ...(config.backend !== undefined && { backend: config.backend }),
     ...(config.backendsDir !== undefined && { backendsDir: config.backendsDir })
   }

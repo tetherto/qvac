@@ -29,8 +29,8 @@ export function markNmtCountersStale(model: object): void {
 // GGML beam search overwrites the token count with the job's own figure rather
 // than adding to it; Bergamot and GGML greedy decoding accumulate it.
 function tokensAccumulate(config: unknown): boolean {
-  const { engine, beamsize } = (config ?? {}) as Partial<NmtConfig>
-  return engine !== 'IndicTrans' || (beamsize ?? 4) <= 1
+  const { engine, beamSize } = (config ?? {}) as Partial<NmtConfig>
+  return engine !== 'IndicTrans' || (beamSize ?? 4) <= 1
 }
 
 function takeDeltas(

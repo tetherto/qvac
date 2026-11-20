@@ -13,7 +13,7 @@ test('MOSS load and request schemas accept native controls and reject invalid bo
   t.ok(ttsConfigSchema.safeParse(speech).success)
   t.absent(ttsConfigSchema.safeParse({ ttsEngine: 'moss-speech' }).success)
   t.absent(ttsConfigSchema.safeParse({ ...sfx, seconds: 31 }).success)
-  t.absent(ttsConfigSchema.safeParse({ ...sfx, useGPU: false, nGpuLayers: 99 }).success)
+  t.absent(ttsConfigSchema.safeParse({ ...sfx, useGpu: false, nGpuLayers: 99 }).success)
   const request = { modelId: 'speech', stream: false, audio: [0, 0.5], sampleRate: 16000 }
   t.ok(ttsClientParamsSchema.safeParse(request).success)
   t.absent(ttsClientParamsSchema.safeParse({ ...request, text: 'also text' }).success)

@@ -12,7 +12,7 @@ registerPlugin(nmtPlugin)
 try {
   const modelId = await loadModel({
     modelSrc: BERGAMOT_EN_FR,
-    modelConfig: { engine: 'Bergamot', from: 'en', to: 'fr', beamsize: 1, normalize: 1 }
+    modelConfig: { engine: 'Bergamot', from: 'en', to: 'fr', beamSize: 1, normalize: 1 }
   })
   console.log(`▸ Model loaded: ${modelId}`)
 

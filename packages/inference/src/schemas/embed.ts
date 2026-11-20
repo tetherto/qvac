@@ -179,7 +179,7 @@ export const embedStatsSchema = z.object({
     .enum(['cpu', 'gpu'])
     .optional()
     .describe('Compute backend used for inference. llama.cpp embedding models only.'),
-  contextSize: z
+  ctxSize: z
     .number()
     .optional()
     .describe('Context size in tokens. llama.cpp embedding models only.'),

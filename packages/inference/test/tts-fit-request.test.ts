@@ -18,7 +18,7 @@ test('chatterbox: carries the S3Gen checkpoint and the KV cache settings', (t) =
   const plan = ttsFitRequest(
     load(
       '/models/t3.gguf',
-      { useGPU: true, nCtx: 2048, kvCacheType: 'q8_0', backendsDir: '/backends' },
+      { useGpu: true, nCtx: 2048, kvCacheType: 'q8_0', backendsDir: '/backends' },
       { artifacts: { s3genPath: '/models/s3gen.gguf' } }
     )
   )
@@ -44,7 +44,7 @@ test('a LavaSR stage is unknown, whichever engine it follows', (t) => {
     const plan = ttsFitRequest(
       load(
         '/models/supertonic.gguf',
-        { ttsEngine: 'supertonic', useGPU: true },
+        { ttsEngine: 'supertonic', useGpu: true },
         {
           artifacts: { [key]: '/models/lavasr.gguf' }
         }
@@ -58,7 +58,7 @@ test('MOSS: projects the declared workload and its load controls', (t) => {
   const plan = ttsFitRequest(
     load(
       '/models/moss.gguf',
-      { ttsEngine: 'moss', useGPU: true, threads: 4, streamChunkTokens: 8 },
+      { ttsEngine: 'moss', useGpu: true, threads: 4, streamChunkTokens: 8 },
       {
         artifacts: {
           mossCodecDecoderPath: '/models/decoder.gguf',
@@ -149,7 +149,7 @@ test('CosyVoice: finds its companions beside the checkpoint', (t) => {
 
 test('the explicit backend selector reaches every fit request', (t) => {
   // The fitter resolves the same device the load would, so the projection
-  // lands there rather than on the useGPU policy's pick.
+  // lands there rather than on the useGpu policy's pick.
   const supertonic = ttsFitRequest(
     load('/models/supertonic.gguf', { ttsEngine: 'supertonic', backend: 'MTL0' })
   )

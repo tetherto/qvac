@@ -64,7 +64,7 @@ test('audioGenConfigSchema accepts MiniMax model pairs and rejects mixed engine 
       engine: 'minimax',
       lmModelSrc: 'minimax-lm.gguf',
       synthModelSrc: 'minimax-synth.gguf',
-      useGPU: true,
+      useGpu: true,
       inferenceSteps: 12,
       cfgScale: 1.8
     }).success
@@ -159,7 +159,7 @@ test('AudioGen ACE-Step load config holds the addon step and shift ranges', (t) 
   t.absent(accepts({ shift: 1e39 }), 'shift is within the float32 range')
 })
 
-test('AudioGen MiniMax load config names a device instead of useGPU', (t) => {
+test('AudioGen MiniMax load config names a device instead of useGpu', (t) => {
   const minimax = {
     engine: 'minimax',
     lmModelSrc: 'minimax-lm.gguf',
@@ -171,19 +171,19 @@ test('AudioGen MiniMax load config names a device instead of useGPU', (t) => {
   }
   t.absent(audioGenConfigSchema.safeParse({ ...minimax, device: 'metal' }).success)
 
-  const both = audioGenConfigSchema.safeParse({ ...minimax, useGPU: true, device: 'gpu' })
-  t.absent(both.success, 'the addon takes useGPU or device, not both')
+  const both = audioGenConfigSchema.safeParse({ ...minimax, useGpu: true, device: 'gpu' })
+  t.absent(both.success, 'the addon takes useGpu or device, not both')
   t.alike(
     both.error?.issues.map((issue) => issue.path),
     [['device']]
   )
   t.absent(
-    audioGenRuntimeConfigSchema.safeParse({ engine: 'minimax', useGPU: false, device: 'cpu' })
+    audioGenRuntimeConfigSchema.safeParse({ engine: 'minimax', useGpu: false, device: 'cpu' })
       .success
   )
   t.absent(
     audioGenConfigSchema.safeParse({ ...modelConfig, device: 'gpu' }).success,
-    'ACE-Step takes useGPU and nGpuLayers, not device'
+    'ACE-Step takes useGpu and nGpuLayers, not device'
   )
 })
 
@@ -411,7 +411,7 @@ test('audioGenStatsSchema carries ACE-Step metadata, the GPU fallback code and t
     caption: 'a hopeful indie track with jangly guitars',
     lyrics: '[verse]\nopen roads',
     bpm: 112,
-    keyscale: 'D major',
+    keyScale: 'D major',
     beatsPerBar: 4,
     vocalLanguage: 'en',
     seed: 4_294_967_296,
@@ -550,8 +550,8 @@ test('audioEdit client params take the edit-run controls the addon reads', (t) =
     referenceAudio: '/tmp/reference.mp3',
     vocalLanguage: 'en',
     bpm: 120,
-    keyscale: 'C minor',
-    timesignature: '4/4',
+    keyScale: 'C minor',
+    timeSignature: '4/4',
     augmentCaptionWithMetadata: true,
     dcwEnabled: false,
     dcwScaler: 0.04,
@@ -579,7 +579,7 @@ test('audioEdit client params take the edit-run controls the addon reads', (t) =
   rejects({ dcwScaler: 1e39 }, 'DCW scalers are within the float32 range')
   rejects({ inferenceSteps: 1001 }, 'steps are capped at 1000')
   rejects({ shift: 1e-50 }, 'a positive shift that rounds to a float32 zero')
-  rejects({ keyscale: '' }, 'prompt metadata strings are not empty')
+  rejects({ keyScale: '' }, 'prompt metadata strings are not empty')
   rejects({ referenceAudio: 42 }, 'a reference is a path or PCM bytes')
 
   t.ok(
@@ -588,7 +588,7 @@ test('audioEdit client params take the edit-run controls the addon reads', (t) =
       ...base,
       sourceAudio: { type: 'filePath', value: '/tmp/song.wav' },
       referenceAudio: { type: 'filePath', value: '/tmp/reference.mp3' },
-      timesignature: '3/4'
+      timeSignature: '3/4'
     }).success,
     'the wire form carries the reference and the prompt metadata'
   )
@@ -986,8 +986,8 @@ const understandResult = {
   caption: 'downtempo synthwave',
   bpm: 96,
   duration: 12.5,
-  keyscale: 'F minor',
-  timesignature: '4/4',
+  keyScale: 'F minor',
+  timeSignature: '4/4',
   vocalLanguage: 'en',
   audioCodes: [7, -3, 2048],
   seed: 11
@@ -1165,7 +1165,7 @@ test('AudioGen ACE-Step load config names its backends and a stage dump director
 
   t.ok(accepts({ backend: 'CUDA0', lmBackend: 'cpu' }), 'the two are chosen independently')
   t.ok(accepts({ lmBackend: 'MTL0' }), 'the LM backend alone')
-  t.ok(accepts({ useGPU: true, nGpuLayers: 99, backend: 'auto' }), 'auto keeps useGPU placement')
+  t.ok(accepts({ useGpu: true, nGpuLayers: 99, backend: 'auto' }), 'auto keeps useGpu placement')
   t.ok(accepts({ dumpStagesDir: '/tmp/acestep-stages' }))
 
   for (const key of ['backend', 'lmBackend', 'dumpStagesDir']) {

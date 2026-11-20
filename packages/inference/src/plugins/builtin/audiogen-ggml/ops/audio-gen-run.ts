@@ -1,7 +1,14 @@
 import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
-import { AudioGen, audiogenBackendName, audiogenGpuFallbackReason } from '@qvac/audiogen-ggml'
+import {
+  AudioGen,
+  audiogenBackendName,
+  audiogenGpuFallbackReason,
+  type AudiogenGenerationMetadata,
+  type AudiogenUnderstandResult
+} from '@qvac/audiogen-ggml'
 import {
   audioGenStatsSchema,
+  type AudioGenGenerationMetadata,
   type AudioGenOutputFormat,
   type AudioGenStats,
   type AudioGenStreamResponse,
@@ -205,9 +212,13 @@ export async function* streamAudioGenRun<TType extends AudioGenRunType>(
   // and anything downstream of JSON — needs as a plain array of integers.
   // Both parses below read the normalized object: handing the raw one to
   // either schema fails its `z.array` check on the typed array.
-  const normalized = raw.understand
-    ? { ...raw, understand: streamedUnderstand ?? toUnderstandResult(raw.understand) }
-    : raw
+  const normalized = {
+    ...raw,
+    ...(raw.understand && {
+      understand: streamedUnderstand ?? toUnderstandResult(raw.understand)
+    }),
+    ...(raw.metadata && { metadata: toGenerationMetadata(raw.metadata) })
+  }
   const stats = audioGenStatsSchema.parse(normalized)
   const diagnostics = buildBackendDiagnostics(stats)
   const terminal = {
@@ -250,17 +261,19 @@ function encodeOutcome(
  * Normalizes the addon's understand result for the wire: `audioCodes` arrives
  * as an `Int32Array`, which neither the schema nor a JSON transport accepts.
  */
-function toUnderstandResult(result: {
-  caption: string
-  bpm: number
-  duration: number
-  keyscale: string
-  timesignature: string
-  vocalLanguage: string
-  audioCodes: Int32Array | number[]
-  seed: number
-}): AudioGenUnderstandResult {
-  return { ...result, audioCodes: Array.from(result.audioCodes) }
+function toUnderstandResult(result: AudiogenUnderstandResult): AudioGenUnderstandResult {
+  const { keyscale, timesignature, audioCodes, ...rest } = result
+  return {
+    ...rest,
+    keyScale: keyscale,
+    timeSignature: timesignature,
+    audioCodes: Array.from(audioCodes)
+  }
+}
+
+function toGenerationMetadata(metadata: AudiogenGenerationMetadata): AudioGenGenerationMetadata {
+  const { keyscale, ...rest } = metadata
+  return { ...rest, keyScale: keyscale }
 }
 
 /** An unrecognized GPU id yields no diagnostics rather than a guessed backend name. */

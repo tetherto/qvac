@@ -19,7 +19,7 @@ const ACE_STEP = {
 }
 
 test('ACE-Step: carries the four stages and the load placement', (t) => {
-  const plan = audiogenFitRequest(load({ useGPU: true, nGpuLayers: 99, threads: 4 }, ACE_STEP))
+  const plan = audiogenFitRequest(load({ useGpu: true, nGpuLayers: 99, threads: 4 }, ACE_STEP))
 
   t.alike(requestOf(plan), {
     textEncoderPath: '/models/textenc.gguf',
@@ -35,12 +35,12 @@ test('ACE-Step: carries the four stages and the load placement', (t) => {
 // the placement the load will ask for, or it sizes the automatic one instead.
 test('ACE-Step: the named backends reach the fitter', (t) => {
   const plan = audiogenFitRequest(
-    load({ useGPU: true, backend: 'CUDA0', lmBackend: 'cpu' }, ACE_STEP)
+    load({ useGpu: true, backend: 'CUDA0', lmBackend: 'cpu' }, ACE_STEP)
   )
   t.is(requestOf(plan)?.['backend'], 'CUDA0')
   t.is(requestOf(plan)?.['lmBackend'], 'cpu')
 
-  const automatic = requestOf(audiogenFitRequest(load({ useGPU: true }, ACE_STEP)))
+  const automatic = requestOf(audiogenFitRequest(load({ useGpu: true }, ACE_STEP)))
   t.absent(automatic && 'backend' in automatic, 'unset leaves placement to the engine')
   t.absent(automatic && 'lmBackend' in automatic)
   t.absent(
@@ -51,8 +51,8 @@ test('ACE-Step: the named backends reach the fitter', (t) => {
 
 test('ACE-Step: a missing stage is unknown, and the CPU is no offload', (t) => {
   const { vaeModelPath: _vae, ...partial } = ACE_STEP
-  t.ok('unknown' in audiogenFitRequest(load({ useGPU: true }, partial)))
-  t.is(requestOf(audiogenFitRequest(load({ useGPU: false }, ACE_STEP)))?.['gpuLayers'], 0)
+  t.ok('unknown' in audiogenFitRequest(load({ useGpu: true }, partial)))
+  t.is(requestOf(audiogenFitRequest(load({ useGpu: false }, ACE_STEP)))?.['gpuLayers'], 0)
 })
 
 test('MiniMax: carries the pair, and the device wins over the GPU switch', (t) => {
@@ -65,7 +65,7 @@ test('MiniMax: carries the pair, and the device wins over the GPU switch', (t) =
     device: 'cpu'
   })
   t.is(
-    requestOf(audiogenFitRequest(load({ engine: 'minimax', useGPU: true }, pair)))?.['gpuLayers'],
+    requestOf(audiogenFitRequest(load({ engine: 'minimax', useGpu: true }, pair)))?.['gpuLayers'],
     1
   )
   t.ok('unknown' in audiogenFitRequest(load({ engine: 'minimax' }, {})), 'an unresolved pair')

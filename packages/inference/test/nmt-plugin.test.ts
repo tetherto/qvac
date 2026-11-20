@@ -10,8 +10,8 @@ test('nmtPlugin.resolveConfig: IndicTrans config passes through without vocab re
     engine: 'IndicTrans' as const,
     from: 'eng_Latn',
     to: 'hin_Deva',
-    beamsize: 1,
-    maxlength: 256
+    beamSize: 1,
+    maxLength: 256
   }
 
   const result = await nmtPlugin.resolveConfig!(config, {
@@ -23,7 +23,7 @@ test('nmtPlugin.resolveConfig: IndicTrans config passes through without vocab re
   t.ok(result.config, 'resolveConfig returns a config object')
   const cfg = result.config as Record<string, unknown>
   t.is(cfg['engine'], 'IndicTrans', 'engine is preserved')
-  t.is(cfg['beamsize'], 1, 'beamsize is preserved')
+  t.is(cfg['beamSize'], 1, 'beamSize is preserved')
   t.absent(
     (result as unknown as Record<string, unknown>)['artifacts'],
     'IndicTrans produces no artifacts (no vocab resolution)'

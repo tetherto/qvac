@@ -21,7 +21,7 @@ export const audioGenEngineSchema = z.enum(AUDIOGEN_ENGINES)
 
 /**
  * Where MiniMax-Music3 runs: `gpu` requires a usable GPU and fails the load
- * otherwise, `auto` (what `useGPU: true` means) falls back to the CPU, `cpu`
+ * otherwise, `auto` (what `useGpu: true` means) falls back to the CPU, `cpu`
  * never touches a GPU.
  */
 const MINIMAX_DEVICES = ['cpu', 'gpu', 'auto'] as const
@@ -130,7 +130,7 @@ export const AUDIOGEN_TRACKS = [
 export const audioGenTrackSchema = z.enum(AUDIOGEN_TRACKS)
 
 const commonAudioGenRuntimeConfigShape = {
-  useGPU: z
+  useGpu: z
     .boolean()
     .optional()
     .describe(
@@ -194,11 +194,11 @@ const acestepRuntimeConfigShape = {
     .int()
     .nonnegative()
     .optional()
-    .describe('ACE-Step GPU layers to offload when `useGPU` is set (99 = all). Ignored on CPU.'),
+    .describe('ACE-Step GPU layers to offload when `useGpu` is set (99 = all). Ignored on CPU.'),
   backend: hostStringSchema('backend')
     .optional()
     .describe(
-      "Advanced: ACE-Step's primary backend, by backend or device name (`cpu`, `MTL0`, `CUDA0`, …). Unset or `auto` keeps the placement `useGPU` and `nGpuLayers` select; any other value overrides both, so `useGPU: false` with `backend: 'CUDA0'` runs on CUDA0. A named backend the host cannot provide fails the load instead of falling back."
+      "Advanced: ACE-Step's primary backend, by backend or device name (`cpu`, `MTL0`, `CUDA0`, …). Unset or `auto` keeps the placement `useGpu` and `nGpuLayers` select; any other value overrides both, so `useGpu: false` with `backend: 'CUDA0'` runs on CUDA0. A named backend the host cannot provide fails the load instead of falling back."
     ),
   lmBackend: hostStringSchema('lmBackend')
     .optional()
@@ -227,12 +227,12 @@ const minimaxRuntimeConfigShape = {
     .enum(MINIMAX_DEVICES)
     .optional()
     .describe(
-      "Where MiniMax runs, instead of `useGPU`: `'gpu'` requires a usable GPU and fails the load otherwise, `'auto'` (what `useGPU: true` means) falls back to the CPU, `'cpu'` never touches a GPU. Cannot be combined with `useGPU`."
+      "Where MiniMax runs, instead of `useGpu`: `'gpu'` requires a usable GPU and fails the load otherwise, `'auto'` (what `useGpu: true` means) falls back to the CPU, `'cpu'` never touches a GPU. Cannot be combined with `useGpu`."
     ),
   coremlProfileDir: hostStringSchema('coremlProfileDir')
     .optional()
     .describe(
-      'Advanced, macOS 15+: directory on the inference host holding the compiled full Core ML profile for this GGUF pair (`manifest.json` plus the LM, depth, conditioner, DiT and vocoder programs). Runs MiniMax through Core ML instead of the native backend and takes precedence over `device` and `useGPU`; the load fails when the build, OS or profile cannot support it rather than switching backends. Requires `coremlComputeUnits`.'
+      'Advanced, macOS 15+: directory on the inference host holding the compiled full Core ML profile for this GGUF pair (`manifest.json` plus the LM, depth, conditioner, DiT and vocoder programs). Runs MiniMax through Core ML instead of the native backend and takes precedence over `device` and `useGpu`; the load fails when the build, OS or profile cannot support it rather than switching backends. Requires `coremlComputeUnits`.'
     ),
   coremlComputeUnits: audioGenMinimaxCoremlComputeUnitsSchema
     .optional()
@@ -242,7 +242,7 @@ const minimaxRuntimeConfigShape = {
   coremlConditionerPath: hostStringSchema('coremlConditionerPath')
     .optional()
     .describe(
-      'Advanced, macOS: absolute path on the inference host to a compiled conditioner `.mlmodelc`. Runs the conditioner convolution alone through Core ML (CPU and Neural Engine); every other stage stays on the backend `device` or `useGPU` selects. Does not enable the full Core ML profile. The load fails when the bundle is invalid or the build cannot use it.'
+      'Advanced, macOS: absolute path on the inference host to a compiled conditioner `.mlmodelc`. Runs the conditioner convolution alone through Core ML (CPU and Neural Engine); every other stage stays on the backend `device` or `useGpu` selects. Does not enable the full Core ML profile. The load fails when the bundle is invalid or the build cannot use it.'
     ),
   inferenceSteps: inferenceStepsSchema
     .optional()
@@ -251,23 +251,23 @@ const minimaxRuntimeConfigShape = {
 }
 
 /**
- * The addon takes `useGPU` or `device` for MiniMax, never both, and the Core
+ * The addon takes `useGpu` or `device` for MiniMax, never both, and the Core
  * ML profile and its compute units only as a pair.
  */
 function refineMinimaxRuntime(
   value: {
-    useGPU?: boolean | undefined
+    useGpu?: boolean | undefined
     device?: string | undefined
     coremlProfileDir?: string | undefined
     coremlComputeUnits?: string | undefined
   },
   ctx: z.RefinementCtx
 ) {
-  if (value.device !== undefined && value.useGPU !== undefined) {
+  if (value.device !== undefined && value.useGpu !== undefined) {
     ctx.addIssue({
       code: 'custom',
       path: ['device'],
-      message: 'MiniMax accepts either useGPU or device, not both'
+      message: 'MiniMax accepts either useGpu or device, not both'
     })
   }
   if ((value.coremlProfileDir === undefined) !== (value.coremlComputeUnits === undefined)) {
@@ -417,8 +417,8 @@ const audioGenGenerationShape = {
   bpm: bpmSchema
     .optional()
     .describe('Beats per minute; `0` or unset lets the LM infer it. ACE-Step only.'),
-  keyscale: z.string().min(1).optional(),
-  timesignature: z.string().min(1).optional(),
+  keyScale: z.string().min(1).optional(),
+  timeSignature: z.string().min(1).optional(),
   augmentCaptionWithMetadata: z
     .boolean()
     .optional()
@@ -804,12 +804,12 @@ const audioEditShape = {
   bpm: bpmSchema
     .optional()
     .describe('Beats per minute for the edit prompts; `0` or unset leaves it unset.'),
-  keyscale: z
+  keyScale: z
     .string()
     .min(1)
     .optional()
     .describe("Key and scale for the edit prompts, e.g. 'C minor'."),
-  timesignature: z
+  timeSignature: z
     .string()
     .min(1)
     .optional()
@@ -925,8 +925,8 @@ export const audioGenUnderstandResultSchema = z.object({
   caption: z.string(),
   bpm: z.number(),
   duration: z.number().describe('LM estimate in seconds. The recovered codes fix the true length.'),
-  keyscale: z.string(),
-  timesignature: z.string(),
+  keyScale: z.string(),
+  timeSignature: z.string(),
   vocalLanguage: z.string(),
   audioCodes: z
     .array(z.number().int().min(INT32_MIN).max(INT32_MAX))
@@ -955,7 +955,7 @@ export const audioGenGenerationMetadataSchema = z.object({
     ),
   lyrics: z.string().describe('The lyrics the run used (LM-written under Simple Mode).'),
   bpm: z.number().describe('Beats per minute; 0 when unresolved.'),
-  keyscale: z.string(),
+  keyScale: z.string(),
   beatsPerBar: z
     .number()
     .describe('Beats per bar, the time-signature numerator (4 for 4/4); 0 when unresolved.'),

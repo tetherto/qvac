@@ -114,7 +114,7 @@ function getAudioGenFiles(
 
 function getAudioGenAddonConfig(config: AudioGenRuntimeConfig) {
   const commonConfig = {
-    ...(config.useGPU !== undefined && { useGPU: config.useGPU }),
+    ...(config.useGpu !== undefined && { useGPU: config.useGpu }),
     ...(config.threads !== undefined && { threads: config.threads }),
     ...(config.backendsDir !== undefined && { backendsDir: config.backendsDir })
   }

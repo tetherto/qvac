@@ -60,7 +60,7 @@ test('whisper: the default decoder sentinel is left to the engine', (t) => {
 test('parakeet: carries threads and the streaming chunk cadence', (t) => {
   const plan = parakeetFitRequest(
     load('/models/parakeet.gguf', {
-      useGPU: true,
+      useGpu: true,
       maxThreads: 6,
       streaming: true,
       streamingChunkMs: 320
@@ -79,7 +79,7 @@ test('parakeet: carries threads and the streaming chunk cadence', (t) => {
 test('parakeet: a streaming window the fitter cannot represent is unknown', (t) => {
   for (const key of ['streamingLeftContextMs', 'streamingHistoryMs']) {
     const plan = parakeetFitRequest(
-      load('/models/parakeet.gguf', { useGPU: true, streaming: true, [key]: 8000 })
+      load('/models/parakeet.gguf', { useGpu: true, streaming: true, [key]: 8000 })
     )
     t.ok('unknown' in plan && plan.unknown.includes('cannot represent'), key)
   }
@@ -87,7 +87,7 @@ test('parakeet: a streaming window the fitter cannot represent is unknown', (t) 
 
 test('parakeet: those windows bind nothing outside a streaming load', (t) => {
   const plan = parakeetFitRequest(
-    load('/models/parakeet.gguf', { useGPU: true, streamingLeftContextMs: 8000 })
+    load('/models/parakeet.gguf', { useGpu: true, streamingLeftContextMs: 8000 })
   )
   t.ok(requestOf(plan))
 })
@@ -134,7 +134,7 @@ test('parakeet: prewarm and energy-VAD tuning stay out of the projection', (t) =
 
 test('parakeet: a non-streaming load holds no live session to size', (t) => {
   const plan = parakeetFitRequest(
-    load('/models/parakeet.gguf', { useGPU: true, streamingChunkMs: 320 })
+    load('/models/parakeet.gguf', { useGpu: true, streamingChunkMs: 320 })
   )
   t.ok(requestOf(plan))
   t.absent('nemotronChunkMs' in (requestOf(plan) ?? {}))
@@ -144,7 +144,7 @@ test('MOSS: projects the declared recording and matching decoding options', (t) 
   const plan = mossTranscribeFitRequest(
     load(
       '/models/moss.gguf',
-      { useGPU: true, maxThreads: 4, backend: 'cuda', backendsDir: '/backends' },
+      { useGpu: true, maxThreads: 4, backend: 'cuda', backendsDir: '/backends' },
       { transcriptionWorkload: { audioSeconds: 90, hotwords: ['Erin'], maxNewTokens: 0 } }
     )
   )
@@ -177,7 +177,7 @@ test('MOSS: no workload is unknown, and the default load stays on the CPU', (t) 
 
 test('parakeet: an explicit backend selector reaches the projection', (t) => {
   const plan = parakeetFitRequest(
-    load('/models/parakeet.gguf', { backend: 'CUDA0', useGPU: false })
+    load('/models/parakeet.gguf', { backend: 'CUDA0', useGpu: false })
   )
 
   t.alike(requestOf(plan), {

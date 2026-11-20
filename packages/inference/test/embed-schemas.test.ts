@@ -20,19 +20,19 @@ test('embedStatsSchema: backendDevice is optional', (t) => {
   t.is(result.success, true)
 })
 
-test('embedStatsSchema: accepts contextSize', (t) => {
-  const result = embedStatsSchema.safeParse({ contextSize: 512 })
+test('embedStatsSchema: accepts ctxSize', (t) => {
+  const result = embedStatsSchema.safeParse({ ctxSize: 512 })
   t.is(result.success, true)
-  if (result.success) t.is(result.data.contextSize, 512)
+  if (result.success) t.is(result.data.ctxSize, 512)
 })
 
-test('embedStatsSchema: contextSize is optional', (t) => {
+test('embedStatsSchema: ctxSize is optional', (t) => {
   const result = embedStatsSchema.safeParse({ backendDevice: 'gpu' })
   t.is(result.success, true)
-  if (result.success) t.is(result.data.contextSize, undefined)
+  if (result.success) t.is(result.data.ctxSize, undefined)
 })
 
-test('embedResponseSchema: round-trips contextSize through stats', (t) => {
+test('embedResponseSchema: round-trips ctxSize through stats', (t) => {
   const result = embedResponseSchema.safeParse({
     type: 'embed',
     success: true,
@@ -41,12 +41,12 @@ test('embedResponseSchema: round-trips contextSize through stats', (t) => {
       totalTime: 5,
       tokensPerSecond: 200,
       totalTokens: 1000,
-      contextSize: 512
+      ctxSize: 512
     }
   })
   t.is(result.success, true)
   if (result.success) {
-    t.is(result.data.stats?.contextSize, 512)
+    t.is(result.data.stats?.ctxSize, 512)
   }
 })
 

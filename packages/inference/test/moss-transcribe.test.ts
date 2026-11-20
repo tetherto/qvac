@@ -15,7 +15,7 @@ test('MOSS load request accepts GPU configuration and rejects streaming knobs', 
     modelSrc: '/tmp/moss.gguf'
   }
   t.ok(
-    loadModelRequestSchema.safeParse({ ...request, modelConfig: { useGPU: true, maxThreads: 4 } })
+    loadModelRequestSchema.safeParse({ ...request, modelConfig: { useGpu: true, maxThreads: 4 } })
       .success
   )
   // The native selector is passed through as given: the engine, not the

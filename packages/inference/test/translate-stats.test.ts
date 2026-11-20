@@ -142,7 +142,7 @@ test('NMT stats: a counter first reported on a later request is read as its own 
 
 test('NMT stats: TTFT is differenced like the encode time it derives from', (t) => {
   const nmt = model()
-  const ggml = { engine: 'IndicTrans', beamsize: 4 }
+  const ggml = { engine: 'IndicTrans', beamSize: 4 }
 
   buildNmtTranslationStats(
     { totalTime: 0.067, encodeTime: 0.0085, TTFT: 8.5, totalTokens: 6 },
@@ -161,7 +161,7 @@ test('NMT stats: TTFT is differenced like the encode time it derives from', (t) 
 
 test('NMT stats: GGML beam search tokens are per-job and pass through', (t) => {
   const nmt = model()
-  const ggml = { engine: 'IndicTrans', beamsize: 4 }
+  const ggml = { engine: 'IndicTrans', beamSize: 4 }
 
   buildNmtTranslationStats({ totalTime: 0.067, totalTokens: 6 }, nmt, ggml)
   const repeat = buildNmtTranslationStats({ totalTime: 0.125, totalTokens: 6 }, nmt, ggml)
@@ -174,7 +174,7 @@ test('NMT stats: GGML beam search tokens are per-job and pass through', (t) => {
 
 test('NMT stats: GGML greedy decoding accumulates tokens and is differenced', (t) => {
   const nmt = model()
-  const greedy = { engine: 'IndicTrans', beamsize: 1 }
+  const greedy = { engine: 'IndicTrans', beamSize: 1 }
 
   buildNmtTranslationStats({ totalTime: 1, totalTokens: 6 }, nmt, greedy)
   const second = buildNmtTranslationStats({ totalTime: 2, totalTokens: 12 }, nmt, greedy)

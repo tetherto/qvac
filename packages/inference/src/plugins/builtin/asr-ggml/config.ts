@@ -65,6 +65,8 @@ export const WHISPER_CONTEXT_NATIVE_KEYS = {
 
 export const WHISPER_MISC_NATIVE_KEYS = { captionEnabled: 'caption_enabled' } as const
 
+const GGML_GPU_NATIVE_KEYS = { useGpu: 'useGPU' } as const
+
 function omitUndefined<T extends Record<string, unknown>>(config: T) {
   return Object.fromEntries(Object.entries(config).filter(([, value]) => value !== undefined))
 }
@@ -115,7 +117,7 @@ export function buildParakeetConfig(
   artifacts?: Record<string, string>
 ): ASRGgml.ParakeetConfig {
   const { speakerAttribution, ...rest } = config
-  const parakeetConfig = omitUndefined(rest) as ASRGgml.ParakeetConfig
+  const parakeetConfig = withNativeKeys(rest, GGML_GPU_NATIVE_KEYS) as ASRGgml.ParakeetConfig
   if (speakerAttribution === undefined) return parakeetConfig
 
   const modelPath = artifacts?.[SPEAKER_ATTRIBUTION_MODEL_PATH]
@@ -161,13 +163,13 @@ export function buildWhisperReloadConfig(config: WhisperConfig) {
 export function buildParakeetReloadConfig(config: ParakeetConfig) {
   const { speakerAttribution: _speakerAttribution, ...rest } = config
   return {
-    parakeetConfig: omitUndefined(rest)
+    parakeetConfig: withNativeKeys(rest, GGML_GPU_NATIVE_KEYS)
   } satisfies ASRGgml.ASRGgmlReloadConfig
 }
 
 export function buildMossTranscribeEngineConfig(config: MossTranscribeConfig) {
   return {
     engine: 'moss-transcribe',
-    mossTranscribeConfig: omitUndefined(config)
+    mossTranscribeConfig: withNativeKeys(config, GGML_GPU_NATIVE_KEYS)
   } satisfies ASRGgml.MossTranscribeEngineConfig
 }
