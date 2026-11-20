@@ -178,6 +178,32 @@ test('registerPlugin rejects a third-party provider that serves a shared operati
   }
 })
 
+test('a third-party shape conflict on an optional operation is rejected in either registration order', function (t) {
+  const newer = () =>
+    plugin('newer', { run: handler('reply'), extra: handler('stream') }, [
+      { id: 'acme.x', version: 1, operations: ['run'], optionalOperations: ['extra'] }
+    ])
+  const older = () =>
+    plugin('older', { run: handler('reply'), extra: handler('reply') }, [
+      { id: 'acme.x', version: 1, operations: ['run'] }
+    ])
+  for (const [first, second] of [
+    [newer, older],
+    [older, newer]
+  ]) {
+    clearPlugins()
+    try {
+      registerPlugin(first())
+      t.ok(
+        /handler "extra" of capability "acme.x@1"/.test(rejectionReason(second()) ?? ''),
+        `${second().modelType} after ${first().modelType} is rejected`
+      )
+    } finally {
+      clearPlugins()
+    }
+  }
+})
+
 const EMBEDDING = { type: 'embed', success: true, embedding: [0.25, 0.5] }
 
 for (const provides of [[CAPABILITY_CONTRACTS.embedding], undefined]) {
