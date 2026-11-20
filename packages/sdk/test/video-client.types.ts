@@ -6,9 +6,9 @@ acceptVideoParams({
   modelId: 'h3',
   mode: 'txt2vid',
   prompt: 'Steam rises from coffee.',
-  video_frames: 124,
+  videoFrames: 124,
   fps: 24,
-  cfg_scale: 1,
+  cfgScale: 1,
   scheduler: 'discrete'
 })
 
@@ -17,10 +17,10 @@ acceptVideoParams({
   mode: 'txt2vid',
   prompt: 'an explorer',
   lora: '/models/adapter.safetensors',
-  reference_images: [new Uint8Array([1])],
-  video_frames: 121,
-  reference_attention_strength: 1,
-  reference_downscale_factor: 1
+  referenceImages: [new Uint8Array([1])],
+  videoFrames: 121,
+  referenceAttentionStrength: 1,
+  referenceDownscaleFactor: 1
 })
 
 acceptVideoParams({
@@ -28,33 +28,33 @@ acceptVideoParams({
   mode: 'txt2vid',
   prompt: 'an explorer',
   lora: '/models/adapter.safetensors',
-  lora_strength: 1
+  loraStrength: 1
 })
 
 acceptVideoParams({
   modelId: 'model-1',
   mode: 'img2vid',
   prompt: 'animate this frame',
-  init_image: new Uint8Array([1]),
+  initImage: new Uint8Array([1]),
   lora: '/models/adapter.safetensors',
-  lora_strength: 1
+  loraStrength: 1
 })
 
-// @ts-expect-error lora_strength requires lora
+// @ts-expect-error loraStrength requires lora
 acceptVideoParams({
   modelId: 'model-1',
   mode: 'txt2vid',
   prompt: 'an explorer',
-  lora_strength: 1
+  loraStrength: 1
 })
 
-// @ts-expect-error lora_strength requires lora for img2vid too
+// @ts-expect-error loraStrength requires lora for img2vid too
 acceptVideoParams({
   modelId: 'model-1',
   mode: 'img2vid',
   prompt: 'animate this frame',
-  init_image: new Uint8Array([1]),
-  lora_strength: 1
+  initImage: new Uint8Array([1]),
+  loraStrength: 1
 })
 
 acceptVideoParams({
@@ -62,9 +62,9 @@ acceptVideoParams({
   mode: 'txt2vid',
   prompt: 'an explorer',
   lora: '/models/adapter.safetensors',
-  video_frames: 121,
+  videoFrames: 121,
   // @ts-expect-error reference conditioning requires exactly one image
-  reference_images: []
+  referenceImages: []
 })
 
 acceptVideoParams({
@@ -72,44 +72,44 @@ acceptVideoParams({
   mode: 'txt2vid',
   prompt: 'an explorer',
   lora: '/models/adapter.safetensors',
-  video_frames: 121,
+  videoFrames: 121,
   // @ts-expect-error reference conditioning requires exactly one image
-  reference_images: [new Uint8Array([1]), new Uint8Array([2])]
+  referenceImages: [new Uint8Array([1]), new Uint8Array([2])]
 })
 
-// @ts-expect-error reference fields require reference_images
+// @ts-expect-error reference fields require referenceImages
 acceptVideoParams({
   modelId: 'model-1',
   mode: 'txt2vid',
   prompt: 'an explorer',
-  reference_attention_strength: 1
+  referenceAttentionStrength: 1
 })
 
-// @ts-expect-error reference_images requires lora
+// @ts-expect-error referenceImages requires lora
 acceptVideoParams({
   modelId: 'model-1',
   mode: 'txt2vid',
   prompt: 'an explorer',
-  reference_images: [new Uint8Array([1])] as const,
-  video_frames: 121
+  referenceImages: [new Uint8Array([1])] as const,
+  videoFrames: 121
 })
 
-// @ts-expect-error reference_images requires explicit video_frames
+// @ts-expect-error referenceImages requires explicit videoFrames
 acceptVideoParams({
   modelId: 'model-1',
   mode: 'txt2vid',
   prompt: 'an explorer',
   lora: '/models/adapter.safetensors',
-  reference_images: [new Uint8Array([1])] as const
+  referenceImages: [new Uint8Array([1])] as const
 })
 
 acceptVideoParams({
   modelId: 'model-1',
   mode: 'img2vid',
   prompt: 'animate this frame',
-  init_image: new Uint8Array([1]),
+  initImage: new Uint8Array([1]),
   // @ts-expect-error img2vid does not accept reference conditioning
-  reference_images: [new Uint8Array([2])]
+  referenceImages: [new Uint8Array([2])]
 })
 
 // @ts-expect-error img2vid does not accept reference attention
@@ -117,15 +117,15 @@ acceptVideoParams({
   modelId: 'model-1',
   mode: 'img2vid',
   prompt: 'animate this frame',
-  init_image: new Uint8Array([1]),
-  reference_attention_strength: 1
+  initImage: new Uint8Array([1]),
+  referenceAttentionStrength: 1
 })
 
 acceptVideoParams({
   modelId: 'model-1',
   mode: 'img2vid',
   prompt: 'animate this frame',
-  init_image: new Uint8Array([1]),
+  initImage: new Uint8Array([1]),
   // @ts-expect-error img2vid does not accept reference downscale
-  reference_downscale_factor: 1
+  referenceDownscaleFactor: 1
 })

@@ -147,17 +147,17 @@ test('videoStream contract exports LTX IC-LoRA field constraints and one schedul
   const properties = def['properties'] as Record<string, JsonSchema>
 
   t.ok(properties['lora']?.['pattern'], 'lora retains the absolute-path pattern')
-  t.is(properties['lora_strength']?.['minimum'], 0)
-  t.is(properties['lora_strength']?.['maximum'], 10)
-  t.is(properties['stg_scale']?.['minimum'], 0)
-  t.is(properties['stg_scale']?.['maximum'], 10)
-  t.is(properties['stg_block']?.['type'], 'integer')
-  t.is(properties['stg_block']?.['minimum'], 0)
-  t.is(properties['reference_images']?.['minItems'], 1)
-  t.is(properties['reference_images']?.['maxItems'], 1)
-  t.is(properties['reference_attention_strength']?.['minimum'], 0)
-  t.is(properties['reference_attention_strength']?.['maximum'], 1)
-  t.is(properties['reference_downscale_factor']?.['const'], 1)
+  t.is(properties.loraStrength?.['minimum'], 0)
+  t.is(properties.loraStrength?.['maximum'], 10)
+  t.is(properties.stgScale?.['minimum'], 0)
+  t.is(properties.stgScale?.['maximum'], 10)
+  t.is(properties.stgBlock?.['type'], 'integer')
+  t.is(properties.stgBlock?.['minimum'], 0)
+  t.is(properties.referenceImages?.['minItems'], 1)
+  t.is(properties.referenceImages?.['maxItems'], 1)
+  t.is(properties.referenceAttentionStrength?.['minimum'], 0)
+  t.is(properties.referenceAttentionStrength?.['maximum'], 1)
+  t.is(properties.referenceDownscaleFactor?.['const'], 1)
 
   const scheduler = properties['scheduler'] as JsonSchema
   t.absent(scheduler['anyOf'], 'video scheduler is one enum, not an anyOf union')

@@ -865,12 +865,12 @@
           "minimum": 0,
           "maximum": 2147483647
         },
-        "keyscale": {
+        "keyScale": {
           "description": "Key and scale for the edit prompts, e.g. 'C minor'.",
           "type": "string",
           "minLength": 1
         },
-        "timesignature": {
+        "timeSignature": {
           "description": "Time signature for the edit prompts, e.g. '4/4'.",
           "type": "string",
           "minLength": 1
@@ -1197,7 +1197,7 @@
                   "type": "number",
                   "description": "Beats per minute; 0 when unresolved."
                 },
-                "keyscale": {
+                "keyScale": {
                   "type": "string"
                 },
                 "beatsPerBar": {
@@ -1224,7 +1224,7 @@
                 "caption",
                 "lyrics",
                 "bpm",
-                "keyscale",
+                "keyScale",
                 "beatsPerBar",
                 "vocalLanguage",
                 "seed",
@@ -1259,10 +1259,10 @@
                   "type": "number",
                   "description": "LM estimate in seconds. The recovered codes fix the true length."
                 },
-                "keyscale": {
+                "keyScale": {
                   "type": "string"
                 },
-                "timesignature": {
+                "timeSignature": {
                   "type": "string"
                 },
                 "vocalLanguage": {
@@ -1287,8 +1287,8 @@
                 "caption",
                 "bpm",
                 "duration",
-                "keyscale",
-                "timesignature",
+                "keyScale",
+                "timeSignature",
                 "vocalLanguage",
                 "audioCodes",
                 "seed"
@@ -1431,11 +1431,11 @@
           "minimum": 0,
           "maximum": 2147483647
         },
-        "keyscale": {
+        "keyScale": {
           "type": "string",
           "minLength": 1
         },
-        "timesignature": {
+        "timeSignature": {
           "type": "string",
           "minLength": 1
         },
@@ -1877,7 +1877,7 @@
                   "type": "number",
                   "description": "Beats per minute; 0 when unresolved."
                 },
-                "keyscale": {
+                "keyScale": {
                   "type": "string"
                 },
                 "beatsPerBar": {
@@ -1904,7 +1904,7 @@
                 "caption",
                 "lyrics",
                 "bpm",
-                "keyscale",
+                "keyScale",
                 "beatsPerBar",
                 "vocalLanguage",
                 "seed",
@@ -1939,10 +1939,10 @@
                   "type": "number",
                   "description": "LM estimate in seconds. The recovered codes fix the true length."
                 },
-                "keyscale": {
+                "keyScale": {
                   "type": "string"
                 },
-                "timesignature": {
+                "timeSignature": {
                   "type": "string"
                 },
                 "vocalLanguage": {
@@ -1967,8 +1967,8 @@
                 "caption",
                 "bpm",
                 "duration",
-                "keyscale",
-                "timesignature",
+                "keyScale",
+                "timeSignature",
                 "vocalLanguage",
                 "audioCodes",
                 "seed"
@@ -2210,10 +2210,10 @@
               "type": "number",
               "description": "LM estimate in seconds. The recovered codes fix the true length."
             },
-            "keyscale": {
+            "keyScale": {
               "type": "string"
             },
-            "timesignature": {
+            "timeSignature": {
               "type": "string"
             },
             "vocalLanguage": {
@@ -2238,8 +2238,8 @@
             "caption",
             "bpm",
             "duration",
-            "keyscale",
-            "timesignature",
+            "keyScale",
+            "timeSignature",
             "vocalLanguage",
             "audioCodes",
             "seed"
@@ -2316,7 +2316,7 @@
                   "type": "number",
                   "description": "Beats per minute; 0 when unresolved."
                 },
-                "keyscale": {
+                "keyScale": {
                   "type": "string"
                 },
                 "beatsPerBar": {
@@ -2343,7 +2343,7 @@
                 "caption",
                 "lyrics",
                 "bpm",
-                "keyscale",
+                "keyScale",
                 "beatsPerBar",
                 "vocalLanguage",
                 "seed",
@@ -2378,10 +2378,10 @@
                   "type": "number",
                   "description": "LM estimate in seconds. The recovered codes fix the true length."
                 },
-                "keyscale": {
+                "keyScale": {
                   "type": "string"
                 },
-                "timesignature": {
+                "timeSignature": {
                   "type": "string"
                 },
                 "vocalLanguage": {
@@ -2406,8 +2406,8 @@
                 "caption",
                 "bpm",
                 "duration",
-                "keyscale",
-                "timesignature",
+                "keyScale",
+                "timeSignature",
                 "vocalLanguage",
                 "audioCodes",
                 "seed"
@@ -2663,15 +2663,15 @@
                 "description": "Optional per-prompt sampling / generation parameters.",
                 "type": "object",
                 "properties": {
-                  "temp": {
+                  "temperature": {
                     "description": "Sampling temperature (typically 0–2).",
                     "type": "number"
                   },
-                  "top_p": {
+                  "topP": {
                     "description": "Top-p (nucleus) sampling cutoff (0–1).",
                     "type": "number"
                   },
-                  "top_k": {
+                  "topK": {
                     "description": "Top-k sampling — keep only the top K tokens.",
                     "type": "number"
                   },
@@ -2683,30 +2683,30 @@
                     "description": "Random seed for reproducibility.",
                     "type": "number"
                   },
-                  "frequency_penalty": {
+                  "frequencyPenalty": {
                     "description": "Penalty applied to tokens based on frequency so far.",
                     "type": "number"
                   },
-                  "presence_penalty": {
+                  "presencePenalty": {
                     "description": "Penalty applied to tokens that have already appeared.",
                     "type": "number"
                   },
-                  "repeat_penalty": {
+                  "repeatPenalty": {
                     "description": "Penalty applied to repeated tokens.",
                     "type": "number"
                   },
-                  "reasoning_budget": {
-                    "description": "Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
+                  "reasoningBudget": {
+                    "description": "Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoningBudget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
                     "type": "integer",
                     "minimum": -1,
                     "maximum": 2147483647
                   },
-                  "tool_choice": {
+                  "toolChoice": {
                     "description": "Controls tool calling for a request that declares `tools`, in the OpenAI style. `\"auto\"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `\"required\"` forces a tool call; `\"none\"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `\"required\"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.",
                     "type": "string",
                     "minLength": 1
                   },
-                  "parallel_tool_calls": {
+                  "parallelToolCalls": {
                     "description": "Whether one response may carry more than one tool call. `true` (default) lets the chat template and tool-call grammar accept several; `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.",
                     "type": "boolean"
                   }
@@ -2748,7 +2748,7 @@
                         "type": "string",
                         "const": "json_schema"
                       },
-                      "json_schema": {
+                      "jsonSchema": {
                         "type": "object",
                         "properties": {
                           "name": {
@@ -2779,7 +2779,7 @@
                         "title": "BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchema"
                       }
                     },
-                    "required": ["type", "json_schema"],
+                    "required": ["type", "jsonSchema"],
                     "additionalProperties": false,
                     "title": "BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchema"
                   }
@@ -4801,7 +4801,7 @@
           "type": "boolean"
         },
         "seedFrom": {
-          "description": "Name of another caller-managed cache to start this chat from, such as a primed system prompt and tools. On the first turn of a chat whose `kvCache` key has no cache yet, the model reads that cache and reuses the prefix it shares with the prompt, so only the rest is processed; the source is never written. Ignored once the chat has a cache. Needs a string `kvCache` other than itself. Refused when no cache of that name exists for this model and system prompt, or when the model was not loaded with `cache_share_across_keys: true`, which is off by default.",
+          "description": "Name of another caller-managed cache to start this chat from, such as a primed system prompt and tools. On the first turn of a chat whose `kvCache` key has no cache yet, the model reads that cache and reuses the prefix it shares with the prompt, so only the rest is processed; the source is never written. Ignored once the chat has a cache. Needs a string `kvCache` other than itself. Refused when no cache of that name exists for this model and system prompt, or when the model was not loaded with `cacheShareAcrossKeys: true`, which is off by default.",
           "type": "string",
           "minLength": 1
         },
@@ -4949,15 +4949,15 @@
           "description": "Optional sampling / generation parameters.",
           "type": "object",
           "properties": {
-            "temp": {
+            "temperature": {
               "description": "Sampling temperature (typically 0–2).",
               "type": "number"
             },
-            "top_p": {
+            "topP": {
               "description": "Top-p (nucleus) sampling cutoff (0–1).",
               "type": "number"
             },
-            "top_k": {
+            "topK": {
               "description": "Top-k sampling — keep only the top K tokens.",
               "type": "number"
             },
@@ -4969,30 +4969,30 @@
               "description": "Random seed for reproducibility.",
               "type": "number"
             },
-            "frequency_penalty": {
+            "frequencyPenalty": {
               "description": "Penalty applied to tokens based on frequency so far.",
               "type": "number"
             },
-            "presence_penalty": {
+            "presencePenalty": {
               "description": "Penalty applied to tokens that have already appeared.",
               "type": "number"
             },
-            "repeat_penalty": {
+            "repeatPenalty": {
               "description": "Penalty applied to repeated tokens.",
               "type": "number"
             },
-            "reasoning_budget": {
-              "description": "Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
+            "reasoningBudget": {
+              "description": "Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoningBudget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
               "type": "integer",
               "minimum": -1,
               "maximum": 2147483647
             },
-            "tool_choice": {
+            "toolChoice": {
               "description": "Controls tool calling for a request that declares `tools`, in the OpenAI style. `\"auto\"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `\"required\"` forces a tool call; `\"none\"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `\"required\"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.",
               "type": "string",
               "minLength": 1
             },
-            "parallel_tool_calls": {
+            "parallelToolCalls": {
               "description": "Whether one response may carry more than one tool call. `true` (default) lets the chat template and tool-call grammar accept several; `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.",
               "type": "boolean"
             }
@@ -5048,7 +5048,7 @@
                   "type": "string",
                   "const": "json_schema"
                 },
-                "json_schema": {
+                "jsonSchema": {
                   "type": "object",
                   "properties": {
                     "name": {
@@ -5079,7 +5079,7 @@
                   "title": "CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchema"
                 }
               },
-              "required": ["type", "json_schema"],
+              "required": ["type", "jsonSchema"],
               "additionalProperties": false,
               "title": "CompletionOrchestrateRequestResponseFormatJsonSchema"
             }
@@ -5585,7 +5585,7 @@
           "type": "boolean"
         },
         "seedFrom": {
-          "description": "Name of another caller-managed cache to start this chat from, such as a primed system prompt and tools. On the first turn of a chat whose `kvCache` key has no cache yet, the model reads that cache and reuses the prefix it shares with the prompt, so only the rest is processed; the source is never written. Ignored once the chat has a cache. Needs a string `kvCache` other than itself. Refused when no cache of that name exists for this model and system prompt, or when the model was not loaded with `cache_share_across_keys: true`, which is off by default.",
+          "description": "Name of another caller-managed cache to start this chat from, such as a primed system prompt and tools. On the first turn of a chat whose `kvCache` key has no cache yet, the model reads that cache and reuses the prefix it shares with the prompt, so only the rest is processed; the source is never written. Ignored once the chat has a cache. Needs a string `kvCache` other than itself. Refused when no cache of that name exists for this model and system prompt, or when the model was not loaded with `cacheShareAcrossKeys: true`, which is off by default.",
           "type": "string",
           "minLength": 1
         },
@@ -5733,15 +5733,15 @@
           "description": "Optional sampling / generation parameters.",
           "type": "object",
           "properties": {
-            "temp": {
+            "temperature": {
               "description": "Sampling temperature (typically 0–2).",
               "type": "number"
             },
-            "top_p": {
+            "topP": {
               "description": "Top-p (nucleus) sampling cutoff (0–1).",
               "type": "number"
             },
-            "top_k": {
+            "topK": {
               "description": "Top-k sampling — keep only the top K tokens.",
               "type": "number"
             },
@@ -5753,30 +5753,30 @@
               "description": "Random seed for reproducibility.",
               "type": "number"
             },
-            "frequency_penalty": {
+            "frequencyPenalty": {
               "description": "Penalty applied to tokens based on frequency so far.",
               "type": "number"
             },
-            "presence_penalty": {
+            "presencePenalty": {
               "description": "Penalty applied to tokens that have already appeared.",
               "type": "number"
             },
-            "repeat_penalty": {
+            "repeatPenalty": {
               "description": "Penalty applied to repeated tokens.",
               "type": "number"
             },
-            "reasoning_budget": {
-              "description": "Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
+            "reasoningBudget": {
+              "description": "Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoningBudget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
               "type": "integer",
               "minimum": -1,
               "maximum": 2147483647
             },
-            "tool_choice": {
+            "toolChoice": {
               "description": "Controls tool calling for a request that declares `tools`, in the OpenAI style. `\"auto\"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `\"required\"` forces a tool call; `\"none\"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `\"required\"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.",
               "type": "string",
               "minLength": 1
             },
-            "parallel_tool_calls": {
+            "parallelToolCalls": {
               "description": "Whether one response may carry more than one tool call. `true` (default) lets the chat template and tool-call grammar accept several; `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.",
               "type": "boolean"
             }
@@ -5832,7 +5832,7 @@
                   "type": "string",
                   "const": "json_schema"
                 },
-                "json_schema": {
+                "jsonSchema": {
                   "type": "object",
                   "properties": {
                     "name": {
@@ -5863,7 +5863,7 @@
                   "title": "CompletionStreamRequestResponseFormatJsonSchemaJsonSchema"
                 }
               },
-              "required": ["type", "json_schema"],
+              "required": ["type", "jsonSchema"],
               "additionalProperties": false,
               "title": "CompletionStreamRequestResponseFormatJsonSchema"
             }
@@ -8054,7 +8054,7 @@
           "type": "string",
           "description": "Positive prompt describing the image to generate."
         },
-        "negative_prompt": {
+        "negativePrompt": {
           "description": "Optional negative prompt describing what to avoid.",
           "type": "string"
         },
@@ -8073,25 +8073,25 @@
           "multipleOf": 8
         },
         "steps": {
-          "description": "Number of sampling steps. Overridden by custom_sigmas.length - 1 when supplied.",
+          "description": "Number of sampling steps. Overridden by customSigmas.length - 1 when supplied.",
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
         },
-        "cfg_scale": {
+        "cfgScale": {
           "description": "Classifier-free guidance scale for SD and Qwen-Image models; typical range 1-20, default 7",
           "type": "number"
         },
-        "img_cfg_scale": {
+        "imgCfgScale": {
           "default": -1,
-          "description": "Image CFG scale for img2img/inpaint workflows where the image and prompt should have different guidance weights; defaults to -1 which reuses cfg_scale",
+          "description": "Image CFG scale for img2img/inpaint workflows where the image and prompt should have different guidance weights; defaults to -1 which reuses cfgScale",
           "type": "number"
         },
         "guidance": {
           "description": "Distilled guidance for FLUX models; typical range 1–10, default 3.5",
           "type": "number"
         },
-        "sampling_method": {
+        "samplingMethod": {
           "description": "Sampling algorithm used by the diffusion scheduler.",
           "type": "string",
           "enum": [
@@ -8113,7 +8113,7 @@
           "title": "DiffusionStreamRequestSamplingMethod"
         },
         "scheduler": {
-          "description": "Noise schedule to apply when sampling. Overridden by custom_sigmas when supplied.",
+          "description": "Noise schedule to apply when sampling. Overridden by customSigmas when supplied.",
           "type": "string",
           "enum": [
             "discrete",
@@ -8130,8 +8130,8 @@
           ],
           "title": "DiffusionStreamRequestScheduler"
         },
-        "custom_sigmas": {
-          "description": "Explicit noise schedule, including terminal zero. At least two finite, non-negative float values, strictly decreasing after conversion to float precision. Overrides scheduler and steps; the effective step count is length minus one. Qwen-Image-2.1-Turbo uses its fixed eight-step schedule with Euler and cfg_scale: 1.",
+        "customSigmas": {
+          "description": "Explicit noise schedule, including terminal zero. At least two finite, non-negative float values, strictly decreasing after conversion to float precision. Overrides scheduler and steps; the effective step count is length minus one. Qwen-Image-2.1-Turbo uses its fixed eight-step schedule with Euler and cfgScale: 1.",
           "minItems": 2,
           "maxItems": 2147483647,
           "type": "array",
@@ -8147,18 +8147,18 @@
           "minimum": -9007199254740991,
           "maximum": 9007199254740991
         },
-        "batch_count": {
+        "batchCount": {
           "description": "Number of images to generate in this call.",
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
         },
-        "vae_tiling": {
+        "vaeTiling": {
           "description": "Enable VAE tiling for large images on constrained VRAM, overriding model config.",
           "type": "boolean"
         },
-        "vae_tile_size": {
-          "description": "VAE tile size in latent units, as a positive integer or a WxH string such as 64x32. Each dimension must be between 1 and 2147483647. For Qwen-Image-2.1 outputs at 2048x2048 or larger, use vae_tiling: true with vae_tile_size: 64 to bound decode memory.",
+        "vaeTileSize": {
+          "description": "VAE tile size in latent units, as a positive integer or a WxH string such as 64x32. Each dimension must be between 1 and 2147483647. For Qwen-Image-2.1 outputs at 2048x2048 or larger, use vaeTiling: true with vaeTileSize: 64 to bound decode memory.",
           "anyOf": [
             {
               "type": "integer",
@@ -8173,18 +8173,18 @@
             }
           ]
         },
-        "cache_preset": {
+        "cachePreset": {
           "description": "Optional name of a cached sampler preset to reuse.",
           "type": "string"
         },
-        "init_image": {
-          "description": "Base64-encoded PNG/JPEG for img2img or reference editing. Qwen-Image-2.1 requires projectionModelSrc for editing and preserves reference alpha. Mutually exclusive with init_images.",
+        "initImage": {
+          "description": "Base64-encoded PNG/JPEG for img2img or reference editing. Qwen-Image-2.1 requires projectionModelSrc for editing and preserves reference alpha. Mutually exclusive with initImages.",
           "type": "string",
           "minLength": 1,
           "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
         },
-        "init_images": {
-          "description": "Ordered base64-encoded PNG/JPEG references for models with reference editing, including FLUX.2, FLUX.3 and Qwen-Image-2.1. Native model detection validates support. FLUX.3 and Qwen-Image-2.1 do not need FLUX.2 @imageN tags or a prediction override; Qwen-Image-2.1 requires projectionModelSrc and preserves alpha. Mutually exclusive with init_image.",
+        "initImages": {
+          "description": "Ordered base64-encoded PNG/JPEG references for models with reference editing, including FLUX.2, FLUX.3 and Qwen-Image-2.1. Native model detection validates support. FLUX.3 and Qwen-Image-2.1 do not need FLUX.2 @imageN tags or a prediction override; Qwen-Image-2.1 requires projectionModelSrc and preserves alpha. Mutually exclusive with initImage.",
           "minItems": 1,
           "type": "array",
           "items": {
@@ -8193,16 +8193,16 @@
             "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
           }
         },
-        "increase_ref_index": {
+        "increaseRefIndex": {
           "description": "FLUX.2 fusion only. When omitted, the addon default (false) is used. When false, all reference latents share one RoPE index slot and blend via attention (recommended for FLUX.2-klein). When true, each reference gets its own RoPE index slot — use only with text encoders that receive per-image vision tokens.",
           "type": "boolean"
         },
-        "auto_resize_ref_image": {
+        "autoResizeRefImage": {
           "description": "FLUX.2 only. When omitted, the addon default (true) is used. When true, every reference image (single or fusion) is auto-resized to the target width/height before VAE-encoding. Disable only if the buffers are already at the exact target dimensions.",
           "type": "boolean"
         },
         "lora": {
-          "description": "Optional local LoRA adapter path to apply for this generation. Must be an absolute filesystem path. Whether the adapter persists across subsequent diffusion() calls is controlled by sdcppConfigSchema.lora_apply_mode (set at loadModel time).",
+          "description": "Optional local LoRA adapter path to apply for this generation. Must be an absolute filesystem path. Whether the adapter persists across subsequent diffusion() calls is controlled by sdcppConfigSchema.loraApplyMode (set at loadModel time).",
           "type": "string",
           "minLength": 1,
           "pattern": "^(\\/|[A-Za-z]:[\\\\/]|\\\\\\\\)"
@@ -8214,7 +8214,7 @@
           "maximum": 1
         },
         "upscale": {
-          "description": "Post-generation ESRGAN upscale. `true` (or `{}` / `{ repeats: 1 }`) runs a single upscale pass at the model's native scale factor (e.g. x4 for RealESRGAN_x4plus). `false` is a no-op (same as omitting the field). `{ repeats: N }` runs the upscaler N times sequentially — each pass multiplies the output dimensions by the model's scale factor. When `batch_count > 1`, every output image is upscaled independently. Requires the model to be loaded with `upscaler.model_src` set in modelConfig. ESRGAN accepts RGB only; Qwen-Image-2.1 RGBA output rejects upscaling.",
+          "description": "Post-generation ESRGAN upscale. `true` (or `{}` / `{ repeats: 1 }`) runs a single upscale pass at the model's native scale factor (e.g. x4 for RealESRGAN_x4plus). `false` is a no-op (same as omitting the field). `{ repeats: N }` runs the upscaler N times sequentially — each pass multiplies the output dimensions by the model's scale factor. When `batchCount > 1`, every output image is upscaled independently. Requires the model to be loaded with `upscaler.modelSrc` set in modelConfig. ESRGAN accepts RGB only; Qwen-Image-2.1 RGBA output rejects upscaling.",
           "anyOf": [
             {
               "type": "boolean"
@@ -8850,7 +8850,7 @@
               "enum": ["cpu", "gpu"],
               "title": "EmbedResponseStatsBackendDevice"
             },
-            "contextSize": {
+            "ctxSize": {
               "description": "Context size in tokens. llama.cpp embedding models only.",
               "type": "number"
             },
@@ -9059,7 +9059,7 @@
               "enum": ["cpu", "gpu"],
               "title": "EmbedBatchResponseStatsBackendDevice"
             },
-            "contextSize": {
+            "ctxSize": {
               "description": "Context size in tokens. llama.cpp embedding models only.",
               "type": "number"
             },
@@ -9552,10 +9552,10 @@
         "stats": {
           "type": "object",
           "properties": {
-            "train_loss": {
+            "trainLoss": {
               "type": "number"
             },
-            "train_loss_uncertainty": {
+            "trainLossUncertainty": {
               "anyOf": [
                 {
                   "anyOf": [
@@ -9570,10 +9570,10 @@
                 }
               ]
             },
-            "val_loss": {
+            "valLoss": {
               "type": "number"
             },
-            "val_loss_uncertainty": {
+            "valLossUncertainty": {
               "anyOf": [
                 {
                   "anyOf": [
@@ -9588,10 +9588,10 @@
                 }
               ]
             },
-            "train_accuracy": {
+            "trainAccuracy": {
               "type": "number"
             },
-            "train_accuracy_uncertainty": {
+            "trainAccuracyUncertainty": {
               "anyOf": [
                 {
                   "anyOf": [
@@ -9606,10 +9606,10 @@
                 }
               ]
             },
-            "val_accuracy": {
+            "valAccuracy": {
               "type": "number"
             },
-            "val_accuracy_uncertainty": {
+            "valAccuracyUncertainty": {
               "anyOf": [
                 {
                   "anyOf": [
@@ -9624,21 +9624,21 @@
                 }
               ]
             },
-            "learning_rate": {
+            "learningRate": {
               "type": "number"
             },
-            "global_steps": {
+            "globalSteps": {
               "type": "integer",
               "minimum": 0,
               "maximum": 9007199254740991
             },
-            "epochs_completed": {
+            "epochsCompleted": {
               "type": "integer",
               "minimum": 0,
               "maximum": 9007199254740991
             }
           },
-          "required": ["global_steps", "epochs_completed"],
+          "required": ["globalSteps", "epochsCompleted"],
           "additionalProperties": false,
           "title": "FinetuneResponseStats"
         }
@@ -9650,7 +9650,7 @@
       "title": "FinetuneProgressResponse",
       "type": "object",
       "properties": {
-        "is_train": {
+        "isTrain": {
           "type": "boolean"
         },
         "loss": {
@@ -9668,7 +9668,7 @@
             }
           ]
         },
-        "loss_uncertainty": {
+        "lossUncertainty": {
           "anyOf": [
             {
               "anyOf": [
@@ -9698,7 +9698,7 @@
             }
           ]
         },
-        "accuracy_uncertainty": {
+        "accuracyUncertainty": {
           "anyOf": [
             {
               "anyOf": [
@@ -9713,31 +9713,31 @@
             }
           ]
         },
-        "global_steps": {
+        "globalSteps": {
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
         },
-        "current_epoch": {
+        "currentEpoch": {
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
         },
-        "current_batch": {
+        "currentBatch": {
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
         },
-        "total_batches": {
+        "totalBatches": {
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
         },
-        "elapsed_ms": {
+        "elapsedMs": {
           "type": "number",
           "minimum": 0
         },
-        "eta_ms": {
+        "etaMs": {
           "type": "number",
           "minimum": 0
         },
@@ -9750,17 +9750,17 @@
         }
       },
       "required": [
-        "is_train",
+        "isTrain",
         "loss",
-        "loss_uncertainty",
+        "lossUncertainty",
         "accuracy",
-        "accuracy_uncertainty",
-        "global_steps",
-        "current_epoch",
-        "current_batch",
-        "total_batches",
-        "elapsed_ms",
-        "eta_ms",
+        "accuracyUncertainty",
+        "globalSteps",
+        "currentEpoch",
+        "currentBatch",
+        "totalBatches",
+        "elapsedMs",
+        "etaMs",
         "type",
         "modelId"
       ],
@@ -14177,7 +14177,7 @@
                   "type": "object",
                   "properties": {
                     "backend": {
-                      "description": "Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with a split-mode other than 'none' or with devices.",
+                      "description": "Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with a splitMode other than 'none' or with devices.",
                       "minItems": 1,
                       "type": "array",
                       "items": {
@@ -14186,23 +14186,23 @@
                         "title": "LoadModelSrcRequestLlamacppCompletionModelConfigBackendItem"
                       }
                     },
-                    "ctx_size": {
+                    "ctxSize": {
                       "description": "Context window size in tokens; `0` uses the model's trained context length. Default 1024.",
                       "type": "number"
                     },
-                    "temp": {
+                    "temperature": {
                       "description": "Sampling temperature (0–2). Default 0.8.",
                       "type": "number",
                       "minimum": 0,
                       "maximum": 2
                     },
-                    "top_p": {
+                    "topP": {
                       "description": "Top-p (nucleus) sampling cutoff (0–1). Default 0.9.",
                       "type": "number",
                       "minimum": 0,
                       "maximum": 1
                     },
-                    "top_k": {
+                    "topK": {
                       "description": "Top-k sampling — keep only the top K tokens (0–128). Default 40.",
                       "type": "integer",
                       "minimum": 0,
@@ -14212,7 +14212,7 @@
                       "description": "Sampling RNG seed; `-1` (default) picks a random seed.",
                       "type": "number"
                     },
-                    "gpu_layers": {
+                    "gpuLayers": {
                       "description": "Number of model layers to offload to the GPU. Unset by default, which lets the runtime fit the placement to free device memory (offloading every layer when it fits). Setting it pins the layer count and disables that fit.",
                       "type": "number"
                     },
@@ -14221,7 +14221,7 @@
                       "type": "string"
                     },
                     "device": {
-                      "description": "Device class to run inference on: `'gpu'`, `'cpu'` or `'npu'`. Default `'gpu'`. `'npu'` is the AMD XDNA2 NPU on Linux x64, which needs XRT 2.25 or newer and read/write access to its /dev/accel node; GPU selection never picks it. With no NPU listed, `'npu'` falls back to the GPU order, then the CPU. It cannot be combined with backend, devices, split-mode (beyond their defaults), main-gpu, rpc-servers or finetuning, and a listed NPU that fails to open runs the load on the CPU.",
+                      "description": "Device class to run inference on: `'gpu'`, `'cpu'` or `'npu'`. Default `'gpu'`. `'npu'` is the AMD XDNA2 NPU on Linux x64, which needs XRT 2.25 or newer and read/write access to its /dev/accel node; GPU selection never picks it. With no NPU listed, `'npu'` falls back to the GPU order, then the CPU. It cannot be combined with backend, devices, splitMode (beyond their defaults), mainGpu, rpcServers or finetuning, and a listed NPU that fails to open runs the load on the CPU.",
                       "type": "string"
                     },
                     "predict": {
@@ -14242,11 +14242,11 @@
                         }
                       ]
                     },
-                    "system_prompt": {
+                    "systemPrompt": {
                       "description": "Prepended as the system message when a request's history carries none; applied on the JS side and never forwarded to the addon. Unset by default, so the model sees the history as sent.",
                       "type": "string"
                     },
-                    "load_mode": {
+                    "loadMode": {
                       "description": "Model loading mode: `'none'`, `'mmap'`, `'mlock'`, `'mmap+mlock'`, or `'dio'`. Unset uses the addon's default (`'mmap'`).",
                       "type": "string",
                       "enum": ["none", "mmap", "mlock", "mmap+mlock", "dio"],
@@ -14258,19 +14258,19 @@
                       "enum": [0, 1, 2, 3],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity"
                     },
-                    "presence_penalty": {
+                    "presencePenalty": {
                       "description": "Presence penalty applied to tokens that have already appeared. Default 0.",
                       "type": "number"
                     },
-                    "frequency_penalty": {
+                    "frequencyPenalty": {
                       "description": "Frequency penalty applied to tokens by their frequency so far. Default 0.",
                       "type": "number"
                     },
-                    "repeat_penalty": {
+                    "repeatPenalty": {
                       "description": "Repetition penalty applied to repeated tokens. Default 1.1.",
                       "type": "number"
                     },
-                    "stop_sequences": {
+                    "stopSequences": {
                       "description": "Strings that stop generation when produced (forwarded to the addon as `reverse_prompt`).",
                       "type": "array",
                       "items": {
@@ -14287,48 +14287,48 @@
                       "description": "Enable tool calling via the model's jinja chat template. Default false.",
                       "type": "boolean"
                     },
-                    "cache_checkpoints": {
-                      "description": "Prompt-cache checkpoints kept per sequence on hybrid / recurrent models (Qwen3.5, Jamba, DeepSeek V4) and on sliding-window models (Gemma 3/4, gpt-oss) whose context exceeds the window, one per cached request at the end of its history (0–1024). Default 1, which serves the next turn and a regenerate; the newest checkpoint ending at a user message is kept on top of this count, so the next user turn after a tool loop does not reprocess the conversation; editing the user message k-th from the end without reprocessing the whole conversation needs `k + 1`. Regenerates and edits restore a checkpoint only under a caller-managed string `kvCache` key. `0` disables them. Each checkpoint holds a copy of the recurrent or sliding-window state of its sequence in host RAM (on disk with `cache_checkpoint_storage: 'disk'`), up to hundreds of MiB on larger models, so memory grows with this value and with `parallel` unless `cache_checkpoints_max_bytes` caps it. Model fit checks do not count it. The newest one, and the newest one ending at a user message, are also saved in the `cacheKey` file, so a conversation reloaded in a new process continues from them. Ignored by other models.",
+                    "cacheCheckpoints": {
+                      "description": "Prompt-cache checkpoints kept per sequence on hybrid / recurrent models (Qwen3.5, Jamba, DeepSeek V4) and on sliding-window models (Gemma 3/4, gpt-oss) whose context exceeds the window, one per cached request at the end of its history (0–1024). Default 1, which serves the next turn and a regenerate; the newest checkpoint ending at a user message is kept on top of this count, so the next user turn after a tool loop does not reprocess the conversation; editing the user message k-th from the end without reprocessing the whole conversation needs `k + 1`. Regenerates and edits restore a checkpoint only under a caller-managed string `kvCache` key. `0` disables them. Each checkpoint holds a copy of the recurrent or sliding-window state of its sequence in host RAM (on disk with `cacheCheckpointStorage: 'disk'`), up to hundreds of MiB on larger models, so memory grows with this value and with `parallel` unless `cacheCheckpointsMaxBytes` caps it. Model fit checks do not count it. The newest one, and the newest one ending at a user message, are also saved in the `cacheKey` file, so a conversation reloaded in a new process continues from them. Ignored by other models.",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 1024
                     },
-                    "cache_checkpoints_max_bytes": {
-                      "description": "Byte budget for the checkpoints kept per sequence; the oldest are dropped until the rest fit. `0` (default) is unlimited. The load fails when the budget cannot hold `cache_checkpoints` checkpoints of the largest size the context allows (on a sliding-window model, a full window).",
+                    "cacheCheckpointsMaxBytes": {
+                      "description": "Byte budget for the checkpoints kept per sequence; the oldest are dropped until the rest fit. `0` (default) is unlimited. The load fails when the budget cannot hold `cacheCheckpoints` checkpoints of the largest size the context allows (on a sliding-window model, a full window).",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
-                    "cache_checkpoint_storage": {
-                      "description": "Where checkpoints and the per-request rollback snapshot are kept: `'memory'` (default) in host RAM, `'disk'` in files under `cache_checkpoint_dir`, which it requires.",
+                    "cacheCheckpointStorage": {
+                      "description": "Where checkpoints and the per-request rollback snapshot are kept: `'memory'` (default) in host RAM, `'disk'` in files under `cacheCheckpointDir`, which it requires.",
                       "type": "string",
                       "enum": ["memory", "disk"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigCacheCheckpointStorage"
                     },
-                    "cache_checkpoint_dir": {
-                      "description": "Writable directory for checkpoint files, required with `cache_checkpoint_storage: 'disk'` and rejected without it. The addon writes in a private directory it creates inside it (on Windows, in the directory itself). On mobile, pass the app's cache directory.",
+                    "cacheCheckpointDir": {
+                      "description": "Writable directory for checkpoint files, required with `cacheCheckpointStorage: 'disk'` and rejected without it. The addon writes in a private directory it creates inside it (on Windows, in the directory itself). On mobile, pass the app's cache directory.",
                       "type": "string",
                       "minLength": 1
                     },
-                    "cache_share_across_keys": {
+                    "cacheShareAcrossKeys": {
                       "description": "Let a request reuse the longest prompt prefix another conversation on this model holds. Default false: each request keeps to its own `kvCache` key, and a request without one starts cold. With `true`, callers can tell from prompt-token counts and timing whether another conversation shares their prompt.",
                       "type": "boolean"
                     },
-                    "cache_ram_mib": {
+                    "cacheRamMib": {
                       "description": "Host-RAM budget, in MiB, for cached conversations that are not running (0–1048576). Default 0 (off). A conversation the model switches away from (another `kvCache` key, or a slot eviction with `parallel >= 2`) is kept in RAM, so returning to its caller-managed string `kvCache` key skips reading its `cacheKey` file. Model fit checks do not count this memory.",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 1048576
                     },
-                    "cache-type-k": {
+                    "cacheTypeK": {
                       "description": "KV-cache key quantization type (`f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …). Unset selects a backend-safe default.",
                       "type": "string"
                     },
-                    "cache-type-v": {
+                    "cacheTypeV": {
                       "description": "KV-cache value quantization type; quantizing the value cache requires flash attention. Unset selects a backend-safe default.",
                       "type": "string"
                     },
-                    "main-gpu": {
+                    "mainGpu": {
                       "description": "GPU to use on multi-GPU systems: a device index, or `'integrated'`/`'dedicated'` to restrict selection to that class.",
                       "anyOf": [
                         {
@@ -14343,71 +14343,71 @@
                         }
                       ]
                     },
-                    "rpc-servers": {
+                    "rpcServers": {
                       "description": "Comma-separated unique native RPC host:port endpoints in device registration order for this load. Requires compatible RPC addon builds and a trusted private network; native traffic is unencrypted and unauthenticated.",
                       "type": "string",
                       "minLength": 1
                     },
                     "devices": {
-                      "description": "Explicit ordered native device names, for example RPC0,RPC1, or XDNA0 for the AMD XDNA NPU alone, which reports `backendDevice` `'npu'`; naming XDNA0 without a listed NPU fails the load, and a load with XDNA0 in devices, alone or with other devices, cannot finetune. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order.",
+                      "description": "Explicit ordered native device names, for example RPC0,RPC1, or XDNA0 for the AMD XDNA NPU alone, which reports `backendDevice` `'npu'`; naming XDNA0 without a listed NPU fails the load, and a load with XDNA0 in devices, alone or with other devices, cannot finetune. RPC indices enumerate every device in this load's rpcServers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensorSplit weights follow the selected devices order.",
                       "type": "string",
                       "minLength": 1
                     },
-                    "split-mode": {
-                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctx_size` explicitly). `'tensor'` is rejected with the XDNA0 NPU.",
+                    "splitMode": {
+                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctxSize` explicitly). `'tensor'` is rejected with the XDNA0 NPU.",
                       "type": "string",
                       "enum": ["none", "layer", "tensor"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode"
                     },
-                    "flash-attn": {
-                      "description": "Flash attention: `'on'`, `'off'`, or `'auto'`. With `'auto'`, the backend decides. When unset, the addon defaults to `'off'` for BitNet models and `'on'` for other inference workloads. An explicit value overrides the BitNet default. Finetuning enforces its own setting. `'off'` is incompatible with `'split-mode': 'tensor'`.",
+                    "flashAttention": {
+                      "description": "Flash attention: `'on'`, `'off'`, or `'auto'`. With `'auto'`, the backend decides. When unset, the addon defaults to `'off'` for BitNet models and `'on'` for other inference workloads. An explicit value overrides the BitNet default. Finetuning enforces its own setting. `'off'` is incompatible with `splitMode: 'tensor'`.",
                       "type": "string",
                       "enum": ["on", "off", "auto"],
-                      "title": "LoadModelSrcRequestLlamacppCompletionModelConfigFlashAttn"
+                      "title": "LoadModelSrcRequestLlamacppCompletionModelConfigFlashAttention"
                     },
-                    "tensor-split": {
+                    "tensorSplit": {
                       "description": "Proportions for distributing layers/rows across GPUs, e.g. `'1,1'` (equal) or `'3,1'` (75/25).",
                       "type": "string"
                     },
-                    "batch-size": {
+                    "batchSize": {
                       "description": "Logical maximum batch size, the tokens submitted per decode call. Default 2048.",
                       "type": "integer",
                       "minimum": 1,
                       "maximum": 9007199254740991
                     },
-                    "ubatch-size": {
+                    "ubatchSize": {
                       "description": "Physical maximum batch size, the tokens computed in one pass. Default 512.",
                       "type": "integer",
                       "minimum": 1,
                       "maximum": 9007199254740991
                     },
-                    "cpu-moe": {
+                    "cpuMoe": {
                       "description": "Keep all Mixture-of-Experts weights on the CPU, freeing accelerator memory for the rest of the model. Mixture-of-Experts models only. Default false.",
                       "type": "boolean"
                     },
-                    "n-cpu-moe": {
-                      "description": "Keep the Mixture-of-Experts weights of the first N layers on the CPU. Mixture-of-Experts models only, and a finer-grained alternative to `cpu-moe`.",
+                    "nCpuMoe": {
+                      "description": "Keep the Mixture-of-Experts weights of the first N layers on the CPU. Mixture-of-Experts models only, and a finer-grained alternative to `cpuMoe`.",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
-                    "kv-offload": {
+                    "kvOffload": {
                       "description": "Whether to hold the KV cache in accelerator memory. Default true. Set false to keep it in system memory, which frees accelerator memory at the cost of decode speed.",
                       "type": "boolean"
                     },
-                    "image-max-tokens": {
+                    "imageMaxTokens": {
                       "description": "Upper bound on the tokens one image may occupy. Vision models only. Unset uses the model default.",
                       "type": "integer",
                       "minimum": 1,
                       "maximum": 9007199254740991
                     },
-                    "image-min-tokens": {
+                    "imageMinTokens": {
                       "description": "Lower bound on the tokens one image may occupy. Vision models only. Unset uses the model default.",
                       "type": "integer",
                       "minimum": 1,
                       "maximum": 9007199254740991
                     },
-                    "image-max-megapixels": {
+                    "imageMaxMegapixels": {
                       "description": "Largest image a vision model accepts, in millions of pixels (width × height). Checked against the image header before decoding; larger images are rejected. Vision models only. Default 50.",
                       "type": "integer",
                       "minimum": 1,
@@ -14431,31 +14431,31 @@
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
-                    "threads-batch": {
+                    "threadsBatch": {
                       "description": "CPU threads to use during batch and prompt processing. Applies to steps processing several tokens, including parallel decoding and speculative verification. Single-sequence generation uses `threads`.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
-                    "cpu-mask": {
+                    "cpuMask": {
                       "description": "CPU affinity mask as an arbitrarily long hex string, e.g. `'ff'`. Applies to generation. Unset applies no affinity.",
                       "type": "string"
                     },
-                    "cpu-mask-batch": {
-                      "description": "CPU affinity mask for batch and prompt processing, in the same form as `cpu-mask`. Unset inherits `cpu-mask` when the batch thread count is also unset.",
+                    "cpuMaskBatch": {
+                      "description": "CPU affinity mask for batch and prompt processing, in the same form as `cpuMask`. Unset inherits `cpuMask` when the batch thread count is also unset.",
                       "type": "string"
                     },
-                    "override-tensor": {
+                    "overrideTensor": {
                       "description": "Buffer type overrides for tensors matching a pattern, as comma-separated `<tensor name pattern>=<buffer type>` entries, e.g. `'blk\\.(1[0-9])\\.ffn_(up|down|gate)_exps=CPU'` to keep those experts in system memory.",
                       "type": "string"
                     },
-                    "n-cpu-ffn": {
+                    "nCpuFfn": {
                       "description": "Keep the dense FFN weights of the first N layers on the CPU.",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
-                    "moe-cache-mib": {
+                    "moeCacheMib": {
                       "description": "Persistent accelerator cache for Mixture-of-Experts weights, in MiB. Default `'auto'`, which sizes it during `fit`.",
                       "anyOf": [
                         {
@@ -14469,7 +14469,7 @@
                         }
                       ]
                     },
-                    "prefetch-weights": {
+                    "prefetchWeights": {
                       "description": "Overlap host-to-accelerator weight copies with compute. Default `'auto'`, which enables it for fitted dense models.",
                       "anyOf": [
                         {
@@ -14481,17 +14481,17 @@
                         }
                       ]
                     },
-                    "tensor-read-lazy": {
+                    "tensorReadLazy": {
                       "description": "On-demand reading of large tensors such as per-layer embeddings, which requires mmap: `'on'` reads their rows from disk instead of keeping them resident, `'off'` always keeps them resident, `'auto'` (default) applies `'on'` above 4 GiB.",
                       "type": "string",
                       "enum": ["on", "auto", "off"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigTensorReadLazy"
                     },
                     "fit": {
-                      "description": "Adjust the arguments left unset so the model fits device memory. Default true. It chooses layer offload, tensor split and tensor buffer overrides, and the context size only when `ctx_size` is 0. Setting `gpu_layers` pins the layer count and makes fit abort, leaving every argument unchanged. Incompatible with `split-mode: tensor`, which disables it.",
+                      "description": "Adjust the arguments left unset so the model fits device memory. Default true. It chooses layer offload, tensor split and tensor buffer overrides, and the context size only when `ctxSize` is 0. Setting `gpuLayers` pins the layer count and makes fit abort, leaving every argument unchanged. Incompatible with `splitMode: tensor`, which disables it.",
                       "type": "boolean"
                     },
-                    "fit-target": {
+                    "fitTarget": {
                       "description": "Free margin `fit` aims to leave per device, in MiB. A single value is broadcast across devices; a comma-separated list such as `'1024,512'` sets them individually. Default 1024.",
                       "anyOf": [
                         {
@@ -14505,7 +14505,7 @@
                         }
                       ]
                     },
-                    "fit-ctx": {
+                    "fitCtx": {
                       "description": "Smallest context size `fit` may settle on. Default 4096.",
                       "type": "integer",
                       "minimum": 0,
@@ -14515,32 +14515,32 @@
                       "description": "Writable directory for the OpenCL kernel binary cache; required on Android for fast GPU startup.",
                       "type": "string"
                     },
-                    "reasoning_budget": {
+                    "reasoningBudget": {
                       "description": "Reasoning-channel token budget. `-1` (default) unrestricted, `0` disables it, any positive integer caps the reasoning channel at that many tokens (the closing think tag is force-emitted once the budget is spent).",
                       "type": "integer",
                       "minimum": -1,
                       "maximum": 2147483647
                     },
-                    "spec_type": {
+                    "specType": {
                       "description": "Speculative decoding, as llama-server's `--spec-type`. `'draft-mtp'` drafts with the model's own multi-token-prediction head, or with an external MTP head given as `draftModelSrc`; the head, when given, otherwise the model, must ship MTP layers, and a head must match the model, or the load fails. `'draft-dflash'` drafts with the DFlash model given as `draftModelSrc`, which it requires. The model verifies every draft, so output keeps the distribution of plain decoding. `'none'` (default) decodes one token per step. Works with multimodal prompts, `parallel` and `kvCache`. Completion stats then report `draftTokens` and `draftAcceptedTokens`.",
                       "type": "string",
                       "enum": ["none", "draft-mtp", "draft-dflash"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigSpecType"
                     },
-                    "spec_draft_n_max": {
-                      "description": "Longest draft per step (1–64, default 3). Lowered at load, with a warning, to fit one `ubatch-size` and each sequence’s share of `batch-size`. Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`.",
+                    "specDraftNMax": {
+                      "description": "Longest draft per step (1–64, default 3). Lowered at load, with a warning, to fit one `ubatchSize` and each sequence’s share of `batchSize`. Requires `specType` `'draft-mtp'` or `'draft-dflash'`.",
                       "type": "integer",
                       "minimum": 1,
                       "maximum": 64
                     },
-                    "spec_draft_n_min": {
-                      "description": "Shortest draft worth verifying (0–64, default 0, at most `spec_draft_n_max`); shorter drafts are dropped. Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`.",
+                    "specDraftNMin": {
+                      "description": "Shortest draft worth verifying (0–64, default 0, at most `specDraftNMax`); shorter drafts are dropped. Requires `specType` `'draft-mtp'` or `'draft-dflash'`.",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 64
                     },
-                    "spec_draft_p_min": {
-                      "description": "Minimum draft-head probability for a token to extend the draft (0–1, default 0). Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`.",
+                    "specDraftPMin": {
+                      "description": "Minimum draft-head probability for a token to extend the draft (0–1, default 0). Requires `specType` `'draft-mtp'` or `'draft-dflash'`.",
                       "type": "number",
                       "minimum": 0,
                       "maximum": 1
@@ -14645,7 +14645,7 @@
                       ]
                     },
                     "draftModelSrc": {
-                      "description": "Draft model source, as llama-server's `--spec-draft-model`: the DFlash model, required by `spec_type: 'draft-dflash'`, or an external MTP head for `spec_type: 'draft-mtp'`, such as the MTP quantization of the same model or a Gemma 4 assistant for its Gemma 4 model. Placed like the model (`device`, `gpu_layers`). Model fit checks count an MTP head's memory but not a DFlash model's or a Gemma 4 assistant's, so leave room for those.",
+                      "description": "Draft model source, as llama-server's `--spec-draft-model`: the DFlash model, required by `specType: 'draft-dflash'`, or an external MTP head for `specType: 'draft-mtp'`, such as the MTP quantization of the same model or a Gemma 4 assistant for its Gemma 4 model. Placed like the model (`device`, `gpuLayers`). Model fit checks count an MTP head's memory but not a DFlash model's or a Gemma 4 assistant's, so leave room for those.",
                       "anyOf": [
                         {
                           "type": "string"
@@ -14743,19 +14743,19 @@
                         }
                       ]
                     },
-                    "image_tile_mode": {
+                    "imageTileMode": {
                       "description": "Qwen3.5-VL multi-tile image encoding mode (multimodal models only): `'sequential'` (default) encodes image tiles one at a time, `'batched'` encodes all tiles in a single batched pass, `'disabled'` does no multi-tile encoding (single tile). Ignored by text-only models.",
                       "type": "string",
                       "enum": ["disabled", "batched", "sequential"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode"
                     },
-                    "image_no_upscale": {
+                    "imageNoUpscale": {
                       "description": "idefics3-style image preprocessing rule (multimodal models only): `'on'` rounds the image's long side up to a whole number of slices and caps it, so an image smaller than the cap keeps its own resolution and becomes far fewer slices; `'off'` always stretches the long side to the cap. When unset, the model's own GGUF value is used; ignored with a warning by models that do not use idefics3-style preprocessing. Changes the number of image tokens (and therefore both accuracy and encode time), so a checkpoint whose GGUF omits the key needs this set to preprocess correctly.",
                       "type": "string",
                       "enum": ["on", "off"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigImageNoUpscale"
                     },
-                    "mmproj-use-gpu": {
+                    "mmprojUseGpu": {
                       "description": "Run the multimodal projector (mmproj / vision encoder) on the GPU (multimodal models only). `true` forces GPU, `false` forces CPU. When unset, the backend is auto-selected per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on every other Android GPU (Arm Mali, Adreno <800, and undetectable Adreno tiers), with the LLM layers still on the GPU. On an NPU load (`device: 'npu'` or XDNA0 as the first local device in devices) it runs on a GPU beside the NPU, else the CPU; `true` with no GPU runs it on the NPU. Only honoured when the model itself runs on a GPU or NPU backend — ignored with a warning on CPU.",
                       "type": "boolean"
                     }
@@ -14828,31 +14828,31 @@
                       "enum": ["greedy", "beam_search"],
                       "title": "LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy"
                     },
-                    "n_threads": {
+                    "threads": {
                       "description": "CPU threads for transcription; `0` = auto (half of hardware cores).",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
-                    "n_max_text_ctx": {
+                    "nMaxTextCtx": {
                       "description": "Maximum text tokens from previous segments used as context.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
-                    "offset_ms": {
+                    "offsetMs": {
                       "description": "Milliseconds to skip at the start of the audio.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
-                    "duration_ms": {
+                    "durationMs": {
                       "description": "Maximum duration of audio to transcribe, in milliseconds.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
-                    "audio_ctx": {
+                    "audioCtx": {
                       "description": "Audio context window size in samples; `0` = model default.",
                       "type": "integer",
                       "minimum": -9007199254740991,
@@ -14862,95 +14862,95 @@
                       "description": "Translate the transcribed audio into English.",
                       "type": "boolean"
                     },
-                    "no_context": {
+                    "noContext": {
                       "description": "Do not carry past transcription forward as the decoder's initial prompt; each window is decoded independently.",
                       "type": "boolean"
                     },
-                    "no_timestamps": {
+                    "noTimestamps": {
                       "description": "Omit timestamps from the transcription output.",
                       "type": "boolean"
                     },
-                    "single_segment": {
+                    "singleSegment": {
                       "description": "Force the whole audio into one output segment (for streaming or short clips).",
                       "type": "boolean"
                     },
-                    "print_special": {
+                    "printSpecial": {
                       "description": "Print special tokens in the output.",
                       "type": "boolean"
                     },
-                    "print_progress": {
+                    "printProgress": {
                       "description": "Print progress updates during transcription.",
                       "type": "boolean"
                     },
-                    "print_realtime": {
+                    "printRealtime": {
                       "description": "whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback).",
                       "type": "boolean"
                     },
-                    "print_timestamps": {
-                      "description": "Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data.",
+                    "printTimestamps": {
+                      "description": "Prefix each `printRealtime` line with `[t0 --> t1]`; no effect on returned data.",
                       "type": "boolean"
                     },
-                    "token_timestamps": {
+                    "tokenTimestamps": {
                       "description": "Experimental: compute per-token timestamps (populates `t0`/`t1`).",
                       "type": "boolean"
                     },
-                    "thold_pt": {
+                    "tholdPt": {
                       "description": "Word-timestamp probability threshold for accepting a word (0–1).",
                       "type": "number"
                     },
-                    "thold_ptsum": {
+                    "tholdPtsum": {
                       "description": "Timestamp-token sum-probability threshold used when deriving token-level timestamps (0–1).",
                       "type": "number"
                     },
-                    "max_len": {
+                    "maxLen": {
                       "description": "Maximum tokens per transcription segment.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
-                    "split_on_word": {
-                      "description": "When `max_len > 0`, split segments on word boundaries instead of mid-token.",
+                    "splitOnWord": {
+                      "description": "When `maxLen > 0`, split segments on word boundaries instead of mid-token.",
                       "type": "boolean"
                     },
-                    "max_tokens": {
+                    "maxTokens": {
                       "description": "Maximum tokens per segment; `0` = no limit.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
-                    "debug_mode": {
+                    "debugMode": {
                       "description": "Experimental: emit extra debug output (e.g. the computed log-mel).",
                       "type": "boolean"
                     },
-                    "tdrz_enable": {
+                    "tdrzEnable": {
                       "description": "Enable tinydiarize (lightweight speaker-turn detection).",
                       "type": "boolean"
                     },
-                    "suppress_regex": {
+                    "suppressRegex": {
                       "description": "Regular-expression pattern for tokens to suppress.",
                       "type": "string"
                     },
-                    "initial_prompt": {
+                    "initialPrompt": {
                       "description": "Initial prompt (context) prepended to the transcription.",
                       "type": "string"
                     },
-                    "carry_initial_prompt": {
-                      "description": "Prepend `initial_prompt` to every decode window instead of only the first. Default false.",
+                    "carryInitialPrompt": {
+                      "description": "Prepend `initialPrompt` to every decode window instead of only the first. Default false.",
                       "type": "boolean"
                     },
                     "language": {
                       "description": "Transcription language (ISO 639-1) or `'auto'` to detect.",
                       "type": "string"
                     },
-                    "detect_language": {
-                      "description": "Convenience flag: `true` is translated to `language: 'auto'` before the request reaches the addon, which has no `detect_language` key of its own.",
+                    "detectLanguage": {
+                      "description": "Convenience flag: `true` is translated to `language: 'auto'` before the request reaches the addon, which has no language-detection flag of its own.",
                       "type": "boolean"
                     },
-                    "suppress_blank": {
+                    "suppressBlank": {
                       "description": "Suppress the blank / leading-space token at the start of sampling.",
                       "type": "boolean"
                     },
-                    "suppress_nst": {
+                    "suppressNst": {
                       "description": "Suppress non-speech tokens (NST).",
                       "type": "boolean"
                     },
@@ -14958,39 +14958,39 @@
                       "description": "Sampling temperature (0–1). Default 0.0.",
                       "type": "number"
                     },
-                    "length_penalty": {
+                    "lengthPenalty": {
                       "description": "Beam-search length penalty. Must be ≥ 0, so the upstream `-1` 'disabled' sentinel cannot be set via config.",
                       "type": "number"
                     },
-                    "temperature_inc": {
+                    "temperatureInc": {
                       "description": "Temperature increment applied when sampling fails.",
                       "type": "number"
                     },
-                    "entropy_thold": {
+                    "entropyThold": {
                       "description": "Entropy threshold for filtering uncertain words.",
                       "type": "number"
                     },
-                    "logprob_thold": {
+                    "logprobThold": {
                       "description": "Log-probability threshold for filtering words; `-1` disables.",
                       "type": "number"
                     },
-                    "greedy_best_of": {
+                    "greedyBestOf": {
                       "description": "Greedy decoding: number of candidate completions; `-1` = default.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
-                    "beam_search_beam_size": {
+                    "beamSize": {
                       "description": "Beam size for beam-search decoding; `-1` = default.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
-                    "max_initial_ts": {
+                    "maxInitialTs": {
                       "description": "Maximum initial timestamp the decoder may emit, as a fraction of the window.",
                       "type": "number"
                     },
-                    "no_speech_thold": {
+                    "noSpeechThold": {
                       "description": "No-speech probability above which a segment is treated as silence.",
                       "type": "number"
                     },
@@ -15004,37 +15004,37 @@
                       "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                       "type": "string"
                     },
-                    "vad_params": {
+                    "vadParams": {
                       "type": "object",
                       "properties": {
                         "threshold": {
                           "description": "VAD probability threshold for classifying a segment as speech.",
                           "type": "number"
                         },
-                        "min_speech_duration_ms": {
+                        "minSpeechDurationMs": {
                           "description": "Minimum duration for a segment to count as speech (ms).",
                           "type": "number"
                         },
-                        "min_silence_duration_ms": {
+                        "minSilenceDurationMs": {
                           "description": "Minimum silence duration required to split speech segments (ms).",
                           "type": "number"
                         },
-                        "max_speech_duration_s": {
+                        "maxSpeechDurationS": {
                           "description": "Maximum duration of a single speech segment (s).",
                           "type": "number"
                         },
-                        "speech_pad_ms": {
+                        "speechPadMs": {
                           "description": "Padding added before and after each speech segment (ms).",
                           "type": "number"
                         },
-                        "samples_overlap": {
+                        "samplesOverlap": {
                           "description": "Overlap between consecutive speech segments (0 < x ≤ 1); an explicit `0` falls back to the engine default.",
                           "type": "number"
                         }
                       },
                       "title": "LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams"
                     },
-                    "audio_format": {
+                    "audioFormat": {
                       "description": "Interpretation of raw audio bytes: `'f32le'` or `'s16le'`.",
                       "type": "string",
                       "enum": ["f32le", "s16le"],
@@ -15047,20 +15047,20 @@
                           "description": "Path to the whisper model file (context override).",
                           "type": "string"
                         },
-                        "use_gpu": {
+                        "useGpu": {
                           "description": "Enable GPU acceleration. Default false.",
                           "type": "boolean"
                         },
-                        "flash_attn": {
+                        "flashAttention": {
                           "description": "Enable flash attention.",
                           "type": "boolean"
                         },
-                        "gpu_device": {
-                          "description": "GPU device index to use (legacy GPU/IGPU ordinal). Cannot be combined with `main-gpu`.",
+                        "gpuDevice": {
+                          "description": "GPU device index to use (legacy GPU/IGPU ordinal). Cannot be combined with `mainGpu`.",
                           "type": "number"
                         },
-                        "main-gpu": {
-                          "description": "GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+                        "mainGpu": {
+                          "description": "GPU to run on once `useGpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpuDevice`.",
                           "anyOf": [
                             {
                               "type": "integer",
@@ -15084,7 +15084,7 @@
                     "miscConfig": {
                       "type": "object",
                       "properties": {
-                        "caption_enabled": {
+                        "captionEnabled": {
                           "description": "Format output segments as captions.",
                           "type": "boolean"
                         },
@@ -15266,7 +15266,7 @@
                           "description": "Transcription language (ISO 639-1). Default `en`.",
                           "type": "string"
                         },
-                        "n_threads": {
+                        "threads": {
                           "description": "Number of CPU threads. `0` = auto.",
                           "type": "integer",
                           "minimum": -9007199254740991,
@@ -15276,15 +15276,15 @@
                           "description": "Sampling temperature. Default 0.0.",
                           "type": "number"
                         },
-                        "suppress_nst": {
+                        "suppressNst": {
                           "description": "Suppress non-speech tokens (NST).",
                           "type": "boolean"
                         },
-                        "suppress_blank": {
+                        "suppressBlank": {
                           "description": "Suppress the blank / leading-space token at the start of sampling.",
                           "type": "boolean"
                         },
-                        "duration_ms": {
+                        "durationMs": {
                           "description": "Maximum duration of audio to transcribe, in milliseconds.",
                           "type": "integer",
                           "minimum": -9007199254740991,
@@ -15294,41 +15294,41 @@
                           "description": "Translate the transcribed audio into English.",
                           "type": "boolean"
                         },
-                        "no_timestamps": {
+                        "noTimestamps": {
                           "description": "Omit timestamps from the transcription output.",
                           "type": "boolean"
                         },
-                        "single_segment": {
+                        "singleSegment": {
                           "description": "Force the whole audio into one output segment (for streaming or short clips).",
                           "type": "boolean"
                         },
-                        "print_special": {
+                        "printSpecial": {
                           "description": "Print special tokens in the output.",
                           "type": "boolean"
                         },
-                        "print_progress": {
+                        "printProgress": {
                           "description": "Print progress updates during transcription.",
                           "type": "boolean"
                         },
-                        "print_realtime": {
+                        "printRealtime": {
                           "description": "whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback).",
                           "type": "boolean"
                         },
-                        "print_timestamps": {
-                          "description": "Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data.",
+                        "printTimestamps": {
+                          "description": "Prefix each `printRealtime` line with `[t0 --> t1]`; no effect on returned data.",
                           "type": "boolean"
                         },
-                        "detect_language": {
+                        "detectLanguage": {
                           "description": "Detect the spoken language and stop: whisper.cpp returns straight after detection, so the transcript comes back empty. Use `language: 'auto'` to detect and transcribe in one call.",
                           "type": "boolean"
                         },
-                        "greedy_best_of": {
+                        "greedyBestOf": {
                           "description": "Greedy decoding: number of candidate completions; `-1` = default.",
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
                         },
-                        "beam_search_beam_size": {
+                        "beamSize": {
                           "description": "Beam size for beam-search decoding; `-1` = default.",
                           "type": "integer",
                           "minimum": -9007199254740991,
@@ -15340,7 +15340,7 @@
                     "bciConfig": {
                       "type": "object",
                       "properties": {
-                        "day_idx": {
+                        "dayIdx": {
                           "description": "Session day index selecting day-specific projection matrices; `-1` enables mel passthrough (parity testing only).",
                           "type": "integer",
                           "minimum": -9007199254740991,
@@ -15356,15 +15356,15 @@
                           "description": "Optional whisper model path override (usually set via the loaded model files).",
                           "type": "string"
                         },
-                        "use_gpu": {
+                        "useGpu": {
                           "description": "Enable GPU acceleration. Enabled by default; set false to force CPU.",
                           "type": "boolean"
                         },
-                        "flash_attn": {
+                        "flashAttention": {
                           "description": "Enable flash attention.",
                           "type": "boolean"
                         },
-                        "gpu_device": {
+                        "gpuDevice": {
                           "description": "GPU device index to use.",
                           "type": "number"
                         }
@@ -15374,7 +15374,7 @@
                     "miscConfig": {
                       "type": "object",
                       "properties": {
-                        "caption_enabled": {
+                        "captionEnabled": {
                           "description": "Format output segments with caption markers. Default false.",
                           "type": "boolean"
                         }
@@ -15553,12 +15553,12 @@
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
-                    "useGPU": {
+                    "useGpu": {
                       "description": "Enable the ggml GPU backend. Default false.",
                       "type": "boolean"
                     },
                     "backend": {
-                      "description": "Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `opencl`, `metal`, or an exact ggml device name such as `CUDA0` or `MTL0`. An explicit selection overrides `useGPU` and the load fails if it is unavailable instead of falling back. Applies to the speaker-attribution diarization model too, and reaches `assessModelFit`.",
+                      "description": "Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `opencl`, `metal`, or an exact ggml device name such as `CUDA0` or `MTL0`. An explicit selection overrides `useGpu` and the load fails if it is unavailable instead of falling back. Applies to the speaker-attribution diarization model too, and reaches `assessModelFit`.",
                       "type": "string"
                     },
                     "speakerAttribution": {
@@ -15926,12 +15926,12 @@
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
-                    "useGPU": {
+                    "useGpu": {
                       "description": "Select a GPU automatically when `backend` is `auto`, including Metal. Default false.",
                       "type": "boolean"
                     },
                     "backend": {
-                      "description": "Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `metal`, or an exact ggml device name such as `CUDA0`. An explicit selection overrides `useGPU` and the load fails if it is unavailable.",
+                      "description": "Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `metal`, or an exact ggml device name such as `CUDA0`. An explicit selection overrides `useGpu` and the load fails if it is unavailable.",
                       "type": "string"
                     },
                     "backendsDir": {
@@ -16307,13 +16307,13 @@
                       "enum": ["cpu", "gpu"],
                       "title": "LoadModelSrcRequestLlamacppDecisionModelConfigDevice"
                     },
-                    "gpu_layers": {
+                    "gpuLayers": {
                       "description": "Layers to offload. Unset lets the addon choose placement.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
-                    "batch_size": {
+                    "batchSize": {
                       "description": "Tokens per forward pass. Default 2048; each sequence must fit.",
                       "type": "integer",
                       "exclusiveMinimum": 0,
@@ -16337,17 +16337,17 @@
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
-                    "threads-batch": {
+                    "threadsBatch": {
                       "description": "Batch CPU threads. Unset uses threads; zero or below uses all logical CPUs.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
-                    "flash_attn": {
+                    "flashAttention": {
                       "description": "Flash attention mode. Default auto.",
                       "type": "string",
                       "enum": ["on", "off", "auto"],
-                      "title": "LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttn"
+                      "title": "LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttention"
                     },
                     "verbosity": {
                       "description": "Native log level: 0 error, 1 warn, 2 info, 3 debug.",
@@ -16355,7 +16355,7 @@
                       "minimum": 0,
                       "maximum": 3
                     },
-                    "main-gpu": {
+                    "mainGpu": {
                       "description": "GPU index or device class.",
                       "anyOf": [
                         {
@@ -16370,13 +16370,13 @@
                         }
                       ]
                     },
-                    "split-mode": {
+                    "splitMode": {
                       "description": "Multi-GPU split mode.",
                       "type": "string",
                       "enum": ["none", "layer"],
                       "title": "LoadModelSrcRequestLlamacppDecisionModelConfigSplitMode"
                     },
-                    "tensor-split": {
+                    "tensorSplit": {
                       "description": "Per-GPU tensor split proportions.",
                       "type": "string"
                     },
@@ -16454,20 +16454,20 @@
                       "enum": ["cpu", "gpu"],
                       "title": "LoadModelSrcRequestLlamacppRerankModelConfigDevice"
                     },
-                    "gpu_layers": {
+                    "gpuLayers": {
                       "description": "Layers to offload. Unset lets the addon choose placement.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
-                    "batch_size": {
+                    "batchSize": {
                       "description": "Tokens per forward pass. Default 2048; each document paired with the query must fit.",
                       "type": "integer",
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
                     },
                     "backend": {
-                      "description": "Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with 'split-mode': 'layer'.",
+                      "description": "Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with splitMode: 'layer'.",
                       "minItems": 1,
                       "type": "array",
                       "items": {
@@ -16494,17 +16494,17 @@
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
-                    "threads-batch": {
+                    "threadsBatch": {
                       "description": "Batch CPU threads. Unset uses threads; zero or below uses all logical CPUs.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
-                    "flash_attn": {
+                    "flashAttention": {
                       "description": "Flash attention mode. Default auto.",
                       "type": "string",
                       "enum": ["on", "off", "auto"],
-                      "title": "LoadModelSrcRequestLlamacppRerankModelConfigFlashAttn"
+                      "title": "LoadModelSrcRequestLlamacppRerankModelConfigFlashAttention"
                     },
                     "verbosity": {
                       "description": "Native log level: 0 error, 1 warn, 2 info, 3 debug.",
@@ -16512,7 +16512,7 @@
                       "minimum": 0,
                       "maximum": 3
                     },
-                    "main-gpu": {
+                    "mainGpu": {
                       "description": "GPU index or device class.",
                       "anyOf": [
                         {
@@ -16527,13 +16527,13 @@
                         }
                       ]
                     },
-                    "split-mode": {
+                    "splitMode": {
                       "description": "Multi-GPU split mode.",
                       "type": "string",
                       "enum": ["none", "layer"],
                       "title": "LoadModelSrcRequestLlamacppRerankModelConfigSplitMode"
                     },
-                    "tensor-split": {
+                    "tensorSplit": {
                       "description": "Per-GPU tensor split proportions.",
                       "type": "string"
                     },
@@ -16693,23 +16693,23 @@
                           "enum": ["full"],
                           "title": "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode"
                         },
-                        "beamsize": {
+                        "beamSize": {
                           "description": "Beam search width (≥1); 1 disables beam search. Default 4.",
                           "type": "number"
                         },
-                        "lengthpenalty": {
+                        "lengthPenalty": {
                           "description": "Length-normalization strength (≥0). Default 1.0.",
                           "type": "number"
                         },
-                        "maxlength": {
+                        "maxLength": {
                           "description": "Maximum generated tokens (>0). Default 512.",
                           "type": "number"
                         },
-                        "repetitionpenalty": {
+                        "repeatPenalty": {
                           "description": "Penalty on previously generated tokens (0–2). Default 1.0.",
                           "type": "number"
                         },
-                        "norepeatngramsize": {
+                        "noRepeatNgramSize": {
                           "description": "Disallow repeating n-grams of this size (0–10); 0 disables. Default 0.",
                           "type": "number"
                         },
@@ -16717,11 +16717,11 @@
                           "description": "Sampling temperature (0–2). Default 0.3.",
                           "type": "number"
                         },
-                        "topk": {
+                        "topK": {
                           "description": "Keep top-K logits (0–vocab_size); 0 disables. Default 0.",
                           "type": "number"
                         },
-                        "topp": {
+                        "topP": {
                           "description": "Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0.",
                           "type": "number"
                         },
@@ -17064,23 +17064,23 @@
                               "enum": ["full"],
                               "title": "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode"
                             },
-                            "beamsize": {
+                            "beamSize": {
                               "description": "Beam search width (≥1); 1 disables beam search. Default 4.",
                               "type": "number"
                             },
-                            "lengthpenalty": {
+                            "lengthPenalty": {
                               "description": "Length-normalization strength (≥0). Default 1.0.",
                               "type": "number"
                             },
-                            "maxlength": {
+                            "maxLength": {
                               "description": "Maximum generated tokens (>0). Default 512.",
                               "type": "number"
                             },
-                            "repetitionpenalty": {
+                            "repeatPenalty": {
                               "description": "Penalty on previously generated tokens (0–2). Default 1.0.",
                               "type": "number"
                             },
-                            "norepeatngramsize": {
+                            "noRepeatNgramSize": {
                               "description": "Disallow repeating n-grams of this size (0–10); 0 disables. Default 0.",
                               "type": "number"
                             },
@@ -17088,11 +17088,11 @@
                               "description": "Sampling temperature (0–2). Default 0.3.",
                               "type": "number"
                             },
-                            "topk": {
+                            "topK": {
                               "description": "Keep top-K logits (0–vocab_size); 0 disables. Default 0.",
                               "type": "number"
                             },
-                            "topp": {
+                            "topP": {
                               "description": "Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0.",
                               "type": "number"
                             },
@@ -17414,23 +17414,23 @@
                           "enum": ["full"],
                           "title": "LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode"
                         },
-                        "beamsize": {
+                        "beamSize": {
                           "description": "Beam search width (≥1); 1 disables beam search. Default 4.",
                           "type": "number"
                         },
-                        "lengthpenalty": {
+                        "lengthPenalty": {
                           "description": "Length-normalization strength (≥0). Default 1.0.",
                           "type": "number"
                         },
-                        "maxlength": {
+                        "maxLength": {
                           "description": "Maximum generated tokens (>0). Default 512.",
                           "type": "number"
                         },
-                        "repetitionpenalty": {
+                        "repeatPenalty": {
                           "description": "Penalty on previously generated tokens (0–2). Default 1.0.",
                           "type": "number"
                         },
-                        "norepeatngramsize": {
+                        "noRepeatNgramSize": {
                           "description": "Disallow repeating n-grams of this size (0–10); 0 disables. Default 0.",
                           "type": "number"
                         },
@@ -17438,11 +17438,11 @@
                           "description": "Sampling temperature (0–2). Default 0.3.",
                           "type": "number"
                         },
-                        "topk": {
+                        "topK": {
                           "description": "Keep top-K logits (0–vocab_size); 0 disables. Default 0.",
                           "type": "number"
                         },
-                        "topp": {
+                        "topP": {
                           "description": "Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0.",
                           "type": "number"
                         },
@@ -17624,7 +17624,7 @@
                           "description": "Ignored by Chatterbox; use `referenceAudioSrc` for voice cloning.",
                           "type": "string"
                         },
-                        "useGPU": {
+                        "useGpu": {
                           "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
@@ -17754,7 +17754,7 @@
                           "maximum": 2147483647
                         },
                         "nGpuLayers": {
-                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGpu`; when both are set they must agree.",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
@@ -17766,7 +17766,7 @@
                           "maximum": 2147483647
                         },
                         "backend": {
-                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGpu` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -18481,7 +18481,7 @@
                           "minimum": 0,
                           "maximum": 2147483647
                         },
-                        "useGPU": {
+                        "useGpu": {
                           "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
@@ -18498,7 +18498,7 @@
                           "maximum": 2147483647
                         },
                         "nGpuLayers": {
-                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGpu`; when both are set they must agree.",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
@@ -18510,7 +18510,7 @@
                           "maximum": 2147483647
                         },
                         "vulkanCacheDir": {
-                          "description": "Supertonic + `useGPU` only: directory where the Vulkan backend persists its compiled pipeline cache.",
+                          "description": "Supertonic + `useGpu` only: directory where the Vulkan backend persists its compiled pipeline cache.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -18609,7 +18609,7 @@
                           }
                         },
                         "backend": {
-                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGpu` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -19132,7 +19132,7 @@
                           "type": "string",
                           "minLength": 1
                         },
-                        "useGPU": {
+                        "useGpu": {
                           "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
@@ -19161,7 +19161,7 @@
                           "maximum": 2147483647
                         },
                         "nGpuLayers": {
-                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGpu`; when both are set they must agree.",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
@@ -19228,7 +19228,7 @@
                           "type": "boolean"
                         },
                         "backend": {
-                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGpu` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -19563,7 +19563,7 @@
                             "title": "TtsSpeechTokenId"
                           }
                         },
-                        "useGPU": {
+                        "useGpu": {
                           "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
@@ -19592,7 +19592,7 @@
                           "maximum": 2147483647
                         },
                         "nGpuLayers": {
-                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGpu`; when both are set they must agree.",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
@@ -19604,7 +19604,7 @@
                           "maximum": 2147483647
                         },
                         "backend": {
-                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGpu` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -20180,7 +20180,7 @@
                           "minimum": 0,
                           "maximum": 2147483647
                         },
-                        "useGPU": {
+                        "useGpu": {
                           "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
@@ -20197,7 +20197,7 @@
                           "maximum": 2147483647
                         },
                         "nGpuLayers": {
-                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGpu`; when both are set they must agree.",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
@@ -20209,7 +20209,7 @@
                           "maximum": 2147483647
                         },
                         "backend": {
-                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGpu` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -20596,7 +20596,7 @@
                           "type": "number",
                           "exclusiveMinimum": 0
                         },
-                        "useGPU": {
+                        "useGpu": {
                           "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
@@ -20607,7 +20607,7 @@
                           "maximum": 2147483647
                         },
                         "nGpuLayers": {
-                          "description": "Any non-zero value selects the GPU backend, 0 keeps MOSS on the CPU. Wins over `useGPU`; when both are set they must agree.",
+                          "description": "Any non-zero value selects the GPU backend, 0 keeps MOSS on the CPU. Wins over `useGpu`; when both are set they must agree.",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
@@ -20619,7 +20619,7 @@
                           "maximum": 2147483647
                         },
                         "backend": {
-                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGpu` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -21042,7 +21042,7 @@
                           "const": "moss-sfx",
                           "description": "TTS engine: MOSS-SoundEffect-v2."
                         },
-                        "useGPU": {
+                        "useGpu": {
                           "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
@@ -21053,7 +21053,7 @@
                           "maximum": 2147483647
                         },
                         "nGpuLayers": {
-                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGpu`; when both are set they must agree.",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
@@ -21065,7 +21065,7 @@
                           "maximum": 2147483647
                         },
                         "backend": {
-                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGpu` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -21115,7 +21115,7 @@
                           "const": "moss-speech",
                           "description": "TTS engine: MOSS-Speech."
                         },
-                        "useGPU": {
+                        "useGpu": {
                           "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
@@ -21126,7 +21126,7 @@
                           "maximum": 2147483647
                         },
                         "nGpuLayers": {
-                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGpu`; when both are set they must agree.",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
@@ -21138,7 +21138,7 @@
                           "maximum": 2147483647
                         },
                         "backend": {
-                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGpu` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -21353,7 +21353,7 @@
                       "description": "Recognizer batch size (easyocr only). Default 32.",
                       "type": "number"
                     },
-                    "nThreads": {
+                    "threads": {
                       "description": "GGML CPU thread count: `0` (default) auto-detects physical cores, `> 0` sets an explicit count, `< 0` leaves the backend's default unchanged.",
                       "type": "number"
                     },
@@ -21562,7 +21562,7 @@
                       "enum": ["gpu", "cpu"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigDevice"
                     },
-                    "main-gpu": {
+                    "mainGpu": {
                       "description": "GPU to pin when `device` is \"gpu\": a GPU-device index, \"integrated\", or \"dedicated\" (the discrete GPU with the most VRAM). Omit to let automatic placement choose: a dedicated GPU first, then an integrated one, taking the largest available memory budget within each. Resolved against the addon's own ggml device enumeration, so it cannot desync from the device list the backend actually uses. If an explicit request cannot be satisfied (e.g. \"integrated\" with no integrated GPU, \"dedicated\" with no discrete GPU, or an out-of-range index) the addon falls back to CPU rather than substituting a different GPU. Stripped on mobile (single-GPU devices).",
                       "anyOf": [
                         {
@@ -21610,28 +21610,28 @@
                       "enum": ["cpu", "cuda", "std_default"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigRng"
                     },
-                    "sampler_rng": {
+                    "samplerRng": {
                       "description": "Sampler RNG type override. Default: auto (follows `rng`).",
                       "type": "string",
                       "enum": ["cpu", "cuda", "std_default"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng"
                     },
-                    "vae_auto_cpu_fallback": {
+                    "vaeAutoCpuFallback": {
                       "description": "Automatically move the VAE to CPU when GPU memory is insufficient",
                       "type": "boolean"
                     },
-                    "vae_auto_cpu_fallback_memory_ratio": {
+                    "vaeAutoCpuFallbackMemoryRatio": {
                       "description": "GPU-memory threshold for automatic VAE CPU fallback as a ratio in (0, 1]",
                       "type": "number",
                       "exclusiveMinimum": 0,
                       "maximum": 1
                     },
-                    "vae_tiling": {
+                    "vaeTiling": {
                       "description": "Enable VAE tiling for large images on limited VRAM",
                       "type": "boolean"
                     },
-                    "offload_to_cpu": {
-                      "description": "Keep model weights in CPU memory and offload them during GPU compute. Supplies a '*=cpu' parameter residency default; explicit params_backend assignments override it per module.",
+                    "offloadToCpu": {
+                      "description": "Keep model weights in CPU memory and offload them during GPU compute. Supplies a '*=cpu' parameter residency default; explicit paramsBackend assignments override it per module.",
                       "type": "boolean"
                     },
                     "control_net_cpu": {
@@ -21640,12 +21640,12 @@
                       "deprecated": true
                     },
                     "clip_on_cpu": {
-                      "description": "Removed. Use modelConfig.params_backend: 'te=cpu' to keep text encoder parameters in CPU RAM, or modelConfig.backend: 'te=cpu' to run its graph on CPU.",
+                      "description": "Removed. Use modelConfig.paramsBackend: 'te=cpu' to keep text encoder parameters in CPU RAM, or modelConfig.backend: 'te=cpu' to run its graph on CPU.",
                       "not": {},
                       "deprecated": true
                     },
                     "vae_on_cpu": {
-                      "description": "Removed. Use modelConfig.params_backend: 'vae=cpu' to keep VAE parameters in CPU RAM, or modelConfig.backend: 'vae=cpu' to run its graph on CPU.",
+                      "description": "Removed. Use modelConfig.paramsBackend: 'vae=cpu' to keep VAE parameters in CPU RAM, or modelConfig.backend: 'vae=cpu' to run its graph on CPU.",
                       "not": {},
                       "deprecated": true
                     },
@@ -21654,13 +21654,13 @@
                       "type": "string",
                       "maxLength": 4096
                     },
-                    "params_backend": {
-                      "description": "Parameter residency for diffusion and video, independent of graph execution. 'diffusion=cpu' stages weights from CPU RAM; 'diffusion=disk' reads weights from the local model file on demand and releases them after use. Disk is never selected automatically. With offload_to_cpu enabled, explicit assignments override CPU residency only for the specified modules.",
+                    "paramsBackend": {
+                      "description": "Parameter residency for diffusion and video, independent of graph execution. 'diffusion=cpu' stages weights from CPU RAM; 'diffusion=disk' reads weights from the local model file on demand and releases them after use. Disk is never selected automatically. With offloadToCpu enabled, explicit assignments override CPU residency only for the specified modules.",
                       "type": "string",
                       "maxLength": 4096
                     },
-                    "max_vram": {
-                      "description": "VRAM budget in GiB for diffusion and video graph-cut execution. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0.",
+                    "maxVram": {
+                      "description": "VRAM budget in GiB for diffusion and video graph-cut execution. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. Works without streamLayers. Default: 0.",
                       "anyOf": [
                         {
                           "type": "number"
@@ -21670,19 +21670,19 @@
                         }
                       ]
                     },
-                    "stream_layers": {
-                      "description": "Prefetch and evict diffusion layers from CPU RAM in diffusion and video mode. Only takes effect with graph cutting enabled by max_vram and CPU diffusion parameter residency. Does not stream from disk; use params_backend: 'diffusion=disk' for on-demand file reads. Default: false.",
+                    "streamLayers": {
+                      "description": "Prefetch and evict diffusion layers from CPU RAM in diffusion and video mode. Only takes effect with graph cutting enabled by maxVram and CPU diffusion parameter residency. Does not stream from disk; use paramsBackend: 'diffusion=disk' for on-demand file reads. Default: false.",
                       "type": "boolean"
                     },
-                    "flash_attn": {
+                    "flashAttention": {
                       "description": "Enable flash attention to reduce memory usage",
                       "type": "boolean"
                     },
-                    "diffusion_fa": {
+                    "diffusionFlashAttention": {
                       "description": "Enable flash attention for the diffusion transformer only",
                       "type": "boolean"
                     },
-                    "lora_apply_mode": {
+                    "loraApplyMode": {
                       "description": "How LoRA adapters passed via diffusion({ lora }) or video({ lora }) are applied. 'auto' (default): picked based on weight type — 'at_runtime' for quantized weights, 'immediately' for full-precision. 'immediately': adapter is fused into the model on first use and persists across subsequent generation calls until the model is unloaded. 'at_runtime': adapter is applied per-call and not persisted; use this mode for the LTX Ingredients workflow.",
                       "type": "string",
                       "enum": ["auto", "immediately", "at_runtime"],
@@ -22287,7 +22287,7 @@
                       ]
                     },
                     "highNoiseDiffusionModelSrc": {
-                      "description": "High-noise diffusion expert — required for Wan 2.2 A14B mixture-of-experts video models, and the only thing that enables the high_noise_* / moe_boundary request fields. Omit for single-expert models such as Wan 2.1 and Wan 2.2 TI2V-5B.",
+                      "description": "High-noise diffusion expert — required for Wan 2.2 A14B mixture-of-experts video models, and the only thing that enables the highNoise* / moeBoundary request fields. Omit for single-expert models such as Wan 2.1 and Wan 2.2 TI2V-5B.",
                       "anyOf": [
                         {
                           "type": "string"
@@ -23189,7 +23189,7 @@
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigWorld"
                     },
                     "upscaler": {
-                      "description": "ESRGAN upscaler configuration. In diffusion mode this enables the post-generation upscale path invoked via diffusion({ upscale }) and requires `model_src`. In `mode: 'upscale'` only the tuning fields (tile_size, direct, offload_params_to_cpu, threads) are honored — the primary modelSrc IS the ESRGAN model in that mode and `model_src` here is ignored. In `mode: 'video'` the entire `upscaler` object is ignored. Mode-dependent constraints (e.g. `model_src` required in diffusion mode) are enforced by the sdcpp-generation plugin at load time, not at the schema layer.",
+                      "description": "ESRGAN upscaler configuration. In diffusion mode this enables the post-generation upscale path invoked via diffusion({ upscale }) and requires `modelSrc`. In `mode: 'upscale'` only the tuning fields (tileSize, direct, offloadToCpu, threads) are honored — the primary modelSrc IS the ESRGAN model in that mode and `modelSrc` here is ignored. In `mode: 'video'` the entire `upscaler` object is ignored. Mode-dependent constraints (e.g. `modelSrc` required in diffusion mode) are enforced by the sdcpp-generation plugin at load time, not at the schema layer.",
                       "type": "object",
                       "properties": {
                         "type": {
@@ -23197,7 +23197,7 @@
                           "type": "string",
                           "const": "esrgan"
                         },
-                        "model_src": {
+                        "modelSrc": {
                           "description": "ESRGAN upscaler model (e.g. RealESRGAN_x4plus_anime_6B.pth). Required in diffusion mode when this `upscaler` block is set — configures the post-generation upscaler invoked via diffusion({ upscale }). In `mode: 'upscale'` the primary modelSrc itself is the ESRGAN model, so this field is ignored.",
                           "anyOf": [
                             {
@@ -23296,7 +23296,7 @@
                             }
                           ]
                         },
-                        "tile_size": {
+                        "tileSize": {
                           "description": "ESRGAN upscaler tile size in pixels. Smaller tiles use less VRAM at the cost of more passes.",
                           "type": "integer",
                           "exclusiveMinimum": 0,
@@ -23306,7 +23306,7 @@
                           "description": "Use direct convolution in the ESRGAN upscaler instead of im2col + GEMM. Faster on some backends, slower on others.",
                           "type": "boolean"
                         },
-                        "offload_params_to_cpu": {
+                        "offloadToCpu": {
                           "description": "Keep ESRGAN upscaler weights on CPU and offload them during compute. Trades latency for VRAM headroom on memory-constrained GPUs.",
                           "type": "boolean"
                         },
@@ -23398,7 +23398,7 @@
                           "type": "string",
                           "const": "acestep"
                         },
-                        "useGPU": {
+                        "useGpu": {
                           "description": "Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the primary backend a run used.",
                           "type": "boolean"
                         },
@@ -23426,13 +23426,13 @@
                           "maximum": 3.4028234663852886e38
                         },
                         "nGpuLayers": {
-                          "description": "ACE-Step GPU layers to offload when `useGPU` is set (99 = all). Ignored on CPU.",
+                          "description": "ACE-Step GPU layers to offload when `useGpu` is set (99 = all). Ignored on CPU.",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9007199254740991
                         },
                         "backend": {
-                          "description": "Advanced: ACE-Step's primary backend, by backend or device name (`cpu`, `MTL0`, `CUDA0`, …). Unset or `auto` keeps the placement `useGPU` and `nGpuLayers` select; any other value overrides both, so `useGPU: false` with `backend: 'CUDA0'` runs on CUDA0. A named backend the host cannot provide fails the load instead of falling back.",
+                          "description": "Advanced: ACE-Step's primary backend, by backend or device name (`cpu`, `MTL0`, `CUDA0`, …). Unset or `auto` keeps the placement `useGpu` and `nGpuLayers` select; any other value overrides both, so `useGpu: false` with `backend: 'CUDA0'` runs on CUDA0. A named backend the host cannot provide fails the load instead of falling back.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -23855,7 +23855,7 @@
                           "const": "minimax",
                           "description": "Use the MiniMax-Music3 generation engine."
                         },
-                        "useGPU": {
+                        "useGpu": {
                           "description": "Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the primary backend a run used.",
                           "type": "boolean"
                         },
@@ -23871,13 +23871,13 @@
                           "minLength": 1
                         },
                         "device": {
-                          "description": "Where MiniMax runs, instead of `useGPU`: `'gpu'` requires a usable GPU and fails the load otherwise, `'auto'` (what `useGPU: true` means) falls back to the CPU, `'cpu'` never touches a GPU. Cannot be combined with `useGPU`.",
+                          "description": "Where MiniMax runs, instead of `useGpu`: `'gpu'` requires a usable GPU and fails the load otherwise, `'auto'` (what `useGpu: true` means) falls back to the CPU, `'cpu'` never touches a GPU. Cannot be combined with `useGpu`.",
                           "type": "string",
                           "enum": ["cpu", "gpu", "auto"],
                           "title": "LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxDevice"
                         },
                         "coremlProfileDir": {
-                          "description": "Advanced, macOS 15+: directory on the inference host holding the compiled full Core ML profile for this GGUF pair (`manifest.json` plus the LM, depth, conditioner, DiT and vocoder programs). Runs MiniMax through Core ML instead of the native backend and takes precedence over `device` and `useGPU`; the load fails when the build, OS or profile cannot support it rather than switching backends. Requires `coremlComputeUnits`.",
+                          "description": "Advanced, macOS 15+: directory on the inference host holding the compiled full Core ML profile for this GGUF pair (`manifest.json` plus the LM, depth, conditioner, DiT and vocoder programs). Runs MiniMax through Core ML instead of the native backend and takes precedence over `device` and `useGpu`; the load fails when the build, OS or profile cannot support it rather than switching backends. Requires `coremlComputeUnits`.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -23888,7 +23888,7 @@
                           "title": "LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxCoremlComputeUnits"
                         },
                         "coremlConditionerPath": {
-                          "description": "Advanced, macOS: absolute path on the inference host to a compiled conditioner `.mlmodelc`. Runs the conditioner convolution alone through Core ML (CPU and Neural Engine); every other stage stays on the backend `device` or `useGPU` selects. Does not enable the full Core ML profile. The load fails when the bundle is invalid or the build cannot use it.",
+                          "description": "Advanced, macOS: absolute path on the inference host to a compiled conditioner `.mlmodelc`. Runs the conditioner convolution alone through Core ML (CPU and Neural Engine); every other stage stays on the backend `device` or `useGpu` selects. Does not enable the full Core ML profile. The load fails when the bundle is invalid or the build cannot use it.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -24432,31 +24432,31 @@
                   "enum": ["greedy", "beam_search"],
                   "title": "ReloadConfigRequestModelConfigStrategy"
                 },
-                "n_threads": {
+                "threads": {
                   "description": "CPU threads for transcription; `0` = auto (half of hardware cores).",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
-                "n_max_text_ctx": {
+                "nMaxTextCtx": {
                   "description": "Maximum text tokens from previous segments used as context.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
-                "offset_ms": {
+                "offsetMs": {
                   "description": "Milliseconds to skip at the start of the audio.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
-                "duration_ms": {
+                "durationMs": {
                   "description": "Maximum duration of audio to transcribe, in milliseconds.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
-                "audio_ctx": {
+                "audioCtx": {
                   "description": "Audio context window size in samples; `0` = model default.",
                   "type": "integer",
                   "minimum": -9007199254740991,
@@ -24466,95 +24466,95 @@
                   "description": "Translate the transcribed audio into English.",
                   "type": "boolean"
                 },
-                "no_context": {
+                "noContext": {
                   "description": "Do not carry past transcription forward as the decoder's initial prompt; each window is decoded independently.",
                   "type": "boolean"
                 },
-                "no_timestamps": {
+                "noTimestamps": {
                   "description": "Omit timestamps from the transcription output.",
                   "type": "boolean"
                 },
-                "single_segment": {
+                "singleSegment": {
                   "description": "Force the whole audio into one output segment (for streaming or short clips).",
                   "type": "boolean"
                 },
-                "print_special": {
+                "printSpecial": {
                   "description": "Print special tokens in the output.",
                   "type": "boolean"
                 },
-                "print_progress": {
+                "printProgress": {
                   "description": "Print progress updates during transcription.",
                   "type": "boolean"
                 },
-                "print_realtime": {
+                "printRealtime": {
                   "description": "whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback).",
                   "type": "boolean"
                 },
-                "print_timestamps": {
-                  "description": "Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data.",
+                "printTimestamps": {
+                  "description": "Prefix each `printRealtime` line with `[t0 --> t1]`; no effect on returned data.",
                   "type": "boolean"
                 },
-                "token_timestamps": {
+                "tokenTimestamps": {
                   "description": "Experimental: compute per-token timestamps (populates `t0`/`t1`).",
                   "type": "boolean"
                 },
-                "thold_pt": {
+                "tholdPt": {
                   "description": "Word-timestamp probability threshold for accepting a word (0–1).",
                   "type": "number"
                 },
-                "thold_ptsum": {
+                "tholdPtsum": {
                   "description": "Timestamp-token sum-probability threshold used when deriving token-level timestamps (0–1).",
                   "type": "number"
                 },
-                "max_len": {
+                "maxLen": {
                   "description": "Maximum tokens per transcription segment.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
-                "split_on_word": {
-                  "description": "When `max_len > 0`, split segments on word boundaries instead of mid-token.",
+                "splitOnWord": {
+                  "description": "When `maxLen > 0`, split segments on word boundaries instead of mid-token.",
                   "type": "boolean"
                 },
-                "max_tokens": {
+                "maxTokens": {
                   "description": "Maximum tokens per segment; `0` = no limit.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
-                "debug_mode": {
+                "debugMode": {
                   "description": "Experimental: emit extra debug output (e.g. the computed log-mel).",
                   "type": "boolean"
                 },
-                "tdrz_enable": {
+                "tdrzEnable": {
                   "description": "Enable tinydiarize (lightweight speaker-turn detection).",
                   "type": "boolean"
                 },
-                "suppress_regex": {
+                "suppressRegex": {
                   "description": "Regular-expression pattern for tokens to suppress.",
                   "type": "string"
                 },
-                "initial_prompt": {
+                "initialPrompt": {
                   "description": "Initial prompt (context) prepended to the transcription.",
                   "type": "string"
                 },
-                "carry_initial_prompt": {
-                  "description": "Prepend `initial_prompt` to every decode window instead of only the first. Default false.",
+                "carryInitialPrompt": {
+                  "description": "Prepend `initialPrompt` to every decode window instead of only the first. Default false.",
                   "type": "boolean"
                 },
                 "language": {
                   "description": "Transcription language (ISO 639-1) or `'auto'` to detect.",
                   "type": "string"
                 },
-                "detect_language": {
-                  "description": "Convenience flag: `true` is translated to `language: 'auto'` before the request reaches the addon, which has no `detect_language` key of its own.",
+                "detectLanguage": {
+                  "description": "Convenience flag: `true` is translated to `language: 'auto'` before the request reaches the addon, which has no language-detection flag of its own.",
                   "type": "boolean"
                 },
-                "suppress_blank": {
+                "suppressBlank": {
                   "description": "Suppress the blank / leading-space token at the start of sampling.",
                   "type": "boolean"
                 },
-                "suppress_nst": {
+                "suppressNst": {
                   "description": "Suppress non-speech tokens (NST).",
                   "type": "boolean"
                 },
@@ -24562,39 +24562,39 @@
                   "description": "Sampling temperature (0–1). Default 0.0.",
                   "type": "number"
                 },
-                "length_penalty": {
+                "lengthPenalty": {
                   "description": "Beam-search length penalty. Must be ≥ 0, so the upstream `-1` 'disabled' sentinel cannot be set via config.",
                   "type": "number"
                 },
-                "temperature_inc": {
+                "temperatureInc": {
                   "description": "Temperature increment applied when sampling fails.",
                   "type": "number"
                 },
-                "entropy_thold": {
+                "entropyThold": {
                   "description": "Entropy threshold for filtering uncertain words.",
                   "type": "number"
                 },
-                "logprob_thold": {
+                "logprobThold": {
                   "description": "Log-probability threshold for filtering words; `-1` disables.",
                   "type": "number"
                 },
-                "greedy_best_of": {
+                "greedyBestOf": {
                   "description": "Greedy decoding: number of candidate completions; `-1` = default.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
-                "beam_search_beam_size": {
+                "beamSize": {
                   "description": "Beam size for beam-search decoding; `-1` = default.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
-                "max_initial_ts": {
+                "maxInitialTs": {
                   "description": "Maximum initial timestamp the decoder may emit, as a fraction of the window.",
                   "type": "number"
                 },
-                "no_speech_thold": {
+                "noSpeechThold": {
                   "description": "No-speech probability above which a segment is treated as silence.",
                   "type": "number"
                 },
@@ -24608,37 +24608,37 @@
                   "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                   "type": "string"
                 },
-                "vad_params": {
+                "vadParams": {
                   "type": "object",
                   "properties": {
                     "threshold": {
                       "description": "VAD probability threshold for classifying a segment as speech.",
                       "type": "number"
                     },
-                    "min_speech_duration_ms": {
+                    "minSpeechDurationMs": {
                       "description": "Minimum duration for a segment to count as speech (ms).",
                       "type": "number"
                     },
-                    "min_silence_duration_ms": {
+                    "minSilenceDurationMs": {
                       "description": "Minimum silence duration required to split speech segments (ms).",
                       "type": "number"
                     },
-                    "max_speech_duration_s": {
+                    "maxSpeechDurationS": {
                       "description": "Maximum duration of a single speech segment (s).",
                       "type": "number"
                     },
-                    "speech_pad_ms": {
+                    "speechPadMs": {
                       "description": "Padding added before and after each speech segment (ms).",
                       "type": "number"
                     },
-                    "samples_overlap": {
+                    "samplesOverlap": {
                       "description": "Overlap between consecutive speech segments (0 < x ≤ 1); an explicit `0` falls back to the engine default.",
                       "type": "number"
                     }
                   },
                   "title": "ReloadConfigRequestModelConfigVadParams"
                 },
-                "audio_format": {
+                "audioFormat": {
                   "description": "Interpretation of raw audio bytes: `'f32le'` or `'s16le'`.",
                   "type": "string",
                   "enum": ["f32le", "s16le"],
@@ -24651,20 +24651,20 @@
                       "description": "Path to the whisper model file (context override).",
                       "type": "string"
                     },
-                    "use_gpu": {
+                    "useGpu": {
                       "description": "Enable GPU acceleration. Default false.",
                       "type": "boolean"
                     },
-                    "flash_attn": {
+                    "flashAttention": {
                       "description": "Enable flash attention.",
                       "type": "boolean"
                     },
-                    "gpu_device": {
-                      "description": "GPU device index to use (legacy GPU/IGPU ordinal). Cannot be combined with `main-gpu`.",
+                    "gpuDevice": {
+                      "description": "GPU device index to use (legacy GPU/IGPU ordinal). Cannot be combined with `mainGpu`.",
                       "type": "number"
                     },
-                    "main-gpu": {
-                      "description": "GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+                    "mainGpu": {
+                      "description": "GPU to run on once `useGpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpuDevice`.",
                       "anyOf": [
                         {
                           "type": "integer",
@@ -24688,7 +24688,7 @@
                 "miscConfig": {
                   "type": "object",
                   "properties": {
-                    "caption_enabled": {
+                    "captionEnabled": {
                       "description": "Format output segments as captions.",
                       "type": "boolean"
                     },
@@ -26551,7 +26551,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Documents to score. Each one, paired with the query, must fit in `batch_size`."
+          "description": "Documents to score. Each one, paired with the query, must fit in `batchSize`."
         },
         "modelId": {
           "type": "string",
@@ -30331,7 +30331,7 @@
           "type": "string",
           "description": "Positive prompt describing the video to generate."
         },
-        "negative_prompt": {
+        "negativePrompt": {
           "description": "Optional negative prompt describing what to avoid.",
           "type": "string"
         },
@@ -30341,19 +30341,19 @@
           "minLength": 1,
           "pattern": "^(\\/|[A-Za-z]:[\\\\/]|\\\\\\\\)"
         },
-        "lora_strength": {
+        "loraStrength": {
           "description": "LTX video only. Runtime LoRA multiplier in [0, 10]; requires lora.",
           "type": "number",
           "minimum": 0,
           "maximum": 10
         },
-        "stg_scale": {
+        "stgScale": {
           "description": "LTX video only. Spatiotemporal guidance scale in [0, 10].",
           "type": "number",
           "minimum": 0,
           "maximum": 10
         },
-        "stg_block": {
+        "stgBlock": {
           "description": "LTX video only. Transformer block skipped for spatiotemporal guidance.",
           "type": "integer",
           "minimum": 0,
@@ -30373,7 +30373,7 @@
           "maximum": 9007199254740991,
           "multipleOf": 16
         },
-        "video_frames": {
+        "videoFrames": {
           "description": "Frame count validated against the loaded model: Wan uses 4*k+1 (k>=1), LTX-2 uses 8*k+1 (9–257 frames), and MiniMax-H3 uses 17*k+5 (k>=0).",
           "type": "integer",
           "exclusiveMinimum": 0,
@@ -30397,7 +30397,7 @@
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
         },
-        "sampling_method": {
+        "samplingMethod": {
           "description": "Sampling algorithm used by the low-noise diffusion scheduler.",
           "type": "string",
           "enum": [
@@ -30437,21 +30437,21 @@
           ],
           "title": "VideoStreamRequestScheduler"
         },
-        "cfg_scale": {
+        "cfgScale": {
           "description": "Classifier-free guidance scale.",
           "type": "number"
         },
-        "flow_shift": {
+        "flowShift": {
           "description": "Per-request flow-matching guidance shift override.",
           "type": "number"
         },
-        "high_noise_steps": {
-          "description": "Wan 2.2 A14B high-noise expert step count. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise. Omit to let native routing derive the split from moe_boundary.",
+        "highNoiseSteps": {
+          "description": "Wan 2.2 A14B high-noise expert step count. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise. Omit to let native routing derive the split from moeBoundary.",
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
         },
-        "high_noise_sampler": {
+        "highNoiseSampler": {
           "description": "Wan 2.2 A14B high-noise expert sampler. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.",
           "type": "string",
           "enum": [
@@ -30472,7 +30472,7 @@
           ],
           "title": "VideoStreamRequestHighNoiseSampler"
         },
-        "high_noise_scheduler": {
+        "highNoiseScheduler": {
           "description": "Wan 2.2 A14B high-noise expert scheduler. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.",
           "type": "string",
           "enum": [
@@ -30490,27 +30490,27 @@
           ],
           "title": "VideoStreamRequestHighNoiseScheduler"
         },
-        "high_noise_cfg_scale": {
+        "highNoiseCfgScale": {
           "description": "Wan 2.2 A14B high-noise expert CFG scale. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.",
           "type": "number"
         },
-        "high_noise_flow_shift": {
+        "highNoiseFlowShift": {
           "description": "Wan 2.2 A14B high-noise expert flow shift override. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.",
           "type": "number"
         },
-        "moe_boundary": {
+        "moeBoundary": {
           "description": "Wan 2.2 A14B mixture-of-experts boundary in [0, 1]. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.",
           "type": "number",
           "minimum": 0,
           "maximum": 1
         },
-        "vace_strength": {
+        "vaceStrength": {
           "description": "Control-frame guidance strength.",
           "type": "number",
           "minimum": 0,
           "maximum": 1
         },
-        "control_frames": {
+        "controlFrames": {
           "description": "Optional array of base64-encoded control-frame images.",
           "minItems": 1,
           "type": "array",
@@ -30520,11 +30520,11 @@
             "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
           }
         },
-        "vae_tiling": {
+        "vaeTiling": {
           "description": "Enable VAE tiling for large videos on constrained VRAM.",
           "type": "boolean"
         },
-        "vae_tile_size": {
+        "vaeTileSize": {
           "description": "VAE tile size override.",
           "anyOf": [
             {
@@ -30537,25 +30537,25 @@
             }
           ]
         },
-        "vae_tile_overlap": {
+        "vaeTileOverlap": {
           "description": "VAE tile overlap override.",
           "type": "number"
         },
-        "temporal_tiling": {
+        "temporalTiling": {
           "description": "LTX-2 only: tile the video VAE decode along the time axis to cap peak VRAM for HD / long clips. No effect on Wan (spatial-only VAE).",
           "type": "boolean"
         },
-        "cache_mode": {
+        "cacheMode": {
           "description": "Step-caching algorithm.",
           "type": "string",
           "enum": ["disabled", "easycache", "ucache", "dbcache", "taylorseer", "cache-dit"],
           "title": "VideoStreamRequestCacheMode"
         },
-        "cache_preset": {
+        "cachePreset": {
           "description": "Optional name of a cached sampler preset to reuse.",
           "type": "string"
         },
-        "cache_threshold": {
+        "cacheThreshold": {
           "description": "Direct cache reuse threshold override.",
           "type": "number"
         },
@@ -30565,7 +30565,7 @@
           "description": "Generation mode: 'txt2vid' (no source frame) or 'img2vid' (first-frame image).",
           "title": "VideoStreamRequestMode"
         },
-        "init_image": {
+        "initImage": {
           "description": "Base64-encoded first-frame image (PNG/JPEG). Required for img2vid; rejected for txt2vid.",
           "type": "string",
           "minLength": 1,
@@ -30577,7 +30577,7 @@
           "minimum": 0,
           "maximum": 1
         },
-        "reference_images": {
+        "referenceImages": {
           "description": "LTX txt2vid only. Exactly one base64-encoded composite reference sheet; requires lora.",
           "minItems": 1,
           "maxItems": 1,
@@ -30588,13 +30588,13 @@
             "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
           }
         },
-        "reference_attention_strength": {
-          "description": "LTX txt2vid only. Reference denoise-mask strength in [0, 1]; requires reference_images.",
+        "referenceAttentionStrength": {
+          "description": "LTX txt2vid only. Reference denoise-mask strength in [0, 1]; requires referenceImages.",
           "type": "number",
           "minimum": 0,
           "maximum": 1
         },
-        "reference_downscale_factor": {
+        "referenceDownscaleFactor": {
           "description": "LTX txt2vid only. Reference-image spatial factor; currently exactly 1.",
           "type": "number",
           "const": 1

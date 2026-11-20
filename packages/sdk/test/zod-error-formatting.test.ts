@@ -103,8 +103,8 @@ test('loadModel: an unknown config key is named', function (t) {
 
 test('loadModel: removed diffusion placement options name their replacements', function (t) {
   for (const [key, replacement] of Object.entries({
-    clip_on_cpu: "modelConfig.params_backend: 'te=cpu'",
-    vae_on_cpu: "modelConfig.params_backend: 'vae=cpu'",
+    clip_on_cpu: "modelConfig.paramsBackend: 'te=cpu'",
+    vae_on_cpu: "modelConfig.paramsBackend: 'vae=cpu'",
     control_net_cpu: "modelConfig.backend: 'controlnet=cpu'"
   })) {
     for (const value of [true, false]) {
@@ -127,9 +127,9 @@ test('loadModel: a wrong value type is named with its exact path', function (t) 
   const message = inputError(loadBuiltinToRequestSchema, {
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
     modelType: 'llamacpp-completion',
-    modelConfig: { ctx_size: 'big' }
+    modelConfig: { ctxSize: 'big' }
   })
-  t.ok(message?.includes('modelConfig.ctx_size'), 'names the exact field')
+  t.ok(message?.includes('modelConfig.ctxSize'), 'names the exact field')
   t.ok(message?.includes('number'), 'explains the expected type')
 })
 

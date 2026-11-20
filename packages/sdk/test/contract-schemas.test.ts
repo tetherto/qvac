@@ -55,25 +55,25 @@ test('contract diffusion load config: memory controls and removed options', (t) 
   t.ok(schema)
   if (!schema) return
   const validate = new Ajv2020({ strict: false }).compile(schema)
-  for (const max_vram of [0, -1, 2.5, '6', 'cuda0=6,vulkan0=4']) {
+  for (const maxVram of [0, -1, 2.5, '6', 'cuda0=6,vulkan0=4']) {
     t.ok(
       validate({
         backend: 'cuda0',
-        params_backend: 'diffusion=disk',
-        max_vram,
-        stream_layers: false
+        paramsBackend: 'diffusion=disk',
+        maxVram,
+        streamLayers: false
       })
     )
   }
-  t.ok(validate({ max_vram: 'six' }))
-  t.ok(validate({ max_vram: 'cuda0=6,broken' }))
+  t.ok(validate({ maxVram: 'six' }))
+  t.ok(validate({ maxVram: 'cuda0=6,broken' }))
   t.ok(validate({ backend: '' }))
-  t.is(validate({ params_backend: 'diffusion=cpu,te' }), true)
+  t.is(validate({ paramsBackend: 'diffusion=cpu,te' }), true)
   for (const key of ['clip_on_cpu', 'vae_on_cpu', 'control_net_cpu']) {
     t.is(validate({ [key]: false }), false)
   }
   t.ok(validate({ unknown_option: true }), 'unrelated unknown fields remain accepted')
-  t.is(validate({ stream_layers: 'true' }), false)
+  t.is(validate({ streamLayers: 'true' }), false)
 })
 
 test('contract diffusion load config: optional vision projector accepts local model sources', (t) => {
@@ -277,17 +277,17 @@ test('contract finetune:progress.response: validates progress updates', (t) => {
   const progress = {
     type: 'finetune:progress',
     modelId: 'model-progress',
-    is_train: true,
+    isTrain: true,
     loss: 1.25,
-    loss_uncertainty: null,
+    lossUncertainty: null,
     accuracy: 0.75,
-    accuracy_uncertainty: null,
-    global_steps: 3,
-    current_epoch: 1,
-    current_batch: 2,
-    total_batches: 9,
-    elapsed_ms: 1500,
-    eta_ms: 2500
+    accuracyUncertainty: null,
+    globalSteps: 3,
+    currentEpoch: 1,
+    currentBatch: 2,
+    totalBatches: 9,
+    elapsedMs: 1500,
+    etaMs: 2500
   }
   const contract = contractValidate('finetune:progress.response', progress)
   t.ok(contract.valid, `contract accepts nullable progress fields: ${contract.errors}`)
@@ -301,10 +301,10 @@ test('contract finetune.response: validates terminal stats payload', (t) => {
     type: 'finetune',
     status: 'COMPLETED',
     stats: {
-      train_loss: 0.8,
-      train_accuracy: 0.9,
-      global_steps: 12,
-      epochs_completed: 2
+      trainLoss: 0.8,
+      trainAccuracy: 0.9,
+      globalSteps: 12,
+      epochsCompleted: 2
     }
   }
   const contract = contractValidate('finetune.response', terminal)
@@ -316,20 +316,20 @@ test('contract diffusion request carries custom schedules and VAE tile sizes', (
     type: 'diffusionStream',
     modelId: 'qwen-turbo',
     prompt: 'A red teapot.',
-    custom_sigmas: [1, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0],
-    cfg_scale: 1,
-    sampling_method: 'euler',
-    vae_tiling: true,
-    vae_tile_size: 64
+    customSigmas: [1, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0],
+    cfgScale: 1,
+    samplingMethod: 'euler',
+    vaeTiling: true,
+    vaeTileSize: 64
   }
   t.ok(contractValidate('diffusionStream.request', request).valid)
-  for (const custom_sigmas of [[], [0], [-1, 0], [Number.MAX_VALUE, 0], ['1', 0]]) {
-    t.is(contractValidate('diffusionStream.request', { ...request, custom_sigmas }).valid, false)
+  for (const customSigmas of [[], [0], [-1, 0], [Number.MAX_VALUE, 0], ['1', 0]]) {
+    t.is(contractValidate('diffusionStream.request', { ...request, customSigmas }).valid, false)
   }
-  for (const vae_tile_size of [1, 2147483647, '64x32']) {
-    t.ok(contractValidate('diffusionStream.request', { ...request, vae_tile_size }).valid)
+  for (const vaeTileSize of [1, 2147483647, '64x32']) {
+    t.ok(contractValidate('diffusionStream.request', { ...request, vaeTileSize }).valid)
   }
-  for (const vae_tile_size of [0, 64.5, 2147483648, '64', 'garbage', '64.5x32']) {
-    t.is(contractValidate('diffusionStream.request', { ...request, vae_tile_size }).valid, false)
+  for (const vaeTileSize of [0, 64.5, 2147483648, '64', 'garbage', '64.5x32']) {
+    t.is(contractValidate('diffusionStream.request', { ...request, vaeTileSize }).valid, false)
   }
 })
