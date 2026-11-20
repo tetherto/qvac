@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- `image-max-megapixels` is also passed to fabric's mtmd-helper, which checks it
+  against the size its own decoder reads
+  ([#5783](https://github.com/tetherto/qvac/pull/5783)). The header check before
+  the prompt is processed stays, so an oversized image is still rejected before
+  the session cache changes, and formats stb_image cannot read (WebP, video) are
+  still rejected rather than handed to ffmpeg.
+
+### Fixed
+
+- `assessFit` accepts `image-max-megapixels` (and `image_max_megapixels`), and
+  rejects an invalid value as the load does. Before, it rejected the key as an
+  unknown argument ([#5783](https://github.com/tetherto/qvac/pull/5783)).
+
 ## [0.72.0] - 2026-11-18
 
 ### Added
