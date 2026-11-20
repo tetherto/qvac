@@ -301,3 +301,20 @@ interface DoctorReport {
 - `fail` — required check not met; causes exit code `1`.
 - `skip` — the check could not be executed on this host (missing Node API and no fallback, etc.).
 - `info` — informational row with no pass/fail judgment (e.g. iOS deploy target on a non-macOS host).
+
+### `qvac app`
+
+Run the QV.AC app CLI. Every argument after `app` goes to it unchanged, including `--help` and `--version`.
+
+The app CLI calls itself `qvac-app` in its help and messages: where it says `qvac-app serve`, type `qvac app serve`.
+
+```bash
+qvac app [args...]
+```
+
+On first use the command downloads the compressed binary for this host from `https://static.tether.dev/qv.ac/latest/cli`, verifies its SHA-256 and size against the published manifest, and caches it unpacked under `~/.qvac/app-cli-bin`. It checks for a newer version at most once a day and keeps running the cached binary when that check fails.
+
+| Variable | Description |
+| --- | --- |
+| `QVAC_APP_CLI_URL` | Download location of the manifest and binaries (`https:` only). |
+| `QVAC_APP_CLI_DIR` | Cache directory (default: `~/.qvac/app-cli-bin`). |
