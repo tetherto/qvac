@@ -10,7 +10,7 @@ It ingests text, pre-chunked text or chunks with precomputed embeddings. Text is
 npm install @qvac/rag corestore
 ```
 
-On runtimes without a Node-style `crypto.createHash` (browser, React Native), install a compatible polyfill such as `crypto-browserify`.
+On runtimes without Node-style `crypto` (browser, React Native), install a polyfill such as `crypto-browserify` that provides `createHash` and either `randomBytes` or `getRandomValues`. Randomness is needed to create a namespace and on the first write to a namespace created by 0.10.0 or earlier.
 
 For indexed search on Bare, also install the optional peer:
 
@@ -147,11 +147,11 @@ Returns `{ documents, skipped, cancelled, revision }`. Each entry in `documents`
 
 ### `deleteDocuments({ namespace, documentIds })`
 
-Deletes the documents and their chunks in one batch. Unknown IDs are ignored. Returns `{ deleted, revision }`.
+Deletes the documents and their chunks in one batch. Unknown IDs are ignored. Returns `{ deleted, revision }`. A deleted document's last generation is kept, so ingesting the same ID later continues at the next generation: a `generation` read before the delete never matches the new document.
 
 ### `search({ scope, vector, spaceId, k, signal? })` / `search({ scope, query, k, signal? })`
 
-A text `query` is embedded with the port's `embedQuery` and searched in the port's space, so it takes no `spaceId`. Returns up to `k` hits `{ namespace, documentId, chunkId, ordinal, content, metadataJson?, documentMetadata?, score }`, best first. `metadataJson` is the chunk's and `documentMetadata` is the document's `metadata` from ingest. `spaceId` is the space the query was embedded in; a different one fails with `EMBEDDING_SPACE_MISMATCH`, even when its dimensions match. The score is the dot product, or the cosine similarity for `cosine` spaces, computed from the stored float32 vectors either way. With the index, candidates come from TurboVec and are rescored exactly; a candidate HyperDB no longer maps to a current chunk is dropped. An aborted `signal` fails with `OPERATION_CANCELLED`; the scan checks it between batches, and a search waiting for an index to load or rebuild stops waiting, while the rebuild finishes for later searches. Equal scores rank in scope order for a `documentIds` list and in document ID order otherwise, with and without the index.
+A text `query` is embedded with the port's `embedQuery` and searched in the port's space, so it takes no `spaceId`. Returns up to `k` hits `{ namespace, documentId, chunkId, ordinal, generation, content, metadataJson?, documentMetadata?, score }`, best first. `metadataJson` is the chunk's and `documentMetadata` is the document's `metadata` from ingest. `generation` is the document version the chunk belongs to. `spaceId` is the space the query was embedded in; a different one fails with `EMBEDDING_SPACE_MISMATCH`, even when its dimensions match. The score is the dot product, or the cosine similarity for `cosine` spaces, computed from the stored float32 vectors either way. With the index, candidates come from TurboVec and are rescored exactly; a candidate HyperDB no longer maps to a current chunk is dropped. An aborted `signal` fails with `OPERATION_CANCELLED`; the scan checks it between batches, and a search waiting for an index to load or rebuild stops waiting, while the rebuild finishes for later searches. Equal scores rank in scope order for a `documentIds` list and in document ID order otherwise, with and without the index.
 
 `scope` is `{ namespace, documentIds? }`. Only chunks inside the scope are read and ranked, so a restricted search fills its top `k` from allowed documents. Search fails closed:
 
@@ -160,9 +160,31 @@ A text `query` is embedded with the port's `embedQuery` and searched in the port
 - a document ID that isn't in the namespace fails with `DOCUMENT_OUT_OF_SCOPE`;
 - `documentIds: []` returns no hits.
 
+### `readDocument({ namespace, documentId, generation?, fromOrdinal?, limit? })`
+
+Reads a document's chunks in ordinal order, one page at a time. Returns `{ namespace, documentId, generation, chunkCount, metadata?, chunks, nextOrdinal }`; each chunk is `{ chunkId, ordinal, content, metadataJson? }`, without its vector. `fromOrdinal` defaults to 0 and `limit` to 64 chunks, at most 1,024. `nextOrdinal` is the next page's `fromOrdinal`, or `null` after the last chunk.
+
+Every page comes from one generation. Pass the first page's `generation` on later pages: if the document was re-ingested or deleted since, the read fails with `DOCUMENT_CHANGED` rather than mixing generations. Without `generation` the current one is read, and a document the namespace doesn't have fails with `DOCUMENT_OUT_OF_SCOPE`. To read around a hit, pass its `generation` and start a little before its `ordinal`:
+
+```ts
+await rag.readDocument({
+  namespace,
+  documentId: hit.documentId,
+  generation: hit.generation,
+  fromOrdinal: Math.max(0, hit.ordinal - 1),
+  limit: 3
+})
+```
+
+### `listDocuments({ namespace, after?, limit? })`
+
+Lists a namespace's documents in document ID order. Returns `{ documents, next }`; each entry is `{ documentId, generation, chunkCount, revision, metadata? }`. `limit` defaults to 100, at most 1,024. Pass `next` as `after` for the following page; it is `null` on the last one. `revision` is the namespace revision that committed the document's current generation, so sorting by it gives ingest order, for example to drop the oldest documents. Documents written by 0.10 report 0.
+
 ### `scoped(scope)`
 
-Returns `{ search }` bound to `scope`. The `scope` passed to its `search` is optional and is intersected with the bound one: it can narrow to fewer documents but never add a document or switch namespace. Its `search` takes the same `vector` and `spaceId`, or `query`, plus `k` and `signal`, as `search`. A handle never fails on document identity: an ID that the namespace does not have, whether it was never ingested or has since been deleted, is skipped, so a handle whose documents are gone returns no hits instead of an error. Only the shape of the scope can fail (`INVALID_SCOPE`), and a namespace that does not exist fails with `NAMESPACE_NOT_FOUND`.
+Returns `{ search, readDocument, listDocuments }` bound to `scope`. The `scope` passed to its `search` is optional and is intersected with the bound one: it can narrow to fewer documents but never add a document or switch namespace. Its `search` takes the same `vector` and `spaceId`, or `query`, plus `k` and `signal`, as `search`. A handle never fails on document identity: an ID that the namespace does not have, whether it was never ingested or has since been deleted, is skipped, so a handle whose documents are gone returns no hits instead of an error. Only the shape of the scope can fail (`INVALID_SCOPE`), and a namespace that does not exist fails with `NAMESPACE_NOT_FOUND`.
+
+Its `readDocument` and `listDocuments` take the same parameters without `namespace`. `readDocument` of a document outside the bound scope fails with `DOCUMENT_OUT_OF_SCOPE`, with the same message as a missing one, so a handle can't probe for documents it wasn't granted. `listDocuments` lists the whole namespace for a namespace-wide handle, and otherwise only the granted documents that still exist.
 
 ```ts
 const reader = rag.scoped({ namespace: 'handbook', documentIds: ['leave-policy', 'travel'] })

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync, renameSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync, renameSync, copyFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -258,6 +258,18 @@ test('CLI verifies a real versioned Fabric provider and rejects an unresolved ru
   renameSync(join(dir, 'addon.bare'), join(dir, 'consumer', 'addon.bare'))
   let result = check()
   assert.equal(result.status, 0, result.stdout + result.stderr)
+  const meta = join(dir, 'node_modules/@qvac/fabric')
+  const platform = join(dir, 'node_modules/@qvac/fabric-linux-x64')
+  mkdirSync(meta, { recursive: true })
+  mkdirSync(join(platform, 'prebuilds/linux-x64'), { recursive: true })
+  const manifest = JSON.stringify({ exports: { './package': './package.json' } })
+  writeFileSync(join(meta, 'package.json'), manifest)
+  writeFileSync(join(platform, 'package.json'), manifest)
+  copyFileSync(join(dir, 'fabric.bare'), join(platform, 'prebuilds/linux-x64/qvac__fabric-linux-x64.bare'))
+  const installed = spawnSync(process.execPath, [checker, '--fabric-host', 'linux-x64', 'consumer'], {
+    cwd: dir, encoding: 'utf8'
+  })
+  assert.equal(installed.status, 0, installed.stdout + installed.stderr)
   compile(['-shared', '-nostdlib', '-fPIC', 'addon.c', '-o', 'consumer/addon.bare'])
   result = check()
   assert.equal(result.status, 1, result.stdout + result.stderr)

@@ -1032,8 +1032,8 @@ importers:
         specifier: ^4.6.2
         version: 4.6.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       bare-https:
-        specifier: ^3.0.0
-        version: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+        specifier: ^4.0.0
+        version: 4.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       bare-net:
         specifier: ^2.3.2
         version: 2.3.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -17895,19 +17895,6 @@ snapshots:
       bare-http1: 4.6.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
       bare-tcp: 2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
       bare-tls: 2.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - bare-events
-      - bare-pipe
-      - bare-url
-      - react-native-b4a
-
-  bare-https@3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6):
-    dependencies:
-      bare-http1: 4.6.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
-      bare-tcp: 2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
-      bare-tls: 3.1.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
