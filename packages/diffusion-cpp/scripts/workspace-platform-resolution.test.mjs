@@ -30,8 +30,14 @@ const importers = entries(sections.get('importers').block, 2)
 const snapshots = entries(sections.get('snapshots').block, 2)
 const packages = entries(sections.get('packages').block, 2)
 
+// A release train takes the packages outside it out of the workspace, and the
+// lockfile then has no importer for them.
+const workspace = readFileSync(new URL('pnpm-workspace.yaml', root), 'utf8')
+
 for (const consumer of ['inference', 'sdk']) {
-  test(`${consumer}'s published diffusion fallback retains every desktop binary dependency`, () => {
+  const skip = workspace.includes(`"!packages/${consumer}"`) && 'left out of the workspace'
+  const name = `${consumer}'s published diffusion fallback retains every desktop binary dependency`
+  test(name, { skip }, () => {
     const importer = entries(importers.get(`packages/${consumer}`).block, 4)
     const dependencies = ['dependencies', 'devDependencies', 'optionalDependencies'].flatMap(
       (field) => [...entries(importer.get(field)?.block ?? '', 6)]
