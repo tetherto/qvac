@@ -1826,8 +1826,9 @@ namespace LlmLlamacpp {
     avgConcurrentSeq: number;
     backendDevice: "cpu" | "gpu" | "npu";
     /**
-     * Lowercase backend family used by the primary model, such as `cpu` or `cuda`.
-     * Mixed families are distinct, sorted, and comma-separated. Older addons omit it.
+     * Lowercase backend family that holds the primary model's weights, such as
+     * `cpu` or `cuda`. Mixed families are distinct, sorted, and comma-separated.
+     * Older addons omit it.
      */
     backendName?: string;
     /**
