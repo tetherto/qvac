@@ -342,10 +342,10 @@ const serverErrorDefinitions: ErrorCodesMap = {
         ? `the effective context capacity (${ctxSize} units)`
         : "the model's context capacity"
       if (requiredTokens && cachedTokens) {
-        return `Conversation uses ${requiredTokens} context units (${cachedTokens} already cached) and leaves no room to generate within ${capacity}${model}. Start a new conversation or raise ctx_size.`
+        return `Conversation uses ${requiredTokens} context units (${cachedTokens} already cached) and leaves no room to generate within ${capacity}${model}. Start a new conversation or raise ctxSize.`
       }
       if (requiredTokens) {
-        return `Request uses ${requiredTokens} context units and leaves no room to generate within ${capacity}${model}. Reduce the prompt size, start a new conversation, or raise ctx_size.`
+        return `Request uses ${requiredTokens} context units and leaves no room to generate within ${capacity}${model}. Reduce the prompt size, start a new conversation, or raise ctxSize.`
       }
       const window = ctxSize ? `the ${ctxSize}-token context window` : "the model's context window"
       // The prompt-only branch below is reachable only through the public
@@ -497,7 +497,7 @@ const serverErrorDefinitions: ErrorCodesMap = {
   [SDK_SERVER_ERROR_CODES.KV_CACHE_SEED_SHARING_DISABLED]: {
     name: 'KV_CACHE_SEED_SHARING_DISABLED',
     message: (modelId: string) =>
-      `seedFrom has no effect on model "${modelId}": it was not loaded with cache_share_across_keys true`
+      `seedFrom has no effect on model "${modelId}": it was not loaded with cacheShareAcrossKeys true`
   },
 
   // Config Operations (53,350-53,499)

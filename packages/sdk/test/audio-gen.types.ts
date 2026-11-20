@@ -80,7 +80,7 @@ const minimaxConfig: AudioGenConfig = {
   engine: 'minimax',
   lmModelSrc: '/models/minimax-lm.gguf',
   synthModelSrc: '/models/minimax-synth.gguf',
-  useGPU: true,
+  useGpu: true,
   inferenceSteps: 12,
   cfgScale: 1.8
 }
@@ -213,7 +213,7 @@ void unknownMinimaxDevice
 
 const acestepDevice: AudioGenRuntimeConfig = {
   engine: 'acestep',
-  // @ts-expect-error ACE-Step takes useGPU and nGpuLayers, not device
+  // @ts-expect-error ACE-Step takes useGpu and nGpuLayers, not device
   device: 'gpu'
 }
 void acestepDevice
@@ -233,8 +233,8 @@ const editRunControls: AudioEditClientParams = {
   operations: [{ type: 'repaint', caption: 'analog synth solo', start: 10, end: 20 }],
   vocalLanguage: 'en',
   bpm: 120,
-  keyscale: 'C minor',
-  timesignature: '4/4',
+  keyScale: 'C minor',
+  timeSignature: '4/4',
   augmentCaptionWithMetadata: true,
   dcwEnabled: true,
   dcwScaler: 0.05,
