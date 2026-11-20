@@ -1636,6 +1636,58 @@ test('completion: a deferred tool sends a catalog, not its schema', async (t) =>
   clearRegistry()
 })
 
+test('completion: a streamed tool_search call parses against the rendered tools', async (t) => {
+  clearRegistry()
+
+  const modelId = `kvcache-defer-search-model-${Date.now()}`
+  registerModel(modelId, {
+    model: {
+      run() {
+        return {
+          iterate: async function* () {
+            yield '<tool_call>{"name":"tool_search","arguments":{"query":"area"}}</tool_call>'
+          },
+          await: () => Promise.resolve(),
+          cancel: () => Promise.resolve(),
+          stats: {}
+        }
+      }
+    } as unknown as AnyModel,
+    path: `/tmp/${modelId}.gguf`,
+    config: { tools: true },
+    modelType: ModelType.llamacppCompletion
+  })
+
+  const handler = llmPlugin.handlers.completionStream.handler as unknown as LooseHandler
+  const events: { type: string; text?: string; call?: { name: string } }[] = []
+  for await (const frame of handler({
+    modelId,
+    requestId: `${modelId}-1`,
+    history: [user('Area of a triangle, base 10 height 5?')],
+    stream: true,
+    tools: [deferredTool('calculate_area')]
+  })) {
+    events.push(...((frame as { events?: typeof events }).events ?? []))
+  }
+
+  t.absent(
+    events.some((event) => event.type === 'toolError'),
+    'tool_search is not rejected as an unknown tool'
+  )
+  t.absent(
+    events.some((event) => event.type === 'contentDelta' && event.text?.includes('<tool_call>')),
+    'the call markup does not leak into content'
+  )
+  t.alike(
+    events.filter((event) => event.type === 'toolCall').map((event) => event.call?.name),
+    ['tool_search'],
+    'the search call surfaces once'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
 test('completion: registration-only fields stay out of the prompt when nothing defers', async (t) => {
   await setIsolatedHome()
   clearRegistry()
