@@ -40,6 +40,7 @@ export {
   stopRpcServer,
   discoverRpcServers,
   getSystemResources,
+  getRuntimeCapabilities,
   assessModelFit,
   loggingStream,
   subscribeServerLogs,
@@ -240,6 +241,14 @@ export {
   type GPUResourceSample,
   type SystemResourceSample,
   type SystemResources,
+  CAPABILITY_CONTRACTS,
+  type CapabilityContract,
+  type CapabilityDeclaration,
+  type RuntimeCapability,
+  capabilityPermissions,
+  RUNTIME_PERMISSION_OPERATIONS,
+  type RuntimePermissionOperation,
+  type SessionGrant,
   type AssessModelFitInput,
   type TranscriptionFitWorkload,
   type TtsFitWorkload,
@@ -432,6 +441,8 @@ export {
   ModelLeasedError,
   ModelReconfiguredError,
   OwnerOnlyError,
+  CapabilityNotGrantedError,
+  SessionGrantInvalidError,
   RAGWorkspaceBusyError
 } from './utils/errors-server'
 

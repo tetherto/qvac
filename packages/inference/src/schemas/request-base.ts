@@ -61,6 +61,7 @@ export const UNTRACKED_REQUEST_TYPES: ReadonlySet<string> = new Set([
   'deleteCache',
   'getLoadedModelInfo',
   'getModelInfo',
+  'getRuntimeCapabilities',
   'getSystemResources',
   'heartbeat',
   'loggingStream',

@@ -77,6 +77,9 @@
           "$ref": "#/$defs/getModelInfo.request"
         },
         {
+          "$ref": "#/$defs/getRuntimeCapabilities.request"
+        },
+        {
           "$ref": "#/$defs/getSystemResources.request"
         },
         {
@@ -243,6 +246,9 @@
         },
         {
           "$ref": "#/$defs/getModelInfo.response"
+        },
+        {
+          "$ref": "#/$defs/getRuntimeCapabilities.response"
         },
         {
           "$ref": "#/$defs/getSystemResources.response"
@@ -10170,6 +10176,70 @@
         }
       },
       "required": ["type", "modelInfo"],
+      "additionalProperties": false
+    },
+    "getRuntimeCapabilities.request": {
+      "title": "GetRuntimeCapabilitiesRequest",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "getRuntimeCapabilities"
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the caller session this request belongs to. Omitted for requests made by the runtime owner."
+        }
+      },
+      "required": ["type"]
+    },
+    "getRuntimeCapabilities.response": {
+      "title": "GetRuntimeCapabilitiesResponse",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "getRuntimeCapabilities"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Capability contract ID, such as `transcription`. IDs without a dot are defined by QVAC; a dotted ID names a contract a third-party plugin defines."
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991,
+                "description": "Major version of the contract. A consumer that requires `id@version` matches only this exact pair. An entry means a registered plugin declares this major; when two majors of one ID are listed, a call reaches whichever one the plugin of the selected model serves."
+              },
+              "operations": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Operations every registered provider of this contract implements. Always includes the contract's required operations."
+              },
+              "partialOperations": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Optional operations that only some registered providers implement. A call uses the plugin of the selected model, so it fails when that plugin lacks the operation."
+              }
+            },
+            "required": ["id", "version", "operations", "partialOperations"],
+            "additionalProperties": false,
+            "title": "GetRuntimeCapabilitiesResponseCapabilitiesItem"
+          },
+          "description": "Capability contracts the registered plugins declare, sorted by ID and then version. Built from plugin registration only: it does not load models or check addons, model files, resources or permissions. An empty list means no registered plugin declares a contract."
+        }
+      },
+      "required": ["type", "capabilities"],
       "additionalProperties": false
     },
     "getSystemResources.request": {
@@ -25642,6 +25712,13 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 128
+        },
+        "grant": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Permissions the session may use, one per operation: \"<capability ID>/<operation>\", such as \"transcription/transcribe\", or \"runtime/<operation>\" for loadModel, downloadAsset, vectorIndex, loggingStream and discoverRpcServers. Omitted: the session is unrestricted. An empty list allows only operations that need no permission. The open fails for a permission the runtime does not have."
         }
       },
       "required": ["type", "sessionId"]
