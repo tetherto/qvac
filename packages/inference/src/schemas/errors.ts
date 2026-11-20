@@ -134,6 +134,8 @@ export const ERROR_CODES = {
   MODEL_LEASED: 53622,
   OWNER_ONLY: 53623,
   MODEL_RECONFIGURED: 53624,
+  CAPABILITY_NOT_GRANTED: 53625,
+  SESSION_GRANT_INVALID: 53626,
 
   // System / runtime (53,500-53,699)
   FFMPEG_NOT_AVAILABLE: 53500,
@@ -687,6 +689,16 @@ const errorDefinitions: ErrorCodesMap = {
     name: 'MODEL_RECONFIGURED',
     message: (modelId: string) =>
       `Model "${modelId}" was reconfigured after it was loaded and no longer has the configuration this load asks for; load it again once it is unloaded`
+  },
+  [ERROR_CODES.CAPABILITY_NOT_GRANTED]: {
+    name: 'CAPABILITY_NOT_GRANTED',
+    message: (operation: string, sessionId: string, required: string) =>
+      `Session "${sessionId}" may not call "${operation}": ${required}`
+  },
+  [ERROR_CODES.SESSION_GRANT_INVALID]: {
+    name: 'SESSION_GRANT_INVALID',
+    message: (sessionId: string, details: string) =>
+      `Session "${sessionId}" was not opened: its grant is invalid: ${details}`
   },
 
   // System / runtime

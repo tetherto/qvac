@@ -19,6 +19,8 @@ import {
   ModelLeasedError,
   ModelReconfiguredError,
   OwnerOnlyError,
+  CapabilityNotGrantedError,
+  SessionGrantInvalidError,
   RAGWorkspaceBusyError
 } from '@/utils/errors-server'
 
@@ -254,6 +256,20 @@ const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
   MODEL_RECONFIGURED: (response) =>
     new ModelReconfiguredError(
       readStringField(response.typedFields, 'modelId', ''),
+      response.cause
+    ),
+  CAPABILITY_NOT_GRANTED: (response) =>
+    new CapabilityNotGrantedError(
+      readStringField(response.typedFields, 'operation', ''),
+      readStringField(response.typedFields, 'sessionId', ''),
+      readOptionalStringField(response.typedFields, 'required') ?? null,
+      response.cause
+    ),
+  SESSION_GRANT_INVALID: (response) =>
+    new SessionGrantInvalidError(
+      readStringField(response.typedFields, 'sessionId', ''),
+      readStringField(response.typedFields, 'permission', ''),
+      readStringField(response.typedFields, 'details', ''),
       response.cause
     ),
   RAG_WORKSPACE_BUSY: (response) =>

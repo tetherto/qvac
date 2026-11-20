@@ -25712,6 +25712,14 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 128
+        },
+        "grant": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^([a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*)\\/([^/\\s]+)$"
+          },
+          "description": "Permissions the session may use, one per operation: \"<capability ID>/<operation>\", such as \"transcription/transcribe\", or \"runtime/<operation>\" for loadModel, downloadAsset, vectorIndex, loggingStream and discoverRpcServers. Omitted: the session is unrestricted. An empty list allows only operations that need no permission. The open fails for a permission the runtime does not have."
         }
       },
       "required": ["type", "sessionId"]

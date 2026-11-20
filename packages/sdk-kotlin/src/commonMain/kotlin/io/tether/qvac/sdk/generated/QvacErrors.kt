@@ -28,6 +28,8 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("CACHE_DIR_NOT_WRITABLE", reportedCode, message, payload)
     class ServerCancelFailed(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("CANCEL_FAILED", reportedCode, message, payload)
+    class ServerCapabilityNotGranted(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("CAPABILITY_NOT_GRANTED", reportedCode, message, payload)
     class ServerChecksumUnavailable(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("CHECKSUM_UNAVAILABLE", reportedCode, message, payload)
     class ServerChecksumValidationFailed(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -200,6 +202,8 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("RPC_UNKNOWN_REQUEST_TYPE", reportedCode, message, payload)
     class ServerSeedingNotSupported(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("SEEDING_NOT_SUPPORTED", reportedCode, message, payload)
+    class ServerSessionGrantInvalid(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("SESSION_GRANT_INVALID", reportedCode, message, payload)
     class ServerSessionIdConflict(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("SESSION_ID_CONFLICT", reportedCode, message, payload)
     class ServerSessionNotOpen(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -326,6 +330,7 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "CACHE_DIR_NOT_ABSOLUTE" && (code == null || code == 53202) -> QvacKnownException.ServerCacheDirNotAbsolute(message, payload, code)
     name == "CACHE_DIR_NOT_WRITABLE" && (code == null || code == 53203) -> QvacKnownException.ServerCacheDirNotWritable(message, payload, code)
     name == "CANCEL_FAILED" && (code == null || code == 52408) -> QvacKnownException.ServerCancelFailed(message, payload, code)
+    name == "CAPABILITY_NOT_GRANTED" && (code == null || code == 53625) -> QvacKnownException.ServerCapabilityNotGranted(message, payload, code)
     name == "CHECKSUM_UNAVAILABLE" && (code == null || code == 53017) -> QvacKnownException.ServerChecksumUnavailable(message, payload, code)
     name == "CHECKSUM_VALIDATION_FAILED" && (code == null || code == 53002) -> QvacKnownException.ServerChecksumValidationFailed(message, payload, code)
     name == "COMPLETION_FAILED" && (code == null || code == 52406) -> QvacKnownException.ServerCompletionFailed(message, payload, code)
@@ -412,6 +417,7 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "RPC_SERVER_OPERATION_FAILED" && (code == null || code == 52423) -> QvacKnownException.ServerRpcServerOperationFailed(message, payload, code)
     name == "RPC_UNKNOWN_REQUEST_TYPE" && (code == null || code == 53704) -> QvacKnownException.ServerRpcUnknownRequestType(message, payload, code)
     name == "SEEDING_NOT_SUPPORTED" && (code == null || code == 53008) -> QvacKnownException.ServerSeedingNotSupported(message, payload, code)
+    name == "SESSION_GRANT_INVALID" && (code == null || code == 53626) -> QvacKnownException.ServerSessionGrantInvalid(message, payload, code)
     name == "SESSION_ID_CONFLICT" && (code == null || code == 53620) -> QvacKnownException.ServerSessionIdConflict(message, payload, code)
     name == "SESSION_NOT_OPEN" && (code == null || code == 53621) -> QvacKnownException.ServerSessionNotOpen(message, payload, code)
     name == "SET_CONFIG_FAILED" && (code == null || code == 53350) -> QvacKnownException.ServerSetConfigFailed(message, payload, code)

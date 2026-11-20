@@ -1122,6 +1122,60 @@ export class ModelLeasedError extends QvacErrorBase {
   }
 }
 
+/**
+ * A session with a grant called an operation the grant does not cover.
+ * `required` is the permission the call needs, or `null` for a plugin handler
+ * that no capability contract of its plugin lists, which no grant can cover.
+ */
+export class CapabilityNotGrantedError extends QvacErrorBase {
+  readonly operation: string
+  readonly sessionId: string
+  readonly required: string | null
+
+  constructor(operation: string, sessionId: string, required: string | null, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.CAPABILITY_NOT_GRANTED,
+        [
+          operation,
+          sessionId,
+          required === null
+            ? 'no capability contract lists it, so no grant covers it'
+            : `it needs the permission "${required}"`
+        ],
+        cause
+      )
+    )
+    this.operation = operation
+    this.sessionId = sessionId
+    this.required = required
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { operation: this.operation, sessionId: this.sessionId, required: this.required }
+  }
+}
+
+/** An `openSession` whose grant names a permission the runtime does not have. */
+export class SessionGrantInvalidError extends QvacErrorBase {
+  readonly sessionId: string
+  readonly permission: string
+  readonly details: string
+
+  constructor(sessionId: string, permission: string, details: string, cause?: unknown) {
+    super(
+      createErrorOptions(SDK_SERVER_ERROR_CODES.SESSION_GRANT_INVALID, [sessionId, details], cause)
+    )
+    this.sessionId = sessionId
+    this.permission = permission
+    this.details = details
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { sessionId: this.sessionId, permission: this.permission, details: this.details }
+  }
+}
+
 export class OwnerOnlyError extends QvacErrorBase {
   readonly operation: string
   readonly sessionId: string
