@@ -225,6 +225,10 @@ export {
   type CapabilityContract,
   type CapabilityDeclaration,
   type RuntimeCapability,
+  capabilityPermissions,
+  RUNTIME_PERMISSION_OPERATIONS,
+  type RuntimePermissionOperation,
+  type SessionGrant,
   type AssessModelFitInput,
   type TranscriptionFitWorkload,
   type TtsFitWorkload,
@@ -421,7 +425,9 @@ export {
   SessionNotOpenError,
   ModelLeasedError,
   ModelReconfiguredError,
-  OwnerOnlyError
+  OwnerOnlyError,
+  CapabilityNotGrantedError,
+  SessionGrantInvalidError
 } from './utils/errors-server'
 
 // `WorkerCrashedError` and `WorkerShutdownError` are thrown by the

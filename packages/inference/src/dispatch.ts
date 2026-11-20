@@ -27,6 +27,7 @@ import { assertLifecycleAllowed } from '@/runtime/runtime-lifecycle'
 import { resolveModelConfig, setConfig, setRuntimeContext, isConfigSet } from '@/runtime/state'
 import { initialize, close as closeEngine } from '@/runtime/lifecycle'
 import { assertOwnerOperation, assertWireSessionOpen } from '@/runtime/session-registry'
+import { assertSessionGrant } from '@/runtime/session-grants'
 import { getRequestRegistry } from '@/runtime/request-context'
 import { generateRandomRequestId } from '@/runtime/request-id'
 import { getAllPlugins } from '@/plugins/index'
@@ -208,11 +209,13 @@ function prepareRequest<T extends Request>(request: T): Request {
 // A request runs as the session it names, or as the owner when it names none.
 // The session handlers validate their own `sessionId`: open registers a new id
 // and close removes one, so neither can require it to be open already. A
-// session may not run the operations reserved for the owner.
+// session may not run the operations reserved for the owner, nor, when it was
+// opened with a grant, an operation the grant does not cover.
 function assertRequestSessionAllowed(request: Request): void {
   if (request.type === 'openSession' || request.type === 'closeSession') return
   assertWireSessionOpen(request)
   assertOwnerOperation(request)
+  assertSessionGrant(request)
 }
 
 /**

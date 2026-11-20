@@ -21,6 +21,16 @@ import { InvalidResponseError, SessionInvalidatedError } from '@/utils/errors-cl
 export interface OpenSessionOptions {
   /** Label for worker logs and diagnostics. */
   name?: string
+  /**
+   * Permissions the session may use, one per operation:
+   * `<capability ID>/<operation>`, such as `transcription/transcribe`, or
+   * `runtime/<operation>` for `loadModel`, `downloadAsset`, `vectorIndex`,
+   * `loggingStream` and `discoverRpcServers`. `capabilityPermissions()` lists
+   * every operation of a contract. Omitted: the session is unrestricted. An
+   * empty list allows only operations that need no permission. The worker
+   * refuses an operation outside the grant with `CapabilityNotGrantedError`.
+   */
+  grant?: readonly string[]
 }
 
 type Api = typeof api
@@ -44,7 +54,13 @@ type Api = typeof api
 export interface QvacSession {
   readonly sessionId: string
   readonly name: string | undefined
-  /** Resolves once the worker has registered the session. Calls queue behind it on their own. */
+  /** The permissions the session was opened with; `undefined` when it is unrestricted. */
+  readonly grant: readonly string[] | undefined
+  /**
+   * Resolves once the worker has registered the session. Calls queue behind it
+   * on their own. Rejects with `SessionGrantInvalidError` when the worker
+   * lacks a permission the grant names.
+   */
   readonly opened: Promise<void>
   /**
    * Whether this session loaded `modelId` and has not unloaded it. Stays true
@@ -115,10 +131,13 @@ export interface QvacSession {
  * `openSession` round trip runs in the background; calls made on the handle
  * wait for it, so the handle is usable immediately.
  *
- * @param options - `name` labels the session in worker logs.
+ * @param options - `name` labels the session in worker logs; `grant` limits
+ *   the session to the listed permissions.
  * @returns The session handle.
  * @throws {SessionIdConflictError} Through `session.opened` and every call,
  *   when the worker already has a session with the minted id.
+ * @throws {SessionGrantInvalidError} Through `session.opened` and every call,
+ *   when the grant names a permission the worker does not have.
  *
  * @example
  * ```typescript
@@ -134,11 +153,17 @@ export interface QvacSession {
 export function openSession(options: OpenSessionOptions = {}): QvacSession {
   const sessionId = generateClientRequestId()
   const name = options.name
-  const opened = sendOpenSession({ type: 'openSession', sessionId, ...(name && { name }) })
+  const grant = options.grant ? [...options.grant] : undefined
+  const opened = sendOpenSession({
+    type: 'openSession',
+    sessionId,
+    ...(name && { name }),
+    ...(grant && { grant })
+  })
   // Later calls surface the failure themselves; an unobserved rejection here
   // must not crash the host.
   opened.catch(() => {})
-  return createSessionHandle(createSessionRecord(sessionId, opened), name)
+  return createSessionHandle(createSessionRecord(sessionId, opened), name, grant)
 }
 
 async function sendOpenSession(request: OpenSessionRequest): Promise<void> {
@@ -174,7 +199,11 @@ export async function closeSessionRecord(
   }
 }
 
-function createSessionHandle(record: SessionRecord, name: string | undefined): QvacSession {
+function createSessionHandle(
+  record: SessionRecord,
+  name: string | undefined,
+  grant: readonly string[] | undefined
+): QvacSession {
   const { sessionId, opened } = record
   // Session-stamped options for every wire call made through the handle. A
   // caller's own options are kept; `sessionId` is set by the handle, and the
@@ -200,6 +229,7 @@ function createSessionHandle(record: SessionRecord, name: string | undefined): Q
   return {
     sessionId,
     name,
+    grant: grant ? Object.freeze([...grant]) : undefined,
     opened,
     isModelHeld: (modelId) => isModelHeldBySession(record, modelId),
     close: (options) => closeSessionRecord(record, options),
