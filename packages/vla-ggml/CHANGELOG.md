@@ -10,12 +10,6 @@
   it cannot name the backend
   ([#5502](https://github.com/tetherto/qvac/pull/5502)).
 
-### Fixed
-
-- Output callbacks from an unloaded native instance no longer reach a run
-  started on a later `load()`
-  ([#5502](https://github.com/tetherto/qvac/pull/5502)).
-
 ## [0.39.0] - 2026-11-23
 
 ### Changed

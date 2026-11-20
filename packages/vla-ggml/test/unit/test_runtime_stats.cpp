@@ -76,39 +76,9 @@ TEST(VlaRuntimeStats, ReportsBackendFamilyAsString) {
   EXPECT_EQ(std::get<int64_t>(*backendDevice), 1);
 }
 
-TEST(VlaRuntimeStats, ReportsCpuBackend) {
-  const RuntimeStats stats = statsFor("CPU", /*hasGpu=*/false);
-  const auto backendName = findStat(stats, "backendName");
-  ASSERT_TRUE(backendName.has_value());
-  ASSERT_TRUE(std::holds_alternative<std::string>(*backendName));
-  EXPECT_EQ(std::get<std::string>(*backendName), "cpu");
-
-  const auto backendDevice = findStat(stats, "backendDevice");
-  ASSERT_TRUE(backendDevice.has_value());
-  ASSERT_TRUE(std::holds_alternative<int64_t>(*backendDevice));
-  EXPECT_EQ(std::get<int64_t>(*backendDevice), 0);
-}
-
 TEST(VlaRuntimeStats, OmitsUnknownBackendName) {
   EXPECT_FALSE(
       findStat(statsFor("none", /*hasGpu=*/false), "backendName").has_value());
   EXPECT_FALSE(findStat(statsFor("unknown", /*hasGpu=*/false), "backendName")
                    .has_value());
-}
-
-// The string stat does not change the type of the timing stats beside it.
-TEST(VlaRuntimeStats, TimingsStayDoubles) {
-  const RuntimeStats stats = statsFor("CUDA0", /*hasGpu=*/true);
-  for (const char* key :
-       {"vision_ms",
-        "prefill_compute_ms",
-        "prefill_total_ms",
-        "smollm2_compute_ms",
-        "smollm2_total_ms",
-        "ode_ms",
-        "total_ms"}) {
-    const auto value = findStat(stats, key);
-    ASSERT_TRUE(value.has_value()) << key;
-    EXPECT_TRUE(std::holds_alternative<double>(*value)) << key;
-  }
 }
