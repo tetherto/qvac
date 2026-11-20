@@ -4,11 +4,19 @@
 
 #include <uint8-buff-stream.h>
 
-extern "C" void qvac_runtime_throw();
+extern "C" void qvac_runtime_throw() noexcept(false);
 extern "C" void qvac_runtime_exception(std::exception_ptr* result);
 extern "C" std::basic_streambuf<char>* qvac_runtime_stream();
 
+#ifdef QVAC_TEST_APPLOCAL_CRT
+bool qvac_test_app_local_crt();
+#endif
+
 int main() {
+#ifdef QVAC_TEST_APPLOCAL_CRT
+  if (!qvac_test_app_local_crt())
+    return 6;
+#endif
   try {
     qvac_runtime_throw();
     return 1;
