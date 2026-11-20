@@ -7,7 +7,7 @@
  *   node scripts/model-cache-plan.mjs --family desktop,python,electron --out plan.json   # seed
  *
  * Options:
- *   --family        desktop | electron | python | snap; comma-separated for a union (seed)
+ *   --family        desktop | electron | python | swift | snap; comma-separated for a union (seed)
  *   --os            macos | linux | windows (default: this host)
  *   --suite, --exclude-suite, --filter, --include   the run's test selection
  *   --cache-root    SDK models cache dir, relative to the repository root, which is where the
@@ -31,7 +31,7 @@ const load = (relativePath) => import(pathToFileURL(resolve(projectDir, relative
 
 /**
  * Per family: bootstrap consumer, skip-matching platform label, and resource-table label (they
- * differ only for Python).
+ * differ only for the external clients).
  */
 const FAMILIES = {
   desktop: {
@@ -50,6 +50,13 @@ const FAMILIES = {
     platform: (_os, config) => externalConsumer(config, 'python').platform,
     resourcePlatform: (_os, config) =>
       externalConsumer(config, 'python').env?.QVAC_RESOURCE_PLATFORM ?? 'desktop'
+  },
+  // The swift-macos consumer (runners/swift).
+  swift: {
+    consumer: 'desktop',
+    platform: (_os, config) => externalConsumer(config, 'swift-macos').platform,
+    resourcePlatform: (_os, config) =>
+      externalConsumer(config, 'swift-macos').env?.QVAC_RESOURCE_PLATFORM ?? 'desktop-macos'
   },
   snap: { consumer: 'electron', platform: () => 'snap-linux', resourcePlatform: () => 'snap-linux' }
 }

@@ -35,17 +35,27 @@ import {
   type FetchPackageMetadata
 } from '@/commands/verify/engines-advice'
 import type { PackageRecord } from '@/commands/verify/addon-source'
-import { bundleTargetOf } from '@/client/rpc/bundle-stamp'
+import { bundleLanguageOf, bundleTargetOf } from '@/client/rpc/bundle-stamp'
 import { isBundleTarget, type BundleTarget } from '@/commands/bundle/targets'
 
-export type DesktopRuntime = 'bare-sidecar' | 'pear-runtime' | 'bare-kit-kotlin'
+export type DesktopRuntime = 'bare-sidecar' | 'pear-runtime' | 'bare-kit-kotlin' | 'bare-kit-swift'
 
-/** The Bare that each target runs a bundle on for desktop hosts. */
-export const DESKTOP_RUNTIMES: Record<BundleTarget, DesktopRuntime> = {
-  'bare-sidecar': 'bare-sidecar',
-  'react-native': 'bare-sidecar',
-  'pear-runtime': 'pear-runtime',
-  'bare-kit': 'bare-kit-kotlin'
+/** The Bare that desktop hosts run a bundle for target and language on. */
+export function desktopRuntimeFor(target: BundleTarget, language?: string): DesktopRuntime {
+  switch (target) {
+    case 'bare-kit':
+      return language === 'swift' ? 'bare-kit-swift' : 'bare-kit-kotlin'
+    case 'pear-runtime':
+      return 'pear-runtime'
+    case 'bare-sidecar':
+    case 'react-native':
+      return 'bare-sidecar'
+  }
+}
+
+const BARE_KIT_DESKTOP_PLATFORMS: Partial<Record<DesktopRuntime, BareKitPlatform>> = {
+  'bare-kit-kotlin': 'android',
+  'bare-kit-swift': 'ios'
 }
 
 export interface VerifyBundleOptions {
@@ -55,9 +65,9 @@ export interface VerifyBundleOptions {
   /**
    * The Bare that desktop hosts run: the project's bare-sidecar; the
    * bare-sidecar that pear-runtime resolves, for a `pear-runtime` bundle; or
-   * bare-kit-kotlin as pinned by bare-stow, for a `bare-kit` bundle on the JVM.
-   * Defaults to the one for the target recorded in the harness `package.json`
-   * next to a bundle, else the project's bare-sidecar.
+   * the Bare Kit binding pinned by bare-stow, for a `bare-kit` bundle on the
+   * JVM or macOS. Defaults to the one for the target and language recorded in
+   * the harness next to a bundle, else the project's bare-sidecar.
    */
   desktopRuntime?: DesktopRuntime
   /**
@@ -247,8 +257,9 @@ export async function verifyBundle(options: VerifyBundleOptions): Promise<Verify
   const runtimes: PlatformRuntime[] = []
   const advice: EnginesAdvice[] = []
   const malformed = new Set<string>()
-  const platformOf = (host: string) =>
-    bareKitPlatformOf(host) ?? (desktopRuntime === 'bare-kit-kotlin' ? 'android' : null)
+  const desktopBareKit =
+    desktopRuntime === undefined ? null : (BARE_KIT_DESKTOP_PLATFORMS[desktopRuntime] ?? null)
+  const platformOf = (host: string) => bareKitPlatformOf(host) ?? desktopBareKit
   for (const platform of BARE_KIT_PLATFORMS) {
     const platformHosts = hosts.filter((host) => platformOf(host) === platform)
     if (platformHosts.length === 0) continue
@@ -332,10 +343,12 @@ export async function verifyBundle(options: VerifyBundleOptions): Promise<Verify
   }
 }
 
-/** The desktop runtime of the target `bundleSdk` recorded in the harness package of a bundle. */
+/** The desktop runtime of the target and language `bundleSdk` recorded in the harness of a bundle. */
 function stampedDesktopRuntime(bundlePath: string): DesktopRuntime | undefined {
   const target = bundleTargetOf(bundlePath)
-  return target !== undefined && isBundleTarget(target) ? DESKTOP_RUNTIMES[target] : undefined
+  return target !== undefined && isBundleTarget(target)
+    ? desktopRuntimeFor(target, bundleLanguageOf(bundlePath))
+    : undefined
 }
 
 /** `name@version` ids as built by `formatAddonId`; scoped names keep their leading `@`. */

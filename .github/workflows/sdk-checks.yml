@@ -36,9 +36,10 @@ on:
 permissions:
   contents: read
 
-# An edit only reruns the PR rules, so it gets its own group and never cancels a check run.
+# An edit only reruns the PR rules, so it gets its own group and never cancels a check run. A call names its packages,
+# so a release train's calls for different packages never cancel each other.
 concurrency:
-  group: sdk-checks-${{ inputs.source || (github.event.action == 'edited' && 'edited') || 'pr' }}-${{ github.event.pull_request.number || github.ref }}
+  group: sdk-checks-${{ inputs.source || (github.event.action == 'edited' && 'edited') || 'pr' }}-${{ inputs.packages || 'all' }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:

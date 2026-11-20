@@ -8,6 +8,7 @@ import {
   BUNDLE_RECORD_FILE,
   bundledSdkMismatch,
   bundledTarget,
+  bundleLanguageOf,
   bundleTargetOf,
   installedSdkVersion
 } from '@/client/rpc/bundle-stamp'
@@ -79,6 +80,24 @@ describe('bundleTargetOf', () => {
     fs.mkdirSync(artifacts, { recursive: true })
 
     assert.equal(bundleTargetOf(path.join(artifacts, 'index.bundle')), 'bare-kit')
+  })
+})
+
+describe('bundleLanguageOf', () => {
+  it('reads the language recorded at the root of a harness without a package.json', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-bundle-record-'))
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+    fs.writeFileSync(
+      path.join(root, BUNDLE_RECORD_FILE),
+      JSON.stringify({ qvacTarget: 'bare-kit', qvacLanguage: 'swift' })
+    )
+
+    assert.equal(bundleLanguageOf(path.join(root, 'worker.bundle')), 'swift')
+  })
+
+  it('is undefined for a harness that does not record it', (t) => {
+    const dir = bundleWith(t, { qvacTarget: 'bare-kit' })
+    assert.equal(bundleLanguageOf(path.join(dir, 'index.bundle')), undefined)
   })
 })
 

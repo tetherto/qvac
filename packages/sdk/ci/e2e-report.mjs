@@ -341,7 +341,7 @@ export async function plan(env) {
       iOS: ['ios-arm64'],
       both: ['android-arm64', 'ios-arm64']
     }
-    // Empty packages runs the SDK alone; sdk-python and sdk-kotlin are opt-in, as on main.
+    // Empty packages runs the SDK alone; sdk-python, sdk-kotlin and sdk-swift are opt-in.
     const named = (r) => env.PACKAGES || r.project === SDK
     const devices = mobile.filter(
       (r) => named(r) && (configs[env.PLATFORM] ?? []).includes(r.config)
@@ -353,8 +353,8 @@ export async function plan(env) {
       inference: list('inference-version', env.INFERENCE_VERSION)
     }
     const tests = list('filter', env.FILTER)
-    // The dispatch's suite and options go to every Device Farm row and the SDK's desktop rows; sdk-python and
-    // sdk-kotlin's conformance keep the suite their label gives them.
+    // The dispatch's suite and options go to every Device Farm row and the SDK's desktop rows; the other packages'
+    // desktop rows, such as sdk-kotlin's conformance and sdk-swift's macOS leg, keep the suite their label gives them.
     const withOptions = (r) => ({ ...r, suite: encodeOptions(suite, options), tests })
     return output(env, {
       mode: 'dispatch',

@@ -17,11 +17,11 @@ on:
   workflow_dispatch:
     inputs:
       packages:
-        description: Comma-separated SDK pod packages or directories; empty runs @qvac/sdk only, name sdk-python or sdk-kotlin to add them
+        description: Comma-separated SDK pod packages or directories; empty runs @qvac/sdk only, name sdk-python, sdk-kotlin or sdk-swift to add them
         type: string
         default: ""
       labels:
-        description: Labels whose desktop configurations to run, e.g. electron; empty runs test-e2e-full's desktop ones
+        description: Labels whose desktop configurations to run, e.g. electron or swift; empty runs test-e2e-full's desktop ones
         type: string
         default: ""
       platform:

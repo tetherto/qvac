@@ -3,8 +3,8 @@
 SDK dogfooding tests built on [`@qvac/test-suite`](../test-suite), the test-orchestration framework
 that lives in this monorepo at `packages/test-suite`.
 A producer orchestrates a shared queue of tests over MQTT; a consumer runs them on desktop (Node), Electron
-(packaged Electron main process), strict Snap, mobile (Bare + React Native), the Python client, or the Kotlin
-client on Android.
+(packaged Electron main process), strict Snap, mobile (Bare + React Native), the Python client, the Kotlin
+client on Android, or the Swift client on macOS and iOS.
 
 ## Layout
 
@@ -18,6 +18,7 @@ The package keeps what every SDK client must do apart from how each client does 
 | [`runners/js/`](./runners/js) | The JS client: desktop, Electron, Snap and mobile consumers, and their executors                   |
 | `runners/python/`             | The Python client: an interpreter for the declarative bodies, and hand-written bodies for the rest |
 | `runners/kotlin/`             | The Kotlin client: an Android app that interprets the declarative bodies through the Kotlin SDK    |
+| `runners/swift/`              | The Swift client: a macOS command and an iOS app that interpret the declarative bodies             |
 | `assets/`, `fixtures/`        | Data the tests read                                                                                |
 | `scripts/`                    | Build helpers and the catalog gates                                                                |
 
@@ -246,10 +247,10 @@ other's bundle.
 
 ## Running in CI
 
-The suite runs on the package CI contract (`docs/ci/workflow-standard.md`) through `sdk-e2e.yml`: the sdk's
-`test:integration` configurations on desktop, and its `test:mobile` and sdk-kotlin's on Device Farm. The
-steps live in `packages/sdk/ci/`: `e2e.mjs` runs one desktop leg, `mobile.mjs` builds a mobile consumer
-app and drives it.
+The suite runs on the package CI contract (`docs/ci/workflow-standard.md`) through `sdk-e2e.yml`: the sdk's and
+sdk-swift's `test:integration` configurations on desktop, and the `test:mobile` of the sdk, sdk-kotlin and sdk-swift
+on Device Farm. The steps live in `packages/sdk/ci/`: `e2e.mjs` runs one desktop leg, `mobile.mjs` builds a mobile
+consumer app and drives it.
 
 ### Desktop legs, by label
 
@@ -261,12 +262,18 @@ Each configuration names the labels that run it in `ci.labels`, and the suite ea
 | `*-python` (the catalog on the Python client)                  | the same hosts                                   | `test-e2e-python` (smoke suite)                                                                                                                 |
 | `*-electron`                                                   | the same hosts, the macOS one with a GUI session | a dispatch of `sdk-e2e.yml` with `labels: electron` (full catalog)                                                                              |
 | `linux-x64-snap` (strict Snap)                                 | the Linux GPU host                               | a dispatch of `sdk-e2e.yml` with `labels: snap` (full catalog)                                                                                  |
+| sdk-swift's `darwin-arm64` (the catalog on the Swift client)   | the macOS GPU host                               | a dispatch of `sdk-e2e.yml` with `packages: sdk-swift` and `labels: swift` (full catalog)                                                       |
 
 A dispatch of `sdk-e2e.yml` with `packages: @qvac/sdk` and `labels: test-e2e-smoke` (or any label
 above) runs the same configurations on a branch. Every leg builds `packages/inference` and
 `packages/test-suite` from the checkout and tests them together with `packages/sdk`, downloads its models
-in the run, and uploads its reports as `sdk-results-<configuration>`. The job summary compares them with
-the newest dispatch run's on the base branch; a failed test fails the leg.
+in the run, and uploads its reports as `<package>-results-<configuration>`, such as `sdk-results-linux-x64-gpu`. The
+job summary compares them with the newest dispatch run's on the base branch; a failed test fails the leg.
+
+The Swift leg first runs `swift test` for the Swift SDK at the repository root and for `runners/swift`, then the
+catalog through the `swift-macos` consumer, with the desktop legs' models. It always runs the full catalog: the
+dispatch's `suite`, `exclude-suite`, `include`, `inference-version` and `filter` reach only the sdk's desktop legs and
+the Device Farm apps.
 
 `scripts/impacted-tests.mjs` lists the testIds a change touches
 (`node scripts/impacted-tests.mjs --base main --head HEAD`); CI does not add them to a run.
@@ -283,13 +290,15 @@ closes it:
 
 ### Mobile
 
-Dispatch `sdk-e2e.yml` with `platform: Android` or `platform: iOS` and `packages: @qvac/sdk`, or
-`platform: Android` and `packages: sdk-kotlin` (the Kotlin app). The run builds the consumer APK or IPA with the run id and broker baked in,
+Dispatch `sdk-e2e.yml` with `platform: Android` or `platform: iOS` and `packages: @qvac/sdk`,
+`platform: Android` and `packages: sdk-kotlin` (the Kotlin app), or `platform: iOS` and `packages: sdk-swift` (the
+Swift app; `labels: swift` adds the macOS leg to the same run). The Swift run first builds sdk-swift's iOS example for
+the simulator. The run builds the consumer APK or IPA with the run id and broker baked in,
 starts it on a Device Farm pool from `SDK_ANDROID_DEVICE_FARM_POOLS` or `SDK_IOS_DEVICE_FARM_POOLS`
 (the dispatch's `pool` names one pool; empty prefers an available private pool), drives the full catalog over MQTT once
-the device runs, and fails on any failed test. `tests` narrows it to comma-separated categories or testId
+the device runs, and fails on any failed test. `filter` narrows it to comma-separated categories or testId
 prefixes. On a pull request, `test-e2e-smoke`, `test-e2e-full` and `test-e2e-rerun-failed` run the sdk's Android and iOS
-apps the same way, with the label's suite; the Kotlin app runs only by dispatch.
+apps the same way, with the label's suite; the Kotlin and Swift apps run only by dispatch.
 
 ## Developing new tests
 

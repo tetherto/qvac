@@ -104,6 +104,7 @@ export const modelLoadLlmLoadModeNone: TestDefinition = {
   params: { loadMode: 'none' },
   expectation: { validation: 'type', expectedType: 'string' },
   steps: loadsWithConfig('llm', { verbosity: 0, ctx_size: 2048, load_mode: '$params.loadMode' }),
+  finally: [{ call: { method: 'unloadModel', params: { modelId: '$modelId?' } } }],
   metadata: {
     category: 'model',
     dependency: 'none',
@@ -182,6 +183,7 @@ export const modelLoadLlmPromptCacheKeys: TestDefinition = {
     cache_ram_mib: '$params.cacheRamMib',
     cache_share_across_keys: '$params.cacheShareAcrossKeys'
   }),
+  finally: [{ call: { method: 'unloadModel', params: { modelId: '$modelId?' } } }],
   metadata: {
     category: 'model',
     dependency: 'none',

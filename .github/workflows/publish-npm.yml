@@ -425,6 +425,18 @@ jobs:
       destination: release-assets
       version: ${{ needs.publish.outputs.published_version }}
 
+  # The Swift SDK's worker profile zips on the sdk-v<version> release and its plain <version> tag, on the same condition.
+  swift-package:
+    needs: [select, publish, github-release]
+    if: >-
+      always() && !cancelled() && needs.github-release.result == 'success' && needs.publish.outputs.published_version != '' &&
+      contains(fromJSON(needs.select.outputs.matrices).publish.*.project, '@qvac/sdk')
+    permissions:
+      contents: write
+    uses: ./.github/workflows/publish-swift.yml
+    with:
+      version: ${{ needs.publish.outputs.published_version }}
+
   post:
     needs: [select, create-tag]
     if: >-

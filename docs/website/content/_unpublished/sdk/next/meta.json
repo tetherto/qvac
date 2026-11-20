@@ -10,6 +10,7 @@
     "js-ts-sdk",
     "python-sdk",
     "kotlin-sdk",
+    "swift-sdk",
     "configuration",
     "---Models---",
     "...models",
