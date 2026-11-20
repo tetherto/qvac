@@ -12,7 +12,7 @@ import {
   type NativeIdRecord,
   type SpaceRecord
 } from '../db/records.js'
-import { checkStoredVector } from '../search.js'
+import { checkStoredVector, throwIfAborted } from '../search.js'
 import {
   BIT_WIDTHS,
   loadNativeIndex,
@@ -53,7 +53,8 @@ export interface OpenIndex {
     revision: number,
     query: Float32Array,
     k: number,
-    allowlist: BigUint64Array | null
+    allowlist: BigUint64Array | null,
+    signal?: AbortSignal
   ): Promise<NativeSearchResult | 'stale' | 'unavailable'>
 }
 
@@ -195,8 +196,8 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       storage: entry.identity?.storage ?? DEFAULT_INDEX_STORAGE,
       revision: () => (entry.native === native ? entry.revision : -1),
       rows: () => (entry.native === native ? entry.rows : 0),
-      search: (revision, query, k, allowlist) =>
-        searchAt(entry, native, revision, query, k, allowlist)
+      search: (revision, query, k, allowlist, signal) =>
+        searchAt(entry, native, revision, query, k, allowlist, signal)
     }
   }
 
@@ -206,17 +207,20 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     revision: number,
     query: Float32Array,
     k: number,
-    allowlist: BigUint64Array | null
+    allowlist: BigUint64Array | null,
+    signal?: AbortSignal
   ): Promise<NativeSearchResult | 'stale' | 'unavailable'> {
     // Check and call in one synchronous step, so no mutation slips between.
     if (entry.native !== native || entry.revision !== revision) return 'stale'
     const settled = entry.settled
+    const options = signal ? { signal } : undefined
     let result: NativeSearchResult
     try {
       result = await (allowlist
-        ? native.searchFiltered(query, k, allowlist)
-        : native.search(query, k))
+        ? native.searchFiltered(query, k, allowlist, options)
+        : native.search(query, k, options))
     } catch {
+      throwIfAborted(signal)
       // Disposed by a rebuild or close while the call waited.
       if (entry.native !== native) return 'stale'
       entry.broken = true

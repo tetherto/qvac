@@ -102,7 +102,7 @@ export async function indexSearch(
 
     const vector = query.vector.slice()
     if (index.normalize) normalizeRows(vector, dims)
-    const result = await searchCandidates(index, revision, vector, want, allowlist)
+    const result = await searchCandidates(index, revision, vector, want, allowlist, options.signal)
     if (typeof result === 'string') return result
     const hits: SearchHit[] = []
     let margin = 0
@@ -243,15 +243,18 @@ async function searchCandidates(
   revision: number,
   vector: Float32Array,
   k: number,
-  allowlist: BigUint64Array | null
+  allowlist: BigUint64Array | null,
+  signal: AbortSignal | undefined
 ): Promise<NativeSearchResult | 'stale' | 'unavailable'> {
   let want = k + Math.max(k, MIN_EXTRA_CANDIDATES)
   for (;;) {
+    throwIfAborted(signal)
     const available = allowlist ? allowlist.length : index.rows()
     want = Math.min(available, want)
     // No rows: the index was replaced since the last round.
     if (want === 0) return 'stale'
-    const result = await index.search(revision, vector, want, allowlist)
+    const pending = index.search(revision, vector, want, allowlist, signal)
+    const result = await untilAborted(pending, signal)
     if (typeof result === 'string') return result
     let count = 0
     while (count < result.k && result.ids[count] !== PADDING_ID) count++
@@ -261,8 +264,7 @@ async function searchCandidates(
   }
 }
 
-// Stops waiting for the index on abort; a rebuild already running finishes
-// for the next search.
+// Stops waiting on abort even if the pending work is still running.
 async function untilAborted<T>(pending: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
   if (!signal) return await pending
   pending.catch(() => {})

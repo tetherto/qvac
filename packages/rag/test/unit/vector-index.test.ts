@@ -523,31 +523,40 @@ function controlledLoader(real: NativeIndexModule) {
   const controls = {
     creates: 0,
     searches: 0,
+    lastSearch: null as Promise<NativeSearchResult> | null,
     holdCall: null as Gate | null,
     holdResult: null as Gate | null,
     failAdd: null as Gate | null
   }
+  async function runSearch(start: () => Promise<NativeSearchResult>): Promise<NativeSearchResult> {
+    controls.searches++
+    const call = controls.holdCall
+    controls.holdCall = null
+    if (call) {
+      call.enter()
+      await call.opened
+    }
+    const pending = start()
+    controls.lastSearch = pending
+    const result = controls.holdResult
+    controls.holdResult = null
+    if (result) {
+      result.enter()
+      await result.opened
+    }
+    return await pending
+  }
+
   const wrap = (native: NativeIndex): NativeIndex =>
     new Proxy(native, {
       get(target, key) {
         if (key === 'search') {
-          return async (queries: Float32Array, k: number): Promise<NativeSearchResult> => {
-            controls.searches++
-            const call = controls.holdCall
-            controls.holdCall = null
-            if (call) {
-              call.enter()
-              await call.opened
-            }
-            const pending = target.search(queries, k)
-            const result = controls.holdResult
-            controls.holdResult = null
-            if (result) {
-              result.enter()
-              await result.opened
-            }
-            return await pending
-          }
+          return (...args: Parameters<NativeIndex['search']>) =>
+            runSearch(() => target.search(...args))
+        }
+        if (key === 'searchFiltered') {
+          return (...args: Parameters<NativeIndex['searchFiltered']>) =>
+            runSearch(() => target.searchFiltered(...args))
         }
         if (key === 'addWithIds') {
           return async (vectors: Float32Array, ids: BigUint64Array): Promise<void> => {
@@ -578,6 +587,45 @@ async function useControlledIndex(t: Test) {
   const loaded = controlledLoader((await loadNativeIndex()) as NativeIndexModule)
   setNativeIndexLoader(() => Promise.resolve(loaded.module))
   return loaded.controls
+}
+
+for (const filtered of [false, true]) {
+  test(`an abort stops waiting for a native ${filtered ? 'filtered search' : 'search'}`, async (t) => {
+    const controls = await useControlledIndex(t)
+    const rag = await openOn(t, await openStore(t))
+    const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+    await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
+    const documentIds = filtered ? ['a'] : undefined
+    t.alike(contents(await search(rag, spaceId, [1, 0, 0], 1, documentIds)), ['a'])
+
+    const call = gate()
+    controls.holdCall = call
+    const controller = new AbortController()
+    const pending = rag.search({
+      scope: { namespace: 'ns', documentIds },
+      vector: [1, 0, 0],
+      spaceId,
+      k: 1,
+      signal: controller.signal
+    })
+    const settled = pending.then(
+      () => 'resolved',
+      (error: { code?: number }) => error.code
+    )
+    await call.entered
+    const reason = new Error('stop')
+    controller.abort(reason)
+    const outcome = await Promise.race([settled, delay(100).then(() => 'still waiting')])
+    call.open()
+    t.is(outcome, ERR_CODES.OPERATION_CANCELLED, 'rejected before the native call ran')
+    await call.opened
+    const nativeOutcome = await controls.lastSearch?.catch((error: unknown) => error)
+    t.is(nativeOutcome, reason, 'TurboVec received the aborted signal')
+
+    const before = controls.searches
+    t.alike(contents(await search(rag, spaceId, [1, 0, 0], 1, documentIds)), ['a'])
+    t.is(controls.searches, before + 1, 'later searches still use the index')
+  })
 }
 
 test('a search whose index is disposed while its call waits retries on the rebuilt index', async (t) => {
