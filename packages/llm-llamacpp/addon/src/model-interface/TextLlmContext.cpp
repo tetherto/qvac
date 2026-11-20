@@ -12,6 +12,7 @@
 #include <llama.h>
 
 #include "CacheCheckpointFile.hpp"
+#include "CacheFileIndex.hpp"
 #include "CacheManager.hpp"
 #include "ContinuousBatchScheduler.hpp"
 #include "GenerationParamsApply.hpp"

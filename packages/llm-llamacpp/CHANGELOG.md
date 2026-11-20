@@ -35,8 +35,9 @@ Loads with `parallel >= 2` change as follows:
   output changes ([#5832](https://github.com/tetherto/qvac/pull/5832)).
 - Cache files saved with `parallel >= 2` now hold one KV stream (DeepSeek V4
   and V4.1 keep one per slot), which earlier versions cannot restore. Files
-  saved by earlier versions with
-  `parallel >= 2` still load. A file that fails to load fails its request with
+  saved by earlier versions with `parallel >= 2` still load. A file longer
+  than the slot limit fails its request with `ContextLengthExeeded`; raise the
+  limit or delete it. Any other file that fails to load fails its request with
   `UnableToLoadSessionFile`; delete it, and the next request on that
   `cacheKey` runs without it
   ([#5832](https://github.com/tetherto/qvac/pull/5832)).

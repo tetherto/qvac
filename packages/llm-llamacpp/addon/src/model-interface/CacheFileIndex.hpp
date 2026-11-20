@@ -219,11 +219,11 @@ public:
   /// Whether the ledger in the header of `path` holds more positions or KV
   /// cells than `ceiling`. False when it has no readable ledger.
   static bool ledgerExceeds(const std::string& path, llama_pos ceiling) {
-    const auto words = readLedgerWords(path);
-    if (!words) {
-      return false;
-    }
     try {
+      const auto words = readLedgerWords(path);
+      if (!words) {
+        return false;
+      }
       const DecodedLedger decoded = deserialize(words->data(), words->size());
       return std::max(decoded.nPast, decoded.cacheTokens) > ceiling;
     } catch (const std::exception&) {
