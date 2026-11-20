@@ -1862,10 +1862,18 @@ const ADVISORY_WORKFLOWS = new Map([
 
 test("merge rules: every PR workflow is required or listed as advisory", () => {
   const required = new Set(mergeRules().flatMap((rule) => rule.checks.map((c) => c.workflow)));
+  // Parsed, so `on: pull_request` and `on: [pull_request, ...]` count as well as the block form.
+  const events = (file) => {
+    const out = spawnSync("yq", ["-o=json", ".on", join(root, ".github/workflows", file)], { encoding: "utf8" });
+    assert.equal(out.status, 0, out.stderr);
+    const on = JSON.parse(out.stdout);
+    return typeof on === "string" ? [on] : Array.isArray(on) ? on : Object.keys(on ?? {});
+  };
   const prWorkflows = readdirSync(join(root, ".github/workflows")).filter(
     (file) =>
+      /\.ya?ml$/.test(file) &&
       file !== "pr-gate-merge.yml" &&
-      /^\s+(pull_request|workflow_run|merge_group):/m.test(onBlock(read(`.github/workflows/${file}`))),
+      events(file).some((e) => ["pull_request", "pull_request_target", "workflow_run", "merge_group"].includes(e)),
   );
   const unwired = prWorkflows.filter((file) => !required.has(file) && !ADVISORY_WORKFLOWS.has(file));
   assert.deepEqual(
