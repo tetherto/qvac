@@ -87,6 +87,12 @@ test('accepts the pinned native build and rejects a different revision, reposito
   assert.throws(() => validateRun({ ...RUN, event: 'pull_request' }, CONFIG), /provenance/)
 })
 
+test('the repository defaults to ordinary SDK e2e without a pinned preflight run', async () => {
+  const root = fileURLToPath(new URL('../../../', import.meta.url))
+  assert.equal(existsSync(join(root, 'packages/sdk/ci/speech-preflight.json')), false)
+  assert.equal(await prepareSpeechPreflight(root, {}), null)
+})
+
 test('without the opt-in manifest, the ordinary SDK installation remains unchanged', async (t) => {
   assert.equal(await prepareSpeechPreflight(temporary(t), {}), null)
 })
