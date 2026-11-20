@@ -8,7 +8,7 @@ try {
   const modelId = await loadModel({
     modelSrc: LFM_TOOL_HF,
     modelType: 'llamacpp-completion',
-    modelConfig: { ctx_size: 4096, tools: true },
+    modelConfig: { ctxSize: 4096, tools: true },
     onProgress: (p) => {
       const mb = (n: number) => (n / 1e6).toFixed(1)
       const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`

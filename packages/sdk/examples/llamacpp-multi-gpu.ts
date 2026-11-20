@@ -7,7 +7,7 @@ import { completion, loadModel, unloadModel, VERBOSITY, LLAMA_3_2_1B_INST_Q4_0 }
 // - "row":   splits layers and KV cache across GPUs, and uses tensor parallelism
 //            where supported.
 //
-// tensor-split controls the proportion of work assigned to each GPU.
+// tensorSplit controls the proportion of work assigned to each GPU.
 // "1,1" distributes evenly across two GPUs; "3,1" assigns 75% to GPU 0.
 //
 // Usage:
@@ -21,11 +21,11 @@ try {
     modelSrc,
     modelType: 'llamacpp-completion',
     modelConfig: {
-      'split-mode': 'layer',
-      'tensor-split': '1,1',
-      'main-gpu': 0,
-      ctx_size: 4096,
-      gpu_layers: 99,
+      splitMode: 'layer',
+      tensorSplit: '1,1',
+      mainGpu: 0,
+      ctxSize: 4096,
+      gpuLayers: 99,
       verbosity: VERBOSITY.ERROR
     },
     onProgress: (progress) => {

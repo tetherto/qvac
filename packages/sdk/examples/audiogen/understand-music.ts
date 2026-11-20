@@ -38,7 +38,7 @@ try {
       lmModelSrc: AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
       ditModelSrc: AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
       vaeModelSrc: AUDIOGEN_VAE_BF16,
-      useGPU: true
+      useGpu: true
     }
   })
   console.log(`▸ Model loaded: ${modelId}`)
@@ -61,7 +61,7 @@ try {
 
   const [description, stats] = await Promise.all([run.description, run.stats])
   console.log(`▸ Caption: ${description.caption}`)
-  console.log(`▸ ${description.bpm} BPM, ${description.keyscale}, ${description.timesignature}`)
+  console.log(`▸ ${description.bpm} BPM, ${description.keyScale}, ${description.timeSignature}`)
   console.log(`▸ Vocal language: ${description.vocalLanguage}`)
   // The LM's duration is an estimate; the recovered codes fix the true length.
   console.log(`▸ Estimated duration: ${description.duration.toFixed(1)} s`)

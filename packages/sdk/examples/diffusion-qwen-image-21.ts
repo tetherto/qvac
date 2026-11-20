@@ -56,7 +56,7 @@ function modelSource(source: string) {
 let modelId: string | undefined
 
 try {
-  const init_images = [referencePathA, referencePathB].map(
+  const initImages = [referencePathA, referencePathB].map(
     (file) => new Uint8Array(fs.readFileSync(file))
   )
 
@@ -68,7 +68,7 @@ try {
       llmModelSrc: modelSource(llmModelSrc),
       vaeModelSrc: modelSource(vaeModelSrc),
       projectionModelSrc: modelSource(projectionModelSrc),
-      flash_attn: true
+      flashAttention: true
     },
     onProgress: (progress) => {
       const mb = (bytes: number) => (bytes / 1e6).toFixed(1)
@@ -83,16 +83,16 @@ try {
   const { progressStream, outputs, stats } = diffusion({
     modelId,
     prompt,
-    init_images,
+    initImages,
     width: 512,
     height: 512,
     ...(!turbo && { steps: 30 }),
-    cfg_scale: turbo ? 1 : 6,
+    cfgScale: turbo ? 1 : 6,
     ...(turbo && {
       // Official Turbo sample_sigmas plus the native terminal zero.
-      custom_sigmas: [1, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0]
+      customSigmas: [1, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0]
     }),
-    sampling_method: 'euler',
+    samplingMethod: 'euler',
     seed: 42
   })
 

@@ -66,7 +66,7 @@ try {
   modelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
     modelConfig: {
-      ctx_size: 4096,
+      ctxSize: 4096,
       verbosity: VERBOSITY.ERROR
     },
     onProgress: (p) => {

@@ -101,7 +101,7 @@ async function main(): Promise<void> {
     modelId = await loadModel({
       modelSrc: staged.modelSrc,
       modelType: 'parakeet-transcription',
-      modelConfig: { useGPU: true }
+      modelConfig: { useGpu: true }
     })
 
     console.log('▸ Transcribing audio...')

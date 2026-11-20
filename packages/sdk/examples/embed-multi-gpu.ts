@@ -29,7 +29,7 @@ try {
   const texts = [
     'Multi-GPU embedding distributes layer computation across GPUs.',
     'Each GPU handles a subset of layers, improving throughput for large models.',
-    'The tensor-split ratio controls how much work each GPU receives.'
+    'The tensorSplit ratio controls how much work each GPU receives.'
   ]
 
   for (const text of texts) {

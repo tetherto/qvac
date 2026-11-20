@@ -27,7 +27,7 @@ import { completion, loadModel, unloadModel, QWEN3_600M_INST_Q4 } from '@qvac/sd
 try {
   const modelId = await loadModel({
     modelSrc: QWEN3_600M_INST_Q4,
-    modelConfig: { ctx_size: 4096 },
+    modelConfig: { ctxSize: 4096 },
     onProgress: (p) => {
       const mb = (n: number) => (n / 1e6).toFixed(1)
       const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`

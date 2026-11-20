@@ -53,7 +53,7 @@ try {
       // Flow-Edit needs a turbo DiT variant; Repaint works on every variant.
       ditModelSrc: AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
       vaeModelSrc: AUDIOGEN_VAE_BF16,
-      useGPU: true
+      useGpu: true
     }
   })
   console.log(`▸ Model loaded: ${modelId}`)

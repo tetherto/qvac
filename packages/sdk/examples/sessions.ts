@@ -22,11 +22,11 @@ try {
 
   const modelId = await harness.loadModel({
     modelSrc: QWEN3_600M_INST_Q4,
-    modelConfig: { ctx_size: 4096 }
+    modelConfig: { ctxSize: 4096 }
   })
   const sameModelId = await skillRunner.loadModel({
     modelSrc: QWEN3_600M_INST_Q4,
-    modelConfig: { ctx_size: 4096 }
+    modelConfig: { ctxSize: 4096 }
   })
   const { leaseCount } = await getLoadedModelInfo({ modelId })
   console.log(`▸ same model for both sessions: ${modelId === sameModelId}, leases: ${leaseCount}`)

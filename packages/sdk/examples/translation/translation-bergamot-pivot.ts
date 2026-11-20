@@ -23,19 +23,19 @@ try {
       engine: 'Bergamot',
       from: 'es',
       to: 'it', // Final target language (SDK handles the pivot internally)
-      beamsize: 4,
+      beamSize: 4,
       normalize: 1,
       temperature: 0.3,
-      topk: 100,
+      topK: 100,
       // Pivot model configuration (English → Italian)
       pivotModel: {
         modelSrc: BERGAMOT_EN_IT, // Source for English → Italian model
         // Bergamot-specific generation parameters for pivot model
-        beamsize: 4,
+        beamSize: 4,
         temperature: 0.3,
-        topk: 100,
+        topK: 100,
         normalize: 1,
-        lengthpenalty: 1.2
+        lengthPenalty: 1.2
       }
     },
     onProgress: (p) => {

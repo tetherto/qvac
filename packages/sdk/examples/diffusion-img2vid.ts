@@ -45,10 +45,10 @@ try {
       t5XxlModelSrc,
       vaeModelSrc,
       clipVisionModelSrc,
-      diffusion_fa: true,
-      offload_to_cpu: true,
-      params_backend: 'vae=cpu',
-      vae_tiling: true
+      diffusionFlashAttention: true,
+      offloadToCpu: true,
+      paramsBackend: 'vae=cpu',
+      vaeTiling: true
     },
     onProgress: (p) => {
       const mb = (n: number) => (n / 1e6).toFixed(1)
@@ -59,23 +59,23 @@ try {
   })
   console.log(`▸ Model loaded: ${modelId}`)
 
-  const init_image = new Uint8Array(fs.readFileSync(initImagePath))
+  const initImage = new Uint8Array(fs.readFileSync(initImagePath))
   console.log(`▸ Generating video for: "${prompt}"`)
 
   const { progressStream, outputs, stats } = video({
     modelId,
     mode: 'img2vid',
     prompt,
-    init_image,
-    negative_prompt: 'blurry, distorted, low quality, jittery, static, frozen',
+    initImage,
+    negativePrompt: 'blurry, distorted, low quality, jittery, static, frozen',
     strength: 0.85,
-    flow_shift: 3.0,
-    video_frames: 33,
+    flowShift: 3.0,
+    videoFrames: 33,
     fps: 16,
     steps: 30,
-    cfg_scale: 6.0,
+    cfgScale: 6.0,
     seed: 42,
-    vae_tiling: true
+    vaeTiling: true
   })
 
   for await (const { step, totalSteps } of progressStream) {

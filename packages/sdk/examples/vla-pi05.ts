@@ -89,10 +89,10 @@ try {
   console.log(Array.from(actions.subarray(0, actionDim)))
   if (stats) {
     console.log(
-      `▸ Timing: vision=${stats.vision_ms?.toFixed(0)}ms ` +
-        `prefill=${stats.prefill_total_ms?.toFixed(0)}ms ` +
-        `ode=${stats.ode_ms?.toFixed(0)}ms ` +
-        `total=${stats.total_ms?.toFixed(0)}ms`
+      `▸ Timing: vision=${stats.visionMs?.toFixed(0)}ms ` +
+        `prefill=${stats.prefillTotalMs?.toFixed(0)}ms ` +
+        `ode=${stats.odeMs?.toFixed(0)}ms ` +
+        `total=${stats.totalTime?.toFixed(0)}ms`
     )
   }
 

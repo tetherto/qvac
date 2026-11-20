@@ -16,7 +16,7 @@ try {
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
     modelConfig: {
       device: 'gpu',
-      ctx_size: 2048,
+      ctxSize: 2048,
       verbosity: VERBOSITY.ERROR
     }
   })

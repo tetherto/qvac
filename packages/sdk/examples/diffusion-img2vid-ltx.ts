@@ -14,7 +14,7 @@ import path from 'path'
 // Image-to-video (+ synchronized audio) with LTX-2. Unlike Wan I2V, LTX-2
 // conditions on the first frame through its video VAE, so it needs NO CLIP
 // vision weights (clipVisionModelSrc) — the same LTX-2 layout used for
-// txt2vid works for img2vid, you just add an init_image at generation time.
+// txt2vid works for img2vid, you just add an initImage at generation time.
 //
 // This example needs powerful hardware: LTX-2.3 is a ~21B model, budget at
 // least 20+ GB of video / unified memory.
@@ -55,8 +55,8 @@ try {
       vaeModelSrc,
       audioVaeModelSrc,
       embeddingsConnectorsModelSrc,
-      diffusion_fa: true,
-      vae_tiling: true
+      diffusionFlashAttention: true,
+      vaeTiling: true
     },
     onProgress: (p) => {
       const mb = (n: number) => (n / 1e6).toFixed(1)
@@ -67,25 +67,25 @@ try {
   })
   console.log(`▸ Model loaded: ${modelId}`)
 
-  const init_image = new Uint8Array(fs.readFileSync(initImagePath))
+  const initImage = new Uint8Array(fs.readFileSync(initImagePath))
   console.log(`▸ Generating video for: "${prompt}"`)
 
   const { progressStream, outputs, stats } = video({
     modelId,
     mode: 'img2vid',
     prompt,
-    init_image,
-    negative_prompt: 'blurry, distorted, low quality, jittery, static, frozen, distorted audio',
+    initImage,
+    negativePrompt: 'blurry, distorted, low quality, jittery, static, frozen, distorted audio',
     strength: 0.85,
     // LTX-2 requires width/height as multiples of 32 and (8*k + 1) frames (max 257).
     width: 512,
     height: 320,
-    video_frames: 121,
+    videoFrames: 121,
     fps: 24,
     steps: 10,
-    cfg_scale: 1.0,
+    cfgScale: 1.0,
     seed: 42,
-    temporal_tiling: true
+    temporalTiling: true
   })
 
   for await (const { step, totalSteps } of progressStream) {
