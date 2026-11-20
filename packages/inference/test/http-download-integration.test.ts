@@ -34,11 +34,13 @@ function bytesEqual(a: Buffer, b: Buffer): boolean {
 interface Server {
   base: string
   served206: () => boolean
+  served416: () => boolean
   close: () => Promise<void>
 }
 
 async function startServer(): Promise<Server> {
   let sent206 = false
+  let sent416 = false
   const server = http.createServer((req, res) => {
     const url = req.url ?? '/'
     if (url === '/redirect') {
@@ -69,6 +71,7 @@ async function startServer(): Promise<Server> {
       const match = /bytes=(\d+)-/.exec(String(range))
       const start = match && match[1] ? parseInt(match[1]) : 0
       if (start >= CONTENT.length) {
+        sent416 = true
         res.writeHead(416, { 'content-range': `bytes */${CONTENT.length}` })
         res.end()
         return
@@ -90,6 +93,7 @@ async function startServer(): Promise<Server> {
   return {
     base: `http://127.0.0.1:${port}`,
     served206: () => sent206,
+    served416: () => sent416,
     close: () => new Promise<void>((resolve) => server.close(() => resolve()))
   }
 }
@@ -253,10 +257,16 @@ test('downloadModelFromHttp: a 416 for the whole file marks it complete', async 
   const server = await startServer()
   t.teardown(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
 
-  const url = `${server.base}/head-unsized.bin`
+  const url = `${server.base}/ggml-whole-part.bin`
   const modelPath = await downloadModelFromHttp(url)
-  // HEAD gives no size, so this load sends a Range past the end and gets a 416.
+  // A download stopped before publish: the whole file is still in the partial.
+  fs.renameSync(modelPath, partialDownloadPath(modelPath))
+  fs.rmSync(completeMarkerPath(modelPath))
+
+  // The Range starts past the end, so the server answers 416.
   await downloadModelFromHttp(url)
+  t.ok(server.served416(), 'the server answered 416')
+  t.ok(fs.existsSync(completeMarkerPath(modelPath)), 'the 416 load wrote the marker')
   await server.close()
 
   t.is(await downloadModelFromHttp(url), modelPath, 'offline load uses the cached file')
@@ -270,7 +280,7 @@ test('downloadModelFromHttp: an empty cache is not marked when HEAD gives no siz
 
   const url = `${server.base}/head-unsized.bin`
   const modelPath = await downloadModelFromHttp(url)
-  // An interrupted download that left nothing on disk.
+  // An empty file an older SDK left at the model path.
   fs.writeFileSync(modelPath, Buffer.alloc(0))
   fs.rmSync(completeMarkerPath(modelPath))
 
@@ -307,9 +317,12 @@ test('downloadModelFromHttp: a 416 for a file longer than the server has is not 
 
   const url = `${server.base}/ggml-long.bin`
   const modelPath = await downloadModelFromHttp(url)
-  fs.writeFileSync(modelPath, Buffer.concat([CONTENT, Buffer.alloc(10)]))
+  fs.rmSync(modelPath)
+  fs.rmSync(completeMarkerPath(modelPath))
+  fs.writeFileSync(partialDownloadPath(modelPath), Buffer.concat([CONTENT, Buffer.alloc(10)]))
 
   await downloadModelFromHttp(url)
+  t.ok(server.served416(), 'the server answered 416')
   t.absent(fs.existsSync(completeMarkerPath(modelPath)), 'no marker for a size the server denies')
 })
 
