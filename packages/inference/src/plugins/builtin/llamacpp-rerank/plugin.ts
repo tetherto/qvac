@@ -1,4 +1,5 @@
 import { Reranker } from '@qvac/embed-llamacpp'
+import { CAPABILITY_CONTRACTS } from '@/schemas/capabilities'
 import {
   definePlugin,
   defineHandler,
@@ -41,6 +42,7 @@ export const rerankPlugin = definePlugin({
   addonPackage: ADDON_EMBEDDING,
   loadConfigSchema: rerankConfigSchema,
   createModel: (params) => ({ model: createRerankModel(params) }),
+  provides: [CAPABILITY_CONTRACTS.reranking],
   handlers: {
     rerank: defineHandler({
       requestSchema: rerankRequestSchema,

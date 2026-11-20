@@ -62,6 +62,8 @@ from . import (
     GetLoadedModelInfoResponse,
     GetModelInfoRequest,
     GetModelInfoResponse,
+    GetRuntimeCapabilitiesRequest,
+    GetRuntimeCapabilitiesResponse,
     GetSystemResourcesRequest,
     GetSystemResourcesResponse,
     HeartbeatRequest,
@@ -320,6 +322,13 @@ async def get_model_info(
 ) -> GetModelInfoResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     return GetModelInfoResponse.model_validate(await transport.call(payload))
+
+
+async def get_runtime_capabilities(
+    transport: Transport, params: GetRuntimeCapabilitiesRequest
+) -> GetRuntimeCapabilitiesResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return GetRuntimeCapabilitiesResponse.model_validate(await transport.call(payload))
 
 
 async def get_system_resources(
@@ -587,6 +596,7 @@ __all__ = [
     "finetune_with_progress",
     "get_loaded_model_info",
     "get_model_info",
+    "get_runtime_capabilities",
     "get_system_resources",
     "heartbeat",
     "load_model",

@@ -1,4 +1,5 @@
 import { LayaDecisions } from '@qvac/embed-llamacpp'
+import { CAPABILITY_CONTRACTS } from '@/schemas/capabilities'
 import {
   definePlugin,
   defineHandler,
@@ -41,6 +42,7 @@ export const decisionPlugin = definePlugin({
   addonPackage: ADDON_EMBEDDING,
   loadConfigSchema: decisionConfigSchema,
   createModel: (params) => ({ model: createDecisionModel(params) }),
+  provides: [CAPABILITY_CONTRACTS.decision],
   handlers: {
     decide: defineHandler({
       requestSchema: decideRequestSchema,
