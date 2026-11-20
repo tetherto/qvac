@@ -1,0 +1,79 @@
+---
+title: Stereo depth
+icon: Glasses
+description: Estimate per-pixel disparity from a rectified stereo image pair for depth measurement via BridgeDepth on GGML
+schemaType: HowTo
+---
+
+## Overview
+
+Stereo depth uses a **GGML** inference engine ([`@qvac/classification-ggml`](https://github.com/tetherto/qvac/tree/main/packages/classification-ggml)) to run BridgeDepth. Load a model using `modelType: "ggml-stereo-depth"` and the path to its GGUF file as `modelSrc`.
+
+Pass the rectified left and right views of a stereo camera to [`estimateDisparity()`](/sdk/reference/api#estimatedisparity) as `left` and `right`, each a `Uint8Array` of either:
+* an encoded **JPEG or PNG** buffer; or
+* **raw RGB** bytes, with one shared `width`, `height`, and `channels: 3` for both views.
+
+Both views must have the same size, with each side from 32 to 4096 pixels. The model runs on at most 1280 by 720 pixels, or 720 by 1280 for a portrait pair, and scales a larger pair down to fit.
+
+`estimateDisparity()` returns `{ width, height, disparity, stats }`. `disparity` is a `Float32Array` of `width * height` values in row-major order: the disparity of each pixel of the left view, in input pixels, at the input size. Depth needs the camera calibration: `depth = focalPx * baseline / disparity`, in the unit of the baseline.
+
+A pair larger than 1280 by 720 gets no extra detail, because the model computes at that size and the map is scaled back up. It only makes the reply bigger: a 4096 by 4096 pair returns about 89 MB of base64 text. Unless you need a value for every input pixel, scale both views down to fit 1280 by 720 (720 by 1280 for portrait) before calling `estimateDisparity()`. The disparity is then in the smaller image's pixels, so scale `focalPx` by the same factor when you compute depth.
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/sdk/reference/api#loadmodel)
+2. [`estimateDisparity()`](/sdk/reference/api#estimatedisparity)
+3. [`unloadModel()`](/sdk/reference/api#unloadmodel)
+
+For how to use each function, see [SDK — API reference](/sdk/reference/api/).
+
+## Models
+
+Supported model families and their file layouts:
+
+- **BridgeDepth** (`rvc_pretrain` checkpoint with the Depth Anything V2 ViT-S mono branch): one F32 `*.gguf` file of about 196 MB.
+
+BridgeDepth is not in the model registry yet, so there is no model constant. Convert the checkpoint with the addon's [BridgeDepth guide](https://github.com/tetherto/qvac/blob/main/packages/classification-ggml/docs/bridgedepth.md) and pass the local file path as `modelSrc`.
+
+## Features
+
+* Device selection: `modelConfig.backend` takes an exact GGML device name, such as `CPU`, `CUDA0`, `Vulkan0`, or `MTL0`. If omitted, the addon selects a GPU, then CPU. `modelConfig.threads` accepts integers from 1 to 1024, and `modelConfig.backendsDir` selects a directory of GGML backend modules.
+* Statistics: `stats` exposes `totalTime` in milliseconds, `weightBytes`, `cpuFallbackNodes`, and `backendId`. Backend IDs are CPU=0, Metal=1, CUDA=2, Vulkan=3, OpenCL=4, and other=99.
+* Plugin: when bundling a plugin subset, include `@qvac/sdk/ggml-stereo-depth/plugin` or `PLUGIN_STEREO_DEPTH`. The default SDK worker includes it.
+
+## Cancellation
+
+Calls queue FIFO per model, with one active call and at most 64 waiting. The returned promise exposes `requestId` immediately. Use [`cancel({ requestId })`](/sdk/reference/api#cancel) to cancel that call, or `cancel({ modelId, kind: "stereoDepth" })` for all matching calls.
+
+Cancelling a queued call prevents native inference from starting. Cancelling an active call discards its result after native inference finishes and rejects with `InferenceCancelledError`. The next call waits until that work finishes.
+
+## Example
+
+The following script estimates the disparity of a stereo pair and prints its range and the value at the image centre, and also prints the depth at the centre when given the focal length in pixels and the baseline in metres:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/image/bridgedepth.js title="bridgedepth.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/image/bridgedepth.ts title="bridgedepth.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="info">
+The Python client supports this capability through the same worker. A dedicated Python example is not yet published. See the [Python SDK](/sdk/python-sdk) for the API surface.
+</Callout>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart), the [Python quickstart](/sdk/python-sdk#quickstart), or the [Kotlin quickstart](/sdk/kotlin-sdk#quickstart).
+</Callout>

@@ -127,6 +127,12 @@
       "responseSchema": "schema.json#/$defs/embedBatch.response"
     },
     {
+      "name": "estimateDisparity",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/estimateDisparity.request",
+      "responseSchema": "schema.json#/$defs/estimateDisparity.response"
+    },
+    {
       "name": "finetune",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/finetune.request",

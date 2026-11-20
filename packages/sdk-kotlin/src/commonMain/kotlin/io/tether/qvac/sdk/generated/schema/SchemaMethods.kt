@@ -51,6 +51,8 @@ suspend fun QvacCaller.`embed`(request: io.tether.qvac.sdk.generated.schema.Embe
 
 suspend fun QvacCaller.`embedBatch`(request: io.tether.qvac.sdk.generated.schema.EmbedBatchRequest): io.tether.qvac.sdk.generated.schema.EmbedBatchResponse = callTyped(request)
 
+suspend fun QvacCaller.`estimateDisparity`(request: io.tether.qvac.sdk.generated.schema.EstimateDisparityRequest): io.tether.qvac.sdk.generated.schema.EstimateDisparityResponse = callTyped(request)
+
 suspend fun QvacCaller.`finetune`(request: io.tether.qvac.sdk.generated.schema.FinetuneRequest): io.tether.qvac.sdk.generated.schema.FinetuneResponse = callTyped(request)
 fun QvacCaller.finetuneWithProgress(request: io.tether.qvac.sdk.generated.schema.FinetuneRequest): Flow<QvacProgressEvent<io.tether.qvac.sdk.generated.schema.FinetuneProgressResponse, io.tether.qvac.sdk.generated.schema.FinetuneResponse>> = progressTyped(request, progressType = "finetune:progress")
 

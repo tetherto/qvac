@@ -5,6 +5,7 @@ import { getRequestRegistry } from '@/runtime/request-context'
 import { generateRandomRequestId } from '@/runtime/request-id'
 import { EmbedFailedError, InferenceCancelledError, InvalidResponseError } from '@/errors/index'
 import { decodeBase64 } from '@/utils/encoding'
+import { rawRgbDimensions } from '@/schemas/raw-rgb'
 import { nowMs } from '@/profiling/index'
 import { attachModelExecutionMs, forwardModelExecution } from '@/profiling/model-execution'
 import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
@@ -68,12 +69,7 @@ function toImageSource(input: EmbedWireInput): ImageSource {
 // Loads one image at a time so a batch never holds every decoded image in memory.
 async function loadImage(source: ImageSource) {
   if (source.kind === 'image') {
-    const { image, width, height, channels } = source.input
-    const dimensions =
-      width !== undefined && height !== undefined && channels !== undefined
-        ? { width, height, channels }
-        : undefined
-    return { image: decodeBase64(image), dimensions }
+    return { image: decodeBase64(source.input.image), dimensions: rawRgbDimensions(source.input) }
   }
   const { type, value } = source.media
   if (type === 'base64') return { image: decodeBase64(value), dimensions: undefined }

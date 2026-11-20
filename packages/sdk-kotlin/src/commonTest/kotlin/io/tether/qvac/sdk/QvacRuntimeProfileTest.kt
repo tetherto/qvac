@@ -56,6 +56,32 @@ class QvacRuntimeProfileTest {
     }
 
     @Test
+    fun stereoDepthCapabilityIsCheckedBeforeDispatch() = runTest {
+        val denied = ProfileTransport(
+            QvacRuntimeProfile("vision", "0.23.0", setOf(QvacCapability.CLASSIFICATION)),
+        )
+        val allowed = ProfileTransport(
+            Json.decodeFromString<QvacRuntimeProfile>(
+                """{"name":"aio","sdkVersion":"0.23.0","capabilities":["STEREO_DEPTH"],"plugins":["@qvac/sdk/ggml-stereo-depth/plugin"]}""",
+            ),
+        )
+        for (operation in listOf("estimateDisparity", "loadModel")) {
+            val payload = buildJsonObject {
+                put("type", operation)
+                if (operation == "loadModel") put("modelType", "ggml-stereo-depth")
+            }
+            val error = assertFailsWith<UnsupportedCapabilityException> {
+                QvacClient(denied).call(payload)
+            }
+            assertEquals(QvacCapability.STEREO_DEPTH, error.capability)
+            assertFalse(denied.dispatched)
+            allowed.dispatched = false
+            QvacClient(allowed).call(payload)
+            assertTrue(allowed.dispatched)
+        }
+    }
+
+    @Test
     fun decisionCapabilityIsCheckedBeforeDispatch() = runTest {
         val transport = ProfileTransport(
             QvacRuntimeProfile(
