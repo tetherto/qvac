@@ -10,7 +10,13 @@ const tools = [
 ]
 const history = [{ role: 'system', content: 'Follow the user instructions. Be brief.' }]
 const question = [...history, { role: 'user', content: 'Reply with only the word APPLE.' }]
-const generationParams = { temp: 0, top_k: 1, seed: 42, predict: 128, reasoning_budget: 0 }
+const generationParams = {
+  temperature: 0,
+  topK: 1,
+  seed: 42,
+  predict: 128,
+  reasoningBudget: 0
+}
 
 function reuseCase(
   name: string,
@@ -116,7 +122,7 @@ const invalidCases = [
       prefill: true,
       kvCache: 'invalid-prime',
       tools,
-      generationParams: { tool_choice: 'required' }
+      generationParams: { toolChoice: 'required' }
     },
     error: 'prefill cannot be combined'
   }
@@ -144,7 +150,7 @@ const invalidCases = [
   metadata: { category: 'kv-cache', dependency: 'none', estimatedDurationMs: 5000 }
 }))
 
-// Tools alone, on a model with no `system_prompt`: rejected before the addon.
+// Tools alone, on a model with no `systemPrompt`: rejected before the addon.
 const noMessageCase: TestDefinition = {
   testId: 'kv-cache-prefill-no-message',
   params: {
@@ -185,7 +191,7 @@ export const kvCachePrefillTests = [
   reuseCase('reload', 'prefill-reload', true, { reload: true }),
   reuseCase('system-only', 'prefill-system-only', false),
   noMessageCase,
-  // Tools only; the system message comes from the model's `system_prompt`.
+  // Tools only; the system message comes from the model's `systemPrompt`.
   reuseCase('tools-only', true, true, { history: [], dependency: 'prefill-llm-system-prompt' }),
   ...invalidCases
 ]

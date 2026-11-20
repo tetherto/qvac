@@ -27,7 +27,7 @@ const completesWith = (
         modelId: '$model',
         history: [{ role: 'user', content: '$params.prompt' }],
         stream: false,
-        generationParams: { temp: 0, seed: 42, predict: 96, reasoning_budget: 0 }
+        generationParams: { temperature: 0, seed: 42, predict: 96, reasoningBudget: 0 }
       },
       as: 'run'
     }
@@ -45,7 +45,7 @@ export const speculativeDecodingMtp: TestDefinition = {
   expectation: { validation: 'contains-all', contains: ['Mercury', 'Venus', 'Earth'] },
   suites: ['smoke'],
   steps: [
-    ...completesWith({ ctx_size: 2048, spec_type: 'draft-mtp' }),
+    ...completesWith({ ctxSize: 2048, specType: 'draft-mtp' }),
     { project: { from: '$stats', path: 'draftTokens', as: 'draftTokens' } },
     { assert: { on: '$draftTokens', named: 'atLeast', with: { value: 1 } } },
     {
@@ -72,7 +72,7 @@ export const speculativeDecodingMtpExternalHead: TestDefinition = {
   steps: [
     // The base model has no MTP layers; the MTP model's head drafts for it.
     ...completesWith(
-      { ctx_size: 2048, spec_type: 'draft-mtp', draftModelSrc: '$head.modelSrc' },
+      { ctxSize: 2048, specType: 'draft-mtp', draftModelSrc: '$head.modelSrc' },
       'llm-no-mtp',
       [{ modelSource: { dep: 'llm-mtp', as: 'head' } }]
     ),
@@ -100,7 +100,7 @@ export const speculativeDecodingNone: TestDefinition = {
   params: { prompt: PLANETS_PROMPT },
   expectation: { validation: 'contains-all', contains: ['Mercury', 'Venus', 'Earth'] },
   steps: [
-    ...completesWith({ ctx_size: 2048, spec_type: 'none' }),
+    ...completesWith({ ctxSize: 2048, specType: 'none' }),
     {
       assert: {
         on: '$stats',
@@ -121,7 +121,7 @@ export const speculativeDecodingNone: TestDefinition = {
 export const speculativeDecodingDraftNMaxOutOfRangeRejected: TestDefinition = {
   testId: 'speculative-decoding-draft-n-max-out-of-range-rejected',
   params: { draftNMax: 65 },
-  expectation: { validation: 'throws-error', errorContains: 'spec_draft_n_max' },
+  expectation: { validation: 'throws-error', errorContains: 'specDraftNMax' },
   steps: [
     { modelSource: { dep: 'llm-mtp', as: 'src' } },
     {
@@ -130,7 +130,7 @@ export const speculativeDecodingDraftNMaxOutOfRangeRejected: TestDefinition = {
         params: {
           modelSrc: '$src.modelSrc',
           modelType: '$src.modelType',
-          modelConfig: { spec_type: 'draft-mtp', spec_draft_n_max: '$params.draftNMax' }
+          modelConfig: { specType: 'draft-mtp', specDraftNMax: '$params.draftNMax' }
         },
         as: 'err'
       }
@@ -142,7 +142,7 @@ export const speculativeDecodingDraftNMaxOutOfRangeRejected: TestDefinition = {
         on: '$err',
         named: 'errorMatches',
         with: {
-          messageContains: 'spec_draft_n_max',
+          messageContains: 'specDraftNMax',
           messageNotMatching: 'must be an integer between'
         }
       }

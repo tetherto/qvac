@@ -318,7 +318,7 @@ class InterpreterTest {
                 Json.parseToJsonElement(
                     """
                     {"llm": {"constant": {"${'$'}const": "${Models.all.first().name}"}, "type": "llm",
-                             "config": {"ctx_size": 1024}, "configOn": {"mobile": {"ctx_size": 512}, "desktop": {"ctx_size": 4096}}},
+                             "config": {"ctxSize": 1024}, "configOn": {"mobile": {"ctxSize": 512}, "desktop": {"ctxSize": 4096}}},
                      "desktop-only": {"on": ["desktop"], "modelSrc": "x", "type": "llm"}}
                     """,
                 ),
@@ -331,7 +331,7 @@ class InterpreterTest {
         assertTrue(loaded.passed, loaded.output)
         val load = transport.requests.first()
         assertEquals("llamacpp-completion", load["modelType"]!!.jsonPrimitive.content)
-        assertEquals("512", load["modelConfig"]!!.jsonObject["ctx_size"].toString())
+        assertEquals("512", load["modelConfig"]!!.jsonObject["ctxSize"].toString())
 
         val missing = interpreter.run("""{"steps": [{"useModel": {"deps": ["desktop-only"]}}]}""")
         assertTrue(missing.incomplete, missing.output)

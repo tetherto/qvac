@@ -2,14 +2,14 @@ import type { Step, TestDefinition } from '@qvac/test-suite'
 import type { ToolDialect } from './wire-types.js'
 
 interface GenerationParams {
-  temp?: number
+  temperature?: number
   seed?: number
   predict?: number
 }
 
 interface JsonSchemaResponseFormat {
   type: 'json_schema'
-  json_schema: {
+  jsonSchema: {
     name: string
     schema: Record<string, unknown>
     strict?: boolean
@@ -102,10 +102,10 @@ function createBatchCompletionTest(
   }
 }
 
-const deterministic: GenerationParams = { temp: 0, seed: 42, predict: 16 }
+const deterministic: GenerationParams = { temperature: 0, seed: 42, predict: 16 }
 const markerDeterministic: GenerationParams = { ...deterministic, predict: 32 }
 const visionDeterministic: GenerationParams = {
-  temp: 0,
+  temperature: 0,
   seed: 42,
   predict: 128
 }
@@ -114,7 +114,7 @@ const ELEPHANT_IMAGE_TERMS = ['elephant', 'tusk', 'trunk']
 function markerResponseFormat(marker: string) {
   return {
     type: 'json_schema',
-    json_schema: {
+    jsonSchema: {
       name: 'BatchMarker',
       strict: true,
       schema: {
@@ -284,7 +284,7 @@ export const batchCompletionToolCalling = createBatchCompletionTest(
             }
           }
         ],
-        generationParams: { temp: 0, seed: 42, predict: 96 }
+        generationParams: { temperature: 0, seed: 42, predict: 96 }
       },
       {
         id: 'plain',

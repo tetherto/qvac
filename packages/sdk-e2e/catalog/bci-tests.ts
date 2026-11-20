@@ -3,7 +3,7 @@
 // Drives the BCI whisper.cpp addon through the public SDK surface:
 // `bciTranscribe` (batch) and `bciTranscribeStream` (duplex). The neural
 // input is a committed fixture (`assets/neural/neural-not-too-controversial.bin`,
-// sample 2 from the addon's test set) recorded on session day_idx 1. The
+// sample 2 from the addon's test set) recorded on session dayIdx 1. The
 // addon decodes it deterministically (temperature 0, WER 0.0) to
 // "not too controversial", so "controversial" is a stable assertable token.
 import type { Step, TestDefinition } from '@qvac/test-suite'

@@ -106,7 +106,7 @@ world: {
 - `streamLayers` — keeps the leading transformer segments inside the budget and transfers the rest from system RAM. It needs all three of CPU-backed transformer weights, GPU execution and a nonzero `maxVram`; with any one missing it does nothing.
 - `verbosity` — the engine log level, `0` (errors) to `3` (debug). Use `3` to see the chosen budget and which layers are being streamed.
 
-These live under `world` rather than at the top level. The flat `params_backend`, `max_vram`, `stream_layers` and `verbosity` accepted by image and video generation do not reach a walk session, so passing one in world mode fails at `loadModel()` and names the `world.*` field to use instead.
+These live under `world` rather than at the top level. The flat `paramsBackend`, `maxVram`, `streamLayers` and `verbosity` accepted by image and video generation do not reach a walk session, so passing one in world mode fails at `loadModel()` and names the `world.*` field to use instead.
 
 [`assessModelFit()`](/sdk/reference/api#assessmodelfit) and the fit check in [`loadModel()`](/sdk/reference/api#loadmodel) size a walk when the load names a pre-built `sceneSrc`: they count the transformer, the decoder, the attention caches and the history a walk accumulates. `world.fitSteps` (default `100`) sets how many walk steps that estimate covers; it does not limit the walk. Scene creation is not part of the estimate, so a load without `sceneSrc` gets no engine estimate.
 

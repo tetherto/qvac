@@ -6,7 +6,7 @@
     "type": "llamacpp-completion",
     "config": {
       "verbosity": 0,
-      "ctx_size": 2048
+      "ctxSize": 2048
     }
   },
   "llm-shared-cache": {
@@ -16,8 +16,8 @@
     "type": "llamacpp-completion",
     "config": {
       "verbosity": 0,
-      "ctx_size": 2048,
-      "cache_share_across_keys": true
+      "ctxSize": 2048,
+      "cacheShareAcrossKeys": true
     }
   },
   "llm-small-ctx": {
@@ -27,7 +27,7 @@
     "type": "llamacpp-completion",
     "config": {
       "verbosity": 0,
-      "ctx_size": 512
+      "ctxSize": 512
     }
   },
   "llm-mtp": {
@@ -37,7 +37,7 @@
     "type": "llamacpp-completion",
     "config": {
       "verbosity": 0,
-      "ctx_size": 2048
+      "ctxSize": 2048
     }
   },
   "llm-no-mtp": {
@@ -47,7 +47,7 @@
     "type": "llamacpp-completion",
     "config": {
       "verbosity": 0,
-      "ctx_size": 2048
+      "ctxSize": 2048
     }
   },
   "llm-batch": {
@@ -57,7 +57,7 @@
     "type": "llm",
     "config": {
       "verbosity": 0,
-      "ctx_size": 4096,
+      "ctxSize": 4096,
       "parallel": 4
     }
   },
@@ -67,7 +67,7 @@
     },
     "type": "llm",
     "config": {
-      "ctx_size": 4096,
+      "ctxSize": 4096,
       "tools": true,
       "parallel": 2
     }
@@ -82,7 +82,7 @@
     "type": "llamacpp-completion",
     "config": {
       "verbosity": 0,
-      "ctx_size": 2048
+      "ctxSize": 2048
     }
   },
   "finetune-llm-qwen35": {
@@ -95,7 +95,7 @@
     "type": "llamacpp-completion",
     "config": {
       "verbosity": 0,
-      "ctx_size": 2048
+      "ctxSize": 2048
     }
   },
   "decision": {
@@ -111,8 +111,8 @@
     "type": "llamacpp-decision",
     "config": {
       "device": "cpu",
-      "flash_attn": "off",
-      "batch_size": 64
+      "flashAttention": "off",
+      "batchSize": 64
     }
   },
   "embeddings": {
@@ -170,22 +170,22 @@
       "vadModelSrc": {
         "$const": "VAD_SILERO_5_1_2"
       },
-      "audio_format": "f32le",
+      "audioFormat": "f32le",
       "strategy": "greedy",
       "language": "en",
       "translate": false,
-      "no_timestamps": false,
-      "single_segment": false,
+      "noTimestamps": false,
+      "singleSegment": false,
       "temperature": 0,
-      "suppress_blank": true,
-      "suppress_nst": true,
-      "vad_params": {
+      "suppressBlank": true,
+      "suppressNst": true,
+      "vadParams": {
         "threshold": 0.35,
-        "min_speech_duration_ms": 200,
-        "min_silence_duration_ms": 150,
-        "max_speech_duration_s": 30,
-        "speech_pad_ms": 600,
-        "samples_overlap": 0.3
+        "minSpeechDurationMs": 200,
+        "minSilenceDurationMs": 150,
+        "maxSpeechDurationS": 30,
+        "speechPadMs": 600,
+        "samplesOverlap": 0.3
       }
     }
   },
@@ -195,7 +195,7 @@
     },
     "type": "llamacpp-completion",
     "config": {
-      "ctx_size": 4096,
+      "ctxSize": 4096,
       "tools": true
     }
   },
@@ -205,7 +205,7 @@
     },
     "type": "llamacpp-completion",
     "config": {
-      "ctx_size": 4096,
+      "ctxSize": 4096,
       "tools": true,
       "parallel": 1
     }
@@ -216,7 +216,7 @@
     },
     "type": "llamacpp-completion",
     "config": {
-      "ctx_size": 4096,
+      "ctxSize": 4096,
       "tools": true,
       "parallel": 2
     }
@@ -227,10 +227,10 @@
     },
     "type": "llamacpp-completion",
     "config": {
-      "ctx_size": 4096,
+      "ctxSize": 4096,
       "tools": true,
       "parallel": 1,
-      "system_prompt": "Follow the user instructions. Be brief."
+      "systemPrompt": "Follow the user instructions. Be brief."
     }
   },
   "tools-qwen35": {
@@ -244,7 +244,7 @@
     },
     "type": "llamacpp-completion",
     "config": {
-      "ctx_size": 4096,
+      "ctxSize": 4096,
       "tools": true
     }
   },
@@ -258,7 +258,7 @@
     },
     "type": "llamacpp-completion",
     "config": {
-      "ctx_size": 4096,
+      "ctxSize": 4096,
       "tools": true
     }
   },
@@ -398,7 +398,7 @@
     "type": "llamacpp-completion",
     "config": {
       "verbosity": 0,
-      "ctx_size": 2048
+      "ctxSize": 2048
     },
     "skipPreDownload": true
   },
@@ -471,7 +471,7 @@
         "modelSrc": {
           "$const": "BERGAMOT_EN_IT"
         },
-        "beamsize": 4,
+        "beamSize": 4,
         "temperature": 0.3
       }
     }
@@ -484,7 +484,7 @@
     "config": {
       "ttsEngine": "chatterbox",
       "language": "en",
-      "useGPU": true,
+      "useGpu": true,
       "s3genModelSrc": {
         "$const": "TTS_S3GEN_EN_CHATTERBOX_Q4_0"
       },
@@ -509,7 +509,7 @@
     "type": "tts-ggml",
     "config": {
       "ttsEngine": "parler",
-      "useGPU": true,
+      "useGpu": true,
       "seed": 42,
       "topK": 1,
       "maxFrames": 430,
@@ -524,7 +524,7 @@
     "type": "tts-ggml",
     "config": {
       "ttsEngine": "parler",
-      "useGPU": true,
+      "useGpu": true,
       "seed": 42,
       "topK": 1,
       "maxFrames": 430,
@@ -538,7 +538,7 @@
     "type": "tts-ggml",
     "config": {
       "ttsEngine": "cosyvoice3",
-      "useGPU": true,
+      "useGpu": true,
       "seed": 42
     }
   },
@@ -549,7 +549,7 @@
     "type": "tts-ggml",
     "config": {
       "ttsEngine": "cosyvoice3",
-      "useGPU": true,
+      "useGpu": true,
       "seed": 42,
       "streamChunkTokens": 25,
       "streamFirstChunkTokens": 10
@@ -566,7 +566,7 @@
     "type": "tts-ggml",
     "config": {
       "ttsEngine": "moss-sfx",
-      "useGPU": true,
+      "useGpu": true,
       "seed": 42
     }
   },
@@ -580,7 +580,7 @@
     "type": "tts-ggml",
     "config": {
       "ttsEngine": "moss-speech",
-      "useGPU": true,
+      "useGpu": true,
       "mossSpeechCodecModelSrc": {
         "$const": "TTS_CODEC_MOSS_SPEECH_F16"
       }
@@ -610,7 +610,7 @@
       "ttsEngine": "supertonic",
       "language": "en",
       "voice": "F1",
-      "useGPU": true
+      "useGpu": true
     }
   },
   "tts-supertonic-multilingual": {
@@ -622,7 +622,7 @@
       "ttsEngine": "supertonic",
       "language": "es",
       "voice": "F1",
-      "useGPU": true
+      "useGpu": true
     }
   },
   "tts-supertonic-8k": {
@@ -634,7 +634,7 @@
       "ttsEngine": "supertonic",
       "language": "en",
       "voice": "F1",
-      "useGPU": true,
+      "useGpu": true,
       "outputSampleRate": 8000
     }
   },
@@ -647,7 +647,7 @@
       "ttsEngine": "supertonic",
       "language": "en",
       "voice": "F1",
-      "useGPU": true,
+      "useGpu": true,
       "lavasrDenoiserModelSrc": {
         "$const": "TTS_DENOISER_LAVASR_FP16"
       },
@@ -704,7 +704,7 @@
     },
     "type": "moss-transcribe",
     "config": {
-      "useGPU": false,
+      "useGpu": false,
       "maxThreads": 4
     }
   },
@@ -714,7 +714,7 @@
     },
     "type": "parakeet-transcription",
     "config": {
-      "useGPU": false,
+      "useGpu": false,
       "maxThreads": 4
     }
   },
@@ -784,10 +784,10 @@
         "temperature": 0
       },
       "miscConfig": {
-        "caption_enabled": false
+        "captionEnabled": false
       },
       "bciConfig": {
-        "day_idx": 1
+        "dayIdx": 1
       }
     }
   },
@@ -797,8 +797,8 @@
     },
     "type": "llamacpp-completion",
     "config": {
-      "ctx_size": 4096,
-      "image_no_upscale": "on",
+      "ctxSize": 4096,
+      "imageNoUpscale": "on",
       "projectionModelSrc": {
         "$const": "MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0"
       }
@@ -810,9 +810,9 @@
     },
     "type": "llamacpp-completion",
     "config": {
-      "ctx_size": 2048,
+      "ctxSize": 2048,
       "parallel": 2,
-      "image_no_upscale": "on",
+      "imageNoUpscale": "on",
       "projectionModelSrc": {
         "$const": "MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0"
       }
@@ -824,8 +824,8 @@
     },
     "type": "llamacpp-completion",
     "config": {
-      "ctx_size": 4096,
-      "image_no_upscale": "off",
+      "ctxSize": 4096,
+      "imageNoUpscale": "off",
       "projectionModelSrc": {
         "$const": "MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0"
       }
@@ -863,7 +863,7 @@
     "config": {
       "device": "gpu",
       "threads": 4,
-      "flash_attn": true,
+      "flashAttention": true,
       "llmModelSrc": {
         "$const": "QWEN3_5_9B_MULTIMODAL_Q4_K_M"
       },
@@ -921,7 +921,7 @@
       "vaeModelSrc": {
         "$const": "AUDIOGEN_VAE_BF16"
       },
-      "useGPU": true,
+      "useGpu": true,
       "inferenceSteps": 8
     }
   },
@@ -943,7 +943,7 @@
       "vaeModelSrc": {
         "$const": "FLUX_2_KLEIN_4B_VAE"
       },
-      "diffusion_fa": true
+      "diffusionFlashAttention": true
     }
   },
   "diffusion-fa-disabled": {
@@ -964,7 +964,7 @@
       "vaeModelSrc": {
         "$const": "FLUX_2_KLEIN_4B_VAE"
       },
-      "diffusion_fa": false
+      "diffusionFlashAttention": false
     }
   },
   "diffusion-esrgan": {
@@ -987,10 +987,10 @@
       },
       "upscaler": {
         "type": "esrgan",
-        "model_src": {
+        "modelSrc": {
           "$const": "REALESRGAN_X4PLUS_ANIME_6B"
         },
-        "tile_size": 128
+        "tileSize": 128
       }
     }
   },
@@ -1014,10 +1014,10 @@
       },
       "upscaler": {
         "type": "esrgan",
-        "model_src": {
+        "modelSrc": {
           "$const": "REALESRGAN_X4PLUS_ANIME_6B"
         },
-        "tile_size": 128
+        "tileSize": 128
       }
     }
   },
@@ -1032,7 +1032,7 @@
     "config": {
       "mode": "upscale",
       "upscaler": {
-        "tile_size": 128
+        "tileSize": 128
       }
     }
   },
@@ -1048,7 +1048,7 @@
       "mode": "upscale",
       "device": "cpu",
       "upscaler": {
-        "tile_size": 64
+        "tileSize": 64
       }
     }
   }

@@ -36,7 +36,7 @@ export const configReloadWhisperLanguage: TestDefinition = {
 
 export const configReloadWhisperParams: TestDefinition = {
   testId: 'config-reload-whisper-params',
-  params: { newConfig: { language: 'de', temperature: 0.2, suppress_blank: false } },
+  params: { newConfig: { language: 'de', temperature: 0.2, suppressBlank: false } },
   expectation: { validation: 'type', expectedType: 'string' },
   steps: reloadSteps('$params.newConfig'),
   metadata: { category: 'config-reload', dependency: 'whisper', estimatedDurationMs: 15000 }
@@ -73,7 +73,7 @@ export const configReloadWrongModelType: TestDefinition = {
   steps: reloadRejects({
     modelId: '$model',
     modelType: 'llamacpp-completion',
-    modelConfig: { ctx_size: 2048 }
+    modelConfig: { ctxSize: 2048 }
   }),
   metadata: { category: 'config-reload', dependency: 'whisper', estimatedDurationMs: 5000 }
 }

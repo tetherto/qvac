@@ -29,7 +29,7 @@ Use a reranker GGUF, such as bge-reranker, jina-reranker or Qwen3-Reranker. The 
 
 Rerankers and embedding models are not interchangeable: a reranker cannot be loaded for [`embed()`](/sdk/reference/api#embed), and an embedding model has no classifier head to score documents with.
 
-The load-time `batch_size` sets the tokens per forward pass. Each document, paired with the query, must fit within it; the documents are packed into as few passes as fit. `threads`, `threads-batch`, `gpu_layers`, `flash_attn`, and `backend` control execution. The reranker fixes context size, pooling, and parallelism; these settings cannot be configured through the SDK.
+The load-time `batchSize` sets the tokens per forward pass. Each document, paired with the query, must fit within it; the documents are packed into as few passes as fit. `threads`, `threadsBatch`, `gpuLayers`, `flashAttention`, and `backend` control execution. The reranker fixes context size, pooling, and parallelism; these settings cannot be configured through the SDK.
 
 ## Cancellation and concurrency
 

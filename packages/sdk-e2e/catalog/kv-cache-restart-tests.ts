@@ -11,7 +11,7 @@ export const kvCacheWorkerRestart: TestDefinition = {
       'What is the capital of France? Answer with just the city name.'
     ],
     expectedAnswerContains: 'Paris',
-    generationParams: { temp: 0, top_k: 1, seed: 42, predict: 256 }
+    generationParams: { temperature: 0, topK: 1, seed: 42, predict: 256 }
   },
   expectation: { validation: 'function', fn: () => true },
   metadata: { category: 'lifecycle', dependency: 'llm', estimatedDurationMs: 90000 },

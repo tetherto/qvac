@@ -13,15 +13,15 @@ import { AbstractModelExecutor } from './abstract-model-executor.js'
 import { errorTests } from '../../../../catalog/error-tests.js'
 
 interface GenerationParams {
-  temp?: number
-  top_p?: number
-  top_k?: number
+  temperature?: number
+  topP?: number
+  topK?: number
   predict?: number
   seed?: number
-  frequency_penalty?: number
-  presence_penalty?: number
-  repeat_penalty?: number
-  reasoning_budget?: number
+  frequencyPenalty?: number
+  presencePenalty?: number
+  repeatPenalty?: number
+  reasoningBudget?: number
 }
 
 interface ChatMessage {

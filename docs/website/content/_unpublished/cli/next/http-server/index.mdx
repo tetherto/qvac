@@ -93,7 +93,7 @@ qvac configure --yes     # non-interactive: chat + transcription starter
       "my-llm": {
         "model": "QWEN3_600M_INST_Q4",
         "default": true,
-        "config": { "ctx_size": 8192 }
+        "config": { "ctxSize": 8192 }
       }
     }
   }
@@ -142,7 +142,7 @@ Models are declared in `qvac.config.*` under the `serve.models` key. The server 
         "model": "QWEN3_600M_INST_Q4",
         "default": true,
         "preload": true,
-        "config": { "ctx_size": 8192, "tools": true }
+        "config": { "ctxSize": 8192, "tools": true }
       },
       "my-embed": {
         "model": "GTE_LARGE_FP16",
@@ -168,7 +168,7 @@ Models are declared in `qvac.config.*` under the `serve.models` key. The server 
 Lazy-load behavior (whether requests may load models on demand, load concurrency, per-load timeout, and cancel-on-disconnect) is tuned under [`serve.load`](/sdk/configuration#loadoptions-serveload), with matching `qvac serve --openai` flags. Set `serve.load.lazy: false` (or `--no-lazy-load`) to require preloaded models and return `503 model_not_loaded` otherwise.
 
 <Callout type="info">
-The default LLM context window is 1,024 tokens and includes both the input and generated output. Set `config.ctx_size` explicitly for longer prompts. A request's `max_tokens` limits only generated tokens, so budget the prompt and requested output together within `ctx_size`.
+The default LLM context window is 1,024 tokens and includes both the input and generated output. Set `config.ctxSize` explicitly for longer prompts. A request's `max_tokens` limits only generated tokens, so budget the prompt and requested output together within `ctxSize`.
 </Callout>
 
 <Callout type="warn">
@@ -339,7 +339,7 @@ which is faster than sending the same prompts one by one.
 
 `model` names a `serve.models` alias whose endpoint category is `chat` and whose
 `config.parallel` is 2 or more. Up to `parallel` prompts decode at once and the rest queue.
-The slots share the alias's `ctx_size`.
+The slots share the alias's `ctxSize`.
 
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
@@ -420,7 +420,7 @@ Configure the alias with at least two `parallel` slots:
     "models": {
       "my-llm": {
         "model": "QWEN3_600M_INST_Q4",
-        "config": { "ctx_size": 8192, "parallel": 4 }
+        "config": { "ctxSize": 8192, "parallel": 4 }
       }
     }
   }
@@ -557,7 +557,7 @@ memory each load takes is summed per device and compared against what is free.
 | `models[].modelConfig`| `object`   | No       | Config to assess with, merged over an alias's own config  |
 
 An alias is assessed with the config it would load with. `modelConfig` is merged over it key
-by key, nested objects included, so `{"ctx_size": 32768}` asks about a longer context and an
+by key, nested objects included, so `{"ctxSize": 32768}` asks about a longer context and an
 override inside `contextParams` keeps the alias's other context params. Model sources cannot be given in the request:
 companion sources in `modelConfig` (every `*Src` key, such as `llmModelSrc` or `tokenizerSrc`, and every entry of a `*Srcs` list) must name SDK model constants, so a request
 never makes the server read a path or URL of its choosing.
@@ -582,7 +582,7 @@ where the backend reports one, so the same GPU matches across engines.
 ```bash
 curl -sS http://localhost:11435/qvac/v1/models/fit \
   -H "Content-Type: application/json" \
-  -d '{"models":[{"model":"my-llm","modelConfig":{"ctx_size":8192}}]}'
+  -d '{"models":[{"model":"my-llm","modelConfig":{"ctxSize":8192}}]}'
 ```
 
 ```json
@@ -994,7 +994,7 @@ Configure an upscale model with `config.mode: "upscale"`:
     "models": {
       "upscaler": {
         "model": "REALESRGAN_X4PLUS",
-        "config": { "mode": "upscale", "upscaler": { "tile_size": 128 } }
+        "config": { "mode": "upscale", "upscaler": { "tileSize": 128 } }
       }
     }
   }
@@ -1036,7 +1036,7 @@ Ranges and combinations (a `cover-nofsq` task needs `sourceAudio`, `duration` ex
 | `simpleMode`, `rewriteQuery`     | `boolean`          | No       | Let the LM write or rewrite the request                   |
 | `generateLrc`, `computeQualityScore` | `boolean`      | No       | Add `stats.lrc` / `stats.lyricsScore`, `stats.qualityScore` |
 
-The other `audioGen()` fields (`bpm`, `keyscale`, `timesignature`, `vocalLanguage`, `track`,
+The other `audioGen()` fields (`bpm`, `keyScale`, `timeSignature`, `vocalLanguage`, `track`,
 `maxFrames`, `inferenceSteps`, `shift`, `cfgScale`, the `lm*` and `dcw*` controls, ...) are
 accepted under the same names.
 
@@ -1073,7 +1073,7 @@ Runs an ordered pipeline of `flow-edit` and `repaint` operations over `sourceAud
 | `referenceAudio` | file, data URL, id | No       | Timbre reference for every operation                       |
 | `seed`           | `integer`          | No       | Seeds the first operation; each next one uses `seed + index` |
 
-`bpm`, `keyscale`, `timesignature`, `vocalLanguage`, `inferenceSteps`, `shift` and the `dcw*`
+`bpm`, `keyScale`, `timeSignature`, `vocalLanguage`, `inferenceSteps`, `shift` and the `dcw*`
 controls apply to every operation.
 
 Known limitation: the SDK decodes an encoded source to mono, and a loud stereo source can mix
@@ -1133,8 +1133,8 @@ codes, which a generation takes back as `audioCodes`. A client disconnect cancel
     "caption": "A calm lo-fi piano piece with soft keys.",
     "bpm": 72,
     "duration": 30,
-    "keyscale": "A minor",
-    "timesignature": "4/4",
+    "keyScale": "A minor",
+    "timeSignature": "4/4",
     "vocalLanguage": "unknown",
     "audioCodes": [8123, 1022, 517],
     "seed": 1
@@ -1183,7 +1183,7 @@ ACE-Step takes four weights. The alias's `model` is its DiT; `config` names all 
           "lmModelSrc": "AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0",
           "ditModelSrc": "AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M",
           "vaeModelSrc": "AUDIOGEN_VAE_BF16",
-          "useGPU": true
+          "useGpu": true
         }
       }
     }
@@ -1594,14 +1594,14 @@ The following OpenAI parameters are forwarded to the model on each request:
 
 | OpenAI parameter | SDK parameter | Description |
 | --- | --- | --- |
-| `temperature` | `temp` | Sampling temperature |
+| `temperature` | `temperature` | Sampling temperature |
 | `max_tokens` | `predict` | Maximum tokens to generate |
 | `max_completion_tokens` | `predict` | Alias for `max_tokens` |
-| `top_p` | `top_p` | Nucleus sampling threshold |
+| `top_p` | `topP` | Nucleus sampling threshold |
 | `seed` | `seed` | Random seed for deterministic output |
-| `frequency_penalty` | `frequency_penalty` | Penalize frequent tokens |
-| `presence_penalty` | `presence_penalty` | Penalize already-present tokens |
-| `reasoning_budget` | `reasoning_budget` | Boolean toggle for hybrid-thinking models: `true` keeps reasoning on, `false` disables it. Despite the name, it does not take a positive token cap — only the booleans (or their numeric equivalents `-1`/`0`). |
+| `frequency_penalty` | `frequencyPenalty` | Penalize frequent tokens |
+| `presence_penalty` | `presencePenalty` | Penalize already-present tokens |
+| `reasoning_budget` | `reasoningBudget` | Boolean toggle for hybrid-thinking models: `true` keeps reasoning on, `false` disables it. Despite the name, it does not take a positive token cap — only the booleans (or their numeric equivalents `-1`/`0`). |
 
 #### Instructions (`system` and `developer`)
 
@@ -2021,7 +2021,7 @@ curl http://localhost:11435/v1/audio/transcriptions \
   -F "response_format=text"
 ```
 
-**With prompt** (Whisper uses it as `initial_prompt`):
+**With prompt** (Whisper uses it as `initialPrompt`):
 
 ```bash
 curl http://localhost:11435/v1/audio/transcriptions \
@@ -2386,7 +2386,7 @@ curl http://localhost:11435/v1/images/edits \
   -F "prompt=Place the referenced subjects together in one scene."
 ```
 
-The server passes every reference as SDK `init_images` in upload order. A single file uses `init_image`. Configure the model with its required companion files and prediction settings before sending edits.
+The server passes every reference as SDK `initImages` in upload order. A single file uses `initImage`. Configure the model with its required companion files and prediction settings before sending edits.
 
 <Callout type="warn">
 `mask` / `mask[]` is rejected with `400 mask_not_supported`. The diffusion engine has no mask channel, so masked inpainting cannot be honored — it would silently re-render the entire image.
@@ -2534,7 +2534,7 @@ Register an alias whose endpoint category is `video`: the virtual SDK type **`sd
         "config": {
           "t5XxlModelSrc": "UMT5_XXL_FP16",
           "vaeModelSrc": "WAN_2_1_COMFYUI_REPACKAGED_VAE",
-          "offload_to_cpu": true
+          "offloadToCpu": true
         }
       },
       "wan-i2v": {
@@ -2545,7 +2545,7 @@ Register an alias whose endpoint category is `video`: the virtual SDK type **`sd
           "t5XxlModelSrc": "UMT5_XXL_FP16",
           "vaeModelSrc": "WAN_2_1_COMFYUI_REPACKAGED_VAE",
           "clipVisionModelSrc": "CLIP_VISION_H",
-          "offload_to_cpu": true
+          "offloadToCpu": true
         }
       }
     }

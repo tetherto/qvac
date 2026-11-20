@@ -47,9 +47,9 @@ Unload models using the endpoint before calling `stopRpcServer({ serverId })`. T
 
 Discovery accepts only RPC protocol `113.0.x` and rejects incompatible servers with a diagnostic containing the received and supported versions. Native inference also requires matching protocol major versions. Keep the Fabric versions used by your model addon and RPC servers compatible.
 
-Choose and order the endpoints before calling `getRpcDeviceMap(selected)`. Pass those same endpoints, in the same order, as the comma-separated `modelConfig["rpc-servers"]` value to [`loadModel()`](/sdk/reference/api#loadmodel). The map assigns `RPC0`, `RPC1`, and subsequent aliases across every device in endpoint order. Aliases start at `RPC0` for each model load, including when you reuse a worker.
+Choose and order the endpoints before calling `getRpcDeviceMap(selected)`. Pass those same endpoints, in the same order, as the comma-separated `modelConfig.rpcServers` value to [`loadModel()`](/sdk/reference/api#loadmodel). The map assigns `RPC0`, `RPC1`, and subsequent aliases across every device in endpoint order. Aliases start at `RPC0` for each model load, including when you reuse a worker.
 
-Use the chosen aliases in `modelConfig.devices`. Set `"split-mode": "layer"` to split layers across devices, and order `"tensor-split"` weights to match the selected devices. See [Text generation](/sdk/ai-capabilities/text-generation) for the inference API.
+Use the chosen aliases in `modelConfig.devices`. Set `splitMode: "layer"` to split layers across devices, and order `tensorSplit` weights to match the selected devices. See [Text generation](/sdk/ai-capabilities/text-generation) for the inference API.
 
 ## Cancellation
 
