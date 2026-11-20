@@ -3,12 +3,28 @@ import type { DiffusionFiles, SdConfig, VideoStableDiffusionArgs } from '@qvac/d
 import { ModelLoadFailedError } from '@/errors/index'
 import { flattenUpscalerKeys } from '@/plugins/builtin/sdcpp-generation/upscaler-config'
 import type { SdcppConfig } from '@/schemas/index'
+import { withNativeKeys } from '@/utils/native-keys'
 
 type Artifacts = Record<string, string> | undefined
 
+const SD_NATIVE_KEYS = {
+  mainGpu: 'main-gpu',
+  samplerRng: 'sampler_rng',
+  vaeAutoCpuFallback: 'vae_auto_cpu_fallback',
+  vaeAutoCpuFallbackMemoryRatio: 'vae_auto_cpu_fallback_memory_ratio',
+  vaeTiling: 'vae_tiling',
+  offloadToCpu: 'offload_to_cpu',
+  paramsBackend: 'params_backend',
+  maxVram: 'max_vram',
+  streamLayers: 'stream_layers',
+  flashAttention: 'flash_attn',
+  diffusionFlashAttention: 'diffusion_fa',
+  loraApplyMode: 'lora_apply_mode'
+} as const satisfies Partial<Record<keyof SdcppConfig, string>>
+
 /**
  * In diffusion mode the ESRGAN file (when post-generation upscale is wanted)
- * must come from upscaler.model_src — the primary modelPath is the main
+ * must come from upscaler.modelSrc — the primary modelPath is the main
  * diffusion checkpoint.
  */
 export function assertUpscalerResolved(config: SdcppConfig, artifacts: Artifacts): void {
@@ -18,7 +34,7 @@ export function assertUpscalerResolved(config: SdcppConfig, artifacts: Artifacts
     !artifacts?.['esrganModelPath']
   ) {
     throw new ModelLoadFailedError(
-      'modelConfig.upscaler.model_src is required when modelConfig.upscaler ' +
+      'modelConfig.upscaler.modelSrc is required when modelConfig.upscaler ' +
         'is set in diffusion mode. Provide the ESRGAN model, omit the ' +
         "upscaler block, or switch to modelConfig.mode = 'upscale' to load " +
         'a standalone upscaler.'
@@ -52,7 +68,7 @@ export function imageFilesFor(modelPath: string, artifacts: Artifacts): Diffusio
 export function imageConfigFor(config: SdcppConfig): SdConfig {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { upscaler, mode, ...rest } = config
-  return { ...rest, ...flattenUpscalerKeys(upscaler) } as SdConfig
+  return { ...withNativeKeys(rest, SD_NATIVE_KEYS), ...flattenUpscalerKeys(upscaler) } as SdConfig
 }
 
 /**
@@ -165,5 +181,5 @@ export function videoConfigFor(config: SdcppConfig): SdConfig {
     ...rest
   } = config
   /* eslint-enable @typescript-eslint/no-unused-vars */
-  return rest as SdConfig
+  return withNativeKeys(rest, SD_NATIVE_KEYS) as SdConfig
 }

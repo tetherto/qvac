@@ -4,10 +4,10 @@ import type { SdcppConfig } from '@/schemas/index'
 export function flattenUpscalerKeys(upscaler: SdcppConfig['upscaler']) {
   if (!upscaler) return {}
   return {
-    ...(upscaler.tile_size !== undefined && { upscaler_tile_size: upscaler.tile_size }),
+    ...(upscaler.tileSize !== undefined && { upscaler_tile_size: upscaler.tileSize }),
     ...(upscaler.direct !== undefined && { upscaler_direct: upscaler.direct }),
-    ...(upscaler.offload_params_to_cpu !== undefined && {
-      upscaler_offload_params_to_cpu: upscaler.offload_params_to_cpu
+    ...(upscaler.offloadToCpu !== undefined && {
+      upscaler_offload_params_to_cpu: upscaler.offloadToCpu
     }),
     ...(upscaler.threads !== undefined && { upscaler_threads: upscaler.threads })
   } satisfies Partial<EsrganUpscalerConfig>

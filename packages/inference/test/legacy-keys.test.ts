@@ -2,8 +2,10 @@ import test from 'brittle'
 import {
   createLegacyKeyWarner,
   renameLegacyConfigKeys,
+  renameLegacyDiffusionParams,
   renameLegacyKeys,
   renameLegacyRequestKeys,
+  renameLegacyVideoParams,
   type LegacyKeySpec
 } from '@/schemas/legacy-keys'
 import { llmConfigSchema } from '@/schemas/llamacpp-config'
@@ -171,6 +173,48 @@ test('renameLegacyRequestKeys: whisper and BCI nested configs', (t) => {
     bciConfig: { dayIdx: 1 },
     contextParams: { gpuDevice: 0 }
   })
+})
+
+test('renameLegacyRequestKeys: sd.cpp load config and its upscaler block', (t) => {
+  const { warn } = collectWarnings()
+  const renamed = renameLegacyRequestKeys(
+    {
+      type: 'loadModel',
+      modelType: 'diffusion',
+      modelConfig: {
+        diffusion_fa: true,
+        offload_to_cpu: true,
+        'main-gpu': 0,
+        upscaler: { model_src: 'esrgan.pth', tile_size: 128, offload_params_to_cpu: true }
+      }
+    },
+    warn
+  )
+  t.alike(renamed.modelConfig, {
+    diffusionFlashAttention: true,
+    offloadToCpu: true,
+    mainGpu: 0,
+    upscaler: { modelSrc: 'esrgan.pth', tileSize: 128, offloadToCpu: true }
+  })
+})
+
+test('renameLegacyDiffusionParams and renameLegacyVideoParams: client params', (t) => {
+  const { warn } = collectWarnings()
+  const image = new Uint8Array([1])
+  t.alike(
+    renameLegacyDiffusionParams(
+      { modelId: 'a', prompt: 'p', negative_prompt: 'n', cfg_scale: 4, init_image: image },
+      warn
+    ),
+    { modelId: 'a', prompt: 'p', negativePrompt: 'n', cfgScale: 4, initImage: image }
+  )
+  t.alike(
+    renameLegacyVideoParams(
+      { modelId: 'a', prompt: 'p', mode: 'img2vid', init_image: image, video_frames: 17 },
+      warn
+    ),
+    { modelId: 'a', prompt: 'p', mode: 'img2vid', initImage: image, videoFrames: 17 }
+  )
 })
 
 test('renameLegacyRequestKeys: completion generation params and response format', (t) => {

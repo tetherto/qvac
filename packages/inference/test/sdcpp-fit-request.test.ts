@@ -20,7 +20,7 @@ test('image: carries the files and engine config the load builds', (t) => {
   const request = requestOf<DiffusionFitRequest>(
     sdcppFitRequest(
       fitLoad(
-        { mode: 'diffusion', flash_attn: true, vae_tiling: true },
+        { mode: 'diffusion', flashAttention: true, vaeTiling: true },
         {
           llmModelPath: '/models/encoder.gguf',
           projectionModelPath: '/models/projector.gguf',
@@ -71,7 +71,7 @@ test('image: a configured upscaler is fitted together with its model', (t) => {
   const request = requestOf<DiffusionFitRequest>(
     sdcppFitRequest(
       fitLoad(
-        { mode: 'diffusion', upscaler: { tile_size: 128, threads: 2 } },
+        { mode: 'diffusion', upscaler: { tileSize: 128, threads: 2 } },
         { esrganModelPath: '/models/esrgan.pth' }
       )
     )
@@ -84,8 +84,8 @@ test('image: a configured upscaler is fitted together with its model', (t) => {
 
 test('image: an upscaler without its model is refused as the load refuses it', (t) => {
   t.exception(
-    () => sdcppFitRequest(fitLoad({ mode: 'diffusion', upscaler: { tile_size: 128 } })),
-    /upscaler\.model_src is required/
+    () => sdcppFitRequest(fitLoad({ mode: 'diffusion', upscaler: { tileSize: 128 } })),
+    /upscaler\.modelSrc is required/
   )
 })
 
@@ -93,7 +93,7 @@ test('video: the layout the load selects, projected at the frames run generates'
   const request = requestOf<DiffusionFitRequest>(
     sdcppFitRequest(
       fitLoad(
-        { mode: 'video', threads: 4, vae_tiling: true },
+        { mode: 'video', threads: 4, vaeTiling: true },
         { t5XxlModelPath: '/models/umt5.gguf', vaeModelPath: '/models/wan-vae.safetensors' }
       )
     )
@@ -117,7 +117,7 @@ test('video: a load without its VAE is refused as the load refuses it', (t) => {
 
 test('upscale: the ESRGAN checkpoint with the load upscaler config', (t) => {
   const request = requestOf<EsrganFitRequest>(
-    sdcppFitRequest(fitLoad({ mode: 'upscale', device: 'cpu', upscaler: { tile_size: 64 } }))
+    sdcppFitRequest(fitLoad({ mode: 'upscale', device: 'cpu', upscaler: { tileSize: 64 } }))
   )
 
   t.is(request?.mode, 'upscale')

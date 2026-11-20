@@ -27,30 +27,30 @@ test('video schemas: H3 envelopes and loaded-family frame rules', (t) => {
     mode: 'txt2vid' as const,
     prompt: 'Steam rises from an espresso cup.'
   }
-  for (const video_frames of [5, 22, 39, 73, 124]) {
-    t.ok(videoRequestSchema.safeParse({ ...base, video_frames }).success)
-    t.ok(videoStreamRequestSchema.safeParse({ ...base, type: 'videoStream', video_frames }).success)
-    t.ok(h3VideoRequestSchema.safeParse({ ...base, video_frames }).success)
+  for (const videoFrames of [5, 22, 39, 73, 124]) {
+    t.ok(videoRequestSchema.safeParse({ ...base, videoFrames }).success)
+    t.ok(videoStreamRequestSchema.safeParse({ ...base, type: 'videoStream', videoFrames }).success)
+    t.ok(h3VideoRequestSchema.safeParse({ ...base, videoFrames }).success)
   }
-  for (const video_frames of [0, -1, 1.5]) {
-    t.is(videoRequestSchema.safeParse({ ...base, video_frames }).success, false)
+  for (const videoFrames of [0, -1, 1.5]) {
+    t.is(videoRequestSchema.safeParse({ ...base, videoFrames }).success, false)
     t.is(
-      videoStreamRequestSchema.safeParse({ ...base, type: 'videoStream', video_frames }).success,
+      videoStreamRequestSchema.safeParse({ ...base, type: 'videoStream', videoFrames }).success,
       false
     )
   }
-  for (const video_frames of [1, 6, 17, 121]) {
-    t.is(h3VideoRequestSchema.safeParse({ ...base, video_frames }).success, false)
+  for (const videoFrames of [1, 6, 17, 121]) {
+    t.is(h3VideoRequestSchema.safeParse({ ...base, videoFrames }).success, false)
   }
-  for (const video_frames of [1, 6, 22, 124]) {
-    t.is(wanVideoRequestSchema.safeParse({ ...base, video_frames }).success, false)
+  for (const videoFrames of [1, 6, 22, 124]) {
+    t.is(wanVideoRequestSchema.safeParse({ ...base, videoFrames }).success, false)
   }
-  for (const video_frames of [1, 5, 22, 124, 265]) {
-    t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames }).success, false)
+  for (const videoFrames of [1, 5, 22, 124, 265]) {
+    t.is(ltxVideoRequestSchema.safeParse({ ...base, videoFrames }).success, false)
   }
-  t.ok(wanVideoRequestSchema.safeParse({ ...base, video_frames: 5 }).success)
-  t.ok(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 9 }).success)
-  t.ok(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 257 }).success)
+  t.ok(wanVideoRequestSchema.safeParse({ ...base, videoFrames: 5 }).success)
+  t.ok(ltxVideoRequestSchema.safeParse({ ...base, videoFrames: 9 }).success)
+  t.ok(ltxVideoRequestSchema.safeParse({ ...base, videoFrames: 257 }).success)
   t.alike(h3VideoRequestSchema.parse(base), base, 'native generation defaults remain omitted')
 })
 
@@ -66,7 +66,7 @@ test('H3 schema: validates fixed controls and unsupported conditioning', (t) => 
       width: 960,
       height: 544,
       fps: 24,
-      cfg_scale: 1,
+      cfgScale: 1,
       scheduler: 'discrete',
       steps: 8
     }).success
@@ -75,10 +75,10 @@ test('H3 schema: validates fixed controls and unsupported conditioning', (t) => 
     { width: 944 },
     { height: 528 },
     { fps: 16 },
-    { cfg_scale: 0 },
+    { cfgScale: 0 },
     { scheduler: 'simple' },
-    { control_frames: [PNG_B64] },
-    { vace_strength: 0 },
+    { controlFrames: [PNG_B64] },
+    { vaceStrength: 0 },
     { strength: 0 }
   ]) {
     t.is(
@@ -95,18 +95,18 @@ test('H3 schema: accepts image keyframes only for img2vid', (t) => {
     prompt: 'Animate the supplied first frame.',
     width: 864,
     height: 480,
-    video_frames: 22,
+    videoFrames: 22,
     fps: 24,
-    cfg_scale: 1
+    cfgScale: 1
   }
-  t.ok(h3VideoRequestSchema.safeParse({ ...base, mode: 'img2vid', init_image: PNG_B64 }).success)
+  t.ok(h3VideoRequestSchema.safeParse({ ...base, mode: 'img2vid', initImage: PNG_B64 }).success)
   t.is(h3VideoRequestSchema.safeParse({ ...base, mode: 'img2vid' }).success, false)
   t.is(
-    h3VideoRequestSchema.safeParse({ ...base, mode: 'txt2vid', init_image: PNG_B64 }).success,
+    h3VideoRequestSchema.safeParse({ ...base, mode: 'txt2vid', initImage: PNG_B64 }).success,
     false
   )
   t.is(
-    h3VideoRequestSchema.safeParse({ ...base, mode: 'img2vid', init_image: PNG_B64, strength: 0.8 })
+    h3VideoRequestSchema.safeParse({ ...base, mode: 'img2vid', initImage: PNG_B64, strength: 0.8 })
       .success,
     false
   )
@@ -116,22 +116,22 @@ test('sdcpp config: preserves H3 backend and memory controls', (t) => {
   const config = {
     mode: 'video',
     backend: 'cuda0',
-    params_backend: 'cpu',
-    max_vram: 'cuda0=6,vulkan0=2',
-    stream_layers: false
+    paramsBackend: 'cpu',
+    maxVram: 'cuda0=6,vulkan0=2',
+    streamLayers: false
   }
   t.alike(sdcppConfigSchema.parse(config), config)
-  t.is(sdcppConfigSchema.parse({ max_vram: 0 }).max_vram, 0)
+  t.is(sdcppConfigSchema.parse({ maxVram: 0 }).maxVram, 0)
   for (const config of [
     { backend: 0 },
-    { params_backend: false },
-    { max_vram: true },
-    { stream_layers: 'false' }
+    { paramsBackend: false },
+    { maxVram: true },
+    { streamLayers: 'false' }
   ]) {
     t.is(sdcppConfigSchema.safeParse(config).success, false)
   }
   const defaults = sdcppConfigSchema.parse({ mode: 'video' })
-  for (const field of ['backend', 'params_backend', 'max_vram', 'stream_layers'] as const) {
+  for (const field of ['backend', 'paramsBackend', 'maxVram', 'streamLayers'] as const) {
     t.is(defaults[field], undefined)
   }
 })
@@ -139,7 +139,7 @@ test('sdcpp config: preserves H3 backend and memory controls', (t) => {
 test("sdcppConfigSchema: accepts mode: 'video' and highNoiseDiffusionModelSrc", (t: BrittleT) => {
   const result = sdcppConfigSchema.safeParse({
     mode: 'video',
-    offload_to_cpu: true,
+    offloadToCpu: true,
     t5XxlModelSrc: 'umt5_xxl_fp16.safetensors',
     vaeModelSrc: 'wan_2.1_vae.safetensors',
     highNoiseDiffusionModelSrc: 'wan2.2_high_noise_fp16.safetensors'
@@ -171,15 +171,15 @@ test('sdcppConfigSchema: accepts LTX-2 video layout sources', (t: BrittleT) => {
 test('sdcppConfigSchema: preserves automatic VAE CPU fallback settings', (t: BrittleT) => {
   const result = sdcppConfigSchema.safeParse({
     mode: 'video',
-    vae_auto_cpu_fallback: true,
-    vae_auto_cpu_fallback_memory_ratio: 0.9
+    vaeAutoCpuFallback: true,
+    vaeAutoCpuFallbackMemoryRatio: 0.9
   })
 
   t.is(result.success, true)
-  t.is(result.success && result.data.vae_auto_cpu_fallback, true)
-  t.is(result.success && result.data.vae_auto_cpu_fallback_memory_ratio, 0.9)
-  t.is(sdcppConfigSchema.safeParse({ vae_auto_cpu_fallback_memory_ratio: 0 }).success, false)
-  t.is(sdcppConfigSchema.safeParse({ vae_auto_cpu_fallback_memory_ratio: 1.1 }).success, false)
+  t.is(result.success && result.data.vaeAutoCpuFallback, true)
+  t.is(result.success && result.data.vaeAutoCpuFallbackMemoryRatio, 0.9)
+  t.is(sdcppConfigSchema.safeParse({ vaeAutoCpuFallbackMemoryRatio: 0 }).success, false)
+  t.is(sdcppConfigSchema.safeParse({ vaeAutoCpuFallbackMemoryRatio: 1.1 }).success, false)
 })
 
 test('videoStatsSchema: accepts video runtime stats fields', (t: BrittleT) => {
@@ -230,12 +230,12 @@ test('videoRequestSchema: accepts minimal txt2vid request', (t: BrittleT) => {
     modelId: 'model-1',
     mode: 'txt2vid',
     prompt: 'a running fox',
-    video_frames: 5
+    videoFrames: 5
   })
   t.is(result.success, true)
 })
 
-test('videoRequestSchema: accepts temporal_tiling and LTX-shaped dims/frames', (t: BrittleT) => {
+test('videoRequestSchema: accepts temporalTiling and LTX-shaped dims/frames', (t: BrittleT) => {
   const result = videoRequestSchema.safeParse({
     modelId: 'model-1',
     mode: 'txt2vid',
@@ -243,8 +243,8 @@ test('videoRequestSchema: accepts temporal_tiling and LTX-shaped dims/frames', (
     // The server validates family-specific rules against the loaded model.
     width: 512,
     height: 320,
-    video_frames: 121,
-    temporal_tiling: true
+    videoFrames: 121,
+    temporalTiling: true
   })
   t.is(result.success, true)
 })
@@ -256,14 +256,14 @@ test('ltxVideoRequestSchema: enforces LTX-2 dimensions and frame counts', (t: Br
     prompt: 'a claymation cat playing jazz',
     width: 512,
     height: 320,
-    video_frames: 121
+    videoFrames: 121
   }
 
   t.is(ltxVideoRequestSchema.safeParse(base).success, true)
   t.is(ltxVideoRequestSchema.safeParse({ ...base, width: 528 }).success, false)
   t.is(ltxVideoRequestSchema.safeParse({ ...base, height: 496 }).success, false)
-  t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 13 }).success, false)
-  t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 265 }).success, false)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, videoFrames: 13 }).success, false)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, videoFrames: 265 }).success, false)
 })
 
 test('ltxVideoRequestSchema: accepts the full Ingredients request', (t: BrittleT) => {
@@ -272,15 +272,15 @@ test('ltxVideoRequestSchema: accepts the full Ingredients request', (t: BrittleT
     mode: 'txt2vid',
     prompt: 'Reference sheet: an explorer. Generated video: the explorer walks through snow.',
     lora: '/models/ltx-2-ingredients.safetensors',
-    lora_strength: 1.37,
-    stg_scale: 1,
-    stg_block: 29,
-    reference_images: [PNG_B64],
-    reference_attention_strength: 1,
-    reference_downscale_factor: 1,
+    loraStrength: 1.37,
+    stgScale: 1,
+    stgBlock: 29,
+    referenceImages: [PNG_B64],
+    referenceAttentionStrength: 1,
+    referenceDownscaleFactor: 1,
     width: 768,
     height: 448,
-    video_frames: 121,
+    videoFrames: 121,
     scheduler: 'ltx2'
   })
 
@@ -292,16 +292,16 @@ test('ltxVideoRequestSchema: validates LoRA and STG fields', (t: BrittleT) => {
     modelId: 'model-1',
     mode: 'txt2vid' as const,
     prompt: 'an explorer',
-    video_frames: 121
+    videoFrames: 121
   }
 
   t.is(ltxVideoRequestSchema.safeParse({ ...base, lora: 'relative.safetensors' }).success, false)
-  t.is(ltxVideoRequestSchema.safeParse({ ...base, lora_strength: 1 }).success, false)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, loraStrength: 1 }).success, false)
   t.is(
     ltxVideoRequestSchema.safeParse({
       ...base,
       lora: '/models/adapter.safetensors',
-      lora_strength: -0.1
+      loraStrength: -0.1
     }).success,
     false
   )
@@ -309,13 +309,13 @@ test('ltxVideoRequestSchema: validates LoRA and STG fields', (t: BrittleT) => {
     ltxVideoRequestSchema.safeParse({
       ...base,
       lora: '/models/adapter.safetensors',
-      lora_strength: 10
+      loraStrength: 10
     }).success,
     true
   )
-  t.is(ltxVideoRequestSchema.safeParse({ ...base, stg_scale: 10.1 }).success, false)
-  t.is(ltxVideoRequestSchema.safeParse({ ...base, stg_block: -1 }).success, false)
-  t.is(ltxVideoRequestSchema.safeParse({ ...base, stg_block: 1.5 }).success, false)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, stgScale: 10.1 }).success, false)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, stgBlock: -1 }).success, false)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, stgBlock: 1.5 }).success, false)
 })
 
 test('ltxVideoRequestSchema: validates reference conditioning dependencies', (t: BrittleT) => {
@@ -324,51 +324,51 @@ test('ltxVideoRequestSchema: validates reference conditioning dependencies', (t:
     mode: 'txt2vid' as const,
     prompt: 'an explorer',
     lora: '/models/adapter.safetensors',
-    video_frames: 121
+    videoFrames: 121
   }
 
   t.is(
     ltxVideoRequestSchema.safeParse({
       ...base,
       lora: undefined,
-      reference_images: [PNG_B64]
+      referenceImages: [PNG_B64]
     }).success,
     false
   )
   t.is(
     ltxVideoRequestSchema.safeParse({
       ...base,
-      reference_images: [PNG_B64, PNG_B64]
+      referenceImages: [PNG_B64, PNG_B64]
     }).success,
     false
   )
   t.is(
     ltxVideoRequestSchema.safeParse({
       ...base,
-      reference_attention_strength: 0.5
+      referenceAttentionStrength: 0.5
     }).success,
     false
   )
   t.is(
     ltxVideoRequestSchema.safeParse({
       ...base,
-      reference_downscale_factor: 1
+      referenceDownscaleFactor: 1
     }).success,
     false
   )
   t.is(
     ltxVideoRequestSchema.safeParse({
       ...base,
-      reference_images: [PNG_B64],
-      reference_attention_strength: 1.1
+      referenceImages: [PNG_B64],
+      referenceAttentionStrength: 1.1
     }).success,
     false
   )
   t.is(
     ltxVideoRequestSchema.safeParse({
       ...base,
-      reference_images: [PNG_B64],
-      reference_downscale_factor: 2
+      referenceImages: [PNG_B64],
+      referenceDownscaleFactor: 2
     }).success,
     false
   )
@@ -380,14 +380,14 @@ test('ltxVideoRequestSchema: reference conditioning requires at least 121 frames
     mode: 'txt2vid' as const,
     prompt: 'an explorer',
     lora: '/models/adapter.safetensors',
-    reference_images: [PNG_B64]
+    referenceImages: [PNG_B64]
   }
 
   t.is(ltxVideoRequestSchema.safeParse(base).success, false)
-  t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 97 }).success, false)
-  t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 121 }).success, true)
-  t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 257 }).success, true)
-  t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 265 }).success, false)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, videoFrames: 97 }).success, false)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, videoFrames: 121 }).success, true)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, videoFrames: 257 }).success, true)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, videoFrames: 265 }).success, false)
 })
 
 test('videoRequestSchema: rejects reference conditioning on img2vid', (t: BrittleT) => {
@@ -395,23 +395,23 @@ test('videoRequestSchema: rejects reference conditioning on img2vid', (t: Brittl
     modelId: 'model-1',
     mode: 'img2vid' as const,
     prompt: 'animate this frame',
-    init_image: PNG_B64
+    initImage: PNG_B64
   }
 
-  t.is(videoRequestSchema.safeParse({ ...base, reference_images: [PNG_B64] }).success, false)
-  t.is(videoRequestSchema.safeParse({ ...base, reference_attention_strength: 1 }).success, false)
-  t.is(videoRequestSchema.safeParse({ ...base, reference_downscale_factor: 1 }).success, false)
+  t.is(videoRequestSchema.safeParse({ ...base, referenceImages: [PNG_B64] }).success, false)
+  t.is(videoRequestSchema.safeParse({ ...base, referenceAttentionStrength: 1 }).success, false)
+  t.is(videoRequestSchema.safeParse({ ...base, referenceDownscaleFactor: 1 }).success, false)
 })
 
 test('nonLtxVideoRequestSchema: rejects every LTX-only field', (t: BrittleT) => {
   const fields = [
     ['lora', '/models/adapter.safetensors'],
-    ['lora_strength', 1],
-    ['stg_scale', 1],
-    ['stg_block', 29],
-    ['reference_images', [PNG_B64]],
-    ['reference_attention_strength', 1],
-    ['reference_downscale_factor', 1]
+    ['loraStrength', 1],
+    ['stgScale', 1],
+    ['stgBlock', 29],
+    ['referenceImages', [PNG_B64]],
+    ['referenceAttentionStrength', 1],
+    ['referenceDownscaleFactor', 1]
   ] as const
 
   for (const [field, value] of fields) {
@@ -440,8 +440,8 @@ test('sdcppConfigSchema: accepts the Wan 2.2 TI2V-5B three-file layout', (t: Bri
     mode: 'video',
     t5XxlModelSrc: 'umt5_xxl_fp16.safetensors',
     vaeModelSrc: 'wan2.2_vae.safetensors',
-    diffusion_fa: true,
-    vae_tiling: true
+    diffusionFlashAttention: true,
+    vaeTiling: true
   })
   t.is(result.success, true)
 })
@@ -454,36 +454,33 @@ test('singleExpertVideoRequestSchema: rejects MoE fields without a high-noise ex
     prompt: 'steam curling from an espresso cup',
     width: 1280,
     height: 704,
-    video_frames: 121,
+    videoFrames: 121,
     fps: 24,
     steps: 4,
-    cfg_scale: 1.0,
-    flow_shift: 5.0
+    cfgScale: 1.0,
+    flowShift: 5.0
   }
 
   t.is(singleExpertVideoRequestSchema.safeParse(base).success, true)
-  t.is(singleExpertVideoRequestSchema.safeParse({ ...base, high_noise_steps: 8 }).success, false)
+  t.is(singleExpertVideoRequestSchema.safeParse({ ...base, highNoiseSteps: 8 }).success, false)
   t.is(
-    singleExpertVideoRequestSchema.safeParse({ ...base, high_noise_sampler: 'euler' }).success,
+    singleExpertVideoRequestSchema.safeParse({ ...base, highNoiseSampler: 'euler' }).success,
     false
   )
   t.is(
-    singleExpertVideoRequestSchema.safeParse({ ...base, high_noise_scheduler: 'simple' }).success,
+    singleExpertVideoRequestSchema.safeParse({ ...base, highNoiseScheduler: 'simple' }).success,
     false
   )
+  t.is(singleExpertVideoRequestSchema.safeParse({ ...base, highNoiseCfgScale: 6.0 }).success, false)
   t.is(
-    singleExpertVideoRequestSchema.safeParse({ ...base, high_noise_cfg_scale: 6.0 }).success,
+    singleExpertVideoRequestSchema.safeParse({ ...base, highNoiseFlowShift: 5.0 }).success,
     false
   )
-  t.is(
-    singleExpertVideoRequestSchema.safeParse({ ...base, high_noise_flow_shift: 5.0 }).success,
-    false
-  )
-  t.is(singleExpertVideoRequestSchema.safeParse({ ...base, moe_boundary: 0.875 }).success, false)
+  t.is(singleExpertVideoRequestSchema.safeParse({ ...base, moeBoundary: 0.875 }).success, false)
 
   // The A14B path keeps every MoE field: only the single-expert refinement
   // rejects them.
-  t.is(videoRequestSchema.safeParse({ ...base, high_noise_steps: 8 }).success, true)
+  t.is(videoRequestSchema.safeParse({ ...base, highNoiseSteps: 8 }).success, true)
 })
 
 test('singleExpertVideoRequestSchema: reports every offending MoE field at its own path', (t: BrittleT) => {
@@ -491,13 +488,13 @@ test('singleExpertVideoRequestSchema: reports every offending MoE field at its o
     modelId: 'model-1',
     mode: 'txt2vid',
     prompt: 'a fox',
-    high_noise_steps: 8,
-    moe_boundary: 0.875
+    highNoiseSteps: 8,
+    moeBoundary: 0.875
   })
 
   t.is(result.success, false)
   const paths = result.success ? [] : result.error.issues.map((issue) => issue.path.join('.'))
-  t.alike(paths.sort(), ['high_noise_steps', 'moe_boundary'])
+  t.alike(paths.sort(), ['highNoiseSteps', 'moeBoundary'])
 })
 
 test('videoRequestSchema: accepts optional requestId', (t: BrittleT) => {
@@ -506,21 +503,21 @@ test('videoRequestSchema: accepts optional requestId', (t: BrittleT) => {
     requestId: 'video-request-1',
     mode: 'txt2vid',
     prompt: 'a running fox',
-    video_frames: 5
+    videoFrames: 5
   })
   t.is(result.success, true)
 })
 
-test('videoRequestSchema: validates video_frames, fps, moe_boundary, and base64 inputs', (t: BrittleT) => {
+test('videoRequestSchema: validates videoFrames, fps, moeBoundary, and base64 inputs', (t: BrittleT) => {
   t.is(
     wanVideoRequestSchema.safeParse({
       modelId: 'model-1',
       mode: 'txt2vid',
       prompt: 'a fox',
-      video_frames: 6
+      videoFrames: 6
     }).success,
     false,
-    'video_frames must satisfy (4*k + 1)'
+    'videoFrames must satisfy (4*k + 1)'
   )
 
   t.is(
@@ -539,10 +536,10 @@ test('videoRequestSchema: validates video_frames, fps, moe_boundary, and base64 
       modelId: 'model-1',
       mode: 'txt2vid',
       prompt: 'a fox',
-      moe_boundary: 2
+      moeBoundary: 2
     }).success,
     false,
-    'moe_boundary must be in [0, 1]'
+    'moeBoundary must be in [0, 1]'
   )
 
   t.is(
@@ -550,10 +547,10 @@ test('videoRequestSchema: validates video_frames, fps, moe_boundary, and base64 
       modelId: 'model-1',
       mode: 'txt2vid',
       prompt: 'a fox',
-      control_frames: ['not valid base64!!!']
+      controlFrames: ['not valid base64!!!']
     }).success,
     false,
-    'control_frames entries must be valid base64'
+    'controlFrames entries must be valid base64'
   )
 
   t.is(
@@ -561,41 +558,41 @@ test('videoRequestSchema: validates video_frames, fps, moe_boundary, and base64 
       modelId: 'model-1',
       mode: 'txt2vid',
       prompt: 'a fox',
-      control_frames: []
+      controlFrames: []
     }).success,
     false,
-    'control_frames must reject empty arrays'
+    'controlFrames must reject empty arrays'
   )
 })
 
-test('videoRequestSchema: accepts img2vid with init_image', (t: BrittleT) => {
+test('videoRequestSchema: accepts img2vid with initImage', (t: BrittleT) => {
   const result = videoRequestSchema.safeParse({
     modelId: 'model-1',
     mode: 'img2vid',
     prompt: 'the subject waves gently',
-    init_image: PNG_B64,
+    initImage: PNG_B64,
     strength: 0.85,
-    video_frames: 5
+    videoFrames: 5
   })
   t.is(result.success, true)
 })
 
-test('videoRequestSchema: accepts LTX-2 img2vid (init_image + strength + temporal_tiling)', (t: BrittleT) => {
+test('videoRequestSchema: accepts LTX-2 img2vid (initImage + strength + temporalTiling)', (t: BrittleT) => {
   const result = videoRequestSchema.safeParse({
     modelId: 'model-1',
     mode: 'img2vid',
     prompt: 'the subject slowly turns and smiles',
-    init_image: PNG_B64,
+    initImage: PNG_B64,
     strength: 0.85,
     width: 512,
     height: 320,
-    video_frames: 121,
-    temporal_tiling: true
+    videoFrames: 121,
+    temporalTiling: true
   })
   t.is(result.success, true)
 })
 
-test('videoRequestSchema: rejects img2vid without init_image', (t: BrittleT) => {
+test('videoRequestSchema: rejects img2vid without initImage', (t: BrittleT) => {
   const result = videoRequestSchema.safeParse({
     modelId: 'model-1',
     mode: 'img2vid',
@@ -604,12 +601,12 @@ test('videoRequestSchema: rejects img2vid without init_image', (t: BrittleT) => 
   t.is(result.success, false)
 })
 
-test('videoRequestSchema: rejects txt2vid with init_image', (t: BrittleT) => {
+test('videoRequestSchema: rejects txt2vid with initImage', (t: BrittleT) => {
   const result = videoRequestSchema.safeParse({
     modelId: 'model-1',
     mode: 'txt2vid',
     prompt: 'a fox',
-    init_image: PNG_B64
+    initImage: PNG_B64
   })
   t.is(result.success, false)
 })
@@ -620,7 +617,7 @@ test('videoStreamRequestSchema: accepts img2vid stream envelope', (t: BrittleT) 
     modelId: 'model-1',
     mode: 'img2vid',
     prompt: 'animate this frame',
-    init_image: PNG_B64
+    initImage: PNG_B64
   })
   t.is(result.success, true)
 })

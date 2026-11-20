@@ -9,9 +9,9 @@ const config = {
   vaeModelSrc: '/models/video.safetensors',
   audioVaeModelSrc: '/models/audio.safetensors',
   backend: 'cuda0',
-  params_backend: 'cpu',
-  max_vram: 'cuda0=6,vulkan0=2',
-  stream_layers: false
+  paramsBackend: 'cpu',
+  maxVram: 'cuda0=6,vulkan0=2',
+  streamLayers: false
 }
 
 test('H3 plugin: public load config resolves four files and preserves native controls', async (t) => {
@@ -34,9 +34,9 @@ test('H3 plugin: public load config resolves four files and preserves native con
   t.alike(resolved.config, {
     mode: 'video',
     backend: 'cuda0',
-    params_backend: 'cpu',
-    max_vram: 'cuda0=6,vulkan0=2',
-    stream_layers: false
+    paramsBackend: 'cpu',
+    maxVram: 'cuda0=6,vulkan0=2',
+    streamLayers: false
   })
   const { model } = diffusionPlugin.createModel({
     modelId: 'h3-test',
