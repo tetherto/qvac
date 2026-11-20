@@ -20,8 +20,7 @@ interface BatchPrompt {
   id?: string
   history: Array<{
     role: string
-    content: string
-    attachments?: Array<{ path: string }>
+    content: string | Array<{ type: 'text'; text: string } | { type: 'media'; path: string }>
   }>
   generationParams?: GenerationParams
   responseFormat?: JsonSchemaResponseFormat
@@ -322,8 +321,10 @@ const visionMixedPrompts = (image: string) => [
     history: [
       {
         role: 'user',
-        content: 'What animal is in this image? Reply with one word.',
-        attachments: [{ path: image }]
+        content: [
+          { type: 'media' as const, path: image },
+          { type: 'text' as const, text: 'What animal is in this image? Reply with one word.' }
+        ]
       }
     ],
     generationParams: visionDeterministic
@@ -375,8 +376,10 @@ export const batchCompletionVisionMissingImage = createBatchCompletionTest(
         history: [
           {
             role: 'user',
-            content: 'What is in this image?',
-            attachments: [{ path: 'shared-test-data/images/nonexistent.jpg' }]
+            content: [
+              { type: 'media', path: 'shared-test-data/images/nonexistent.jpg' },
+              { type: 'text', text: 'What is in this image?' }
+            ]
           }
         ],
         generationParams: visionDeterministic

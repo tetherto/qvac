@@ -2439,7 +2439,10 @@ class BatchCompletionStreamRequestPromptsItemHistoryItem(GeneratedBaseModel):
     ] = None
     attachments: Annotated[
         list[BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem] | None,
-        Field(description="Optional file attachments for multimodal models."),
+        Field(
+            deprecated=True,
+            description="Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+        ),
     ] = None
     tool_calls: Annotated[
         list[BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItem] | None,
@@ -4505,7 +4508,10 @@ class CompletionOrchestrateRequestHistoryItem(GeneratedBaseModel):
     ] = None
     attachments: Annotated[
         list[CompletionOrchestrateRequestHistoryItemAttachmentsItem] | None,
-        Field(description="Optional file attachments for multimodal models."),
+        Field(
+            deprecated=True,
+            description="Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+        ),
     ] = None
     tool_calls: Annotated[
         list[CompletionOrchestrateRequestHistoryItemToolCallsItem] | None,
@@ -5247,7 +5253,10 @@ class CompletionStreamRequestHistoryItem(GeneratedBaseModel):
     ] = None
     attachments: Annotated[
         list[CompletionStreamRequestHistoryItemAttachmentsItem] | None,
-        Field(description="Optional file attachments for multimodal models."),
+        Field(
+            deprecated=True,
+            description="Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+        ),
     ] = None
     tool_calls: Annotated[
         list[CompletionStreamRequestHistoryItemToolCallsItem] | None,

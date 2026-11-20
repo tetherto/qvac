@@ -2602,7 +2602,8 @@
                       ]
                     },
                     "attachments": {
-                      "description": "Optional file attachments for multimodal models.",
+                      "description": "Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+                      "deprecated": true,
                       "type": "array",
                       "items": {
                         "type": "object",
@@ -4724,7 +4725,8 @@
                 ]
               },
               "attachments": {
-                "description": "Optional file attachments for multimodal models.",
+                "description": "Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+                "deprecated": true,
                 "type": "array",
                 "items": {
                   "type": "object",
@@ -5508,7 +5510,8 @@
                 ]
               },
               "attachments": {
-                "description": "Optional file attachments for multimodal models.",
+                "description": "Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+                "deprecated": true,
                 "type": "array",
                 "items": {
                   "type": "object",

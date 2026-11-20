@@ -26,8 +26,8 @@
  *                       produced by that prompt. Requires a tool-capable model
  *                       loaded with `modelConfig.tools: true` (e.g. Qwen). See
  *                       the `tools/` examples for the tool-calling surface.
- *  - `attachments`    — the same multimodal attachments `completion()` supports,
- *                       when the loaded model has a projection model.
+ *  - media            — ordered `{ type: 'media', path }` content parts on a user
+ *                       turn, when the loaded model has a projection model.
  *  - `responseFormat` — `json_object` / `json_schema` (cannot be combined with
  *                       `tools` or `mcp`, which already constrain output).
  *

@@ -404,7 +404,7 @@ curl -sS http://localhost:11435/qvac/v1/chat/batch \
 | 400 | `tools_not_enabled` | A prompt has `tools` and the alias lacks `tools` |
 | 400 | `invalid_response_format` | Bad `response_format`, or one combined with `tools` |
 | 400 | `invalid_tool_choice` | `tool_choice` names no declared tool |
-| 400 | `unsupported_image_content` | An image is not a PNG or JPEG data URL |
+| 400 | `unsupported_image_content` | An image is not a PNG or JPEG data URL, or is on a non-user message |
 | 400 | `invalid_model_type` | Alias is not a `chat` model |
 | 400 | `context_length_exceeded` | The batch does not fit the context window |
 | 404 | `model_not_found` | Unknown alias |
@@ -1563,8 +1563,9 @@ shape has no field for it.
 `messages[].content` accepts a plain string or an OpenAI array of `text` and
 `image_url` parts. User messages with images preserve the order of every text and
 image part, so each image reaches the model where the client placed it. Text-only
-arrays are joined into one string without separators. On other roles, images are
-sent as attachments before the joined text.
+arrays are joined into one string without separators. Images are accepted on
+user messages only; an `image_url` part on any other role returns
+`400 unsupported_image_content`.
 
 Both shapes below are valid.
 

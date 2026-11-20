@@ -118,7 +118,7 @@ function ensureDesktopE2EConfig() {
   }
 }
 
-function resolveBatchAttachmentPath(inputPath: string) {
+function resolveBatchMediaPath(inputPath: string) {
   const fileName = inputPath.split('/').pop()
   if (!fileName) return inputPath
   return path.resolve(process.cwd(), 'assets/images', fileName)
@@ -145,7 +145,7 @@ export const executor = createExecutor({
     new RerankExecutor(resources),
     new ModelLoadingExecutor(resources),
     new BatchCompletionExecutor(resources, {
-      resolveAttachmentPath: resolveBatchAttachmentPath
+      resolveMediaPath: resolveBatchMediaPath
     }),
     new CompletionExecutor(resources),
     new TranscriptionExecutor(resources),

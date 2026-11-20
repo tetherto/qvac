@@ -47,7 +47,7 @@ test('batchCompletionClientParamsSchema: accepts batch prompts', (t) => {
   t.is(result.success, true)
 })
 
-test('batchCompletionClientParamsSchema: accepts multimodal attachments', (t) => {
+test('batchCompletionClientParamsSchema: accepts media content parts', (t) => {
   const result = batchCompletionClientParamsSchema.safeParse({
     modelId: 'vision',
     prompts: [
@@ -56,8 +56,10 @@ test('batchCompletionClientParamsSchema: accepts multimodal attachments', (t) =>
         history: [
           {
             role: 'user',
-            content: 'What animal is in this image?',
-            attachments: [{ path: '/tmp/elephant.jpg' }]
+            content: [
+              { type: 'media', path: '/tmp/elephant.jpg' },
+              { type: 'text', text: 'What animal is in this image?' }
+            ]
           }
         ]
       }
