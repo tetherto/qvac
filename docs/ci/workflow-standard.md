@@ -14,8 +14,8 @@ A package without the tag runs the workflows it names itself, such as the regist
 
 | Group | Runs on | Targets it runs |
 |---|---|---|
-| `pr-checks.yml` | every pull request; no secrets | `lint`, `typecheck`, `test:unit`, `verify:generated`, `verify:deps`, and the range and dependency checks below |
-| `pr-build-test.yml` | every pull request, after fork approval and trust | `build`, `cpp:lint`, `cpp:build`, `cpp:tests`, `test:integration`, `test:backend` |
+| `pr-checks.yml` | every pull request; no secrets. A label event runs no jobs: it only starts the two workflows below | `lint`, `typecheck`, `test:unit`, `verify:generated`, `verify:deps`, and the range and dependency checks below |
+| `pr-build-test.yml` | `workflow_run` when `pr-checks.yml` starts on a pull request, after fork approval and trust; dispatch | `build`, `cpp:lint`, `cpp:build`, `cpp:tests`, `test:integration`, `test:backend` |
 | `mobile-tests.yml` | dispatch | `test:mobile` |
 | `benchmarks.yml` | dispatch; weekly for the perf report | `build`, `benchmark`, `test:mobile` |
 | `cache-warm.yml` | push to `main` on cache inputs, schedule, dispatch | `cache:models`, `build`, `cpp:tests` |
@@ -131,7 +131,7 @@ A package's slug, in its release branches, tags and artifact names, is its direc
 ## Prebuilds
 
 - Each build job uploads `prebuild-<slug>-<configuration>`, holding `packages/<dir>/prebuilds` for every package it built or restored, providers included.
-- A build leg is reused from an earlier same-repository run on the branch, or on the default branch (where `cache-warm.yml` builds them), when its row, the package's and its providers' native files and the build inputs are unchanged. `.github/scripts/prebuild-reuse.mjs` keys the legs: native files include the linker maps, export lists and CMake config templates, and the `ci/build-*` and `ci/verify-*` scripts a build target runs; build inputs include every file of the shared CMake and vcpkg code, `pnpm-lock.yaml`, the Bare toolchain, `scripts/ci`, `.github/actions` and `_build.yml`. The publish groups build without reuse.
+- A build leg is reused when its row, the package's and its providers' native files and the build inputs are unchanged. `.github/scripts/prebuild-reuse.mjs` keys the legs: native files include the linker maps, export lists and CMake config templates, and the `ci/build-*` and `ci/verify-*` scripts a build target runs; build inputs include every file of the shared CMake and vcpkg code, `pnpm-lock.yaml`, the Bare toolchain, `scripts/ci`, `.github/actions` and `_build.yml`. A branch's build counts only from a `push`, `schedule` or `workflow_dispatch` run on that branch or the default branch (where `cache-warm.yml` builds them). A pull request's legs are named `prebuild-cache-pr<number>-…`, so only that PR's later runs reuse them; it also reuses the default branch's. A fork PR builds every leg. The publish groups build without reuse.
 - `pr-build-test.yml`'s merge job folds each package's own folder into `prebuilds-<slug>`, the bundle mobile tests install. The publish groups place only the package's own folder, so a dependency never ships inside it.
 - C++ and desktop test jobs restore `prebuild-<slug>-<platform>-<arch>`, run `link:platform` on what they restored, and run their target with `--exclude-task-dependencies`. Every platform and architecture a test configuration uses needs a build configuration.
 - A package without a `build` target restores no prebuilds: its C++, desktop and mobile rows run against the installed workspace and the package itself.
@@ -139,7 +139,17 @@ A package's slug, in its release branches, tags and artifact names, is its direc
 
 ## Trust
 
-Every job in `pr-build-test.yml` that holds secrets, OIDC or runs pull-request code needs `trust` and runs only when `needs.trust.outputs.allowed == 'true'`; `trust` needs `fork-approval`. `pr-checks.yml` holds no secrets; its checks job reads `@tetherto` packages from GitHub Packages with the job token (`packages: read`).
+`pr-build-test.yml` and `sdk-e2e.yml` run on `workflow_run` when `PR checks` is requested, so the default branch's copy of each builds every pull request, and a PR cannot change the workflow that builds it. A PR that changes them runs its own copy only through `workflow_dispatch` on its branch.
+
+- **What they read from the trigger:** only `workflow_run.head_sha`, `head_repository` and `head_branch`. Their `context` job (`.github/actions/workflow-run-pr`) finds the one open PR with that head through the API, and skips the run unless its head SHA still matches, its head repository matches and its base branch is one they build. The PR's number, base, labels, draft state and whether it is a fork all come from the API; `PR checks`' result, outputs and artifacts are never read. `GITHUB_SHA` and `GITHUB_REF` are the default branch's, so every PR checkout takes the `context` job's SHA and repository.
+- **Fork PRs:** `fork-approval` waits on the `fork-ci` environment for a fork, as the API reports it. The run summary lists the PR's changed files before the approval. A fork PR that changes anything under `.github/` is refused, and its status says so. PR-code checkouts of a fork set `allow-unsafe-pr-checkout`, pinned to the SHA, without persisted credentials.
+- **Gating:** every job that holds secrets, OIDC or runs pull-request code needs `trust` and runs only when `needs.trust.outputs.allowed == 'true'`; `trust` needs `fork-approval`.
+- **Permissions:** both workflows set `permissions: {}` and `cache-mode: read`. Jobs that run PR code get `contents: read`, plus `id-token: write` where they use AWS. Only `context` and the last job, which run no PR code, post statuses.
+- **Results:** `qvac/pr-build-test` and `qvac/sdk-e2e` on the PR head link to the run, next to `qvac/prebuild-<key>` and `qvac/cpp-tests-<key>`. The build jobs do not appear in the PR's Checks tab.
+- **Labels:** applying a label starts `PR checks` again, which starts both. The `context` job tells a label's run from a push's by the PR's latest `labeled` event since the previous `PR checks` run on that commit.
+- **Re-runs:** re-running `PR checks` does not start them again; re-run the workflow itself.
+
+`pr-checks.yml` holds no secrets; its checks job reads `@tetherto` packages from GitHub Packages with the job token (`packages: read`). `pr-gate-merge.yml` runs on `pull_request`, so its required check reports on the PR, a fork's included. `check-approvals.yml` runs the default branch's copy when `PR checks` is requested, for fork PRs too, with the App key. It finds the PR through the API the same way, checks out nothing, and reports the required `Check Approvals` as a commit status on the PR head; a `review` comment on the PR runs it again.
 
 ## Shared CI changes
 

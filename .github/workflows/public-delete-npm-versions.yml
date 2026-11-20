@@ -83,7 +83,7 @@ jobs:
 
           # Determine target "pr-<num>" if applicable
           target_version=""
-          if [ "${{ github.event_name }}" == "pull_request" ] || [ "${{ github.event_name }}" == "pull_request_target" ]; then
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
             pr_number="${{ github.event.number }}"
             target_version="pr-$pr_number"
             echo "Target version (from event): $target_version"
@@ -134,7 +134,7 @@ jobs:
             # Only delete on PR events (same as your original intent)
             # If you want manual deletion too, relax this guard.
             if [ "$(echo "$delete_versions" | jq 'length')" -gt 0 ] && \
-               ([ "${{ github.event_name }}" == "pull_request" ] || [ "${{ github.event_name }}" == "pull_request_target" ]); then
+               [ "${{ github.event_name }}" == "pull_request" ]; then
               if [ "${{ inputs.dry-run }}" == "true" ]; then
                 echo "Dry-run enabled; skipping deletes."
               else

@@ -1,12 +1,13 @@
 # PR Validation and Post-Merge Staging Sync
 #
-# On PR: validates models.prod.json and runs tests (fork-ci gates external forks).
+# On PR: validates models.prod.json and runs tests, with no secrets, so forks run them too.
 # On merge to main: syncs models to staging registry and runs smoke test.
 
 name: PR Validation and Staging Sync (Registry-server)
 
 on:
-  pull_request_target:
+  # The PR's own validation and tests, which need no secrets; deploys run only on push and dispatch.
+  pull_request:
     branches: [main, release-*, feature-*, tmp-*]
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
@@ -37,47 +38,16 @@ permissions:
 # only serializes nodes within a single run. The group name is shared with
 # fill-fit-blobs-registry-server.yml, which writes to the same cluster.
 # Never cancel an in-flight deploy.
-# Group PR validation by PR number: pull_request_target uses the base branch ref.
+# Group PR validation by PR number.
 concurrency:
-  group: ${{ github.event_name == 'pull_request_target' && format('{0}-pr-{1}', github.workflow, github.event.pull_request.number) || 'registry-server-staging-write' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
+  group: ${{ github.event_name == 'pull_request' && format('{0}-pr-{1}', github.workflow, github.event.pull_request.number) || 'registry-server-staging-write' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  fork-approval:
-    permissions:
-      statuses: write
-    uses: ./.github/workflows/reusable-fork-approval.yml
-  authorize:
-    needs: [fork-approval]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-      statuses: read
-    outputs:
-      allowed: ${{ steps.auth.outputs.allowed }}
-    steps:
-      - name: Checkout authorize-pr (default branch)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/authorize-pr
-          sparse-checkout-cone-mode: false
-          persist-credentials: false
-
-      - name: Authorize
-        id: auth
-        uses: ./.github/actions/authorize-pr
-        with:
-          github-token: ${{ github.token }}
-
   detect-changes:
-    needs: [authorize, fork-approval]
     runs-on: ubuntu-latest
-    # Fork PR code (checkout + git diff, and downstream npm install / tests)
-    # only runs once BOTH gates pass: authorize-pr (draft / same-repo / fork
-    # synchronize safety) AND fork-approval (fork-ci environment approval).
-    if: needs.authorize.outputs.allowed == 'true'
+    # A draft PR waits for ready-for-review, as before.
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     outputs:
       models_changed: ${{ steps.filter.outputs.models }}
       models_only: ${{ steps.filter.outputs.models == 'true' && steps.filter.outputs.other == 'false' }}
@@ -103,7 +73,7 @@ jobs:
           EVENT_NAME="${{ github.event_name }}"
 
           # Pick SHAs based on event type (PR vs push vs manual)
-          if [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "pull_request_target" ]]; then
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
             HEAD_SHA="${{ github.event.pull_request.head.sha }}"
           elif [[ "$EVENT_NAME" == "push" ]]; then
@@ -151,9 +121,8 @@ jobs:
           fi
 
   validate-json:
-    needs: [authorize, detect-changes, fork-approval]
+    needs: [detect-changes]
     if: |
-      needs.authorize.outputs.allowed == 'true' &&
       needs.detect-changes.outputs.models_changed == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -178,9 +147,8 @@ jobs:
         run: node scripts/validate-models-json.js --file=./data/models.prod.json
 
   test:
-    needs: [authorize, detect-changes, fork-approval]
+    needs: [detect-changes]
     if: |
-      needs.authorize.outputs.allowed == 'true' &&
       needs.detect-changes.outputs.other_changed == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -230,9 +198,8 @@ jobs:
   # uses bare indices so they never appear in job names either. Fails loudly if
   # unset so a misconfiguration blocks the deploy rather than silently skipping.
   resolve-deploy-targets:
-    needs: [authorize, detect-changes, fork-approval]
+    needs: [detect-changes]
     if: |-
-      needs.authorize.outputs.allowed == 'true' &&
       (needs.detect-changes.outputs.models_changed == 'true' || github.event_name == 'workflow_dispatch') &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
@@ -264,7 +231,6 @@ jobs:
   # Autobase quorum; each node must report indexer status before the next.
   deploy-staging:
     needs:
-      - fork-approval
       - detect-changes
       - validate-json
       - test
@@ -334,7 +300,6 @@ jobs:
 
   sync-staging:
     needs:
-      - fork-approval
       - detect-changes
       - validate-json
       - test
@@ -392,7 +357,6 @@ jobs:
 
   smoke-test:
     needs:
-      - fork-approval
       - sync-staging
     runs-on: ubuntu-latest
     environment: release

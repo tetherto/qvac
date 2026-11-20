@@ -1,7 +1,8 @@
 name: Publish (registry-server)
 
 on:
-  pull_request_target:
+  # The PR's lint and tests on pull_request: same-repo PRs only, since they need secrets a fork's run does not get.
+  pull_request:
     types:
       - opened
       - synchronize
@@ -37,19 +38,15 @@ env:
   NAME_SUFFIX: "-mono"
 
 jobs:
-  fork-approval:
-    permissions:
-      statuses: write
-    uses: ./.github/workflows/reusable-fork-approval.yml
+  # Same-repo PRs and non-PR events only: a fork's pull_request run has none of the secrets these jobs need.
   authorize:
-    needs: [fork-approval]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
       statuses: read
     outputs:
-      allowed: ${{ steps.auth.outputs.allowed }}
+      allowed: ${{ steps.auth.outputs.allowed == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     steps:
       - name: Checkout authorize-pr (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -105,10 +102,10 @@ jobs:
 
   detect-changes:
     needs:
-      - fork-approval
       - authorize
     runs-on: ubuntu-latest
-    environment: release
+    # A PR's run is on its merge ref, outside the release environment's deployment branches; it needs no secret here.
+    environment: ${{ github.event_name != 'pull_request' && 'release' || '' }}
     if: (needs.authorize.outputs.allowed == 'true')
     outputs:
       schema_changed: ${{ steps.filter.outputs.schema }}
@@ -123,9 +120,11 @@ jobs:
           fetch-depth: 0
 
       - name: Fetch PR head commits
-        if: github.event_name == 'pull_request_target'
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          git fetch origin ${{ github.event.pull_request.head.sha }}
+          git fetch origin "$HEAD_SHA"
 
       - name: Detect file changes
         id: filter
@@ -136,7 +135,7 @@ jobs:
           PKG_DIR="${PKG_DIR}"
           EVENT="${GITHUB_EVENT_NAME}"
 
-          if [[ "${EVENT}" == "pull_request" || "${EVENT}" == "pull_request_target" ]]; then
+          if [[ "${EVENT}" == "pull_request" ]]; then
             # PR diff: base..head
             BEFORE_SHA="${{ github.event.pull_request.base.sha }}"
             AFTER_SHA="${{ github.event.pull_request.head.sha }}"
@@ -171,7 +170,7 @@ jobs:
           fi
 
   publish-logic:
-    needs: [fork-approval, authorize]
+    needs: [authorize]
     runs-on: ubuntu-latest
     if: needs.authorize.outputs.allowed == 'true'
     outputs:
@@ -222,7 +221,6 @@ jobs:
 
   publish-schema-gpr:
     needs:
-      - fork-approval
       - authorize
       - detect-changes
       - publish-logic
@@ -259,7 +257,6 @@ jobs:
 
   publish-schema-npm:
     needs:
-      - fork-approval
       - authorize
       - detect-changes
       - publish-logic
@@ -317,7 +314,7 @@ jobs:
 
   publish-schema:
     name: Publish Schema (meta)
-    needs: [fork-approval, authorize, publish-schema-gpr, publish-schema-npm]
+    needs: [authorize, publish-schema-gpr, publish-schema-npm]
     if: |
       needs.authorize.outputs.allowed == 'true' &&
       (needs.publish-schema-gpr.result == 'success' || needs.publish-schema-gpr.result == 'skipped') &&
@@ -339,7 +336,6 @@ jobs:
 
   lint-and-test:
     needs:
-      - fork-approval
       - authorize
       - detect-changes
     if: |-
@@ -348,7 +344,8 @@ jobs:
       contents: read
       packages: read
     runs-on: ubuntu-latest
-    environment: release
+    # A PR's run is on its merge ref, outside the release environment's deployment branches; npm installs anonymously.
+    environment: ${{ github.event_name != 'pull_request' && 'release' || '' }}
     steps:
       - name: Checkout base repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -359,12 +356,14 @@ jobs:
           fetch-depth: 0
 
       - name: Checkout PR head
-        if: github.event_name == 'pull_request_target'
+        if: github.event_name == 'pull_request'
         shell: bash
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          git fetch origin ${{ github.event.pull_request.head.sha }}:refs/remotes/origin/pr-head
-          git checkout --detach ${{ github.event.pull_request.head.sha }}
+          git fetch origin "$HEAD_SHA:refs/remotes/origin/pr-head"
+          git checkout --detach "$HEAD_SHA"
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
@@ -373,11 +372,13 @@ jobs:
       - name: Configure npm for package registries
         shell: bash
         working-directory: ${{ env.PKG_DIR }}/client
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
           echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
+          if [ -n "$NPM_TOKEN" ]; then echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc; fi
 
       - name: Install client dependencies
         working-directory: ${{ env.PKG_DIR }}/client
@@ -410,7 +411,6 @@ jobs:
 
   publish-client-gpr:
     needs:
-      - fork-approval
       - authorize
       - detect-changes
       - publish-logic
@@ -450,7 +450,6 @@ jobs:
 
   publish-client-npm:
     needs:
-      - fork-approval
       - authorize
       - detect-changes
       - publish-logic
