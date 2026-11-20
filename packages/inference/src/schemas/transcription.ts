@@ -161,6 +161,7 @@ export const ASR_BACKEND_IDS = Object.freeze({
   CUDA: 2,
   Vulkan: 3,
   OpenCL: 4,
+  WebGPU: 5,
   Other: 99
 } as const satisfies AddonBackendIds)
 

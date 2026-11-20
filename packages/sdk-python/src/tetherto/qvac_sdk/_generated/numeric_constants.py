@@ -11,6 +11,7 @@ ASR_BACKEND_IDS: dict[str, int] = {
     "CUDA": 2,
     "Vulkan": 3,
     "OpenCL": 4,
+    "WebGPU": 5,
     "Other": 99,
 }
 
