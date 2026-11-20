@@ -222,8 +222,35 @@ Linux also verifies typed exceptions, `exception_ptr`, stream RTTI and
 allocation/destruction across a shared C++ boundary, with versioned imports.
 Full fabric prebuild CI uses the same overlay and checks staged ELF imports.
 
+Windows source validation with MSVC 14.44, LLVM 23.1.4 and `/MTd` passes the
+CPU allocate/free, logger and abort tests. A Release DLL whole-archiving
+llama/common/mtmd against the shared core also links and loads successfully.
+
+The additional C++ stream/vector acceptance probe remains **failing** under
+`/MTd`: a caller-owned vector is passed into `Uint8BufferStreamBuf`, and the
+core reports `__acrt_first_block == header` during DLL teardown. The no-stream
+control passes. This is separate from the fixed linker/export collision.
+Keep this boundary out of any claim that Windows ownership is fully validated.
+The probe is source-only and instruments the core with a test CRT report hook;
+it is not the installed-port test and is not run by the current CI target.
+Run it in a VS developer shell, with native CMake/Ninja/clang-cl executables:
+
+```powershell
+cmake -S packages/fabric/test/native -B build/windows-stream -G Ninja `
+  -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl `
+  -DQVAC_GGML_SOURCE_DIR=C:/path/to/fabric/ggml `
+  -DCMAKE_PROJECT_INCLUDE="$PWD/packages/fabric/test/regression/windows-stream/hook.cmake"
+cmake --build build/windows-stream
+ctest --test-dir build/windows-stream --output-on-failure
+```
+
+The report hook terminates the child with status 86 on any CRT assertion,
+including assertions after `main` returns; checking a counter in `main` would
+miss this failure. The hook does not change allocation behavior and is never
+compiled into shipped core libraries.
+
 The strict runtime-binding audit remains required: versioned imports alone
-have not eliminated Bare's allocator interposition. Windows ownership of the
-fork's C++ stream/vector extensions, Android APK loading, bare-sidecar,
-coexistence and GPU/NPU execution remain cutover acceptance work. These draft
-PRs do not migrate all consumer addons or remove their compatibility paths.
+have not eliminated Bare's allocator interposition. Windows stream/vector
+ownership, Android APK loading, bare-sidecar, coexistence and GPU/NPU execution
+remain cutover acceptance work. These draft PRs do not migrate all consumer
+addons or remove their compatibility paths.
