@@ -75,10 +75,10 @@ async def main() -> int:
                 "threads": 4,
                 "t5XxlModelSrc": t5_xxl_model_src,
                 "vaeModelSrc": vae_model_src,
-                "diffusion_fa": True,
-                "offload_to_cpu": True,
-                "params_backend": "vae=cpu",
-                "vae_tiling": True,
+                "diffusionFlashAttention": True,
+                "offloadToCpu": True,
+                "paramsBackend": "vae=cpu",
+                "vaeTiling": True,
             },
             on_progress=print_progress,
         )
@@ -92,7 +92,7 @@ async def main() -> int:
                 "modelId": model_id,
                 "mode": "txt2vid",
                 "prompt": prompt,
-                "negative_prompt": "blurry, low quality, static, jittery, watermark",
+                "negativePrompt": "blurry, low quality, static, jittery, watermark",
                 "width": 480,
                 "height": 832,
                 # Frame count must satisfy (4*k + 1), k >= 1. Common values at
@@ -105,16 +105,16 @@ async def main() -> int:
                 # motion quality, ~28 min)
                 # Going beyond 81 can degrade quality because it exceeds the
                 # model's positional embeddings.
-                "video_frames": 33,
+                "videoFrames": 33,
                 "fps": 16,
                 "steps": 30,
-                "cfg_scale": 6.0,
-                # Wan 2.1 T2V needs flow_shift=3.0 for visible motion. Higher
+                "cfgScale": 6.0,
+                # Wan 2.1 T2V needs flowShift=3.0 for visible motion. Higher
                 # values can make consecutive frames near-identical, which
                 # looks like a frozen video.
-                "flow_shift": 3.0,
+                "flowShift": 3.0,
                 "seed": 42,
-                "vae_tiling": True,
+                "vaeTiling": True,
             }
         )
 

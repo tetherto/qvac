@@ -30,6 +30,7 @@ MODELS_REGISTRY_JSON_PATH = CONTRACT_DIR / "models.json"
 MODEL_TYPE_MAPS_JSON_PATH = CONTRACT_DIR / "model-type-maps.json"
 ERROR_CODES_JSON_PATH = CONTRACT_DIR / "error-codes.json"
 NUMERIC_CONSTANTS_JSON_PATH = CONTRACT_DIR / "numeric-constants.json"
+LEGACY_KEYS_JSON_PATH = CONTRACT_DIR / "legacy-keys.json"
 SDK_PACKAGE_JSON_PATH = CONTRACT_DIR.parent / "package.json"
 SRC_DIR = PACKAGE_ROOT / "src"
 PACKAGE_DIR = SRC_DIR / "tetherto" / "qvac_sdk"
@@ -356,6 +357,9 @@ def run_datamodel_codegen(output_dir: Path) -> None:
         )
         run_codegen_on(codegen_schema, output_dir)
     preserve_forbidden_fields(output_dir)
+    ignore_shadowed_deprecated_fields(output_dir)
+    add_legacy_keys(output_dir)
+    format_with_black([output_dir])
 
 
 def run_codegen_on(schema_path: Path, output_dir: Path) -> None:
@@ -399,6 +403,134 @@ def run_codegen_on(schema_path: Path, output_dir: Path) -> None:
         ],
         check=True,
     )
+
+
+def deprecated_alias(field: ast.AnnAssign) -> str | None:
+    """The wire alias of a field generated with `Field(..., deprecated=True)`."""
+    for node in ast.walk(field.annotation):
+        if not (
+            isinstance(node, ast.Call) and getattr(node.func, "id", None) == "Field"
+        ):
+            continue
+        keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+        deprecated = keywords.get("deprecated")
+        alias = keywords.get("alias")
+        if (
+            isinstance(deprecated, ast.Constant)
+            and deprecated.value is True
+            and isinstance(alias, ast.Constant)
+            and isinstance(alias.value, str)
+        ):
+            return alias.value
+    return None
+
+
+def ignore_shadowed_deprecated_fields(output_dir: Path) -> None:
+    """Drop each deprecated response alias whose Python name is already its
+    replacement's, such as `global_steps` next to `globalSteps`. The generator
+    would otherwise emit it as `global_steps_1`. The model ignores that wire key
+    instead, so the Python attribute stays the one callers already use."""
+    for path in output_dir.rglob("*.py"):
+        source = path.read_text(encoding="utf-8")
+        edits: list[tuple[int, int, list[str]]] = []
+        for node in ast.walk(ast.parse(source)):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            fields = [
+                (field.target.id, field)
+                for field in node.body
+                if isinstance(field, ast.AnnAssign)
+                and isinstance(field.target, ast.Name)
+            ]
+            names = {name for name, _ in fields}
+            ignored: list[str] = []
+            for name, field in fields:
+                alias = deprecated_alias(field)
+                if alias is None or name == alias:
+                    continue
+                if alias in names:
+                    ignored.append(alias)
+                    edits.append(
+                        (field.lineno - 1, field.end_lineno or field.lineno, [])
+                    )
+            if ignored:
+                keys = ", ".join(repr(key) for key in sorted(ignored))
+                line = class_body_start(node)
+                edits.append(
+                    (line, line, [f"    __ignored_keys__ = frozenset({{{keys}}})\n"])
+                )
+        if edits:
+            lines = source.splitlines(keepends=True)
+            for start, end, replacement in sorted(edits, reverse=True):
+                lines[start:end] = replacement
+            path.write_text("".join(lines), encoding="utf-8")
+
+
+def class_body_start(node: ast.ClassDef) -> int:
+    """The line index to insert a class attribute at, after any docstring."""
+    first = node.body[0]
+    if (
+        isinstance(first, ast.Expr)
+        and isinstance(first.value, ast.Constant)
+        and isinstance(first.value.value, str)
+    ):
+        return first.end_lineno or first.lineno
+    return first.lineno - 1
+
+
+def legacy_key_renames(renames: dict[str, str]) -> dict[str, str]:
+    """Each legacy wire key and the Python field name the generator gave it,
+    such as `maxThreads` and `max_threads`, mapped to the replacement's wire
+    alias. A key that is the Python name of its replacement is left out:
+    `populate_by_name` already accepts it."""
+    from datamodel_code_generator.reference import FieldNameResolver
+
+    resolver = FieldNameResolver(snake_case_field=True)
+    accepted: dict[str, str] = {}
+    for legacy, replacement in renames.items():
+        replacement_name = resolver.get_valid_name(replacement)
+        for key in (legacy, resolver.get_valid_name(legacy)):
+            if key != replacement_name:
+                accepted[key] = replacement
+    return accepted
+
+
+def add_legacy_keys(output_dir: Path) -> None:
+    """Give each model in contract/legacy-keys.json the legacy keys it still
+    accepts, from `legacy_key_renames`."""
+    legacy_by_title = {
+        title: legacy_key_renames(renames)
+        for title, renames in json.loads(
+            LEGACY_KEYS_JSON_PATH.read_text(encoding="utf-8")
+        ).items()
+    }
+    found: set[str] = set()
+    for path in output_dir.rglob("*.py"):
+        source = path.read_text(encoding="utf-8")
+        inserts: list[tuple[int, str]] = []
+        for node in ast.walk(ast.parse(source)):
+            if not isinstance(node, ast.ClassDef) or node.name not in legacy_by_title:
+                continue
+            found.add(node.name)
+            renames = legacy_by_title[node.name]
+            if renames:
+                entries = ", ".join(
+                    f"{legacy!r}: {replacement!r}"
+                    for legacy, replacement in sorted(renames.items())
+                )
+                inserts.append(
+                    (class_body_start(node), f"    __legacy_keys__ = {{{entries}}}\n")
+                )
+        if inserts:
+            lines = source.splitlines(keepends=True)
+            for line, text in sorted(inserts, reverse=True):
+                lines[line:line] = [text]
+            path.write_text("".join(lines), encoding="utf-8")
+    missing = sorted(set(legacy_by_title) - found)
+    if missing:
+        raise RuntimeError(
+            f"contract/legacy-keys.json names models the generator did not emit: {missing}"
+        )
 
 
 def preserve_forbidden_fields(output_dir: Path) -> None:
@@ -457,13 +589,7 @@ def preserve_forbidden_fields(output_dir: Path) -> None:
                 f"{snake_case(key)!r}: {value!r}"
                 for key, value in sorted(forbidden.items())
             )
-            first_body_line = node.body[0].lineno - 1
-            if (
-                isinstance(node.body[0], ast.Expr)
-                and isinstance(node.body[0].value, ast.Constant)
-                and isinstance(node.body[0].value.value, str)
-            ):
-                first_body_line = node.body[0].end_lineno or node.body[0].lineno
+            first_body_line = class_body_start(node)
             edits.append(
                 (
                     first_body_line,
@@ -479,7 +605,6 @@ def preserve_forbidden_fields(output_dir: Path) -> None:
             for start, end, replacement in sorted(edits, reverse=True):
                 lines[start:end] = replacement
             path.write_text("".join(lines), encoding="utf-8")
-    format_with_black([output_dir])
 
 
 def resolve_titles(

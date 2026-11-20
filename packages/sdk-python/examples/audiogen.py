@@ -77,7 +77,7 @@ async def main() -> int:
                     "lmModelSrc": AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0.src,
                     "ditModelSrc": AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M.src,
                     "vaeModelSrc": AUDIOGEN_VAE_BF16.src,
-                    "useGPU": True,
+                    "useGpu": True,
                     "inferenceSteps": 8,
                 },
                 on_progress=print_progress,

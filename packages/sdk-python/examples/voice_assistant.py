@@ -58,21 +58,21 @@ SYSTEM_PROMPT = (
 # on its own echo. These defaults are deliberately conservative:
 #   - threshold 0.6: less sensitive than Silero's default; avoids triggering
 #     on TTS reverb bleeding into the mic or low-level background noise.
-#   - min_speech_duration_ms 300: drops short clicks/breaths and stray words.
-#   - min_silence_duration_ms 700: requires a longer quiet tail before
+#   - minSpeechDurationMs 300: drops short clicks/breaths and stray words.
+#   - minSilenceDurationMs 700: requires a longer quiet tail before
 #     committing a segment. Crucial for preventing self-hearing feedback loops
 #     where Whisper hallucinates content from near-silent audio.
-#   - max_speech_duration_s 15: caps runaway utterances.
-#   - speech_pad_ms 200: padding improves accuracy on utterance edges.
-# If the assistant cuts you off mid-sentence, raise min_silence_duration_ms.
+#   - maxSpeechDurationS 15: caps runaway utterances.
+#   - speechPadMs 200: padding improves accuracy on utterance edges.
+# If the assistant cuts you off mid-sentence, raise minSilenceDurationMs.
 # If it keeps hallucinating / talking to itself, raise threshold to 0.7 and/or
-# min_silence_duration_ms to 900.
+# minSilenceDurationMs to 900.
 VAD_PARAMS = {
     "threshold": 0.6,
-    "min_speech_duration_ms": 300,
-    "min_silence_duration_ms": 700,
-    "max_speech_duration_s": 15.0,
-    "speech_pad_ms": 200,
+    "minSpeechDurationMs": 300,
+    "minSilenceDurationMs": 700,
+    "maxSpeechDurationS": 15.0,
+    "speechPadMs": 200,
 }
 
 # Short grace period after TTS playback before we start listening again.
@@ -264,15 +264,15 @@ async def main() -> int:
                 model_src=WHISPER_TINY,
                 model_config={
                     "vadModelSrc": VAD_SILERO_5_1_2,
-                    "audio_format": "f32le",
+                    "audioFormat": "f32le",
                     "strategy": "greedy",
-                    "n_threads": 4,
+                    "threads": 4,
                     "language": "en",
-                    "no_timestamps": True,
-                    "suppress_blank": True,
-                    "suppress_nst": True,
+                    "noTimestamps": True,
+                    "suppressBlank": True,
+                    "suppressNst": True,
                     "temperature": 0.0,
-                    "vad_params": VAD_PARAMS,
+                    "vadParams": VAD_PARAMS,
                 },
             )
             model_ids.append(asr_model_id)
@@ -281,7 +281,7 @@ async def main() -> int:
             llm_model_id = await load_model(
                 t,
                 model_src=LLAMA_3_2_1B_INST_Q4_0,
-                model_config={"ctx_size": 4096},
+                model_config={"ctxSize": 4096},
             )
             model_ids.append(llm_model_id)
 

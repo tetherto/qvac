@@ -166,8 +166,9 @@ def _unwrap_root(value: Any) -> Any:
 
 
 def _reject_unknown_config_keys(payload: dict[str, Any], request: Any) -> None:
-    """Refuse a `modelConfig` key the model type does not define, by alias or
-    by Python name, since the generated models accept both."""
+    """Refuse a `modelConfig` key the model type does not define, by alias,
+    by Python name or as a legacy key, since the generated models accept all
+    three."""
     sent = payload.get("modelConfig")
     if not isinstance(sent, dict) or not sent:
         return
@@ -190,7 +191,7 @@ def _reject_unknown_config_keys(payload: dict[str, Any], request: Any) -> None:
         for name, field in type(config).model_fields.items()
         for key in (name, field.alias)
         if key is not None
-    }
+    } | set(getattr(type(config), "__legacy_keys__", {}))
     unknown = sorted(set(sent) - legal)
     if unknown:
         named = ", ".join(repr(key) for key in unknown)

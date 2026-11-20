@@ -53,8 +53,8 @@ def test_lax_boolean_strings_serialize_as_booleans() -> None:
     [
         {"verbosity": 4},
         {"verbosity": -1},
-        {"stream_layers": "maybe"},
-        {"params_backend": "x" * 4097},
+        {"streamLayers": "maybe"},
+        {"paramsBackend": "x" * 4097},
     ],
 )
 def test_invalid_world_memory_controls_are_rejected(fields: dict[str, object]) -> None:

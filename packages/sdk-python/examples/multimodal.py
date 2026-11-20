@@ -52,7 +52,7 @@ async def main() -> int:
                 model_config={
                     # Each image takes hundreds of context tokens, and the
                     # comparison below sends two at once.
-                    "ctx_size": 8192,
+                    "ctxSize": 8192,
                     "projectionModelSrc": MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
                 },
                 on_progress=print_progress,

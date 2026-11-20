@@ -51,7 +51,7 @@ async def main() -> int:
             model_id = await load_model(
                 t,
                 model_src=LLAMA_3_2_1B_INST_Q4_0,
-                model_config={"ctx_size": 2048},
+                model_config={"ctxSize": 2048},
             )
 
             run = completion(

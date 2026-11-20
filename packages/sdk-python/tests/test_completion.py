@@ -97,6 +97,19 @@ async def test_prefill_forwarding_and_empty_completion(prefill):
         assert "prefill" not in transport.sent
 
 
+async def test_completion_renames_legacy_generation_params_with_a_warning():
+    transport = FakeTransport([_chunk([_done(0)], done=True)])
+    with pytest.warns(FutureWarning, match='"temp".*Use "temperature" instead'):
+        run = completion(
+            transport,
+            model_id="m",
+            history=[{"role": "user", "content": "Hi"}],
+            generation_params={"temp": 0, "top_k": 1},
+        )
+    await run.final
+    assert transport.sent["generationParams"] == {"temperature": 0, "topK": 1}
+
+
 async def test_completion_aggregates_content_thinking_and_stats():
     transport = FakeTransport(
         stream_items=[

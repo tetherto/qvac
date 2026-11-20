@@ -55,7 +55,7 @@ async def main() -> int:
                     {
                         "model_src": model,
                         "model_type": "llamacpp-completion",
-                        "model_config": {"ctx_size": CONTEXT_TOKENS},
+                        "model_config": {"ctxSize": CONTEXT_TOKENS},
                     }
                     for model in CANDIDATES
                 ],
