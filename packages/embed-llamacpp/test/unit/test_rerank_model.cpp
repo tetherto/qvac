@@ -351,4 +351,6 @@ TEST_F(RerankModelTest, RuntimeStatsDescribeTheLastRequest) {
   EXPECT_GT(stats["total_tokens"], 0);
   EXPECT_GT(stats["batch_size"], 0);
   EXPECT_GT(stats["context_size"], 0);
+  EXPECT_FALSE(
+      test_common::getStatString(model->runtimeStats(), "backendName").empty());
 }

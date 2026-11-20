@@ -298,6 +298,7 @@ TEST_F(BertModelTest, RuntimeStatsBeforeProcessing) {
       static_cast<double>(llama_model_n_ctx_train(model.getModel())));
   double backendDevice = getStatValue(stats, "backendDevice");
   EXPECT_TRUE(backendDevice == 0.0 || backendDevice == 1.0);
+  EXPECT_EQ(test_common::getStatString(stats, "backendName"), "cpu");
 }
 
 TEST_F(BertModelTest, DefaultContextSizeMatchesTrainedContext) {

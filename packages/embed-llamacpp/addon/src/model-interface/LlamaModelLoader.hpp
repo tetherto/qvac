@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <streambuf>
 #include <string>
@@ -105,7 +106,13 @@ public:
   [[nodiscard]] llama_context* context() const { return ctx_; }
   [[nodiscard]] const common_params& params() const { return init_.params; }
   [[nodiscard]] int64_t runtimeBackendDevice() const {
+    std::lock_guard lock(runtimeBackendMutex_);
     return runtimeBackendDevice_;
+  }
+  /// Lowercase backend family of the loaded model, or empty when unknown.
+  [[nodiscard]] std::string runtimeBackendName() const {
+    std::lock_guard lock(runtimeBackendMutex_);
+    return runtimeBackendName_;
   }
 
 private:
@@ -123,6 +130,9 @@ private:
 
   InitLoader initLoader_;
   std::optional<LlamaBackendsHandle> backendsHandle_;
+  // init() can run on the InitLoader thread while a job reads stats.
+  mutable std::mutex runtimeBackendMutex_;
   int64_t runtimeBackendDevice_ = 0;
+  std::string runtimeBackendName_;
   ModelMetaData metadata_;
 };
