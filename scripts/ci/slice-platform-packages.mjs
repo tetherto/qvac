@@ -19,6 +19,27 @@ export const SLICE_DEFINITIONS = [
 // `module.exports = require('#host-addon')`, mapped to these packages.
 export const PLATFORM_INDEX_SOURCE = 'module.exports = require.addon()\n'
 
+export const FABRIC_BACKEND_DEFINITIONS = ['cuda'].map((backend) => ({
+  ...SLICE_DEFINITIONS[0],
+  suffix: 'linux-x64-' + backend,
+  backend
+}))
+
+// Load the shared runtime first, then register the CUDA backend directory before
+// a consumer can call loadBackends(). Literal imports keep Bare's graph complete.
+export const FABRIC_LINUX_INDEX_SOURCE =
+  'const fabric = require.addon()\n' +
+  "require('@qvac/fabric-linux-x64-cuda')\n" +
+  'module.exports = fabric\n'
+
+function isFabricLinux (metaManifest, definition) {
+  return metaManifest.name === '@qvac/fabric' && definition.suffix === 'linux-x64'
+}
+
+function platformIndexSource (metaManifest, definition) {
+  return isFabricLinux(metaManifest, definition) ? FABRIC_LINUX_INDEX_SOURCE : PLATFORM_INDEX_SOURCE
+}
+
 const DEFAULT_MAX_SLICE_MB = 450
 const BYTES_PER_MB = 1024 * 1024
 const MANIFEST_INDENT = 2
@@ -122,6 +143,15 @@ export function buildSliceManifest (metaManifest, definition) {
   if (definition.os) manifest.os = definition.os
   if (definition.cpu) manifest.cpu = definition.cpu
   if (definition.libc) manifest.libc = definition.libc
+  if (isFabricLinux(metaManifest, definition)) {
+    manifest.dependencies = Object.fromEntries(FABRIC_BACKEND_DEFINITIONS.map((backend) => [
+      slicePackageName(metaManifest.name, backend), metaManifest.version
+    ]))
+  } else if (metaManifest.name === '@qvac/fabric' && definition.backend) {
+    // bare-link uses direct addon dependencies to rewrite the carrier's
+    // DT_NEEDED on the shared runtime. npm supports this version-locked cycle.
+    manifest.dependencies = { '@qvac/fabric-linux-x64': metaManifest.version }
+  }
   return manifest
 }
 
@@ -210,17 +240,31 @@ function sliceDirName (metaManifest, definition) {
   return metaManifest.name.replace('@', '').replace('/', '-') + '-' + definition.suffix
 }
 
-function stageSlice (definition, context) {
+// Also used by host-specific registry smoke tests. Release callers must use
+// slicePlatformPackages(), which validates the complete release matrix first.
+export function stageSlice (definition, context) {
   const { metaManifest, workdir, outDir, prebuildsDir } = context
   const sliceDir = path.join(outDir, sliceDirName(metaManifest, definition))
   const slicePrebuildsDir = path.join(sliceDir, 'prebuilds')
   fs.mkdirSync(slicePrebuildsDir, { recursive: true })
 
   writeManifest(path.join(sliceDir, 'package.json'), buildSliceManifest(metaManifest, definition))
-  fs.writeFileSync(path.join(sliceDir, 'index.js'), PLATFORM_INDEX_SOURCE)
+  fs.writeFileSync(path.join(sliceDir, 'index.js'), platformIndexSource(metaManifest, definition))
   fs.writeFileSync(path.join(sliceDir, 'README.md'), buildSliceReadme(metaManifest, definition))
   copyMetaFiles(workdir, sliceDir)
-  moveHostDirs(definition.hosts, prebuildsDir, slicePrebuildsDir)
+  if (definition.backend) {
+    const host = 'linux-x64'
+    const moduleName = mangledAddonName(slicePackageName(metaManifest.name, definition))
+    const target = path.join(slicePrebuildsDir, host)
+    fs.mkdirSync(target, { recursive: true })
+    for (const entry of fs.readdirSync(path.join(prebuildsDir, host))) {
+      if (entry === moduleName || entry.startsWith(moduleName + '.bare')) {
+        fs.renameSync(path.join(prebuildsDir, host, entry), path.join(target, entry))
+      }
+    }
+  } else {
+    moveHostDirs(definition.hosts, prebuildsDir, slicePrebuildsDir)
+  }
 
   return sliceDir
 }
@@ -277,6 +321,7 @@ export function slicePlatformPackages (options) {
   validateHostDirs(listHostDirs(prebuildsDir, keepDirs))
   assertAllHostAddonsPresent(prebuildsDir, metaManifest.name)
   assertKeepDirsPresent(prebuildsDir, keepDirs)
+  if (metaManifest.name === '@qvac/fabric') assertFabricBackendPackages(prebuildsDir)
   fs.mkdirSync(outDir, { recursive: true })
 
   const context = { metaManifest, workdir, outDir, prebuildsDir }
@@ -317,8 +362,14 @@ export function linkLocalPlatformPackages (options) {
   }
   if (hostDirs.length === 0) throw new Error('No host prebuilds under ' + prebuildsDir)
 
+  if (metaManifest.name === '@qvac/fabric' && hostDirs.includes('linux-x64')) {
+    assertFabricBackendPackages(prebuildsDir)
+  }
+  const definitions = metaManifest.name === '@qvac/fabric'
+    ? [...SLICE_DEFINITIONS, ...FABRIC_BACKEND_DEFINITIONS]
+    : SLICE_DEFINITIONS
   const linked = []
-  for (const definition of SLICE_DEFINITIONS) {
+  for (const definition of definitions) {
     const hosts = definition.hosts.filter((host) => hostDirs.includes(host))
     if (hosts.length === 0) continue
     for (const host of hosts) assertHostAddonPresent(prebuildsDir, metaManifest.name, host)
@@ -328,7 +379,7 @@ export function linkLocalPlatformPackages (options) {
     fs.rmSync(packageDir, { recursive: true, force: true })
     fs.mkdirSync(path.join(packageDir, 'prebuilds'), { recursive: true })
     writeManifest(path.join(packageDir, 'package.json'), buildSliceManifest(metaManifest, definition))
-    fs.writeFileSync(path.join(packageDir, 'index.js'), PLATFORM_INDEX_SOURCE)
+    fs.writeFileSync(path.join(packageDir, 'index.js'), platformIndexSource(metaManifest, definition))
     for (const host of hosts) {
       // 'junction' is ignored off Windows, where it avoids needing the symlink privilege.
       fs.symlinkSync(path.join(prebuildsDir, host), path.join(packageDir, 'prebuilds', host), 'junction')
@@ -339,9 +390,28 @@ export function linkLocalPlatformPackages (options) {
   return linked
 }
 
+export function assertFabricBackendPackages (prebuildsDir) {
+  for (const definition of FABRIC_BACKEND_DEFINITIONS) {
+    const moduleName = mangledAddonName('@qvac/fabric-' + definition.suffix)
+    const hostDir = path.join(prebuildsDir, 'linux-x64')
+    const backendFile = 'libqvac-ggml-' + definition.backend + '.so'
+    if (fs.existsSync(path.join(hostDir, 'qvac__fabric-linux-x64', backendFile))) {
+      throw new Error('Stale unsplit Fabric backend ' + backendFile + ' in the base package; clean prebuilds and rebuild')
+    }
+    for (const entry of [moduleName + '.bare', path.join(moduleName, backendFile)]) {
+      if (!fs.existsSync(path.join(hostDir, entry))) {
+        throw new Error('Missing Fabric backend package file: linux-x64/' + entry)
+      }
+    }
+  }
+}
+
 function stageAllSlices (context, maxSliceMb, log) {
   const sliceDirs = []
-  for (const definition of SLICE_DEFINITIONS) {
+  const definitions = context.metaManifest.name === '@qvac/fabric'
+    ? [...FABRIC_BACKEND_DEFINITIONS, ...SLICE_DEFINITIONS]
+    : SLICE_DEFINITIONS
+  for (const definition of definitions) {
     const sliceDir = stageSlice(definition, context)
     const sizeMb = assertSliceSize(sliceDir, maxSliceMb)
     log('Staged ' + path.basename(sliceDir) + ' (' + sizeMb.toFixed(1) + ' MB unpacked)')

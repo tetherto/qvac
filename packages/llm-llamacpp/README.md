@@ -779,6 +779,29 @@ These tests help prevent regressions and ensure the library remains stable as co
 Unit tests are located in [`test/unit/`](./test/unit/) and test the C++ addon components at a lower level, including backend selection, cache management, chat templates, context handling, and UTF8 token processing.  
 These tests validate the native implementation and help catch issues early in development.
 
+The `test:backend` target validates Fabric's Linux x64 npm packaging using the
+PR-built Fabric and LLM artifacts. It stages the base (including HIP) and CUDA
+packages with the production slicer, publishes them to a temporary Verdaccio
+registry, installs a fresh application, and runs two completions. The CPU and
+CUDA configurations verify the requested inference device, one shared runtime,
+and the installed backend locations; CUDA also requires explicit CUDA selection.
+The registry cannot proxy Fabric or LLM packages from npm. HIP's payload is
+checked on both hosts; HIP inference is not exercised.
+
+The `run-desktop-addon-tests` PR label runs both configurations. Results, packed
+sizes, the dependency tree, and logs are uploaded in the existing
+`llm-llamacpp-results-<configuration>` artifacts. To run locally after building
+Fabric and this addon and fetching the `test:backend` model from
+`test/integration/models.manifest.json`:
+
+```bash
+pnpm exec nx run @qvac/llm-llamacpp:test:backend:linux-x64-cpu --exclude-task-dependencies
+pnpm exec nx run @qvac/llm-llamacpp:test:backend:linux-x64-cuda --exclude-task-dependencies
+```
+
+Each run starts an isolated registry on a loopback port, uses a fresh application
+and npm cache, and removes its temporary registry and installation on exit.
+
 **C++ unit test models** live under `models/unit-test/` (resolved from the test binary via `../../../models/unit-test`). `npm run test:cpp:run` downloads missing files automatically (cross-platform Node script). To prefetch or refresh without running tests:
 
 ```bash
