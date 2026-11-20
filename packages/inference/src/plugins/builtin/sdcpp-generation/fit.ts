@@ -68,10 +68,18 @@ export function sdcppFitRequest(load: FitLoad): FitRequestPlan {
   const vaeTiling = config.vae_tiling !== undefined && { vaeTiling: config.vae_tiling }
 
   if (config.mode === 'video') {
+    // A context that declares all three output limits is sized at its largest clip.
+    const boundedVideo = config.performance_max_width !== undefined &&
+      config.performance_max_height !== undefined &&
+      config.performance_max_frames !== undefined && {
+        width: config.performance_max_width,
+        height: config.performance_max_height,
+        videoFrames: config.performance_max_frames
+      }
     const request: DiffusionFitRequest = {
       files: videoFilesFor(load.modelPath, artifacts),
       config: videoConfigFor(config),
-      workload: { ...vaeTiling, videoFrames: DEFAULT_VIDEO_FRAMES }
+      workload: { ...vaeTiling, videoFrames: DEFAULT_VIDEO_FRAMES, ...boundedVideo }
     }
     return { request }
   }

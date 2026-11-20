@@ -259,6 +259,51 @@ export const sdcppConfigSchema = z.object({
         "params_backend: 'diffusion=disk' for on-demand file reads. Default: false."
     ),
   flash_attn: z.boolean().optional().describe('Enable flash attention to reduce memory usage'),
+  performance_profile: z
+    .enum(['auto', 'off'])
+    .optional()
+    .describe(
+      'Addon-owned model/GPU/API performance profiles. Default: auto. Explicit native ' +
+        'options win. off retains baseline settings. Temporal tiling is unchanged.'
+    ),
+  performance_max_width: z
+    .number()
+    .int()
+    .positive()
+    .max(2147483647)
+    .optional()
+    .describe(
+      'Maximum video output width. Declare all three performance_max_* limits for bounded memory profiles.'
+    ),
+  performance_max_height: z
+    .number()
+    .int()
+    .positive()
+    .max(2147483647)
+    .optional()
+    .describe(
+      'Maximum video output height; requests above this declared bound are rejected by the addon.'
+    ),
+  performance_max_frames: z
+    .number()
+    .int()
+    .positive()
+    .max(2147483647)
+    .optional()
+    .describe(
+      'Maximum video output frame count; requests above this declared bound are rejected by the addon.'
+    ),
+  vae_conv_direct: z
+    .boolean()
+    .optional()
+    .describe('Explicit VAE convolution selection, overriding automatic performance profiles.'),
+  tensor_type_rules: z
+    .string()
+    .max(4096)
+    .optional()
+    .describe(
+      'Explicit native per-tensor precision rules, overriding automatic matrix precision selection.'
+    ),
   diffusion_fa: z
     .boolean()
     .optional()
@@ -566,6 +611,31 @@ export type SdcppConfig = Omit<
   z.input<typeof sdcppConfigSchema>,
   'control_net_cpu' | 'clip_on_cpu' | 'vae_on_cpu'
 >
+
+const PERFORMANCE_LIMIT_KEYS = [
+  'performance_max_width',
+  'performance_max_height',
+  'performance_max_frames'
+] as const
+
+// The addon rejects a context that declares only some output limits, so the
+// schema does too, naming the first missing one.
+export function refineSdcppPerformanceLimits(
+  config: Pick<SdcppConfig, (typeof PERFORMANCE_LIMIT_KEYS)[number]>,
+  ctx: z.RefinementCtx
+) {
+  const missing = PERFORMANCE_LIMIT_KEYS.filter((key) => config[key] === undefined)
+  if (missing.length === 0 || missing.length === PERFORMANCE_LIMIT_KEYS.length) return
+  ctx.addIssue({
+    code: 'custom',
+    path: [missing[0]!],
+    message:
+      'performance_max_width, performance_max_height and performance_max_frames ' +
+      'must be supplied together.'
+  })
+}
+
+export const sdcppLoadConfigSchema = sdcppConfigSchema.superRefine(refineSdcppPerformanceLimits)
 
 export const diffusionStatsSchema = z.object({
   modelLoadMs: z
