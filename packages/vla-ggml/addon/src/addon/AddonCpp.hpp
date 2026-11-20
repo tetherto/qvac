@@ -7,6 +7,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <inference-addon-cpp/ModelInterfaces.hpp>
@@ -14,6 +15,7 @@
 
 #include "model-interface/model_factory.hpp"
 #include "model-interface/vla_model.hpp"
+#include "utils/BackendSelection.hpp"
 
 namespace qvac_lib_infer_vla_ggml {
 
@@ -48,13 +50,22 @@ public:
       const std::string& ggufPath, bool forceCpu = false,
       std::string backendsDir = {}, const VlaEmbodimentRequest& embodiment = {},
       const std::vector<std::string>& backendOverride = {})
-      : model_(createVlaModelFromGguf(
-            ggufPath, forceCpu, backendsDir, embodiment, backendOverride)) {
-    // Canonical `backendDevice` encoding used across the inference addons
-    // (LlamaModel, BertModel): 0 = CPU, 1 = GPU. Captured at load time so
-    // `runtimeStats()` can report it without re-querying ggml.
-    runtimeBackendDevice_ = model_->hasGpu() ? 1 : 0;
-  }
+      : VlaModel(createVlaModelFromGguf(
+            ggufPath, forceCpu, backendsDir, embodiment, backendOverride)) {}
+
+  // Wraps an already-loaded model. The path constructor above delegates here,
+  // and the C++ tests use it to run runtimeStats() over a fake IVlaModel.
+  //
+  // Canonical `backendDevice` encoding used across the inference addons
+  // (LlamaModel, BertModel): 0 = CPU, 1 = GPU. Both backend stats are captured
+  // at load time, so `runtimeStats()` reports them without re-querying ggml.
+  // The loaders settle the backend (including any CPU fallback) before they
+  // return and never change it afterwards.
+  explicit VlaModel(std::unique_ptr<IVlaModel> model)
+      : model_(std::move(model)),
+        runtimeBackendDevice_(model_->hasGpu() ? 1 : 0),
+        runtimeBackendName_(
+            vla_backend_selection::backendFamilyName(model_->backendName())) {}
 
   VlaModel(const VlaModel&) = delete;
   VlaModel& operator=(const VlaModel&) = delete;
@@ -140,7 +151,8 @@ public:
     return std::any{runInternal(*in)};
   }
 
-  // Per-stage timings plus backendDevice (0=CPU, 1=GPU). Mirrors
+  // Per-stage timings, backendDevice (0=CPU, 1=GPU) and backendName (the
+  // backend family, see backendFamilyName; omitted when unknown). Mirrors
   // LlamaModel::runtimeStats() / BertModel::runtimeStats() so consumers can
   // use a single read pattern across addons. The values reflect the most
   // recent process() call; before any run they are zeroed out.
@@ -153,7 +165,7 @@ public:
   // consumers have migrated to the architecture-neutral keys.
   [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
   runtimeStats() const final {
-    return {
+    qvac_lib_inference_addon_cpp::RuntimeStats stats{
         {"vision_ms", lastTiming_.vision_ms},
         {"prefill_compute_ms", lastTiming_.prefill_compute_ms},
         {"prefill_total_ms", lastTiming_.prefill_total_ms},
@@ -163,6 +175,10 @@ public:
         {"ode_ms", lastTiming_.ode_ms},
         {"total_ms", lastTiming_.total_ms},
         {"backendDevice", runtimeBackendDevice_}};
+    if (!runtimeBackendName_.empty()) {
+      stats.emplace_back("backendName", runtimeBackendName_);
+    }
+    return stats;
   }
 
 private:
@@ -250,6 +266,9 @@ private:
   std::unique_ptr<IVlaModel> model_;
   VlaTimingGeneric lastTiming_{};
   int64_t runtimeBackendDevice_ = 0;
+  // Immutable after construction, so the worker thread's runtimeStats() reads
+  // it without synchronisation.
+  const std::string runtimeBackendName_;
   // Jobs accepted by the scheduler and not yet finished in process(). Written
   // from the JS thread (dispatch) and the worker thread (completion), read by
   // setEmbodiment on the JS thread — hence atomic.
