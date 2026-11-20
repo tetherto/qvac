@@ -5,7 +5,7 @@
 // audio VAE. The four files are read from a local directory you pass as args,
 // so nothing is downloaded.
 //
-// This example needs powerful hardware. `offload_to_cpu` stays on so the run
+// This example needs powerful hardware. `offloadToCpu` stays on so the run
 // fits on a single GPU; tune placement through the H3_* environment variables.
 //
 // TypeScript's `video()` hands back separate channels and the example drains
@@ -68,13 +68,13 @@ fun main(args: Array<String>): Unit = runBlocking {
         put("vaeModelSrc", vaeModelSrc.toString())
         put("audioVaeModelSrc", audioVaeModelSrc.toString())
         put("device", "gpu")
-        put("diffusion_fa", true)
-        put("offload_to_cpu", System.getenv("H3_OFFLOAD_TO_CPU") != "0")
-        put("stream_layers", System.getenv("H3_STREAM_LAYERS") == "1")
+        put("diffusionFlashAttention", true)
+        put("offloadToCpu", System.getenv("H3_OFFLOAD_TO_CPU") != "0")
+        put("streamLayers", System.getenv("H3_STREAM_LAYERS") == "1")
         for ((key, variable) in listOf(
             "backend" to "H3_BACKEND",
-            "params_backend" to "H3_PARAMS_BACKEND",
-            "max_vram" to "H3_MAX_VRAM",
+            "paramsBackend" to "H3_PARAMS_BACKEND",
+            "maxVram" to "H3_MAX_VRAM",
         )) {
             System.getenv(variable)?.takeIf { it.isNotEmpty() }?.let { put(key, it) }
         }
@@ -94,17 +94,17 @@ fun main(args: Array<String>): Unit = runBlocking {
                     modelId = modelId,
                     mode = VideoStreamRequestMode.TXT2VID,
                     prompt = System.getenv("PROMPT")?.takeIf { it.isNotEmpty() } ?: DEFAULT_PROMPT,
-                    negative_prompt = "extra people, duplicate cup, malformed hands, cup " +
+                    negativePrompt = "extra people, duplicate cup, malformed hands, cup " +
                         "fused to hand, text, subtitles, watermark, cartoon, " +
                         "CGI, blur, flicker, jitter, camera shake",
                     width = 960,
                     height = 544,
                     // H3 uses 17*k+5 frames; 124 frames at 24 FPS is
                     // approximately 5.17 seconds.
-                    video_frames = System.getenv("FRAMES")?.takeIf { it.isNotEmpty() }?.toLong() ?: 124,
+                    videoFrames = System.getenv("FRAMES")?.takeIf { it.isNotEmpty() }?.toLong() ?: 124,
                     fps = 24.0,
                     steps = 8,
-                    cfg_scale = 1.0,
+                    cfgScale = 1.0,
                     seed = 11,
                 ),
             )

@@ -44,10 +44,10 @@ class WorkerConformanceTest {
         val history = params["history"]?.jsonArray.orEmpty().map { QvacMessage(it.jsonObject.string("role"), it.jsonObject.string("content")) }
         val gen = params["generationParams"] as? JsonObject
         val options = QvacCompletionOptions(generation = QvacGenerationOptions(
-            temperature = gen?.get("temp")?.jsonPrimitive?.double,
+            temperature = gen?.get("temperature")?.jsonPrimitive?.double,
             seed = gen?.get("seed")?.jsonPrimitive?.long,
             predict = gen?.get("predict")?.jsonPrimitive?.long ?: -1,
-            reasoningBudget = gen?.get("reasoning_budget")?.jsonPrimitive?.long,
+            reasoningBudget = gen?.get("reasoningBudget")?.jsonPrimitive?.long,
         ))
         when (case.string("category")) {
             "completion" -> expectText(case, client.completion.run(modelId, history, options = options).text())

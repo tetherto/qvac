@@ -28,6 +28,13 @@ registry` (`ModelType`, `Verbosity`, `PluginId`,
   rules describe legacy classification, not checkpoint compatibility with
   multiple plugins.
 
+- `legacy-keys.json` — request and `loadModel` model-config keys the worker
+  still accepts under their legacy spelling for one release, renaming each
+  with a deprecation warning. Keyed by the `schema.json` title of the object
+  that owns them, each entry maps a legacy key to its current key. Generated
+  clients use it for deprecated aliases. Built from `LEGACY_REQUEST_KEYS` and
+  `LEGACY_MODEL_CONFIG_KEYS` in `@qvac/inference`.
+
 Do not edit these files by hand. Regenerate with:
 
 ```bash

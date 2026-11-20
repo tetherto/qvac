@@ -58,7 +58,7 @@ private val PROMPTS = listOf(
             ),
         ),
         generationParams = BatchCompletionStreamRequestPromptsItemGenerationParams(
-            temp = 0.0,
+            temperature = 0.0,
             seed = 42.0,
             predict = 16.0,
         ),
@@ -73,7 +73,7 @@ fun main(): Unit = runBlocking {
         modelId = client.loadWithProgress(
             Models.LLAMA_3_2_1B_INST_Q4_0,
             modelConfig = buildJsonObject {
-                put("ctx_size", 4096)
+                put("ctxSize", 4096)
                 put("parallel", 4)
             },
         )

@@ -43,7 +43,7 @@ fun main(): Unit = runBlocking {
             modelType = "tts-ggml",
             modelConfig = buildJsonObject {
                 put("ttsEngine", "moss-sfx")
-                put("useGPU", true)
+                put("useGpu", true)
                 put("seed", 42)
             },
         )

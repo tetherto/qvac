@@ -56,8 +56,8 @@ fun main(args: Array<String>): Unit = runBlocking {
                 put("prediction", "v")
                 putJsonObject("upscaler") {
                     put("type", "esrgan")
-                    put("model_src", esrganModelSrc)
-                    put("tile_size", 128)
+                    put("modelSrc", esrganModelSrc)
+                    put("tileSize", 128)
                 }
             },
         )
@@ -68,11 +68,11 @@ fun main(args: Array<String>): Unit = runBlocking {
         val baseParams = DiffusionStreamRequest(
             modelId = modelId,
             prompt = prompt,
-            negative_prompt = negativePrompt,
+            negativePrompt = negativePrompt,
             width = 128,
             height = 128,
             steps = 5,
-            cfg_scale = 7.5,
+            cfgScale = 7.5,
             seed = seed,
         )
 

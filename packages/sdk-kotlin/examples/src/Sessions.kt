@@ -39,7 +39,7 @@ fun main(): Unit = runBlocking {
         val skillRunner = client.openSession(name = "skill-runner")
 
         val model = Models.QWEN3_600M_INST_Q4
-        val config = buildJsonObject { put("ctx_size", 4096) }
+        val config = buildJsonObject { put("ctxSize", 4096) }
         val loaded = harness.models.load(source = model.src, modelType = model.engine, modelName = model.name, modelConfig = config)
         val modelId = loaded.modelId ?: error(loaded.error ?: "loadModel failed")
         val again = skillRunner.models.load(source = model.src, modelType = model.engine, modelName = model.name, modelConfig = config)

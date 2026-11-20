@@ -45,7 +45,7 @@ class SchemaTypesTest {
     fun constructingTypedNestedConfigurationEmitsDiscriminatorsWithDefaultJsonSettings() {
         val request = LoadModelRequest.LoadModelSrcRequest(LoadModelSrcRequest.LlamacppCompletion(
             LoadModelSrcRequestLlamacppCompletion(modelSrc = "registry:model",
-                modelConfig = LoadModelSrcRequestLlamacppCompletionModelConfig(ctx_size = 2048.0, gpu_layers = 0.0))))
+                modelConfig = LoadModelSrcRequestLlamacppCompletionModelConfig(ctxSize = 2048.0, gpuLayers = 0.0))))
         val encoded = Json.encodeToJsonElement<LoadModelRequest>(request).jsonObject
         assertEquals("loadModel", encoded.getValue("type").jsonPrimitive.content)
         assertEquals("llamacpp-completion", encoded.getValue("modelType").jsonPrimitive.content)
@@ -65,11 +65,25 @@ class SchemaTypesTest {
 
     @Test
     fun nestedModelConfigurationIsTypedAndPreservesWireNames() {
-        val input = Json.parseToJsonElement("""{"type":"loadModel","modelSrc":"registry:model","modelType":"llamacpp-completion","modelConfig":{"ctx_size":2048,"gpu_layers":99}}""")
+        val input = Json.parseToJsonElement("""{"type":"loadModel","modelSrc":"registry:model","modelType":"llamacpp-completion","modelConfig":{"ctxSize":2048,"gpuLayers":99}}""")
         val value = json.decodeFromJsonElement<LoadModelRequest>(input)
         val encoded = json.encodeToJsonElement<LoadModelRequest>(value).jsonObject
-        assertEquals(2048.0, encoded.getValue("modelConfig").jsonObject.getValue("ctx_size").jsonPrimitive.double)
+        assertEquals(2048.0, encoded.getValue("modelConfig").jsonObject.getValue("ctxSize").jsonPrimitive.double)
         assertEquals("llamacpp-completion", encoded.getValue("modelType").jsonPrimitive.content)
+    }
+
+    @Test
+    @Suppress("DEPRECATION")
+    fun deprecatedLegacyPropertiesSerializeUnderTheirLegacyKeys() {
+        val legacy = json.encodeToJsonElement(LoadModelSrcRequestLlamacppCompletionModelConfig(ctx_size = 2048.0, cachetypek = "f16")).jsonObject
+        assertEquals(setOf("ctx_size", "cache-type-k"), legacy.keys)
+        assertEquals(2048.0, legacy.getValue("ctx_size").jsonPrimitive.double)
+        val current = json.encodeToJsonElement(LoadModelSrcRequestLlamacppCompletionModelConfig(ctxSize = 2048.0)).jsonObject
+        assertEquals(setOf("ctxSize"), current.keys)
+
+        val params = json.encodeToJsonElement(CompletionStreamRequestGenerationParams(temperature = 0.5, top_p = 0.9)).jsonObject
+        assertEquals(setOf("temperature", "top_p"), params.keys)
+        assertEquals(0.9, params.getValue("top_p").jsonPrimitive.double)
     }
 
     @Test

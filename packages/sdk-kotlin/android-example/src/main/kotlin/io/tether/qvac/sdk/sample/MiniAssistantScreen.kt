@@ -437,8 +437,8 @@ class MiniAssistantScreen(
                         // -1 generates until EOS. The finite model context is
                         // the only unavoidable upper bound.
                         predict = -1.0,
-                        reasoning_budget = -1,
-                        temp = 0.7,
+                        reasoningBudget = -1,
+                        temperature = 0.7,
                     ),
                     history = history.toList(),
                     modelId = modelId,

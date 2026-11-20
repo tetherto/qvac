@@ -56,14 +56,14 @@ private const val RESULTS_DIR = "./finetune-output"
 
 /** One progress tick, train or validation. */
 private fun tickLine(tick: FinetuneProgressResponse): String {
-    val phase = if (tick.is_train) "train" else "val"
+    val phase = if (tick.isTrain) "train" else "val"
     // loss and accuracy are absent on some ticks, so guard the formatting.
     val loss = (tick.loss as? FinetuneProgressResponseLoss.Variant1)?.let { "%.4f".format(it.value) } ?: "-"
     val accuracy = (tick.accuracy as? FinetuneProgressResponseAccuracy.Variant1)?.let { "%.4f".format(it.value) }
         ?: "-"
-    return "▸ epoch=${tick.current_epoch + 1} step=${tick.global_steps}" +
-        " batch=${tick.current_batch}/${tick.total_batches} $phase" +
-        " loss=$loss acc=$accuracy eta=${(tick.eta_ms / 1000).roundToLong()}s"
+    return "▸ epoch=${tick.currentEpoch + 1} step=${tick.globalSteps}" +
+        " batch=${tick.currentBatch}/${tick.totalBatches} $phase" +
+        " loss=$loss acc=$accuracy eta=${(tick.etaMs / 1000).roundToLong()}s"
 }
 
 /** Print each tick as it arrives; return the terminal result. */
@@ -76,7 +76,7 @@ private suspend fun QvacClient.readProgress(
         when (event) {
             is QvacProgressEvent.Progress -> {
                 println(tickLine(event.value))
-                onTick(event.value.global_steps)
+                onTick(event.value.globalSteps)
             }
             is QvacProgressEvent.Result -> result = event.value
         }
@@ -100,7 +100,7 @@ fun main(args: Array<String>): Unit = runBlocking {
             modelName = model.name,
             modelConfig = buildJsonObject {
                 put("device", "gpu")
-                put("ctx_size", 512)
+                put("ctxSize", 512)
             },
         )
         val id = loaded.modelId ?: error(loaded.error ?: "loadModel failed")

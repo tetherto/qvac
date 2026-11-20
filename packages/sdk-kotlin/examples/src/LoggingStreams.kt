@@ -48,8 +48,8 @@ fun main(): Unit = runBlocking {
             modelType = model.engine,
             modelName = model.name,
             modelConfig = buildJsonObject {
-                put("ctx_size", 2048)
-                put("temp", 0.7)
+                put("ctxSize", 2048)
+                put("temperature", 0.7)
             },
         )
         val modelId = loaded.modelId ?: error(loaded.error ?: "loadModel failed")
@@ -61,8 +61,8 @@ fun main(): Unit = runBlocking {
         val run = client.completion.run(
             modelId = modelId,
             history = listOf(QvacMessage.user("Count from 1 to 5 and explain each number.")),
-            // Bound the generation: at temp 0.7 a 1B model can ignore "to 5" and
-            // ramble past ctx_size (2048) into a context overflow. This demo only
+            // Bound the generation: at temperature 0.7 a 1B model can ignore "to 5" and
+            // ramble past ctxSize (2048) into a context overflow. This demo only
             // needs enough tokens to show logs streaming.
             options = QvacCompletionOptions(generation = QvacGenerationOptions(predict = 512)),
         )

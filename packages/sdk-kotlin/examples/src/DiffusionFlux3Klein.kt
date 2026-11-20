@@ -4,12 +4,12 @@
 // encoder and the FLUX.2 VAE, all handed to one load call through
 // `modelConfig`. Without reference images it generates from text; up to 10
 // reference images passed after the model arguments go in order through
-// `init_images` for editing.
+// `initImages` for editing.
 //
 // TypeScript's `diffusion()` takes each reference as raw bytes and base64-encodes
 // them on the way to the worker. The typed `DiffusionStreamRequest` carries the
 // encoded strings, so the example encodes the files with `java.util.Base64`, and
-// leaves `init_images` null when there are none. `sampling_method` is a
+// leaves `initImages` null when there are none. `samplingMethod` is a
 // generated enum (`DiffusionStreamRequestSamplingMethod`). The returned
 // `QvacMediaRun` splits progress (`events` Flow) from the images and stats
 // (`final` Deferred), as TypeScript does.
@@ -95,7 +95,7 @@ fun main(args: Array<String>): Unit = runBlocking {
             modelConfig = buildJsonObject {
                 put("llmModelSrc", modelSource(llmModelSrc))
                 put("vaeModelSrc", modelSource(vaeModelSrc))
-                put("flash_attn", true)
+                put("flashAttention", true)
             },
         )
         println("▸ Model loaded: $modelId")
@@ -108,12 +108,12 @@ fun main(args: Array<String>): Unit = runBlocking {
                 DiffusionStreamRequest(
                     modelId = modelId,
                     prompt = prompt,
-                    init_images = initImages.ifEmpty { null },
+                    initImages = initImages.ifEmpty { null },
                     width = 512,
                     height = 512,
                     steps = 16,
-                    cfg_scale = 1.0,
-                    sampling_method = DiffusionStreamRequestSamplingMethod.EULER,
+                    cfgScale = 1.0,
+                    samplingMethod = DiffusionStreamRequestSamplingMethod.EULER,
                     seed = 42,
                 ),
             )

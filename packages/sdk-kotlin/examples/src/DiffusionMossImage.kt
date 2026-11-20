@@ -93,7 +93,7 @@ fun main(args: Array<String>): Unit = runBlocking {
                 put("llmModelSrc", llmModelSrc)
                 put("vaeModelSrc", vaeModelSrc)
                 put("tokenizerSrc", tokenizerSrc)
-                put("flash_attn", true)
+                put("flashAttention", true)
             },
         )
         println("▸ Model loaded: $modelId")
@@ -106,8 +106,8 @@ fun main(args: Array<String>): Unit = runBlocking {
                     width = WIDTH.toLong(),
                     height = HEIGHT.toLong(),
                     steps = 50,
-                    cfg_scale = 3.0,
-                    sampling_method = DiffusionStreamRequestSamplingMethod.EULER,
+                    cfgScale = 3.0,
+                    samplingMethod =DiffusionStreamRequestSamplingMethod.EULER,
                     scheduler = DiffusionStreamRequestScheduler.DISCRETE,
                     seed = 42,
                 ),

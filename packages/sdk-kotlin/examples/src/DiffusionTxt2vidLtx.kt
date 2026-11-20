@@ -62,8 +62,8 @@ fun main(args: Array<String>): Unit = runBlocking {
                 put("vaeModelSrc", vaeModelSrc)
                 put("audioVaeModelSrc", audioVaeModelSrc)
                 put("embeddingsConnectorsModelSrc", embeddingsConnectorsModelSrc)
-                put("diffusion_fa", true)
-                put("vae_tiling", true)
+                put("diffusionFlashAttention", true)
+                put("vaeTiling", true)
             },
         )
         println("▸ Model loaded: $modelId")
@@ -75,22 +75,22 @@ fun main(args: Array<String>): Unit = runBlocking {
                 modelId = modelId,
                 mode = VideoStreamRequestMode.TXT2VID,
                 prompt = prompt,
-                negative_prompt = "blurry, low quality, static, jittery, watermark, distorted audio",
+                negativePrompt = "blurry, low quality, static, jittery, watermark, distorted audio",
                 // LTX-2 requires width/height as multiples of 32.
                 width = 512,
                 height = 320,
                 // LTX-2 requires (8*k + 1) frames, max 257. At 24 fps:
                 // 25~=1s, 121~=5s, 241~=10s.
-                video_frames = 121,
+                videoFrames = 121,
                 fps = 24.0,
                 // Distilled variants run in 4-8 steps with cfg ~1.0; the
                 // full --dev model wants steps >= 20 and cfg ~7.0.
                 steps = 10,
-                cfg_scale = 1.0,
+                cfgScale = 1.0,
                 seed = 42,
                 // Tile the video VAE decode along the time axis to cap peak
                 // VRAM on long / HD clips (LTX-2 only).
-                temporal_tiling = true,
+                temporalTiling = true,
             ),
         )
         run.events.collect { event ->

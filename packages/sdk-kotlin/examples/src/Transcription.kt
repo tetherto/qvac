@@ -42,7 +42,7 @@ fun main(args: Array<String>): Unit = runBlocking {
         val modelId = client.loadWithProgress(
             Models.WHISPER_TINY,
             modelConfig = buildJsonObject {
-                put("audio_format", "f32le")
+                put("audioFormat", "f32le")
                 put("language", "en")
             },
         )

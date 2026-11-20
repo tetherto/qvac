@@ -24,7 +24,7 @@ class QvacCapabilitiesTest {
         )
         val client = QvacClient(transport)
 
-        val modelConfig = buildJsonObject { put("ctx_size", 2048) }
+        val modelConfig = buildJsonObject { put("ctxSize", 2048) }
         val result = client.models.load(
             source = "registry://qwen",
             modelType = "llamacpp-completion",

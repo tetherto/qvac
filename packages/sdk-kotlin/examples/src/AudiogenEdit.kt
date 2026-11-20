@@ -86,7 +86,7 @@ fun main(args: Array<String>): Unit = runBlocking {
                 // Flow-Edit needs a turbo DiT variant; Repaint works on every variant.
                 put("ditModelSrc", Models.AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M.src)
                 put("vaeModelSrc", Models.AUDIOGEN_VAE_BF16.src)
-                put("useGPU", true)
+                put("useGpu", true)
             },
         )
         println("▸ Model loaded: $modelId")

@@ -3,7 +3,7 @@
 // img2img with FLUX.2 [klein] split-layout -- uses in-context conditioning
 // ("flux2_flow").
 //
-// TypeScript's `diffusion()` takes `init_image` as raw bytes and base64-encodes
+// TypeScript's `diffusion()` takes `initImage` as raw bytes and base64-encodes
 // them on the way to the worker. The typed `DiffusionStreamRequest` carries the
 // already-encoded string, so the example encodes the file with
 // `java.util.Base64`. The returned `QvacMediaRun` splits the stream like
@@ -73,10 +73,10 @@ fun main(args: Array<String>): Unit = runBlocking {
             DiffusionStreamRequest(
                 modelId = modelId,
                 prompt = prompt,
-                init_image = initImage,
+                initImage = initImage,
                 steps = 20,
                 guidance = 3.5,
-                cfg_scale = 1.0,
+                cfgScale = 1.0,
                 seed = -1,
             ),
         )

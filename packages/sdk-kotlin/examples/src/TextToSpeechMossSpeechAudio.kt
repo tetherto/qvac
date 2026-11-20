@@ -60,7 +60,7 @@ fun main(args: Array<String>): Unit = runBlocking {
                     "mossSpeechCodecModelSrc",
                     System.getenv("QVAC_MOSS_SPEECH_CODEC") ?: Models.TTS_CODEC_MOSS_SPEECH_F16.src,
                 )
-                put("useGPU", true)
+                put("useGpu", true)
                 put("seed", 42)
             },
         )

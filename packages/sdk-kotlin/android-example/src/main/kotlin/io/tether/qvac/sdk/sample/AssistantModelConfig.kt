@@ -8,45 +8,44 @@ object AssistantModelConfig {
     val smolVlmProjectionSource = Models.MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0.src
 
     fun qwen() = buildJsonObject {
-        put("ctx_size", 2048)
+        put("ctxSize", 2048)
         put("device", "gpu")
         // Values above the model's layer count offload the entire model.
-        put("gpu_layers", 99)
+        put("gpuLayers", 99)
         // Let Qwen finish its reasoning; forcing non-thinking mode degraded
         // answer quality on the Pixel. This is independent of output length.
-        put("reasoning_budget", -1)
+        put("reasoningBudget", -1)
     }
 
     fun qwenCpu() = buildJsonObject {
-        put("ctx_size", 1024)
+        put("ctxSize", 1024)
         put("device", "cpu")
-        put("gpu_layers", 0)
-        put("n_threads", 4)
-        put("reasoning_budget", -1)
+        put("gpuLayers", 0)
+        put("reasoningBudget", -1)
     }
 
     fun parakeet() = buildJsonObject {
         put("maxThreads", 4)
-        put("useGPU", false)
+        put("useGpu", false)
     }
 
     fun smolVlm() = buildJsonObject {
-        put("ctx_size", 1024)
+        put("ctxSize", 1024)
         put("device", "cpu")
-        put("gpu_layers", 0)
+        put("gpuLayers", 0)
         put("projectionModelSrc", smolVlmProjectionSource)
     }
 
     fun whisperTiny() = buildJsonObject {
-        put("audio_format", "f32le")
+        put("audioFormat", "f32le")
         put("language", "en")
         put("strategy", "greedy")
-        put("n_threads", 4)
+        put("threads", 4)
         put("translate", false)
-        put("no_timestamps", true)
+        put("noTimestamps", true)
         put("contextParams", buildJsonObject {
-            put("use_gpu", false)
-            put("flash_attn", false)
+            put("useGpu", false)
+            put("flashAttention", false)
         })
     }
 
@@ -59,20 +58,19 @@ object AssistantModelConfig {
     }
 
     fun embeddings() = buildJsonObject {
-        put("ctx_size", 512)
+        put("ctxSize", 512)
         put("device", "cpu")
-        put("gpu_layers", 0)
-        put("n_threads", 4)
+        put("gpuLayers", 0)
     }
 
     fun bergamotEnFr() = buildJsonObject {
         put("engine", "Bergamot")
         put("from", "en")
         put("to", "fr")
-        put("beamsize", 1)
+        put("beamSize", 1)
         put("normalize", 1)
         put("temperature", 0.2)
-        put("norepeatngramsize", 3)
-        put("lengthpenalty", 1.2)
+        put("noRepeatNgramSize", 3)
+        put("lengthPenalty", 1.2)
     }
 }
