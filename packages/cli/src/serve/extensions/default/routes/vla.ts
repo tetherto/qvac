@@ -163,7 +163,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         release()
       }
 
-      app.qvac.logger.info(`  vla done ms=${result.stats?.total_ms ?? 0}`)
+      app.qvac.logger.info(`  vla done ms=${result.stats?.totalTime ?? 0}`)
       return {
         object: 'vla.actions' as const,
         model: alias,

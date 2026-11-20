@@ -7,7 +7,7 @@ import { assertStatusAndError, collectSSE, multipart } from '../helpers/http.js'
 
 const ALIAS = 'test-bci'
 
-// The SDK e2e fixture: decodes deterministically to "not too controversial" on day_idx 1.
+// The SDK e2e fixture: decodes deterministically to "not too controversial" on dayIdx 1.
 const NEURAL = readFileSync(
   fileURLToPath(
     new URL('../../../../sdk-e2e/assets/neural/neural-not-too-controversial.bin', import.meta.url)
@@ -22,8 +22,8 @@ const BCI_CONFIG = {
         preload: true,
         config: {
           whisperConfig: { language: 'en', temperature: 0.0 },
-          miscConfig: { caption_enabled: false },
-          bciConfig: { day_idx: 1 }
+          miscConfig: { captionEnabled: false },
+          bciConfig: { dayIdx: 1 }
         }
       }
     }

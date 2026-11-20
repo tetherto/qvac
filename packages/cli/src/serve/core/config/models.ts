@@ -1,4 +1,9 @@
-import type { ModelConstant } from '@qvac/sdk'
+import {
+  createLegacyKeyWarner,
+  renameLegacyModelConfigKeys,
+  type LegacyKeyWarn,
+  type ModelConstant
+} from '@qvac/sdk'
 import { modelFitPolicySchema, type ModelFitPolicy } from '@qvac/sdk/schemas'
 import type { ResolvedModelEntry, ServeConfig } from '@/serve/core/config/types'
 import { SDCPP_VIDEO_TYPE, resolveSdcppVideoAlias } from '@/serve/core/config/aliases/sdcpp-video'
@@ -25,6 +30,22 @@ export interface ExplicitModelEntry {
 }
 
 export type RawModelEntry = string | ConstantModelEntry | ExplicitModelEntry
+
+export const warnLegacyKey: LegacyKeyWarn = createLegacyKeyWarner((message) => {
+  console.warn(message)
+})
+
+function resolveModelConfig(
+  alias: string,
+  sdkType: string,
+  config: Record<string, unknown>
+): Record<string, unknown> {
+  const path = `serve.models.${alias}.config`
+  return resolveNestedModelSrcConstants(
+    renameLegacyModelConfigKeys(sdkType, config, warnLegacyKey, path),
+    path
+  )
+}
 
 export function resolveServeModels(
   rawModels: Record<string, RawModelEntry>
@@ -137,7 +158,7 @@ export function resolveModelConstant(alias: string, entry: ConstantModelEntry): 
     isDefault: entry.default === true,
     preload: entry.preload !== false,
     ...modelFitPolicyOf(alias, entry.modelFitPolicy),
-    config: resolveNestedModelSrcConstants(resolved.config, `serve.models.${alias}.config`)
+    config: resolveModelConfig(alias, resolved.sdkType, resolved.config)
   }
 }
 
@@ -168,7 +189,7 @@ function parseExplicitEntry(alias: string, entry: ExplicitModelEntry): ResolvedM
     isDefault: entry.default === true,
     preload: entry.preload === true,
     ...modelFitPolicyOf(alias, entry.modelFitPolicy),
-    config: resolveNestedModelSrcConstants(resolved.config, `serve.models.${alias}.config`)
+    config: resolveModelConfig(alias, resolved.sdkType, resolved.config)
   }
 }
 

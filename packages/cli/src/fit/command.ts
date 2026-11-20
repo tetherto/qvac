@@ -23,9 +23,9 @@ export function registerFitCommand(program: Command): void {
 Exit status: 0 fits, 2 does not fit, 3 unknown, 1 error. --catalog exits 0 once every model is judged.
 
 Examples:
-  qvac fit QWEN3_8B_INST_Q4_K_M --set ctx_size=8192
-  qvac fit QWEN3_8B_INST_Q4_K_M QWEN3_600M_INST_Q4 --set QWEN3_8B_INST_Q4_K_M:ctx_size=0
-  qvac fit --catalog --set llamacpp-completion:ctx_size=0 --json`
+  qvac fit QWEN3_8B_INST_Q4_K_M --set ctxSize=8192
+  qvac fit QWEN3_8B_INST_Q4_K_M QWEN3_600M_INST_Q4 --set QWEN3_8B_INST_Q4_K_M:ctxSize=0
+  qvac fit --catalog --set llamacpp-completion:ctxSize=0 --json`
     )
     .action(
       async (

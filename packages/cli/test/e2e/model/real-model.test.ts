@@ -322,7 +322,7 @@ describe('chat completions (tools / structured output)', () => {
     assert.ok(['stop', 'tool_calls', 'length'].includes(body.choices[0].finish_reason))
   })
 
-  // What this case is for: a real run puts `tool_choice` through the SDK's
+  // What this case is for: a real run puts `toolChoice` through the SDK's
   // strict generationParams schema and its tools refinement, which a stubbed
   // `completion()` cannot reach. The 200 is the assertion that carries that.
   //

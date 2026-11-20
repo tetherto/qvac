@@ -5,7 +5,8 @@ import {
   audioEditBody,
   audioGenParams,
   audioGenerationBody,
-  audioUnderstandingBody
+  audioUnderstandingBody,
+  renameLegacyMusicKeys
 } from '@/serve/extensions/default/schemas/music'
 import { createMusicJobsStore, musicJobResource } from '@/serve/extensions/default/music-jobs-store'
 import { tearDownMusicJob } from '@/serve/extensions/default/routes/music'
@@ -129,6 +130,37 @@ describe('audioGenParams', () => {
       taskType: 'cover-nofsq',
       sourceAudio: '/tmp/a.wav'
     })
+  })
+})
+
+describe('renameLegacyMusicKeys', () => {
+  it('moves the deprecated prompt-metadata keys to their camelCase names', () => {
+    const warnings: [string, string, boolean | undefined][] = []
+    const body = renameLegacyMusicKeys(
+      { model: 'm', caption: 'lofi', keyscale: 'C minor', timesignature: '3/4' },
+      (legacy, replacement, ignored) => warnings.push([legacy, replacement, ignored])
+    )
+    assert.deepEqual(body, {
+      model: 'm',
+      caption: 'lofi',
+      keyScale: 'C minor',
+      timeSignature: '3/4'
+    })
+    assert.equal(audioGenerationBody.safeParse(body).success, true)
+    assert.deepEqual(warnings, [
+      ['keyscale', 'keyScale', false],
+      ['timesignature', 'timeSignature', false]
+    ])
+  })
+
+  it('keeps the camelCase value when both spellings are sent', () => {
+    const warnings: [string, string, boolean | undefined][] = []
+    const body = renameLegacyMusicKeys(
+      { model: 'm', caption: 'lofi', keyscale: 'C minor', keyScale: 'D major' },
+      (legacy, replacement, ignored) => warnings.push([legacy, replacement, ignored])
+    )
+    assert.deepEqual(body, { model: 'm', caption: 'lofi', keyScale: 'D major' })
+    assert.deepEqual(warnings, [['keyscale', 'keyScale', true]])
   })
 })
 

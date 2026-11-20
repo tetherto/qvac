@@ -132,7 +132,7 @@ describe('qvac vla: actions and hparams against a stubbed SDK', () => {
           actions: Float32Array.from([1, 2, 3, 4, 5, 6]),
           actionDim: 3,
           chunkSize: 2,
-          stats: { total_ms: 9, vision_ms: 2 }
+          stats: { totalTime: 9, visionMs: 2 }
         })
       return Object.assign(run, { requestId: 'vla-req' })
     }
@@ -154,7 +154,7 @@ describe('qvac vla: actions and hparams against a stubbed SDK', () => {
         [1, 2, 3],
         [4, 5, 6]
       ],
-      stats: { total_ms: 9, vision_ms: 2 }
+      stats: { totalTime: 9, visionMs: 2 }
     })
 
     const call = calls[0]!

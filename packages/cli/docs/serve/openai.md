@@ -625,7 +625,7 @@ curl -sS http://127.0.0.1:11435/v1/images/edits \
 
 Response shape matches `/v1/images/generations`.
 
-For models with multi-reference support, including FLUX.2 and Qwen-Image-2.1, send repeated `image[]` files. The server forwards every image in upload order as SDK `init_images`; a single file still uses `init_image`. Configure the model with its required companion files and prediction settings before sending edits.
+For models with multi-reference support, including FLUX.2 and Qwen-Image-2.1, send repeated `image[]` files. The server forwards every image in upload order as SDK `initImages`; a single file still uses `initImage`. Configure the model with its required companion files and prediction settings before sending edits.
 
 ```bash
 curl -sS http://127.0.0.1:11435/v1/images/edits \
@@ -675,7 +675,7 @@ curl -sS http://127.0.0.1:11435/v1/audio/transcriptions \
 
 Configure MOSS with a catalog model such as `MOSS_TRANSCRIBE_DIARIZE_Q8_0`,
 or use `type: moss-transcribe` and a local GGUF `src`. Model `config` accepts
-`maxThreads`, `useGPU` for Metal, and `backendsDir`. MOSS processes whole
+`threads`, `useGpu` for Metal, and `backendsDir`. MOSS processes whole
 recordings and does not support streaming or CoreML sidecars in this integration.
 For Nemotron diarization before registry models are available, configure
 `type: parakeet-transcription` and a local Nemotron 3 Diarization GGUF `src`,
@@ -724,7 +724,7 @@ The recommended shape is the same `"model": "<SDK_CONSTANT>"` shorthand used els
 }
 ```
 
-**Optional full `config`** uses the same **flat** Whisper keys as other `serve.models` Whisper entries (see [changelog example](./changelog/0.2.2/api.md): `language`, `n_threads`, `strategy`, … alongside `contextParams` / `miscConfig` if needed). You may also nest tuning under `whisperConfig`; for **`whispercpp-audio-translation` only**, those keys are merged to the top level before load.
+**Optional full `config`** uses the same **flat** Whisper keys as other `serve.models` Whisper entries (see [changelog example](./changelog/0.2.2/api.md): `language`, `threads`, `strategy`, … alongside `contextParams` / `miscConfig` if needed). You may also nest tuning under `whisperConfig`; for **`whispercpp-audio-translation` only**, those keys are merged to the top level before load.
 
 **Example with extra Whisper tuning (flat keys, same style as transcriptions):**
 
@@ -737,12 +737,12 @@ serve:
       preload: true
       config:
         language: auto
-        n_threads: 4
+        threads: 4
         strategy: greedy
         contextParams:
-          use_gpu: true
+          useGpu: true
         miscConfig:
-          caption_enabled: false
+          captionEnabled: false
 ```
 
 If you need to point at non-registry weights (a local path, `https://…`, `registry://…`, etc.), drop the `model` shorthand and use the explicit `{ "type": "whispercpp-audio-translation", "src": "<weights>" }` form. `src` is passed to `@qvac/sdk` as `modelSrc` verbatim, so it cannot be an SDK constant name in that form — use the `model` shorthand above when you want constant resolution.
@@ -800,7 +800,7 @@ world
 }
 ```
 
-Whisper segments add the metadata the engine reports: `language` (the language the window was decoded in), `no_speech_prob`, `speaker_turn_next` (with `tdrz_enable`) and, with `token_timestamps`, a `token_timestamps` array of `{ text, start, end, probability }` with times in seconds. The top-level `language` is present when every segment that reports one reports the same language.
+Whisper segments add the metadata the engine reports: `language` (the language the window was decoded in), `no_speech_prob`, `speaker_turn_next` (with `tdrzEnable`) and, with `tokenTimestamps`, a `token_timestamps` array of `{ text, start, end, probability }` with times in seconds. The top-level `language` is present when every segment that reports one reports the same language.
 
 ```json
 {

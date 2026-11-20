@@ -18,10 +18,10 @@ interface PartialVerboseSegment {
   language?: string
   /** Whisper: probability that the window holds no speech. */
   no_speech_prob?: number
-  /** Whisper with `tdrz_enable`: a speaker turn follows this segment. */
+  /** Whisper with `tdrzEnable`: a speaker turn follows this segment. */
   speaker_turn_next?: boolean
   /**
-   * Whisper with `token_timestamps`. Not OpenAI's `tokens`, which are token
+   * Whisper with `tokenTimestamps`. Not OpenAI's `tokens`, which are token
    * ids; these carry the token text, its timing in seconds and probability.
    */
   token_timestamps?: PartialVerboseToken[]

@@ -8,7 +8,7 @@ const TOOLS = [{ name: 'get_weather' }]
 describe('assertToolsEnabled', () => {
   it('rejects a tools request when the model was loaded without tools: true', () => {
     assert.throws(
-      () => assertToolsEnabled({ ctx_size: 2048 }, TOOLS, 'my-llm'),
+      () => assertToolsEnabled({ ctxSize: 2048 }, TOOLS, 'my-llm'),
       (err: unknown) =>
         err instanceof HttpError &&
         err.status === 400 &&

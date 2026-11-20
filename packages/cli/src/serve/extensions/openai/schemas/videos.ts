@@ -209,7 +209,7 @@ export const videoIdParam = z.object({
 /**
  * Rounds `value` to the nearest integer of the form (4*k + 1) with k >= 1
  * (so the result is one of 5, 9, 13, 17, ...). This is the constraint the
- * sdcpp video addon imposes on `video_frames`.
+ * sdcpp video addon imposes on `videoFrames`.
  */
 export function nearestVideoFrameCount(value: number): number {
   if (!Number.isFinite(value)) return 5
@@ -243,16 +243,16 @@ function videoFramesFor(seconds: string, fps: number | undefined, config: Record
   return nearestVideoFrameCount(Number(seconds) * (fps ?? DEFAULT_FPS))
 }
 
-// Body fields that map 1:1 onto VideoClientParams. Listed once so the
-// extractor doesn't repeat itself per field.
-const DIRECT_PARAM_KEYS = [
-  'fps',
-  'seed',
-  'steps',
-  'negative_prompt',
-  'cfg_scale',
-  'flow_shift'
-] as const
+// Body fields that map 1:1 onto VideoClientParams, with the SDK key each one
+// fills. Listed once so the extractor doesn't repeat itself per field.
+const DIRECT_PARAM_KEYS = {
+  fps: 'fps',
+  seed: 'seed',
+  steps: 'steps',
+  negative_prompt: 'negativePrompt',
+  cfg_scale: 'cfgScale',
+  flow_shift: 'flowShift'
+} as const
 
 function coerceStrength(raw: string | number | undefined): number | undefined {
   if (raw === undefined) return undefined
@@ -275,8 +275,9 @@ export function extractVideoCreateParams(
   config: Record<string, unknown> = {}
 ): VideoClientParams {
   const direct: Record<string, unknown> = {}
-  for (const key of DIRECT_PARAM_KEYS) {
-    if (body[key] !== undefined) direct[key] = body[key]
+  for (const [bodyKey, paramKey] of Object.entries(DIRECT_PARAM_KEYS)) {
+    const value = body[bodyKey as keyof typeof DIRECT_PARAM_KEYS]
+    if (value !== undefined) direct[paramKey] = value
   }
   const base = {
     modelId,
@@ -284,7 +285,7 @@ export function extractVideoCreateParams(
     ...direct,
     ...(body.size !== undefined ? parseSizeFields(body.size) : {}),
     ...(body.seconds !== undefined
-      ? { video_frames: videoFramesFor(body.seconds, body.fps, config) }
+      ? { videoFrames: videoFramesFor(body.seconds, body.fps, config) }
       : {})
   }
   if (initImage !== undefined) {
@@ -292,7 +293,7 @@ export function extractVideoCreateParams(
     return {
       ...base,
       mode: 'img2vid' as const,
-      init_image: initImage,
+      initImage,
       ...(strength !== undefined ? { strength } : {})
     } as unknown as VideoClientParams
   }

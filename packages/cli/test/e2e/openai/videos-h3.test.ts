@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer, type CreateServerOptions } from '../helpers/server.js'
 import { openaiState } from '@/serve/extensions/openai/state'
-import type { VideoClientParams } from '@qvac/sdk'
+import type { video } from '@qvac/sdk'
 
 describe('serve: H3 video', () => {
   it('loads the four-file layout and serves the result of a five-second request', async (t) => {
@@ -12,11 +12,11 @@ describe('serve: H3 video', () => {
       vaeModelSrc: '/models/video.safetensors',
       audioVaeModelSrc: '/models/audio.safetensors',
       backend: 'cuda',
-      max_vram: 'cuda0=6',
-      stream_layers: false
+      maxVram: 'cuda0=6',
+      streamLayers: false
     }
     const loads: Parameters<NonNullable<CreateServerOptions['loadModelOverride']>>[0][] = []
-    const requests: VideoClientParams[] = []
+    const requests: Parameters<typeof video>[0][] = []
     const app = await createServer(t, {
       config: {
         serve: {
@@ -58,7 +58,7 @@ describe('serve: H3 video', () => {
     assert.equal(loads[0]?.modelType, 'sdcpp-generation')
     assert.deepEqual(loads[0]?.modelConfig, config)
     assert.equal(requests[0]?.modelId, 'loaded-h3')
-    assert.equal(requests[0]?.video_frames, 124)
+    assert.equal(requests[0]?.videoFrames, 124)
     assert.equal(requests[0]?.fps, undefined)
 
     const { id } = created.json<{ id: string }>()

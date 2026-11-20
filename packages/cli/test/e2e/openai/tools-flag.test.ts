@@ -25,7 +25,7 @@ const RESPONSES_TOOLS = [
 const CONFIG = {
   serve: {
     models: {
-      'test-llm': { model: 'QWEN3_600M_INST_Q4', preload: false, config: { ctx_size: 2048 } }
+      'test-llm': { model: 'QWEN3_600M_INST_Q4', preload: false, config: { ctxSize: 2048 } }
     }
   }
 }

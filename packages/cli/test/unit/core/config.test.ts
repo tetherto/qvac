@@ -22,13 +22,13 @@ describe('resolveExplicitServeModel', () => {
 
   it('maps whispercpp-audio-translation to whispercpp-transcription and audio-translation', () => {
     const r = resolveExplicitServeModel('whispercpp-audio-translation', {
-      whisperConfig: { language: 'auto', n_threads: 4 }
+      whisperConfig: { language: 'auto', threads: 4 }
     })
     assert.equal(r.sdkType, 'whispercpp-transcription')
     assert.equal(r.endpointCategory, 'audio-translation')
     assert.equal(r.config['translate'], true)
     assert.equal(r.config['language'], 'auto')
-    assert.equal(r.config['n_threads'], 4)
+    assert.equal(r.config['threads'], 4)
     assert.equal('whisperConfig' in r.config, false)
   })
 
@@ -242,15 +242,15 @@ describe('resolveNestedModelSrcConstants', () => {
     assert.equal(pivot['modelSrc'], TTS_S3GEN_EN_CHATTERBOX)
   })
 
-  it('rewrites nested objects and upscaler.model_src', () => {
+  it('rewrites nested objects and upscaler.modelSrc', () => {
     const out = resolveNestedModelSrcConstants({
       whisperConfig: { vadModelSrc: 'WHISPER_EN_TINY_Q8_0' },
-      upscaler: { type: 'esrgan', model_src: 'TTS_S3GEN_EN_CHATTERBOX' }
+      upscaler: { type: 'esrgan', modelSrc: 'TTS_S3GEN_EN_CHATTERBOX' }
     })
     const whisper = out['whisperConfig'] as Record<string, unknown>
     const upscaler = out['upscaler'] as Record<string, unknown>
     assert.equal(whisper['vadModelSrc'], WHISPER_EN_TINY_Q8_0)
-    assert.equal(upscaler['model_src'], TTS_S3GEN_EN_CHATTERBOX)
+    assert.equal(upscaler['modelSrc'], TTS_S3GEN_EN_CHATTERBOX)
   })
 
   it("rewrites a nested object's own modelSrc, as the parakeet speaker-attribution diarizer", () => {
@@ -410,7 +410,7 @@ describe('parseServeConfig nested companions', () => {
               config: {
                 upscaler: {
                   type: 'esrgan',
-                  model_src: 'IGNORED_VALUE'
+                  modelSrc: 'IGNORED_VALUE'
                 }
               }
             }
@@ -422,7 +422,51 @@ describe('parseServeConfig nested companions', () => {
     const wan = cfg.models.get('wan')!
     assert.deepEqual(wan.config['upscaler'], {
       type: 'esrgan',
-      model_src: 'IGNORED_VALUE'
+      modelSrc: 'IGNORED_VALUE'
     })
+  })
+})
+
+describe('parseServeConfig legacy model config keys', () => {
+  it('loads legacy keys as their camelCase names, resolving a renamed modelSrc constant', (t) => {
+    const warn = t.mock.method(console, 'warn', () => {})
+    const cfg = parseServeConfig(
+      {
+        serve: {
+          models: {
+            'legacy-llm': { model: 'QWEN3_600M_INST_Q4', config: { ctx_size: 2048 } },
+            'legacy-upscale': {
+              src: 'placeholder',
+              type: 'sdcpp-generation',
+              config: {
+                mode: 'upscale',
+                upscaler: { type: 'esrgan', model_src: 'TTS_S3GEN_EN_CHATTERBOX' }
+              }
+            }
+          }
+        }
+      },
+      {}
+    )
+    const llm = cfg.models.get('legacy-llm')!
+    assert.equal(llm.config['ctxSize'], 2048)
+    assert.equal('ctx_size' in llm.config, false)
+    const upscaler = cfg.models.get('legacy-upscale')!.config['upscaler'] as Record<string, unknown>
+    assert.deepEqual(upscaler, { type: 'esrgan', modelSrc: TTS_S3GEN_EN_CHATTERBOX })
+    const messages = warn.mock.calls.map((call) => String(call.arguments[0]))
+    assert.ok(
+      messages.some(
+        (m) =>
+          m.includes('"serve.models.legacy-llm.config.ctx_size"') &&
+          m.includes('"serve.models.legacy-llm.config.ctxSize"')
+      )
+    )
+    assert.ok(
+      messages.some(
+        (m) =>
+          m.includes('"serve.models.legacy-upscale.config.upscaler.model_src"') &&
+          m.includes('"serve.models.legacy-upscale.config.upscaler.modelSrc"')
+      )
+    )
   })
 })

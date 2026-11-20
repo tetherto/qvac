@@ -156,7 +156,7 @@ mode exits `0` once every model is judged.
 **What to pass:**
 
 - A language model is judged at the SDK's default context of 1024 tokens unless
-  `ctx_size` is set. `--set ctx_size=0` reports the longest context that fits.
+  `ctxSize` is set. `--set ctxSize=0` reports the longest context that fits.
 - A model made of several parts needs its companion files and engine in its
   config: a TTS model needs `ttsEngine`, a translation model its `engine` and a
   language pair (`from`, `to`). A translation model is judged once downloaded.
@@ -169,16 +169,16 @@ mode exits `0` once every model is judged.
 
 ```bash
 # One model at 8K context
-qvac fit QWEN3_8B_INST_Q4_K_M --set ctx_size=8192
+qvac fit QWEN3_8B_INST_Q4_K_M --set ctxSize=8192
 
 # Two models loaded together, the larger at the longest context that fits
-qvac fit QWEN3_8B_INST_Q4_K_M QWEN3_600M_INST_Q4 --set QWEN3_8B_INST_Q4_K_M:ctx_size=0
+qvac fit QWEN3_8B_INST_Q4_K_M QWEN3_600M_INST_Q4 --set QWEN3_8B_INST_Q4_K_M:ctxSize=0
 
 # A translation model with its language pair
 qvac fit BERGAMOT_DE_EN --set engine=Bergamot --set from=de --set to=en
 
 # Every SDK model, language models at the longest context that fits, as JSON
-qvac fit --catalog --set llamacpp-completion:ctx_size=0 --json
+qvac fit --catalog --set llamacpp-completion:ctxSize=0 --json
 ```
 
 ### `configure`

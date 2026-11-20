@@ -23,10 +23,7 @@ function issuePaths(input: unknown): string[] {
 describe('modelFitBody', () => {
   it('accepts named models with optional config', () => {
     const result = modelFitBody.safeParse({
-      models: [
-        { model: 'my-llm', modelConfig: { ctx_size: 8192 } },
-        { model: 'QWEN3_600M_INST_Q4' }
-      ]
+      models: [{ model: 'my-llm', modelConfig: { ctxSize: 8192 } }, { model: 'QWEN3_600M_INST_Q4' }]
     })
     assert.equal(result.success, true)
   })
@@ -186,20 +183,20 @@ describe('toHttpError', () => {
 
   it('makes a config the engine schema refuses a 400 with its message', () => {
     const err = toHttpError(
-      sdkError(SDK_SERVER_ERROR_CODES.PLUGIN_LOAD_CONFIG_VALIDATION_FAILED, 'ctx_size: too small')
+      sdkError(SDK_SERVER_ERROR_CODES.PLUGIN_LOAD_CONFIG_VALIDATION_FAILED, 'ctxSize: too small')
     )
     assert.equal(err.status, 400)
     assert.equal(err.code, 'invalid_model_config')
-    assert.equal(err.message, 'ctx_size: too small')
+    assert.equal(err.message, 'ctxSize: too small')
   })
 
   it('makes a config value the engine refuses while applying its defaults a 400', () => {
     const err = toHttpError(
-      sdkError(SDK_CLIENT_ERROR_CODES.REQUEST_VALIDATION_FAILED, 'ctx_size: expected number')
+      sdkError(SDK_CLIENT_ERROR_CODES.REQUEST_VALIDATION_FAILED, 'ctxSize: expected number')
     )
     assert.equal(err.status, 400)
     assert.equal(err.code, 'invalid_model_config')
-    assert.equal(err.message, 'ctx_size: expected number')
+    assert.equal(err.message, 'ctxSize: expected number')
   })
 
   it('makes an unknown model a 404 and a non-constant companion source a 400', () => {
@@ -227,26 +224,26 @@ describe('toHttpError', () => {
 describe('mergeConfig', () => {
   it('keeps sibling keys of a nested object the request only partly overrides', () => {
     const merged = mergeConfig(
-      { language: 'en', contextParams: { use_gpu: true, n_ctx: 448 } },
+      { language: 'en', contextParams: { useGpu: true, n_ctx: 448 } },
       { contextParams: { n_ctx: 1024 } }
     )
-    assert.deepEqual(merged, { language: 'en', contextParams: { use_gpu: true, n_ctx: 1024 } })
+    assert.deepEqual(merged, { language: 'en', contextParams: { useGpu: true, n_ctx: 1024 } })
   })
 
   it('replaces arrays, scalars and model sources whole', () => {
     const base = {
       stop: ['a', 'b'],
-      ctx_size: 2048,
+      ctxSize: 2048,
       projectionModelSrc: { src: 'registry://old', name: 'OLD', addon: 'llm' }
     }
     const next = { src: 'registry://new', name: 'NEW', addon: 'llm' }
-    const merged = mergeConfig(base, { stop: ['c'], ctx_size: 4096, projectionModelSrc: next })
-    assert.deepEqual(merged, { stop: ['c'], ctx_size: 4096, projectionModelSrc: next })
+    const merged = mergeConfig(base, { stop: ['c'], ctxSize: 4096, projectionModelSrc: next })
+    assert.deepEqual(merged, { stop: ['c'], ctxSize: 4096, projectionModelSrc: next })
   })
 
   it('leaves the alias config untouched', () => {
-    const base = { contextParams: { use_gpu: true } }
-    mergeConfig(base, { contextParams: { use_gpu: false } })
-    assert.deepEqual(base, { contextParams: { use_gpu: true } })
+    const base = { contextParams: { useGpu: true } }
+    mergeConfig(base, { contextParams: { useGpu: false } })
+    assert.deepEqual(base, { contextParams: { useGpu: true } })
   })
 })

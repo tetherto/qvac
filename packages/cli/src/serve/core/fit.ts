@@ -1,7 +1,16 @@
-import { assessModelFit, SDK_CLIENT_ERROR_CODES, SDK_SERVER_ERROR_CODES } from '@qvac/sdk'
+import {
+  assessModelFit,
+  renameLegacyModelConfigKeys,
+  SDK_CLIENT_ERROR_CODES,
+  SDK_SERVER_ERROR_CODES
+} from '@qvac/sdk'
 import type { ServeConfig } from '@/serve/core/config/types'
 import { loadModelConstants } from '@/serve/core/config/constants'
-import { resolveExplicitServeModel, resolveModelAlias } from '@/serve/core/config/models'
+import {
+  resolveExplicitServeModel,
+  resolveModelAlias,
+  warnLegacyKey
+} from '@/serve/core/config/models'
 import { isModelSrcKey, resolveNestedModelSrcConstants } from '@/serve/core/config/nested-model-src'
 
 /** A model named the way `qvac fit` and `POST /qvac/v1/models/fit` take it. */
@@ -64,22 +73,20 @@ export async function assessNamedModels(
  *   source in its config is not an SDK model constant.
  */
 export function resolveFitCandidate(serveConfig: ServeConfig, candidate: FitCandidate): FitRequest {
-  const requested = candidate.modelConfig ?? {}
-  assertConstantSources(requested, 'modelConfig')
-  const overrides = resolveNestedModelSrcConstants(requested)
-
   const alias = resolveModelAlias(serveConfig, candidate.model)
   if (alias) {
     return {
       modelSrc: alias.modelSrc,
       modelType: alias.sdkType as ModelType,
-      modelConfig: mergeConfig(alias.config, overrides)
+      modelConfig: mergeConfig(alias.config, resolveOverrides(alias.sdkType, candidate))
     }
   }
 
   const constant = loadModelConstants().get(candidate.model)
   if (constant) {
-    const resolved = resolveExplicitServeModel(constant.engine || constant.addon, overrides)
+    const engine = constant.engine || constant.addon
+    const { sdkType } = resolveExplicitServeModel(engine, {})
+    const resolved = resolveExplicitServeModel(engine, resolveOverrides(sdkType, candidate))
     return {
       modelSrc: constant,
       modelType: resolved.sdkType as ModelType,
@@ -91,6 +98,19 @@ export function resolveFitCandidate(serveConfig: ServeConfig, candidate: FitCand
     'model_not_found',
     `Model "${candidate.model}" is neither a serve.models alias nor an SDK model constant.`
   )
+}
+
+// Deprecated keys are renamed first, so a companion source under its old name is
+// still checked as one.
+function resolveOverrides(sdkType: string, candidate: FitCandidate): Record<string, unknown> {
+  const requested = renameLegacyModelConfigKeys(
+    sdkType,
+    candidate.modelConfig ?? {},
+    warnLegacyKey,
+    'modelConfig'
+  )
+  assertConstantSources(requested, 'modelConfig')
+  return resolveNestedModelSrcConstants(requested)
 }
 
 /** The SDK model type a name resolves to, or `undefined` when it names no model. */

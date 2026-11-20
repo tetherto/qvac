@@ -7,7 +7,7 @@ const ALIAS = 'runtime-llm'
 const CONFIG = {
   serve: {
     models: {
-      [ALIAS]: { model: 'QWEN3_600M_INST_Q4', preload: true, config: { ctx_size: 2048 } },
+      [ALIAS]: { model: 'QWEN3_600M_INST_Q4', preload: true, config: { ctxSize: 2048 } },
       idle: { model: 'QWEN3_600M_INST_Q4', preload: false }
     }
   }

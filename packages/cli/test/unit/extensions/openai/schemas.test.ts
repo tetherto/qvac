@@ -632,13 +632,13 @@ describe('extractGenerationParams (chat semantics)', () => {
   it('extracts temperature', () => {
     const params = extractChat({ temperature: 0.7 })
     assert.ok(params)
-    assert.equal(params.temp, 0.7)
+    assert.equal(params.temperature, 0.7)
   })
 
   it('extracts top_p', () => {
     const params = extractChat({ top_p: 0.9 })
     assert.ok(params)
-    assert.equal(params.top_p, 0.9)
+    assert.equal(params.topP, 0.9)
   })
 
   it('extracts seed', () => {
@@ -650,8 +650,8 @@ describe('extractGenerationParams (chat semantics)', () => {
   it('extracts frequency_penalty and presence_penalty', () => {
     const params = extractChat({ frequency_penalty: 0.5, presence_penalty: 0.3 })
     assert.ok(params)
-    assert.equal(params.frequency_penalty, 0.5)
-    assert.equal(params.presence_penalty, 0.3)
+    assert.equal(params.frequencyPenalty, 0.5)
+    assert.equal(params.presencePenalty, 0.3)
   })
 
   it('maps max_tokens to predict', () => {
@@ -676,29 +676,29 @@ describe('extractGenerationParams (chat semantics)', () => {
       presence_penalty: 0.1
     })
     assert.ok(params)
-    assert.equal(params.temp, 0.0)
-    assert.equal(params.top_p, 0.95)
+    assert.equal(params.temperature, 0.0)
+    assert.equal(params.topP, 0.95)
     assert.equal(params.seed, 123)
     assert.equal(params.predict, 256)
-    assert.equal(params.frequency_penalty, 0.2)
-    assert.equal(params.presence_penalty, 0.1)
+    assert.equal(params.frequencyPenalty, 0.2)
+    assert.equal(params.presencePenalty, 0.1)
   })
 
   it('extracts reasoning_budget true → SDK-native -1', () => {
     const params = extractChat({ reasoning_budget: true })
     assert.ok(params)
-    assert.equal(params.reasoning_budget, -1)
+    assert.equal(params.reasoningBudget, -1)
   })
 
   it('extracts reasoning_budget false → SDK-native 0', () => {
     const params = extractChat({ reasoning_budget: false })
     assert.ok(params)
-    assert.equal(params.reasoning_budget, 0)
+    assert.equal(params.reasoningBudget, 0)
   })
 
   it('extracts SDK-native numeric reasoning_budget', () => {
-    assert.equal(extractChat({ reasoning_budget: -1 })!.reasoning_budget, -1)
-    assert.equal(extractChat({ reasoning_budget: 0 })!.reasoning_budget, 0)
+    assert.equal(extractChat({ reasoning_budget: -1 })!.reasoningBudget, -1)
+    assert.equal(extractChat({ reasoning_budget: 0 })!.reasoningBudget, 0)
   })
 
   it('ignores unsupported numeric reasoning_budget values', () => {
@@ -748,7 +748,7 @@ describe('extractResponseFormat', () => {
     })
     assert.deepEqual(result, {
       type: 'json_schema',
-      json_schema: {
+      jsonSchema: {
         name: 'Person',
         schema: { type: 'object', properties: { name: { type: 'string' } } }
       }
@@ -768,8 +768,8 @@ describe('extractResponseFormat', () => {
       }
     })
     assert.ok(result && result.type === 'json_schema')
-    assert.equal(result.json_schema.description, 'a person')
-    assert.equal(result.json_schema.strict, true)
+    assert.equal(result.jsonSchema.description, 'a person')
+    assert.equal(result.jsonSchema.strict, true)
   })
 
   it('throws on a non-object response_format', () => {
@@ -1248,7 +1248,7 @@ describe('Responses review follow-ups', () => {
         tool_choice: { type: 'function', namespace: 'files', name: 'read' }
       })
     )
-    assert.equal(args.generationParams?.tool_choice, 'files__read')
+    assert.equal(args.generationParams?.toolChoice, 'files__read')
   })
 })
 
@@ -1611,17 +1611,17 @@ describe('extractToolChoice', () => {
 describe('withToolChoice', () => {
   it('leaves params untouched when there is no choice', () => {
     assert.equal(withToolChoice(undefined, undefined), undefined)
-    assert.deepEqual(withToolChoice({ temp: 0.2 }, undefined), { temp: 0.2 })
+    assert.deepEqual(withToolChoice({ temperature: 0.2 }, undefined), { temperature: 0.2 })
   })
 
   it('creates params when the request set only a tool_choice', () => {
-    assert.deepEqual(withToolChoice(undefined, 'required'), { tool_choice: 'required' })
+    assert.deepEqual(withToolChoice(undefined, 'required'), { toolChoice: 'required' })
   })
 
   it('merges the choice into existing params', () => {
-    assert.deepEqual(withToolChoice({ temp: 0.2 }, 'get_weather'), {
-      temp: 0.2,
-      tool_choice: 'get_weather'
+    assert.deepEqual(withToolChoice({ temperature: 0.2 }, 'get_weather'), {
+      temperature: 0.2,
+      toolChoice: 'get_weather'
     })
   })
 })
@@ -1657,7 +1657,7 @@ describe('chat tool_choice wiring', () => {
 
   it('threads a mode choice into generationParams', () => {
     const args = toSdkChatArgs(chatCompletionsBody.parse(body({ tool_choice: 'required' })))
-    assert.equal(args.generationParams?.tool_choice, 'required')
+    assert.equal(args.generationParams?.toolChoice, 'required')
   })
 
   it('threads the object form through as the bare tool name', () => {
@@ -1666,15 +1666,15 @@ describe('chat tool_choice wiring', () => {
         body({ tool_choice: { type: 'function', function: { name: 'get_weather' } } })
       )
     )
-    assert.equal(args.generationParams?.tool_choice, 'get_weather')
+    assert.equal(args.generationParams?.toolChoice, 'get_weather')
   })
 
   it('keeps tool_choice alongside the other generation params', () => {
     const args = toSdkChatArgs(
       chatCompletionsBody.parse(body({ tool_choice: 'required', temperature: 0.3 }))
     )
-    assert.equal(args.generationParams?.tool_choice, 'required')
-    assert.equal(args.generationParams?.temp, 0.3)
+    assert.equal(args.generationParams?.toolChoice, 'required')
+    assert.equal(args.generationParams?.temperature, 0.3)
   })
 
   it('leaves generationParams undefined when nothing was set', () => {
@@ -1717,14 +1717,14 @@ describe('parallel_tool_calls wiring', () => {
 
   it('forwards an explicit false on a chat request', () => {
     assert.deepEqual(chatParams({ tools, parallel_tool_calls: false }), {
-      parallel_tool_calls: false
+      parallelToolCalls: false
     })
   })
 
   it('rides along with tool_choice', () => {
     assert.deepEqual(chatParams({ tools, tool_choice: 'required', parallel_tool_calls: true }), {
-      tool_choice: 'required',
-      parallel_tool_calls: true
+      toolChoice: 'required',
+      parallelToolCalls: true
     })
   })
 
@@ -1738,7 +1738,7 @@ describe('parallel_tool_calls wiring', () => {
     assert.equal(unset.generationParams, undefined)
     assert.equal(unset.parallelToolCalls, true)
     assert.deepEqual(responsesParams({ tools: responsesTools, parallel_tool_calls: false }), {
-      parallel_tool_calls: false
+      parallelToolCalls: false
     })
   })
 })
