@@ -564,3 +564,48 @@ test('FFmpegDecoder - cancel rejects response and decoder is reusable', async (t
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
 })
+
+test(
+  'FFmpegDecoder - cancel settles a run whose input stream is stalled',
+  { timeout: 10000 },
+  async (t) => {
+    const decoder = await loadDecoder({ audioFormat: 's16le', sampleRate: 16000 })
+    let inputClosed = false
+    // Delivers one chunk, then never delivers or ends.
+    const stalled = {
+      [Symbol.asyncIterator]() {
+        let first = true
+        return {
+          next() {
+            if (!first) return new Promise(() => {})
+            first = false
+            return Promise.resolve({ value: Buffer.alloc(16), done: false })
+          },
+          return() {
+            inputClosed = true
+            return Promise.resolve({ value: undefined, done: true })
+          }
+        }
+      }
+    }
+
+    try {
+      const response = decoder.run(stalled)
+      response.onError(() => {})
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      await response.cancel()
+
+      const outcome = await Promise.race([
+        response.await().then(
+          () => 'resolved',
+          (err) => `rejected:${err.name}`
+        ),
+        new Promise((resolve) => setTimeout(() => resolve('still pending'), 1000))
+      ])
+      t.is(outcome, 'rejected:JOB_CANCELLED', 'the cancelled run rejects')
+      t.ok(inputClosed, 'the input iterator is closed')
+    } finally {
+      await decoder.unload()
+    }
+  }
+)
