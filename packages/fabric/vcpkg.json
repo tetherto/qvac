@@ -67,17 +67,6 @@
           "default-features": false
         }
       ]
-    },
-    "shared-core": {
-      "description": "Experimental shared ggml core, disabled for released builds",
-      "dependencies": [
-        {
-          "name": "qvac-fabric",
-          "features": [
-            "shared-core"
-          ]
-        }
-      ]
     }
   },
   "overrides": [

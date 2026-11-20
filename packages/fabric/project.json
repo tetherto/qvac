@@ -90,7 +90,7 @@
               "forwardAllArgs": false
             },
             {
-              "command": "node ../../.github/scripts/check-linux-module-cxx-runtime.mjs prebuilds/linux-x64 --xdna",
+              "command": "node ci/verify-shared-core.mjs linux-x64 --xdna",
               "forwardAllArgs": false
             }
           ]
@@ -121,7 +121,7 @@
               "forwardAllArgs": true
             },
             {
-              "command": "node ../../.github/scripts/check-linux-module-cxx-runtime.mjs prebuilds/linux-arm64",
+              "command": "node ci/verify-shared-core.mjs linux-arm64",
               "forwardAllArgs": false
             }
           ]
@@ -276,11 +276,17 @@
         "win32-x64": {
           "ci": {
             "runner": "win_2025_x64"
-          }
+          },
+          "commands": [
+            {
+              "command": "node ../../scripts/ci/msvc-env.mjs node ci/boundary-regressions.mjs build",
+              "forwardAllArgs": false
+            }
+          ]
         }
       },
       "metadata": {
-        "timeoutMinutes": 30
+        "timeoutMinutes": 120
       }
     },
     "cpp:tests": {
@@ -302,11 +308,17 @@
         "win32-x64": {
           "ci": {
             "runner": "win_2025_x64"
-          }
+          },
+          "commands": [
+            {
+              "command": "node ../../scripts/ci/msvc-env.mjs node ci/boundary-regressions.mjs test",
+              "forwardAllArgs": false
+            }
+          ]
         }
       },
       "metadata": {
-        "timeoutMinutes": 30
+        "timeoutMinutes": 120
       }
     }
   },
