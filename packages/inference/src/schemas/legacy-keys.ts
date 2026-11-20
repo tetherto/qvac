@@ -10,6 +10,12 @@ import type { DecisionConfigInput } from '@/schemas/decision'
 import type { RerankConfigInput } from '@/schemas/rerank'
 import type { WhisperConfig } from '@/schemas/transcription-config'
 import type { BciConfig } from '@/schemas/bci-config'
+import type {
+  DiffusionClientParams,
+  SdcppConfig,
+  VideoClientParams,
+  VideoImg2vidClientParams
+} from '@/schemas/sdcpp-config'
 
 export interface LegacyLlmConfig {
   /** @deprecated Use `ctxSize`. */
@@ -298,12 +304,147 @@ export interface LegacyBciConfig {
   miscConfig?: NonNullable<BciConfig['miscConfig']> & LegacyWhisperMiscConfig
 }
 
+type SdcppUpscalerConfig = NonNullable<SdcppConfig['upscaler']>
+
+export interface LegacySdcppConfig {
+  /** @deprecated Use `mainGpu`. */
+  'main-gpu'?: SdcppConfig['mainGpu']
+  /** @deprecated Use `samplerRng`. */
+  sampler_rng?: SdcppConfig['samplerRng']
+  /** @deprecated Use `vaeAutoCpuFallback`. */
+  vae_auto_cpu_fallback?: SdcppConfig['vaeAutoCpuFallback']
+  /** @deprecated Use `vaeAutoCpuFallbackMemoryRatio`. */
+  vae_auto_cpu_fallback_memory_ratio?: SdcppConfig['vaeAutoCpuFallbackMemoryRatio']
+  /** @deprecated Use `vaeTiling`. */
+  vae_tiling?: SdcppConfig['vaeTiling']
+  /** @deprecated Use `offloadToCpu`. */
+  offload_to_cpu?: SdcppConfig['offloadToCpu']
+  /** @deprecated Use `paramsBackend`. */
+  params_backend?: SdcppConfig['paramsBackend']
+  /** @deprecated Use `maxVram`. */
+  max_vram?: SdcppConfig['maxVram']
+  /** @deprecated Use `streamLayers`. */
+  stream_layers?: SdcppConfig['streamLayers']
+  /** @deprecated Use `flashAttention`. */
+  flash_attn?: SdcppConfig['flashAttention']
+  /** @deprecated Use `performanceProfile`. */
+  performance_profile?: SdcppConfig['performanceProfile']
+  /** @deprecated Use `performanceMaxWidth`. */
+  performance_max_width?: SdcppConfig['performanceMaxWidth']
+  /** @deprecated Use `performanceMaxHeight`. */
+  performance_max_height?: SdcppConfig['performanceMaxHeight']
+  /** @deprecated Use `performanceMaxFrames`. */
+  performance_max_frames?: SdcppConfig['performanceMaxFrames']
+  /** @deprecated Use `vaeConvDirect`. */
+  vae_conv_direct?: SdcppConfig['vaeConvDirect']
+  /** @deprecated Use `tensorTypeRules`. */
+  tensor_type_rules?: SdcppConfig['tensorTypeRules']
+  /** @deprecated Use `diffusionFlashAttention`. */
+  diffusion_fa?: SdcppConfig['diffusionFlashAttention']
+  /** @deprecated Use `loraApplyMode`. */
+  lora_apply_mode?: SdcppConfig['loraApplyMode']
+  upscaler?: SdcppUpscalerConfig & {
+    /** @deprecated Use `modelSrc`. */
+    model_src?: SdcppUpscalerConfig['modelSrc']
+    /** @deprecated Use `tileSize`. */
+    tile_size?: SdcppUpscalerConfig['tileSize']
+    /** @deprecated Use `offloadToCpu`. */
+    offload_params_to_cpu?: SdcppUpscalerConfig['offloadToCpu']
+  }
+}
+
+interface LegacyImageGenerationParams<P extends DiffusionClientParams | VideoClientParams> {
+  /** @deprecated Use `negativePrompt`. */
+  negative_prompt?: P['negativePrompt']
+  /** @deprecated Use `cfgScale`. */
+  cfg_scale?: P['cfgScale']
+  /** @deprecated Use `samplingMethod`. */
+  sampling_method?: P['samplingMethod']
+  /** @deprecated Use `vaeTiling`. */
+  vae_tiling?: P['vaeTiling']
+  /** @deprecated Use `vaeTileSize`. */
+  vae_tile_size?: P['vaeTileSize']
+  /** @deprecated Use `cachePreset`. */
+  cache_preset?: P['cachePreset']
+}
+
+export type LegacyDiffusionClientParams = DiffusionClientParams &
+  LegacyImageGenerationParams<DiffusionClientParams> & {
+    /** @deprecated Use `imgCfgScale`. */
+    img_cfg_scale?: DiffusionClientParams['imgCfgScale']
+    /** @deprecated Use `customSigmas`. */
+    custom_sigmas?: DiffusionClientParams['customSigmas']
+    /** @deprecated Use `batchCount`. */
+    batch_count?: DiffusionClientParams['batchCount']
+    /** @deprecated Use `initImage`. */
+    init_image?: Uint8Array
+    /** @deprecated Use `initImages`. */
+    init_images?: Uint8Array[]
+    /** @deprecated Use `increaseRefIndex`. */
+    increase_ref_index?: DiffusionClientParams['increaseRefIndex']
+    /** @deprecated Use `autoResizeRefImage`. */
+    auto_resize_ref_image?: DiffusionClientParams['autoResizeRefImage']
+  }
+
+interface LegacyVideoKeys extends LegacyImageGenerationParams<VideoClientParams> {
+  /** @deprecated Use `loraStrength`. */
+  lora_strength?: number
+  /** @deprecated Use `stgScale`. */
+  stg_scale?: VideoClientParams['stgScale']
+  /** @deprecated Use `stgBlock`. */
+  stg_block?: VideoClientParams['stgBlock']
+  /** @deprecated Use `videoFrames`. */
+  video_frames?: number
+  /** @deprecated Use `flowShift`. */
+  flow_shift?: VideoClientParams['flowShift']
+  /** @deprecated Use `highNoiseSteps`. */
+  high_noise_steps?: VideoClientParams['highNoiseSteps']
+  /** @deprecated Use `highNoiseSampler`. */
+  high_noise_sampler?: VideoClientParams['highNoiseSampler']
+  /** @deprecated Use `highNoiseScheduler`. */
+  high_noise_scheduler?: VideoClientParams['highNoiseScheduler']
+  /** @deprecated Use `highNoiseCfgScale`. */
+  high_noise_cfg_scale?: VideoClientParams['highNoiseCfgScale']
+  /** @deprecated Use `highNoiseFlowShift`. */
+  high_noise_flow_shift?: VideoClientParams['highNoiseFlowShift']
+  /** @deprecated Use `moeBoundary`. */
+  moe_boundary?: VideoClientParams['moeBoundary']
+  /** @deprecated Use `vaceStrength`. */
+  vace_strength?: VideoClientParams['vaceStrength']
+  /** @deprecated Use `controlFrames`. */
+  control_frames?: Uint8Array[]
+  /** @deprecated Use `vaeTileOverlap`. */
+  vae_tile_overlap?: VideoClientParams['vaeTileOverlap']
+  /** @deprecated Use `temporalTiling`. */
+  temporal_tiling?: VideoClientParams['temporalTiling']
+  /** @deprecated Use `cacheMode`. */
+  cache_mode?: VideoClientParams['cacheMode']
+  /** @deprecated Use `cacheThreshold`. */
+  cache_threshold?: VideoClientParams['cacheThreshold']
+  /** @deprecated Use `referenceImages`. */
+  reference_images?: readonly [Uint8Array]
+  /** @deprecated Use `referenceAttentionStrength`. */
+  reference_attention_strength?: number
+  /** @deprecated Use `referenceDownscaleFactor`. */
+  reference_downscale_factor?: 1
+}
+
+export type LegacyVideoClientParams = (
+  | VideoClientParams
+  | (Omit<VideoImg2vidClientParams, 'initImage'> & {
+      /** @deprecated Use `initImage`. */
+      init_image: Uint8Array
+    })
+) &
+  LegacyVideoKeys
+
 export type LegacyModelConfigs = {
   'llamacpp-completion': LegacyLlmConfig
   'llamacpp-decision': LegacyEmbedLlamacppConfig<DecisionConfigInput>
   'llamacpp-rerank': LegacyEmbedLlamacppConfig<RerankConfigInput>
   'whispercpp-transcription': LegacyWhisperConfig
   'bci-whispercpp-transcription': LegacyBciConfig
+  'sdcpp-generation': LegacySdcppConfig
 }
 
 type CanonicalOf<T> = T extends keyof typeof ModelTypeAliases ? (typeof ModelTypeAliases)[T] : T
@@ -493,18 +634,115 @@ const BCI_CONFIG_KEYS: LegacyKeySpec = {
   }
 }
 
+const SDCPP_CONFIG_KEYS: LegacyKeySpec = {
+  renames: {
+    'main-gpu': 'mainGpu',
+    sampler_rng: 'samplerRng',
+    vae_auto_cpu_fallback: 'vaeAutoCpuFallback',
+    vae_auto_cpu_fallback_memory_ratio: 'vaeAutoCpuFallbackMemoryRatio',
+    vae_tiling: 'vaeTiling',
+    offload_to_cpu: 'offloadToCpu',
+    params_backend: 'paramsBackend',
+    max_vram: 'maxVram',
+    stream_layers: 'streamLayers',
+    flash_attn: 'flashAttention',
+    performance_profile: 'performanceProfile',
+    performance_max_width: 'performanceMaxWidth',
+    performance_max_height: 'performanceMaxHeight',
+    performance_max_frames: 'performanceMaxFrames',
+    vae_conv_direct: 'vaeConvDirect',
+    tensor_type_rules: 'tensorTypeRules',
+    diffusion_fa: 'diffusionFlashAttention',
+    lora_apply_mode: 'loraApplyMode'
+  },
+  nested: {
+    upscaler: {
+      renames: {
+        model_src: 'modelSrc',
+        tile_size: 'tileSize',
+        offload_params_to_cpu: 'offloadToCpu'
+      }
+    }
+  }
+}
+
+const IMAGE_GENERATION_RENAMES = {
+  negative_prompt: 'negativePrompt',
+  cfg_scale: 'cfgScale',
+  sampling_method: 'samplingMethod',
+  vae_tiling: 'vaeTiling',
+  vae_tile_size: 'vaeTileSize',
+  cache_preset: 'cachePreset',
+  init_image: 'initImage'
+}
+
+const DIFFUSION_PARAMS_KEYS: LegacyKeySpec = {
+  renames: {
+    ...IMAGE_GENERATION_RENAMES,
+    img_cfg_scale: 'imgCfgScale',
+    custom_sigmas: 'customSigmas',
+    batch_count: 'batchCount',
+    init_images: 'initImages',
+    increase_ref_index: 'increaseRefIndex',
+    auto_resize_ref_image: 'autoResizeRefImage'
+  }
+}
+
+const VIDEO_PARAMS_KEYS: LegacyKeySpec = {
+  renames: {
+    ...IMAGE_GENERATION_RENAMES,
+    lora_strength: 'loraStrength',
+    stg_scale: 'stgScale',
+    stg_block: 'stgBlock',
+    video_frames: 'videoFrames',
+    flow_shift: 'flowShift',
+    high_noise_steps: 'highNoiseSteps',
+    high_noise_sampler: 'highNoiseSampler',
+    high_noise_scheduler: 'highNoiseScheduler',
+    high_noise_cfg_scale: 'highNoiseCfgScale',
+    high_noise_flow_shift: 'highNoiseFlowShift',
+    moe_boundary: 'moeBoundary',
+    vace_strength: 'vaceStrength',
+    control_frames: 'controlFrames',
+    vae_tile_overlap: 'vaeTileOverlap',
+    temporal_tiling: 'temporalTiling',
+    cache_mode: 'cacheMode',
+    cache_threshold: 'cacheThreshold',
+    reference_images: 'referenceImages',
+    reference_attention_strength: 'referenceAttentionStrength',
+    reference_downscale_factor: 'referenceDownscaleFactor'
+  }
+}
+
 export const LEGACY_MODEL_CONFIG_KEYS: Partial<Record<CanonicalModelType, LegacyKeySpec>> = {
   'llamacpp-completion': LLM_CONFIG_KEYS,
   'llamacpp-decision': EMBED_LLAMACPP_CONFIG_KEYS,
   'llamacpp-rerank': EMBED_LLAMACPP_CONFIG_KEYS,
   'whispercpp-transcription': WHISPER_CONFIG_KEYS,
-  'bci-whispercpp-transcription': BCI_CONFIG_KEYS
+  'bci-whispercpp-transcription': BCI_CONFIG_KEYS,
+  'sdcpp-generation': SDCPP_CONFIG_KEYS
 }
 
 export const LEGACY_REQUEST_KEYS: Readonly<Record<string, LegacyKeySpec>> = {
   completionStream: COMPLETION_PARAMS_KEYS,
   completionOrchestrate: COMPLETION_PARAMS_KEYS,
-  batchCompletionStream: { nested: { prompts: COMPLETION_PARAMS_KEYS } }
+  batchCompletionStream: { nested: { prompts: COMPLETION_PARAMS_KEYS } },
+  diffusionStream: DIFFUSION_PARAMS_KEYS,
+  videoStream: VIDEO_PARAMS_KEYS
+}
+
+export function renameLegacyDiffusionParams(
+  params: LegacyDiffusionClientParams,
+  warn: LegacyKeyWarn
+): DiffusionClientParams {
+  return renameLegacyKeys(params, DIFFUSION_PARAMS_KEYS, warn) as DiffusionClientParams
+}
+
+export function renameLegacyVideoParams(
+  params: LegacyVideoClientParams,
+  warn: LegacyKeyWarn
+): VideoClientParams {
+  return renameLegacyKeys(params, VIDEO_PARAMS_KEYS, warn) as VideoClientParams
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

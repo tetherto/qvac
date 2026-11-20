@@ -18,8 +18,8 @@ test('sdcppConfigSchema: accepts the Ideogram 4 companion layout', (t) => {
   const result = sdcppConfigSchema.safeParse({
     mode: 'diffusion',
     device: 'gpu',
-    diffusion_fa: true,
-    offload_to_cpu: true,
+    diffusionFlashAttention: true,
+    offloadToCpu: true,
     llmModelSrc: IDEOGRAM_LLM,
     vaeModelSrc: IDEOGRAM_VAE,
     uncondModelSrc: IDEOGRAM_UNCOND_MODEL
@@ -34,8 +34,8 @@ test('sdcpp plugin resolveConfig: resolves Ideogram companions and strips source
   const resolved = await diffusionPlugin.resolveConfig!(
     {
       mode: 'diffusion',
-      diffusion_fa: true,
-      offload_to_cpu: true,
+      diffusionFlashAttention: true,
+      offloadToCpu: true,
       llmModelSrc: IDEOGRAM_LLM,
       vaeModelSrc: IDEOGRAM_VAE,
       uncondModelSrc: IDEOGRAM_UNCOND_MODEL
@@ -56,8 +56,8 @@ test('sdcpp plugin resolveConfig: resolves Ideogram companions and strips source
   t.is('vaeModelSrc' in resolved.config, false)
   t.is('uncondModelSrc' in resolved.config, false)
   t.is(resolved.config.mode, 'diffusion')
-  t.is(resolved.config.diffusion_fa, true)
-  t.is(resolved.config.offload_to_cpu, true)
+  t.is(resolved.config.diffusionFlashAttention, true)
+  t.is(resolved.config.offloadToCpu, true)
 })
 
 test('sdcpp plugin resolveConfig: rejects Ideogram unconditional model outside diffusion mode', async (t) => {
@@ -130,8 +130,8 @@ test('sdcpp plugin createModel: wires Ideogram unconditional model into the addo
     modelPath: '/tmp/ideogram4-Q4_0.gguf',
     modelConfig: {
       mode: 'diffusion',
-      diffusion_fa: true,
-      offload_to_cpu: true
+      diffusionFlashAttention: true,
+      offloadToCpu: true
     },
     artifacts: {
       llmModelPath: '/tmp/Qwen3-VL-8B-Instruct-Q4_K_M.gguf',

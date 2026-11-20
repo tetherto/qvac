@@ -435,12 +435,12 @@ test('diffusion performance options survive the generated load contract', functi
   const validate = new Ajv2020({ strict: false }).compile(schema)
   const modelConfig = {
     mode: 'video',
-    performance_profile: 'auto',
-    performance_max_width: 512,
-    performance_max_height: 320,
-    performance_max_frames: 97,
-    vae_conv_direct: false,
-    tensor_type_rules: ''
+    performanceProfile: 'auto',
+    performanceMaxWidth: 512,
+    performanceMaxHeight: 320,
+    performanceMaxFrames: 97,
+    vaeConvDirect: false,
+    tensorTypeRules: ''
   }
   const request = {
     type: 'loadModel',
@@ -448,15 +448,15 @@ test('diffusion performance options survive the generated load contract', functi
     modelSrc: '/models/ltx.gguf',
     modelConfig
   }
-  for (const performance_profile of ['auto', 'off']) {
-    t.ok(validate({ ...request, modelConfig: { ...modelConfig, performance_profile } }))
+  for (const performanceProfile of ['auto', 'off']) {
+    t.ok(validate({ ...request, modelConfig: { ...modelConfig, performanceProfile } }))
   }
   for (const override of [
-    { performance_profile: 'fast' },
-    { performance_max_width: 0 },
-    { performance_max_height: -1 },
-    { performance_max_frames: 1.5 },
-    { vae_conv_direct: 'false' }
+    { performanceProfile: 'fast' },
+    { performanceMaxWidth: 0 },
+    { performanceMaxHeight: -1 },
+    { performanceMaxFrames: 1.5 },
+    { vaeConvDirect: 'false' }
   ]) {
     t.absent(validate({ ...request, modelConfig: { ...modelConfig, ...override } }))
   }

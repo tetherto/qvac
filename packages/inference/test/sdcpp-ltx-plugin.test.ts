@@ -145,7 +145,7 @@ test('sdcpp plugin createModel: LTX-2 audio VAE is optional (silent video)', asy
   t.is(files['audioVae'], undefined, 'audio VAE omitted → no audio slot')
 })
 
-test("sdcpp plugin createModel: forwards lora_apply_mode 'at_runtime' to LTX addon config", async (t) => {
+test("sdcpp plugin createModel: forwards loraApplyMode 'at_runtime' to LTX addon config", async (t) => {
   const { diffusionPlugin } = await import('@/plugins/builtin/sdcpp-generation/plugin')
 
   const result = diffusionPlugin.createModel({
@@ -153,7 +153,7 @@ test("sdcpp plugin createModel: forwards lora_apply_mode 'at_runtime' to LTX add
     modelPath: '/tmp/ltx.gguf',
     modelConfig: {
       mode: 'video',
-      lora_apply_mode: 'at_runtime'
+      loraApplyMode: 'at_runtime'
     },
     artifacts: {
       llmModelPath: '/tmp/gemma.gguf',

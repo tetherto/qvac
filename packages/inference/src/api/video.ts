@@ -1,4 +1,11 @@
-import { videoStreamResponseSchema, type VideoClientParams, type VideoStats } from '@/schemas/index'
+import {
+  videoStreamResponseSchema,
+  renameLegacyVideoParams,
+  type LegacyVideoClientParams,
+  type VideoClientParams,
+  type VideoStats
+} from '@/schemas/index'
+import { warnLegacyKey } from '@/runtime/legacy-keys'
 import { createVideoStreamRequest } from '@/api/video-request'
 import { stream as streamRpc } from '@/dispatch'
 import { generateRequestId } from '@/runtime/request-id'
@@ -40,7 +47,7 @@ export interface VideoResult {
  *   prompt: "a cat surfing a wave at sunset",
  *   width: 480,
  *   height: 832,
- *   video_frames: 17, // must satisfy (4*k + 1)
+ *   videoFrames: 17, // must satisfy (4*k + 1)
  *   fps: 16,
  * });
  * const buffers = await outputs;
@@ -67,7 +74,7 @@ export interface VideoResult {
  *   modelId,
  *   mode: "img2vid",
  *   prompt: "the subject slowly turns and smiles, cinematic lighting",
- *   init_image: firstFrame,
+ *   initImage: firstFrame,
  *   strength: 0.85,
  * });
  * ```
@@ -80,7 +87,7 @@ export interface VideoResult {
  *   modelId,
  *   mode: "txt2vid",
  *   prompt: "smooth transition between scenes",
- *   control_frames: [frameA, frameB],
+ *   controlFrames: [frameA, frameB],
  * });
  * ```
  *
@@ -92,13 +99,13 @@ export interface VideoResult {
  *   mode: "txt2vid",
  *   prompt: "Reference sheet: a red-haired explorer. Generated video: the explorer crosses a snowy ridge.",
  *   lora: "/absolute/path/to/ltx-2-ingredients.safetensors",
- *   lora_strength: 1.37,
- *   stg_scale: 1,
- *   stg_block: 29,
- *   reference_images: [referenceSheet],
- *   reference_attention_strength: 1,
- *   reference_downscale_factor: 1,
- *   video_frames: 217,
+ *   loraStrength: 1.37,
+ *   stgScale: 1,
+ *   stgBlock: 29,
+ *   referenceImages: [referenceSheet],
+ *   referenceAttentionStrength: 1,
+ *   referenceDownscaleFactor: 1,
+ *   videoFrames: 217,
  *   scheduler: "ltx2",
  * });
  * const buffers = await outputs;
@@ -111,7 +118,11 @@ export interface VideoResult {
  * await cancel(requestId);
  * ```
  */
-export function video(params: VideoClientParams): VideoResult {
+export function video(params: LegacyVideoClientParams): VideoResult {
+  return runVideo(renameLegacyVideoParams(params, warnLegacyKey))
+}
+
+function runVideo(params: VideoClientParams): VideoResult {
   const requestId = generateRequestId()
   const request = createVideoStreamRequest(params, requestId)
 

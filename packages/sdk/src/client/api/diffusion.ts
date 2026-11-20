@@ -1,10 +1,12 @@
 import {
   diffusionStreamResponseSchema,
+  renameLegacyDiffusionParams,
   type DiffusionStreamRequest,
-  type DiffusionClientParams,
+  type LegacyDiffusionClientParams,
   type DiffusionStats,
   type RPCOptions
 } from '@qvac/inference/surface'
+import { warnLegacyKey } from '@/utils/legacy-keys'
 import { stream as streamRpc } from '@/client/rpc/rpc-client'
 import { generateClientRequestId } from '@/client/api/client-request-id'
 import { decodeBase64, encodeBase64 } from '@/utils/encoding'
@@ -32,8 +34,8 @@ interface DiffusionResult {
  * @throws {InferenceCancelledError} The run's promises reject and progress stream throws when an active generation is cancelled.
  * @throws {RequestRejectedByPolicyError} The run rejects when another image or video generation owns the model.
  *
- * Supports txt2img without input images, img2img via `init_image`,
- * and ordered multi-reference editing via `init_images` on supported models.
+ * Supports txt2img without input images, img2img via `initImage`,
+ * and ordered multi-reference editing via `initImages` on supported models.
  *
  * @example
  * ```typescript
@@ -44,25 +46,25 @@ interface DiffusionResult {
  *
  * // img2img (SD/SDXL — SDEdit)
  * const initImage = fs.readFileSync("input.png");
- * const { outputs } = diffusion({ modelId, prompt: "oil painting style", init_image: initImage, strength: 0.7 });
+ * const { outputs } = diffusion({ modelId, prompt: "oil painting style", initImage: initImage, strength: 0.7 });
  *
  * // img2img (FLUX.2 — in-context conditioning)
  * // IMPORTANT: FLUX.2 img2img requires `prediction: "flux2_flow"` to be set on the
  * // model config at loadModel time (e.g. `loadModel(src, { modelType: "diffusion",
  * // modelConfig: { prediction: "flux2_flow" } })`).
- * const { outputs } = diffusion({ modelId, prompt: "turn into watercolor", init_image: initImage });
+ * const { outputs } = diffusion({ modelId, prompt: "turn into watercolor", initImage: initImage });
  *
  * // FLUX.2 multi-reference fusion
  * // IMPORTANT: requires the model loaded with `modelConfig: { prediction: "flux2_flow" }`
  * // and a Qwen3 text encoder via `llmModelSrc` (same loadModel requirements as the
- * // FLUX.2 img2img example above). `init_image` and `init_images` are mutually
+ * // FLUX.2 img2img example above). `initImage` and `initImages` are mutually
  * // exclusive — pass one or the other, not both.
  * const refA = fs.readFileSync("scientist-a.jpg");
  * const refB = fs.readFileSync("scientist-b.jpg");
  * const { outputs } = diffusion({
  *   modelId,
  *   prompt: "a portrait using most visual traits from @image1 and the eyes from @image2",
- *   init_images: [refA, refB],
+ *   initImages: [refA, refB],
  *   width: 768,
  *   height: 768,
  * });
@@ -72,12 +74,12 @@ interface DiffusionResult {
  * const { outputs: flux3Edit } = diffusion({
  *   modelId,
  *   prompt: "Place the subject in a lush garden, preserving its appearance.",
- *   init_images: [refA],
+ *   initImages: [refA],
  *   width: 512,
  *   height: 512,
  *   steps: 16,
- *   cfg_scale: 1,
- *   sampling_method: "euler",
+ *   cfgScale: 1,
+ *   samplingMethod: "euler",
  * });
  *
  * // Qwen-Image-2.1 reference editing. Load the matching Qwen3-VL encoder,
@@ -85,25 +87,25 @@ interface DiffusionResult {
  * const { outputs: edited } = diffusion({
  *   modelId,
  *   prompt: "Place the two referenced people together in one office.",
- *   init_images: [refA, refB],
+ *   initImages: [refA, refB],
  *   width: 512,
  *   height: 512,
  *   steps: 30,
- *   cfg_scale: 6,
- *   sampling_method: "euler",
+ *   cfgScale: 6,
+ *   samplingMethod: "euler",
  *   seed: 42,
  * });
  *
  * // LoRA adapter for this generation (absolute path required).
  * // Persistence across subsequent diffusion() calls is controlled at
- * // loadModel time via `modelConfig.lora_apply_mode`.
+ * // loadModel time via `modelConfig.loraApplyMode`.
  * const { outputs } = diffusion({
  *   modelId,
  *   prompt: "a watercolor cat",
  *   lora: "/home/user/loras/watercolor.safetensors",
  * });
  *
- * // ESRGAN upscale; requires the model to be loaded with `modelConfig.upscaler.model_src` set.
+ * // ESRGAN upscale; requires the model to be loaded with `modelConfig.upscaler.modelSrc` set.
  * const { outputs: singleOutputs } = diffusion({
  *   modelId,
  *   prompt: "a fox portrait",
@@ -133,15 +135,18 @@ interface DiffusionResult {
  * const buffers = await outputs;
  * ```
  */
-export function diffusion(params: DiffusionClientParams, options?: RPCOptions): DiffusionResult {
-  const { init_image, init_images, ...rest } = params
+export function diffusion(
+  params: LegacyDiffusionClientParams,
+  options?: RPCOptions
+): DiffusionResult {
+  const { initImage, initImages, ...rest } = renameLegacyDiffusionParams(params, warnLegacyKey)
 
   const requestId = generateClientRequestId()
   const request: DiffusionStreamRequest = {
     ...rest,
-    ...(init_image !== undefined && { init_image: encodeBase64(init_image) }),
-    ...(init_images !== undefined && {
-      init_images: init_images.map(encodeBase64)
+    ...(initImage !== undefined && { initImage: encodeBase64(initImage) }),
+    ...(initImages !== undefined && {
+      initImages: initImages.map(encodeBase64)
     }),
     type: 'diffusionStream',
     requestId

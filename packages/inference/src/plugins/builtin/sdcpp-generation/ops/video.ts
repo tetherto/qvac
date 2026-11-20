@@ -114,10 +114,10 @@ export async function* video(
   validateProviderPaths(request)
   const modelEntry = getModelEntry(request.modelId)
   const modelConfig = modelEntry ? sdcppConfigSchema.safeParse(modelEntry.local.config) : null
-  const loraApplyMode = modelConfig?.success ? (modelConfig.data.lora_apply_mode ?? 'auto') : 'auto'
+  const loraApplyMode = modelConfig?.success ? (modelConfig.data.loraApplyMode ?? 'auto') : 'auto'
   if (request.lora !== undefined && loraApplyMode !== 'at_runtime') {
     requestLogger.warn(
-      `[video] lora_apply_mode="${loraApplyMode}" may persist the request LoRA across later generations; use "at_runtime" for per-call application.`
+      `[video] loraApplyMode="${loraApplyMode}" may persist the request LoRA across later generations; use "at_runtime" for per-call application.`
     )
   }
 
@@ -138,81 +138,81 @@ export async function* video(
 
   const runParams = {
     prompt: request.prompt,
-    ...(request.negative_prompt !== undefined && {
-      negative_prompt: request.negative_prompt
+    ...(request.negativePrompt !== undefined && {
+      negative_prompt: request.negativePrompt
     }),
     ...(request.lora !== undefined && { lora: request.lora }),
-    ...(request.lora_strength !== undefined && {
-      lora_strength: request.lora_strength
+    ...(request.loraStrength !== undefined && {
+      lora_strength: request.loraStrength
     }),
-    ...(request.stg_scale !== undefined && { stg_scale: request.stg_scale }),
-    ...(request.stg_block !== undefined && { stg_block: request.stg_block }),
+    ...(request.stgScale !== undefined && { stg_scale: request.stgScale }),
+    ...(request.stgBlock !== undefined && { stg_block: request.stgBlock }),
     ...(request.width !== undefined && { width: request.width }),
     ...(request.height !== undefined && { height: request.height }),
-    ...(request.video_frames !== undefined && {
-      video_frames: request.video_frames
+    ...(request.videoFrames !== undefined && {
+      video_frames: request.videoFrames
     }),
     ...(request.fps !== undefined && { fps: request.fps }),
     ...(request.seed !== undefined && { seed: request.seed }),
     ...(request.steps !== undefined && { steps: request.steps }),
-    ...(request.sampling_method !== undefined && {
-      sampling_method: request.sampling_method
+    ...(request.samplingMethod !== undefined && {
+      sampling_method: request.samplingMethod
     }),
     ...(request.scheduler !== undefined && { scheduler: request.scheduler }),
-    ...(request.cfg_scale !== undefined && { cfg_scale: request.cfg_scale }),
-    ...(request.flow_shift !== undefined && { flow_shift: request.flow_shift }),
-    ...(request.high_noise_steps !== undefined && {
-      high_noise_steps: request.high_noise_steps
+    ...(request.cfgScale !== undefined && { cfg_scale: request.cfgScale }),
+    ...(request.flowShift !== undefined && { flow_shift: request.flowShift }),
+    ...(request.highNoiseSteps !== undefined && {
+      high_noise_steps: request.highNoiseSteps
     }),
-    ...(request.high_noise_sampler !== undefined && {
-      high_noise_sampler: request.high_noise_sampler
+    ...(request.highNoiseSampler !== undefined && {
+      high_noise_sampler: request.highNoiseSampler
     }),
-    ...(request.high_noise_scheduler !== undefined && {
-      high_noise_scheduler: request.high_noise_scheduler
+    ...(request.highNoiseScheduler !== undefined && {
+      high_noise_scheduler: request.highNoiseScheduler
     }),
-    ...(request.high_noise_cfg_scale !== undefined && {
-      high_noise_cfg_scale: request.high_noise_cfg_scale
+    ...(request.highNoiseCfgScale !== undefined && {
+      high_noise_cfg_scale: request.highNoiseCfgScale
     }),
-    ...(request.high_noise_flow_shift !== undefined && {
-      high_noise_flow_shift: request.high_noise_flow_shift
+    ...(request.highNoiseFlowShift !== undefined && {
+      high_noise_flow_shift: request.highNoiseFlowShift
     }),
-    ...(request.moe_boundary !== undefined && {
-      moe_boundary: request.moe_boundary
+    ...(request.moeBoundary !== undefined && {
+      moe_boundary: request.moeBoundary
     }),
-    ...(request.vace_strength !== undefined && {
-      vace_strength: request.vace_strength
+    ...(request.vaceStrength !== undefined && {
+      vace_strength: request.vaceStrength
     }),
     ...(request.strength !== undefined && {
       strength: request.strength
     }),
-    ...(request.control_frames !== undefined && {
-      control_frames: request.control_frames.map((b64) => Buffer.from(b64, 'base64'))
+    ...(request.controlFrames !== undefined && {
+      control_frames: request.controlFrames.map((b64) => Buffer.from(b64, 'base64'))
     }),
-    ...(request.reference_images !== undefined && {
-      reference_images: request.reference_images.map((b64) => Buffer.from(b64, 'base64'))
+    ...(request.referenceImages !== undefined && {
+      reference_images: request.referenceImages.map((b64) => Buffer.from(b64, 'base64'))
     }),
-    ...(request.reference_attention_strength !== undefined && {
-      reference_attention_strength: request.reference_attention_strength
+    ...(request.referenceAttentionStrength !== undefined && {
+      reference_attention_strength: request.referenceAttentionStrength
     }),
-    ...(request.reference_downscale_factor !== undefined && {
-      reference_downscale_factor: request.reference_downscale_factor
+    ...(request.referenceDownscaleFactor !== undefined && {
+      reference_downscale_factor: request.referenceDownscaleFactor
     }),
-    ...(request.vae_tiling !== undefined && { vae_tiling: request.vae_tiling }),
-    ...(request.vae_tile_size !== undefined && {
-      vae_tile_size: request.vae_tile_size
+    ...(request.vaeTiling !== undefined && { vae_tiling: request.vaeTiling }),
+    ...(request.vaeTileSize !== undefined && {
+      vae_tile_size: request.vaeTileSize
     }),
-    ...(request.vae_tile_overlap !== undefined && {
-      vae_tile_overlap: request.vae_tile_overlap
+    ...(request.vaeTileOverlap !== undefined && {
+      vae_tile_overlap: request.vaeTileOverlap
     }),
-    ...(request.temporal_tiling !== undefined && {
-      temporal_tiling: request.temporal_tiling
+    ...(request.temporalTiling !== undefined && {
+      temporal_tiling: request.temporalTiling
     }),
-    ...(request.cache_mode !== undefined && { cache_mode: request.cache_mode }),
-    ...(request.cache_preset !== undefined && {
-      cache_preset: request.cache_preset
+    ...(request.cacheMode !== undefined && { cache_mode: request.cacheMode }),
+    ...(request.cachePreset !== undefined && {
+      cache_preset: request.cachePreset
     }),
-    ...(request.cache_threshold !== undefined && {
-      cache_threshold: request.cache_threshold
+    ...(request.cacheThreshold !== undefined && {
+      cache_threshold: request.cacheThreshold
     })
   }
   const response =
@@ -221,7 +221,7 @@ export async function* video(
           ...runParams,
           mode: 'img2vid',
           // parseVideoRequest requires this field for image-to-video requests.
-          init_image: Buffer.from(request.init_image!, 'base64')
+          init_image: Buffer.from(request.initImage!, 'base64')
         })
       : await model.run({ ...runParams, mode: 'txt2vid' })
 

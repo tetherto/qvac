@@ -2,11 +2,14 @@ import test from 'brittle'
 import {
   createLegacyKeyWarner,
   renameLegacyConfigKeys,
+  renameLegacyDiffusionParams,
   renameLegacyKeys,
   renameLegacyRequestKeys,
+  renameLegacyVideoParams,
   type LegacyKeySpec
 } from '@/schemas/legacy-keys'
 import { llmConfigSchema } from '@/schemas/llamacpp-config'
+import { sdcppLoadConfigSchema } from '@/schemas/sdcpp-config'
 import { requestSchema } from '@/schemas/index'
 
 const spec: LegacyKeySpec = {
@@ -190,6 +193,48 @@ test('renameLegacyRequestKeys: whisper and BCI nested configs', (t) => {
   })
 })
 
+test('renameLegacyRequestKeys: sd.cpp load config and its upscaler block', (t) => {
+  const { warn } = collectWarnings()
+  const renamed = renameLegacyRequestKeys(
+    {
+      type: 'loadModel',
+      modelType: 'diffusion',
+      modelConfig: {
+        diffusion_fa: true,
+        offload_to_cpu: true,
+        'main-gpu': 0,
+        upscaler: { model_src: 'esrgan.pth', tile_size: 128, offload_params_to_cpu: true }
+      }
+    },
+    warn
+  )
+  t.alike(renamed.modelConfig, {
+    diffusionFlashAttention: true,
+    offloadToCpu: true,
+    mainGpu: 0,
+    upscaler: { modelSrc: 'esrgan.pth', tileSize: 128, offloadToCpu: true }
+  })
+})
+
+test('renameLegacyDiffusionParams and renameLegacyVideoParams: client params', (t) => {
+  const { warn } = collectWarnings()
+  const image = new Uint8Array([1])
+  t.alike(
+    renameLegacyDiffusionParams(
+      { modelId: 'a', prompt: 'p', negative_prompt: 'n', cfg_scale: 4, init_image: image },
+      warn
+    ),
+    { modelId: 'a', prompt: 'p', negativePrompt: 'n', cfgScale: 4, initImage: image }
+  )
+  t.alike(
+    renameLegacyVideoParams(
+      { modelId: 'a', prompt: 'p', mode: 'img2vid', init_image: image, video_frames: 17 },
+      warn
+    ),
+    { modelId: 'a', prompt: 'p', mode: 'img2vid', initImage: image, videoFrames: 17 }
+  )
+})
+
 test('renameLegacyRequestKeys: completion generation params and response format', (t) => {
   const { warn } = collectWarnings()
   const request = renameLegacyRequestKeys(
@@ -307,4 +352,33 @@ test('renameLegacyRequestKeys: the Core ML FFN keys load a valid LLM config', (t
   })
   t.ok(llmConfigSchema.safeParse(llm.modelConfig).success)
   t.ok(warnings.some(([legacyPath]) => legacyPath === 'modelConfig.coreml-ffn-split'))
+})
+
+test('renameLegacyRequestKeys: the sd.cpp performance keys load a valid config', (t) => {
+  const { warnings, warn } = collectWarnings()
+  const sdcpp = renameLegacyRequestKeys(
+    {
+      type: 'loadModel',
+      modelType: 'diffusion',
+      modelConfig: {
+        performance_profile: 'off',
+        performance_max_width: 768,
+        performance_max_height: 512,
+        performance_max_frames: 97,
+        vae_conv_direct: true,
+        tensor_type_rules: '^vae\\.=f16'
+      }
+    },
+    warn
+  )
+  t.alike(sdcpp.modelConfig, {
+    performanceProfile: 'off',
+    performanceMaxWidth: 768,
+    performanceMaxHeight: 512,
+    performanceMaxFrames: 97,
+    vaeConvDirect: true,
+    tensorTypeRules: '^vae\\.=f16'
+  })
+  t.ok(sdcppLoadConfigSchema.safeParse(sdcpp.modelConfig).success)
+  t.ok(warnings.some(([legacyPath]) => legacyPath === 'modelConfig.tensor_type_rules'))
 })

@@ -64,34 +64,34 @@ export async function* diffusion(
   })
   if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
 
-  const init_image = request.init_image ? Buffer.from(request.init_image, 'base64') : undefined
+  const initImage = request.initImage ? Buffer.from(request.initImage, 'base64') : undefined
 
-  const init_images = request.init_images
-    ? request.init_images.map((b64) => Buffer.from(b64, 'base64'))
+  const initImages = request.initImages
+    ? request.initImages.map((b64) => Buffer.from(b64, 'base64'))
     : undefined
 
   try {
     const response = await model.run({
       prompt: request.prompt,
-      negative_prompt: request.negative_prompt,
+      negative_prompt: request.negativePrompt,
       width: request.width,
       height: request.height,
       steps: request.steps,
-      cfg_scale: request.cfg_scale,
-      img_cfg_scale: request.img_cfg_scale ?? -1,
+      cfg_scale: request.cfgScale,
+      img_cfg_scale: request.imgCfgScale ?? -1,
       guidance: request.guidance,
-      sampling_method: request.sampling_method,
+      sampling_method: request.samplingMethod,
       scheduler: request.scheduler,
-      custom_sigmas: request.custom_sigmas,
+      custom_sigmas: request.customSigmas,
       seed: request.seed,
-      batch_count: request.batch_count,
-      vae_tiling: request.vae_tiling,
-      vae_tile_size: request.vae_tile_size,
-      cache_preset: request.cache_preset,
-      init_image,
-      init_images,
-      increase_ref_index: request.increase_ref_index,
-      auto_resize_ref_image: request.auto_resize_ref_image,
+      batch_count: request.batchCount,
+      vae_tiling: request.vaeTiling,
+      vae_tile_size: request.vaeTileSize,
+      cache_preset: request.cachePreset,
+      init_image: initImage,
+      init_images: initImages,
+      increase_ref_index: request.increaseRefIndex,
+      auto_resize_ref_image: request.autoResizeRefImage,
       strength: request.strength,
       lora: request.lora,
       upscale: request.upscale === false ? undefined : request.upscale

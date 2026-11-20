@@ -1,4 +1,9 @@
-import type { DiffusionFitRequest, EsrganFitRequest, WorldFitRequest } from '@qvac/diffusion-cpp'
+import type {
+  DiffusionFitRequest,
+  EsrganFitRequest,
+  SdConfig,
+  WorldFitRequest
+} from '@qvac/diffusion-cpp'
 
 import { ModelLoadFailedError } from '@/errors/index'
 import {
@@ -29,15 +34,19 @@ const DEFAULT_VIDEO_FRAMES = 33
 const FIT_MAX_DIMENSION = 65536
 const FIT_MAX_VIDEO_FRAMES = 4096
 
+/** A mobile load drops the multi-GPU keys before it runs. */
+function forHost(config: SdConfig): SdConfig {
+  if (isMobile()) stripMultiGpuKeys(config)
+  return config
+}
+
 /** The diffusion fit request for a load: the files and config each mode loads. */
 export function sdcppFitRequest(load: FitLoad): FitRequestPlan {
   if (load.isShardedModel) {
     return { unknown: 'the fitter reads one model file, and this model is split' }
   }
 
-  const config = { ...((load.modelConfig ?? {}) as SdcppConfig) }
-  // A mobile load drops the multi-GPU keys before it runs.
-  if (isMobile()) stripMultiGpuKeys(config)
+  const config = (load.modelConfig ?? {}) as SdcppConfig
   const artifacts = load.artifacts
 
   if (config.mode === 'upscale') {
@@ -72,16 +81,16 @@ export function sdcppFitRequest(load: FitLoad): FitRequestPlan {
     return { request }
   }
 
-  const vaeTiling = config.vae_tiling !== undefined && { vaeTiling: config.vae_tiling }
+  const vaeTiling = config.vaeTiling !== undefined && { vaeTiling: config.vaeTiling }
 
   if (config.mode === 'video') {
     // A context that declares all three output limits is sized at its largest clip.
-    const boundedVideo = config.performance_max_width !== undefined &&
-      config.performance_max_height !== undefined &&
-      config.performance_max_frames !== undefined && {
-        width: config.performance_max_width,
-        height: config.performance_max_height,
-        videoFrames: config.performance_max_frames
+    const boundedVideo = config.performanceMaxWidth !== undefined &&
+      config.performanceMaxHeight !== undefined &&
+      config.performanceMaxFrames !== undefined && {
+        width: config.performanceMaxWidth,
+        height: config.performanceMaxHeight,
+        videoFrames: config.performanceMaxFrames
       }
     if (
       boundedVideo &&
@@ -93,7 +102,7 @@ export function sdcppFitRequest(load: FitLoad): FitRequestPlan {
     }
     const request: DiffusionFitRequest = {
       files: videoFilesFor(load.modelPath, artifacts),
-      config: videoConfigFor(config),
+      config: forHost(videoConfigFor(config)),
       workload: { ...vaeTiling, videoFrames: DEFAULT_VIDEO_FRAMES, ...boundedVideo }
     }
     return { request }
@@ -107,7 +116,7 @@ export function sdcppFitRequest(load: FitLoad): FitRequestPlan {
   }
   const request: DiffusionFitRequest = {
     files: imageFilesFor(load.modelPath, artifacts),
-    config: imageConfigFor(config),
+    config: forHost(imageConfigFor(config)),
     workload: { ...vaeTiling, ...(config.upscaler !== undefined && { upscaleRepeats: 1 }) }
   }
   return { request }
