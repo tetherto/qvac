@@ -2370,12 +2370,14 @@ NormalizedLoad normalizeLoadForFit(
     params.n_ctx = kMinNCtx;
   }
   // The batch scheduler refuses caps that overbook the pool; with an explicit
-  // ctx-size the pool fabric creates (padded to 256) is known here, so fit
-  // checks refuse the same config. ctx-size 0 is checked once the context
-  // exists.
+  // ctx-size the pool fabric creates is known here, so fit checks refuse the
+  // same config. ctx-size 0 is checked once the context exists.
   if (params.n_parallel >= 2 && params.kv_unified_per_slot > 0 &&
       params.n_ctx > 0) {
-    const int64_t pool = GGML_PAD(static_cast<int64_t>(params.n_ctx), 256);
+    // llama_context pads n_ctx to a multiple of this (llama-context.cpp).
+    constexpr int64_t kFabricCtxPad = 256;
+    const int64_t pool =
+        GGML_PAD(static_cast<int64_t>(params.n_ctx), kFabricCtxPad);
     if (static_cast<int64_t>(params.n_parallel) * params.kv_unified_per_slot >
         pool) {
       throw qvac_errors::StatusError(
