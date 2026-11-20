@@ -13836,7 +13836,7 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
+            description="Directory scanned as given for dynamically-loaded ggml backend modules. Unset uses the backends the `@qvac/fabric` runtime ships.",
         ),
     ] = None
     vad_params: Annotated[
@@ -14234,7 +14234,7 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfig(GeneratedBaseMode
         str | None,
         Field(
             alias="backendsDir",
-            description="Android and Linux: the directory scanned, as given, for the ggml backend modules. Defaults to the directory next to the loaded addon module.",
+            description="Directory scanned as given for the ggml backend modules. Unset uses the backends the `@qvac/fabric` runtime ships. The first load or fit check in a process decides; later values are ignored.",
         ),
     ] = None
     embedder_model_src: Annotated[
@@ -14752,7 +14752,7 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
+            description="Directory scanned as given for dynamically-loaded ggml backend modules. Unset uses the backends the `@qvac/fabric` runtime ships.",
         ),
     ] = None
     opencl_cache_dir: Annotated[
@@ -17949,7 +17949,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
+            description="Directory scanned as given for dynamically-loaded ggml backend modules. Unset uses the backends the `@qvac/fabric` runtime ships.",
             min_length=1,
         ),
     ] = None
@@ -18815,7 +18815,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
+            description="Directory scanned as given for dynamically-loaded ggml backend modules. Unset uses the backends the `@qvac/fabric` runtime ships.",
             min_length=1,
         ),
     ] = None
@@ -19409,7 +19409,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
+            description="Directory scanned as given for dynamically-loaded ggml backend modules. Unset uses the backends the `@qvac/fabric` runtime ships.",
             min_length=1,
         ),
     ] = None
@@ -20262,7 +20262,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
+            description="Directory scanned as given for dynamically-loaded ggml backend modules. Unset uses the backends the `@qvac/fabric` runtime ships.",
             min_length=1,
         ),
     ] = None
@@ -20791,7 +20791,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
+            description="Directory scanned as given for dynamically-loaded ggml backend modules. Unset uses the backends the `@qvac/fabric` runtime ships.",
             min_length=1,
         ),
     ] = None
@@ -21423,7 +21423,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMoss(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
+            description="Directory scanned as given for dynamically-loaded ggml backend modules. Unset uses the backends the `@qvac/fabric` runtime ships.",
             min_length=1,
         ),
     ] = None
@@ -21511,7 +21511,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossSfx(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
+            description="Directory scanned as given for dynamically-loaded ggml backend modules. Unset uses the backends the `@qvac/fabric` runtime ships.",
             min_length=1,
         ),
     ] = None
@@ -21717,7 +21717,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossSpeech(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
+            description="Directory scanned as given for dynamically-loaded ggml backend modules. Unset uses the backends the `@qvac/fabric` runtime ships.",
             min_length=1,
         ),
     ] = None
@@ -24821,7 +24821,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestep(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Advanced: directory scanned as given for dlopen’d ggml backend modules. Unset scans the directory the native module was loaded from. Needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
+            description="Advanced: directory scanned as given for dlopen’d ggml backend modules. Unset uses the backends the `@qvac/fabric` runtime ships.",
             min_length=1,
         ),
     ] = None
@@ -25166,7 +25166,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimax(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Advanced: directory scanned as given for dlopen’d ggml backend modules. Unset scans the directory the native module was loaded from. Needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
+            description="Advanced: directory scanned as given for dlopen’d ggml backend modules. Unset uses the backends the `@qvac/fabric` runtime ships.",
             min_length=1,
         ),
     ] = None
@@ -26139,7 +26139,7 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
+            description="Directory scanned as given for dynamically-loaded ggml backend modules. Unset uses the backends the `@qvac/fabric` runtime ships.",
         ),
     ] = None
     vad_params: Annotated[
