@@ -23,6 +23,9 @@ export interface DefaultState {
   cancelOverride?: typeof sdk.cancel
   worldCreateSceneOverride?: typeof sdk.worldCreateScene
   worldStepOverride?: typeof sdk.worldStep
+  vlaOverride?: typeof sdk.vla
+  vlaHparamsOverride?: typeof sdk.vlaHparams
+  vlaSetEmbodimentOverride?: typeof sdk.vlaSetEmbodiment
 }
 
 declare module '@/serve/core/context' {
