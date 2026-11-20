@@ -1,10 +1,11 @@
-# Asserts that a built addon module imports its C++ runtime from @qvac/fabric
+# Asserts that a built addon module imports its C++ runtime from its provider
 # and not from whatever C++ runtime the host process happens to load first.
 #
 # Run as a POST_BUILD step by qvac_addon_finalize, with:
 #   READELF  path to readelf (CMAKE_READELF)
 #   MODULE   the built .bare module
-#   FABRIC   the @qvac/fabric module MODULE links against
+#   FABRIC   the legacy @qvac/fabric module MODULE links against
+#   PROVIDER explicit shared-core provider (takes precedence over FABRIC)
 #
 # This exists because both halves of the failure are silent. -nostdlib++ links
 # cleanly whether or not fabric ends up providing the runtime, and a module that
@@ -21,6 +22,11 @@
 # turns this assertion off, which is precisely the state it exists to catch.
 
 cmake_minimum_required(VERSION 3.25)
+
+# Explicit PROVIDER supports a relocated shared core without changing legacy callers.
+if(PROVIDER)
+  set(FABRIC "${PROVIDER}")
+endif()
 
 foreach(_required READELF MODULE FABRIC)
   if(NOT ${_required})
@@ -92,6 +98,10 @@ foreach(_line IN LISTS _fabric_sym_lines)
     break()
   endif()
 endforeach()
+
+if(NOT _fabric_defines_runtime AND PROVIDER)
+  message(FATAL_ERROR "${PROVIDER} was selected as the runtime provider but exports no __cxa_throw")
+endif()
 
 if(NOT _fabric_defines_runtime)
   # This fabric resolves libc++ from a shared library, which the module resolves
