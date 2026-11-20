@@ -10,6 +10,10 @@
 
 namespace qvac_lib_inference_addon_llama {
 
+static char toLowerChar(unsigned char character) {
+  return static_cast<char>(std::tolower(character));
+}
+
 static void
 handleReasoningBudget(common_params& params, const std::string& value) {
   params.reasoning_budget = parsers::parseReasoningBudgetConfig(value);
@@ -17,7 +21,7 @@ handleReasoningBudget(common_params& params, const std::string& value) {
 
 static void handleImageTileMode(common_params& params, const std::string& raw) {
   std::string val = raw;
-  std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+  std::transform(val.begin(), val.end(), val.begin(), toLowerChar);
   if (val == "0" || val == "batched") {
     params.image_tile_mode = COMMON_IMAGE_TILE_MODE_BATCHED;
   } else if (val == "1" || val == "sequential") {
@@ -45,7 +49,7 @@ static void handleImageTileMode(common_params& params, const std::string& raw) {
 static void
 handleImageNoUpscale(common_params& params, const std::string& raw) {
   std::string val = raw;
-  std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+  std::transform(val.begin(), val.end(), val.begin(), toLowerChar);
   if (val == "1" || val == "on" || val == "true") {
     params.image_no_upscale = 1;
   } else if (val == "0" || val == "off" || val == "false") {
