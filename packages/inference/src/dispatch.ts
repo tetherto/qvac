@@ -292,9 +292,8 @@ async function replyWithinDeadline<T>(
   clock: DeadlineClock | undefined
 ): Promise<T> {
   if (!clock) return work
-  work.catch(() => {})
   try {
-    return await Promise.race([work, clock.expired])
+    return await clock.within(work)
   } catch (error) {
     throw clock.error ?? error
   }
@@ -315,9 +314,7 @@ async function* streamWithinDeadline<T>(
   let expired = false
   try {
     while (true) {
-      const next = source.next()
-      next.catch(() => {})
-      const result = await Promise.race([next, clock.expired])
+      const result = await clock.within(source.next())
       if (result.done) return
       clock.touch()
       yield result.value

@@ -907,6 +907,13 @@ export function createRequestRegistry(options?: {
       logLifecycle('deadline', entry.ctx, Date.now() - entry.startedAt)
       cancelEntry(entry, `deadline:${error.boundary}`)
     }
+    // A request already in teardown still holds its slot. It is not aborted
+    // again: its teardown is running.
+    for (const entry of disposingEntries) {
+      if (entry.deadline !== deadline || entry.ctx.overdue) continue
+      entry.ctx.overdue = true
+      logLifecycle('deadline', entry.ctx, Date.now() - entry.startedAt)
+    }
   }
 
   async function begin(beginOpts: BeginOpts): Promise<ManagedRequestContext> {

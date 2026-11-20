@@ -126,6 +126,36 @@ test('an overdue request keeps its slot until its teardown finishes', async (t) 
   waiterClock.close()
 })
 
+test('a deadline that passes while the request is in teardown lists it as overdue', async (t) => {
+  const r = serialRegistry()
+  const clock = clockFor('late', { runMs: 40 })
+  const unbind = r.bindDeadline('late', undefined, clock)
+  const ctx = await r.begin({ requestId: 'late', kind: 'completion', modelId: 'm1' })
+  let finishTeardown: () => void = () => {}
+  ctx.scope.defer(
+    () =>
+      new Promise<void>((resolve) => {
+        finishTeardown = resolve
+      })
+  )
+  const disposing = ctx[Symbol.asyncDispose]()
+  t.is(r.overdue().length, 0, 'in teardown, deadline not yet passed')
+
+  const error = await expiryOf(clock)
+  t.is(error.boundary, 'run')
+  t.alike(
+    r.overdue().map((c) => c.requestId),
+    ['late'],
+    'it still holds its slot, so it is reported'
+  )
+
+  finishTeardown()
+  await disposing
+  t.is(r.overdue().length, 0)
+  unbind()
+  clock.close()
+})
+
 test('idle deadline: progress restarts it, and a gap longer than the deadline expires it', async (t) => {
   const r = serialRegistry()
   const clock = clockFor('r-idle', { idleMs: 60 })

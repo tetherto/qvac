@@ -190,6 +190,31 @@ export class DeadlineClock {
   }
 
   /**
+   * `work`'s result, or the deadline's error at the moment a deadline passes.
+   * Unlike a race against `expired`, nothing stays attached to the clock once
+   * `work` settles, so a stream can call this for every response.
+   */
+  within<T>(work: Promise<T>): Promise<T> {
+    if (this.error !== undefined) {
+      work.catch(() => {})
+      return Promise.reject(this.error)
+    }
+    return new Promise<T>((resolve, reject) => {
+      const stopListening = this.onExpire(reject)
+      work.then(
+        (value) => {
+          stopListening()
+          resolve(value)
+        },
+        (error: unknown) => {
+          stopListening()
+          reject(error)
+        }
+      )
+    })
+  }
+
+  /**
    * The request started waiting for an admission slot. The run and idle
    * timers stop until `admitted()`; `onExpire` is called if the queue
    * deadline passes during the wait.
