@@ -31,8 +31,8 @@ try {
   const llmModelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
     modelConfig: {
-      ctx_size: 2048,
-      temp: 0.7,
+      ctxSize: 2048,
+      temperature: 0.7,
       verbosity: VERBOSITY.ERROR // Only log errors, remaining logs are captured by loggingStream
     }
   })
@@ -69,8 +69,8 @@ try {
     modelId: llmModelId,
     history: messages,
     stream: true,
-    // Bound the generation: at temp 0.7 a 1B model can ignore "to 5" and ramble
-    // past ctx_size (2048) into a context overflow. This demo only needs enough
+    // Bound the generation: at temperature 0.7 a 1B model can ignore "to 5" and ramble
+    // past ctxSize (2048) into a context overflow. This demo only needs enough
     // tokens to show logs streaming.
     generationParams: { predict: 512 }
   })

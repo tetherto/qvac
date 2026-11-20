@@ -10,13 +10,13 @@ try {
   const alice = await loadModel({
     modelSrc: QWEN3_1_7B_INST_Q4,
     modelConfig: {
-      ctx_size: 4096
+      ctxSize: 4096
     }
   })
   const bob = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
     modelConfig: {
-      ctx_size: 4096
+      ctxSize: 4096
     },
     onProgress: (p) => {
       const mb = (n: number) => (n / 1e6).toFixed(1)

@@ -34,10 +34,10 @@ try {
       threads: 4,
       t5XxlModelSrc,
       vaeModelSrc,
-      diffusion_fa: true,
-      offload_to_cpu: true,
-      params_backend: 'vae=cpu',
-      vae_tiling: true
+      diffusionFlashAttention: true,
+      offloadToCpu: true,
+      paramsBackend: 'vae=cpu',
+      vaeTiling: true
     },
     onProgress: (p) => {
       const mb = (n: number) => (n / 1e6).toFixed(1)
@@ -54,7 +54,7 @@ try {
     modelId,
     mode: 'txt2vid',
     prompt,
-    negative_prompt: 'blurry, low quality, static, jittery, watermark',
+    negativePrompt: 'blurry, low quality, static, jittery, watermark',
     width: 480,
     height: 832,
     // Frame count must satisfy (4*k + 1), k >= 1. Common values at 16 fps:
@@ -66,15 +66,15 @@ try {
     // quality, ~28 min)
     // Going beyond 81 can degrade quality because it exceeds the model's
     // positional embeddings.
-    video_frames: 33,
+    videoFrames: 33,
     fps: 16,
     steps: 30,
-    cfg_scale: 6.0,
-    // Wan 2.1 T2V needs flow_shift=3.0 for visible motion. Higher values can
+    cfgScale: 6.0,
+    // Wan 2.1 T2V needs flowShift=3.0 for visible motion. Higher values can
     // make consecutive frames near-identical, which looks like a frozen video.
-    flow_shift: 3.0,
+    flowShift: 3.0,
     seed: 42,
-    vae_tiling: true
+    vaeTiling: true
   })
 
   for await (const { step, totalSteps } of progressStream) {

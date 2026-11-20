@@ -29,7 +29,7 @@ const tools: ToolInput[] = [
 try {
   const modelId = await loadModel({
     modelSrc: QWEN3_1_7B_INST_Q4,
-    modelConfig: { ctx_size: 4096, tools: true }
+    modelConfig: { ctxSize: 4096, tools: true }
   })
   console.log(`▸ Model loaded: ${modelId}`)
 

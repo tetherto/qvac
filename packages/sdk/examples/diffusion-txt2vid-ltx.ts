@@ -44,8 +44,8 @@ try {
       vaeModelSrc,
       audioVaeModelSrc,
       embeddingsConnectorsModelSrc,
-      diffusion_fa: true,
-      vae_tiling: true
+      diffusionFlashAttention: true,
+      vaeTiling: true
     },
     onProgress: (p) => {
       const mb = (n: number) => (n / 1e6).toFixed(1)
@@ -62,21 +62,21 @@ try {
     modelId,
     mode: 'txt2vid',
     prompt,
-    negative_prompt: 'blurry, low quality, static, jittery, watermark, distorted audio',
+    negativePrompt: 'blurry, low quality, static, jittery, watermark, distorted audio',
     // LTX-2 requires width/height as multiples of 32.
     width: 512,
     height: 320,
     // LTX-2 requires (8*k + 1) frames, max 257. At 24 fps: 25≈1s, 121≈5s, 241≈10s.
-    video_frames: 121,
+    videoFrames: 121,
     fps: 24,
     // Distilled variants run in 4-8 steps with cfg ~1.0; the full --dev model
     // wants steps >= 20 and cfg ~7.0.
     steps: 10,
-    cfg_scale: 1.0,
+    cfgScale: 1.0,
     seed: 42,
     // Tile the video VAE decode along the time axis to cap peak VRAM on long
     // / HD clips (LTX-2 only).
-    temporal_tiling: true
+    temporalTiling: true
   })
 
   for await (const { step, totalSteps } of progressStream) {

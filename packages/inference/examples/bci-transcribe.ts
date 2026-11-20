@@ -23,9 +23,9 @@ if (!neuralPath) {
     const modelId = await loadModel({
       modelSrc: BCI_WINDOWED,
       modelConfig: {
-        whisperConfig: { language: 'en', n_threads: 4, temperature: 0.0 },
-        // day_idx selects the session-specific projection matrices.
-        bciConfig: { day_idx: 1 }
+        whisperConfig: { language: 'en', threads: 4, temperature: 0.0 },
+        // dayIdx selects the session-specific projection matrices.
+        bciConfig: { dayIdx: 1 }
       }
     })
     console.log(`▸ Model loaded: ${modelId}`)

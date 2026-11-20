@@ -24,10 +24,10 @@ try {
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
     modelConfig: {
       device: 'gpu',
-      'rpc-servers': selected.map((server) => server.url).join(','),
+      rpcServers: selected.map((server) => server.url).join(','),
       devices: devices.map((device) => device.alias).join(','),
-      'split-mode': 'layer',
-      'tensor-split': devices.map(() => '1').join(',')
+      splitMode: 'layer',
+      tensorSplit: devices.map(() => '1').join(',')
     },
     onProgress: (progress) => {
       process.stderr.write(`\r▸ Downloading ${progress.percentage.toFixed(0)}%`)

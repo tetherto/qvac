@@ -77,7 +77,7 @@ try {
   const llmModelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
     modelConfig: {
-      ctx_size: 2048
+      ctxSize: 2048
     },
     onProgress: (p: ModelProgressUpdate) => {
       const mb = (n: number) => (n / 1e6).toFixed(1)

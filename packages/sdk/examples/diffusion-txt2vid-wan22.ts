@@ -14,7 +14,7 @@ import path from 'path'
 // the Wan 2.2 VAE specifically: its 16x spatial compression is what gives
 // TI2V its 32-pixel grid, and the Wan 2.1 VAE is not interchangeable.
 //
-// TI2V-5B is a single-expert model. The high_noise_* / moe_boundary fields
+// TI2V-5B is a single-expert model. The high_noise_* / moeBoundary fields
 // belong to the two-expert Wan 2.2 A14B layout and are rejected here.
 //
 // Budget at least 16 GB of video memory or 20 GB of unified memory. The
@@ -46,9 +46,9 @@ try {
       threads: 4,
       t5XxlModelSrc,
       vaeModelSrc,
-      diffusion_fa: true,
-      offload_to_cpu: true,
-      vae_tiling: true
+      diffusionFlashAttention: true,
+      offloadToCpu: true,
+      vaeTiling: true
     },
     onProgress: (p) => {
       const mb = (n: number) => (n / 1e6).toFixed(1)
@@ -65,7 +65,7 @@ try {
     modelId,
     mode: 'txt2vid',
     prompt,
-    negative_prompt:
+    negativePrompt:
       'flickering, temporal jitter, morphing, duplicated subject, warped geometry, ' +
       'distorted anatomy, blurry details, low resolution, text, watermark, logo',
     // TI2V-5B requires width and height to be multiples of 32 — stricter than
@@ -78,16 +78,16 @@ try {
     height: 704,
     // Frame count must satisfy (4*k + 1), k >= 1. At 24 fps: 49 ≈ 2s,
     // 121 ≈ 5s (the trained length).
-    video_frames: 121,
+    videoFrames: 121,
     fps: 24,
     // Turbo is distilled for very short schedules: 4 steps with guidance
     // effectively disabled. The non-distilled TI2V-5B wants steps >= 30 and
     // cfg ~5.0 instead.
     steps: 4,
-    cfg_scale: 1.0,
-    flow_shift: 5.0,
+    cfgScale: 1.0,
+    flowShift: 5.0,
     seed: 42,
-    vae_tiling: true
+    vaeTiling: true
   })
 
   for await (const { step, totalSteps } of progressStream) {

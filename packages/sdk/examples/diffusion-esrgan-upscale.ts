@@ -22,7 +22,7 @@ const esrganModelSrc = esrganArg ?? REALESRGAN_X4PLUS_ANIME_6B
 const prompt =
   promptArg ??
   'an illustrated red fox portrait, clean line art, soft watercolor background, detailed fur, crisp eyes'
-const negative_prompt = 'blurry, low quality, watermark, text'
+const negativePrompt = 'blurry, low quality, watermark, text'
 const outputDir = outputDirArg ?? '.'
 const seed = 42
 
@@ -34,8 +34,8 @@ try {
       prediction: 'v',
       upscaler: {
         type: 'esrgan',
-        model_src: esrganModelSrc,
-        tile_size: 128
+        modelSrc: esrganModelSrc,
+        tileSize: 128
       }
     },
     onProgress: (p) => {
@@ -51,11 +51,11 @@ try {
   const baseParams = {
     modelId,
     prompt,
-    negative_prompt,
+    negativePrompt,
     width: 128,
     height: 128,
     steps: 5,
-    cfg_scale: 7.5,
+    cfgScale: 7.5,
     seed
   }
 

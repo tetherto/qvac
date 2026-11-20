@@ -79,7 +79,7 @@ try {
       llmModelSrc,
       vaeModelSrc,
       tokenizerSrc,
-      flash_attn: true
+      flashAttention: true
     },
     onProgress: (progress) => {
       const percent = Math.floor(progress.percentage)
@@ -99,8 +99,8 @@ try {
     width,
     height,
     steps: 50,
-    cfg_scale: 3,
-    sampling_method: 'euler',
+    cfgScale: 3,
+    samplingMethod: 'euler',
     scheduler: 'discrete',
     seed: 42
   })

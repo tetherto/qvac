@@ -18,7 +18,7 @@ try {
 
   const modelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-    modelConfig: { ctx_size: 2048 }
+    modelConfig: { ctxSize: 2048 }
   })
 
   const result = completion({

@@ -70,7 +70,7 @@ console.log('▸ 1. LLM Completion (llamacpp-completion plugin)')
 try {
   const llmModelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-    modelConfig: { ctx_size: 2048 },
+    modelConfig: { ctxSize: 2048 },
     onProgress: (p) => {
       const mb = (n: number) => (n / 1e6).toFixed(1)
       const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`

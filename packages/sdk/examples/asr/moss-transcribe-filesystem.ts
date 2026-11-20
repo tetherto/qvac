@@ -34,7 +34,7 @@ try {
     modelSrc: modelPath ?? MOSS_TRANSCRIBE_DIARIZE_Q8_0,
     modelConfig: {
       maxThreads: 4,
-      useGPU: false // Set true to opt into Metal on a supported Mac.
+      useGpu: false // Set true to opt into Metal on a supported Mac.
     },
     onProgress: (progress) => {
       const mb = (bytes: number) => (bytes / 1e6).toFixed(1)

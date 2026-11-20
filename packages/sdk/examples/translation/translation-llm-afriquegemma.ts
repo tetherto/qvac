@@ -12,14 +12,14 @@ try {
     // IMPORTANT: these parameters are validated to be optimal
     modelConfig: {
       tools: true,
-      ctx_size: 2048,
-      top_k: 1,
-      top_p: 1,
-      temp: 0,
-      repeat_penalty: 1,
+      ctxSize: 2048,
+      topK: 1,
+      topP: 1,
+      temperature: 0,
+      repeatPenalty: 1,
       seed: 42,
       predict: 256,
-      stop_sequences: ['\n']
+      stopSequences: ['\n']
     }
   })
 

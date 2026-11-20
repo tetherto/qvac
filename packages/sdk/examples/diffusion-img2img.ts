@@ -25,13 +25,13 @@ try {
   })
   console.log(`▸ Model loaded: ${modelId}`)
 
-  const init_image = new Uint8Array(fs.readFileSync(inputPath))
+  const initImage = new Uint8Array(fs.readFileSync(inputPath))
   console.log(`▸ Transforming "${inputPath}" with prompt: "${prompt}"`)
 
   const { progressStream, outputs, stats } = diffusion({
     modelId,
     prompt,
-    init_image,
+    initImage,
     strength: 0.5,
     steps: 30,
     seed: -1

@@ -14,7 +14,7 @@ try {
     modelType: 'llamacpp-completion',
     modelConfig: {
       device: 'gpu',
-      ctx_size: 2048,
+      ctxSize: 2048,
       verbosity: VERBOSITY.ERROR
     },
     onProgress: (progress) => {

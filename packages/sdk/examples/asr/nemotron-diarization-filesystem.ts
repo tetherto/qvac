@@ -29,7 +29,7 @@ try {
     modelType: 'parakeet-transcription',
     modelConfig: {
       maxThreads: 4,
-      useGPU: false
+      useGpu: false
       // Optional: diarizationThreshold and diarizationMinSegmentMs.
       // Omit them to use the loaded model's defaults.
     }
