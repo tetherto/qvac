@@ -934,14 +934,16 @@ function getModelInfo(params: GetModelInfoParams, options?: RPCOptions): Promise
 
 ### `getRuntimeCapabilities`
 
-List the capability contracts the runtime's registered plugins provide,
+List the capability contracts the runtime's registered plugins declare,
 with the major version of each. A consumer checks for the `id` and
 `version` it was built against before loading a model.
 
 The report reads plugin registration only. It loads no model, and it does
 not check addons, model files, resources or permissions, so a listed
 operation can still fail for a given model. An operation in
-`partialOperations` is implemented by only some of the contract's plugins.
+`partialOperations` is implemented by only some of the contract's plugins,
+and a call uses the plugin of the model it names. The list is empty when no
+registered plugin declares a contract.
 
 **Signature**:
 
@@ -952,7 +954,7 @@ function getRuntimeCapabilities(options?: RPCOptions): Promise<RuntimeCapability
 **Throws**:
 
 - `InvalidResponseError` — If the worker returns a different response type.
-- `Error` — If the RPC request fails.
+- `Error` — If the RPC request fails, including on a worker released before this request existed.
 
 **Example**:
 ```ts
