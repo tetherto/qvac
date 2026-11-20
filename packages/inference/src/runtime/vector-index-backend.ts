@@ -40,8 +40,11 @@ export interface OpenVectorIndex extends VectorIndexState {
   search(queries: Float32Array, k: number, nProbe: number | undefined): Promise<VectorIndexHit[][]>
   /** Answers the whole batch as one operation, so a concurrent add lands before or after it. */
   contains(ids: bigint[]): Promise<boolean[]>
-  /** Returns whether the id was present, with the state read in the same operation. */
-  remove(id: bigint): Promise<{ removed: boolean; state: VectorIndexState }>
+  /**
+   * Removes the ids in order as one operation, appending whether each was
+   * present to `removed`, so a failure part-way leaves the applied count there.
+   */
+  remove(ids: bigint[], removed: boolean[]): Promise<VectorIndexState>
   write(path: string): Promise<void>
   dispose(): Promise<void>
 }

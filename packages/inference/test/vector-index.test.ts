@@ -597,6 +597,25 @@ for (const sync of [false, true]) {
   })
 }
 
+test('vector index: a contains queued during a remove sees the whole batch removed', async (t) => {
+  await withProvider(async () => {
+    const index = await createVectorIndex({ dim: 2 })
+    await index.add({
+      ids: ['1', '2'],
+      vectors: [
+        [1, 0],
+        [0, 1]
+      ]
+    })
+    const [removed, present] = await Promise.all([
+      index.remove({ ids: ['1', '2'] }),
+      index.contains({ ids: ['1', '2'] })
+    ])
+    t.alike(removed, [true, true])
+    t.alike(present, [false, false], 'the contains runs before or after the batch, never inside it')
+  })
+})
+
 test('vector index: shutdown clears the registry even when dispose throws', async (t) => {
   await withProvider(async (calls, failures) => {
     await createVectorIndex({ dim: 2 })

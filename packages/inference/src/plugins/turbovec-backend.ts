@@ -195,11 +195,14 @@ function openIndex(
         for (const id of ids) present.push(await index.contains(id))
         return present
       }),
-    remove: (id) =>
+    remove: (ids, removed) =>
       exclusive(async () => {
-        const removed = await index.remove(id)
-        if (removed) markChanged()
-        return { removed, state: state() }
+        for (const id of ids) {
+          const present = await index.remove(id)
+          if (present) markChanged()
+          removed.push(present)
+        }
+        return state()
       }),
     write: (path) => exclusive(async () => await index.write(path)),
     dispose: () => exclusive(async () => await index.dispose())

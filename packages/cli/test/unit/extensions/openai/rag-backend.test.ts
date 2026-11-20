@@ -220,6 +220,65 @@ describe('createRagBackend', () => {
     })
   })
 
+  // The second server reads the record, then waits on its embedding probe
+  // while the first deletes the store, before it opens the store's data.
+  function gatedProbe() {
+    let release = () => {}
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const embed: EmbedTexts = async (modelId, texts) => {
+      if (texts[0] === 'dimension probe') await held
+      return embedTexts(modelId, texts)
+    }
+    return { embed, release }
+  }
+
+  it('a search waiting to open a store does not bring it back after a delete', async () => {
+    await withDir(async (dir) => {
+      const first = createRagBackend({ dir, embedTexts })
+      await first.attach('vs_s', model, { fileId: 'file-1', fileName: 'moon.txt', text: 'A moon.' })
+      await first.close()
+      const gate = gatedProbe()
+      const second = createRagBackend({ dir, embedTexts: gate.embed })
+      const searching = second.search('vs_s', model, 'moon', 1)
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      assert.equal(await first.delete('vs_s'), true)
+      gate.release()
+      assert.deepEqual(await searching, [])
+      assert.deepEqual(await readdir(path.join(dir, 'stores')), [])
+      await first.close()
+      await second.close()
+    })
+  })
+
+  it('an attach waiting to open a store lands in a new store after a delete', async () => {
+    await withDir(async (dir) => {
+      const first = createRagBackend({ dir, embedTexts })
+      await first.attach('vs_t', model, { fileId: 'file-1', fileName: 'moon.txt', text: 'A moon.' })
+      await first.close()
+      const gate = gatedProbe()
+      const second = createRagBackend({ dir, embedTexts: gate.embed })
+      const attaching = second.attach('vs_t', model, {
+        fileId: 'file-2',
+        fileName: 'oven.txt',
+        text: 'Preheat the oven.'
+      })
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      assert.equal(await first.delete('vs_t'), true)
+      gate.release()
+      await attaching
+      const hits = await second.search('vs_t', model, 'oven moon', 5)
+      assert.deepEqual(
+        hits.map((hit) => hit.fileId),
+        ['file-2']
+      )
+      assert.deepEqual(await readdir(path.join(dir, 'stores')), ['vs_t'])
+      await first.close()
+      await second.close()
+    })
+  })
+
   it('finishes a delete whose data could not be removed', async (t) => {
     if (process.getuid?.() === 0) return t.skip('root ignores directory permissions')
     await withDir(async (dir) => {
@@ -230,7 +289,10 @@ describe('createRagBackend', () => {
         text: 'A moon in orbit.'
       })
       const storesDir = path.join(dir, 'stores')
-      await chmod(path.join(storesDir, 'vs_g'), 0o500)
+      const [dataDir = ''] = (await readdir(path.join(storesDir, 'vs_g'))).filter((name) =>
+        name.startsWith('data-')
+      )
+      await chmod(path.join(storesDir, 'vs_g', dataDir, 'corestore'), 0o500)
       await assert.rejects(backend.delete('vs_g'))
 
       const [leftover = '', ...others] = await readdir(storesDir)
@@ -239,7 +301,7 @@ describe('createRagBackend', () => {
       assert.deepEqual(await backend.list(), [])
       assert.deepEqual(await backend.search('vs_g', model, 'moon', 1), [])
 
-      await chmod(path.join(storesDir, leftover), 0o700)
+      await chmod(path.join(storesDir, leftover, 'corestore'), 0o700)
       assert.deepEqual(await backend.list(), [])
       assert.deepEqual(await readdir(storesDir), [])
       await backend.close()

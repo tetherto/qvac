@@ -1,5 +1,15 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { link, mkdir, readdir, readFile, rename, rm, unlink, writeFile } from 'node:fs/promises'
+import {
+  link,
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  rmdir,
+  unlink,
+  writeFile
+} from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import Corestore from 'corestore'
@@ -152,8 +162,8 @@ function spaceRevision(model: ModelIdentity): string {
   return model.revision ? `${model.revision}+${config}` : config
 }
 
-// Each store has its own folder: its record, Corestore and index. Deleting a
-// store removes the folder, and stores never contend for one Corestore lock.
+// Each store has its own folder: its record and a data folder with its
+// Corestore and index. Stores never contend for one Corestore lock.
 export function createRagBackend(
   options: { dir?: string; embedTexts?: EmbedTexts } = {}
 ): RagBackend {
@@ -233,7 +243,14 @@ export function createRagBackend(
     await current.corestore.close()
   }
 
-  async function openRag(id: string, record: StoreRecord, model: EmbeddingModelRef) {
+  // Returns null when the store was deleted or recreated before this server
+  // took its lock. `published: false` is for a store this server is creating.
+  async function openRag(
+    id: string,
+    record: StoreRecord,
+    model: EmbeddingModelRef,
+    { published = true }: { published?: boolean } = {}
+  ): Promise<OpenRag | null> {
     const current = open.get(id)
     if (current && current.dataDir === record.dataDir) {
       current.port.sdkModelId = model.sdkModelId
@@ -275,6 +292,17 @@ export function createRagBackend(
     const rag = createRag({ corestore, embeddings: port, index: { dir: path.join(dir, 'index') } })
     try {
       await rag.ready()
+      if (published) {
+        const latest = await readStore(id)
+        if (!latest || latest.dataDir !== record.dataDir) {
+          await rag.close()
+          await corestore.close()
+          // Opening recreated the deleted folder; nothing else uses it.
+          await rm(dir, { recursive: true, force: true })
+          await rmdir(storeDir(id)).catch(() => {})
+          return null
+        }
+      }
       await rag.createNamespace({ name: NAMESPACE, space })
     } catch (err) {
       await rag.close().catch(() => {})
@@ -287,17 +315,54 @@ export function createRagBackend(
     return opened
   }
 
-  // A Corestore has one opener at a time, so opening it fails while another
-  // server holds the store. Any other failure leaves a broken store deletable.
-  async function assertNotOpenElsewhere(id: string, record: StoreRecord): Promise<void> {
-    const corestore = new Corestore(path.join(dataPath(id, record), 'corestore'))
+  // A Corestore has one opener at a time, so holding it keeps other servers
+  // out of the store. Returns null when the store was deleted or recreated
+  // before the lock was taken. Any other open failure leaves a broken store
+  // deletable, so it does not stop the delete.
+  async function lockStore(id: string, seen: StoreRecord) {
+    const corestore = new Corestore(path.join(dataPath(id, seen), 'corestore'))
     try {
       await corestore.ready()
     } catch (err) {
-      if (isLockError(err)) throw new VectorStoreInUseError(id)
-    } finally {
       await corestore.close().catch(() => {})
+      if (isLockError(err)) throw new VectorStoreInUseError(id)
     }
+    const record = await readStore(id).catch(async (err: unknown) => {
+      await corestore.close().catch(() => {})
+      throw err
+    })
+    if (!record || record.dataDir !== seen.dataDir) {
+      await corestore.close().catch(() => {})
+      return null
+    }
+    return corestore
+  }
+
+  // Under the lock, moves the record out first: a server that opens the data
+  // afterwards finds no record and leaves it. The data is removed only once
+  // the lock is released, since Windows cannot rename a folder with open files.
+  async function removeStore(id: string): Promise<boolean> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const record = await readStore(id)
+      if (!record) return false
+      await closeOpen(id)
+      const lock = await lockStore(id, record)
+      if (!lock) continue
+      const tag = `${DELETED_PREFIX}${id}-${randomBytes(4).toString('hex')}`
+      try {
+        await rename(recordPath(id), path.join(storesDir, `${tag}.json`))
+      } finally {
+        await lock.close().catch(() => {})
+      }
+      const deleted = path.join(storesDir, tag)
+      await rename(dataPath(id, record), deleted)
+      // Fails harmlessly when another server already created the id again.
+      await rmdir(storeDir(id)).catch(() => {})
+      await rm(`${deleted}.json`, { force: true })
+      await rm(deleted, { recursive: true, force: true })
+      return true
+    }
+    throw new VectorStoreInUseError(id)
   }
 
   async function ingest(rag: Rag, file: VectorStoreFile & { text: string }) {
@@ -327,7 +392,9 @@ export function createRagBackend(
     await mkdir(dir, { recursive: true })
     let rag: Rag
     try {
-      ;({ rag } = await openRag(id, record, model))
+      const opened = await openRag(id, record, model, { published: false })
+      if (!opened) throw new Error('unreachable: an unpublished store is never stale')
+      rag = opened.rag
       await publishStore(id, record)
     } catch (err) {
       await closeOpen(id).catch(() => {})
@@ -354,7 +421,9 @@ export function createRagBackend(
     model: EmbeddingModelRef,
     file: VectorStoreFile & { text: string }
   ) {
-    const { rag } = await openRag(id, seen, model)
+    const opened = await openRag(id, seen, model)
+    if (!opened) return null
+    const { rag } = opened
     const record = await readStore(id)
     if (!record || record.dataDir !== seen.dataDir) {
       await closeOpen(id)
@@ -414,8 +483,9 @@ export function createRagBackend(
         const record = await readStore(id)
         if (!record) return []
         assertModel(id, record, model)
-        const { rag } = await openRag(id, record, model)
-        const hits = await rag.search({ scope: { namespace: NAMESPACE }, query, k })
+        const opened = await openRag(id, record, model)
+        if (!opened) return []
+        const hits = await opened.rag.search({ scope: { namespace: NAMESPACE }, query, k })
         return hits.map((hit) => {
           const filename = hit.documentMetadata?.['filename']
           return {
@@ -430,22 +500,9 @@ export function createRagBackend(
         })
       }),
 
-    delete: (id) =>
-      serialize(id, async () => {
-        const record = await readStore(id)
-        if (!record) return false
-        await closeOpen(id)
-        await assertNotOpenElsewhere(id, record)
-        // Move the folder out of the listing first: the store is gone even if
-        // removing its data fails, and the next listing retries the removal.
-        const deleted = path.join(
-          storesDir,
-          `${DELETED_PREFIX}${id}-${randomBytes(4).toString('hex')}`
-        )
-        await rename(storeDir(id), deleted)
-        await rm(deleted, { recursive: true, force: true })
-        return true
-      }),
+    // The store is gone once its record moves, even if removing its data
+    // fails; the next listing retries the removal.
+    delete: (id) => serialize(id, () => removeStore(id)),
 
     async close() {
       await Promise.all([...open.keys()].map((id) => serialize(id, () => closeOpen(id))))

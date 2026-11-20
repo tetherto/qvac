@@ -204,29 +204,26 @@ export async function searchVectors(params: {
 }
 
 /**
- * Removes ids one at a time, which is the only shape the backend offers. A
- * backend throw here means the handle itself is unusable, so the batch stops
- * rather than trying the rest — but ids before it are already gone, so the
- * error names how many were applied. `length` is only reported on success,
+ * The backend removes the batch as one operation, so no other call on the
+ * index lands between two of its ids. A backend throw means the handle itself
+ * is unusable, so the batch stops rather than trying the rest — but ids before
+ * it are already gone, so the error names how many were applied. `length` is only reported on success,
  * which is why the handle documents its own `length` as of the last call that
  * reported one.
  */
 export async function removeVectors(params: { indexId: string; ids: VectorIdWire[] }) {
   const index = getIndex(params.indexId)
   const removed: boolean[] = []
-  let state: VectorIndexState | undefined
-  for (const id of params.ids) {
-    const result = await runBackend(
-      () => index.remove(BigInt(id)),
-      (detail) =>
-        `remove applied ${removed.length} of ${params.ids.length} ids before failing: ${detail}`
-    )
-    removed.push(result.removed)
-    state = result.state
-  }
-  // The schema requires at least one id, so the loop always sets `state`.
-  const final = state ?? index
-  return { removed, length: final.length, ...indexState(final) }
+  const state = await runBackend(
+    () =>
+      index.remove(
+        params.ids.map((id) => BigInt(id)),
+        removed
+      ),
+    (detail) =>
+      `remove applied ${removed.length} of ${params.ids.length} ids before failing: ${detail}`
+  )
+  return { removed, length: state.length, ...indexState(state) }
 }
 
 export async function containsVectors(params: { indexId: string; ids: VectorIdWire[] }) {
