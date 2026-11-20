@@ -10,7 +10,7 @@ export declare function assertAbsolute(key: string, value: unknown): asserts val
  * Rejects a file set the engine could only report as an opaque error. Shared
  * so a fit refuses the same paths a load refuses.
  */
-export declare function assertFilePaths(files: DiffusionFiles & DiffusionVideoFiles): void;
+export declare function assertFilePaths(files: DiffusionFiles & DiffusionVideoFiles, hostPlatform?: string): void;
 /** The file-path half of `SdConfigurationParams`, without `config`. */
 export interface DiffusionFilePaths {
     path: string;
@@ -23,6 +23,9 @@ export interface DiffusionFilePaths {
     llmPath: string;
     llmVisionPath: string;
     tokenizerPath: string;
+    taesdPath: string;
+    coremlUnetPath: string;
+    coremlTaeDecoderPath: string;
     vaePath: string;
     clipVisionPath: string;
     esrganPath: string;

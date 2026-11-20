@@ -15,7 +15,13 @@
     },
     {
       "name": "stable-diffusion-cpp",
-      "version>=": "2026-11-01#1"
+      "version>=": "2026-11-01#2",
+      "features": [
+        {
+          "name": "coreml",
+          "platform": "osx | ios"
+        }
+      ]
     },
     "stb"
   ],

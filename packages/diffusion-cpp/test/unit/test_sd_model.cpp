@@ -134,3 +134,18 @@ TEST_F(SdModelTest, FitOutcomeWithoutEntriesIsUnknown) {
   EXPECT_EQ(outcome.status, "unknown");
   EXPECT_TRUE(outcome.devices.empty());
 }
+
+TEST_F(SdModelTest, CoremlFitIsUnknownWithoutReadingWeights) {
+  for (const bool unet : {true, false}) {
+    SdCtxConfig config{};
+    config.modelPath = "/missing/model.gguf";
+    if (unet)
+      config.coremlUnetPath = "/missing/unet.mlmodelc";
+    else
+      config.coremlTaeDecoderPath = "/missing/decoder.mlmodelc";
+    SdModel model(std::move(config));
+    const auto result = model.assessFit(SdModel::FitWorkload{});
+    EXPECT_EQ(result.status, "unknown");
+    EXPECT_TRUE(result.devices.empty());
+  }
+}
