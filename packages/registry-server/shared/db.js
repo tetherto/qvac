@@ -104,21 +104,15 @@ class RegistryDatabase extends ReadyResource {
           lte: { quantization: quantization + '\uffff' }
         })
         .toArray()
-    } else if (name) {
-      models = await this.db
-        .find(`@${QVAC_MAIN_REGISTRY}/models-by-name`, {
-          gte: name,
-          lte: name + '\uffff'
-        })
-        .toArray()
     } else {
       models = await this.db.find(`@${QVAC_MAIN_REGISTRY}/model`, {}).toArray()
     }
 
-    if (name && engine) {
-      models = models.filter((m) =>
-        m.path?.split('/').pop()?.toLowerCase().includes(name.toLowerCase())
-      )
+    // `name` is a case-insensitive substring of the filename, which no index
+    // range can express, so it is filtered here whichever index served the query.
+    if (name) {
+      const needle = name.toLowerCase()
+      models = models.filter((m) => m.path?.split('/').pop()?.toLowerCase().includes(needle))
     }
 
     if (!includeDeprecated) models = models.filter((m) => !m.deprecated)
