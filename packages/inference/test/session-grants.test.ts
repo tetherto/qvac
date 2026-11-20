@@ -3,7 +3,7 @@ import env from 'bare-env'
 import os from 'bare-os'
 import path from 'bare-path'
 import { z } from 'zod'
-import { send, close } from '@/dispatch'
+import { send, stream, duplex, close } from '@/dispatch'
 import { clearPlugins, registerPlugin } from '@/plugins'
 import { registry } from '@/registry'
 import { QVAC_OPERATION_CALL_SHAPES } from '@/plugins/capabilities'
@@ -27,7 +27,7 @@ import {
   type CapabilityDeclaration,
   type Request
 } from '@/schemas'
-import { definePlugin, defineHandler, type QvacPlugin } from '@/schemas/plugin'
+import { definePlugin, defineHandler, defineDuplexHandler, type QvacPlugin } from '@/schemas/plugin'
 
 env['HOME'] = path.join(os.tmpdir(), `qvac-inference-grants-test-${os.pid()}`)
 
@@ -393,6 +393,82 @@ test('a typed request maps by operation name, whatever the model plugin declares
   )
 })
 
+// Through the engine's own stream and duplex entry points, the ones the SDK
+// worker calls, with handlers that answer: a granted call runs to completion,
+// an ungranted one is refused before its handler starts.
+test('granted stream and duplex calls run end to end and ungranted ones are refused', async function (t) {
+  let started = 0
+  const asr = definePlugin({
+    modelType: testModelType('asr-live'),
+    displayName: 'Live ASR',
+    addonPackage: '@acme/addon-asr-live',
+    loadConfigSchema: z.object({}),
+    createModel() {
+      return { model: { load: async function () {} } }
+    },
+    provides: [CAPABILITY_CONTRACTS.transcription],
+    handlers: {
+      transcribe: defineHandler({
+        requestSchema: z.object({}).passthrough(),
+        responseSchema: z.object({}).passthrough(),
+        streaming: true,
+        handler: async function* () {
+          started++
+          yield { type: 'transcribe', text: 'hello', done: true }
+        }
+      }),
+      transcribeStream: defineDuplexHandler({
+        requestSchema: z.object({}).passthrough(),
+        responseSchema: z.object({}).passthrough(),
+        streaming: true,
+        duplex: true,
+        handler: async function* (_request, input) {
+          started++
+          let bytes = 0
+          for await (const chunk of input) bytes += chunk.length
+          yield { type: 'transcribeStream', text: `${bytes} bytes`, done: true }
+        }
+      })
+    }
+  })
+  await withRuntime([asr], async () => {
+    addModel('live-model', 'asr-live')
+    try {
+      await open('batch', ['transcription/transcribe'])
+      await open('both', capabilityPermissions(CAPABILITY_CONTRACTS.transcription))
+      const transcribe = (sessionId: string) =>
+        asSession(sessionId, {
+          type: 'transcribe',
+          modelId: 'live-model',
+          audioChunk: { type: 'base64', value: 'AAAA' }
+        })
+      const transcribeStream = (sessionId: string) =>
+        asSession(sessionId, { type: 'transcribeStream', modelId: 'live-model' })
+
+      const frames: Array<{ text?: string }> = []
+      for await (const frame of stream(transcribe('batch'))) frames.push(frame as { text?: string })
+      t.is(frames.at(-1)?.text, 'hello', 'a granted stream call returns its result')
+
+      await t.exception(
+        () => duplex(transcribeStream('batch')),
+        CapabilityNotGrantedError,
+        'a duplex call outside the grant is refused'
+      )
+      t.is(started, 1, 'the refused handler never started')
+
+      const session = await duplex(transcribeStream('both'))
+      session.requestStream.write(new Uint8Array([1, 2, 3]))
+      session.requestStream.end()
+      let output = ''
+      for await (const chunk of session.responseStream) output += chunk.toString()
+      t.ok(output.includes('3 bytes'), 'a granted duplex call streams its input through')
+      t.is(started, 2)
+    } finally {
+      unregisterModel('live-model')
+    }
+  })
+})
+
 test('openSession validates the grant and opens no session on failure', async function (t) {
   await withRuntime(
     [
@@ -403,6 +479,7 @@ test('openSession validates the grant and opens no session on failure', async fu
       for (const [grant, why] of [
         [['transcription'], 'malformed'],
         [['Transcription/transcribe'], 'malformed ID'],
+        [[''], 'malformed empty'],
         [['transcription/transcribe', 'transcription/transcribe'], 'duplicate'],
         [['embedding/embed'], 'no plugin declares embedding'],
         [['transcription/translate'], 'not an operation of transcription'],
@@ -410,13 +487,14 @@ test('openSession validates the grant and opens no session on failure', async fu
         [['runtime/heartbeat'], 'heartbeat needs no permission'],
         [['acme.tool/other'], 'not an operation of acme.tool']
       ] as const) {
-        await t.exception(
-          () => open(`bad-${why}`, [...grant]),
-          why.startsWith('malformed') ? RequestValidationFailedError : SessionGrantInvalidError,
-          why
-        )
+        await t.exception(() => open(`bad-${why}`, [...grant]), SessionGrantInvalidError, why)
         t.is(getSessionGrant(`bad-${why}`), undefined, `no session for ${why}`)
       }
+      await t.exception(
+        () => open('bad-type', [1] as unknown as string[]),
+        RequestValidationFailedError,
+        'a grant entry that is not a string fails the request schema'
+      )
 
       await open('ok', [
         ...capabilityPermissions(CAPABILITY_CONTRACTS.transcription),

@@ -26935,15 +26935,6 @@ class OcrStreamResponse(GeneratedBaseModel):
     ] = None
 
 
-class GrantItem(RootModel[str]):
-    root: Annotated[
-        str,
-        Field(
-            pattern="^([a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*)*)\\/([^/\\s]+)$"
-        ),
-    ]
-
-
 class OpenSessionRequest(GeneratedBaseModel):
     type: Literal["openSession"] = "openSession"
     session_id: Annotated[
@@ -26963,7 +26954,7 @@ class OpenSessionRequest(GeneratedBaseModel):
         ),
     ] = None
     grant: Annotated[
-        list[GrantItem] | None,
+        list[str] | None,
         Field(
             description='Permissions the session may use, one per operation: "<capability ID>/<operation>", such as "transcription/transcribe", or "runtime/<operation>" for loadModel, downloadAsset, vectorIndex, loggingStream and discoverRpcServers. Omitted: the session is unrestricted. An empty list allows only operations that need no permission. The open fails for a permission the runtime does not have.'
         ),
