@@ -44,7 +44,6 @@ class JvmBareKitTransport private constructor(
     // Ends with the worker's ipc: the worker exited, crashed or was killed, or close() stopped it.
     override val lost: Deferred<Unit> = exitWatch.async {
         runCatching { ipc.wait() }
-        Unit
     }
 
     override suspend fun call(payload: JsonObject): JsonObject = rpc.call(payload)
