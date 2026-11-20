@@ -47,6 +47,7 @@ export interface OpenIndex {
 
 interface Entry {
   namespace: string
+  dir: string | undefined
   store: SnapshotStore | null
   snapshotEvery: number
   native: NativeIndex | null
@@ -118,6 +119,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     if (!entry) {
       entry = {
         namespace,
+        dir: config.dir,
         store: config.dir ? createSnapshotStore(config.dir, coreKey) : null,
         snapshotEvery: config.snapshotEvery,
         native: null,
@@ -411,11 +413,15 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       await entry.persisting
       discard(entry)
     }
-    const { dir } = config
+    // Every directory an index of this namespace used, not only the caller's.
+    const dirs = new Set([config.dir, ...detached.map((entry) => entry.dir)])
+    dirs.delete(undefined)
     // Snapshots exist only where the addon loads; this also keeps Node off bare-fs.
-    if (!dir || !(await loadNativeIndex())) return
-    const store = createSnapshotStore(dir, coreKey)
-    await onDisk(namespace, () => store.remove(namespace, createdAt))
+    if (dirs.size === 0 || !(await loadNativeIndex())) return
+    for (const dir of dirs as Set<string>) {
+      const store = createSnapshotStore(dir, coreKey)
+      await onDisk(namespace, () => store.remove(namespace, createdAt))
+    }
   }
 
   async function close(): Promise<void> {

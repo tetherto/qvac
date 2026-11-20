@@ -238,3 +238,18 @@ test('an ingest that outlives a drop and re-create writes nothing', async (t) =>
   await rejectsWithCode(t, pending, ERR_CODES.NAMESPACE_NOT_FOUND, 'stale ingest', /dropped/)
   t.alike((await rag.listDocuments({ namespace: 'ns' })).documents, [])
 })
+
+test('dropNamespace deletes snapshots in every index directory on the core', async (t) => {
+  const { dir, open } = await setup(t)
+  const indexed = await open({ snapshotEvery: 1 })
+  const plain = await open({ dir: undefined })
+  await indexed.createNamespace({ name: 'ns', space: SPACE })
+  await indexed.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a0', [1, 0, 0]]])] })
+  const query = { vector: [1, 0, 0], spaceId, k: 1, scope: { namespace: 'ns' } }
+  t.is((await indexed.search(query)).length, 1)
+  await indexed.ingest({ namespace: 'ns', documents: [doc('b', spaceId, [['b0', [0, 1, 0]]])] })
+  t.ok(snapshotFiles(dir).length > 0, 'the indexed RAG wrote a snapshot')
+
+  await plain.dropNamespace({ name: 'ns' })
+  t.alike(snapshotFiles(dir), [], 'a drop through a RAG without a directory still deletes it')
+})
