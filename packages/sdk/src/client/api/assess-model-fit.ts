@@ -29,7 +29,10 @@ function withModelType(candidate: AssessModelFitInput['models'][number]) {
  *
  * Each model's engine fitter runs against the registry's weightless description
  * of the model, or the model itself when it is on disk. The memory each load
- * takes is summed per device and compared against what is free.
+ * takes is summed per memory pool and compared against what is free. Each
+ * model's status is its verdict alone, which counts its rows that share one
+ * pool, such as a Metal GPU and the CPU, together. A single model's verdict is
+ * its status; a set does not fit when any model does not fit alone.
  *
  * `unknown` is the answer for a load that would start but cannot be sized: an
  * engine with no fitter, a load the fitter cannot project, a model with no
@@ -38,10 +41,14 @@ function withModelType(candidate: AssessModelFitInput['models'][number]) {
  *
  * @param input - The models, each as `loadModel` takes it.
  * @returns The verdict for the set, the memory pools it was judged on, and
- *   each model's addon result: its status, device rows and stats.
+ *   each model's addon result: its status, device rows and stats, and the
+ *   reason when its status is `unknown`.
  * @throws The error `loadModel` would throw for a load it refuses: no plugin
- *   for the model type, a config the plugin refuses, or a model the fitter
- *   cannot read.
+ *   for the model type, or a config the plugin refuses.
+ * @throws {QvacErrorBase} With code `MODEL_FIT_REJECTED` when the engine
+ *   fitter cannot assess the load, such as a model it cannot read or an engine
+ *   that fails to run it. A companion file, such as a projector, VAE or codec,
+ *   does not load on its own: assess the model that loads it.
  */
 export async function assessModelFit(
   input: AssessModelFitInput,

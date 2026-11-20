@@ -419,7 +419,7 @@ class ModelFitModelResult(GeneratedBaseModel):
     status: Annotated[
         ModelFitModelResultStatus,
         Field(
-            description="The engine fitter's verdict for this model alone.",
+            description="This model's verdict alone: the engine fitter's, and `does-not-fit` when its rows sharing one memory pool take more than 90% of that pool's free memory.",
             title="ModelFitModelResultStatus",
         ),
     ]
@@ -433,6 +433,12 @@ class ModelFitModelResult(GeneratedBaseModel):
         LlamaFitStats | dict[str, Any],
         Field(description="The resolved load of a llama.cpp verdict. Empty otherwise."),
     ]
+    reason: Annotated[
+        str | None,
+        Field(
+            description="Why the model has no verdict. Present when `status` is `unknown`."
+        ),
+    ] = None
 
 
 class AssessModelFitResponse(GeneratedBaseModel):
@@ -8651,7 +8657,7 @@ class ModelFitProbeModel(GeneratedBaseModel):
     status: Annotated[
         ModelFitProbeModelStatus,
         Field(
-            description="The engine fitter's verdict for this model alone.",
+            description="This model's verdict alone: the engine fitter's, and `does-not-fit` when its rows sharing one memory pool take more than 90% of that pool's free memory.",
             title="ModelFitProbeModelStatus",
         ),
     ]
@@ -8665,6 +8671,12 @@ class ModelFitProbeModel(GeneratedBaseModel):
         ModelFitProbeLlamaStats | dict[str, Any],
         Field(description="The resolved load of a llama.cpp verdict. Empty otherwise."),
     ]
+    reason: Annotated[
+        str | None,
+        Field(
+            description="Why the model has no verdict. Present when `status` is `unknown`."
+        ),
+    ] = None
 
 
 class ModelFitProbe(GeneratedBaseModel):

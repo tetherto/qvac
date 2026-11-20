@@ -6,11 +6,14 @@ import path from 'bare-path'
 import { z } from 'zod'
 
 import {
+  ModelFitRejectedError,
   ModelTypeRequiredError,
   PluginLoadConfigValidationFailedError,
   PluginNotFoundError
 } from '@/errors/index'
+import { ERROR_CODES } from '@/schemas/errors'
 import { assessModelFit, noStubDetail } from '@/model-fit/assess'
+import { ENGINE_UNSIZED } from '@/model-fit/fit-load'
 import type { AddonFit } from '@/model-fit/run/engine'
 import { registerPlugin, unregisterPlugin } from '@/plugins/registry'
 import { ModelType } from '@/schemas/index'
@@ -109,14 +112,23 @@ test('assess: models that fit alone may not fit together', async (t) => {
   )
 })
 
-test('assess: a fitter that rejects makes the assessment throw', async (t) => {
+test('assess: a fitter that rejects throws a typed error carrying its message', async (t) => {
   const broken = modelFile('broken.gguf')
-  withPlugin(t, fakePlugin(new Map([[broken, new Error('assessFit: the model cannot be read')]])))
+  const rejection = new Error('assessFit: the model cannot be read')
+  withPlugin(t, fakePlugin(new Map([[broken, rejection]])))
 
-  await t.exception(
-    assessModelFit([{ modelSrc: broken, modelType: ModelType.llamacppCompletion }]),
-    /the model cannot be read/
-  )
+  try {
+    await assessModelFit([{ modelSrc: broken, modelType: ModelType.llamacppCompletion }])
+    t.fail('the assessment should throw')
+  } catch (error) {
+    t.ok(error instanceof ModelFitRejectedError)
+    t.is((error as ModelFitRejectedError).code, ERROR_CODES.MODEL_FIT_REJECTED)
+    t.is(
+      (error as Error).message,
+      `${ModelType.llamacppCompletion}: the engine fitter could not assess this load (assessFit: the model cannot be read)`
+    )
+    t.is((error as Error).cause, rejection)
+  }
 })
 
 test('assess: a transcription workload on an engine other than MOSS is unknown', async (t) => {
@@ -149,7 +161,12 @@ test('assess: an engine with no fitter is unknown, and so is the set', async (t)
   ])
 
   t.is(result.verdict, 'unknown')
-  t.alike(result.models[1], { status: 'unknown', devices: [], stats: {} })
+  t.alike(result.models[1], {
+    status: 'unknown',
+    devices: [],
+    stats: {},
+    reason: `no fitter for model type ${ModelType.ggmlClassification}`
+  })
 })
 
 test('assess: an engine that builds a fit request but has no fitter is unknown', async (t) => {
@@ -166,7 +183,26 @@ test('assess: an engine that builds a fit request but has no fitter is unknown',
   ])
 
   t.is(result.verdict, 'unknown')
-  t.alike(result.models, [{ status: 'unknown', devices: [], stats: {} }])
+  t.alike(result.models, [
+    {
+      status: 'unknown',
+      devices: [],
+      stats: {},
+      reason: `no fitter for model type ${ModelType.ggmlClassification}`
+    }
+  ])
+})
+
+test('assess: an engine fitter that answers unknown without a reason gets one', async (t) => {
+  const model = modelFile('model.gguf')
+  const unsized: AddonFit = { status: 'unknown', devices: [], stats: {} }
+  withPlugin(t, fakePlugin(new Map([[model, unsized]])))
+
+  const result = await assessModelFit([
+    { modelSrc: model, modelType: ModelType.llamacppCompletion }
+  ])
+
+  t.alike(result.models, [{ ...unsized, reason: ENGINE_UNSIZED }])
 })
 
 test('assess: a split model is unknown, and the rest of the set is still assessed', async (t) => {
@@ -190,7 +226,15 @@ test('assess: a split model is unknown, and the rest of the set is still assesse
 
   t.alike(seen, [true, false], 'the split flag comes from the file name')
   t.is(result.verdict, 'unknown')
-  t.alike(result.models, [{ status: 'unknown', devices: [], stats: {} }, onHost(1)])
+  t.alike(result.models, [
+    {
+      status: 'unknown',
+      devices: [],
+      stats: {},
+      reason: 'the fitter reads one model file, and this model is split'
+    },
+    onHost(1)
+  ])
 })
 
 test('assess: a catalog constant is split when its registry path names a shard', async (t) => {
