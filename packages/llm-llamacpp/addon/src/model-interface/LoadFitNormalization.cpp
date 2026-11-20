@@ -2374,10 +2374,11 @@ NormalizedLoad normalizeLoadForFit(
   // same config. ctx-size 0 is checked once the context exists.
   if (params.n_parallel >= 2 && params.kv_unified_per_slot > 0 &&
       params.n_ctx > 0) {
-    // llama_context pads n_ctx to a multiple of this (llama-context.cpp).
+    // llama_context pads n_ctx to a multiple of this, except for training
+    // contexts (llama-context.cpp).
     constexpr int64_t kFabricCtxPad = 256;
-    const int64_t pool =
-        GGML_PAD(static_cast<int64_t>(params.n_ctx), kFabricCtxPad);
+    const auto nCtx = static_cast<int64_t>(params.n_ctx);
+    const int64_t pool = params.training ? nCtx : GGML_PAD(nCtx, kFabricCtxPad);
     if (static_cast<int64_t>(params.n_parallel) * params.kv_unified_per_slot >
         pool) {
       throw qvac_errors::StatusError(
@@ -2386,10 +2387,12 @@ NormalizedLoad normalizeLoadForFit(
               qvac_errors::general_error::InvalidArgument),
           string_format(
               "%s: parallel x kv_unified_per_slot (%d x %d) must fit "
-              "ctx_size=%lld; leave ctx_size unset to size the pool to it.\n",
+              "ctx_size=%d (pool %lld); leave ctx_size unset to size the pool "
+              "to it.\n",
               K_LEGACY_PARSER_NAME.data(),
               params.n_parallel,
               params.kv_unified_per_slot,
+              params.n_ctx,
               static_cast<long long>(pool)));
     }
   }

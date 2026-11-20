@@ -365,7 +365,7 @@ config: { parallel: '4', kv_unified_per_slot: '2048' } // one 8192-cell pool, 20
 - **Known issues with `parallel >= 2`** — fabric takes the whole buffer as one sequence's context in two places, until a fabric change gives it the slot limit:
   - DeepSeek V4 and V4.1 keep one cache per sequence and size each to the whole buffer, so those caches take `parallel` times the memory. A load that fits with one buffer per slot can run out of memory.
   - Models with long RoPE factors (for example Phi-3) use the long factors whenever `C` exceeds the model's original context, even though each slot stays within it, so their output changes.
-- **Cache files** — a file saved by an earlier version with `parallel >= 2` holds one KV stream per slot; fabric restores it into the shared buffer. A file saved now holds one stream, which earlier versions cannot restore at `parallel >= 2`. A file that fails to load fails its request with `UnableToLoadSessionFile`; delete it, and the next request on that `cacheKey` runs without it.
+- **Cache files** — a file saved by an earlier version with `parallel >= 2` holds one KV stream per slot; fabric restores it into the shared buffer. A file saved now holds one stream (DeepSeek V4 and V4.1 keep one per slot), which earlier versions cannot restore at `parallel >= 2`. A file that fails to load fails its request with `UnableToLoadSessionFile`; delete it, and the next request on that `cacheKey` runs without it.
 
 ---
 

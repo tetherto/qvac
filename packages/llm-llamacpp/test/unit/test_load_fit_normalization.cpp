@@ -2103,7 +2103,35 @@ TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotOverbookingIsRejected) {
     FAIL() << "caps that overbook the pool must throw";
   } catch (const qvac_errors::StatusError& error) {
     EXPECT_THAT(
-        error.what(), ::testing::HasSubstr("(2 x 513) must fit ctx_size=1024"));
+        error.what(),
+        ::testing::HasSubstr("(2 x 513) must fit ctx_size=1000 (pool 1024)"));
+  }
+}
+
+// A training context is not padded, so the caps must fit ctx-size itself.
+TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotTrainingPoolIsNotPadded) {
+  const auto normalize = [this](const std::string& perSlot) {
+    auto config = baseConfig();
+    config["kv-unified-per-slot"] = perSlot;
+    return lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {.active = true,
+         .batchSize = 64,
+         .microBatchSize = 16,
+         .contextLength = 1000,
+         .flashAttn = false},
+        backend({.type = backend_selection::CPU, .name = "none"}));
+  };
+  EXPECT_EQ(normalize("500").params.kv_unified_per_slot, 500);
+  try {
+    static_cast<void>(normalize("505"));
+    FAIL() << "caps over an unpadded training pool must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr("(2 x 505) must fit ctx_size=1000 (pool 1000)"));
   }
 }
 

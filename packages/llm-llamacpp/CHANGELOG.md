@@ -33,8 +33,9 @@ Loads with `parallel >= 2` change as follows:
   memory; models with long RoPE factors (for example Phi-3) use the long
   factors whenever `ctx_size` exceeds the model's original context, so their
   output changes ([#5832](https://github.com/tetherto/qvac/pull/5832)).
-- Cache files saved with `parallel >= 2` now hold one KV stream, which earlier
-  versions cannot restore. Files saved by earlier versions with
+- Cache files saved with `parallel >= 2` now hold one KV stream (DeepSeek V4
+  and V4.1 keep one per slot), which earlier versions cannot restore. Files
+  saved by earlier versions with
   `parallel >= 2` still load. A file that fails to load fails its request with
   `UnableToLoadSessionFile`; delete it, and the next request on that
   `cacheKey` runs without it

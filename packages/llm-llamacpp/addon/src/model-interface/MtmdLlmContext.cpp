@@ -2748,6 +2748,15 @@ bool MtmdLlmContext::loadCache(
       stateTokens.size(),
       &tokenCount);
   if (loadedBytes == 0) {
+    // A file over the slot limit fails to load when the other slots leave too
+    // few free cells; report it as the check after a load does.
+    if (cache::CacheFileIndex::ledgerExceeds(cacheKey, ctxCeiling())) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(ContextLengthExeeded),
+          "MtmdLlmContext::loadCache: cache '" + cacheKey +
+              "' exceeds current context size");
+    }
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnableToLoadSessionFile),

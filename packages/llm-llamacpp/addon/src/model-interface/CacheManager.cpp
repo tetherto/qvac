@@ -26,6 +26,17 @@ using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::logging;
 namespace cache = qvac_lib_inference_addon_llama::cache;
 
+namespace {
+// The same limit the context generates against.
+unsigned slotCeiling(LlmContext& llmContext) {
+  auto* ctx = llmContext.getCtx();
+  return qvac_lib_inference_addon_llama::batching::perSeqCeiling(
+      llama_n_ctx(ctx),
+      llama_n_seq_max(ctx),
+      llmContext.getParams().kv_unified_per_slot);
+}
+} // namespace
+
 CacheManager::CacheManager(
     LlmContext* llmContext, std::function<void(bool)> resetStateCallback)
     : llmContext_(llmContext),
@@ -235,6 +246,20 @@ bool CacheManager::loadCache() {
       stateTokens.size(),
       &nTokenCount);
   if (loadedBytes == 0) {
+    // A file over the slot limit fails to load when the other slots leave too
+    // few free cells; report it as `acceptLoadedState` does.
+    const unsigned ceiling = slotCeiling(*llmContext_);
+    if (cache::CacheFileIndex::ledgerExceeds(
+            sessionPath_, static_cast<llama_pos>(ceiling))) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(ContextLengthExeeded),
+          string_format(
+              "%s: cache file '%s' exceeds the context limit of %u tokens\n",
+              __func__,
+              sessionPath_.c_str(),
+              ceiling));
+    }
     std::string errorMsg = string_format(
         "%s: failed to load session file '%s'\n",
         __func__,
@@ -299,13 +324,8 @@ bool CacheManager::acceptLoadedState(
             source.c_str(),
             ex.what()));
   }
-  // The same limit the context generates against, on positions and KV cells
-  // (they diverge for M-RoPE images).
-  const unsigned ceiling =
-      qvac_lib_inference_addon_llama::batching::perSeqCeiling(
-          llama_n_ctx(ctx),
-          llama_n_seq_max(ctx),
-          llmContext_->getParams().kv_unified_per_slot);
+  // Positions and KV cells both count (they diverge for M-RoPE images).
+  const unsigned ceiling = slotCeiling(*llmContext_);
   const llama_pos used =
       std::max(llmContext_->getNPast(), llmContext_->getCacheTokens());
   if (used > static_cast<llama_pos>(ceiling)) {
