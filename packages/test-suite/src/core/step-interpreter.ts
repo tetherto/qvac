@@ -41,6 +41,12 @@ export interface StepBindings {
 
   /** Evict everything not in `keep` before a test runs. */
   evictAllExcept?(keep: Set<string>): Promise<void>
+
+  /**
+   * Release what the test acquired itself, such as models from `loadModel` calls. Runs after the
+   * started calls drain, on pass, fail and throw. A throw fails a passing test.
+   */
+  endTest?(): Promise<void>
 }
 
 /**
@@ -88,6 +94,8 @@ const STARTED = '__started'
 
 export class StepInterpreter {
   private readonly bindings: StepBindings
+  /** Id of the newest run, so a run abandoned on timeout skips `endTest`. */
+  private latestRun = 0
 
   constructor(bindings: StepBindings) {
     this.bindings = bindings
@@ -104,6 +112,19 @@ export class StepInterpreter {
       }
     }
 
+    const run = ++this.latestRun
+    let result: TestResult
+    try {
+      result = await this.runDeclared(steps, definition)
+    } catch (error: unknown) {
+      await this.endTest(run)
+      throw error
+    }
+    const ended = await this.endTest(run)
+    return ended ? this.merge(result, ended, 'end-of-test release') : result
+  }
+
+  private async runDeclared(steps: Step[], definition: TestDefinition): Promise<TestResult> {
     // Evict anything this test did not declare, so a run does not depend on the order tests
     // happened to arrive in.
     if (this.bindings.evictAllExcept) {
@@ -161,14 +182,29 @@ export class StepInterpreter {
   }
 
   /**
-   * Folds a failed teardown into the body's result: a passing body cannot be claimed when cleanup
+   * Runs `endTest` and returns its failure. Skipped for a run a newer one superseded: the consumer
+   * abandons a timed-out run, and its release would unload the newer run's models.
+   */
+  private async endTest(run: number): Promise<TestResult | undefined> {
+    if (!this.bindings.endTest || run !== this.latestRun) return undefined
+    try {
+      await this.bindings.endTest()
+      return undefined
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: message }
+    }
+  }
+
+  /**
+   * Folds a failed cleanup into the body's result: a passing body cannot be claimed when cleanup
    * failed, and a failing one keeps its own diagnosis.
    */
-  private merge(body: TestResult, teardown: TestResult): TestResult {
-    if (body.passed) return { ...teardown, output: `teardown failed: ${teardown.output}` }
+  private merge(body: TestResult, cleanup: TestResult, what = 'teardown'): TestResult {
+    if (body.passed) return { ...cleanup, output: `${what} failed: ${cleanup.output}` }
     return {
       ...body,
-      output: `${body.output} [teardown also failed: ${teardown.output}]`
+      output: `${body.output} [${what} also failed: ${cleanup.output}]`
     }
   }
 
