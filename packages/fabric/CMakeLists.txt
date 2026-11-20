@@ -12,13 +12,10 @@ if(QVAC_CUDA_JETSON)
   list(APPEND VCPKG_MANIFEST_FEATURES "cuda-jetson")
 endif()
 
-option(QVAC_FABRIC_SHARED_CORE "Experimental shared ggml core (matching port feature required)" OFF)
-if(QVAC_FABRIC_SHARED_CORE)
-  list(APPEND VCPKG_MANIFEST_FEATURES "shared-core")
-endif()
-
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
+
+list(PREPEND VCPKG_OVERLAY_PORTS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/ports")
 
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 include("${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/toolchains/export-bare-make-env.cmake")
@@ -43,8 +40,19 @@ if(DEFINED ENV{QVAC_FABRIC_ASAN} AND NOT "$ENV{QVAC_FABRIC_ASAN}" STREQUAL "0")
   set(QVAC_FABRIC_ASAN ON)
 endif()
 
+find_package(OpenSSL)
+find_package(llama CONFIG REQUIRED)
+find_package(ggml CONFIG REQUIRED)
+get_target_property(_ggml_base_type ggml::ggml-base TYPE)
+set(QVAC_FABRIC_SHARED_CORE OFF)
+if(_ggml_base_type STREQUAL "SHARED_LIBRARY")
+  set(QVAC_FABRIC_SHARED_CORE ON)
+endif()
+if(GGML_BACKEND_DL AND NOT QVAC_FABRIC_SHARED_CORE)
+  message(FATAL_ERROR "Dynamic backends require the shared-core qvac-fabric port")
+endif()
 if(QVAC_FABRIC_ASAN AND QVAC_FABRIC_SHARED_CORE)
-  message(FATAL_ERROR "Experimental shared-core packaging does not yet support QVAC_FABRIC_ASAN")
+  message(FATAL_ERROR "Shared-core packaging does not yet support QVAC_FABRIC_ASAN")
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -100,19 +108,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# llama-targets.cmake transitively requires OpenSSL::SSL via cpp-httplib's
-# IMPORTED interface. Make OpenSSL discoverable before find_package(llama) so
-# the target chain resolves on local builds.
-find_package(OpenSSL)
-find_package(llama CONFIG REQUIRED)
-find_package(ggml CONFIG REQUIRED)
-if(QVAC_FABRIC_SHARED_CORE AND NOT GGML_SHARED_CORE)
-  message(FATAL_ERROR "QVAC_FABRIC_SHARED_CORE requires qvac-fabric[shared-core]; use the matching experimental port")
-elseif(GGML_SHARED_CORE AND NOT QVAC_FABRIC_SHARED_CORE)
-  message(FATAL_ERROR "A shared-core port requires QVAC_FABRIC_SHARED_CORE=ON; do not embed a second libc++ in fabric")
-endif()
-
-
 # The qvac-fabric[vector-index] feature exports the ANN index API
 # (ggml_vec_index_*) as a static library separate from the ggml core. We request
 # the feature unconditionally, so a missing target is a port contract break
@@ -157,7 +152,7 @@ if(QVAC_FABRIC_SHARED_CORE)
   foreach(_core ggml::ggml-base ggml::ggml ggml::ggml-vector-index)
     get_target_property(_core_type ${_core} TYPE)
     if(NOT _core_type STREQUAL "SHARED_LIBRARY")
-      message(FATAL_ERROR "Experimental core target ${_core} must be shared, got ${_core_type}")
+      message(FATAL_ERROR "Core target ${_core} must be shared, got ${_core_type}")
     endif()
     if(NOT WIN32)
       list(APPEND BACKEND_DL_LIBS INSTALL TARGET ${_core})

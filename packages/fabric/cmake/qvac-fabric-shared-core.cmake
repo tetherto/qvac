@@ -1,13 +1,13 @@
 include_guard(GLOBAL)
 
 # Import the development libraries from the same platform package as the addon.
-# Call only for an experimental shared-core package, not a legacy prebuild.
+# Call for dynamic-backend platform packages.
 function(qvac_fabric_import_shared_core prebuilds host)
   get_filename_component(prebuilds "${prebuilds}" ABSOLUTE)
   qvac_fabric_module_name("${host}" module)
   get_filename_component(directory "${prebuilds}/${host}/${module}" ABSOLUTE)
   if(NOT EXISTS "${directory}/qvac-shared-core.cmake")
-    message(FATAL_ERROR "No shared-core metadata in ${directory}; use a matching experimental fabric package")
+    message(FATAL_ERROR "No shared-core metadata in ${directory}; use a matching fabric package")
   endif()
   set(_qvac_core_abi "")
   set(_qvac_core_definitions "")

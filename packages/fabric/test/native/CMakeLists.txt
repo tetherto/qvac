@@ -48,6 +48,13 @@ else()
   set(core ggml::ggml-base)
   set(registry ggml::ggml)
 endif()
+option(QVAC_TEST_REQUIRE_SHARED_CORE "Require the installed port's dynamic shared core" OFF)
+if(QVAC_TEST_REQUIRE_SHARED_CORE)
+  get_target_property(_core_type ${core} TYPE)
+  if(NOT GGML_BACKEND_DL OR NOT _core_type STREQUAL "SHARED_LIBRARY")
+    message(FATAL_ERROR "Port regression coverage requires dynamic backends and a shared core")
+  endif()
+endif()
 if(NOT QVAC_TEST_BACKEND)
   message(FATAL_ERROR "Set QVAC_TEST_BACKEND to a real CPU/GPU module; no fallback is tested")
 endif()
@@ -74,12 +81,17 @@ add_test(NAME module-abort COMMAND ${CMAKE_COMMAND}
   -P "${CMAKE_CURRENT_SOURCE_DIR}/expect-abort-callback.cmake")
 set_tests_properties(backend-allocation module-logger module-abort PROPERTIES TIMEOUT 30)
 
-if(MSVC)
-  # Release-only packages cannot establish Debug CRT ownership. Never silently
-  # treat an imported Release archive as a /MTd regression run.
-  if(NOT QVAC_GGML_SOURCE_DIR)
-    message(FATAL_ERROR "Windows CRT coverage requires QVAC_GGML_SOURCE_DIR and a Debug build")
+if(MSVC AND NOT QVAC_GGML_SOURCE_DIR)
+  if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(FATAL_ERROR "Windows CRT coverage requires Debug")
   endif()
+  get_target_property(_debug_core ${core} IMPORTED_LOCATION_DEBUG)
+  if(NOT _debug_core OR NOT _debug_core MATCHES "/debug/bin/")
+    message(FATAL_ERROR "Windows CRT coverage requires the port's Debug core DLL")
+  endif()
+  add_custom_command(TARGET boundary POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${core}> $<TARGET_FILE:${registry}>
+      $<TARGET_FILE_DIR:boundary>)
 endif()
 
 # Opt-in packaged-provider checks; the original baseline remains unchanged.
