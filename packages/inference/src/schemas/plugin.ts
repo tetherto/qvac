@@ -10,7 +10,7 @@ import type { ModelSrcInput } from '@/schemas/model-src-utils'
 import type { RuntimeContext } from '@/schemas/runtime-context'
 import type { AbortSignalLike } from '@/schemas/abort-signal'
 import { trackedRequestSchema } from '@/schemas/request-base'
-import { capabilityContractRuntimeSchema, type CapabilityContract } from '@/schemas/capabilities'
+import { capabilityContractRuntimeSchema, type CapabilityDeclaration } from '@/schemas/capabilities'
 
 /**
  * Granularity at which the addon can cancel.
@@ -237,12 +237,14 @@ export interface QvacPlugin<
   /**
    * The capability contracts this plugin provides. Reference an entry of
    * `CAPABILITY_CONTRACTS` to provide a QVAC contract; a contract QVAC does
-   * not define needs a dotted ID, such as `acme.diarization`. Every required
-   * operation needs a handler of the same name, and a handler belongs to at
-   * most one contract ID. A plugin without `provides` serves only
-   * `pluginInvoke` and adds nothing to `getRuntimeCapabilities`.
+   * not define needs a dotted ID, such as `acme.diarization`, and its
+   * operation lists. Every required operation needs a handler of the same
+   * name, a handler belongs to at most one contract ID, and each handler's
+   * reply/stream/duplex shape must match the operation's. A plugin without
+   * `provides` adds nothing to `getRuntimeCapabilities`; its handlers are
+   * called as before.
    */
-  provides?: readonly CapabilityContract[] | undefined
+  provides?: readonly CapabilityDeclaration[] | undefined
   logging?: PluginLogging | undefined
   capabilities?: QvacPluginCapabilities | undefined
   /** When true, skips file-existence validation for modelPath. Use for plugins that derive paths from config. */

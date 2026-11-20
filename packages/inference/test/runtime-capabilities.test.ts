@@ -11,11 +11,16 @@ import { clearSessions, openSession } from '@/runtime/session-registry'
 import { PluginDefinitionInvalidError, SessionNotOpenError as SessionNotOpen } from '@/errors'
 import {
   CAPABILITY_CONTRACTS,
-  type CapabilityContract,
+  type CapabilityDeclaration,
   type Request,
   type Response
 } from '@/schemas'
-import { definePlugin, defineHandler, type QvacPlugin } from '@/schemas/plugin'
+import { definePlugin, type PluginHandlerDefinition, type QvacPlugin } from '@/schemas/plugin'
+import {
+  QVAC_OPERATION_CALL_SHAPES,
+  resolveCapabilityDeclaration,
+  type OperationCallShape
+} from '@/plugins/capabilities'
 
 env['HOME'] = path.join(os.tmpdir(), `qvac-inference-capabilities-test-${os.pid()}`)
 
@@ -25,22 +30,30 @@ const BUILTIN_PLUGINS: QvacPlugin[] = Object.values(builtin) as QvacPlugin[]
 
 let createModelCalls = 0
 
+function makeHandler(shape: OperationCallShape): PluginHandlerDefinition {
+  return {
+    requestSchema: z.object({}),
+    responseSchema: z.object({ ok: z.boolean() }),
+    streaming: shape !== 'reply',
+    ...(shape === 'duplex' && { duplex: true }),
+    handler: async function () {
+      return { ok: true }
+    }
+  } as PluginHandlerDefinition
+}
+
+// A handler takes the shape the runtime calls a QVAC operation with, unless
+// the test names another.
 function makePlugin(
   modelType: string,
   handlerNames: string[],
-  provides?: readonly CapabilityContract[]
+  provides?: readonly CapabilityDeclaration[],
+  shapes: Record<string, OperationCallShape> = {}
 ): QvacPlugin {
   const handlers = Object.fromEntries(
     handlerNames.map((name) => [
       name,
-      defineHandler({
-        requestSchema: z.object({}),
-        responseSchema: z.object({ ok: z.boolean() }),
-        streaming: false,
-        handler: async function () {
-          return { ok: true }
-        }
-      })
+      makeHandler(shapes[name] ?? QVAC_OPERATION_CALL_SHAPES[name] ?? 'reply')
     ])
   )
   return definePlugin({
@@ -62,7 +75,7 @@ function thirdParty(
   version: number,
   operations: string[],
   optionalOperations: string[] = []
-): CapabilityContract {
+): CapabilityDeclaration {
   return { id, version, operations, optionalOperations }
 }
 
@@ -84,9 +97,13 @@ function assertRejected(t: Assert, plugin: QvacPlugin, why: RegExp) {
 test('every built-in handler belongs to exactly one capability contract', function (t) {
   for (const plugin of BUILTIN_PLUGINS) {
     for (const handlerName of Object.keys(plugin.handlers)) {
-      const owners = (plugin.provides ?? []).filter((contract) =>
-        [...contract.operations, ...contract.optionalOperations].includes(handlerName)
-      )
+      const owners = (plugin.provides ?? [])
+        .map(resolveCapabilityDeclaration)
+        .filter(
+          (contract) =>
+            typeof contract !== 'string' &&
+            [...contract.operations, ...contract.optionalOperations].includes(handlerName)
+        )
       t.is(owners.length, 1, `${plugin.modelType}.${handlerName} is in one contract`)
     }
   }
@@ -327,22 +344,44 @@ test('registerPlugin rejects an undotted ID or major QVAC does not define', func
   }
 })
 
-test('registerPlugin rejects a QVAC ID whose operations differ from the table', function (t) {
+test('a QVAC declaration from an earlier or later table registers, and the report uses the runtime table', function (t) {
+  clearPlugins()
+  try {
+    registerPlugin(
+      makePlugin(
+        'built-against-older-table',
+        ['transcribe', 'transcribeStream'],
+        [thirdParty('transcription', 1, ['transcribe'])]
+      )
+    )
+    registerPlugin(
+      makePlugin(
+        'built-against-newer-table',
+        ['transcribe', 'transcribeBatch'],
+        [thirdParty('transcription', 1, ['transcribe'], ['transcribeStream', 'transcribeBatch'])]
+      )
+    )
+    registerPlugin(makePlugin('names-only', ['transcribe'], [{ id: 'transcription', version: 1 }]))
+    t.alike(getProvidedCapabilities(), [
+      {
+        id: 'transcription',
+        version: 1,
+        operations: ['transcribe'],
+        partialOperations: ['transcribeStream']
+      }
+    ])
+  } finally {
+    clearPlugins()
+  }
+})
+
+test('registerPlugin rejects a dotted declaration without operations', function (t) {
   clearPlugins()
   try {
     assertRejected(
       t,
-      makePlugin('a', ['transcribe'], [thirdParty('transcription', 1, ['transcribe'])]),
-      /QVAC contract has/
-    )
-    assertRejected(
-      t,
-      makePlugin(
-        'b',
-        ['transcribe', 'transcribeStream'],
-        [thirdParty('transcription', 1, ['transcribe', 'transcribeStream'])]
-      ),
-      /QVAC contract has/
+      makePlugin('a', ['diarize'], [{ id: 'acme.diarization', version: 1 }]),
+      /must list its operations/
     )
   } finally {
     clearPlugins()
@@ -397,17 +436,30 @@ test('registerPlugin rejects a repeated contract or operation', function (t) {
   }
 })
 
-test('registerPlugin rejects a third-party contract that disagrees with a registered provider', function (t) {
+test('providers of one third-party contract may list different optional operations', function (t) {
+  clearPlugins()
+  try {
+    registerPlugin(makePlugin('older', ['run'], [thirdParty('acme.x', 1, ['run'])]))
+    registerPlugin(
+      makePlugin('newer', ['run', 'extra'], [thirdParty('acme.x', 1, ['run'], ['extra'])])
+    )
+    t.alike(getProvidedCapabilities(), [
+      { id: 'acme.x', version: 1, operations: ['run'], partialOperations: ['extra'] }
+    ])
+  } finally {
+    clearPlugins()
+  }
+})
+
+test('registerPlugin rejects a third-party provider whose required operations differ', function (t) {
   clearPlugins()
   try {
     registerPlugin(makePlugin('first', ['run'], [thirdParty('acme.x', 1, ['run'])]))
     assertRejected(
       t,
-      makePlugin('second', ['run', 'extra'], [thirdParty('acme.x', 1, ['run'], ['extra'])]),
-      /plugin "first" declares/
+      makePlugin('second', ['run', 'stop'], [thirdParty('acme.x', 1, ['run', 'stop'])]),
+      /requires \[run, stop\], but plugin "first" requires \[run\]/
     )
-    registerPlugin(makePlugin('third', ['run'], [thirdParty('acme.x', 1, ['run'])]))
-    t.is(getProvidedCapabilities().length, 1, 'an agreeing provider registers')
   } finally {
     clearPlugins()
   }
