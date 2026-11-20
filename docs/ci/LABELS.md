@@ -106,11 +106,11 @@ Six relations connect a changed file to testIds:
 | `catalog/*-tests.ts`, `catalog/test-definitions.ts` | the testIds it declares — narrowed to the changed lines when they name tests, widened to the whole file otherwise |
 | `runners/js/**/executors/*.ts` | the executor's `pattern` regex |
 | anything else under `catalog/` or `runners/js/` | the import graph, via the executors that reach it |
-| `packages/inference/src/plugins/builtin/<engine>/**` | the models that engine serves — directory name → `engine` in the SDK model contract → the resource constants naming those models → the tests depending on those resources |
+| `packages/inference/src/plugins/builtin/<engine>/**` | the models that engine serves — directory name → `engine` in the inference model registry → the resource constants naming those models → the tests depending on those resources |
 | `packages/sdk/src/client/api/*.ts` | the functions it exports, and the executors importing them |
 | a handler module registered in `packages/inference/src/registry.ts` | the same way, via the operation the registry binds it to. Operations dispatched to a plugin rather than a module are left to the engine relation |
 
-The last three relations are the only ones that reach outside `packages/sdk-e2e/`. It needs no table: the plugin directory name *is* the engine id the SDK loads by, the contract is regenerated and checked by `contract:check`, a wrong model constant fails the download, and a wrong `dependency` throws `Unknown dependency` at run time. Every link is already load-bearing, so none of them can rot silently to suit this mapper.
+The last three relations are the only ones that reach outside `packages/sdk-e2e/`. It needs no table: the plugin directory name *is* the engine id the SDK loads by, the model registry is the one the SDK loads from, a wrong model constant fails the download, and a wrong `dependency` throws `Unknown dependency` at run time. Every link is already load-bearing, so none of them can rot silently to suit this mapper.
 
 Deliberate limits:
 

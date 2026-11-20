@@ -25,9 +25,8 @@ The catalog imports nothing from a runner or a client. `catalog/tsconfig.json` t
 as part of `npm run typecheck`: an import from `runners/` fails there, and so does one from `@qvac/sdk`,
 which resolves to an empty module. The wire shapes the catalog needs — tool dialects, index storages,
 decision requests and results — are declared in [`catalog/wire-types.ts`](./catalog/wire-types.ts).
-Two checks hold them to the SDK: `check:contract` compares them with the wire contract in
-`packages/sdk/contract/schema.json`, and the JS executors that hand them to the SDK are type-checked
-against its own types.
+The JS executors that hand them to the SDK are type-checked against its own types, and the tests
+using them fail when a value no longer matches the SDK.
 
 ## Running locally
 
@@ -318,7 +317,7 @@ apps the same way, with the label's suite; the Kotlin app runs only by dispatch.
 
   The SDK pod checks run `format` and `check:catalog` here. `check:catalog` needs
   no SDK build: it runs `check:resource-table`, `check:step-dependencies`,
-  `check:skip-matrix`, `check:contract` and `qvac-test catalog:validate`, each of
+  `check:skip-matrix` and `qvac-test catalog:validate`, each of
   which also runs on its own after `npm run build:catalog`.
 
   `check:skip-matrix` compares the platform policy against the recorded set in

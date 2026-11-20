@@ -21,25 +21,13 @@ plugins {
 }
 
 group = "io.tether"
-// The Kotlin SDK carries the version of the @qvac/sdk it is generated from: the
-// sibling package in the monorepo, or the exact pin in this package's own
-// manifest for a checkout of packages/sdk-kotlin alone (checkVersionAlignment
-// keeps the two equal).
+// The Kotlin SDK carries the version of the sibling @qvac/sdk it is generated from.
 val sdkPackageJson = projectDir.parentFile.resolve("sdk/package.json")
-val sdkVersion = if (sdkPackageJson.exists()) {
-    Regex("\"version\"\\s*:\\s*\"([^\"]+)\"")
-        .find(sdkPackageJson.readText())
-        ?.groupValues
-        ?.get(1)
-        ?: error("Could not read @qvac/sdk version from $sdkPackageJson")
-} else {
-    Regex("\"@qvac/sdk\"\\s*:\\s*\"([^\"]+)\"")
-        .find(projectDir.resolve("package.json").readText())
-        ?.groupValues
-        ?.get(1)
-        ?: error("Could not read the @qvac/sdk pin from ${projectDir.resolve("package.json")}")
-}
-version = sdkVersion
+version = Regex("\"version\"\\s*:\\s*\"([^\"]+)\"")
+    .find(sdkPackageJson.readText())
+    ?.groupValues
+    ?.get(1)
+    ?: error("Could not read @qvac/sdk version from $sdkPackageJson")
 
 // Keep the existing coordinates/publications; delegate Central's deployment
 // lifecycle to the maintained publisher rather than a custom HTTP uploader.
@@ -88,35 +76,32 @@ signing {
     }
 }
 
+// The generated client is compiled from build/, never committed. It is made from
+// the SDK contract the generator exports from the sibling packages/sdk source,
+// which needs that package installed and @qvac/inference built.
+val sdkDirectory = projectDir.parentFile.resolve("sdk")
 val generateContract = tasks.register<Exec>("generateContract") {
     inputs.files(fileTree("scripts") { include("*.py") })
     inputs.file("scripts/schema-type-names.json")
+    inputs.files(fileTree(sdkDirectory.resolve("src")), fileTree(sdkDirectory.resolve("scripts/contract")))
+    inputs.files(sdkDirectory.resolve("package.json"), sdkDirectory.resolve("scripts/export-contract.ts"))
+    inputs.files(fileTree(projectDir.parentFile.resolve("inference/dist")))
+    outputs.dir(layout.buildDirectory.dir("generated/contract/kotlin"))
+    mustRunAfter(":android-barekit:buildWorkspaceSdk")
     commandLine("python3", "$projectDir/scripts/generate-contract.py")
-    inputs.dir(projectDir.parentFile.resolve("sdk/contract"))
-    inputs.file(projectDir.parentFile.resolve("sdk/package.json"))
-    outputs.dir("$projectDir/src/commonMain/kotlin/io/tether/qvac/sdk/generated")
-}
-
-val checkContract = tasks.register<Exec>("checkContract") {
-    inputs.files(fileTree("scripts") { include("*.py") })
-    inputs.file("scripts/schema-type-names.json")
-    commandLine("python3", "$projectDir/scripts/generate-contract.py", "--check")
-    inputs.dir(projectDir.parentFile.resolve("sdk/contract"))
-    inputs.file(projectDir.parentFile.resolve("sdk/package.json"))
-    inputs.dir("$projectDir/src/commonMain/kotlin/io/tether/qvac/sdk/generated")
 }
 
 val testContractGenerator = tasks.register<Exec>("testContractGenerator") {
+    dependsOn(generateContract)
     commandLine("python3", "-m", "unittest", "discover", "-s", "$projectDir/scripts", "-p", "test_*.py")
 }
 val checkWireLiterals = tasks.register<Exec>("checkWireLiterals") {
+    dependsOn(generateContract)
     commandLine("python3", "$projectDir/scripts/check-wire-literals.py")
 }
-checkContract.configure { dependsOn(testContractGenerator, checkWireLiterals) }
 val testReleaseGate = tasks.register<Exec>("testReleaseGate") {
     commandLine("node", "--test", "$projectDir/scripts/platform-package.test.mjs")
 }
-checkContract.configure { dependsOn(testReleaseGate) }
 
 // The Android and JVM runtimes bundle from the same packages/sdk worker entry,
 // so their prepare tasks must not run concurrently.
@@ -170,8 +155,7 @@ val checkVersionAlignment = tasks.register<Exec>("checkVersionAlignment") {
 }
 
 tasks.named("check") {
-    dependsOn(checkContract)
-    dependsOn(checkVersionAlignment)
+    dependsOn(testContractGenerator, checkWireLiterals, testReleaseGate, checkVersionAlignment)
 }
 
 publishing {
@@ -297,6 +281,9 @@ kotlin {
         compilerOptions.jvmTarget.set(JvmTarget.JVM_11)
     }
     sourceSets {
+        commonMain {
+            kotlin.srcDir(generateContract)
+        }
         commonMain.dependencies {
             api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
             api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
