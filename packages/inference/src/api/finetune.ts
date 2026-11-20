@@ -97,7 +97,7 @@ function createFinetuneReplyRequest(params: FinetuneReplyParams) {
  * });
  *
  * for await (const progress of handle.progressStream) {
- *   console.log(progress.global_steps, progress.loss);
+ *   console.log(progress.globalSteps, progress.loss);
  * }
  *
  * console.log(await handle.result);
@@ -194,20 +194,12 @@ export function finetune(
           'type' in response &&
           response.type === 'finetune:progress'
         ) {
-          const progressResponse = finetuneProgressResponseSchema.parse(response)
-          progressQueue.push({
-            is_train: progressResponse.is_train,
-            loss: progressResponse.loss,
-            loss_uncertainty: progressResponse.loss_uncertainty,
-            accuracy: progressResponse.accuracy,
-            accuracy_uncertainty: progressResponse.accuracy_uncertainty,
-            global_steps: progressResponse.global_steps,
-            current_epoch: progressResponse.current_epoch,
-            current_batch: progressResponse.current_batch,
-            total_batches: progressResponse.total_batches,
-            elapsed_ms: progressResponse.elapsed_ms,
-            eta_ms: progressResponse.eta_ms
-          })
+          const {
+            type: _type,
+            modelId: _modelId,
+            ...progress
+          } = finetuneProgressResponseSchema.parse(response)
+          progressQueue.push(progress)
 
           if (progressResolve) {
             progressResolve()
