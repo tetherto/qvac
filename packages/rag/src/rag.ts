@@ -57,7 +57,13 @@ import { listDocumentPage, outOfScope, readDocumentPage } from './documents.js'
 import { dropNamespaceRows, listNamespaceSummaries } from './namespaces.js'
 import { exportFrames } from './transfer/export.js'
 import { importStream } from './transfer/import.js'
-import { checkQuery, scanSearch, throwIfAborted, type SearchQuery } from './search.js'
+import {
+  checkQuery,
+  scanSearch,
+  throwIfAborted,
+  type SearchOptions,
+  type SearchQuery
+} from './search.js'
 import { computeSpaceId, parseEmbeddingSpace } from './space.js'
 import { parseIndexOptions, parseIndexStorage } from './vector-index/options.js'
 import {
@@ -497,6 +503,8 @@ export function createRag(options: CreateRagOptions): Rag {
     if (!query) return []
     return await runSearch(handles, scope, query, request.k, {
       strict: true,
+      perDocument: request.perDocument,
+      minScore: request.minScore,
       signal: request.signal
     })
   }
@@ -639,6 +647,8 @@ export function createRag(options: CreateRagOptions): Rag {
         if (!query) return []
         return await runSearch(handles, narrowed, query, request.k, {
           strict: false,
+          perDocument: request.perDocument,
+          minScore: request.minScore,
           signal: request.signal
         })
       }
@@ -675,7 +685,7 @@ export function createRag(options: CreateRagOptions): Rag {
     scope: SearchScope,
     query: SearchQuery,
     k: number,
-    options: { strict: boolean; signal?: AbortSignal }
+    options: SearchOptions
   ): Promise<SearchHit[]> {
     const open = () => indexRegistry.open(scope.namespace, indexConfig)
     for (let attempt = 0; ; attempt++) {

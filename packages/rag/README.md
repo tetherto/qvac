@@ -149,9 +149,25 @@ Returns `{ documents, skipped, cancelled, revision }`. Each entry in `documents`
 
 Deletes the documents and their chunks in one batch. Unknown IDs are ignored. Returns `{ deleted, revision }`. A deleted document's last generation is kept, so ingesting the same ID later continues at the next generation: a `generation` read before the delete never matches the new document.
 
-### `search({ scope, vector, spaceId, k, signal? })` / `search({ scope, query, k, signal? })`
+### `search({ scope, vector, spaceId, k, perDocument?, minScore?, signal? })` / `search({ scope, query, k, perDocument?, minScore?, signal? })`
 
-A text `query` is embedded with the port's `embedQuery` and searched in the port's space, so it takes no `spaceId`. Returns up to `k` hits `{ namespace, documentId, chunkId, ordinal, generation, content, metadataJson?, documentMetadata?, score }`, best first. `metadataJson` is the chunk's and `documentMetadata` is the document's `metadata` from ingest. `generation` is the document version the chunk belongs to. `spaceId` is the space the query was embedded in; a different one fails with `EMBEDDING_SPACE_MISMATCH`, even when its dimensions match. The score is the dot product, or the cosine similarity for `cosine` spaces, computed from the stored float32 vectors either way. With the index, candidates come from TurboVec and are rescored exactly; a candidate HyperDB no longer maps to a current chunk is dropped. An aborted `signal` fails with `OPERATION_CANCELLED`; the scan checks it between batches, and a search waiting for an index to load or rebuild stops waiting, while the rebuild finishes for later searches. Equal scores rank in scope order for a `documentIds` list and in document ID order otherwise, with and without the index.
+A text `query` is embedded with the port's `embedQuery` and searched in the port's space, so it takes no `spaceId`. Returns up to `k` hits `{ namespace, documentId, chunkId, ordinal, generation, chunkCount, content, metadataJson?, documentMetadata?, citation, score }`, best first. `metadataJson` is the chunk's and `documentMetadata` is the document's `metadata` from ingest. `generation` and `chunkCount` describe the document version the chunk belongs to. `spaceId` is the space the query was embedded in; a different one fails with `EMBEDDING_SPACE_MISMATCH`, even when its dimensions match. The score is the dot product, or the cosine similarity for `cosine` spaces, computed from the stored float32 vectors either way. With the index, candidates come from TurboVec and are rescored exactly; a candidate HyperDB no longer maps to a current chunk is dropped. An aborted `signal` fails with `OPERATION_CANCELLED`; the scan checks it between batches, and a search waiting for an index to load or rebuild stops waiting, while the rebuild finishes for later searches. Equal scores rank in scope order for a `documentIds` list and in document ID order otherwise, with and without the index.
+
+`citation` holds `title`, `sourceUrl`, `sourcePath` and `mimeType` from the document's `metadata`, falling back to the chunk's `metadataJson` (the `rag-extract` chunk format carries the same keys), and `page` from the chunk's `metadataJson`. A key is present only when it holds a non-empty string, or for `page` an integer of at least 1.
+
+`perDocument` spreads the `k` hits across documents: each document's best hit is taken first, in score order, then further hits go round the documents again, up to `perDocument` each. The hits still come back best first. When `scope.documentIds` lists at most `k` documents, every listed document that has chunks gets a hit. Without the index the selection is exact. With it, candidates are fetched in a window that grows until hits outside it could no longer take a seat: `k` fills before any document that may hold more of them gets its turn (each fetch also takes the usual extra margin and any scores tied at its edge). Once the next window would reach an eighth of the chunks in scope, or pass 4,096, the exact scan answers instead, so one long document can't leave the result short.
+
+`minScore` drops every hit scoring below it before `perDocument` and `k` apply, so a result can hold fewer than `k` hits, and a listed document is seated only when it has a chunk at or above the floor. On the index path the candidate window stops growing once every candidate in its margin scores below `minScore`.
+
+```ts
+const hits = await rag.search({
+  scope: { namespace: 'handbook' },
+  query,
+  k: 8,
+  perDocument: 2,
+  minScore: 0.4
+})
+```
 
 `scope` is `{ namespace, documentIds? }`. Only chunks inside the scope are read and ranked, so a restricted search fills its top `k` from allowed documents. Search fails closed:
 
@@ -224,7 +240,7 @@ Deletes the namespace with all its documents, chunks, delete records and index s
 
 ### `scoped(scope)`
 
-Returns `{ search, readDocument, listDocuments }` bound to `scope`. The `scope` passed to its `search` is optional and is intersected with the bound one: it can narrow to fewer documents but never add a document or switch namespace. Its `search` takes the same `vector` and `spaceId`, or `query`, plus `k` and `signal`, as `search`. A handle never fails on document identity: an ID that the namespace does not have, whether it was never ingested or has since been deleted, is skipped, so a handle whose documents are gone returns no hits instead of an error. Only the shape of the scope can fail (`INVALID_SCOPE`), and a namespace that does not exist fails with `NAMESPACE_NOT_FOUND`.
+Returns `{ search, readDocument, listDocuments }` bound to `scope`. The `scope` passed to its `search` is optional and is intersected with the bound one: it can narrow to fewer documents but never add a document or switch namespace. Its `search` takes the same `vector` and `spaceId`, or `query`, plus `k`, `perDocument`, `minScore` and `signal`, as `search`. A handle never fails on document identity: an ID that the namespace does not have, whether it was never ingested or has since been deleted, is skipped, so a handle whose documents are gone returns no hits instead of an error. Only the shape of the scope can fail (`INVALID_SCOPE`), and a namespace that does not exist fails with `NAMESPACE_NOT_FOUND`.
 
 Its `readDocument` and `listDocuments` take the same parameters without `namespace`. `readDocument` of a document outside the bound scope fails with `DOCUMENT_OUT_OF_SCOPE`, with the same message as a missing one, so a handle can't probe for documents it wasn't granted. `listDocuments` lists the whole namespace for a namespace-wide handle, and otherwise only the granted documents that still exist.
 
