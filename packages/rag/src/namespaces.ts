@@ -54,8 +54,8 @@ export async function listNamespaceSummaries(reader: HyperDBReader): Promise<Nam
 export async function dropNamespaceRows(
   tx: HyperDBTransaction,
   name: string
-): Promise<DropNamespaceResult> {
-  await getNamespace(tx, name)
+): Promise<{ result: DropNamespaceResult; createdAt: number }> {
+  const { createdAt } = await getNamespace(tx, name)
   const range = { gte: { namespace: name }, lte: { namespace: name } }
 
   let documentCount = 0
@@ -69,7 +69,7 @@ export async function dropNamespaceRows(
   }
   await tx.delete(NAMESPACES, { name })
   await tx.flush()
-  return { name, documentCount, chunkCount }
+  return { result: { name, documentCount, chunkCount }, createdAt: createdAt.getTime() }
 }
 
 // Reads in bounded batches, each starting past the last row of the one before:

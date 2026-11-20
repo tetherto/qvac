@@ -600,9 +600,9 @@ export function createRag(options: CreateRagOptions): Rag {
   async function dropNamespace(params: DropNamespaceParams): Promise<DropNamespaceResult> {
     const name = parseDropNamespace(params)
     const indexRegistry = registry()
-    const result = await withTransaction(database(), (tx) => dropNamespaceRows(tx, name))
-    await indexRegistry.drop(name, indexConfig)
-    return result
+    const dropped = await withTransaction(database(), (tx) => dropNamespaceRows(tx, name))
+    await indexRegistry.drop(name, dropped.createdAt, indexConfig)
+    return dropped.result
   }
 
   // A handle's documents are granted, not chosen per request: an ID the
