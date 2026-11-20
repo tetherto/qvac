@@ -68,7 +68,7 @@ async def main() -> int:
             model_id = await load_model(
                 t,
                 model_src=LLAMA_3_2_1B_INST_Q4_0,
-                model_config={"ctx_size": 4096, "parallel": 4},
+                model_config={"ctxSize": 4096, "parallel": 4},
                 on_progress=print_progress,
             )
             print(f"▸ Model loaded: {model_id}")
@@ -83,7 +83,7 @@ async def main() -> int:
                     t,
                     model_id=model_id,
                     history=[{"role": "user", "content": ask}],
-                    generation_params={"temp": 0, "seed": 42, "predict": 16},
+                    generation_params={"temperature": 0, "seed": 42, "predict": 16},
                 )
                 for _name, ask in PROMPTS
             ]
@@ -129,7 +129,7 @@ async def main() -> int:
                 history=[
                     {"role": "user", "content": "Write a long story about an otter."}
                 ],
-                generation_params={"temp": 0, "seed": 1, "predict": 256},
+                generation_params={"temperature": 0, "seed": 1, "predict": 256},
             )
             survivor = completion(
                 t,
@@ -137,7 +137,7 @@ async def main() -> int:
                 history=[
                     {"role": "user", "content": "Write a long story about a melon."}
                 ],
-                generation_params={"temp": 0, "seed": 42, "predict": 256},
+                generation_params={"temperature": 0, "seed": 42, "predict": 256},
             )
 
             # Bind each stream once: `run.events` returns a NEW iterator per

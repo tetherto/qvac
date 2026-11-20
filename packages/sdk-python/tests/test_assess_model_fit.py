@@ -114,7 +114,7 @@ async def test_assess_model_fit_sends_config_companions_as_whole_descriptors():
             {
                 "model_src": QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
                 "model_config": {
-                    "ctx_size": 4096,
+                    "ctxSize": 4096,
                     "projectionModelSrc": MMPROJ_QWEN3_5_0_8B_MULTIMODAL_Q8_0,
                 },
             }
@@ -122,7 +122,7 @@ async def test_assess_model_fit_sends_config_companions_as_whole_descriptors():
     )
     [candidate] = transport.sent["models"]
     config = candidate["modelConfig"]
-    assert config["ctx_size"] == 4096
+    assert config["ctxSize"] == 4096
     companion = config["projectionModelSrc"]
     assert companion["src"] == MMPROJ_QWEN3_5_0_8B_MULTIMODAL_Q8_0.src
     assert (

@@ -65,7 +65,7 @@ async def main() -> int:
             model_id = await load_model(
                 t,
                 model_src=QWEN3_600M_INST_Q4,
-                model_config={"ctx_size": 4096},
+                model_config={"ctxSize": 4096},
                 on_progress=print_progress,
             )
             print(f"▸ Model loaded: {model_id}")

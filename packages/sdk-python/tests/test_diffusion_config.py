@@ -19,9 +19,9 @@ def test_diffusion_memory_controls_serialize(
     )
     assert config.model_dump(by_alias=True, exclude_unset=True) == {
         "backend": "cuda0",
-        "params_backend": residency,
-        "max_vram": budget,
-        "stream_layers": False,
+        "paramsBackend": residency,
+        "maxVram": budget,
+        "streamLayers": False,
     }
 
 
@@ -45,7 +45,7 @@ def test_removed_diffusion_options_are_rejected(key: str, value: bool | None) ->
 
 
 def test_removed_diffusion_options_reject_mapping_inputs_with_guidance() -> None:
-    with pytest.raises(ValidationError, match="params_backend"):
+    with pytest.raises(ValidationError, match="paramsBackend"):
         LoadModelSrcRequestSdcppGenerationModelConfig.model_validate(
             UserDict({"clip_on_cpu": True})
         )
@@ -63,7 +63,7 @@ def test_turbo_schedule_and_tile_size_round_trip() -> None:
         "type": "diffusionStream",
         "modelId": "qwen-turbo",
         "prompt": "A red ceramic teapot.",
-        "custom_sigmas": [
+        "customSigmas": [
             1,
             0.978453,
             0.95418,
@@ -74,10 +74,10 @@ def test_turbo_schedule_and_tile_size_round_trip() -> None:
             0.414568,
             0,
         ],
-        "sampling_method": "euler",
-        "cfg_scale": 1,
-        "vae_tiling": True,
-        "vae_tile_size": 64,
+        "samplingMethod": "euler",
+        "cfgScale": 1,
+        "vaeTiling": True,
+        "vaeTileSize": 64,
     }
     request = DiffusionStreamRequest.model_validate(payload)
     assert request.model_dump(mode="json", by_alias=True, exclude_unset=True) == payload
@@ -85,13 +85,13 @@ def test_turbo_schedule_and_tile_size_round_trip() -> None:
 
 @pytest.mark.parametrize("sigmas", [[], [0], [-1, 0], [1e39, 0]])
 def test_invalid_sigma_bounds_reject_before_rpc(sigmas: list[float]) -> None:
-    with pytest.raises(ValidationError, match="custom_sigmas"):
+    with pytest.raises(ValidationError, match="customSigmas"):
         DiffusionStreamRequest.model_validate(
             {
                 "type": "diffusionStream",
                 "modelId": "qwen-turbo",
                 "prompt": "A teapot.",
-                "custom_sigmas": sigmas,
+                "customSigmas": sigmas,
             }
         )
 
@@ -113,23 +113,23 @@ def test_valid_tile_sizes_serialize_for_native_parser(
         "type": "diffusionStream",
         "modelId": "qwen-turbo",
         "prompt": "A teapot.",
-        "vae_tile_size": tile_size,
+        "vaeTileSize": tile_size,
     }
     request = DiffusionStreamRequest.model_validate(payload)
     assert request.model_dump(mode="json", by_alias=True, exclude_unset=True) == {
         **payload,
-        "vae_tile_size": expected,
+        "vaeTileSize": expected,
     }
 
 
 @pytest.mark.parametrize("tile_size", [0, 64.5, 2147483648, "garbage", "64.5x32"])
 def test_invalid_tile_sizes_reject_before_rpc(tile_size: int | float | str) -> None:
-    with pytest.raises(ValidationError, match="vae_tile_size"):
+    with pytest.raises(ValidationError, match="vaeTileSize"):
         DiffusionStreamRequest.model_validate(
             {
                 "type": "diffusionStream",
                 "modelId": "qwen-turbo",
                 "prompt": "A teapot.",
-                "vae_tile_size": tile_size,
+                "vaeTileSize": tile_size,
             }
         )

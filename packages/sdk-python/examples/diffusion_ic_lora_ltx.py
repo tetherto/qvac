@@ -1,15 +1,15 @@
 """Python port of packages/sdk/examples/diffusion-ic-lora-ltx.ts.
 
 Reference-conditioned text-to-video with LTX-2 and an Ingredients (IC) LoRA.
-The LoRA is applied at runtime (`lora_apply_mode: 'at_runtime'`), and a
-composite reference sheet is handed to generation in `reference_images` so the
+The LoRA is applied at runtime (`loraApplyMode: 'at_runtime'`), and a
+composite reference sheet is handed to generation in `referenceImages` so the
 clip inherits the character / style it shows. Reference conditioning needs at
-least 121 frames, hence `video_frames: 217`.
+least 121 frames, hence `videoFrames: 217`.
 
 This example needs powerful hardware: LTX-2.3 is a ~21B model, budget at least
 20+ GB of video / unified memory.
 
-TypeScript's `video()` takes `reference_images` as raw bytes and base64-encodes
+TypeScript's `video()` takes `referenceImages` as raw bytes and base64-encodes
 them on the way to the worker. Python calls the worker directly through
 `video_stream`, where each entry is already the encoded string, so the example
 encodes the file itself. The same iterator then carries progress, the finished
@@ -102,12 +102,12 @@ async def main() -> int:
                     "embeddingsConnectorsModelSrc": (
                         LTX_2_3_22B_DISTILLED_EMBEDDINGS_CONNECTORS
                     ),
-                    "diffusion_fa": True,
-                    "offload_to_cpu": True,
-                    "vae_tiling": True,
+                    "diffusionFlashAttention": True,
+                    "offloadToCpu": True,
+                    "vaeTiling": True,
                     # Keep the LoRA out of the loaded weights so it can be
                     # swapped per request.
-                    "lora_apply_mode": "at_runtime",
+                    "loraApplyMode": "at_runtime",
                 },
                 on_progress=print_progress,
             )
@@ -118,27 +118,27 @@ async def main() -> int:
                     "modelId": model_id,
                     "mode": "txt2vid",
                     "prompt": prompt,
-                    "negative_prompt": (
+                    "negativePrompt": (
                         "blurry, low quality, static, jittery, watermark"
                     ),
                     "width": 768,
                     "height": 448,
                     # Reference conditioning requires at least 121 frames.
-                    "video_frames": 217,
+                    "videoFrames": 217,
                     "fps": 24,
                     "steps": 8,
                     "scheduler": "ltx2",
-                    "cfg_scale": 1,
+                    "cfgScale": 1,
                     "seed": 84,
                     "lora": lora_path,
-                    "lora_strength": 1.37,
-                    "stg_scale": 1,
-                    "stg_block": 29,
-                    "reference_images": [reference_sheet],
-                    "reference_attention_strength": 1,
-                    "reference_downscale_factor": 1,
-                    "temporal_tiling": True,
-                    "vae_tile_size": 4,
+                    "loraStrength": 1.37,
+                    "stgScale": 1,
+                    "stgBlock": 29,
+                    "referenceImages": [reference_sheet],
+                    "referenceAttentionStrength": 1,
+                    "referenceDownscaleFactor": 1,
+                    "temporalTiling": True,
+                    "vaeTileSize": 4,
                 }
             )
 

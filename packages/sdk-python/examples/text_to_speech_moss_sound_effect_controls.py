@@ -77,7 +77,7 @@ async def main() -> int:
                 model_src=os.environ.get("QVAC_MOSS_SFX_MODEL")
                 or AUDIOGEN_MOSS_SFX_V2_Q8_0.src,
                 model_type="tts-ggml",
-                model_config={"ttsEngine": "moss-sfx", "useGPU": True, "seed": 42},
+                model_config={"ttsEngine": "moss-sfx", "useGpu": True, "seed": 42},
                 on_progress=print_progress,
             )
 

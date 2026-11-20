@@ -47,7 +47,7 @@ async def main() -> int:
                 model_src=LLAMA_3_2_1B_INST_Q4_0,
                 model_config={
                     "device": "gpu",
-                    "ctx_size": 2048,
+                    "ctxSize": 2048,
                     "verbosity": 0,  # 0=ERROR, 1=WARN, 2=INFO, 3=DEBUG
                 },
             )

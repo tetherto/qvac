@@ -117,7 +117,7 @@ async def main() -> int:
         "language": "en",
         "mossCodecDecoderModelSrc": TTS_CODEC_DECODER_MOSS_TTS_F16,
         "streamChunkTokens": 25,
-        "useGPU": True,
+        "useGpu": True,
         "seed": 7,
     }
     if reference_audio_src:

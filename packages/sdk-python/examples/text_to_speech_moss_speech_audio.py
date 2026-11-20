@@ -149,7 +149,7 @@ async def main() -> int:
                     "ttsEngine": "moss-speech",
                     "mossSpeechCodecModelSrc": os.environ.get("QVAC_MOSS_SPEECH_CODEC")
                     or TTS_CODEC_MOSS_SPEECH_F16,
-                    "useGPU": True,
+                    "useGpu": True,
                     "seed": 42,
                 },
                 on_progress=print_progress,

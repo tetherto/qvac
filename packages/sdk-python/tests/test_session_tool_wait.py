@@ -41,7 +41,7 @@ async def test_a_session_close_during_a_tool_call_ends_the_completion(
         session.transport,
         model_src=QWEN3_600M_INST_Q4,
         model_type="llamacpp-completion",
-        model_config={"ctx_size": 4096, "tools": True},
+        model_config={"ctxSize": 4096, "tools": True},
     )
     tool_called = asyncio.Event()
     release_tool = asyncio.Event()
@@ -69,10 +69,10 @@ async def test_a_session_close_during_a_tool_call_ends_the_completion(
             }
         ],
         generation_params={
-            "temp": 0,
+            "temperature": 0,
             "seed": 42,
             "predict": 512,
-            "reasoning_budget": 0,
+            "reasoningBudget": 0,
         },
     )
     await asyncio.wait_for(tool_called.wait(), timeout=120)

@@ -2,12 +2,12 @@
 
 Qwen-Image-2.1 in split layout: a diffusion model, a Qwen3-VL LLM text
 encoder, its vision projector and the 2.1 VAE, all handed to one `load_model`
-call. Two reference images go in order through `init_images`, and the prompt
+call. Two reference images go in order through `initImages`, and the prompt
 asks for an RGBA image with a transparent background.
 
 TypeScript's `diffusion()` takes each reference as raw bytes and base64-encodes
 them on the way to the worker. Python calls the worker directly through
-`diffusion_stream`, where `init_images` is already a list of encoded strings,
+`diffusion_stream`, where `initImages` is already a list of encoded strings,
 so the example encodes the files itself. The same iterator then carries
 progress, the finished images and the closing stats, which TypeScript receives
 as three separate channels.
@@ -134,7 +134,7 @@ async def main() -> int:
                     "llmModelSrc": model_source(llm_model_src),
                     "vaeModelSrc": model_source(vae_model_src),
                     "projectionModelSrc": model_source(projection_model_src),
-                    "flash_attn": True,
+                    "flashAttention": True,
                 },
                 on_progress=print_progress,
             )
@@ -148,14 +148,14 @@ async def main() -> int:
                     "type": "diffusionStream",
                     "modelId": model_id,
                     "prompt": prompt,
-                    "init_images": init_images,
+                    "initImages": init_images,
                     "width": 512,
                     "height": 512,
                     **({} if turbo else {"steps": 30}),
-                    "cfg_scale": 1 if turbo else 6,
+                    "cfgScale": 1 if turbo else 6,
                     **(
                         {
-                            "custom_sigmas": [
+                            "customSigmas": [
                                 1,
                                 0.978453,
                                 0.95418,
@@ -170,7 +170,7 @@ async def main() -> int:
                         if turbo
                         else {}
                     ),
-                    "sampling_method": "euler",
+                    "samplingMethod": "euler",
                     "seed": 42,
                 }
             )

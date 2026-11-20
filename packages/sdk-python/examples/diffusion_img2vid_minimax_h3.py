@@ -6,12 +6,12 @@ VAE is omitted for silent output -- add `audioVaeModelSrc` when loading the
 model to generate synchronized 32 kHz audio. The three files are read from a
 local directory you pass as argv, so nothing is downloaded.
 
-This example needs powerful hardware. `offload_to_cpu` stays on so the run
+This example needs powerful hardware. `offloadToCpu` stays on so the run
 fits on a single GPU; tune placement through the H3_* environment variables.
 
-TypeScript's `video()` takes `init_image` as raw bytes and base64-encodes them
+TypeScript's `video()` takes `initImage` as raw bytes and base64-encodes them
 on the way to the worker. Python calls the worker directly through
-`video_stream`, where `init_image` is already the encoded string, so the
+`video_stream`, where `initImage` is already the encoded string, so the
 example encodes the file itself. The same iterator then carries progress, the
 finished clips and the closing stats, which TypeScript receives as three
 separate channels.
@@ -73,14 +73,14 @@ async def main() -> int:
         "llmModelSrc": str(llm_model_src),
         "vaeModelSrc": str(vae_model_src),
         "device": "gpu",
-        "diffusion_fa": True,
-        "offload_to_cpu": os.environ.get("H3_OFFLOAD_TO_CPU") != "0",
-        "stream_layers": os.environ.get("H3_STREAM_LAYERS") == "1",
+        "diffusionFlashAttention": True,
+        "offloadToCpu": os.environ.get("H3_OFFLOAD_TO_CPU") != "0",
+        "streamLayers": os.environ.get("H3_STREAM_LAYERS") == "1",
     }
     for key, variable in (
         ("backend", "H3_BACKEND"),
-        ("params_backend", "H3_PARAMS_BACKEND"),
-        ("max_vram", "H3_MAX_VRAM"),
+        ("paramsBackend", "H3_PARAMS_BACKEND"),
+        ("maxVram", "H3_MAX_VRAM"),
     ):
         value = os.environ.get(variable)
         if value:
@@ -115,14 +115,14 @@ async def main() -> int:
                         "modelId": model_id,
                         "mode": "img2vid",
                         "prompt": prompt,
-                        "init_image": init_image,
+                        "initImage": init_image,
                         "width": 864,
                         "height": 480,
                         # H3 uses 17*k+5 frames and requires 24 FPS.
-                        "video_frames": int(os.environ.get("FRAMES") or 124),
+                        "videoFrames": int(os.environ.get("FRAMES") or 124),
                         "fps": 24,
                         "steps": 8,
-                        "cfg_scale": 1,
+                        "cfgScale": 1,
                         "seed": 11,
                     }
                 )

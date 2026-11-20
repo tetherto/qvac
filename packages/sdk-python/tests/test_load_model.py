@@ -154,6 +154,49 @@ async def test_load_model_alias_warns_and_normalizes():
     assert transport.sent["modelType"] == "llamacpp-completion"
 
 
+async def test_load_model_renames_legacy_config_keys_with_a_warning():
+    transport = FakeTransport(response=OK)
+    with pytest.warns(DeprecationWarning) as record:
+        await api.load_model(
+            transport,
+            model_src="/models/ggml-base.bin",
+            model_type="whispercpp-transcription",
+            model_config={"n_threads": 4, "context_params": {"flash_attn": True}},
+        )
+    assert sorted(str(warning.message) for warning in record) == [
+        '"flash_attn" is deprecated and will be removed in the next release. Use "flashAttention" instead.',
+        '"n_threads" is deprecated and will be removed in the next release. Use "threads" instead.',
+    ]
+    config = transport.sent["modelConfig"]
+    assert config["threads"] == 4
+    assert config["contextParams"]["flashAttention"] is True
+    assert "n_threads" not in config
+
+
+async def test_load_model_renames_a_legacy_camel_case_config_key():
+    transport = FakeTransport(response=OK)
+    with pytest.warns(DeprecationWarning, match='"useGPU".*Use "useGpu" instead'):
+        await api.load_model(
+            transport,
+            model_src="/models/parakeet.onnx",
+            model_type="parakeet-transcription",
+            model_config={"useGPU": False},
+        )
+    assert transport.sent["modelConfig"]["useGpu"] is False
+
+
+async def test_load_model_python_names_of_current_keys_do_not_warn(recwarn):
+    transport = FakeTransport(response=OK)
+    await api.load_model(
+        transport,
+        model_src="/models/x.gguf",
+        model_type="llamacpp-completion",
+        model_config={"ctx_size": 2048},
+    )
+    assert not [w for w in recwarn if issubclass(w.category, DeprecationWarning)]
+    assert transport.sent["modelConfig"]["ctxSize"] == 2048
+
+
 async def test_load_model_explicit_type_mismatch_raises():
     transport = FakeTransport(response=OK)
     with pytest.raises(ModelSrcTypeMismatchError) as excinfo:

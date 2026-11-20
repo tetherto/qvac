@@ -53,7 +53,7 @@ async def main() -> int:
                     # An image is tiled into hundreds of context units before a
                     # single word of the prompt is counted, and the comparison
                     # below sends two at once.
-                    "ctx_size": 8192,
+                    "ctxSize": 8192,
                     "projectionModelSrc": MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
                 },
                 on_progress=print_progress,

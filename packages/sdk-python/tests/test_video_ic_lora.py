@@ -16,13 +16,13 @@ def ingredients_payload() -> dict[str, object]:
             "Generated video: the explorer crosses a snowy ridge."
         ),
         "lora": "/models/ltx-2-ingredients.safetensors",
-        "lora_strength": 1.37,
-        "stg_scale": 1,
-        "stg_block": 29,
-        "reference_images": ["AQID"],
-        "reference_attention_strength": 1,
-        "reference_downscale_factor": 1,
-        "video_frames": 121,
+        "loraStrength": 1.37,
+        "stgScale": 1,
+        "stgBlock": 29,
+        "referenceImages": ["AQID"],
+        "referenceAttentionStrength": 1,
+        "referenceDownscaleFactor": 1,
+        "videoFrames": 121,
         "scheduler": "ltx2",
     }
 
@@ -35,12 +35,12 @@ def test_video_ic_lora_request_serializes_wire_fields() -> None:
     assert request.scheduler.value == "ltx2"
     wire = request.model_dump(mode="json", by_alias=True, exclude_unset=True)
     assert wire["modelId"] == "model-1"
-    assert wire["lora_strength"] == 1.37
-    assert wire["stg_scale"] == 1
-    assert wire["stg_block"] == 29
-    assert wire["reference_images"] == ["AQID"]
-    assert wire["reference_attention_strength"] == 1
-    assert wire["reference_downscale_factor"] == 1
+    assert wire["loraStrength"] == 1.37
+    assert wire["stgScale"] == 1
+    assert wire["stgBlock"] == 29
+    assert wire["referenceImages"] == ["AQID"]
+    assert wire["referenceAttentionStrength"] == 1
+    assert wire["referenceDownscaleFactor"] == 1
     assert wire["scheduler"] == "ltx2"
 
 
@@ -48,12 +48,12 @@ def test_video_ic_lora_request_serializes_wire_fields() -> None:
     ("field", "value"),
     [
         ("lora", "relative.safetensors"),
-        ("lora_strength", 10.1),
-        ("stg_scale", -0.1),
-        ("stg_block", -1),
-        ("reference_images", ["AQID", "BAUG"]),
-        ("reference_attention_strength", 1.1),
-        ("reference_downscale_factor", 2),
+        ("loraStrength", 10.1),
+        ("stgScale", -0.1),
+        ("stgBlock", -1),
+        ("referenceImages", ["AQID", "BAUG"]),
+        ("referenceAttentionStrength", 1.1),
+        ("referenceDownscaleFactor", 2),
     ],
 )
 def test_video_ic_lora_generated_field_constraints(field: str, value: object) -> None:

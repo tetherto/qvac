@@ -46,7 +46,7 @@ async def main() -> int:
             model_id = await load_model(
                 t,
                 model_src=LLAMA_3_2_1B_INST_Q4_0,
-                model_config={"ctx_size": 2048, "temp": 0.7},
+                model_config={"ctxSize": 2048, "temperature": 0.7},
             )
 
             print("▸ Subscribing to model logs")
@@ -62,8 +62,8 @@ async def main() -> int:
                         "content": "Count from 1 to 5 and explain each number.",
                     }
                 ],
-                # Bound the generation: at temp 0.7 a 1B model can ignore "to 5"
-                # and ramble past ctx_size (2048) into a context overflow. This
+                # Bound the generation: at temperature 0.7 a 1B model can ignore
+                # "to 5" and ramble past ctxSize (2048) into a context overflow. This
                 # demo only needs enough tokens to show logs streaming.
                 generation_params={"predict": 512},
             )

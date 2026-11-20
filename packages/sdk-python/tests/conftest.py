@@ -15,6 +15,8 @@ from bare_stow_host.protocol import (
     encode_frame,
 )
 
+from tetherto.qvac_sdk._generated_base import warned_legacy_keys
+
 
 class _Pipe:
     """One direction of an in-memory byte transport."""
@@ -112,3 +114,8 @@ async def answer_init_config(req) -> bool:
 @pytest.fixture
 def fake_worker() -> Callable[..., FakeWorker]:
     return FakeWorker
+
+
+@pytest.fixture(autouse=True)
+def reset_legacy_key_warnings() -> None:
+    warned_legacy_keys.clear()
