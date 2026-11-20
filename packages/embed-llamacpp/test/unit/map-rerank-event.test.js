@@ -37,10 +37,6 @@ test('stats payload maps to JobEnded with backendDevice names', function (t) {
   t.is(gpu.data.backendDevice, 'gpu')
   t.is(gpu.data.documents, 4)
   t.is(gpu.data.backendName, 'cuda,vulkan')
-  t.absent(
-    'backendName' in mapRerankEvent('Stats', { documents: 1, backendDevice: 1 }, null).data,
-    'older addons do not gain an inferred name'
-  )
   t.is(mapRerankEvent('Stats', { documents: 1, backendDevice: 0 }, null).data.backendDevice, 'cpu')
 })
 

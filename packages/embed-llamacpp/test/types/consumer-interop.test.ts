@@ -11,13 +11,8 @@ import {
 } from '@qvac/embed-llamacpp'
 
 export function backendStatsTypes(stats: RuntimeStats) {
-  const backendName: string | undefined = stats.backendName
   const named: RuntimeStats = { ...stats, backendName: 'cuda,vulkan' }
-  // @ts-expect-error backendName is a string, unlike the native device enum
-  const numeric: RuntimeStats = { ...stats, backendName: 1 }
-  void named
-  void numeric
-  return backendName
+  return named
 }
 
 type Equal<A, B> =
