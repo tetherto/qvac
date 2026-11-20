@@ -1,4 +1,5 @@
 import fs from 'bare-fs'
+import path from 'bare-path'
 
 import { PluginLoadConfigValidationFailedError, PluginNotFoundError } from '@/errors/index'
 import type { TtsFitWorkload } from '@/schemas/assess-model-fit'
@@ -91,7 +92,11 @@ function stubSetFor(registryPath: string): FitStubSet | undefined {
  * Engines whose fitter sizes the files on disk and reads no registry
  * description, so a stub would be answered for as if it were the model.
  */
-const FILES_ONLY_ENGINES: ReadonlySet<CanonicalModelType> = new Set([ModelType.nmtcppTranslation])
+const FILES_ONLY_ENGINES: ReadonlySet<CanonicalModelType> = new Set([
+  ModelType.nmtcppTranslation,
+  ModelType.ggmlClassification,
+  ModelType.ggmlImageEmbedding
+])
 
 class NoStubError extends Error {
   reason: FitStubUnavailableReason
@@ -139,7 +144,9 @@ export async function resolveLoadFromStubs(
 
   const resolveModelPath = async (src: ModelSrcInput): Promise<string> => {
     const location = srcString(src)
-    if (location !== '' && fs.existsSync(location)) return location
+    // Fitters take absolute paths only, while a load also takes one relative
+    // to the working directory.
+    if (location !== '' && fs.existsSync(location)) return path.resolve(location)
     if (FILES_ONLY_ENGINES.has(load.modelType)) throw new NoStubError('files-only-engine')
 
     const ref = stubRefFor(src)

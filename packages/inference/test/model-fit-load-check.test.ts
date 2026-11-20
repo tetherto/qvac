@@ -174,7 +174,7 @@ test('load check: an engine with no fitter is unknown at debug', async (t) => {
   const { calls, runFit } = runReturning({ status: 'completed', fit: fit('fits', 1) })
 
   const check = await runLoadFitCheck(
-    { ...INPUT, modelType: ModelType.ggmlClassification },
+    { ...INPUT, modelType: ModelType.ggmlVla },
     { logger, runFit }
   )
 
