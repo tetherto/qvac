@@ -53,20 +53,20 @@ try {
     modelSrc: WHISPER_TINY,
     modelConfig: {
       vadModelSrc: VAD_SILERO_5_1_2,
-      audio_format: 'f32le',
+      audioFormat: 'f32le',
       strategy: 'greedy',
-      n_threads: 4,
+      threads: 4,
       language: 'en',
-      no_timestamps: true,
-      suppress_blank: true,
-      suppress_nst: true,
+      noTimestamps: true,
+      suppressBlank: true,
+      suppressNst: true,
       temperature: 0.0,
-      vad_params: {
+      vadParams: {
         threshold: 0.6,
-        min_speech_duration_ms: 250,
-        min_silence_duration_ms: 300,
-        max_speech_duration_s: 15.0,
-        speech_pad_ms: 100
+        minSpeechDurationMs: 250,
+        minSilenceDurationMs: 300,
+        maxSpeechDurationS: 15.0,
+        speechPadMs: 100
       }
     }
   })

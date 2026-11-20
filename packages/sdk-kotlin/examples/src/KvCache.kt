@@ -42,7 +42,7 @@ fun main(): Unit = runBlocking {
             modelName = model.name,
             modelConfig = buildJsonObject {
                 put("device", "gpu")
-                put("ctx_size", 2048)
+                put("ctxSize", 2048)
                 put("verbosity", 0) // 0=ERROR, 1=WARN, 2=INFO, 3=DEBUG
             },
         )

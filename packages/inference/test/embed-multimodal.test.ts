@@ -176,7 +176,7 @@ test('embed op: mixed inputs return one normalized vector per input and retain s
   t.ok(Math.abs((result.embedding as number[][])[0][0] - 0.6) < 1e-6)
   t.alike((result.embedding as number[][])[1], [0, 1])
   t.is(result.stats?.totalTokens, 12)
-  t.is(result.stats?.contextSize, 2048)
+  t.is(result.stats?.ctxSize, 2048)
   t.is(getRequestRegistry().list().length, 0)
 })
 

@@ -1,11 +1,12 @@
-import { qvacConfigSchema, type QvacConfig } from '@qvac/inference/surface'
+import { qvacConfigSchema, renameLegacyConfigKeys, type QvacConfig } from '@qvac/inference/surface'
 import { ConfigValidationFailedError } from '@/utils/errors-client'
 import { formatZodError } from '@/utils/zod-error'
+import { warnLegacyKey } from '@/utils/legacy-keys'
 
 export type { QvacConfig }
 
 export function validateConfig(config: unknown): QvacConfig {
-  const result = qvacConfigSchema.safeParse(config)
+  const result = qvacConfigSchema.safeParse(renameLegacyConfigKeys(config, warnLegacyKey))
 
   if (!result.success) {
     throw new ConfigValidationFailedError(formatZodError(result.error))

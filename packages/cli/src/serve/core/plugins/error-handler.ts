@@ -162,7 +162,7 @@ export function sdkErrorAsHttp(err: unknown): HttpError | undefined {
     return new HttpError(
       400,
       'context_length_exceeded',
-      "The request exceeds the model's context capacity. Shorten the input, start a new conversation, or increase ctx_size."
+      "The request exceeds the model's context capacity. Shorten the input, start a new conversation, or increase ctxSize."
     )
   }
   if (isLifecycleBlockedError(err)) return runtimeSuspendedError()

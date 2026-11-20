@@ -232,7 +232,7 @@ test('diffusion early consumer exit cancels and settles before releasing admissi
   const stream = diffusionPlugin.handlers.diffusionStream.handler({
     modelId,
     prompt: 'A portrait.',
-    img_cfg_scale: -1
+    imgCfgScale: -1
   }) as AsyncGenerator<DiffusionStreamResponse>
   try {
     await stream.next()

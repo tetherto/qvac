@@ -87,7 +87,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
     const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
       modelType: 'llamacpp-completion',
-      modelConfig: { verbosity: 0, ctx_size: 2048 }
+      modelConfig: { verbosity: 0, ctxSize: 2048 }
     })
     this.resources.register('llm', modelId)
     return ValidationHelpers.validate(modelId, expectation)
@@ -189,7 +189,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
         modelId = await loadModel({
           modelSrc,
           modelType: 'llamacpp-completion',
-          modelConfig: { verbosity: 0, ctx_size: 2048 }
+          modelConfig: { verbosity: 0, ctxSize: 2048 }
         })
         this.resources.register('llm', modelId)
       } else {
@@ -211,7 +211,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
     const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
       modelType: 'llamacpp-completion',
-      modelConfig: { verbosity: 0, ctx_size: 2048 }
+      modelConfig: { verbosity: 0, ctxSize: 2048 }
     })
     this.resources.register('llm', modelId)
     return ValidationHelpers.validate(modelId, expectation)
@@ -229,7 +229,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
     const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
       modelType: 'llamacpp-completion',
-      modelConfig: { verbosity: 0, ctx_size: 2048 }
+      modelConfig: { verbosity: 0, ctxSize: 2048 }
     })
     this.resources.register('llm', modelId)
     return ValidationHelpers.validate(modelId, expectation)
@@ -247,7 +247,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
     const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
       modelType: 'llamacpp-completion',
-      modelConfig: { verbosity: 0, ctx_size: 2048 }
+      modelConfig: { verbosity: 0, ctxSize: 2048 }
     })
     this.resources.register('llm', modelId)
     return ValidationHelpers.validate(modelId, expectation)
@@ -259,7 +259,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
   ): Promise<TestResult> {
     const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-      modelConfig: { verbosity: 0, ctx_size: 2048 }
+      modelConfig: { verbosity: 0, ctxSize: 2048 }
     })
     this.resources.register('llm', modelId)
     return ValidationHelpers.validate(modelId, expectation)
@@ -294,7 +294,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
       const modelId = await loadModel({
         modelSrc: LLAMA_3_2_1B_INST_Q4_0,
         modelType: 'llamacpp-completion',
-        modelConfig: { verbosity: 0, ctx_size: 2048, load_mode: loadMode }
+        modelConfig: { verbosity: 0, ctxSize: 2048, loadMode }
       })
       this.resources.register(dep, modelId)
       return ValidationHelpers.validate(modelId, expectation)
@@ -312,7 +312,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
       const modelId = await loadModel({
         modelSrc: LLAMA_3_2_1B_INST_Q4_0,
         modelType: 'llamacpp-completion',
-        modelConfig: { verbosity: 0, ctx_size: 2048, device: 'npu' }
+        modelConfig: { verbosity: 0, ctxSize: 2048, device: 'npu' }
       })
       this.resources.register(dep, modelId)
       return ValidationHelpers.validate(modelId, expectation)
@@ -370,12 +370,12 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
         modelType: 'llamacpp-completion',
         modelConfig: {
           verbosity: 0,
-          ctx_size: 2048,
-          cache_checkpoints: p.cacheCheckpoints,
-          cache_checkpoints_max_bytes: p.cacheCheckpointsMaxBytes,
-          cache_checkpoint_storage: p.cacheCheckpointStorage,
-          cache_ram_mib: p.cacheRamMib,
-          cache_share_across_keys: p.cacheShareAcrossKeys
+          ctxSize: 2048,
+          cacheCheckpoints: p.cacheCheckpoints,
+          cacheCheckpointsMaxBytes: p.cacheCheckpointsMaxBytes,
+          cacheCheckpointStorage: p.cacheCheckpointStorage,
+          cacheRamMib: p.cacheRamMib,
+          cacheShareAcrossKeys: p.cacheShareAcrossKeys
         }
       })
       this.resources.register(dep, modelId)
@@ -395,19 +395,19 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
       const modelId = await loadModel({
         modelSrc: LLAMA_3_2_1B_INST_Q4_0,
         modelType: 'llamacpp-completion',
-        modelConfig: { cache_checkpoints: cacheCheckpoints }
+        modelConfig: { cacheCheckpoints }
       })
       // Should not happen, but release it rather than leak on the failure path.
       this.resources.register(dep, modelId)
       await this.resources.evict(dep)
-      return { passed: false, output: 'cache_checkpoints above 1024 should have been rejected' }
+      return { passed: false, output: 'cacheCheckpoints above 1024 should have been rejected' }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : JSON.stringify(error)
       // The addon's own range error means the value skipped SDK validation.
       if (/must be an integer between/.test(errorMsg)) {
         return {
           passed: false,
-          output: `cache_checkpoints reached the addon instead of failing SDK validation: ${errorMsg}`
+          output: `cacheCheckpoints reached the addon instead of failing SDK validation: ${errorMsg}`
         }
       }
       // The code is on the error, not in its message.

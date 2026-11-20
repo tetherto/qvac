@@ -13,14 +13,14 @@ test('nmtConfigSchema: applies defaults for Bergamot', (t) => {
   })
   t.is(result.engine, 'Bergamot')
   t.is(result.mode, 'full')
-  t.is(result.beamsize, 4)
-  t.is(result.lengthpenalty, 1.0)
-  t.is(result.maxlength, 512)
-  t.is(result.repetitionpenalty, 1.0)
-  t.is(result.norepeatngramsize, 0)
+  t.is(result.beamSize, 4)
+  t.is(result.lengthPenalty, 1.0)
+  t.is(result.maxLength, 512)
+  t.is(result.repeatPenalty, 1.0)
+  t.is(result.noRepeatNgramSize, 0)
   t.is(result.temperature, 0.3)
-  t.is(result.topk, 0)
-  t.is(result.topp, 1.0)
+  t.is(result.topK, 0)
+  t.is(result.topP, 1.0)
 })
 
 test('nmtConfigSchema: applies defaults for IndicTrans', (t) => {
@@ -30,8 +30,8 @@ test('nmtConfigSchema: applies defaults for IndicTrans', (t) => {
     to: 'hin_Deva'
   })
   t.is(result.engine, 'IndicTrans')
-  t.is(result.beamsize, 4)
-  t.is(result.maxlength, 512)
+  t.is(result.beamSize, 4)
+  t.is(result.maxLength, 512)
 })
 
 test('nmtConfigSchema: preserves user-supplied generation params', (t) => {
@@ -39,12 +39,12 @@ test('nmtConfigSchema: preserves user-supplied generation params', (t) => {
     engine: 'IndicTrans',
     from: 'eng_Latn',
     to: 'hin_Deva',
-    beamsize: 1,
-    maxlength: 256,
+    beamSize: 1,
+    maxLength: 256,
     temperature: 0.8
   })
-  t.is(result.beamsize, 1)
-  t.is(result.maxlength, 256)
+  t.is(result.beamSize, 1)
+  t.is(result.maxLength, 256)
   t.is(result.temperature, 0.8)
 })
 

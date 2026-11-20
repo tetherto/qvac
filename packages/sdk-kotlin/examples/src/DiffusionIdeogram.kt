@@ -107,8 +107,8 @@ fun main(args: Array<String>): Unit = runBlocking {
             modelConfig = buildJsonObject {
                 put("device", "gpu")
                 put("threads", 4)
-                put("diffusion_fa", true)
-                put("offload_to_cpu", true)
+                put("diffusionFlashAttention", true)
+                put("offloadToCpu", true)
                 put("llmModelSrc", llmModelSrc)
                 put("vaeModelSrc", vaeModelSrc)
                 put("uncondModelSrc", uncondModelSrc)
@@ -126,7 +126,7 @@ fun main(args: Array<String>): Unit = runBlocking {
                     width = 768,
                     height = 768,
                     steps = 16,
-                    cfg_scale = 7.0,
+                    cfgScale = 7.0,
                     seed = 42,
                 ),
             )

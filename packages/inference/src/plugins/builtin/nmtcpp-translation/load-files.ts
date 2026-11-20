@@ -2,6 +2,17 @@ import path from 'bare-path'
 import type { TranslationNmtcppConfig, TranslationNmtcppFiles } from '@qvac/translation-nmtcpp'
 
 import { BERGAMOT_CJK_LANG_PAIRS, type NmtConfig } from '@/schemas/index'
+import { withNativeKeys } from '@/utils/native-keys'
+
+const NMT_GENERATION_NATIVE_KEYS = {
+  beamSize: 'beamsize',
+  lengthPenalty: 'lengthpenalty',
+  maxLength: 'maxlength',
+  repeatPenalty: 'repetitionpenalty',
+  noRepeatNgramSize: 'norepeatngramsize',
+  topK: 'topk',
+  topP: 'topp'
+}
 
 /**
  * Derive absolute vocab paths from a resolved Bergamot model path.
@@ -58,26 +69,26 @@ export function nmtConfigFor(
 ): TranslationNmtcppConfig {
   const {
     engine,
-    beamsize,
-    lengthpenalty,
-    maxlength,
-    repetitionpenalty,
-    norepeatngramsize,
+    beamSize,
+    lengthPenalty,
+    maxLength,
+    repeatPenalty,
+    noRepeatNgramSize,
     temperature,
-    topk,
-    topp
+    topK,
+    topP
   } = nmtConfig
 
   return {
     modelType: engine,
-    beamsize,
-    lengthpenalty,
-    maxlength,
-    repetitionpenalty,
-    norepeatngramsize,
+    beamsize: beamSize,
+    lengthpenalty: lengthPenalty,
+    maxlength: maxLength,
+    repetitionpenalty: repeatPenalty,
+    norepeatngramsize: noRepeatNgramSize,
     temperature,
-    topk,
-    topp,
+    topk: topK,
+    topp: topP,
     ...(nmtConfig.engine === 'Bergamot' && {
       ...(nmtConfig.normalize !== undefined && {
         normalize: nmtConfig.normalize
@@ -87,7 +98,7 @@ export function nmtConfigFor(
           pivotConfig: (() => {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { modelSrc, dstVocabSrc, srcVocabSrc, ...pivotGenConfig } = nmtConfig.pivotModel
-            return pivotGenConfig
+            return withNativeKeys(pivotGenConfig, NMT_GENERATION_NATIVE_KEYS)
           })()
         })
     })

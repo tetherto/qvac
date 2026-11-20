@@ -6,7 +6,7 @@ const rerankFields = {
   documents: z
     .array(z.string())
     .min(1)
-    .describe('Documents to score. Each one, paired with the query, must fit in `batch_size`.')
+    .describe('Documents to score. Each one, paired with the query, must fit in `batchSize`.')
 }
 
 export const rerankRequestBodySchema = z.object(rerankFields).strict()
@@ -33,12 +33,12 @@ export const rerankResponseSchema = z.object({
 export const rerankConfigBaseSchema = z
   .object({
     device: z.enum(['cpu', 'gpu']).optional().describe("Compute device. Default 'gpu'."),
-    gpu_layers: z
+    gpuLayers: z
       .number()
       .int()
       .optional()
       .describe('Layers to offload. Unset lets the addon choose placement.'),
-    batch_size: z
+    batchSize: z
       .number()
       .int()
       .positive()
@@ -56,7 +56,7 @@ export const rerankConfigBaseSchema = z
           'If unset, uses the native default order. ' +
           'If none of the specified names has a corresponding available device, selection falls back to the native default order. ' +
           "Use device: 'cpu' for CPU. " +
-          "A GPU override cannot be combined with 'split-mode': 'layer'."
+          "A GPU override cannot be combined with splitMode: 'layer'."
       ),
     poll: z
       .number()
@@ -81,12 +81,12 @@ export const rerankConfigBaseSchema = z
       .int()
       .optional()
       .describe('CPU threads, at most the CPU count. Zero or below uses all logical CPUs.'),
-    'threads-batch': z
+    threadsBatch: z
       .number()
       .int()
       .optional()
       .describe('Batch CPU threads. Unset uses threads; zero or below uses all logical CPUs.'),
-    flash_attn: z
+    flashAttention: z
       .enum(['on', 'off', 'auto'])
       .optional()
       .describe('Flash attention mode. Default auto.'),
@@ -97,12 +97,12 @@ export const rerankConfigBaseSchema = z
       .max(3)
       .optional()
       .describe('Native log level: 0 error, 1 warn, 2 info, 3 debug.'),
-    'main-gpu': z
+    mainGpu: z
       .union([z.number().int().nonnegative(), z.enum(['integrated', 'dedicated'])])
       .optional()
       .describe('GPU index or device class.'),
-    'split-mode': z.enum(['none', 'layer']).optional().describe('Multi-GPU split mode.'),
-    'tensor-split': z.string().optional().describe('Per-GPU tensor split proportions.'),
+    splitMode: z.enum(['none', 'layer']).optional().describe('Multi-GPU split mode.'),
+    tensorSplit: z.string().optional().describe('Per-GPU tensor split proportions.'),
     openclCacheDir: z
       .string()
       .optional()

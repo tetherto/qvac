@@ -34,7 +34,7 @@ async def main() -> int:
         t = client.transport
         try:
             model_id = await load_model(
-                t, model_src=QWEN3_600M_INST_Q4, model_config={"ctx_size": 4096}
+                t, model_src=QWEN3_600M_INST_Q4, model_config={"ctxSize": 4096}
             )
 
             run = completion(

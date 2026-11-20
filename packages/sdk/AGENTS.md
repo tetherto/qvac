@@ -20,6 +20,10 @@ Source code and tests win over historical agent notes.
   user-facing inference capability must include matching CLI support in the same
   PR, or the PR must explicitly explain why it is library-only. Native-addon PRs
   remain native; apply this requirement in the follow-up SDK exposure PR.
+- Public schema keys are camelCase; see
+  [`../inference/AGENTS.md`](../inference/AGENTS.md). Deprecated spellings reach
+  the generated clients through `contract/legacy-keys.json`, so regenerate the
+  contract and the clients when the legacy-key map changes.
 - For public constants consumed outside JavaScript, follow
   [`contract/README.md`](contract/README.md); an `index.ts` export alone is not
   sufficient.

@@ -2,15 +2,15 @@
 import type { Step, TestDefinition } from '@qvac/test-suite'
 
 interface GenerationParams {
-  temp?: number
-  top_p?: number
-  top_k?: number
+  temperature?: number
+  topP?: number
+  topK?: number
   predict?: number
   seed?: number
-  frequency_penalty?: number
-  presence_penalty?: number
-  repeat_penalty?: number
-  reasoning_budget?: number
+  frequencyPenalty?: number
+  presencePenalty?: number
+  repeatPenalty?: number
+  reasoningBudget?: number
 }
 
 type ResponseFormat =
@@ -18,7 +18,7 @@ type ResponseFormat =
   | { type: 'json_object' }
   | {
       type: 'json_schema'
-      json_schema: {
+      jsonSchema: {
         name: string
         schema: Record<string, unknown>
         description?: string
@@ -28,7 +28,7 @@ type ResponseFormat =
 
 // Shared deterministic sampling: greedy decode + fixed seed so a passing
 // assertion stays reproducible across runs, models, and addon updates.
-const DETERMINISTIC: GenerationParams = { temp: 0, seed: 42 }
+const DETERMINISTIC: GenerationParams = { temperature: 0, seed: 42 }
 
 interface CompletionTestParams {
   history: Array<{ role: string; content: string }>
@@ -247,7 +247,7 @@ export const completionTemperature05 = createCompletionTest(
   {
     history: [{ role: 'user', content: 'What is 6+6? Answer with just the number.' }],
     stream: false,
-    generationParams: { temp: 0.5, seed: 42 }
+    generationParams: { temperature: 0.5, seed: 42 }
   },
   { validation: 'type', expectedType: 'string' },
   { estimatedDurationMs: 8000 }
@@ -260,7 +260,7 @@ export const completionTemperature10 = createCompletionTest(
   {
     history: [{ role: 'user', content: 'What is 7+7? Answer with just the number.' }],
     stream: false,
-    generationParams: { temp: 1.0, seed: 42 }
+    generationParams: { temperature: 1.0, seed: 42 }
   },
   { validation: 'type', expectedType: 'string' },
   { estimatedDurationMs: 8000 }
@@ -271,19 +271,19 @@ export const completionTemperature15 = createCompletionTest(
   {
     history: [{ role: 'user', content: 'What is 8+8? Answer with just the number.' }],
     stream: false,
-    generationParams: { temp: 1.5, seed: 42 }
+    generationParams: { temperature: 1.5, seed: 42 }
   },
   { validation: 'type', expectedType: 'string' },
   { estimatedDurationMs: 8000 }
 )
 
-// top_p variations
+// topP variations
 export const completionTopP = createCompletionTest(
   'completion-top-p',
   {
     history: [{ role: 'user', content: 'What is 7 + 8? Answer with just the number.' }],
     stream: false,
-    generationParams: { temp: 0.1, top_p: 0.1, seed: 42 }
+    generationParams: { temperature: 0.1, topP: 0.1, seed: 42 }
   },
   { validation: 'contains-all', contains: ['15'] }
 )
@@ -298,7 +298,7 @@ export const completionTopP01 = createCompletionTest(
       }
     ],
     stream: false,
-    generationParams: { temp: 0.1, top_p: 0.1, seed: 42 }
+    generationParams: { temperature: 0.1, topP: 0.1, seed: 42 }
   },
   { validation: 'contains-all', contains: ['1', '2', '3', '4', '5'] },
   { estimatedDurationMs: 8000, suites: ['smoke'] }
@@ -309,7 +309,7 @@ export const completionTopP05 = createCompletionTest(
   {
     history: [{ role: 'user', content: 'What is 9+9? Answer with just the number.' }],
     stream: false,
-    generationParams: { temp: 0.1, top_p: 0.5, seed: 42 }
+    generationParams: { temperature: 0.1, topP: 0.5, seed: 42 }
   },
   { validation: 'contains-all', contains: ['18'] },
   { estimatedDurationMs: 8000 }
@@ -320,7 +320,7 @@ export const completionTopP10 = createCompletionTest(
   {
     history: [{ role: 'user', content: 'What is 11+11? Answer with just the number.' }],
     stream: false,
-    generationParams: { temp: 0.1, top_p: 1.0, seed: 42 }
+    generationParams: { temperature: 0.1, topP: 1.0, seed: 42 }
   },
   { validation: 'contains-all', contains: ['22'] },
   { estimatedDurationMs: 8000 }
@@ -332,7 +332,7 @@ export const completionFrequencyPenalty00 = createCompletionTest(
   {
     history: [{ role: 'user', content: 'What is 15+15? Answer with just the number.' }],
     stream: false,
-    generationParams: { ...DETERMINISTIC, frequency_penalty: 0.0 }
+    generationParams: { ...DETERMINISTIC, frequencyPenalty: 0.0 }
   },
   { validation: 'contains-all', contains: ['30'] },
   { estimatedDurationMs: 8000 }
@@ -343,7 +343,7 @@ export const completionFrequencyPenaltyNeg10 = createCompletionTest(
   {
     history: [{ role: 'user', content: 'What is 13+13? Answer with just the number.' }],
     stream: false,
-    generationParams: { ...DETERMINISTIC, frequency_penalty: -1.0 }
+    generationParams: { ...DETERMINISTIC, frequencyPenalty: -1.0 }
   },
   { validation: 'contains-all', contains: ['26'] },
   { estimatedDurationMs: 8000 }
@@ -354,7 +354,7 @@ export const completionFrequencyPenalty10 = createCompletionTest(
   {
     history: [{ role: 'user', content: 'What is 17+17? Answer with just the number.' }],
     stream: false,
-    generationParams: { ...DETERMINISTIC, frequency_penalty: 1.0 }
+    generationParams: { ...DETERMINISTIC, frequencyPenalty: 1.0 }
   },
   { validation: 'contains-all', contains: ['34'] },
   { estimatedDurationMs: 8000 }
@@ -370,7 +370,7 @@ export const completionPresencePenalty = createCompletionTest(
       }
     ],
     stream: false,
-    generationParams: { ...DETERMINISTIC, presence_penalty: 1.0 }
+    generationParams: { ...DETERMINISTIC, presencePenalty: 1.0 }
   },
   { validation: 'contains-all', contains: ['ice'] },
   { estimatedDurationMs: 8000 }
@@ -382,7 +382,7 @@ export const completionTemperature01 = createCompletionTest(
   {
     history: [{ role: 'user', content: 'What is 2+2? Answer with just the number.' }],
     stream: false,
-    generationParams: { temp: 0.1, seed: 42 }
+    generationParams: { temperature: 0.1, seed: 42 }
   },
   { validation: 'contains-all', contains: ['4'] },
   { estimatedDurationMs: 8000 }
@@ -393,7 +393,7 @@ export const completionTemperature09 = createCompletionTest(
   {
     history: [{ role: 'user', content: 'What is 2+2? Answer with just the number.' }],
     stream: false,
-    generationParams: { temp: 0.9, seed: 42 }
+    generationParams: { temperature: 0.9, seed: 42 }
   },
   { validation: 'type', expectedType: 'string' },
   { estimatedDurationMs: 8000 }
@@ -425,7 +425,7 @@ export const completionRepeatPenalty = createCompletionTest(
       }
     ],
     stream: false,
-    generationParams: { ...DETERMINISTIC, repeat_penalty: 1.3 }
+    generationParams: { ...DETERMINISTIC, repeatPenalty: 1.3 }
   },
   { validation: 'contains-all', contains: ['1', '2', '3', '4', '5'] },
   { estimatedDurationMs: 8000 }
@@ -436,7 +436,7 @@ export const completionTopK = createCompletionTest(
   {
     history: [{ role: 'user', content: 'What is 2 + 3? Answer with just the number.' }],
     stream: false,
-    generationParams: { ...DETERMINISTIC, top_k: 1 }
+    generationParams: { ...DETERMINISTIC, topK: 1 }
   },
   { validation: 'contains-all', contains: ['5'] },
   { estimatedDurationMs: 8000 }
@@ -693,7 +693,7 @@ export const completionResponseFormatJsonSchema = createCompletionTest(
     stream: false,
     responseFormat: {
       type: 'json_schema',
-      json_schema: {
+      jsonSchema: {
         name: 'Person',
         schema: {
           type: 'object',
@@ -735,7 +735,7 @@ export const completionReasoningBudgetDisabled = createCompletionTest(
   {
     history: [{ role: 'user', content: 'What is 2+2? Answer with only the number.' }],
     stream: false,
-    generationParams: { reasoning_budget: 0, predict: 32 }
+    generationParams: { reasoningBudget: 0, predict: 32 }
   },
   { validation: 'type', expectedType: 'string' }
 )
@@ -745,7 +745,7 @@ export const completionReasoningBudgetUnrestricted = createCompletionTest(
   {
     history: [{ role: 'user', content: 'What is 2+2? Answer with only the number.' }],
     stream: false,
-    generationParams: { reasoning_budget: -1, predict: 32 }
+    generationParams: { reasoningBudget: -1, predict: 32 }
   },
   { validation: 'type', expectedType: 'string' }
 )

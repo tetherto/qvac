@@ -25,7 +25,7 @@ function resolveContext(calls: unknown[]): ResolveContext {
 test('buildParakeetConfig: swaps the resolved diarization path in for the model source', (t) => {
   const config: ParakeetConfig = {
     backend: 'cpu',
-    useGPU: false,
+    useGpu: false,
     speakerAttribution: {
       modelSrc: 'sortformer-4spk-v1.q8_0.gguf',
       mergeSameSpeaker: false,

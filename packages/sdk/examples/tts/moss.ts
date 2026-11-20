@@ -37,7 +37,7 @@ try {
         ? { mossCodecEncoderModelSrc: TTS_CODEC_ENCODER_MOSS_TTS_F16, referenceAudioSrc }
         : {}),
       streamChunkTokens: 25,
-      useGPU: true,
+      useGpu: true,
       seed: 7
     },
     onProgress: (p: ModelProgressUpdate) => {

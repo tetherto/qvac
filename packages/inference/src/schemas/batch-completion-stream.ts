@@ -17,6 +17,7 @@ import {
 } from '@/schemas/completion-stream'
 import { type McpClientInput } from '@/schemas/mcp-adapter'
 import { toolSchema, toolSearchOptionsSchema } from '@/schemas/tools'
+import type { WithLegacyCompletionParams } from '@/schemas/legacy-keys'
 
 const mcpClientInputSchema = z.custom<McpClientInput>()
 
@@ -176,7 +177,11 @@ export const batchCompletionStreamResponseSchema = z
 
 export type BatchPrompt = z.infer<typeof batchPromptSchema>
 export type BatchCompletionStreamPrompt = z.infer<typeof batchPromptStreamSchema>
-export type BatchCompletionClientParams = z.input<typeof batchCompletionClientParamsSchema>
+type BatchCompletionClientParamsInput = z.input<typeof batchCompletionClientParamsSchema>
+
+export type BatchCompletionClientParams = Omit<BatchCompletionClientParamsInput, 'prompts'> & {
+  prompts: WithLegacyCompletionParams<BatchCompletionClientParamsInput['prompts'][number]>[]
+}
 export type BatchCompletionStreamRequest = z.infer<typeof batchCompletionStreamRequestSchema>
 export type BatchCompletionEvent = z.infer<typeof batchCompletionEventSchema>
 export type BatchCompletionStreamResponse = z.infer<typeof batchCompletionStreamResponseSchema>

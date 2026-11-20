@@ -70,9 +70,9 @@ test('loadModel: an unknown config key is named', function (t) {
   const message = inputError(loadBuiltinToRequestSchema, {
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
     modelType: 'llamacpp-completion',
-    modelConfig: { ctx_sizee: 4096 }
+    modelConfig: { ctxSizee: 4096 }
   })
-  t.ok(message?.includes('ctx_sizee'), 'names the field')
+  t.ok(message?.includes('ctxSizee'), 'names the field')
   t.ok(message?.includes('modelConfig'), 'points at modelConfig')
 })
 
@@ -80,9 +80,9 @@ test('loadModel: a wrong value type is named with its exact path', function (t) 
   const message = inputError(loadBuiltinToRequestSchema, {
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
     modelType: 'llamacpp-completion',
-    modelConfig: { ctx_size: 'big' }
+    modelConfig: { ctxSize: 'big' }
   })
-  t.ok(message?.includes('modelConfig.ctx_size'), 'names the exact field')
+  t.ok(message?.includes('modelConfig.ctxSize'), 'names the exact field')
   t.ok(message?.includes('number'), 'explains the expected type')
 })
 
@@ -97,9 +97,9 @@ test('loadModel: field-level for any model type, and through aliases', function 
   const viaAlias = inputError(loadBuiltinToRequestSchema, {
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
     modelType: 'llm',
-    modelConfig: { ctx_sizee: 4096 }
+    modelConfig: { ctxSizee: 4096 }
   })
-  t.ok(viaAlias?.includes('ctx_sizee'), 'alias resolves to the right branch')
+  t.ok(viaAlias?.includes('ctxSizee'), 'alias resolves to the right branch')
 })
 
 test('loadModel: a custom plugin modelType is accepted', function (t) {

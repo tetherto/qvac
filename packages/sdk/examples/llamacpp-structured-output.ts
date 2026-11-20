@@ -102,7 +102,7 @@ try {
       stream: true,
       responseFormat: {
         type: 'json_schema',
-        json_schema: {
+        jsonSchema: {
           name: 'person',
           schema: PERSON_SCHEMA
         }

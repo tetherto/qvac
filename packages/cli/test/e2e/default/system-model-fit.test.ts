@@ -10,6 +10,11 @@ const FIT_CONFIG = {
         type: 'llamacpp-completion',
         src: 'hyper://example.invalid/chat',
         preload: false
+      },
+      'image-model': {
+        type: 'sdcpp-generation',
+        src: 'hyper://example.invalid/image',
+        preload: false
       }
     }
   }
@@ -92,7 +97,14 @@ describe('qvac models/fit: validation', () => {
 
   it('looks for companion sources in nested config too', async () => {
     const res = await fit({
-      models: [{ model: 'chat-model', modelConfig: { upscaler: { model_src: './esrgan.bin' } } }]
+      models: [{ model: 'chat-model', modelConfig: { upscaler: { modelSrc: './esrgan.bin' } } }]
+    })
+    assertStatusAndError(res, 400, 'invalid_model_src')
+  })
+
+  it('checks a legacy-spelled companion source under its camelCase name', async () => {
+    const res = await fit({
+      models: [{ model: 'image-model', modelConfig: { upscaler: { model_src: './esrgan.bin' } } }]
     })
     assertStatusAndError(res, 400, 'invalid_model_src')
   })

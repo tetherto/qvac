@@ -70,8 +70,8 @@ async def main() -> int:
                 "prediction": "v",
                 "upscaler": {
                     "type": "esrgan",
-                    "model_src": esrgan_model_src,
-                    "tile_size": 128,
+                    "modelSrc": esrgan_model_src,
+                    "tileSize": 128,
                 },
             },
             on_progress=print_progress,
@@ -84,11 +84,11 @@ async def main() -> int:
             "type": "diffusionStream",
             "modelId": model_id,
             "prompt": prompt,
-            "negative_prompt": negative_prompt,
+            "negativePrompt": negative_prompt,
             "width": 128,
             "height": 128,
             "steps": 5,
-            "cfg_scale": 7.5,
+            "cfgScale": 7.5,
             "seed": seed,
         }
 

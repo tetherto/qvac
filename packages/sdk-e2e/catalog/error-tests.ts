@@ -146,7 +146,7 @@ export const errorTranscriptionFailed: TestDefinition = {
 
 export const completionNegativeTemperatureAccepted: TestDefinition = {
   testId: 'error-completion-negative-temperature-accepted',
-  params: { history: HISTORY, generationParams: { temp: -0.5 } },
+  params: { history: HISTORY, generationParams: { temperature: -0.5 } },
   expectation: { validation: 'type', expectedType: 'string' },
   suites: ['smoke'],
   steps: completesWithGenerationParams,
@@ -155,7 +155,7 @@ export const completionNegativeTemperatureAccepted: TestDefinition = {
 
 export const completionExcessiveTemperatureAccepted: TestDefinition = {
   testId: 'error-completion-excessive-temperature-accepted',
-  params: { history: HISTORY, generationParams: { temp: 3.0 } },
+  params: { history: HISTORY, generationParams: { temperature: 3.0 } },
   expectation: { validation: 'type', expectedType: 'string' },
   steps: completesWithGenerationParams,
   metadata: { category: 'error', dependency: 'llm', estimatedDurationMs: 3000 }
@@ -163,7 +163,7 @@ export const completionExcessiveTemperatureAccepted: TestDefinition = {
 
 export const completionInvalidTopPAccepted: TestDefinition = {
   testId: 'error-completion-invalid-topp-accepted',
-  params: { history: HISTORY, generationParams: { top_p: 1.5 } },
+  params: { history: HISTORY, generationParams: { topP: 1.5 } },
   expectation: { validation: 'type', expectedType: 'string' },
   steps: completesWithGenerationParams,
   metadata: { category: 'error', dependency: 'llm', estimatedDurationMs: 3000 }

@@ -102,7 +102,7 @@ Maps each model-type key to a model config object. For example (inside `DevicePa
 
 ```json
 {
-  "llm": { "device": "cpu", "ctx_size": 1024 },
+  "llm": { "device": "cpu", "ctxSize": 1024 },
   "embeddings": { "device": "cpu", "flashAttention": "off" }
 }
 ```
@@ -181,7 +181,7 @@ Example:
         "model": "QWEN3_600M_INST_Q4",
         "default": true,
         "preload": true,
-        "config": { "ctx_size": 8192 }
+        "config": { "ctxSize": 8192 }
       },
       "my-embed": "GTE_LARGE_FP16"
     }

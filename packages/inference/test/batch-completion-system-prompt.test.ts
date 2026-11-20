@@ -9,7 +9,7 @@ import {
 import { ModelType } from '@/schemas'
 import { llmConfigSchema } from '@/schemas/llamacpp-config'
 
-// The configured `system_prompt` has to reach the model through the batch
+// The configured `systemPrompt` has to reach the model through the batch
 // handler the same way it does through `completion`, or one model and one
 // history render two different prompts depending on which handler was called.
 //
@@ -95,7 +95,7 @@ test('batchCompletionStream: seeds the configured system prompt per prompt', asy
   const prompts: RecordedPrompt[] = []
   registerRecordingBatchModel(modelId, prompts, {
     tools: true,
-    system_prompt: 'Always answer with the single word BANANA.'
+    systemPrompt: 'Always answer with the single word BANANA.'
   })
 
   await runBatch(modelId, [[user('Capital of France?')], [user('Capital of Spain?')]])
@@ -122,7 +122,7 @@ test('batchCompletionStream: keeps a prompt system message over the configured o
   const prompts: RecordedPrompt[] = []
   registerRecordingBatchModel(modelId, prompts, {
     tools: true,
-    system_prompt: 'Always answer with the single word BANANA.'
+    systemPrompt: 'Always answer with the single word BANANA.'
   })
 
   await runBatch(modelId, [
@@ -246,8 +246,8 @@ test('batchCompletionStream: a prompt with a loaded deferred tool declares it an
     prompts: [
       { id: 'fresh', history: [user('Area?')], tools },
       { id: 'loaded', history: loaded, tools },
-      { id: 'auto', history: loaded, tools, generationParams: { tool_choice: 'auto' } },
-      { id: 'caller', history: loaded, tools, generationParams: { tool_choice: 'required' } }
+      { id: 'auto', history: loaded, tools, generationParams: { toolChoice: 'auto' } },
+      { id: 'caller', history: loaded, tools, generationParams: { toolChoice: 'required' } }
     ]
   })
   for await (const _ of gen) void _
@@ -299,7 +299,7 @@ test('batchCompletionStream: parallel_tool_calls reaches the addon as true unles
         id: 'single',
         history: [user('Area?')],
         tools,
-        generationParams: { parallel_tool_calls: false }
+        generationParams: { parallelToolCalls: false }
       },
       { id: 'no-tools', history: [user('Capital of France?')] }
     ]

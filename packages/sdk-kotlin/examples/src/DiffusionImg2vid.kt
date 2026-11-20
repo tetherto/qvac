@@ -1,12 +1,12 @@
 // Kotlin port of packages/sdk/examples/diffusion-img2vid.ts.
 //
-// Image-to-video with Wan 2.1 I2V: a first-frame `init_image` animated by a
+// Image-to-video with Wan 2.1 I2V: a first-frame `initImage` animated by a
 // motion prompt. The model uses a split layout of four files -- the I2V
 // diffusion checkpoint plus UMT5-XXL, the Wan VAE and CLIP vision weights --
 // all handed to one load call through `modelConfig`. The sources default to
 // the registry constants, so the common case is just an init image path.
 //
-// TypeScript's `video()` takes `init_image` as raw bytes and base64-encodes
+// TypeScript's `video()` takes `initImage` as raw bytes and base64-encodes
 // them on the way to the worker. The typed `VideoStreamRequest` carries the
 // encoded string, so the example encodes the file with `java.util.Base64`. The
 // returned `QvacMediaRun` splits progress (`events` Flow) from the clips and
@@ -65,10 +65,10 @@ fun main(args: Array<String>): Unit = runBlocking {
                 put("t5XxlModelSrc", t5XxlModelSrc)
                 put("vaeModelSrc", vaeModelSrc)
                 put("clipVisionModelSrc", clipVisionModelSrc)
-                put("diffusion_fa", true)
-                put("offload_to_cpu", true)
-                put("params_backend", "vae=cpu")
-                put("vae_tiling", true)
+                put("diffusionFlashAttention", true)
+                put("offloadToCpu", true)
+                put("paramsBackend", "vae=cpu")
+                put("vaeTiling", true)
             },
         )
         println("▸ Model loaded: $modelId")
@@ -81,16 +81,16 @@ fun main(args: Array<String>): Unit = runBlocking {
                 modelId = modelId,
                 mode = VideoStreamRequestMode.IMG2VID,
                 prompt = prompt,
-                init_image = initImage,
-                negative_prompt = "blurry, distorted, low quality, jittery, static, frozen",
+                initImage = initImage,
+                negativePrompt = "blurry, distorted, low quality, jittery, static, frozen",
                 strength = 0.85,
-                flow_shift = 3.0,
-                video_frames = 33,
+                flowShift = 3.0,
+                videoFrames = 33,
                 fps = 16.0,
                 steps = 30,
-                cfg_scale = 6.0,
+                cfgScale = 6.0,
                 seed = 42,
-                vae_tiling = true,
+                vaeTiling = true,
             ),
         )
         run.events.collect { event ->

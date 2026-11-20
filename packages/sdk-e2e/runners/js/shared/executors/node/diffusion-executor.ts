@@ -16,19 +16,19 @@ export class NodeDiffusionExecutor extends SharedDiffusionExecutor {
   protected override async resolveParams(p: DiffusionParams): Promise<DiffusionParams> {
     const out: DiffusionParams = { ...p }
 
-    if (typeof p.init_image === 'string') {
-      out.init_image = readImageBytes(p.init_image)
+    if (typeof p.initImage === 'string') {
+      out.initImage = readImageBytes(p.initImage)
     }
 
     if (typeof p.image === 'string') {
       out.image = readImageBytes(p.image)
     }
 
-    if (Array.isArray(p.init_images)) {
-      if (!p.init_images.every((v): v is string => typeof v === 'string')) {
-        throw new Error('init_images in test params must be a string[] of image filenames')
+    if (Array.isArray(p.initImages)) {
+      if (!p.initImages.every((v): v is string => typeof v === 'string')) {
+        throw new Error('initImages in test params must be a string[] of image filenames')
       }
-      out.init_images = p.init_images.map(readImageBytes)
+      out.initImages = p.initImages.map(readImageBytes)
     }
 
     return out

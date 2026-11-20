@@ -3,7 +3,6 @@ import type {
   BatchCompletionStreamPrompt,
   CompletionStats,
   HistoryContent,
-  ResponseFormat,
   Tool
 } from '@/schemas/index'
 import { getModel, getModelConfig, type AnyModel } from '@/runtime/model-registry'
@@ -13,13 +12,14 @@ import { getEngineLogger } from '@/logging/index'
 import { nowMs } from '@/profiling/index'
 import { buildStreamResult } from '@/profiling/model-execution'
 import type { LlmStats } from '@/utils/addon-responses'
-import { getResponseFormatJsonSchema } from '@/utils/response-format'
 import {
   seedConfiguredSystemPrompt,
-  transformMessages,
-  withParallelToolCalls,
-  type CompletionGenerationParams
+  transformMessages
 } from '@/plugins/builtin/llamacpp-completion/ops/completion-stream'
+import {
+  toNativeGenerationParams,
+  type NativeGenerationParams
+} from '@/plugins/builtin/llamacpp-completion/generation-params'
 import { normalizeCompletionStats } from '@/plugins/builtin/llamacpp-completion/ops/completion-stats'
 import { prependToolsToHistory } from '@/utils/tool-integration'
 import { resolveDeferredTools, toWireTool, type DeferredResolution } from '@/utils/tools/defer'
@@ -32,7 +32,7 @@ type AddonBatchOutputChunk = {
 }
 
 type BatchCompletionRunOptions = {
-  generationParams: CompletionGenerationParams
+  generationParams: NativeGenerationParams
 }
 
 type HistoryMessage = {
@@ -84,21 +84,6 @@ function runBatchModel(model: AnyModel, prompts: AddonBatchPrompt[]) {
   return run(prompts)
 }
 
-function mergeGenerationParams(
-  generationParams: CompletionGenerationParams | undefined,
-  responseFormat: ResponseFormat | undefined
-) {
-  if (!responseFormat) return generationParams
-
-  const jsonSchema = getResponseFormatJsonSchema(responseFormat)
-  if (jsonSchema === undefined) return generationParams
-
-  return {
-    ...(generationParams ?? {}),
-    json_schema: jsonSchema
-  }
-}
-
 function renderPromptHistory(
   prompt: BatchCompletionStreamPrompt,
   history: HistoryMessage[],
@@ -126,13 +111,12 @@ function buildBatchPrompt(
 ): AddonBatchPrompt {
   const history = seedConfiguredSystemPrompt(prompt.history, options.modelConfig)
   const deferred = resolveDeferredTools(prompt.tools, history, prompt.toolSearch)
-  const mergedGenerationParams = withParallelToolCalls(
-    mergeGenerationParams(prompt.generationParams, prompt.responseFormat)
-  )
   return {
     ...(prompt.id !== undefined && { id: prompt.id }),
     prompt: renderPromptHistory(prompt, history, deferred, options),
-    runOptions: { generationParams: mergedGenerationParams }
+    runOptions: {
+      generationParams: toNativeGenerationParams(prompt.generationParams, prompt.responseFormat)
+    }
   }
 }
 

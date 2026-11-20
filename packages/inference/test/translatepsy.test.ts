@@ -88,7 +88,7 @@ for (const size of ['0.8', '2', '4']) {
         )
         t.alike(result.calls, [[expectedMessages, expectedOptions]])
         t.alike(result.tokens, ['Habari'])
-        t.is(result.config.ctx_size, 1024, 'retains the SDK context default')
+        t.is(result.config.ctxSize, 1024, 'retains the SDK context default')
         t.absent(result.config.tools, 'does not require tool calling')
       }
     })

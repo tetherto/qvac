@@ -5,7 +5,7 @@
 // the Wan 2.2 VAE specifically: its 16x spatial compression is what gives TI2V
 // its 32-pixel grid, and the Wan 2.1 VAE is not interchangeable.
 //
-// TI2V-5B is a single-expert model. The high_noise_* / moe_boundary fields
+// TI2V-5B is a single-expert model. The highNoise* / moeBoundary fields
 // belong to the two-expert Wan 2.2 A14B layout and are rejected here.
 //
 // Budget at least 16 GB of video memory or 20 GB of unified memory. The
@@ -65,9 +65,9 @@ fun main(args: Array<String>): Unit = runBlocking {
                 put("threads", 4)
                 put("t5XxlModelSrc", t5XxlModelSrc)
                 put("vaeModelSrc", vaeModelSrc)
-                put("diffusion_fa", true)
-                put("offload_to_cpu", true)
-                put("vae_tiling", true)
+                put("diffusionFlashAttention", true)
+                put("offloadToCpu", true)
+                put("vaeTiling", true)
             },
         )
         println("▸ Model loaded: $modelId")
@@ -79,7 +79,7 @@ fun main(args: Array<String>): Unit = runBlocking {
                 modelId = modelId,
                 mode = VideoStreamRequestMode.TXT2VID,
                 prompt = prompt,
-                negative_prompt = "flickering, temporal jitter, morphing, duplicated subject, " +
+                negativePrompt = "flickering, temporal jitter, morphing, duplicated subject, " +
                     "warped geometry, distorted anatomy, blurry details, low " +
                     "resolution, text, watermark, logo",
                 // TI2V-5B requires width and height to be multiples of 32 --
@@ -94,16 +94,16 @@ fun main(args: Array<String>): Unit = runBlocking {
                 height = 704,
                 // Frame count must satisfy (4*k + 1), k >= 1. At 24 fps:
                 // 49 ~= 2s, 121 ~= 5s (the trained length).
-                video_frames = 121,
+                videoFrames = 121,
                 fps = 24.0,
                 // Turbo is distilled for very short schedules: 4 steps with
                 // guidance effectively disabled. The non-distilled TI2V-5B
                 // wants steps >= 30 and cfg ~5.0 instead.
                 steps = 4,
-                cfg_scale = 1.0,
-                flow_shift = 5.0,
+                cfgScale = 1.0,
+                flowShift = 5.0,
                 seed = 42,
-                vae_tiling = true,
+                vaeTiling = true,
             ),
         )
         run.events.collect { event ->

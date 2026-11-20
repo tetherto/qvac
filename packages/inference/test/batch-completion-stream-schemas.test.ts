@@ -9,7 +9,7 @@ import { requestSchema, responseSchema } from '@/schemas/common'
 const prompt = {
   id: 'first',
   history: [{ role: 'user', content: 'Reply with APPLE only.' }],
-  generationParams: { temp: 0, seed: 42 },
+  generationParams: { temperature: 0, seed: 42 },
   responseFormat: { type: 'text' as const }
 }
 
@@ -185,8 +185,8 @@ test('batchCompletionStreamResponseSchema: stats is optional', (t) => {
   t.is(batchCompletionStreamResponseSchema.safeParse(response).success, true)
 })
 
-test('batchCompletionClientParamsSchema: a demanding tool_choice needs the prompt tools', (t) => {
-  const required = { ...prompt, generationParams: { tool_choice: 'required' } }
+test('batchCompletionClientParamsSchema: a demanding toolChoice needs the prompt tools', (t) => {
+  const required = { ...prompt, generationParams: { toolChoice: 'required' } }
   t.is(
     batchCompletionClientParamsSchema.safeParse({ modelId: 'm', prompts: [required] }).success,
     false,
@@ -202,7 +202,7 @@ test('batchCompletionClientParamsSchema: a demanding tool_choice needs the promp
   t.is(
     batchCompletionClientParamsSchema.safeParse({
       modelId: 'm',
-      prompts: [{ ...prompt, tools: [tool], generationParams: { tool_choice: 'get_time' } }]
+      prompts: [{ ...prompt, tools: [tool], generationParams: { toolChoice: 'get_time' } }]
     }).success,
     false,
     'name not among the prompt tools'

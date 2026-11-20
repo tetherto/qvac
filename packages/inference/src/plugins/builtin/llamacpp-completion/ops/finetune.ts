@@ -1,4 +1,5 @@
 import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
+import type LlmLlamacpp from '@qvac/llm-llamacpp'
 import fs from 'bare-fs'
 import { getModel, type AnyModel } from '@/runtime/model-registry'
 import type {
@@ -21,16 +22,58 @@ const PAUSE_CHECKPOINT_PREFIX = 'pause_checkpoint_step_'
 
 type FinetuneOptions = FinetuneRunParams['options']
 
+type AddonFinetuneProgress = LlmLlamacpp.FinetuneProgressStats
+
 interface AddonFinetuneResult {
   op: 'finetune'
   status: 'COMPLETED' | 'PAUSED'
-  stats?: FinetuneStats
+  stats?: LlmLlamacpp.FinetuneStats
 }
 
 interface AddonFinetuneHandle {
-  on(event: 'stats', cb: (stats: FinetuneProgress) => void): AddonFinetuneHandle
-  removeListener(event: 'stats', cb: (stats: FinetuneProgress) => void): AddonFinetuneHandle
+  on(event: 'stats', cb: (stats: AddonFinetuneProgress) => void): AddonFinetuneHandle
+  removeListener(event: 'stats', cb: (stats: AddonFinetuneProgress) => void): AddonFinetuneHandle
   await(): Promise<AddonFinetuneResult>
+}
+
+function toFinetuneProgress(progress: AddonFinetuneProgress): FinetuneProgress {
+  return {
+    isTrain: progress.is_train,
+    loss: progress.loss,
+    lossUncertainty: progress.loss_uncertainty,
+    accuracy: progress.accuracy,
+    accuracyUncertainty: progress.accuracy_uncertainty,
+    globalSteps: progress.global_steps,
+    currentEpoch: progress.current_epoch,
+    currentBatch: progress.current_batch,
+    totalBatches: progress.total_batches,
+    elapsedMs: progress.elapsed_ms,
+    etaMs: progress.eta_ms
+  }
+}
+
+function toFinetuneStats(stats: LlmLlamacpp.FinetuneStats): FinetuneStats {
+  return {
+    ...(stats.train_loss !== undefined && { trainLoss: stats.train_loss }),
+    ...(stats.train_loss_uncertainty !== undefined && {
+      trainLossUncertainty: stats.train_loss_uncertainty
+    }),
+    ...(stats.val_loss !== undefined && { valLoss: stats.val_loss }),
+    ...(stats.val_loss_uncertainty !== undefined && {
+      valLossUncertainty: stats.val_loss_uncertainty
+    }),
+    ...(stats.train_accuracy !== undefined && { trainAccuracy: stats.train_accuracy }),
+    ...(stats.train_accuracy_uncertainty !== undefined && {
+      trainAccuracyUncertainty: stats.train_accuracy_uncertainty
+    }),
+    ...(stats.val_accuracy !== undefined && { valAccuracy: stats.val_accuracy }),
+    ...(stats.val_accuracy_uncertainty !== undefined && {
+      valAccuracyUncertainty: stats.val_accuracy_uncertainty
+    }),
+    ...(stats.learning_rate !== undefined && { learningRate: stats.learning_rate }),
+    globalSteps: stats.global_steps,
+    epochsCompleted: stats.epochs_completed
+  }
 }
 
 interface FinetuneCapableModel extends AnyModel {
@@ -258,9 +301,12 @@ export async function startFinetune(
   const handle = await model.finetune(request.options)
 
   if (onProgress) {
-    handle.on('stats', onProgress)
+    const onAddonProgress = (progress: AddonFinetuneProgress) => {
+      onProgress(toFinetuneProgress(progress))
+    }
+    handle.on('stats', onAddonProgress)
     ctx.scope.defer(() => {
-      handle.removeListener('stats', onProgress)
+      handle.removeListener('stats', onAddonProgress)
     })
   }
 
@@ -269,7 +315,7 @@ export async function startFinetune(
   return {
     type: 'finetune',
     status: result.status,
-    stats: result.stats
+    ...(result.stats && { stats: toFinetuneStats(result.stats) })
   }
 }
 

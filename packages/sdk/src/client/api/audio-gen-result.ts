@@ -20,8 +20,11 @@ import {
   type AudioUnderstandClientParams,
   type AudioUnderstandRequest,
   type AudioUnderstandResult,
-  type InferenceBackendDiagnostics
+  type InferenceBackendDiagnostics,
+  type LegacyAudioGenParams,
+  renameLegacyAudioGenParams
 } from '@qvac/inference/surface'
+import { warnLegacyKey } from '@/utils/legacy-keys'
 import type { z } from 'zod'
 import { parseClientInput } from '@/client/parse-input'
 import { generateClientRequestId } from '@/client/api/client-request-id'
@@ -116,10 +119,13 @@ function concatenateChunks(chunks: Uint8Array[]) {
 }
 
 export function createAudioGenResult(
-  params: AudioGenClientParams,
+  params: AudioGenClientParams & LegacyAudioGenParams,
   streamFactory: AudioGenStreamFactory
 ): AudioGenResult {
-  const parsed = parseClientInput(audioGenClientParamsSchema, params)
+  const parsed = parseClientInput(
+    audioGenClientParamsSchema,
+    renameLegacyAudioGenParams(params, warnLegacyKey)
+  )
   const requestId = generateClientRequestId()
   const request: AudioGenStreamRequest = {
     ...parsed,
@@ -136,10 +142,13 @@ export function createAudioGenResult(
 }
 
 export function createAudioEditResult(
-  params: AudioEditClientParams,
+  params: AudioEditClientParams & LegacyAudioGenParams,
   streamFactory: AudioEditStreamFactory
 ): AudioGenResult {
-  const parsed = parseClientInput(audioEditClientParamsSchema, params)
+  const parsed = parseClientInput(
+    audioEditClientParamsSchema,
+    renameLegacyAudioGenParams(params, warnLegacyKey)
+  )
   const requestId = generateClientRequestId()
   const request: AudioEditStreamRequest = {
     ...parsed,

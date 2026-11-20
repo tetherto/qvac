@@ -171,7 +171,7 @@ test('completion: a seeded chat points the addon at the source file and writes o
   clearRegistry()
   const modelId = `seed-base-${Date.now()}`
   const calls: RecordedCall[] = []
-  registerRecordingModel(modelId, calls, { cache_share_across_keys: true })
+  registerRecordingModel(modelId, calls, { cacheShareAcrossKeys: true })
   const complete = completer(modelId)
 
   const baseHistory = [system(SYSTEM), user('What is two plus two?')]
@@ -214,7 +214,7 @@ test('completion: a seed is refused when the source is missing or sharing is off
   clearRegistry()
   const modelId = `seed-refuse-${Date.now()}`
   const calls: RecordedCall[] = []
-  registerRecordingModel(modelId, calls, { cache_share_across_keys: true })
+  registerRecordingModel(modelId, calls, { cacheShareAcrossKeys: true })
   const complete = completer(modelId)
 
   await rejectsWith(
@@ -240,7 +240,7 @@ test('completion: a seed is refused when the source is missing or sharing is off
   // Sharing is off unless the load opts in, and the addon would skip the base file silently.
   const isolatedConfigs: Array<[string, Record<string, unknown>]> = [
     ['without the option', {}],
-    ['with the option false', { cache_share_across_keys: false }]
+    ['with the option false', { cacheShareAcrossKeys: false }]
   ]
   for (const [label, config] of isolatedConfigs) {
     const isolated = `seed-isolated-${label.replace(/ /g, '-')}-${Date.now()}`

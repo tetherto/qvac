@@ -82,7 +82,7 @@ async def main() -> int:
                     "lmModelSrc": AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0.src,
                     "ditModelSrc": AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M.src,
                     "vaeModelSrc": AUDIOGEN_VAE_BF16.src,
-                    "useGPU": True,
+                    "useGpu": True,
                 },
                 on_progress=print_progress,
             )
@@ -137,8 +137,8 @@ async def main() -> int:
 
             print(f"▸ Caption: {description.caption}")
             print(
-                f"▸ {description.bpm} BPM, {description.keyscale}, "
-                f"{description.timesignature}"
+                f"▸ {description.bpm} BPM, {description.key_scale}, "
+                f"{description.time_signature}"
             )
             print(f"▸ Vocal language: {description.vocal_language}")
             # The LM's duration is an estimate; the recovered codes fix the

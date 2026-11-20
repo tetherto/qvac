@@ -81,7 +81,7 @@ describe('extractImageGenerationParams', () => {
     assert.equal(params.prompt, 'a cat')
     assert.equal(params.width, undefined)
     assert.equal(params.height, undefined)
-    assert.equal(params.batch_count, undefined)
+    assert.equal(params.batchCount, undefined)
     assert.equal(params.seed, undefined)
   })
 
@@ -108,10 +108,10 @@ describe('extractImageGenerationParams', () => {
   })
 
   it('forwards positive integer n unchanged (no upper clamp)', () => {
-    assert.equal(extractImageGenerationParams({ prompt: 'p', n: 1 }, 'm').batch_count, 1)
-    assert.equal(extractImageGenerationParams({ prompt: 'p', n: 4 }, 'm').batch_count, 4)
-    assert.equal(extractImageGenerationParams({ prompt: 'p', n: 10 }, 'm').batch_count, 10)
-    assert.equal(extractImageGenerationParams({ prompt: 'p', n: 64 }, 'm').batch_count, 64)
+    assert.equal(extractImageGenerationParams({ prompt: 'p', n: 1 }, 'm').batchCount, 1)
+    assert.equal(extractImageGenerationParams({ prompt: 'p', n: 4 }, 'm').batchCount, 4)
+    assert.equal(extractImageGenerationParams({ prompt: 'p', n: 10 }, 'm').batchCount, 10)
+    assert.equal(extractImageGenerationParams({ prompt: 'p', n: 64 }, 'm').batchCount, 64)
   })
 
   it('throws InvalidImageBatchCountError on n < 1, non-integer, or non-number', () => {
@@ -296,14 +296,14 @@ describe('coerceMultipartFields', () => {
 describe('extractImageEditParams', () => {
   const buf = new Uint8Array([1, 2, 3])
 
-  it('sets init_image and forwards prompt', () => {
+  it('sets initImage and forwards prompt', () => {
     const body: Record<string, unknown> = { model: 'ignored', prompt: 'x', n: 2 }
     const p = extractImageEditParams(body, [buf], 'sdk-1')
     assert.equal(p.modelId, 'sdk-1')
     assert.equal(p.prompt, 'x')
-    assert.deepEqual(Array.from(p.init_image!), Array.from(buf))
-    assert.equal(p.init_images, undefined)
-    assert.equal(p.batch_count, 2)
+    assert.deepEqual(Array.from(p.initImage!), Array.from(buf))
+    assert.equal(p.initImages, undefined)
+    assert.equal(p.batchCount, 2)
   })
 
   it('maps strength when in range', () => {
@@ -342,11 +342,11 @@ describe('extractImageEditParams', () => {
     )
   })
 
-  it('sets ordered init_images without init_image for multiple references', () => {
+  it('sets ordered initImages without initImage for multiple references', () => {
     const images = [buf, new Uint8Array([4, 5, 6])]
     const p = extractImageEditParams({ prompt: 'Combine the subjects.', n: 2 }, images, 'm')
-    assert.deepEqual(p.init_images, images)
-    assert.equal(p.init_image, undefined)
-    assert.equal(p.batch_count, 2)
+    assert.deepEqual(p.initImages, images)
+    assert.equal(p.initImage, undefined)
+    assert.equal(p.batchCount, 2)
   })
 })

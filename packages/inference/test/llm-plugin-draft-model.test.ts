@@ -18,10 +18,10 @@ const ctx: ResolveContext = {
 test('llm plugin resolveConfig: no companion source resolves nothing', async (t) => {
   const { llmPlugin } = await import('@/plugins/builtin/llamacpp-completion/plugin')
 
-  const resolved = await llmPlugin.resolveConfig!({ ctx_size: 2048 }, ctx)
+  const resolved = await llmPlugin.resolveConfig!({ ctxSize: 2048 }, ctx)
 
   t.is(resolved.artifacts, undefined)
-  t.alike(resolved.config, { ctx_size: 2048 })
+  t.alike(resolved.config, { ctxSize: 2048 })
 })
 
 test('llm plugin resolveConfig: projection only', async (t) => {
@@ -37,13 +37,13 @@ test('llm plugin resolveConfig: draft model only', async (t) => {
   const { llmPlugin } = await import('@/plugins/builtin/llamacpp-completion/plugin')
 
   const resolved = await llmPlugin.resolveConfig!(
-    { spec_type: 'draft-dflash', draftModelSrc: 'dflash.gguf' },
+    { specType: 'draft-dflash', draftModelSrc: 'dflash.gguf' },
     ctx
   )
 
   t.alike(resolved.artifacts, { draftModelPath: '/cache/dflash.gguf' })
   t.is('draftModelSrc' in resolved.config, false)
-  t.is((resolved.config as { spec_type?: string }).spec_type, 'draft-dflash')
+  t.is((resolved.config as { specType?: string }).specType, 'draft-dflash')
 })
 
 test('llm plugin resolveConfig: projection and draft model together', async (t) => {
@@ -70,7 +70,7 @@ test('llm plugin createModel: the draft model path reaches the addon as spec_dra
   const result = llmPlugin.createModel({
     modelId,
     modelPath: '/models/model.gguf',
-    modelConfig: { spec_type: 'draft-dflash', spec_draft_n_max: 7 },
+    modelConfig: { specType: 'draft-dflash', specDraftNMax: 7 },
     artifacts: { projectionModelPath: '/models/mmproj.gguf', draftModelPath: '/models/dflash.gguf' }
   })
   const model = result.model as unknown as LlamacppDebugModel
@@ -89,7 +89,7 @@ test('llm plugin createModel: an external MTP head reaches the addon as spec_dra
   const result = llmPlugin.createModel({
     modelId,
     modelPath: '/models/model.gguf',
-    modelConfig: { spec_type: 'draft-mtp' },
+    modelConfig: { specType: 'draft-mtp' },
     artifacts: { draftModelPath: '/models/mtp-head.gguf' }
   })
   const model = result.model as unknown as LlamacppDebugModel
@@ -106,7 +106,7 @@ test('llm plugin createModel: no draft model path sends no spec_draft_model', as
   const result = llmPlugin.createModel({
     modelId,
     modelPath: '/models/model.gguf',
-    modelConfig: { spec_type: 'draft-mtp' }
+    modelConfig: { specType: 'draft-mtp' }
   })
   const model = result.model as unknown as LlamacppDebugModel
 

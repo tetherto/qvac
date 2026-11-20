@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { whisperConfigSchema } from '@/schemas/transcription-config'
 import { whisperModelTypeSchema } from '@/schemas/model-types'
 import { trackedRequestSchema } from '@/schemas/request-base'
+import type { WithLegacyModelConfig } from '@/schemas/legacy-keys'
 
 export const modelIdSchema = z.string().regex(/^[0-9a-f]{16}$/, 'Invalid modelId format')
 
@@ -54,4 +55,4 @@ export const reloadConfigRequestSchema = z
   .meta({ title: 'ReloadConfigRequest' })
 
 export type ReloadConfigRequest = z.infer<typeof reloadConfigRequestSchema>
-export type ReloadConfigOptions = z.infer<typeof reloadConfigOptionsSchema>
+export type ReloadConfigOptions = WithLegacyModelConfig<z.infer<typeof reloadConfigOptionsSchema>>

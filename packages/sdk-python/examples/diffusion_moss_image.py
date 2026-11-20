@@ -136,7 +136,7 @@ async def main() -> int:
                     "llmModelSrc": llm_model_src,
                     "vaeModelSrc": vae_model_src,
                     "tokenizerSrc": tokenizer_src,
-                    "flash_attn": True,
+                    "flashAttention": True,
                 },
                 on_progress=print_progress,
             )
@@ -152,8 +152,8 @@ async def main() -> int:
                     "width": WIDTH,
                     "height": HEIGHT,
                     "steps": 50,
-                    "cfg_scale": 3,
-                    "sampling_method": "euler",
+                    "cfgScale": 3,
+                    "samplingMethod": "euler",
                     "scheduler": "discrete",
                     "seed": 42,
                 }

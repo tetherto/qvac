@@ -555,7 +555,7 @@ class QvacMedia internal constructor(private val client: QvacCaller) {
             modelId = modelId,
             prompt = prompt,
             requestId = requestId,
-            video_frames = frames?.toLong(),
+            videoFrames = frames?.toLong(),
             width = width?.toLong(),
         ),
     )

@@ -31,12 +31,12 @@ try {
       vaeModelSrc,
       audioVaeModelSrc,
       device: 'gpu',
-      diffusion_fa: true,
-      offload_to_cpu: process.env['H3_OFFLOAD_TO_CPU'] !== '0',
-      stream_layers: process.env['H3_STREAM_LAYERS'] === '1',
+      diffusionFlashAttention: true,
+      offloadToCpu: process.env['H3_OFFLOAD_TO_CPU'] !== '0',
+      streamLayers: process.env['H3_STREAM_LAYERS'] === '1',
       ...(process.env['H3_BACKEND'] && { backend: process.env['H3_BACKEND'] }),
-      ...(process.env['H3_PARAMS_BACKEND'] && { params_backend: process.env['H3_PARAMS_BACKEND'] }),
-      ...(process.env['H3_MAX_VRAM'] && { max_vram: process.env['H3_MAX_VRAM'] })
+      ...(process.env['H3_PARAMS_BACKEND'] && { paramsBackend: process.env['H3_PARAMS_BACKEND'] }),
+      ...(process.env['H3_MAX_VRAM'] && { maxVram: process.env['H3_MAX_VRAM'] })
     }
   })
   const { progressStream, outputs, stats } = video({
@@ -45,15 +45,15 @@ try {
     prompt:
       process.env['PROMPT'] ||
       'Premium cinematic coffee commercial. A confident adult sits at a small café table at sunrise, slowly lifts one matte black coffee cup, takes a relaxed sip, and smiles. Warm golden rim light, drifting steam, realistic skin, natural hands, shallow depth of field, subtle slow camera push-in, restrained natural motion, polished live-action advertising, no dialogue, no text overlay.',
-    negative_prompt:
+    negativePrompt:
       'extra people, duplicate cup, malformed hands, cup fused to hand, text, subtitles, watermark, cartoon, CGI, blur, flicker, jitter, camera shake',
     width: 960,
     height: 544,
     // H3 uses 17*k+5 frames; 124 frames at 24 FPS is approximately 5.17 seconds.
-    video_frames: Number(process.env['FRAMES'] || 124),
+    videoFrames: Number(process.env['FRAMES'] || 124),
     fps: 24,
     steps: 8,
-    cfg_scale: 1,
+    cfgScale: 1,
     seed: 11
   })
   const progress = (async () => {

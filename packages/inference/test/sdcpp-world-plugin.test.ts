@@ -52,9 +52,9 @@ test('sdcpp plugin resolveConfig: flat memory options name their world equivalen
   const { diffusionPlugin } = await import('@/plugins/builtin/sdcpp-generation/plugin')
 
   for (const [flat, value, nested] of [
-    ['params_backend', 'diffusion=cpu', 'paramsBackend'],
-    ['max_vram', 2, 'maxVram'],
-    ['stream_layers', true, 'streamLayers'],
+    ['paramsBackend', 'diffusion=cpu', 'paramsBackend'],
+    ['maxVram', 2, 'maxVram'],
+    ['streamLayers', true, 'streamLayers'],
     ['verbosity', 3, 'verbosity']
   ] as const) {
     await t.exception(
@@ -200,7 +200,7 @@ test('sdcpp plugin resolveConfig: world rejects the upscaler block', async (t) =
   const { diffusionPlugin } = await import('@/plugins/builtin/sdcpp-generation/plugin')
 
   await t.exception(
-    diffusionPlugin.resolveConfig!({ ...WORLD_BASE, upscaler: { tile_size: 128 } }, resolveCtx),
+    diffusionPlugin.resolveConfig!({ ...WORLD_BASE, upscaler: { tileSize: 128 } }, resolveCtx),
     /upscaler does not reach the ABot-World session/,
     'ESRGAN does not apply to a walk session, and that is now said out loud'
   )
@@ -222,8 +222,8 @@ test('sdcpp plugin resolveConfig: world rejects every unsupported top-level fiel
   )
 
   await t.exception(
-    diffusionPlugin.resolveConfig!({ ...WORLD_BASE, vae_tiling: true }, resolveCtx),
-    /vae_tiling does not reach the ABot-World session/,
+    diffusionPlugin.resolveConfig!({ ...WORLD_BASE, vaeTiling: true }, resolveCtx),
+    /vaeTiling does not reach the ABot-World session/,
     'a sampler-pipeline runtime key is refused rather than ignored'
   )
 
@@ -295,9 +295,9 @@ test('sdcpp plugin resolveConfig: flat compute keys are rejected in world mode',
     'device points at world.backend rather than being silently dropped'
   )
   await t.exception(
-    diffusionPlugin.resolveConfig!({ ...WORLD_BASE, 'main-gpu': 1 }, resolveCtx),
+    diffusionPlugin.resolveConfig!({ ...WORLD_BASE, mainGpu: 1 }, resolveCtx),
     /world\.backend/,
-    'main-gpu points at world.backend'
+    'mainGpu points at world.backend'
   )
   await t.exception(
     diffusionPlugin.resolveConfig!({ ...WORLD_BASE, threads: 8 }, resolveCtx),
@@ -305,9 +305,9 @@ test('sdcpp plugin resolveConfig: flat compute keys are rejected in world mode',
     'threads points at world.threads'
   )
   await t.exception(
-    diffusionPlugin.resolveConfig!({ ...WORLD_BASE, offload_to_cpu: true }, resolveCtx),
+    diffusionPlugin.resolveConfig!({ ...WORLD_BASE, offloadToCpu: true }, resolveCtx),
     /world\.offloadParamsToCpu/,
-    'offload_to_cpu points at world.offloadParamsToCpu'
+    'offloadToCpu points at world.offloadParamsToCpu'
   )
 })
 

@@ -136,7 +136,7 @@ async def main() -> int:
                 t,
                 model_src=model_src,
                 model_type="parakeet-transcription",
-                model_config={"useGPU": True},
+                model_config={"useGpu": True},
             )
 
             print("▸ Transcribing audio...")

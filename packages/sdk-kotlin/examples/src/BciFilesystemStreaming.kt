@@ -61,13 +61,13 @@ fun main(args: Array<String>): Unit = runBlocking {
             modelConfig = buildJsonObject {
                 putJsonObject("whisperConfig") {
                     put("language", "en")
-                    put("n_threads", 4)
+                    put("threads", 4)
                     put("temperature", 0.0)
                 }
                 // Session day index selects the day-specific projection
                 // matrices. Set this to match the recording session your
                 // neural file came from.
-                putJsonObject("bciConfig") { put("day_idx", 1) }
+                putJsonObject("bciConfig") { put("dayIdx", 1) }
             },
         )
         val modelId = loaded.modelId ?: error(loaded.error ?: "loadModel failed")

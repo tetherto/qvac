@@ -27,7 +27,7 @@ export type CalcTokensClientParams = OmitTools<CalcTokensParams> & {
  * `completion()`.
  * Media content and attachments are not supported.
  * The count uses every supplied tool and the load-time reasoning setting. A named
- * `generationParams.tool_choice` or `generationParams.reasoning_budget` override on
+ * `generationParams.toolChoice` or `generationParams.reasoningBudget` override on
  * `completion()` can render a different prompt.
  *
  * @param params - Loaded model ID and at least one prompt source: `text` or non-empty `history`.

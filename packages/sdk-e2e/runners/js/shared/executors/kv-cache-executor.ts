@@ -986,7 +986,7 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
     }
   }
 
-  // `tool_choice: 'required'` on a warm turn arms the tool grammar from the tool
+  // `toolChoice: 'required'` on a warm turn arms the tool grammar from the tool
   // block every turn carries, so the turn calls the tool and still reuses the cache.
   async warmToolChoiceRequired(
     params: {
@@ -1030,22 +1030,22 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
         history,
         tools,
         params.requiredGenerationParams,
-        'Turn 2 (tool_choice required)'
+        'Turn 2 (toolChoice required)'
       )
       if (!second.ok) return { passed: false, output: second.output }
       if (second.cacheTokens < 1) {
         return {
           passed: false,
-          output: `The warm turn under tool_choice 'required' reused no cached tokens`
+          output: `The warm turn under toolChoice 'required' reused no cached tokens`
         }
       }
       return ValidationHelpers.validate(
-        `Warm tool_choice required: call=${second.toolName} cacheTokens=${second.cacheTokens}`,
+        `Warm toolChoice required: call=${second.toolName} cacheTokens=${second.cacheTokens}`,
         expectation
       )
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
-      return { passed: false, output: `Warm tool_choice required failed: ${errorMsg}` }
+      return { passed: false, output: `Warm toolChoice required failed: ${errorMsg}` }
     }
   }
 }

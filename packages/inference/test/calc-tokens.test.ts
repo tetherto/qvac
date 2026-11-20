@@ -10,8 +10,8 @@ function fixture(
   t: TestContext,
   id: string,
   count: (input: unknown) => Promise<number>,
-  config: { system_prompt?: string; tools?: boolean } = {
-    system_prompt: 'Configured system prompt',
+  config: { systemPrompt?: string; tools?: boolean } = {
+    systemPrompt: 'Configured system prompt',
     tools: true
   }
 ) {
@@ -274,7 +274,7 @@ test('calcTokens drops tools without switching raw text to the chat template', a
       input = value
       return 4
     },
-    { system_prompt: 'Configured system prompt', tools: false }
+    { systemPrompt: 'Configured system prompt', tools: false }
   )
 
   await calcTokens({

@@ -216,7 +216,7 @@ test('audioGen client forwards ACE-Step per-run steps and shift and resolves the
     caption: 'a hopeful indie track with jangly guitars',
     lyrics: '[Instrumental]',
     bpm: 112,
-    keyscale: 'D major',
+    keyScale: 'D major',
     beatsPerBar: 4,
     vocalLanguage: 'unknown',
     seed: 1_234_567,
@@ -292,8 +292,8 @@ test('audioEdit client forwards the edit-run controls and normalizes the referen
       referenceAudio: Buffer.from(reference.buffer, reference.byteOffset, reference.byteLength),
       vocalLanguage: 'en',
       bpm: 120,
-      keyscale: 'C minor',
-      timesignature: '4/4',
+      keyScale: 'C minor',
+      timeSignature: '4/4',
       augmentCaptionWithMetadata: true,
       dcwEnabled: false,
       dcwScaler: 0.04,
@@ -323,8 +323,8 @@ test('audioEdit client forwards the edit-run controls and normalizes the referen
   })
   t.is(capturedRequest?.vocalLanguage, 'en')
   t.is(capturedRequest?.bpm, 120)
-  t.is(capturedRequest?.keyscale, 'C minor')
-  t.is(capturedRequest?.timesignature, '4/4')
+  t.is(capturedRequest?.keyScale, 'C minor')
+  t.is(capturedRequest?.timeSignature, '4/4')
   t.is(capturedRequest?.augmentCaptionWithMetadata, true)
   t.is(capturedRequest?.dcwEnabled, false)
   t.is(capturedRequest?.dcwScaler, 0.04)
@@ -495,8 +495,8 @@ const description = {
   caption: 'downtempo synthwave',
   bpm: 96,
   duration: 12.5,
-  keyscale: 'F minor',
-  timesignature: '4/4',
+  keyScale: 'F minor',
+  timeSignature: '4/4',
   vocalLanguage: 'en',
   audioCodes: [7, -3, 2048],
   seed: 11

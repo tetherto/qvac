@@ -12,9 +12,11 @@ import {
   normalizeModelType,
   PROFILING_KEY,
   createErrorResponse,
+  renameLegacyRequestKeys,
   requestSchema,
   UNTRACKED_REQUEST_TYPES
 } from '@/schemas/index'
+import { warnLegacyKey } from '@/runtime/legacy-keys'
 import { z } from 'zod'
 import { formatZodError } from '@/utils/zod-error'
 import os from 'bare-os'
@@ -189,7 +191,7 @@ function prepareRequest<T extends Request>(request: T): Request {
   let validated: Request
   try {
     // Resolving device defaults parses the model config, so a bad value fails here.
-    withDeviceDefaults = applyDeviceDefaults(request)
+    withDeviceDefaults = applyDeviceDefaults(renameLegacyRequestKeys(request, warnLegacyKey))
     validated = requestSchema.parse(withDeviceDefaults)
   } catch (error) {
     if (error instanceof z.ZodError) {

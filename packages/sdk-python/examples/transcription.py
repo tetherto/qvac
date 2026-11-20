@@ -50,7 +50,7 @@ async def main() -> int:
             model_id = await load_model(
                 t,
                 model_src=WHISPER_TINY,
-                model_config={"audio_format": "f32le", "language": "en"},
+                model_config={"audioFormat": "f32le", "language": "en"},
                 on_progress=print_progress,
             )
             print(f"▸ Whisper model loaded with ID: {model_id}")

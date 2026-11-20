@@ -222,12 +222,12 @@ def no_progress_batch_gaps(value: Any, _args: dict[str, Any]) -> StepResult:
     for event in events:
         if not isinstance(event, dict):
             continue
-        key = ("train" if event.get("is_train") else "val") + (
-            f":epoch{event.get('current_epoch')}"
+        key = ("train" if event.get("isTrain") else "val") + (
+            f":epoch{event.get('currentEpoch')}"
         )
-        total = int(event.get("total_batches") or 0)
+        total = int(event.get("totalBatches") or 0)
         phase = phases.setdefault(key, {"batches": set(), "total": total})
-        phase["batches"].add(event.get("current_batch"))
+        phase["batches"].add(event.get("currentBatch"))
         if total > phase["total"]:
             phase["total"] = total
 

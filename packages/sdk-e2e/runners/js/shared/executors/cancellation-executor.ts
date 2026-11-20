@@ -770,12 +770,12 @@ export class CancellationExecutor extends AbstractModelExecutor<typeof sharedTes
           {
             id: `${tag}-a`,
             history: [{ role: 'user', content: ask }],
-            generationParams: { temp: 0, seed: 1, predict }
+            generationParams: { temperature: 0, seed: 1, predict }
           },
           {
             id: `${tag}-b`,
             history: [{ role: 'user', content: ask }],
-            generationParams: { temp: 0, seed: 2, predict }
+            generationParams: { temperature: 0, seed: 2, predict }
           }
         ]
       })
@@ -909,7 +909,7 @@ export class CancellationExecutor extends AbstractModelExecutor<typeof sharedTes
             content: `Write a long detailed story about topic ${index} using many sentences.`
           }
         ],
-        generationParams: { temp: 0, seed: index + 1, predict: params.predict }
+        generationParams: { temperature: 0, seed: index + 1, predict: params.predict }
       }))
     })
     const results = markHandled(run.results)

@@ -18,10 +18,12 @@ import {
   finetuneProgressResponseSchema,
   finetuneRequestSchema,
   finetuneResponseSchema,
-  type FinetuneProgress,
   type FinetuneRequest,
   type FinetuneResult
 } from '@/schemas'
+import type LlmLlamacpp from '@qvac/llm-llamacpp'
+
+type AddonFinetuneProgress = LlmLlamacpp.FinetuneProgressStats
 
 function registerFinetunePlugin() {
   registerPlugin({
@@ -68,7 +70,7 @@ test('handleFinetune: wraps progress callbacks for start requests', async (t) =>
   clearRegistry()
   const modelId = 'finetune-progress-model'
   const updates: Array<ReturnType<typeof finetuneProgressResponseSchema.parse>> = []
-  const progress: FinetuneProgress = {
+  const progress: AddonFinetuneProgress = {
     is_train: true,
     loss: 1.2,
     loss_uncertainty: 0.1,
@@ -88,15 +90,15 @@ test('handleFinetune: wraps progress callbacks for start requests', async (t) =>
     epochs_completed: 1
   }
 
-  let registeredListener: ((value: FinetuneProgress) => void) | null = null
+  let registeredListener: ((value: AddonFinetuneProgress) => void) | null = null
   let removeListenerCalls = 0
   const handle = {
-    on(event: 'stats', cb: (value: FinetuneProgress) => void) {
+    on(event: 'stats', cb: (value: AddonFinetuneProgress) => void) {
       t.is(event, 'stats')
       registeredListener = cb
       return handle
     },
-    removeListener(event: 'stats', cb: (value: FinetuneProgress) => void) {
+    removeListener(event: 'stats', cb: (value: AddonFinetuneProgress) => void) {
       t.is(event, 'stats')
       t.is(cb, registeredListener)
       removeListenerCalls++
@@ -140,9 +142,15 @@ test('handleFinetune: wraps progress callbacks for start requests', async (t) =>
     t.is(updates.length, 1)
     t.is(updates[0]?.type, 'finetune:progress')
     t.is(updates[0]?.modelId, modelId)
-    t.is(updates[0]?.global_steps, progress.global_steps)
+    t.is(updates[0]?.globalSteps, progress.global_steps)
+    t.is(updates[0]?.etaMs, progress.eta_ms)
     t.is(result.status, 'COMPLETED')
-    t.is(result.stats?.global_steps, stats.global_steps)
+    t.alike(result.stats, {
+      trainLoss: stats.train_loss,
+      trainAccuracy: stats.train_accuracy,
+      globalSteps: stats.global_steps,
+      epochsCompleted: stats.epochs_completed
+    })
     t.is(removeListenerCalls, 1)
   } finally {
     unregisterModel(modelId)
@@ -154,7 +162,7 @@ test('handleFinetune: wraps progress callbacks for omitted-operation requests', 
   clearRegistry()
   const modelId = 'finetune-auto-progress-model'
   const updates: Array<ReturnType<typeof finetuneProgressResponseSchema.parse>> = []
-  const progress: FinetuneProgress = {
+  const progress = {
     is_train: true,
     loss: 0.8,
     loss_uncertainty: null,
@@ -168,14 +176,14 @@ test('handleFinetune: wraps progress callbacks for omitted-operation requests', 
     eta_ms: 1500
   }
 
-  let registeredListener: ((value: FinetuneProgress) => void) | null = null
+  let registeredListener: ((value: typeof progress) => void) | null = null
   const handle = {
-    on(event: 'stats', cb: (value: FinetuneProgress) => void) {
+    on(event: 'stats', cb: (value: typeof progress) => void) {
       t.is(event, 'stats')
       registeredListener = cb
       return handle
     },
-    removeListener(event: 'stats', cb: (value: FinetuneProgress) => void) {
+    removeListener(event: 'stats', cb: (value: typeof progress) => void) {
       t.is(event, 'stats')
       t.is(cb, registeredListener)
       return handle
@@ -219,7 +227,8 @@ test('handleFinetune: wraps progress callbacks for omitted-operation requests', 
 
     t.is(updates.length, 1)
     t.is(updates[0]?.modelId, modelId)
-    t.is(updates[0]?.global_steps, progress.global_steps)
+    t.is(updates[0]?.globalSteps, progress.global_steps)
+    t.is(updates[0]?.lossUncertainty, null)
     t.is(result.status, 'COMPLETED')
   } finally {
     unregisterModel(modelId)
@@ -272,7 +281,7 @@ test('handleFinetune: dispatches start requests without progress callbacks', asy
 
     t.is(result.type, 'finetune')
     t.is(result.status, 'COMPLETED')
-    t.is(result.stats?.global_steps, 6)
+    t.is(result.stats?.globalSteps, 6)
   } finally {
     unregisterModel(modelId)
     clearPlugins()

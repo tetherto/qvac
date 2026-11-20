@@ -105,6 +105,38 @@ class ContractTypesTest(unittest.TestCase):
         graph = TypeGraph({"$defs": {"A": {"title": "A", "type": "object", "properties": {"forbidden": {"not": {}}, "ok": {"type": "string"}}}}})
         self.assertNotIn("val `forbidden`", graph.render())
 
+    def test_legacy_keys_become_trailing_deprecated_aliases(self):
+        schema = {"$defs": {"A": {"title": "A", "type": "object", "required": ["ctxSize"], "properties": {
+            "ctxSize": {"type": "integer"}, "mainGpu": {"type": "string"}}}}}
+        text = TypeGraph(schema, legacy_keys={"A": {"ctx_size": "ctxSize", "main-gpu": "mainGpu"}}).render()
+        body = text.split("data class A(")[1].split("\n)")[0].splitlines()[1:]
+        self.assertEqual([
+            '    @SerialName("ctxSize") val `ctxSize`: Long,',
+            '    @SerialName("mainGpu") val `mainGpu`: String? = null,',
+            '    @Deprecated("Use ctxSize.", ReplaceWith("ctxSize"))',
+            '    @SerialName("ctx_size") val `ctx_size`: Long? = null,',
+            '    @Deprecated("Use mainGpu.", ReplaceWith("mainGpu"))',
+            '    @SerialName("main-gpu") val `maingpu`: String? = null,',
+        ], body)
+
+    def test_legacy_keys_fail_on_unknown_types_and_keys(self):
+        schema = {"$defs": {"A": {"title": "A", "type": "object", "properties": {"ctxSize": {"type": "integer"}}}}}
+        with self.assertRaisesRegex(ValueError, "unknown types"):
+            TypeGraph(schema, legacy_keys={"B": {"ctx_size": "ctxSize"}})
+        with self.assertRaisesRegex(ValueError, "missing"):
+            TypeGraph(schema, legacy_keys={"A": {"n_ctx": "nCtx"}})
+
+    def test_shared_type_needs_the_same_legacy_keys_everywhere(self):
+        def request(title):
+            return {"title": title, "type": "object", "properties": {"params": {
+                "title": title + "Params", "type": "object", "properties": {"topP": {"type": "number"}}}}}
+        schema = {"$defs": {"A": request("ARequest"), "B": request("BRequest")}}
+        with self.assertRaisesRegex(ValueError, "differ"):
+            TypeGraph(schema, legacy_keys={"ARequestParams": {"top_p": "topP"}})
+        text = TypeGraph(schema, legacy_keys={"ARequestParams": {"top_p": "topP"},
+                                              "BRequestParams": {"top_p": "topP"}}).render()
+        self.assertEqual(1, text.count('@SerialName("top_p")'))
+
     def test_nullable_required_field_is_nullable(self):
         graph = TypeGraph({"$defs": {"A": {"title": "A", "type": "object", "properties": {"value": {"type": ["string", "null"]}}, "required": ["value"]}}})
         self.assertIn("val `value`: String?", graph.render())

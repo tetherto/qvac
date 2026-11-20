@@ -45,7 +45,7 @@ Each entry in `questions` has a `type` and `instructions`:
 
 `optionOrder` changes the order in which the model sees options. Answers still use the original option order. `maxLen` sets the token budget per sequence, and `headMaxLen` sets the budget for a question and its options. Omit them to use the checkpoint's budgets. Inspect `usage.truncated`, `usage.truncatedQuestions`, and `usage.stateTokensDropped` to detect truncation.
 
-The load-time `batch_size` controls tokens per forward pass; each sequence must fit within it. `threads`, `threads-batch`, `gpu_layers`, and `flash_attn` control execution. The decision backend fixes context size, pooling, and parallelism; these settings cannot be configured through the SDK.
+The load-time `batchSize` controls tokens per forward pass; each sequence must fit within it. `threads`, `threadsBatch`, `gpuLayers`, and `flashAttention` control execution. The decision backend fixes context size, pooling, and parallelism; these settings cannot be configured through the SDK.
 
 ## Cancellation and concurrency
 

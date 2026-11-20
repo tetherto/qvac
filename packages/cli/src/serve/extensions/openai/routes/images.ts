@@ -103,7 +103,7 @@ async function runAndRespond(
   const dims = params.width && params.height ? `${params.width}x${params.height}` : 'default'
   ctx.logger.info(
     `  ${logLabel} model=${alias} prompt_chars=${params.prompt.length} size=${dims} ` +
-      `n=${params.batch_count ?? 1} response_format=${responseFormat} stream=${wantsStream}`
+      `n=${params.batchCount ?? 1} response_format=${responseFormat} stream=${wantsStream}`
   )
 
   const result = (openaiState(ctx).diffusionOverride ?? diffusion)(params)
@@ -187,8 +187,8 @@ returns 400 \`mask_not_supported\` — the underlying diffusion engine has no ma
 channel. Use a prompt-only edit (full-image img2img) instead.
 
 **Multiple images** sent as repeated \`image\` or \`image[]\` files are forwarded
-in upload order as SDK \`init_images\`. Use a model with multi-reference support,
-such as FLUX.2 or Qwen-Image-2.1. A single file uses SDK \`init_image\`.
+in upload order as SDK \`initImages\`. Use a model with multi-reference support,
+such as FLUX.2 or Qwen-Image-2.1. A single file uses SDK \`initImage\`.
 
 Same output / \`response_format=url\` / streaming caveats as
 \`POST /v1/images/generations\`.

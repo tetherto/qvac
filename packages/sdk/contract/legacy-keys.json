@@ -1,0 +1,331 @@
+{
+  "AudioEditStreamRequest": {
+    "keyscale": "keyScale",
+    "timesignature": "timeSignature"
+  },
+  "AudioGenStreamRequest": {
+    "keyscale": "keyScale",
+    "timesignature": "timeSignature"
+  },
+  "BatchCompletionStreamRequestPromptsItemGenerationParams": {
+    "frequency_penalty": "frequencyPenalty",
+    "parallel_tool_calls": "parallelToolCalls",
+    "presence_penalty": "presencePenalty",
+    "reasoning_budget": "reasoningBudget",
+    "repeat_penalty": "repeatPenalty",
+    "temp": "temperature",
+    "tool_choice": "toolChoice",
+    "top_k": "topK",
+    "top_p": "topP"
+  },
+  "BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchema": {
+    "json_schema": "jsonSchema"
+  },
+  "CompletionOrchestrateRequestGenerationParams": {
+    "frequency_penalty": "frequencyPenalty",
+    "parallel_tool_calls": "parallelToolCalls",
+    "presence_penalty": "presencePenalty",
+    "reasoning_budget": "reasoningBudget",
+    "repeat_penalty": "repeatPenalty",
+    "temp": "temperature",
+    "tool_choice": "toolChoice",
+    "top_k": "topK",
+    "top_p": "topP"
+  },
+  "CompletionOrchestrateRequestResponseFormatJsonSchema": {
+    "json_schema": "jsonSchema"
+  },
+  "CompletionStreamRequestGenerationParams": {
+    "frequency_penalty": "frequencyPenalty",
+    "parallel_tool_calls": "parallelToolCalls",
+    "presence_penalty": "presencePenalty",
+    "reasoning_budget": "reasoningBudget",
+    "repeat_penalty": "repeatPenalty",
+    "temp": "temperature",
+    "tool_choice": "toolChoice",
+    "top_k": "topK",
+    "top_p": "topP"
+  },
+  "CompletionStreamRequestResponseFormatJsonSchema": {
+    "json_schema": "jsonSchema"
+  },
+  "DiffusionStreamRequest": {
+    "auto_resize_ref_image": "autoResizeRefImage",
+    "batch_count": "batchCount",
+    "cache_preset": "cachePreset",
+    "cfg_scale": "cfgScale",
+    "custom_sigmas": "customSigmas",
+    "img_cfg_scale": "imgCfgScale",
+    "increase_ref_index": "increaseRefIndex",
+    "init_image": "initImage",
+    "init_images": "initImages",
+    "negative_prompt": "negativePrompt",
+    "sampling_method": "samplingMethod",
+    "vae_tile_size": "vaeTileSize",
+    "vae_tiling": "vaeTiling"
+  },
+  "LoadModelSrcRequestAudiogenGgmlModelConfigAcestep": {
+    "useGPU": "useGpu"
+  },
+  "LoadModelSrcRequestAudiogenGgmlModelConfigMinimax": {
+    "useGPU": "useGpu"
+  },
+  "LoadModelSrcRequestBciWhispercppTranscriptionModelConfigBciConfig": {
+    "day_idx": "dayIdx"
+  },
+  "LoadModelSrcRequestBciWhispercppTranscriptionModelConfigContextParams": {
+    "flash_attn": "flashAttention",
+    "gpu_device": "gpuDevice",
+    "use_gpu": "useGpu"
+  },
+  "LoadModelSrcRequestBciWhispercppTranscriptionModelConfigMiscConfig": {
+    "caption_enabled": "captionEnabled"
+  },
+  "LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig": {
+    "beam_search_beam_size": "beamSize",
+    "detect_language": "detectLanguage",
+    "duration_ms": "durationMs",
+    "greedy_best_of": "greedyBestOf",
+    "n_threads": "threads",
+    "no_timestamps": "noTimestamps",
+    "print_progress": "printProgress",
+    "print_realtime": "printRealtime",
+    "print_special": "printSpecial",
+    "print_timestamps": "printTimestamps",
+    "single_segment": "singleSegment",
+    "suppress_blank": "suppressBlank",
+    "suppress_nst": "suppressNst"
+  },
+  "LoadModelSrcRequestGgmlOcrModelConfig": {
+    "nThreads": "threads"
+  },
+  "LoadModelSrcRequestLlamacppCompletionModelConfig": {
+    "batch-size": "batchSize",
+    "cache-type-k": "cacheTypeK",
+    "cache-type-v": "cacheTypeV",
+    "cache_checkpoint_dir": "cacheCheckpointDir",
+    "cache_checkpoint_storage": "cacheCheckpointStorage",
+    "cache_checkpoints": "cacheCheckpoints",
+    "cache_checkpoints_max_bytes": "cacheCheckpointsMaxBytes",
+    "cache_ram_mib": "cacheRamMib",
+    "cache_share_across_keys": "cacheShareAcrossKeys",
+    "cpu-mask": "cpuMask",
+    "cpu-mask-batch": "cpuMaskBatch",
+    "cpu-moe": "cpuMoe",
+    "ctx_size": "ctxSize",
+    "fit-ctx": "fitCtx",
+    "fit-target": "fitTarget",
+    "flash-attn": "flashAttention",
+    "frequency_penalty": "frequencyPenalty",
+    "gpu_layers": "gpuLayers",
+    "image-max-megapixels": "imageMaxMegapixels",
+    "image-max-tokens": "imageMaxTokens",
+    "image-min-tokens": "imageMinTokens",
+    "image_no_upscale": "imageNoUpscale",
+    "image_tile_mode": "imageTileMode",
+    "kv-offload": "kvOffload",
+    "load_mode": "loadMode",
+    "main-gpu": "mainGpu",
+    "mmproj-use-gpu": "mmprojUseGpu",
+    "moe-cache-mib": "moeCacheMib",
+    "n-cpu-ffn": "nCpuFfn",
+    "n-cpu-moe": "nCpuMoe",
+    "override-tensor": "overrideTensor",
+    "prefetch-weights": "prefetchWeights",
+    "presence_penalty": "presencePenalty",
+    "reasoning_budget": "reasoningBudget",
+    "repeat_penalty": "repeatPenalty",
+    "rpc-servers": "rpcServers",
+    "spec_draft_n_max": "specDraftNMax",
+    "spec_draft_n_min": "specDraftNMin",
+    "spec_draft_p_min": "specDraftPMin",
+    "spec_type": "specType",
+    "split-mode": "splitMode",
+    "stop_sequences": "stopSequences",
+    "system_prompt": "systemPrompt",
+    "temp": "temperature",
+    "tensor-read-lazy": "tensorReadLazy",
+    "tensor-split": "tensorSplit",
+    "threads-batch": "threadsBatch",
+    "top_k": "topK",
+    "top_p": "topP",
+    "ubatch-size": "ubatchSize"
+  },
+  "LoadModelSrcRequestLlamacppDecisionModelConfig": {
+    "batch_size": "batchSize",
+    "flash_attn": "flashAttention",
+    "gpu_layers": "gpuLayers",
+    "main-gpu": "mainGpu",
+    "split-mode": "splitMode",
+    "tensor-split": "tensorSplit",
+    "threads-batch": "threadsBatch"
+  },
+  "LoadModelSrcRequestLlamacppRerankModelConfig": {
+    "batch_size": "batchSize",
+    "flash_attn": "flashAttention",
+    "gpu_layers": "gpuLayers",
+    "main-gpu": "mainGpu",
+    "split-mode": "splitMode",
+    "tensor-split": "tensorSplit",
+    "threads-batch": "threadsBatch"
+  },
+  "LoadModelSrcRequestMossTranscribeModelConfig": {
+    "useGPU": "useGpu"
+  },
+  "LoadModelSrcRequestNmtcppTranslationModelConfigBergamot": {
+    "beamsize": "beamSize",
+    "lengthpenalty": "lengthPenalty",
+    "maxlength": "maxLength",
+    "norepeatngramsize": "noRepeatNgramSize",
+    "repetitionpenalty": "repeatPenalty",
+    "topk": "topK",
+    "topp": "topP"
+  },
+  "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModel": {
+    "beamsize": "beamSize",
+    "lengthpenalty": "lengthPenalty",
+    "maxlength": "maxLength",
+    "norepeatngramsize": "noRepeatNgramSize",
+    "repetitionpenalty": "repeatPenalty",
+    "topk": "topK",
+    "topp": "topP"
+  },
+  "LoadModelSrcRequestNmtcppTranslationModelConfigIndicTrans": {
+    "beamsize": "beamSize",
+    "lengthpenalty": "lengthPenalty",
+    "maxlength": "maxLength",
+    "norepeatngramsize": "noRepeatNgramSize",
+    "repetitionpenalty": "repeatPenalty",
+    "topk": "topK",
+    "topp": "topP"
+  },
+  "LoadModelSrcRequestParakeetTranscriptionModelConfig": {
+    "useGPU": "useGpu"
+  },
+  "LoadModelSrcRequestSdcppGenerationModelConfig": {
+    "diffusion_fa": "diffusionFlashAttention",
+    "flash_attn": "flashAttention",
+    "lora_apply_mode": "loraApplyMode",
+    "main-gpu": "mainGpu",
+    "max_vram": "maxVram",
+    "offload_to_cpu": "offloadToCpu",
+    "params_backend": "paramsBackend",
+    "sampler_rng": "samplerRng",
+    "stream_layers": "streamLayers",
+    "vae_auto_cpu_fallback": "vaeAutoCpuFallback",
+    "vae_auto_cpu_fallback_memory_ratio": "vaeAutoCpuFallbackMemoryRatio",
+    "vae_tiling": "vaeTiling"
+  },
+  "LoadModelSrcRequestSdcppGenerationModelConfigUpscaler": {
+    "model_src": "modelSrc",
+    "offload_params_to_cpu": "offloadToCpu",
+    "tile_size": "tileSize"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigAudio8": {
+    "useGPU": "useGpu"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigChatterbox": {
+    "useGPU": "useGpu"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3": {
+    "useGPU": "useGpu"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigMoss": {
+    "useGPU": "useGpu"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigMossSfx": {
+    "useGPU": "useGpu"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigMossSpeech": {
+    "useGPU": "useGpu"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigParler": {
+    "useGPU": "useGpu"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigSupertonic": {
+    "useGPU": "useGpu"
+  },
+  "LoadModelSrcRequestWhispercppTranscriptionModelConfig": {
+    "audio_ctx": "audioCtx",
+    "audio_format": "audioFormat",
+    "beam_search_beam_size": "beamSize",
+    "carry_initial_prompt": "carryInitialPrompt",
+    "debug_mode": "debugMode",
+    "detect_language": "detectLanguage",
+    "duration_ms": "durationMs",
+    "entropy_thold": "entropyThold",
+    "greedy_best_of": "greedyBestOf",
+    "initial_prompt": "initialPrompt",
+    "length_penalty": "lengthPenalty",
+    "logprob_thold": "logprobThold",
+    "max_initial_ts": "maxInitialTs",
+    "max_len": "maxLen",
+    "max_tokens": "maxTokens",
+    "n_max_text_ctx": "nMaxTextCtx",
+    "n_threads": "threads",
+    "no_context": "noContext",
+    "no_speech_thold": "noSpeechThold",
+    "no_timestamps": "noTimestamps",
+    "offset_ms": "offsetMs",
+    "print_progress": "printProgress",
+    "print_realtime": "printRealtime",
+    "print_special": "printSpecial",
+    "print_timestamps": "printTimestamps",
+    "single_segment": "singleSegment",
+    "split_on_word": "splitOnWord",
+    "suppress_blank": "suppressBlank",
+    "suppress_nst": "suppressNst",
+    "suppress_regex": "suppressRegex",
+    "tdrz_enable": "tdrzEnable",
+    "temperature_inc": "temperatureInc",
+    "thold_pt": "tholdPt",
+    "thold_ptsum": "tholdPtsum",
+    "token_timestamps": "tokenTimestamps",
+    "vad_params": "vadParams"
+  },
+  "LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams": {
+    "flash_attn": "flashAttention",
+    "gpu_device": "gpuDevice",
+    "main-gpu": "mainGpu",
+    "use_gpu": "useGpu"
+  },
+  "LoadModelSrcRequestWhispercppTranscriptionModelConfigMiscConfig": {
+    "caption_enabled": "captionEnabled"
+  },
+  "LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams": {
+    "max_speech_duration_s": "maxSpeechDurationS",
+    "min_silence_duration_ms": "minSilenceDurationMs",
+    "min_speech_duration_ms": "minSpeechDurationMs",
+    "samples_overlap": "samplesOverlap",
+    "speech_pad_ms": "speechPadMs"
+  },
+  "VideoStreamRequest": {
+    "cache_mode": "cacheMode",
+    "cache_preset": "cachePreset",
+    "cache_threshold": "cacheThreshold",
+    "cfg_scale": "cfgScale",
+    "control_frames": "controlFrames",
+    "flow_shift": "flowShift",
+    "high_noise_cfg_scale": "highNoiseCfgScale",
+    "high_noise_flow_shift": "highNoiseFlowShift",
+    "high_noise_sampler": "highNoiseSampler",
+    "high_noise_scheduler": "highNoiseScheduler",
+    "high_noise_steps": "highNoiseSteps",
+    "init_image": "initImage",
+    "lora_strength": "loraStrength",
+    "moe_boundary": "moeBoundary",
+    "negative_prompt": "negativePrompt",
+    "reference_attention_strength": "referenceAttentionStrength",
+    "reference_downscale_factor": "referenceDownscaleFactor",
+    "reference_images": "referenceImages",
+    "sampling_method": "samplingMethod",
+    "stg_block": "stgBlock",
+    "stg_scale": "stgScale",
+    "temporal_tiling": "temporalTiling",
+    "vace_strength": "vaceStrength",
+    "vae_tile_overlap": "vaeTileOverlap",
+    "vae_tile_size": "vaeTileSize",
+    "vae_tiling": "vaeTiling",
+    "video_frames": "videoFrames"
+  }
+}

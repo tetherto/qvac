@@ -1,4 +1,9 @@
-import type { AudioEditClientParams, AudioGenResult, RPCOptions } from '@qvac/inference/surface'
+import type {
+  AudioEditClientParams,
+  AudioGenResult,
+  LegacyAudioGenParams,
+  RPCOptions
+} from '@qvac/inference/surface'
 import { stream as streamRpc } from '@/client/rpc/rpc-client'
 import { createAudioEditResult } from '@/client/api/audio-gen-result'
 
@@ -13,7 +18,7 @@ import { createAudioEditResult } from '@/client/api/audio-gen-result'
  * @param params.referenceAudio - Optional timbre reference for every operation, in the same forms
  *   as `sourceAudio` (samples need only be finite).
  * @param params.vocalLanguage - Prompt metadata for every operation, as on a generation; so are
- *   `bpm`, `keyscale`, `timesignature` and `augmentCaptionWithMetadata`.
+ *   `bpm`, `keyScale`, `timeSignature` and `augmentCaptionWithMetadata`.
  * @param params.dcwEnabled - Repaint only: the Haar DCW sampler correction, tuned by `dcwScaler` and
  *   `dcwHighScaler`.
  * @param params.inferenceSteps - DiT steps for every operation (0..1000); omit to keep the load-time
@@ -43,12 +48,15 @@ import { createAudioEditResult } from '@/client/api/audio-gen-result'
  *   seed: 22883,
  *   referenceAudio: "/path/to/reference.wav",
  *   bpm: 120,
- *   keyscale: "C minor",
+ *   keyScale: "C minor",
  * });
  * stopButton.onclick = () => cancel({ requestId: run.requestId });
  * const { pcm, sampleRate, channels, bitsPerSample } = await run.audio;
  * ```
  */
-export function audioEdit(params: AudioEditClientParams, options?: RPCOptions): AudioGenResult {
+export function audioEdit(
+  params: AudioEditClientParams & LegacyAudioGenParams,
+  options?: RPCOptions
+): AudioGenResult {
   return createAudioEditResult(params, (request) => streamRpc(request, options))
 }

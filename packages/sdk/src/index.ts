@@ -483,3 +483,9 @@ export type {
 export { RpcServerOperationError } from './utils/errors-server'
 
 export { getRpcDeviceMap, type RpcDeviceMapping, type RpcDevice } from '@qvac/inference/surface'
+
+export {
+  createLegacyKeyWarner,
+  renameLegacyModelConfigKeys,
+  type LegacyKeyWarn
+} from '@qvac/inference/surface'

@@ -16,6 +16,7 @@ import {
   isModelTypeAlias,
   normalizeModelType,
   inferModelTypeFromModelSrc,
+  renameLegacyModelConfigKeys,
   ModelType
 } from '@/schemas/index'
 import {
@@ -29,6 +30,7 @@ import { parseClientInput } from '@/api/parse-input'
 import { getAppLogger } from '@/logging/index'
 import { decoratePromise } from '@/utils/decorate-promise'
 import { generateRequestId } from '@/runtime/request-id'
+import { warnLegacyKey } from '@/runtime/legacy-keys'
 
 const logger = getAppLogger()
 
@@ -57,7 +59,7 @@ let warnedLocalVideoModelLoad = false
  * @throws {ModelTypeRequiredError} When `modelType` cannot be inferred from `modelSrc` at runtime.
  * @example
  * ```typescript
- * await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0, modelConfig: { ctx_size: 2048 } });
+ * await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0, modelConfig: { ctxSize: 2048 } });
  * await loadModel({ modelSrc: WHISPER_TINY });
  * ```
  */
@@ -103,7 +105,7 @@ export function loadModel<S extends ModelDescriptor>(
  * const localModelId = await loadModel({
  *   modelSrc: "/home/user/models/llama-7b.gguf",
  *   modelType: "llamacpp-completion",
- *   modelConfig: { ctx_size: 2048 }
+ *   modelConfig: { ctxSize: 2048 }
  * });
  *
  * // Local file path - relative path
@@ -116,7 +118,7 @@ export function loadModel<S extends ModelDescriptor>(
  * const hyperdriveId = await loadModel({
  *   modelSrc: "pear://<hyperdrive-key>/llama-7b.gguf",
  *   modelType: "llamacpp-completion",
- *   modelConfig: { ctx_size: 2048 }
+ *   modelConfig: { ctxSize: 2048 }
  * });
  *
  * // Remote HTTP/HTTPS URL with progress tracking
@@ -133,7 +135,7 @@ export function loadModel<S extends ModelDescriptor>(
  *   modelSrc: "https://huggingface.co/.../main-model.gguf",
  *   modelType: "llamacpp-completion",
  *   modelConfig: {
- *     ctx_size: 512,
+ *     ctxSize: 512,
  *     projectionModelSrc: "https://huggingface.co/.../projection-model.gguf"
  *   },
  *   onProgress: (progress) => {
@@ -305,6 +307,16 @@ async function runLoadModel(
   // `cancel({ requestId: op.requestId })` a no-op when no match exists
   // and a precise abort when it does.
   resolvedOptions = { ...resolvedOptions, requestId }
+  if (resolvedOptions['modelConfig'] !== undefined) {
+    resolvedOptions = {
+      ...resolvedOptions,
+      modelConfig: renameLegacyModelConfigKeys(
+        resolvedOptions['modelType'],
+        resolvedOptions['modelConfig'],
+        warnLegacyKey
+      )
+    }
+  }
 
   const request = isReloadConfig
     ? parseClientInput(reloadConfigOptionsToRequestSchema, resolvedOptions)

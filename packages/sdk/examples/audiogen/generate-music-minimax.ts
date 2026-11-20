@@ -22,7 +22,7 @@ try {
       engine: 'minimax',
       lmModelSrc: requiredModelPath('AUDIOGEN_MINIMAX_LM_MODEL'),
       synthModelSrc: requiredModelPath('AUDIOGEN_MINIMAX_SYNTH_MODEL'),
-      useGPU: process.env['AUDIOGEN_USE_GPU'] === '1',
+      useGpu: process.env['AUDIOGEN_USE_GPU'] === '1',
       ...(threads !== undefined && { threads })
     },
     onProgress: function (progress: ModelProgressUpdate) {

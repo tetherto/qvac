@@ -93,8 +93,8 @@ async def main() -> int:
                     "vaeModelSrc": vae_model_src,
                     "audioVaeModelSrc": audio_vae_model_src,
                     "embeddingsConnectorsModelSrc": embeddings_connectors_model_src,
-                    "diffusion_fa": True,
-                    "vae_tiling": True,
+                    "diffusionFlashAttention": True,
+                    "vaeTiling": True,
                 },
                 on_progress=print_progress,
             )
@@ -108,7 +108,7 @@ async def main() -> int:
                     "modelId": model_id,
                     "mode": "txt2vid",
                     "prompt": prompt,
-                    "negative_prompt": (
+                    "negativePrompt": (
                         "blurry, low quality, static, jittery, watermark, "
                         "distorted audio"
                     ),
@@ -117,16 +117,16 @@ async def main() -> int:
                     "height": 320,
                     # LTX-2 requires (8*k + 1) frames, max 257. At 24 fps:
                     # 25~=1s, 121~=5s, 241~=10s.
-                    "video_frames": 121,
+                    "videoFrames": 121,
                     "fps": 24,
                     # Distilled variants run in 4-8 steps with cfg ~1.0; the
                     # full --dev model wants steps >= 20 and cfg ~7.0.
                     "steps": 10,
-                    "cfg_scale": 1.0,
+                    "cfgScale": 1.0,
                     "seed": 42,
                     # Tile the video VAE decode along the time axis to cap peak
                     # VRAM on long / HD clips (LTX-2 only).
-                    "temporal_tiling": True,
+                    "temporalTiling": True,
                 }
             )
 

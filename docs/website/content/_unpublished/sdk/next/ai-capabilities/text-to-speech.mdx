@@ -140,12 +140,12 @@ console.log(stats?.realTimeFactor, stats?.backendId, stats?.gpuUnsupported);
 
 ## Backend selection
 
-Every engine takes `useGPU` (and `nGpuLayers`) to ask for the host's GPU
+Every engine takes `useGpu` (and `nGpuLayers`) to ask for the host's GPU
 backend by policy. `modelConfig.backend` names the backend explicitly instead:
 `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as
 `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An explicit
 backend that is not available fails the load rather than falling back, and
-unset keeps the `useGPU` policy. `assessModelFit()` projects the load on the
+unset keeps the `useGpu` policy. `assessModelFit()` projects the load on the
 same device.
 
 ```ts
@@ -248,7 +248,7 @@ per request — set it in `modelConfig`.
 `seed`, `threads`, `nGpuLayers`, `outputSampleRate` and `backendsDir` work
 as on the other engines; `openclCacheDir` is accepted by Chatterbox,
 Supertonic and CosyVoice3 only, and `vulkanCacheDir` additionally persists
-the compiled Vulkan pipeline cache when `useGPU` is set. `vulkanDevice` picks
+the compiled Vulkan pipeline cache when `useGpu` is set. `vulkanDevice` picks
 the Vulkan adapter (`0` = the first, `N` = the Nth, `-1` = auto-pick by free
 VRAM preferring a discrete GPU) and is also used by the LavaSR enhancer;
 `prewarmText` is synthesized once at load so GPU pipelines (and a Core ML
@@ -460,7 +460,7 @@ const result = textToSpeech({
 Set `streamChunkTokens` above zero for native chunk streaming
 (`streamFirstChunkTokens` tunes the first chunk only). Native streaming emits
 at 24 kHz, so omit `outputSampleRate` or set it to `24000` unless the LavaSR
-enhancer is loaded. `useGPU` offloads to Metal on macOS/iOS, Vulkan on
+enhancer is loaded. `useGpu` offloads to Metal on macOS/iOS, Vulkan on
 desktop Linux/Windows, and OpenCL on Adreno Android devices; `vulkanDevice`
 picks the Vulkan adapter (`0` = the first, `N` = the Nth, `-1` = auto-pick by
 free VRAM preferring a discrete GPU) and is also used by the LavaSR enhancer.
@@ -612,7 +612,7 @@ Generation is sampled by default: `temperature` (default `0.7`), `topK`
 (`50`), and `topP` (`0.9`) tune it, `greedy: true` takes the argmax instead
 and ignores all three, and `maxFrames` caps generation in codec frames
 (~21.5 frames per second of audio). `seed`, `threads`, `nGpuLayers`, and
-`outputSampleRate` work as on the other engines; `useGPU` offloads to Metal
+`outputSampleRate` work as on the other engines; `useGpu` offloads to Metal
 on macOS/iOS, Vulkan on desktop Linux/Windows, and OpenCL on Android/Adreno —
 elsewhere it falls back to CPU and sets `stats.gpuUnsupported` in the
 response.
@@ -622,7 +622,7 @@ downloads its Apple Core ML bundle (`audio8-codec-decoder.mlmodelc`, about
 150 MB, the same bundle for every decoder tier) and places it beside the
 decoder GGUF.
 The codec's synthesis stack — the upsampling stages and the DAC decoder — then
-runs on Core ML, while the language model stays on `useGPU`'s backend. Other
+runs on Core ML, while the language model stays on `useGpu`'s backend. Other
 platforms download only the GGUF. If the bundle is unavailable at load, or a
 synthesis fails on it, Audio8 runs the codec on ggml instead; the
 `codecSidecarLoaded` and `codecOnCoreml` stats report which path ran.
@@ -657,7 +657,7 @@ const modelId = await loadModel({
     language: "en",
     mossCodecDecoderModelSrc: TTS_CODEC_DECODER_MOSS_TTS_F16,
     streamChunkTokens: 25,
-    useGPU: true,
+    useGpu: true,
   },
 });
 
@@ -698,7 +698,7 @@ only apply there, and a MOSS request without `sentenceStream: true` rejects
 them.
 
 `seed` (engine default `1234`), `threads` and `backendsDir` work as on the
-other engines. MOSS runs on the CPU by default; `useGPU: true` or a non-zero
+other engines. MOSS runs on the CPU by default; `useGpu: true` or a non-zero
 `nGpuLayers` asks for a GPU backend, and when none is usable it falls back to
 the CPU and sets `stats.gpuUnsupported`.
 

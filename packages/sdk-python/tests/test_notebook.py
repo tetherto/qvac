@@ -181,14 +181,14 @@ def test_sync_client_notebook_flow_against_real_worker():
 
     with SyncClient(worker_path=WORKER_PATH) as client:
         model_id = client.load_model(
-            model_src=QWEN3_600M_INST_Q4, model_config={"ctx_size": 2048}
+            model_src=QWEN3_600M_INST_Q4, model_config={"ctxSize": 2048}
         )
         text = client.completion(
             model_id,
             "Say hello in five words.",
             live=False,
             predict=512,
-            temp=0,
+            temperature=0,
             seed=42,
         )
         assert text.strip(), "expected real completion text through SyncClient"

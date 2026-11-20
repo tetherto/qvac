@@ -13,7 +13,7 @@ try {
     modelSrc: httpUrl,
     modelType: 'llamacpp-completion',
     modelConfig: {
-      ctx_size: 4096
+      ctxSize: 4096
     },
     onProgress: (p) => {
       const mb = (n: number) => (n / 1e6).toFixed(1)

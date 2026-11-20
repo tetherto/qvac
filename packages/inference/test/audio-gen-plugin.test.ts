@@ -198,7 +198,12 @@ test('audioGen forwards per-run steps and shift and reports what the run rendere
   ])
   const terminal = frames.at(-1)
   t.is(terminal?.done, true)
-  t.alike(terminal?.stats, { audioDurationMs: 30_000, totalTimeMs: 9_000, metadata })
+  const { keyscale, ...renderedMetadata } = metadata
+  t.alike(terminal?.stats, {
+    audioDurationMs: 30_000,
+    totalTimeMs: 9_000,
+    metadata: { ...renderedMetadata, keyScale: keyscale }
+  })
   t.is(terminal?.stats?.metadata?.seed, 1_234_567, 'an unseeded take can be replayed')
   t.is(getRequestRegistry().get(requestId), null)
 })

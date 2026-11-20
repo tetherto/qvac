@@ -32,8 +32,8 @@ const lmSampling = {
 const promptMetadata = {
   vocalLanguage: z.string().min(1).optional(),
   bpm: int().optional().describe('Beats per minute; 0 or unset lets the LM infer it.'),
-  keyscale: z.string().min(1).optional().describe('Key and scale, e.g. "C minor".'),
-  timesignature: z.string().min(1).optional().describe('Time signature, e.g. "4/4".'),
+  keyScale: z.string().min(1).optional().describe('Key and scale, e.g. "C minor".'),
+  timeSignature: z.string().min(1).optional().describe('Time signature, e.g. "4/4".'),
   augmentCaptionWithMetadata: bool()
     .optional()
     .describe('Append BPM, time signature and key to the conditioning caption.')
@@ -258,8 +258,8 @@ export const audioUnderstandingResult = z.object({
     caption: z.string(),
     bpm: z.number(),
     duration: z.number().describe('LM estimate in seconds.'),
-    keyscale: z.string(),
-    timesignature: z.string(),
+    keyScale: z.string(),
+    timeSignature: z.string(),
     vocalLanguage: z.string(),
     audioCodes: z
       .array(z.number())

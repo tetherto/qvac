@@ -114,25 +114,25 @@ test('finetuneProgressResponseSchema: parses nullable progress fields', (t) => {
   const progress = finetuneProgressResponseSchema.parse({
     type: 'finetune:progress',
     modelId: 'model-progress',
-    is_train: true,
+    isTrain: true,
     loss: 1.25,
-    loss_uncertainty: null,
+    lossUncertainty: null,
     accuracy: 0.75,
-    accuracy_uncertainty: null,
-    global_steps: 3,
-    current_epoch: 1,
-    current_batch: 2,
-    total_batches: 9,
-    elapsed_ms: 1500,
-    eta_ms: 2500
+    accuracyUncertainty: null,
+    globalSteps: 3,
+    currentEpoch: 1,
+    currentBatch: 2,
+    totalBatches: 9,
+    elapsedMs: 1500,
+    etaMs: 2500
   })
 
   t.is(progress.type, 'finetune:progress')
   t.is(progress.modelId, 'model-progress')
   t.is(progress.loss, 1.25)
-  t.is(progress.loss_uncertainty, null)
+  t.is(progress.lossUncertainty, null)
   t.is(progress.accuracy, 0.75)
-  t.is(progress.global_steps, 3)
+  t.is(progress.globalSteps, 3)
 })
 
 test('finetuneResponseSchema: parses terminal stats payload', (t) => {
@@ -140,17 +140,17 @@ test('finetuneResponseSchema: parses terminal stats payload', (t) => {
     type: 'finetune',
     status: 'COMPLETED',
     stats: {
-      train_loss: 0.8,
-      train_accuracy: 0.9,
-      global_steps: 12,
-      epochs_completed: 2
+      trainLoss: 0.8,
+      trainAccuracy: 0.9,
+      globalSteps: 12,
+      epochsCompleted: 2
     }
   })
 
   t.is(response.type, 'finetune')
   t.is(response.status, 'COMPLETED')
-  t.is(response.stats?.global_steps, 12)
-  t.is(response.stats?.epochs_completed, 2)
+  t.is(response.stats?.globalSteps, 12)
+  t.is(response.stats?.epochsCompleted, 2)
 })
 
 test('finetuneResponseSchema: parses idle terminal status', (t) => {
@@ -188,23 +188,23 @@ test('finetuneResponseSchema: accepts NaN terminal uncertainties', (t) => {
     type: 'finetune',
     status: 'COMPLETED',
     stats: {
-      train_loss: 0.8,
-      train_loss_uncertainty: Number.NaN,
-      val_loss: 0.7,
-      val_loss_uncertainty: Number.NaN,
-      train_accuracy: 0.9,
-      train_accuracy_uncertainty: Number.NaN,
-      val_accuracy: 0.85,
-      val_accuracy_uncertainty: Number.NaN,
-      global_steps: 3,
-      epochs_completed: 1
+      trainLoss: 0.8,
+      trainLossUncertainty: Number.NaN,
+      valLoss: 0.7,
+      valLossUncertainty: Number.NaN,
+      trainAccuracy: 0.9,
+      trainAccuracyUncertainty: Number.NaN,
+      valAccuracy: 0.85,
+      valAccuracyUncertainty: Number.NaN,
+      globalSteps: 3,
+      epochsCompleted: 1
     }
   })
 
-  t.ok(Number.isNaN(response.stats?.train_loss_uncertainty))
-  t.ok(Number.isNaN(response.stats?.val_loss_uncertainty))
-  t.ok(Number.isNaN(response.stats?.train_accuracy_uncertainty))
-  t.ok(Number.isNaN(response.stats?.val_accuracy_uncertainty))
+  t.ok(Number.isNaN(response.stats?.trainLossUncertainty))
+  t.ok(Number.isNaN(response.stats?.valLossUncertainty))
+  t.ok(Number.isNaN(response.stats?.trainAccuracyUncertainty))
+  t.ok(Number.isNaN(response.stats?.valAccuracyUncertainty))
 })
 
 test('finetuneResponseSchema: accepts null terminal uncertainties', (t) => {
@@ -212,21 +212,21 @@ test('finetuneResponseSchema: accepts null terminal uncertainties', (t) => {
     type: 'finetune',
     status: 'COMPLETED',
     stats: {
-      train_loss: 0.8,
-      train_loss_uncertainty: null,
-      val_loss: 0.7,
-      val_loss_uncertainty: null,
-      train_accuracy: 0.9,
-      train_accuracy_uncertainty: null,
-      val_accuracy: 0.85,
-      val_accuracy_uncertainty: null,
-      global_steps: 3,
-      epochs_completed: 1
+      trainLoss: 0.8,
+      trainLossUncertainty: null,
+      valLoss: 0.7,
+      valLossUncertainty: null,
+      trainAccuracy: 0.9,
+      trainAccuracyUncertainty: null,
+      valAccuracy: 0.85,
+      valAccuracyUncertainty: null,
+      globalSteps: 3,
+      epochsCompleted: 1
     }
   })
 
-  t.is(response.stats?.train_loss_uncertainty, null)
-  t.is(response.stats?.val_loss_uncertainty, null)
-  t.is(response.stats?.train_accuracy_uncertainty, null)
-  t.is(response.stats?.val_accuracy_uncertainty, null)
+  t.is(response.stats?.trainLossUncertainty, null)
+  t.is(response.stats?.valLossUncertainty, null)
+  t.is(response.stats?.trainAccuracyUncertainty, null)
+  t.is(response.stats?.valAccuracyUncertainty, null)
 })

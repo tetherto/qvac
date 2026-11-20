@@ -81,20 +81,20 @@ test('video op: H3 validates before native execution and preserves audio results
     async (modelId) => {
       const base = { modelId, mode: 'txt2vid' as const, prompt: 'Steam rises from coffee.' }
       for (const params of [
-        { video_frames: 121 },
+        { videoFrames: 121 },
         { width: 944 },
         { height: 528 },
         { fps: 16 },
-        { cfg_scale: 0 },
+        { cfgScale: 0 },
         { scheduler: 'simple' as const },
-        { vace_strength: 0 },
+        { vaceStrength: 0 },
         { strength: 0 },
-        { stg_scale: 0 },
-        { stg_block: 0 },
-        { lora_strength: 0 },
-        { reference_attention_strength: 0 },
-        { high_noise_cfg_scale: 0 },
-        { moe_boundary: 0 }
+        { stgScale: 0 },
+        { stgBlock: 0 },
+        { loraStrength: 0 },
+        { referenceAttentionStrength: 0 },
+        { highNoiseCfgScale: 0 },
+        { moeBoundary: 0 }
       ]) {
         await t.exception(
           async () => videoOp({ ...base, ...params }).next(),
@@ -103,8 +103,8 @@ test('video op: H3 validates before native execution and preserves audio results
       }
       t.is(observed.length, 0, 'invalid H3 requests never reach native execution')
       for (const params of [
-        { video_frames: 124 },
-        { video_frames: 22 },
+        { videoFrames: 124 },
+        { videoFrames: 22 },
         {},
         { scheduler: 'discrete' as const }
       ]) {
@@ -127,7 +127,7 @@ test('video op: H3 validates before native execution and preserves audio results
         t.is(observed[2]?.[field], undefined, `${field} remains omitted`)
       }
       const { stats: i2vStats } = await collectVideo(
-        videoOp({ ...base, mode: 'img2vid', init_image: PNG_B64 })
+        videoOp({ ...base, mode: 'img2vid', initImage: PNG_B64 })
       )
       t.is(i2vStats?.hasAudio, true)
       t.is(observed[4]?.['mode'], 'img2vid')
@@ -151,9 +151,9 @@ test('video op: Wan still rejects invalid frames at the loaded-model boundary', 
       return {}
     },
     async (modelId) => {
-      for (const video_frames of [1, 6, 22, 124]) {
+      for (const videoFrames of [1, 6, 22, 124]) {
         await t.exception(
-          async () => videoOp({ modelId, mode: 'txt2vid', prompt: 'Coffee', video_frames }).next(),
+          async () => videoOp({ modelId, mode: 'txt2vid', prompt: 'Coffee', videoFrames }).next(),
           PluginRequestValidationFailedError as unknown as new () => Error
         )
       }
@@ -189,8 +189,8 @@ test('video op: decodes base64 inputs, forwards mode, and emits stream responses
           modelId,
           mode: 'txt2vid',
           prompt: 'a running fox',
-          control_frames: [PNG_B64, JPEG_B64],
-          video_frames: 5,
+          controlFrames: [PNG_B64, JPEG_B64],
+          videoFrames: 5,
           fps: 16
         })
       )
@@ -257,7 +257,7 @@ test('video op: maps addon numeric hasAudio to a boolean in final stats', async 
           modelId,
           mode: 'txt2vid',
           prompt: 'a jazz band with synced audio',
-          video_frames: 121
+          videoFrames: 121
         })
       )
 
@@ -293,7 +293,7 @@ test('video op: silent video maps hasAudio 0 to false', async function (t) {
           modelId,
           mode: 'txt2vid',
           prompt: 'a silent clip',
-          video_frames: 121
+          videoFrames: 121
         })
       )
 
@@ -302,7 +302,7 @@ test('video op: silent video maps hasAudio 0 to false', async function (t) {
   )
 })
 
-test('video op: forwards img2vid init_image and strength to model.run', async function (t) {
+test('video op: forwards img2vid initImage and strength to model.run', async function (t) {
   const { video: videoOp } = await import('@/plugins/builtin/sdcpp-generation/ops/video')
   let observed: Record<string, unknown> | undefined
 
@@ -321,9 +321,9 @@ test('video op: forwards img2vid init_image and strength to model.run', async fu
         modelId,
         mode: 'img2vid',
         prompt: 'gentle head turn',
-        init_image: PNG_B64,
+        initImage: PNG_B64,
         strength: 0.9,
-        video_frames: 5
+        videoFrames: 5
       })) {
         // drain
       }
@@ -337,7 +337,7 @@ test('video op: forwards img2vid init_image and strength to model.run', async fu
   )
 })
 
-test('video op: LTX-2 img2vid forwards init_image, strength, and temporal_tiling', async function (t) {
+test('video op: LTX-2 img2vid forwards initImage, strength, and temporalTiling', async function (t) {
   const { video: videoOp } = await import('@/plugins/builtin/sdcpp-generation/ops/video')
   let observed: Record<string, unknown> | undefined
 
@@ -356,10 +356,10 @@ test('video op: LTX-2 img2vid forwards init_image, strength, and temporal_tiling
         modelId,
         mode: 'img2vid',
         prompt: 'the subject slowly turns and smiles',
-        init_image: PNG_B64,
+        initImage: PNG_B64,
         strength: 0.85,
-        video_frames: 121,
-        temporal_tiling: true
+        videoFrames: 121,
+        temporalTiling: true
       })) {
         // drain
       }
@@ -373,7 +373,7 @@ test('video op: LTX-2 img2vid forwards init_image, strength, and temporal_tiling
   )
 })
 
-test('video op: forwards temporal_tiling to model.run (LTX-2 video VAE knob)', async function (t) {
+test('video op: forwards temporalTiling to model.run (LTX-2 video VAE knob)', async function (t) {
   const { video: videoOp } = await import('@/plugins/builtin/sdcpp-generation/ops/video')
   let observed: Record<string, unknown> | undefined
 
@@ -392,8 +392,8 @@ test('video op: forwards temporal_tiling to model.run (LTX-2 video VAE knob)', a
         modelId,
         mode: 'txt2vid',
         prompt: 'a claymation cat playing jazz',
-        video_frames: 121,
-        temporal_tiling: true
+        videoFrames: 121,
+        temporalTiling: true
       })) {
         // drain
       }
@@ -423,13 +423,13 @@ test('video op: forwards the full LTX Ingredients request to model.run', async f
         mode: 'txt2vid',
         prompt: 'Reference sheet: an explorer. Generated video: the explorer crosses a ridge.',
         lora: '/models/ltx-2-ingredients.safetensors',
-        lora_strength: 1.37,
-        stg_scale: 1,
-        stg_block: 29,
-        reference_images: [PNG_B64],
-        reference_attention_strength: 1,
-        reference_downscale_factor: 1,
-        video_frames: 217,
+        loraStrength: 1.37,
+        stgScale: 1,
+        stgBlock: 29,
+        referenceImages: [PNG_B64],
+        referenceAttentionStrength: 1,
+        referenceDownscaleFactor: 1,
+        videoFrames: 217,
         scheduler: 'ltx2'
       })) {
         // drain
@@ -477,7 +477,7 @@ test('video op: warns when the configured LoRA mode may persist the adapter', as
           mode: 'txt2vid',
           prompt: 'a reference-conditioned explorer',
           lora: '/models/ltx-2-ingredients.safetensors',
-          video_frames: 97
+          videoFrames: 97
         })) {
           // drain
         }
@@ -492,12 +492,12 @@ test('video op: warns when the configured LoRA mode may persist the adapter', as
   try {
     await runWithConfig({})
     t.is(
-      warnings.some((message) => message.includes('lora_apply_mode="auto" may persist')),
+      warnings.some((message) => message.includes('loraApplyMode="auto" may persist')),
       true
     )
 
     warnings.length = 0
-    await runWithConfig({ lora_apply_mode: 'at_runtime' })
+    await runWithConfig({ loraApplyMode: 'at_runtime' })
     t.is(warnings.length, 0, 'at_runtime applies LoRA per call without a persistence warning')
   } finally {
     logger.warn = originalWarn
@@ -525,7 +525,7 @@ test('video op: validates LoRA paths using provider filesystem semantics', async
         mode: 'txt2vid' as const,
         prompt: 'a reference-conditioned explorer',
         lora: windowsLoraPath,
-        video_frames: 97
+        videoFrames: 97
       }
 
       if (path.isAbsolute(windowsLoraPath)) {
@@ -546,7 +546,7 @@ test('video op: validates LoRA paths using provider filesystem semantics', async
     async function () {},
     true,
     false,
-    { lora_apply_mode: 'at_runtime' }
+    { loraApplyMode: 'at_runtime' }
   )
 })
 
@@ -615,7 +615,7 @@ test('video op: rejects invalid LTX-2 dimensions and frame counts before generat
             prompt: 'a fox',
             width: 528,
             height: 320,
-            video_frames: 121
+            videoFrames: 121
           }).next()
         },
         PluginRequestValidationFailedError as unknown as new () => Error
@@ -628,7 +628,7 @@ test('video op: rejects invalid LTX-2 dimensions and frame counts before generat
             prompt: 'a fox',
             width: 512,
             height: 496,
-            video_frames: 121
+            videoFrames: 121
           }).next()
         },
         PluginRequestValidationFailedError as unknown as new () => Error
@@ -641,7 +641,7 @@ test('video op: rejects invalid LTX-2 dimensions and frame counts before generat
             prompt: 'a fox',
             width: 512,
             height: 320,
-            video_frames: 13
+            videoFrames: 13
           }).next()
         },
         PluginRequestValidationFailedError as unknown as new () => Error
@@ -654,7 +654,7 @@ test('video op: rejects invalid LTX-2 dimensions and frame counts before generat
             prompt: 'a fox',
             width: 512,
             height: 320,
-            video_frames: 265
+            videoFrames: 265
           }).next()
         },
         PluginRequestValidationFailedError as unknown as new () => Error
@@ -691,8 +691,8 @@ test('video op: rejects Wan 2.2 MoE parameters on a single-expert model', async 
             prompt: 'steam curling from an espresso cup',
             width: 1280,
             height: 704,
-            video_frames: 121,
-            high_noise_steps: 8
+            videoFrames: 121,
+            highNoiseSteps: 8
           }).next()
         },
         PluginRequestValidationFailedError as unknown as new () => Error
@@ -703,7 +703,7 @@ test('video op: rejects Wan 2.2 MoE parameters on a single-expert model', async 
             modelId,
             mode: 'txt2vid',
             prompt: 'steam curling from an espresso cup',
-            moe_boundary: 0.875
+            moeBoundary: 0.875
           }).next()
         },
         PluginRequestValidationFailedError as unknown as new () => Error
@@ -733,18 +733,18 @@ test('video op: single-expert guard forwards the non-MoE Wan 2.2 TI2V knobs', as
         prompt: 'steam curling from an espresso cup',
         width: 1280,
         height: 704,
-        video_frames: 121,
+        videoFrames: 121,
         fps: 24,
         steps: 4,
-        sampling_method: 'euler',
+        samplingMethod: 'euler',
         scheduler: 'simple',
-        cfg_scale: 1.0,
-        flow_shift: 5.0
+        cfgScale: 1.0,
+        flowShift: 5.0
       })) {
         // drain
       }
 
-      // Every sampling knob here has a `high_noise_*` twin that the guard does
+      // Every sampling knob here has a `highNoise*` twin that the guard does
       // reject, so a refinement that matched by prefix — or listed the base
       // name by mistake — would fail the request instead of forwarding it.
       t.is(observed?.['width'], 1280)
@@ -777,9 +777,9 @@ test('video op: forwards Wan 2.2 MoE parameters when a high-noise expert is load
         modelId,
         mode: 'txt2vid',
         prompt: 'a running fox',
-        high_noise_steps: 8,
-        high_noise_cfg_scale: 6.0,
-        moe_boundary: 0.875
+        highNoiseSteps: 8,
+        highNoiseCfgScale: 6.0,
+        moeBoundary: 0.875
       })) {
         // drain
       }
@@ -828,7 +828,7 @@ test('video op: broad cancel routes through registry and calls model.cancel', as
         requestId,
         mode: 'txt2vid',
         prompt: 'a running fox',
-        video_frames: 5
+        videoFrames: 5
       })
       const firstChunk = gen.next()
       await Promise.resolve()
@@ -891,7 +891,7 @@ test('video op: early consumer exit settles native work before releasing admissi
         modelId,
         mode: 'txt2vid' as const,
         prompt: 'A running fox.',
-        video_frames: 5
+        videoFrames: 5
       }
       const stream = diffusionPlugin.handlers.videoStream.handler(
         request
@@ -967,7 +967,7 @@ test('video outputs allow an immediate next generation on the same model', async
             modelId,
             mode: 'txt2vid',
             prompt: 'A running fox.',
-            video_frames: 5
+            videoFrames: 5
           }).outputs
           t.alike(
             outputs.map((output) => Array.from(output)),

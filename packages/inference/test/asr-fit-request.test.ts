@@ -21,8 +21,8 @@ test('whisper: carries the VAD model, flash attention, and the decoder count', (
       '/models/whisper.bin',
       {
         strategy: 'beam_search',
-        beam_search_beam_size: 5,
-        contextParams: { use_gpu: true, flash_attn: true, gpu_device: 1 }
+        beamSize: 5,
+        contextParams: { useGpu: true, flashAttention: true, gpuDevice: 1 }
       },
       { artifacts: { vadModelPath: '/models/vad.bin' } }
     )
@@ -40,18 +40,18 @@ test('whisper: carries the VAD model, flash attention, and the decoder count', (
 })
 
 test('whisper: a CPU load asks the fitter for no offload', (t) => {
-  const plan = whisperFitRequest(load('/models/whisper.bin', { contextParams: { use_gpu: false } }))
+  const plan = whisperFitRequest(load('/models/whisper.bin', { contextParams: { useGpu: false } }))
   t.is(requestOf(plan)?.['gpuLayers'], 0)
 })
 
 test('whisper: the transcribe duration bounds the projection', (t) => {
-  const plan = whisperFitRequest(load('/models/whisper.bin', { duration_ms: 90_000 }))
+  const plan = whisperFitRequest(load('/models/whisper.bin', { durationMs: 90_000 }))
   t.is(requestOf(plan)?.['audioSeconds'], 90)
 })
 
 test('whisper: the default decoder sentinel is left to the engine', (t) => {
   const plan = whisperFitRequest(
-    load('/models/whisper.bin', { strategy: 'greedy', greedy_best_of: -1 })
+    load('/models/whisper.bin', { strategy: 'greedy', greedyBestOf: -1 })
   )
   t.ok(requestOf(plan))
   t.absent('decoders' in (requestOf(plan) ?? {}))
@@ -60,7 +60,7 @@ test('whisper: the default decoder sentinel is left to the engine', (t) => {
 test('parakeet: carries threads and the streaming chunk cadence', (t) => {
   const plan = parakeetFitRequest(
     load('/models/parakeet.gguf', {
-      useGPU: true,
+      useGpu: true,
       maxThreads: 6,
       streaming: true,
       streamingChunkMs: 320
@@ -79,7 +79,7 @@ test('parakeet: carries threads and the streaming chunk cadence', (t) => {
 test('parakeet: a streaming window the fitter cannot represent is unknown', (t) => {
   for (const key of ['streamingLeftContextMs', 'streamingHistoryMs']) {
     const plan = parakeetFitRequest(
-      load('/models/parakeet.gguf', { useGPU: true, streaming: true, [key]: 8000 })
+      load('/models/parakeet.gguf', { useGpu: true, streaming: true, [key]: 8000 })
     )
     t.ok('unknown' in plan && plan.unknown.includes('cannot represent'), key)
   }
@@ -87,7 +87,7 @@ test('parakeet: a streaming window the fitter cannot represent is unknown', (t) 
 
 test('parakeet: those windows bind nothing outside a streaming load', (t) => {
   const plan = parakeetFitRequest(
-    load('/models/parakeet.gguf', { useGPU: true, streamingLeftContextMs: 8000 })
+    load('/models/parakeet.gguf', { useGpu: true, streamingLeftContextMs: 8000 })
   )
   t.ok(requestOf(plan))
 })
@@ -134,7 +134,7 @@ test('parakeet: prewarm and energy-VAD tuning stay out of the projection', (t) =
 
 test('parakeet: a non-streaming load holds no live session to size', (t) => {
   const plan = parakeetFitRequest(
-    load('/models/parakeet.gguf', { useGPU: true, streamingChunkMs: 320 })
+    load('/models/parakeet.gguf', { useGpu: true, streamingChunkMs: 320 })
   )
   t.ok(requestOf(plan))
   t.absent('nemotronChunkMs' in (requestOf(plan) ?? {}))
@@ -144,7 +144,7 @@ test('MOSS: projects the declared recording and matching decoding options', (t) 
   const plan = mossTranscribeFitRequest(
     load(
       '/models/moss.gguf',
-      { useGPU: true, maxThreads: 4, backend: 'cuda', backendsDir: '/backends' },
+      { useGpu: true, maxThreads: 4, backend: 'cuda', backendsDir: '/backends' },
       { transcriptionWorkload: { audioSeconds: 90, hotwords: ['Erin'], maxNewTokens: 0 } }
     )
   )
@@ -177,7 +177,7 @@ test('MOSS: no workload is unknown, and the default load stays on the CPU', (t) 
 
 test('parakeet: an explicit backend selector reaches the projection', (t) => {
   const plan = parakeetFitRequest(
-    load('/models/parakeet.gguf', { backend: 'CUDA0', useGPU: false })
+    load('/models/parakeet.gguf', { backend: 'CUDA0', useGpu: false })
   )
 
   t.alike(requestOf(plan), {

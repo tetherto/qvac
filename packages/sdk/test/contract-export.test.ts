@@ -11,6 +11,7 @@ import {
   renderRegistryEngineManifest
 } from '../scripts/contract/build-contract'
 import { buildModelsRegistry } from '../scripts/contract/build-models-registry'
+import { buildLegacyKeys } from '../scripts/contract/build-legacy-keys'
 import { constantsRegistry } from '../scripts/contract/constants-registry'
 import { PLUGIN_MOSS_TRANSCRIBE } from '../src/plugin-ids'
 import { methodShapes } from '../scripts/contract/method-shapes'
@@ -147,17 +148,17 @@ test('videoStream contract exports LTX IC-LoRA field constraints and one schedul
   const properties = def['properties'] as Record<string, JsonSchema>
 
   t.ok(properties['lora']?.['pattern'], 'lora retains the absolute-path pattern')
-  t.is(properties['lora_strength']?.['minimum'], 0)
-  t.is(properties['lora_strength']?.['maximum'], 10)
-  t.is(properties['stg_scale']?.['minimum'], 0)
-  t.is(properties['stg_scale']?.['maximum'], 10)
-  t.is(properties['stg_block']?.['type'], 'integer')
-  t.is(properties['stg_block']?.['minimum'], 0)
-  t.is(properties['reference_images']?.['minItems'], 1)
-  t.is(properties['reference_images']?.['maxItems'], 1)
-  t.is(properties['reference_attention_strength']?.['minimum'], 0)
-  t.is(properties['reference_attention_strength']?.['maximum'], 1)
-  t.is(properties['reference_downscale_factor']?.['const'], 1)
+  t.is(properties.loraStrength?.['minimum'], 0)
+  t.is(properties.loraStrength?.['maximum'], 10)
+  t.is(properties.stgScale?.['minimum'], 0)
+  t.is(properties.stgScale?.['maximum'], 10)
+  t.is(properties.stgBlock?.['type'], 'integer')
+  t.is(properties.stgBlock?.['minimum'], 0)
+  t.is(properties.referenceImages?.['minItems'], 1)
+  t.is(properties.referenceImages?.['maxItems'], 1)
+  t.is(properties.referenceAttentionStrength?.['minimum'], 0)
+  t.is(properties.referenceAttentionStrength?.['maximum'], 1)
+  t.is(properties.referenceDownscaleFactor?.['const'], 1)
 
   const scheduler = properties['scheduler'] as JsonSchema
   t.absent(scheduler['anyOf'], 'video scheduler is one enum, not an anyOf union')
@@ -422,6 +423,39 @@ test('world fit length survives the generated load contract', function (t) {
   for (const fitSteps of [0, -1, 1.5, 1000001]) {
     request.modelConfig.world = { fitSteps }
     t.absent(validate(request), `rejects ${fitSteps} steps`)
+  }
+})
+
+test('legacy keys name titled request objects and their camelCase properties', (t) => {
+  const { schemaDocument } = buildContract()
+  const legacyKeys = buildLegacyKeys(schemaDocument.$defs)
+  const nodes: JsonSchema[] = []
+  for (const def of Object.values(schemaDocument.$defs)) collectTitleableNodes(def, nodes)
+  const byTitle = new Map(
+    nodes.map(function (node) {
+      return [node['title'], node] as const
+    })
+  )
+
+  t.is(legacyKeys['CompletionStreamRequestGenerationParams']?.['temp'], 'temperature')
+  t.alike(legacyKeys['CompletionStreamRequestResponseFormatJsonSchema'], {
+    json_schema: 'jsonSchema'
+  })
+  t.is(legacyKeys['LoadModelSrcRequestLlamacppCompletionModelConfig']?.['ctx_size'], 'ctxSize')
+  t.is(
+    legacyKeys['LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams']?.[
+      'min_speech_duration_ms'
+    ],
+    'minSpeechDurationMs'
+  )
+
+  for (const [title, renames] of Object.entries(legacyKeys)) {
+    const properties = byTitle.get(title)?.['properties'] as JsonSchema | undefined
+    t.ok(properties, `${title} is an object schema in schema.json`)
+    for (const [legacyKey, key] of Object.entries(renames)) {
+      t.ok(properties !== undefined && key in properties, `${title}.${key} exists`)
+      t.absent(properties !== undefined && legacyKey in properties, `${title}.${legacyKey} is gone`)
+    }
   }
 })
 

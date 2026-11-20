@@ -3,7 +3,7 @@ import { modelSrcInputSchema } from '@/schemas/model-src-utils'
 
 // === BCI (whisper.cpp) engine config ===
 //
-// Mirrors `BCIWhispercppConfig` from `@qvac/bci-whispercpp`. Unlike the
+// The camelCase form of `BCIWhispercppConfig` from `@qvac/bci-whispercpp`. Unlike the
 // flat `whisperConfigSchema`, the BCI addon nests its inference knobs
 // under `whisperConfig` and exposes a separate `bciConfig` for
 // session-level (neural-signal) parameters.
@@ -13,53 +13,48 @@ import { modelSrcInputSchema } from '@/schemas/model-src-utils'
 const bciWhisperConfigSchema = z
   .object({
     language: z.string().optional().describe('Transcription language (ISO 639-1). Default `en`.'),
-    n_threads: z.number().int().optional().describe('Number of CPU threads. `0` = auto.'),
+    threads: z.number().int().optional().describe('Number of CPU threads. `0` = auto.'),
     temperature: z.number().optional().describe('Sampling temperature. Default 0.0.'),
-    suppress_nst: z.boolean().optional().describe('Suppress non-speech tokens (NST).'),
-    suppress_blank: z
+    suppressNst: z.boolean().optional().describe('Suppress non-speech tokens (NST).'),
+    suppressBlank: z
       .boolean()
       .optional()
       .describe('Suppress the blank / leading-space token at the start of sampling.'),
-    duration_ms: z
+    durationMs: z
       .number()
       .int()
       .optional()
       .describe('Maximum duration of audio to transcribe, in milliseconds.'),
     translate: z.boolean().optional().describe('Translate the transcribed audio into English.'),
-    no_timestamps: z
-      .boolean()
-      .optional()
-      .describe('Omit timestamps from the transcription output.'),
-    single_segment: z
+    noTimestamps: z.boolean().optional().describe('Omit timestamps from the transcription output.'),
+    singleSegment: z
       .boolean()
       .optional()
       .describe('Force the whole audio into one output segment (for streaming or short clips).'),
-    print_special: z.boolean().optional().describe('Print special tokens in the output.'),
-    print_progress: z.boolean().optional().describe('Print progress updates during transcription.'),
-    print_realtime: z
+    printSpecial: z.boolean().optional().describe('Print special tokens in the output.'),
+    printProgress: z.boolean().optional().describe('Print progress updates during transcription.'),
+    printRealtime: z
       .boolean()
       .optional()
       .describe(
         'whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback).'
       ),
-    print_timestamps: z
+    printTimestamps: z
       .boolean()
       .optional()
-      .describe(
-        'Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data.'
-      ),
-    detect_language: z
+      .describe('Prefix each `printRealtime` line with `[t0 --> t1]`; no effect on returned data.'),
+    detectLanguage: z
       .boolean()
       .optional()
       .describe(
         "Detect the spoken language and stop: whisper.cpp returns straight after detection, so the transcript comes back empty. Use `language: 'auto'` to detect and transcribe in one call."
       ),
-    greedy_best_of: z
+    greedyBestOf: z
       .number()
       .int()
       .optional()
       .describe('Greedy decoding: number of candidate completions; `-1` = default.'),
-    beam_search_beam_size: z
+    beamSize: z
       .number()
       .int()
       .optional()
@@ -69,7 +64,7 @@ const bciWhisperConfigSchema = z
 
 const bciSessionConfigSchema = z
   .object({
-    day_idx: z
+    dayIdx: z
       .number()
       .int()
       .optional()
@@ -85,18 +80,18 @@ const bciContextParamsSchema = z
       .string()
       .optional()
       .describe('Optional whisper model path override (usually set via the loaded model files).'),
-    use_gpu: z
+    useGpu: z
       .boolean()
       .optional()
       .describe('Enable GPU acceleration. Enabled by default; set false to force CPU.'),
-    flash_attn: z.boolean().optional().describe('Enable flash attention.'),
-    gpu_device: z.number().optional().describe('GPU device index to use.')
+    flashAttention: z.boolean().optional().describe('Enable flash attention.'),
+    gpuDevice: z.number().optional().describe('GPU device index to use.')
   })
   .optional()
 
 const bciMiscConfigSchema = z
   .object({
-    caption_enabled: z
+    captionEnabled: z
       .boolean()
       .optional()
       .describe('Format output segments with caption markers. Default false.')

@@ -60,9 +60,9 @@ test('Laya config accepts only supported context options and preserves native de
   const config = {
     device: 'cpu' as const,
     threads: 0,
-    'threads-batch': -1,
-    batch_size: 2048,
-    flash_attn: 'off' as const
+    threadsBatch: -1,
+    batchSize: 2048,
+    flashAttention: 'off' as const
   }
   t.alike(transformDecisionConfig(decisionConfigSchema.parse(config)), {
     device: 'cpu',
@@ -75,16 +75,16 @@ test('Laya config accepts only supported context options and preserves native de
     device: 'gpu'
   })
   t.alike(
-    transformDecisionConfig(decisionConfigSchema.parse({ device: 'cpu', batch_size: undefined })),
+    transformDecisionConfig(decisionConfigSchema.parse({ device: 'cpu', batchSize: undefined })),
     {
       device: 'cpu'
     }
   )
   for (const bad of [
     { device: 'cuda' },
-    { device: 'gpu', ctx_size: 512 },
+    { device: 'gpu', ctxSize: 512 },
     { device: 'cpu', threads: 1.5 },
-    { device: 'cpu', 'split-mode': 'row' }
+    { device: 'cpu', splitMode: 'row' }
   ]) {
     t.absent(decisionConfigSchema.safeParse(bad).success)
   }

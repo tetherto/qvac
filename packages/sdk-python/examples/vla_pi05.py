@@ -118,10 +118,10 @@ async def main() -> int:
             if result.stats:
                 s = result.stats
                 print(
-                    f"▸ Timing: vision={s.get('vision_ms', 0):.0f}ms "
-                    f"prefill={s.get('prefill_total_ms', 0):.0f}ms "
-                    f"ode={s.get('ode_ms', 0):.0f}ms "
-                    f"total={s.get('total_ms', 0):.0f}ms"
+                    f"▸ Timing: vision={s.get('visionMs', 0):.0f}ms "
+                    f"prefill={s.get('prefillTotalMs', 0):.0f}ms "
+                    f"ode={s.get('odeMs', 0):.0f}ms "
+                    f"total={s.get('totalTime', 0):.0f}ms"
                 )
 
             await unload_model(t, model_id)

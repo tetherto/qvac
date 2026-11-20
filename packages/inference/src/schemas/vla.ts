@@ -211,16 +211,11 @@ export type VlaHparams = z.infer<typeof vlaHparamsSchema>
 // ============================================
 
 export const vlaStatsSchema = z.object({
-  vision_ms: z.number().optional(),
-  // Architecture-neutral prefill timings (emitted by both SmolVLA and π₀.₅).
-  prefill_compute_ms: z.number().optional(),
-  prefill_total_ms: z.number().optional(),
-  // Legacy SmolVLA-named aliases for the prefill timings above; kept for
-  // back-compat with consumers written against the original SmolVLA surface.
-  smollm2_compute_ms: z.number().optional(),
-  smollm2_total_ms: z.number().optional(),
-  ode_ms: z.number().optional(),
-  total_ms: z.number().optional(),
+  visionMs: z.number().optional(),
+  prefillComputeMs: z.number().optional(),
+  prefillTotalMs: z.number().optional(),
+  odeMs: z.number().optional(),
+  totalTime: z.number().optional(),
   backendDevice: z
     .number()
     .optional()

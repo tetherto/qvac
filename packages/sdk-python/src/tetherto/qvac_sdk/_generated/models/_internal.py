@@ -615,6 +615,7 @@ class AudioEditStreamRequestReferenceAudioFilePath(GeneratedBaseModel):
 
 
 class AudioEditStreamRequest(GeneratedBaseModel):
+    __legacy_keys__ = {"keyscale": "keyScale", "timesignature": "timeSignature"}
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -653,17 +654,20 @@ class AudioEditStreamRequest(GeneratedBaseModel):
             le=2147483647,
         ),
     ] = None
-    keyscale: Annotated[
+    key_scale: Annotated[
         str | None,
         Field(
+            alias="keyScale",
             description="Key and scale for the edit prompts, e.g. 'C minor'.",
             min_length=1,
         ),
     ] = None
-    timesignature: Annotated[
+    time_signature: Annotated[
         str | None,
         Field(
-            description="Time signature for the edit prompts, e.g. '4/4'.", min_length=1
+            alias="timeSignature",
+            description="Time signature for the edit prompts, e.g. '4/4'.",
+            min_length=1,
         ),
     ] = None
     augment_caption_with_metadata: Annotated[
@@ -849,7 +853,7 @@ class AudioEditStreamResponseStatsMetadata(GeneratedBaseModel):
         Field(description="The lyrics the run used (LM-written under Simple Mode)."),
     ]
     bpm: Annotated[float, Field(description="Beats per minute; 0 when unresolved.")]
-    keyscale: str
+    key_scale: Annotated[str, Field(alias="keyScale")]
     beats_per_bar: Annotated[
         float,
         Field(
@@ -896,8 +900,8 @@ class AudioEditStreamResponseStatsUnderstand(GeneratedBaseModel):
             description="LM estimate in seconds. The recovered codes fix the true length."
         ),
     ]
-    keyscale: str
-    timesignature: str
+    key_scale: Annotated[str, Field(alias="keyScale")]
+    time_signature: Annotated[str, Field(alias="timeSignature")]
     vocal_language: Annotated[str, Field(alias="vocalLanguage")]
     audio_codes: Annotated[
         list[AudioCode],
@@ -1226,6 +1230,7 @@ class AudioGenStreamRequestSourceAudioFilePath(GeneratedBaseModel):
 
 
 class AudioGenStreamRequest(GeneratedBaseModel):
+    __legacy_keys__ = {"keyscale": "keyScale", "timesignature": "timeSignature"}
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -1251,8 +1256,10 @@ class AudioGenStreamRequest(GeneratedBaseModel):
             le=2147483647,
         ),
     ] = None
-    keyscale: Annotated[str | None, Field(min_length=1)] = None
-    timesignature: Annotated[str | None, Field(min_length=1)] = None
+    key_scale: Annotated[str | None, Field(alias="keyScale", min_length=1)] = None
+    time_signature: Annotated[
+        str | None, Field(alias="timeSignature", min_length=1)
+    ] = None
     augment_caption_with_metadata: Annotated[
         bool | None,
         Field(
@@ -1588,7 +1595,7 @@ class AudioGenStreamResponseStatsMetadata(GeneratedBaseModel):
         Field(description="The lyrics the run used (LM-written under Simple Mode)."),
     ]
     bpm: Annotated[float, Field(description="Beats per minute; 0 when unresolved.")]
-    keyscale: str
+    key_scale: Annotated[str, Field(alias="keyScale")]
     beats_per_bar: Annotated[
         float,
         Field(
@@ -1631,8 +1638,8 @@ class AudioGenStreamResponseStatsUnderstand(GeneratedBaseModel):
             description="LM estimate in seconds. The recovered codes fix the true length."
         ),
     ]
-    keyscale: str
-    timesignature: str
+    key_scale: Annotated[str, Field(alias="keyScale")]
+    time_signature: Annotated[str, Field(alias="timeSignature")]
     vocal_language: Annotated[str, Field(alias="vocalLanguage")]
     audio_codes: Annotated[
         list[AudioCode],
@@ -2016,8 +2023,8 @@ class AudioUnderstandResponseUnderstand(GeneratedBaseModel):
             description="LM estimate in seconds. The recovered codes fix the true length."
         ),
     ]
-    keyscale: str
-    timesignature: str
+    key_scale: Annotated[str, Field(alias="keyScale")]
+    time_signature: Annotated[str, Field(alias="timeSignature")]
     vocal_language: Annotated[str, Field(alias="vocalLanguage")]
     audio_codes: Annotated[
         list[AudioCode],
@@ -2055,7 +2062,7 @@ class AudioUnderstandResponseStatsMetadata(GeneratedBaseModel):
         Field(description="The lyrics the run used (LM-written under Simple Mode)."),
     ]
     bpm: Annotated[float, Field(description="Beats per minute; 0 when unresolved.")]
-    keyscale: str
+    key_scale: Annotated[str, Field(alias="keyScale")]
     beats_per_bar: Annotated[
         float,
         Field(
@@ -2098,8 +2105,8 @@ class AudioUnderstandResponseStatsUnderstand(GeneratedBaseModel):
             description="LM estimate in seconds. The recovered codes fix the true length."
         ),
     ]
-    keyscale: str
-    timesignature: str
+    key_scale: Annotated[str, Field(alias="keyScale")]
+    time_signature: Annotated[str, Field(alias="timeSignature")]
     vocal_language: Annotated[str, Field(alias="vocalLanguage")]
     audio_codes: Annotated[
         list[AudioCode],
@@ -2465,17 +2472,20 @@ class BatchCompletionStreamRequestPromptsItemHistoryItem(GeneratedBaseModel):
 
 
 class BatchCompletionStreamRequestPromptsItemGenerationParams(GeneratedBaseModel):
+    __legacy_keys__ = {"temp": "temperature"}
     model_config = ConfigDict(
         extra="forbid",
     )
-    temp: Annotated[
+    temperature: Annotated[
         float | None, Field(description="Sampling temperature (typically 0–2).")
     ] = None
     top_p: Annotated[
-        float | None, Field(description="Top-p (nucleus) sampling cutoff (0–1).")
+        float | None,
+        Field(alias="topP", description="Top-p (nucleus) sampling cutoff (0–1)."),
     ] = None
     top_k: Annotated[
-        float | None, Field(description="Top-k sampling — keep only the top K tokens.")
+        float | None,
+        Field(alias="topK", description="Top-k sampling — keep only the top K tokens."),
     ] = None
     predict: Annotated[
         float | None,
@@ -2488,19 +2498,27 @@ class BatchCompletionStreamRequestPromptsItemGenerationParams(GeneratedBaseModel
     ] = None
     frequency_penalty: Annotated[
         float | None,
-        Field(description="Penalty applied to tokens based on frequency so far."),
+        Field(
+            alias="frequencyPenalty",
+            description="Penalty applied to tokens based on frequency so far.",
+        ),
     ] = None
     presence_penalty: Annotated[
         float | None,
-        Field(description="Penalty applied to tokens that have already appeared."),
+        Field(
+            alias="presencePenalty",
+            description="Penalty applied to tokens that have already appeared.",
+        ),
     ] = None
     repeat_penalty: Annotated[
-        float | None, Field(description="Penalty applied to repeated tokens.")
+        float | None,
+        Field(alias="repeatPenalty", description="Penalty applied to repeated tokens."),
     ] = None
     reasoning_budget: Annotated[
         int | None,
         Field(
-            description="Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
+            alias="reasoningBudget",
+            description="Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoningBudget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
             ge=-1,
             le=2147483647,
         ),
@@ -2508,6 +2526,7 @@ class BatchCompletionStreamRequestPromptsItemGenerationParams(GeneratedBaseModel
     tool_choice: Annotated[
         str | None,
         Field(
+            alias="toolChoice",
             description='Controls tool calling for a request that declares `tools`, in the OpenAI style. `"auto"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `"required"` forces a tool call; `"none"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `"required"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.',
             min_length=1,
         ),
@@ -2515,7 +2534,8 @@ class BatchCompletionStreamRequestPromptsItemGenerationParams(GeneratedBaseModel
     parallel_tool_calls: Annotated[
         bool | None,
         Field(
-            description="Whether one response may carry more than one tool call. `true` (default) lets the chat template and tool-call grammar accept several; `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it."
+            alias="parallelToolCalls",
+            description="Whether one response may carry more than one tool call. `true` (default) lets the chat template and tool-call grammar accept several; `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.",
         ),
     ] = None
 
@@ -2593,7 +2613,8 @@ class BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchema(
     json_schema: Annotated[
         BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchema,
         Field(
-            title="BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchema"
+            alias="jsonSchema",
+            title="BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchema",
         ),
     ]
 
@@ -4650,17 +4671,20 @@ class CompletionOrchestrateRequestToolSearch(GeneratedBaseModel):
 
 
 class CompletionOrchestrateRequestGenerationParams(GeneratedBaseModel):
+    __legacy_keys__ = {"temp": "temperature"}
     model_config = ConfigDict(
         extra="forbid",
     )
-    temp: Annotated[
+    temperature: Annotated[
         float | None, Field(description="Sampling temperature (typically 0–2).")
     ] = None
     top_p: Annotated[
-        float | None, Field(description="Top-p (nucleus) sampling cutoff (0–1).")
+        float | None,
+        Field(alias="topP", description="Top-p (nucleus) sampling cutoff (0–1)."),
     ] = None
     top_k: Annotated[
-        float | None, Field(description="Top-k sampling — keep only the top K tokens.")
+        float | None,
+        Field(alias="topK", description="Top-k sampling — keep only the top K tokens."),
     ] = None
     predict: Annotated[
         float | None,
@@ -4673,19 +4697,27 @@ class CompletionOrchestrateRequestGenerationParams(GeneratedBaseModel):
     ] = None
     frequency_penalty: Annotated[
         float | None,
-        Field(description="Penalty applied to tokens based on frequency so far."),
+        Field(
+            alias="frequencyPenalty",
+            description="Penalty applied to tokens based on frequency so far.",
+        ),
     ] = None
     presence_penalty: Annotated[
         float | None,
-        Field(description="Penalty applied to tokens that have already appeared."),
+        Field(
+            alias="presencePenalty",
+            description="Penalty applied to tokens that have already appeared.",
+        ),
     ] = None
     repeat_penalty: Annotated[
-        float | None, Field(description="Penalty applied to repeated tokens.")
+        float | None,
+        Field(alias="repeatPenalty", description="Penalty applied to repeated tokens."),
     ] = None
     reasoning_budget: Annotated[
         int | None,
         Field(
-            description="Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
+            alias="reasoningBudget",
+            description="Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoningBudget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
             ge=-1,
             le=2147483647,
         ),
@@ -4693,6 +4725,7 @@ class CompletionOrchestrateRequestGenerationParams(GeneratedBaseModel):
     tool_choice: Annotated[
         str | None,
         Field(
+            alias="toolChoice",
             description='Controls tool calling for a request that declares `tools`, in the OpenAI style. `"auto"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `"required"` forces a tool call; `"none"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `"required"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.',
             min_length=1,
         ),
@@ -4700,7 +4733,8 @@ class CompletionOrchestrateRequestGenerationParams(GeneratedBaseModel):
     parallel_tool_calls: Annotated[
         bool | None,
         Field(
-            description="Whether one response may carry more than one tool call. `true` (default) lets the chat template and tool-call grammar accept several; `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it."
+            alias="parallelToolCalls",
+            description="Whether one response may carry more than one tool call. `true` (default) lets the chat template and tool-call grammar accept several; `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.",
         ),
     ] = None
 
@@ -4783,7 +4817,10 @@ class CompletionOrchestrateRequestResponseFormatJsonSchema(GeneratedBaseModel):
     type: Literal["json_schema"] = "json_schema"
     json_schema: Annotated[
         CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchema,
-        Field(title="CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchema"),
+        Field(
+            alias="jsonSchema",
+            title="CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchema",
+        ),
     ]
 
 
@@ -4810,7 +4847,7 @@ class CompletionOrchestrateRequest(GeneratedBaseModel):
         str | None,
         Field(
             alias="seedFrom",
-            description="Name of another caller-managed cache to start this chat from, such as a primed system prompt and tools. On the first turn of a chat whose `kvCache` key has no cache yet, the model reads that cache and reuses the prefix it shares with the prompt, so only the rest is processed; the source is never written. Ignored once the chat has a cache. Needs a string `kvCache` other than itself. Refused when no cache of that name exists for this model and system prompt, or when the model was not loaded with `cache_share_across_keys: true`, which is off by default.",
+            description="Name of another caller-managed cache to start this chat from, such as a primed system prompt and tools. On the first turn of a chat whose `kvCache` key has no cache yet, the model reads that cache and reuses the prefix it shares with the prompt, so only the rest is processed; the source is never written. Ignored once the chat has a cache. Needs a string `kvCache` other than itself. Refused when no cache of that name exists for this model and system prompt, or when the model was not loaded with `cacheShareAcrossKeys: true`, which is off by default.",
             min_length=1,
         ),
     ] = None
@@ -5386,17 +5423,20 @@ class CompletionStreamRequestToolSearch(GeneratedBaseModel):
 
 
 class CompletionStreamRequestGenerationParams(GeneratedBaseModel):
+    __legacy_keys__ = {"temp": "temperature"}
     model_config = ConfigDict(
         extra="forbid",
     )
-    temp: Annotated[
+    temperature: Annotated[
         float | None, Field(description="Sampling temperature (typically 0–2).")
     ] = None
     top_p: Annotated[
-        float | None, Field(description="Top-p (nucleus) sampling cutoff (0–1).")
+        float | None,
+        Field(alias="topP", description="Top-p (nucleus) sampling cutoff (0–1)."),
     ] = None
     top_k: Annotated[
-        float | None, Field(description="Top-k sampling — keep only the top K tokens.")
+        float | None,
+        Field(alias="topK", description="Top-k sampling — keep only the top K tokens."),
     ] = None
     predict: Annotated[
         float | None,
@@ -5409,19 +5449,27 @@ class CompletionStreamRequestGenerationParams(GeneratedBaseModel):
     ] = None
     frequency_penalty: Annotated[
         float | None,
-        Field(description="Penalty applied to tokens based on frequency so far."),
+        Field(
+            alias="frequencyPenalty",
+            description="Penalty applied to tokens based on frequency so far.",
+        ),
     ] = None
     presence_penalty: Annotated[
         float | None,
-        Field(description="Penalty applied to tokens that have already appeared."),
+        Field(
+            alias="presencePenalty",
+            description="Penalty applied to tokens that have already appeared.",
+        ),
     ] = None
     repeat_penalty: Annotated[
-        float | None, Field(description="Penalty applied to repeated tokens.")
+        float | None,
+        Field(alias="repeatPenalty", description="Penalty applied to repeated tokens."),
     ] = None
     reasoning_budget: Annotated[
         int | None,
         Field(
-            description="Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
+            alias="reasoningBudget",
+            description="Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoningBudget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
             ge=-1,
             le=2147483647,
         ),
@@ -5429,6 +5477,7 @@ class CompletionStreamRequestGenerationParams(GeneratedBaseModel):
     tool_choice: Annotated[
         str | None,
         Field(
+            alias="toolChoice",
             description='Controls tool calling for a request that declares `tools`, in the OpenAI style. `"auto"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `"required"` forces a tool call; `"none"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `"required"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.',
             min_length=1,
         ),
@@ -5436,7 +5485,8 @@ class CompletionStreamRequestGenerationParams(GeneratedBaseModel):
     parallel_tool_calls: Annotated[
         bool | None,
         Field(
-            description="Whether one response may carry more than one tool call. `true` (default) lets the chat template and tool-call grammar accept several; `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it."
+            alias="parallelToolCalls",
+            description="Whether one response may carry more than one tool call. `true` (default) lets the chat template and tool-call grammar accept several; `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.",
         ),
     ] = None
 
@@ -5517,7 +5567,10 @@ class CompletionStreamRequestResponseFormatJsonSchema(GeneratedBaseModel):
     type: Literal["json_schema"] = "json_schema"
     json_schema: Annotated[
         CompletionStreamRequestResponseFormatJsonSchemaJsonSchema,
-        Field(title="CompletionStreamRequestResponseFormatJsonSchemaJsonSchema"),
+        Field(
+            alias="jsonSchema",
+            title="CompletionStreamRequestResponseFormatJsonSchemaJsonSchema",
+        ),
     ]
 
 
@@ -5544,7 +5597,7 @@ class CompletionStreamRequest(GeneratedBaseModel):
         str | None,
         Field(
             alias="seedFrom",
-            description="Name of another caller-managed cache to start this chat from, such as a primed system prompt and tools. On the first turn of a chat whose `kvCache` key has no cache yet, the model reads that cache and reuses the prefix it shares with the prompt, so only the rest is processed; the source is never written. Ignored once the chat has a cache. Needs a string `kvCache` other than itself. Refused when no cache of that name exists for this model and system prompt, or when the model was not loaded with `cache_share_across_keys: true`, which is off by default.",
+            description="Name of another caller-managed cache to start this chat from, such as a primed system prompt and tools. On the first turn of a chat whose `kvCache` key has no cache yet, the model reads that cache and reuses the prefix it shares with the prompt, so only the rest is processed; the source is never written. Ignored once the chat has a cache. Needs a string `kvCache` other than itself. Refused when no cache of that name exists for this model and system prompt, or when the model was not loaded with `cacheShareAcrossKeys: true`, which is off by default.",
             min_length=1,
         ),
     ] = None
@@ -7100,7 +7153,7 @@ class DiffusionVaeTileSize(RootModel[int]):
     root: Annotated[
         int,
         Field(
-            description="VAE tile size in latent units, as a positive integer or a WxH string such as 64x32. Each dimension must be between 1 and 2147483647. For Qwen-Image-2.1 outputs at 2048x2048 or larger, use vae_tiling: true with vae_tile_size: 64 to bound decode memory.",
+            description="VAE tile size in latent units, as a positive integer or a WxH string such as 64x32. Each dimension must be between 1 and 2147483647. For Qwen-Image-2.1 outputs at 2048x2048 or larger, use vaeTiling: true with vaeTileSize: 64 to bound decode memory.",
             gt=0,
             le=2147483647,
             title="DiffusionVaeTileSize",
@@ -7112,7 +7165,7 @@ class DiffusionVaeTileSizeSpec(RootModel[str]):
     root: Annotated[
         str,
         Field(
-            description="VAE tile size in latent units, as a positive integer or a WxH string such as 64x32. Each dimension must be between 1 and 2147483647. For Qwen-Image-2.1 outputs at 2048x2048 or larger, use vae_tiling: true with vae_tile_size: 64 to bound decode memory.",
+            description="VAE tile size in latent units, as a positive integer or a WxH string such as 64x32. Each dimension must be between 1 and 2147483647. For Qwen-Image-2.1 outputs at 2048x2048 or larger, use vaeTiling: true with vaeTileSize: 64 to bound decode memory.",
             pattern="^[0-9]+x[0-9]+$",
             title="DiffusionVaeTileSizeSpec",
         ),
@@ -7149,7 +7202,10 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     ]
     negative_prompt: Annotated[
         str | None,
-        Field(description="Optional negative prompt describing what to avoid."),
+        Field(
+            alias="negativePrompt",
+            description="Optional negative prompt describing what to avoid.",
+        ),
     ] = None
     width: Annotated[
         int | None,
@@ -7172,7 +7228,7 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     steps: Annotated[
         int | None,
         Field(
-            description="Number of sampling steps. Overridden by custom_sigmas.length - 1 when supplied.",
+            description="Number of sampling steps. Overridden by customSigmas.length - 1 when supplied.",
             gt=0,
             le=9007199254740991,
         ),
@@ -7180,13 +7236,15 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     cfg_scale: Annotated[
         float | None,
         Field(
-            description="Classifier-free guidance scale for SD and Qwen-Image models; typical range 1-20, default 7"
+            alias="cfgScale",
+            description="Classifier-free guidance scale for SD and Qwen-Image models; typical range 1-20, default 7",
         ),
     ] = None
     img_cfg_scale: Annotated[
         float | None,
         Field(
-            description="Image CFG scale for img2img/inpaint workflows where the image and prompt should have different guidance weights; defaults to -1 which reuses cfg_scale"
+            alias="imgCfgScale",
+            description="Image CFG scale for img2img/inpaint workflows where the image and prompt should have different guidance weights; defaults to -1 which reuses cfgScale",
         ),
     ] = -1
     guidance: Annotated[
@@ -7198,6 +7256,7 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     sampling_method: Annotated[
         DiffusionStreamRequestSamplingMethod | None,
         Field(
+            alias="samplingMethod",
             description="Sampling algorithm used by the diffusion scheduler.",
             title="DiffusionStreamRequestSamplingMethod",
         ),
@@ -7205,14 +7264,15 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     scheduler: Annotated[
         DiffusionStreamRequestScheduler | None,
         Field(
-            description="Noise schedule to apply when sampling. Overridden by custom_sigmas when supplied.",
+            description="Noise schedule to apply when sampling. Overridden by customSigmas when supplied.",
             title="DiffusionStreamRequestScheduler",
         ),
     ] = None
     custom_sigmas: Annotated[
         list[CustomSigma] | None,
         Field(
-            description="Explicit noise schedule, including terminal zero. At least two finite, non-negative float values, strictly decreasing after conversion to float precision. Overrides scheduler and steps; the effective step count is length minus one. Qwen-Image-2.1-Turbo uses its fixed eight-step schedule with Euler and cfg_scale: 1.",
+            alias="customSigmas",
+            description="Explicit noise schedule, including terminal zero. At least two finite, non-negative float values, strictly decreasing after conversion to float precision. Overrides scheduler and steps; the effective step count is length minus one. Qwen-Image-2.1-Turbo uses its fixed eight-step schedule with Euler and cfgScale: 1.",
             max_length=2147483647,
             min_length=2,
         ),
@@ -7228,6 +7288,7 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     batch_count: Annotated[
         int | None,
         Field(
+            alias="batchCount",
             description="Number of images to generate in this call.",
             gt=0,
             le=9007199254740991,
@@ -7236,23 +7297,29 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     vae_tiling: Annotated[
         bool | None,
         Field(
-            description="Enable VAE tiling for large images on constrained VRAM, overriding model config."
+            alias="vaeTiling",
+            description="Enable VAE tiling for large images on constrained VRAM, overriding model config.",
         ),
     ] = None
     vae_tile_size: Annotated[
         DiffusionVaeTileSize | DiffusionVaeTileSizeSpec | None,
         Field(
-            description="VAE tile size in latent units, as a positive integer or a WxH string such as 64x32. Each dimension must be between 1 and 2147483647. For Qwen-Image-2.1 outputs at 2048x2048 or larger, use vae_tiling: true with vae_tile_size: 64 to bound decode memory."
+            alias="vaeTileSize",
+            description="VAE tile size in latent units, as a positive integer or a WxH string such as 64x32. Each dimension must be between 1 and 2147483647. For Qwen-Image-2.1 outputs at 2048x2048 or larger, use vaeTiling: true with vaeTileSize: 64 to bound decode memory.",
         ),
     ] = None
     cache_preset: Annotated[
         str | None,
-        Field(description="Optional name of a cached sampler preset to reuse."),
+        Field(
+            alias="cachePreset",
+            description="Optional name of a cached sampler preset to reuse.",
+        ),
     ] = None
     init_image: Annotated[
         str | None,
         Field(
-            description="Base64-encoded PNG/JPEG for img2img or reference editing. Qwen-Image-2.1 requires projectionModelSrc for editing and preserves reference alpha. Mutually exclusive with init_images.",
+            alias="initImage",
+            description="Base64-encoded PNG/JPEG for img2img or reference editing. Qwen-Image-2.1 requires projectionModelSrc for editing and preserves reference alpha. Mutually exclusive with initImages.",
             min_length=1,
             pattern="^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
         ),
@@ -7260,26 +7327,29 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     init_images: Annotated[
         list[InitImage] | None,
         Field(
-            description="Ordered base64-encoded PNG/JPEG references for models with reference editing, including FLUX.2, FLUX.3 and Qwen-Image-2.1. Native model detection validates support. FLUX.3 and Qwen-Image-2.1 do not need FLUX.2 @imageN tags or a prediction override; Qwen-Image-2.1 requires projectionModelSrc and preserves alpha. Mutually exclusive with init_image.",
+            alias="initImages",
+            description="Ordered base64-encoded PNG/JPEG references for models with reference editing, including FLUX.2, FLUX.3 and Qwen-Image-2.1. Native model detection validates support. FLUX.3 and Qwen-Image-2.1 do not need FLUX.2 @imageN tags or a prediction override; Qwen-Image-2.1 requires projectionModelSrc and preserves alpha. Mutually exclusive with initImage.",
             min_length=1,
         ),
     ] = None
     increase_ref_index: Annotated[
         bool | None,
         Field(
-            description="FLUX.2 fusion only. When omitted, the addon default (false) is used. When false, all reference latents share one RoPE index slot and blend via attention (recommended for FLUX.2-klein). When true, each reference gets its own RoPE index slot — use only with text encoders that receive per-image vision tokens."
+            alias="increaseRefIndex",
+            description="FLUX.2 fusion only. When omitted, the addon default (false) is used. When false, all reference latents share one RoPE index slot and blend via attention (recommended for FLUX.2-klein). When true, each reference gets its own RoPE index slot — use only with text encoders that receive per-image vision tokens.",
         ),
     ] = None
     auto_resize_ref_image: Annotated[
         bool | None,
         Field(
-            description="FLUX.2 only. When omitted, the addon default (true) is used. When true, every reference image (single or fusion) is auto-resized to the target width/height before VAE-encoding. Disable only if the buffers are already at the exact target dimensions."
+            alias="autoResizeRefImage",
+            description="FLUX.2 only. When omitted, the addon default (true) is used. When true, every reference image (single or fusion) is auto-resized to the target width/height before VAE-encoding. Disable only if the buffers are already at the exact target dimensions.",
         ),
     ] = None
     lora: Annotated[
         str | None,
         Field(
-            description="Optional local LoRA adapter path to apply for this generation. Must be an absolute filesystem path. Whether the adapter persists across subsequent diffusion() calls is controlled by sdcppConfigSchema.lora_apply_mode (set at loadModel time).",
+            description="Optional local LoRA adapter path to apply for this generation. Must be an absolute filesystem path. Whether the adapter persists across subsequent diffusion() calls is controlled by sdcppConfigSchema.loraApplyMode (set at loadModel time).",
             min_length=1,
             pattern="^(\\/|[A-Za-z]:[\\\\/]|\\\\\\\\)",
         ),
@@ -7295,7 +7365,7 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     upscale: Annotated[
         bool | DiffusionStreamRequestUpscale | None,
         Field(
-            description="Post-generation ESRGAN upscale. `true` (or `{}` / `{ repeats: 1 }`) runs a single upscale pass at the model's native scale factor (e.g. x4 for RealESRGAN_x4plus). `false` is a no-op (same as omitting the field). `{ repeats: N }` runs the upscaler N times sequentially — each pass multiplies the output dimensions by the model's scale factor. When `batch_count > 1`, every output image is upscaled independently. Requires the model to be loaded with `upscaler.model_src` set in modelConfig. ESRGAN accepts RGB only; Qwen-Image-2.1 RGBA output rejects upscaling."
+            description="Post-generation ESRGAN upscale. `true` (or `{}` / `{ repeats: 1 }`) runs a single upscale pass at the model's native scale factor (e.g. x4 for RealESRGAN_x4plus). `false` is a no-op (same as omitting the field). `{ repeats: N }` runs the upscaler N times sequentially — each pass multiplies the output dimensions by the model's scale factor. When `batchCount > 1`, every output image is upscaled independently. Requires the model to be loaded with `upscaler.modelSrc` set in modelConfig. ESRGAN accepts RGB only; Qwen-Image-2.1 RGBA output rejects upscaling."
         ),
     ] = None
     type: Literal["diffusionStream"] = "diffusionStream"
@@ -7911,10 +7981,10 @@ class EmbedResponseStats(GeneratedBaseModel):
             title="EmbedResponseStatsBackendDevice",
         ),
     ] = None
-    context_size: Annotated[
+    ctx_size: Annotated[
         float | None,
         Field(
-            alias="contextSize",
+            alias="ctxSize",
             description="Context size in tokens. llama.cpp embedding models only.",
         ),
     ] = None
@@ -8113,10 +8183,10 @@ class EmbedBatchResponseStats(GeneratedBaseModel):
             title="EmbedBatchResponseStatsBackendDevice",
         ),
     ] = None
-    context_size: Annotated[
+    ctx_size: Annotated[
         float | None,
         Field(
-            alias="contextSize",
+            alias="ctxSize",
             description="Context size in tokens. llama.cpp embedding models only.",
         ),
     ] = None
@@ -8471,17 +8541,27 @@ class FinetuneResponseStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    train_loss: float | None = None
-    train_loss_uncertainty: float | Any | None = None
-    val_loss: float | None = None
-    val_loss_uncertainty: float | Any | None = None
-    train_accuracy: float | None = None
-    train_accuracy_uncertainty: float | Any | None = None
-    val_accuracy: float | None = None
-    val_accuracy_uncertainty: float | Any | None = None
-    learning_rate: float | None = None
-    global_steps: Annotated[int, Field(ge=0, le=9007199254740991)]
-    epochs_completed: Annotated[int, Field(ge=0, le=9007199254740991)]
+    train_loss: Annotated[float | None, Field(alias="trainLoss")] = None
+    train_loss_uncertainty: Annotated[
+        float | Any | None, Field(alias="trainLossUncertainty")
+    ] = None
+    val_loss: Annotated[float | None, Field(alias="valLoss")] = None
+    val_loss_uncertainty: Annotated[
+        float | Any | None, Field(alias="valLossUncertainty")
+    ] = None
+    train_accuracy: Annotated[float | None, Field(alias="trainAccuracy")] = None
+    train_accuracy_uncertainty: Annotated[
+        float | Any | None, Field(alias="trainAccuracyUncertainty")
+    ] = None
+    val_accuracy: Annotated[float | None, Field(alias="valAccuracy")] = None
+    val_accuracy_uncertainty: Annotated[
+        float | Any | None, Field(alias="valAccuracyUncertainty")
+    ] = None
+    learning_rate: Annotated[float | None, Field(alias="learningRate")] = None
+    global_steps: Annotated[int, Field(alias="globalSteps", ge=0, le=9007199254740991)]
+    epochs_completed: Annotated[
+        int, Field(alias="epochsCompleted", ge=0, le=9007199254740991)
+    ]
 
 
 class FinetuneResponse(GeneratedBaseModel):
@@ -8499,17 +8579,25 @@ class FinetuneProgressResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    is_train: bool
+    is_train: Annotated[bool, Field(alias="isTrain")]
     loss: float | Any | None
-    loss_uncertainty: float | Any | None
+    loss_uncertainty: Annotated[float | Any | None, Field(alias="lossUncertainty")]
     accuracy: float | Any | None
-    accuracy_uncertainty: float | Any | None
-    global_steps: Annotated[int, Field(ge=0, le=9007199254740991)]
-    current_epoch: Annotated[int, Field(ge=0, le=9007199254740991)]
-    current_batch: Annotated[int, Field(ge=0, le=9007199254740991)]
-    total_batches: Annotated[int, Field(ge=0, le=9007199254740991)]
-    elapsed_ms: Annotated[float, Field(ge=0.0)]
-    eta_ms: Annotated[float, Field(ge=0.0)]
+    accuracy_uncertainty: Annotated[
+        float | Any | None, Field(alias="accuracyUncertainty")
+    ]
+    global_steps: Annotated[int, Field(alias="globalSteps", ge=0, le=9007199254740991)]
+    current_epoch: Annotated[
+        int, Field(alias="currentEpoch", ge=0, le=9007199254740991)
+    ]
+    current_batch: Annotated[
+        int, Field(alias="currentBatch", ge=0, le=9007199254740991)
+    ]
+    total_batches: Annotated[
+        int, Field(alias="totalBatches", ge=0, le=9007199254740991)
+    ]
+    elapsed_ms: Annotated[float, Field(alias="elapsedMs", ge=0.0)]
+    eta_ms: Annotated[float, Field(alias="etaMs", ge=0.0)]
     type: Literal["finetune:progress"] = "finetune:progress"
     model_id: Annotated[str, Field(alias="modelId")]
 
@@ -12533,7 +12621,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode(Enum):
     tensor = "tensor"
 
 
-class LoadModelSrcRequestLlamacppCompletionModelConfigFlashAttn(Enum):
+class LoadModelSrcRequestLlamacppCompletionModelConfigFlashAttention(Enum):
     on = "on"
     off = "off"
     auto = "auto"
@@ -12817,26 +12905,57 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigImageNoUpscale(Enum):
 
 
 class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
+    __legacy_keys__ = {
+        "batch-size": "batchSize",
+        "cache-type-k": "cacheTypeK",
+        "cache-type-v": "cacheTypeV",
+        "cpu-mask": "cpuMask",
+        "cpu-mask-batch": "cpuMaskBatch",
+        "cpu-moe": "cpuMoe",
+        "fit-ctx": "fitCtx",
+        "fit-target": "fitTarget",
+        "flash-attn": "flashAttention",
+        "image-max-megapixels": "imageMaxMegapixels",
+        "image-max-tokens": "imageMaxTokens",
+        "image-min-tokens": "imageMinTokens",
+        "kv-offload": "kvOffload",
+        "main-gpu": "mainGpu",
+        "mmproj-use-gpu": "mmprojUseGpu",
+        "moe-cache-mib": "moeCacheMib",
+        "n-cpu-ffn": "nCpuFfn",
+        "n-cpu-moe": "nCpuMoe",
+        "override-tensor": "overrideTensor",
+        "prefetch-weights": "prefetchWeights",
+        "rpc-servers": "rpcServers",
+        "split-mode": "splitMode",
+        "temp": "temperature",
+        "tensor-read-lazy": "tensorReadLazy",
+        "tensor-split": "tensorSplit",
+        "threads-batch": "threadsBatch",
+        "ubatch-size": "ubatchSize",
+    }
     backend: Annotated[
         list[LoadModelSrcRequestLlamacppCompletionModelConfigBackendItem] | None,
         Field(
-            description="Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with a split-mode other than 'none' or with devices.",
+            description="Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with a splitMode other than 'none' or with devices.",
             min_length=1,
         ),
     ] = None
     ctx_size: Annotated[
         float | None,
         Field(
-            description="Context window size in tokens; `0` uses the model's trained context length. Default 1024."
+            alias="ctxSize",
+            description="Context window size in tokens; `0` uses the model's trained context length. Default 1024.",
         ),
     ] = None
-    temp: Annotated[
+    temperature: Annotated[
         float | None,
         Field(description="Sampling temperature (0–2). Default 0.8.", ge=0.0, le=2.0),
     ] = None
     top_p: Annotated[
         float | None,
         Field(
+            alias="topP",
             description="Top-p (nucleus) sampling cutoff (0–1). Default 0.9.",
             ge=0.0,
             le=1.0,
@@ -12845,6 +12964,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     top_k: Annotated[
         int | None,
         Field(
+            alias="topK",
             description="Top-k sampling — keep only the top K tokens (0–128). Default 40.",
             ge=0,
             le=128,
@@ -12857,7 +12977,8 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     gpu_layers: Annotated[
         float | None,
         Field(
-            description="Number of model layers to offload to the GPU. Unset by default, which lets the runtime fit the placement to free device memory (offloading every layer when it fits). Setting it pins the layer count and disables that fit."
+            alias="gpuLayers",
+            description="Number of model layers to offload to the GPU. Unset by default, which lets the runtime fit the placement to free device memory (offloading every layer when it fits). Setting it pins the layer count and disables that fit.",
         ),
     ] = None
     lora: Annotated[
@@ -12869,7 +12990,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     device: Annotated[
         str | None,
         Field(
-            description="Device class to run inference on: `'gpu'`, `'cpu'` or `'npu'`. Default `'gpu'`. `'npu'` is the AMD XDNA2 NPU on Linux x64, which needs XRT 2.25 or newer and read/write access to its /dev/accel node; GPU selection never picks it. With no NPU listed, `'npu'` falls back to the GPU order, then the CPU. It cannot be combined with backend, devices, split-mode (beyond their defaults), main-gpu, rpc-servers or finetuning, and a listed NPU that fails to open runs the load on the CPU."
+            description="Device class to run inference on: `'gpu'`, `'cpu'` or `'npu'`. Default `'gpu'`. `'npu'` is the AMD XDNA2 NPU on Linux x64, which needs XRT 2.25 or newer and read/write access to its /dev/accel node; GPU selection never picks it. With no NPU listed, `'npu'` falls back to the GPU order, then the CPU. It cannot be combined with backend, devices, splitMode (beyond their defaults), mainGpu, rpcServers or finetuning, and a listed NPU that fails to open runs the load on the CPU."
         ),
     ] = None
     predict: Annotated[
@@ -12881,12 +13002,14 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     system_prompt: Annotated[
         str | None,
         Field(
-            description="Prepended as the system message when a request's history carries none; applied on the JS side and never forwarded to the addon. Unset by default, so the model sees the history as sent."
+            alias="systemPrompt",
+            description="Prepended as the system message when a request's history carries none; applied on the JS side and never forwarded to the addon. Unset by default, so the model sees the history as sent.",
         ),
     ] = None
     load_mode: Annotated[
         LoadModelSrcRequestLlamacppCompletionModelConfigLoadMode | None,
         Field(
+            alias="loadMode",
             description="Model loading mode: `'none'`, `'mmap'`, `'mlock'`, `'mmap+mlock'`, or `'dio'`. Unset uses the addon's default (`'mmap'`).",
             title="LoadModelSrcRequestLlamacppCompletionModelConfigLoadMode",
         ),
@@ -12901,25 +13024,29 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     presence_penalty: Annotated[
         float | None,
         Field(
-            description="Presence penalty applied to tokens that have already appeared. Default 0."
+            alias="presencePenalty",
+            description="Presence penalty applied to tokens that have already appeared. Default 0.",
         ),
     ] = None
     frequency_penalty: Annotated[
         float | None,
         Field(
-            description="Frequency penalty applied to tokens by their frequency so far. Default 0."
+            alias="frequencyPenalty",
+            description="Frequency penalty applied to tokens by their frequency so far. Default 0.",
         ),
     ] = None
     repeat_penalty: Annotated[
         float | None,
         Field(
-            description="Repetition penalty applied to repeated tokens. Default 1.1."
+            alias="repeatPenalty",
+            description="Repetition penalty applied to repeated tokens. Default 1.1.",
         ),
     ] = None
     stop_sequences: Annotated[
         list[str] | None,
         Field(
-            description="Strings that stop generation when produced (forwarded to the addon as `reverse_prompt`)."
+            alias="stopSequences",
+            description="Strings that stop generation when produced (forwarded to the addon as `reverse_prompt`).",
         ),
     ] = None
     parallel: Annotated[
@@ -12939,7 +13066,8 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     cache_checkpoints: Annotated[
         int | None,
         Field(
-            description="Prompt-cache checkpoints kept per sequence on hybrid / recurrent models (Qwen3.5, Jamba, DeepSeek V4) and on sliding-window models (Gemma 3/4, gpt-oss) whose context exceeds the window, one per cached request at the end of its history (0–1024). Default 1, which serves the next turn and a regenerate; the newest checkpoint ending at a user message is kept on top of this count, so the next user turn after a tool loop does not reprocess the conversation; editing the user message k-th from the end without reprocessing the whole conversation needs `k + 1`. Regenerates and edits restore a checkpoint only under a caller-managed string `kvCache` key. `0` disables them. Each checkpoint holds a copy of the recurrent or sliding-window state of its sequence in host RAM (on disk with `cache_checkpoint_storage: 'disk'`), up to hundreds of MiB on larger models, so memory grows with this value and with `parallel` unless `cache_checkpoints_max_bytes` caps it. Model fit checks do not count it. The newest one, and the newest one ending at a user message, are also saved in the `cacheKey` file, so a conversation reloaded in a new process continues from them. Ignored by other models.",
+            alias="cacheCheckpoints",
+            description="Prompt-cache checkpoints kept per sequence on hybrid / recurrent models (Qwen3.5, Jamba, DeepSeek V4) and on sliding-window models (Gemma 3/4, gpt-oss) whose context exceeds the window, one per cached request at the end of its history (0–1024). Default 1, which serves the next turn and a regenerate; the newest checkpoint ending at a user message is kept on top of this count, so the next user turn after a tool loop does not reprocess the conversation; editing the user message k-th from the end without reprocessing the whole conversation needs `k + 1`. Regenerates and edits restore a checkpoint only under a caller-managed string `kvCache` key. `0` disables them. Each checkpoint holds a copy of the recurrent or sliding-window state of its sequence in host RAM (on disk with `cacheCheckpointStorage: 'disk'`), up to hundreds of MiB on larger models, so memory grows with this value and with `parallel` unless `cacheCheckpointsMaxBytes` caps it. Model fit checks do not count it. The newest one, and the newest one ending at a user message, are also saved in the `cacheKey` file, so a conversation reloaded in a new process continues from them. Ignored by other models.",
             ge=0,
             le=1024,
         ),
@@ -12947,7 +13075,8 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     cache_checkpoints_max_bytes: Annotated[
         int | None,
         Field(
-            description="Byte budget for the checkpoints kept per sequence; the oldest are dropped until the rest fit. `0` (default) is unlimited. The load fails when the budget cannot hold `cache_checkpoints` checkpoints of the largest size the context allows (on a sliding-window model, a full window).",
+            alias="cacheCheckpointsMaxBytes",
+            description="Byte budget for the checkpoints kept per sequence; the oldest are dropped until the rest fit. `0` (default) is unlimited. The load fails when the budget cannot hold `cacheCheckpoints` checkpoints of the largest size the context allows (on a sliding-window model, a full window).",
             ge=0,
             le=9007199254740991,
         ),
@@ -12955,26 +13084,30 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     cache_checkpoint_storage: Annotated[
         LoadModelSrcRequestLlamacppCompletionModelConfigCacheCheckpointStorage | None,
         Field(
-            description="Where checkpoints and the per-request rollback snapshot are kept: `'memory'` (default) in host RAM, `'disk'` in files under `cache_checkpoint_dir`, which it requires.",
+            alias="cacheCheckpointStorage",
+            description="Where checkpoints and the per-request rollback snapshot are kept: `'memory'` (default) in host RAM, `'disk'` in files under `cacheCheckpointDir`, which it requires.",
             title="LoadModelSrcRequestLlamacppCompletionModelConfigCacheCheckpointStorage",
         ),
     ] = None
     cache_checkpoint_dir: Annotated[
         str | None,
         Field(
-            description="Writable directory for checkpoint files, required with `cache_checkpoint_storage: 'disk'` and rejected without it. The addon writes in a private directory it creates inside it (on Windows, in the directory itself). On mobile, pass the app's cache directory.",
+            alias="cacheCheckpointDir",
+            description="Writable directory for checkpoint files, required with `cacheCheckpointStorage: 'disk'` and rejected without it. The addon writes in a private directory it creates inside it (on Windows, in the directory itself). On mobile, pass the app's cache directory.",
             min_length=1,
         ),
     ] = None
     cache_share_across_keys: Annotated[
         bool | None,
         Field(
-            description="Let a request reuse the longest prompt prefix another conversation on this model holds. Default false: each request keeps to its own `kvCache` key, and a request without one starts cold. With `true`, callers can tell from prompt-token counts and timing whether another conversation shares their prompt."
+            alias="cacheShareAcrossKeys",
+            description="Let a request reuse the longest prompt prefix another conversation on this model holds. Default false: each request keeps to its own `kvCache` key, and a request without one starts cold. With `true`, callers can tell from prompt-token counts and timing whether another conversation shares their prompt.",
         ),
     ] = None
     cache_ram_mib: Annotated[
         int | None,
         Field(
+            alias="cacheRamMib",
             description="Host-RAM budget, in MiB, for cached conversations that are not running (0–1048576). Default 0 (off). A conversation the model switches away from (another `kvCache` key, or a slot eviction with `parallel >= 2`) is kept in RAM, so returning to its caller-managed string `kvCache` key skips reading its `cacheKey` file. Model fit checks do not count this memory.",
             ge=0,
             le=1048576,
@@ -12983,28 +13116,28 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     cache_type_k: Annotated[
         str | None,
         Field(
-            alias="cache-type-k",
+            alias="cacheTypeK",
             description="KV-cache key quantization type (`f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …). Unset selects a backend-safe default.",
         ),
     ] = None
     cache_type_v: Annotated[
         str | None,
         Field(
-            alias="cache-type-v",
+            alias="cacheTypeV",
             description="KV-cache value quantization type; quantizing the value cache requires flash attention. Unset selects a backend-safe default.",
         ),
     ] = None
     main_gpu: Annotated[
         MainGpu | LoadModelSrcRequestLlamacppCompletionModelConfigMainGpu | None,
         Field(
-            alias="main-gpu",
+            alias="mainGpu",
             description="GPU to use on multi-GPU systems: a device index, or `'integrated'`/`'dedicated'` to restrict selection to that class.",
         ),
     ] = None
     rpc_servers: Annotated[
         str | None,
         Field(
-            alias="rpc-servers",
+            alias="rpcServers",
             description="Comma-separated unique native RPC host:port endpoints in device registration order for this load. Requires compatible RPC addon builds and a trusted private network; native traffic is unencrypted and unauthenticated.",
             min_length=1,
         ),
@@ -13012,37 +13145,37 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     devices: Annotated[
         str | None,
         Field(
-            description="Explicit ordered native device names, for example RPC0,RPC1, or XDNA0 for the AMD XDNA NPU alone, which reports `backendDevice` `'npu'`; naming XDNA0 without a listed NPU fails the load, and a load with XDNA0 in devices, alone or with other devices, cannot finetune. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order.",
+            description="Explicit ordered native device names, for example RPC0,RPC1, or XDNA0 for the AMD XDNA NPU alone, which reports `backendDevice` `'npu'`; naming XDNA0 without a listed NPU fails the load, and a load with XDNA0 in devices, alone or with other devices, cannot finetune. RPC indices enumerate every device in this load's rpcServers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensorSplit weights follow the selected devices order.",
             min_length=1,
         ),
     ] = None
     split_mode: Annotated[
         LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode | None,
         Field(
-            alias="split-mode",
-            description="How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctx_size` explicitly). `'tensor'` is rejected with the XDNA0 NPU.",
+            alias="splitMode",
+            description="How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctxSize` explicitly). `'tensor'` is rejected with the XDNA0 NPU.",
             title="LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode",
         ),
     ] = None
-    flash_attn: Annotated[
-        LoadModelSrcRequestLlamacppCompletionModelConfigFlashAttn | None,
+    flash_attention: Annotated[
+        LoadModelSrcRequestLlamacppCompletionModelConfigFlashAttention | None,
         Field(
-            alias="flash-attn",
-            description="Flash attention: `'on'`, `'off'`, or `'auto'`. With `'auto'`, the backend decides. When unset, the addon defaults to `'off'` for BitNet models and `'on'` for other inference workloads. An explicit value overrides the BitNet default. Finetuning enforces its own setting. `'off'` is incompatible with `'split-mode': 'tensor'`.",
-            title="LoadModelSrcRequestLlamacppCompletionModelConfigFlashAttn",
+            alias="flashAttention",
+            description="Flash attention: `'on'`, `'off'`, or `'auto'`. With `'auto'`, the backend decides. When unset, the addon defaults to `'off'` for BitNet models and `'on'` for other inference workloads. An explicit value overrides the BitNet default. Finetuning enforces its own setting. `'off'` is incompatible with `splitMode: 'tensor'`.",
+            title="LoadModelSrcRequestLlamacppCompletionModelConfigFlashAttention",
         ),
     ] = None
     tensor_split: Annotated[
         str | None,
         Field(
-            alias="tensor-split",
+            alias="tensorSplit",
             description="Proportions for distributing layers/rows across GPUs, e.g. `'1,1'` (equal) or `'3,1'` (75/25).",
         ),
     ] = None
     batch_size: Annotated[
         int | None,
         Field(
-            alias="batch-size",
+            alias="batchSize",
             description="Logical maximum batch size, the tokens submitted per decode call. Default 2048.",
             ge=1,
             le=9007199254740991,
@@ -13051,7 +13184,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     ubatch_size: Annotated[
         int | None,
         Field(
-            alias="ubatch-size",
+            alias="ubatchSize",
             description="Physical maximum batch size, the tokens computed in one pass. Default 512.",
             ge=1,
             le=9007199254740991,
@@ -13060,15 +13193,15 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     cpu_moe: Annotated[
         bool | None,
         Field(
-            alias="cpu-moe",
+            alias="cpuMoe",
             description="Keep all Mixture-of-Experts weights on the CPU, freeing accelerator memory for the rest of the model. Mixture-of-Experts models only. Default false.",
         ),
     ] = None
     n_cpu_moe: Annotated[
         int | None,
         Field(
-            alias="n-cpu-moe",
-            description="Keep the Mixture-of-Experts weights of the first N layers on the CPU. Mixture-of-Experts models only, and a finer-grained alternative to `cpu-moe`.",
+            alias="nCpuMoe",
+            description="Keep the Mixture-of-Experts weights of the first N layers on the CPU. Mixture-of-Experts models only, and a finer-grained alternative to `cpuMoe`.",
             ge=0,
             le=9007199254740991,
         ),
@@ -13076,14 +13209,14 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     kv_offload: Annotated[
         bool | None,
         Field(
-            alias="kv-offload",
+            alias="kvOffload",
             description="Whether to hold the KV cache in accelerator memory. Default true. Set false to keep it in system memory, which frees accelerator memory at the cost of decode speed.",
         ),
     ] = None
     image_max_tokens: Annotated[
         int | None,
         Field(
-            alias="image-max-tokens",
+            alias="imageMaxTokens",
             description="Upper bound on the tokens one image may occupy. Vision models only. Unset uses the model default.",
             ge=1,
             le=9007199254740991,
@@ -13092,7 +13225,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     image_min_tokens: Annotated[
         int | None,
         Field(
-            alias="image-min-tokens",
+            alias="imageMinTokens",
             description="Lower bound on the tokens one image may occupy. Vision models only. Unset uses the model default.",
             ge=1,
             le=9007199254740991,
@@ -13101,7 +13234,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     image_max_megapixels: Annotated[
         int | None,
         Field(
-            alias="image-max-megapixels",
+            alias="imageMaxMegapixels",
             description="Largest image a vision model accepts, in millions of pixels (width × height). Checked against the image header before decoding; larger images are rejected. Vision models only. Default 50.",
             ge=1,
             le=18446744073709,
@@ -13135,7 +13268,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     threads_batch: Annotated[
         int | None,
         Field(
-            alias="threads-batch",
+            alias="threadsBatch",
             description="CPU threads to use during batch and prompt processing. Applies to steps processing several tokens, including parallel decoding and speculative verification. Single-sequence generation uses `threads`.",
             ge=-9007199254740991,
             le=9007199254740991,
@@ -13144,28 +13277,28 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     cpu_mask: Annotated[
         str | None,
         Field(
-            alias="cpu-mask",
+            alias="cpuMask",
             description="CPU affinity mask as an arbitrarily long hex string, e.g. `'ff'`. Applies to generation. Unset applies no affinity.",
         ),
     ] = None
     cpu_mask_batch: Annotated[
         str | None,
         Field(
-            alias="cpu-mask-batch",
-            description="CPU affinity mask for batch and prompt processing, in the same form as `cpu-mask`. Unset inherits `cpu-mask` when the batch thread count is also unset.",
+            alias="cpuMaskBatch",
+            description="CPU affinity mask for batch and prompt processing, in the same form as `cpuMask`. Unset inherits `cpuMask` when the batch thread count is also unset.",
         ),
     ] = None
     override_tensor: Annotated[
         str | None,
         Field(
-            alias="override-tensor",
+            alias="overrideTensor",
             description="Buffer type overrides for tensors matching a pattern, as comma-separated `<tensor name pattern>=<buffer type>` entries, e.g. `'blk\\.(1[0-9])\\.ffn_(up|down|gate)_exps=CPU'` to keep those experts in system memory.",
         ),
     ] = None
     n_cpu_ffn: Annotated[
         int | None,
         Field(
-            alias="n-cpu-ffn",
+            alias="nCpuFfn",
             description="Keep the dense FFN weights of the first N layers on the CPU.",
             ge=0,
             le=9007199254740991,
@@ -13174,21 +13307,21 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     moe_cache_mib: Annotated[
         MoeCacheMib | Literal["auto"] | None,
         Field(
-            alias="moe-cache-mib",
+            alias="moeCacheMib",
             description="Persistent accelerator cache for Mixture-of-Experts weights, in MiB. Default `'auto'`, which sizes it during `fit`.",
         ),
     ] = None
     prefetch_weights: Annotated[
         bool | Literal["auto"] | None,
         Field(
-            alias="prefetch-weights",
+            alias="prefetchWeights",
             description="Overlap host-to-accelerator weight copies with compute. Default `'auto'`, which enables it for fitted dense models.",
         ),
     ] = None
     tensor_read_lazy: Annotated[
         LoadModelSrcRequestLlamacppCompletionModelConfigTensorReadLazy | None,
         Field(
-            alias="tensor-read-lazy",
+            alias="tensorReadLazy",
             description="On-demand reading of large tensors such as per-layer embeddings, which requires mmap: `'on'` reads their rows from disk instead of keeping them resident, `'off'` always keeps them resident, `'auto'` (default) applies `'on'` above 4 GiB.",
             title="LoadModelSrcRequestLlamacppCompletionModelConfigTensorReadLazy",
         ),
@@ -13196,20 +13329,20 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     fit: Annotated[
         bool | None,
         Field(
-            description="Adjust the arguments left unset so the model fits device memory. Default true. It chooses layer offload, tensor split and tensor buffer overrides, and the context size only when `ctx_size` is 0. Setting `gpu_layers` pins the layer count and makes fit abort, leaving every argument unchanged. Incompatible with `split-mode: tensor`, which disables it."
+            description="Adjust the arguments left unset so the model fits device memory. Default true. It chooses layer offload, tensor split and tensor buffer overrides, and the context size only when `ctxSize` is 0. Setting `gpuLayers` pins the layer count and makes fit abort, leaving every argument unchanged. Incompatible with `splitMode: tensor`, which disables it."
         ),
     ] = None
     fit_target: Annotated[
         FitTarget | FitTarget1 | None,
         Field(
-            alias="fit-target",
+            alias="fitTarget",
             description="Free margin `fit` aims to leave per device, in MiB. A single value is broadcast across devices; a comma-separated list such as `'1024,512'` sets them individually. Default 1024.",
         ),
     ] = None
     fit_ctx: Annotated[
         int | None,
         Field(
-            alias="fit-ctx",
+            alias="fitCtx",
             description="Smallest context size `fit` may settle on. Default 4096.",
             ge=0,
             le=9007199254740991,
@@ -13225,6 +13358,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     reasoning_budget: Annotated[
         int | None,
         Field(
+            alias="reasoningBudget",
             description="Reasoning-channel token budget. `-1` (default) unrestricted, `0` disables it, any positive integer caps the reasoning channel at that many tokens (the closing think tag is force-emitted once the budget is spent).",
             ge=-1,
             le=2147483647,
@@ -13233,6 +13367,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     spec_type: Annotated[
         LoadModelSrcRequestLlamacppCompletionModelConfigSpecType | None,
         Field(
+            alias="specType",
             description="Speculative decoding, as llama-server's `--spec-type`. `'draft-mtp'` drafts with the model's own multi-token-prediction head, or with an external MTP head given as `draftModelSrc`; the head, when given, otherwise the model, must ship MTP layers, and a head must match the model, or the load fails. `'draft-dflash'` drafts with the DFlash model given as `draftModelSrc`, which it requires. The model verifies every draft, so output keeps the distribution of plain decoding. `'none'` (default) decodes one token per step. Works with multimodal prompts, `parallel` and `kvCache`. Completion stats then report `draftTokens` and `draftAcceptedTokens`.",
             title="LoadModelSrcRequestLlamacppCompletionModelConfigSpecType",
         ),
@@ -13240,7 +13375,8 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     spec_draft_n_max: Annotated[
         int | None,
         Field(
-            description="Longest draft per step (1–64, default 3). Lowered at load, with a warning, to fit one `ubatch-size` and each sequence’s share of `batch-size`. Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`.",
+            alias="specDraftNMax",
+            description="Longest draft per step (1–64, default 3). Lowered at load, with a warning, to fit one `ubatchSize` and each sequence’s share of `batchSize`. Requires `specType` `'draft-mtp'` or `'draft-dflash'`.",
             ge=1,
             le=64,
         ),
@@ -13248,7 +13384,8 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     spec_draft_n_min: Annotated[
         int | None,
         Field(
-            description="Shortest draft worth verifying (0–64, default 0, at most `spec_draft_n_max`); shorter drafts are dropped. Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`.",
+            alias="specDraftNMin",
+            description="Shortest draft worth verifying (0–64, default 0, at most `specDraftNMax`); shorter drafts are dropped. Requires `specType` `'draft-mtp'` or `'draft-dflash'`.",
             ge=0,
             le=64,
         ),
@@ -13256,7 +13393,8 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     spec_draft_p_min: Annotated[
         float | None,
         Field(
-            description="Minimum draft-head probability for a token to extend the draft (0–1, default 0). Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`.",
+            alias="specDraftPMin",
+            description="Minimum draft-head probability for a token to extend the draft (0–1, default 0). Requires `specType` `'draft-mtp'` or `'draft-dflash'`.",
             ge=0.0,
             le=1.0,
         ),
@@ -13272,12 +13410,13 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
         str | LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc | None,
         Field(
             alias="draftModelSrc",
-            description="Draft model source, as llama-server's `--spec-draft-model`: the DFlash model, required by `spec_type: 'draft-dflash'`, or an external MTP head for `spec_type: 'draft-mtp'`, such as the MTP quantization of the same model or a Gemma 4 assistant for its Gemma 4 model. Placed like the model (`device`, `gpu_layers`). Model fit checks count an MTP head's memory but not a DFlash model's or a Gemma 4 assistant's, so leave room for those.",
+            description="Draft model source, as llama-server's `--spec-draft-model`: the DFlash model, required by `specType: 'draft-dflash'`, or an external MTP head for `specType: 'draft-mtp'`, such as the MTP quantization of the same model or a Gemma 4 assistant for its Gemma 4 model. Placed like the model (`device`, `gpuLayers`). Model fit checks count an MTP head's memory but not a DFlash model's or a Gemma 4 assistant's, so leave room for those.",
         ),
     ] = None
     image_tile_mode: Annotated[
         LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode | None,
         Field(
+            alias="imageTileMode",
             description="Qwen3.5-VL multi-tile image encoding mode (multimodal models only): `'sequential'` (default) encodes image tiles one at a time, `'batched'` encodes all tiles in a single batched pass, `'disabled'` does no multi-tile encoding (single tile). Ignored by text-only models.",
             title="LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode",
         ),
@@ -13285,6 +13424,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     image_no_upscale: Annotated[
         LoadModelSrcRequestLlamacppCompletionModelConfigImageNoUpscale | None,
         Field(
+            alias="imageNoUpscale",
             description="idefics3-style image preprocessing rule (multimodal models only): `'on'` rounds the image's long side up to a whole number of slices and caps it, so an image smaller than the cap keeps its own resolution and becomes far fewer slices; `'off'` always stretches the long side to the cap. When unset, the model's own GGUF value is used; ignored with a warning by models that do not use idefics3-style preprocessing. Changes the number of image tokens (and therefore both accuracy and encode time), so a checkpoint whose GGUF omits the key needs this set to preprocess correctly.",
             title="LoadModelSrcRequestLlamacppCompletionModelConfigImageNoUpscale",
         ),
@@ -13292,7 +13432,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     mmproj_use_gpu: Annotated[
         bool | None,
         Field(
-            alias="mmproj-use-gpu",
+            alias="mmprojUseGpu",
             description="Run the multimodal projector (mmproj / vision encoder) on the GPU (multimodal models only). `true` forces GPU, `false` forces CPU. When unset, the backend is auto-selected per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on every other Android GPU (Arm Mali, Adreno <800, and undetectable Adreno tiers), with the LLM layers still on the GPU. On an NPU load (`device: 'npu'` or XDNA0 as the first local device in devices) it runs on a GPU beside the NPU, else the CPU; `true` with no GPU runs it on the NPU. Only honoured when the model itself runs on a GPU or NPU backend — ignored with a warning on CPU.",
         ),
     ] = None
@@ -13392,26 +13532,37 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams(
     ] = None
     min_speech_duration_ms: Annotated[
         float | None,
-        Field(description="Minimum duration for a segment to count as speech (ms)."),
+        Field(
+            alias="minSpeechDurationMs",
+            description="Minimum duration for a segment to count as speech (ms).",
+        ),
     ] = None
     min_silence_duration_ms: Annotated[
         float | None,
         Field(
-            description="Minimum silence duration required to split speech segments (ms)."
+            alias="minSilenceDurationMs",
+            description="Minimum silence duration required to split speech segments (ms).",
         ),
     ] = None
     max_speech_duration_s: Annotated[
         float | None,
-        Field(description="Maximum duration of a single speech segment (s)."),
+        Field(
+            alias="maxSpeechDurationS",
+            description="Maximum duration of a single speech segment (s).",
+        ),
     ] = None
     speech_pad_ms: Annotated[
         float | None,
-        Field(description="Padding added before and after each speech segment (ms)."),
+        Field(
+            alias="speechPadMs",
+            description="Padding added before and after each speech segment (ms).",
+        ),
     ] = None
     samples_overlap: Annotated[
         float | None,
         Field(
-            description="Overlap between consecutive speech segments (0 < x ≤ 1); an explicit `0` falls back to the engine default."
+            alias="samplesOverlap",
+            description="Overlap between consecutive speech segments (0 < x ≤ 1); an explicit `0` falls back to the engine default.",
         ),
     ] = None
 
@@ -13425,7 +13576,7 @@ class MainGpu1(RootModel[int]):
     root: Annotated[
         int,
         Field(
-            description="GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+            description="GPU to run on once `useGpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpuDevice`.",
             ge=0,
             le=2147483647,
         ),
@@ -13436,7 +13587,7 @@ class MainGpu2(RootModel[str]):
     root: Annotated[
         str,
         Field(
-            description="GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+            description="GPU to run on once `useGpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpuDevice`.",
             pattern="^\\d+$",
         ),
     ]
@@ -13450,20 +13601,24 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMainGpu(
 class LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams(
     GeneratedBaseModel
 ):
+    __legacy_keys__ = {"flash_attn": "flashAttention", "main-gpu": "mainGpu"}
     model: Annotated[
         str | None,
         Field(description="Path to the whisper model file (context override)."),
     ] = None
     use_gpu: Annotated[
-        bool | None, Field(description="Enable GPU acceleration. Default false.")
+        bool | None,
+        Field(alias="useGpu", description="Enable GPU acceleration. Default false."),
     ] = None
-    flash_attn: Annotated[bool | None, Field(description="Enable flash attention.")] = (
-        None
-    )
+    flash_attention: Annotated[
+        bool | None,
+        Field(alias="flashAttention", description="Enable flash attention."),
+    ] = None
     gpu_device: Annotated[
         float | None,
         Field(
-            description="GPU device index to use (legacy GPU/IGPU ordinal). Cannot be combined with `main-gpu`."
+            alias="gpuDevice",
+            description="GPU device index to use (legacy GPU/IGPU ordinal). Cannot be combined with `mainGpu`.",
         ),
     ] = None
     main_gpu: Annotated[
@@ -13472,8 +13627,8 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams(
         | LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMainGpu
         | None,
         Field(
-            alias="main-gpu",
-            description="GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+            alias="mainGpu",
+            description="GPU to run on once `useGpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpuDevice`.",
         ),
     ] = None
 
@@ -13482,7 +13637,10 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigMiscConfig(
     GeneratedBaseModel
 ):
     caption_enabled: Annotated[
-        bool | None, Field(description="Format output segments as captions.")
+        bool | None,
+        Field(
+            alias="captionEnabled", description="Format output segments as captions."
+        ),
     ] = None
     seed: Annotated[
         int | None,
@@ -13607,6 +13765,7 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc(
 
 
 class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
+    __legacy_keys__ = {"beam_search_beam_size": "beamSize", "n_threads": "threads"}
     strategy: Annotated[
         LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy | None,
         Field(
@@ -13614,7 +13773,7 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
             title="LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy",
         ),
     ] = None
-    n_threads: Annotated[
+    threads: Annotated[
         int | None,
         Field(
             description="CPU threads for transcription; `0` = auto (half of hardware cores).",
@@ -13625,6 +13784,7 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
     n_max_text_ctx: Annotated[
         int | None,
         Field(
+            alias="nMaxTextCtx",
             description="Maximum text tokens from previous segments used as context.",
             ge=-9007199254740991,
             le=9007199254740991,
@@ -13633,6 +13793,7 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
     offset_ms: Annotated[
         int | None,
         Field(
+            alias="offsetMs",
             description="Milliseconds to skip at the start of the audio.",
             ge=-9007199254740991,
             le=9007199254740991,
@@ -13641,6 +13802,7 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
     duration_ms: Annotated[
         int | None,
         Field(
+            alias="durationMs",
             description="Maximum duration of audio to transcribe, in milliseconds.",
             ge=-9007199254740991,
             le=9007199254740991,
@@ -13649,6 +13811,7 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
     audio_ctx: Annotated[
         int | None,
         Field(
+            alias="audioCtx",
             description="Audio context window size in samples; `0` = model default.",
             ge=-9007199254740991,
             le=9007199254740991,
@@ -13660,57 +13823,74 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
     no_context: Annotated[
         bool | None,
         Field(
-            description="Do not carry past transcription forward as the decoder's initial prompt; each window is decoded independently."
+            alias="noContext",
+            description="Do not carry past transcription forward as the decoder's initial prompt; each window is decoded independently.",
         ),
     ] = None
     no_timestamps: Annotated[
-        bool | None, Field(description="Omit timestamps from the transcription output.")
+        bool | None,
+        Field(
+            alias="noTimestamps",
+            description="Omit timestamps from the transcription output.",
+        ),
     ] = None
     single_segment: Annotated[
         bool | None,
         Field(
-            description="Force the whole audio into one output segment (for streaming or short clips)."
+            alias="singleSegment",
+            description="Force the whole audio into one output segment (for streaming or short clips).",
         ),
     ] = None
     print_special: Annotated[
-        bool | None, Field(description="Print special tokens in the output.")
+        bool | None,
+        Field(alias="printSpecial", description="Print special tokens in the output."),
     ] = None
     print_progress: Annotated[
-        bool | None, Field(description="Print progress updates during transcription.")
+        bool | None,
+        Field(
+            alias="printProgress",
+            description="Print progress updates during transcription.",
+        ),
     ] = None
     print_realtime: Annotated[
         bool | None,
         Field(
-            description="whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback)."
+            alias="printRealtime",
+            description="whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback).",
         ),
     ] = None
     print_timestamps: Annotated[
         bool | None,
         Field(
-            description="Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data."
+            alias="printTimestamps",
+            description="Prefix each `printRealtime` line with `[t0 --> t1]`; no effect on returned data.",
         ),
     ] = None
     token_timestamps: Annotated[
         bool | None,
         Field(
-            description="Experimental: compute per-token timestamps (populates `t0`/`t1`)."
+            alias="tokenTimestamps",
+            description="Experimental: compute per-token timestamps (populates `t0`/`t1`).",
         ),
     ] = None
     thold_pt: Annotated[
         float | None,
         Field(
-            description="Word-timestamp probability threshold for accepting a word (0–1)."
+            alias="tholdPt",
+            description="Word-timestamp probability threshold for accepting a word (0–1).",
         ),
     ] = None
     thold_ptsum: Annotated[
         float | None,
         Field(
-            description="Timestamp-token sum-probability threshold used when deriving token-level timestamps (0–1)."
+            alias="tholdPtsum",
+            description="Timestamp-token sum-probability threshold used when deriving token-level timestamps (0–1).",
         ),
     ] = None
     max_len: Annotated[
         int | None,
         Field(
+            alias="maxLen",
             description="Maximum tokens per transcription segment.",
             ge=-9007199254740991,
             le=9007199254740991,
@@ -13719,12 +13899,14 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
     split_on_word: Annotated[
         bool | None,
         Field(
-            description="When `max_len > 0`, split segments on word boundaries instead of mid-token."
+            alias="splitOnWord",
+            description="When `maxLen > 0`, split segments on word boundaries instead of mid-token.",
         ),
     ] = None
     max_tokens: Annotated[
         int | None,
         Field(
+            alias="maxTokens",
             description="Maximum tokens per segment; `0` = no limit.",
             ge=-9007199254740991,
             le=9007199254740991,
@@ -13733,25 +13915,36 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
     debug_mode: Annotated[
         bool | None,
         Field(
-            description="Experimental: emit extra debug output (e.g. the computed log-mel)."
+            alias="debugMode",
+            description="Experimental: emit extra debug output (e.g. the computed log-mel).",
         ),
     ] = None
     tdrz_enable: Annotated[
         bool | None,
-        Field(description="Enable tinydiarize (lightweight speaker-turn detection)."),
+        Field(
+            alias="tdrzEnable",
+            description="Enable tinydiarize (lightweight speaker-turn detection).",
+        ),
     ] = None
     suppress_regex: Annotated[
         str | None,
-        Field(description="Regular-expression pattern for tokens to suppress."),
+        Field(
+            alias="suppressRegex",
+            description="Regular-expression pattern for tokens to suppress.",
+        ),
     ] = None
     initial_prompt: Annotated[
         str | None,
-        Field(description="Initial prompt (context) prepended to the transcription."),
+        Field(
+            alias="initialPrompt",
+            description="Initial prompt (context) prepended to the transcription.",
+        ),
     ] = None
     carry_initial_prompt: Annotated[
         bool | None,
         Field(
-            description="Prepend `initial_prompt` to every decode window instead of only the first. Default false."
+            alias="carryInitialPrompt",
+            description="Prepend `initialPrompt` to every decode window instead of only the first. Default false.",
         ),
     ] = None
     language: Annotated[
@@ -13761,17 +13954,20 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
     detect_language: Annotated[
         bool | None,
         Field(
-            description="Convenience flag: `true` is translated to `language: 'auto'` before the request reaches the addon, which has no `detect_language` key of its own."
+            alias="detectLanguage",
+            description="Convenience flag: `true` is translated to `language: 'auto'` before the request reaches the addon, which has no language-detection flag of its own.",
         ),
     ] = None
     suppress_blank: Annotated[
         bool | None,
         Field(
-            description="Suppress the blank / leading-space token at the start of sampling."
+            alias="suppressBlank",
+            description="Suppress the blank / leading-space token at the start of sampling.",
         ),
     ] = None
     suppress_nst: Annotated[
-        bool | None, Field(description="Suppress non-speech tokens (NST).")
+        bool | None,
+        Field(alias="suppressNst", description="Suppress non-speech tokens (NST)."),
     ] = None
     temperature: Annotated[
         float | None, Field(description="Sampling temperature (0–1). Default 0.0.")
@@ -13779,34 +13975,44 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
     length_penalty: Annotated[
         float | None,
         Field(
-            description="Beam-search length penalty. Must be ≥ 0, so the upstream `-1` 'disabled' sentinel cannot be set via config."
+            alias="lengthPenalty",
+            description="Beam-search length penalty. Must be ≥ 0, so the upstream `-1` 'disabled' sentinel cannot be set via config.",
         ),
     ] = None
     temperature_inc: Annotated[
         float | None,
-        Field(description="Temperature increment applied when sampling fails."),
+        Field(
+            alias="temperatureInc",
+            description="Temperature increment applied when sampling fails.",
+        ),
     ] = None
     entropy_thold: Annotated[
         float | None,
-        Field(description="Entropy threshold for filtering uncertain words."),
+        Field(
+            alias="entropyThold",
+            description="Entropy threshold for filtering uncertain words.",
+        ),
     ] = None
     logprob_thold: Annotated[
         float | None,
         Field(
-            description="Log-probability threshold for filtering words; `-1` disables."
+            alias="logprobThold",
+            description="Log-probability threshold for filtering words; `-1` disables.",
         ),
     ] = None
     greedy_best_of: Annotated[
         int | None,
         Field(
+            alias="greedyBestOf",
             description="Greedy decoding: number of candidate completions; `-1` = default.",
             ge=-9007199254740991,
             le=9007199254740991,
         ),
     ] = None
-    beam_search_beam_size: Annotated[
+    beam_size: Annotated[
         int | None,
         Field(
+            alias="beamSize",
             description="Beam size for beam-search decoding; `-1` = default.",
             ge=-9007199254740991,
             le=9007199254740991,
@@ -13815,13 +14021,15 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
     max_initial_ts: Annotated[
         float | None,
         Field(
-            description="Maximum initial timestamp the decoder may emit, as a fraction of the window."
+            alias="maxInitialTs",
+            description="Maximum initial timestamp the decoder may emit, as a fraction of the window.",
         ),
     ] = None
     no_speech_thold: Annotated[
         float | None,
         Field(
-            description="No-speech probability above which a segment is treated as silence."
+            alias="noSpeechThold",
+            description="No-speech probability above which a segment is treated as silence.",
         ),
     ] = None
     seed: Annotated[
@@ -13841,11 +14049,15 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
     ] = None
     vad_params: Annotated[
         LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams | None,
-        Field(title="LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams"),
+        Field(
+            alias="vadParams",
+            title="LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams",
+        ),
     ] = None
     audio_format: Annotated[
         LoadModelSrcRequestWhispercppTranscriptionModelConfigAudioFormat | None,
         Field(
+            alias="audioFormat",
             description="Interpretation of raw audio bytes: `'f32le'` or `'s16le'`.",
             title="LoadModelSrcRequestWhispercppTranscriptionModelConfigAudioFormat",
         ),
@@ -13954,11 +14166,12 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelFitPolicy(Enum):
 class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig(
     GeneratedBaseModel
 ):
+    __legacy_keys__ = {"beam_search_beam_size": "beamSize", "n_threads": "threads"}
     language: Annotated[
         str | None,
         Field(description="Transcription language (ISO 639-1). Default `en`."),
     ] = None
-    n_threads: Annotated[
+    threads: Annotated[
         int | None,
         Field(
             description="Number of CPU threads. `0` = auto.",
@@ -13970,17 +14183,20 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig(
         float | None, Field(description="Sampling temperature. Default 0.0.")
     ] = None
     suppress_nst: Annotated[
-        bool | None, Field(description="Suppress non-speech tokens (NST).")
+        bool | None,
+        Field(alias="suppressNst", description="Suppress non-speech tokens (NST)."),
     ] = None
     suppress_blank: Annotated[
         bool | None,
         Field(
-            description="Suppress the blank / leading-space token at the start of sampling."
+            alias="suppressBlank",
+            description="Suppress the blank / leading-space token at the start of sampling.",
         ),
     ] = None
     duration_ms: Annotated[
         int | None,
         Field(
+            alias="durationMs",
             description="Maximum duration of audio to transcribe, in milliseconds.",
             ge=-9007199254740991,
             le=9007199254740991,
@@ -13990,49 +14206,64 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig(
         bool | None, Field(description="Translate the transcribed audio into English.")
     ] = None
     no_timestamps: Annotated[
-        bool | None, Field(description="Omit timestamps from the transcription output.")
+        bool | None,
+        Field(
+            alias="noTimestamps",
+            description="Omit timestamps from the transcription output.",
+        ),
     ] = None
     single_segment: Annotated[
         bool | None,
         Field(
-            description="Force the whole audio into one output segment (for streaming or short clips)."
+            alias="singleSegment",
+            description="Force the whole audio into one output segment (for streaming or short clips).",
         ),
     ] = None
     print_special: Annotated[
-        bool | None, Field(description="Print special tokens in the output.")
+        bool | None,
+        Field(alias="printSpecial", description="Print special tokens in the output."),
     ] = None
     print_progress: Annotated[
-        bool | None, Field(description="Print progress updates during transcription.")
+        bool | None,
+        Field(
+            alias="printProgress",
+            description="Print progress updates during transcription.",
+        ),
     ] = None
     print_realtime: Annotated[
         bool | None,
         Field(
-            description="whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback)."
+            alias="printRealtime",
+            description="whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback).",
         ),
     ] = None
     print_timestamps: Annotated[
         bool | None,
         Field(
-            description="Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data."
+            alias="printTimestamps",
+            description="Prefix each `printRealtime` line with `[t0 --> t1]`; no effect on returned data.",
         ),
     ] = None
     detect_language: Annotated[
         bool | None,
         Field(
-            description="Detect the spoken language and stop: whisper.cpp returns straight after detection, so the transcript comes back empty. Use `language: 'auto'` to detect and transcribe in one call."
+            alias="detectLanguage",
+            description="Detect the spoken language and stop: whisper.cpp returns straight after detection, so the transcript comes back empty. Use `language: 'auto'` to detect and transcribe in one call.",
         ),
     ] = None
     greedy_best_of: Annotated[
         int | None,
         Field(
+            alias="greedyBestOf",
             description="Greedy decoding: number of candidate completions; `-1` = default.",
             ge=-9007199254740991,
             le=9007199254740991,
         ),
     ] = None
-    beam_search_beam_size: Annotated[
+    beam_size: Annotated[
         int | None,
         Field(
+            alias="beamSize",
             description="Beam size for beam-search decoding; `-1` = default.",
             ge=-9007199254740991,
             le=9007199254740991,
@@ -14046,6 +14277,7 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigBciConfig(
     day_idx: Annotated[
         int | None,
         Field(
+            alias="dayIdx",
             description="Session day index selecting day-specific projection matrices; `-1` enables mel passthrough (parity testing only).",
             ge=-9007199254740991,
             le=9007199254740991,
@@ -14056,6 +14288,7 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigBciConfig(
 class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigContextParams(
     GeneratedBaseModel
 ):
+    __legacy_keys__ = {"flash_attn": "flashAttention"}
     model: Annotated[
         str | None,
         Field(
@@ -14065,14 +14298,16 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigContextParams(
     use_gpu: Annotated[
         bool | None,
         Field(
-            description="Enable GPU acceleration. Enabled by default; set false to force CPU."
+            alias="useGpu",
+            description="Enable GPU acceleration. Enabled by default; set false to force CPU.",
         ),
     ] = None
-    flash_attn: Annotated[bool | None, Field(description="Enable flash attention.")] = (
-        None
-    )
+    flash_attention: Annotated[
+        bool | None,
+        Field(alias="flashAttention", description="Enable flash attention."),
+    ] = None
     gpu_device: Annotated[
-        float | None, Field(description="GPU device index to use.")
+        float | None, Field(alias="gpuDevice", description="GPU device index to use.")
     ] = None
 
 
@@ -14082,7 +14317,8 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigMiscConfig(
     caption_enabled: Annotated[
         bool | None,
         Field(
-            description="Format output segments with caption markers. Default false."
+            alias="captionEnabled",
+            description="Format output segments with caption markers. Default false.",
         ),
     ] = None
 
@@ -14482,6 +14718,7 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfigSpeakerAttribution(
 
 
 class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
+    __legacy_keys__ = {"useGPU": "useGpu"}
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -14497,13 +14734,13 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
     use_gpu: Annotated[
         bool | None,
         Field(
-            alias="useGPU", description="Enable the ggml GPU backend. Default false."
+            alias="useGpu", description="Enable the ggml GPU backend. Default false."
         ),
     ] = None
     backend: Annotated[
         str | None,
         Field(
-            description="Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `opencl`, `metal`, or an exact ggml device name such as `CUDA0` or `MTL0`. An explicit selection overrides `useGPU` and the load fails if it is unavailable instead of falling back. Applies to the speaker-attribution diarization model too, and reaches `assessModelFit`."
+            description="Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `opencl`, `metal`, or an exact ggml device name such as `CUDA0` or `MTL0`. An explicit selection overrides `useGpu` and the load fails if it is unavailable instead of falling back. Applies to the speaker-attribution diarization model too, and reaches `assessModelFit`."
         ),
     ] = None
     speaker_attribution: Annotated[
@@ -14864,6 +15101,7 @@ class LoadModelSrcRequestMossTranscribeModelFitPolicy(Enum):
 
 
 class LoadModelSrcRequestMossTranscribeModelConfig(GeneratedBaseModel):
+    __legacy_keys__ = {"useGPU": "useGpu"}
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -14879,14 +15117,14 @@ class LoadModelSrcRequestMossTranscribeModelConfig(GeneratedBaseModel):
     use_gpu: Annotated[
         bool | None,
         Field(
-            alias="useGPU",
+            alias="useGpu",
             description="Select a GPU automatically when `backend` is `auto`, including Metal. Default false.",
         ),
     ] = None
     backend: Annotated[
         str | None,
         Field(
-            description="Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `metal`, or an exact ggml device name such as `CUDA0`. An explicit selection overrides `useGPU` and the load fails if it is unavailable."
+            description="Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `metal`, or an exact ggml device name such as `CUDA0`. An explicit selection overrides `useGpu` and the load fails if it is unavailable."
         ),
     ] = None
     backends_dir: Annotated[
@@ -15413,7 +15651,7 @@ class LoadModelSrcRequestLlamacppDecisionModelConfigDevice(Enum):
     gpu = "gpu"
 
 
-class LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttn(Enum):
+class LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttention(Enum):
     on = "on"
     off = "off"
     auto = "auto"
@@ -15436,6 +15674,13 @@ class LoadModelSrcRequestLlamacppDecisionModelConfigSplitMode(Enum):
 
 
 class LoadModelSrcRequestLlamacppDecisionModelConfig(GeneratedBaseModel):
+    __legacy_keys__ = {
+        "flash_attn": "flashAttention",
+        "main-gpu": "mainGpu",
+        "split-mode": "splitMode",
+        "tensor-split": "tensorSplit",
+        "threads-batch": "threadsBatch",
+    }
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -15449,6 +15694,7 @@ class LoadModelSrcRequestLlamacppDecisionModelConfig(GeneratedBaseModel):
     gpu_layers: Annotated[
         int | None,
         Field(
+            alias="gpuLayers",
             description="Layers to offload. Unset lets the addon choose placement.",
             ge=-9007199254740991,
             le=9007199254740991,
@@ -15457,6 +15703,7 @@ class LoadModelSrcRequestLlamacppDecisionModelConfig(GeneratedBaseModel):
     batch_size: Annotated[
         int | None,
         Field(
+            alias="batchSize",
             description="Tokens per forward pass. Default 2048; each sequence must fit.",
             gt=0,
             le=9007199254740991,
@@ -15490,17 +15737,18 @@ class LoadModelSrcRequestLlamacppDecisionModelConfig(GeneratedBaseModel):
     threads_batch: Annotated[
         int | None,
         Field(
-            alias="threads-batch",
+            alias="threadsBatch",
             description="Batch CPU threads. Unset uses threads; zero or below uses all logical CPUs.",
             ge=-9007199254740991,
             le=9007199254740991,
         ),
     ] = None
-    flash_attn: Annotated[
-        LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttn | None,
+    flash_attention: Annotated[
+        LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttention | None,
         Field(
+            alias="flashAttention",
             description="Flash attention mode. Default auto.",
-            title="LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttn",
+            title="LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttention",
         ),
     ] = None
     verbosity: Annotated[
@@ -15513,19 +15761,19 @@ class LoadModelSrcRequestLlamacppDecisionModelConfig(GeneratedBaseModel):
     ] = None
     main_gpu: Annotated[
         MainGpu4 | LoadModelSrcRequestLlamacppDecisionModelConfigMainGpu | None,
-        Field(alias="main-gpu", description="GPU index or device class."),
+        Field(alias="mainGpu", description="GPU index or device class."),
     ] = None
     split_mode: Annotated[
         LoadModelSrcRequestLlamacppDecisionModelConfigSplitMode | None,
         Field(
-            alias="split-mode",
+            alias="splitMode",
             description="Multi-GPU split mode.",
             title="LoadModelSrcRequestLlamacppDecisionModelConfigSplitMode",
         ),
     ] = None
     tensor_split: Annotated[
         str | None,
-        Field(alias="tensor-split", description="Per-GPU tensor split proportions."),
+        Field(alias="tensorSplit", description="Per-GPU tensor split proportions."),
     ] = None
     opencl_cache_dir: Annotated[
         str | None,
@@ -15626,7 +15874,7 @@ class LoadModelSrcRequestLlamacppRerankModelConfigBackendItem(Enum):
     auto = "auto"
 
 
-class LoadModelSrcRequestLlamacppRerankModelConfigFlashAttn(Enum):
+class LoadModelSrcRequestLlamacppRerankModelConfigFlashAttention(Enum):
     on = "on"
     off = "off"
     auto = "auto"
@@ -15643,6 +15891,13 @@ class LoadModelSrcRequestLlamacppRerankModelConfigSplitMode(Enum):
 
 
 class LoadModelSrcRequestLlamacppRerankModelConfig(GeneratedBaseModel):
+    __legacy_keys__ = {
+        "flash_attn": "flashAttention",
+        "main-gpu": "mainGpu",
+        "split-mode": "splitMode",
+        "tensor-split": "tensorSplit",
+        "threads-batch": "threadsBatch",
+    }
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -15656,6 +15911,7 @@ class LoadModelSrcRequestLlamacppRerankModelConfig(GeneratedBaseModel):
     gpu_layers: Annotated[
         int | None,
         Field(
+            alias="gpuLayers",
             description="Layers to offload. Unset lets the addon choose placement.",
             ge=-9007199254740991,
             le=9007199254740991,
@@ -15664,6 +15920,7 @@ class LoadModelSrcRequestLlamacppRerankModelConfig(GeneratedBaseModel):
     batch_size: Annotated[
         int | None,
         Field(
+            alias="batchSize",
             description="Tokens per forward pass. Default 2048; each document paired with the query must fit.",
             gt=0,
             le=9007199254740991,
@@ -15672,7 +15929,7 @@ class LoadModelSrcRequestLlamacppRerankModelConfig(GeneratedBaseModel):
     backend: Annotated[
         list[LoadModelSrcRequestLlamacppRerankModelConfigBackendItem] | None,
         Field(
-            description="Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with 'split-mode': 'layer'.",
+            description="Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with splitMode: 'layer'.",
             min_length=1,
         ),
     ] = None
@@ -15704,17 +15961,18 @@ class LoadModelSrcRequestLlamacppRerankModelConfig(GeneratedBaseModel):
     threads_batch: Annotated[
         int | None,
         Field(
-            alias="threads-batch",
+            alias="threadsBatch",
             description="Batch CPU threads. Unset uses threads; zero or below uses all logical CPUs.",
             ge=-9007199254740991,
             le=9007199254740991,
         ),
     ] = None
-    flash_attn: Annotated[
-        LoadModelSrcRequestLlamacppRerankModelConfigFlashAttn | None,
+    flash_attention: Annotated[
+        LoadModelSrcRequestLlamacppRerankModelConfigFlashAttention | None,
         Field(
+            alias="flashAttention",
             description="Flash attention mode. Default auto.",
-            title="LoadModelSrcRequestLlamacppRerankModelConfigFlashAttn",
+            title="LoadModelSrcRequestLlamacppRerankModelConfigFlashAttention",
         ),
     ] = None
     verbosity: Annotated[
@@ -15727,19 +15985,19 @@ class LoadModelSrcRequestLlamacppRerankModelConfig(GeneratedBaseModel):
     ] = None
     main_gpu: Annotated[
         MainGpu4 | LoadModelSrcRequestLlamacppRerankModelConfigMainGpu | None,
-        Field(alias="main-gpu", description="GPU index or device class."),
+        Field(alias="mainGpu", description="GPU index or device class."),
     ] = None
     split_mode: Annotated[
         LoadModelSrcRequestLlamacppRerankModelConfigSplitMode | None,
         Field(
-            alias="split-mode",
+            alias="splitMode",
             description="Multi-GPU split mode.",
             title="LoadModelSrcRequestLlamacppRerankModelConfigSplitMode",
         ),
     ] = None
     tensor_split: Annotated[
         str | None,
-        Field(alias="tensor-split", description="Per-GPU tensor split proportions."),
+        Field(alias="tensorSplit", description="Per-GPU tensor split proportions."),
     ] = None
     opencl_cache_dir: Annotated[
         str | None,
@@ -16625,6 +16883,15 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabS
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModel(
     GeneratedBaseModel
 ):
+    __legacy_keys__ = {
+        "beamsize": "beamSize",
+        "lengthpenalty": "lengthPenalty",
+        "maxlength": "maxLength",
+        "norepeatngramsize": "noRepeatNgramSize",
+        "repetitionpenalty": "repeatPenalty",
+        "topk": "topK",
+        "topp": "topP",
+    }
     mode: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode | None,
         Field(
@@ -16632,37 +16899,56 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModel(
             title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode",
         ),
     ] = None
-    beamsize: Annotated[
-        float | None,
-        Field(description="Beam search width (≥1); 1 disables beam search. Default 4."),
-    ] = None
-    lengthpenalty: Annotated[
-        float | None,
-        Field(description="Length-normalization strength (≥0). Default 1.0."),
-    ] = None
-    maxlength: Annotated[
-        float | None, Field(description="Maximum generated tokens (>0). Default 512.")
-    ] = None
-    repetitionpenalty: Annotated[
-        float | None,
-        Field(description="Penalty on previously generated tokens (0–2). Default 1.0."),
-    ] = None
-    norepeatngramsize: Annotated[
+    beam_size: Annotated[
         float | None,
         Field(
-            description="Disallow repeating n-grams of this size (0–10); 0 disables. Default 0."
+            alias="beamSize",
+            description="Beam search width (≥1); 1 disables beam search. Default 4.",
+        ),
+    ] = None
+    length_penalty: Annotated[
+        float | None,
+        Field(
+            alias="lengthPenalty",
+            description="Length-normalization strength (≥0). Default 1.0.",
+        ),
+    ] = None
+    max_length: Annotated[
+        float | None,
+        Field(
+            alias="maxLength", description="Maximum generated tokens (>0). Default 512."
+        ),
+    ] = None
+    repeat_penalty: Annotated[
+        float | None,
+        Field(
+            alias="repeatPenalty",
+            description="Penalty on previously generated tokens (0–2). Default 1.0.",
+        ),
+    ] = None
+    no_repeat_ngram_size: Annotated[
+        float | None,
+        Field(
+            alias="noRepeatNgramSize",
+            description="Disallow repeating n-grams of this size (0–10); 0 disables. Default 0.",
         ),
     ] = None
     temperature: Annotated[
         float | None, Field(description="Sampling temperature (0–2). Default 0.3.")
     ] = None
-    topk: Annotated[
+    top_k: Annotated[
         float | None,
-        Field(description="Keep top-K logits (0–vocab_size); 0 disables. Default 0."),
+        Field(
+            alias="topK",
+            description="Keep top-K logits (0–vocab_size); 0 disables. Default 0.",
+        ),
     ] = None
-    topp: Annotated[
+    top_p: Annotated[
         float | None,
-        Field(description="Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0."),
+        Field(
+            alias="topP",
+            description="Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0.",
+        ),
     ] = None
     model_src: Annotated[
         str | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc,
@@ -16698,6 +16984,15 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModel(
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamot(GeneratedBaseModel):
+    __legacy_keys__ = {
+        "beamsize": "beamSize",
+        "lengthpenalty": "lengthPenalty",
+        "maxlength": "maxLength",
+        "norepeatngramsize": "noRepeatNgramSize",
+        "repetitionpenalty": "repeatPenalty",
+        "topk": "topK",
+        "topp": "topP",
+    }
     mode: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode | None,
         Field(
@@ -16705,37 +17000,56 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamot(GeneratedBaseModel
             title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode",
         ),
     ] = None
-    beamsize: Annotated[
-        float | None,
-        Field(description="Beam search width (≥1); 1 disables beam search. Default 4."),
-    ] = None
-    lengthpenalty: Annotated[
-        float | None,
-        Field(description="Length-normalization strength (≥0). Default 1.0."),
-    ] = None
-    maxlength: Annotated[
-        float | None, Field(description="Maximum generated tokens (>0). Default 512.")
-    ] = None
-    repetitionpenalty: Annotated[
-        float | None,
-        Field(description="Penalty on previously generated tokens (0–2). Default 1.0."),
-    ] = None
-    norepeatngramsize: Annotated[
+    beam_size: Annotated[
         float | None,
         Field(
-            description="Disallow repeating n-grams of this size (0–10); 0 disables. Default 0."
+            alias="beamSize",
+            description="Beam search width (≥1); 1 disables beam search. Default 4.",
+        ),
+    ] = None
+    length_penalty: Annotated[
+        float | None,
+        Field(
+            alias="lengthPenalty",
+            description="Length-normalization strength (≥0). Default 1.0.",
+        ),
+    ] = None
+    max_length: Annotated[
+        float | None,
+        Field(
+            alias="maxLength", description="Maximum generated tokens (>0). Default 512."
+        ),
+    ] = None
+    repeat_penalty: Annotated[
+        float | None,
+        Field(
+            alias="repeatPenalty",
+            description="Penalty on previously generated tokens (0–2). Default 1.0.",
+        ),
+    ] = None
+    no_repeat_ngram_size: Annotated[
+        float | None,
+        Field(
+            alias="noRepeatNgramSize",
+            description="Disallow repeating n-grams of this size (0–10); 0 disables. Default 0.",
         ),
     ] = None
     temperature: Annotated[
         float | None, Field(description="Sampling temperature (0–2). Default 0.3.")
     ] = None
-    topk: Annotated[
+    top_k: Annotated[
         float | None,
-        Field(description="Keep top-K logits (0–vocab_size); 0 disables. Default 0."),
+        Field(
+            alias="topK",
+            description="Keep top-K logits (0–vocab_size); 0 disables. Default 0.",
+        ),
     ] = None
-    topp: Annotated[
+    top_p: Annotated[
         float | None,
-        Field(description="Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0."),
+        Field(
+            alias="topP",
+            description="Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0.",
+        ),
     ] = None
     engine: Annotated[
         Literal["Bergamot"],
@@ -16849,6 +17163,15 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo(Enum):
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTrans(GeneratedBaseModel):
+    __legacy_keys__ = {
+        "beamsize": "beamSize",
+        "lengthpenalty": "lengthPenalty",
+        "maxlength": "maxLength",
+        "norepeatngramsize": "noRepeatNgramSize",
+        "repetitionpenalty": "repeatPenalty",
+        "topk": "topK",
+        "topp": "topP",
+    }
     mode: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode | None,
         Field(
@@ -16856,37 +17179,56 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTrans(GeneratedBaseMod
             title="LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode",
         ),
     ] = None
-    beamsize: Annotated[
-        float | None,
-        Field(description="Beam search width (≥1); 1 disables beam search. Default 4."),
-    ] = None
-    lengthpenalty: Annotated[
-        float | None,
-        Field(description="Length-normalization strength (≥0). Default 1.0."),
-    ] = None
-    maxlength: Annotated[
-        float | None, Field(description="Maximum generated tokens (>0). Default 512.")
-    ] = None
-    repetitionpenalty: Annotated[
-        float | None,
-        Field(description="Penalty on previously generated tokens (0–2). Default 1.0."),
-    ] = None
-    norepeatngramsize: Annotated[
+    beam_size: Annotated[
         float | None,
         Field(
-            description="Disallow repeating n-grams of this size (0–10); 0 disables. Default 0."
+            alias="beamSize",
+            description="Beam search width (≥1); 1 disables beam search. Default 4.",
+        ),
+    ] = None
+    length_penalty: Annotated[
+        float | None,
+        Field(
+            alias="lengthPenalty",
+            description="Length-normalization strength (≥0). Default 1.0.",
+        ),
+    ] = None
+    max_length: Annotated[
+        float | None,
+        Field(
+            alias="maxLength", description="Maximum generated tokens (>0). Default 512."
+        ),
+    ] = None
+    repeat_penalty: Annotated[
+        float | None,
+        Field(
+            alias="repeatPenalty",
+            description="Penalty on previously generated tokens (0–2). Default 1.0.",
+        ),
+    ] = None
+    no_repeat_ngram_size: Annotated[
+        float | None,
+        Field(
+            alias="noRepeatNgramSize",
+            description="Disallow repeating n-grams of this size (0–10); 0 disables. Default 0.",
         ),
     ] = None
     temperature: Annotated[
         float | None, Field(description="Sampling temperature (0–2). Default 0.3.")
     ] = None
-    topk: Annotated[
+    top_k: Annotated[
         float | None,
-        Field(description="Keep top-K logits (0–vocab_size); 0 disables. Default 0."),
+        Field(
+            alias="topK",
+            description="Keep top-K logits (0–vocab_size); 0 disables. Default 0.",
+        ),
     ] = None
-    topp: Annotated[
+    top_p: Annotated[
         float | None,
-        Field(description="Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0."),
+        Field(
+            alias="topP",
+            description="Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0.",
+        ),
     ] = None
     engine: Annotated[
         Literal["IndicTrans"],
@@ -17704,6 +18046,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserCoremlCompute
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
+    __legacy_keys__ = {"useGPU": "useGpu"}
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -17730,7 +18073,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
     use_gpu: Annotated[
         bool | None,
         Field(
-            alias="useGPU",
+            alias="useGpu",
             description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
@@ -17925,7 +18268,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
         int | None,
         Field(
             alias="nGpuLayers",
-            description="Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+            description="Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGpu`; when both are set they must agree.",
             ge=-2147483648,
             le=2147483647,
         ),
@@ -17941,7 +18284,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
     backend: Annotated[
         str | None,
         Field(
-            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGpu` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
             min_length=1,
         ),
     ] = None
@@ -18596,6 +18939,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicNoiseNpySrc(GeneratedBaseMo
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(GeneratedBaseModel):
+    __legacy_keys__ = {"useGPU": "useGpu"}
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -18640,7 +18984,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(GeneratedBaseModel):
     use_gpu: Annotated[
         bool | None,
         Field(
-            alias="useGPU",
+            alias="useGpu",
             description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
@@ -18665,7 +19009,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(GeneratedBaseModel):
         int | None,
         Field(
             alias="nGpuLayers",
-            description="Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+            description="Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGpu`; when both are set they must agree.",
             ge=-2147483648,
             le=2147483647,
         ),
@@ -18682,7 +19026,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(GeneratedBaseModel):
         str | None,
         Field(
             alias="vulkanCacheDir",
-            description="Supertonic + `useGPU` only: directory where the Vulkan backend persists its compiled pipeline cache.",
+            description="Supertonic + `useGpu` only: directory where the Vulkan backend persists its compiled pipeline cache.",
             min_length=1,
         ),
     ] = None
@@ -18807,7 +19151,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(GeneratedBaseModel):
     backend: Annotated[
         str | None,
         Field(
-            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGpu` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
             min_length=1,
         ),
     ] = None
@@ -19200,6 +19544,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserCoremlComputeUnit
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
+    __legacy_keys__ = {"useGPU": "useGpu"}
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -19272,7 +19617,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
     use_gpu: Annotated[
         bool | None,
         Field(
-            alias="useGPU",
+            alias="useGpu",
             description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
@@ -19315,7 +19660,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
         int | None,
         Field(
             alias="nGpuLayers",
-            description="Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+            description="Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGpu`; when both are set they must agree.",
             ge=-2147483648,
             le=2147483647,
         ),
@@ -19401,7 +19746,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
     backend: Annotated[
         str | None,
         Field(
-            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGpu` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
             min_length=1,
         ),
     ] = None
@@ -20128,6 +20473,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc(
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3(GeneratedBaseModel):
+    __legacy_keys__ = {"useGPU": "useGpu"}
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -20195,7 +20541,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3(GeneratedBaseModel):
     use_gpu: Annotated[
         bool | None,
         Field(
-            alias="useGPU",
+            alias="useGpu",
             description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
@@ -20238,7 +20584,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3(GeneratedBaseModel):
         int | None,
         Field(
             alias="nGpuLayers",
-            description="Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+            description="Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGpu`; when both are set they must agree.",
             ge=-2147483648,
             le=2147483647,
         ),
@@ -20254,7 +20600,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3(GeneratedBaseModel):
     backend: Annotated[
         str | None,
         Field(
-            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGpu` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
             min_length=1,
         ),
     ] = None
@@ -20688,6 +21034,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc(GeneratedBase
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigAudio8(GeneratedBaseModel):
+    __legacy_keys__ = {"useGPU": "useGpu"}
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -20742,7 +21089,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8(GeneratedBaseModel):
     use_gpu: Annotated[
         bool | None,
         Field(
-            alias="useGPU",
+            alias="useGpu",
             description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
@@ -20767,7 +21114,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8(GeneratedBaseModel):
         int | None,
         Field(
             alias="nGpuLayers",
-            description="Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+            description="Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGpu`; when both are set they must agree.",
             ge=-2147483648,
             le=2147483647,
         ),
@@ -20783,7 +21130,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8(GeneratedBaseModel):
     backend: Annotated[
         str | None,
         Field(
-            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGpu` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
             min_length=1,
         ),
     ] = None
@@ -21267,6 +21614,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem(
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigMoss(GeneratedBaseModel):
+    __legacy_keys__ = {"useGPU": "useGpu"}
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -21383,7 +21731,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMoss(GeneratedBaseModel):
     use_gpu: Annotated[
         bool | None,
         Field(
-            alias="useGPU",
+            alias="useGpu",
             description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
@@ -21399,7 +21747,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMoss(GeneratedBaseModel):
         int | None,
         Field(
             alias="nGpuLayers",
-            description="Any non-zero value selects the GPU backend, 0 keeps MOSS on the CPU. Wins over `useGPU`; when both are set they must agree.",
+            description="Any non-zero value selects the GPU backend, 0 keeps MOSS on the CPU. Wins over `useGpu`; when both are set they must agree.",
             ge=-2147483648,
             le=2147483647,
         ),
@@ -21415,7 +21763,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMoss(GeneratedBaseModel):
     backend: Annotated[
         str | None,
         Field(
-            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGpu` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
             min_length=1,
         ),
     ] = None
@@ -21461,6 +21809,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMoss(GeneratedBaseModel):
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigMossSfx(GeneratedBaseModel):
+    __legacy_keys__ = {"useGPU": "useGpu"}
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -21471,7 +21820,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossSfx(GeneratedBaseModel):
     use_gpu: Annotated[
         bool | None,
         Field(
-            alias="useGPU",
+            alias="useGpu",
             description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
@@ -21487,7 +21836,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossSfx(GeneratedBaseModel):
         int | None,
         Field(
             alias="nGpuLayers",
-            description="Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+            description="Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGpu`; when both are set they must agree.",
             ge=-2147483648,
             le=2147483647,
         ),
@@ -21503,7 +21852,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossSfx(GeneratedBaseModel):
     backend: Annotated[
         str | None,
         Field(
-            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGpu` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
             min_length=1,
         ),
     ] = None
@@ -21667,6 +22016,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc(
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigMossSpeech(GeneratedBaseModel):
+    __legacy_keys__ = {"useGPU": "useGpu"}
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -21677,7 +22027,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossSpeech(GeneratedBaseModel):
     use_gpu: Annotated[
         bool | None,
         Field(
-            alias="useGPU",
+            alias="useGpu",
             description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
         ),
     ] = None
@@ -21693,7 +22043,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossSpeech(GeneratedBaseModel):
         int | None,
         Field(
             alias="nGpuLayers",
-            description="Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+            description="Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGpu`; when both are set they must agree.",
             ge=-2147483648,
             le=2147483647,
         ),
@@ -21709,7 +22059,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossSpeech(GeneratedBaseModel):
     backend: Annotated[
         str | None,
         Field(
-            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGpu` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
             min_length=1,
         ),
     ] = None
@@ -21950,6 +22300,7 @@ class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc(GeneratedBaseModel):
 
 
 class LoadModelSrcRequestGgmlOcrModelConfig(GeneratedBaseModel):
+    __legacy_keys__ = {"nThreads": "threads"}
     lang_list: Annotated[
         list[str] | None,
         Field(
@@ -22007,11 +22358,10 @@ class LoadModelSrcRequestGgmlOcrModelConfig(GeneratedBaseModel):
             description="Recognizer batch size (easyocr only). Default 32.",
         ),
     ] = None
-    n_threads: Annotated[
+    threads: Annotated[
         float | None,
         Field(
-            alias="nThreads",
-            description="GGML CPU thread count: `0` (default) auto-detects physical cores, `> 0` sets an explicit count, `< 0` leaves the backend's default unchanged.",
+            description="GGML CPU thread count: `0` (default) auto-detects physical cores, `> 0` sets an explicit count, `< 0` leaves the backend's default unchanged."
         ),
     ] = None
     backend_device: Annotated[
@@ -23984,6 +24334,7 @@ class Threads1(RootModel[int]):
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigUpscaler(GeneratedBaseModel):
+    __legacy_keys__ = {"offload_params_to_cpu": "offloadToCpu"}
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -23996,12 +24347,14 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscaler(GeneratedBaseModel):
     model_src: Annotated[
         str | LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrc | None,
         Field(
-            description="ESRGAN upscaler model (e.g. RealESRGAN_x4plus_anime_6B.pth). Required in diffusion mode when this `upscaler` block is set — configures the post-generation upscaler invoked via diffusion({ upscale }). In `mode: 'upscale'` the primary modelSrc itself is the ESRGAN model, so this field is ignored."
+            alias="modelSrc",
+            description="ESRGAN upscaler model (e.g. RealESRGAN_x4plus_anime_6B.pth). Required in diffusion mode when this `upscaler` block is set — configures the post-generation upscaler invoked via diffusion({ upscale }). In `mode: 'upscale'` the primary modelSrc itself is the ESRGAN model, so this field is ignored.",
         ),
     ] = None
     tile_size: Annotated[
         int | None,
         Field(
+            alias="tileSize",
             description="ESRGAN upscaler tile size in pixels. Smaller tiles use less VRAM at the cost of more passes.",
             gt=0,
             le=9007199254740991,
@@ -24013,10 +24366,11 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscaler(GeneratedBaseModel):
             description="Use direct convolution in the ESRGAN upscaler instead of im2col + GEMM. Faster on some backends, slower on others."
         ),
     ] = None
-    offload_params_to_cpu: Annotated[
+    offload_to_cpu: Annotated[
         bool | None,
         Field(
-            description="Keep ESRGAN upscaler weights on CPU and offload them during compute. Trades latency for VRAM headroom on memory-constrained GPUs."
+            alias="offloadToCpu",
+            description="Keep ESRGAN upscaler weights on CPU and offload them during compute. Trades latency for VRAM headroom on memory-constrained GPUs.",
         ),
     ] = None
     threads: Annotated[
@@ -24028,11 +24382,16 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscaler(GeneratedBaseModel):
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
+    __legacy_keys__ = {
+        "diffusion_fa": "diffusionFlashAttention",
+        "flash_attn": "flashAttention",
+        "main-gpu": "mainGpu",
+    }
     __forbidden_fields__ = frozenset({"clip_on_cpu", "control_net_cpu", "vae_on_cpu"})
     __forbidden_field_guidance__ = {
-        "clip_on_cpu": "Removed. Use modelConfig.params_backend: 'te=cpu' to keep text encoder parameters in CPU RAM, or modelConfig.backend: 'te=cpu' to run its graph on CPU.",
+        "clip_on_cpu": "Removed. Use modelConfig.paramsBackend: 'te=cpu' to keep text encoder parameters in CPU RAM, or modelConfig.backend: 'te=cpu' to run its graph on CPU.",
         "control_net_cpu": "Removed. Use modelConfig.backend: 'controlnet=cpu' to run the ControlNet graph on CPU.",
-        "vae_on_cpu": "Removed. Use modelConfig.params_backend: 'vae=cpu' to keep VAE parameters in CPU RAM, or modelConfig.backend: 'vae=cpu' to run its graph on CPU.",
+        "vae_on_cpu": "Removed. Use modelConfig.paramsBackend: 'vae=cpu' to keep VAE parameters in CPU RAM, or modelConfig.backend: 'vae=cpu' to run its graph on CPU.",
     }
     mode: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigMode | None,
@@ -24055,7 +24414,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     main_gpu: Annotated[
         MainGpu6 | LoadModelSrcRequestSdcppGenerationModelConfigMainGpu | None,
         Field(
-            alias="main-gpu",
+            alias="mainGpu",
             description='GPU to pin when `device` is "gpu": a GPU-device index, "integrated", or "dedicated" (the discrete GPU with the most VRAM). Omit to let automatic placement choose: a dedicated GPU first, then an integrated one, taking the largest available memory budget within each. Resolved against the addon\'s own ggml device enumeration, so it cannot desync from the device list the backend actually uses. If an explicit request cannot be satisfied (e.g. "integrated" with no integrated GPU, "dedicated" with no discrete GPU, or an out-of-range index) the addon falls back to CPU rather than substituting a different GPU. Stripped on mobile (single-GPU devices).',
         ),
     ] = None
@@ -24083,6 +24442,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     sampler_rng: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng | None,
         Field(
+            alias="samplerRng",
             description="Sampler RNG type override. Default: auto (follows `rng`).",
             title="LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng",
         ),
@@ -24090,12 +24450,14 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     vae_auto_cpu_fallback: Annotated[
         bool | None,
         Field(
-            description="Automatically move the VAE to CPU when GPU memory is insufficient"
+            alias="vaeAutoCpuFallback",
+            description="Automatically move the VAE to CPU when GPU memory is insufficient",
         ),
     ] = None
     vae_auto_cpu_fallback_memory_ratio: Annotated[
         float | None,
         Field(
+            alias="vaeAutoCpuFallbackMemoryRatio",
             description="GPU-memory threshold for automatic VAE CPU fallback as a ratio in (0, 1]",
             gt=0.0,
             le=1.0,
@@ -24103,12 +24465,16 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     ] = None
     vae_tiling: Annotated[
         bool | None,
-        Field(description="Enable VAE tiling for large images on limited VRAM"),
+        Field(
+            alias="vaeTiling",
+            description="Enable VAE tiling for large images on limited VRAM",
+        ),
     ] = None
     offload_to_cpu: Annotated[
         bool | None,
         Field(
-            description="Keep model weights in CPU memory and offload them during GPU compute. Supplies a '*=cpu' parameter residency default; explicit params_backend assignments override it per module."
+            alias="offloadToCpu",
+            description="Keep model weights in CPU memory and offload them during GPU compute. Supplies a '*=cpu' parameter residency default; explicit paramsBackend assignments override it per module.",
         ),
     ] = None
     backend: Annotated[
@@ -24121,32 +24487,43 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     params_backend: Annotated[
         str | None,
         Field(
-            description="Parameter residency for diffusion and video, independent of graph execution. 'diffusion=cpu' stages weights from CPU RAM; 'diffusion=disk' reads weights from the local model file on demand and releases them after use. Disk is never selected automatically. With offload_to_cpu enabled, explicit assignments override CPU residency only for the specified modules.",
+            alias="paramsBackend",
+            description="Parameter residency for diffusion and video, independent of graph execution. 'diffusion=cpu' stages weights from CPU RAM; 'diffusion=disk' reads weights from the local model file on demand and releases them after use. Disk is never selected automatically. With offloadToCpu enabled, explicit assignments override CPU residency only for the specified modules.",
             max_length=4096,
         ),
     ] = None
     max_vram: Annotated[
         float | str | None,
         Field(
-            description="VRAM budget in GiB for diffusion and video graph-cut execution. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0."
+            alias="maxVram",
+            description="VRAM budget in GiB for diffusion and video graph-cut execution. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. Works without streamLayers. Default: 0.",
         ),
     ] = None
     stream_layers: Annotated[
         bool | None,
         Field(
-            description="Prefetch and evict diffusion layers from CPU RAM in diffusion and video mode. Only takes effect with graph cutting enabled by max_vram and CPU diffusion parameter residency. Does not stream from disk; use params_backend: 'diffusion=disk' for on-demand file reads. Default: false."
+            alias="streamLayers",
+            description="Prefetch and evict diffusion layers from CPU RAM in diffusion and video mode. Only takes effect with graph cutting enabled by maxVram and CPU diffusion parameter residency. Does not stream from disk; use paramsBackend: 'diffusion=disk' for on-demand file reads. Default: false.",
         ),
     ] = None
-    flash_attn: Annotated[
-        bool | None, Field(description="Enable flash attention to reduce memory usage")
-    ] = None
-    diffusion_fa: Annotated[
+    flash_attention: Annotated[
         bool | None,
-        Field(description="Enable flash attention for the diffusion transformer only"),
+        Field(
+            alias="flashAttention",
+            description="Enable flash attention to reduce memory usage",
+        ),
+    ] = None
+    diffusion_flash_attention: Annotated[
+        bool | None,
+        Field(
+            alias="diffusionFlashAttention",
+            description="Enable flash attention for the diffusion transformer only",
+        ),
     ] = None
     lora_apply_mode: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode | None,
         Field(
+            alias="loraApplyMode",
             description="How LoRA adapters passed via diffusion({ lora }) or video({ lora }) are applied. 'auto' (default): picked based on weight type — 'at_runtime' for quantized weights, 'immediately' for full-precision. 'immediately': adapter is fused into the model on first use and persists across subsequent generation calls until the model is unloaded. 'at_runtime': adapter is applied per-call and not persisted; use this mode for the LTX Ingredients workflow.",
             title="LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode",
         ),
@@ -24205,7 +24582,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         | None,
         Field(
             alias="highNoiseDiffusionModelSrc",
-            description="High-noise diffusion expert — required for Wan 2.2 A14B mixture-of-experts video models, and the only thing that enables the high_noise_* / moe_boundary request fields. Omit for single-expert models such as Wan 2.1 and Wan 2.2 TI2V-5B.",
+            description="High-noise diffusion expert — required for Wan 2.2 A14B mixture-of-experts video models, and the only thing that enables the highNoise* / moeBoundary request fields. Omit for single-expert models such as Wan 2.1 and Wan 2.2 TI2V-5B.",
         ),
     ] = None
     uncond_model_src: Annotated[
@@ -24269,7 +24646,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     upscaler: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigUpscaler | None,
         Field(
-            description="ESRGAN upscaler configuration. In diffusion mode this enables the post-generation upscale path invoked via diffusion({ upscale }) and requires `model_src`. In `mode: 'upscale'` only the tuning fields (tile_size, direct, offload_params_to_cpu, threads) are honored — the primary modelSrc IS the ESRGAN model in that mode and `model_src` here is ignored. In `mode: 'video'` the entire `upscaler` object is ignored. Mode-dependent constraints (e.g. `model_src` required in diffusion mode) are enforced by the sdcpp-generation plugin at load time, not at the schema layer.",
+            description="ESRGAN upscaler configuration. In diffusion mode this enables the post-generation upscale path invoked via diffusion({ upscale }) and requires `modelSrc`. In `mode: 'upscale'` only the tuning fields (tileSize, direct, offloadToCpu, threads) are honored — the primary modelSrc IS the ESRGAN model in that mode and `modelSrc` here is ignored. In `mode: 'video'` the entire `upscaler` object is ignored. Mode-dependent constraints (e.g. `modelSrc` required in diffusion mode) are enforced by the sdcpp-generation plugin at load time, not at the schema layer.",
             title="LoadModelSrcRequestSdcppGenerationModelConfigUpscaler",
         ),
     ] = None
@@ -24795,6 +25172,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc(GeneratedBase
 
 
 class LoadModelSrcRequestAudiogenGgmlModelConfigAcestep(GeneratedBaseModel):
+    __legacy_keys__ = {"useGPU": "useGpu"}
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -24805,7 +25183,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestep(GeneratedBaseModel):
     use_gpu: Annotated[
         bool | None,
         Field(
-            alias="useGPU",
+            alias="useGpu",
             description="Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the primary backend a run used.",
         ),
     ] = None
@@ -24846,7 +25224,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestep(GeneratedBaseModel):
         int | None,
         Field(
             alias="nGpuLayers",
-            description="ACE-Step GPU layers to offload when `useGPU` is set (99 = all). Ignored on CPU.",
+            description="ACE-Step GPU layers to offload when `useGpu` is set (99 = all). Ignored on CPU.",
             ge=0,
             le=9007199254740991,
         ),
@@ -24854,7 +25232,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestep(GeneratedBaseModel):
     backend: Annotated[
         str | None,
         Field(
-            description="Advanced: ACE-Step's primary backend, by backend or device name (`cpu`, `MTL0`, `CUDA0`, …). Unset or `auto` keeps the placement `useGPU` and `nGpuLayers` select; any other value overrides both, so `useGPU: false` with `backend: 'CUDA0'` runs on CUDA0. A named backend the host cannot provide fails the load instead of falling back.",
+            description="Advanced: ACE-Step's primary backend, by backend or device name (`cpu`, `MTL0`, `CUDA0`, …). Unset or `auto` keeps the placement `useGpu` and `nGpuLayers` select; any other value overrides both, so `useGpu: false` with `backend: 'CUDA0'` runs on CUDA0. A named backend the host cannot provide fails the load instead of falling back.",
             min_length=1,
         ),
     ] = None
@@ -25140,6 +25518,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc(
 
 
 class LoadModelSrcRequestAudiogenGgmlModelConfigMinimax(GeneratedBaseModel):
+    __legacy_keys__ = {"useGPU": "useGpu"}
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -25150,7 +25529,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimax(GeneratedBaseModel):
     use_gpu: Annotated[
         bool | None,
         Field(
-            alias="useGPU",
+            alias="useGpu",
             description="Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the primary backend a run used.",
         ),
     ] = None
@@ -25173,7 +25552,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimax(GeneratedBaseModel):
     device: Annotated[
         LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxDevice | None,
         Field(
-            description="Where MiniMax runs, instead of `useGPU`: `'gpu'` requires a usable GPU and fails the load otherwise, `'auto'` (what `useGPU: true` means) falls back to the CPU, `'cpu'` never touches a GPU. Cannot be combined with `useGPU`.",
+            description="Where MiniMax runs, instead of `useGpu`: `'gpu'` requires a usable GPU and fails the load otherwise, `'auto'` (what `useGpu: true` means) falls back to the CPU, `'cpu'` never touches a GPU. Cannot be combined with `useGpu`.",
             title="LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxDevice",
         ),
     ] = None
@@ -25181,7 +25560,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimax(GeneratedBaseModel):
         str | None,
         Field(
             alias="coremlProfileDir",
-            description="Advanced, macOS 15+: directory on the inference host holding the compiled full Core ML profile for this GGUF pair (`manifest.json` plus the LM, depth, conditioner, DiT and vocoder programs). Runs MiniMax through Core ML instead of the native backend and takes precedence over `device` and `useGPU`; the load fails when the build, OS or profile cannot support it rather than switching backends. Requires `coremlComputeUnits`.",
+            description="Advanced, macOS 15+: directory on the inference host holding the compiled full Core ML profile for this GGUF pair (`manifest.json` plus the LM, depth, conditioner, DiT and vocoder programs). Runs MiniMax through Core ML instead of the native backend and takes precedence over `device` and `useGpu`; the load fails when the build, OS or profile cannot support it rather than switching backends. Requires `coremlComputeUnits`.",
             min_length=1,
         ),
     ] = None
@@ -25197,7 +25576,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimax(GeneratedBaseModel):
         str | None,
         Field(
             alias="coremlConditionerPath",
-            description="Advanced, macOS: absolute path on the inference host to a compiled conditioner `.mlmodelc`. Runs the conditioner convolution alone through Core ML (CPU and Neural Engine); every other stage stays on the backend `device` or `useGPU` selects. Does not enable the full Core ML profile. The load fails when the bundle is invalid or the build cannot use it.",
+            description="Advanced, macOS: absolute path on the inference host to a compiled conditioner `.mlmodelc`. Runs the conditioner convolution alone through Core ML (CPU and Neural Engine); every other stage stays on the backend `device` or `useGpu` selects. Does not enable the full Core ML profile. The load fails when the bundle is invalid or the build cannot use it.",
             min_length=1,
         ),
     ] = None
@@ -25706,26 +26085,37 @@ class ReloadConfigRequestModelConfigVadParams(GeneratedBaseModel):
     ] = None
     min_speech_duration_ms: Annotated[
         float | None,
-        Field(description="Minimum duration for a segment to count as speech (ms)."),
+        Field(
+            alias="minSpeechDurationMs",
+            description="Minimum duration for a segment to count as speech (ms).",
+        ),
     ] = None
     min_silence_duration_ms: Annotated[
         float | None,
         Field(
-            description="Minimum silence duration required to split speech segments (ms)."
+            alias="minSilenceDurationMs",
+            description="Minimum silence duration required to split speech segments (ms).",
         ),
     ] = None
     max_speech_duration_s: Annotated[
         float | None,
-        Field(description="Maximum duration of a single speech segment (s)."),
+        Field(
+            alias="maxSpeechDurationS",
+            description="Maximum duration of a single speech segment (s).",
+        ),
     ] = None
     speech_pad_ms: Annotated[
         float | None,
-        Field(description="Padding added before and after each speech segment (ms)."),
+        Field(
+            alias="speechPadMs",
+            description="Padding added before and after each speech segment (ms).",
+        ),
     ] = None
     samples_overlap: Annotated[
         float | None,
         Field(
-            description="Overlap between consecutive speech segments (0 < x ≤ 1); an explicit `0` falls back to the engine default."
+            alias="samplesOverlap",
+            description="Overlap between consecutive speech segments (0 < x ≤ 1); an explicit `0` falls back to the engine default.",
         ),
     ] = None
 
@@ -25739,7 +26129,7 @@ class MainGpu7(RootModel[int]):
     root: Annotated[
         int,
         Field(
-            description="GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+            description="GPU to run on once `useGpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpuDevice`.",
             ge=0,
             le=2147483647,
         ),
@@ -25750,7 +26140,7 @@ class MainGpu8(RootModel[str]):
     root: Annotated[
         str,
         Field(
-            description="GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+            description="GPU to run on once `useGpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpuDevice`.",
             pattern="^\\d+$",
         ),
     ]
@@ -25767,29 +26157,35 @@ class ReloadConfigRequestModelConfigContextParams(GeneratedBaseModel):
         Field(description="Path to the whisper model file (context override)."),
     ] = None
     use_gpu: Annotated[
-        bool | None, Field(description="Enable GPU acceleration. Default false.")
+        bool | None,
+        Field(alias="useGpu", description="Enable GPU acceleration. Default false."),
     ] = None
-    flash_attn: Annotated[bool | None, Field(description="Enable flash attention.")] = (
-        None
-    )
+    flash_attention: Annotated[
+        bool | None,
+        Field(alias="flashAttention", description="Enable flash attention."),
+    ] = None
     gpu_device: Annotated[
         float | None,
         Field(
-            description="GPU device index to use (legacy GPU/IGPU ordinal). Cannot be combined with `main-gpu`."
+            alias="gpuDevice",
+            description="GPU device index to use (legacy GPU/IGPU ordinal). Cannot be combined with `mainGpu`.",
         ),
     ] = None
     main_gpu: Annotated[
         MainGpu7 | MainGpu8 | ReloadConfigRequestModelConfigContextParamsMainGpu | None,
         Field(
-            alias="main-gpu",
-            description="GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+            alias="mainGpu",
+            description="GPU to run on once `useGpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpuDevice`.",
         ),
     ] = None
 
 
 class ReloadConfigRequestModelConfigMiscConfig(GeneratedBaseModel):
     caption_enabled: Annotated[
-        bool | None, Field(description="Format output segments as captions.")
+        bool | None,
+        Field(
+            alias="captionEnabled", description="Format output segments as captions."
+        ),
     ] = None
     seed: Annotated[
         int | None,
@@ -25917,7 +26313,7 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
             title="ReloadConfigRequestModelConfigStrategy",
         ),
     ] = None
-    n_threads: Annotated[
+    threads: Annotated[
         int | None,
         Field(
             description="CPU threads for transcription; `0` = auto (half of hardware cores).",
@@ -25928,6 +26324,7 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
     n_max_text_ctx: Annotated[
         int | None,
         Field(
+            alias="nMaxTextCtx",
             description="Maximum text tokens from previous segments used as context.",
             ge=-9007199254740991,
             le=9007199254740991,
@@ -25936,6 +26333,7 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
     offset_ms: Annotated[
         int | None,
         Field(
+            alias="offsetMs",
             description="Milliseconds to skip at the start of the audio.",
             ge=-9007199254740991,
             le=9007199254740991,
@@ -25944,6 +26342,7 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
     duration_ms: Annotated[
         int | None,
         Field(
+            alias="durationMs",
             description="Maximum duration of audio to transcribe, in milliseconds.",
             ge=-9007199254740991,
             le=9007199254740991,
@@ -25952,6 +26351,7 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
     audio_ctx: Annotated[
         int | None,
         Field(
+            alias="audioCtx",
             description="Audio context window size in samples; `0` = model default.",
             ge=-9007199254740991,
             le=9007199254740991,
@@ -25963,57 +26363,74 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
     no_context: Annotated[
         bool | None,
         Field(
-            description="Do not carry past transcription forward as the decoder's initial prompt; each window is decoded independently."
+            alias="noContext",
+            description="Do not carry past transcription forward as the decoder's initial prompt; each window is decoded independently.",
         ),
     ] = None
     no_timestamps: Annotated[
-        bool | None, Field(description="Omit timestamps from the transcription output.")
+        bool | None,
+        Field(
+            alias="noTimestamps",
+            description="Omit timestamps from the transcription output.",
+        ),
     ] = None
     single_segment: Annotated[
         bool | None,
         Field(
-            description="Force the whole audio into one output segment (for streaming or short clips)."
+            alias="singleSegment",
+            description="Force the whole audio into one output segment (for streaming or short clips).",
         ),
     ] = None
     print_special: Annotated[
-        bool | None, Field(description="Print special tokens in the output.")
+        bool | None,
+        Field(alias="printSpecial", description="Print special tokens in the output."),
     ] = None
     print_progress: Annotated[
-        bool | None, Field(description="Print progress updates during transcription.")
+        bool | None,
+        Field(
+            alias="printProgress",
+            description="Print progress updates during transcription.",
+        ),
     ] = None
     print_realtime: Annotated[
         bool | None,
         Field(
-            description="whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback)."
+            alias="printRealtime",
+            description="whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback).",
         ),
     ] = None
     print_timestamps: Annotated[
         bool | None,
         Field(
-            description="Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data."
+            alias="printTimestamps",
+            description="Prefix each `printRealtime` line with `[t0 --> t1]`; no effect on returned data.",
         ),
     ] = None
     token_timestamps: Annotated[
         bool | None,
         Field(
-            description="Experimental: compute per-token timestamps (populates `t0`/`t1`)."
+            alias="tokenTimestamps",
+            description="Experimental: compute per-token timestamps (populates `t0`/`t1`).",
         ),
     ] = None
     thold_pt: Annotated[
         float | None,
         Field(
-            description="Word-timestamp probability threshold for accepting a word (0–1)."
+            alias="tholdPt",
+            description="Word-timestamp probability threshold for accepting a word (0–1).",
         ),
     ] = None
     thold_ptsum: Annotated[
         float | None,
         Field(
-            description="Timestamp-token sum-probability threshold used when deriving token-level timestamps (0–1)."
+            alias="tholdPtsum",
+            description="Timestamp-token sum-probability threshold used when deriving token-level timestamps (0–1).",
         ),
     ] = None
     max_len: Annotated[
         int | None,
         Field(
+            alias="maxLen",
             description="Maximum tokens per transcription segment.",
             ge=-9007199254740991,
             le=9007199254740991,
@@ -26022,12 +26439,14 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
     split_on_word: Annotated[
         bool | None,
         Field(
-            description="When `max_len > 0`, split segments on word boundaries instead of mid-token."
+            alias="splitOnWord",
+            description="When `maxLen > 0`, split segments on word boundaries instead of mid-token.",
         ),
     ] = None
     max_tokens: Annotated[
         int | None,
         Field(
+            alias="maxTokens",
             description="Maximum tokens per segment; `0` = no limit.",
             ge=-9007199254740991,
             le=9007199254740991,
@@ -26036,25 +26455,36 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
     debug_mode: Annotated[
         bool | None,
         Field(
-            description="Experimental: emit extra debug output (e.g. the computed log-mel)."
+            alias="debugMode",
+            description="Experimental: emit extra debug output (e.g. the computed log-mel).",
         ),
     ] = None
     tdrz_enable: Annotated[
         bool | None,
-        Field(description="Enable tinydiarize (lightweight speaker-turn detection)."),
+        Field(
+            alias="tdrzEnable",
+            description="Enable tinydiarize (lightweight speaker-turn detection).",
+        ),
     ] = None
     suppress_regex: Annotated[
         str | None,
-        Field(description="Regular-expression pattern for tokens to suppress."),
+        Field(
+            alias="suppressRegex",
+            description="Regular-expression pattern for tokens to suppress.",
+        ),
     ] = None
     initial_prompt: Annotated[
         str | None,
-        Field(description="Initial prompt (context) prepended to the transcription."),
+        Field(
+            alias="initialPrompt",
+            description="Initial prompt (context) prepended to the transcription.",
+        ),
     ] = None
     carry_initial_prompt: Annotated[
         bool | None,
         Field(
-            description="Prepend `initial_prompt` to every decode window instead of only the first. Default false."
+            alias="carryInitialPrompt",
+            description="Prepend `initialPrompt` to every decode window instead of only the first. Default false.",
         ),
     ] = None
     language: Annotated[
@@ -26064,17 +26494,20 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
     detect_language: Annotated[
         bool | None,
         Field(
-            description="Convenience flag: `true` is translated to `language: 'auto'` before the request reaches the addon, which has no `detect_language` key of its own."
+            alias="detectLanguage",
+            description="Convenience flag: `true` is translated to `language: 'auto'` before the request reaches the addon, which has no language-detection flag of its own.",
         ),
     ] = None
     suppress_blank: Annotated[
         bool | None,
         Field(
-            description="Suppress the blank / leading-space token at the start of sampling."
+            alias="suppressBlank",
+            description="Suppress the blank / leading-space token at the start of sampling.",
         ),
     ] = None
     suppress_nst: Annotated[
-        bool | None, Field(description="Suppress non-speech tokens (NST).")
+        bool | None,
+        Field(alias="suppressNst", description="Suppress non-speech tokens (NST)."),
     ] = None
     temperature: Annotated[
         float | None, Field(description="Sampling temperature (0–1). Default 0.0.")
@@ -26082,34 +26515,44 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
     length_penalty: Annotated[
         float | None,
         Field(
-            description="Beam-search length penalty. Must be ≥ 0, so the upstream `-1` 'disabled' sentinel cannot be set via config."
+            alias="lengthPenalty",
+            description="Beam-search length penalty. Must be ≥ 0, so the upstream `-1` 'disabled' sentinel cannot be set via config.",
         ),
     ] = None
     temperature_inc: Annotated[
         float | None,
-        Field(description="Temperature increment applied when sampling fails."),
+        Field(
+            alias="temperatureInc",
+            description="Temperature increment applied when sampling fails.",
+        ),
     ] = None
     entropy_thold: Annotated[
         float | None,
-        Field(description="Entropy threshold for filtering uncertain words."),
+        Field(
+            alias="entropyThold",
+            description="Entropy threshold for filtering uncertain words.",
+        ),
     ] = None
     logprob_thold: Annotated[
         float | None,
         Field(
-            description="Log-probability threshold for filtering words; `-1` disables."
+            alias="logprobThold",
+            description="Log-probability threshold for filtering words; `-1` disables.",
         ),
     ] = None
     greedy_best_of: Annotated[
         int | None,
         Field(
+            alias="greedyBestOf",
             description="Greedy decoding: number of candidate completions; `-1` = default.",
             ge=-9007199254740991,
             le=9007199254740991,
         ),
     ] = None
-    beam_search_beam_size: Annotated[
+    beam_size: Annotated[
         int | None,
         Field(
+            alias="beamSize",
             description="Beam size for beam-search decoding; `-1` = default.",
             ge=-9007199254740991,
             le=9007199254740991,
@@ -26118,13 +26561,15 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
     max_initial_ts: Annotated[
         float | None,
         Field(
-            description="Maximum initial timestamp the decoder may emit, as a fraction of the window."
+            alias="maxInitialTs",
+            description="Maximum initial timestamp the decoder may emit, as a fraction of the window.",
         ),
     ] = None
     no_speech_thold: Annotated[
         float | None,
         Field(
-            description="No-speech probability above which a segment is treated as silence."
+            alias="noSpeechThold",
+            description="No-speech probability above which a segment is treated as silence.",
         ),
     ] = None
     seed: Annotated[
@@ -26144,11 +26589,12 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
     ] = None
     vad_params: Annotated[
         ReloadConfigRequestModelConfigVadParams | None,
-        Field(title="ReloadConfigRequestModelConfigVadParams"),
+        Field(alias="vadParams", title="ReloadConfigRequestModelConfigVadParams"),
     ] = None
     audio_format: Annotated[
         ReloadConfigRequestModelConfigAudioFormat | None,
         Field(
+            alias="audioFormat",
             description="Interpretation of raw audio bytes: `'f32le'` or `'s16le'`.",
             title="ReloadConfigRequestModelConfigAudioFormat",
         ),
@@ -27481,7 +27927,7 @@ class RerankRequest(GeneratedBaseModel):
     documents: Annotated[
         list[str],
         Field(
-            description="Documents to score. Each one, paired with the query, must fit in `batch_size`.",
+            description="Documents to score. Each one, paired with the query, must fit in `batchSize`.",
             min_length=1,
         ),
     ]
@@ -31169,7 +31615,10 @@ class VideoStreamRequest(GeneratedBaseModel):
     ]
     negative_prompt: Annotated[
         str | None,
-        Field(description="Optional negative prompt describing what to avoid."),
+        Field(
+            alias="negativePrompt",
+            description="Optional negative prompt describing what to avoid.",
+        ),
     ] = None
     lora: Annotated[
         str | None,
@@ -31182,6 +31631,7 @@ class VideoStreamRequest(GeneratedBaseModel):
     lora_strength: Annotated[
         float | None,
         Field(
+            alias="loraStrength",
             description="LTX video only. Runtime LoRA multiplier in [0, 10]; requires lora.",
             ge=0.0,
             le=10.0,
@@ -31190,6 +31640,7 @@ class VideoStreamRequest(GeneratedBaseModel):
     stg_scale: Annotated[
         float | None,
         Field(
+            alias="stgScale",
             description="LTX video only. Spatiotemporal guidance scale in [0, 10].",
             ge=0.0,
             le=10.0,
@@ -31198,6 +31649,7 @@ class VideoStreamRequest(GeneratedBaseModel):
     stg_block: Annotated[
         int | None,
         Field(
+            alias="stgBlock",
             description="LTX video only. Transformer block skipped for spatiotemporal guidance.",
             ge=0,
             le=9007199254740991,
@@ -31224,6 +31676,7 @@ class VideoStreamRequest(GeneratedBaseModel):
     video_frames: Annotated[
         int | None,
         Field(
+            alias="videoFrames",
             description="Frame count validated against the loaded model: Wan uses 4*k+1 (k>=1), LTX-2 uses 8*k+1 (9–257 frames), and MiniMax-H3 uses 17*k+5 (k>=0).",
             gt=0,
             le=9007199254740991,
@@ -31256,6 +31709,7 @@ class VideoStreamRequest(GeneratedBaseModel):
     sampling_method: Annotated[
         VideoStreamRequestSamplingMethod | None,
         Field(
+            alias="samplingMethod",
             description="Sampling algorithm used by the low-noise diffusion scheduler.",
             title="VideoStreamRequestSamplingMethod",
         ),
@@ -31268,16 +31722,21 @@ class VideoStreamRequest(GeneratedBaseModel):
         ),
     ] = None
     cfg_scale: Annotated[
-        float | None, Field(description="Classifier-free guidance scale.")
+        float | None,
+        Field(alias="cfgScale", description="Classifier-free guidance scale."),
     ] = None
     flow_shift: Annotated[
         float | None,
-        Field(description="Per-request flow-matching guidance shift override."),
+        Field(
+            alias="flowShift",
+            description="Per-request flow-matching guidance shift override.",
+        ),
     ] = None
     high_noise_steps: Annotated[
         int | None,
         Field(
-            description="Wan 2.2 A14B high-noise expert step count. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise. Omit to let native routing derive the split from moe_boundary.",
+            alias="highNoiseSteps",
+            description="Wan 2.2 A14B high-noise expert step count. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise. Omit to let native routing derive the split from moeBoundary.",
             gt=0,
             le=9007199254740991,
         ),
@@ -31285,6 +31744,7 @@ class VideoStreamRequest(GeneratedBaseModel):
     high_noise_sampler: Annotated[
         VideoStreamRequestHighNoiseSampler | None,
         Field(
+            alias="highNoiseSampler",
             description="Wan 2.2 A14B high-noise expert sampler. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.",
             title="VideoStreamRequestHighNoiseSampler",
         ),
@@ -31292,6 +31752,7 @@ class VideoStreamRequest(GeneratedBaseModel):
     high_noise_scheduler: Annotated[
         VideoStreamRequestHighNoiseScheduler | None,
         Field(
+            alias="highNoiseScheduler",
             description="Wan 2.2 A14B high-noise expert scheduler. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.",
             title="VideoStreamRequestHighNoiseScheduler",
         ),
@@ -31299,18 +31760,21 @@ class VideoStreamRequest(GeneratedBaseModel):
     high_noise_cfg_scale: Annotated[
         float | None,
         Field(
-            description="Wan 2.2 A14B high-noise expert CFG scale. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise."
+            alias="highNoiseCfgScale",
+            description="Wan 2.2 A14B high-noise expert CFG scale. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.",
         ),
     ] = None
     high_noise_flow_shift: Annotated[
         float | None,
         Field(
-            description="Wan 2.2 A14B high-noise expert flow shift override. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise."
+            alias="highNoiseFlowShift",
+            description="Wan 2.2 A14B high-noise expert flow shift override. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.",
         ),
     ] = None
     moe_boundary: Annotated[
         float | None,
         Field(
+            alias="moeBoundary",
             description="Wan 2.2 A14B mixture-of-experts boundary in [0, 1]. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.",
             ge=0.0,
             le=1.0,
@@ -31318,43 +31782,63 @@ class VideoStreamRequest(GeneratedBaseModel):
     ] = None
     vace_strength: Annotated[
         float | None,
-        Field(description="Control-frame guidance strength.", ge=0.0, le=1.0),
+        Field(
+            alias="vaceStrength",
+            description="Control-frame guidance strength.",
+            ge=0.0,
+            le=1.0,
+        ),
     ] = None
     control_frames: Annotated[
         list[ControlFrame] | None,
         Field(
+            alias="controlFrames",
             description="Optional array of base64-encoded control-frame images.",
             min_length=1,
         ),
     ] = None
     vae_tiling: Annotated[
         bool | None,
-        Field(description="Enable VAE tiling for large videos on constrained VRAM."),
+        Field(
+            alias="vaeTiling",
+            description="Enable VAE tiling for large videos on constrained VRAM.",
+        ),
     ] = None
     vae_tile_size: Annotated[
-        VaeTileSize | VaeTileSize1 | None, Field(description="VAE tile size override.")
+        VaeTileSize | VaeTileSize1 | None,
+        Field(alias="vaeTileSize", description="VAE tile size override."),
     ] = None
     vae_tile_overlap: Annotated[
-        float | None, Field(description="VAE tile overlap override.")
+        float | None,
+        Field(alias="vaeTileOverlap", description="VAE tile overlap override."),
     ] = None
     temporal_tiling: Annotated[
         bool | None,
         Field(
-            description="LTX-2 only: tile the video VAE decode along the time axis to cap peak VRAM for HD / long clips. No effect on Wan (spatial-only VAE)."
+            alias="temporalTiling",
+            description="LTX-2 only: tile the video VAE decode along the time axis to cap peak VRAM for HD / long clips. No effect on Wan (spatial-only VAE).",
         ),
     ] = None
     cache_mode: Annotated[
         VideoStreamRequestCacheMode | None,
         Field(
-            description="Step-caching algorithm.", title="VideoStreamRequestCacheMode"
+            alias="cacheMode",
+            description="Step-caching algorithm.",
+            title="VideoStreamRequestCacheMode",
         ),
     ] = None
     cache_preset: Annotated[
         str | None,
-        Field(description="Optional name of a cached sampler preset to reuse."),
+        Field(
+            alias="cachePreset",
+            description="Optional name of a cached sampler preset to reuse.",
+        ),
     ] = None
     cache_threshold: Annotated[
-        float | None, Field(description="Direct cache reuse threshold override.")
+        float | None,
+        Field(
+            alias="cacheThreshold", description="Direct cache reuse threshold override."
+        ),
     ] = None
     mode: Annotated[
         VideoStreamRequestMode,
@@ -31366,6 +31850,7 @@ class VideoStreamRequest(GeneratedBaseModel):
     init_image: Annotated[
         str | None,
         Field(
+            alias="initImage",
             description="Base64-encoded first-frame image (PNG/JPEG). Required for img2vid; rejected for txt2vid.",
             min_length=1,
             pattern="^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
@@ -31382,6 +31867,7 @@ class VideoStreamRequest(GeneratedBaseModel):
     reference_images: Annotated[
         list[ReferenceImage] | None,
         Field(
+            alias="referenceImages",
             description="LTX txt2vid only. Exactly one base64-encoded composite reference sheet; requires lora.",
             max_length=1,
             min_length=1,
@@ -31390,7 +31876,8 @@ class VideoStreamRequest(GeneratedBaseModel):
     reference_attention_strength: Annotated[
         float | None,
         Field(
-            description="LTX txt2vid only. Reference denoise-mask strength in [0, 1]; requires reference_images.",
+            alias="referenceAttentionStrength",
+            description="LTX txt2vid only. Reference denoise-mask strength in [0, 1]; requires referenceImages.",
             ge=0.0,
             le=1.0,
         ),
@@ -31398,7 +31885,8 @@ class VideoStreamRequest(GeneratedBaseModel):
     reference_downscale_factor: Annotated[
         Literal[1] | None,
         Field(
-            description="LTX txt2vid only. Reference-image spatial factor; currently exactly 1."
+            alias="referenceDownscaleFactor",
+            description="LTX txt2vid only. Reference-image spatial factor; currently exactly 1.",
         ),
     ] = None
     type: Literal["videoStream"] = "videoStream"

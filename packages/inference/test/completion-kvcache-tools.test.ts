@@ -273,12 +273,7 @@ test('completion: tools-only auto prefill with a configured system prompt is reu
   const modelId = 'tools-only-prefill'
   const calls: RecordedCall[] = []
   const paths: string[] = []
-  registerRecordingModel(
-    modelId,
-    calls,
-    { tools: true, system_prompt: 'Use the area tool.' },
-    paths
-  )
+  registerRecordingModel(modelId, calls, { tools: true, systemPrompt: 'Use the area tool.' }, paths)
   const complete = completer(modelId, true)
   await complete([], [areaTool], undefined, true)
   t.alike(shape(calls[0]!), ['system', 'tool'], 'the configured system prompt leads the tools')
@@ -303,7 +298,7 @@ test('completion: a prefill with no message is rejected before the model runs', 
     }
     t.ok(error instanceof RequestValidationFailedError, `${String(kvCache)}: a validation error`)
     t.ok(
-      (error as Error | undefined)?.message.includes('modelConfig.system_prompt'),
+      (error as Error | undefined)?.message.includes('modelConfig.systemPrompt'),
       `${String(kvCache)}: names the ways to supply a message`
     )
     t.is(calls.length, 0, `${String(kvCache)}: the model is never called`)
@@ -321,7 +316,7 @@ test('completion: unrelated requests do not consume tool-bearing auto prefills',
     registerRecordingModel(
       modelId,
       calls,
-      configured ? { tools: true, system_prompt: 'Use the area tool.' } : { tools: true },
+      configured ? { tools: true, systemPrompt: 'Use the area tool.' } : { tools: true },
       paths
     )
     const complete = completer(modelId, true)
@@ -720,7 +715,7 @@ test('completion: kv-cache sends one tool block on a turn whose tool_choice dema
   const third = user('Thanks. What about base 6 height 2?')
 
   await complete([first], [areaTool])
-  await complete([first, reply, second], [areaTool], { tool_choice: 'required' })
+  await complete([first, reply, second], [areaTool], { toolChoice: 'required' })
   await complete([first, reply, second, reply, third], [areaTool])
 
   const turnCalls = calls.filter((call) => !call.prefill)
@@ -754,7 +749,7 @@ test('completion: kv-cache sends the full tool block under a named tool_choice',
   const tools = [areaTool, makeTool('calculate_perimeter')]
   const complete = completer(modelId, 'tools-named-key')
   const first = user('Area of a triangle, base 10 height 5?')
-  await complete([first], tools, { tool_choice: 'calculate_triangle_area' })
+  await complete([first], tools, { toolChoice: 'calculate_triangle_area' })
   await complete([first, assistant('25.'), user('And base 4 height 3?')], tools)
 
   const turnCalls = calls.filter((call) => !call.prefill)
@@ -779,7 +774,7 @@ test('completion: parallel_tool_calls reaches the addon as true unless the calle
   const complete = completer(modelId, undefined)
   const question = user('Area of a triangle, base 10 height 5?')
   await complete([question], [areaTool])
-  await complete([question], [areaTool], { parallel_tool_calls: false })
+  await complete([question], [areaTool], { parallelToolCalls: false })
   await complete([question])
 
   const turnCalls = calls.filter((call) => !call.prefill)
@@ -1512,7 +1507,7 @@ test('completion: kv-cache seeds the configured system prompt when the history o
   const calls: RecordedCall[] = []
   registerRecordingModel(modelId, calls, {
     tools: true,
-    system_prompt: 'Always answer with the single word BANANA.'
+    systemPrompt: 'Always answer with the single word BANANA.'
   })
 
   const complete = completer(modelId, 'sysprompt-regression-key')
@@ -1544,7 +1539,7 @@ test('completion: kv-cache keeps the caller system message over the configured o
   const calls: RecordedCall[] = []
   registerRecordingModel(modelId, calls, {
     tools: true,
-    system_prompt: 'Always answer with the single word BANANA.'
+    systemPrompt: 'Always answer with the single word BANANA.'
   })
 
   const complete = completer(modelId, 'sysprompt-override-key')
@@ -1696,7 +1691,7 @@ test('completion: loading a deferred tool declares it and keeps the grammar on',
       { role: 'tool', content: loaded, attachments: [] }
     ],
     tools,
-    { tool_choice: 'auto' }
+    { toolChoice: 'auto' }
   )
   const explicitAuto = calls.filter((call) => !call.prefill).at(-1)!
 

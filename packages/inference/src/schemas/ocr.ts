@@ -49,7 +49,7 @@ export const ocrConfigSchema = z.object({
     .number()
     .optional()
     .describe('Recognizer batch size (easyocr only). Default 32.'),
-  nThreads: z
+  threads: z
     .number()
     .optional()
     .describe(

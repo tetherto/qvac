@@ -15,29 +15,29 @@ const generation = { modelId: 'qwen-turbo', prompt: 'A red teapot.' }
 
 test('custom sigma schemas accept Turbo, one-step and float-boundary schedules without rewriting them', (t) => {
   for (const schema of [diffusionRequestSchema, diffusionStreamRequestSchema]) {
-    for (const custom_sigmas of [turboSigmas, [14, 0], [3.4028234663852886e38, 2 ** -149, 0]]) {
+    for (const customSigmas of [turboSigmas, [14, 0], [3.4028234663852886e38, 2 ** -149, 0]]) {
       const parsed = schema.parse({
         ...generation,
         type: 'diffusionStream',
         steps: 30,
         scheduler: 'karras',
-        custom_sigmas,
-        vae_tiling: true,
-        vae_tile_size: 64
+        customSigmas,
+        vaeTiling: true,
+        vaeTileSize: 64
       })
-      t.alike(parsed.custom_sigmas, custom_sigmas)
+      t.alike(parsed.customSigmas, customSigmas)
       t.is(parsed.steps, 30, 'the native addon owns the effective step count')
       t.is(parsed.scheduler, 'karras', 'the addon applies schedule precedence')
-      t.is(parsed.vae_tile_size, 64)
+      t.is(parsed.vaeTileSize, 64)
     }
   }
   const ordinary = diffusionRequestSchema.parse({ ...generation, steps: 30 })
-  t.is(ordinary.custom_sigmas, undefined)
+  t.is(ordinary.customSigmas, undefined)
   t.is(ordinary.steps, 30)
 })
 
 test('custom sigma validation rejects malformed schedules before native execution', (t) => {
-  for (const custom_sigmas of [
+  for (const customSigmas of [
     null,
     true,
     '1,0',
@@ -59,26 +59,26 @@ test('custom sigma validation rejects malformed schedules before native executio
     const result = diffusionStreamRequestSchema.safeParse({
       ...generation,
       type: 'diffusionStream',
-      custom_sigmas
+      customSigmas
     })
     t.is(result.success, false)
-    if (!result.success) t.is(result.error.issues[0]?.path[0], 'custom_sigmas')
+    if (!result.success) t.is(result.error.issues[0]?.path[0], 'customSigmas')
   }
 })
 
 test('diffusion tile sizes accept native integer bounds and WxH strings without rewriting them', (t) => {
   for (const schema of [diffusionRequestSchema, diffusionStreamRequestSchema]) {
     const request = { ...generation, type: 'diffusionStream' }
-    t.is(schema.parse(request).vae_tile_size, undefined)
-    for (const vae_tile_size of [1, 64, 2147483647, '64x32', '001x064', '2147483647x1']) {
-      t.is(schema.parse({ ...request, vae_tile_size }).vae_tile_size, vae_tile_size)
+    t.is(schema.parse(request).vaeTileSize, undefined)
+    for (const vaeTileSize of [1, 64, 2147483647, '64x32', '001x064', '2147483647x1']) {
+      t.is(schema.parse({ ...request, vaeTileSize }).vaeTileSize, vaeTileSize)
     }
   }
 })
 
 test('diffusion tile sizes reject malformed dimensions before native execution', (t) => {
   for (const schema of [diffusionRequestSchema, diffusionStreamRequestSchema]) {
-    for (const vae_tile_size of [
+    for (const vaeTileSize of [
       0,
       -1,
       64.5,
@@ -103,9 +103,9 @@ test('diffusion tile sizes reject malformed dimensions before native execution',
       '64x2147483648',
       '64x32x16'
     ]) {
-      const result = schema.safeParse({ ...generation, type: 'diffusionStream', vae_tile_size })
-      t.is(result.success, false, `reject ${String(vae_tile_size)}`)
-      if (!result.success) t.is(result.error.issues[0]?.path[0], 'vae_tile_size')
+      const result = schema.safeParse({ ...generation, type: 'diffusionStream', vaeTileSize })
+      t.is(result.success, false, `reject ${String(vaeTileSize)}`)
+      if (!result.success) t.is(result.error.issues[0]?.path[0], 'vaeTileSize')
     }
   }
 })
@@ -158,7 +158,7 @@ test('Qwen companions resolve into load and fit files without native config sour
   const { diffusionPlugin } = await import('@/plugins/builtin/sdcpp-generation/plugin')
   const calls: unknown[] = []
   const resolved = await diffusionPlugin.resolveConfig!(
-    sdcppConfigSchema.parse({ ...companions, flash_attn: true }),
+    sdcppConfigSchema.parse({ ...companions, flashAttention: true }),
     {
       ...context,
       resolveModelPath: async (src) => {
@@ -168,7 +168,7 @@ test('Qwen companions resolve into load and fit files without native config sour
     }
   )
   t.alike(calls, Object.values(companions), 'resolve each user-provided companion once')
-  t.alike(resolved.config, { mode: 'diffusion', flash_attn: true })
+  t.alike(resolved.config, { mode: 'diffusion', flashAttention: true })
   t.alike(resolved.artifacts, companionPaths)
 
   const result = diffusionPlugin.createModel({
@@ -283,19 +283,19 @@ test('diffusion handler passes ordered reference Buffers and output base64 throu
     modelType: context.modelType
   })
   try {
-    for (const refs of [{ init_image: 'AQID' }, { init_images: ['AQID', 'BAUG'] }]) {
+    for (const refs of [{ initImage: 'AQID' }, { initImages: ['AQID', 'BAUG'] }]) {
       const chunks = []
       const stream = diffusionPlugin.handlers.diffusionStream.handler({
         modelId,
         prompt: 'A portrait.',
-        img_cfg_scale: -1,
+        imgCfgScale: -1,
         steps: 30,
         scheduler: 'karras',
-        custom_sigmas: turboSigmas,
-        cfg_scale: 1,
-        sampling_method: 'euler',
-        vae_tiling: true,
-        vae_tile_size: 64,
+        customSigmas: turboSigmas,
+        cfgScale: 1,
+        samplingMethod: 'euler',
+        vaeTiling: true,
+        vaeTileSize: 64,
         ...refs
       }) as AsyncGenerator<DiffusionStreamResponse>
       for await (const chunk of stream) {

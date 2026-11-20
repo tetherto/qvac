@@ -84,7 +84,7 @@ async def test_load_model_and_completion_stream(transport) -> None:
             # Qwen3 is a thinking model: the worker reserves context for the
             # reasoning trace, so the metadata-default budget overflows even a
             # tiny prompt. Give it an explicit window (matches the SDK e2e).
-            "modelConfig": {"ctx_size": 2048},
+            "modelConfig": {"ctxSize": 2048},
         }
     )
     load_response = await load_model(transport, load_request)
@@ -98,9 +98,9 @@ async def test_load_model_and_completion_stream(transport) -> None:
             "history": [{"role": "user", "content": "Say hello in five words."}],
             "stream": True,
             # Bound + seed the generation: Qwen3's thinking trace otherwise
-            # rambles nondeterministically and can outgrow ctx_size mid-stream,
+            # rambles nondeterministically and can outgrow ctxSize mid-stream,
             # surfacing as a flaky CONTEXT_OVERFLOW.
-            "generationParams": {"predict": 512, "temp": 0, "seed": 42},
+            "generationParams": {"predict": 512, "temperature": 0, "seed": 42},
         }
     )
 
@@ -252,9 +252,9 @@ async def test_bci_transcribe_stream_duplex(transport) -> None:
             "modelType": ModelType.bci_whispercpp_transcription,
             "modelConfig": {
                 "whisperConfig": {"language": "en", "temperature": 0.0},
-                "miscConfig": {"caption_enabled": False},
+                "miscConfig": {"captionEnabled": False},
                 # neural-not-too-controversial.bin was recorded on session day 1.
-                "bciConfig": {"day_idx": 1},
+                "bciConfig": {"dayIdx": 1},
             },
         }
     )
@@ -364,7 +364,7 @@ async def test_completion_orchestrate_without_tools(transport) -> None:
             "type": "loadModel",
             "modelSrc": QWEN3_600M_INST_Q4.src,
             "modelType": "llamacpp-completion",
-            "modelConfig": {"ctx_size": 2048},
+            "modelConfig": {"ctxSize": 2048},
         }
     )
     load_response = await load_model(transport, load_request)
@@ -376,7 +376,7 @@ async def test_completion_orchestrate_without_tools(transport) -> None:
         model_id=load_response.model_id,
         history=[{"role": "user", "content": "Say hello in five words."}],
         tools=[],
-        generation_params={"predict": 512, "temp": 0, "seed": 42},
+        generation_params={"predict": 512, "temperature": 0, "seed": 42},
     )
     saw_delta = False
     async for event in run.events:
@@ -400,7 +400,7 @@ async def test_completion_orchestrate_runs_the_tool_loop(transport) -> None:
             "type": "loadModel",
             "modelSrc": QWEN3_600M_INST_Q4.src,
             "modelType": "llamacpp-completion",
-            "modelConfig": {"ctx_size": 4096, "tools": True},
+            "modelConfig": {"ctxSize": 4096, "tools": True},
         }
     )
     load_response = await load_model(transport, load_request)
@@ -430,14 +430,14 @@ async def test_completion_orchestrate_runs_the_tool_loop(transport) -> None:
                 "handler": get_secret_code,
             }
         ],
-        # reasoning_budget 0 keeps thinking off: with it on, a 0.6B model can
+        # reasoningBudget 0 keeps thinking off: with it on, a 0.6B model can
         # spend the whole predict budget in <think> and never emit the tool
         # call, which is the loop under test (QVAC-24318).
         generation_params={
             "predict": 512,
-            "temp": 0,
+            "temperature": 0,
             "seed": 42,
-            "reasoning_budget": 0,
+            "reasoningBudget": 0,
         },
     )
     async for _event in run.events:
@@ -465,7 +465,7 @@ async def test_completion_orchestrate_cancel_stops_generation(transport) -> None
             "type": "loadModel",
             "modelSrc": QWEN3_600M_INST_Q4.src,
             "modelType": "llamacpp-completion",
-            "modelConfig": {"ctx_size": 2048},
+            "modelConfig": {"ctxSize": 2048},
         }
     )
     load_response = await load_model(transport, load_request)
@@ -485,7 +485,7 @@ async def test_completion_orchestrate_cancel_stops_generation(transport) -> None
         tools=[],
         # A large predict budget so generation is still running when the cancel
         # lands -- the run must not finish on its own before we cancel it.
-        generation_params={"predict": 4096, "temp": 0, "seed": 42},
+        generation_params={"predict": 4096, "temperature": 0, "seed": 42},
     )
 
     async def wait_for_generation_start() -> None:

@@ -14,6 +14,7 @@ import {
   extractProfilingMeta,
   stripProfilingMeta,
   recordFailure,
+  renameLegacyRequestKeys,
   untilAborted,
   type AbortSignalLike,
   type AbortableRPCOptions,
@@ -40,6 +41,7 @@ import {
   sessionOf
 } from '@/client/session-registry'
 import { formatZodError } from '@/utils/zod-error'
+import { warnLegacyKey } from '@/utils/legacy-keys'
 import { z } from 'zod'
 import {
   createClientTimings,
@@ -110,11 +112,12 @@ function pinpointRequestError(request: unknown, fallback: z.ZodError): z.ZodErro
 }
 
 function parseRequest<T extends Request>(request: T): Request {
+  const renamed = renameLegacyRequestKeys(request, warnLegacyKey)
   try {
-    return requestSchema.parse(request)
+    return requestSchema.parse(renamed)
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new RequestValidationFailedError(formatZodError(pinpointRequestError(request, error)))
+      throw new RequestValidationFailedError(formatZodError(pinpointRequestError(renamed, error)))
     }
     throw error
   }

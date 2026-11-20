@@ -10,9 +10,8 @@ import { loadModelConstants } from '@/serve/core/config/constants'
  * `tokenizerSrc`, `sceneSrc`, `srcVocabSrc`, `referenceAudioSrc`, and a nested
  * object's own `modelSrc` such as the parakeet `speakerAttribution` diarizer or
  * the nmt `pivot` model), source lists ending in `Srcs` (e.g.
- * `dialogueReferenceSrcs`, resolved per element), and the ESRGAN
- * `upscaler.model_src` snake_case field. Recurses into plain nested objects so
- * whisper/nmt nested configs are covered.
+ * `dialogueReferenceSrcs`, resolved per element). Recurses into plain nested
+ * objects so whisper/nmt nested configs and the ESRGAN `upscaler` are covered.
  *
  * Bare identifiers are looked up as constants; values with `/` or a leading
  * `.` are left as filesystem / registry paths. Unknown CONSTANT_CASE names
@@ -57,7 +56,7 @@ function walk(
 }
 
 export function isModelSrcKey(key: string): boolean {
-  return /Srcs?$/.test(key) || key === 'model_src'
+  return /Srcs?$/.test(key)
 }
 
 function resolveModelSrcString(

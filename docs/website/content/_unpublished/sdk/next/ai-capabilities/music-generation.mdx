@@ -100,7 +100,7 @@ const modelId = await loadModel({
     lmModelSrc: AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
     ditModelSrc: AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
     vaeModelSrc: AUDIOGEN_VAE_BF16,
-    useGPU: true,
+    useGpu: true,
   },
 });
 ```
@@ -111,7 +111,7 @@ For more about model constants and sources, see [SDK — Models](/sdk#models).
 
 #### Choose where each stage runs
 
-`useGPU` and `nGpuLayers` leave placement to the engine. To name the device yourself, set `backend` for the primary pipeline and `lmBackend` for the language model. The two are independent, so the LM can run on a different device from the rest of the pipeline.
+`useGpu` and `nGpuLayers` leave placement to the engine. To name the device yourself, set `backend` for the primary pipeline and `lmBackend` for the language model. The two are independent, so the LM can run on a different device from the rest of the pipeline.
 
 ```ts
 const modelId = await loadModel({
@@ -130,7 +130,7 @@ const modelId = await loadModel({
 
 | Field | What it does |
 | --- | --- |
-| `backend` | The primary backend, by backend or device name: `"cpu"`, `"MTL0"`, `"CUDA0"` and so on. Unset or `"auto"` keeps the placement `useGPU` and `nGpuLayers` select. |
+| `backend` | The primary backend, by backend or device name: `"cpu"`, `"MTL0"`, `"CUDA0"` and so on. Unset or `"auto"` keeps the placement `useGpu` and `nGpuLayers` select. |
 | `lmBackend` | The backend the language model runs on, named the same way and chosen independently of `backend`. Unset or `"auto"` keeps the engine's own placement. |
 | `dumpStagesDir` | Diagnostics. An existing directory on the inference host that receives each stage's intermediate tensors. The engine does not create it, and writes nothing when the field is unset. |
 
@@ -153,12 +153,12 @@ const modelId = await loadModel({
     engine: "minimax",
     lmModelSrc: "/path/to/mm3-lm-q8.gguf",
     synthModelSrc: "/path/to/mm3-synth-q8.gguf",
-    useGPU: true,
+    useGpu: true,
   },
 });
 ```
 
-`useGPU: true` runs on a GPU when one is usable and falls back to the CPU otherwise. To fail the load instead of falling back, set `device: "gpu"` in place of `useGPU`. `device` takes `"gpu"`, `"auto"` (what `useGPU: true` means) or `"cpu"`, and the SDK rejects a config that sets both `device` and `useGPU`.
+`useGpu: true` runs on a GPU when one is usable and falls back to the CPU otherwise. To fail the load instead of falling back, set `device: "gpu"` in place of `useGpu`. `device` takes `"gpu"`, `"auto"` (what `useGpu: true` means) or `"cpu"`, and the SDK rejects a config that sets both `device` and `useGpu`.
 
 #### Full Core ML on macOS
 
@@ -182,13 +182,13 @@ const modelId = await loadModel({
 | `coremlProfileDir` | Directory on the inference host holding the compiled profile for this GGUF pair: `manifest.json` plus the LM, depth, conditioner, DiT and vocoder programs. Use the original f16 pair the profile was exported from, and keep its weights and dimensions matched to it. |
 | `coremlComputeUnits` | The Apple compute units the profile may use: `"CPU_ONLY"`, `"CPU_AND_GPU"`, `"CPU_AND_NE"` or `"ALL"` (`AUDIOGEN_MINIMAX_COREML_COMPUTE_UNITS`). This is a policy: Core ML decides where each operation runs within the units it is allowed. |
 
-The pair takes precedence over `device` and `useGPU`. A Core ML request never switches backends quietly: the load fails when the build, the OS or the profile cannot support it, and the SDK refuses the config on any platform other than macOS before resolving the model files. The compiled programs stay loaded between generations and are released when the model is unloaded.
+The pair takes precedence over `device` and `useGpu`. A Core ML request never switches backends quietly: the load fails when the build, the OS or the profile cannot support it, and the SDK refuses the config on any platform other than macOS before resolving the model files. The compiled programs stay loaded between generations and are released when the model is unloaded.
 
 A Core ML run reports `stats.backendId: 99` and leaves out `stats.backendDevice` and `stats.gpuFallbackReason`, so its `diagnostics` resolve to `undefined`. [`assessModelFit()`](/sdk/models/assess-model-fit) cannot size this route. Its output is not guaranteed to match the native backend sample for sample, and it is not necessarily faster: the engine's [Core ML validation guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/audiogen/docs/minimax-coreml-validation.md) records what has been measured.
 
 #### Core ML conditioner on macOS
 
-`coremlConditionerPath` moves one MiniMax stage to Core ML and leaves the rest alone. Point it at a compiled conditioner `.mlmodelc` on the inference host: the conditioner convolution runs through Core ML on the CPU and Neural Engine, and every other stage stays on the backend `device` or `useGPU` selects.
+`coremlConditionerPath` moves one MiniMax stage to Core ML and leaves the rest alone. Point it at a compiled conditioner `.mlmodelc` on the inference host: the conditioner convolution runs through Core ML on the CPU and Neural Engine, and every other stage stays on the backend `device` or `useGpu` selects.
 
 ```ts
 const modelId = await loadModel({
@@ -230,8 +230,8 @@ The city wakes beneath the moon
 Dance until the morning comes`,
   vocalLanguage: "en",
   bpm: 98,
-  keyscale: "A minor",
-  timesignature: "4/4",
+  keyScale: "A minor",
+  timeSignature: "4/4",
   duration: 30,
   seed: 42,
 });
@@ -309,7 +309,7 @@ Every ACE-Step generation reports what it rendered in `stats.metadata`, after th
 | Field               | Meaning                                                                                                                          |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `caption`, `lyrics` | The caption and lyrics the run used. With `augmentCaptionWithMetadata` the caption is always your own, before the metadata hint. |
-| `bpm`, `keyscale`   | The tempo and key the run used; `bpm` is `0` when unresolved.                                                                    |
+| `bpm`, `keyScale`   | The tempo and key the run used; `bpm` is `0` when unresolved.                                                                    |
 | `beatsPerBar`       | The time-signature numerator (`4` for `4/4`); `0` when unresolved.                                                               |
 | `vocalLanguage`     | The vocal language the run used.                                                                                                 |
 | `seed`              | The seed the run used: the one the engine drew when you passed none.                                                             |
@@ -338,7 +338,7 @@ MiniMax-Music3 runs report no `metadata`.
 
 ### With MiniMax-Music3
 
-MiniMax-Music3 exposes a smaller input surface. It rejects ACE-Step's musical controls (`bpm`, `keyscale`, `timesignature`, `vocalLanguage`, `augmentCaptionWithMetadata`), the ACE-Step-only LM and DCW knobs, `audioCodes` and `shift` above, the LM-assisted and guidance controls (`rewriteQuery`, `generateLrc`, `computeQualityScore`, `guidanceScale`), every reference/cover field, and both `audioEdit()` and `audioUnderstand()`. It ignores `simpleMode` and `normalizeLoudness`. Pass the caption and, when useful, any of these MiniMax-only controls:
+MiniMax-Music3 exposes a smaller input surface. It rejects ACE-Step's musical controls (`bpm`, `keyScale`, `timeSignature`, `vocalLanguage`, `augmentCaptionWithMetadata`), the ACE-Step-only LM and DCW knobs, `audioCodes` and `shift` above, the LM-assisted and guidance controls (`rewriteQuery`, `generateLrc`, `computeQualityScore`, `guidanceScale`), every reference/cover field, and both `audioEdit()` and `audioUnderstand()`. It ignores `simpleMode` and `normalizeLoudness`. Pass the caption and, when useful, any of these MiniMax-only controls:
 
 | Field            | When to set it                                                                                                                                                        |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -538,7 +538,7 @@ The rest of an edit's inputs apply to every operation in the pipeline, with the 
 | Field                                                                             | Purpose                                                                                |
 | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | `referenceAudio`                                                                  | Timbre reference, in the same forms as `sourceAudio`. Its samples need only be finite. |
-| `vocalLanguage`, `bpm`, `keyscale`, `timesignature`, `augmentCaptionWithMetadata` | Prompt metadata for the edit prompts, as on a generation.                              |
+| `vocalLanguage`, `bpm`, `keyScale`, `timeSignature`, `augmentCaptionWithMetadata` | Prompt metadata for the edit prompts, as on a generation.                              |
 | `dcwEnabled`, `dcwScaler`, `dcwHighScaler`                                        | Repaint only: the Haar DCW sampler correction (defaults `true`, `0.05` and `0.02`).    |
 | `inferenceSteps`, `shift`                                                         | DiT steps and timestep shift for every operation, overriding the load-time values.     |
 
@@ -565,8 +565,8 @@ for await (const progress of run.progressStream) {
 const {
   caption,
   bpm,
-  keyscale,
-  timesignature,
+  keyScale,
+  timeSignature,
   vocalLanguage,
   duration,
   audioCodes,
@@ -578,7 +578,7 @@ const {
 | Field                                               | Meaning                                                                    |
 | --------------------------------------------------- | -------------------------------------------------------------------------- |
 | `caption`                                           | The LM's description of the clip.                                          |
-| `bpm`, `keyscale`, `timesignature`, `vocalLanguage` | The musical metadata the LM read off the recording.                        |
+| `bpm`, `keyScale`, `timeSignature`, `vocalLanguage` | The musical metadata the LM read off the recording.                        |
 | `duration`                                          | The LM's estimate in seconds. The recovered codes fix the true length.     |
 | `audioCodes`                                        | The recovered FSQ semantic codes, as a plain integer array.                |
 | `seed`                                              | The seed the LM decode used: the one the engine drew when you passed none. |
@@ -602,7 +602,7 @@ The same description is repeated on the terminal frame as `stats.understand`, so
 [`assessModelFit()`](/sdk/models/assess-model-fit) runs the engine's own fitter over a load described as `loadModel()` takes it, reading model metadata only — no weights are downloaded or loaded. Both engines are covered:
 
 - ACE-Step, on every platform, from the registry's weightless descriptions of the four model constants, so before anything is downloaded, or from the files already on disk. It projects the placement the config asks for, including a named [`backend` and `lmBackend`](#choose-where-each-stage-runs).
-- MiniMax-Music3, on desktop, from the LM and synthesis files on disk, since it has no registry constants. It projects the default generation (300 semantic frames, 12 s) on the device the config selects: `device` as given, otherwise `useGPU`. A [Core ML profile](#full-core-ml-on-macos) or [conditioner](#core-ml-conditioner-on-macos) cannot be sized by the fitter.
+- MiniMax-Music3, on desktop, from the LM and synthesis files on disk, since it has no registry constants. It projects the default generation (300 semantic frames, 12 s) on the device the config selects: `device` as given, otherwise `useGpu`. A [Core ML profile](#full-core-ml-on-macos) or [conditioner](#core-ml-conditioner-on-macos) cannot be sized by the fitter.
 
 The audiogen fitter reports each device's peak across the pipeline phases, so an audiogen load is summed with the other models assessed alongside it like any other.
 

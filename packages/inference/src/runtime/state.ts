@@ -7,7 +7,9 @@ import {
   ConfigAlreadySetError
 } from '@/errors/index'
 import type { QvacConfig, RuntimeContext, CanonicalModelType } from '@/schemas/index'
+import { renameLegacyConfigKeys } from '@/schemas/legacy-keys'
 import { getEngineLogger, setGlobalConsoleOutput, setGlobalLogLevel } from '@/logging/index'
+import { warnLegacyKey } from '@/runtime/legacy-keys'
 
 export {
   CANONICAL_TO_ALIAS,
@@ -142,7 +144,7 @@ export function setConfig(config: QvacConfig) {
   }
 
   if (config.deviceDefaults !== undefined && config.deviceDefaults !== null) {
-    configRegistry.deviceDefaults = config.deviceDefaults
+    configRegistry.deviceDefaults = renameLegacyConfigKeys(config, warnLegacyKey).deviceDefaults
     logger.info(`✅ Device defaults configured: ${config.deviceDefaults.length} pattern(s)`)
   }
 

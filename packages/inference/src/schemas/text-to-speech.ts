@@ -205,7 +205,7 @@ const TTS_SEED_DESC =
   'RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).'
 const TTS_THREADS_DESC = 'CPU thread count; overrides the hardware default.'
 const TTS_NGPU_LAYERS_DESC =
-  'Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.'
+  'Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGpu`; when both are set they must agree.'
 const TTS_STREAM_CHUNK_TOKENS_DESC =
   'Speech tokens per native streaming chunk; 0 disables native chunk streaming.'
 const TTS_STREAM_FIRST_CHUNK_TOKENS_DESC =
@@ -226,7 +226,7 @@ const TTS_BACKENDS_DIR_DESC =
 const TTS_OPENCL_CACHE_DIR_DESC =
   "Persistent directory for ggml-opencl's compiled-program cache (Android only)."
 const TTS_BACKEND_DESC =
-  'Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.'
+  'Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGpu` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.'
 
 // The ggml backend knobs every engine honours. `openclCacheDir` is added only
 // on the three engines whose native config reads it (Parler and Audio8 build
@@ -258,21 +258,21 @@ const ttsOpenclCacheFieldShape = {
 
 // Mirrors the addon's assertGpuIntentConsistent: when both are stated they
 // must agree, because `nGpuLayers` wins at the native layer and would silently
-// contradict an explicit `useGPU`. Rejecting it here names both fields instead
+// contradict an explicit `useGpu`. Rejecting it here names both fields instead
 // of surfacing a raw addon throw at load.
 function refineGpuIntent(
-  config: { useGPU?: boolean | undefined; nGpuLayers?: number | undefined },
+  config: { useGpu?: boolean | undefined; nGpuLayers?: number | undefined },
   ctx: z.RefinementCtx
 ) {
-  if (typeof config.useGPU !== 'boolean' || config.nGpuLayers === undefined) return
-  if (config.useGPU === (config.nGpuLayers !== 0)) return
+  if (typeof config.useGpu !== 'boolean' || config.nGpuLayers === undefined) return
+  if (config.useGpu === (config.nGpuLayers !== 0)) return
   ctx.addIssue({
     code: 'custom',
     path: ['nGpuLayers'],
     message:
-      `useGPU=${config.useGPU} conflicts with nGpuLayers=${config.nGpuLayers}. ` +
-      'Drop one, or make them agree (useGPU true with a non-zero nGpuLayers, ' +
-      'or useGPU false with nGpuLayers 0).'
+      `useGpu=${config.useGpu} conflicts with nGpuLayers=${config.nGpuLayers}. ` +
+      'Drop one, or make them agree (useGpu true with a non-zero nGpuLayers, ' +
+      'or useGpu false with nGpuLayers 0).'
   })
 }
 
@@ -380,7 +380,7 @@ function refineParlerDescriptionFields(
 type TtsParlerRuntimeRefinementInput = TtsParlerDescriptionRefinementInput & {
   outputSampleRate?: number | undefined
   streamChunkTokens?: number | undefined
-  useGPU?: boolean | undefined
+  useGpu?: boolean | undefined
   nGpuLayers?: number | undefined
 }
 
@@ -425,7 +425,7 @@ export const ttsChatterboxRuntimeConfigSchema = z
       .string()
       .optional()
       .describe('Ignored by Chatterbox; use `referenceAudioSrc` for voice cloning.'),
-    useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
+    useGpu: z.boolean().optional().describe(TTS_USE_GPU_DESC),
     outputSampleRate: ttsOutputSampleRateSchema.optional(),
     // Chatterbox has no pace channel — it time-stretches the rendered waveform
     // instead — so the multiplier is the only speech-rate control it offers,
@@ -550,7 +550,7 @@ function refineChatterboxRuntimeConfig(
   config: {
     ttsEngine: 'chatterbox'
     backend?: string | undefined
-    useGPU?: boolean | undefined
+    useGpu?: boolean | undefined
     nGpuLayers?: number | undefined
   },
   ctx: z.RefinementCtx
@@ -583,7 +583,7 @@ function refineSupertonicRateControls(
   config: {
     ttsSpeed?: number | undefined
     pace?: string | undefined
-    useGPU?: boolean | undefined
+    useGpu?: boolean | undefined
     nGpuLayers?: number | undefined
     voiceStyleTtl?: number[] | undefined
     voiceStyleDp?: number[] | undefined
@@ -626,7 +626,7 @@ const ttsSupertonicRuntimeConfigShape = {
   ttsNumInferenceSteps: ttsNonNegativeInt32Schema
     .optional()
     .describe('Supertonic vector-estimator CFM steps; 0 uses the GGUF default.'),
-  useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
+  useGpu: z.boolean().optional().describe(TTS_USE_GPU_DESC),
   outputSampleRate: ttsOutputSampleRateSchema.optional(),
   threads: ttsPositiveInt32Schema.optional().describe(TTS_THREADS_DESC),
   nGpuLayers: ttsInt32Schema.optional().describe(TTS_NGPU_LAYERS_DESC),
@@ -636,7 +636,7 @@ const ttsSupertonicRuntimeConfigShape = {
     .min(1)
     .optional()
     .describe(
-      'Supertonic + `useGPU` only: directory where the Vulkan backend persists its compiled pipeline cache.'
+      'Supertonic + `useGpu` only: directory where the Vulkan backend persists its compiled pipeline cache.'
     ),
   vulkanDevice: ttsInt32Schema.min(-1).optional().describe(TTS_VULKAN_DEVICE_DESC),
   prewarmText: z
@@ -720,7 +720,7 @@ export const ttsSupertonicRuntimeConfigSchema = z
 const ttsParlerRuntimeConfigShape = {
   ttsEngine: z.literal('parler').describe('TTS engine: Parler.'),
   ...ttsParlerDescriptionFieldsShape,
-  useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
+  useGpu: z.boolean().optional().describe(TTS_USE_GPU_DESC),
   outputSampleRate: ttsOutputSampleRateSchema.optional(),
   streamChunkTokens: ttsNonNegativeInt32Schema.optional().describe(TTS_STREAM_CHUNK_TOKENS_DESC),
   streamFirstChunkTokens: ttsNonNegativeInt32Schema
@@ -807,7 +807,7 @@ type TtsCosyvoice3RefinementInput = {
   instruct?: unknown
   outputSampleRate?: number | undefined
   streamChunkTokens?: number | undefined
-  useGPU?: boolean | undefined
+  useGpu?: boolean | undefined
   nGpuLayers?: number | undefined
 }
 
@@ -906,7 +906,7 @@ const ttsCosyvoice3RuntimeConfigShape = {
     .describe(
       'Speech-token trajectory of ONE native synthesis to replay instead of generating, as a previous batch run, native chunk stream or single sentence returned it in `speechTokenIds`. Fixed at load: every synthesis of the model replays this same array, so a joined sentence stream cannot be replayed sentence by sentence. An empty array restores generation.'
     ),
-  useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
+  useGpu: z.boolean().optional().describe(TTS_USE_GPU_DESC),
   outputSampleRate: ttsOutputSampleRateSchema.optional(),
   streamChunkTokens: ttsNonNegativeInt32Schema.optional().describe(TTS_STREAM_CHUNK_TOKENS_DESC),
   streamFirstChunkTokens: ttsNonNegativeInt32Schema
@@ -941,7 +941,7 @@ const ttsAudio8RuntimeConfigShape = {
   topK: ttsNonNegativeInt32Schema.optional().describe(TTS_TOP_K_DESC),
   topP: z.number().positive().max(1).optional().describe(TTS_TOP_P_DESC),
   maxFrames: ttsNonNegativeInt32Schema.optional().describe(TTS_MAX_FRAMES_DESC),
-  useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
+  useGpu: z.boolean().optional().describe(TTS_USE_GPU_DESC),
   outputSampleRate: ttsOutputSampleRateSchema.optional(),
   threads: ttsPositiveInt32Schema.optional().describe(TTS_THREADS_DESC),
   nGpuLayers: ttsInt32Schema.optional().describe(TTS_NGPU_LAYERS_DESC),
@@ -983,7 +983,7 @@ function refineMossRuntimeConfig(
   config: {
     ttsEngine: 'moss'
     backend?: string | undefined
-    useGPU?: boolean | undefined
+    useGpu?: boolean | undefined
     nGpuLayers?: number | undefined
     durationTokens?: number | undefined
     maxNewTokens?: number | undefined
@@ -1070,14 +1070,14 @@ const ttsMossRuntimeConfigShape = {
       'Generation budget in rows (engine default 2048), of which 33 are delay/EOS rows; bounds `durationTokens`.'
     ),
   ...ttsMossSamplingFieldsShape,
-  useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
+  useGpu: z.boolean().optional().describe(TTS_USE_GPU_DESC),
   threads: ttsPositiveInt32Schema.optional().describe(TTS_THREADS_DESC),
   // Not TTS_NGPU_LAYERS_DESC: MOSS does not offload per layer, so a layer
   // count would misdescribe it — the value only picks the backend.
   nGpuLayers: ttsInt32Schema
     .optional()
     .describe(
-      'Any non-zero value selects the GPU backend, 0 keeps MOSS on the CPU. Wins over `useGPU`; when both are set they must agree.'
+      'Any non-zero value selects the GPU backend, 0 keeps MOSS on the CPU. Wins over `useGpu`; when both are set they must agree.'
     ),
   seed: ttsInt32Schema.optional().describe(TTS_SEED_DESC),
   ...ttsBackendDirFieldsShape
@@ -1175,7 +1175,7 @@ const ttsSpeechFieldsShape = {
 }
 
 const ttsBatchBackendShape = {
-  useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
+  useGpu: z.boolean().optional().describe(TTS_USE_GPU_DESC),
   threads: ttsPositiveInt32Schema.optional().describe(TTS_THREADS_DESC),
   nGpuLayers: ttsInt32Schema.optional().describe(TTS_NGPU_LAYERS_DESC),
   seed: ttsInt32Schema.optional().describe(TTS_SEED_DESC),
@@ -1186,7 +1186,7 @@ function refineMossBatchRuntimeConfig(
   config: {
     ttsEngine: 'moss-sfx' | 'moss-speech'
     backend?: string | undefined
-    useGPU?: boolean | undefined
+    useGpu?: boolean | undefined
     nGpuLayers?: number | undefined
   },
   ctx: z.RefinementCtx
@@ -1363,7 +1363,7 @@ function refineChatterboxLoadConfig(
 type TtsSupertonicLoadRefinementInput = TtsLavasrCoremlRefinementInput & {
   ttsSpeed?: number | undefined
   pace?: string | undefined
-  useGPU?: boolean | undefined
+  useGpu?: boolean | undefined
   nGpuLayers?: number | undefined
   voiceStyleTtl?: number[] | undefined
   voiceStyleDp?: number[] | undefined
@@ -1537,7 +1537,7 @@ type TtsAudio8LoadRefinementInput = {
   referenceText?: string | undefined
   audio8CodecEncoderModelSrc?: ModelSrcInput | undefined
   referenceAudioSrc?: ModelSrcInput | undefined
-  useGPU?: boolean | undefined
+  useGpu?: boolean | undefined
   nGpuLayers?: number | undefined
 }
 
@@ -1598,7 +1598,7 @@ type TtsMossLoadRefinementInput = {
   mossCodecEncoderModelSrc?: ModelSrcInput | undefined
   referenceAudioSrc?: ModelSrcInput | undefined
   dialogueReferenceSrcs?: ModelSrcInput[] | undefined
-  useGPU?: boolean | undefined
+  useGpu?: boolean | undefined
   nGpuLayers?: number | undefined
   durationTokens?: number | undefined
   maxNewTokens?: number | undefined

@@ -149,7 +149,7 @@ export function extractImageGenerationParams(
         `"n" must be a positive integer (got ${JSON.stringify(n)}).`
       )
     }
-    params.batch_count = n
+    params.batchCount = n
   }
 
   return params
@@ -237,9 +237,9 @@ export function extractImageEditParams(
 ): DiffusionClientParams {
   const params = extractImageGenerationParams(body, modelId)
   if (imageBuffers.length === 1) {
-    params.init_image = imageBuffers[0]!
+    params.initImage = imageBuffers[0]!
   } else {
-    params.init_images = imageBuffers
+    params.initImages = imageBuffers
   }
 
   const strengthRaw = body['strength']

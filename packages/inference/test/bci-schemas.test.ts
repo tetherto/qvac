@@ -15,6 +15,60 @@ import { toTranscribeSegment } from '@/utils/transcribe-metadata'
 import { requestSchema, responseSchema } from '@/schemas/common'
 import { loadModelSrcRequestSchema, loadModelOptionsToRequestSchema } from '@/schemas/load-model'
 import { ModelType } from '@/schemas'
+import { buildBciWhispercppConfig } from '@/plugins/builtin/bci-whispercpp-transcription/config'
+
+test('buildBciWhispercppConfig: every key reaches the addon under its native name', (t) => {
+  t.alike(
+    buildBciWhispercppConfig({
+      whisperConfig: {
+        language: 'en',
+        threads: 2,
+        temperature: 0,
+        suppressNst: true,
+        suppressBlank: true,
+        durationMs: 1000,
+        translate: false,
+        noTimestamps: true,
+        singleSegment: false,
+        printSpecial: false,
+        printProgress: false,
+        printRealtime: false,
+        printTimestamps: false,
+        detectLanguage: false,
+        greedyBestOf: 3,
+        beamSize: 4
+      },
+      bciConfig: { dayIdx: 1 },
+      contextParams: { useGpu: true, flashAttention: true, gpuDevice: 0 },
+      miscConfig: { captionEnabled: false },
+      backendsDir: '/backends'
+    }),
+    {
+      whisperConfig: {
+        language: 'en',
+        n_threads: 2,
+        temperature: 0,
+        suppress_nst: true,
+        suppress_blank: true,
+        duration_ms: 1000,
+        translate: false,
+        no_timestamps: true,
+        single_segment: false,
+        print_special: false,
+        print_progress: false,
+        print_realtime: false,
+        print_timestamps: false,
+        detect_language: false,
+        greedy_best_of: 3,
+        beam_search_beam_size: 4
+      },
+      bciConfig: { day_idx: 1 },
+      contextParams: { use_gpu: true, flash_attn: true, gpu_device: 0 },
+      miscConfig: { caption_enabled: false },
+      backendsDir: '/backends'
+    }
+  )
+})
 
 // === bciConfigSchema (engine config) ===
 
@@ -25,32 +79,32 @@ test('bciConfigSchema: accepts an empty config', (t) => {
 
 test('bciConfigSchema: accepts the full nested config shape', (t) => {
   const result = bciConfigSchema.parse({
-    whisperConfig: { language: 'en', n_threads: 4, temperature: 0.0 },
-    bciConfig: { day_idx: 1 },
-    contextParams: { use_gpu: false, flash_attn: true },
-    miscConfig: { caption_enabled: false },
+    whisperConfig: { language: 'en', threads: 4, temperature: 0.0 },
+    bciConfig: { dayIdx: 1 },
+    contextParams: { useGpu: false, flashAttention: true },
+    miscConfig: { captionEnabled: false },
     backendsDir: '/tmp/backends',
     embedderModelSrc: 'bci-embedder.bin'
   })
   t.is(result.whisperConfig?.language, 'en')
-  t.is(result.bciConfig?.day_idx, 1)
-  t.is(result.miscConfig?.caption_enabled, false)
+  t.is(result.bciConfig?.dayIdx, 1)
+  t.is(result.miscConfig?.captionEnabled, false)
   t.is(result.embedderModelSrc, 'bci-embedder.bin')
 })
 
-test('bciConfigSchema: accepts day_idx -1 (mel passthrough)', (t) => {
-  const result = bciConfigSchema.parse({ bciConfig: { day_idx: -1 } })
-  t.is(result.bciConfig?.day_idx, -1)
+test('bciConfigSchema: accepts dayIdx -1 (mel passthrough)', (t) => {
+  const result = bciConfigSchema.parse({ bciConfig: { dayIdx: -1 } })
+  t.is(result.bciConfig?.dayIdx, -1)
 })
 
-test('bciConfigSchema: rejects a non-integer day_idx', (t) => {
-  const result = bciConfigSchema.safeParse({ bciConfig: { day_idx: 1.5 } })
+test('bciConfigSchema: rejects a non-integer dayIdx', (t) => {
+  const result = bciConfigSchema.safeParse({ bciConfig: { dayIdx: 1.5 } })
   t.is(result.success, false)
 })
 
-test('bciConfigSchema: rejects a non-integer n_threads', (t) => {
+test('bciConfigSchema: rejects a non-integer threads', (t) => {
   const result = bciConfigSchema.safeParse({
-    whisperConfig: { n_threads: 2.5 }
+    whisperConfig: { threads: 2.5 }
   })
   t.is(result.success, false)
 })
@@ -283,8 +337,8 @@ test("loadModelOptionsToRequestSchema: resolves the 'bci' alias to the canonical
     modelSrc: 'ggml-bci-windowed.bin',
     modelConfig: {
       whisperConfig: { language: 'en', temperature: 0.0 },
-      bciConfig: { day_idx: 1 },
-      miscConfig: { caption_enabled: false }
+      bciConfig: { dayIdx: 1 },
+      miscConfig: { captionEnabled: false }
     }
   })
   t.is(result.success, true)

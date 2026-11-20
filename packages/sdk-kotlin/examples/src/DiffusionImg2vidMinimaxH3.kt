@@ -6,10 +6,10 @@
 // model to generate synchronized 32 kHz audio. The three files are read from a
 // local directory you pass as args, so nothing is downloaded.
 //
-// This example needs powerful hardware. `offload_to_cpu` stays on so the run
+// This example needs powerful hardware. `offloadToCpu` stays on so the run
 // fits on a single GPU; tune placement through the H3_* environment variables.
 //
-// TypeScript's `video()` takes `init_image` as raw bytes and base64-encodes
+// TypeScript's `video()` takes `initImage` as raw bytes and base64-encodes
 // them on the way to the worker. The typed `VideoStreamRequest` carries the
 // encoded string, so the example encodes the file with `java.util.Base64`. The
 // returned `QvacMediaRun` splits progress (`events` Flow) from the clips and
@@ -64,13 +64,13 @@ fun main(args: Array<String>): Unit = runBlocking {
         put("llmModelSrc", llmModelSrc.toString())
         put("vaeModelSrc", vaeModelSrc.toString())
         put("device", "gpu")
-        put("diffusion_fa", true)
-        put("offload_to_cpu", System.getenv("H3_OFFLOAD_TO_CPU") != "0")
-        put("stream_layers", System.getenv("H3_STREAM_LAYERS") == "1")
+        put("diffusionFlashAttention", true)
+        put("offloadToCpu", System.getenv("H3_OFFLOAD_TO_CPU") != "0")
+        put("streamLayers", System.getenv("H3_STREAM_LAYERS") == "1")
         for ((key, variable) in listOf(
             "backend" to "H3_BACKEND",
-            "params_backend" to "H3_PARAMS_BACKEND",
-            "max_vram" to "H3_MAX_VRAM",
+            "paramsBackend" to "H3_PARAMS_BACKEND",
+            "maxVram" to "H3_MAX_VRAM",
         )) {
             System.getenv(variable)?.takeIf { it.isNotEmpty() }?.let { put(key, it) }
         }
@@ -97,14 +97,14 @@ fun main(args: Array<String>): Unit = runBlocking {
                     modelId = modelId,
                     mode = VideoStreamRequestMode.IMG2VID,
                     prompt = prompt,
-                    init_image = initImage,
+                    initImage = initImage,
                     width = 864,
                     height = 480,
                     // H3 uses 17*k+5 frames and requires 24 FPS.
-                    video_frames = System.getenv("FRAMES")?.takeIf { it.isNotEmpty() }?.toLong() ?: 124,
+                    videoFrames = System.getenv("FRAMES")?.takeIf { it.isNotEmpty() }?.toLong() ?: 124,
                     fps = 24.0,
                     steps = 8,
-                    cfg_scale = 1.0,
+                    cfgScale = 1.0,
                     seed = 11,
                 ),
             )

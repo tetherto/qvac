@@ -3,16 +3,16 @@
 Image-to-video (+ synchronized audio) with LTX-2. Unlike Wan I2V, LTX-2
 conditions on the first frame through its video VAE, so it needs NO CLIP vision
 weights (clipVisionModelSrc) -- the same LTX-2 layout used for txt2vid works
-for img2vid, you just add an init_image at generation time.
+for img2vid, you just add an initImage at generation time.
 
 This example needs powerful hardware: LTX-2.3 is a ~21B model, budget at least
 20+ GB of video / unified memory.
 
 Pass your own paths / URLs via argv to override any of the five sources.
 
-TypeScript's `video()` takes `init_image` as raw bytes and base64-encodes them
+TypeScript's `video()` takes `initImage` as raw bytes and base64-encodes them
 on the way to the worker. Python calls the worker directly through
-`video_stream`, where `init_image` is already the encoded string, so the
+`video_stream`, where `initImage` is already the encoded string, so the
 example encodes the file itself. The same iterator then carries progress, the
 finished clips and the closing stats, which TypeScript receives as three
 separate channels.
@@ -106,8 +106,8 @@ async def main() -> int:
                     "vaeModelSrc": vae_model_src,
                     "audioVaeModelSrc": audio_vae_model_src,
                     "embeddingsConnectorsModelSrc": embeddings_connectors_model_src,
-                    "diffusion_fa": True,
-                    "vae_tiling": True,
+                    "diffusionFlashAttention": True,
+                    "vaeTiling": True,
                 },
                 on_progress=print_progress,
             )
@@ -124,8 +124,8 @@ async def main() -> int:
                     "modelId": model_id,
                     "mode": "img2vid",
                     "prompt": prompt,
-                    "init_image": init_image,
-                    "negative_prompt": (
+                    "initImage": init_image,
+                    "negativePrompt": (
                         "blurry, distorted, low quality, jittery, static, frozen, "
                         "distorted audio"
                     ),
@@ -134,12 +134,12 @@ async def main() -> int:
                     # (8*k + 1) frames (max 257).
                     "width": 512,
                     "height": 320,
-                    "video_frames": 121,
+                    "videoFrames": 121,
                     "fps": 24,
                     "steps": 10,
-                    "cfg_scale": 1.0,
+                    "cfgScale": 1.0,
                     "seed": 42,
-                    "temporal_tiling": True,
+                    "temporalTiling": True,
                 }
             )
 

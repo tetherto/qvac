@@ -65,8 +65,8 @@ try {
     modelConfig: {
       device: 'gpu',
       threads: 4,
-      diffusion_fa: true,
-      offload_to_cpu: true,
+      diffusionFlashAttention: true,
+      offloadToCpu: true,
       llmModelSrc,
       vaeModelSrc,
       uncondModelSrc
@@ -85,7 +85,7 @@ try {
     width: 768,
     height: 768,
     steps: 16,
-    cfg_scale: 7,
+    cfgScale: 7,
     seed: 42
   })
 

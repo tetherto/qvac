@@ -43,10 +43,10 @@ try {
       vaeModelSrc: LTX_2_3_VIDEO_VAE,
       audioVaeModelSrc: LTX_2_3_AUDIO_VAE,
       embeddingsConnectorsModelSrc: LTX_2_3_22B_DISTILLED_EMBEDDINGS_CONNECTORS,
-      diffusion_fa: true,
-      offload_to_cpu: true,
-      vae_tiling: true,
-      lora_apply_mode: 'at_runtime'
+      diffusionFlashAttention: true,
+      offloadToCpu: true,
+      vaeTiling: true,
+      loraApplyMode: 'at_runtime'
     }
   })
 
@@ -54,24 +54,24 @@ try {
     modelId,
     mode: 'txt2vid',
     prompt,
-    negative_prompt: 'blurry, low quality, static, jittery, watermark',
+    negativePrompt: 'blurry, low quality, static, jittery, watermark',
     width: 768,
     height: 448,
-    video_frames: 217,
+    videoFrames: 217,
     fps: 24,
     steps: 8,
     scheduler: 'ltx2',
-    cfg_scale: 1,
+    cfgScale: 1,
     seed: 84,
     lora: loraPath,
-    lora_strength: 1.37,
-    stg_scale: 1,
-    stg_block: 29,
-    reference_images: [referenceSheet],
-    reference_attention_strength: 1,
-    reference_downscale_factor: 1,
-    temporal_tiling: true,
-    vae_tile_size: 4
+    loraStrength: 1.37,
+    stgScale: 1,
+    stgBlock: 29,
+    referenceImages: [referenceSheet],
+    referenceAttentionStrength: 1,
+    referenceDownscaleFactor: 1,
+    temporalTiling: true,
+    vaeTileSize: 4
   })
 
   for await (const { step, totalSteps } of progressStream) {

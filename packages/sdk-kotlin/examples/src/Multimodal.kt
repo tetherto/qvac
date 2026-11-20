@@ -48,7 +48,7 @@ fun main(args: Array<String>): Unit = runBlocking {
                 // An image is tiled into hundreds of context units before a
                 // single word of the prompt is counted, and the comparison
                 // below sends two at once.
-                put("ctx_size", 8192)
+                put("ctxSize", 8192)
                 put("projectionModelSrc", Models.MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0.src)
             },
         )

@@ -16,9 +16,9 @@ try {
   await loadModel({
     modelSrc: GPT_OSS_20B_INST_Q4_K_M,
     modelConfig: {
-      ctx_size: 131072,
-      'cache-type-k': 'f32',
-      'cache-type-v': 'f32'
+      ctxSize: 131072,
+      cacheTypeK: 'f32',
+      cacheTypeV: 'f32'
     },
     modelFitPolicy: 'refuse'
   })

@@ -143,7 +143,7 @@ export async function embed(
     ...(response.stats?.backendDevice !== undefined && {
       backendDevice: response.stats.backendDevice
     }),
-    ...(response.stats?.context_size !== undefined && { contextSize: response.stats.context_size })
+    ...(response.stats?.context_size !== undefined && { ctxSize: response.stats.context_size })
   }
 
   const embeddingsArray = rawEmbeddings[0]

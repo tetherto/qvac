@@ -94,6 +94,7 @@ export * from '@/schemas/model-info'
 export * from '@/schemas/system-resources'
 export * from '@/schemas/model-src-utils'
 export * from '@/schemas/json-schema'
+export * from '@/schemas/legacy-keys'
 export { type McpClient, type McpClientInput } from '@/schemas/mcp-adapter'
 export {
   PUBLIC_MODEL_TYPES as MODEL_TYPES,

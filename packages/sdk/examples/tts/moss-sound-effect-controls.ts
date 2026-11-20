@@ -54,7 +54,7 @@ async function main() {
   const modelId = await loadModel({
     modelSrc: process.env['QVAC_MOSS_SFX_MODEL'] ?? AUDIOGEN_MOSS_SFX_V2_Q8_0.src,
     modelType: 'tts-ggml',
-    modelConfig: { ttsEngine: 'moss-sfx', useGPU: true, seed: 42 },
+    modelConfig: { ttsEngine: 'moss-sfx', useGpu: true, seed: 42 },
     onProgress: progress
   })
   try {

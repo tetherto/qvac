@@ -42,7 +42,7 @@ try {
   const modelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
     modelType: 'llm',
-    modelConfig: { ctx_size: 4096, parallel: 4 },
+    modelConfig: { ctxSize: 4096, parallel: 4 },
     onProgress: (p) => {
       const mb = (n: number) => (n / 1e6).toFixed(1)
       const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`
@@ -58,17 +58,17 @@ try {
       {
         id: 'cherry',
         history: [{ role: 'user', content: 'Reply with only the word CHERRY.' }],
-        generationParams: { temp: 0, seed: 42, predict: 16 }
+        generationParams: { temperature: 0, seed: 42, predict: 16 }
       },
       {
         id: 'banana',
         history: [{ role: 'user', content: 'Reply with only the word BANANA.' }],
-        generationParams: { temp: 0, seed: 42, predict: 16 }
+        generationParams: { temperature: 0, seed: 42, predict: 16 }
       },
       {
         id: 'grape',
         history: [{ role: 'user', content: 'Reply with only the word GRAPE.' }],
-        generationParams: { temp: 0, seed: 42, predict: 16 }
+        generationParams: { temperature: 0, seed: 42, predict: 16 }
       }
     ]
   })

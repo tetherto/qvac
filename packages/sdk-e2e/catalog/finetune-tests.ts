@@ -93,7 +93,7 @@ export const finetuneStartComplete = createFinetuneTest(
   60000,
   ['smoke'],
   finetuneRun('finetune-llm', [
-    { project: { from: '$result', path: 'stats.global_steps', as: 'steps' } },
+    { project: { from: '$result', path: 'stats.globalSteps', as: 'steps' } },
     { assert: { on: '$steps', named: 'atLeast', with: { value: 1 } } },
     { assert: { on: '$progress', named: 'anyElementPositive', with: { field: 'loss' } } },
     {
@@ -244,7 +244,7 @@ export const finetuneProgressLossSchema = createFinetuneTest(
             assert: {
               on: '$update',
               named: 'fieldsPresent',
-              with: { fields: ['current_epoch', 'current_batch', 'total_batches', 'is_train'] }
+              with: { fields: ['currentEpoch', 'currentBatch', 'totalBatches', 'isTrain'] }
             }
           }
         ]

@@ -363,14 +363,19 @@ val request = LoadModelRequest.LoadModelSrcRequest(
         LoadModelSrcRequestLlamacppCompletion(
             modelSrc = Models.QWEN3_600M_INST_Q4.src,
             modelConfig = LoadModelSrcRequestLlamacppCompletionModelConfig(
-                ctx_size = 2048.0,
-                gpu_layers = 0.0,
+                ctxSize = 2048.0,
+                gpuLayers = 0.0,
             ),
         ),
     ),
 )
 val loaded = client.models.load(request)
 ```
+
+Legacy spellings of request and model-config properties (`ctx_size`, `top_p`,
+`main-gpu`, ...) are nullable `@Deprecated` properties after the current ones.
+Each serializes under its legacy key, which the worker accepts with a
+deprecation warning. Use the camelCase property the deprecation names.
 
 Known worker errors are subclasses of generated `QvacKnownException`, itself a
 `QvacException`; for example `QvacKnownException.ServerContextOverflow`.

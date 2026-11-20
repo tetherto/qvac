@@ -120,7 +120,7 @@ async def main() -> int:
                     # One recording per speaker, in the order the text tags them.
                     "dialogueReferenceSrcs": [s1_audio, s2_audio],
                     "streamChunkTokens": 25,
-                    "useGPU": True,
+                    "useGpu": True,
                 },
             )
             print(f"▸ Model loaded: {model_id}")

@@ -44,7 +44,7 @@ for (const descriptor of [TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0, TTS_COSYVOICE3_LLM_
             modelType: 'tts-ggml',
             modelConfig: {
               ttsEngine: 'cosyvoice3',
-              useGPU: true,
+              useGpu: true,
               seed: 42,
               ...(nativeStream ? { streamChunkTokens: 25, streamFirstChunkTokens: 25 } : {})
             }

@@ -59,12 +59,14 @@ class Definition:
     name: str
     schema: dict
     kind: str
+    shape: str = ""
     fields: list = field(default_factory=list)
     arms: list = field(default_factory=list)
+    legacy_fields: list = field(default_factory=list)
 
 
 class TypeGraph:
-    def __init__(self, schema, type_names=None):
+    def __init__(self, schema, type_names=None, legacy_keys=None):
         self.defs = schema["$defs"]
         self.type_names = type_names or {}
         self.def_ids = {id(value) for value in self.defs.values()}
@@ -87,6 +89,39 @@ class TypeGraph:
         self.types, self.by_shape = {}, {}
         for key, value in self.defs.items():
             self.roots[key] = self.resolve(value, value.get("title", key), root=True)
+        self.attach_legacy_keys(legacy_keys or {})
+
+    def attach_legacy_keys(self, legacy_keys):
+        """Deprecated aliases for the keys the worker still accepts under a legacy
+        spelling. A shared type takes them only when every place it appears
+        renames the same keys, since the alias is sent as written."""
+        matched = set()
+        for d in self.types.values():
+            if d.kind != "object":
+                continue
+            titles = sorted(self.candidates.get(d.shape, ()))
+            renames = [legacy_keys.get(title) for title in titles]
+            present = [r for r in renames if r]
+            if not present:
+                continue
+            if len(present) != len(renames) or any(r != present[0] for r in present):
+                raise ValueError(f"Legacy keys differ across the places {d.name} appears: {titles}")
+            matched.update(t for t in titles if t in legacy_keys)
+            fields = {key: (identifier, typ) for key, identifier, typ, _, _ in d.fields}
+            identifiers = {identifier for identifier, _ in fields.values()}
+            for legacy_key, key in present[0].items():
+                if key not in fields:
+                    raise ValueError(f"Legacy key {d.name}.{legacy_key} renames to missing {key}")
+                identifier, typ = fields[key]
+                legacy_identifier = name(legacy_key)
+                if legacy_identifier in identifiers:
+                    raise ValueError(f"Property identifier collision in {d.name}: {legacy_key}")
+                identifiers.add(legacy_identifier)
+                nullable = typ if typ.endswith("?") else typ + "?"
+                d.legacy_fields.append((legacy_key, legacy_identifier, nullable, identifier))
+        unmatched = sorted(set(legacy_keys) - matched)
+        if unmatched:
+            raise ValueError(f"Legacy keys name unknown types: {unmatched}")
 
     def dereference(self, schema):
         if not isinstance(schema, dict):
@@ -179,7 +214,7 @@ class TypeGraph:
                 typename += suffix or hashlib.sha256(shape.encode()).hexdigest()[:8].upper()
                 if typename in self.types:
                     raise ValueError(f"Duplicate inline type name: {typename}")
-            definition = Definition(typename, schema, kind)
+            definition = Definition(typename, schema, kind, shape)
             self.types[typename] = definition
             self.by_shape[shape] = typename
         if kind == "object":
@@ -263,6 +298,9 @@ class TypeGraph:
                     elif not required:
                         default = " = null"
                     out += [f"    @SerialName({literal(key)}) val `{identifier}`: {typ}{default},"]
+                for key, identifier, typ, replacement in d.legacy_fields:
+                    out += [f"    @Deprecated({literal('Use ' + replacement + '.')}, ReplaceWith({literal(replacement)}))",
+                            f"    @SerialName({literal(key)}) val `{identifier}`: {typ} = null,"]
                 if d.fields:
                     out += [")"]
             elif d.kind == "enum":

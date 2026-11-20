@@ -83,13 +83,13 @@ describe('configure: param-schemas', () => {
     const schema = configSchemaForAddon('diffusion')
     assert.ok(schema)
     const fields = paramFields(schema)
-    for (const name of ['backend', 'params_backend', 'max_vram', 'stream_layers']) {
+    for (const name of ['backend', 'paramsBackend', 'maxVram', 'streamLayers']) {
       const field = fields.find((field) => field.name === name)
       assert.ok(field, `${name} is editable`)
       assert.ok(field.description, `${name} is described`)
     }
-    const maxVram = fields.find((field) => field.name === 'max_vram')!
-    const streamLayers = fields.find((field) => field.name === 'stream_layers')!
+    const maxVram = fields.find((field) => field.name === 'maxVram')!
+    const streamLayers = fields.find((field) => field.name === 'streamLayers')!
     assert.equal(validateParam(maxVram, '0'), true)
     assert.equal(validateParam(maxVram, 'cuda0=6,vulkan0=2'), true)
     assert.equal(validateParam(streamLayers, 'false'), true)
@@ -227,12 +227,12 @@ describe('configure: param-schemas', () => {
     const fields = paramFields(schema)
     assert.ok(fields.length > 10)
 
-    const ctx = fields.find((f) => f.name === 'ctx_size')
+    const ctx = fields.find((f) => f.name === 'ctxSize')
     assert.ok(ctx)
     assert.equal(ctx.type, 'number')
     assert.match(ctx.description, /context window/i)
 
-    const temp = fields.find((f) => f.name === 'temp')
+    const temp = fields.find((f) => f.name === 'temperature')
     assert.ok(temp)
     assert.match(temp.type, /<= 2/)
 
@@ -269,8 +269,8 @@ describe('configure: param-schemas', () => {
     const schema = configSchemaForAddon('llm')
     assert.ok(schema)
     const fields = paramFields(schema)
-    const temp = fields.find((f) => f.name === 'temp')
-    const ctx = fields.find((f) => f.name === 'ctx_size')
+    const temp = fields.find((f) => f.name === 'temperature')
+    const ctx = fields.find((f) => f.name === 'ctxSize')
     assert.ok(temp && ctx)
 
     assert.equal(validateParam(temp, '0.8'), true)

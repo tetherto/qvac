@@ -21,12 +21,12 @@ let exitCode = 0
 
 async function readProgress(handle: FinetuneHandle, onTick: (globalSteps: number) => void) {
   for await (const tick of handle.progressStream) {
-    const phase = tick.is_train ? 'train' : 'val'
+    const phase = tick.isTrain ? 'train' : 'val'
     console.log(
-      `▸ epoch=${tick.current_epoch + 1} step=${tick.global_steps} batch=${tick.current_batch}/${tick.total_batches} ${phase} loss=${tick.loss?.toFixed(4)} acc=${tick.accuracy?.toFixed(4)} eta=${Math.round(tick.eta_ms / 1000)}s`
+      `▸ epoch=${tick.currentEpoch + 1} step=${tick.globalSteps} batch=${tick.currentBatch}/${tick.totalBatches} ${phase} loss=${tick.loss?.toFixed(4)} acc=${tick.accuracy?.toFixed(4)} eta=${Math.round(tick.etaMs / 1000)}s`
     )
 
-    onTick(tick.global_steps)
+    onTick(tick.globalSteps)
   }
 }
 
@@ -35,7 +35,7 @@ try {
     modelSrc: QWEN3_600M_INST_Q4,
     modelConfig: {
       device: 'gpu',
-      ctx_size: 512
+      ctxSize: 512
     }
   })
 

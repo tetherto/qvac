@@ -41,17 +41,17 @@ PROMPTS = [
     {
         "id": "cherry",
         "history": [{"role": "user", "content": "Reply with only the word CHERRY."}],
-        "generationParams": {"temp": 0, "seed": 42, "predict": 16},
+        "generationParams": {"temperature": 0, "seed": 42, "predict": 16},
     },
     {
         "id": "banana",
         "history": [{"role": "user", "content": "Reply with only the word BANANA."}],
-        "generationParams": {"temp": 0, "seed": 42, "predict": 16},
+        "generationParams": {"temperature": 0, "seed": 42, "predict": 16},
     },
     {
         "id": "grape",
         "history": [{"role": "user", "content": "Reply with only the word GRAPE."}],
-        "generationParams": {"temp": 0, "seed": 42, "predict": 16},
+        "generationParams": {"temperature": 0, "seed": 42, "predict": 16},
     },
 ]
 
@@ -76,7 +76,7 @@ async def main() -> int:
             model_id = await load_model(
                 t,
                 model_src=LLAMA_3_2_1B_INST_Q4_0,
-                model_config={"ctx_size": 4096, "parallel": 4},
+                model_config={"ctxSize": 4096, "parallel": 4},
                 on_progress=print_progress,
             )
             print(f"▸ Model loaded: {model_id}")

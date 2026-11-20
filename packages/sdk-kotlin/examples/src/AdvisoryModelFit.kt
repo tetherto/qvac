@@ -51,9 +51,9 @@ fun main(): Unit = runBlocking {
                         modelSrc = model.src,
                         modelName = model.name,
                         modelConfig = LoadModelSrcRequestLlamacppCompletionModelConfig(
-                            ctx_size = 131072.0,
-                            cachetypek = "f32",
-                            cachetypev = "f32",
+                            ctxSize = 131072.0,
+                            cacheTypeK = "f32",
+                            cacheTypeV = "f32",
                         ),
                         modelFitPolicy = LoadModelSrcRequestLlamacppCompletionModelFitPolicy.REFUSE,
                     ),

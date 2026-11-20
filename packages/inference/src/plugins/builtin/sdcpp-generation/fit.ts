@@ -1,4 +1,9 @@
-import type { DiffusionFitRequest, EsrganFitRequest, WorldFitRequest } from '@qvac/diffusion-cpp'
+import type {
+  DiffusionFitRequest,
+  EsrganFitRequest,
+  SdConfig,
+  WorldFitRequest
+} from '@qvac/diffusion-cpp'
 
 import { ModelLoadFailedError } from '@/errors/index'
 import {
@@ -22,15 +27,19 @@ import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
  */
 const DEFAULT_VIDEO_FRAMES = 33
 
+/** A mobile load drops the multi-GPU keys before it runs. */
+function forHost(config: SdConfig): SdConfig {
+  if (isMobile()) stripMultiGpuKeys(config)
+  return config
+}
+
 /** The diffusion fit request for a load: the files and config each mode loads. */
 export function sdcppFitRequest(load: FitLoad): FitRequestPlan {
   if (load.isShardedModel) {
     return { unknown: 'the fitter reads one model file, and this model is split' }
   }
 
-  const config = { ...((load.modelConfig ?? {}) as SdcppConfig) }
-  // A mobile load drops the multi-GPU keys before it runs.
-  if (isMobile()) stripMultiGpuKeys(config)
+  const config = (load.modelConfig ?? {}) as SdcppConfig
   const artifacts = load.artifacts
 
   if (config.mode === 'upscale') {
@@ -65,12 +74,12 @@ export function sdcppFitRequest(load: FitLoad): FitRequestPlan {
     return { request }
   }
 
-  const vaeTiling = config.vae_tiling !== undefined && { vaeTiling: config.vae_tiling }
+  const vaeTiling = config.vaeTiling !== undefined && { vaeTiling: config.vaeTiling }
 
   if (config.mode === 'video') {
     const request: DiffusionFitRequest = {
       files: videoFilesFor(load.modelPath, artifacts),
-      config: videoConfigFor(config),
+      config: forHost(videoConfigFor(config)),
       workload: { ...vaeTiling, videoFrames: DEFAULT_VIDEO_FRAMES }
     }
     return { request }
@@ -79,7 +88,7 @@ export function sdcppFitRequest(load: FitLoad): FitRequestPlan {
   assertUpscalerResolved(config, artifacts)
   const request: DiffusionFitRequest = {
     files: imageFilesFor(load.modelPath, artifacts),
-    config: imageConfigFor(config),
+    config: forHost(imageConfigFor(config)),
     workload: { ...vaeTiling, ...(config.upscaler !== undefined && { upscaleRepeats: 1 }) }
   }
   return { request }

@@ -22,7 +22,7 @@ export type ManagedModelInput = string | QvacManagedModel
 //     `model` resolves to the underlying SDK constant. This lets the serve
 //     answer requests for `qwen3.5-9b` directly (matching models.dev), with no
 //     id translation needed in front of it.
-// `config` carries per-model serve settings (ctx_size, reasoning_budget, …).
+// `config` carries per-model serve settings (ctxSize, reasoningBudget, …).
 interface SynthesizedModelEntry {
   readonly model: string
   readonly preload: boolean

@@ -494,7 +494,7 @@ export const kvCacheToolsSequentialSave: TestDefinition = {
     ],
     messages: ['What is 10 + 20?', 'Now what is 5 + 5?'],
     stream: true,
-    generationParams: { temp: 0, top_k: 1, seed: 42 },
+    generationParams: { temperature: 0, topK: 1, seed: 42 },
     declaredTool: 'calculator',
     requiredArgs: ['operation', 'a', 'b']
   },
@@ -566,7 +566,7 @@ export const kvCacheToolSetChange: TestDefinition = {
     changedTools: [CALCULATOR_TOOL, WEATHER_TOOL],
     messages: ['What is 10 + 20?', 'What is the weather in Paris?', 'Now what is 5 + 5?'],
     stream: true,
-    generationParams: { temp: 0, top_k: 1, seed: 42 },
+    generationParams: { temperature: 0, topK: 1, seed: 42 },
     declaredTool: 'calculator',
     requiredArgs: ['operation', 'a', 'b'],
     addedTool: 'get_weather',
@@ -614,7 +614,7 @@ export const kvCacheToolSetChange: TestDefinition = {
 }
 
 /**
- * `tool_choice: 'required'` on a warm turn arms the tool grammar from the tool block every turn
+ * `toolChoice: 'required'` on a warm turn arms the tool grammar from the tool block every turn
  * carries: the addon refuses a `required` turn it cannot arm, so this one completing with a call
  * shows the grammar was armed over the cached prefix. The turn asks for a calculation because the
  * grammar only forbids ending without a call, and a prose answer can loop until the context fills
@@ -627,8 +627,8 @@ export const kvCacheWarmToolChoiceRequired: TestDefinition = {
     tools: [CALCULATOR_TOOL],
     messages: ['What is 10 + 20?', 'Now what is 5 + 5?'],
     stream: true,
-    generationParams: { temp: 0, top_k: 1, seed: 42 },
-    requiredGenerationParams: { temp: 0, top_k: 1, seed: 42, tool_choice: 'required' },
+    generationParams: { temperature: 0, topK: 1, seed: 42 },
+    requiredGenerationParams: { temperature: 0, topK: 1, seed: 42, toolChoice: 'required' },
     declaredTool: 'calculator',
     requiredArgs: ['operation', 'a', 'b']
   },
@@ -660,7 +660,7 @@ export const kvCacheCancelThenNewPrompt: TestDefinition = {
     secondUserMessage: 'What is 2+2? Answer with just the number.',
     expectedAnswerContains: '4',
     cancelAfterTokens: 3,
-    generationParams: { temp: 0, top_k: 1, seed: 42 }
+    generationParams: { temperature: 0, topK: 1, seed: 42 }
   },
   expectation: { validation: 'function', fn: () => true },
   metadata: {
@@ -685,7 +685,7 @@ export const kvCacheConcurrentSameKey: TestDefinition = {
       { role: 'user', content: 'Count from one to twenty using words.' }
     ],
     kvCache: 'concurrent-same-key-session',
-    generationParams: { temp: 0, seed: 42, predict: 64 }
+    generationParams: { temperature: 0, seed: 42, predict: 64 }
   },
   expectation: { validation: 'type', expectedType: 'string' },
   metadata: { category: 'kv-cache', dependency: 'llm-batch', estimatedDurationMs: 30000 }
@@ -704,7 +704,7 @@ export const kvCacheConcurrentSameKeyAuto: TestDefinition = {
       { role: 'user', content: 'Count from one to twenty using words.' }
     ],
     kvCache: true,
-    generationParams: { temp: 0, seed: 42, predict: 64 }
+    generationParams: { temperature: 0, seed: 42, predict: 64 }
   },
   expectation: { validation: 'type', expectedType: 'string' },
   metadata: { category: 'kv-cache', dependency: 'llm-batch', estimatedDurationMs: 30000 }
@@ -717,7 +717,7 @@ export const kvCacheConcurrentSameKeyAuto: TestDefinition = {
 // No declarative body: concurrency is measured from per-token windows across the streams.
 export const kvCacheAutoConcurrency: TestDefinition = {
   testId: 'kv-cache-auto-concurrency',
-  params: { generationParams: { temp: 0, seed: 42, predict: 48 } },
+  params: { generationParams: { temperature: 0, seed: 42, predict: 48 } },
   expectation: { validation: 'type', expectedType: 'string' },
   metadata: { category: 'kv-cache', dependency: 'llm-batch', estimatedDurationMs: 60000 }
 }
@@ -744,7 +744,7 @@ export const kvCacheCancelKeepsCommittedCache: TestDefinition = {
     // fails if anything but the last turn's answer is measured.
     expectedAnswerContains: 'Paris',
     cancelAfterTokens: 3,
-    generationParams: { temp: 0, top_k: 1, seed: 42, predict: 256 }
+    generationParams: { temperature: 0, topK: 1, seed: 42, predict: 256 }
   },
   expectation: { validation: 'function', fn: () => true },
   metadata: { category: 'kv-cache', dependency: 'llm', estimatedDurationMs: 60000 }
@@ -756,7 +756,7 @@ const SEED_QUESTION = [
   ...SEED_HISTORY,
   { role: 'user', content: 'Reply with only the word APPLE.' }
 ]
-const SEED_GENERATION = { temp: 0, top_k: 1, seed: 42, predict: 32 }
+const SEED_GENERATION = { temperature: 0, topK: 1, seed: 42, predict: 32 }
 
 const seedCompletion = (
   as: string,
@@ -967,7 +967,7 @@ export const kvCacheSharedPrefixDefaultIsolated: TestDefinition = {
       }
     ],
     sourceKey: 'shared-prefix-default-isolated-source',
-    generationParams: { temp: 0, seed: 42, predict: 8 }
+    generationParams: { temperature: 0, seed: 42, predict: 8 }
   },
   expectation: { validation: 'type', expectedType: 'string' },
   steps: [
@@ -1030,7 +1030,7 @@ export const kvCacheSharedPrefixOptIn: TestDefinition = {
       }
     ],
     sourceKey: 'shared-prefix-opt-in-source',
-    generationParams: { temp: 0, seed: 42, predict: 8 }
+    generationParams: { temperature: 0, seed: 42, predict: 8 }
   },
   expectation: { validation: 'type', expectedType: 'string' },
   steps: [
