@@ -25,55 +25,146 @@ test('ASR addon constants preserve legacy engine mappings', (t) => {
   t.is(LEGACY_ENGINE_TO_CANONICAL[ADDON_PARAKEET], ModelType.parakeetTranscription)
 })
 
-test('buildWhisperEngineConfig creates strict unified addon config', (t) => {
+test('buildWhisperEngineConfig sends every key under its native name', (t) => {
   const config = buildWhisperEngineConfig({
+    strategy: 'beam_search',
+    threads: 4,
+    nMaxTextCtx: 16,
+    offsetMs: 100,
+    durationMs: 2000,
+    audioCtx: 0,
+    translate: false,
+    noContext: true,
+    noTimestamps: false,
+    singleSegment: true,
+    printSpecial: false,
+    printProgress: false,
+    printRealtime: false,
+    printTimestamps: false,
+    tokenTimestamps: true,
+    tholdPt: 0.01,
+    tholdPtsum: 0.02,
+    maxLen: 40,
+    splitOnWord: true,
+    maxTokens: 32,
+    debugMode: false,
+    tdrzEnable: false,
+    suppressRegex: '^\\[',
+    initialPrompt: 'QVAC',
+    carryInitialPrompt: true,
     language: 'en',
-    audio_format: 's16le',
-    vadModelSrc: '/models/vad.bin',
-    contextParams: {
-      use_gpu: true,
-      gpu_device: undefined
+    suppressBlank: true,
+    suppressNst: true,
+    temperature: 0,
+    lengthPenalty: 1,
+    temperatureInc: 0.2,
+    entropyThold: 2.4,
+    logprobThold: -1,
+    greedyBestOf: 5,
+    beamSize: 4,
+    maxInitialTs: 1,
+    noSpeechThold: 0.6,
+    seed: 7,
+    vadParams: {
+      threshold: 0.5,
+      minSpeechDurationMs: 250,
+      minSilenceDurationMs: 100,
+      maxSpeechDurationS: 30,
+      speechPadMs: 30,
+      samplesOverlap: 0.1
     },
-    miscConfig: {
-      caption_enabled: true
-    }
+    audioFormat: 's16le',
+    vadModelSrc: '/models/vad.bin',
+    contextParams: { useGpu: true, flashAttention: true, gpuDevice: 1 },
+    miscConfig: { captionEnabled: true, seed: 3 }
   })
 
   t.alike(config, {
     engine: 'whisper',
     whisperConfig: {
+      strategy: 'beam_search',
+      n_threads: 4,
+      n_max_text_ctx: 16,
+      offset_ms: 100,
+      duration_ms: 2000,
+      audio_ctx: 0,
+      translate: false,
+      no_context: true,
+      no_timestamps: false,
+      single_segment: true,
+      print_special: false,
+      print_progress: false,
+      print_realtime: false,
+      print_timestamps: false,
+      token_timestamps: true,
+      thold_pt: 0.01,
+      thold_ptsum: 0.02,
+      max_len: 40,
+      split_on_word: true,
+      max_tokens: 32,
+      debug_mode: false,
+      tdrz_enable: false,
+      suppress_regex: '^\\[',
+      initial_prompt: 'QVAC',
+      carry_initial_prompt: true,
       language: 'en',
+      suppress_blank: true,
+      suppress_nst: true,
+      temperature: 0,
+      length_penalty: 1,
+      temperature_inc: 0.2,
+      entropy_thold: 2.4,
+      logprob_thold: -1,
+      greedy_best_of: 5,
+      beam_search_beam_size: 4,
+      max_initial_ts: 1,
+      no_speech_thold: 0.6,
+      seed: 7,
+      vad_params: {
+        threshold: 0.5,
+        min_speech_duration_ms: 250,
+        min_silence_duration_ms: 100,
+        max_speech_duration_s: 30,
+        speech_pad_ms: 30,
+        samples_overlap: 0.1
+      },
       audio_format: 's16le'
     },
-    contextParams: {
-      use_gpu: true
-    },
-    miscConfig: {
-      caption_enabled: true
-    }
+    contextParams: { use_gpu: true, flash_attn: true, gpu_device: 1 },
+    miscConfig: { caption_enabled: true, seed: 3 }
   })
 })
 
-test('Whisper config maps detect_language to the unified auto language mode', (t) => {
-  t.alike(buildWhisperEngineConfig({ language: 'fr', detect_language: true }), {
+test('buildWhisperEngineConfig drops undefined addon fields', (t) => {
+  t.alike(
+    buildWhisperEngineConfig({
+      language: 'en',
+      contextParams: { useGpu: true, gpuDevice: undefined }
+    }),
+    { engine: 'whisper', whisperConfig: { language: 'en' }, contextParams: { use_gpu: true } }
+  )
+})
+
+test('Whisper config maps detectLanguage to the unified auto language mode', (t) => {
+  t.alike(buildWhisperEngineConfig({ language: 'fr', detectLanguage: true }), {
     engine: 'whisper',
     whisperConfig: {
       language: 'auto'
     }
   })
-  t.alike(buildWhisperReloadConfig({ language: 'fr', detect_language: false }), {
+  t.alike(buildWhisperReloadConfig({ language: 'fr', detectLanguage: false }), {
     whisperConfig: {
       language: 'fr'
     }
   })
 })
 
-test('Whisper config forwards carry_initial_prompt and the main-gpu selector', (t) => {
+test('Whisper config forwards carryInitialPrompt and the mainGpu selector', (t) => {
   t.alike(
     buildWhisperEngineConfig({
-      initial_prompt: 'QVAC',
-      carry_initial_prompt: true,
-      contextParams: { use_gpu: true, 'main-gpu': 'dedicated' }
+      initialPrompt: 'QVAC',
+      carryInitialPrompt: true,
+      contextParams: { useGpu: true, mainGpu: 'dedicated' }
     }),
     {
       engine: 'whisper',
@@ -88,18 +179,18 @@ test('Whisper config forwards carry_initial_prompt and the main-gpu selector', (
     }
   )
   t.alike(
-    buildWhisperReloadConfig({ carry_initial_prompt: false }),
+    buildWhisperReloadConfig({ carryInitialPrompt: false }),
     { whisperConfig: { carry_initial_prompt: false } },
-    'carry_initial_prompt is a reloadable whisperConfig key'
+    'carryInitialPrompt is a reloadable whisperConfig key'
   )
 })
 
-test('whisperConfigSchema accepts main-gpu and rejects conflicting selectors', (t) => {
-  t.ok(whisperConfigSchema.safeParse({ carry_initial_prompt: true }).success)
-  t.ok(whisperConfigSchema.safeParse({ contextParams: { 'main-gpu': 0 } }).success)
-  t.ok(whisperConfigSchema.safeParse({ contextParams: { 'main-gpu': '1' } }).success)
-  t.ok(whisperConfigSchema.safeParse({ contextParams: { 'main-gpu': 'integrated' } }).success)
-  t.ok(whisperConfigSchema.safeParse({ contextParams: { gpu_device: 1 } }).success)
+test('whisperConfigSchema accepts mainGpu and rejects conflicting selectors', (t) => {
+  t.ok(whisperConfigSchema.safeParse({ carryInitialPrompt: true }).success)
+  t.ok(whisperConfigSchema.safeParse({ contextParams: { mainGpu: 0 } }).success)
+  t.ok(whisperConfigSchema.safeParse({ contextParams: { mainGpu: '1' } }).success)
+  t.ok(whisperConfigSchema.safeParse({ contextParams: { mainGpu: 'integrated' } }).success)
+  t.ok(whisperConfigSchema.safeParse({ contextParams: { gpuDevice: 1 } }).success)
   // The addon's validateMainGpu() vocabulary: a non-negative 32-bit registry
   // index (number or digit string), 'dedicated', or 'integrated'.
   for (const selector of [
@@ -114,32 +205,24 @@ test('whisperConfigSchema accepts main-gpu and rejects conflicting selectors', (
     ''
   ]) {
     t.absent(
-      whisperConfigSchema.safeParse({ contextParams: { 'main-gpu': selector } }).success,
-      `main-gpu rejects ${JSON.stringify(selector)} before model load`
+      whisperConfigSchema.safeParse({ contextParams: { mainGpu: selector } }).success,
+      `mainGpu rejects ${JSON.stringify(selector)} before model load`
     )
   }
-  t.ok(whisperConfigSchema.safeParse({ contextParams: { 'main-gpu': 2147483647 } }).success)
-  // The addon's `main_gpu` spelling is not SDK vocabulary: the generated
-  // Python model's `main_gpu` field already serialises to `main-gpu`, and a
-  // second wire key of that name would make it emit both spellings.
-  t.alike(
-    whisperConfigSchema.parse({ contextParams: { main_gpu: 'integrated' } }).contextParams,
-    {},
-    'the snake_case spelling is dropped like any other unknown context key'
-  )
-  const withLegacy = whisperConfigSchema.safeParse({
-    contextParams: { 'main-gpu': 'dedicated', gpu_device: 0 }
+  t.ok(whisperConfigSchema.safeParse({ contextParams: { mainGpu: 2147483647 } }).success)
+  const withGpuDevice = whisperConfigSchema.safeParse({
+    contextParams: { mainGpu: 'dedicated', gpuDevice: 0 }
   })
-  t.absent(withLegacy.success, 'main-gpu combined with the legacy gpu_device is rejected')
-  if (!withLegacy.success) {
+  t.absent(withGpuDevice.success, 'mainGpu combined with gpuDevice is rejected')
+  if (!withGpuDevice.success) {
     t.ok(
-      withLegacy.error.issues.some((issue) => issue.message.includes('gpu_device')),
-      'the error names gpu_device'
+      withGpuDevice.error.issues.some((issue) => issue.message.includes('gpuDevice')),
+      'the error names gpuDevice'
     )
   }
   t.absent(
-    whisperConfigSchema.partial().strict().safeParse({ 'main-gpu': 0 }).success,
-    'main-gpu belongs under contextParams, not at the top level'
+    whisperConfigSchema.partial().strict().safeParse({ mainGpu: 0 }).success,
+    'mainGpu belongs under contextParams, not at the top level'
   )
 })
 
@@ -176,7 +259,7 @@ test('ASR reload config builders keep engine-specific wrappers', (t) => {
   t.alike(
     buildWhisperReloadConfig({
       language: 'fr',
-      contextParams: { use_gpu: true },
+      contextParams: { useGpu: true },
       vadModelSrc: '/models/vad.bin'
     }),
     {
@@ -196,15 +279,15 @@ test('ASR reload config builders keep engine-specific wrappers', (t) => {
 test('Whisper prompt reload strips engine-only keys for asr-ggml', (t) => {
   const originalConfig = {
     language: 'en',
-    detect_language: true,
+    detectLanguage: true,
     vadModelSrc: '/models/vad.bin',
-    initial_prompt: 'old prompt',
+    initialPrompt: 'old prompt',
     miscConfig: {
-      caption_enabled: true
+      captionEnabled: true
     }
   }
 
-  t.alike(buildWhisperReloadConfig({ ...originalConfig, initial_prompt: 'new prompt' }), {
+  t.alike(buildWhisperReloadConfig({ ...originalConfig, initialPrompt: 'new prompt' }), {
     whisperConfig: {
       language: 'auto',
       initial_prompt: 'new prompt'
@@ -213,7 +296,7 @@ test('Whisper prompt reload strips engine-only keys for asr-ggml', (t) => {
       caption_enabled: true
     }
   })
-  t.alike(buildWhisperReloadConfig({ ...originalConfig, initial_prompt: '' }), {
+  t.alike(buildWhisperReloadConfig({ ...originalConfig, initialPrompt: '' }), {
     whisperConfig: {
       language: 'auto',
       initial_prompt: ''

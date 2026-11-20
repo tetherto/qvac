@@ -1,7 +1,5 @@
-import BCIWhispercpp, {
-  type BCIWhispercppConfig,
-  assessFit as bciAssessFit
-} from '@qvac/bci-whispercpp'
+import BCIWhispercpp, { assessFit as bciAssessFit } from '@qvac/bci-whispercpp'
+import { buildBciWhispercppConfig } from '@/plugins/builtin/bci-whispercpp-transcription/config'
 import {
   definePlugin,
   defineHandler,
@@ -37,7 +35,7 @@ function createBciModel(
 
   const args = buildBciWhispercppArgs(modelPath, embedderPath, logger)
 
-  const model = new BCIWhispercpp(args, bciConfig as unknown as BCIWhispercppConfig)
+  const model = new BCIWhispercpp(args, buildBciWhispercppConfig(bciConfig))
 
   return { model }
 }

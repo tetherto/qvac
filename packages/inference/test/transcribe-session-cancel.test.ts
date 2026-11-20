@@ -41,7 +41,7 @@ test('transcribe: cancelling a queued request leaves the running one alone', asy
   registerModel(modelId, {
     model: model as never,
     path: '/tmp/whisper.gguf',
-    config: { audio_format: 's16le' } as never,
+    config: { audioFormat: 's16le' } as never,
     modelType: ModelType.whispercppTranscription
   } as never)
   const request = { modelId, audioChunk: { type: 'base64', value: '' } } as never
@@ -93,7 +93,7 @@ test('transcribe stream: an abort ends the input instead of cancelling the model
   registerModel(modelId, {
     model: model as never,
     path: '/tmp/whisper.gguf',
-    config: { audio_format: 's16le' } as never,
+    config: { audioFormat: 's16le' } as never,
     modelType: ModelType.whispercppTranscription
   } as never)
   // Live audio: the caller never ends it.

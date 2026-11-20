@@ -8,6 +8,8 @@ import type { LlmConfigInput } from '@/schemas/llamacpp-config'
 import type { GenerationParams, ResponseFormat } from '@/schemas/completion-stream'
 import type { DecisionConfigInput } from '@/schemas/decision'
 import type { RerankConfigInput } from '@/schemas/rerank'
+import type { WhisperConfig } from '@/schemas/transcription-config'
+import type { BciConfig } from '@/schemas/bci-config'
 
 export interface LegacyLlmConfig {
   /** @deprecated Use `ctxSize`. */
@@ -164,10 +166,138 @@ export interface LegacyEmbedLlamacppConfig<C extends DecisionConfigInput | Reran
   'tensor-split'?: C['tensorSplit']
 }
 
+type WhisperContextParams = NonNullable<WhisperConfig['contextParams']>
+type WhisperVadParams = NonNullable<WhisperConfig['vadParams']>
+type WhisperMiscConfig = NonNullable<WhisperConfig['miscConfig']>
+type BciWhisperConfig = NonNullable<BciConfig['whisperConfig']>
+type BciContextParams = NonNullable<BciConfig['contextParams']>
+
+export interface LegacyWhisperContextParams {
+  /** @deprecated Use `useGpu`. */
+  use_gpu?: WhisperContextParams['useGpu']
+  /** @deprecated Use `flashAttention`. */
+  flash_attn?: WhisperContextParams['flashAttention']
+  /** @deprecated Use `gpuDevice`. */
+  gpu_device?: WhisperContextParams['gpuDevice']
+  /** @deprecated Use `mainGpu`. */
+  'main-gpu'?: WhisperContextParams['mainGpu']
+}
+
+export interface LegacyWhisperMiscConfig {
+  /** @deprecated Use `captionEnabled`. */
+  caption_enabled?: WhisperMiscConfig['captionEnabled']
+}
+
+export interface LegacyWhisperVadParams {
+  /** @deprecated Use `minSpeechDurationMs`. */
+  min_speech_duration_ms?: WhisperVadParams['minSpeechDurationMs']
+  /** @deprecated Use `minSilenceDurationMs`. */
+  min_silence_duration_ms?: WhisperVadParams['minSilenceDurationMs']
+  /** @deprecated Use `maxSpeechDurationS`. */
+  max_speech_duration_s?: WhisperVadParams['maxSpeechDurationS']
+  /** @deprecated Use `speechPadMs`. */
+  speech_pad_ms?: WhisperVadParams['speechPadMs']
+  /** @deprecated Use `samplesOverlap`. */
+  samples_overlap?: WhisperVadParams['samplesOverlap']
+}
+
+export interface LegacyWhisperDecodingConfig<C extends Partial<BciWhisperConfig>> {
+  /** @deprecated Use `threads`. */
+  n_threads?: C['threads']
+  /** @deprecated Use `durationMs`. */
+  duration_ms?: C['durationMs']
+  /** @deprecated Use `noTimestamps`. */
+  no_timestamps?: C['noTimestamps']
+  /** @deprecated Use `singleSegment`. */
+  single_segment?: C['singleSegment']
+  /** @deprecated Use `printSpecial`. */
+  print_special?: C['printSpecial']
+  /** @deprecated Use `printProgress`. */
+  print_progress?: C['printProgress']
+  /** @deprecated Use `printRealtime`. */
+  print_realtime?: C['printRealtime']
+  /** @deprecated Use `printTimestamps`. */
+  print_timestamps?: C['printTimestamps']
+  /** @deprecated Use `detectLanguage`. */
+  detect_language?: C['detectLanguage']
+  /** @deprecated Use `suppressBlank`. */
+  suppress_blank?: C['suppressBlank']
+  /** @deprecated Use `suppressNst`. */
+  suppress_nst?: C['suppressNst']
+  /** @deprecated Use `greedyBestOf`. */
+  greedy_best_of?: C['greedyBestOf']
+  /** @deprecated Use `beamSize`. */
+  beam_search_beam_size?: C['beamSize']
+}
+
+export interface LegacyWhisperConfig extends LegacyWhisperDecodingConfig<WhisperConfig> {
+  /** @deprecated Use `nMaxTextCtx`. */
+  n_max_text_ctx?: WhisperConfig['nMaxTextCtx']
+  /** @deprecated Use `offsetMs`. */
+  offset_ms?: WhisperConfig['offsetMs']
+  /** @deprecated Use `audioCtx`. */
+  audio_ctx?: WhisperConfig['audioCtx']
+  /** @deprecated Use `noContext`. */
+  no_context?: WhisperConfig['noContext']
+  /** @deprecated Use `tokenTimestamps`. */
+  token_timestamps?: WhisperConfig['tokenTimestamps']
+  /** @deprecated Use `tholdPt`. */
+  thold_pt?: WhisperConfig['tholdPt']
+  /** @deprecated Use `tholdPtsum`. */
+  thold_ptsum?: WhisperConfig['tholdPtsum']
+  /** @deprecated Use `maxLen`. */
+  max_len?: WhisperConfig['maxLen']
+  /** @deprecated Use `splitOnWord`. */
+  split_on_word?: WhisperConfig['splitOnWord']
+  /** @deprecated Use `maxTokens`. */
+  max_tokens?: WhisperConfig['maxTokens']
+  /** @deprecated Use `debugMode`. */
+  debug_mode?: WhisperConfig['debugMode']
+  /** @deprecated Use `tdrzEnable`. */
+  tdrz_enable?: WhisperConfig['tdrzEnable']
+  /** @deprecated Use `suppressRegex`. */
+  suppress_regex?: WhisperConfig['suppressRegex']
+  /** @deprecated Use `initialPrompt`. */
+  initial_prompt?: WhisperConfig['initialPrompt']
+  /** @deprecated Use `carryInitialPrompt`. */
+  carry_initial_prompt?: WhisperConfig['carryInitialPrompt']
+  /** @deprecated Use `lengthPenalty`. */
+  length_penalty?: WhisperConfig['lengthPenalty']
+  /** @deprecated Use `temperatureInc`. */
+  temperature_inc?: WhisperConfig['temperatureInc']
+  /** @deprecated Use `entropyThold`. */
+  entropy_thold?: WhisperConfig['entropyThold']
+  /** @deprecated Use `logprobThold`. */
+  logprob_thold?: WhisperConfig['logprobThold']
+  /** @deprecated Use `maxInitialTs`. */
+  max_initial_ts?: WhisperConfig['maxInitialTs']
+  /** @deprecated Use `noSpeechThold`. */
+  no_speech_thold?: WhisperConfig['noSpeechThold']
+  /** @deprecated Use `vadParams`. */
+  vad_params?: WhisperVadParams & LegacyWhisperVadParams
+  /** @deprecated Use `audioFormat`. */
+  audio_format?: WhisperConfig['audioFormat']
+  vadParams?: WhisperVadParams & LegacyWhisperVadParams
+  contextParams?: WhisperContextParams & LegacyWhisperContextParams
+  miscConfig?: WhisperMiscConfig & LegacyWhisperMiscConfig
+}
+
+export interface LegacyBciConfig {
+  whisperConfig?: BciWhisperConfig & LegacyWhisperDecodingConfig<BciWhisperConfig>
+  bciConfig?: NonNullable<BciConfig['bciConfig']> & {
+    /** @deprecated Use `dayIdx`. */
+    day_idx?: NonNullable<BciConfig['bciConfig']>['dayIdx']
+  }
+  contextParams?: BciContextParams & Omit<LegacyWhisperContextParams, 'main-gpu'>
+  miscConfig?: NonNullable<BciConfig['miscConfig']> & LegacyWhisperMiscConfig
+}
+
 export type LegacyModelConfigs = {
   'llamacpp-completion': LegacyLlmConfig
   'llamacpp-decision': LegacyEmbedLlamacppConfig<DecisionConfigInput>
   'llamacpp-rerank': LegacyEmbedLlamacppConfig<RerankConfigInput>
+  'whispercpp-transcription': LegacyWhisperConfig
+  'bci-whispercpp-transcription': LegacyBciConfig
 }
 
 type CanonicalOf<T> = T extends keyof typeof ModelTypeAliases ? (typeof ModelTypeAliases)[T] : T
@@ -272,10 +402,90 @@ const EMBED_LLAMACPP_CONFIG_KEYS: LegacyKeySpec = {
   }
 }
 
+const WHISPER_CONTEXT_PARAMS_KEYS: LegacyKeySpec = {
+  renames: {
+    use_gpu: 'useGpu',
+    flash_attn: 'flashAttention',
+    gpu_device: 'gpuDevice',
+    'main-gpu': 'mainGpu'
+  }
+}
+
+const WHISPER_MISC_CONFIG_KEYS: LegacyKeySpec = { renames: { caption_enabled: 'captionEnabled' } }
+
+const WHISPER_DECODING_RENAMES = {
+  n_threads: 'threads',
+  duration_ms: 'durationMs',
+  no_timestamps: 'noTimestamps',
+  single_segment: 'singleSegment',
+  print_special: 'printSpecial',
+  print_progress: 'printProgress',
+  print_realtime: 'printRealtime',
+  print_timestamps: 'printTimestamps',
+  detect_language: 'detectLanguage',
+  suppress_blank: 'suppressBlank',
+  suppress_nst: 'suppressNst',
+  greedy_best_of: 'greedyBestOf',
+  beam_search_beam_size: 'beamSize'
+}
+
+const WHISPER_CONFIG_KEYS: LegacyKeySpec = {
+  renames: {
+    ...WHISPER_DECODING_RENAMES,
+    n_max_text_ctx: 'nMaxTextCtx',
+    offset_ms: 'offsetMs',
+    audio_ctx: 'audioCtx',
+    no_context: 'noContext',
+    token_timestamps: 'tokenTimestamps',
+    thold_pt: 'tholdPt',
+    thold_ptsum: 'tholdPtsum',
+    max_len: 'maxLen',
+    split_on_word: 'splitOnWord',
+    max_tokens: 'maxTokens',
+    debug_mode: 'debugMode',
+    tdrz_enable: 'tdrzEnable',
+    suppress_regex: 'suppressRegex',
+    initial_prompt: 'initialPrompt',
+    carry_initial_prompt: 'carryInitialPrompt',
+    length_penalty: 'lengthPenalty',
+    temperature_inc: 'temperatureInc',
+    entropy_thold: 'entropyThold',
+    logprob_thold: 'logprobThold',
+    max_initial_ts: 'maxInitialTs',
+    no_speech_thold: 'noSpeechThold',
+    vad_params: 'vadParams',
+    audio_format: 'audioFormat'
+  },
+  nested: {
+    vadParams: {
+      renames: {
+        min_speech_duration_ms: 'minSpeechDurationMs',
+        min_silence_duration_ms: 'minSilenceDurationMs',
+        max_speech_duration_s: 'maxSpeechDurationS',
+        speech_pad_ms: 'speechPadMs',
+        samples_overlap: 'samplesOverlap'
+      }
+    },
+    contextParams: WHISPER_CONTEXT_PARAMS_KEYS,
+    miscConfig: WHISPER_MISC_CONFIG_KEYS
+  }
+}
+
+const BCI_CONFIG_KEYS: LegacyKeySpec = {
+  nested: {
+    whisperConfig: { renames: WHISPER_DECODING_RENAMES },
+    bciConfig: { renames: { day_idx: 'dayIdx' } },
+    contextParams: WHISPER_CONTEXT_PARAMS_KEYS,
+    miscConfig: WHISPER_MISC_CONFIG_KEYS
+  }
+}
+
 export const LEGACY_MODEL_CONFIG_KEYS: Partial<Record<CanonicalModelType, LegacyKeySpec>> = {
   'llamacpp-completion': LLM_CONFIG_KEYS,
   'llamacpp-decision': EMBED_LLAMACPP_CONFIG_KEYS,
-  'llamacpp-rerank': EMBED_LLAMACPP_CONFIG_KEYS
+  'llamacpp-rerank': EMBED_LLAMACPP_CONFIG_KEYS,
+  'whispercpp-transcription': WHISPER_CONFIG_KEYS,
+  'bci-whispercpp-transcription': BCI_CONFIG_KEYS
 }
 
 export const LEGACY_REQUEST_KEYS: Readonly<Record<string, LegacyKeySpec>> = {
