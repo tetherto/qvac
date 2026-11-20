@@ -18,11 +18,16 @@ export interface NativeIndex {
   remove(id: bigint): Promise<boolean>
   compact(): Promise<void>
   contains(id: bigint): Promise<boolean>
-  search(queries: Float32Array, k: number): Promise<NativeSearchResult>
+  search(
+    queries: Float32Array,
+    k: number,
+    options?: { signal?: AbortSignal }
+  ): Promise<NativeSearchResult>
   searchFiltered(
     queries: Float32Array,
     k: number,
-    allowedIds: BigUint64Array
+    allowedIds: BigUint64Array,
+    options?: { signal?: AbortSignal }
   ): Promise<NativeSearchResult>
   prepare(): Promise<void>
   write(path: string): Promise<void>
