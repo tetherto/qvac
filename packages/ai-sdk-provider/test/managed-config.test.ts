@@ -58,14 +58,14 @@ test('synthesizeServeConfig resolves larger catalog ids to SDK constants', () =>
 
 test('synthesizeServeConfig carries per-model config under a catalog-id alias', () => {
   const config = synthesizeServeConfig([
-    { name: 'qwen3.5-9b', config: { ctx_size: 32768, reasoning_budget: -1 } }
+    { name: 'qwen3.5-9b', config: { ctxSize: 32768, reasoningBudget: -1 } }
   ])
 
   assert.deepEqual(config.serve.models['qwen3.5-9b'], {
     model: 'QWEN3_5_9B_MULTIMODAL_Q4_K_M',
     preload: true,
     default: true,
-    config: { ctx_size: 32768, reasoning_budget: -1 }
+    config: { ctxSize: 32768, reasoningBudget: -1 }
   })
 })
 
@@ -136,14 +136,14 @@ test('synthesizeServeConfig rejects more than one explicit default', () => {
 
 test('synthesizeServeConfig accepts a spec object and emits its per-model config', () => {
   const config = synthesizeServeConfig([
-    { name: KNOWN, config: { ctx_size: 16384, reasoning_budget: 0 } }
+    { name: KNOWN, config: { ctxSize: 16384, reasoningBudget: 0 } }
   ])
 
   assert.deepEqual(config.serve.models[KNOWN], {
     model: KNOWN,
     preload: true,
     default: true,
-    config: { ctx_size: 16384, reasoning_budget: 0 }
+    config: { ctxSize: 16384, reasoningBudget: 0 }
   })
 })
 
@@ -164,7 +164,7 @@ test('synthesizeServeConfig honors an explicit default on a non-first model', ()
 test('synthesizeServeConfig mixes bare-string and spec-object inputs', () => {
   const config = synthesizeServeConfig([
     KNOWN,
-    { name: 'QWEN3_1_7B_INST_Q4', config: { ctx_size: 8192 } }
+    { name: 'QWEN3_1_7B_INST_Q4', config: { ctxSize: 8192 } }
   ])
   const entries = config.serve.models
 
@@ -172,7 +172,7 @@ test('synthesizeServeConfig mixes bare-string and spec-object inputs', () => {
   assert.equal(entries[KNOWN]?.default, true)
   assert.equal(entries[KNOWN]?.config, undefined)
   // Spec object => carries config, not default.
-  assert.deepEqual(entries['QWEN3_1_7B_INST_Q4']?.config, { ctx_size: 8192 })
+  assert.deepEqual(entries['QWEN3_1_7B_INST_Q4']?.config, { ctxSize: 8192 })
   assert.equal(entries['QWEN3_1_7B_INST_Q4']?.default, undefined)
 })
 
@@ -183,7 +183,7 @@ test('synthesizeServeConfig omits the config key when a spec has no config', () 
 
 test('synthesizeServeConfig validates names inside spec objects', () => {
   assert.throws(
-    () => synthesizeServeConfig([{ name: 'NOT_A_REAL_MODEL', config: { ctx_size: 1 } }]),
+    () => synthesizeServeConfig([{ name: 'NOT_A_REAL_MODEL', config: { ctxSize: 1 } }]),
     (err: unknown) => {
       assert.ok(err instanceof UnknownManagedModelError)
       assert.deepEqual(err.unknownModels, ['NOT_A_REAL_MODEL'])
@@ -194,7 +194,7 @@ test('synthesizeServeConfig validates names inside spec objects', () => {
 
 test('modelNames extracts alias names from mixed inputs in order', () => {
   assert.deepEqual(
-    modelNames([KNOWN, { name: 'QWEN3_1_7B_INST_Q4', config: { ctx_size: 8192 } }]),
+    modelNames([KNOWN, { name: 'QWEN3_1_7B_INST_Q4', config: { ctxSize: 8192 } }]),
     [KNOWN, 'QWEN3_1_7B_INST_Q4']
   )
 })
@@ -216,13 +216,13 @@ test('writeEphemeralConfig writes valid JSON and cleanup removes it', async () =
 
 test('writeEphemeralConfig persists a per-model config block', async () => {
   const { configPath, cleanup } = await writeEphemeralConfig([
-    { name: KNOWN, config: { ctx_size: 16384, reasoning_budget: 0 } }
+    { name: KNOWN, config: { ctxSize: 16384, reasoningBudget: 0 } }
   ])
 
   const parsed = JSON.parse(await readFile(configPath, 'utf8'))
   assert.deepEqual(parsed.serve.models[KNOWN].config, {
-    ctx_size: 16384,
-    reasoning_budget: 0
+    ctxSize: 16384,
+    reasoningBudget: 0
   })
 
   await cleanup()

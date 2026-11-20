@@ -212,7 +212,7 @@ interface QvacManagedOptions {
 
 interface QvacManagedModel {
   name: string // SDK model constant name
-  config?: Record<string, unknown> // per-model serve config (ctx_size, reasoning_budget, …)
+  config?: Record<string, unknown> // per-model serve config (ctxSize, reasoningBudget, …)
   preload?: boolean // load at startup; default: true
   default?: boolean // make this the default alias (at most one model)
 }
@@ -237,7 +237,7 @@ Neither the detached runner nor the `qvac serve` it starts receives the key thro
 
 ### Per-model configuration
 
-A bare string keeps the serve defaults. To set serve options per model — most importantly `ctx_size` and `reasoning_budget`, which coding agents need (see [Using with coding agents](#using-with-coding-agents)) — pass a spec object instead. The `config` block is written verbatim into the synthesized `qvac.config.json` for that model:
+A bare string keeps the serve defaults. To set serve options per model — most importantly `ctxSize` and `reasoningBudget`, which coding agents need (see [Using with coding agents](#using-with-coding-agents)) — pass a spec object instead. The `config` block is written verbatim into the synthesized `qvac.config.json` for that model:
 
 ```ts
 const qvac = await createQvac({
@@ -246,22 +246,22 @@ const qvac = await createQvac({
     // Agent-capable chat model with a large context window and no reasoning budget.
     {
       name: 'GPT_OSS_20B_INST_Q4_K_M',
-      config: { ctx_size: 32768, reasoning_budget: 0 },
+      config: { ctxSize: 32768, reasoningBudget: 0 },
       default: true
     },
     // A smaller utility model, loaded lazily, for titles/summaries.
-    { name: 'QWEN3_1_7B_INST_Q4', config: { ctx_size: 8192 }, preload: false }
+    { name: 'QWEN3_1_7B_INST_Q4', config: { ctxSize: 8192 }, preload: false }
   ]
 })
 ```
 
-Without this, every model uses `qvac serve`'s defaults — and the default `ctx_size` of 1024 is too small for an agent's tool-laden prompts.
+Without this, every model uses `qvac serve`'s defaults — and the default `ctxSize` of 1024 is too small for an agent's tool-laden prompts.
 
 ### Shared serves & lifecycle
 
 Managed mode runs `qvac serve` as a **shared, self-cleaning daemon** so that opening multiple sessions — or several tools at once — doesn't spawn a serve (and reload models into memory) for each one.
 
-- **Fleet key & reuse.** Each managed provider derives a _fleet key_ from its exact serve config (model set + per-model `config` + bind host + `serveBinPath`). `createQvac` reuses any healthy serve with a matching key and only spawns a new one when none exists. Two sessions that request the same models share one process; two that request different models (or different `ctx_size`, host, or `qvac` binary) each get their own.
+- **Fleet key & reuse.** Each managed provider derives a _fleet key_ from its exact serve config (model set + per-model `config` + bind host + `serveBinPath`). `createQvac` reuses any healthy serve with a matching key and only spawns a new one when none exists. Two sessions that request the same models share one process; two that request different models (or different `ctxSize`, host, or `qvac` binary) each get their own.
 - **Detached supervisor.** The serve is owned by a small detached runner — not by your process — so it survives your script exiting and can be shared. The runner reaps the serve once **no consumer process has been alive for `serveIdleTimeout`** (default 5 min). A _consumer_ is a process that called `createQvac` and hasn't `close()`d or exited — liveness is tracked by those processes, **not** by request traffic. This means a tool that connects straight to `baseURL` (OpenCode, Cline, Aider) does **not** by itself keep the serve alive; the process that resolved the `baseURL` must stay alive for the duration (see [Using with coding agents](#using-with-coding-agents)).
 - **`close()` detaches, it doesn't kill.** Calling `provider.close()` (or leaving an `await using` scope) deregisters _your_ session. A serve still in use by another session keeps running; an unused one is reaped after the idle timeout. An abrupt exit (Ctrl-C, crash) is handled too — the runner prunes dead consumers automatically.
 - **Crash recovery.** If the underlying serve is gone when a request goes out (connection refused), the provider's `fetch` transparently re-resolves — reattaching to a healthy serve or spawning a fresh one — and retries that request once. Only connection-refused is retried, so a completion that the serve had already begun processing is never blindly replayed.
@@ -294,8 +294,8 @@ Coding agents routinely fire concurrent requests — typically a main chat compl
         "model": "QWEN3_8B_INST_Q4_K_M",
         "preload": true,
         "config": {
-          "ctx_size": 16384,
-          "reasoning_budget": 0
+          ctxSize: 16384,
+          reasoningBudget: 0
         }
       }
     }
@@ -326,7 +326,7 @@ import { spawn } from 'node:child_process'
 
 await using qvac = await createQvac({
   mode: 'managed',
-  models: [{ name: 'QWEN3_8B_INST_Q4_K_M', config: { ctx_size: 32768, reasoning_budget: 0 } }]
+  models: [{ name: 'QWEN3_8B_INST_Q4_K_M', config: { ctxSize: 32768, reasoningBudget: 0 } }]
 })
 // Write opencode.json against the managed serve once:
 //   provider.qvac.options.baseURL = qvac.baseURL  (e.g. http://127.0.0.1:5xxxx/v1)
@@ -340,16 +340,13 @@ await new Promise<void>((resolve) => agent.on('exit', () => resolve()))
 
 If you genuinely need the serve to outlive every QVAC-aware process (several independent tools attaching over time), keep a dedicated long-lived holder process open, or pin a `servePort` and run `qvac serve` yourself in [external mode](#external-mode).
 
-### 2. `ctx_size` defaults to 1024 — too small for agents
+### 2. `ctxSize` defaults to 1024 — too small for agents
 
-The default LLM `ctx_size` is 1024 tokens, which is fine for short chats and unusable for coding agents: a typical OpenCode message ships 10–15 tool definitions plus a system prompt, easily 2–4k tokens before the user's first message lands. Set `ctx_size` explicitly per model (`16384` is a sensible default for chat; use 8192+ for a separate utility model that handles summaries or compaction) or you'll see context fills and truncated responses well before the model misbehaves.
+The default LLM `ctxSize` is 1024 tokens, which is fine for short chats and unusable for coding agents: a typical OpenCode message ships 10–15 tool definitions plus a system prompt, easily 2–4k tokens before the user's first message lands. Set `ctxSize` explicitly per model (`16384` is a sensible default for chat; use 8192+ for a separate utility model that handles summaries or compaction) or you'll see context fills and truncated responses well before the model misbehaves.
 
-### 3. `reasoning_budget: 0` to suppress `<think>` blocks
+### 3. `reasoningBudget: 0` to suppress `<think>` blocks
 
-Reasoning-tuned models (Qwen3, DeepSeek-R1, etc.) emit `<think>…</think>` blocks before their final answer. Hosts that lack a reasoning channel render them verbatim in the chat UI, which looks broken and burns latency on tokens the user never sees. Set `reasoning_budget: 0` per model to disable reasoning at the addon level — cleaner output, meaningfully faster responses.
-
-Requires `@qvac/sdk >= 0.11.0` (and `@qvac/cli >= 0.5.0` which pins it). Older SDKs reject the key on startup with `"Unrecognized keys: reasoning_budget"`.
-
+Reasoning-tuned models (Qwen3, DeepSeek-R1, etc.) emit `<think>…</think>` blocks before their final answer. Hosts that lack a reasoning channel render them verbatim in the chat UI, which looks broken and burns latency on tokens the user never sees. Set `reasoningBudget: 0` per model to disable reasoning at the addon level — cleaner output, meaningfully faster responses.
 ### 4. Local-model capability is the real ceiling
 
 The integration is plumbing — your local-model choice decides whether an agent actually works. Empirical findings from `qvac serve` + OpenCode testing:
