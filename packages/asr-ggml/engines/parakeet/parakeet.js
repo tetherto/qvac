@@ -246,7 +246,9 @@ class ParakeetInterface {
         if (this._bufferedBytes + normalized.byteLength > constants_1.MAX_BUFFERED_BYTES) {
             throw createParakeetError(error_1.ERR_CODES_PARAKEET.BUFFER_LIMIT_EXCEEDED, constants_1.MAX_BUFFERED_BYTES + " bytes");
         }
-        this._bufferedAudio.push(normalized);
+        // Kept until end of input: copy when it still shares the caller's memory,
+        // since the caller may reuse its buffer for the next chunk.
+        this._bufferedAudio.push(sharesMemory(normalized, rawData) ? normalized.slice() : normalized);
         this._bufferedBytes += normalized.byteLength;
         return this._nextJobId;
     }
@@ -507,3 +509,10 @@ class ParakeetInterface {
     }
 }
 exports.ParakeetInterface = ParakeetInterface;
+function sharesMemory(samples, source) {
+    if (source === undefined)
+        return false;
+    return ArrayBuffer.isView(source)
+        ? samples.buffer === source.buffer
+        : samples.buffer === source;
+}
