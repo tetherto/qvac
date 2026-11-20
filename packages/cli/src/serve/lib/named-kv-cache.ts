@@ -1,11 +1,61 @@
+import crypto from 'node:crypto'
 import { unlinkSync, type Dirent } from 'node:fs'
 import { mkdir, readdir, stat, unlink, utimes, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { deleteCache } from '@qvac/sdk'
 
-/** Every Responses cache key starts with this, so retention can tell them apart. */
-export const RESPONSES_KV_CACHE_PREFIX = 'responses-'
+// Every cache key this server names starts with this, so retention can tell
+// them apart. `/v1/responses` and `/v1/chat/completions` share it: one quota
+// covers both, and caches written before chat accepted keys stay valid.
+export const NAMED_KV_CACHE_PREFIX = 'responses-'
+
+export class InvalidKvCacheKeyError extends Error {
+  constructor(message = 'KV cache key must be a nonempty string of at most 512 UTF-8 bytes.') {
+    super(message)
+    this.name = 'InvalidKvCacheKeyError'
+  }
+}
+
+function headerValues(rawHeaders: readonly string[], name: string): string[] {
+  const values: string[] = []
+  for (let i = 0; i + 1 < rawHeaders.length; i += 2) {
+    if (rawHeaders[i]!.toLowerCase() === name) values.push(rawHeaders[i + 1]!)
+  }
+  return values
+}
+
+// The SDK cache key a request names, or undefined when it names none.
+// `promptCacheKeyScope` narrows a `prompt_cache_key` to one conversation.
+export function namedKvCacheKey(
+  rawHeaders: readonly string[],
+  body: { metadata?: Record<string, unknown> | null | undefined; prompt_cache_key?: unknown },
+  promptCacheKeyScope?: string
+): string | undefined {
+  // Node joins a repeated header into "a, b", which would hash to an unrelated session.
+  const fromHeader = headerValues(rawHeaders, 'x-qvac-kv-cache-key')
+  if (fromHeader.length > 1) {
+    throw new InvalidKvCacheKeyError('Send the X-QVAC-KV-Cache-Key header only once.')
+  }
+  // Header first, then metadata, then OpenAI's `prompt_cache_key` (Codex sends
+  // one per conversation). A source that is present but invalid is rejected,
+  // not skipped. Validate before trimming/hashing so padding and multibyte
+  // strings cannot bypass the limit.
+  const fromMetadata = body.metadata?.['qvac_kv_cache_key']
+  const explicit: unknown = fromHeader.length > 0 ? fromHeader[0] : fromMetadata
+  // OpenAI clients send `prompt_cache_key: null` to mean "none".
+  const key = explicit !== undefined ? explicit : (body.prompt_cache_key ?? undefined)
+  if (key === undefined) return undefined
+  if (typeof key !== 'string' || Buffer.byteLength(key, 'utf8') > 512 || key.trim().length === 0) {
+    throw new InvalidKvCacheKeyError()
+  }
+  // Never give an opaque caller key to the SDK's filesystem cache layout.
+  const hash = crypto.createHash('sha256').update(key)
+  if (explicit === undefined && promptCacheKeyScope !== undefined) {
+    hash.update('\0').update(promptCacheKeyScope)
+  }
+  return `${NAMED_KV_CACHE_PREFIX}${hash.digest('hex')}`
+}
 
 const GiB = 1024 ** 3
 const HOUR_MS = 60 * 60 * 1000
@@ -287,7 +337,7 @@ export function createNamedKvCacheRetention(
     lastSweepMs = now()
     sweeping = sweep()
       .then((deleted) => {
-        if (deleted > 0) logger?.info(`  kv-cache swept ${deleted} idle Responses cache(s)`)
+        if (deleted > 0) logger?.info(`  kv-cache swept ${deleted} idle named cache(s)`)
         return deleted
       })
       .catch((err: unknown) => {
@@ -337,9 +387,30 @@ async function gone<T>(read: () => Promise<T>): Promise<T | null> {
   }
 }
 
-export const responsesKvCacheRetention = createNamedKvCacheRetention({
-  prefix: RESPONSES_KV_CACHE_PREFIX
+export const namedKvCacheRetention = createNamedKvCacheRetention({
+  prefix: NAMED_KV_CACHE_PREFIX
 })
+
+// Runs a turn while holding the cache session the request named, if any.
+export async function withNamedKvCache(
+  key: string | undefined,
+  raw: { destroyed: boolean },
+  logger: Logger,
+  run: () => Promise<void>
+): Promise<void> {
+  const release = key !== undefined ? await namedKvCacheRetention.acquire(key) : undefined
+  try {
+    // The client may have left while the key waited for a deletion; its
+    // close already fired, so nothing would cancel the run.
+    if (raw.destroyed) return
+    await run()
+  } finally {
+    if (release) {
+      release()
+      namedKvCacheRetention.maybeSweep(logger)
+    }
+  }
+}
 
 function processAlive(pid: number): boolean {
   try {

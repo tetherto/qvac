@@ -3,7 +3,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { completion } from '@qvac/sdk'
 import type { Tool } from '@qvac/sdk'
 import { HttpError, errorType } from '@/serve/lib/http-error'
-import { responsesKvCacheRetention } from '@/serve/lib/responses-kv-cache'
+import { InvalidKvCacheKeyError, withNamedKvCache } from '@/serve/lib/named-kv-cache'
 import { endSSE, initSSE, sendSSE } from '@/serve/lib/sse'
 import { sdkErrorAsHttp } from '@/serve/core/plugins/error-handler'
 import { requireModel } from '@/serve/core/plugins/require-model'
@@ -17,7 +17,6 @@ import {
   historyPrefixFromStoredResponse,
   InvalidResponsesBackgroundError,
   InvalidResponsesConversationError,
-  InvalidResponsesKvCacheKeyError,
   InvalidResponsesToolsError,
   toSdkResponsesArgs,
   type ResponsesHistoryItem
@@ -199,7 +198,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         if (err instanceof InvalidResponsesToolsError) {
           throw new HttpError(400, 'invalid_tools', err.message)
         }
-        if (err instanceof InvalidResponsesKvCacheKeyError) {
+        if (err instanceof InvalidKvCacheKeyError) {
           throw new HttpError(400, 'invalid_kv_cache_key', err.message)
         }
         if (err instanceof InvalidResponsesConversationError) {
@@ -324,12 +323,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         }
       }
 
-      const releaseCache =
-        sdk.kvCache !== undefined ? await responsesKvCacheRetention.acquire(sdk.kvCache) : undefined
-      try {
-        // The client may have left while the key waited for a deletion; its
-        // close already fired, so nothing would cancel the run.
-        if (reply.raw.destroyed) return
+      await withNamedKvCache(sdk.kvCache, reply.raw, ctx.logger, async () => {
         if (streaming) {
           initSSE(reply, { [VOLATILE_HEADER]: RESPONSES_VOLATILE_STUB })
           try {
@@ -343,12 +337,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           // until then so inference errors before headers can produce HTTP errors.
           await writeBlockingResponse(reply.raw, writerParams, runTurn(false))
         }
-      } finally {
-        if (releaseCache) {
-          releaseCache()
-          responsesKvCacheRetention.maybeSweep(ctx.logger)
-        }
-      }
+      })
     }
   )
 
