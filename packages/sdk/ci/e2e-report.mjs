@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// The SDK pod's e2e router and report, main's sdk-e2e-* actions in one place. plan reads the run's label (base on
-// test-e2e-smoke or test-e2e-full, probe on test-e2e-python, rerun on test-e2e-rerun-failed), picks each leg's rows and
-// posts the running comments; report fills them in, records a base run's failures, checks a rerun and labels e2e-tested.
+// The SDK pod's e2e router and report, for every language. plan reads the run's label (base on test-e2e-smoke or
+// test-e2e-full, rerun on test-e2e-rerun-failed), picks each leg's rows and posts the running comments; report fills
+// them in, records a base run's failures, checks a rerun and labels e2e-tested.
 //   node ci/e2e-report.mjs plan|report
 
 import { appendFileSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
@@ -19,13 +19,34 @@ const MAX_TESTS = 400
 export const MODES = {
   'test-e2e-smoke': 'base',
   'test-e2e-full': 'base',
-  'test-e2e-python': 'probe',
   [RERUN]: 'rerun'
 }
 
+// Each e2e row is one language on one platform: the language is its project, the platform its configuration. The
+// configurations a project declares are the platforms that language runs on.
+const LANGUAGES = { [SDK]: 'js', '@qvac/sdk-python': 'python', 'sdk-kotlin': 'kotlin' }
+const PLATFORMS = ['linux', 'mac', 'windows', 'android', 'ios', 'electron', 'snap']
+const OS = { linux: 'linux', darwin: 'mac', win32: 'windows', android: 'android', ios: 'ios' }
+// A client's own folder: a smoke run takes the client when the PR changed it, or with CLIENTS on the PR.
+const CLIENT_DIRS = { python: 'packages/sdk-python/', kotlin: 'packages/sdk-kotlin/' }
+const CLIENTS = 'test-e2e-clients'
+export const languageOf = (row) => LANGUAGES[row.project]
+export function platformOf(row) {
+  if (row.config.endsWith('-electron')) return 'electron'
+  if (row.config.endsWith('-snap')) return 'snap'
+  return OS[row.config.split('-')[0]]
+}
+// A dispatch's comma-separated languages or platforms, each one a name this router knows.
+export function names(input, value, known) {
+  const out = list(input, value).split(',').filter(Boolean)
+  const unknown = out.filter((n) => !known.includes(n))
+  if (unknown.length) {
+    throw new Error(`${input}: unknown ${unknown.join(', ')}; use ${known.join(', ')}`)
+  }
+  return out
+}
+
 export const keyOf = (row) => `${row.slug}/${row.config}`
-// The rows whose legs write results-*.json: the SDK's own e2e and its Device Farm app.
-export const reported = (row) => row.project === SDK
 
 function github(env) {
   const api = env.GITHUB_API_URL || 'https://api.github.com'
@@ -335,17 +356,10 @@ export async function plan(env) {
   const mobile = matrices['test:mobile'] ?? []
   const pr = event.pull_request?.number
   if (!pr) {
-    // A dispatch runs what its inputs select, Device Farm only on the platform it names, as main's test-sdk.yml.
-    const configs = {
-      Android: ['android-arm64'],
-      iOS: ['ios-arm64'],
-      both: ['android-arm64', 'ios-arm64']
-    }
-    // Empty packages runs the SDK alone; sdk-python and sdk-kotlin are opt-in, as on main.
-    const named = (r) => env.PACKAGES || r.project === SDK
-    const devices = mobile.filter(
-      (r) => named(r) && (configs[env.PLATFORM] ?? []).includes(r.config)
-    )
+    // A dispatch runs every row whose language and platform it names.
+    const languages = names('languages', env.LANGUAGES, Object.values(LANGUAGES))
+    const platforms = names('platforms', env.PLATFORMS, PLATFORMS)
+    const named = (r) => languages.includes(languageOf(r)) && platforms.includes(platformOf(r))
     const suite = env.SUITE === 'smoke' ? 'smoke' : ''
     const options = {
       exclude: list('exclude-suite', env.EXCLUDE_SUITE),
@@ -353,14 +367,12 @@ export async function plan(env) {
       inference: list('inference-version', env.INFERENCE_VERSION)
     }
     const tests = list('filter', env.FILTER)
-    // The dispatch's suite and options go to every Device Farm row and the SDK's desktop rows; sdk-python and
-    // sdk-kotlin's conformance keep the suite their label gives them.
     const withOptions = (r) => ({ ...r, suite: encodeOptions(suite, options), tests })
     return output(env, {
       mode: 'dispatch',
       suite,
-      desktop: labelled.filter(named).map((r) => (r.project === SDK ? withOptions(r) : r)),
-      mobile: devices.map(withOptions),
+      desktop: labelled.filter(named).map(withOptions),
+      mobile: mobile.filter(named).map(withOptions),
       report: [],
       comments: {}
     })
@@ -368,12 +380,24 @@ export async function plan(env) {
   const label = event.action === 'labeled' ? event.label?.name : ''
   // Without a label only a base:<branch> key selects rows, main's release-branch run.
   const mode = label ? (MODES[label] ?? 'none') : labelled.length ? 'base' : 'none'
-  const suite = label === 'test-e2e-smoke' || label === 'test-e2e-python' ? 'smoke' : ''
+  const suite = label === 'test-e2e-smoke' ? 'smoke' : ''
   let desktop = labelled
   let devices = []
   const gh = github(env)
   const runUrl = runUrlOf(env)
-  if (mode === 'base') devices = mobile.filter(reported).map((r) => ({ ...r, suite }))
+  if (mode === 'base') {
+    // A full run takes every language. Smoke takes JS, each client whose own folder the PR changed, and every client
+    // once the PR also carries test-e2e-clients, whenever that label was added.
+    const everyLanguage =
+      suite !== 'smoke' || (event.pull_request.labels ?? []).some((l) => l.name === CLIENTS)
+    const changed = everyLanguage ? [] : (await gh.all(`pulls/${pr}/files`)).map((f) => f.filename)
+    const runs = (r) => {
+      const dir = CLIENT_DIRS[languageOf(r)]
+      return everyLanguage || !dir || changed.some((f) => f.startsWith(dir))
+    }
+    desktop = desktop.filter(runs)
+    devices = mobile.filter(runs).map((r) => ({ ...r, suite }))
+  }
   // A smoke run adds the tests the PR touched, on desktop and mobile, as main's resolve-impacted did.
   if (suite === 'smoke' && ['success', 'failure'].includes(env.IMPACTED)) {
     const found = impacted({
@@ -382,10 +406,7 @@ export async function plan(env) {
       json: env.IMPACTED_JSON || ''
     })
     if (found.include) {
-      const add = (r) =>
-        r.project === '@qvac/sdk'
-          ? { ...r, suite: encodeOptions(r.suite, { include: found.include }) }
-          : r
+      const add = (r) => ({ ...r, suite: encodeOptions(r.suite, { include: found.include }) })
       desktop = desktop.map(add)
       devices = devices.map(add)
     }
@@ -420,7 +441,7 @@ export async function plan(env) {
     }
     const withTests = (r) => ({ ...r, tests: failed[keyOf(r)].join(',') })
     desktop = labelled.filter((r) => failed[keyOf(r)]).map(withTests)
-    devices = mobile.filter((r) => reported(r) && failed[keyOf(r)]).map(withTests)
+    devices = mobile.filter((r) => failed[keyOf(r)]).map(withTests)
     const count = Object.values(failed).reduce((n, ids) => n + ids.length, 0)
     const lines = [
       `### QVAC E2E rerun — ${count} previously failed test(s)`,
@@ -441,7 +462,7 @@ export async function plan(env) {
     ]
     await upsert(gh, pr, comments, PLAN, lines.join('\n'))
   }
-  const report = mode === 'none' ? [] : [...desktop, ...devices].filter(reported)
+  const report = mode === 'none' ? [] : [...desktop, ...devices]
   const keys = report.map((r) => ({
     key: keyOf(r),
     slug: r.slug,

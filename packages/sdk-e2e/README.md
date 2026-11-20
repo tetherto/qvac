@@ -4,22 +4,21 @@ SDK dogfooding tests built on [`@qvac/test-suite`](../test-suite), the test-orch
 that lives in this monorepo at `packages/test-suite`.
 A producer orchestrates a shared queue of tests over MQTT; a consumer runs them on desktop (Node), Electron
 (packaged Electron main process), strict Snap, mobile (Bare + React Native), the Python client, or the Kotlin
-client on Android.
+client on Android and on desktop.
 
 ## Layout
 
 The package keeps what every SDK client must do apart from how each client does it:
 
-| Path                          | Holds                                                                                              |
-| ----------------------------- | -------------------------------------------------------------------------------------------------- |
-| [`catalog/`](./catalog)       | The client-neutral catalog: test definitions, platform skips, the resource table, platform policy  |
-| `catalog/resources/`          | The table and policy as JSON for clients that do not read TypeScript, and the recorded skip matrix |
-| `catalog/conformance/`        | The API-level corpus the JS, Python and Kotlin clients each run                                    |
-| [`runners/js/`](./runners/js) | The JS client: desktop, Electron, Snap and mobile consumers, and their executors                   |
-| `runners/python/`             | The Python client: an interpreter for the declarative bodies, and hand-written bodies for the rest |
-| `runners/kotlin/`             | The Kotlin client: an Android app that interprets the declarative bodies through the Kotlin SDK    |
-| `assets/`, `fixtures/`        | Data the tests read                                                                                |
-| `scripts/`                    | Build helpers and the catalog gates                                                                |
+| Path                          | Holds                                                                                                                    |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| [`catalog/`](./catalog)       | The client-neutral catalog: test definitions, platform skips, the resource table, platform policy                        |
+| `catalog/resources/`          | The table and policy as JSON for clients that do not read TypeScript, and the recorded skip matrix                       |
+| [`runners/js/`](./runners/js) | The JS client: desktop, Electron, Snap and mobile consumers, and their executors                                         |
+| `runners/python/`             | The Python client: an interpreter for the declarative bodies, and hand-written bodies for the rest                       |
+| `runners/kotlin/`             | The Kotlin client: an Android app and a desktop JVM program that interpret the declarative bodies through the Kotlin SDK |
+| `assets/`, `fixtures/`        | Data the tests read                                                                                                      |
+| `scripts/`                    | Build helpers and the catalog gates                                                                                      |
 
 The catalog imports nothing from a runner or a client. `catalog/tsconfig.json` type-checks it on its own
 as part of `npm run typecheck`: an import from `runners/` fails there, and so does one from `@qvac/sdk`,
@@ -42,6 +41,7 @@ npx qvac-test run:local:android
 npx qvac-test run:local:ios
 npx qvac-test run:local:python
 npx qvac-test run:local:kotlin-android
+npx qvac-test run:local:kotlin-desktop
 ```
 
 **MQTT broker.** `run:local:*` requires a broker serving WebSockets on port 8080 and MQTT/TCP on 1883.
@@ -78,6 +78,9 @@ full list.
 - Kotlin Android: `adb` + a USB-debuggable arm64 device, JDK 17, Python 3, and an Android SDK with NDK
   `29.0.14206865`. The `prepare` step builds the app from this checkout and installs it; `--skip-build`
   reuses the installed one. See [`runners/kotlin/`](./runners/kotlin/README.md).
+- Kotlin desktop: JDK 17, Python 3, and an Android SDK (the Gradle build configures the Android modules
+  beside the desktop program). The `prepare` step builds the program from this checkout; `--skip-build`
+  reuses the last build. See [`runners/kotlin/`](./runners/kotlin/README.md).
 - Electron: Node 22+, Electron Forge dependencies, and a desktop runner capable of launching packaged Electron
   apps. The config declares `macos`, `windows`, and `linux`; local runs package the current host target unless
   `--platform` / `--arch` are supplied.
@@ -246,7 +249,8 @@ other's bundle.
 ## Running in CI
 
 The suite runs on the package CI contract (`docs/ci/workflow-standard.md`) through `sdk-e2e.yml`: the sdk's
-`test:integration` configurations on desktop, and its `test:mobile` and sdk-kotlin's on Device Farm. The
+`test:integration` configurations on desktop with sdk-python's and sdk-kotlin's, and its `test:mobile` and
+sdk-kotlin's on Device Farm. The
 steps live in `packages/sdk/ci/`: `e2e.mjs` runs one desktop leg, `mobile.mjs` builds a mobile consumer
 app and drives it.
 
@@ -257,15 +261,34 @@ Each configuration names the labels that run it in `ci.labels`, and the suite ea
 | Configurations                                                 | Runs on                                          | Started by                                                                                                                                      |
 | -------------------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `linux-x64-gpu`, `darwin-arm64-gpu`, `win32-x64-gpu` (desktop) | the three GPU hosts                              | `test-e2e-smoke` (smoke suite), `test-e2e-full` (full catalog), `test-e2e-rerun-failed`, and every push to a PR into `release-*` (full catalog) |
-| `*-python` (the catalog on the Python client)                  | the same hosts                                   | `test-e2e-python` (smoke suite)                                                                                                                 |
-| `*-electron`                                                   | the same hosts, the macOS one with a GUI session | a dispatch of `sdk-e2e.yml` with `labels: electron` (full catalog)                                                                              |
-| `linux-x64-snap` (strict Snap)                                 | the Linux GPU host                               | a dispatch of `sdk-e2e.yml` with `labels: snap` (full catalog)                                                                                  |
+| `sdk-python`'s `linux-x64`, `darwin-arm64`, `win32-x64`        | the same hosts                                   | the same labels as the desktop rows, when the run takes Python (see below)                                                                      |
+| `sdk-kotlin`'s `linux-x64`, `darwin-arm64`, `win32-x64`        | the same hosts                                   | the same labels as the desktop rows, when the run takes Kotlin (see below)                                                                      |
+| `*-electron`                                                   | the same hosts, the macOS one with a GUI session | a dispatch of `sdk-e2e.yml` naming `electron` in `platforms`                                                                                    |
+| `linux-x64-snap` (strict Snap)                                 | the Linux GPU host                               | a dispatch of `sdk-e2e.yml` naming `snap` in `platforms`                                                                                        |
 
-A dispatch of `sdk-e2e.yml` with `packages: @qvac/sdk` and `labels: test-e2e-smoke` (or any label
-above) runs the same configurations on a branch. Every leg builds `packages/inference` and
-`packages/test-suite` from the checkout and tests them together with `packages/sdk`, downloads its models
-in the run, and uploads its reports as `sdk-results-<configuration>`. The job summary compares them with
-the newest dispatch run's on the base branch; a failed test fails the leg.
+### A run by hand
+
+Each e2e configuration is one language on one platform: the language is its package (`sdk` is JS, `sdk-python` is
+Python, `sdk-kotlin` is Kotlin) and the platform is the configuration (Linux, Mac, Windows, Android, iOS, Electron,
+Snap). A dispatch of `sdk-e2e.yml` takes:
+
+- `languages`: comma-separated `js`, `python`, `kotlin`. Default all three.
+- `platforms`: comma-separated `linux`, `mac`, `windows`, `android`, `ios`, `electron`, `snap`. Default the first
+  five.
+- `suite`: `full` or `smoke`, plus `exclude-suite`, `include`, `filter` and `inference-version`, for every leg.
+- `pool` and `billing` for the Device Farm legs.
+
+It runs every configuration whose language and platform it names. Every leg builds `packages/inference` and
+`packages/test-suite` from the checkout and tests them together with the client, downloads its models in the run, and
+uploads its reports as `<package>-results-<configuration>`. The job summary compares them with the newest dispatch
+run's on the base branch; a failed test fails the leg. The Python leg installs the client from the wheel it builds, the
+same thin wheel PyPI gets. The Kotlin desktop leg builds the client and its experimental JVM worker host from the
+checkout, as users get them.
+
+```bash
+gh workflow run sdk-e2e.yml --ref <branch> -f languages=python -f platforms=mac -f suite=smoke
+gh workflow run sdk-e2e.yml --ref <branch> -f languages=js,kotlin -f platforms=android
+```
 
 `scripts/impacted-tests.mjs` lists the testIds a change touches
 (`node scripts/impacted-tests.mjs --base main --head HEAD`); CI does not add them to a run.
@@ -273,22 +296,24 @@ the newest dispatch run's on the base branch; a failed test fails the leg.
 On a pull request, `sdk-e2e.yml`'s `plan` job (`packages/sdk/ci/e2e-report.mjs`) routes the run and its `report` job
 closes it:
 
-- `test-e2e-smoke` and `test-e2e-full` are base runs: they also run the sdk's Android and iOS apps, post one comment
+- `test-e2e-smoke` and `test-e2e-full` are base runs on Linux, Mac, Windows, Android and iOS. Full runs every
+  language. Smoke runs JS, and each client whose own folder the PR changed, or every client with `test-e2e-clients`
+  also on the PR. A base run posts one comment
   per leg that the report fills in with its failed tests, and record the failures in a hidden PR comment. A base run
   green on every leg sets `e2e-tested`.
 - `test-e2e-rerun-failed` reruns only the recorded failures, on the legs where they failed. The label removes itself,
   so add it again for each attempt; it starts nothing while the base run is still going or when the base is green.
-- `test-e2e-python` posts its comments but records nothing and never sets `e2e-tested`.
+- Every language's legs post their comments and record their failures the same way, so a rerun and `e2e-tested` cover
+  them all.
 
 ### Mobile
 
-Dispatch `sdk-e2e.yml` with `platform: Android` or `platform: iOS` and `packages: @qvac/sdk`, or
-`platform: Android` and `packages: sdk-kotlin` (the Kotlin app). The run builds the consumer APK or IPA with the run id and broker baked in,
-starts it on a Device Farm pool from `SDK_ANDROID_DEVICE_FARM_POOLS` or `SDK_IOS_DEVICE_FARM_POOLS`
-(the dispatch's `pool` names one pool; empty prefers an available private pool), drives the full catalog over MQTT once
-the device runs, and fails on any failed test. `tests` narrows it to comma-separated categories or testId
-prefixes. On a pull request, `test-e2e-smoke`, `test-e2e-full` and `test-e2e-rerun-failed` run the sdk's Android and iOS
-apps the same way, with the label's suite; the Kotlin app runs only by dispatch.
+A dispatch naming `android` or `ios` in `platforms` runs the JS app on both and the Kotlin app on Android. The run builds
+the consumer APK or IPA with the run id and broker baked in, starts it on a Device Farm pool from
+`SDK_ANDROID_DEVICE_FARM_POOLS` or `SDK_IOS_DEVICE_FARM_POOLS` (the dispatch's `pool` names one pool; empty prefers an
+available private pool), drives the catalog over MQTT once the device runs, and fails on any failed test. `filter`
+narrows it to comma-separated categories or testId prefixes. On a pull request, the base runs and
+`test-e2e-rerun-failed` run the apps the same way, with the label's suite.
 
 ## Developing new tests
 

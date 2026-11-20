@@ -123,7 +123,9 @@ android {
 val npmCi by tasks.registering(Exec::class) {
     description = "Install pinned QVAC Android runtime dependencies"
     workingDir(runtimeRoot)
-    commandLine("npm", "install", "--ignore-scripts", "--legacy-peer-deps", "--no-package-lock")
+    @Suppress("UNCHECKED_CAST")
+    commandLine(rootProject.extra["npm"] as List<String>)
+    args("install", "--ignore-scripts", "--legacy-peer-deps", "--no-package-lock")
     inputs.files(
         runtimeRoot.file("package.json"),
     )
@@ -137,7 +139,7 @@ val workspaceInference = runtimeRoot.dir("../inference")
 val buildWorkspaceSdk by tasks.registering(Exec::class) {
     description = "Build packages/sdk with the shared worker build"
     workingDir(runtimeRoot)
-    commandLine("python3", "../sdk-python/scripts/build_worker.py", "--force")
+    commandLine(rootProject.extra["python"] as String, "../sdk-python/scripts/build_worker.py", "--force")
     inputs.dir(workspaceSdk.dir("src"))
     inputs.dir(workspaceInference.dir("src"))
     inputs.files(
