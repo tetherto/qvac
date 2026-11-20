@@ -307,6 +307,42 @@ describe('createRagBackend', () => {
     })
   })
 
+  it("a create that loses the race to another server leaves that server's files", async () => {
+    await withDir(async (dir) => {
+      let release = () => {}
+      const held = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      let probes = 0
+      const slowProbe: EmbedTexts = async (modelId, texts) => {
+        if (texts[0] === 'dimension probe' && probes++ === 0) await held
+        return embedTexts(modelId, texts)
+      }
+      const first = createRagBackend({ dir, embedTexts: slowProbe })
+      const second = createRagBackend({ dir, embedTexts })
+      const losing = first.attach('vs_race', model, {
+        fileId: 'file-1',
+        fileName: 'moon.txt',
+        text: 'A moon in orbit.'
+      })
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      await second.attach('vs_race', model, {
+        fileId: 'file-2',
+        fileName: 'oven.txt',
+        text: 'Preheat the oven.'
+      })
+      release()
+      await assert.rejects(losing, VectorStoreInUseError)
+      const hits = await second.search('vs_race', model, 'oven moon orbit', 5)
+      assert.deepEqual(
+        hits.map((hit) => hit.fileId),
+        ['file-2']
+      )
+      await first.close()
+      await second.close()
+    })
+  })
+
   it('keeps vector stores next to the configured model cache', () => {
     assert.equal(
       vectorStoreDirFor('/data/qvac/models'),

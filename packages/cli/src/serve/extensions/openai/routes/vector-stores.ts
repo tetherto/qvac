@@ -69,6 +69,9 @@ fails with \`no_embedding_model_configured\` / \`ambiguous_embedding_model\`.
 another load config (such as pooling), requests are rejected with
 \`embedding_model_mismatch\` to prevent silent precision loss.
 
+**In use**: a store is open in one server at a time. While another server on
+the same data directory holds it, requests fail with \`vector_store_in_use\` (409).
+
 **Ignored params** (logged, not rejected): \`filters\`, \`ranking_options\`,
 \`rewrite_query\`. Only \`max_num_results\` (default 5) is forwarded.
 
@@ -328,6 +331,9 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         return searchResultsToOpenAI(results, body.query)
       } catch (err) {
         if (err instanceof EmbeddingModelChangedError) throwModelChanged(err)
+        if (err instanceof VectorStoreInUseError) {
+          throw new HttpError(409, 'vector_store_in_use', err.message)
+        }
         const message = err instanceof Error ? err.message : String(err)
         ctx.logger.error(`Vector store search error for "${id}": ${message}`)
         throw new HttpError(
@@ -419,6 +425,9 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         })
       } catch (err) {
         if (err instanceof EmbeddingModelChangedError) throwModelChanged(err)
+        if (err instanceof VectorStoreInUseError) {
+          throw new HttpError(409, 'vector_store_in_use', err.message)
+        }
         const message = err instanceof Error ? err.message : String(err)
         ctx.logger.error(`Vector store ingest error for "${id}": ${message}`)
         throw new HttpError(

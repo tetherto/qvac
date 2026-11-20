@@ -2438,7 +2438,7 @@ Defaults: **1 h TTL**, **256 MB** total cap, **256 files** cap, oldest-first evi
 
 ### Vector stores
 
-OpenAI-compatible vector-store endpoints backed by [`@qvac/rag`](https://www.npmjs.com/package/@qvac/rag). Stores keep their data under `serve/vector-stores` next to the SDK `cacheDirectory` (`~/.qvac/serve/vector-stores` by default), so they survive a restart; metadata such as `name` and `expires_after` stays in memory.
+OpenAI-compatible vector-store endpoints backed by [`@qvac/rag`](https://www.npmjs.com/package/@qvac/rag). Stores keep their data under `serve/vector-stores` next to the SDK `cacheDirectory` (`~/.qvac/serve/vector-stores` by default), so they survive a restart; metadata such as `name` and `expires_after` stays in memory. A store is open in one server at a time: while another server on the same data directory holds it, search, attach and delete return `409 vector_store_in_use`.
 
 #### `GET /v1/vector_stores`
 
@@ -2458,7 +2458,7 @@ Update `name`, `expires_after`, or `metadata`.
 
 #### `DELETE /v1/vector_stores/:id`
 
-Delete the store and its ingested files. Returns `409 vector_store_in_use` while another server on the same data directory has the store open.
+Delete the store and its ingested files.
 
 #### `POST /v1/vector_stores/:id/search`
 
