@@ -12,6 +12,14 @@ import type { AbortSignalLike } from '@/schemas/abort-signal'
 import { trackedRequestSchema } from '@/schemas/request-base'
 import { capabilityContractRuntimeSchema, type CapabilityDeclaration } from '@/schemas/capabilities'
 
+// Plugin authors import from the `plugin-utils` entry point, which is this
+// module, so the contracts a plugin declares in `provides` are available there.
+export {
+  CAPABILITY_CONTRACTS,
+  type CapabilityContract,
+  type CapabilityDeclaration
+} from '@/schemas/capabilities'
+
 /**
  * Granularity at which the addon can cancel.
  *  - `"request"` — addon cancels a specific in-flight `requestId`.
