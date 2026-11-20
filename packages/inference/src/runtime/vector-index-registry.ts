@@ -2,7 +2,11 @@ import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import { QvacErrorBase } from '@qvac/error'
 import { getTurboVecBackend } from '@/plugins/turbovec-backend'
-import type { OpenVectorIndex, VectorIndexBackend } from '@/runtime/vector-index-backend'
+import type {
+  OpenVectorIndex,
+  VectorIndexBackend,
+  VectorIndexState
+} from '@/runtime/vector-index-backend'
 import { getConfiguredCacheDir } from '@/runtime/state'
 import { generateRandomRequestId } from '@/runtime/request-id'
 import { resolveSessionId } from '@/runtime/session-id'
@@ -116,7 +120,7 @@ function track(index: OpenVectorIndex, sessionId: string) {
 }
 
 // Omit a control the provider lacks so clients read it as unknown, not off.
-function indexState(index: OpenVectorIndex) {
+function indexState(index: VectorIndexState) {
   const { ivf } = index
   return {
     ...(index.calibrated !== undefined && { calibrated: index.calibrated }),
@@ -170,8 +174,8 @@ export async function addVectors(params: {
   }
   const vectors = flattenRows(params.vectors, index.dim, 'vectors')
   const ids = toNativeIds(params.ids)
-  await runBackend(() => index.add(vectors, ids))
-  return { length: index.length, ...indexState(index) }
+  const state = await runBackend(() => index.add(vectors, ids))
+  return { length: state.length, ...indexState(state) }
 }
 
 export async function setVectorIndexStagedSearch(params: { indexId: string; enabled: boolean }) {
@@ -210,16 +214,19 @@ export async function searchVectors(params: {
 export async function removeVectors(params: { indexId: string; ids: VectorIdWire[] }) {
   const index = getIndex(params.indexId)
   const removed: boolean[] = []
+  let state: VectorIndexState | undefined
   for (const id of params.ids) {
-    removed.push(
-      await runBackend(
-        () => index.remove(BigInt(id)),
-        (detail) =>
-          `remove applied ${removed.length} of ${params.ids.length} ids before failing: ${detail}`
-      )
+    const result = await runBackend(
+      () => index.remove(BigInt(id)),
+      (detail) =>
+        `remove applied ${removed.length} of ${params.ids.length} ids before failing: ${detail}`
     )
+    removed.push(result.removed)
+    state = result.state
   }
-  return { removed, length: index.length, ...indexState(index) }
+  // The schema requires at least one id, so the loop always sets `state`.
+  const final = state ?? index
+  return { removed, length: final.length, ...indexState(final) }
 }
 
 export async function containsVectors(params: { indexId: string; ids: VectorIdWire[] }) {

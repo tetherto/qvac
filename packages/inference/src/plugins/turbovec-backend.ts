@@ -6,7 +6,11 @@ import {
   type VectorIndexHit,
   type VectorIndexIvfSettings
 } from '@/schemas/index'
-import type { OpenVectorIndex, VectorIndexBackend } from '@/runtime/vector-index-backend'
+import type {
+  OpenVectorIndex,
+  VectorIndexBackend,
+  VectorIndexState
+} from '@/runtime/vector-index-backend'
 
 // The native index pads short result rows with UINT64_MAX.
 const PADDING_ID = BigInt(VECTOR_ID_RESERVED)
@@ -91,6 +95,20 @@ function openIndex(
     needsPrepare = true
     ivfBuilt = false
   }
+  function ivfState() {
+    if (!ivfSupported) return undefined
+    return ivfSettings && { ...ivfSettings, built: ivfBuilt }
+  }
+  // The native getters throw once the index is disposed, so callers read the
+  // state inside the operation that changed it.
+  function state(): VectorIndexState {
+    return {
+      length: index.length,
+      calibrated: index.calibrated,
+      stagedSearch: index.stagedSearch,
+      ivf: ivfState()
+    }
+  }
   // One call at a time per index: each one reads and updates the prepare and
   // IVF flags around its native await, and an interleaved add or remove would
   // leave IVF marked built over lists the native index has dropped.
@@ -115,8 +133,7 @@ function openIndex(
       return index.stagedSearch
     },
     get ivf() {
-      if (!ivfSupported) return undefined
-      return ivfSettings && { ...ivfSettings, built: ivfBuilt }
+      return ivfState()
     },
     setStagedSearch: (enabled) =>
       exclusive(async () => {
@@ -155,6 +172,7 @@ function openIndex(
       exclusive(async () => {
         markChanged()
         await index.addWithIds(vectors, ids)
+        return state()
       }),
     search: (queries, k, nProbe) =>
       exclusive(async () => {
@@ -181,7 +199,7 @@ function openIndex(
       exclusive(async () => {
         const removed = await index.remove(id)
         if (removed) markChanged()
-        return removed
+        return { removed, state: state() }
       }),
     write: (path) => exclusive(async () => await index.write(path)),
     dispose: () => exclusive(async () => await index.dispose())

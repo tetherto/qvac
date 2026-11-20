@@ -81,8 +81,11 @@ export function observableIndexProvider({
   function createIndex(dim: number, bitWidth?: number): FakeIndex {
     const indexIds: bigint[] = []
     let ivfBuilt = false
+    let disposed = false
     const index: FakeIndex = {
+      // The native getters throw once the index is disposed.
       get length() {
+        if (disposed) throw new Error('IdMapIndex has been disposed')
         return indexIds.length
       },
       dim,
@@ -127,6 +130,7 @@ export function observableIndexProvider({
       dispose() {
         calls.dispose++
         if (failures.dispose) throw new Error('native dispose failed')
+        disposed = true
       }
     }
 
