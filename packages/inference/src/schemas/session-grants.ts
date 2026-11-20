@@ -60,15 +60,11 @@ export function capabilityPermissions(contract: CapabilityContract): string[] {
   )
 }
 
+// Entries are only required to be strings here: the open handler checks their
+// form, so a malformed permission fails with `SessionGrantInvalidError` like
+// any other bad grant rather than with a generic validation error.
 export const sessionGrantSchema = z
-  .array(
-    z
-      .string()
-      .regex(
-        SESSION_PERMISSION_PATTERN,
-        'a permission is "<capability ID>/<operation>" or "runtime/<operation>"'
-      )
-  )
+  .array(z.string())
   .describe(
     'Permissions the session may use, one per operation: "<capability ID>/<operation>", such as ' +
       '"transcription/transcribe", or "runtime/<operation>" for loadModel, downloadAsset, vectorIndex, ' +
