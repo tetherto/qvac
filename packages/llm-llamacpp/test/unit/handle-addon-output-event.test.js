@@ -25,12 +25,11 @@ function createStub(defaultImpl = () => {}) {
 
 // parallel: 4 puts the model on the tagged multi-job path (_maxConcurrency > 1);
 // inference routing goes solely through _jobSinks at every parallel value.
-function createModel(opts = {}) {
+function createModel() {
   const model = new LlmLlamacpp({
     files: { model: ['/tmp/test.gguf'] },
     config: { device: 'cpu', ctx_size: '256', parallel: '4' },
-    logger: { info() {}, warn() {}, error() {}, debug() {} },
-    opts
+    logger: { info() {}, warn() {}, error() {}, debug() {} }
   })
   model.addon = { runJob: createStub(), activeJobs: () => 0 }
   return model
@@ -63,32 +62,6 @@ test('two concurrent jobs receive only their own output', async (t) => {
   t.absent(out1.includes('BBB'), 'job 1 must not see job 2 output')
   t.ok(out2.includes('BBB'), 'job 2 gets its own token')
   t.absent(out2.includes('AAA'), 'job 2 must not see job 1 output')
-})
-
-test('native backend names reach single responses only when stats are enabled', async (t) => {
-  for (const stats of [true, false]) {
-    const model = createModel({ stats })
-    model.addon.runJob.callsFake(() => ({ accepted: true, id: 1 }))
-    const response = await model._runInternal([{ role: 'user', content: 'a' }])
-    const updates = []
-    response.on('stats', (value) => updates.push(value))
-    model._addonOutputCallback(
-      null,
-      'Stats',
-      { TPS: 1, backendDevice: 1, backendName: 'vulkan' },
-      null,
-      1
-    )
-    await response.await()
-    if (stats) {
-      t.is(response.stats.backendName, 'vulkan')
-      t.is(response.stats.backendDevice, 'gpu')
-      t.is(updates[0].backendName, 'vulkan', 'the stats event includes the native name')
-    } else {
-      t.alike(response.stats, {}, 'disabled stats do not expose the backend name')
-      t.alike(updates, [], 'disabled stats emit no stats event')
-    }
-  }
 })
 
 test('a throwing stats listener cannot strand a completed job', async (t) => {

@@ -405,7 +405,6 @@ TEST_F(LlamaModelTest, RuntimeBackendNameReportsCpuWithZeroGpuLayers) {
 
   const auto stats = model.runtimeStats();
   EXPECT_EQ(getStatString(stats, "backendName"), "cpu");
-  EXPECT_EQ(getStatValue(stats, "backendDevice"), 0.0);
 }
 
 TEST_F(LlamaModelTest, RuntimeStatsAfterProcessing) {

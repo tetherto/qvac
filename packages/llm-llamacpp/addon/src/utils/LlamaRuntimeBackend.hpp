@@ -1,8 +1,5 @@
 #pragma once
 
-#include <algorithm>
-#include <cctype>
-#include <cstdint>
 #include <map>
 #include <string>
 #include <string_view>
@@ -16,10 +13,8 @@
 
 #if __has_include(<llama-ext.h>)
 #include <llama-ext.h>
-#elif __has_include(<common/../src/llama-ext.h>)
-#include <common/../src/llama-ext.h>
 #else
-// Fabric 0.25 exports this staged API but does not install llama-ext.h.
+// Fabric 0.31 exports this staged API but does not install llama-ext.h.
 // Keep the declaration identical to Fabric's src/llama-ext.h.
 // NOLINTNEXTLINE(readability-identifier-naming)
 struct llama_memory_breakdown_data {
