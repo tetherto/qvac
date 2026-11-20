@@ -71,6 +71,7 @@ export function isBuiltInModelType(modelType: unknown): boolean {
 }
 import { reloadConfigRequestSchema } from './reload-config'
 import { modelFitPolicySchema, type ModelFitPolicy } from './model-fit-policy'
+import type { LegacyModelConfigOf, WithLegacyModelConfig } from './legacy-keys'
 
 const MODEL_SRC_DESCRIPTION = `The model to load: a registry model constant for a built-in model, or a model source — ${MODEL_SOURCE_URI_HINT} — for HTTP, local, or P2P models.`
 
@@ -930,7 +931,9 @@ export type ModelProgressUpdate = z.infer<typeof modelProgressUpdateSchema>
  * `loadModel` options for built-in model types.
  * Custom plugin types use {@link LoadCustomPluginModelOptions}.
  */
-export type LoadModelOptions = z.input<typeof loadBuiltinModelOptionsBaseSchema> & {
+export type LoadModelOptions = WithLegacyModelConfig<
+  z.input<typeof loadBuiltinModelOptionsBaseSchema>
+> & {
   onProgress?: (progress: ModelProgressUpdate) => void
   logger?: Logger
 }
@@ -969,7 +972,10 @@ export type LoadModelDescriptorOnlyOptions = {
  * shape. Engines without a known literal fall through to
  * `Record<string, unknown>` (handled by {@link LoadModelDescriptorParam}).
  */
-export type InferredConfig<S> = S extends {
+export type InferredConfig<S> = InferredEngineConfig<S> &
+  (S extends { engine: infer Engine } ? LegacyModelConfigOf<Engine> : unknown)
+
+type InferredEngineConfig<S> = S extends {
   engine: typeof ModelType.llamacppCompletion
 }
   ? z.input<typeof llmConfigBaseSchema>

@@ -16,6 +16,7 @@ import {
   isModelTypeAlias,
   normalizeModelType,
   inferModelTypeFromModelSrc,
+  renameLegacyModelConfigKeys,
   ModelType
 } from '@/schemas/index'
 import {
@@ -29,6 +30,7 @@ import { parseClientInput } from '@/api/parse-input'
 import { getAppLogger } from '@/logging/index'
 import { decoratePromise } from '@/utils/decorate-promise'
 import { generateRequestId } from '@/runtime/request-id'
+import { warnLegacyKey } from '@/runtime/legacy-keys'
 
 const logger = getAppLogger()
 
@@ -305,6 +307,16 @@ async function runLoadModel(
   // `cancel({ requestId: op.requestId })` a no-op when no match exists
   // and a precise abort when it does.
   resolvedOptions = { ...resolvedOptions, requestId }
+  if (resolvedOptions['modelConfig'] !== undefined) {
+    resolvedOptions = {
+      ...resolvedOptions,
+      modelConfig: renameLegacyModelConfigKeys(
+        resolvedOptions['modelType'],
+        resolvedOptions['modelConfig'],
+        warnLegacyKey
+      )
+    }
+  }
 
   const request = isReloadConfig
     ? parseClientInput(reloadConfigOptionsToRequestSchema, resolvedOptions)

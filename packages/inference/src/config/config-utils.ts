@@ -1,11 +1,12 @@
-import { qvacConfigSchema, type QvacConfig } from '@/schemas/index'
+import { qvacConfigSchema, renameLegacyConfigKeys, type QvacConfig } from '@/schemas/index'
 import { ConfigValidationFailedError } from '@/errors/index'
 import { formatZodError } from '@/utils/zod-error'
+import { warnLegacyKey } from '@/runtime/legacy-keys'
 
 export type { QvacConfig }
 
 export function validateConfig(config: unknown): QvacConfig {
-  const result = qvacConfigSchema.safeParse(config)
+  const result = qvacConfigSchema.safeParse(renameLegacyConfigKeys(config, warnLegacyKey))
 
   if (!result.success) {
     throw new ConfigValidationFailedError(formatZodError(result.error))

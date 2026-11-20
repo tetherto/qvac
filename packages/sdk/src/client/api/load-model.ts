@@ -16,8 +16,10 @@ import {
   isModelTypeAlias,
   normalizeModelType,
   inferModelTypeFromModelSrc,
+  renameLegacyModelConfigKeys,
   ModelType
 } from '@qvac/inference/surface'
+import { warnLegacyKey } from '@/utils/legacy-keys'
 import {
   ModelLoadFailedError,
   ModelTypeRequiredError,
@@ -318,6 +320,16 @@ async function runLoadModel(
   // `cancel({ requestId: op.requestId })` a no-op when no match exists
   // and a precise abort when it does.
   resolvedOptions = { ...resolvedOptions, requestId }
+  if (resolvedOptions['modelConfig'] !== undefined) {
+    resolvedOptions = {
+      ...resolvedOptions,
+      modelConfig: renameLegacyModelConfigKeys(
+        resolvedOptions['modelType'],
+        resolvedOptions['modelConfig'],
+        warnLegacyKey
+      )
+    }
+  }
 
   const request = isReloadConfig
     ? parseClientInput(reloadConfigOptionsToRequestSchema, resolvedOptions)
