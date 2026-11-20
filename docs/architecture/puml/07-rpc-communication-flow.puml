@@ -1,19 +1,45 @@
 @startuml
-title RPC Communication Flow
+title Bare Worker Lifecycle and RPC
+hide footbox
 
-participant "Client" as Client
-participant "Transport" as Transport
-participant "Engine" as Engine
+participant "SDK Client" as Client
+participant "Host Harness" as Host
+participant "Bare Worker" as Worker
+participant "Inference Engine" as Engine
 
-Client -> Transport : completion({ modelId, history })
-Transport -> Engine : JSON request
-
-loop Token streaming
-    Engine --> Transport : token chunk
-    Transport --> Client : token chunk
+group Launch
+    Client -> Host : Start selected worker
+    Host -> Worker : Launch runtime and attach IPC
+    Worker -> Engine : Register selected plugins
+    Worker -> Worker : Bind bare-rpc to the IPC stream
+    Worker --> Host : ready [bare-stow control]
+    Host --> Client : Ready IPC handle
+    Client -> Host : __init_config RPC
+    Host -> Worker : Initialize with runtimeContext, homeDir,\nand optional config [bare-stow data]
+    Worker --> Host : Initialization succeeds [bare-stow data]
+    Host --> Client : Initialization complete
 end
 
-Engine -> Transport : final { stats }
-Transport -> Client : final { stats }
+group Call
+    Client -> Host : RPC request
+    Host -> Worker : Request [bare-stow data]
+    Worker -> Engine : Dispatch with abort signal
+    alt Work completes
+        Engine --> Worker : Reply or stream events
+        Worker --> Host : RPC responses [bare-stow data]
+        Host --> Client : Reply or stream events
+    else Caller cancels
+        Client -> Host : RPC cancellation
+        Host -> Worker : Cancel [bare-stow data]
+        Worker -> Engine : Abort the request
+    end
+end
 
+group Shutdown
+    Client -> Host : Close runtime
+    Host -> Worker : terminate [bare-stow control]
+    Worker -> Engine : Drain work and release resources
+    Worker --> Host : exit [bare-stow control]
+    Host --> Client : Close completes
+end
 @enduml
