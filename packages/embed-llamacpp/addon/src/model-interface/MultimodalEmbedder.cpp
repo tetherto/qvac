@@ -171,6 +171,34 @@ struct MediaLimits {
   uint64_t maxAudioSeconds;
 };
 
+/// mtmd-helper's decode options for @p limits. mtmd compares them with the
+/// length and size its own decoders read, before it allocates the output.
+mtmd_helper_init_opt
+decodeOptions(const mtmd_context* mctx, const MediaLimits& limits) {
+  mtmd_helper_init_opt opt = mtmd_helper_init_opt_default();
+  opt.max_image_pixels = limits.maxImagePixels;
+  // The audio limit counts samples at the model's rate, plus one: miniaudio
+  // counts one frame more when the input rate is a multiple of the model's
+  // (48 kHz to 16 kHz), so audio exactly at the limit would fail. 0 would mean
+  // no limit, so a value past uint64 saturates.
+  const int sampleRate = mtmd_get_audio_sample_rate(mctx);
+  if (sampleRate > 0) {
+    const auto rate = static_cast<uint64_t>(sampleRate);
+    constexpr uint64_t maxFrames = std::numeric_limits<uint64_t>::max();
+    opt.max_audio_frames = limits.maxAudioSeconds > (maxFrames - 1) / rate
+                               ? maxFrames
+                               : limits.maxAudioSeconds * rate + 1;
+  }
+  return opt;
+}
+
+/// A media part over a size limit: logged at WARN, as the header checks do,
+/// then thrown as UnsupportedMedia.
+[[noreturn]] void throwOverLimit(const std::string& message) {
+  llamaLogCallback(GGML_LOG_LEVEL_WARN, (message + "\n").c_str(), nullptr);
+  throw qvac_errors::StatusError(ADDON_ID, toString(UnsupportedMedia), message);
+}
+
 mtmd::bitmap decodeMedia(
     const mtmd_context* mctx, const MultimodalPart& part, std::size_t index,
     const MediaLimits& limits) {
@@ -196,12 +224,9 @@ mtmd::bitmap decodeMedia(
             "encoder",
             index));
   }
-  // mtmd-helper decodes the whole input at once, sized by its headers, so
-  // both are bounded first.
-  if (isAudio) {
-    audio_length_limit::checkBuffer(
-        part.media.data(), part.media.size(), limits.maxAudioSeconds);
-  } else {
+  // An image stb_image cannot size (WebP, a video) is rejected here, so mtmd
+  // never hands it to ffmpeg. mtmd then bounds the decode itself.
+  if (!isAudio) {
     image_pixel_limit::checkBuffer(
         part.media.data(), part.media.size(), limits.maxImagePixels);
   }
@@ -210,7 +235,21 @@ mtmd::bitmap decodeMedia(
       part.media.data(),
       part.media.size(),
       /* placeholder = */ false,
-      mtmd_helper_init_opt_default());
+      decodeOptions(mctx, limits));
+  if (wrapper.status == MTMD_HELPER_BITMAP_AUDIO_TOO_LONG) {
+    throwOverLimit(string_format(
+        "media part %zu: audio exceeds the %llu s limit. Increase "
+        "audio-max-seconds to allow longer audio.",
+        index,
+        static_cast<unsigned long long>(limits.maxAudioSeconds)));
+  }
+  if (wrapper.status == MTMD_HELPER_BITMAP_IMAGE_TOO_LARGE) {
+    throwOverLimit(string_format(
+        "media part %zu: image exceeds the %llu MP limit. Increase "
+        "image-max-megapixels to allow larger images.",
+        index,
+        static_cast<unsigned long long>(limits.maxImagePixels / 1'000'000)));
+  }
   // A video container never gets here (the pixel check above rejects what
   // stb_image cannot read); free one anyway rather than leak it.
   if (wrapper.video_ctx != nullptr) {

@@ -4,6 +4,15 @@
 
 ### Changed
 
+- `audio-max-seconds` and `image-max-megapixels` are now enforced by fabric's
+  mtmd-helper, against the length and size its own decoders read, before it
+  allocates the decoded output
+  ([#5782](https://github.com/tetherto/qvac/pull/5782)). The addon's own audio
+  header parser (`AudioLengthLimit`) is gone: it had to match each decoder by
+  hand and could not size a free-format MP3, so it rejected every one. Audio
+  over the limit is still rejected with `UnsupportedMedia`, and a free-format
+  MP3 within it now embeds. Images keep the header check that rejects formats
+  stb_image cannot read (WebP, video).
 - `@qvac/fabric` dependency bumped `^0.30.1` -> `^0.31.0`, which carries
   `qvac-fabric` `11739.3.0#1` -> `11739.4.0`
   ([#5831](https://github.com/tetherto/qvac/pull/5831)): opt-in WebGPU builds,
