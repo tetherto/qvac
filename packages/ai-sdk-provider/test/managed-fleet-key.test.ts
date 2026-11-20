@@ -18,22 +18,20 @@ test('fleet key is stable and independent of model declaration order', () => {
 })
 
 test('fleet key is identical for identical configs', () => {
-  const a = synthesizeServeConfig([{ name: 'QWEN3_600M_INST_Q4', config: { ctx_size: 16384 } }])
-  const b = synthesizeServeConfig([{ name: 'QWEN3_600M_INST_Q4', config: { ctx_size: 16384 } }])
+  const a = synthesizeServeConfig([{ name: 'QWEN3_600M_INST_Q4', config: { ctxSize: 16384 } }])
+  const b = synthesizeServeConfig([{ name: 'QWEN3_600M_INST_Q4', config: { ctxSize: 16384 } }])
   assert.equal(computeFleetKey(a, '127.0.0.1'), computeFleetKey(b, '127.0.0.1'))
 })
 
 test('fleet key changes with per-model config and with host', () => {
-  const base = synthesizeServeConfig([{ name: 'QWEN3_600M_INST_Q4', config: { ctx_size: 1024 } }])
-  const bigger = synthesizeServeConfig([
-    { name: 'QWEN3_600M_INST_Q4', config: { ctx_size: 16384 } }
-  ])
+  const base = synthesizeServeConfig([{ name: 'QWEN3_600M_INST_Q4', config: { ctxSize: 1024 } }])
+  const bigger = synthesizeServeConfig([{ name: 'QWEN3_600M_INST_Q4', config: { ctxSize: 16384 } }])
   assert.notEqual(computeFleetKey(base, '127.0.0.1'), computeFleetKey(bigger, '127.0.0.1'))
   assert.notEqual(computeFleetKey(base, '127.0.0.1'), computeFleetKey(base, '0.0.0.0'))
 })
 
 test('fleet key changes with serveBinPath so distinct local builds do not share a serve', () => {
-  const cfg = synthesizeServeConfig([{ name: 'QWEN3_600M_INST_Q4', config: { ctx_size: 1024 } }])
+  const cfg = synthesizeServeConfig([{ name: 'QWEN3_600M_INST_Q4', config: { ctxSize: 1024 } }])
   const resolved = computeFleetKey(cfg, '127.0.0.1')
   // Resolved-from-@qvac/cli (undefined) must match the explicit no-path form.
   assert.equal(resolved, computeFleetKey(cfg, '127.0.0.1', undefined))
@@ -45,7 +43,7 @@ test('fleet key changes with serveBinPath so distinct local builds do not share 
 })
 
 test('fleet key folds in a pinned servePort so pins do not share an auto serve', () => {
-  const cfg = synthesizeServeConfig([{ name: 'QWEN3_600M_INST_Q4', config: { ctx_size: 1024 } }])
+  const cfg = synthesizeServeConfig([{ name: 'QWEN3_600M_INST_Q4', config: { ctxSize: 1024 } }])
   const auto = computeFleetKey(cfg, '127.0.0.1')
   // An auto-allocated port (undefined) stays out of the key.
   assert.equal(auto, computeFleetKey(cfg, '127.0.0.1', undefined, undefined))
@@ -60,10 +58,10 @@ test('fleet key folds in a pinned servePort so pins do not share an auto serve',
 
 test('fleet key is insensitive to key order within a per-model config object', () => {
   const a = synthesizeServeConfig([
-    { name: 'QWEN3_600M_INST_Q4', config: { ctx_size: 1024, reasoning_budget: 0 } }
+    { name: 'QWEN3_600M_INST_Q4', config: { ctxSize: 1024, reasoningBudget: 0 } }
   ])
   const b = synthesizeServeConfig([
-    { name: 'QWEN3_600M_INST_Q4', config: { reasoning_budget: 0, ctx_size: 1024 } }
+    { name: 'QWEN3_600M_INST_Q4', config: { reasoningBudget: 0, ctxSize: 1024 } }
   ])
   assert.equal(computeFleetKey(a, '127.0.0.1'), computeFleetKey(b, '127.0.0.1'))
 })
