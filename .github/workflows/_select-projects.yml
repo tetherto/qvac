@@ -41,7 +41,7 @@ on:
         description: JSON object of target to matrix rows
         value: ${{ jobs.select.outputs.matrices }}
       projects:
-        description: JSON array of selected packages with their gate key
+        description: JSON array of selected packages with their status key
         value: ${{ jobs.select.outputs.projects }}
       runners:
         description: JSON map of reusable-runner-names.yml runner key to label

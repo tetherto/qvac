@@ -1,277 +1,82 @@
 name: Merge Guard
 
+# Posts qvac-merge-guard / validate-pr from .github/merge-rules.yml. See docs/ci/MERGE-GUARD.md.
 on:
-  # The required qvac-merge-guard check on the PR itself, forks included; it reads statuses and builds nothing.
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - labeled
-      - ready_for_review
-    branches:
-      - main
+  workflow_run:
+    workflows: [PR checks, SDK checks, Security baseline]
+    types: [completed]
   workflow_dispatch:
+    inputs:
+      pr:
+        description: PR number to evaluate
+        type: string
+        required: true
+      sha:
+        description: The PR head the caller ran for; groups evaluations of one commit
+        type: string
+        default: ""
+  # /merge-guard from a member re-runs it for the PR head; /merge-guard accept <sha> also accepts a fork's .github/ edits.
+  issue_comment:
+    types: [created]
 
-permissions:
-  contents: read
-  pull-requests: read
-  packages: read
+permissions: {}
 
+cache-mode: none
+
+# One evaluation per head commit; a comment run only dispatches one, so it never cancels another.
 concurrency:
-  # Cancel a superseded in-flight run when a newer event (e.g. a prebuild
-  # label) arrives for the same PR. This gate only READS prebuild statuses (it
-  # no longer builds anything), so cancelling an older run is free and closes a
-  # race: a run started before the label uses a static freshness threshold and
-  # could otherwise trust a pre-label "skipped = success" while the newer
-  # labeled build is still running. Killing the older run leaves only the newer
-  # run, which waits for the real build.
-  group: pr-gate-merge-${{ github.event.pull_request.number || github.ref }}
+  group: pr-gate-merge-${{ inputs.sha || github.event.workflow_run.head_sha || github.run_id }}
   cancel-in-progress: true
 
 jobs:
-  changes:
-    if: github.event_name == 'pull_request'
+  retry:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, '/merge-guard') &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
-    outputs:
-      packages: ${{ steps.pkglist.outputs.packages }}
-      packages-with-path: ${{ steps.pkglist.outputs.packages-with-path }}
-      sanity-packages: ${{ steps.pkglist.outputs.sanity-packages }}
-      any: ${{ steps.filter.outputs.pkg-any }}
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      pull-requests: read
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
-        id: filter
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          filters: |
-            pkg-any:
-              - "packages/**"
-            # Shared CI definitions: they affect every addon but name none, so
-            # nx-affected selects nothing and pr-build-test posts no
-            # qvac/prebuild-<pkg> status for them. They therefore drive
-            # sanity-checks only. Requiring a prebuild status here would poll to
-            # the 180 minute deadline for a status nothing is going to post.
-            shared-ci:
-              # The package CI contract's shared workflows and the script that selects their rows.
-              - ".github/workflows/_*.yml"
-              - ".github/workflows/pr-build-test.yml"
-              - ".github/workflows/pr-checks.yml"
-              - ".github/workflows/mobile-tests.yml"
-              - ".github/workflows/cache-warm.yml"
-              - ".github/scripts/select-projects.mjs"
-            # No workflow line on a package key: pr-build-test selects packages by
-            # their packages/** changes, so a PR touching just that file would
-            # wait to the deadline for a status nothing posts. shared-ci covers it.
-            asr-ggml:
-              - "packages/asr-ggml/**"
-            audiogen-ggml:
-              - "packages/audiogen-ggml/**"
-            bci-whispercpp:
-              - "packages/bci-whispercpp/**"
-            classification-ggml:
-              - "packages/classification-ggml/**"
-            decoder-audio:
-              - "packages/decoder-audio/**"
-            diffusion-cpp:
-              - "packages/diffusion-cpp/**"
-            embed-llamacpp:
-              - "packages/embed-llamacpp/**"
-            # Pure-JS/TS package (no prebuilds). Listed so its lint, typecheck,
-            # declaration and generated-artifact checks run under sanity-checks
-            # and reach the required qvac-merge-guard status.
-            infer-base:
-              - "packages/infer-base/**"
-            ggml-rpc-server:
-              - "packages/ggml-rpc-server/**"
-              - "packages/fabric/**"
-              - "cmake/qvac-addon/**"
-            llm-llamacpp:
-              - "packages/llm-llamacpp/**"
-            model-fit:
-              - "packages/model-fit/**"
-            ocr-ggml:
-              - "packages/ocr-ggml/**"
-            translation-nmtcpp:
-              - "packages/translation-nmtcpp/**"
-            tts-ggml:
-              - "packages/tts-ggml/**"
-            turbovec-ggml:
-              - "packages/turbovec-ggml/**"
-            fabric:
-              - "packages/fabric/**"
-            # C++ only, with no build and no status of its own: listed so pr-build-test can select it.
-            inference-addon-cpp:
-              - "packages/inference-addon-cpp/**"
-            vla:
-              - "packages/vla-ggml/**"
-
-      # Package dir names mostly match the filter/job key (packages/<key>),
-      # except vla (packages/vla-ggml) - mapped explicitly here so
-      # sanity-checks' workdir is always correct. Two outputs: a flat name
-      # list (intersected with PREBUILD_KEYS in verify-prebuilds) and a
-      # name+path list (for the sanity-checks matrix's workdir).
-      - name: Build package lists
-        id: pkglist
+      - name: Start Merge Guard for the PR head
         env:
-          CHANGES: ${{ steps.filter.outputs.changes }}
-          # Every package filter key above. Kept in step with that list.
-          # One line: a folded scalar with a deeper indent keeps its newlines,
-          # and $GITHUB_OUTPUT rejects a multiline value.
-          ALL_PACKAGES: '["asr-ggml","audiogen-ggml","bci-whispercpp","classification-ggml","decoder-audio","diffusion-cpp","embed-llamacpp","ggml-rpc-server","infer-base","llm-llamacpp","model-fit","ocr-ggml","translation-nmtcpp","tts-ggml","turbovec-ggml","fabric","inference-addon-cpp","vla"]'
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.issue.number }}
+          REF: ${{ github.event.repository.default_branch }}
         run: |
-          CHANGED=$(echo "$CHANGES" | jq -c 'map(select(. != "pkg-any" and . != "shared-ci"))')
+          SHA=$(gh pr view "$PR" --json headRefOid --jq .headRefOid)
+          gh workflow run pr-gate-merge.yml --ref "$REF" -f pr="$PR" -f sha="$SHA"
 
-          # `packages` gates verify-prebuilds, so it must only ever name packages
-          # a producer will actually post a status for.
-          echo "packages=${CHANGED}" >> "$GITHUB_OUTPUT"
-
-          # sanity-checks needs no posted status, so a shared-CI edit that names
-          # no package still gets checked here rather than passing the guard with
-          # nothing verified.
-          SANITY="$CHANGED"
-          if [ "$SANITY" = "[]" ] && echo "$CHANGES" | jq -e 'index("shared-ci")' >/dev/null; then
-            # Compacted again so a wrapped value cannot split the output line.
-            SANITY=$(jq -c . <<< "$ALL_PACKAGES")
-            echo "::notice::shared CI changed but no package path did; running sanity-checks across every addon"
-          fi
-          # sanity-checks reads the package's package.json, so a package without one is left to its own targets.
-          SANITY=$(jq -r '.[]' <<< "$SANITY" | while read -r p; do d="packages/$p"; [ "$p" = vla ] && d=packages/vla-ggml; [ -f "$d/package.json" ] && echo "$p"; done | jq -Rsc 'split("\n") | map(select(length > 0))')
-          echo "sanity-packages=${SANITY}" >> "$GITHUB_OUTPUT"
-          echo "packages-with-path=$(echo "$SANITY" | jq -c '
-            map({package: ., path: (if . == "vla" then "packages/vla-ggml" else "packages/" + . end)})
-          ')" >> "$GITHUB_OUTPUT"
-
-  sanity-checks:
-    # Runs per-package (matches how ./.github/actions/sanity-checks is
-    # already invoked from every on-pr-<pkg>.yml - workdir is a package
-    # path, there is no root package.json in this monorepo).
-    # Gate on the concrete package list: a non-addon packages/** change leaves
-    # packages=[], which would make this matrix zero-run and result='' downstream.
-    if: needs.changes.outputs.sanity-packages != '[]' && needs.changes.outputs.sanity-packages != ''
-    needs: [changes]
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.changes.outputs.packages-with-path || '[]') }}
+  validate-pr:
+    if: github.event_name != 'issue_comment'
     runs-on: ubuntu-latest
-    name: sanity-checks (${{ matrix.package }})
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Run Sanity checks
-        uses: ./.github/actions/sanity-checks
-        with:
-          secret-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.GITHUB_TOKEN }}
-          run-integration: "true"
-          workdir: ${{ matrix.path }}
-
-  # Verifies prebuilds without triggering them. Each prebuild-bearing
-  # on-pr-<pkg>.yml posts a qvac/prebuild-<pkg> commit status on the PR head SHA
-  # and stamps its own run URL into the status target_url. A status is trusted
-  # only when the run that produced it is the on-pr-<pkg> workflow AND was
-  # triggered at/after this PR event (run.created_at >= pull_request.updated_at).
-  # That binds the status to a run from the current-or-newer event, so a
-  # superseded pre-label run's "skipped = success" cannot pass the gate just
-  # because its timestamp happens to post-date the label. The producing run is
-  # read by the id embedded in the status, so this never depends on the Actions
-  # API having listed the newest run for the SHA (no listing-lag window).
-  verify-prebuilds:
-    needs: [changes]
-    runs-on: ubuntu-latest
-    # Headroom over verify.mjs's 180-minute poll, so a timeout is reported by
-    # the script with the pending contexts rather than as a bare cancellation.
-    timeout-minutes: 190
+    timeout-minutes: 10
     permissions:
       contents: read
-      statuses: read
       actions: read
+      pull-requests: read
+      statuses: write
     steps:
-      # Trusted base-branch checkout of only the prebuild-status scripts (never
-      # PR head code), so verification logic is a single, unit-tested source.
-      - name: Checkout prebuild-status scripts (default branch)
+      - name: Checkout the rules and the evaluator (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/scripts/prebuild-status
+          sparse-checkout: |
+            .github/merge-rules.yml
+            .github/scripts/merge-guard
           sparse-checkout-cone-mode: false
           persist-credentials: false
-      - name: Verify addon prebuild statuses on the PR head
+      - name: Evaluate the rules
         env:
           GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          CHANGED_PACKAGES: ${{ needs.changes.outputs.packages || '[]' }}
-          # Freshness threshold: the moment this PR event fired. The run that
-          # produced a trusted prebuild status must have been triggered at/after
-          # this (run.created_at >= PR_UPDATED_AT), which rejects statuses from
-          # runs of an earlier event (e.g. the pre-label opened/synchronize run).
-          PR_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
-        run: node .github/scripts/prebuild-status/verify.mjs
-
-  # Verifies C++/fuzz suites without triggering them. Each C++-test-bearing
-  # on-pr flow posts a qvac/cpp-tests-<pkg> commit status on the PR head SHA
-  # (success when the suite passed or was a legitimate no-label skip). The same
-  # freshness/run-binding rules as verify-prebuilds apply.
-  verify-cpp-tests:
-    needs: [changes]
-    runs-on: ubuntu-latest
-    timeout-minutes: 190
-    permissions:
-      contents: read
-      statuses: read
-      actions: read
-    steps:
-      - name: Checkout prebuild-status scripts (default branch)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/scripts/prebuild-status
-          sparse-checkout-cone-mode: false
-          persist-credentials: false
-      - name: Verify addon C++ test statuses on the PR head
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          CHANGED_PACKAGES: ${{ needs.changes.outputs.packages || '[]' }}
-          PR_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
-          KIND: cpp-tests
-        run: node .github/scripts/prebuild-status/verify.mjs
-
-  error-code-ranges:
-    cache-mode: none
-    permissions:
-      contents: read
-    uses: ./.github/workflows/on-pr-error-code-ranges.yml
-
-  qvac-merge-guard:
-    needs:
-      [
-        changes,
-        sanity-checks,
-        verify-prebuilds,
-        verify-cpp-tests,
-        error-code-ranges,
-      ]
-    if: |
-      always() && !cancelled() &&
-      (needs.changes.result == 'success' || needs.changes.result == 'skipped')
-    permissions:
-      contents: read
-      packages: read
-    uses: ./.github/workflows/public-pr.yml
-    with:
-      # A skip passes only where nothing was there to check; error-code-ranges always runs.
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped' }}
-      build-status: ${{ needs.verify-prebuilds.result == 'success' || needs.verify-prebuilds.result == 'skipped' }}
-      general-checks-status: ${{ needs.error-code-ranges.result == 'success' }}
-      cpp-tests-status: ${{ needs.verify-cpp-tests.result == 'success' || needs.verify-cpp-tests.result == 'skipped' }}
+          PR: ${{ inputs.pr }}
+          SHA: ${{ inputs.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RULES_JSON: ${{ runner.temp }}/merge-rules.json
+        run: |
+          yq -o=json '.' .github/merge-rules.yml > "$RULES_JSON"
+          node .github/scripts/merge-guard/evaluate.mjs

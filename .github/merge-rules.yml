@@ -1,0 +1,39 @@
+# Checks Merge Guard requires of a PR into main, by changed paths. See docs/ci/MERGE-GUARD.md.
+
+- name: Error code reservations
+  patterns: ["**"]
+  checks:
+    - { workflow: pr-checks.yml, job: error-code-ranges }
+
+- name: CI definitions
+  patterns: [".github/**", "scripts/ci/**"]
+  checks:
+    - { workflow: security-baseline.yml, job: policy-tests }
+
+- name: Addon packages
+  patterns: ["packages/**", "cmake/qvac-addon/**"]
+  checks:
+    - { workflow: pr-checks.yml, job: "select / *" }
+    - { workflow: pr-checks.yml, job: disallowed-deps }
+    - { workflow: pr-checks.yml, job: "checks (*)", skipped: pass }
+    - { workflow: pr-build-test.yml, job: selected }
+    - { workflow: pr-build-test.yml, job: "status *", skipped: pass }
+
+- name: SDK pod
+  patterns:
+    - "packages/ai-sdk-provider/**"
+    - "packages/cli/**"
+    - "packages/error/**"
+    - "packages/inference/**"
+    - "packages/logging/**"
+    - "packages/rag/**"
+    - "packages/sdk/**"
+    - "packages/sdk-e2e/**"
+    - "packages/sdk-kotlin/**"
+    - "packages/sdk-python/**"
+    - "packages/test-suite/**"
+  checks:
+    - { workflow: sdk-checks.yml, job: "select / *" }
+    - { workflow: sdk-checks.yml, job: pod-rules }
+    - { workflow: sdk-checks.yml, job: release-guard, skipped: pass }
+    - { workflow: sdk-checks.yml, job: "checks (*)", skipped: pass }
