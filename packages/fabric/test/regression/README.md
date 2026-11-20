@@ -176,3 +176,77 @@ QVAC_GGML_BOUNDARY_SOURCE=/absolute/path/to/qvac-fabric-llm.cpp \
   pnpm exec nx run @qvac/fabric:cpp:build:linux-x64
 pnpm exec nx run @qvac/fabric:cpp:tests:linux-x64
 ```
+
+## Experimental shared-core packaging (step 2)
+
+The preparation is opt-in. Default fabric builds keep the released layout.
+Use the matching experimental `qvac-fabric` overlay port, which adds a
+`shared-core` feature and applies the source build-mode patch to 11739.4.0:
+
+```sh
+cmake -S packages/fabric -B /tmp/fabric-shared-core \
+  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+  -DQVAC_FABRIC_SHARED_CORE=ON \
+  -DVCPKG_OVERLAY_PORTS=/path/to/registry/ports
+cmake --build /tmp/fabric-shared-core
+cmake --install /tmp/fabric-shared-core --prefix /tmp/fabric-shared-stage
+```
+
+This follows fabric's usual vcpkg/toolchain setup and GPU SDK requirements.
+The overlay's `shared-core.patch` is also prepared in the source fork as
+`GGML_SHARED_CORE`; remove the patch once a source release includes it.
+The mode scopes shared linkage to ggml, leaving llama and its helpers static.
+It produces `qvac-ggml-base-1`, `qvac-ggml-1` (the backend registry), and
+`qvac-ggml-vector-index-1`, with normal platform prefixes and suffixes.
+The filename encodes native ABI 1 without depending on symlinks. Linux core
+exports use `QVAC_GGML_BASE_ABI_1`. This is an experimental ABI, not a release
+compatibility promise.
+
+Linux libraries and backends ship in the existing named companion directory
+with `$ORIGIN` lookup. Windows core DLLs ship beside the `.bare` entry point;
+their import libraries and backend DLLs stay in the named companion directory.
+Android retains NDK `libc++_shared.so`. Apple builds reject this experimental
+mode and keep their existing layout. No new npm package is introduced.
+
+Platform-local `qvac-shared-core.cmake` records ABI and header definitions.
+The installed `qvac_fabric_import_shared_core(prebuilds host)` helper imports
+these libraries from the platform package, including Windows import libraries.
+It fails on missing or incompatible metadata instead of falling back to a host
+library. This prepares development consumers without changing their default
+linkage. The experimental fabric build suppresses its own libc++ and checks
+its imports against the actual shared provider.
+
+Test the staged package through that helper, rather than the vcpkg build tree:
+
+```sh
+cmake -S packages/fabric/test/native -B /tmp/fabric-shared-tests \
+  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_PREFIX_PATH=/tmp/fabric-shared-stage \
+  -DQVAC_TEST_FABRIC_PREBUILDS=/tmp/fabric-shared-stage \
+  -DQVAC_TEST_FABRIC_HOST=linux-x64 \
+  -DQVAC_TEST_BACKEND=/tmp/fabric-shared-stage/linux-x64/qvac__fabric-linux-x64/libqvac-ggml-cpu.so \
+  -DQVAC_TEST_RUNTIME_PROVIDER=/tmp/fabric-shared-stage/linux-x64/qvac__fabric-linux-x64/libqvac-ggml-base-1.so
+cmake --build /tmp/fabric-shared-tests
+ctest --test-dir /tmp/fabric-shared-tests --output-on-failure
+```
+
+The fourth test checks typed exceptions, `exception_ptr`, stream RTTI and
+allocation/destruction across a real shared C++ module boundary. Its binaries
+must import the provider's versioned runtime. The original duplicated/shared
+source controls remain unchanged.
+
+Local preparation evidence includes a real fabric `.bare`, CPU/RPC/Vulkan,
+CUDA and XDNA module builds, an Android arm64 cross-build, clean npm tarball
+installation, relocated bare-pack output, and loading bare-link's Linux output
+through the native API. CUDA/XDNA linking checks retain private static GNU
+runtime and shared GNU/XRT runtime respectively. XDNA kernels were disabled in
+the local linkage build; that is not a releasable XDNA package.
+
+The strict runtime-binding audit is still required: versioned imports alone
+have not eliminated Bare's allocator interposition. Do not exempt those
+findings. Windows runtime loading and `/MTd` ownership of the fork's C++ stream/vector
+extensions, extracted/unextracted Android APK loading,
+bare-sidecar, full coexistence/inference and GPU/NPU device execution remain
+cutover acceptance work. A successful CPU test or backend registration does
+not establish hardware execution.
