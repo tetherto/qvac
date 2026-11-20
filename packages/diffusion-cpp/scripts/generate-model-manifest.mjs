@@ -269,6 +269,8 @@ export async function main() {
   try {
     for (const [name, entry] of Object.entries(manifest.models)) {
       if (args.only && args.only !== name) continue
+      // S3 artifacts are pinned when published; this generator verifies URL sources.
+      if (!entry.urls) continue
       if (entry.sha256 && !args.force) {
         console.log(`skip ${name} (already pinned; use --force to recompute)`)
         continue

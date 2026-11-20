@@ -356,6 +356,13 @@ BufferFootprint BridgeDepthModel::allocatedBuffers() const {
   return impl_->graph->allocatedBuffers();
 }
 
+uint64_t BridgeDepthModel::heldSizeSlotBytes() const {
+  std::scoped_lock lock(mutex_);
+  if (!impl_)
+    throw StatusError(InternalError, "BridgeDepth is not loaded");
+  return impl_->graph->heldSizeSlotBytes();
+}
+
 std::string BridgeDepthModel::getName() const { return "bridgedepth-ggml"; }
 
 std::any BridgeDepthModel::process(const std::any& input) {

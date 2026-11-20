@@ -16,12 +16,14 @@ QVAC capability through a unified, type-safe API.
 
 ## Requirements
 
+{/* Mirrored in /sdk/platform-support#clients-and-runtimes: update both when a floor changes. */}
+
 - Node.js `>= v22.17` (bundling the worker, for any target, needs `^22.21.0 || >=24.9.0`)
 - npm `>= v10.9`
 - [Bare](https://bare.pears.com) `>= v1.32.0` (if targeting Bare)
 - [Expo](https://expo.dev) `>= v58` (if targeting mobile)
 
-For host-level requirements (OS versions, GPU drivers, Vulkan runtime), see [System requirements](/sdk/system-requirements).
+For supported platforms and host requirements (OS versions, GPU drivers, Vulkan runtime), see [Platform support](/sdk/platform-support).
 
 ## Install
 
@@ -101,8 +103,7 @@ The worker runs in the app's process. A worker that stops before its cleanup fin
 </Steps>
 
 <Callout type="info">
-  Due to limitations with `llamacpp`, QVAC currently does not run on emulators.
-  You **must** use a physical device.
+  QVAC does not run on Android emulators. On Android, you **must** use a physical device.
 </Callout>
 
 ## Quickstart

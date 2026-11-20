@@ -73,17 +73,19 @@
         "parallel": false,
         "forwardAllArgs": false,
         "commands": [
-          "echo no system packages"
+          "pnpm --dir ../.. install --frozen-lockfile --ignore-scripts --filter @qvac/fabric..."
         ]
       },
       "configurations": {
         "linux-arm64": {
           "commands": [
+            "pnpm --dir ../.. install --frozen-lockfile --ignore-scripts --filter @qvac/fabric...",
             "dpkg -s pkg-config libx11-dev libxcb1-dev libxkbcommon-dev libopenblas-dev liblapack-dev libfftw3-dev mesa-vulkan-drivers >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y pkg-config libx11-dev libxcb1-dev libxkbcommon-dev libopenblas-dev liblapack-dev libfftw3-dev mesa-vulkan-drivers)"
           ]
         },
         "android-arm64": {
           "commands": [
+            "pnpm --dir ../.. install --frozen-lockfile --ignore-scripts --filter @qvac/fabric...",
             "dpkg -s pkg-config libx11-dev libxcb1-dev libxkbcommon-dev libopenblas-dev liblapack-dev libfftw3-dev >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y pkg-config libx11-dev libxcb1-dev libxkbcommon-dev libopenblas-dev liblapack-dev libfftw3-dev)"
           ]
         }
@@ -91,7 +93,14 @@
     },
     "build": {
       "executor": "nx:run-commands",
-      "dependsOn": [],
+      "dependsOn": [
+        {
+          "projects": [
+            "@qvac/fabric"
+          ],
+          "target": "link:platform"
+        }
+      ],
       "options": {
         "cwd": "packages/asr-ggml",
         "parallel": false,
@@ -120,7 +129,7 @@
       },
       "configurations": {
         "linux-x64": {
-          "args": "--platform=linux --arch=x64 -D ASR_CUDA=ON",
+          "args": "--platform=linux --arch=x64",
           "ci": {
             "runner": "linux_ubuntu2204_x64"
           },
@@ -146,7 +155,7 @@
               "forwardAllArgs": false
             },
             {
-              "command": "node ../../.github/scripts/check-linux-module-cxx-runtime.mjs prebuilds/linux-x64",
+              "command": "node ../../.github/scripts/check-linux-module-cxx-runtime.mjs --fabric-host linux-x64 prebuilds/linux-x64",
               "forwardAllArgs": false
             }
           ]
@@ -178,7 +187,7 @@
               "forwardAllArgs": false
             },
             {
-              "command": "node ../../.github/scripts/check-linux-module-cxx-runtime.mjs prebuilds/linux-arm64",
+              "command": "node ../../.github/scripts/check-linux-module-cxx-runtime.mjs --fabric-host linux-arm64 prebuilds/linux-arm64",
               "forwardAllArgs": false
             }
           ]
@@ -228,7 +237,7 @@
       },
       "inputs": [
         "default",
-        "!{projectRoot}/prebuilds/**"
+        "{workspaceRoot}/cmake/qvac-addon/**/*"
       ],
       "outputs": [
         "{projectRoot}/prebuilds"
@@ -251,7 +260,7 @@
         "parallel": false,
         "commands": [
           {
-            "command": "node ../../scripts/ci/cpp-lint-changed.mjs --base {args.diff-base} --generate \"npm install --ignore-scripts --no-audit --no-fund && npx --no-install bare-make generate -D ENABLE_VULKAN=OFF\"",
+            "command": "node ../../scripts/ci/cpp-lint-changed.mjs --base {args.diff-base} --generate \"npm install --ignore-scripts --no-audit --no-fund && npx --no-install bare-make generate\"",
             "forwardAllArgs": false
           }
         ]
@@ -265,7 +274,19 @@
       },
       "metadata": {
         "timeoutMinutes": 120
-      }
+      },
+      "dependsOn": [
+        {
+          "projects": [
+            "@qvac/fabric"
+          ],
+          "target": "link:platform"
+        }
+      ],
+      "inputs": [
+        "default",
+        "{workspaceRoot}/cmake/qvac-addon/**/*"
+      ]
     },
     "cpp:build": {
       "executor": "nx:run-commands",
@@ -287,7 +308,19 @@
             "runner": "linux_ubuntu2204_x64"
           }
         }
-      }
+      },
+      "dependsOn": [
+        {
+          "projects": [
+            "@qvac/fabric"
+          ],
+          "target": "link:platform"
+        }
+      ],
+      "inputs": [
+        "default",
+        "{workspaceRoot}/cmake/qvac-addon/**/*"
+      ]
     },
     "cpp:tests": {
       "executor": "nx:run-commands",

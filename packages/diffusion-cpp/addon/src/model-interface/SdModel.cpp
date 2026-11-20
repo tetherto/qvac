@@ -376,7 +376,7 @@ SdModel::~SdModel() = default;
 // and assessFit()
 // ---------------------------------------------------------------------------
 
-void SdModel::fillCtxParams(CtxParams& out) const {
+void SdModel::fillCtxParams(CtxParams& out, bool allowMetadataOnly) const {
   sd_ctx_params_t& params = out.params;
   sd_ctx_params_init(&params);
 
@@ -402,6 +402,8 @@ void SdModel::fillCtxParams(CtxParams& out) const {
   params.vae_path = optPath(config_.vaePath);
   params.clip_vision_path = optPath(config_.clipVisionPath);
   params.taesd_path = optPath(config_.taesdPath);
+  params.coreml_unet_path = optPath(config_.coremlUnetPath);
+  params.coreml_tae_decoder_path = optPath(config_.coremlTaeDecoderPath);
   // LTX-2 (LTXAV) extras. Null for every non-LTX model.
   params.audio_vae_path = optPath(config_.audioVaePath);
   params.embeddings_connectors_path = optPath(config_.embeddingsConnectorsPath);
@@ -576,11 +578,40 @@ void SdModel::fillCtxParams(CtxParams& out) const {
   params.diffusion_conv_direct = config_.diffusionConvDirect;
   params.vae_conv_direct = config_.vaeConvDirect;
   params.force_sdxl_vae_conv_scale = config_.forceSDXLVaeConvScale;
+  out.profile = qvac_lib_inference_addon_sd::selectPerformanceProfile(
+      config_,
+      qvac_lib_inference_addon_sd::inspectProfileModel(
+          config_, allowMetadataOnly),
+      qvac_lib_inference_addon_sd::profileDevice(
+          params.backend, params.preferred_gpu_backend));
+  if (out.profile.flashAttention)
+    params.flash_attn = true;
+  if (out.profile.ltxF16)
+    params.tensor_type_rules = qvac_lib_inference_addon_sd::ltxF16TensorRules();
 }
 
 SdModel::FitOutcome SdModel::assessFit(const FitWorkload& workload) const {
+  if (!workload.upscaleOnly)
+    qvac_lib_inference_addon_sd::validatePerformanceWorkload(
+        config_, workload.width, workload.height, workload.videoFrames);
+  // The metadata-only ggml planner cannot size Core ML sidecars.
+  if (!workload.upscaleOnly && (!config_.coremlUnetPath.empty() ||
+                                !config_.coremlTaeDecoderPath.empty()))
+    return {};
   CtxParams ctx;
-  fillCtxParams(ctx);
+  fillCtxParams(ctx, true);
+
+  // The planner cannot represent per-request VAE convolution changes.
+  // Avoid a fit verdict for a different execution graph. H3 retains the
+  // engine's default graph, which the planner already represents.
+  if (!workload.upscaleOnly && qvac_lib_inference_addon_sd::useVaeGemm(
+                                   ctx.profile,
+                                   workload.width,
+                                   workload.height,
+                                   1,
+                                   UINT64_MAX,
+                                   workload.vaeTiling))
+    return {};
 
   // `sd_fit_params` answers any pinned placement with SD_FIT_FAILURE, and a
   // `device` of cpu reaches it as `preferred_gpu_backend`, which its planner
@@ -755,6 +786,15 @@ void SdModel::load() {
   }
 
   sdCtx_.reset(raw);
+  performanceProfile_ = ctx.profile;
+  performanceBackend_ = params.backend == nullptr ? "" : params.backend;
+  QLOG_IF(
+      qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+      "Performance profile: flash=" +
+          std::to_string(performanceProfile_.flashAttention) +
+          ", vae_gemm_candidate=" +
+          std::to_string(performanceProfile_.vaeGemm) +
+          ", ltx_f16=" + std::to_string(performanceProfile_.ltxF16));
 
   // LTX-2 is identified by the embeddings-connectors input, which no other
   // model family uses. Its temporal shape is used for per-job validation.
@@ -1149,6 +1189,32 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
     } // end single-image else (nMulti == 0)
   } // end gen.mode == "img2img"
 
+  // Reference decoding can change the output dimensions. Select convolution
+  // only after the effective output and reference shapes are known.
+  if (performanceProfile_.vaeGemm) {
+    const auto device = qvac_lib_inference_addon_sd::profileDevice(
+        performanceBackend_.c_str(), SD_BACKEND_PREF_GPU);
+    const bool gemm = gen.loraPath.empty() &&
+                      qvac_lib_inference_addon_sd::useVaeGemm(
+                          performanceProfile_,
+                          genParams.width,
+                          genParams.height,
+                          genParams.batch_count,
+                          device.freeBytes,
+                          gen.vaeTiling,
+                          std::span<const sd_image_t>{
+                              genParams.ref_images,
+                              static_cast<size_t>(genParams.ref_images_count)});
+    if (!sd_set_vae_conv_direct(sdCtx_.get(), !gemm))
+      throw StatusError(
+          general_error::InternalError,
+          "VAE performance profile could not be applied");
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        std::string("Automatic VAE convolution: ") +
+            (gemm ? "GEMM" : "direct"));
+  }
+
   // -- Generate --------------------------------------------------------------
   // stable-diffusion.cpp invokes sample() once per image batch item before
   // decoding all final latents; each sampler sequence reports total ==
@@ -1539,6 +1605,8 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
             "x" + std::to_string(vid.height));
 
   // -- Decode init / end / control-frame images -----------------------------
+  qvac_lib_inference_addon_sd::validatePerformanceWorkload(
+      config_, vid.width, vid.height, vid.videoFrames);
   // sd_image_t::data is allocated by stb_image via malloc(), so we wrap each
   // pixel buffer in unique_ptr with image_codec::FreeDeleter to guarantee
   // release on every exit path (including exceptions from generate_video()

@@ -433,6 +433,14 @@ const RULES: Rule[] = [
     }
   },
   {
+    match: /^diffusion-moss-/,
+    skip: {
+      reason:
+        'MOSS-Image runs on the Linux JS leg only: its 15 GiB model set is not worth pulling on every desktop leg',
+      platforms: ['desktop-macos', 'desktop-windows', 'desktop-python']
+    }
+  },
+  {
     match: ['tools-simple-function-gemma4'],
     skip: {
       reason:

@@ -54,9 +54,16 @@ on a synthetic 100 x 200 pair. The DPN picks two disparity proposals per pixel
 with a top-k over 40 candidates, most of which tie at the same masked value.
 torch.topk keeps the lowest tied index and this port does the same: a tie
 choice that changes from pixel to pixel costs accuracy, one fixed rule does
-not. Metal, and Vulkan on devices with fp16 or coopmat2, stage F32 matrix
-products in half precision, so they sit slightly further from the reference
-than CPU and CUDA.
+not.
+
+The CPU runs F32 throughout. Every GPU backend runs parts of the graph in half
+precision: the linear weights are held as F16 on the device, converted at
+load so the GGUF does not change; the convs run as F16 direct convs on CUDA
+and Vulkan, and through an F16 im2col on the other GPU backends; the ViT
+attention runs fused where the backend supports it. `depth_feature_down` and
+the DPN prior projection stay F32. So the GPU backends sit slightly further
+from the reference than the CPU: the tests hold the CPU to 99.9% of pixels
+within 0.05 px of the reference and a GPU to 99% within 0.2 px.
 
 The CUDA backend uses the CUDA 13 runtime installed on the host
 (`libcudart.so.13`, `libcublas.so.13`, `libcublasLt.so.13` on Linux); Fabric

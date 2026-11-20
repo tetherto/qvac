@@ -70,8 +70,9 @@ struct SdCtxConfig {
   std::string clipVisionPath; // clip_vision_path     -- CLIP vision encoder
                               // (OpenCLIP ViT-H/14) for Wan 2.1 I2V
   std::string esrganPath; // ESRGAN upscaler model for post-generation upscale
-  std::string taesdPath;  // taesd_path            -- Tiny AutoEncoder (optional
-                          // fast preview)
+  std::string coremlUnetPath;
+  std::string coremlTaeDecoderPath;
+  std::string taesdPath; // Tiny AutoEncoder decoder/preview weights
   // -- LTX-2 (LTXAV) video model inputs --------------------------------------
   // LTX-2 reuses diffusionModelPath (diffusion transformer), llmPath (Gemma
   // text encoder) and vaePath (video VAE). These two are LTX-only extras:
@@ -84,6 +85,13 @@ struct SdCtxConfig {
   bool flashAttn = false; // flash_attn:           full-model flash attention
   bool diffusionFlashAttn =
       true; // diffusion_flash_attn: flash attention on diffusion only
+  std::string performanceProfile = "auto";
+  int performanceMaxWidth = 0;
+  int performanceMaxHeight = 0;
+  int performanceMaxFrames = 0;
+  bool explicitFlashAttention = false;
+  bool explicitVaeConvDirect = false;
+  bool explicitTensorTypeRules = false;
 
   // -- Memory management -----------------------------------------------------
   bool mmap = false;         // enable_mmap:           memory-map the GGUF file
