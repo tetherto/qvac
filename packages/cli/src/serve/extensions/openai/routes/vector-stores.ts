@@ -1,12 +1,5 @@
 import type { FastifyReply } from 'fastify'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
-import {
-  ragListWorkspaces,
-  ragSearch,
-  ragDeleteWorkspace,
-  ragCloseWorkspace,
-  ragIngest
-} from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 import {
   vectorStoreIdParams,
@@ -27,6 +20,11 @@ import {
   type VectorStoreMeta
 } from '@/serve/core/stores/vector-stores'
 import {
+  EmbeddingModelChangedError,
+  VectorStoreInUseError,
+  type EmbeddingModelRef
+} from '@/serve/extensions/openai/adapters/rag-backend'
+import {
   vectorStoreToOpenAI,
   searchResultsToOpenAI,
   type VectorStoreRagInfo
@@ -37,50 +35,51 @@ import { ensureReady } from '@/serve/core/plugins/require-model'
 import { openaiState } from '@/serve/extensions/openai/state'
 
 const SYNTHETIC_TIMESTAMP = 0
+const DEFAULT_SEARCH_RESULTS = 5
 
 const descriptions = {
-  list: 'Merge of in-memory metadata records and live RAG workspaces. Workspaces with no local metadata appear as synthetics (`createdAt: 0`).',
+  list: 'Merge of in-memory metadata records and the stores that hold ingested files on disk. Stores with no local metadata appear as synthetics (`createdAt: 0`).',
   create: `
-Create an in-memory metadata record for a new vector store. The RAG workspace
-itself is created lazily on the first \`POST /v1/vector_stores/{id}/files\`.
+Create an in-memory metadata record for a new vector store. Its on-disk data
+is created on the first \`POST /v1/vector_stores/{id}/files\`.
 
 **\`file_ids\`** on create is logged as ignored — attach files separately via
 \`POST /v1/vector_stores/{id}/files\` after uploading them through
 \`POST /v1/files\`.
 
-**\`chunking_strategy\`** is logged as ignored — chunking is configured via the
-SDK's ingest options, not per-request.
+**\`chunking_strategy\`** is logged as ignored — files are chunked with the
+\`@qvac/rag\` defaults (256 tokens, 50 overlap).
 
 \`expires_after\` accepts only \`{ anchor: 'last_active_at', days: <positive int> }\`.
 `.trim(),
   getById:
-    'Returns the merged view (local metadata + RAG workspace info). If only the workspace exists, a synthetic record is returned with `createdAt: 0`.',
+    'Returns the merged view (local metadata + on-disk store). If only the on-disk store exists, a synthetic record is returned with `createdAt: 0`.',
   updateById:
-    'Patch `name` / `expires_after` / `metadata` on the in-memory metadata record. If the store exists only as a disk-only RAG workspace, a local metadata record is materialized first.',
+    'Patch `name` / `expires_after` / `metadata` on the in-memory metadata record. If the store exists only on disk, a local metadata record is materialized first.',
   deleteById:
-    'Delete both the in-memory metadata record AND the underlying RAG workspace. If the RAG delete fails, the metadata is preserved so a retry sees the same state (avoids losing caller-supplied fields).',
+    'Delete both the in-memory metadata record AND the ingested files. Rejected with `vector_store_in_use` (409) while another server on the same data directory has the store open. If removing the files from disk fails, the request fails but the store is already gone; the leftover data is removed on a later request.',
   search: `
-Vector search over a workspace via SDK \`ragSearch()\`.
+Vector search over the store's files with \`@qvac/rag\`.
 
 **Requires an embedding model** configured under \`serve.models\`. Exactly one
 default embedding (or a single embedding alias) must resolve, or the request
 fails with \`no_embedding_model_configured\` / \`ambiguous_embedding_model\`.
 
-**Embedding-model mismatch**: if the store was ingested under a different
-embedding alias, requests are rejected with \`embedding_model_mismatch\` to
-prevent silent precision loss.
+**Embedding-model mismatch**: if the store was ingested with other weights or
+another load config (such as pooling), requests are rejected with
+\`embedding_model_mismatch\` to prevent silent precision loss.
+
+**In use**: a store is open in one server at a time. While another server on
+the same data directory holds it, requests fail with \`vector_store_in_use\` (409).
 
 **Ignored params** (logged, not rejected): \`filters\`, \`ranking_options\`,
-\`rewrite_query\`. Only \`max_num_results\` (mapped to SDK \`topK\`) is
-forwarded.
+\`rewrite_query\`. Only \`max_num_results\` (default 5) is forwarded.
 
-Hit attribution carries the original upload's \`file_id\` and \`filename\`
-when known (from the \`POST /v1/vector_stores/{id}/files\` step); falls back
-to the raw chunk id for workspaces ingested out-of-band.
+Each hit carries the \`file_id\` and \`filename\` of the upload it came from.
 `.trim(),
   attachFile: `
 Ingest a previously-uploaded ephemeral file (\`POST /v1/files\`) into the
-RAG workspace.
+vector store. Attaching the same \`file_id\` again replaces its chunks.
 
 **UTF-8 text only.** Binary uploads are rejected with
 \`unsupported_file_type\` via a NUL-byte sniff over the first 8 KB
@@ -88,9 +87,7 @@ RAG workspace.
 \`empty_file\`.
 
 **Side effects**: on success the file is removed from the ephemeral-files
-store, the store's \`embeddingAlias\` is recorded, and per-chunk attributions
-are stored so subsequent searches return the file's id / filename instead of
-opaque chunk ids.
+store and the store's \`embeddingAlias\` is recorded.
 
 Same embedding-model resolution + mismatch rules as
 \`POST /v1/vector_stores/{id}/search\`.
@@ -100,6 +97,7 @@ Same embedding-model resolution + mismatch rules as
 // lunte-disable-next-line require-await
 const plugin: FastifyPluginAsyncZod = async (app) => {
   const openai = openaiState(app.qvac)
+  app.addHook('onClose', () => openai.ragBackend.close())
 
   app.get(
     '/v1/vector_stores',
@@ -112,7 +110,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     },
     async () => {
       const ctx = app.qvac
-      const ragInfo = await safeListWorkspaces(ctx)
+      const ragInfo = await safeListStores(ctx)
       const local = openai.vectorStores.list()
       const merged = mergeStoresAndWorkspaces(local, ragInfo.workspaces)
       return {
@@ -153,7 +151,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       }
       if (body.chunking_strategy !== undefined) {
         ctx.logger.warn(
-          'Ignoring "chunking_strategy": chunking is configured via SDK ingest options.'
+          'Ignoring "chunking_strategy": files are chunked with the @qvac/rag defaults.'
         )
       }
 
@@ -182,7 +180,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     async (req) => {
       const ctx = app.qvac
       const id = decodeId(req.params.id)
-      const ragInfo = await safeListWorkspaces(ctx)
+      const ragInfo = await safeListStores(ctx)
       const meta = openai.vectorStores.get(id) ?? syntheticFromWorkspace(id, ragInfo.workspaces)
       if (!meta) {
         throw new HttpError(404, 'vector_store_not_found', `Vector store "${id}" not found.`)
@@ -212,7 +210,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         throwInputError(err)
       }
 
-      const ragInfo = await safeListWorkspaces(ctx)
+      const ragInfo = await safeListStores(ctx)
       let meta = openai.vectorStores.get(id)
       if (!meta) {
         const synthetic = syntheticFromWorkspace(id, ragInfo.workspaces)
@@ -256,7 +254,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     async (req) => {
       const ctx = app.qvac
       const id = decodeId(req.params.id)
-      const ragInfo = await safeListWorkspaces(ctx)
+      const ragInfo = await safeListStores(ctx)
       const hadMeta = openai.vectorStores.get(id) !== null
       const workspaceExists = ragInfo.workspaces.some((w) => w.name === id)
       if (!hadMeta && !workspaceExists) {
@@ -264,21 +262,23 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       }
       if (workspaceExists) {
         try {
-          await ragDeleteWorkspace({ workspace: id })
+          await openai.ragBackend.delete(id)
         } catch (err) {
+          if (err instanceof VectorStoreInUseError) {
+            throw new HttpError(409, 'vector_store_in_use', err.message)
+          }
           const message = err instanceof Error ? err.message : String(err)
-          ctx.logger.error(`Failed to delete RAG workspace "${id}": ${message}`)
+          ctx.logger.error(`Failed to delete the files of vector store "${id}": ${message}`)
           throw new HttpError(
             500,
             'vector_store_delete_failed',
-            'Failed to delete underlying RAG workspace.'
+            'Failed to delete the vector store files.'
           )
         }
       }
       openai.vectorStores.delete(id)
-      openai.chunkAttributions.evict(id)
       ctx.logger.info(
-        `  vector_store delete id=${id} workspace=${workspaceExists ? 'deleted' : 'noop'}`
+        `  vector_store delete id=${id} files=${workspaceExists ? 'deleted' : 'none'}`
       )
       return { id, object: 'vector_store.deleted' as const, deleted: true }
     }
@@ -304,9 +304,9 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           ctx.logger.warn(`Ignoring unsupported vector_store search param: ${param}`)
         }
       }
-      const topK = body.max_num_results
+      const topK = body.max_num_results ?? DEFAULT_SEARCH_RESULTS
 
-      const ragInfo = await safeListWorkspaces(ctx)
+      const ragInfo = await safeListStores(ctx)
       const meta = openai.vectorStores.get(id) ?? syntheticFromWorkspace(id, ragInfo.workspaces)
       if (!meta) {
         throw new HttpError(404, 'vector_store_not_found', `Vector store "${id}" not found.`)
@@ -314,32 +314,26 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 
       const embedding = await resolveEmbeddingModel(ctx, reply)
       if (!embedding.ok) throw new HttpError(embedding.status, embedding.code, embedding.message)
-      if (meta.embeddingAlias !== null && meta.embeddingAlias !== embedding.entry.alias) {
-        throw new HttpError(
-          400,
-          'embedding_model_mismatch',
-          `Vector store "${id}" was previously ingested with embedding "${meta.embeddingAlias}"; ` +
-            `current request resolves to "${embedding.entry.alias}". Mark "${meta.embeddingAlias}" as the default ` +
-            'embedding under serve.models, or create a new vector store.'
-        )
-      }
+      await assertSameEmbedding(openai, id, meta.embeddingAlias, embedding.entry.alias)
 
       openai.vectorStores.touch(id)
       ctx.logger.info(
-        `  vector_store search id=${id} model=${embedding.entry.alias} q.len=${body.query.length}${topK ? ` topK=${topK}` : ''}`
+        `  vector_store search id=${id} model=${embedding.entry.alias} q.len=${body.query.length} topK=${topK}`
       )
 
       try {
-        const results = await ragSearch({
-          modelId: embedding.sdkModelId,
-          query: body.query,
-          ...(topK !== undefined ? { topK } : {}),
-          workspace: id
-        })
-        return searchResultsToOpenAI(results, body.query, (chunkId) =>
-          openai.chunkAttributions.lookup(id, chunkId)
+        const results = await openai.ragBackend.search(
+          id,
+          embeddingModelRef(embedding),
+          body.query,
+          topK
         )
+        return searchResultsToOpenAI(results, body.query)
       } catch (err) {
+        if (err instanceof EmbeddingModelChangedError) throwModelChanged(err)
+        if (err instanceof VectorStoreInUseError) {
+          throw new HttpError(409, 'vector_store_in_use', err.message)
+        }
         const message = err instanceof Error ? err.message : String(err)
         ctx.logger.error(`Vector store search error for "${id}": ${message}`)
         throw new HttpError(
@@ -347,8 +341,6 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           'vector_store_search_failed',
           'An internal error occurred during vector store search.'
         )
-      } finally {
-        await closeWorkspaceQuiet(ctx, id, 'search')
       }
     }
   )
@@ -369,7 +361,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       const id = decodeId(req.params.id)
       const fileId = req.body.file_id
 
-      const ragInfo = await safeListWorkspaces(ctx)
+      const ragInfo = await safeListStores(ctx)
       let meta = openai.vectorStores.get(id)
       if (!meta) {
         const synthetic = syntheticFromWorkspace(id, ragInfo.workspaces)
@@ -393,15 +385,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 
       const embedding = await resolveEmbeddingModel(ctx, reply)
       if (!embedding.ok) throw new HttpError(embedding.status, embedding.code, embedding.message)
-      if (meta.embeddingAlias !== null && meta.embeddingAlias !== embedding.entry.alias) {
-        throw new HttpError(
-          400,
-          'embedding_model_mismatch',
-          `Vector store "${id}" was previously ingested with embedding "${meta.embeddingAlias}"; ` +
-            `current request resolves to "${embedding.entry.alias}". Mark "${meta.embeddingAlias}" as the default ` +
-            'embedding under serve.models, or create a new vector store.'
-        )
-      }
+      await assertSameEmbedding(openai, id, meta.embeddingAlias, embedding.entry.alias)
 
       const record = ctx.files.get(fileId)
       if (record === null) {
@@ -433,15 +417,17 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         `  vector_store files attach id=${id} file_id=${fileId} bytes=${record.data.length} embed=${embedding.entry.alias}`
       )
 
-      let ingestResult: { processed: unknown[]; droppedIndices: number[] }
       try {
-        ingestResult = await ragIngest({
-          modelId: embedding.sdkModelId,
-          documents: text,
-          workspace: id,
-          chunk: true
+        await openai.ragBackend.attach(id, embeddingModelRef(embedding), {
+          fileId,
+          fileName: record.fileName,
+          text
         })
       } catch (err) {
+        if (err instanceof EmbeddingModelChangedError) throwModelChanged(err)
+        if (err instanceof VectorStoreInUseError) {
+          throw new HttpError(409, 'vector_store_in_use', err.message)
+        }
         const message = err instanceof Error ? err.message : String(err)
         ctx.logger.error(`Vector store ingest error for "${id}": ${message}`)
         throw new HttpError(
@@ -449,12 +435,9 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           'vector_store_ingest_failed',
           'An internal error occurred while ingesting file content into the vector store.'
         )
-      } finally {
-        await closeWorkspaceQuiet(ctx, id, 'ingest')
       }
 
       openai.vectorStores.setEmbedding(id, embedding.entry.alias)
-      recordChunkAttributions(ctx, id, fileId, record.fileName, ingestResult.processed)
       ctx.files.remove(fileId)
 
       return {
@@ -527,41 +510,49 @@ function throwInputError(err: unknown): never {
   throw err
 }
 
-interface RagInfo {
-  workspaces: Array<{ name: string; open: boolean }>
+interface StoredWorkspace {
+  name: string
 }
 
-async function safeListWorkspaces(ctx: QvacContext): Promise<RagInfo> {
+interface RagInfo {
+  workspaces: StoredWorkspace[]
+}
+
+async function safeListStores(ctx: QvacContext): Promise<RagInfo> {
   try {
-    const workspaces = await ragListWorkspaces()
-    return { workspaces }
+    const ids = await openaiState(ctx).ragBackend.list()
+    return { workspaces: ids.map((name) => ({ name })) }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    ctx.logger.warn(`ragListWorkspaces failed; assuming none: ${message}`)
+    ctx.logger.warn(`Listing vector stores on disk failed; assuming none: ${message}`)
     return { workspaces: [] }
   }
 }
 
-async function closeWorkspaceQuiet(ctx: QvacContext, id: string, op: string): Promise<void> {
-  try {
-    await ragCloseWorkspace({ workspace: id })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    ctx.logger.warn(`ragCloseWorkspace after ${op} failed for "${id}": ${message}`)
-  }
+async function assertSameEmbedding(
+  openai: ReturnType<typeof openaiState>,
+  id: string,
+  recorded: string | null,
+  requested: string
+): Promise<void> {
+  const previous = recorded ?? (await openai.ragBackend.embeddingAlias(id))
+  if (previous === null || previous === requested) return
+  throw new HttpError(
+    400,
+    'embedding_model_mismatch',
+    `Vector store "${id}" was previously ingested with embedding "${previous}"; ` +
+      `current request resolves to "${requested}". Mark "${previous}" as the default ` +
+      'embedding under serve.models, or create a new vector store.'
+  )
 }
 
-function workspaceInfoFor(
-  id: string,
-  workspaces: Array<{ name: string; open: boolean }>
-): VectorStoreRagInfo {
-  const found = workspaces.find((w) => w.name === id)
-  return found ? { exists: true, open: found.open } : { exists: false }
+function workspaceInfoFor(id: string, workspaces: StoredWorkspace[]): VectorStoreRagInfo {
+  return { exists: workspaces.some((w) => w.name === id) }
 }
 
 export function syntheticFromWorkspace(
   id: string,
-  workspaces: Array<{ name: string; open: boolean }>
+  workspaces: StoredWorkspace[]
 ): VectorStoreMeta | null {
   const found = workspaces.find((w) => w.name === id)
   if (!found) return null
@@ -584,7 +575,7 @@ interface MergedEntry {
 
 function mergeStoresAndWorkspaces(
   local: VectorStoreMeta[],
-  workspaces: Array<{ name: string; open: boolean }>
+  workspaces: StoredWorkspace[]
 ): MergedEntry[] {
   const seen = new Set<string>()
   const merged: MergedEntry[] = []
@@ -595,7 +586,7 @@ function mergeStoresAndWorkspaces(
   for (const ws of workspaces) {
     if (seen.has(ws.name)) continue
     const synthetic = syntheticFromWorkspace(ws.name, workspaces)
-    if (synthetic) merged.push({ meta: synthetic, ragInfo: { exists: true, open: ws.open } })
+    if (synthetic) merged.push({ meta: synthetic, ragInfo: { exists: true } })
   }
   merged.sort((a, b) => b.meta.createdAt - a.meta.createdAt)
   return merged
@@ -606,21 +597,34 @@ export function looksBinary(data: Buffer): boolean {
   return window.includes(0)
 }
 
-function recordChunkAttributions(
-  ctx: QvacContext,
-  vectorStoreId: string,
-  fileId: string,
-  fileName: string,
-  processed: unknown[]
-): void {
-  const openai = openaiState(ctx)
-  for (const entry of processed) {
-    if (typeof entry !== 'object' || entry === null) continue
-    const e = entry as { status?: unknown; id?: unknown }
-    if (e.status !== 'fulfilled') continue
-    if (typeof e.id !== 'string') continue
-    openai.chunkAttributions.record(vectorStoreId, e.id, { fileId, fileName })
+function embeddingModelRef(embedding: EmbeddingResolutionOk): EmbeddingModelRef {
+  const src = embedding.entry.modelSrc
+  return {
+    alias: embedding.entry.alias,
+    sdkModelId: embedding.sdkModelId,
+    model: typeof src === 'string' ? src : src.src,
+    revision: typeof src === 'string' ? '' : src.sha256Checksum,
+    config: stableJson(embedding.entry.config)
   }
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableJson(v)}`).join(',')}}`
+  }
+  return JSON.stringify(value)
+}
+
+function throwModelChanged(err: EmbeddingModelChangedError): never {
+  throw new HttpError(
+    400,
+    'embedding_model_mismatch',
+    `${err.message} Point the alias back at that model, or create a new vector store.`
+  )
 }
 
 interface EmbeddingResolutionOk {

@@ -37,7 +37,6 @@ import { MobileVisionExecutor } from './executors/vision-executor.js'
 import { MobileOcrExecutor } from './executors/ocr-executor.js'
 import { VlaExecutor } from '../shared/executors/vla-executor.js'
 import { MobileClassificationExecutor } from './executors/classification-executor.js'
-import { MobileRagExecutor } from './executors/rag-executor.js'
 import { VectorIndexExecutor } from '../shared/executors/vector-index-executor.js'
 import { MobileConfigReloadExecutor } from './executors/config-reload-executor.js'
 import { MobileTtsExecutor } from './executors/tts-executor.js'
@@ -215,7 +214,6 @@ export const executor = createExecutor({
     new EmbeddingGemma2Executor(resources, resolveTableAsset),
     new DecisionExecutor(resources),
     new RerankExecutor(resources),
-    new MobileRagExecutor(resources),
     new VectorIndexExecutor(resources),
     new ModelInfoExecutor(resources),
     new ModelFitExecutor(resources, hostLlamaOnCpu),

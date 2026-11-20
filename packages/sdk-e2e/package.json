@@ -26,7 +26,7 @@
     "clean": "rm -rf dist",
     "clean:build": "npm run unpin:consumer-inference && rm -rf dist build out qvac .sdk-e2e snap/dist snap/electron-dist snap/parts snap/prime snap/stage",
     "clean:config": "rm -rf qvac.config.json qvac.config.e2e.generated.json",
-    "clean:cache": "rm -rf .qvac-cache .qvac-worker-backup rag-hyperdb rag-turbovec",
+    "clean:cache": "rm -rf .qvac-cache .qvac-worker-backup",
     "clean:dependencies": "rm -rf node_modules package-lock.json ../sdk/node_modules ../sdk/dist ../sdk/bun.lock ../sdk/package-lock.json ../inference/node_modules ../inference/dist ../inference/bun.lock ../inference/package-lock.json",
     "clean:all": "npm run clean:build && npm run clean:config && npm run clean:cache && npm run clean:dependencies",
     "clean:sdk-snapshot": "rm -rf node_modules/@qvac/sdk build/consumers/ios/node_modules/@qvac/sdk build/consumers/android/node_modules/@qvac/sdk",

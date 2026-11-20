@@ -156,32 +156,6 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND", reportedCode, message, payload)
     class ServerQvacModelRegistryQueryFailed(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("QVAC_MODEL_REGISTRY_QUERY_FAILED", reportedCode, message, payload)
-    class ServerRagChunkFailed(message: String, payload: JsonObject, reportedCode: Int?) :
-        QvacKnownException("RAG_CHUNK_FAILED", reportedCode, message, payload)
-    class ServerRagDeleteFailed(message: String, payload: JsonObject, reportedCode: Int?) :
-        QvacKnownException("RAG_DELETE_FAILED", reportedCode, message, payload)
-    class ServerRagHyperdbFailed(message: String, payload: JsonObject, reportedCode: Int?) :
-        QvacKnownException("RAG_HYPERDB_FAILED", reportedCode, message, payload)
-    class ServerRagListWorkspacesFailed(message: String, payload: JsonObject, reportedCode: Int?) :
-        QvacKnownException("RAG_LIST_WORKSPACES_FAILED", reportedCode, message, payload)
-    class ServerRagSaveFailed(message: String, payload: JsonObject, reportedCode: Int?) :
-        QvacKnownException("RAG_SAVE_FAILED", reportedCode, message, payload)
-    class ServerRagSearchFailed(message: String, payload: JsonObject, reportedCode: Int?) :
-        QvacKnownException("RAG_SEARCH_FAILED", reportedCode, message, payload)
-    class ServerRagUnknownOperation(message: String, payload: JsonObject, reportedCode: Int?) :
-        QvacKnownException("RAG_UNKNOWN_OPERATION", reportedCode, message, payload)
-    class ServerRagWorkspaceBusy(message: String, payload: JsonObject, reportedCode: Int?) :
-        QvacKnownException("RAG_WORKSPACE_BUSY", reportedCode, message, payload)
-    class ServerRagWorkspaceCloseFailed(message: String, payload: JsonObject, reportedCode: Int?) :
-        QvacKnownException("RAG_WORKSPACE_CLOSE_FAILED", reportedCode, message, payload)
-    class ServerRagWorkspaceInUse(message: String, payload: JsonObject, reportedCode: Int?) :
-        QvacKnownException("RAG_WORKSPACE_IN_USE", reportedCode, message, payload)
-    class ServerRagWorkspaceModelMismatch(message: String, payload: JsonObject, reportedCode: Int?) :
-        QvacKnownException("RAG_WORKSPACE_MODEL_MISMATCH", reportedCode, message, payload)
-    class ServerRagWorkspaceNotFound(message: String, payload: JsonObject, reportedCode: Int?) :
-        QvacKnownException("RAG_WORKSPACE_NOT_FOUND", reportedCode, message, payload)
-    class ServerRagWorkspaceNotOpen(message: String, payload: JsonObject, reportedCode: Int?) :
-        QvacKnownException("RAG_WORKSPACE_NOT_OPEN", reportedCode, message, payload)
     class ServerRegistryDownloadFailed(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("REGISTRY_DOWNLOAD_FAILED", reportedCode, message, payload)
     class ServerRequestIdConflict(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -390,19 +364,6 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "QVAC_MODEL_REGISTRY_BUSY" && (code == null || code == 53952) -> QvacKnownException.ServerQvacModelRegistryBusy(message, payload, code)
     name == "QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND" && (code == null || code == 53951) -> QvacKnownException.ServerQvacModelRegistryModelNotFound(message, payload, code)
     name == "QVAC_MODEL_REGISTRY_QUERY_FAILED" && (code == null || code == 53950) -> QvacKnownException.ServerQvacModelRegistryQueryFailed(message, payload, code)
-    name == "RAG_CHUNK_FAILED" && (code == null || code == 52810) -> QvacKnownException.ServerRagChunkFailed(message, payload, code)
-    name == "RAG_DELETE_FAILED" && (code == null || code == 52802) -> QvacKnownException.ServerRagDeleteFailed(message, payload, code)
-    name == "RAG_HYPERDB_FAILED" && (code == null || code == 52804) -> QvacKnownException.ServerRagHyperdbFailed(message, payload, code)
-    name == "RAG_LIST_WORKSPACES_FAILED" && (code == null || code == 52809) -> QvacKnownException.ServerRagListWorkspacesFailed(message, payload, code)
-    name == "RAG_SAVE_FAILED" && (code == null || code == 52800) -> QvacKnownException.ServerRagSaveFailed(message, payload, code)
-    name == "RAG_SEARCH_FAILED" && (code == null || code == 52801) -> QvacKnownException.ServerRagSearchFailed(message, payload, code)
-    name == "RAG_UNKNOWN_OPERATION" && (code == null || code == 52803) -> QvacKnownException.ServerRagUnknownOperation(message, payload, code)
-    name == "RAG_WORKSPACE_BUSY" && (code == null || code == 52812) -> QvacKnownException.ServerRagWorkspaceBusy(message, payload, code)
-    name == "RAG_WORKSPACE_CLOSE_FAILED" && (code == null || code == 52808) -> QvacKnownException.ServerRagWorkspaceCloseFailed(message, payload, code)
-    name == "RAG_WORKSPACE_IN_USE" && (code == null || code == 52807) -> QvacKnownException.ServerRagWorkspaceInUse(message, payload, code)
-    name == "RAG_WORKSPACE_MODEL_MISMATCH" && (code == null || code == 52805) -> QvacKnownException.ServerRagWorkspaceModelMismatch(message, payload, code)
-    name == "RAG_WORKSPACE_NOT_FOUND" && (code == null || code == 52806) -> QvacKnownException.ServerRagWorkspaceNotFound(message, payload, code)
-    name == "RAG_WORKSPACE_NOT_OPEN" && (code == null || code == 52811) -> QvacKnownException.ServerRagWorkspaceNotOpen(message, payload, code)
     name == "REGISTRY_DOWNLOAD_FAILED" && (code == null || code == 53015) -> QvacKnownException.ServerRegistryDownloadFailed(message, payload, code)
     name == "REQUEST_ID_CONFLICT" && (code == null || code == 52417) -> QvacKnownException.ServerRequestIdConflict(message, payload, code)
     name == "REQUEST_NOT_FOUND" && (code == null || code == 52418) -> QvacKnownException.ServerRequestNotFound(message, payload, code)

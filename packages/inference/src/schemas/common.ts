@@ -66,7 +66,6 @@ import {
   textToSpeechStreamResponseSchema
 } from '@/schemas/text-to-speech'
 import { errorResponseSchema } from '@/schemas/error'
-import { ragRequestSchema, ragResponseSchema, ragProgressUpdateSchema } from '@/schemas/rag'
 import { vectorIndexRequestSchema, vectorIndexResponseSchema } from '@/schemas/vector-index'
 import {
   getModelInfoRequestSchema,
@@ -163,7 +162,6 @@ export const requestSchema = z.union([
   ttsRequestSchema,
   textToSpeechStreamRequestSchema,
   cancelRequestSchema,
-  ragRequestSchema,
   vectorIndexRequestSchema,
   deleteCacheRequestSchema,
   getModelInfoRequestSchema,
@@ -220,8 +218,6 @@ export const responseSchema = z.discriminatedUnion('type', [
   textToSpeechStreamResponseSchema,
   cancelResponseSchema,
   errorResponseSchema,
-  ragResponseSchema,
-  ragProgressUpdateSchema,
   vectorIndexResponseSchema,
   deleteCacheResponseSchema,
   getModelInfoResponseSchema,

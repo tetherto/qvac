@@ -14,17 +14,6 @@ export { embed, embedBatch } from '@/api/embed'
 export { finetune, type FinetuneHandle } from '@/api/finetune'
 export { translate } from '@/api/translate'
 export { cancel } from '@/api/cancel'
-export {
-  ragChunk,
-  ragIngest,
-  ragSaveEmbeddings,
-  ragSearch,
-  ragDeleteEmbeddings,
-  ragReindex,
-  ragListWorkspaces,
-  ragCloseWorkspace,
-  ragDeleteWorkspace
-} from '@/api/rag'
 export { createVectorIndex, loadVectorIndex, type VectorIndex } from '@/api/vector-index'
 export { textToSpeech, textToSpeechStream } from '@/api/text-to-speech'
 export { getModelInfo } from '@/api/get-model-info'

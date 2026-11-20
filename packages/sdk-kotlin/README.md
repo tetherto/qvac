@@ -452,7 +452,7 @@ val actions = client.vla.run(
 
 Higher-level wrappers also cover BCI transcription, classification, audio
 generation, diffusion, video, world generation, upscaling, and VLA.
-`registry`, `plugins`, `retrieval`, and `training` expose typed request helpers;
+`registry`, `plugins`, and `training` expose typed request helpers;
 `completion.batch` exposes batch generation. `system.pause/resume/state` use the
 worker lifecycle API, while `resources(includeUsageSnapshot = true)` keeps the
 wire key `sample` internal. `serverLogs()` returns a cold log Flow;

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type Buffer from 'bare-buffer'
-import type { TurboVecIndexProvider } from '@qvac/rag'
+import type { TurboVecIndexProvider } from '@/plugins/turbovec-index'
 import type {
   ModelFitModelResult,
   TranscriptionFitWorkload,

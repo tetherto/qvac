@@ -97,32 +97,6 @@ export function summarizeRequest(request: Request): Record<string, unknown> {
     return summary
   }
 
-  if (request.type === 'rag') {
-    const op = request['operation']
-    if (op === 'ingest' || op === 'chunk') {
-      summary['operation'] = op
-      if ('workspace' in request) summary['workspace'] = request['workspace']
-      const docs = request['documents']
-      if (Array.isArray(docs)) {
-        const totalLen = docs.reduce((sum, d) => sum + d.length, 0)
-        summary['documents'] = `[${docs.length} docs, ${totalLen} chars]`
-      } else if (docs.length > 200) {
-        summary['documents'] = `[${docs.length} chars]`
-      } else {
-        summary['documents'] = docs
-      }
-      return summary
-    }
-    if (op === 'saveEmbeddings') {
-      summary['operation'] = op
-      if ('workspace' in request) summary['workspace'] = request['workspace']
-      const docs = request['documents']
-      const dims = docs[0]?.embedding?.length ?? 0
-      summary['documents'] = `[${docs.length} docs with ${dims}-dim embeddings]`
-      return summary
-    }
-  }
-
   // All other requests - return full request (no large payloads)
   return request
 }

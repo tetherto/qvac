@@ -70,7 +70,6 @@ extra.
 | `multimodal.py`                    | `llamacpp-multimodal.ts`                               | image `attachments` on a `completion` history; `projectionModelSrc` loaded alongside the LLM                              |
 | `cancel.py`                        | `cancel-by-request-id.ts`                              | `cancel` by `request_id`, `InferenceCancelledError`                                                                       |
 | `embeddings.py`                    | `embed-p2p.ts`                                         | `embed` (`EmbedRequest`)                                                                                                  |
-| `rag_managed.py`                   | `rag/rag-hyperdb/ingest.ts`                            | `rag` (`RagRequest`) — `ingest`, `search`, `closeWorkspace` against the built-in vector store                             |
 | `rag_turbovec.py`                  | `rag/rag-turbovec.ts`                                  | `vector_index` (`VectorIndexRequest`) — TurboVec index over `embed` vectors, with snapshot `write`/`load`                 |
 | `rag_turbovec_ivf.py`              | `rag/rag-turbovec-ivf.ts`                              | `vector_index` `setIvf` on an F32 index: IVF lists, per-call `nProbe` on `search`, rebuilt after `add`, off with `None`   |
 | `rag_mongodb.py`                   | `rag/rag-mongodb.ts`                                   | `embed` into MongoDB Atlas Vector Search: `$vectorSearch` with a pre-filter (needs `pymongo`)                             |
