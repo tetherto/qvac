@@ -14487,6 +14487,20 @@
                       "enum": ["on", "auto", "off"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigTensorReadLazy"
                     },
+                    "coreml-ffn": {
+                      "description": "Run part of each prompt-processing FFN through a Core ML sidecar on macOS and iOS, with the rest on Metal; decode stays on Metal. Supported for Qwen3.5 0.8B, 2B, 4B and 9B (and Qwen3.8-27B), with the split picked from the model: 1024x1, 2048x1, 2560x1 and 4096x1. Only prompt batches of 256 or more tokens use it, so keep `ubatch-size` at 256 or above. The first load exports and compiles the sidecar into `coreml-ffn-cache` from the GGUF, and later loads reuse it. The sidecar stays resident beside the GGUF, about 0.2 GB more for 0.8B, 1 GiB at peak for 2B on an iPhone 16, 1.6 GB for 4B and 3.2 GB for 9B, and model fit checks do not count it: 4B does not fit an iPhone 16, and 9B is meant for macOS. Another model, a split GGUF, finetuning, a layer off Metal or a build without Core ML FFN logs a warning and runs on Metal. Default false.",
+                      "type": "boolean"
+                    },
+                    "coreml-ffn-split": {
+                      "description": "Overrides the automatic Core ML FFN split as `METALxN`: FFN channels kept on Metal, then Core ML programs per layer (1 or 2). Supported overrides are 3072x1 and 4096x1 for Qwen3.5-2B and 3072x1 for Qwen3.5-4B; an unsupported split logs a warning and runs on Metal. Requires `'coreml-ffn': true`.",
+                      "type": "string",
+                      "pattern": "^[1-9]\\d*x[12]$"
+                    },
+                    "coreml-ffn-cache": {
+                      "description": "Writable directory for the compiled Core ML FFN programs. Unset uses `$LLAMA_CACHE/coreml-ffn`, else `~/Library/Caches/llama.cpp/coreml-ffn`. Pass an absolute path private to the app: programs already in it are loaded without verification and never pruned. Requires `'coreml-ffn': true`.",
+                      "type": "string",
+                      "minLength": 1
+                    },
                     "fit": {
                       "description": "Adjust the arguments left unset so the model fits device memory. Default true. It chooses layer offload, tensor split and tensor buffer overrides, and the context size only when `ctx_size` is 0. Setting `gpu_layers` pins the layer count and makes fit abort, leaving every argument unchanged. Incompatible with `split-mode: tensor`, which disables it.",
                       "type": "boolean"

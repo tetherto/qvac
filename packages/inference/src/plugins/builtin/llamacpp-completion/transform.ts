@@ -48,6 +48,14 @@ export function transformLlmConfig(llmConfig: LlmConfig) {
     }
   }
 
+  if ('coreml-ffn' in transformed) {
+    if (transformed['coreml-ffn'] === 'true') {
+      transformed['coreml-ffn'] = ''
+    } else {
+      delete transformed['coreml-ffn']
+    }
+  }
+
   if ('kv-offload' in transformed) {
     const enabled = transformed['kv-offload'] === 'true'
     delete transformed['kv-offload']
