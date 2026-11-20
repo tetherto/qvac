@@ -1,6 +1,8 @@
+import { execFile } from 'node:child_process'
 import { promises as fsp } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { promisify } from 'node:util'
 import stow from 'bare-stow'
 import semver from 'semver'
 import {
@@ -9,6 +11,8 @@ import {
   scratchFolderFor,
   type Staged
 } from '@/commands/bundle/scratch'
+import { DEFAULT_IOS_ENGINE, type IosEngine } from '@/commands/bundle/ios-engine'
+import { commonJSStowOptions } from '@/commands/bundle/commonjs'
 import { findInAncestorNodeModules } from '@/expo/plugins/find-in-ancestor-node-modules'
 import { AddonLinkFailedError, ReactNativeBareKitUnsupportedError } from '@/utils/errors-client'
 import type { Logger } from '@/logging/types'
@@ -16,6 +20,8 @@ import type { Logger } from '@/logging/types'
 const REACT_NATIVE_BARE_KIT = 'react-native-bare-kit'
 
 const { link, resources } = stow
+
+const execFileAsync = promisify(execFile)
 
 /** The folder of the app's assets in a linked module, which an iOS app copies into its bundle. */
 export const BARE_KIT_RESOURCES = resources
@@ -68,16 +74,32 @@ export const NATIVE_MODULES = {
   }
 } as const
 
-const BARE_KIT_SWIFT_FROM =
-  /(\.package\(url: "https:\/\/github\.com\/holepunchto\/bare-kit-swift(?:\.git)?", )from: /
+/** bare-kit-swift selects its engine with package traits, which need these Swift tools. */
+export const MIN_SWIFT_TOOLS = '6.1'
 
-/**
- * Pins bare-kit-swift at the version bare-stow names. bare-stow writes it as a
- * minimum, which Swift Package Manager resolves at the newest release, so the
- * app would run a newer Bare than the one its addons were checked against.
- */
-export function pinBareKitSwift(manifest: string): string {
-  return manifest.replace(BARE_KIT_SWIFT_FROM, '$1exact: ')
+/** The Swift version in the output of `swift --version`, or null. */
+export function parseSwiftVersion(output: string): string | null {
+  return /Swift version (\d+\.\d+(?:\.\d+)?)/.exec(output)?.[1] ?? null
+}
+
+/** Whether the Swift that printed `output` is known to be too old to build bare-kit-swift. */
+export function isSwiftTooOld(output: string): boolean {
+  const version = semver.coerce(parseSwiftVersion(output))
+  return version !== null && semver.lt(version, semver.coerce(MIN_SWIFT_TOOLS)!)
+}
+
+async function warnIfSwiftTooOld(logger: Logger) {
+  let output: string
+  try {
+    output = (await execFileAsync('xcrun', ['swift', '--version'])).stdout
+  } catch {
+    return
+  }
+  if (!isSwiftTooOld(output)) return
+  logger.warn(
+    `Bare Kit for iOS needs Swift ${MIN_SWIFT_TOOLS} or newer (Xcode 16.3), and this machine has ` +
+      `Swift ${parseSwiftVersion(output)}. The iOS build will fail to resolve QvacBareKit.`
+  )
 }
 
 export interface StageAddonsOptions {
@@ -87,6 +109,13 @@ export interface StageAddonsOptions {
   hosts: string[]
   imports: stow.LinkOptions['imports']
   defer: string[]
+  /** Defaults to `DEFAULT_IOS_ENGINE`. */
+  iosEngine?: IosEngine | undefined
+  /**
+   * Link the graph with its ES modules converted to CommonJS, as the bundle
+   * holds it for JavaScriptCore, so both resolve the same modules.
+   */
+  commonJS?: boolean | undefined
   logger: Logger
 }
 
@@ -100,6 +129,7 @@ export async function stageAddons(
   options: StageAddonsOptions
 ): Promise<{ written: string[]; staged: Staged[] }> {
   const { projectRoot, entryPath, hosts, imports, defer, logger } = options
+  const iosEngine = options.iosEngine ?? DEFAULT_IOS_ENGINE
 
   const staged: Staged[] = []
   const written: string[] = []
@@ -112,6 +142,8 @@ export async function stageAddons(
         logger.warn(`Linking iOS addons needs macOS; skipped ${platformHosts.join(', ')}.`)
         continue
       }
+
+      if (module.language === 'swift') await warnIfSwiftTooOld(logger)
 
       const out = path.join(projectRoot, module.dir)
       await removeStaleScratch(out)
@@ -126,9 +158,11 @@ export async function stageAddons(
           {
             language: module.language,
             languageOptions: module.languageOptions,
+            ...(module.language === 'swift' && { targetOptions: { engine: iosEngine } }),
             hosts: platformHosts,
             ...(imports !== undefined && { imports }),
-            defer
+            defer,
+            ...(options.commonJS === true && commonJSStowOptions())
           }
         )) {
           const file = path.join(out, path.relative(scratch, fileURLToPath(url.href)))
@@ -138,11 +172,9 @@ export async function stageAddons(
       } catch (error) {
         throw new AddonLinkFailedError(platformHosts, error)
       }
+      // Xcode requires the folder of the assets, even when there are none.
       if (module.language === 'swift') {
-        // Xcode requires the folder of the assets, even when there are none.
         await fsp.mkdir(path.join(scratch, BARE_KIT_RESOURCES), { recursive: true })
-        const manifest = path.join(scratch, 'Package.swift')
-        await fsp.writeFile(manifest, pinBareKitSwift(await fsp.readFile(manifest, 'utf8')))
       }
       warnOverwritten(platformWritten, out, logger)
       written.push(...platformWritten)
@@ -169,3 +201,6 @@ export function warnOverwritten(written: string[], out: string, logger: Logger) 
   const files = [...overwritten].map((file) => path.relative(out, file)).sort()
   logger.warn(`Several native addons ship ${files.join(', ')}; only the copy linked last is kept.`)
 }
+
+export { DEFAULT_IOS_ENGINE, IOS_ENGINES, IOS_V8_ENTITLEMENT } from '@/commands/bundle/ios-engine'
+export type { IosEngine } from '@/commands/bundle/ios-engine'

@@ -210,9 +210,9 @@ tasks.configureEach {
 
 dependencies {
     api(project(":"))
-    // The dependencies of bare-stow's `bare-kit` harness module for Kotlin.
-    api("com.github.holepunchto.bare-kit-kotlin:bare-kit-kotlin:v0.2.2")
-    api("com.github.holepunchto.bare-stow-host-kotlin:bare-stow-host-kotlin:v0.2.2")
+    // bare-stow's `bare-kit` harness deps, at its pins: the Bare the SDK checks the bundle against.
+    api("com.github.holepunchto.bare-kit-kotlin:bare-kit-kotlin:v0.2.+")
+    api("com.github.holepunchto.bare-stow-host-kotlin:bare-stow-host-kotlin:v0.2.+")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 }
 

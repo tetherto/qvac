@@ -78,7 +78,10 @@ const hostLlamaOnCpu =
 
 // Download plan and the unload settling mobile needs -- and why it needs it -- come from the shared
 // platform policy; see catalog/platform-policy.ts.
-const resources = new ResourceManager(policyFor('mobile'))
+const resources = new ResourceManager({
+  ...policyFor('mobile'),
+  holdRuntimeOpen: Platform.OS === 'ios'
+})
 
 // One table, shared with every other client, applied here as `mobile-<os>` so an entry can target one OS.
 applyResourceTable(

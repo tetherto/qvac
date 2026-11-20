@@ -6,6 +6,7 @@ import {
   translate,
   diffusion,
   unloadModel,
+  cancel,
   SDK_LOG_ID
 } from '@qvac/sdk'
 import { type TestResult } from '@qvac/test-suite'
@@ -164,12 +165,22 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
   }
 
   private async runAddonLogging(testId: string, params: AnyParams): Promise<TestResult> {
-    // SDK-server logs flow with any RPC; no explicit trigger needed.
+    // A cancel that matches no request is the one call the engine logs at `info`
+    // on a worker in any state, and its line names the request id. Only a line
+    // naming that id counts, so the one read is the one this test caused.
     if (getMeta(testId)['target'] === 'sdk-server') {
+      const requestId = params['requestId']
+      if (typeof requestId !== 'string' || requestId.length === 0) {
+        throw new Error(`addon-logging test "${testId}" has no params.requestId`)
+      }
       return collectLogs({
         testId,
         targetId: SDK_LOG_ID,
         target: 1,
+        trigger: async () => {
+          await cancel({ operation: 'request', requestId })
+        },
+        containing: requestId,
         postTriggerWaitMs: POST_TRIGGER_GRACE_MS
       })
     }
@@ -351,6 +362,8 @@ interface CollectLogsOptions {
   targetId: string
   target: number
   trigger?: () => Promise<void>
+  /** Count only logs whose message holds this text. */
+  containing?: string
   postTriggerWaitMs: number
   preTriggerExtraWaitMs?: number
 }
@@ -360,7 +373,15 @@ interface CollectLogsResult extends TestResult {
 }
 
 async function collectLogs(opts: CollectLogsOptions): Promise<CollectLogsResult> {
-  const { testId, targetId, target, trigger, postTriggerWaitMs, preTriggerExtraWaitMs = 0 } = opts
+  const {
+    testId,
+    targetId,
+    target,
+    trigger,
+    containing,
+    postTriggerWaitMs,
+    preTriggerExtraWaitMs = 0
+  } = opts
   const logs: LogEntry[] = []
 
   // Drop logs emitted before the trigger fires so buffered load logs from a
@@ -370,6 +391,7 @@ async function collectLogs(opts: CollectLogsOptions): Promise<CollectLogsResult>
   const collectPromise = (async () => {
     for await (const log of loggingStream({ id: targetId })) {
       if (log.timestamp < triggerStartMs) continue
+      if (containing !== undefined && !log.message.includes(containing)) continue
       logs.push(log)
       if (logs.length >= target) break
     }

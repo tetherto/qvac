@@ -36,7 +36,8 @@ function createFixture(options?: {
   emptyGPUInventory?: boolean
   platform?: string
   processAvailableBytes?: number
-  failProcessMemorySample?: boolean
+  failProcessUsedSample?: boolean
+  failProcessAvailableSample?: boolean
 }) {
   const calls = {
     createCPU: 0,
@@ -145,9 +146,13 @@ function createFixture(options?: {
       calls.gpuIds++
       return `opaque-${calls.gpuIds}`
     },
-    sampleProcessMemory() {
-      if (options?.failProcessMemorySample) throw new Error('process memory sample failed')
-      return { usedBytes: 2048, availableBytes: options?.processAvailableBytes }
+    sampleProcessUsedBytes() {
+      if (options?.failProcessUsedSample) throw new Error('process usage sample failed')
+      return 2048
+    },
+    sampleProcessAvailableBytes() {
+      if (options?.failProcessAvailableSample) throw new Error('process allowance sample failed')
+      return options?.processAvailableBytes
     }
   }
 
@@ -197,9 +202,6 @@ test('grades the per-process memory sample under the process scope', (t) => {
   const withAllowance = createSystemResourceCollector(
     createFixture({ processAvailableBytes: 512 }).dependencies
   ).sample()
-  const failed = createSystemResourceCollector(
-    createFixture({ failProcessMemorySample: true }).dependencies
-  ).sample()
 
   t.alike(withAllowance.memory.processUsedBytes, {
     status: 'supported',
@@ -214,9 +216,26 @@ test('grades the per-process memory sample under the process scope', (t) => {
 
   t.is(withoutAllowance.memory.processUsedBytes.status, 'supported')
   t.is(withoutAllowance.memory.processAvailableBytes.status, 'unavailable')
+})
 
-  t.is(failed.memory.processUsedBytes.status, 'failed')
-  t.is(failed.memory.processAvailableBytes.status, 'failed')
+test('a failed process memory reading leaves the other one standing', (t) => {
+  // JavaScriptCore: `os.memoryUsage()` throws, `os.availableMemory()` does not.
+  const usageFailed = createSystemResourceCollector(
+    createFixture({ failProcessUsedSample: true, processAvailableBytes: 512 }).dependencies
+  ).sample()
+  const allowanceFailed = createSystemResourceCollector(
+    createFixture({ failProcessAvailableSample: true }).dependencies
+  ).sample()
+
+  t.is(usageFailed.memory.processUsedBytes.status, 'failed')
+  t.alike(usageFailed.memory.processAvailableBytes, {
+    status: 'supported',
+    value: 512,
+    provenance: { source: 'bare-os', scope: 'process' }
+  })
+
+  t.is(allowanceFailed.memory.processUsedBytes.status, 'supported')
+  t.is(allowanceFailed.memory.processAvailableBytes.status, 'failed')
 })
 
 test('contains CPU and GPU initialization failures independently', (t) => {

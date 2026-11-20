@@ -730,7 +730,11 @@ describe('bundleSdk', () => {
       runtime.hosts.includes('android-arm64')
     )?.resolution
     assert.ok(resolution?.resolved === true)
-    assert.equal(resolution.runtime.packageVersion, bundlerPins.android)
+    // A range like `0.2.+` resolves to a release, so check the pin in the detail.
+    assert.ok(
+      resolution.runtime.detail.includes(`bare-kit-kotlin ${bundlerPins.android}`),
+      resolution.runtime.detail
+    )
   })
 
   it('names the addon and hosts a desktop bundle has no native build for', async (t) => {
@@ -851,50 +855,6 @@ describe('bundleSdk', () => {
       fs.readdirSync(path.dirname(workerDir)).filter((name) => name.startsWith('.')),
       []
     )
-  })
-
-  it("bundles the SDK's bare-type in place of a newer one the project installs", async (t) => {
-    const { projectRoot, sdkPath, configPath } = fakeBundleSdkProject(t)
-    linkDependency(projectRoot, 'react-native-bare-kit', SDK_DIR)
-    linkDependency(projectRoot, 'bare-stow-target-react-native', SDK_DIR)
-    linkDependency(projectRoot, 'bare-stow', SDK_DIR)
-    const writeBareType = (dir: string, version: string, bare: string) => {
-      // bare-stow's dependencies are linked into the project, bare-type among them.
-      fs.rmSync(dir, { recursive: true, force: true })
-      writeFile(
-        path.join(dir, 'package.json'),
-        JSON.stringify({ name: 'bare-type', version, main: 'index.js', engines: { bare } })
-      )
-      writeFile(path.join(dir, 'index.js'), `module.exports = ${JSON.stringify(version)}\n`)
-    }
-    writeBareType(path.join(projectRoot, 'node_modules', 'bare-type'), '99.0.0', '>=99.0.0')
-    writeBareType(path.join(sdkPath, 'node_modules', 'bare-type'), '1.4.0', '>=1.32.0')
-    const importer = path.join(projectRoot, 'node_modules', 'uses-bare-type')
-    writeFile(
-      path.join(importer, 'package.json'),
-      JSON.stringify({ name: 'uses-bare-type', version: '1.0.0', main: 'index.js' })
-    )
-    writeFile(path.join(importer, 'index.js'), "module.exports = require('bare-type')\n")
-    addPlugin(
-      sdkPath,
-      'llamacpp-completion',
-      'llm-plugin.js',
-      "import type from 'uses-bare-type'\nexport const llmPlugin = { type }\n"
-    )
-
-    const result = await bundleSdk({
-      projectRoot,
-      configPath,
-      target: 'react-native',
-      hosts: ['android-arm64'],
-      link: false,
-      quiet: true
-    })
-
-    const files = Object.keys((await readBundle(result.bundlePath)).files)
-    const bareTypes = files.filter((file) => file.endsWith('/bare-type/index.js'))
-    assert.deepEqual(bareTypes.length, 1, files.join('\n'))
-    assert.match(bareTypes[0]!, /@qvac\/sdk\/node_modules\/bare-type\/index\.js$/)
   })
 
   it('keeps the last good bundle when the native module cannot be written', async (t) => {

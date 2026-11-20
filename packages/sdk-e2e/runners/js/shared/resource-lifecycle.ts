@@ -5,6 +5,9 @@ export async function modelSetup(resources: ResourceManager, context: unknown) {
 
   await resources.downloadAllOnce(console.log)
   resources.incrementTestCount()
+  // Before any load or unload of this test, including the ones a test makes
+  // through the SDK directly.
+  await resources.ensureRuntimeHold()
 
   const dep = ctx.dependency as string | undefined
   // dependency:"none" means the test declares it needs no preloaded model.
