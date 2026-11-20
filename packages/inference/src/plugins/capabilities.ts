@@ -173,7 +173,10 @@ function findQvacCallShapeProblem(
 // Providers of one third-party contract must agree on its required operations
 // and on how each shared operation is called, or a consumer written against
 // one provider fails on another. Optional operations may differ, so a newer
-// provider can add one under the same major.
+// provider can add one under the same major. Call shapes are compared over
+// both providers' lists: the report counts any handler with an optional
+// operation's name, whichever provider listed it, so checking only the
+// incoming provider's lists would make the result depend on registration order.
 function findThirdPartyConflict(
   plugin: QvacPlugin,
   contract: CapabilityContract,
@@ -192,7 +195,13 @@ function findThirdPartyConflict(
         `but plugin "${other.modelType}" requires ${list(otherRequired)}`
       )
     }
-    for (const operation of [...contract.operations, ...contract.optionalOperations]) {
+    const operations = new Set([
+      ...contract.operations,
+      ...contract.optionalOperations,
+      ...otherRequired,
+      ...(match.optionalOperations ?? [])
+    ])
+    for (const operation of operations) {
       const handler = getHandler(plugin, operation)
       const otherHandler = getHandler(other, operation)
       if (!handler || !otherHandler) continue
