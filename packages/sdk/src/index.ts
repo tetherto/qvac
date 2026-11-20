@@ -223,6 +223,7 @@ export {
   type SystemResources,
   CAPABILITY_CONTRACTS,
   type CapabilityContract,
+  type CapabilityDeclaration,
   type RuntimeCapability,
   type AssessModelFitInput,
   type TranscriptionFitWorkload,
