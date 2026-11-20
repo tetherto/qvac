@@ -198,6 +198,32 @@ describe('createRagBackend', () => {
     })
   })
 
+  it('finishes a delete whose data could not be removed', async (t) => {
+    if (process.getuid?.() === 0) return t.skip('root ignores directory permissions')
+    await withDir(async (dir) => {
+      const backend = createRagBackend({ dir, embedTexts })
+      await backend.attach('vs_g', model, {
+        fileId: 'file-1',
+        fileName: 'moon.txt',
+        text: 'A moon in orbit.'
+      })
+      const storesDir = path.join(dir, 'stores')
+      await chmod(path.join(storesDir, 'vs_g'), 0o500)
+      await assert.rejects(backend.delete('vs_g'))
+
+      const [leftover = '', ...others] = await readdir(storesDir)
+      assert.ok(leftover.startsWith('.deleted-vs_g-'))
+      assert.deepEqual(others, [])
+      assert.deepEqual(await backend.list(), [])
+      assert.deepEqual(await backend.search('vs_g', model, 'moon', 1), [])
+
+      await chmod(path.join(storesDir, leftover), 0o700)
+      assert.deepEqual(await backend.list(), [])
+      assert.deepEqual(await readdir(storesDir), [])
+      await backend.close()
+    })
+  })
+
   it('ingests nothing when the store record cannot be written', async (t) => {
     if (process.getuid?.() === 0) return t.skip('root ignores directory permissions')
     await withDir(async (dir) => {

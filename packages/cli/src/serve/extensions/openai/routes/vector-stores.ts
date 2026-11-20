@@ -56,7 +56,7 @@ is created on the first \`POST /v1/vector_stores/{id}/files\`.
   updateById:
     'Patch `name` / `expires_after` / `metadata` on the in-memory metadata record. If the store exists only on disk, a local metadata record is materialized first.',
   deleteById:
-    'Delete both the in-memory metadata record AND the ingested files. If deleting the files fails, the metadata is preserved so a retry sees the same state (avoids losing caller-supplied fields).',
+    'Delete both the in-memory metadata record AND the ingested files. If removing the files from disk fails, the request fails but the store is already gone; the leftover data is removed on a later request.',
   search: `
 Vector search over the store's files with \`@qvac/rag\`.
 
@@ -147,7 +147,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       }
       if (body.chunking_strategy !== undefined) {
         ctx.logger.warn(
-          'Ignoring "chunking_strategy": chunking is configured via SDK ingest options.'
+          'Ignoring "chunking_strategy": files are chunked with the @qvac/rag defaults.'
         )
       }
 

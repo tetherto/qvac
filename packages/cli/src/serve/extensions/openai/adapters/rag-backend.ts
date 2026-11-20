@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { mkdir, readdir, readFile, rename, rm, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import Corestore from 'corestore'
@@ -10,6 +10,8 @@ const DEFAULT_CACHE_DIRECTORY = path.join(os.homedir(), '.qvac', 'models')
 const NAMESPACE = 'files'
 const RECORD_FILE = 'store.json'
 const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/
+// Not a valid store id, so a folder being deleted is never listed as a store.
+const DELETED_PREFIX = '.deleted-'
 
 /** Vector stores live next to the SDK's model cache, like the rest of its data. */
 export function vectorStoreDirFor(cacheDirectory: string | undefined): string {
@@ -261,6 +263,12 @@ export function createRagBackend(
         if ((err as NodeJS.ErrnoException).code === 'ENOENT') return []
         throw err
       }
+      // Finish the deletes whose folder could not be removed at the time.
+      await Promise.all(
+        names
+          .filter((name) => name.startsWith(DELETED_PREFIX))
+          .map((name) => rm(path.join(storesDir, name), { recursive: true, force: true }))
+      ).catch(() => {})
       const ids = await Promise.all(
         names.map(async (name) => (SAFE_ID.test(name) && (await readStore(name)) ? name : null))
       )
@@ -328,9 +336,14 @@ export function createRagBackend(
       serialize(id, async () => {
         if (!(await readStore(id))) return false
         await closeOpen(id)
-        // Drop the record first: the store is gone even if removing its data fails.
-        await unlink(recordPath(id))
-        await rm(storeDir(id), { recursive: true, force: true })
+        // Move the folder out of the listing first: the store is gone even if
+        // removing its data fails, and the next listing retries the removal.
+        const deleted = path.join(
+          storesDir,
+          `${DELETED_PREFIX}${id}-${randomBytes(4).toString('hex')}`
+        )
+        await rename(storeDir(id), deleted)
+        await rm(deleted, { recursive: true, force: true })
         return true
       }),
 
