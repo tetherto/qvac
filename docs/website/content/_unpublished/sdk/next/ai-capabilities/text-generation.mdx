@@ -38,18 +38,18 @@ You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible
 * Thinking content: models that emit `<think>` blocks surface them as dedicated `thinkingDelta` events (enable with `captureThinking: true`), so consumers don't have to parse tags from raw text.
 * Tool calls: the model emits structured tool calls as `toolCall` events ordered alongside content and thinking in the same stream. Arguments are repaired against the tool's schema before validation: an object or array written as a JSON string (including OpenAI-style string `arguments`), broken JSON, numbers and booleans written as strings, an enum value in the wrong case when only one value matches, `"null"` for an optional field, and arguments nested under an undeclared wrapper key. A value the schema accepts as a string is never changed. Qwen-family `<function=NAME>` blocks without a `<tool_call>` wrapper are recovered for declared tools.
 * Example calls: some call-shaped markup stays text, in `contentDelta` or `thinkingDelta`, with neither a `toolCall` nor a `toolError`: a call inside reasoning, a block naming an undeclared tool, and a call followed by more text in bare `<function=NAME>` blocks or in the `harmony`, `qwen35`, `gemma4` and `dsml` dialects, whose templates end the turn at a call.
-* Tool choice: `generationParams.tool_choice` takes `"auto"` (default), `"required"`, `"none"` or the name of a declared tool. On llama.cpp-backed models the sampler is constrained by the chat template's tool-call grammar, so under `"required"` the model cannot finish without a call, though a long text reply can use up the tokens before it reaches one, and a name restricts the call to that tool; a request whose choice cannot be applied fails before generating.
+* Tool choice: `generationParams.toolChoice` takes `"auto"` (default), `"required"`, `"none"` or the name of a declared tool. On llama.cpp-backed models the sampler is constrained by the chat template's tool-call grammar, so under `"required"` the model cannot finish without a call, though a long text reply can use up the tokens before it reaches one, and a name restricts the call to that tool; a request whose choice cannot be applied fails before generating.
 * Tool parameters: a tool's `parameters` is a JSON Schema object and is passed to the model as declared, including nested `properties`, `items`, nullable types (`["string", "null"]`) and `anyOf`. Zod `parameters` are converted with `z.toJSONSchema`, so nested Zod objects and arrays keep their structure.
 * Tool errors: a tool-call region the model emitted that fails to parse or validate after repair surfaces as a `toolError` event and in `final.toolErrors`, so an empty `toolCalls` can be told apart from a malformed call.
 * Past tool calls in history: an `assistant` message carries the calls it made in `toolCalls` (`id`, `name`, `arguments`), and a `tool` message names the call it answers with `toolCallId` and `toolName`. llama.cpp-backed models render them with their own chat template instead of reading them as text in `content`.
-* Parallel tool calls: one response may carry several tool calls on llama.cpp-backed models. `generationParams.parallel_tool_calls` defaults to `true`; set it to `false` to get at most one.
+* Parallel tool calls: one response may carry several tool calls on llama.cpp-backed models. `generationParams.parallelToolCalls` defaults to `true`; set it to `false` to get at most one.
 * MCP: plug MCP servers into `completion()` so the model can use external tools (e.g., web search) via the same tool-call mechanism.
 * Raw output: with `emitRawDeltas: true`, every raw model token is also emitted as a `rawDelta` event in parallel to the structured events — useful for debugging or full-fidelity logging.
 * KV cache: cache and reuse the model's key/value attention state to speed up follow-up turns in long conversations. The `kvCache` parameter sets the cache key — pass a string to manage a session manually, or `true` to let the SDK auto-generate one.
 * Multimodal: attach images (and other media) to prompts so the model reasons over text and images together in the same conversation — see [Multimodal](/sdk/ai-capabilities/multimodal).
 * Multi-job continuous batching: load with `modelConfig.parallel >= 2` (default `1`) to run several `completion()` calls in parallel on one loaded model. Up to `parallel` prompts finish in roughly the time of the slowest one (extras queue), and each call has its own `requestId` so you can cancel one without touching the others — see [Concurrent completions](#concurrent-completions).
 * Batch processing: run multiple prompts through a single loaded model in one call with `batchCompletion()` — optimizes resources and reduces total run time. See [Batch processing](/sdk/ai-capabilities/batch-processing).
-* Speculative decoding: load with `modelConfig.spec_type` to draft several tokens per step and verify them in one decode, with multi-token-prediction (MTP) layers, the model's own or an external head, or with a separate DFlash or DSpark draft model. Output keeps the distribution of plain decoding. See [Speculative decoding](#speculative-decoding).
+* Speculative decoding: load with `modelConfig.specType` to draft several tokens per step and verify them in one decode, with multi-token-prediction (MTP) layers, the model's own or an external head, or with a separate DFlash or DSpark draft model. Output keeps the distribution of plain decoding. See [Speculative decoding](#speculative-decoding).
 * AMD NPU: on Linux x64 with an AMD XDNA2 NPU, load with `modelConfig.device: "npu"` to run the ops the NPU supports on it, with the CPU running the rest; the LLM layers leave the GPU free for another model. See [AMD NPU](#amd-npu).
 
 ## Examples
@@ -102,7 +102,7 @@ Use this when you have more than one prompt in flight against the same loaded mo
 
 Load the model with `modelConfig.parallel >= 2`, then call `completion()` several times without awaiting between calls. The SDK runs up to `parallel` of them together on the model, so **up to `parallel` prompts finish in roughly the time of the slowest one** instead of the sum of all of them; beyond that they queue. Each call has its own `requestId`; `cancel({ requestId })` stops just that call and its peers keep going — useful for a per-request stop button, rather than killing the whole model.
 
-The default is `1` (one request at a time), so you have to set `parallel` explicitly to enable batching. Also raise `ctx_size` with it. The slots share one KV cache, and each request is limited to `ctx_size / parallel` tokens, so `parallel: 4` on a `ctx_size: 4096` model gives each request only ~1024 tokens. Size `ctx_size` for `parallel × per-request context`. Leaving `ctx_size` unset uses the 1024-token default, so `parallel: 4` gives each request 256 tokens. With `ctx_size: 0`, auto-fit picks the context for the whole pool, and each slot gets a `parallel`-th of it: with `parallel: 4`, a model trained on 32768 tokens gives each request 8192.
+The default is `1` (one request at a time), so you have to set `parallel` explicitly to enable batching. Also raise `ctxSize` with it. The slots share one KV cache, and each request is limited to `ctxSize / parallel` tokens, so `parallel: 4` on a `ctxSize: 4096` model gives each request only ~1024 tokens. Size `ctxSize` for `parallel × per-request context`. Leaving `ctxSize` unset uses the 1024-token default, so `parallel: 4` gives each request 256 tokens. With `ctxSize: 0`, auto-fit picks the context for the whole pool, and each slot gets a `parallel`-th of it: with `parallel: 4`, a model trained on 32768 tokens gives each request 8192.
 
 `completion()` and `batchCompletion()` share the model's `parallel` slots. Each call is one request — a big `batchCompletion({ prompts: N })` never blocks more than one concurrent `completion()` from starting — but every prompt in the batch takes one decode slot, so a large batch fills all `parallel` slots itself and any concurrent `completion()` you launch will only start decoding once the batch has room. If you already have every prompt ready up front, [`batchCompletion()`](/sdk/ai-capabilities/batch-processing) is often simpler; use concurrent `completion()` when prompts arrive over time or you want independent streams and cancellation per call.
 
@@ -323,7 +323,7 @@ Notes:
 * `completion()` stays stateless. The loaded set is read back from the
   conversation, so a reopened chat given the same tools and the same history has
   the same tools loaded, and concurrent chats cannot mix.
-* `generationParams.tool_choice` cannot name a deferred tool — its schema is not
+* `generationParams.toolChoice` cannot name a deferred tool — its schema is not
   in the prompt, so the call cannot be constrained. Force `"tool_search"`
   instead.
 * The tool block sits near the start of the prompt, so the turn after a load
@@ -371,7 +371,7 @@ const tokens = await calcTokens({
 
 When neither `history` nor enabled tools are supplied, `text` is counted as raw text. Otherwise, the SDK renders the prompt with the loaded model's chat template, adds the model's configured system prompt when the history has none, and appends `text` as the final user turn. Load the model with `modelConfig: { tools: true }` for tool definitions to be counted; otherwise they are ignored and text-only input remains raw. Pass the same `toolSearch` limits to `calcTokens()` and `completion()` when using deferred tools. Media content and attachments are not supported. The call returns a number and can run while the model is generating.
 
-The count uses every supplied tool and the reasoning setting from model load. If `completion()` uses a named `generationParams.tool_choice` or overrides `generationParams.reasoning_budget` for one request, that request can render a different prompt and report a different `promptTokens` value.
+The count uses every supplied tool and the reasoning setting from model load. If `completion()` uses a named `generationParams.toolChoice` or overrides `generationParams.reasoningBudget` for one request, that request can render a different prompt and report a different `promptTokens` value.
 
 ### KV cache
 
@@ -379,15 +379,15 @@ The `kvCache` parameter on `completion()` both enables caching and sets the cach
 
 - A **non-empty string** (e.g. `"user-123-session-a"`) — use this key for a caller-managed cache. You control the session identity, so you can reuse the same key across turns and later clean it up with [`deleteCache({ kvCacheKey })`](/sdk/reference/api#deletecache).
 - `true` — SDK-managed auto cache. The SDK generates the key internally from the conversation history. Convenient for single-session use; you don't get a stable key for per-session cleanup, but you can reclaim them in bulk with [`deleteCache({ auto: true })`](/sdk/reference/api#deletecache).
-- `false` or `undefined` — no persistent cache key (default). Keyless requests reuse a shared prefix only when the model loads with `cache_share_across_keys: true`.
+- `false` or `undefined` — no persistent cache key (default). Keyless requests reuse a shared prefix only when the model loads with `cacheShareAcrossKeys: true`.
 
 SDK-managed auto caches are removed after 24 hours idle or under disk quota pressure. The quota is 512 MiB on React Native and 4 GiB on other runtimes. [`deleteCache({ auto: true })`](/sdk/reference/api#deletecache) reclaims them on demand instead of waiting for either bound, skipping any cache a request is still using. Caller-managed string-key caches are not subject to the automatic retention policy and are not touched by that call — clean those up with [`deleteCache({ kvCacheKey })`](/sdk/reference/api#deletecache).
 
-When the addon can't restore a completion's own KV cache file, the request fails and the SDK deletes that file. You can retry the same request on the same key. If the saved cache exceeds the slot's token limit, the request fails with `ContextOverflowError` and the SDK deletes the file as well. This can happen with `ctx_size: 0` when less memory is available on a later load and auto-fit chooses a smaller pool. The same conversation usually won't fit on a retry either, so shorten the history, start a new conversation, or raise `ctx_size`.
+When the addon can't restore a completion's own KV cache file, the request fails and the SDK deletes that file. You can retry the same request on the same key. If the saved cache exceeds the slot's token limit, the request fails with `ContextOverflowError` and the SDK deletes the file as well. This can happen with `ctxSize: 0` when less memory is available on a later load and auto-fit chooses a smaller pool. The same conversation usually won't fit on a retry either, so shorten the history, start a new conversation, or raise `ctxSize`.
 
 On a cached turn, `stats.promptTokens` counts only the prompt tokens the model processed on that turn. Tokens reused from the cache are not included, so a warm turn reports far fewer than the full prompt. `stats.cacheTokens` is the number of tokens held in the cache after the turn. Before v0.22, `promptTokens` counted the whole prompt.
 
-Prompt-prefix sharing across conversations is opt-in. Set `cache_share_across_keys: true` in the model's `modelConfig` to let a decoder-only request start from the longest text or image prefix held by another conversation on the same loaded model. This also applies to requests without `kvCache`; their state stays in memory but is never written to an SDK cache file. With the default `false`, a keyless request starts cold and resets afterwards, while a keyed request reuses only its own state. Keep the default on multi-tenant hosts: enabling sharing can expose prompt-prefix overlap through `stats.promptTokens`, `stats.cacheTokens` and timing.
+Prompt-prefix sharing across conversations is opt-in. Set `cacheShareAcrossKeys: true` in the model's `modelConfig` to let a decoder-only request start from the longest text or image prefix held by another conversation on the same loaded model. This also applies to requests without `kvCache`; their state stays in memory but is never written to an SDK cache file. With the default `false`, a keyless request starts cold and resets afterwards, while a keyed request reuses only its own state. Keep the default on multi-tenant hosts: enabling sharing can expose prompt-prefix overlap through `stats.promptTokens`, `stats.cacheTokens` and timing.
 
 There is no separate `kvCacheKey` completion parameter — when you want a caller-managed cache, pass the key string directly as `kvCache`:
 
@@ -402,18 +402,18 @@ completion({
 
 On hybrid and recurrent models (Qwen3.5, Jamba, DeepSeek V4) and on sliding-window models (Gemma 3/4, gpt-oss), a turn under a caller-managed `kvCache` key whose history diverges from the cache, such as the next turn under a thinking template or a regenerate, continues from a checkpoint instead of reprocessing the whole conversation. Each checkpoint costs host RAM, up to hundreds of MiB on larger models, which model fit checks do not count. Tune them at load time in `modelConfig`:
 
-- `cache_checkpoints`: checkpoints kept per sequence (0–1024, default 1). Editing the user message k-th from the end without reprocessing needs `k + 1`; `0` turns checkpoints off.
-- `cache_checkpoints_max_bytes`: byte budget for them per sequence, `0` (default) for unlimited.
-- `cache_checkpoint_storage`: `'memory'` (default) or `'disk'`. With `'disk'`, set `cache_checkpoint_dir` to a writable directory; on mobile, use the app's cache directory.
-- `cache_ram_mib`: host-RAM budget, in MiB, for cached conversations that are not running, so switching back to a caller-managed `kvCache` key skips reading its cache file. Default `0` (off).
-- `cache_share_across_keys`: whether requests may reuse a prefix held by another conversation. Default `false`; set `true` to opt in to model-wide sharing.
+- `cacheCheckpoints`: checkpoints kept per sequence (0–1024, default 1). Editing the user message k-th from the end without reprocessing needs `k + 1`; `0` turns checkpoints off.
+- `cacheCheckpointsMaxBytes`: byte budget for them per sequence, `0` (default) for unlimited.
+- `cacheCheckpointStorage`: `'memory'` (default) or `'disk'`. With `'disk'`, set `cacheCheckpointDir` to a writable directory; on mobile, use the app's cache directory.
+- `cacheRamMib`: host-RAM budget, in MiB, for cached conversations that are not running, so switching back to a caller-managed `kvCache` key skips reading its cache file. Default `0` (off).
+- `cacheShareAcrossKeys`: whether requests may reuse a prefix held by another conversation. Default `false`; set `true` to opt in to model-wide sharing.
 
 #### Start a chat from a primed cache
 
 In-memory reuse only helps while the base conversation is still loaded. To start a chat from a caller-managed cache that may no longer be in memory, such as a system prompt and tools primed with `prefill` in an earlier session, pass its key as `seedFrom`:
 
 ```js
-// The model is loaded with `cache_share_across_keys: true` in its modelConfig.
+// The model is loaded with `cacheShareAcrossKeys: true` in its modelConfig.
 // Prime the base once.
 await completion({ modelId, history: systemAndTools, stream: false, kvCache: "base", prefill: true }).final;
 
@@ -430,7 +430,7 @@ completion({
 - `seedFrom` needs a string `kvCache` other than itself; it has no meaning for the auto cache.
 - The model reads the `seedFrom` cache and reuses the prefix it shares with the prompt, so a history that does not continue the base reuses less, down to nothing on hybrid and recurrent models. The source is never written; the chat's own key is.
 - It applies only while the chat's `kvCache` key has no cache. Once the chat has one, later turns ignore it.
-- The call is refused when no cache named `seedFrom` exists for the model and system prompt, or when the model was not loaded with `cache_share_across_keys: true`, which is off by default.
+- The call is refused when no cache named `seedFrom` exists for the model and system prompt, or when the model was not loaded with `cacheShareAcrossKeys: true`, which is off by default.
 - The source must have been saved by a model loaded with the same `parallel` value.
 
 #### Prepare the system prompt and tools ahead of time
@@ -449,7 +449,7 @@ const answer = await completion({
 }).final;
 ```
 
-Load the model with `modelConfig: { tools: true }` when passing tools. Resend the same system prompt and tools on the question so their cached prefix can be reused. A prefill rejects forced `generationParams.tool_choice` values (`"required"` or a named tool, including `"tool_search"`); use the default `"auto"` or `"none"` instead. A prefill also needs at least one message: a system message in the history, or `modelConfig.system_prompt` set at load. Tools alone are rejected. Auto-cache priming saves the complete prompt history without appending an empty assistant message.
+Load the model with `modelConfig: { tools: true }` when passing tools. Resend the same system prompt and tools on the question so their cached prefix can be reused. A prefill rejects forced `generationParams.toolChoice` values (`"required"` or a named tool, including `"tool_search"`); use the default `"auto"` or `"none"` instead. A prefill also needs at least one message: a system message in the history, or `modelConfig.systemPrompt` set at load. Tools alone are rejected. Auto-cache priming saves the complete prompt history without appending an empty assistant message.
 
 With `kvCache: true`, the first question moves the cache to the conversation's new history, so the prime serves one conversation. Use a named key for reuse across conversations, or prime each conversation separately.
 
@@ -495,7 +495,7 @@ The following script enables `kvCache: true` to speed up follow-up turns, and th
 
 ### Speculative decoding
 
-Speculative decoding drafts several tokens per step and has the model verify the whole draft in one decode. The model checks every drafted token, so output keeps the distribution of plain decoding. Enable it at load time with `modelConfig.spec_type`:
+Speculative decoding drafts several tokens per step and has the model verify the whole draft in one decode. The model checks every drafted token, so output keeps the distribution of plain decoding. Enable it at load time with `modelConfig.specType`:
 
 - `"draft-mtp"` — drafts with multi-token-prediction (MTP) layers: the model's own, for example `QWEN3_5_0_8B_MTP_Q4_K_M` (also 2B, 4B and 9B) or `QWEN3_8_27B_MULTIMODAL_UD_Q4_K_XL`, or an external MTP head given as `modelConfig.draftModelSrc`, for example `QWEN3_5_0_8B_MTP_Q4_K_M` for `QWEN3_5_0_8B_MULTIMODAL_Q4_K_M`, or a Gemma 4 assistant for its Gemma 4 model. The head, when given, otherwise the model, must have MTP layers, and a head must match the model (hidden width and vocabulary), or the load fails. A head is placed like the model, and model fit checks count its memory.
 - `"draft-dflash"` — drafts with a separate DFlash model, given as `modelConfig.draftModelSrc`, which it requires: for example `QWEN3_5_4B_DFLASH_Q8_0` with `QWEN3_5_4B_MULTIMODAL_Q4_K_M`. The draft model is placed like the model, and model fit checks count its memory.
@@ -505,7 +505,7 @@ Speculative decoding drafts several tokens per step and has the model verify the
 
 A DFlash or DSpark model made for another model fails the load and model fit checks, with an error naming the mismatch: vocabulary, hidden width, target layers or block size. Fit checks answer `unknown` for a split model, such as the DeepSeek target above, or a load with a projection model, so they neither catch the mismatch nor count the draft model's memory there; see [Assess model fit](/sdk/models/assess-model-fit).
 
-`spec_draft_n_max` (1–64, default 5 with `"draft-dflash"`, or `"auto"` when it detects a DFlash model, and 3 otherwise) caps the draft length and is lowered at load, with a warning, to fit the batch. `spec_draft_n_min` (0–64, default 0) drops shorter drafts, and `spec_draft_p_min` (0–1, default 0) is the minimum draft-head probability for a token to extend the draft. With a DSpark model, `spec_draft_p_min` is the confidence head's threshold: the draft stops at the first token below it, and a DSpark model without a confidence head doesn't draft when it is above 0. These three require `spec_type` `"draft-mtp"`, `"draft-dflash"`, `"draft-dspark"` or `"auto"`. Speculative decoding works with multimodal prompts, `parallel` and `kvCache`.
+`specDraftNMax` (1–64, default 5 with `"draft-dflash"`, or `"auto"` when it detects a DFlash model, and 3 otherwise) caps the draft length and is lowered at load, with a warning, to fit the batch. `specDraftNMin` (0–64, default 0) drops shorter drafts, and `specDraftPMin` (0–1, default 0) is the minimum draft-head probability for a token to extend the draft. With a DSpark model, `specDraftPMin` is the confidence head's threshold: the draft stops at the first token below it, and a DSpark model without a confidence head doesn't draft when it is above 0. These three require `specType` `"draft-mtp"`, `"draft-dflash"`, `"draft-dspark"` or `"auto"`. Speculative decoding works with multimodal prompts, `parallel` and `kvCache`.
 
 When it is on, `stats.draftTokens` counts the drafted tokens and `stats.draftAcceptedTokens` the ones the model kept. For [`batchCompletion()`](/sdk/reference/api#batchcompletion) they are batch-level, on `run.stats`. The gain depends on the device: with several concurrent sequences, the larger verification batches can cost more than they save.
 
@@ -514,7 +514,7 @@ const modelId = await loadModel({
   modelSrc: QWEN3_5_4B_MULTIMODAL_Q4_K_M,
   modelType: "llm",
   modelConfig: {
-    spec_type: "draft-dflash",
+    specType: "draft-dflash",
     draftModelSrc: QWEN3_5_4B_DFLASH_Q8_0,
   },
 });
@@ -525,7 +525,7 @@ const modelId = await loadModel({
 On Linux x64 with an AMD XDNA2 NPU (Strix Point, Strix Halo or Krackan), load with `modelConfig.device: "npu"` to run the ops the NPU supports on it, with the CPU running the rest. The NPU needs XRT 2.25 or newer and read/write access to its `/dev/accel` node, and is never selected automatically.
 
 - Without a listed NPU, `device: "npu"` falls back to the GPU, then the CPU. A listed NPU that fails to open runs the load on the CPU.
-- The LLM layers leave the GPU free for another model. A vision model's projector runs on a GPU beside the NPU by default, and `mmproj-use-gpu: false` keeps it on the CPU.
+- The LLM layers leave the GPU free for another model. A vision model's projector runs on a GPU beside the NPU by default, and `mmprojUseGpu: false` keeps it on the CPU.
 - `stats.backendDevice` reports `"npu"` when the NPU is selected.
 
 Only a model with a 1024-wide hidden size, such as Qwen3.5-0.8B, decodes on the NPU, and only with the weight types its fused decode layer takes. Those depend on how the GGUF was quantized, not on its quantization name. Of the registry builds:

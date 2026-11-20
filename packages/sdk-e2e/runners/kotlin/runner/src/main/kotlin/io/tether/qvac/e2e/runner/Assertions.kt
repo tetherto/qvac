@@ -121,10 +121,10 @@ object Assertions {
         val phases = LinkedHashMap<String, Pair<MutableSet<Any?>, Int>>()
         for (raw in events) {
             val event = raw as? Map<*, *> ?: continue
-            val key = (if (event["is_train"] == true) "train" else "val") + ":epoch${jsString(event["current_epoch"])}"
-            val total = asDouble(event["total_batches"])?.toInt() ?: 0
+            val key = (if (event["isTrain"] == true) "train" else "val") + ":epoch${jsString(event["currentEpoch"])}"
+            val total = asDouble(event["totalBatches"])?.toInt() ?: 0
             val phase = phases.getOrPut(key) { mutableSetOf<Any?>() to total }
-            phase.first.add(event["current_batch"]?.let { asDouble(it) })
+            phase.first.add(event["currentBatch"]?.let { asDouble(it) })
             if (total > phase.second) phases[key] = phase.first to total
         }
         val drops = phases.mapNotNull { (key, phase) ->

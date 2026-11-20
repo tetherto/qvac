@@ -138,13 +138,13 @@ openclaw onboard \
   --skip-health
 ```
 
-Advanced plugin options use camelCase because they configure the plugin, not `qvac.config.json` directly. The plugin converts them into the temporary QVAC serve config it starts `qvac serve` with.
+Advanced plugin options configure the plugin, not `qvac.config.json` directly. The plugin converts them into the temporary QVAC serve config it starts `qvac serve` with.
 
 | Plugin option | What it controls | Default |
 | --- | --- | --- |
 | `model` | QVAC catalog id to preload and select. | `qwen3.5-9b` |
 | `qvacCommand` | Command or absolute path for the `qvac` binary. | `qvac` |
-| `ctxSize` | Context window written as `ctx_size` in the generated serve config. | `32768` |
+| `ctxSize` | Context window written as `ctxSize` in the generated serve config. | `32768` |
 | `reasoningBudget` | QVAC reasoning budget; `0` disables reasoning and `-1` enables the model default. | `-1` |
 | `tools` | Enables QVAC tool-call formatting for agent use. | `true` |
 | `port` | Local HTTP server port; `0` lets `qvac serve` bind a free port and report it to the plugin. | `0` |
@@ -169,8 +169,8 @@ For example:
         "model": "GEMMA4_2B_MULTIMODAL_Q4_K_M",
         "preload": true,
         "config": {
-          "ctx_size": 32768,
-          "reasoning_budget": 0,
+          "ctxSize": 32768,
+          "reasoningBudget": 0,
           "tools": true
         }
       }
@@ -201,7 +201,7 @@ The following tools have been verified to work as drop-in replacements by pointi
 
 Skip this section if you are using the OpenCode or OpenClaw plugin above.
 
-The only QVAC-specific setting for connecting an AI tool is the `serve.models` block in `qvac.config.json`, where you declare the models the server exposes. _Each key is a **model alias** that you reference when configuring the tool_. Coding agents need a larger context window than the server default, so set `ctx_size` explicitly:
+The only QVAC-specific setting for connecting an AI tool is the `serve.models` block in `qvac.config.json`, where you declare the models the server exposes. _Each key is a **model alias** that you reference when configuring the tool_. Coding agents need a larger context window than the server default, so set `ctxSize` explicitly:
 
 ```json title="qvac.config.json"
 {
@@ -211,8 +211,8 @@ The only QVAC-specific setting for connecting an AI tool is the `serve.models` b
         "model": "QWEN3_8B_INST_Q4_K_M",
         "preload": true,
         "config": {
-          "ctx_size": 16384,
-          "reasoning_budget": 0,
+          "ctxSize": 16384,
+          "reasoningBudget": 0,
           "tools": true
         }
       }
@@ -270,7 +270,7 @@ Drop `options.apiKey` only if you started the server without authentication. `op
 
 For a custom (non-[models.dev](https://models.dev)) provider, OpenCode will not list or let you select the QVAC models unless `opencode.json` also declares a `provider.qvac.models` map. Without it, you get `Provider not found: qvac` and no models in the picker.
 
-Each key under `models` must match an alias declared in `serve.models`; `limit.context` should match that alias's `ctx_size` so OpenCode tracks remaining context correctly; and `modalities` declares the input/output types the model accepts. Declare `"image"` as an input only for a multimodal model; see [Text and image input](#text-and-image-input).
+Each key under `models` must match an alias declared in `serve.models`; `limit.context` should match that alias's `ctxSize` so OpenCode tracks remaining context correctly; and `modalities` declares the input/output types the model accepts. Declare `"image"` as an input only for a multimodal model; see [Text and image input](#text-and-image-input).
 
 For details on configuring a custom provider in OpenCode, see [OpenCode docs › Custom providers](https://opencode.ai/docs/providers/#custom-provider).
 
@@ -294,13 +294,13 @@ The underlying `llm-llamacpp` addon runs one decode at a time per native model c
 
 Coding agents routinely fire concurrent requests — typically a main chat completion plus a title, summary, or compaction call. Those utility calls wait behind the active decode when they use the same alias. You can still configure a separate `small_model` alias if you want utility calls to avoid waiting, but it is no longer required for correctness.
 
-### `ctx_size` defaults to 1024 — too small for agents
+### `ctxSize` defaults to 1024 — too small for agents
 
-The default LLM `ctx_size` is 1024 tokens, which is fine for short chats and unusable for coding agents: a typical OpenCode message ships 10–15 tool definitions plus a system prompt, easily 2–4k tokens before the user's first message lands. Set `ctx_size` explicitly per model (`16384` is a sensible default for chat) or you'll see context fills and truncated responses well before the model misbehaves.
+The default LLM `ctxSize` is 1024 tokens, which is fine for short chats and unusable for coding agents: a typical OpenCode message ships 10–15 tool definitions plus a system prompt, easily 2–4k tokens before the user's first message lands. Set `ctxSize` explicitly per model (`16384` is a sensible default for chat) or you'll see context fills and truncated responses well before the model misbehaves.
 
-### `reasoning_budget: 0` to suppress `<think>` blocks
+### `reasoningBudget: 0` to suppress `<think>` blocks
 
-Reasoning-tuned models (Qwen3, DeepSeek-R1, etc.) emit `<think>…</think>` blocks before their final answer. Hosts that lack a reasoning channel render them verbatim in the chat UI, which looks broken and burns latency on tokens the user never sees. Set `reasoning_budget: 0` per model to disable reasoning at the addon level — cleaner output, meaningfully faster responses.
+Reasoning-tuned models (Qwen3, DeepSeek-R1, etc.) emit `<think>…</think>` blocks before their final answer. Hosts that lack a reasoning channel render them verbatim in the chat UI, which looks broken and burns latency on tokens the user never sees. Set `reasoningBudget: 0` per model to disable reasoning at the addon level — cleaner output, meaningfully faster responses.
 
 ### Local-model capability is the real ceiling
 

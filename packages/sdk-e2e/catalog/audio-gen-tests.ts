@@ -35,8 +35,8 @@ const generationSteps = (extra: Record<string, unknown> = {}): Step[] => [
         seed: '$params.seed?',
         duration: '$params.duration?',
         bpm: '$params.bpm?',
-        keyscale: '$params.keyscale?',
-        timesignature: '$params.timesignature?',
+        keyScale: '$params.keyScale?',
+        timeSignature: '$params.timeSignature?',
         augmentCaptionWithMetadata: '$params.augmentCaptionWithMetadata?',
         audioCodes: '$params.audioCodes?',
         taskType: '$params.taskType?',
@@ -191,8 +191,8 @@ export const audioGenAugmentedCaption: TestDefinition = {
     seed: 98,
     duration: 2,
     bpm: 98,
-    keyscale: 'A minor',
-    timesignature: '4/4',
+    keyScale: 'A minor',
+    timeSignature: '4/4',
     augmentCaptionWithMetadata: true
   },
   expectation: {
@@ -247,7 +247,7 @@ export const audioEditPipeline: TestDefinition = {
   params: {
     seed: 22883,
     bpm: 120,
-    keyscale: 'C minor',
+    keyScale: 'C minor',
     sourceTone: '2s-220hz',
     operations: [
       {
@@ -283,7 +283,7 @@ export const audioEditPipeline: TestDefinition = {
           operations: '$params.operations',
           seed: '$params.seed?',
           bpm: '$params.bpm?',
-          keyscale: '$params.keyscale?'
+          keyScale: '$params.keyScale?'
         },
         as: 'run'
       }

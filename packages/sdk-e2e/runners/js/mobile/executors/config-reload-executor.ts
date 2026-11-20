@@ -98,7 +98,7 @@ export class MobileConfigReloadExecutor extends ModelAssetExecutor<typeof config
       await loadModel({
         modelId: whisperModelId,
         modelType: 'llamacpp-completion',
-        modelConfig: { ctx_size: 2048 }
+        modelConfig: { ctxSize: 2048 }
       } as never)
       return { passed: false, output: 'Expected error for model type mismatch' }
     } catch (error) {

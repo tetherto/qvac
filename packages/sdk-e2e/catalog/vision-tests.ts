@@ -105,7 +105,7 @@ export const visionBasic = createVisionTest(
   'What animal is in this image?',
   'elephant.jpg',
   { validation: 'contains-any', contains: ELEPHANT_IMAGE_TERMS },
-  { generationParams: { temp: 0, seed: 42 } },
+  { generationParams: { temperature: 0, seed: 42 } },
   ['smoke']
 )
 
@@ -114,7 +114,7 @@ export const visionStreaming = createVisionTest(
   'What do you see in this image?',
   'elephant.jpg',
   { validation: 'contains-any', contains: ELEPHANT_IMAGE_TERMS },
-  { stream: true, generationParams: { temp: 0, seed: 42 } },
+  { stream: true, generationParams: { temperature: 0, seed: 42 } },
   ['smoke']
 )
 
@@ -123,7 +123,7 @@ export const visionStats = createVisionTest(
   'Describe this image briefly.',
   'elephant.jpg',
   { validation: 'contains-any', contains: ELEPHANT_IMAGE_TERMS },
-  { generationParams: { temp: 0, seed: 42 } }
+  { generationParams: { temperature: 0, seed: 42 } }
 )
 
 const noUpscaleHistory = (image: string) => [imageTurn('Describe this image briefly.', image)]
@@ -134,7 +134,7 @@ export const visionImageNoUpscale: TestDefinition = {
   params: {
     image: 'small-64.jpg',
     history: noUpscaleHistory('shared-test-data/images/small-64.jpg'),
-    generationParams: { temp: 0, top_k: 1, seed: 42, predict: 8 }
+    generationParams: { temperature: 0, topK: 1, seed: 42, predict: 8 }
   },
   expectation: { validation: 'function', fn: () => true },
   steps: visionHistorySteps(
@@ -184,7 +184,7 @@ export const visionObjectDetection = createVisionTest(
   'List all the objects you can identify in this image.',
   'room.jpg',
   { validation: 'contains-any', contains: ['sofa', 'couch', 'table', 'lamp', 'window'] },
-  { generationParams: { temp: 0, seed: 42 } }
+  { generationParams: { temperature: 0, seed: 42 } }
 )
 
 export const visionTextExtraction = createVisionTest(
@@ -192,7 +192,7 @@ export const visionTextExtraction = createVisionTest(
   'Read the text in this image. Reply with only the text.',
   'sign.jpg',
   { validation: 'contains-all', contains: ['hello'] },
-  { generationParams: { temp: 0, top_k: 1, seed: 42, predict: 128 } }
+  { generationParams: { temperature: 0, topK: 1, seed: 42, predict: 128 } }
 )
 
 export const visionSceneUnderstanding = createVisionTest(

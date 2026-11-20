@@ -220,7 +220,7 @@ export const shardedModelLlmCompletion: TestDefinition = {
   testId: 'sharded-model-llm-completion',
   params: {
     history: [{ role: 'user', content: 'What is 2+2? Answer with only the number.' }],
-    generationParams: { temp: 0, seed: 42 }
+    generationParams: { temperature: 0, seed: 42 }
   },
   expectation: { validation: 'contains-all', contains: ['4'] },
   steps: [
@@ -238,7 +238,7 @@ export const shardedModelLlmReload: TestDefinition = {
   testId: 'sharded-model-llm-reload',
   params: {
     history: [{ role: 'user', content: 'What is 2+2? Answer with only the number.' }],
-    generationParams: { temp: 0, seed: 42 }
+    generationParams: { temperature: 0, seed: 42 }
   },
   expectation: { validation: 'contains-all', contains: ['4'] },
   // Answer, drop the model, answer again.

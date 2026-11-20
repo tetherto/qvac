@@ -336,7 +336,7 @@ export const toolsResultNextTurn: TestDefinition = {
           history: [PROJECT_NAME_PROMPT],
           tools: [PROJECT_NAME_TOOL],
           stream: true,
-          generationParams: { temp: 0, seed: 42 }
+          generationParams: { temperature: 0, seed: 42 }
         },
         as: 'first'
       }
@@ -363,7 +363,7 @@ export const toolsResultNextTurn: TestDefinition = {
           ],
           tools: [PROJECT_NAME_TOOL],
           stream: false,
-          generationParams: { temp: 0, seed: 42 }
+          generationParams: { temperature: 0, seed: 42 }
         },
         as: 'second'
       }

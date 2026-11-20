@@ -1124,14 +1124,14 @@ const ASSERTIONS: Record<
 
     const phases = new Map<string, { batches: Set<number>; total: number }>()
     for (const event of events) {
-      const key = `${event['is_train'] ? 'train' : 'val'}:epoch${String(event['current_epoch'])}`
-      const total = Number(event['total_batches'])
+      const key = `${event['isTrain'] ? 'train' : 'val'}:epoch${String(event['currentEpoch'])}`
+      const total = Number(event['totalBatches'])
       let phase = phases.get(key)
       if (!phase) {
         phase = { batches: new Set(), total }
         phases.set(key, phase)
       }
-      phase.batches.add(Number(event['current_batch']))
+      phase.batches.add(Number(event['currentBatch']))
       if (total > phase.total) phase.total = total
     }
 

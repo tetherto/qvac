@@ -12,10 +12,10 @@ const DEFAULT_FINETUNE_DEPENDENCY = 'finetune-llm'
 const FINETUNE_DEPENDENCIES = collectTestDeps(finetuneTests)
 
 const STATS_UNCERTAINTY_FIELDS = [
-  'train_loss_uncertainty',
-  'val_loss_uncertainty',
-  'train_accuracy_uncertainty',
-  'val_accuracy_uncertainty'
+  'trainLossUncertainty',
+  'valLossUncertainty',
+  'trainAccuracyUncertainty',
+  'valAccuracyUncertainty'
 ] as const satisfies readonly (keyof FinetuneStats)[]
 
 function summarizeStatsUncertaintyShape(stats: FinetuneStats | undefined) {
@@ -115,8 +115,8 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
         return { passed: false, output: 'Expected at least one finetune progress update' }
       }
 
-      if (typeof result.stats?.global_steps !== 'number') {
-        return { passed: false, output: 'Expected terminal finetune stats.global_steps' }
+      if (typeof result.stats?.globalSteps !== 'number') {
+        return { passed: false, output: 'Expected terminal finetune stats.globalSteps' }
       }
 
       const finiteLosses = progress.filter(
@@ -138,7 +138,7 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
 
       return ValidationHelpers.validate(
         `Completed finetune with ${progress.length} progress updates, ` +
-          `${result.stats.global_steps} steps, ${finiteLosses.length} finite loss values ` +
+          `${result.stats.globalSteps} steps, ${finiteLosses.length} finite loss values ` +
           `and a LoRA adapter`,
         expectation as Expectation
       )
@@ -168,7 +168,7 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
       const initialProgressPromise = this.collectProgress(
         initialHandle.progressStream,
         async (update) => {
-          if (!pauseRequested && update.global_steps >= pauseAfterGlobalSteps) {
+          if (!pauseRequested && update.globalSteps >= pauseAfterGlobalSteps) {
             pauseRequested = true
             pausePromise = pauseOperation({
               modelId,
@@ -223,15 +223,15 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
       }
 
       if (
-        typeof initialResult.stats?.global_steps === 'number' &&
-        typeof resumedResult.stats?.global_steps === 'number' &&
-        resumedResult.stats.global_steps <= initialResult.stats.global_steps
+        typeof initialResult.stats?.globalSteps === 'number' &&
+        typeof resumedResult.stats?.globalSteps === 'number' &&
+        resumedResult.stats.globalSteps <= initialResult.stats.globalSteps
       ) {
         return {
           passed: false,
           output:
-            `Expected resumed finetune steps to advance beyond ${initialResult.stats.global_steps}, ` +
-            `got ${resumedResult.stats.global_steps}`
+            `Expected resumed finetune steps to advance beyond ${initialResult.stats.globalSteps}, ` +
+            `got ${resumedResult.stats.globalSteps}`
         }
       }
 
@@ -272,17 +272,17 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
       }
 
       for (let i = 1; i < progress.length; i++) {
-        if (progress[i]!.global_steps < progress[i - 1]!.global_steps) {
+        if (progress[i]!.globalSteps < progress[i - 1]!.globalSteps) {
           return {
             passed: false,
-            output: 'Finetune progress global_steps must be monotonic'
+            output: 'Finetune progress globalSteps must be monotonic'
           }
         }
       }
 
       const lastProgress = progress[progress.length - 1]!
-      if (typeof lastProgress.elapsed_ms !== 'number' || lastProgress.elapsed_ms < 0) {
-        return { passed: false, output: 'Expected non-negative elapsed_ms in finetune progress' }
+      if (typeof lastProgress.elapsedMs !== 'number' || lastProgress.elapsedMs < 0) {
+        return { passed: false, output: 'Expected non-negative elapsedMs in finetune progress' }
       }
 
       return ValidationHelpers.validate(
@@ -417,15 +417,15 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
       const groups = new Map<string, { batches: Set<number>; totalBatches: number }>()
 
       for (const ev of progress) {
-        const key = `${ev.is_train ? 'train' : 'val'}:epoch${ev.current_epoch}`
+        const key = `${ev.isTrain ? 'train' : 'val'}:epoch${ev.currentEpoch}`
         let group = groups.get(key)
         if (!group) {
-          group = { batches: new Set(), totalBatches: ev.total_batches }
+          group = { batches: new Set(), totalBatches: ev.totalBatches }
           groups.set(key, group)
         }
-        group.batches.add(ev.current_batch)
-        if (ev.total_batches > group.totalBatches) {
-          group.totalBatches = ev.total_batches
+        group.batches.add(ev.currentBatch)
+        if (ev.totalBatches > group.totalBatches) {
+          group.totalBatches = ev.totalBatches
         }
       }
 

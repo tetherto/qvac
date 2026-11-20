@@ -102,7 +102,7 @@ See [`qvac doctor`](#qvac-doctor) for every check, the exit codes, and the JSON 
 The `qvac fit` command tells you whether a model, or a whole stack loaded together, fits this machine's memory before you download anything. It runs each engine's own fitter against the registry's weightless description of the model, and gives the same answer as [`POST /qvac/v1/models/fit`](/cli/http-server#post-qvacv1modelsfit) and the SDK's [`assessModelFit()`](/sdk/models/assess-model-fit).
 
 ```bash
-qvac fit QWEN3_8B_INST_Q4_K_M QWEN3_600M_INST_Q4 --set QWEN3_8B_INST_Q4_K_M:ctx_size=0
+qvac fit QWEN3_8B_INST_Q4_K_M QWEN3_600M_INST_Q4 --set QWEN3_8B_INST_Q4_K_M:ctxSize=0
 ```
 
 See [`qvac fit`](#qvac-fit) for the options, the output, and the exit codes.
@@ -335,7 +335,7 @@ The output gives each model's verdict alone, the context and GPU layers a langua
 
 What to pass:
 
-- A language model is judged at the SDK's default context of 1024 tokens unless `ctx_size` is set. `ctx_size=0` reports the longest context that fits.
+- A language model is judged at the SDK's default context of 1024 tokens unless `ctxSize` is set. `ctxSize=0` reports the longest context that fits.
 - A model made of several parts needs its companion files and engine in its config: a TTS model needs `ttsEngine`, a translation model its `engine` and a language pair (`from`, `to`). A translation model is judged once downloaded.
 - A companion file on its own, such as a projector, VAE or codec, cannot be judged. It fails with `MODEL_FIT_REJECTED`; judge the model that loads it. The error is followed by a hint, and catalog mode lists these models under their own heading.
 
@@ -352,11 +352,11 @@ What to pass:
 
 ```bash
 # One model at 8K context
-qvac fit QWEN3_8B_INST_Q4_K_M --set ctx_size=8192
+qvac fit QWEN3_8B_INST_Q4_K_M --set ctxSize=8192
 
 # A translation model with its language pair
 qvac fit BERGAMOT_DE_EN --set engine=Bergamot --set from=de --set to=en
 
 # Every SDK model, language models at the longest context that fits, as JSON
-qvac fit --catalog --set llamacpp-completion:ctx_size=0 --json
+qvac fit --catalog --set llamacpp-completion:ctxSize=0 --json
 ```

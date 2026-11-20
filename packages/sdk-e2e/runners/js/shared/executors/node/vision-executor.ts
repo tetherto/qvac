@@ -65,18 +65,18 @@ export class VisionExecutor extends AbstractModelExecutor<typeof visionTests> {
         return {
           passed: false,
           output:
-            `image_no_upscale on (${noUpscaleTokens}) should use less than half the prompt tokens ` +
+            `imageNoUpscale on (${noUpscaleTokens}) should use less than half the prompt tokens ` +
             `of off (${upscaleTokens})`
         }
       }
 
       return {
         passed: true,
-        output: `image_no_upscale reduced prompt tokens from ${upscaleTokens} to ${noUpscaleTokens}`
+        output: `imageNoUpscale reduced prompt tokens from ${upscaleTokens} to ${noUpscaleTokens}`
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
-      return { passed: false, output: `image_no_upscale comparison failed: ${errorMsg}` }
+      return { passed: false, output: `imageNoUpscale comparison failed: ${errorMsg}` }
     }
   }
 
