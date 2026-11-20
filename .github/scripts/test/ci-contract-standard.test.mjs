@@ -13,8 +13,7 @@ import {
   CONFIG_NAME,
   configurations,
   checkMetadata,
-  parseRunnerLabels,
-  gateKeys
+  parseRunnerLabels
 } from '../select-projects.mjs'
 
 const root = fileURLToPath(new URL('../../..', import.meta.url))
@@ -73,17 +72,6 @@ for (const project of contract) {
           `${project.path} ${target} ${cfg.config}: runner key ${cfg.runnerKey} is not in reusable-runner-names.yml`
         )
     }
-  })
-
-  test(`${project.name}: has a Merge Guard key when it posts a status`, () => {
-    // Native builds and C++ tests post the statuses Merge Guard waits for; a package with neither needs no key.
-    const configured = Object.keys(project.targets.build?.configurations ?? {}).length > 0
-    if (!configured && !project.targets['cpp:tests']) return
-    const [parent, dir] = project.path.split('/')
-    assert.ok(
-      gateKeys(read('.github/workflows/pr-gate-merge.yml'))[dir],
-      `${project.path}: add a pr-gate-merge.yml filter whose first path is "${parent}/${dir}/**"`
-    )
   })
 
   test(`${project.name}: host setup targets take no forwarded arguments`, () => {

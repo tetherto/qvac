@@ -1,6 +1,4 @@
-// Posts the qvac/prebuild-<pkg> or qvac/cpp-tests-<pkg> commit status consumed
-// by Merge Guard's verify-prebuilds / verify-cpp-tests. Run by the on-pr
-// orchestrators' `publish-prebuild-status` / `publish-cpp-test-status` jobs.
+// Posts qvac/prebuild-<pkg> or qvac/cpp-tests-<pkg>; a failed state fails the job too.
 //
 // Env:
 //   GH_TOKEN, REPO, HEAD_SHA, CONTEXT, RUN_URL, REUSE_HIT, CI_ROUTER_RESULT,
@@ -62,6 +60,10 @@ function main() {
     { stdio: ['ignore', 'ignore', 'inherit'] },
   )
   console.log(`Posted ${context} = ${state} (${runUrl}) on ${sha}`)
+  if (state === 'failure') {
+    console.log(`::error title=${context}::${kindName} failed`)
+    return 1
+  }
   return 0
 }
 

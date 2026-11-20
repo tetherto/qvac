@@ -98,7 +98,6 @@ test("select-projects emits baseline rows for the opted-in package alone", async
     affected: null,
     targets: ["build", "cpp:tests"],
     labels: { linux_ubuntu2204_x64: "qvac-ubuntu2204-x64" },
-    gate: { a: "a", b: "b" },
   });
   assert.deepEqual(out.matrices["build:baseline"].map((r) => r.project), ["a"]);
   assert.deepEqual(out.matrices["cpp:tests:baseline"].map((r) => r.project), ["a"]);

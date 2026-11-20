@@ -1,204 +1,88 @@
-# Merge Guard — wiring a new job into the required status check
+# Merge Guard
 
-`qvac-merge-guard / validate-pr` is the **single** GitHub required status check gating merges to `main`. It exists so the branch ruleset never has to track individual job names — no matter how many jobs run on a PR, GitHub only ever needs to require the one aggregated check. This doc is the reference for *adding a new job so it correctly feeds into that aggregate*, instead of accidentally creating a second, disconnected check that the ruleset doesn't require and nobody notices when it fails.
+`qvac-merge-guard / validate-pr` is the one status the `qvac-merge-guard` ruleset requires on `main`. It passes when every check that [`.github/merge-rules.yml`](../../.github/merge-rules.yml) requires of the PR has passed. Teams add a required check with a line in that file; nobody edits the guard to do it.
 
-Folding a new job into `qvac-merge-guard` (below) is what every new merge-gating job does — the ruleset only ever requires this one aggregated check, regardless of how many jobs feed into it.
-
-## Hard rule: nothing else may produce the `qvac-merge-guard / validate-pr` check name
-
-Exactly one job in this repo may produce the check context `qvac-merge-guard / validate-pr`: the `qvac-merge-guard` job in `pr-gate-merge.yml` calling `public-pr.yml`'s `validate-pr` job. No other workflow may define a job with id `qvac-merge-guard` (or any job that itself calls a reusable workflow whose job id is `validate-pr`) — doing so would produce the identical check-context string and let that other workflow's result silently satisfy the required check instead of the real Merge Guard gate.
-
-Before merging any workflow change, verify:
-
-```bash
-grep -rl "^  qvac-merge-guard:$" .github/workflows/*.yml
-```
-
-This must return **only** `pr-gate-merge.yml`. If it returns more than one file, that's the collision — rename the job id in whichever file didn't earn the name (see the general check-name-collision guidance the org already applies when centralizing per-addon jobs).
-
-**This applies to any new job or workflow, in any domain** — a new addon's sanity check, an SDK check, a docs-validation job, a security scan, a licensing gate, anything. The three patterns below (fold-in / caller-workflow / new-boolean) are generic decision points, not specific to packages or addons. The concrete `prebuilds-caller.yml` / addon examples used throughout are one worked instance of the pattern, not the only thing it applies to — substitute your own job/family/category wherever an addon or package name appears.
-
----
-
-## The job graph
-
-`.github/workflows/pr-gate-merge.yml` ("Merge Guard", triggers on `pull_request`, so it reports on fork PRs too; it builds nothing and holds no secrets):
+## How it decides
 
 ```mermaid
 flowchart LR
-    CHANGES[changes<br/>dorny/paths-filter, per-package]
-    CHANGES --> SC[sanity-checks<br/>matrix]
-    CHANGES --> VP[verify-prebuilds<br/>reads on-pr prebuild statuses]
-    CHANGES --> VC[verify-cpp-tests<br/>reads on-pr C++ test statuses]
-    CHANGES --> QMG[qvac-merge-guard]
-    ECR[error-code-ranges] --> QMG
-    SC --> QMG
-    VP --> QMG
-    VC --> QMG
-    QMG -->|uses| PP[public-pr.yml<br/>job: validate-pr]
-    PP -->|check name| CHK["qvac-merge-guard / validate-pr"]
+  subgraph PR["pull_request: PR code, no secrets"]
+    PC[PR checks]
+    SC[SDK checks]
+  end
+  subgraph WR["workflow_run: main's copy, fork-ci gate"]
+    BT[PR build and test]
+  end
+  PC -- completed --> G
+  SC -- completed --> G
+  BT -- "merge-guard job: gh workflow run" --> G
+  C["/merge-guard comment"] --> G
+  G["Merge Guard: validate-pr<br/>main's rules and evaluator, API only"] --> S["status qvac-merge-guard / validate-pr<br/>on the PR head"]
 ```
 
-The SDK pod's checks are not in Merge Guard. They run in `sdk-checks.yml`, from each package's `project.json` targets; no ruleset requires `PR checks` yet, so a pod PR with failing checks is not blocked from merging until the `main` ruleset requires it.
+`pr-gate-merge.yml` runs from the default branch and checks out only `.github/merge-rules.yml` and `.github/scripts/merge-guard`. For a PR into `main`, `evaluate.mjs`:
 
-The final job in `pr-gate-merge.yml`:
+1. Lists the PR's changed files, and takes every rule with a pattern matching one of them.
+2. Finds each producer's runs for the PR head: `pull_request` runs by head commit, and `workflow_run` runs of the default branch's copy by the head commit in their title (`pr-build-test.yml` sets it in `run-name`). Only runs of the named workflow file count, so a lookalike workflow with the same name is ignored.
+3. Reads each required job's result. Per job name, the newest attempt that did not skip counts, so a label run of `PR checks` or an edit run of `SDK checks`, whose jobs skip, never hides the real result.
+4. Posts the status: `failure` naming the jobs that failed, `pending` naming the producers still running, or `success`. The run summary has the table: rule, check, result, the jobs with their failing step and links, and the files that brought each rule in.
+
+It never waits. A check whose producer has not finished is pending, and that producer's completion starts the guard again; the producer to finish last triggers the final result. One evaluation runs per head commit at a time (`cancel-in-progress`). A member's `/merge-guard` comment on the PR re-runs it, for example if GitHub dropped an event.
+
+The guard decides on job results, never on commit statuses: a workflow with `statuses: write`, including a same-repo PR's edited `pull_request` workflow, could post any status. The `qvac/prebuild-*`, `qvac/cpp-tests-*` and `qvac/pr-build-test` statuses are for people reading the PR.
+
+## The rules
 
 ```yaml
-qvac-merge-guard:
-  needs: [changes, sanity-checks, verify-prebuilds, verify-cpp-tests, error-code-ranges]
-  if: |
-    always() && !cancelled() &&
-    (needs.changes.result == 'success' || needs.changes.result == 'skipped')
-  permissions:
-    contents: read
-    packages: read
-  uses: ./.github/workflows/public-pr.yml
-  with:
-    sanity-checks-status: ${{ needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped' }}
-    build-status: ${{ needs.verify-prebuilds.result == 'success' || needs.verify-prebuilds.result == 'skipped' }}
-    general-checks-status: ${{ needs.error-code-ranges.result == 'success' }}
-    cpp-tests-status: ${{ needs.verify-cpp-tests.result == 'success' || needs.verify-cpp-tests.result == 'skipped' }}
+- name: Addon packages
+  patterns: ["packages/**", "cmake/qvac-addon/**"]
+  checks:
+    - { workflow: pr-checks.yml, job: "select / *" }
+    - { workflow: pr-checks.yml, job: "checks (*)", skipped: pass }
 ```
 
-`general-checks-status` is `error-code-ranges`' result; a job folded into it adds its own, as below.
+- `patterns`: globs on the changed files; `**` spans directories, `*` stays within one, and a leading `-` excludes. Every matching rule adds its checks.
+- `workflow`: the producer file.
+- `job`: the job's check-run name. `*` matches a matrix leg or a called workflow's job, for example `checks (*)` or `select / *`.
+- `skipped: pass`: a job that skips because nothing it covers changed counts as passed. Pair it with a check that fails when the selection itself fails, as `select` and `selected` do, so a broken selection never reads as nothing to check.
 
-A skipped `sanity-checks`, `verify-prebuilds` or `verify-cpp-tests` counts as success: each skips only when `changes` found nothing for it to check. Merge Guard has no fork gate of its own. It runs no PR code with secrets, and a fork's builds are gated where they run, in `pr-build-test.yml`'s `fork-ci` approval; `verify-prebuilds` then waits for the statuses those builds post.
+Today the file requires the error-code reservations on every PR; each package's PR checks, prebuild and C++ test verdict, for addon packages; and the pod rules, release guard and per-package checks for the SDK pod, the packages tagged `ci:sdk`.
 
-### `verify-prebuilds`: Merge Guard checks prebuilds, it does not trigger them
+## Producers
 
-`build-status` comes from `verify-prebuilds`, which **reads** rather than **runs** prebuilds. Building is owned by the label-gated `on-pr-<pkg>.yml` flows (so their native-change detection + artifact-reuse optimisations are preserved and prebuilds don't run on every PR). Each prebuild-bearing `on-pr-<pkg>.yml` has a `publish-prebuild-status` job that posts a `qvac/prebuild-<pkg>` commit status on the PR head SHA — `success` when the prebuild passed *or* reused an artifact *or* was **legitimately** skipped, `failure` otherwise. The prebuild job uses `if: always() && …`, so an upstream failure (e.g. `ci-router`, which produces `run_prebuilds`, erroring) doesn't fail that job — it makes its `if` fall through and the job comes back `skipped`. A bare `skipped → success` mapping would therefore turn a crashed pipeline into a green prebuild. To fail closed, the publish job forwards `ci-router`'s `result` and `run_prebuilds`, and a skip is trusted only when `ci-router` succeeded and deliberately chose not to build (`run_prebuilds == 'false'`, i.e. no prebuild label); any other skip publishes `failure`. That job stamps its own run URL into the status `target_url`, binding the status to the exact `on-pr-<pkg>` run that produced it. `verify-prebuilds` intersects the changed packages with its `PREBUILD_KEYS` allowlist and, for each, waits for and mirrors that commit status (fail-closed on timeout). It selects the newest matching status across **all** pages of the statuses API (paginated results are slurped and flattened, so a context that appears on more than one page is never split).
+| Producer | Runs | Reports |
+| --- | --- | --- |
+| `PR checks` (`pr-checks.yml`) | `pull_request`: `select`, then `checks (<package>)` (lint, typecheck, unit, generated files, dependencies, bundler requires) for the changed `ci:addons` and `ci:libs` packages; `error-code-ranges` on every PR | jobs on the PR head |
+| `SDK checks` (`sdk-checks.yml`) | `pull_request`: `pod-rules`, `release-guard`, `select`, `checks (<package>)` | jobs on the PR head |
+| `PR build and test` (`pr-build-test.yml`) | `workflow_run` from `main`, after the `fork-ci` approval for forks | `selected`, and one `status <package>` job per package |
 
-Both sides share one unit-tested module in `.github/scripts/prebuild-status/` (`lib.mjs` holds the pure state-mapping / selection / run-binding / freshness logic; `publish.mjs` and `verify.mjs` are thin CLIs that inject the GitHub API calls). The producing `on-pr-<pkg>` publish jobs and the merge-guard verify job each `sparse-checkout` only that scripts directory from the trusted default branch (never PR head code) and run the corresponding CLI. The logic is covered by `.github/scripts/test/prebuild-status.test.mjs`.
+In `PR build and test`:
 
-To avoid trusting a **superseded** status (e.g. a `skipped = success` from an earlier no-label run that is later relabelled to build on the same SHA), `verify-prebuilds` reads the producing run — by the id embedded in `target_url` — and trusts the status only when that run (a) is the `on-pr-<pkg>` workflow and (b) was triggered at/after this PR event (`run.created_at >= github.event.pull_request.updated_at`). Because the run id comes from the status itself, this never depends on the Actions API having *listed* the newest run for the SHA — so there is no listing-lag window, and a status produced by a pre-label run (whose `created_at` predates the label) is rejected even if its own timestamp happens to post-date the label. `concurrency.cancel-in-progress: true` additionally cancels an older in-flight Merge Guard run so only the newest run (with the newest threshold) gates the PR, and as cheap defense-in-depth `verify-prebuilds` only trusts statuses whose `creator.login` is `github-actions[bot]`. It compiles nothing and inherits no secrets. When you add a new prebuild-bearing addon, add its key to `PREBUILD_KEYS` and give its `on-pr-<pkg>.yml` a `publish-prebuild-status` job that stamps `target_url` with its run URL.
+- `selected` fails when the run refused the PR (a fork PR that changes `.github/`) or package selection failed.
+- `status <package>` posts `qvac/prebuild-<dir>` and `qvac/cpp-tests-<dir>` and fails when either is a failure. A build or C++ test that routing skipped (no label, and not a baseline package) is a success; any other skip fails closed. `.github/scripts/prebuild-status/lib.mjs` holds that mapping and the `PREBUILD_KEYS` and `CPP_TEST_KEYS` lists.
+- The `merge-guard` job starts the guard with the PR number once the status jobs are done, so desktop tests and the perf report do not hold it up. This run's own completion event names `main`'s commit, not the PR's.
 
-### `verify-cpp-tests`: Merge Guard checks C++ tests, it does not trigger them
+## Adding a required check
 
-`cpp-tests-status` is a separate boolean from `build-status` so a C++/fuzz failure reports **“C++ tests have not returned success”**, not a prebuild failure. `verify-cpp-tests` **reads** `qvac/cpp-tests-<pkg>` commit statuses. The suites run in `pr-build-test.yml`, gated on the `run-cpp-addon-tests` label unless the package sets `metadata.baseline` on its `cpp:tests` target. A skip is published as success only when the routing job succeeded, `run_cpp_tests == false` (no label), and the package is not a baseline package; any other skip fails closed. Trust, freshness, and run-binding reuse the same `.github/scripts/prebuild-status/` scripts and producer map as `verify-prebuilds`, selected with `KIND: cpp-tests` (`publish.mjs` / `verify.mjs`, `CPP_TEST_KEYS`).
+| You want to | Do this |
+| --- | --- |
+| Require a job that already runs | Add a line under the right rule in `.github/merge-rules.yml` |
+| Add a check that runs PR code | Add the job to `pr-checks.yml` or `sdk-checks.yml`, then the line |
+| Add a check that needs secrets or a build | Add the job to `pr-build-test.yml` behind its `trust` gate, then the line |
+| Require checks only for some paths | Add a rule with its own `patterns` |
+| Add a new `pull_request` producer | Give it no workflow-level `paths` or `paths-ignore` (filter in its jobs, so it runs for every commit), and add its `name` to `pr-gate-merge.yml`'s `workflow_run.workflows` |
+| Add a new `workflow_run` producer | Set a `run-name` carrying the PR head commit, and end with a job that runs `gh workflow run pr-gate-merge.yml -f pr=<n> -f sha=<head>` |
 
-`pr-build-test.yml`'s `status` job posts the aggregate `cpp-tests` result for every selected package, so one failing suite reds every `qvac/cpp-tests-*` status in that run. That is fail-closed, but the failing package has to be read from the run itself.
+`ci-trust-policy.test.mjs` fails a rule that names a workflow the guard does not listen to, a `pull_request` producer with a `paths` filter, or a job pattern no job matches. `CODEOWNERS` gives `.github/merge-rules.yml` to `@tetherto/qvac-internal-merge`.
 
-A key belongs in `CPP_TEST_KEYS` only when its producer can actually fail:
+## Testing a change
 
-- `ocr-ggml` uses the standard Linux C++ test lane; its bounded image-decode fuzz suite runs after the unit tests, and either failure fails its status.
-- `asr-ggml` and `bci-whispercpp` fail their jobs directly on C++ test errors and are included. TTS retains its deterministic `hardGateCommand` before its optional model round-trip tier.
-- `audiogen-ggml` is included. It has no addon-level C++ unit tests yet; its carve-out builds the native addon and then runs the bounded config-parse fuzz target, and a fuzz failure fails its status. It is also deliberately absent from `PREBUILD_KEYS`, so its prebuild failures do not reach the required check. Because it is in the `changes` paths-filter, audiogen PRs do run `sanity-checks` inside the required check.
+The guard and the rules always run from `main`, so a PR that edits them is evaluated by `main`'s copy. After merge, open a PR that touches the affected paths and read the guard's run summary; to see a check gate, make it fail once.
 
-When you add a C++-test-bearing addon, add its key to `CPP_TEST_KEYS`, to the `changes` paths-filter in `pr-gate-merge.yml`, and to `ALL_PACKAGES` in the same job, and make sure its producer posts `qvac/cpp-tests-<key>` (`vla` for `packages/vla-ggml`). For a package built by the CI contract's `pr-build-test.yml`, the filter entry must list only `packages/<dir>/**`. It picks packages through `nx show projects --affected`, which never selects a package for a `.github/` path, so such an entry would wait to the deadline for a status nothing posts. `ci-trust-policy.test.mjs` enforces both rules.
-
-A PR that changes only shared contract CI (`pr-build-test.yml`, the `_*.yml` templates, `.github/scripts/select-projects.mjs`, or an action they call) therefore selects no package, and Merge Guard requires no prebuild or C++ test status for it. To exercise the change on a package, dispatch `pr-build-test.yml` on the branch with `packages` set to that package's directory, for example `-f packages=vla-ggml`; a dispatch runs every stage.
-
-> **Known limitation — relabel-after-green window.** A PR that changes a prebuild-bearing package *without* the prebuild label legitimately greens `qvac-merge-guard / validate-pr` (no build required — matches the "doc/version-bump changes shouldn't rebuild" goal). If someone then adds the prebuild label, a new Merge Guard run starts and its `verify-prebuilds` correctly waits for the real build, but GitHub keys required checks by **commit SHA**, so the earlier green can remain valid on that same SHA until the new run reports. `concurrency.cancel-in-progress: true` closes the *in-flight* variant (a run still polling when the label lands is cancelled), and the newly-triggered run re-marks the check pending under GitHub's latest-run-for-context semantics. The window cannot be closed by posting a same-named `pending` commit status: GitHub requires that when a check and a commit status share a name, **both** must pass, and `validate-pr` only ever reports a check-run — a same-named status would deadlock every merge. Mitigation: don't rely on auto-merge firing between adding a prebuild label and the labeled build completing; push a new commit (new SHA) if in doubt.
-
-> **Historical note:** an earlier design had Merge Guard call a `prebuilds-caller.yml` reusable workflow that built every changed package itself. That file was removed — it double-ran prebuilds (once here, once in the label-gated `on-pr` flow) and bypassed the reuse optimisations. The caller-workflow *pattern* described below is still a valid general shape; `prebuilds-caller.yml` is just no longer a live instance of it.
-
-`public-pr.yml`'s single job (`validate-pr`) fails the check if any of the boolean inputs it receives is `false` (sanity checks, builds, C++ tests, integration tests, etc.). A fork PR's secret-bearing builds are gated where they run, by the `fork-ci` environment in `pr-build-test.yml` and `sdk-e2e.yml`; see [`LABELS.md`](LABELS.md). Merge Guard itself runs on `pull_request`, where a fork's run gets no secrets. Its check name — `qvac-merge-guard / validate-pr` — is the *only* thing the ruleset requires. It still has two unused boolean inputs `pr-gate-merge.yml` doesn't pass yet: `integration-tests-status` and `build-with-model-status` — see the caller-workflow pattern below for how to use the spare `integration-tests-status` slot instead of inventing a new one. `cpp-tests-status` is already wired.
-
----
-
-## Adding a new job — pick the right pattern
-
-However you're extending Merge Guard, you're always in one of three situations. **If you're an agent following this doc on someone's behalf, ask which pattern applies as an explicit question rather than inferring it from repo state** (e.g. an existing half-built caller workflow doesn't necessarily mean pattern 2 is what the human wants) — confirm, then proceed. Work out which one applies *before* touching any YAML:
-
-### 1. Folds into an existing category
-
-Use this when the new job is just another instance of a check `qvac-merge-guard` already gates on (another sanity check, another build, another general check), no matter what triggers it or what it validates.
-
-If it's matrix-driven off `changes`, add an entry to the `changes` job's `dorny/paths-filter` map (one entry: `<key>: ["<path-glob-that-should-trigger-it>", ...]`) and it flows through the existing matrix/caller automatically — `qvac-merge-guard` and `public-pr.yml` need no changes. The addon-package example: `<pkg>: ["packages/<pkg>/**", ".github/workflows/prebuilds-<pkg>.yml"]`.
-
-If it's a single job that's close to an existing category but isn't matrix-driven, add it to that category's `needs:` and fold its result into the existing boolean's expression, e.g.:
-
-```yaml
-general-checks-status: ${{ needs.error-code-ranges.result == 'success' && (needs.my-new-job.result == 'success' || needs.my-new-job.result == 'skipped') }}
-```
-
-### 2. A repeated, growing family of similarly-shaped jobs — build a caller workflow
-
-**Don't reach for this with only one target.** If today there's exactly one thing to gate on (e.g. only `ocr-ggml` needs an integration-test job right now), that's pattern 1 or pattern 3, not this one — wire that single job in directly, no caller workflow. A caller workflow's entire value is dispatching to *multiple* targets from one place; with one target it's pure indirection for zero benefit (an extra file, an extra `uses:` hop, nothing gained). Build the caller **later**, when a second target actually shows up — refactoring one direct job into a one-job caller at that point is a small, mechanical change, not a reason to build it preemptively.
-
-Use this pattern only once you're actually adding **more than one or two** near-identical jobs that only differ by which thing they target — one per addon package, one per platform, one per service, one per whatever. The naming pattern doesn't matter (`integration-*`, `lint-*`, `deploy-*`, anything) — what matters is "this is a family that will keep growing as new targets get added," not "this looks like it structurally resembles `prebuilds-caller.yml`."
-
-**Even then, check whether you actually need a caller, or just a matrix.** This repo already has both shapes for the same "one-per-package" problem, chosen for different reasons — pick based on which is actually true of your case:
-
-- **Matrix** (`sanity-checks`) — use when every target runs the **same job body**, just parameterized (same composite action, same steps, only `workdir`/similar inputs differ). One job definition, `strategy.matrix.include: ${{ fromJSON(needs.changes.outputs.packages-with-path) }}`, done. No caller workflow needed at all — the matrix *is* the aggregation, and `qvac-merge-guard` depends on the single `sanity-checks` job.
-- **Caller workflow, one named job per target** (`prebuilds-caller.yml`) — use when each target's job is genuinely **heterogeneous**: different `uses:` (each package has its own `prebuilds-<pkg>.yml`), potentially different inputs/secrets/permissions per target, or steps that diverge enough that forcing them into one matrix body would obscure more than it clarifies. The caller exists mainly for **readability and separation** — one clearly-named job per package instead of one matrix job whose per-iteration behavior is harder to follow — not because the jobs can't technically be expressed as a matrix.
-
-If your new family's job body is uniform across targets, default to a matrix and skip the caller workflow entirely. Only reach for the caller-with-individual-jobs shape when the targets' jobs genuinely diverge enough that a single matrix body would hurt readability.
-
-**Don't** wire each member of the family individually into `qvac-merge-guard`'s `needs:` array one at a time — that's how the array becomes an unreadable, ever-growing list, and it's the same anti-pattern as the 15 legacy `on-pr-<pkg>.yml` workflows the org is trying to move away from (see `packages/ocr-ggml/.agent/knowledge/ci-validation.md`). Whichever shape (matrix or caller) you land on, it's still exactly one job in `qvac-merge-guard`'s `needs:`.
-
-Instead, follow the exact precedent already in this repo: **`prebuilds-caller.yml`**. It's a reusable `workflow_call` workflow with one job per target, each gated on a membership check against a JSON list of what changed/applies:
-
-```yaml
-# .github/workflows/prebuilds-caller.yml (existing, for reference)
-on:
-  workflow_call:
-    inputs:
-      changed-packages:
-        required: true
-        type: string
-      repository:
-        required: false
-        type: string
-        default: "tetherto/qvac"
-      ref:
-        required: false
-        type: string
-
-jobs:
-  ocr-ggml-build:
-    if: contains(fromJSON(inputs.changed-packages), 'ocr-ggml')
-    uses: ./.github/workflows/prebuilds-ocr-ggml.yml
-    secrets: inherit
-    with:
-      repository: ${{ inputs.repository }}
-      ref: ${{ inputs.ref }}
-  # ...one block per package
-```
-
-Because it's called via `uses:` as a single job in `pr-gate-merge.yml`, that one job's `result` already reflects the aggregate of every inner job (success only if all ran-or-skipped cleanly) — no extra aggregation step needed.
-
-To wire any such family in the same shape (worked example below uses a hypothetical `integration-*` family — substitute your own):
-
-1. Create a new caller workflow (e.g. `.github/workflows/integration-tests-caller.yml`), mirroring `prebuilds-caller.yml`'s structure — one job per target, `if: contains(fromJSON(inputs.changed-packages), '<target>')` (or whatever list your family keys off), each calling that target's existing job/workflow.
-2. Add exactly one job to `pr-gate-merge.yml`:
-   ```yaml
-   integration-tests-caller:
-     needs: [changes]
-     permissions:
-       contents: read
-     uses: ./.github/workflows/integration-tests-caller.yml
-     secrets: inherit
-     with:
-       changed-packages: ${{ needs.changes.outputs.packages || '[]' }}
-       repository: ${{ github.event.pull_request.head.repo.full_name }}
-       ref: ${{ github.event.pull_request.head.sha }}
-   ```
-3. Add `integration-tests-caller` to `qvac-merge-guard`'s `needs:`, and wire its result into the **already-existing** `integration-tests-status` input on `public-pr.yml` (no change to `public-pr.yml` needed — that boolean is unused today, this is exactly what it's for):
-   ```yaml
-   integration-tests-status: ${{ needs.integration-tests-caller.result == 'success' || needs.integration-tests-caller.result == 'skipped' }}
-   ```
-
-Still exactly one check reported: `qvac-merge-guard / validate-pr`.
-
-### 3. A genuinely new category — one-off job, not a repeated family, doesn't fit any existing boolean
-
-Add the job to `pr-gate-merge.yml`, add it to `qvac-merge-guard`'s `needs:`, and add a **new** boolean input — first check whether `public-pr.yml` already has a spare unused input (`build-with-model-status` is also currently unused, alongside `integration-tests-status` if you haven't claimed it per pattern 2) before adding a brand new one to `workflow_call.inputs` and the shell check block.
-
-### What NOT to do
-
-Never give a new job its own top-level PR trigger with no `needs:` link into `qvac-merge-guard`. That produces a second, disconnected check name the ruleset doesn't require — a failure there is invisible to the merge gate. This is the exact anti-pattern the legacy per-package `on-pr-<pkg>.yml` workflows represent; wiring many similarly-named jobs straight into `needs:` one-by-one instead of behind a caller workflow is the same anti-pattern in miniature.
-
----
-
-## Verification after wiring a new job
-
-1. Open a real (or throwaway) PR touching the new job's trigger paths.
-2. Confirm via `gh pr checks <n> --repo tetherto/qvac` that `qvac-merge-guard / validate-pr` still appears exactly once, and its pass/fail reflects the new job's outcome (force the new job to fail once to confirm the aggregate check goes red).
-3. Because `pr-gate-merge.yml` runs on `pull_request`, a PR that edits it runs its own copy, so the PR validates its own wiring change before merge. The verifier scripts still come from the default branch's `.github/scripts/prebuild-status`.
+A PR that changes only shared contract CI (`pr-build-test.yml`, the `_*.yml` templates, `.github/scripts/select-projects.mjs` or an action they call) selects no package. To exercise it on one, dispatch `pr-build-test.yml` on the branch with `packages` set to the package's directory, for example `-f packages=vla-ggml`; a dispatch runs every stage.
 
 ## See also
 
-- [`docs/ci/LABELS.md`](LABELS.md) — fork-ci environment and retired `verified` label.
-- [`docs/ci/TEAMS.md`](TEAMS.md) — who can approve the `fork-ci` environment.
-- `qv-merge-guard-wire` skill (`.agents/skills/qv-merge-guard-wire/`) — this doc's content as an actionable Claude/Cursor skill.
+- [`LABELS.md`](LABELS.md): the `fork-ci` environment and the build labels.
+- [`TEAMS.md`](TEAMS.md): who can approve `fork-ci`.
+- The `qv-merge-guard-wire` skill (`.agents/skills/qv-merge-guard-wire/`).

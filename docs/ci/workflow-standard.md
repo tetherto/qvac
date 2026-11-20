@@ -124,7 +124,7 @@ A dependency off the contract is built inside each job that needs it, through th
 
 ### Names and Merge Guard keys
 
-A package's slug, in its release branches, tags and artifact names, is its directory under `packages/`, else its unscoped npm name: `plugins/opencode` releases from `release-opencode-plugin-<x.y.z>`. A package with a native build or C++ tests needs a `pr-gate-merge.yml` filter whose first path is `packages/<dir>/**` or `plugins/<dir>/**`, since those post the statuses Merge Guard waits for; a package with neither needs none.
+A package's slug, in its release branches, tags and artifact names, is its directory under `packages/`, else its unscoped npm name: `plugins/opencode` releases from `release-opencode-plugin-<x.y.z>`.
 
 ## Prebuilds
 
@@ -142,12 +142,12 @@ A package's slug, in its release branches, tags and artifact names, is its direc
 - **What they read from the trigger:** only `workflow_run.head_sha`, `head_repository` and `head_branch`. Their `context` job (`.github/actions/workflow-run-pr`) finds the one open PR with that head through the API, and skips the run unless its head SHA still matches, its head repository matches and its base branch is one they build. The PR's number, base, labels, draft state and whether it is a fork all come from the API; `PR checks`' result, outputs and artifacts are never read. `GITHUB_SHA` and `GITHUB_REF` are the default branch's, so every PR checkout takes the `context` job's SHA and repository.
 - **Fork PRs:** `fork-approval` waits on the `fork-ci` environment for a fork, as the API reports it. The run summary lists the PR's changed files before the approval. A fork PR that changes anything under `.github/` is refused, and its status says so. PR-code checkouts of a fork set `allow-unsafe-pr-checkout`, pinned to the SHA, without persisted credentials.
 - **Gating:** every job that holds secrets, OIDC or runs pull-request code needs `trust` and runs only when `needs.trust.outputs.allowed == 'true'`; `trust` needs `fork-approval`.
-- **Permissions:** both workflows set `permissions: {}` and `cache-mode: read`. Jobs that run PR code get `contents: read`, plus `id-token: write` where they use AWS. Only `context` and the last job, which run no PR code, post statuses.
+- **Permissions:** both workflows set `permissions: {}` and `cache-mode: read`. Jobs that run PR code get `contents: read`, plus `id-token: write` where they use AWS. Only jobs that run no PR code post statuses or start Merge Guard (`actions: write`).
 - **Results:** `qvac/pr-build-test` and `qvac/sdk-e2e` on the PR head link to the run, next to `qvac/prebuild-<key>` and `qvac/cpp-tests-<key>`. The build jobs do not appear in the PR's Checks tab.
 - **Labels:** applying a label starts `PR checks` again, which starts both. The `context` job tells a label's run from a push's by the PR's latest `labeled` event since the previous `PR checks` run on that commit.
 - **Re-runs:** re-running `PR checks` does not start them again; re-run the workflow itself.
 
-`pr-checks.yml` holds no secrets; its checks job reads `@tetherto` packages from GitHub Packages with the job token (`packages: read`). `pr-gate-merge.yml` runs on `pull_request`, so its required check reports on the PR, a fork's included. `check-approvals.yml` runs the default branch's copy when `PR checks` is requested, for fork PRs too, with the App key. It finds the PR through the API the same way, checks out nothing, and reports the required `Check Approvals` as a commit status on the PR head; a `review` comment on the PR runs it again.
+`pr-checks.yml` holds no secrets; its checks job reads `@tetherto` packages from GitHub Packages with the job token (`packages: read`). `pr-gate-merge.yml` runs the default branch's copy when `PR checks` or `SDK checks` completes and when `PR build and test` starts it, and posts the required `qvac-merge-guard / validate-pr` as a commit status from the job results `.github/merge-rules.yml` requires; see [`MERGE-GUARD.md`](MERGE-GUARD.md). `check-approvals.yml` runs the default branch's copy when `PR checks` is requested, for fork PRs too, with the App key. It finds the PR through the API the same way, checks out nothing, and reports the required `Check Approvals` as a commit status on the PR head; a `review` comment on the PR runs it again.
 
 ## Shared CI changes
 
@@ -157,7 +157,7 @@ A pull request that changes only the groups, `select-projects.mjs` or an action 
 
 - `.github/scripts/test/ci-contract-standard.test.mjs` checks every tagged package against this standard: target names, configurations, metadata, runner keys, `forwardAllArgs` on the host targets, and a build configuration for every configuration that restores one. It also checks that the groups request only standard targets.
 - `select-projects.mjs` applies the same rules when it builds rows, and rejects a request for a target outside the standard.
-- `ci-trust-policy.test.mjs` checks the trust gate in `pr-build-test.yml` and the Merge Guard filter entries.
+- `ci-trust-policy.test.mjs` checks the trust gate in `pr-build-test.yml` and that every check in `.github/merge-rules.yml` names a job its producer defines and a producer Merge Guard listens to.
 - `scripts/ci/check-workspace-ranges.mjs` runs in `pr-checks.yml` on every pull request, as does `scripts/ci/check-disallowed-deps.mjs`: no git URLs and no `-dev` or `-tmp` prerelease pins outside `@tetherto/*` in a contract package's dependencies.
 - On a PR into `release-*`, `sdk-checks.yml`'s release-guard job checks a release train's versions against npm, or a package's release branch, version bump and CHANGELOG section when its publish metadata sets `releaseGuard`.
 - On a PR that changes a path `.github/teams/sdk.json` owns, `sdk-checks.yml`'s pod-rules job checks the title and description with `packages/sdk/ci/validator.cjs`, and reruns on edits.

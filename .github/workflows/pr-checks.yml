@@ -29,6 +29,7 @@ jobs:
     with:
       targets: lint,typecheck,test:unit,verify:generated,verify:deps
       packages: ${{ inputs.packages }}
+      tags: ci:addons,ci:libs
 
   # A range on a workspace package that excludes its workspace version makes pnpm install the npm copy instead, so a
   # bump updates its dependents' ranges in the same pull request.
@@ -130,3 +131,29 @@ jobs:
         env:
           PROJECT: ${{ matrix.project.name }}
         run: pnpm exec nx run-many -t verify:deps -p "$PROJECT" --outputStyle=stream
+      - name: bundler requires
+        working-directory: src
+        env:
+          DIR: ${{ matrix.project.dir }}
+        run: node scripts/ci/check-bundler-requires.mjs "$DIR"
+
+  error-code-ranges:
+    if: github.event.action != 'labeled'
+    runs-on: ubuntu-latest
+    cache-mode: none
+    timeout-minutes: 10
+    steps:
+      - name: Checkout pull request
+        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          node-version: "lts/*"
+      - uses: tetherto/qvac-actions/setup-pnpm@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - run: pnpm install --frozen-lockfile --ignore-scripts --filter .
+      - run: npm run errors:check
+      - run: npm run errors:test
+      - run: npm run errors:typecheck
