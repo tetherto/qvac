@@ -15,8 +15,8 @@ test('carries the embedder, the device, the decoder count and the duration', (t)
   const plan = bciFitRequest(
     load(
       {
-        whisperConfig: { beam_search_beam_size: 5, duration_ms: 30_000 },
-        contextParams: { use_gpu: true, gpu_device: 1 }
+        whisperConfig: { beamSize: 5, durationMs: 30_000 },
+        contextParams: { useGpu: true, gpuDevice: 1 }
       },
       { artifacts: { embedderPath: '/models/bci-embedder.bin' } }
     )
@@ -34,5 +34,5 @@ test('carries the embedder, the device, the decoder count and the duration', (t)
 
 test('the GPU is on unless the load turns it off', (t) => {
   t.is(requestOf(bciFitRequest(load({})))?.['gpuLayers'], 1)
-  t.is(requestOf(bciFitRequest(load({ contextParams: { use_gpu: false } })))?.['gpuLayers'], 0)
+  t.is(requestOf(bciFitRequest(load({ contextParams: { useGpu: false } })))?.['gpuLayers'], 0)
 })

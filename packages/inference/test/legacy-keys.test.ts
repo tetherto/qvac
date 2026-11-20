@@ -147,6 +147,49 @@ test('renameLegacyRequestKeys: decision and rerank loads take the shared spellin
   }
 })
 
+test('renameLegacyRequestKeys: whisper and BCI nested configs', (t) => {
+  const { warn } = collectWarnings()
+  const whisper = renameLegacyRequestKeys(
+    {
+      type: 'loadModel',
+      modelType: 'whisper',
+      modelConfig: {
+        n_threads: 4,
+        beam_search_beam_size: 5,
+        vad_params: { speech_pad_ms: 30 },
+        contextParams: { use_gpu: true, flash_attn: true, 'main-gpu': 'dedicated' },
+        miscConfig: { caption_enabled: true }
+      }
+    },
+    warn
+  )
+  t.alike(whisper.modelConfig, {
+    threads: 4,
+    beamSize: 5,
+    vadParams: { speechPadMs: 30 },
+    contextParams: { useGpu: true, flashAttention: true, mainGpu: 'dedicated' },
+    miscConfig: { captionEnabled: true }
+  })
+
+  const bci = renameLegacyRequestKeys(
+    {
+      type: 'loadModel',
+      modelType: 'bci-whispercpp-transcription',
+      modelConfig: {
+        whisperConfig: { n_threads: 2, greedy_best_of: 3 },
+        bciConfig: { day_idx: 1 },
+        contextParams: { gpu_device: 0 }
+      }
+    },
+    warn
+  )
+  t.alike(bci.modelConfig, {
+    whisperConfig: { threads: 2, greedyBestOf: 3 },
+    bciConfig: { dayIdx: 1 },
+    contextParams: { gpuDevice: 0 }
+  })
+})
+
 test('renameLegacyRequestKeys: completion generation params and response format', (t) => {
   const { warn } = collectWarnings()
   const request = renameLegacyRequestKeys(

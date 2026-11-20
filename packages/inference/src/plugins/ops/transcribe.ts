@@ -81,7 +81,7 @@ function getEngineModelType(modelId: string): string {
 function getAudioFormat(modelId: string, engineType: string): AudioFormat {
   if (engineType === ModelType.whispercppTranscription) {
     const config = getModelConfig(modelId) as WhisperConfig
-    return (config.audio_format as AudioFormat) || 's16le'
+    return (config.audioFormat as AudioFormat) || 's16le'
   }
   return 's16le'
 }
@@ -99,7 +99,7 @@ async function applyPrompt(
   if (typeof model.reload !== 'function') return null
 
   const originalConfig = getModelConfig(modelId) as WhisperConfig
-  await model.reload(buildWhisperReloadConfig({ ...originalConfig, initial_prompt: prompt }))
+  await model.reload(buildWhisperReloadConfig({ ...originalConfig, initialPrompt: prompt }))
 
   return originalConfig
 }
@@ -108,7 +108,7 @@ async function restorePrompt(modelId: string, originalConfig: WhisperConfig): Pr
   const model = getModel(modelId)
   if (typeof model.reload !== 'function') return
 
-  await model.reload(buildWhisperReloadConfig({ ...originalConfig, initial_prompt: '' }))
+  await model.reload(buildWhisperReloadConfig({ ...originalConfig, initialPrompt: '' }))
 }
 
 type TranscribeReturn = {

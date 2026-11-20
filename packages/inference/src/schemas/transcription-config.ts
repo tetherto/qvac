@@ -14,23 +14,23 @@ const vadParamsSchema = z
       .number()
       .optional()
       .describe('VAD probability threshold for classifying a segment as speech.'),
-    min_speech_duration_ms: z
+    minSpeechDurationMs: z
       .number()
       .optional()
       .describe('Minimum duration for a segment to count as speech (ms).'),
-    min_silence_duration_ms: z
+    minSilenceDurationMs: z
       .number()
       .optional()
       .describe('Minimum silence duration required to split speech segments (ms).'),
-    max_speech_duration_s: z
+    maxSpeechDurationS: z
       .number()
       .optional()
       .describe('Maximum duration of a single speech segment (s).'),
-    speech_pad_ms: z
+    speechPadMs: z
       .number()
       .optional()
       .describe('Padding added before and after each speech segment (ms).'),
-    samples_overlap: z
+    samplesOverlap: z
       .number()
       .optional()
       .describe(
@@ -40,7 +40,7 @@ const vadParamsSchema = z
   .optional()
 
 const MAIN_GPU_DESCRIPTION =
-  "GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`."
+  "GPU to run on once `useGpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpuDevice`."
 
 // Mirrors the addon's validateMainGpu() so a bad selector is a structured
 // input error instead of a failure once model loading starts.
@@ -50,9 +50,9 @@ const mainGpuSelectorSchema = z.union([
   z.number().int().min(0).max(MAIN_GPU_INDEX_MAX),
   z
     .string()
-    .regex(/^\d+$/, 'main-gpu string must be a device index, dedicated, or integrated')
+    .regex(/^\d+$/, 'mainGpu string must be a device index, dedicated, or integrated')
     .refine((value) => Number(value) <= MAIN_GPU_INDEX_MAX, {
-      message: 'main-gpu device index must fit in a 32-bit integer'
+      message: 'mainGpu device index must fit in a 32-bit integer'
     }),
   z.enum(['dedicated', 'integrated'])
 ])
@@ -60,26 +60,22 @@ const mainGpuSelectorSchema = z.union([
 const contextParamsSchema = z
   .object({
     model: z.string().optional().describe('Path to the whisper model file (context override).'),
-    use_gpu: z.boolean().optional().describe('Enable GPU acceleration. Default false.'),
-    flash_attn: z.boolean().optional().describe('Enable flash attention.'),
-    gpu_device: z
+    useGpu: z.boolean().optional().describe('Enable GPU acceleration. Default false.'),
+    flashAttention: z.boolean().optional().describe('Enable flash attention.'),
+    gpuDevice: z
       .number()
       .optional()
       .describe(
-        'GPU device index to use (legacy GPU/IGPU ordinal). Cannot be combined with `main-gpu`.'
+        'GPU device index to use (legacy GPU/IGPU ordinal). Cannot be combined with `mainGpu`.'
       ),
-    // The addon also reads a `main_gpu` spelling; the SDK carries the one
-    // used by the other engines' configs, which the generated Python model
-    // exposes as its `main_gpu` field. A second key with that name would
-    // collide with the field and serialise both spellings at once.
-    'main-gpu': mainGpuSelectorSchema.optional().describe(MAIN_GPU_DESCRIPTION)
+    mainGpu: mainGpuSelectorSchema.optional().describe(MAIN_GPU_DESCRIPTION)
   })
   .superRefine((params, ctx) => {
-    if (params['main-gpu'] !== undefined && params.gpu_device !== undefined) {
+    if (params.mainGpu !== undefined && params.gpuDevice !== undefined) {
       ctx.addIssue({
         code: 'custom',
-        path: ['gpu_device'],
-        message: 'main-gpu cannot be combined with gpu_device'
+        path: ['gpuDevice'],
+        message: 'mainGpu cannot be combined with gpuDevice'
       })
     }
   })
@@ -87,7 +83,7 @@ const contextParamsSchema = z
 
 const miscConfigSchema = z
   .object({
-    caption_enabled: z.boolean().optional().describe('Format output segments as captions.'),
+    captionEnabled: z.boolean().optional().describe('Format output segments as captions.'),
     seed: z
       .number()
       .int()
@@ -101,143 +97,139 @@ export const whisperConfigSchema = z.object({
     .enum(['greedy', 'beam_search'])
     .optional()
     .describe("Decoding strategy: `'greedy'` or `'beam_search'`."),
-  n_threads: z
+  threads: z
     .number()
     .int()
     .optional()
     .describe('CPU threads for transcription; `0` = auto (half of hardware cores).'),
-  n_max_text_ctx: z
+  nMaxTextCtx: z
     .number()
     .int()
     .optional()
     .describe('Maximum text tokens from previous segments used as context.'),
-  offset_ms: z
-    .number()
-    .int()
-    .optional()
-    .describe('Milliseconds to skip at the start of the audio.'),
-  duration_ms: z
+  offsetMs: z.number().int().optional().describe('Milliseconds to skip at the start of the audio.'),
+  durationMs: z
     .number()
     .int()
     .optional()
     .describe('Maximum duration of audio to transcribe, in milliseconds.'),
-  audio_ctx: z
+  audioCtx: z
     .number()
     .int()
     .optional()
     .describe('Audio context window size in samples; `0` = model default.'),
   translate: z.boolean().optional().describe('Translate the transcribed audio into English.'),
-  no_context: z
+  noContext: z
     .boolean()
     .optional()
     .describe(
       "Do not carry past transcription forward as the decoder's initial prompt; each window is decoded independently."
     ),
-  no_timestamps: z.boolean().optional().describe('Omit timestamps from the transcription output.'),
-  single_segment: z
+  noTimestamps: z.boolean().optional().describe('Omit timestamps from the transcription output.'),
+  singleSegment: z
     .boolean()
     .optional()
     .describe('Force the whole audio into one output segment (for streaming or short clips).'),
-  print_special: z.boolean().optional().describe('Print special tokens in the output.'),
-  print_progress: z.boolean().optional().describe('Print progress updates during transcription.'),
-  print_realtime: z
+  printSpecial: z.boolean().optional().describe('Print special tokens in the output.'),
+  printProgress: z.boolean().optional().describe('Print progress updates during transcription.'),
+  printRealtime: z
     .boolean()
     .optional()
     .describe(
       'whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback).'
     ),
-  print_timestamps: z
+  printTimestamps: z
     .boolean()
     .optional()
-    .describe('Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data.'),
-  token_timestamps: z
+    .describe('Prefix each `printRealtime` line with `[t0 --> t1]`; no effect on returned data.'),
+  tokenTimestamps: z
     .boolean()
     .optional()
     .describe('Experimental: compute per-token timestamps (populates `t0`/`t1`).'),
-  thold_pt: z
+  tholdPt: z
     .number()
     .optional()
     .describe('Word-timestamp probability threshold for accepting a word (0–1).'),
-  thold_ptsum: z
+  tholdPtsum: z
     .number()
     .optional()
     .describe(
       'Timestamp-token sum-probability threshold used when deriving token-level timestamps (0–1).'
     ),
-  max_len: z.number().int().optional().describe('Maximum tokens per transcription segment.'),
-  split_on_word: z
+  maxLen: z.number().int().optional().describe('Maximum tokens per transcription segment.'),
+  splitOnWord: z
     .boolean()
     .optional()
-    .describe('When `max_len > 0`, split segments on word boundaries instead of mid-token.'),
-  max_tokens: z.number().int().optional().describe('Maximum tokens per segment; `0` = no limit.'),
-  debug_mode: z
+    .describe('When `maxLen > 0`, split segments on word boundaries instead of mid-token.'),
+  maxTokens: z.number().int().optional().describe('Maximum tokens per segment; `0` = no limit.'),
+  debugMode: z
     .boolean()
     .optional()
     .describe('Experimental: emit extra debug output (e.g. the computed log-mel).'),
-  tdrz_enable: z
+  tdrzEnable: z
     .boolean()
     .optional()
     .describe('Enable tinydiarize (lightweight speaker-turn detection).'),
-  suppress_regex: z
+  suppressRegex: z
     .string()
     .optional()
     .describe('Regular-expression pattern for tokens to suppress.'),
-  initial_prompt: z
+  initialPrompt: z
     .string()
     .optional()
     .describe('Initial prompt (context) prepended to the transcription.'),
-  carry_initial_prompt: z
+  carryInitialPrompt: z
     .boolean()
     .optional()
     .describe(
-      'Prepend `initial_prompt` to every decode window instead of only the first. Default false.'
+      'Prepend `initialPrompt` to every decode window instead of only the first. Default false.'
     ),
   language: z
     .string()
     .optional()
     .describe("Transcription language (ISO 639-1) or `'auto'` to detect."),
-  detect_language: z
+  detectLanguage: z
     .boolean()
     .optional()
     .describe(
-      "Convenience flag: `true` is translated to `language: 'auto'` before the request reaches the addon, which has no `detect_language` key of its own."
+      "Convenience flag: `true` is translated to `language: 'auto'` before the request reaches the addon, which has no language-detection flag of its own."
     ),
-  suppress_blank: z
+  suppressBlank: z
     .boolean()
     .optional()
     .describe('Suppress the blank / leading-space token at the start of sampling.'),
-  suppress_nst: z.boolean().optional().describe('Suppress non-speech tokens (NST).'),
+  suppressNst: z.boolean().optional().describe('Suppress non-speech tokens (NST).'),
   temperature: z.number().optional().describe('Sampling temperature (0–1). Default 0.0.'),
-  length_penalty: z
+  lengthPenalty: z
     .number()
     .optional()
     .describe(
       "Beam-search length penalty. Must be ≥ 0, so the upstream `-1` 'disabled' sentinel cannot be set via config."
     ),
-  temperature_inc: z
+  temperatureInc: z
     .number()
     .optional()
     .describe('Temperature increment applied when sampling fails.'),
-  entropy_thold: z.number().optional().describe('Entropy threshold for filtering uncertain words.'),
-  logprob_thold: z
+  entropyThold: z.number().optional().describe('Entropy threshold for filtering uncertain words.'),
+  logprobThold: z
     .number()
     .optional()
     .describe('Log-probability threshold for filtering words; `-1` disables.'),
-  greedy_best_of: z
+  greedyBestOf: z
     .number()
     .int()
     .optional()
     .describe('Greedy decoding: number of candidate completions; `-1` = default.'),
-  beam_search_beam_size: z
+  beamSize: z
     .number()
     .int()
     .optional()
     .describe('Beam size for beam-search decoding; `-1` = default.'),
-  max_initial_ts: z
+  maxInitialTs: z
     .number()
     .optional()
     .describe('Maximum initial timestamp the decoder may emit, as a fraction of the window.'),
-  no_speech_thold: z
+  noSpeechThold: z
     .number()
     .optional()
     .describe('No-speech probability above which a segment is treated as silence.'),
@@ -248,8 +240,8 @@ export const whisperConfigSchema = z.object({
     .describe(
       'Directory scanned as given for dynamically-loaded ggml backend modules. Unset uses the backends the `@qvac/fabric` runtime ships.'
     ),
-  vad_params: vadParamsSchema,
-  audio_format: audioFormatSchema
+  vadParams: vadParamsSchema,
+  audioFormat: audioFormatSchema
     .optional()
     .describe("Interpretation of raw audio bytes: `'f32le'` or `'s16le'`."),
   contextParams: contextParamsSchema,

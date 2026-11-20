@@ -21,8 +21,8 @@ test('whisper: carries the VAD model, flash attention, and the decoder count', (
       '/models/whisper.bin',
       {
         strategy: 'beam_search',
-        beam_search_beam_size: 5,
-        contextParams: { use_gpu: true, flash_attn: true, gpu_device: 1 }
+        beamSize: 5,
+        contextParams: { useGpu: true, flashAttention: true, gpuDevice: 1 }
       },
       { artifacts: { vadModelPath: '/models/vad.bin' } }
     )
@@ -40,18 +40,18 @@ test('whisper: carries the VAD model, flash attention, and the decoder count', (
 })
 
 test('whisper: a CPU load asks the fitter for no offload', (t) => {
-  const plan = whisperFitRequest(load('/models/whisper.bin', { contextParams: { use_gpu: false } }))
+  const plan = whisperFitRequest(load('/models/whisper.bin', { contextParams: { useGpu: false } }))
   t.is(requestOf(plan)?.['gpuLayers'], 0)
 })
 
 test('whisper: the transcribe duration bounds the projection', (t) => {
-  const plan = whisperFitRequest(load('/models/whisper.bin', { duration_ms: 90_000 }))
+  const plan = whisperFitRequest(load('/models/whisper.bin', { durationMs: 90_000 }))
   t.is(requestOf(plan)?.['audioSeconds'], 90)
 })
 
 test('whisper: the default decoder sentinel is left to the engine', (t) => {
   const plan = whisperFitRequest(
-    load('/models/whisper.bin', { strategy: 'greedy', greedy_best_of: -1 })
+    load('/models/whisper.bin', { strategy: 'greedy', greedyBestOf: -1 })
   )
   t.ok(requestOf(plan))
   t.absent('decoders' in (requestOf(plan) ?? {}))

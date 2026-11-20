@@ -399,7 +399,7 @@ test('transcribe (whisper): cancel-by-requestId exits loop and runs restorePromp
   registerModel(modelId, {
     model: model as never,
     path: '/tmp/whisper.gguf',
-    config: { audio_format: 's16le' } as never,
+    config: { audioFormat: 's16le' } as never,
     modelType: ModelType.whispercppTranscription
   } as never)
 

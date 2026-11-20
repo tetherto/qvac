@@ -36,7 +36,7 @@ function collectUndescribed(node: JsonSchemaNode, path: string, out: string[]): 
   }
   for (const [name, field] of Object.entries(node.properties ?? {})) {
     const childPath = `${path}.${name}`
-    // A nested config object (e.g. whisper `vad_params`) needs no description of
+    // A nested config object (e.g. whisper `vadParams`) needs no description of
     // its own; every other field (leaf or union, e.g. CosyVoice3 `instruct`) does.
     // Recurse regardless, so nested fields and union object arms are covered.
     const isContainer =

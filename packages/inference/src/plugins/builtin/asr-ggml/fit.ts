@@ -59,20 +59,20 @@ export function whisperFitRequest(load: FitLoad): FitRequestPlan {
   const config = (load.modelConfig ?? {}) as WhisperConfig
   const vadModelPath = load.artifacts?.['vadModelPath']
   const decoders = decoderCount([
-    config.strategy === 'beam_search' ? config.beam_search_beam_size : config.greedy_best_of
+    config.strategy === 'beam_search' ? config.beamSize : config.greedyBestOf
   ])
-  const seconds = audioSeconds(config.duration_ms)
+  const seconds = audioSeconds(config.durationMs)
 
   const request: WhisperFitRequest = {
     engine: 'whisper',
     modelPath: load.modelPath,
-    gpuLayers: gpuLayersFromGate(config.contextParams?.use_gpu),
+    gpuLayers: gpuLayersFromGate(config.contextParams?.useGpu),
     ...(vadModelPath !== undefined && { vadModelPath }),
-    ...(config.contextParams?.flash_attn !== undefined && {
-      flashAttn: config.contextParams.flash_attn
+    ...(config.contextParams?.flashAttention !== undefined && {
+      flashAttn: config.contextParams.flashAttention
     }),
-    ...(config.contextParams?.gpu_device !== undefined && {
-      gpuDevice: config.contextParams.gpu_device
+    ...(config.contextParams?.gpuDevice !== undefined && {
+      gpuDevice: config.contextParams.gpuDevice
     }),
     ...(decoders !== undefined && { decoders }),
     ...(seconds !== undefined && { audioSeconds: seconds })

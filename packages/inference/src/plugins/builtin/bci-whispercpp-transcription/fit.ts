@@ -10,16 +10,16 @@ export function bciFitRequest(load: FitLoad): FitRequestPlan {
   const config = (load.modelConfig ?? {}) as BciConfig
   const embedderPath = load.artifacts?.['embedderPath']
   const whisper = config.whisperConfig
-  const decoders = decoderCount([whisper?.beam_search_beam_size, whisper?.greedy_best_of])
-  const seconds = audioSeconds(whisper?.duration_ms)
+  const decoders = decoderCount([whisper?.beamSize, whisper?.greedyBestOf])
+  const seconds = audioSeconds(whisper?.durationMs)
 
   const request: BciFitRequest = {
     modelPath: load.modelPath,
     ...(embedderPath !== undefined && { embedderPath }),
     // The load runs on the GPU unless told otherwise.
-    gpuLayers: gpuLayersFromGate(config.contextParams?.use_gpu ?? true),
-    ...(config.contextParams?.gpu_device !== undefined && {
-      gpuDevice: config.contextParams.gpu_device
+    gpuLayers: gpuLayersFromGate(config.contextParams?.useGpu ?? true),
+    ...(config.contextParams?.gpuDevice !== undefined && {
+      gpuDevice: config.contextParams.gpuDevice
     }),
     ...(decoders !== undefined && { decoders }),
     ...(seconds !== undefined && { audioSeconds: seconds })
