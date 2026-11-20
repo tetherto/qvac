@@ -13,6 +13,7 @@
 
 #include "CacheCheckpointFile.hpp"
 #include "CacheManager.hpp"
+#include "ContinuousBatchScheduler.hpp"
 #include "GenerationParamsApply.hpp"
 #include "RequestRecoveryHelpers.hpp"
 #include "addon/LlmErrors.hpp"
@@ -80,9 +81,14 @@ TextLlmContext::~TextLlmContext() {
 }
 
 llama_pos TextLlmContext::ctxCeiling() const {
-  return perSeqCtxCeiling_ > 0
-             ? perSeqCtxCeiling_
-             : static_cast<llama_pos>(llama_n_ctx(modelCtx_.lctx));
+  // The slot's even share of the pool, or kv_unified_per_slot when lower.
+  // llama-server caps a slot at kv_unified_per_slot only; the even share is the
+  // addon's, so slots cannot overbook the pool.
+  return perSeqCtxCeiling_ > 0 ? perSeqCtxCeiling_
+                               : static_cast<llama_pos>(batching::perSeqCeiling(
+                                     llama_n_ctx(modelCtx_.lctx),
+                                     llama_n_seq_max(modelCtx_.lctx),
+                                     params_.kv_unified_per_slot));
 }
 
 void TextLlmContext::initializeCommonState() {
@@ -132,7 +138,9 @@ void TextLlmContext::initializeCommonState() {
       qvac_lib_inference_addon_llama::utils::takesSlidingWindowCheckpoints(
           llama_model_n_swa(model),
           params_.swa_full,
-          llama_n_ctx_seq(modelCtx_.lctx));
+          std::min(
+              llama_n_ctx_seq(modelCtx_.lctx),
+              static_cast<uint32_t>(ctxCeiling())));
   snapshotScope_ =
       qvac_lib_inference_addon_llama::utils::untrimmableSnapshotScope();
   requestRollback_.setScope(snapshotScope_);
@@ -1943,7 +1951,7 @@ void TextLlmContext::acceptRestoredState(
             "': " + ex.what());
   }
   const llama_pos metadataNPast = nPast_;
-  if (metadataNPast > llama_n_ctx(modelCtx_.lctx)) {
+  if (metadataNPast > ctxCeiling()) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(ContextLengthExeeded),

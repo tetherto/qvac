@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iterator>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
@@ -2019,6 +2020,148 @@ TEST_F(LoadFitNormalizationTest, FalseyValueOnNegatedSpellingEnablesKvOffload) {
       {},
       backend({.type = backend_selection::GPU, .name = "none"}));
   EXPECT_FALSE(result.params.no_kv_offload);
+}
+
+// llama-server's --kv-unified-per-slot without -c sizes the pool to
+// parallel x per-slot (baseConfig has parallel 2).
+TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotSizesThePool) {
+  auto config = baseConfig();
+  config["kv_unified_per_slot"] = "1024";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_TRUE(result.params.kv_unified);
+  EXPECT_EQ(result.params.kv_unified_per_slot, 1024);
+  EXPECT_EQ(result.params.n_ctx, 2048);
+  EXPECT_TRUE(result.fitSnapshot.kvUnified);
+  EXPECT_EQ(result.fitSnapshot.nCtx, 2048U);
+}
+
+// fit-ctx also writes the marker ctx-size 0 leaves, and keys are applied in
+// unordered_map order, so it must not decide whether the pool is sized.
+TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotKeepsExplicitContext) {
+  for (const std::string ctxKey : {"ctx-size", "ctx_size"}) {
+    for (const std::string ctxSize : {"4096", "0"}) {
+      auto config = baseConfig();
+      config["kv-unified-per-slot"] = "1024";
+      config["fit-ctx"] = "2048";
+      config[ctxKey] = ctxSize;
+      const auto result = lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}));
+      EXPECT_EQ(result.params.n_ctx, std::stoi(ctxSize))
+          << ctxKey << "=" << ctxSize;
+    }
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotPoolOverflowIsRejected) {
+  // baseConfig has parallel 2: the smallest cap whose pool overflows int32.
+  constexpr int32_t kPerSlot = std::numeric_limits<int32_t>::max() / 2 + 1;
+  auto config = baseConfig();
+  config["kv-unified-per-slot"] = std::to_string(kPerSlot);
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "none"})));
+    FAIL() << "a pool over the largest ctx-size must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr(
+            "parallel x kv-unified-per-slot (2 x " + std::to_string(kPerSlot) +
+            ") exceeds"));
+  }
+}
+
+// With an explicit ctx-size, caps that overbook the pool fabric creates (padded
+// to 256) are refused before the model loads (baseConfig has parallel 2).
+TEST_F(LoadFitNormalizationTest, KvUnifiedPerSlotOverbookingIsRejected) {
+  const auto normalize = [this](const std::string& perSlot) {
+    auto config = baseConfig();
+    config["ctx-size"] = "1000";
+    config["kv-unified-per-slot"] = perSlot;
+    return lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "none"}));
+  };
+  EXPECT_EQ(normalize("512").params.kv_unified_per_slot, 512);
+  try {
+    static_cast<void>(normalize("513"));
+    FAIL() << "caps that overbook the pool must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(), ::testing::HasSubstr("(2 x 513) must fit ctx_size=1024"));
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, NegativeKvUnifiedPerSlotIsRejected) {
+  auto config = baseConfig();
+  config["kv-unified-per-slot"] = "-512";
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "none"})));
+    FAIL() << "a negative kv-unified-per-slot must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr(
+            "kv-unified-per-slot must be 0 (no cap) or positive, got -512"));
+  }
+}
+
+// Several slots share one KV pool, split evenly; one slot has the same layout
+// either way and keeps a per-slot cache.
+TEST_F(LoadFitNormalizationTest, KvCacheIsUnifiedWithSeveralSlots) {
+  for (const std::string parallel : {"1", "2"}) {
+    auto config = baseConfig();
+    config["parallel"] = parallel;
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "none"}));
+    const bool unified = parallel != "1";
+    EXPECT_EQ(result.params.kv_unified, unified) << "parallel=" << parallel;
+    EXPECT_EQ(result.fitSnapshot.kvUnified, unified) << "parallel=" << parallel;
+    EXPECT_EQ(result.params.kv_unified_per_slot, 0) << "parallel=" << parallel;
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, KvUnifiedIsNotAnOption) {
+  for (const std::string key : {"kv-unified", "kv_unified", "no-kv-unified"}) {
+    auto config = baseConfig();
+    config[key] = "true";
+    try {
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"})));
+      FAIL() << key << " must be rejected";
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("invalid argument"))
+          << key;
+    }
+  }
 }
 
 TEST_F(LoadFitNormalizationTest, UnknownBooleanValueIsRejected) {

@@ -16,6 +16,7 @@
 
 #include "CacheCheckpointFile.hpp"
 #include "CacheManager.hpp"
+#include "ContinuousBatchScheduler.hpp"
 #include "GenerationParamsApply.hpp"
 #include "ImagePixelLimit.hpp"
 #include "ImageTokenBudget.hpp"
@@ -232,7 +233,9 @@ void MtmdLlmContext::initializeCommonState() {
       qvac_lib_inference_addon_llama::utils::takesSlidingWindowCheckpoints(
           llama_model_n_swa(model),
           params_.swa_full,
-          llama_n_ctx_seq(modelCtx_.lctx));
+          std::min(
+              llama_n_ctx_seq(modelCtx_.lctx),
+              static_cast<uint32_t>(ctxCeiling())));
   snapshotScope_ =
       qvac_lib_inference_addon_llama::utils::untrimmableSnapshotScope();
   requestRollback_.setScope(snapshotScope_);
@@ -1453,9 +1456,14 @@ llama_pos MtmdLlmContext::removeLastNTokens(llama_pos count) {
 }
 
 llama_pos MtmdLlmContext::ctxCeiling() const {
-  return perSeqCtxCeiling_ > 0
-             ? perSeqCtxCeiling_
-             : static_cast<llama_pos>(llama_n_ctx(modelCtx_.lctx));
+  // The slot's even share of the pool, or kv_unified_per_slot when lower.
+  // llama-server caps a slot at kv_unified_per_slot only; the even share is the
+  // addon's, so slots cannot overbook the pool.
+  return perSeqCtxCeiling_ > 0 ? perSeqCtxCeiling_
+                               : static_cast<llama_pos>(batching::perSeqCeiling(
+                                     llama_n_ctx(modelCtx_.lctx),
+                                     llama_n_seq_max(modelCtx_.lctx),
+                                     params_.kv_unified_per_slot));
 }
 
 cache::Ledger
@@ -2637,7 +2645,8 @@ void MtmdLlmContext::acceptRestoredState(
             "': " + ex.what());
   }
 
-  if (getNPast() > llama_n_ctx(modelCtx_.lctx)) {
+  // Positions and KV cells diverge for M-RoPE images; both must fit the slot.
+  if (getNPast() > ctxCeiling() || getCacheTokens() > ctxCeiling()) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(ContextLengthExeeded),
