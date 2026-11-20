@@ -1,0 +1,22 @@
+# Source-only acceptance probe: imported package targets cannot be instrumented.
+function(qvac_test_windows_stream)
+  if(NOT TARGET ggml-base OR TARGET windows_stream_vector)
+    return()
+  endif()
+  if(NOT MSVC OR NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(FATAL_ERROR "The stream ownership probe requires Windows/MSVC Debug")
+  endif()
+  get_target_property(core_type ggml-base TYPE)
+  if(NOT core_type STREQUAL "SHARED_LIBRARY")
+    message(FATAL_ERROR "The stream ownership probe requires the shared core")
+  endif()
+  # Fail the child process on assertions even during DLL teardown. The report
+  # hook must live in the core's CRT, where the assertion occurs.
+  target_sources(ggml-base PRIVATE "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/crt-helper.cpp")
+  add_executable(windows_stream_vector "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/stream.cpp")
+  target_link_libraries(windows_stream_vector PRIVATE ggml-base)
+  add_test(NAME windows-stream-control COMMAND windows_stream_vector control)
+  add_test(NAME windows-stream-vector COMMAND windows_stream_vector)
+  set_tests_properties(windows-stream-control windows-stream-vector PROPERTIES TIMEOUT 15)
+endfunction()
+cmake_language(DEFER CALL qvac_test_windows_stream)

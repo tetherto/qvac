@@ -176,3 +176,138 @@ QVAC_GGML_BOUNDARY_SOURCE=/absolute/path/to/qvac-fabric-llm.cpp \
   pnpm exec nx run @qvac/fabric:cpp:build:linux-x64
 pnpm exec nx run @qvac/fabric:cpp:tests:linux-x64
 ```
+
+## Shared-core packaging (step 2)
+
+Dynamic-backend builds now use shared ggml core libraries by default. The
+checked-in `vcpkg-overlays/ports/qvac-fabric` is an exact copy of draft registry
+PR #504. It pins the source fork's `feat/shared-core-12032` branch by commit,
+based on `tetherto/temp-12032`, with no source patches or shared-core feature.
+Replace this temporary source pin after the fabric branch merges.
+
+Top-level `BUILD_SHARED_LIBS` remains off: enabling it also changes llama and
+mtmd into shared libraries. The source instead sets it within ggml when
+`GGML_BACKEND_DL` is selected. llama/helpers remain static; ggml-base, the
+backend registry and vector-index become shared libraries with ABI-1 filenames.
+CPU-only non-DL builds and Apple retain their previous linkage.
+
+Linux ggml-base embeds and exports libc++ under `QVAC_GGML_BASE_ABI_1`.
+Libc++ backends and fabric import it. CUDA keeps private static libstdc++;
+XDNA keeps system shared libstdc++/XRT. GNU runtime selection and symbol export
+maps live in the fork; installed binary ownership checks live in the port.
+Android retains NDK `libc++_shared.so`.
+
+The libraries ship in fabric's existing platform package, with `$ORIGIN`
+lookup on Linux/Android. Windows core DLLs sit beside the `.bare` entry point;
+import libraries and backend DLLs stay in its companion directory. Platform
+metadata and `qvac_fabric_import_shared_core(prebuilds host)` support importing
+the same package from development consumers. No additional npm package is needed.
+
+Native CI now builds the real overlay port, rather than the old source-only
+static/shared controls (which remain on the parent regression PR #5871):
+
+```sh
+cd packages/fabric
+node ci/boundary-regressions.mjs build
+node ci/boundary-regressions.mjs test
+```
+
+Use the usual provisioned vcpkg/Bare toolchain and Vulkan SDK. The small test
+manifest requests GPU backends and vector-index, so it exercises the normal
+DL port configuration, all CPU variants, Vulkan and RPC. It builds both
+Release and Debug dependencies, then links the tests to the installed Debug
+core and a real CPU module. Windows uses the static Debug CRT (`/MTd`) and
+rejects missing Debug core metadata. Logger/abort probes link that same core.
+Linux also verifies typed exceptions, `exception_ptr`, stream RTTI and
+allocation/destruction across a shared C++ boundary, with versioned imports.
+Full fabric prebuild CI uses the same overlay and checks staged ELF imports.
+
+Windows source validation with MSVC 14.44, LLVM 23.1.4 and `/MTd` passes the
+CPU allocate/free, logger and abort tests. A Release DLL whole-archiving
+llama/common/mtmd against the shared core also links and loads successfully.
+
+The additional C++ stream/vector probe remains **failing** under
+`/MTd`: a caller-owned vector is passed into `Uint8BufferStreamBuf`, and the
+core reports `__acrt_first_block == header` during DLL teardown. The no-stream
+control passes. This is separate from the fixed linker/export collision.
+The current LLM addon loads from disk and rejects weight streaming. Its old
+`initFromMemory` helper has no production callers in this checkout, so this
+probe does not establish a failure in the active model-loading path. The
+exported `llama_model_load_from_buffer` API still calls this constructor across
+the new fabric/core DLL boundary and would have the same ownership problem.
+The probe is source-only and instruments the core with a test CRT report hook;
+it is not the installed-port test and is not run by the current CI target.
+Run it in a VS developer shell, with native CMake/Ninja/clang-cl executables:
+
+```powershell
+cmake -S packages/fabric/test/native -B build/windows-stream -G Ninja `
+  -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl `
+  -DQVAC_GGML_SOURCE_DIR=C:/path/to/fabric/ggml `
+  -DCMAKE_PROJECT_INCLUDE="$PWD/packages/fabric/test/regression/windows-stream/hook.cmake"
+cmake --build build/windows-stream
+ctest --test-dir build/windows-stream --output-on-failure
+```
+
+The report hook terminates the child with status 86 on any CRT assertion,
+including assertions after `main` returns; checking a counter in `main` would
+miss this failure. The hook does not change allocation behavior and is never
+compiled into shipped core libraries.
+
+### Windows shared CRT experiment
+
+`windows-shared-crt` evaluates a common Windows runtime using `/MDd` in Debug
+and `/MD` in Release. It does not change production triplets, addon flags,
+registry pins, or the existing `/MTd` baseline. Both builds use the actual
+shared-core source checkout and a real CPU backend. A separate DLL
+whole-archives llama/common/mtmd, matching fabric's archive layout, while a
+client executable checks typed exceptions, `exception_ptr`, stream RTTI and
+allocation/destruction across DLL boundaries. This DLL is a link/ownership
+control; it is not the actual Bare addon.
+
+In a VS developer shell with native CMake/Ninja/clang-cl executables:
+
+```powershell
+$source = 'packages/fabric/test/regression/windows-shared-crt'
+cmake -S $source -B build/windows-shared-crt-debug -G Ninja `
+  -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl `
+  -DQVAC_FABRIC_SOURCE_DIR=C:/path/to/fabric
+cmake --build build/windows-shared-crt-debug --parallel 6
+ctest --test-dir build/windows-shared-crt-debug --output-on-failure
+
+cmake -S $source -B build/windows-shared-crt-release -G Ninja `
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl `
+  -DQVAC_FABRIC_SOURCE_DIR=C:/path/to/fabric `
+  -DMSVC_REDIST_DIR='C:/path/to/VS/VC/Redist/MSVC/toolset-version'
+cmake --build build/windows-shared-crt-release --parallel 6
+ctest --test-dir build/windows-shared-crt-release --output-on-failure
+cmake --install build/windows-shared-crt-release --prefix build/windows-crt-package `
+  --component crt-experiment
+& ./build/windows-crt-package/bin/runtime_boundary.exe
+```
+
+Debug additionally runs the original stream/vector probe with its fatal CRT
+assertion hook. Release copies the toolset's redistributable runtime DLLs into
+the executable directory and installs a standalone test bundle. Its runtime
+test verifies that `msvcp140.dll` and `vcruntime140.dll` actually loaded from
+that directory, so a globally installed redistributable cannot mask failure.
+The OS-provided UCRT remains a system dependency on supported modern Windows.
+Debug runtime DLLs are used only on the development machine and are never
+included in the distributable bundle. This is a manual experiment, outside the
+current installed-port CI target. Production adoption still needs consistent
+consumer/dependency flags, runtime staging, Bare DLL lookup and CI policy work.
+
+Validated with MSVC 14.44 and LLVM 23.1.4 against source `f89291d9c`:
+all six Debug tests pass, including the stream/vector probe that fails under
+`/MTd`. The Release C++ boundary test passes both in the build tree and in the
+installed bundle with `PATH` restricted to the Windows system directory.
+`msvcp140.dll`, `vcruntime140.dll` and `vcruntime140_1.dll` report loading from
+the bundle. PE imports confirm that the caller, fabric-like DLL, core and CPU
+backend use the shared runtime. The existing four Linux boundary tests also
+pass after making the probe's intentionally throwing C-linkage function
+explicitly `noexcept(false)`, as required by Windows `/EHsc` assumptions.
+
+The strict runtime-binding audit remains required: versioned imports alone
+have not eliminated Bare's allocator interposition. Windows stream/vector
+ownership, Android APK loading, bare-sidecar, coexistence and GPU/NPU execution
+remain cutover acceptance work. These draft PRs do not migrate all consumer
+addons or remove their compatibility paths.

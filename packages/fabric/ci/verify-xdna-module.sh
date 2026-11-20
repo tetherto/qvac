@@ -20,10 +20,8 @@ if echo "$dyn" | grep -q -E 'Shared library: \[libc\+\+(abi)?\.so'; then
   echo "::error::$module needs libc++; it must use libstdc++ only"
   exit 1
 fi
-if nm -D --undefined-only "$module" | grep -q -E ' (ggml|gguf)_'; then
-  echo "::error::$module has undefined ggml_/gguf_ symbols; it must embed its own ggml-base"
-  exit 1
-fi
+# Validate versioned imports against the sibling core and retain GNU/XRT isolation.
+node "$(dirname "${BASH_SOURCE[0]}")/verify-shared-core.mjs" linux-x64 --xdna
 for design in fused_layer gemv_n32_r4_c8; do
   kernels=("$dir"/${design}_*.xclbin)
   if [ "${#kernels[@]}" -eq 0 ]; then

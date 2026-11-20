@@ -189,3 +189,7 @@ Pass `-D VCPKG_MANIFEST_FEATURES=webgpu` to `bare-make generate` when building
 Fabric, then build, install and run `npm run link:platform`. Build speech and
 LLM consumers against this platform package. The default published runtime
 does not include WebGPU; consumers do not build or ship a separate backend.
+
+The shared-core migration and its package-boundary tests are described
+in [the regression guide](test/regression/README.md#shared-core-packaging-step-2).
+Default builds retain the current linkage until the coordinated migration.
