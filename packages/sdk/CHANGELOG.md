@@ -1712,7 +1712,7 @@ import { loadModel, ModelType } from '@qvac/sdk'
 const modelId = await loadModel({
   modelType: ModelType.llamacppCompletion,
   modelSrc: '/models/llm.gguf',
-  modelConfig: { backend: 'cuda,vulkan' }
+  modelConfig: { backend: ['cuda', 'vulkan'] }
 })
 ```
 
