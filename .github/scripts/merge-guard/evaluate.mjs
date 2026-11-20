@@ -118,7 +118,7 @@ function github(env) {
 
 async function findPr(gh, env, event) {
   const repo = env.GITHUB_REPOSITORY
-  let number = env.PR || event.issue?.number
+  const number = env.PR
   if (env.GITHUB_EVENT_NAME === 'workflow_run') {
     const run = event.workflow_run
     const owner = run.head_repository?.full_name?.split('/')[0]
@@ -132,6 +132,7 @@ async function findPr(gh, env, event) {
   const pr = await gh.get(`repos/${repo}/pulls/${number}`)
   if (pr.state !== 'open') return { why: `PR #${number} is ${pr.state}` }
   if (pr.base.ref !== env.DEFAULT_BRANCH) return { why: `PR #${number} is into ${pr.base.ref}` }
+  if (env.SHA && pr.head.sha !== env.SHA) return { why: `PR #${number} moved on from ${env.SHA}` }
   return { pr }
 }
 
@@ -201,7 +202,11 @@ async function main(env) {
     producer: runs[c.workflow][0]?.name ?? c.workflow,
     ...resolveCheck(c, runs[c.workflow])
   }))
-  const result = verdict(resolved)
+  // A fork PR's pull_request runs use its own workflow files, so it could replace the checks it is judged on.
+  const forkEditsCi = pr.head.repo?.full_name !== env.GITHUB_REPOSITORY && files.some((f) => f.startsWith('.github/'))
+  const result = forkEditsCi
+    ? { state: 'failure', description: 'fork PRs that change .github/ are not accepted; a maintainer re-raises them from a branch' }
+    : verdict(resolved)
   appendFileSync(env.GITHUB_STEP_SUMMARY, summary(pr, rules, resolved, result))
 
   const now = await gh.get(`repos/${env.GITHUB_REPOSITORY}/pulls/${pr.number}`)

@@ -9,6 +9,7 @@
   patterns: ["packages/**", "cmake/qvac-addon/**"]
   checks:
     - { workflow: pr-checks.yml, job: "select / *" }
+    - { workflow: pr-checks.yml, job: disallowed-deps }
     - { workflow: pr-checks.yml, job: "checks (*)", skipped: pass }
     - { workflow: pr-build-test.yml, job: selected }
     - { workflow: pr-build-test.yml, job: "status *", skipped: pass }

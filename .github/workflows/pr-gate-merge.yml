@@ -15,7 +15,7 @@ on:
         description: The PR head the caller ran for; groups evaluations of one commit
         type: string
         default: ""
-  # /merge-guard from a member re-runs it.
+  # /merge-guard from a member re-runs it for the PR head.
   issue_comment:
     types: [created]
 
@@ -23,19 +23,36 @@ permissions: {}
 
 cache-mode: none
 
+# One evaluation per head commit; a comment run only dispatches one, so it never cancels another.
 concurrency:
-  # Other comments get their own group, so they can't cancel a /merge-guard run.
-  group: pr-gate-merge-${{ inputs.sha || github.event.workflow_run.head_sha || inputs.pr || (startsWith(github.event.comment.body, '/merge-guard') && github.event.issue.number) || github.run_id }}
+  group: pr-gate-merge-${{ inputs.sha || github.event.workflow_run.head_sha || github.run_id }}
   cancel-in-progress: true
 
 jobs:
-  validate-pr:
+  retry:
     if: >-
-      github.event_name != 'issue_comment' || (
-        github.event.issue.pull_request != null &&
-        startsWith(github.event.comment.body, '/merge-guard') &&
-        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
-      )
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, '/merge-guard') &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      pull-requests: read
+    steps:
+      - name: Start Merge Guard for the PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.issue.number }}
+          REF: ${{ github.event.repository.default_branch }}
+        run: |
+          SHA=$(gh pr view "$PR" --json headRefOid --jq .headRefOid)
+          gh workflow run pr-gate-merge.yml --ref "$REF" -f pr="$PR" -f sha="$SHA"
+
+  validate-pr:
+    if: github.event_name != 'issue_comment'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -57,6 +74,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ inputs.pr }}
+          SHA: ${{ inputs.sha }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           RULES_JSON: ${{ runner.temp }}/merge-rules.json
         run: |

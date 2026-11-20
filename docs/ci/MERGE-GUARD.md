@@ -27,7 +27,9 @@ flowchart LR
 3. Reads each required job's result. Per job name, the newest attempt that did not skip counts, so a label run of `PR checks` or an edit run of `SDK checks`, whose jobs skip, never hides the real result.
 4. Posts the status: `failure` naming the jobs that failed, `pending` naming the producers still running, or `success`. The run summary has the table: rule, check, result, the jobs with their failing step and links, and the files that brought each rule in.
 
-It never waits. A check whose producer has not finished is pending, and that producer's completion starts the guard again; the producer to finish last triggers the final result. One evaluation runs per head commit at a time (`cancel-in-progress`). A member's `/merge-guard` comment on the PR re-runs it, for example if GitHub dropped an event.
+It never waits. A check whose producer has not finished is pending, and that producer's completion starts the guard again; the producer to finish last triggers the final result. One evaluation runs per head commit at a time (`cancel-in-progress`), and one started for a commit the PR has moved past posts nothing. A member's `/merge-guard` comment on the PR starts an evaluation of its head, for example if GitHub dropped an event.
+
+A fork PR that changes `.github/` fails the guard: its `pull_request` runs use its own workflow files, so it could rewrite the checks it is judged on. A maintainer re-raises it from a branch.
 
 The guard decides on job results, never on commit statuses: a workflow with `statuses: write`, including a same-repo PR's edited `pull_request` workflow, could post any status. The `qvac/prebuild-*`, `qvac/cpp-tests-*` and `qvac/pr-build-test` statuses are for people reading the PR.
 
