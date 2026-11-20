@@ -412,6 +412,11 @@ private:
         normalizedFitSnapshot_;
     std::optional<CacheManager> cacheManager_;
 
+    /// The primary model's backend family, reported as the `backendName`
+    /// stat. Empty when unknown. Written by init() under the exclusive
+    /// `stateMtx_` and read under the shared one.
+    std::string backendName_;
+
     /// Mode flags for the most recent `processPrompt*` call, used by
     /// `runtimeStats()` to dispatch between the single-prompt and batch
     /// stat sources. The numbers themselves are NOT cached here: the

@@ -12,8 +12,13 @@ test('TPS-shaped data maps to JobEnded with mapped backendDevice (cpu)', functio
 })
 
 test('TPS-shaped data maps backendDevice 1 to "gpu"', function (t) {
-  const result = mapAddonEvent('anything', { TPS: 50, backendDevice: 1 }, null)
+  const result = mapAddonEvent(
+    'anything',
+    { TPS: 50, backendDevice: 1, backendName: 'cuda,vulkan' },
+    null
+  )
   t.is(result.data.backendDevice, 'gpu')
+  t.is(result.data.backendName, 'cuda,vulkan', 'backendName passes through unchanged')
 })
 
 test('TPS-shaped data maps backendDevice 2 to "npu"', function (t) {

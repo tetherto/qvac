@@ -152,9 +152,21 @@ test('two concurrent batch groups route chunks, results and stats independently'
 
   // Terminal events are tagged with the group's native job id.
   model._handleAddonOutputEvent('BatchResult', ['outA1', 'outA2'], null, 11)
-  model._handleAddonOutputEvent('JobEnded', { TPS: 5, generatedTokens: 7 }, null, 11)
+  model._addonOutputCallback(
+    null,
+    'Stats',
+    { TPS: 5, generatedTokens: 7, backendDevice: 1, backendName: 'cuda,vulkan' },
+    null,
+    11
+  )
   model._handleAddonOutputEvent('BatchResult', ['outB1', 'outB2'], null, 12)
-  model._handleAddonOutputEvent('JobEnded', { TPS: 9, generatedTokens: 3 }, null, 12)
+  model._addonOutputCallback(
+    null,
+    'Stats',
+    { TPS: 9, generatedTokens: 3, backendDevice: 1, backendName: 'cuda,vulkan' },
+    null,
+    12
+  )
 
   const resultsA = await groupA.await()
   const resultsB = await groupB.await()
@@ -179,6 +191,8 @@ test('two concurrent batch groups route chunks, results and stats independently'
   )
   t.is(groupA.stats.TPS, 5, 'group A carries its own per-group stats')
   t.is(groupB.stats.TPS, 9, 'group B carries its own per-group stats')
+  t.is(groupA.stats.backendName, 'cuda,vulkan', 'group A retains the native backend families')
+  t.is(groupB.stats.backendName, 'cuda,vulkan', 'group B retains the native backend families')
 })
 
 test('a tagged batch Error fails only its group; the peer group still completes', async (t) => {
