@@ -75,6 +75,21 @@ test('transformLlmConfig: cpu-moe becomes a valueless flag, or is dropped', (t) 
   t.absent('cpu-moe' in transformLlmConfig(makeConfig({ 'cpu-moe': false })))
 })
 
+test('transformLlmConfig: coreml-ffn becomes a valueless flag, or is dropped', (t) => {
+  const enabled = transformLlmConfig(
+    makeConfig({
+      'coreml-ffn': true,
+      'coreml-ffn-split': '3072x1',
+      'coreml-ffn-cache': '/app/cache/coreml-ffn'
+    })
+  )
+  t.is(enabled['coreml-ffn'], '')
+  t.is(enabled['coreml-ffn-split'], '3072x1')
+  t.is(enabled['coreml-ffn-cache'], '/app/cache/coreml-ffn')
+  t.absent('coreml-ffn' in transformLlmConfig(makeConfig({ 'coreml-ffn': false })))
+  t.absent('coreml-ffn' in transformLlmConfig(makeConfig({})))
+})
+
 test('transformLlmConfig: kv-offload picks the spelling that carries its polarity', (t) => {
   const enabled = transformLlmConfig(makeConfig({ 'kv-offload': true }))
   t.is(enabled['kv-offload'], '')
