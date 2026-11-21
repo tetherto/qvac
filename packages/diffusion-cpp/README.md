@@ -69,6 +69,12 @@ pinned downloads, text-to-image, ordered reference editing, and RGBA handling.
 See [FLUX.3 Image Klein](docs/flux3.md) for pinned, checksum-verified downloads,
 the shared MOSS registry baseline, and text-to-image and reference-editing examples.
 
+## Fibo 2.0 Edit Turbo setup
+
+See [Fibo 2.0 Edit Turbo](docs/fibo2-edit-turbo.md) for the pinned Q4_0 download
+bundle, four-step reference-editing example, and native integration checks.
+Source builds have been validated on CUDA and Vulkan; see the guide for limits.
+
 ## MOSS-Image setup
 
 Download the pinned SFT diffusion model, Qwen3.5 encoder, small FLUX.2 VAE,
