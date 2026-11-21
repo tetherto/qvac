@@ -26,6 +26,26 @@ test('browser binding rolls back admission when serialization throws', (t) => {
   t.is(binding.activeJobs(handle), 0)
 })
 
+test('browser binding rejects non-finite generation values before admission', (t) => {
+  const handle = instance()
+  const values = [NaN, Infinity, -Infinity]
+
+  for (let iteration = 0; iteration < 20; iteration++) {
+    for (const reasoningBudget of values) {
+      let error = null
+      try {
+        binding.runJob(handle, [
+          { type: 'text', input: '[]', generationParams: { reasoning_budget: reasoningBudget } }
+        ])
+      } catch (cause) {
+        error = cause
+      }
+      t.ok(/reasoning_budget must be a finite number/.test(error?.message))
+      t.is(binding.activeJobs(handle), 0)
+    }
+  }
+})
+
 test('browser binding cleans cancelled jobs when an output listener throws', async (t) => {
   const handle = instance(() => {
     throw new Error('listener failed')

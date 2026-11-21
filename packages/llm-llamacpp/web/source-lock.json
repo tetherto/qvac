@@ -1,9 +1,9 @@
 {
   "fabric": {
-    "version": "temp-12032-cf3a4531e",
-    "commit": "cf3a4531e51a636b46380174f689c240836d6a88",
-    "url": "https://codeload.github.com/tetherto/qvac-fabric-llm.cpp/tar.gz/cf3a4531e51a636b46380174f689c240836d6a88",
-    "sha256": "15a0fb001f1377faa88213781ae287102d810dc5a728509c990f27b6f170a4d4"
+    "version": "temp-12032-f38278b45",
+    "commit": "f38278b45c4d7b5a93de2e02fa276edf61c3cf28",
+    "url": "https://codeload.github.com/tetherto/qvac-fabric-llm.cpp/tar.gz/f38278b45c4d7b5a93de2e02fa276edf61c3cf28",
+    "sha256": "ddf05297c7139864c04a0a099407b3db22a9e2a3271818ad277b2a9f2737af83"
   },
   "picojson": {
     "version": "1.3.0",

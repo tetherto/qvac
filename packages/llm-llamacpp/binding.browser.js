@@ -12,8 +12,8 @@
 const LOG_PRIORITY = { ERROR: 0, WARNING: 1, INFO: 2, DEBUG: 3 }
 const { browserLoadConfig } = require('./browser/load-config.js')
 const { modelFiles } = require('./browser/model-files.js')
+const retryableModule = require('./browser/retryable-module.js')
 
-let modulePromise = null
 let logCallback = null
 // The engine runs one call at a time (Asyncify allows a single suspended
 // call), so every native call goes through this chain in order.
@@ -42,18 +42,15 @@ function importEngine() {
   return import('./prebuilds/web/llm-llamacpp.mjs')
 }
 
-function loadModule() {
-  if (!modulePromise) {
-    modulePromise = importEngine().then(({ default: createModule }) =>
-      createModule({
-        print: (line) => log(line, LOG_PRIORITY.INFO),
-        printErr: (line) => log(line, LOG_PRIORITY.WARNING),
-        qvacEmit: (handle, jobId, event, payload) => emit(handle, jobId, event, payload)
-      })
-    )
-  }
-  return modulePromise
-}
+const loadModule = retryableModule(() =>
+  importEngine().then(({ default: createModule }) =>
+    createModule({
+      print: (line) => log(line, LOG_PRIORITY.INFO),
+      printErr: (line) => log(line, LOG_PRIORITY.WARNING),
+      qvacEmit: (handle, jobId, event, payload) => emit(handle, jobId, event, payload)
+    })
+  )
+)
 
 function enqueue(task) {
   queuedCalls++
@@ -202,7 +199,12 @@ function runJob(handle, data) {
   if (containsMedia(data)) {
     return unsupported('Media input')
   }
-  const messages = JSON.stringify(data)
+  const messages = JSON.stringify(data, (key, value) => {
+    if (typeof value === 'number' && !Number.isFinite(value)) {
+      throw new TypeError(`${key || 'value'} must be a finite number`)
+    }
+    return value
+  })
   const id = handle.nextJobId++
   const job = { cancelled: false, ended: false }
   handle.jobs.set(id, job)

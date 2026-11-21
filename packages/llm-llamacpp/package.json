@@ -101,6 +101,7 @@
     "brittle": "^3.16.5",
     "cmake-bare": "^1.9.0",
     "cmake-vcpkg": "^1.1.0",
+    "esbuild": "0.28.1",
     "eslint": "^9.39.4",
     "eslint-import-resolver-typescript": "^4.4.5",
     "eslint-plugin-import": "^2.32.0",
@@ -159,6 +160,7 @@
   },
   "browser": {
     "./binding.js": "./binding.browser.js",
+    "@qvac/infer-base": "./browser/infer-base.js",
     "bare-fs": "./browser/fs.js",
     "bare-path": "./browser/path.js"
   },
