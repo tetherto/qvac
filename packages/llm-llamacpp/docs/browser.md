@@ -13,6 +13,7 @@ browser:
 | Module | Browser replacement |
 |--------|---------------------|
 | `binding.js` (Bare addon) | `binding.browser.js` (WebAssembly build) |
+| `@qvac/infer-base` | `browser/infer-base.js` (browser-safe inference helpers) |
 | `bare-fs` | `browser/fs.js` (native-only filesystem operations reject) |
 | `bare-path` | `browser/path.js` (POSIX subset) |
 

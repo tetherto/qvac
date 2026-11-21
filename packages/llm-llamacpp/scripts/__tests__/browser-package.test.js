@@ -31,6 +31,7 @@ test('packed package root bundles for a browser without native Bare bindings', a
     absWorkingDir: packageRoot,
     bundle: true,
     entryPoints: [path.join(extractDir, 'package', 'index.js')],
+    external: ['./prebuilds/web/*'],
     format: 'esm',
     logLevel: 'silent',
     nodePaths: [path.join(packageRoot, 'node_modules')],
