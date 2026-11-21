@@ -47,5 +47,7 @@ export interface ResolvedModelEntry {
   isDefault: boolean
   preload: boolean
   modelFitPolicy?: ModelFitPolicy
+  /** Alternate source for a catalog model when the registry is unreachable. */
+  fallbackSrc?: string
   config: Record<string, unknown>
 }

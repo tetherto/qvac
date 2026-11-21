@@ -399,6 +399,80 @@ describe('parseServeConfig nested companions', () => {
     )
   })
 
+  it('carries a per-alias fallbackSrc for catalog models', () => {
+    const cfg = parseServeConfig(
+      {
+        serve: {
+          models: {
+            constant: {
+              model: 'WHISPER_EN_TINY_Q8_0',
+              fallbackSrc: 'https://mirror.example.invalid/ggml-tiny.en-q8_0.bin'
+            },
+            explicit: {
+              src: 'WHISPER_EN_TINY_Q8_0',
+              type: 'whispercpp-transcription',
+              fallbackSrc: '/models/ggml-tiny.en-q8_0.bin'
+            },
+            unset: { model: 'WHISPER_EN_TINY_Q8_0' }
+          }
+        }
+      },
+      {}
+    )
+    assert.equal(
+      cfg.models.get('constant')!.fallbackSrc,
+      'https://mirror.example.invalid/ggml-tiny.en-q8_0.bin'
+    )
+    assert.equal(cfg.models.get('explicit')!.fallbackSrc, '/models/ggml-tiny.en-q8_0.bin')
+    assert.equal('fallbackSrc' in cfg.models.get('unset')!, false)
+    assert.equal('fallbackSrc' in cfg.models.get('constant')!.config, false)
+  })
+
+  it('rejects fallbackSrc on an explicit entry whose src is not a model constant', () => {
+    assert.throws(
+      () =>
+        parseServeConfig(
+          {
+            serve: {
+              models: {
+                local: {
+                  src: '/models/ggml-tiny.en-q8_0.bin',
+                  type: 'whispercpp-transcription',
+                  fallbackSrc: '/backup/ggml-tiny.en-q8_0.bin'
+                }
+              }
+            }
+          },
+          {}
+        ),
+      /serve\.models\.local\.fallbackSrc: only applies to a catalog model/
+    )
+  })
+
+  it('rejects a fallbackSrc that is not a non-empty string', () => {
+    for (const fallbackSrc of ['', '   ', 42]) {
+      assert.throws(
+        () =>
+          resolveModelConstant('a', {
+            model: 'WHISPER_EN_TINY_Q8_0',
+            fallbackSrc: fallbackSrc as string
+          }),
+        /serve\.models\.a\.fallbackSrc: expected an HTTP URL or a local file path/
+      )
+    }
+  })
+
+  it('points a fallbackSrc set inside config to the entry-level field', () => {
+    assert.throws(
+      () =>
+        resolveModelConstant('qwen', {
+          model: 'WHISPER_EN_TINY_Q8_0',
+          config: { fallbackSrc: '/models/ggml-tiny.en-q8_0.bin' }
+        }),
+      /serve\.models\.qwen\.config\.fallbackSrc: fallbackSrc is a load option, not a model config field\. Set serve\.models\.qwen\.fallbackSrc instead\./
+    )
+  })
+
   it('leaves the ignored upscaler block unchanged for video entries', () => {
     const cfg = parseServeConfig(
       {
