@@ -45,6 +45,7 @@ _CODE_MODEL_UNLOAD_FAILED = _CODES["MODEL_UNLOAD_FAILED"]
 _CODE_REQUEST_ID_CONFLICT = _CODES["REQUEST_ID_CONFLICT"]
 _CODE_REQUEST_NOT_FOUND = _CODES["REQUEST_NOT_FOUND"]
 _CODE_REQUEST_REJECTED_BY_POLICY = _CODES["REQUEST_REJECTED_BY_POLICY"]
+_CODE_DEADLINE_EXCEEDED = _CODES["DEADLINE_EXCEEDED"]
 _CODE_CONTEXT_OVERFLOW = _CODES["CONTEXT_OVERFLOW"]
 _CODE_DELETE_CACHE_FAILED = _CODES["DELETE_CACHE_FAILED"]
 _CODE_INVALID_DELETE_CACHE_PARAMS = _CODES["INVALID_DELETE_CACHE_PARAMS"]
@@ -178,6 +179,39 @@ class RequestRejectedByPolicyError(QvacError):
             message or reason or "Request rejected by policy",
             name="REQUEST_REJECTED_BY_POLICY",
             code=_CODE_REQUEST_REJECTED_BY_POLICY,
+            cause=cause,
+        )
+
+
+class DeadlineExceededError(QvacError):
+    """A deadline the runtime enforces passed. `boundary` names it: "queue"
+    (waiting for an admission slot), "load" (loading a model), "run" (from
+    admission to the end) or "idle" (time since the last progress).
+    `capability` is the capability contract the limit was configured under;
+    it is None for `load_model` and for a plugin handler outside every
+    contract."""
+
+    def __init__(
+        self,
+        request_id: str,
+        boundary: str,
+        timeout_ms: int,
+        capability: str | None = None,
+        model_id: str | None = None,
+        *,
+        cause: Any = None,
+        message: str | None = None,
+    ) -> None:
+        self.request_id = request_id
+        self.boundary = boundary
+        self.timeout_ms = timeout_ms
+        self.capability = capability
+        self.model_id = model_id
+        super().__init__(
+            message
+            or f'Request "{request_id}" exceeded its {boundary} deadline of {timeout_ms}ms',
+            name="DEADLINE_EXCEEDED",
+            code=_CODE_DEADLINE_EXCEEDED,
             cause=cause,
         )
 
@@ -792,6 +826,19 @@ def _reconstruct_request_rejected(response: dict[str, Any]) -> QvacError:
     )
 
 
+def _reconstruct_deadline_exceeded(response: dict[str, Any]) -> QvacError:
+    fields = _typed_fields(response)
+    return DeadlineExceededError(
+        _str_field(fields, "requestId"),
+        _str_field(fields, "boundary", "run"),
+        _opt_num_field(fields, "timeoutMs") or 0,
+        _opt_str_field(fields, "capability"),
+        _opt_str_field(fields, "modelId"),
+        cause=response.get("cause"),
+        message=_opt_str(response, "message"),
+    )
+
+
 def _reconstruct_context_overflow(response: dict[str, Any]) -> QvacError:
     fields = _typed_fields(response)
     return ContextOverflowError(
@@ -892,6 +939,7 @@ _RECONSTRUCTORS: dict[str, Callable[[dict[str, Any]], QvacError]] = {
     "REQUEST_ID_CONFLICT": _reconstruct_request_id_conflict,
     "REQUEST_NOT_FOUND": _reconstruct_request_not_found,
     "REQUEST_REJECTED_BY_POLICY": _reconstruct_request_rejected,
+    "DEADLINE_EXCEEDED": _reconstruct_deadline_exceeded,
     "CONTEXT_OVERFLOW": _reconstruct_context_overflow,
     "QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND": _reconstruct_registry_model_not_found,
     "QVAC_MODEL_REGISTRY_BUSY": _reconstruct_registry_busy,
@@ -933,6 +981,7 @@ __all__ = [
     "RequestIdConflictError",
     "RequestNotFoundError",
     "RequestRejectedByPolicyError",
+    "DeadlineExceededError",
     "ContextOverflowError",
     "CancelFailedError",
     "ModelLoadFailedError",

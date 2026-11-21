@@ -1,6 +1,7 @@
 // Re-export all schemas and types
 export * from '@/schemas/model-file'
 export * from '@/schemas/request-base'
+export * from '@/schemas/deadlines'
 export * from '@/schemas/session'
 export * from '@/schemas/cancel'
 export * from '@/schemas/batch-completion-stream'
@@ -19,6 +20,7 @@ export {
   type ToolCallWithCall
 } from '@/schemas/tools'
 export * from '@/schemas/heartbeat'
+export * from '@/schemas/capabilities'
 export * from '@/schemas/model-ops'
 export * from '@/schemas/download-asset'
 export * from '@/schemas/embed'
