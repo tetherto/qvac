@@ -13,7 +13,7 @@ import { startFinetune } from '@/plugins/builtin/llamacpp-completion/ops/finetun
 import { llmPlugin } from '@/plugins/builtin/llamacpp-completion/plugin'
 import { DeadlineClock } from '@/runtime/deadlines'
 import { DeadlineExceededError } from '@/errors'
-import { ModelType } from '@/schemas'
+import { CAPABILITY_CONTRACTS, ModelType } from '@/schemas'
 import type { Request, Response } from '@/schemas'
 import type { QvacPlugin } from '@/schemas/plugin'
 import {
@@ -134,6 +134,45 @@ test('a single-reply handler that never settles fails at its run deadline', asyn
     await sleep(20)
   } finally {
     await tearDown()
+  }
+})
+
+test('a typed call to a plugin handler that registers no request fails at its run deadline', async (t) => {
+  const modelType = 'unregistered-embedder'
+  const modelId = `${modelType}-model`
+  const never = {
+    requestSchema: z.looseObject({}),
+    responseSchema: z.looseObject({}),
+    streaming: false,
+    handler: () => new Promise<never>(() => {})
+  }
+  clearPlugins()
+  registerPlugin({
+    modelType,
+    displayName: 'Unregistered embedder',
+    addonPackage: '@qvac/unregistered-embedder',
+    loadConfigSchema: z.looseObject({}),
+    createModel: () => ({ model: { load: async () => {}, unload: async () => {} } }),
+    provides: [CAPABILITY_CONTRACTS.embedding],
+    handlers: { embed: never, embedBatch: never }
+  } as unknown as QvacPlugin)
+  registerModel(modelId, {
+    model: { load: async () => {}, unload: async () => {} } as unknown as AnyModel,
+    path: '/tmp/model.bin',
+    config: {},
+    modelType: modelType as never
+  })
+  try {
+    const error = await failure(
+      send({ type: 'embed', modelId, text: 'hello', deadline: { runMs: 50 } } as unknown as Request)
+    )
+    t.is(error.boundary, 'run')
+    t.is(error.timeoutMs, 50)
+    t.is(error.capability, 'embedding')
+  } finally {
+    unregisterModel(modelId)
+    await close()
+    clearPlugins()
   }
 })
 

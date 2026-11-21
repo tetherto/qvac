@@ -48,6 +48,8 @@ A request in this state is _overdue_. A request queued behind an overdue request
 
 Whether the native work stops promptly depends on the operation, as it does for `cancel()`: see the coverage notes in [Cancellation](/sdk/runtime/cancellation). `ocr()`, `classify()`, `vla()` and `invokePlugin()` have no admission slot. After a deadline aborts one of them, a new request on the same model starts at once, while the earlier native job may still be running.
 
+A [custom plugin](/sdk/configuration/plugins/write-custom-plugin) handler called through a typed operation, such as `embed()`, fails at its deadline too. Such a handler receives no abort signal, so its work runs to its end after the call has failed.
+
 ## Configuration
 
 ```json
