@@ -273,6 +273,7 @@ function openDeadline(request: Request, streaming: boolean): OpenDeadline | unde
     { idleFromAdmission: streaming }
   )
   const unbind = getRequestRegistry().bindDeadline(tracked.requestId, tracked.sessionId, clock)
+  clock.start()
   return {
     clock,
     close: () => {

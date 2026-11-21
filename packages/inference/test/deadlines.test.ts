@@ -185,6 +185,23 @@ test('a deadline that passes while the runtime is suspended expires on resume', 
   t.is(clock.error?.timeoutMs, 60_000)
 })
 
+test('start: the run deadline counts from admission when the request is admitted later', async (t) => {
+  const clock = new DeadlineClock(
+    { runMs: 80 },
+    { requestId: 'r-start' },
+    { idleFromAdmission: false }
+  )
+  t.teardown(() => clock.close())
+  clock.start()
+  await new Promise<void>((resolve) => setTimeout(resolve, 50))
+  clock.admitted()
+  await new Promise<void>((resolve) => setTimeout(resolve, 50))
+  t.is(clock.error, undefined, '100ms after start, 50ms after admission')
+
+  await t.exception(clock.expired, DeadlineExceededError as unknown as new () => Error)
+  t.is(clock.error?.boundary, 'run')
+})
+
 test('within: settled work keeps its outcome, pending work fails at the deadline', async (t) => {
   const clock = new DeadlineClock(
     { runMs: 40 },

@@ -160,6 +160,7 @@ export class DeadlineClock {
   #rejectExpired: (error: DeadlineExceededError) => void = () => {}
   #queueListener: ExpiryListener | undefined
   #running = false
+  #startedByDispatch = false
   #closed = false
 
   /**
@@ -237,12 +238,25 @@ export class DeadlineClock {
    */
   pause(): void {
     this.#running = false
+    this.#startedByDispatch = false
     this.#disarm('run')
     this.#disarm('idle')
   }
 
+  /**
+   * Dispatch is about to call the handler: the run and idle timers start. A
+   * handler that registers a request restarts them through `startQueue()` or
+   * `admitted()`; one that registers none, as a third-party plugin's handler
+   * may, stays bounded from this point.
+   */
+  start(): void {
+    this.admitted()
+    this.#startedByDispatch = true
+  }
+
   /** The request holds its slot, or needs none: the run and idle timers start. */
   admitted(): void {
+    if (this.#startedByDispatch) this.pause()
     this.#running = true
     if (this.#limits.runMs !== undefined && !this.#timers.has('run')) {
       this.#arm('run', this.#limits.runMs)
