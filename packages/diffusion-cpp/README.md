@@ -654,7 +654,7 @@ Reference-validation compatibility: `init_images` on SD1/SD2/SDXL is now
 rejected by the loaded native model after job submission, rather than by the
 JavaScript file/prediction checks. Await the response's `.await()` promise to
 handle the error. The native message is
-`img2img: init_images requires a model supporting reference editing (FLUX.2 or Qwen-Image-2.1).`
+`img2img: init_images requires a model supporting reference editing.`
 Callers matching the former JavaScript error text must update their handling.
 The former rejection of `init_image` with `files.llm` but no explicit
 `'flux2_flow'` prediction is also removed; native model capabilities determine

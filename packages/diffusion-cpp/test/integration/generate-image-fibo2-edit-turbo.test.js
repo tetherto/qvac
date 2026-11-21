@@ -105,18 +105,18 @@ test(
 
       let cancelled = false
       const response = await model.run({ ...params, init_image: refs[0], steps: 32 })
-      try {
-        await response
+      await t.exception.all(
+        response
           .onUpdate(async (data) => {
             if (!cancelled && typeof data === 'string') {
               cancelled = true
               await model.cancel()
             }
           })
-          .await()
-      } catch (error) {
-        t.ok(/cancel|aborted|stopp?ed/i.test(error.message), `cancel settles: ${error.message}`)
-      }
+          .await(),
+        /cancel|aborted|stopp?ed/i,
+        'cancelled generation rejects'
+      )
       t.ok(cancelled, 'cancel requested after native progress')
       await generate('after-cancel')
       await model.unload()

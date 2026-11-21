@@ -61,8 +61,10 @@ Use an addon built with a native engine containing Fibo support; follow
 [the package build instructions](../build.md) for the selected backend. The
 downloader does not build or install a native addon.
 
-Build this checkout to include the addon's `flux` scheduler and its pinned
-[engine capability patch](../vcpkg-overlays/README.md). An older published
+Build this checkout to include the addon's `flux` scheduler and
+`stable-diffusion-cpp` `2026-11-01#3`, which contains the merged
+[engine capability fix](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/74).
+The package's vcpkg manifest selects this version from the registry. An older published
 prebuild can reject `scheduler: 'flux'` or Fibo's `init_images`; downloading
 weights alone does not update that binary.
 

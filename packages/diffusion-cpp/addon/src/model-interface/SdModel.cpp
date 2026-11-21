@@ -1018,7 +1018,8 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
     if (nMulti > 0 && !usesReferences)
       throw StatusError(
           general_error::InvalidArgument,
-          "img2img: init_images requires a model supporting reference editing.");
+          "img2img: init_images requires a model supporting reference "
+          "editing.");
 
     // -- Multiple ordered reference images ---------------------------------
     if (nMulti > 0) {
