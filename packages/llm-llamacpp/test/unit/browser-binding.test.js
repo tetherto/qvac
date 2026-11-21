@@ -2,6 +2,10 @@
 
 const test = require('brittle')
 const binding = require('../../binding.browser.js')
+const {
+  ensureMessageCacheDirectories,
+  ensureParentDirectory
+} = require('../../browser/cache-files.js')
 
 function instance(output = () => {}) {
   return binding.createInstance({}, {}, output)
@@ -43,6 +47,27 @@ test('browser binding rejects non-finite generation values before admission', (t
       t.ok(/reasoning_budget must be a finite number/.test(error?.message))
       t.is(binding.activeJobs(handle), 0)
     }
+  }
+})
+
+test('browser cache paths create their private filesystem parents', (t) => {
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const directories = []
+    const module = { FS: { mkdirTree: (path) => directories.push(path) } }
+    const messages = [
+      { cacheKey: '/.qvac/cache/chat/model/config.bin' },
+      { baseCacheKey: 'cache/base.bin' },
+      { cacheKey: 'root.bin' },
+      null
+    ]
+    const serialized = JSON.stringify(messages)
+    messages[0].cacheKey = '/mutated/after-admission.bin'
+
+    ensureMessageCacheDirectories(module, serialized)
+    ensureParentDirectory(module, '/cache/manual.bin')
+    ensureParentDirectory(module, '')
+
+    t.alike(directories, ['/.qvac/cache/chat/model', '/cache'], `iteration ${iteration + 1}`)
   }
 })
 

@@ -10,6 +10,7 @@
 // copied into WebAssembly memory.
 
 const LOG_PRIORITY = { ERROR: 0, WARNING: 1, INFO: 2, DEBUG: 3 }
+const { ensureMessageCacheDirectories, ensureParentDirectory } = require('./browser/cache-files.js')
 const { browserLoadConfig } = require('./browser/load-config.js')
 const { modelFiles } = require('./browser/model-files.js')
 const retryableModule = require('./browser/retryable-module.js')
@@ -94,8 +95,9 @@ function check(module, status) {
   return status
 }
 
-async function call(name, types, args) {
+async function call(name, types, args, prepare) {
   const module = await loadModule()
+  if (prepare) prepare(module)
   const status = await module.ccall(name, 'number', types, args, {
     async: true
   })
@@ -217,7 +219,12 @@ function runJob(handle, data) {
     await new Promise((resolve) => setTimeout(resolve, 0))
     try {
       if (!job.cancelled) {
-        await call('qvac_web_run', ['number', 'number', 'string'], [handle.native, id, messages])
+        await call(
+          'qvac_web_run',
+          ['number', 'number', 'string'],
+          [handle.native, id, messages],
+          (module) => ensureMessageCacheDirectories(module, messages)
+        )
       }
     } catch (error) {
       // The engine reports its own failures as an Error event; this covers a
@@ -288,7 +295,11 @@ module.exports = {
   activeSlots: () => 0,
   assessFit: () => unsupported('assessFit'),
   saveCache: (handle, cacheKey) =>
-    enqueue(() => call('qvac_web_save_cache', ['number', 'string'], [handle.native, cacheKey])),
+    enqueue(() =>
+      call('qvac_web_save_cache', ['number', 'string'], [handle.native, cacheKey], (module) =>
+        ensureParentDirectory(module, cacheKey)
+      )
+    ),
   discardCache: (handle, cacheKey) =>
     enqueue(() => call('qvac_web_discard_cache', ['number', 'string'], [handle.native, cacheKey])),
   calcTokens: (handle, params) => {

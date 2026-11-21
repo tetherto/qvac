@@ -7,7 +7,7 @@ Emscripten against Fabric's WebGPU backend and exposed through the same
 
 ## How it is selected
 
-The package's `browser` field swaps three modules when a bundler targets the
+The package's `browser` field swaps these modules when a bundler targets the
 browser:
 
 | Module | Browser replacement |

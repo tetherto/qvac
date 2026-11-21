@@ -18,6 +18,7 @@ import {
 } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { validateWebPrebuild } from './validate-web-prebuild.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const web = join(root, 'web')
@@ -243,4 +244,5 @@ writeFileSync(
     2
   )}\n`
 )
+validateWebPrebuild(root, output)
 console.log(`Browser prebuild written to ${output}`)
