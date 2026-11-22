@@ -42,6 +42,7 @@ import { bciTests } from './bci-tests.js'
 import { visionTests } from './vision-tests.js'
 import { downloadTests } from './download-tests.js'
 import { downloadResilienceTests } from './download-resilience-tests.js'
+import { pathTraversalTests } from './path-traversal-tests.js'
 import { diffusionTests } from './diffusion-tests.js'
 import { worldTests } from './world-tests.js'
 import { audioGenTests } from './audio-gen-tests.js'
@@ -667,6 +668,9 @@ const catalog: TestDefinition[] = [
 
   // Download resilience: survive suspend/resume + network drop (QVAC-21225)
   ...downloadResilienceTests,
+
+  // Sources and names that would resolve outside the cache are refused
+  ...pathTraversalTests,
 
   // Diffusion tests
   ...diffusionTests,
