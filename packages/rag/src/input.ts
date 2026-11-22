@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 import { QvacErrorRAG, ERR_CODES } from './errors.js'
 import { fromZodError } from './validation.js'
-import type { DeleteDocumentsParams, IngestOptions } from './types.js'
+import type { DeleteDocumentsParams, ImportOptions, IngestOptions } from './types.js'
 
 export interface ValidChunk {
   id: string
@@ -124,6 +124,8 @@ const searchSchema = z
     vector: vectorSchema,
     spaceId: z.string().min(1),
     k: z.number().int().positive(),
+    perDocument: z.number().int().positive().optional(),
+    minScore: z.number().finite().optional(),
     signal: signalSchema.optional()
   })
   .strict()
@@ -133,6 +135,8 @@ const textSearchSchema = z
     scope: z.unknown(),
     query: z.string().min(1),
     k: z.number().int().positive(),
+    perDocument: z.number().int().positive().optional(),
+    minScore: z.number().finite().optional(),
     signal: signalSchema.optional()
   })
   .strict()
@@ -311,6 +315,8 @@ export function parseDelete(params: unknown): DeleteDocumentsParams {
 export type ValidSearch = {
   scope: unknown
   k: number
+  perDocument?: number
+  minScore?: number
   signal?: AbortSignal
 } & ({ vector: Float32Array; spaceId: string; query?: undefined } | { query: string })
 
@@ -318,8 +324,8 @@ export function parseSearch(params: unknown): ValidSearch {
   if (hasKey(params, 'query')) {
     const parsed = textSearchSchema.safeParse(params)
     if (!parsed.success) throw invalidInput(parsed.error)
-    const { scope, query, k, signal } = parsed.data
-    return { scope, query, k, signal }
+    const { scope, query, k, perDocument, minScore, signal } = parsed.data
+    return { scope, query, k, perDocument, minScore, signal }
   }
   const parsed = searchSchema.safeParse(params)
   if (!parsed.success) throw invalidInput(parsed.error)
@@ -328,6 +334,8 @@ export function parseSearch(params: unknown): ValidSearch {
     vector: toVector(parsed.data.vector, 'vector'),
     spaceId: parsed.data.spaceId,
     k: parsed.data.k,
+    perDocument: parsed.data.perDocument,
+    minScore: parsed.data.minScore,
     signal: parsed.data.signal
   }
 }
@@ -399,6 +407,85 @@ export function parseScopedListDocuments(params: unknown): ValidList {
   const parsed = scopedListSchema.safeParse(params)
   if (!parsed.success) throw invalidInput(parsed.error)
   return { after: parsed.data?.after, limit: parsed.data?.limit ?? 100 }
+}
+
+const exportSchema = z
+  .object({
+    namespace: z.string().min(1),
+    documentIds: z.array(z.string().min(1)).optional()
+  })
+  .strict()
+
+const exportOptionsSchema = z.object({ signal: signalSchema.optional() }).strict().optional()
+
+const importSchema = z
+  .object({
+    namespace: z.string().min(1),
+    source: z.custom<AsyncIterable<Uint8Array>>(
+      (value) =>
+        typeof (value as { [Symbol.asyncIterator]?: unknown } | null)?.[Symbol.asyncIterator] ===
+        'function',
+      'source must be an AsyncIterable of Uint8Array'
+    ),
+    index: z.unknown().optional()
+  })
+  .strict()
+
+const importOptionsSchema = z
+  .object({
+    signal: signalSchema.optional(),
+    onProgress: z.custom<NonNullable<ImportOptions['onProgress']>>(
+      (value) => typeof value === 'function',
+      'onProgress must be a function'
+    )
+  })
+  .partial()
+  .strict()
+  .optional()
+
+const dropSchema = z.object({ name: z.string().min(1) }).strict()
+
+export function parseExport(
+  params: unknown,
+  options: unknown
+): { namespace: string; documentIds?: string[]; signal?: AbortSignal } {
+  const parsed = exportSchema.safeParse(params)
+  if (!parsed.success) throw invalidInput(parsed.error)
+  const parsedOptions = exportOptionsSchema.safeParse(options)
+  if (!parsedOptions.success) throw invalidInput(parsedOptions.error)
+  const { namespace, documentIds } = parsed.data
+  return {
+    namespace,
+    documentIds: documentIds && Array.from(new Set(documentIds)),
+    signal: parsedOptions.data?.signal
+  }
+}
+
+export function parseImport(
+  params: unknown,
+  options: unknown
+): {
+  namespace: string
+  source: AsyncIterable<Uint8Array>
+  index: unknown
+  options: ImportOptions
+} {
+  const parsed = importSchema.safeParse(params)
+  if (!parsed.success) throw invalidInput(parsed.error)
+  const parsedOptions = importOptionsSchema.safeParse(options)
+  if (!parsedOptions.success) throw invalidInput(parsedOptions.error)
+  return {
+    namespace: parsed.data.namespace,
+    source: parsed.data.source,
+    index: parsed.data.index,
+    options: { signal: parsedOptions.data?.signal, onProgress: parsedOptions.data?.onProgress }
+  }
+}
+
+export function parseDropNamespace(params: unknown): string {
+  const parsed = dropSchema.safeParse(params)
+  if (!parsed.success) throw invalidInput(parsed.error)
+  return parsed.data.name
 }
 
 export function parseNamespaceName(name: unknown): string {
