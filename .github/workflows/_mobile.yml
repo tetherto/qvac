@@ -56,6 +56,10 @@ on:
         description: Run each package's <platform>Weekly test groups, as the weekend schedule does
         type: boolean
         default: false
+      billing_method:
+        description: "Device Farm billing: UNMETERED (free slots, METERED after 3 min in queue) or METERED"
+        type: string
+        default: UNMETERED
 
 permissions: {}
 
@@ -342,18 +346,21 @@ jobs:
           project-arn: ${{ env.PROJECT_ARN }}
           type: APPIUM_NODE_TEST_SPEC
           files: ${{ steps.specs.outputs.specs }}
+      # As qvac-actions devicefarm-schedule-runs, plus UNMETERED first and METERED for a run with no free slot in 3 min.
       - id: schedule
-        uses: tetherto/qvac-actions/devicefarm-schedule-runs@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          platform: ${{ inputs.platform }}
-          project-arn: ${{ env.PROJECT_ARN }}
-          app-arn: ${{ steps.app.outputs.arn }}
-          test-type: APPIUM_NODE
-          test-package-arn: ${{ steps.package.outputs.arn }}
-          specs: ${{ steps.spec-uploads.outputs.uploads }}
-          devices: ${{ env.DEVICES }}
-          device-model-operator: ${{ inputs.device_model_operator }}
-          job-timeout-minutes: ${{ matrix.row.meta.mobile.jobTimeoutMinutes || '120' }}
+        shell: bash
+        env:
+          APP_ARN: ${{ steps.app.outputs.arn }}
+          TEST_TYPE: APPIUM_NODE
+          TEST_PACKAGE_ARN: ${{ steps.package.outputs.arn }}
+          SPECS: ${{ steps.spec-uploads.outputs.uploads }}
+          OPERATOR: ${{ inputs.device_model_operator }}
+          TIMEOUT: ${{ matrix.row.meta.mobile.jobTimeoutMinutes || '120' }}
+          BILLING_METHOD: ${{ inputs.billing_method }}
+          CHECK_SECONDS: "180"
+          AWS_RETRY_MODE: standard
+          AWS_MAX_ATTEMPTS: "6"
+        run: node .github/scripts/devicefarm-schedule-unmetered.mjs
       - id: budget
         shell: bash
         env:

@@ -6,6 +6,7 @@ settings:
 
 overrides:
   hyper-instrument>bare-v8: ^1.0.1
+  cmake-toolchains: 2.1.2
   '@electron/rebuild>@electron/node-gyp': 10.2.0-electron.2
   '@qvac/asr-ggml-linux-x64': '-'
   '@qvac/asr-ggml-linux-arm64': '-'
@@ -22,11 +23,11 @@ overrides:
   '@qvac/audiogen-ggml-darwin-arm64': '-'
   '@qvac/audiogen-ggml-darwin-x64': '-'
   '@qvac/audiogen-ggml-win32-x64': '-'
-  '@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-linux-x64': '-'
-  '@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-linux-arm64': '-'
-  '@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-darwin-arm64': '-'
-  '@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-darwin-x64': '-'
-  '@qvac/diffusion-cpp@0.36.0>@qvac/diffusion-cpp-win32-x64': '-'
+  '@qvac/diffusion-cpp@0.37.1>@qvac/diffusion-cpp-linux-x64': '-'
+  '@qvac/diffusion-cpp@0.37.1>@qvac/diffusion-cpp-linux-arm64': '-'
+  '@qvac/diffusion-cpp@0.37.1>@qvac/diffusion-cpp-darwin-arm64': '-'
+  '@qvac/diffusion-cpp@0.37.1>@qvac/diffusion-cpp-darwin-x64': '-'
+  '@qvac/diffusion-cpp@0.37.1>@qvac/diffusion-cpp-win32-x64': '-'
   llvm-runtime-resources-darwin>require-asset: ^1.2.4
   llvm-runtime-resources-linux>require-asset: ^1.2.4
   llvm-runtime-resources-win32>require-asset: ^1.2.4
@@ -109,8 +110,8 @@ importers:
         specifier: ^0.1.1
         version: 0.1.1
       '@qvac/fabric':
-        specifier: ^0.30.1
-        version: 0.30.1(@qvac/fabric-android-arm64@0.30.1)(@qvac/fabric-ios@0.30.1)
+        specifier: ^0.31.0
+        version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -134,11 +135,11 @@ importers:
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-ios':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/registry-client':
         specifier: ^0.6.1
         version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
@@ -167,8 +168,8 @@ importers:
         specifier: ^4.1.1
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       cmake-toolchains:
-        specifier: ^2.1.0
-        version: 2.4.0(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -207,20 +208,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
 
   packages/bci-whispercpp:
     dependencies:
@@ -228,8 +229,8 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/fabric':
-        specifier: ^0.30.1
-        version: 0.30.1(@qvac/fabric-android-arm64@0.30.1)(@qvac/fabric-ios@0.30.1)
+        specifier: ^0.31.0
+        version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -244,11 +245,11 @@ importers:
         version: 3.1.1
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-ios':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/registry-client':
         specifier: ^0.6.0
         version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
@@ -286,8 +287,8 @@ importers:
         specifier: ^4.1.1
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       cmake-toolchains:
-        specifier: ^2.1.0
-        version: 2.4.0(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -326,26 +327,26 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
 
   packages/classification-ggml:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.30.1
-        version: 0.30.1(@qvac/fabric-android-arm64@0.30.1)(@qvac/fabric-ios@0.30.1)
+        specifier: ^0.31.0
+        version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -375,11 +376,11 @@ importers:
         version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-ios':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
@@ -402,8 +403,8 @@ importers:
         specifier: ^4.1.1
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       cmake-toolchains:
-        specifier: ^2.1.0
-        version: 2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -442,20 +443,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
 
   packages/cli:
     dependencies:
@@ -617,6 +618,9 @@ importers:
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1
+      bare-os:
+        specifier: ^3.7.1
+        version: 3.9.3
       bare-path:
         specifier: ^3.0.0
         version: 3.1.1
@@ -645,9 +649,6 @@ importers:
       bare-make:
         specifier: ^2.1.0
         version: 2.1.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
-      bare-os:
-        specifier: ^3.7.1
-        version: 3.9.3
       bare-process:
         specifier: ^4.2.2
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -676,8 +677,8 @@ importers:
         specifier: ^4.1.1
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       cmake-toolchains:
-        specifier: ^2.1.0
-        version: 2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -718,8 +719,8 @@ importers:
   packages/embed-llamacpp:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.30.1
-        version: 0.30.1(@qvac/fabric-android-arm64@0.30.1)(@qvac/fabric-ios@0.30.1)
+        specifier: ^0.31.0
+        version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -731,11 +732,11 @@ importers:
         version: 3.1.1
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-ios':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
@@ -779,8 +780,8 @@ importers:
         specifier: ^4.1.1
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       cmake-toolchains:
-        specifier: ^2.1.0
-        version: 2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -819,20 +820,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
 
   packages/error:
     devDependencies:
@@ -870,8 +871,8 @@ importers:
         specifier: ^4.1.1
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       cmake-toolchains:
-        specifier: ^2.1.0
-        version: 2.4.0(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -897,8 +898,8 @@ importers:
   packages/ggml-rpc-server:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.30.1
-        version: 0.30.1(@qvac/fabric-android-arm64@0.30.1)(@qvac/fabric-ios@0.30.1)
+        specifier: ^0.31.0
+        version: link:../fabric
       bare-net:
         specifier: ^2.3.2
         version: 2.3.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -907,11 +908,11 @@ importers:
         version: 3.1.1
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-ios':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
@@ -937,8 +938,8 @@ importers:
         specifier: ^4.1.1
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       cmake-toolchains:
-        specifier: ^2.1.0
-        version: 2.4.0(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -977,20 +978,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
 
   packages/inference:
     dependencies:
@@ -1031,8 +1032,8 @@ importers:
         specifier: ^4.6.2
         version: 4.6.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       bare-https:
-        specifier: ^3.0.0
-        version: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+        specifier: ^4.0.0
+        version: 4.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       bare-net:
         specifier: ^2.3.2
         version: 2.3.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1087,10 +1088,10 @@ importers:
         version: 0.12.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/audiogen-ggml':
         specifier: ^0.10.1
-        version: link:../audiogen-ggml
+        version: 0.10.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/bci-whispercpp':
         specifier: ^0.15.0
-        version: link:../bci-whispercpp
+        version: 0.15.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/classification-ggml':
         specifier: ^0.36.0
         version: 0.36.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
@@ -1120,7 +1121,7 @@ importers:
         version: 0.25.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-fetch@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/tts-ggml':
         specifier: ^0.15.0
-        version: link:../tts-ggml
+        version: 0.15.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
       '@qvac/turbovec-ggml':
         specifier: ^0.5.0
         version: 0.5.1
@@ -1201,8 +1202,8 @@ importers:
   packages/llm-llamacpp:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.30.1
-        version: 0.30.1(@qvac/fabric-android-arm64@0.30.1)(@qvac/fabric-ios@0.30.1)
+        specifier: ^0.31.0
+        version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -1217,11 +1218,11 @@ importers:
         version: 3.1.1
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-ios':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
@@ -1265,8 +1266,8 @@ importers:
         specifier: ^4.1.1
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       cmake-toolchains:
-        specifier: ^2.1.0
-        version: 2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -1305,20 +1306,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
 
   packages/logging:
     dependencies:
@@ -1351,8 +1352,8 @@ importers:
   packages/model-fit:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.30.1
-        version: 0.30.1(@qvac/fabric-android-arm64@0.30.1)(@qvac/fabric-ios@0.30.1)
+        specifier: ^0.31.0
+        version: link:../fabric
       bare-fs:
         specifier: ^4.5.1
         version: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1367,11 +1368,11 @@ importers:
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-ios':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
@@ -1403,8 +1404,8 @@ importers:
         specifier: ^4.1.1
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       cmake-toolchains:
-        specifier: ^2.1.0
-        version: 2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -1443,20 +1444,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
 
   packages/ocr-ggml:
     dependencies:
@@ -1464,8 +1465,8 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/fabric':
-        specifier: ^0.30.1
-        version: 0.30.1(@qvac/fabric-android-arm64@0.30.1)(@qvac/fabric-ios@0.30.1)
+        specifier: ^0.31.0
+        version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -1495,11 +1496,11 @@ importers:
         version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-ios':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/registry-client':
         specifier: ^0.4.0
         version: 0.4.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
@@ -1531,8 +1532,8 @@ importers:
         specifier: ^4.1.1
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       cmake-toolchains:
-        specifier: ^2.1.0
-        version: 2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -1571,20 +1572,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
 
   packages/qvac-ci:
     dependencies:
@@ -1888,10 +1889,10 @@ importers:
         version: 0.12.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/audiogen-ggml':
         specifier: ^0.10.1
-        version: link:../audiogen-ggml
+        version: 0.10.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/bci-whispercpp':
         specifier: ^0.15.0
-        version: link:../bci-whispercpp
+        version: 0.15.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/classification-ggml':
         specifier: ^0.36.0
         version: 0.36.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
@@ -1930,7 +1931,7 @@ importers:
         version: 0.25.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-fetch@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/tts-ggml':
         specifier: ^0.15.0
-        version: link:../tts-ggml
+        version: 0.15.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
       '@qvac/turbovec-ggml':
         specifier: ^0.5.0
         version: 0.5.1
@@ -2183,8 +2184,8 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/fabric':
-        specifier: ^0.30.1
-        version: 0.30.1(@qvac/fabric-android-arm64@0.30.1)(@qvac/fabric-ios@0.30.1)
+        specifier: ^0.31.0
+        version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -2208,11 +2209,11 @@ importers:
         version: 2.4.6
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-ios':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/registry-client':
         specifier: ^0.6.1
         version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
@@ -2247,8 +2248,8 @@ importers:
         specifier: ^4.1.1
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       cmake-toolchains:
-        specifier: ^2.1.0
-        version: 2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -2287,20 +2288,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
 
   packages/tts-ggml:
     dependencies:
@@ -2308,8 +2309,8 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/fabric':
-        specifier: ^0.30.1
-        version: 0.30.1(@qvac/fabric-android-arm64@0.30.1)(@qvac/fabric-ios@0.30.1)
+        specifier: ^0.31.0
+        version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -2345,11 +2346,11 @@ importers:
         specifier: 0.8.1
         version: 0.8.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/fabric-android-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-ios':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/registry-client':
         specifier: ^0.6.1
         version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
@@ -2378,8 +2379,8 @@ importers:
         specifier: ^4.1.1
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       cmake-toolchains:
-        specifier: ^2.1.0
-        version: 2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -2424,39 +2425,42 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
 
   packages/turbovec-ggml:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.30.1
-        version: 0.30.1(@qvac/fabric-android-arm64@0.30.1)(@qvac/fabric-ios@0.30.1)
+        specifier: ^0.31.0
+        version: link:../fabric
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-ios':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
       bare:
         specifier: ^1.36.0
         version: 1.37.1(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-stream@2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+      bare-abort-controller:
+        specifier: ^1.1.2
+        version: 1.1.2
       bare-fs:
         specifier: ^4.5.1
         version: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -2475,6 +2479,9 @@ importers:
       bare-runtime:
         specifier: ^1.36.0
         version: 1.37.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+      bare-thread:
+        specifier: ^1.4.0
+        version: 1.4.0(bare-buffer@3.6.2)
       bare-url:
         specifier: ^2.1.6
         version: 2.5.4
@@ -2491,8 +2498,8 @@ importers:
         specifier: ^4.1.1
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       cmake-toolchains:
-        specifier: ^2.1.0
-        version: 2.4.0(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -2531,20 +2538,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
 
   packages/vla-ggml:
     dependencies:
@@ -2552,8 +2559,8 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/fabric':
-        specifier: ^0.30.1
-        version: 0.30.1(@qvac/fabric-android-arm64@0.30.1)(@qvac/fabric-ios@0.30.1)
+        specifier: ^0.31.0
+        version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -2568,11 +2575,11 @@ importers:
         version: 3.1.1
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-ios':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
@@ -2610,8 +2617,8 @@ importers:
         specifier: ^4.1.1
         version: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       cmake-toolchains:
-        specifier: ^2.1.0
-        version: 2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
+        specifier: 2.1.2
+        version: 2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
@@ -2650,20 +2657,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.31.0
+        version: 0.31.0
 
   plugins/openclaw:
     dependencies:
@@ -5265,6 +5272,23 @@ packages:
     resolution: {integrity: sha512-0z6FRBHpEsG4dSK+EhUuEA5YEKM2t5jGBooSH7dwoWeKR2KRHk/ChApoV+5Mjy5rLkoKNH1sJNiYmuT2bYKDXQ==}
     engines: {bare: '>=1.20.0'}
 
+  '@qvac/audiogen-ggml@0.10.1':
+    resolution: {integrity: sha512-U3Iyy+Iqeol9MzzYPThWC41B4ciAgsic0vulkT+NR7FZuY3bHzuuJYHHd4zvcwNeJZMijg69/192MlfC6IM8Jw==}
+    engines: {bare: '>=1.19.0'}
+    hasBin: true
+    peerDependencies:
+      '@qvac/audiogen-ggml-android-arm64': 0.10.1
+      '@qvac/audiogen-ggml-ios': 0.10.1
+    peerDependenciesMeta:
+      '@qvac/audiogen-ggml-android-arm64':
+        optional: true
+      '@qvac/audiogen-ggml-ios':
+        optional: true
+
+  '@qvac/bci-whispercpp@0.15.1':
+    resolution: {integrity: sha512-lTqU70eSrFRamsThehxonPGdLHZMGQ2ObfrdFLvfaDoE12Plj/pe3nnCfe/0wCDizdtWD0SfwoxPppH+xbGDcQ==}
+    engines: {bare: '>=1.24.0'}
+
   '@qvac/classification-ggml@0.36.1':
     resolution: {integrity: sha512-2umQWF01CzwMjR8c0y5SRk7WMuLAXCypuxPrX/zzbKGr0nhcJ+ZvKNHbmd+qYGZl7UFYxQSEqeYzsw0aK3CajA==}
     engines: {bare: '>=1.24.0'}
@@ -5339,8 +5363,8 @@ packages:
   '@qvac/error@0.1.1':
     resolution: {integrity: sha512-Xv7p1wnC/JmsKimGrkvXlcq+AHsG1r33f+uayANuEYe5ThFi+FR3txnN2UPjulwBdDorEnger9/+9ftShAFOAw==}
 
-  '@qvac/fabric-android-arm64@0.30.1':
-    resolution: {integrity: sha512-X0NwAdCtkLSxbFWVqUel1/zlmW06rxElZf5k7VxfV3lFYUKVslf+Kz9J9Rg5tVoL0RYTL58IyMoscJ5P2xHw+A==}
+  '@qvac/fabric-android-arm64@0.31.0':
+    resolution: {integrity: sha512-7/WcGf7+EzEH4F0H/w9ZHc4bjcH+DZ6EoGGRxZyNiYp8XXmjcbjoc/3hQhtb0D5PCervYlbaeEwmoElihbCQEQ==}
     engines: {bare: '>=1.24.0'}
 
   '@qvac/fabric-darwin-arm64@0.29.1':
@@ -5349,8 +5373,8 @@ packages:
     cpu: [arm64]
     os: [darwin]
 
-  '@qvac/fabric-darwin-arm64@0.30.1':
-    resolution: {integrity: sha512-Q0HhikDqQxzVk4sWA1N+bJ8yBiZK9lxEXpapvCBchZGKuarq0wBep9+e8WxJh4PnAVLZygwLsMJDHJQJbTLfOQ==}
+  '@qvac/fabric-darwin-arm64@0.31.0':
+    resolution: {integrity: sha512-QiCDKCOtaZ1ZtTW16H33pyriWVCf3TCtZDoC13ZY8ImQf6XNfOWiuWscWpBycrNAYSYFfY8K/818r4eXPMOd5A==}
     engines: {bare: '>=1.24.0'}
     cpu: [arm64]
     os: [darwin]
@@ -5361,14 +5385,14 @@ packages:
     cpu: [x64]
     os: [darwin]
 
-  '@qvac/fabric-darwin-x64@0.30.1':
-    resolution: {integrity: sha512-90hMcgy6b5XSefXCc1bk3HJNt44LlgEg1nW/p89BA8PBiTLIN7XgD2ixKcFkoRmWWyrt7qDI7LgnU/Vj7mhVWA==}
+  '@qvac/fabric-darwin-x64@0.31.0':
+    resolution: {integrity: sha512-6n2LYgUG+zKJKdVNC9ynXsGtF1zFJrZ0HOVPRFSnFKCObid5aeab3waOqOsjKplKXgO4pPNyDww+tMUf6irAag==}
     engines: {bare: '>=1.24.0'}
     cpu: [x64]
     os: [darwin]
 
-  '@qvac/fabric-ios@0.30.1':
-    resolution: {integrity: sha512-7rJbxYzT46nHDrLoW1hONuagfXqRpIVRTZ/heMHje8kCjK1fDEGmKBprNXNV38JG0r/W/5O9uNvnVcrQycaqSg==}
+  '@qvac/fabric-ios@0.31.0':
+    resolution: {integrity: sha512-FIbMjngBhW8yxjog/UECq/kzXLA0iHtI4aNtdRRuoK8bFemnRfs9tj5pexzwRYu/vRZ4ksYBqc3xk0iHlQ8Yqg==}
     engines: {bare: '>=1.24.0'}
 
   '@qvac/fabric-linux-arm64@0.29.1':
@@ -5378,8 +5402,8 @@ packages:
     os: [linux]
     libc: [glibc]
 
-  '@qvac/fabric-linux-arm64@0.30.1':
-    resolution: {integrity: sha512-LA/UBAGEuKFgEpqYW2VEhR6xM997FqDgde/7ewupHrqruaKY7XlxbtNZZNdJW1hvGwegrYuc939+AHWfCq7H4g==}
+  '@qvac/fabric-linux-arm64@0.31.0':
+    resolution: {integrity: sha512-Uy/fV/uuhIdklHec6UXO0doM3nj6utXeti/jtEArFgQz3mDiCd9Eazdv7iMa07tfci5dRjh2bblv1jqlQMDqYg==}
     engines: {bare: '>=1.24.0'}
     cpu: [arm64]
     os: [linux]
@@ -5392,8 +5416,8 @@ packages:
     os: [linux]
     libc: [glibc]
 
-  '@qvac/fabric-linux-x64@0.30.1':
-    resolution: {integrity: sha512-sAEzWvykV+BUnnSEhCa6QaZy5UY7eaaApGTYzEDwy6fxhRClViorPcQ9RVu5pgRsaMlSswMbZzibZXFtdPnZCQ==}
+  '@qvac/fabric-linux-x64@0.31.0':
+    resolution: {integrity: sha512-+HSL0ihvn0cI8WMOwZTfhy4+dVsutfkELbSYVlzxfQlFd38XAIIHJwWC/SNscatIGwDCjxIRlO5ivZDtAhfmFw==}
     engines: {bare: '>=1.24.0'}
     cpu: [x64]
     os: [linux]
@@ -5405,8 +5429,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@qvac/fabric-win32-x64@0.30.1':
-    resolution: {integrity: sha512-CS346hwohwOj0UEWiT2LtnCVepcKkAsUbXarEPCQDyLucETx7/TWKfgL/ismINH2XGXAvrM8kxhINq8LQXsWzw==}
+  '@qvac/fabric-win32-x64@0.31.0':
+    resolution: {integrity: sha512-CcJToX5DG7xLcbfHBuBgshfiBIaRY4h7bjwPiclBlK+UrDleny7chS3gGI6GZv8yhPfFv6joN78ndPSNRrY1Ow==}
     engines: {bare: '>=1.24.0'}
     cpu: [x64]
     os: [win32]
@@ -5417,18 +5441,6 @@ packages:
     peerDependencies:
       '@qvac/fabric-android-arm64': 0.29.1
       '@qvac/fabric-ios': 0.29.1
-    peerDependenciesMeta:
-      '@qvac/fabric-android-arm64':
-        optional: true
-      '@qvac/fabric-ios':
-        optional: true
-
-  '@qvac/fabric@0.30.1':
-    resolution: {integrity: sha512-DWmkwEURjV8oAi4Cvjgh+snPMHZLZNSS00Rh0H+5CFLI/8zFchJkfjnsC0aUxPDxNK7NzwMaQS9EtTbicBZ1pA==}
-    engines: {bare: '>=1.24.0'}
-    peerDependencies:
-      '@qvac/fabric-android-arm64': 0.30.1
-      '@qvac/fabric-ios': 0.30.1
     peerDependenciesMeta:
       '@qvac/fabric-android-arm64':
         optional: true
@@ -5533,6 +5545,18 @@ packages:
       '@qvac/fabric-ios':
         optional: true
       bare-fetch:
+        optional: true
+
+  '@qvac/tts-ggml@0.15.1':
+    resolution: {integrity: sha512-7Jy4bR3mBbUEHqOjhK9n4wnMDkW40ErT2ayBMcldQ/PGneVTIAZAUZNrRaZ0VbRz+NWYNU7Swhz3RfW72baN3w==}
+    engines: {bare: '>=1.19.0'}
+    peerDependencies:
+      '@qvac/tts-ggml-android-arm64': 0.15.1
+      '@qvac/tts-ggml-ios': 0.15.1
+    peerDependenciesMeta:
+      '@qvac/tts-ggml-android-arm64':
+        optional: true
+      '@qvac/tts-ggml-ios':
         optional: true
 
   '@qvac/turbovec-ggml@0.5.1':
@@ -7111,6 +7135,15 @@ packages:
       bare-pipe:
         optional: true
 
+  bare-thread@1.4.0:
+    resolution: {integrity: sha512-WkLdv7BRdGlChAdM3rLPgM2/1kRHk2dlDyf1Jedfc2LbUjzY6kjJ2W5IHB0DfVjY0r+XdfpCk4PomcpINeBW6w==}
+    engines: {bare: '>=1.33.0'}
+    peerDependencies:
+      bare-buffer: '*'
+    peerDependenciesMeta:
+      bare-buffer:
+        optional: true
+
   bare-timers@3.2.1:
     resolution: {integrity: sha512-O+9e6Jol/BoYsQUzAFXG0gWUW1GWryFMblGcNBfi3smPrD3rJIKQwpw2FJARl2j/1VHne4a8YaHPK1cxDKfiYQ==}
     engines: {bare: '>=1.7.0'}
@@ -7655,19 +7688,16 @@ packages:
     resolution: {integrity: sha512-EH5OO3OmCa676Y1OdLT6Q+Kg+SWYfkZQMjG1PFsdFbgn0Vxhs5UZGpXTgF9HnDMDgv9DEiUAzYEAB12z3768Pw==}
     hasBin: true
 
-  cmake-toolchains@2.4.0:
-    resolution: {integrity: sha512-GbyIkP0ifh7K6+CK/ZNMj5U4BbaUSp5LcDx+7SGO1dL/a1nr+CUH35j0DnUgvKsCj2I/RlWBniomlDbW3lgHyg==}
+  cmake-toolchains@2.1.2:
+    resolution: {integrity: sha512-E9MfAe6JRCpQ2w8veL2xguguXVKYuCXuMllOii6wn3fzRhOTVbfPOy6nkNgfWxL89u7DDOAt54lQBBoFndNMAQ==}
     peerDependencies:
-      cmake-runtime: ^3.29.1 || ^4
-      llvm-runtime: ^23.1.5 || ^23.1.6-0
-      musl-sysroot: ^0.1.1
-      nasm-runtime: ^2.16.3 || ^3.2.0
-      picolibc-sysroot: ^0.1.0
-      wasi-sysroot: ^0.1.1
+      cmake-runtime: ^3 || ^4
+      llvm-runtime: ^22 || ^23
+      musl-sysroot: '*'
+      nasm-runtime: ^2 || ^3
+      wasi-sysroot: '*'
     peerDependenciesMeta:
       musl-sysroot:
-        optional: true
-      picolibc-sysroot:
         optional: true
       wasi-sysroot:
         optional: true
@@ -15869,6 +15899,33 @@ snapshots:
       - bare-buffer
       - react-native-b4a
 
+  '@qvac/audiogen-ggml@0.10.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
+    dependencies:
+      '@qvac/error': 0.1.1
+      '@qvac/infer-base': 0.8.0
+      '@qvac/logging': 0.1.1
+      bare-ffmpeg: 1.5.0
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-os: 3.9.3
+      bare-path: 3.1.1
+      bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
+
+  '@qvac/bci-whispercpp@0.15.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
+    dependencies:
+      '@qvac/error': 0.1.1
+      '@qvac/infer-base': 0.8.0
+      '@qvac/logging': 0.1.1
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-path: 3.1.1
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
+
   '@qvac/classification-ggml@0.36.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))':
     dependencies:
       '@qvac/fabric': 0.29.1
@@ -15943,38 +16000,38 @@ snapshots:
 
   '@qvac/error@0.1.1': {}
 
-  '@qvac/fabric-android-arm64@0.30.1': {}
+  '@qvac/fabric-android-arm64@0.31.0': {}
 
   '@qvac/fabric-darwin-arm64@0.29.1':
     optional: true
 
-  '@qvac/fabric-darwin-arm64@0.30.1':
+  '@qvac/fabric-darwin-arm64@0.31.0':
     optional: true
 
   '@qvac/fabric-darwin-x64@0.29.1':
     optional: true
 
-  '@qvac/fabric-darwin-x64@0.30.1':
+  '@qvac/fabric-darwin-x64@0.31.0':
     optional: true
 
-  '@qvac/fabric-ios@0.30.1': {}
+  '@qvac/fabric-ios@0.31.0': {}
 
   '@qvac/fabric-linux-arm64@0.29.1':
     optional: true
 
-  '@qvac/fabric-linux-arm64@0.30.1':
+  '@qvac/fabric-linux-arm64@0.31.0':
     optional: true
 
   '@qvac/fabric-linux-x64@0.29.1':
     optional: true
 
-  '@qvac/fabric-linux-x64@0.30.1':
+  '@qvac/fabric-linux-x64@0.31.0':
     optional: true
 
   '@qvac/fabric-win32-x64@0.29.1':
     optional: true
 
-  '@qvac/fabric-win32-x64@0.30.1':
+  '@qvac/fabric-win32-x64@0.31.0':
     optional: true
 
   '@qvac/fabric@0.29.1':
@@ -15984,16 +16041,6 @@ snapshots:
       '@qvac/fabric-linux-arm64': 0.29.1
       '@qvac/fabric-linux-x64': 0.29.1
       '@qvac/fabric-win32-x64': 0.29.1
-
-  '@qvac/fabric@0.30.1(@qvac/fabric-android-arm64@0.30.1)(@qvac/fabric-ios@0.30.1)':
-    optionalDependencies:
-      '@qvac/fabric-android-arm64': 0.30.1
-      '@qvac/fabric-darwin-arm64': 0.30.1
-      '@qvac/fabric-darwin-x64': 0.30.1
-      '@qvac/fabric-ios': 0.30.1
-      '@qvac/fabric-linux-arm64': 0.30.1
-      '@qvac/fabric-linux-x64': 0.30.1
-      '@qvac/fabric-win32-x64': 0.30.1
 
   '@qvac/ggml-rpc-server@0.9.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
     dependencies:
@@ -16289,6 +16336,26 @@ snapshots:
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
+      - react-native-b4a
+
+  '@qvac/tts-ggml@0.15.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))':
+    dependencies:
+      '@qvac/error': 0.1.1
+      '@qvac/infer-base': 0.8.0
+      '@qvac/langdetect-text': 0.1.3
+      '@qvac/logging': 0.1.1
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-https: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
+      bare-os: 3.9.3
+      bare-path: 3.1.1
+      bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-stream: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+      bare-url: 2.5.4
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-events
+      - bare-pipe
       - react-native-b4a
 
   '@qvac/turbovec-ggml@0.5.1':
@@ -17836,19 +17903,6 @@ snapshots:
       - bare-url
       - react-native-b4a
 
-  bare-https@3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6):
-    dependencies:
-      bare-http1: 4.6.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
-      bare-tcp: 2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
-      bare-tls: 3.1.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - bare-events
-      - bare-pipe
-      - bare-url
-      - react-native-b4a
-
   bare-https@3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4):
     dependencies:
       bare-http1: 4.6.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
@@ -17945,7 +17999,7 @@ snapshots:
       bare-os: 3.9.3
       bare-path: 3.1.1
       cmake-runtime: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
-      cmake-toolchains: 2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
+      cmake-toolchains: 2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))
       llvm-runtime: 23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       nasm-runtime: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       ninja-runtime: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
@@ -17957,7 +18011,6 @@ snapshots:
       - bare-buffer
       - bare-url
       - musl-sysroot
-      - picolibc-sysroot
       - react-native-b4a
       - wasi-sysroot
 
@@ -17968,7 +18021,7 @@ snapshots:
       bare-os: 3.9.3
       bare-path: 3.1.1
       cmake-runtime: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      cmake-toolchains: 2.4.0(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
+      cmake-toolchains: 2.1.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))
       llvm-runtime: 23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       nasm-runtime: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       ninja-runtime: 1.13.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
@@ -17980,7 +18033,6 @@ snapshots:
       - bare-buffer
       - bare-url
       - musl-sysroot
-      - picolibc-sysroot
       - react-native-b4a
       - wasi-sysroot
 
@@ -18715,6 +18767,15 @@ snapshots:
       - bare-abort-controller
       - bare-buffer
       - react-native-b4a
+
+  bare-thread@1.4.0(bare-buffer@3.6.2):
+    dependencies:
+      bare-bundle: 1.11.0(bare-buffer@3.6.2)(bare-url@2.5.4)
+      bare-module-resolve: 1.12.6(bare-url@2.5.4)
+      bare-module-traverse: 2.7.4(bare-buffer@3.6.2)(bare-url@2.5.4)
+      bare-url: 2.5.4
+    optionalDependencies:
+      bare-buffer: 3.6.2
 
   bare-timers@3.2.1(bare-abort-controller@1.1.2):
     optionalDependencies:
@@ -19566,39 +19627,39 @@ snapshots:
       - bare-url
       - react-native-b4a
 
-  cmake-toolchains@2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)):
+  cmake-toolchains@2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)):
     dependencies:
       cmake-runtime: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       llvm-runtime: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       nasm-runtime: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
-      require-asset: 1.2.2(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
 
-  cmake-toolchains@2.4.0(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)):
+  cmake-toolchains@2.1.2(bare-url@2.4.6)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(llvm-runtime@23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)):
     dependencies:
       cmake-runtime: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       llvm-runtime: 23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       nasm-runtime: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
-      require-asset: 1.2.2(bare-url@2.4.6)
+      require-asset: 1.2.4(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
 
-  cmake-toolchains@2.4.0(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)):
+  cmake-toolchains@2.1.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)):
     dependencies:
       cmake-runtime: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       llvm-runtime: 23.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       nasm-runtime: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      require-asset: 1.2.2(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
 
-  cmake-toolchains@2.4.0(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)):
+  cmake-toolchains@2.1.2(bare-url@2.5.4)(cmake-runtime@4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(llvm-runtime@23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(nasm-runtime@3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)):
     dependencies:
       cmake-runtime: 4.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       llvm-runtime: 23.1.6-1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       nasm-runtime: 3.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
-      require-asset: 1.2.2(bare-url@2.5.4)
+      require-asset: 1.2.4(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
 
@@ -25469,6 +25530,7 @@ snapshots:
       bare-module-resolve: 1.12.6(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
+    optional: true
 
   require-asset@1.2.2(bare-url@2.5.4):
     dependencies:
@@ -25481,14 +25543,12 @@ snapshots:
       bare-module-resolve: 1.12.6(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
-    optional: true
 
   require-asset@1.2.4(bare-url@2.5.4):
     dependencies:
       bare-module-resolve: 1.12.6(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
-    optional: true
 
   require-directory@2.1.1: {}
 

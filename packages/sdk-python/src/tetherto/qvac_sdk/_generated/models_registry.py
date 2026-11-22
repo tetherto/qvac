@@ -2243,6 +2243,60 @@ BITNET_B1_58_3B_BASE_TQ2_0 = ModelConstant(
     params="3B",
 )
 
+BOTPSY_0_8B_TOOL_CALLING_BF16 = ModelConstant(
+    name="BOTPSY_0_8B_TOOL_CALLING_BF16",
+    src="registry://hf/qvac/BotPsy-0.8B-GGUFs/resolve/17bb36aa29c58fcde8e321aaaad3f2f7372aa655/botpsy-0.8b-bf16.gguf",
+    registry_path="qvac/BotPsy-0.8B-GGUFs/resolve/17bb36aa29c58fcde8e321aaaad3f2f7372aa655/botpsy-0.8b-bf16.gguf",
+    registry_source="hf",
+    blob_core_key="e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+    blob_block_offset=5574480,
+    blob_block_length=23144,
+    blob_byte_offset=365326121441,
+    model_id="botpsy-0.8b-bf16.gguf",
+    expected_size=1516744160,
+    sha256_checksum="a7f6b3b4e5c0c15e8b3caaf7b3814596c6d79251ca047f874d9a682e9a5127e8",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="bf16",
+    params="0.8B",
+)
+
+BOTPSY_0_8B_TOOL_CALLING_Q4_K_M = ModelConstant(
+    name="BOTPSY_0_8B_TOOL_CALLING_Q4_K_M",
+    src="registry://hf/qvac/BotPsy-0.8B-GGUFs/resolve/17bb36aa29c58fcde8e321aaaad3f2f7372aa655/botpsy-0.8b-q4_k_m-imat.gguf",
+    registry_path="qvac/BotPsy-0.8B-GGUFs/resolve/17bb36aa29c58fcde8e321aaaad3f2f7372aa655/botpsy-0.8b-q4_k_m-imat.gguf",
+    registry_source="hf",
+    blob_core_key="e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+    blob_block_offset=5597625,
+    blob_block_length=8077,
+    blob_byte_offset=366842885665,
+    model_id="botpsy-0.8b-q4_k_m-imat.gguf",
+    expected_size=529296960,
+    sha256_checksum="482db2dfdbc8ab7db3d3216fd8ef071d7381dd8547aff9933bc03312839d4d83",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="q4_k_m",
+    params="0.8B",
+)
+
+BOTPSY_0_8B_TOOL_CALLING_Q8_0 = ModelConstant(
+    name="BOTPSY_0_8B_TOOL_CALLING_Q8_0",
+    src="registry://hf/qvac/BotPsy-0.8B-GGUFs/resolve/17bb36aa29c58fcde8e321aaaad3f2f7372aa655/botpsy-0.8b-q8_0.gguf",
+    registry_path="qvac/BotPsy-0.8B-GGUFs/resolve/17bb36aa29c58fcde8e321aaaad3f2f7372aa655/botpsy-0.8b-q8_0.gguf",
+    registry_source="hf",
+    blob_core_key="e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+    blob_block_offset=5605703,
+    blob_block_length=12388,
+    blob_byte_offset=367372202753,
+    model_id="botpsy-0.8b-q8_0.gguf",
+    expected_size=811843040,
+    sha256_checksum="3ad45ab73cc5a45a200cda373f9cf7262741cc005b6e32b3a6221cb0c28e06be",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="q8_0",
+    params="0.8B",
+)
+
 CLIP_VISION_H = ModelConstant(
     name="CLIP_VISION_H",
     src="registry://hf/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/06e001fc51048fb03433a6fb25334de7836704a5/split_files/clip_vision/clip_vision_h.safetensors",
@@ -2259,6 +2313,42 @@ CLIP_VISION_H = ModelConstant(
     engine="sdcpp-generation",
     quantization="",
     params="",
+)
+
+DEEPSEEK_V4_1_552B_A16B_DSPARK_Q8_0 = ModelConstant(
+    name="DEEPSEEK_V4_1_552B_A16B_DSPARK_Q8_0",
+    src="registry://hf/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/dspark-DeepSeek-V4.1-Flash-1017-Q8_0.gguf",
+    registry_path="unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/dspark-DeepSeek-V4.1-Flash-1017-Q8_0.gguf",
+    registry_source="hf",
+    blob_core_key="106dc5cf3342f0aea7c08503f9b0b8368ce829d32ff532477923de051eccddaa",
+    blob_block_offset=8020543,
+    blob_block_length=121719,
+    blob_byte_offset=525631623853,
+    model_id="dspark-DeepSeek-V4.1-Flash-1017-Q8_0.gguf",
+    expected_size=7976914240,
+    sha256_checksum="6ba6ac1b331c540691a209e7fc97dec2a24e295acb1e755c84c7d24a4373927a",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="q8_0",
+    params="552B-A16B",
+)
+
+DEEPSEEK_V4_1_552B_A16B_MULTIMODAL_Q4_K_M_SHARD = ModelConstant(
+    name="DEEPSEEK_V4_1_552B_A16B_MULTIMODAL_Q4_K_M_SHARD",
+    src="registry://s3/qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    registry_path="qvac_models_compiled/ggml/deepseek-v4.1-flash-1017/2026-11-12/DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    registry_source="s3",
+    blob_core_key="e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+    blob_block_offset=3371179,
+    blob_block_length=734489,
+    blob_byte_offset=220930894785,
+    model_id="DeepSeek-V4.1-Flash-1017-Q4_K_M-00001-of-00008.gguf",
+    expected_size=404686076192,
+    sha256_checksum="c0732980fdcf264ef988d4b612dd8b5a25e82c7b614b41752346f815f0fd3e6b",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="q4_k_m",
+    params="552B-A16B",
 )
 
 DEEPSEEK_V4_304B_INST_UD_IQ2_M_SHARD = ModelConstant(
@@ -3737,6 +3827,24 @@ MEGALOC_MIXED = ModelConstant(
     params="",
 )
 
+MMPROJ_DEEPSEEK_V4_1_552B_A16B_MULTIMODAL_F16 = ModelConstant(
+    name="MMPROJ_DEEPSEEK_V4_1_552B_A16B_MULTIMODAL_F16",
+    src="registry://hf/unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/mmproj-F16.gguf",
+    registry_path="unsloth/DeepSeek-V4.1-Flash-1017-GGUF/resolve/f2e5a380fc945842d9783292315307eeab418684/mmproj-F16.gguf",
+    registry_source="hf",
+    blob_core_key="106dc5cf3342f0aea7c08503f9b0b8368ce829d32ff532477923de051eccddaa",
+    blob_block_offset=8142263,
+    blob_block_length=14817,
+    blob_byte_offset=533608545005,
+    model_id="mmproj-F16.gguf",
+    expected_size=971004064,
+    sha256_checksum="dad8ad13f1d9a25757e121592d7b4f8ca83620d1172048004998b7c0b964b18e",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="f16",
+    params="552B-A16B",
+)
+
 MMPROJ_EMBEDDINGGEMMA_2_Q8_0 = ModelConstant(
     name="MMPROJ_EMBEDDINGGEMMA_2_Q8_0",
     src="registry://hf/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/mmproj-embeddinggemma-2-Q8_0.gguf",
@@ -4437,6 +4545,60 @@ MOE_35B_INST_Q8_0 = ModelConstant(
     engine="llamacpp-completion",
     quantization="q8_0",
     params="35B",
+)
+
+MOSS_IMAGE_SFT_5B_BF16 = ModelConstant(
+    name="MOSS_IMAGE_SFT_5B_BF16",
+    src="registry://hf/Comfy-Org/MOSS-Image/resolve/530a4c94f92c35ef6818b1b035a983fe9dcf5f54/diffusion_models/moss_image_sft_bf16.safetensors",
+    registry_path="Comfy-Org/MOSS-Image/resolve/530a4c94f92c35ef6818b1b035a983fe9dcf5f54/diffusion_models/moss_image_sft_bf16.safetensors",
+    registry_source="hf",
+    blob_core_key="e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+    blob_block_offset=3190846,
+    blob_block_length=155101,
+    blob_byte_offset=209112888048,
+    model_id="moss_image_sft_bf16.safetensors",
+    expected_size=10164655808,
+    sha256_checksum="f96738d8116d78b7316b57c663d8c98591ddafab7488f48e3099b7655e34ab6f",
+    addon="diffusion",
+    engine="sdcpp-generation",
+    quantization="BF16",
+    params="5B",
+)
+
+MOSS_IMAGE_SFT_TOKENIZER = ModelConstant(
+    name="MOSS_IMAGE_SFT_TOKENIZER",
+    src="registry://hf/OpenMOSS-Team/MOSS-Image-SFT/resolve/f972bd4b4b9e3852133cc5da954d87bc32cd8fb9/tokenizer/tokenizer.json",
+    registry_path="OpenMOSS-Team/MOSS-Image-SFT/resolve/f972bd4b4b9e3852133cc5da954d87bc32cd8fb9/tokenizer/tokenizer.json",
+    registry_source="hf",
+    blob_core_key="e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+    blob_block_offset=3349757,
+    blob_block_length=306,
+    blob_byte_offset=219527131668,
+    model_id="tokenizer.json",
+    expected_size=19989325,
+    sha256_checksum="06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+    addon="diffusion",
+    engine="sdcpp-generation",
+    quantization="",
+    params="",
+)
+
+MOSS_IMAGE_VAE = ModelConstant(
+    name="MOSS_IMAGE_VAE",
+    src="registry://hf/Comfy-Org/MOSS-Image/resolve/530a4c94f92c35ef6818b1b035a983fe9dcf5f54/vae/flux2-vae_small.safetensors",
+    registry_path="Comfy-Org/MOSS-Image/resolve/530a4c94f92c35ef6818b1b035a983fe9dcf5f54/vae/flux2-vae_small.safetensors",
+    registry_source="hf",
+    blob_core_key="e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+    blob_block_offset=3345948,
+    blob_block_length=3808,
+    blob_byte_offset=219277582384,
+    model_id="flux2-vae_small.safetensors",
+    expected_size=249521340,
+    sha256_checksum="d8d52ba036475f5fb07c8b435e176d3d97ebfa82f0d1a1c317f9cc1e25bd013b",
+    addon="diffusion",
+    engine="sdcpp-generation",
+    quantization="",
+    params="",
 )
 
 MOSS_TRANSCRIBE_DIARIZE_F16 = ModelConstant(
@@ -8776,7 +8938,12 @@ __all__ = [
     "BITNET_0_7B_BASE_TQ2_0",
     "BITNET_1B_BASE_TQ2_0",
     "BITNET_B1_58_3B_BASE_TQ2_0",
+    "BOTPSY_0_8B_TOOL_CALLING_BF16",
+    "BOTPSY_0_8B_TOOL_CALLING_Q4_K_M",
+    "BOTPSY_0_8B_TOOL_CALLING_Q8_0",
     "CLIP_VISION_H",
+    "DEEPSEEK_V4_1_552B_A16B_DSPARK_Q8_0",
+    "DEEPSEEK_V4_1_552B_A16B_MULTIMODAL_Q4_K_M_SHARD",
     "DEEPSEEK_V4_304B_INST_UD_IQ2_M_SHARD",
     "DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_SHARD",
     "DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_TENSORS",
@@ -8859,6 +9026,7 @@ __all__ = [
     "MEDGEMMA_4B_IT_Q8_0_SHARD",
     "MEGALOC_F16",
     "MEGALOC_MIXED",
+    "MMPROJ_DEEPSEEK_V4_1_552B_A16B_MULTIMODAL_F16",
     "MMPROJ_EMBEDDINGGEMMA_2_Q8_0",
     "MMPROJ_GEMMA4_2B_MULTIMODAL_BF16",
     "MMPROJ_GEMMA4_2B_MULTIMODAL_F16",
@@ -8898,6 +9066,9 @@ __all__ = [
     "MOE_35B_INST_IQ2_XXS",
     "MOE_35B_INST_Q4_K_M",
     "MOE_35B_INST_Q8_0",
+    "MOSS_IMAGE_SFT_5B_BF16",
+    "MOSS_IMAGE_SFT_TOKENIZER",
+    "MOSS_IMAGE_VAE",
     "MOSS_TRANSCRIBE_DIARIZE_F16",
     "MOSS_TRANSCRIBE_DIARIZE_Q5_0",
     "MOSS_TRANSCRIBE_DIARIZE_Q8_0",

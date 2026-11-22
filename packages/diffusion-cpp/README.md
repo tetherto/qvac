@@ -20,6 +20,7 @@ The package exposes four JS entry points:
 - [Supported Platforms](#supported-platforms)
 - [Platform packages](#platform-packages)
 - [Building From Source](#building-from-source)
+- [Core ML sidecars on Apple](#core-ml-sidecars-on-apple)
 - [Downloading Models](#downloading-models)
 - [Examples](#examples)
 - [Image API](#image-api)
@@ -67,6 +68,12 @@ pinned downloads, text-to-image, ordered reference editing, and RGBA handling.
 
 See [FLUX.3 Image Klein](docs/flux3.md) for pinned, checksum-verified downloads,
 the shared MOSS registry baseline, and text-to-image and reference-editing examples.
+
+## Fibo 2.0 Edit Turbo setup
+
+See [Fibo 2.0 Edit Turbo](docs/fibo2-edit-turbo.md) for the pinned Q4_0 download
+bundle, four-step reference-editing example, and native integration checks.
+Source builds have been validated on CUDA and Vulkan; see the guide for limits.
 
 ## MOSS-Image setup
 
@@ -230,6 +237,61 @@ GGML_DISABLE_CUDA=1 GGML_DISABLE_VULKAN=1 QVAC_EXPECT_BACKEND=CPU bare test/inte
 Set `SD_TEST_MODEL_PATH` to an existing SD2 Q8_0 GGUF to avoid downloading it.
 Set `QVAC_TEST_BACKENDS_DIR` to test modules from a separate build, including
 a directory containing only Vulkan or a CUDA module incompatible with the GPU.
+
+## Core ML sidecars on Apple
+
+macOS and iOS builds enable the engine's Core ML support. Pass compiled
+`.mlmodelc` directories explicitly; preserve every file and subdirectory in
+these bundles. The text encoder and scheduler continue to use ggml. The two
+sidecars are independent, and Core ML controls CPU/GPU/Neural Engine placement.
+
+```js
+const model = new ImgStableDiffusion({
+  files: {
+    model: '/absolute/models/stable-diffusion-v2-1-Q8_0.gguf',
+    taesd: '/absolute/models/taesd.safetensors',
+    coremlUnet: '/absolute/models/sd21base_unet_p6.mlmodelc',
+    coremlTaeDecoder: '/absolute/models/taesd_decoder.mlmodelc'
+  },
+  // This sidecar is SD 2.1-base (epsilon prediction); SD 2.1 supplies the
+  // shared OpenCLIP text encoder, while its UNet weights are skipped.
+  config: { prediction: 'eps' }
+})
+await model.load()
+try {
+  const response = await model.run({
+    prompt: 'a red fox in a snowy forest',
+    width: 512, height: 512, steps: 20, cfg_scale: 7, seed: 42
+  })
+  await response.onUpdate((image) => { /* save image bytes */ }).await()
+} finally {
+  await model.unload()
+}
+```
+
+`coremlUnet` supports SD 1.x/2.x, including SDXS. Use the prediction type,
+resolution and prompt limits of the export. `coremlTaeDecoder` requires SDXS's
+built-in tiny autoencoder or `files.taesd` for SD/SDXL. `files.taesd` replaces
+the full VAE for every encoding and decoding operation, so `files.vae` is
+unused when the tiny autoencoder loads. If the engine cannot load the tiny
+weights, it logs the failing path and retains the full VAE; with an explicit
+Core ML tiny decoder, the missing tiny autoencoder instead fails loading.
+Tiled decoding, encoding and circular padding use the ggml tiny autoencoder;
+its weights stay loaded.
+LoRAs and circular padding are rejected with a Core ML UNet. Explicit missing
+or unusable sidecars fail loading. Core ML file options are rejected on
+platforms other than macOS and iOS. Omit the sidecar options for a ggml load.
+
+`SD_COREML_COMPUTE_UNITS` accepts `cpu_ne` (default), `all`, `cpu_gpu`, or `cpu`.
+These select eligible devices; they do not guarantee ANE execution. The first
+load can take longer while Core ML specializes and caches the model.
+`assessFit()` returns `unknown` with empty device rows for Core ML loads.
+
+See the [engine Core ML guide](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/blob/9e544e85276f330f861dd8f4e60d5953df7fae55/docs/coreml.md)
+for exporting compatible artifacts. The package's `test/integration/coreml.test.js`
+runs on macOS ARM64 using the assets in its test manifest; `COREML_MODELS_DIR`
+can point to a local directory containing those exact bundles and TAESD weights.
+The on-device mobile suite does not currently stage these sidecars.
 
 ## Downloading Models
 
@@ -427,6 +489,9 @@ All file paths must be absolute.
 | `files.t5Xxl`                   |       no | T5-XXL text encoder for SD3                                                 |
 | `files.llm`                     |       no | Qwen3 LLM text encoder for FLUX.2 [klein]                                   |
 | `files.vae`                     |       no | Separate VAE                                                                |
+| `files.taesd`                   |       no | Tiny autoencoder for all encoding/decoding; overrides `files.vae`           |
+| `files.coremlUnet`              |       no | Apple Core ML SD 1.x/2.x UNet `.mlmodelc` directory                         |
+| `files.coremlTaeDecoder`        |       no | Apple Core ML tiny decoder `.mlmodelc` directory                            |
 | `files.esrgan`                  |       no | ESRGAN model for post-generation upscale                                    |
 | `files.highNoiseDiffusionModel` |       no | Wan 2.2 high-noise expert path; normally used by `VideoStableDiffusion`     |
 
@@ -589,7 +654,7 @@ Reference-validation compatibility: `init_images` on SD1/SD2/SDXL is now
 rejected by the loaded native model after job submission, rather than by the
 JavaScript file/prediction checks. Await the response's `.await()` promise to
 handle the error. The native message is
-`img2img: init_images requires a model supporting reference editing (FLUX.2 or Qwen-Image-2.1).`
+`img2img: init_images requires a model supporting reference editing.`
 Callers matching the former JavaScript error text must update their handling.
 The former rejection of `init_image` with `files.llm` but no explicit
 `'flux2_flow'` prediction is also removed; native model capabilities determine
@@ -1026,7 +1091,7 @@ fit.stats // {}
 
 Every number must be finite, whole and in range; anything else rejects.
 
-The engine chooses the placement, so it has to be given an unpinned configuration. A `config.mainGpu`, a `config.device` of `cpu`, a `paramsBackend` naming individual modules, or an OpenCL preference that does not name the first GPU is `status: "unknown"`.
+The engine chooses the placement, so it has to be given an unpinned configuration. A `config.mainGpu`, a `config.device` of `cpu`, a `paramsBackend` naming individual modules, an OpenCL preference that does not name the first GPU, or Core ML sidecars (`files.coremlUnet` / `files.coremlTaeDecoder`) on macOS/iOS is `status: "unknown"`.
 
 For standalone ESRGAN, use `mode: 'upscale'`, `files: { esrgan }` and the same config as `EsrganUpscaler`. This mode supports `device: 'cpu'`. `workload.width` and `height` describe the input image. The estimate includes weights, the tiled graph and full-image RAM buffers; smaller tiles do not remove full-image allocations.
 

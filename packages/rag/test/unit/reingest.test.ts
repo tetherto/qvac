@@ -255,7 +255,11 @@ test('an unchanged document is skipped like any other on abort, and comes back a
     namespace: 'ns',
     documents: [doc('a', spaceId, [['a', [1, 0, 0]]])]
   })
-  t.alike(result.documents, [{ id: 'a', generation: 1, chunkCount: 1, status: 'created' }])
+  t.alike(
+    result.documents,
+    [{ id: 'a', generation: 2, chunkCount: 1, status: 'created' }],
+    'the generation continues past the deleted one'
+  )
   t.is(result.revision, 3)
 })
 
@@ -314,7 +318,7 @@ test('a document found unchanged is rechecked at commit', async (t) => {
   const result = await pending
   t.alike(result.documents, [
     { id: 'new', generation: 1, chunkCount: 1, status: 'created' },
-    { id: 'gone', generation: 1, chunkCount: 1, status: 'created' },
+    { id: 'gone', generation: 2, chunkCount: 1, status: 'created' },
     { id: 'edited', generation: 3, chunkCount: 1, status: 'replaced', removedChunks: 1 },
     { id: 'kept', generation: 1, chunkCount: 1, status: 'unchanged' }
   ])
