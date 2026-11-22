@@ -21,7 +21,11 @@ export interface HyperDBStream<T> extends AsyncIterable<T> {
 
 export interface HyperDBReader {
   get<T = unknown>(collection: string, query: object): Promise<T | null>
-  find<T = unknown>(collection: string, query?: object): HyperDBStream<T>
+  find<T = unknown>(
+    collection: string,
+    query?: object,
+    options?: { limit?: number }
+  ): HyperDBStream<T>
   close(): Promise<void>
 }
 

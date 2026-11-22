@@ -64,6 +64,7 @@ export interface OpenClawModel {
   readonly maxTokens: number
   readonly compat: {
     readonly requiresStringContent: true
+    readonly supportsPromptCacheKey: true
   }
 }
 
@@ -294,7 +295,9 @@ export function createOpenClawModels(options: ResolvedOptions): OpenClawModel[] 
     cost: ZERO_COST,
     contextWindow: options.ctxSize,
     maxTokens: 8192,
-    compat: { requiresStringContent: true }
+    // The session's prompt_cache_key names a KV cache session on qvac serve,
+    // which keeps the cache across tool calls.
+    compat: { requiresStringContent: true, supportsPromptCacheKey: true }
   }))
 }
 
