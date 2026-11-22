@@ -1,6 +1,11 @@
+#include <cmath>
+#include <set>
+#include <vector>
+
 #include <gtest/gtest.h>
 
 #include "model-interface/nmt.hpp"
+#include "model-interface/nmt_state_backend.hpp"
 
 class Nmt : public ::testing::Test {
 protected:
@@ -219,4 +224,101 @@ TEST_F(Nmt, State_Defaults) {
   // Energy / speech
   EXPECT_TRUE(state.energy.empty());
   EXPECT_FLOAT_EQ(state.no_speech_prob, 0.0F);
+}
+
+namespace {
+
+// A beam-search cache after one step: cell 0 holds BOS for beams 0, 1 and 2;
+// cells 1, 2 and 3 hold the first token of beams 0, 1 and 2.
+nmt_kv_cache makeBeamCache() {
+  nmt_kv_cache cache;
+  cache.size = 8;
+  cache.cells.resize(cache.size);
+  cache.cells[0].pos = 0;
+  cache.cells[0].seq_id = {0, 1, 2};
+  cache.cells[1].pos = 1;
+  cache.cells[1].seq_id = {0};
+  cache.cells[2].pos = 1;
+  cache.cells[2].seq_id = {1};
+  cache.cells[3].pos = 1;
+  cache.cells[3].seq_id = {2};
+  cache.head = 4;
+  return cache;
+}
+
+} // namespace
+
+TEST(NmtBeamKvCache, ReassignSharesParentWithChildrenAndFreesDroppedParent) {
+  nmt_kv_cache cache = makeBeamCache();
+
+  // Beam 0 has two children, beam 1 is dropped, beam 2 continues.
+  nmtKvCacheReassignSeqs(cache, {0, 0, 2}, 3);
+
+  EXPECT_EQ(cache.cells[0].seq_id, (std::set<nmt_seq_id>{0, 1, 2}));
+  EXPECT_EQ(cache.cells[1].seq_id, (std::set<nmt_seq_id>{0, 1}));
+  EXPECT_TRUE(cache.cells[2].seq_id.empty());
+  EXPECT_EQ(cache.cells[2].pos, -1);
+  EXPECT_EQ(cache.cells[3].seq_id, (std::set<nmt_seq_id>{2}));
+  EXPECT_EQ(cache.cells[3].pos, 1);
+  // The freed cell can be reused by the next step.
+  EXPECT_EQ(cache.head, 2U);
+}
+
+TEST(NmtBeamKvCache, ReassignKeepsSharedCellsUntilLastUserIsRemoved) {
+  nmt_kv_cache cache = makeBeamCache();
+
+  // Beams 0 and 2 finish; only beam 1 continues.
+  nmtKvCacheReassignSeqs(cache, {1}, 3);
+
+  EXPECT_EQ(cache.cells[0].seq_id, (std::set<nmt_seq_id>{0}));
+  EXPECT_EQ(cache.cells[0].pos, 0);
+  EXPECT_EQ(cache.cells[2].seq_id, (std::set<nmt_seq_id>{0}));
+  EXPECT_EQ(cache.cells[1].pos, -1);
+  EXPECT_EQ(cache.cells[3].pos, -1);
+
+  // No beam left: every cell is free.
+  nmtKvCacheReassignSeqs(cache, {}, 3);
+  for (const auto& cell : cache.cells) {
+    EXPECT_EQ(cell.pos, -1);
+    EXPECT_TRUE(cell.seq_id.empty());
+  }
+}
+
+TEST(NmtBeamKvCache, MaskKeepsEachBeamToItsOwnHistory) {
+  nmt_kv_cache cache = makeBeamCache();
+  // A cell of beam 0 at a later position than the tokens below.
+  cache.cells[4].pos = 3;
+  cache.cells[4].seq_id = {0};
+
+  const int nTokens = 3;
+  const int nKv = 5;
+  nmt_batch batch = nmtBatchInit(nTokens, 1);
+  batch.n_tokens = nTokens;
+  for (int i = 0; i < nTokens; ++i) {
+    batch.pos[i] = 2;
+    batch.n_seq_id[i] = 1;
+    batch.seq_id[i][0] = i;
+  }
+
+  std::vector<float> mask;
+  nmtKvCacheBuildMask(cache, batch, nKv, mask);
+  nmtBatchFree(batch);
+
+  ASSERT_EQ(mask.size(), static_cast<size_t>(nTokens * nKv));
+  const std::vector<std::vector<bool>> visible = {
+      {true, true, false, false, false}, // beam 0: BOS, its token
+      {true, false, true, false, false}, // beam 1
+      {true, false, false, true, false}, // beam 2
+  };
+  for (int i = 0; i < nTokens; ++i) {
+    for (int j = 0; j < nKv; ++j) {
+      const float value = mask[static_cast<size_t>(i) * nKv + j];
+      if (visible[i][j]) {
+        EXPECT_EQ(value, 0.0F) << "token " << i << " cell " << j;
+      } else {
+        EXPECT_TRUE(std::isinf(value) && value < 0)
+            << "token " << i << " cell " << j;
+      }
+    }
+  }
 }

@@ -2,6 +2,7 @@
 #include "nmt_state_backend.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <functional>
@@ -314,6 +315,40 @@ void nmtKvCacheSeqCp(
   for (auto& cell : cache.cells) {
     if (cell.has_seq_id(seqSrc)) {
       cell.seq_id.insert(seqDst);
+    }
+  }
+}
+
+void nmtKvCacheReassignSeqs(
+    struct nmt_kv_cache& cache, const std::vector<nmt_seq_id>& parentSeqIds,
+    int nSeqMax) {
+  // Copy into temporary ids first, since a parent's id may be the child id of
+  // another beam.
+  const int n_children = static_cast<int>(parentSeqIds.size());
+  for (int i = 0; i < n_children; ++i) {
+    nmtKvCacheSeqCp(cache, parentSeqIds[i], nSeqMax + i);
+  }
+  for (int seq = 0; seq < nSeqMax; ++seq) {
+    nmtKvCacheSeqRm(cache, seq);
+  }
+  for (int i = 0; i < n_children; ++i) {
+    nmtKvCacheSeqCp(cache, nSeqMax + i, i);
+    nmtKvCacheSeqRm(cache, nSeqMax + i);
+  }
+}
+
+void nmtKvCacheBuildMask(
+    const struct nmt_kv_cache& cache, const struct nmt_batch& batch, int nKv,
+    std::vector<float>& mask) {
+  mask.assign(static_cast<size_t>(nKv) * batch.n_tokens, -INFINITY);
+  for (int i = 0; i < batch.n_tokens; ++i) {
+    const nmt_seq_id seq_id = batch.seq_id[i][0];
+    const nmt_pos pos = batch.pos[i];
+    for (int j = 0; j < nKv; ++j) {
+      const auto& cell = cache.cells[j];
+      if (cell.pos >= 0 && cell.pos <= pos && cell.has_seq_id(seq_id)) {
+        mask[static_cast<size_t>(i) * nKv + j] = 0.0F;
+      }
     }
   }
 }

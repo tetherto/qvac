@@ -704,18 +704,8 @@ bool nmtDecodeGraph(nmt_context& ctx, nmt_batch& batch, nmt_state& state) {
 
   ggml_tensor* kq_mask = ggml_graph_get_tensor(gf, "KQ_mask");
   if (kq_mask != nullptr) {
-    const int n_kv = static_cast<int>(kq_mask->ne[0]);
-    std::vector<float> mask(static_cast<size_t>(n_kv) * n_tokens, -INFINITY);
-    for (int i = 0; i < n_tokens; ++i) {
-      const nmt_seq_id seq_id = batch.seq_id[i][0];
-      const nmt_pos pos = batch.pos[i];
-      for (int j = 0; j < n_kv; ++j) {
-        const auto& cell = kv_self.cells[j];
-        if (cell.pos >= 0 && cell.pos <= pos && cell.has_seq_id(seq_id)) {
-          mask[static_cast<size_t>(i) * n_kv + j] = 0.0F;
-        }
-      }
-    }
+    std::vector<float> mask;
+    nmtKvCacheBuildMask(kv_self, batch, static_cast<int>(kq_mask->ne[0]), mask);
     ggml_backend_tensor_set(
         kq_mask, mask.data(), 0, sizeof(float) * mask.size());
   }
