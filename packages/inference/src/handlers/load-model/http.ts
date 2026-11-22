@@ -46,6 +46,7 @@ import {
   ResponseBodyNotReadableError
 } from '@/errors/index'
 import { getEngineLogger } from '@/logging/index'
+import { joinWithinBase } from '@/utils/path-security'
 import type { DownloadHooks, DownloadSecurityOptions } from '@/handlers/load-model/types'
 
 const logger = getEngineLogger()
@@ -705,12 +706,13 @@ async function downloadShardedModelFromHttp(
   const connectionTimeout = config.httpConnectionTimeoutMs ?? DEFAULT_HTTP_CONNECTION_TIMEOUT_MS
   const { requireChecksum, requireSecureTransport } = resolveDownloadSecurity(security)
   const { shardUrls: shardInfos, cacheKey } = parsePatternBasedShardUrl(shardUrl)
+  const shardDir = getShardedModelCacheDir(cacheKey)
+  // Shard names come from the URL, so each must stay inside the shard directory.
+  const shardPaths = shardInfos.map((shard) => joinWithinBase(shardDir, shard.filename))
   const downloadKey = `http-sharded:${cacheKey}`
   hooks?.onDownloadKey?.(downloadKey)
 
   logger.info(`📥 HTTP sharded download: ${shardInfos.length} shards detected from ${shardUrl}`)
-
-  const shardDir = getShardedModelCacheDir(cacheKey)
 
   const result = startOrJoinDownload(
     downloadKey,
@@ -721,7 +723,7 @@ async function downloadShardedModelFromHttp(
         await fsPromises.mkdir(shardDir, { recursive: true })
         const shardStates: ShardDownloadState[] = await Promise.all(
           shardInfos.map(async (shard, index) => {
-            const shardPath = path.join(shardDir, shard.filename)
+            const shardPath = shardPaths[index]!
             let expectedSize = 0
 
             try {
@@ -809,7 +811,7 @@ async function downloadShardedModelFromHttp(
 
         logger.info(`✅ All ${shardInfos.length} shards downloaded successfully`)
 
-        return path.join(shardDir, shardInfos[0]!.filename)
+        return shardPaths[0]!
       } catch (error) {
         logger.error(
           '❌ Error during sharded download:',
