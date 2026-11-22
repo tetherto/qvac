@@ -129,7 +129,11 @@ if(VCPKG_TARGET_IS_LINUX AND VCPKG_TARGET_ARCHITECTURE STREQUAL "x64" AND BUILD_
   list(APPEND PLATFORM_OPTIONS
     -DGGML_HIP=ON
     -DAMDGPU_TARGETS=gfx1151
-    -DCMAKE_HIP_ARCHITECTURES=gfx1151)
+    -DCMAKE_HIP_ARCHITECTURES=gfx1151
+    # Stores the device code zstd-compressed; the HIP runtime decompresses it
+    # when the module loads. Set on the release flags because the toolchain's
+    # CMAKE_HIP_FLAGS_INIT carries the libc++ headers.
+    "-DCMAKE_HIP_FLAGS_RELEASE=-O3 -DNDEBUG --offload-compress")
 endif()
 
 # CUDA backend, opt-in via 'cuda-backend': a runtime-loaded module beside Vulkan.
