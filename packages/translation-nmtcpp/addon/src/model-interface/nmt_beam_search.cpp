@@ -6,84 +6,37 @@
 #include <functional>
 #include <limits>
 #include <queue>
+#include <thread>
 #include <tuple>
 #include <vector>
 
+#include "inference-addon-cpp/Logger.hpp"
 #include "nmt.hpp"
 #include "nmt_graph_decoder.hpp"
 #include "nmt_state_backend.hpp"
-#include "inference-addon-cpp/Logger.hpp"
 
 struct beam_candidate {
   std::vector<nmt_vocab::id> tokens;
   float score;            // normalized score (for comparison only)
   float cumulative_score; // sum of log probabilities (unnormalized)
   bool finished;
-  int kv_cache_idx;
+  // Sequence id of this beam in the shared self-attention cache, or -1 for a
+  // finished beam, which needs no cache.
+  int seq_id;
 
   beam_candidate();
   beam_candidate(const std::vector<nmt_vocab::id>& tokens_, float score_);
 };
 
-struct beam_kv_pool {
-  std::vector<nmt_kv_cache> kv_caches;
-  std::vector<bool> in_use;
-
-  bool init(nmt_context& ctx, int pool_size);
-  int acquire();
-  void release(int idx);
-  void cleanup();
-};
-
 beam_candidate::beam_candidate()
     : score(std::numeric_limits<float>::lowest()),
       cumulative_score(std::numeric_limits<float>::lowest()), finished(false),
-      kv_cache_idx(-1) {}
+      seq_id(-1) {}
 
 beam_candidate::beam_candidate(
     const std::vector<nmt_vocab::id>& tokens_, float score_)
     : tokens(tokens_), score(score_), cumulative_score(score_), finished(false),
-      kv_cache_idx(-1) {}
-
-bool beam_kv_pool::init(nmt_context& ctx, int pool_size) {
-  kv_caches.resize(pool_size);
-  in_use.resize(pool_size, false);
-
-  for (int i = 0; i < pool_size; ++i) {
-    if (!nmtKvCacheInit(
-            kv_caches[i],
-            ctx.state->backends.back(),
-            ctx.itype,
-            ctx.model.hparams.n_text_state,
-            ctx.model.hparams.n_decoder_layers,
-            GGML_PAD(ctx.model.hparams.n_decoder_ctx, 256))) {
-      return false;
-    }
-  }
-  return true;
-}
-
-int beam_kv_pool::acquire() {
-  for (int i = 0; i < in_use.size(); ++i) {
-    if (!in_use[i]) {
-      in_use[i] = true;
-      return i;
-    }
-  }
-  return -1;
-}
-
-void beam_kv_pool::release(int idx) {
-  if (idx >= 0 && idx < in_use.size()) {
-    in_use[idx] = false;
-  }
-}
-
-void beam_kv_pool::cleanup() {
-  for (auto& cache : kv_caches) {
-    nmtKvCacheFree(cache);
-  }
-}
+      seq_id(-1) {}
 
 void nmt_set_beam_size(struct nmt_context* ctx, int beam_size) {
   if (!ctx) {
@@ -96,87 +49,97 @@ int nmtDecodeBeamSearch(
     struct nmt_context* ctx, int beamSize,
     int maxTokens) { // NOLINT(readability-identifier-naming)
   const int vocab_size = ctx->model.hparams.n_tgt_vocab;
+  nmt_state& state = *ctx->state;
 
-  beam_kv_pool kv_pool;
-  if (!kv_pool.init(*ctx, beamSize * 2)) {
+  // All beams share one self-attention cache, on the backend the decoder runs
+  // on. Each cell records which beams' sequences contain it, so a beam that
+  // continues another shares its prefix instead of copying it, and every live
+  // beam is decoded in a single batch per step. A beam needs at most one
+  // decoder context of cells, and live beams never exceed beamSize.
+  const int n_ctx_pad = GGML_PAD(ctx->model.hparams.n_decoder_ctx, 256);
+  nmt_kv_cache beam_kv;
+  if (!nmtKvCacheInit(
+          beam_kv,
+          state.backends[0],
+          ctx->itype,
+          ctx->model.hparams.n_text_state,
+          ctx->model.hparams.n_decoder_layers,
+          beamSize * n_ctx_pad)) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-        "Failed to initialize KV cache pool");
+        "Failed to initialize the beam search KV cache");
     return -1;
   }
+  nmtKvCacheClear(beam_kv);
+  std::swap(state.kv_self, beam_kv);
 
   std::vector<beam_candidate> beams;
   beam_candidate initial_beam;
   initial_beam.tokens = {ctx->vocab.bos_token_id};
   initial_beam.score = 0.0f;
   initial_beam.cumulative_score = 0.0f;
-  initial_beam.kv_cache_idx = kv_pool.acquire();
-  if (initial_beam.kv_cache_idx == -1) {
-    QLOG(
-        qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-        "Failed to acquire initial KV cache");
-    kv_pool.cleanup();
-    return -1;
-  }
+  initial_beam.seq_id = 0;
   beams.push_back(initial_beam);
 
   // Keep 2*beam_size candidates at each step, following HuggingFace's beam
   // search
   const size_t num_candidates_to_keep = 2 * beamSize;
 
-  for (int step = 0; step < maxTokens - 1; ++step) {
-    // Store: normalized_score (for comparison), cumulative_score, beam_idx,
-    // token_id
-    std::priority_queue<
-        std::tuple<float, float, int, nmt_vocab::id>,
-        std::vector<std::tuple<float, float, int, nmt_vocab::id>>,
-        std::greater<>>
-        top_candidates;
-    bool any_active = false;
+  nmt_batch& batch = state.batch;
+  std::vector<float> all_logits;
+  std::vector<int> batch_row(beamSize * 2, -1);
 
-    for (int beam_idx = 0; beam_idx < beams.size(); ++beam_idx) {
+  for (int step = 0; step < maxTokens - 1; ++step) {
+    // One batch row per live beam. Live beams all have the same length.
+    batch.n_tokens = 0;
+    for (int beam_idx = 0; beam_idx < static_cast<int>(beams.size());
+         ++beam_idx) {
+      batch_row[beam_idx] = -1;
       const auto& beam = beams[beam_idx];
       if (beam.finished) {
-        top_candidates.emplace(beam.score, beam.cumulative_score, beam_idx, -1);
-        if (top_candidates.size() > num_candidates_to_keep) {
-          top_candidates.pop();
-        }
         continue;
       }
+      const int row = batch.n_tokens++;
+      batch_row[beam_idx] = row;
+      batch.token[row] = beam.tokens.back();
+      batch.pos[row] = static_cast<nmt_pos>(beam.tokens.size()) - 1;
+      batch.n_seq_id[row] = 1;
+      batch.seq_id[row][0] = beam.seq_id;
+      batch.logits[row] = 1;
+    }
 
-      any_active = true;
+    if (batch.n_tokens == 0) {
+      break;
+    }
 
-      nmt_kv_cache original_kv = ctx->state->kv_self;
-      ctx->state->kv_self = kv_pool.kv_caches[beam.kv_cache_idx];
+    if (!nmtDecodeGraph(*ctx, batch, state)) {
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+          "Beam search decode step failed; keeping the beams so far");
+      break;
+    }
 
-      ctx->state->decoder_inputs = beam.tokens;
+    all_logits.resize(static_cast<size_t>(batch.n_tokens) * vocab_size);
+    ggml_backend_tensor_get(
+        state.logits_tensor,
+        all_logits.data(),
+        0,
+        sizeof(float) * all_logits.size());
 
-      nmtBatchPrepLegacy(
-          ctx->state->batch,
-          ctx->state->decoder_inputs.data() +
-              ctx->state->decoder_inputs.size() - 1,
-          1,
-          ctx->state->decoder_inputs.size() - 1,
-          0);
+    // Score each live beam's continuations. Beams are independent, so they
+    // are scored in parallel; each keeps its best num_candidates_to_keep in
+    // ascending order, and the results are merged below in beam order, as a
+    // sequential loop would.
+    using candidate_t = std::tuple<float, float, int, nmt_vocab::id>;
+    std::vector<std::vector<candidate_t>> beam_candidates(beams.size());
 
-      if (!nmtDecodeInternal(*ctx, ctx->state->batch, *ctx->state)) {
-        ctx->state->kv_self = original_kv;
-        continue;
-      }
-
-      kv_pool.kv_caches[beam.kv_cache_idx] = ctx->state->kv_self;
-      ctx->state->kv_self = original_kv;
-
-      ggml_tensor* logits = ctx->state->logits_tensor;
-      std::vector<float> next_token_logits_vec(vocab_size);
-
-      const int number_of_tokens = ggml_nelements(logits) / vocab_size;
-
-      ggml_backend_tensor_get(
-          logits,
-          next_token_logits_vec.data(),
-          sizeof(float) * (number_of_tokens - 1) * vocab_size,
-          sizeof(float) * next_token_logits_vec.size());
+    auto score_beam = [&](int beam_idx) {
+      const auto& beam = beams[beam_idx];
+      const auto row_begin =
+          all_logits.begin() +
+          static_cast<std::ptrdiff_t>(batch_row[beam_idx]) * vocab_size;
+      std::vector<float> next_token_logits_vec(
+          row_begin, row_begin + vocab_size);
 
       // Apply penalties and filters
       if (ctx->model.config.repetition_penalty > 0.0) {
@@ -187,10 +150,12 @@ int nmtDecodeBeamSearch(
       }
 
       if (ctx->model.config.top_k > 0) {
+        // Per-thread workspace, sized to the target vocabulary this step
+        // scores; applyTopKFilter writes one entry per logit.
+        std::vector<nmt_pair<float, nmt_vocab::id>> logits_id(
+            next_token_logits_vec.size());
         applyTopKFilter(
-            next_token_logits_vec,
-            ctx->state->decoders[0].logits_id,
-            ctx->model.config.top_k);
+            next_token_logits_vec, logits_id, ctx->model.config.top_k);
       }
 
       std::for_each(
@@ -205,12 +170,20 @@ int nmtDecodeBeamSearch(
           beam.tokens,
           ctx->model.config.no_repeat_ngram_size);
 
-      std::vector<float> logprobs(vocab_size);
-      nmtComputeLogprobs(next_token_logits_vec, vocab_size, logprobs);
+      // log-softmax, as nmtComputeLogprobs computes it, applied per token
+      // inside the selection loop instead of into a second full-vocab array.
+      const double logit_max = static_cast<double>(*std::max_element(
+          next_token_logits_vec.begin(), next_token_logits_vec.end()));
+      double logsumexp = 0.0;
+      for (int i = 0; i < vocab_size; ++i) {
+        if (next_token_logits_vec[i] > -INFINITY) {
+          logsumexp +=
+              exp(static_cast<double>(next_token_logits_vec[i]) - logit_max);
+        }
+      }
+      logsumexp = log(logsumexp) + logit_max;
 
-      // OPTIMIZATION: Maintain fixed-size min-heap during iteration (avoids
-      // large allocations) Using priority_queue with greater<> creates a
-      // min-heap (smallest on top)
+      // Maintain a fixed-size min-heap of this beam's best continuations
       std::priority_queue<
           std::pair<float, int>, // (score, token_id)
           std::vector<std::pair<float, int>>,
@@ -226,10 +199,11 @@ int nmtDecodeBeamSearch(
                     static_cast<float>(ctx->model.config.length_penalty))
               : 1.0f;
 
-      // Single pass: maintain only top num_candidates_to_keep tokens
       for (int token_id = 0; token_id < vocab_size; ++token_id) {
-        if (logprobs[token_id] > -INFINITY) {
-          float cumulative_score = beam.cumulative_score + logprobs[token_id];
+        if (next_token_logits_vec[token_id] > -INFINITY) {
+          const float logprob = static_cast<float>(
+              static_cast<double>(next_token_logits_vec[token_id]) - logsumexp);
+          float cumulative_score = beam.cumulative_score + logprob;
           float normalized_score = cumulative_score / length_norm;
 
           if (beam_top_k.size() < num_candidates_to_keep) {
@@ -241,23 +215,61 @@ int nmtDecodeBeamSearch(
         }
       }
 
-      // Add top-K to global candidates
+      auto& out = beam_candidates[beam_idx];
       while (!beam_top_k.empty()) {
         float normalized_score = beam_top_k.top().first;
         int token_id = beam_top_k.top().second;
         beam_top_k.pop();
 
-        float cumulative_score = beam.cumulative_score + logprobs[token_id];
-        top_candidates.emplace(
+        const float logprob = static_cast<float>(
+            static_cast<double>(next_token_logits_vec[token_id]) - logsumexp);
+        float cumulative_score = beam.cumulative_score + logprob;
+        out.emplace_back(
             normalized_score, cumulative_score, beam_idx, token_id);
+      }
+    };
+
+    std::vector<std::thread> workers;
+    int first_live = -1;
+    for (int beam_idx = 0; beam_idx < static_cast<int>(beams.size());
+         ++beam_idx) {
+      if (beams[beam_idx].finished) {
+        continue;
+      }
+      if (first_live < 0) {
+        first_live = beam_idx;
+      } else {
+        workers.emplace_back(score_beam, beam_idx);
+      }
+    }
+    if (first_live >= 0) {
+      score_beam(first_live);
+    }
+    for (auto& worker : workers) {
+      worker.join();
+    }
+
+    // Store: normalized_score (for comparison), cumulative_score, beam_idx,
+    // token_id
+    std::priority_queue<candidate_t, std::vector<candidate_t>, std::greater<>>
+        top_candidates;
+
+    for (int beam_idx = 0; beam_idx < static_cast<int>(beams.size());
+         ++beam_idx) {
+      const auto& beam = beams[beam_idx];
+      if (beam.finished) {
+        top_candidates.emplace(beam.score, beam.cumulative_score, beam_idx, -1);
+        if (top_candidates.size() > num_candidates_to_keep) {
+          top_candidates.pop();
+        }
+        continue;
+      }
+      for (const auto& candidate : beam_candidates[beam_idx]) {
+        top_candidates.push(candidate);
         if (top_candidates.size() > num_candidates_to_keep) {
           top_candidates.pop();
         }
       }
-    }
-
-    if (!any_active) {
-      break;
     }
 
     std::vector<std::tuple<float, float, int, nmt_vocab::id>> all_candidates;
@@ -290,46 +302,31 @@ int nmtDecodeBeamSearch(
 
         bool is_eos = (token_id == 2);
         new_beam.finished = is_eos;
-
-        if (!is_eos) {
-          new_beam.kv_cache_idx = kv_pool.acquire();
-          if (new_beam.kv_cache_idx != -1) {
-            const auto& src_cache =
-                kv_pool.kv_caches[beams[beam_idx].kv_cache_idx];
-            auto& dst_cache = kv_pool.kv_caches[new_beam.kv_cache_idx];
-
-            // OPTIMIZATION: Direct backend-to-backend copy (no CPU bounce)
-            // This eliminates 4 memory transfers (2 reads + 2 writes through
-            // CPU)
-            ggml_backend_tensor_copy(src_cache.k, dst_cache.k);
-            ggml_backend_tensor_copy(src_cache.v, dst_cache.v);
-
-            dst_cache.head = src_cache.head;
-            dst_cache.n = src_cache.n;
-            dst_cache.cells = src_cache.cells;
-          }
-        } else {
-          new_beam.kv_cache_idx = -1;
-        }
+        // For now, the parent's sequence; renumbered below.
+        new_beam.seq_id = is_eos ? -1 : beams[beam_idx].seq_id;
 
         new_beams.push_back(new_beam);
       }
       selected++;
     }
 
-    for (auto& old_beam : beams) {
-      if (old_beam.kv_cache_idx != -1) {
-        bool still_used = false;
-        for (const auto& new_beam : new_beams) {
-          if (new_beam.kv_cache_idx == old_beam.kv_cache_idx) {
-            still_used = true;
-            break;
-          }
-        }
-        if (!still_used) {
-          kv_pool.release(old_beam.kv_cache_idx);
-        }
+    // Give each live beam a sequence id in [0, beamSize) that holds its
+    // parent's cells. Copy into temporary ids first, since a parent can have
+    // several children and its id may be reused by another beam.
+    int n_live = 0;
+    for (auto& beam : new_beams) {
+      if (beam.finished || beam.seq_id < 0) {
+        continue;
       }
+      nmtKvCacheSeqCp(state.kv_self, beam.seq_id, beamSize + n_live);
+      beam.seq_id = n_live++;
+    }
+    for (int seq = 0; seq < beamSize; ++seq) {
+      nmtKvCacheSeqRm(state.kv_self, seq);
+    }
+    for (int seq = 0; seq < n_live; ++seq) {
+      nmtKvCacheSeqCp(state.kv_self, beamSize + seq, seq);
+      nmtKvCacheSeqRm(state.kv_self, beamSize + seq);
     }
 
     beams = std::move(new_beams);
@@ -349,7 +346,8 @@ int nmtDecodeBeamSearch(
         static_cast<int32_t>(best_beam->tokens.size()) - 1; // -1 for BOS
   }
 
-  kv_pool.cleanup();
+  std::swap(state.kv_self, beam_kv);
+  nmtKvCacheFree(beam_kv);
 
   return 0;
 }

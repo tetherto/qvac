@@ -262,7 +262,12 @@ struct ggml_cgraph* nmtBuildGraphDecoder(
   const int n_state_head = d_model / n_head;
 
   const float embed_scaling = std::sqrt(hparams.d_model);
-  const int seq = batch.n_tokens;
+  // One row per token in the batch: one token for greedy decoding, one per
+  // live beam for beam search. The worst-case graph used to size the compute
+  // buffers is built for a full beam, not for the whole decoder context.
+  const int n_tokens = worstCase
+                           ? std::min<int>(batch.n_tokens, NMT_MAX_DECODERS)
+                           : batch.n_tokens;
   // const int n_encoder_ctx = state.exp_n_encoder_ctx > 0 ?
   // state.exp_n_encoder_ctx : hparams.n_encoder_ctx;
   const int n_encoder_ctx = state.tokens_to_process;
@@ -270,7 +275,7 @@ struct ggml_cgraph* nmtBuildGraphDecoder(
   const int n_encoder_ctx_pad = GGML_PAD(n_encoder_ctx, 256);
 
   const int32_t n_kv = worstCase ? n_ctx : kv_self.n;
-  const int32_t kv_head = worstCase ? n_ctx - seq : kv_self.head;
+  const int32_t kv_head = worstCase ? n_ctx - n_tokens : kv_self.head;
 
   struct ggml_init_params params = {
       /*.mem_size   =*/state.sched_decode.meta.size(),
@@ -292,7 +297,7 @@ struct ggml_cgraph* nmtBuildGraphDecoder(
   struct ggml_tensor* KQ_mask_f16 = nullptr;
   struct ggml_tensor* encoder_output = nullptr;
 
-  input_ids = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, 1);
+  input_ids = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
   ggml_set_name(input_ids, "input_ids");
   ggml_set_input(input_ids);
 
@@ -301,9 +306,19 @@ struct ggml_cgraph* nmtBuildGraphDecoder(
   ggml_set_name(encoder_output, "encoder_output");
   ggml_set_input(encoder_output);
 
-  position = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, 1);
+  position = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
   ggml_set_name(position, "position");
   ggml_set_input(position);
+
+  // Self-attention mask: token i may attend to cell j only if the cell belongs
+  // to token i's sequence and is not after it. Beams share one cache, so this
+  // is what keeps each beam to its own history.
+  KQ_mask = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_kv, n_tokens);
+  ggml_set_name(KQ_mask, "KQ_mask");
+  ggml_set_input(KQ_mask);
+  if (ctx.params.flash_attn) {
+    KQ_mask_f16 = ggml_cast(ctx0, KQ_mask, GGML_TYPE_F16);
+  }
 
   // token encoding + position encoding
   struct ggml_tensor* cur = nullptr;
@@ -314,7 +329,7 @@ struct ggml_cgraph* nmtBuildGraphDecoder(
     ggml_set_name(cur, "decoder_scaled_embeds");
 
     struct ggml_tensor* pos_emb =
-        ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, d_model, 1);
+        ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, d_model, n_tokens);
     ggml_set_name(pos_emb, "decoder_pos_emb");
     ggml_set_input(pos_emb);
 
@@ -368,24 +383,24 @@ struct ggml_cgraph* nmtBuildGraphDecoder(
         k = ggml_view_1d(
             ctx0,
             kv_self.k,
-            seq * d_model,
+            n_tokens * d_model,
             (ggml_element_size(kv_self.k) * d_model) * (il * n_ctx + kv_head));
         v = ggml_view_1d(
             ctx0,
             kv_self.v,
-            seq * d_model,
+            n_tokens * d_model,
             (ggml_element_size(kv_self.v) * d_model) * (il * n_ctx + kv_head));
       } else {
 
         k = ggml_view_1d(
             ctx0,
             kv_self.k,
-            1 * d_model,
+            n_tokens * d_model,
             (ggml_element_size(kv_self.k) * d_model) * (il * n_ctx + kv_head));
         v = ggml_view_1d(
             ctx0,
             kv_self.v,
-            1 * d_model,
+            n_tokens * d_model,
             (ggml_element_size(kv_self.v) * d_model) * (il * n_ctx + kv_head));
 
         ggml_build_forward_expand(gf, ggml_cpy(ctx0, Kcur, k));
@@ -394,7 +409,7 @@ struct ggml_cgraph* nmtBuildGraphDecoder(
 
       struct ggml_tensor* Q = ggml_permute(
           ctx0,
-          ggml_reshape_3d(ctx0, Qcur, n_state_head, n_head, 1),
+          ggml_reshape_3d(ctx0, Qcur, n_state_head, n_head, n_tokens),
           0,
           2,
           1,
@@ -423,12 +438,12 @@ struct ggml_cgraph* nmtBuildGraphDecoder(
 
         cur = ggml_flash_attn_ext(ctx0, Q, K, V, KQ_mask_f16, 1.0F, 0.0F, 0.0F);
 
-        cur = ggml_reshape_2d(ctx0, cur, d_model, seq);
+        cur = ggml_reshape_2d(ctx0, cur, d_model, n_tokens);
       } else {
         // K * Q
         struct ggml_tensor* KQ = ggml_mul_mat(ctx0, K, Q);
         struct ggml_tensor* KQ_soft_max =
-            ggml_soft_max_ext(ctx0, KQ, nullptr, 1.0F, 0.0F);
+            ggml_soft_max_ext(ctx0, KQ, KQ_mask, 1.0F, 0.0F);
 
         struct ggml_tensor* V = ggml_view_3d(
             ctx0,
@@ -447,7 +462,7 @@ struct ggml_cgraph* nmtBuildGraphDecoder(
 
         struct ggml_tensor* KQV_merged = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
 
-        cur = ggml_cont_2d(ctx0, KQV_merged, d_model, 1);
+        cur = ggml_cont_2d(ctx0, KQV_merged, d_model, n_tokens);
       }
     }
 
@@ -481,8 +496,8 @@ struct ggml_cgraph* nmtBuildGraphDecoder(
       Qcur = ggml_add(ctx0, Qcur, layer.cross_attn_q_b);
 
       struct ggml_tensor* Q = ggml_permute(
-          ctx0, // n_tokens is set to 1
-          ggml_reshape_3d(ctx0, Qcur, n_state_head, n_head, 1),
+          ctx0,
+          ggml_reshape_3d(ctx0, Qcur, n_state_head, n_head, n_tokens),
           0,
           2,
           1,
@@ -514,7 +529,7 @@ struct ggml_cgraph* nmtBuildGraphDecoder(
         cur = ggml_flash_attn_ext(
             ctx0, Q, Kcross, Vcross, nullptr, KQscale, 0.0F, 0.0F);
 
-        cur = ggml_reshape_2d(ctx0, cur, d_model, seq);
+        cur = ggml_reshape_2d(ctx0, cur, d_model, n_tokens);
       } else {
         struct ggml_tensor* Kcross = nullptr;
         struct ggml_tensor* Vcross = nullptr;
@@ -548,7 +563,7 @@ struct ggml_cgraph* nmtBuildGraphDecoder(
             ggml_soft_max_ext(ctx0, KQ, nullptr, KQscale, 0.0F);
         struct ggml_tensor* KQV = ggml_mul_mat(ctx0, Vcross, KQ_soft_max);
         struct ggml_tensor* KQV_merged = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
-        cur = ggml_cont_2d(ctx0, KQV_merged, d_model, 1);
+        cur = ggml_cont_2d(ctx0, KQV_merged, d_model, n_tokens);
       }
     }
     // projection
@@ -599,7 +614,8 @@ struct ggml_cgraph* nmtBuildGraphDecoder(
         ggml_mul(ctx0, cur, model.m_decoder_norm_w),
         model.m_decoder_norm_b);
   }
-  if (hparams.has_lm_head && model.m_lm_head_w != nullptr) {
+  if ((hparams.has_lm_head || model.lm_head_tied) &&
+      model.m_lm_head_w != nullptr) {
     logits = ggml_mul_mat(ctx0, model.m_lm_head_w, cur);
   } else {
     logits = ggml_mul_mat(ctx0, model.m_decoder_embeddings, cur);
@@ -612,7 +628,7 @@ struct ggml_cgraph* nmtBuildGraphDecoder(
   return gf;
 }
 
-bool nmtDecodeInternal(nmt_context& ctx, nmt_batch& batch, nmt_state& state) {
+bool nmtDecodeGraph(nmt_context& ctx, nmt_batch& batch, nmt_state& state) {
   const auto n_tokens = batch.n_tokens;
 
   auto& kv_self = state.kv_self;
@@ -634,20 +650,16 @@ bool nmtDecodeInternal(nmt_context& ctx, nmt_batch& batch, nmt_state& state) {
 
   ggml_tensor* input_ids = ggml_graph_get_tensor(gf, "input_ids");
   if (input_ids != nullptr) {
-    // Set bos_token_id from the batch token sequence
     ggml_backend_tensor_set(
-        input_ids,
-        batch.token + (batch.n_tokens - 1),
-        0,
-        ggml_element_size(input_ids));
+        input_ids, batch.token, 0, ggml_element_size(input_ids) * n_tokens);
   }
   ggml_tensor* position_tensor = ggml_graph_get_tensor(gf, "position");
   if (position_tensor != nullptr) {
     ggml_backend_tensor_set(
         position_tensor,
-        batch.pos + (batch.n_tokens - 1),
+        batch.pos,
         0,
-        ggml_element_size(position_tensor));
+        ggml_element_size(position_tensor) * n_tokens);
   }
 
   ggml_tensor* encoder_output_tensor =
@@ -663,20 +675,25 @@ bool nmtDecodeInternal(nmt_context& ctx, nmt_batch& batch, nmt_state& state) {
   ggml_tensor* decoder_pos_emb = ggml_graph_get_tensor(gf, "decoder_pos_emb");
   if (decoder_pos_emb != nullptr) {
     const int d_model = ctx.model.hparams.n_text_state;
-    const int logical_pos = batch.pos[batch.n_tokens - 1];
     const int offset = 2;
-    const int actual_pos = logical_pos + offset;
-    const int table_size = actual_pos + 1;
+    int max_pos = 0;
+    for (int i = 0; i < n_tokens; ++i) {
+      max_pos = std::max(max_pos, static_cast<int>(batch.pos[i]));
+    }
+    const int table_size = max_pos + offset + 1;
 
     std::vector<float> pos_table(d_model * table_size);
     indictransComputeSinusoidalPositionalEmbeddingsToBuffer(
         pos_table.data(), d_model, table_size);
 
-    std::vector<float> pos_embeds(d_model);
-    std::copy(
-        pos_table.begin() + actual_pos * d_model,
-        pos_table.begin() + (actual_pos + 1) * d_model,
-        pos_embeds.begin());
+    std::vector<float> pos_embeds(static_cast<size_t>(d_model) * n_tokens);
+    for (int i = 0; i < n_tokens; ++i) {
+      const int actual_pos = batch.pos[i] + offset;
+      std::copy(
+          pos_table.begin() + actual_pos * d_model,
+          pos_table.begin() + (actual_pos + 1) * d_model,
+          pos_embeds.begin() + static_cast<size_t>(i) * d_model);
+    }
 
     ggml_backend_tensor_set(
         decoder_pos_emb,
@@ -685,12 +702,34 @@ bool nmtDecodeInternal(nmt_context& ctx, nmt_batch& batch, nmt_state& state) {
         sizeof(float) * pos_embeds.size());
   }
 
+  ggml_tensor* kq_mask = ggml_graph_get_tensor(gf, "KQ_mask");
+  if (kq_mask != nullptr) {
+    const int n_kv = static_cast<int>(kq_mask->ne[0]);
+    std::vector<float> mask(static_cast<size_t>(n_kv) * n_tokens, -INFINITY);
+    for (int i = 0; i < n_tokens; ++i) {
+      const nmt_seq_id seq_id = batch.seq_id[i][0];
+      const nmt_pos pos = batch.pos[i];
+      for (int j = 0; j < n_kv; ++j) {
+        const auto& cell = kv_self.cells[j];
+        if (cell.pos >= 0 && cell.pos <= pos && cell.has_seq_id(seq_id)) {
+          mask[static_cast<size_t>(i) * n_kv + j] = 0.0F;
+        }
+      }
+    }
+    ggml_backend_tensor_set(
+        kq_mask, mask.data(), 0, sizeof(float) * mask.size());
+  }
+
   // Use optimal thread count based on available CPU cores
-  if (!ggml_graph_compute_helper(sched, gf, get_optimal_thread_count())) {
+  return ggml_graph_compute_helper(sched, gf, get_optimal_thread_count());
+}
+
+bool nmtDecodeInternal(nmt_context& ctx, nmt_batch& batch, nmt_state& state) {
+  if (!nmtDecodeGraph(ctx, batch, state)) {
     return false;
   }
 
-  ggml_tensor* logits = ggml_graph_node(gf, -1);
+  ggml_tensor* logits = state.logits_tensor;
 
   int vocab_size = ctx.model.hparams.n_tgt_vocab;
   std::vector<float> next_token_logits_vec(vocab_size);

@@ -293,6 +293,31 @@ int nmtGetRuntimeStats(
   return 0;
 }
 
+void nmtKvCacheSeqRm(struct nmt_kv_cache& cache, nmt_seq_id seqId) {
+  uint32_t new_head = cache.size;
+  for (uint32_t i = 0; i < cache.size; ++i) {
+    auto& cell = cache.cells[i];
+    if (cell.seq_id.erase(seqId) > 0 && cell.seq_id.empty()) {
+      cell.pos = -1;
+      if (new_head == cache.size) {
+        new_head = i;
+      }
+    }
+  }
+  if (new_head != cache.size && new_head < cache.head) {
+    cache.head = new_head;
+  }
+}
+
+void nmtKvCacheSeqCp(
+    struct nmt_kv_cache& cache, nmt_seq_id seqSrc, nmt_seq_id seqDst) {
+  for (auto& cell : cache.cells) {
+    if (cell.has_seq_id(seqSrc)) {
+      cell.seq_id.insert(seqDst);
+    }
+  }
+}
+
 void nmtKvCacheClear(struct nmt_kv_cache& cache) {
   if (cache.buffer) {
     ggml_backend_buffer_clear(cache.buffer, 0);

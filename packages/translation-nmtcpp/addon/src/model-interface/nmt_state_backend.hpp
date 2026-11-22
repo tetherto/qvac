@@ -27,6 +27,14 @@ bool nmtKvCacheInit(
 
 void nmtKvCacheFree(struct nmt_kv_cache& cache);
 
+// Removes seqId from every cell; a cell that no sequence uses becomes free.
+void nmtKvCacheSeqRm(struct nmt_kv_cache& cache, nmt_seq_id seqId);
+
+// Adds seqDst to every cell that belongs to seqSrc. No K/V data is copied:
+// both sequences now share those cells.
+void nmtKvCacheSeqCp(
+    struct nmt_kv_cache& cache, nmt_seq_id seqSrc, nmt_seq_id seqDst);
+
 void nmtFreeState(struct nmt_state* state);
 
 struct nmt_state* nmtInitState(nmt_context* ctx);
