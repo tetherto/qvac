@@ -2052,7 +2052,7 @@ const ASSERTIONS: Record<
   }
 }
 
-/** `endTest` is typed here too: `@qvac/test-suite` <0.14 lacks it and never calls it. */
+/** `endTest` is typed here too: published `@qvac/test-suite` up to 0.15.0 lacks it and never calls it. */
 export function createStepBindings(
   resources: ResourceManager
 ): StepBindings & { endTest(): Promise<void> } {
