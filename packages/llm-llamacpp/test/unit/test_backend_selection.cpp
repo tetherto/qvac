@@ -436,7 +436,7 @@ TEST_F(BackendSelectionTest, CudaBackendIsEligible) {
 }
 
 TEST_F(BackendSelectionTest, ShippingFamiliesAreEligibleByRegistryIdentity) {
-  for (const char* registry : {"Vulkan", "MTL", "OpenCL", "WebGPU"}) {
+  for (const char *registry : {"Vulkan", "MTL", "OpenCL", "WebGPU"}) {
     mockBackend.clearDevices();
     const std::string description =
         std::string(registry) == "OpenCL" ? ADRENO_DESC : "supported GPU";
@@ -1734,9 +1734,8 @@ TEST_F(BackendSelectionTest, ParseBackendOverrideRejectsXdna) {
 }
 
 TEST_F(BackendSelectionTest, ParseBackendOverrideBasic) {
-  EXPECT_EQ(
-      parseBackendOverride("CUDA,Vulkan,WebGPU"),
-      (std::vector<std::string>{"cuda", "vulkan", "webgpu"}));
+  EXPECT_EQ(parseBackendOverride("CUDA,Vulkan,WebGPU"),
+            (std::vector<std::string>{"cuda", "vulkan", "webgpu"}));
 }
 
 TEST_F(BackendSelectionTest, ParseBackendOverrideTrimsAndLowercases) {
