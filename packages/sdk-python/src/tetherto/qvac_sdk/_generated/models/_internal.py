@@ -13193,6 +13193,29 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
             title="LoadModelSrcRequestLlamacppCompletionModelConfigTensorReadLazy",
         ),
     ] = None
+    coreml_ffn: Annotated[
+        bool | None,
+        Field(
+            alias="coreml-ffn",
+            description="Run part of each prompt-processing FFN through a Core ML sidecar on macOS and iOS, with the rest on Metal; decode stays on Metal. Fabric picks the split from the model. Only prompt batches of 256 or more tokens use it, so keep `ubatch-size` at 256 or above. The first load exports and compiles the sidecar into `coreml-ffn-cache` from the GGUF, and later loads reuse it. The sidecar stays resident beside the GGUF, 3 GB or more on the larger models, and model fit checks do not count it. A model fabric has no Core ML FFN template for, a split GGUF, finetuning, a layer off Metal or a build without Core ML FFN logs a warning and runs on Metal. Default false.",
+        ),
+    ] = None
+    coreml_ffn_split: Annotated[
+        str | None,
+        Field(
+            alias="coreml-ffn-split",
+            description="Overrides the automatic Core ML FFN split as `METALxN`: FFN channels kept on Metal, then Core ML programs per layer (1 or 2). A split the model does not support logs a warning and runs on Metal. Requires `'coreml-ffn': true`.",
+            pattern="^[1-9]\\d*x[12]$",
+        ),
+    ] = None
+    coreml_ffn_cache: Annotated[
+        str | None,
+        Field(
+            alias="coreml-ffn-cache",
+            description="Writable directory for the compiled Core ML FFN programs. Unset uses `$LLAMA_CACHE/coreml-ffn`, else `~/Library/Caches/llama.cpp/coreml-ffn`. Pass an absolute path private to the app: programs already in it are loaded without verification and never pruned. Ignored unless `'coreml-ffn'` is true, so it can be set once in device defaults.",
+            min_length=1,
+        ),
+    ] = None
     fit: Annotated[
         bool | None,
         Field(
