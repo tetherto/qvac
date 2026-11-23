@@ -524,12 +524,14 @@ test("all ci-router callers re-run when a draft becomes ready", () => {
   assert.match(read(".github/workflows/pr-gate-merge.yml"), /ready_for_review/);
 });
 
-test("check-approvals runs when PR checks is requested and reports a status", () => {
+test("check-approvals runs when PR events is requested and reports a status", () => {
   const source = read(".github/workflows/check-approvals.yml");
   assert.match(
     onBlock(source),
-    /workflow_run:\n\s+workflows: \[PR checks\]\n\s+types: \[requested\]/,
+    /workflow_run:\n\s+workflows: \[PR events\]\n\s+types: \[requested\]/,
   );
+  // A retarget fires only edited, so PR events must carry it, as main's Check Approvals did.
+  assert.match(onBlock(read(".github/workflows/pr-events.yml")), /types: \[[^\]]*\bedited\b[^\]]*\]/);
   assert.doesNotMatch(source, /actions\/checkout/);
   assert.match(source, /context='Check Approvals'/);
 });

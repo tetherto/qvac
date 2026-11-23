@@ -114,10 +114,12 @@ jobs:
             esac
           fi
           echo "kind=$kind" >> "$GITHUB_OUTPUT"
-      # Only a base or rerun run reports qvac/sdk-e2e, so a probe or an ignored label never replaces its result.
+      # Only a PR's base or rerun run reports qvac/sdk-e2e, so a probe, an ignored label or a dispatch never replaces
+      # its result; report, which finishes the status, also needs the PR.
       - if: >-
           steps.pr.outputs.refused != '' ||
-          (steps.pr.outputs.ok == 'true' && contains(fromJSON('["base","rerun"]'), steps.kind.outputs.kind))
+          (steps.pr.outputs.ok == 'true' && steps.pr.outputs.pr != '' &&
+          contains(fromJSON('["base","rerun"]'), steps.kind.outputs.kind))
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ steps.pr.outputs.sha }}

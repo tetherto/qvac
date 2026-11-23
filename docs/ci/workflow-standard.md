@@ -147,7 +147,7 @@ A package's slug, in its release branches, tags and artifact names, is its direc
 - **Labels:** applying a label starts `PR checks` again, which starts both. The `context` job tells a label's run from a push's by the PR's latest `labeled` event since the previous `PR checks` run on that commit.
 - **Re-runs:** re-running `PR checks` does not start them again; re-run the workflow itself.
 
-`pr-checks.yml` holds no secrets; its checks job reads `@tetherto` packages from GitHub Packages with the job token (`packages: read`). `pr-gate-merge.yml` runs on `pull_request`, so its required check reports on the PR, a fork's included. `check-approvals.yml` runs the default branch's copy when `PR checks` is requested, for fork PRs too, with the App key. It finds the PR through the API the same way, checks out nothing, and reports the required `Check Approvals` as a commit status on the PR head; a `review` comment on the PR runs it again.
+`pr-checks.yml` holds no secrets; its checks job reads `@tetherto` packages from GitHub Packages with the job token (`packages: read`). `pr-gate-merge.yml` runs on `pull_request`, so its required check reports on the PR, a fork's included. `check-approvals.yml` runs the default branch's copy when `PR events` is requested (on main's events, a retarget's `edited` included), for fork PRs too, with the App key. It finds the PR through the API the same way, checks out nothing, and reports the required `Check Approvals` as a commit status on the PR head; a `review` comment on the PR runs it again.
 
 ## Shared CI changes
 
