@@ -14,13 +14,16 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+## [0.13.2] - 2026-11-23
+
 ### Fixed
 
 - The platform packages (`@qvac/asr-ggml-<host>`) now declare the matching
   `@qvac/fabric-<host>` as an optional peer dependency. Without it bare-link
   left the fabric runtime reference unresolved in a mobile application, and the
   addon failed to load on Android (`CANNOT_LOAD`) and iOS
-  (`Library not loaded: @rpath/qvac__fabric-ios@0.bare`).
+  (`Library not loaded: @rpath/qvac__fabric-ios@0.bare`)
+  ([#5902](https://github.com/tetherto/qvac/pull/5902)).
 
 ## [0.13.1] - 2026-11-20
 
