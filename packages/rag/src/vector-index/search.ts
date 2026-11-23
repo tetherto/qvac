@@ -52,7 +52,7 @@ const SCAN_SHARE = 8
 // The index must be at the reader's revision: an index ahead of the reader
 // holds IDs the reader can't map and lacks the ones it replaced. Returns
 // 'stale' then, so the caller retries on a fresh reader, and 'unavailable'
-// when there is no index at all.
+// when there is no index at all or its search failed.
 export async function indexSearch(
   reader: HyperDBReader,
   revision: number,
@@ -85,9 +85,7 @@ export async function indexSearch(
 
   const { perDocument, minScore } = options
 
-  // The top `want` candidates, rescored exactly and sorted. Each call opens the
-  // index last: a rebuild started by another search may dispose the native
-  // index it replaces, so nothing awaits between the open and the native search.
+  // The top `want` candidates, rescored exactly and sorted.
   async function candidates(
     want: number
   ): Promise<
@@ -99,18 +97,13 @@ export async function indexSearch(
     if (index.storage.startsWith('turbovec-') && !index.normalize && !quantizable(query.vector)) {
       return 'unavailable'
     }
-    const available = allowlist ? allowlist.length : index.native.length
+    const available = allowlist ? allowlist.length : index.rows()
     if (available === 0) return { hits: [], available, pastFloor: true }
 
     const vector = query.vector.slice()
     if (index.normalize) normalizeRows(vector, dims)
-    let result: NativeSearchResult
-    try {
-      result = searchCandidates(index, vector, want, available, allowlist)
-    } catch {
-      index.fail()
-      return 'unavailable'
-    }
+    const result = await searchCandidates(index, revision, vector, want, allowlist, options.signal)
+    if (typeof result === 'string') return result
     const hits: SearchHit[] = []
     let margin = 0
     let marginBelow = 0
@@ -245,28 +238,33 @@ function quantizable(vector: Float32Array): boolean {
 // Native results break ties by native ID, which is not the scan's order. When
 // the candidate cutoff ties with the k-th candidate, more rows may share that
 // score, so the window widens until it no longer cuts through the tie.
-function searchCandidates(
+async function searchCandidates(
   index: OpenIndex,
+  revision: number,
   vector: Float32Array,
   k: number,
-  available: number,
-  allowlist: BigUint64Array | null
-): NativeSearchResult {
-  let want = Math.min(available, k + Math.max(k, MIN_EXTRA_CANDIDATES))
+  allowlist: BigUint64Array | null,
+  signal: AbortSignal | undefined
+): Promise<NativeSearchResult | 'stale' | 'unavailable'> {
+  let want = k + Math.max(k, MIN_EXTRA_CANDIDATES)
   for (;;) {
-    const result = allowlist
-      ? index.native.searchFiltered(vector, want, allowlist)
-      : index.native.search(vector, want)
+    throwIfAborted(signal)
+    const available = allowlist ? allowlist.length : index.rows()
+    want = Math.min(available, want)
+    // No rows: the index was replaced since the last round.
+    if (want === 0) return 'stale'
+    const pending = index.search(revision, vector, want, allowlist, signal)
+    const result = await untilAborted(pending, signal)
+    if (typeof result === 'string') return result
     let count = 0
     while (count < result.k && result.ids[count] !== PADDING_ID) count++
     if (count < want || want === available) return result
     if (result.scores[count - 1] < result.scores[Math.min(k, count) - 1]) return result
-    want = Math.min(available, want * 2)
+    want *= 2
   }
 }
 
-// Stops waiting for the index on abort; a rebuild already running finishes
-// for the next search.
+// Stops waiting on abort even if the pending work is still running.
 async function untilAborted<T>(pending: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
   if (!signal) return await pending
   pending.catch(() => {})

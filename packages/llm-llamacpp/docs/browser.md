@@ -21,6 +21,17 @@ browser:
 runtime. A bundler emits both variants, but the browser fetches only the one
 it selects. Each `.wasm` file must remain next to its matching `.mjs` loader.
 
+Vite preserves that loader-to-Wasm layout automatically. Plain esbuild emits
+the loader chunks but does not copy files referenced through `new URL()`.
+After an esbuild bundle, copy both binaries from
+`node_modules/@qvac/llm-llamacpp/prebuilds/web/` into the directory containing
+the emitted loader chunks:
+
+```sh
+cp node_modules/@qvac/llm-llamacpp/prebuilds/web/llm-llamacpp.wasm dist/
+cp node_modules/@qvac/llm-llamacpp/prebuilds/web/llm-llamacpp-64.wasm dist/
+```
+
 ## Requirements
 
 - Run it in a **Dedicated Worker**. Between GPU waits the engine runs on the
@@ -38,16 +49,14 @@ it selects. Each `.wasm` file must remain next to its matching `.mjs` loader.
 
 ## Model files
 
-Model paths are absolute paths in the origin private file system (OPFS), or
-paths registered by the SDK for user-selected browser `File` objects.
+Model paths are absolute paths in the origin private file system (OPFS).
 `/models/qwen.gguf` refers to `models/qwen.gguf` under
 `navigator.storage.getDirectory()`. Files are mounted read-only into the
 engine and read on demand; they are not copied whole into WebAssembly memory.
 
 For a sharded GGUF, pass the first shard path only. Every shard must be in the
-same OPFS directory, or registered by the SDK in the same virtual directory,
-with its original `*-00001-of-000NN.gguf` name. The binding verifies that the
-set is complete before loading it.
+same OPFS directory with its original `*-00001-of-000NN.gguf` name. The
+binding verifies that the set is complete before loading it.
 
 `files.projectionModel`, `config.lora`, and
 `config.spec_draft_model`/`config['spec-draft-model']` use the same absolute
@@ -73,6 +82,8 @@ await model.unload()
 Supported:
 
 - Completion and streaming
+- Batch completion and multiple concurrent `run()` calls when `parallel >= 2`
+- Projection-backed multimodal inference from `Uint8Array` media
 - Reasoning models
 - Tool calling
 - Generation parameters
@@ -84,17 +95,18 @@ Supported:
 - Mounting and forwarding projection, LoRA and external speculative model files
 - Load and unload
 
-| Outside the current binding scope                      | Behaviour                                                             |
-| ------------------------------------------------------ | --------------------------------------------------------------------- |
-| `parallel` > 1 and batch `run()`                       | Rejected at load/run                                                  |
-| `load_mode` other than `auto`/`none`                   | Rejected at load; weights are read, never memory-mapped               |
-| Media input and projection-backed multimodal inference | Media is rejected; the projector is not exercised until media support |
-| RPC servers and native backend/cache directories       | Rejected at load                                                      |
-| `finetune()`                                           | Throws: not exposed by the browser binding                            |
-| `assessFit()`                                          | Rejects                                                               |
+| Outside the current binding scope                | Behaviour                                               |
+| ------------------------------------------------ | ------------------------------------------------------- |
+| `load_mode` other than `auto`/`none`             | Rejected at load; weights are read, never memory-mapped |
+| RPC servers and native backend/cache directories | Rejected at load                                        |
+| `finetune()`                                     | Throws: not exposed by the browser binding              |
+| `assessFit()`                                    | Rejects                                                 |
 
-Requests run one at a time per Worker. A second `run()` either fails
-fast (`rejectWhenBusy`, the default) or waits its turn.
+With `parallel: 1`, one request runs at a time in the Worker. With
+`parallel >= 2`, Fabric's continuous-batching scheduler advances multiple
+requests cooperatively between browser event-loop turns. `rejectWhenBusy`
+controls whether a request fails fast or waits when every configured slot is
+occupied.
 `calcTokens()` fails with `RUN_BUSY` instead of waiting behind another engine
 operation.
 

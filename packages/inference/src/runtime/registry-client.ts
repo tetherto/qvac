@@ -11,6 +11,7 @@ import {
   type SuspendableStore
 } from '@/runtime/runtime-lifecycle'
 import { getEngineLogger } from '@/logging/index'
+import { getConfig } from '@/runtime/state'
 import { DEFAULT_REGISTRY_CORE_KEY } from '@/constants/index'
 import { DownloadCancelledError, ModelRegistryBusyError } from '@/errors/index'
 
@@ -497,10 +498,13 @@ async function tryOpen(): Promise<OpenStore | null> {
   const leaseMarker = marker === 'unavailable' ? null : marker
 
   logger.info('🔗 Creating new registry client...')
+  // The client prints its log straight to the console, so it follows the
+  // engine's console setting.
   const client = new QVACRegistryClient({
     registryCoreKey: DEFAULT_REGISTRY_CORE_KEY,
     storage: storeDir(),
-    corestoreOpts: { wait: false }
+    corestoreOpts: { wait: false },
+    logger: { enabled: getConfig().loggerConsoleOutput === true }
   })
   try {
     await client.ready()

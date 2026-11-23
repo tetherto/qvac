@@ -2,6 +2,7 @@
 #include <atomic>
 #include <cstdint>
 #include <functional>
+#include <future>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -48,10 +49,10 @@ class LlamaModel : public IModel,
                    public IModelJobStats,
                    public IModelJobLifecycle {
 public:
-  LlamaModel(const LlamaModel&) = delete;
-  LlamaModel& operator=(const LlamaModel&) = delete;
-  LlamaModel(LlamaModel&&) = delete;
-  LlamaModel& operator=(LlamaModel&&) = delete;
+  LlamaModel(const LlamaModel &) = delete;
+  LlamaModel &operator=(const LlamaModel &) = delete;
+  LlamaModel(LlamaModel &&) = delete;
+  LlamaModel &operator=(LlamaModel &&) = delete;
 
   /**
    * The Constructor for llama model.
@@ -59,9 +60,8 @@ public:
    * @param projectionPath - path to the projector file.
    * @param configFilemap - map of configuration files.
    */
-  LlamaModel(
-      std::string&& modelPath, std::string&& projectionPath,
-      std::unordered_map<std::string, std::string>&& configFilemap);
+  LlamaModel(std::string &&modelPath, std::string &&projectionPath,
+             std::unordered_map<std::string, std::string> &&configFilemap);
 
   struct ConstructionArgs {
     std::string modelPath;
@@ -78,9 +78,9 @@ public:
   ~LlamaModel() override;
 
   std::string getName() const final { return "LlamaModel"; }
-  void setWeightsForFile(
-      const std::string& filename,
-      std::unique_ptr<std::basic_streambuf<char>>&& shard) final;
+  void
+  setWeightsForFile(const std::string &filename,
+                    std::unique_ptr<std::basic_streambuf<char>> &&shard) final;
   /// Whole-model cancel. On the continuous-batching path this only records
   /// the request (ContinuousBatchScheduler::requestCancelAll); the batch
   /// worker applies it later, draining the active slots and pending queue
@@ -97,7 +97,8 @@ public:
     bool prefill = false;
     GenerationParams generationParams;
     std::vector<std::vector<uint8_t>> media;
-    std::function<void(const std::string&)> outputCallback;
+    std::function<void(const std::string &)> outputCallback;
+    LlmContext::CancelRequested cancelRequested;
     LlamaFinetuner::ProgressCallback progressCallback;
     std::optional<qvac_lib_inference_addon_llama::LlamaFinetuningParams>
         finetuningParams;
@@ -113,7 +114,7 @@ public:
     std::string baseCacheKey;
   };
 
-  std::any process(const std::any& input) final;
+  std::any process(const std::any &input) final;
 
   /// Multi-job entry carrying the admitting job id. An eligible single Prompt
   /// (text generation or a cache-persisting prefill; see isConcurrentEligible)
@@ -123,8 +124,8 @@ public:
   /// fall back to the single-job path; a live-only prefill is rejected on a
   /// parallel model (its warmed single-context state would be unreachable and
   /// running it would race peers on the shared context).
-  std::any
-  process(const std::any& input, qvac_lib_inference_addon_cpp::JobId id) final;
+  std::any process(const std::any &input,
+                   qvac_lib_inference_addon_cpp::JobId id) final;
 
   /// Cancel the in-flight job admitted under @p id: a concurrent job by
   /// cancelling its scheduler slot, a single-path job (no scheduler) by
@@ -154,7 +155,7 @@ public:
   [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
   consumeJobStats(qvac_lib_inference_addon_cpp::JobId id) const final;
 
-  std::string processPrompt(const Prompt& prompt);
+  std::string processPrompt(const Prompt &prompt);
 
   /// Run several prompts in parallel via the continuous-batching session
   /// and return their generated texts in input order. Each output entry
@@ -166,7 +167,7 @@ public:
   /// empty, or capacity exhausted with no room to queue). Output
   /// streaming via `Prompt::outputCallback` is honoured per-slot.
   std::vector<std::string>
-  processPromptBatch(const std::vector<Prompt>& prompts);
+  processPromptBatch(const std::vector<Prompt> &prompts);
 
   /// Submit a tagged prompt group to the no-thread scheduler and return
   /// before inference starts. The caller repeatedly drives one quantum with
@@ -194,14 +195,20 @@ public:
   /// conversation. Throws `InvalidArgument` when nothing is kept for the key
   /// and no file exists, and `UnableToSaveSessionFile` when the write fails
   /// (the conversation stays in memory, still unsaved).
-  void saveCache(const std::string& cacheKey);
+  void saveCache(const std::string &cacheKey);
 
   /// Drops the conversation kept in memory for @p cacheKey without writing
   /// it: the single-prompt session, a parked batch sequence, the RAM tier and
   /// its checkpoints. Waits for a request running on that key, like
   /// `saveCache`. The file, if any, is left alone. A no-op when nothing is
   /// kept for the key.
-  void discardCache(const std::string& cacheKey);
+  void discardCache(const std::string &cacheKey);
+
+  using CooperativeCacheOutcome = batching::SlotStateCache::SaveOutcome;
+  std::future<CooperativeCacheOutcome>
+  enqueueCooperativeCache(const std::string &cacheKey, bool discard);
+  void completeCooperativeCache(const std::string &cacheKey, bool discard,
+                                CooperativeCacheOutcome outcome) const;
 
   /// What `calcTokens` counts. `history` is a `Message[]` in `process`'s JSON
   /// shape, tool definitions allowed; `tools` holds tool definitions only. A
@@ -228,7 +235,7 @@ public:
   /// render the conversation fails as it would for `process`. Reads only
   /// load-time state and never enters the job scheduler, so it runs beside
   /// in-flight requests.
-  [[nodiscard]] size_t calcTokens(const CalcTokensRequest& request) const;
+  [[nodiscard]] size_t calcTokens(const CalcTokensRequest &request) const;
 
   /**
    * The Reset method.
@@ -245,9 +252,8 @@ public:
   /// @param newFinetuneOverrides  When provided, pendingFinetuneOverrides_ is
   ///   atomically replaced under the exclusive lock before the reload proceeds.
   ///   Omit (or std::nullopt) to leave pendingFinetuneOverrides_ unchanged.
-  void reload(
-      std::optional<FinetuneConfigOverrides> newFinetuneOverrides =
-          std::nullopt);
+  void reload(std::optional<FinetuneConfigOverrides> newFinetuneOverrides =
+                  std::nullopt);
 
   /**
    * Check if model is loaded.
@@ -263,19 +269,19 @@ public:
     localState->initLoader_.waitForLoadInitialization();
   }
 
-  llama_context* getContext();
-  llama_model* getModel();
-  common_params& getCommonParams();
+  llama_context *getContext();
+  llama_model *getModel();
+  common_params &getCommonParams();
 
   qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const final;
-  static void
-  llamaLogCallback(ggml_log_level level, const char* text, void* userData);
+  static void llamaLogCallback(ggml_log_level level, const char *text,
+                               void *userData);
 
   /// @brief Access the LoRA finetuner that owns finetune state and lifecycle
   /// for this model. The reference remains valid for the lifetime of the
   /// `LlamaModel` instance.
-  LlamaFinetuner& finetuner() { return finetuner_; }
-  const LlamaFinetuner& finetuner() const { return finetuner_; }
+  LlamaFinetuner &finetuner() { return finetuner_; }
+  const LlamaFinetuner &finetuner() const { return finetuner_; }
 
   /// Record the checkpoint mode a cancel(savePauseCheckpoint) wants for every
   /// job id in its snapshot: the JS binding arms this right before routing
@@ -289,7 +295,7 @@ public:
   /// discardFinetuneCancelSaveModes removes what the dispatch never consumed.
   void setFinetuneCancelSavesCheckpoint(
       bool save,
-      const std::vector<qvac_lib_inference_addon_cpp::JobId>& cancelledJobs);
+      const std::vector<qvac_lib_inference_addon_cpp::JobId> &cancelledJobs);
 
   /// Drop the recorded checkpoint modes for @p cancelledJobs — the
   /// canceller's own snapshot — once its per-id dispatch has returned.
@@ -297,7 +303,7 @@ public:
   /// finished first were never consumed and must not outlive the cancel that
   /// armed them.
   void discardFinetuneCancelSaveModes(
-      const std::vector<qvac_lib_inference_addon_cpp::JobId>& cancelledJobs);
+      const std::vector<qvac_lib_inference_addon_cpp::JobId> &cancelledJobs);
 
 private:
   struct ReloadableState;
@@ -312,7 +318,7 @@ private:
   friend class LlamaModelTestPeer;
 
   // Impl without mutexes
-  std::string processPromptImpl(const Prompt& prompt);
+  std::string processPromptImpl(const Prompt &prompt);
 
   /// Observes the scheduler `seqId` each request is admitted on, in input
   /// order, at slot admission — before the slot decodes anything. Runs on the
@@ -330,10 +336,11 @@ private:
   using SeqObserver = std::function<void(size_t requestIndex, uint32_t seqId)>;
   /// @p groupTag (non-zero) tags the scheduler group with the job id, so a
   /// cancel can settle it while its requests are still queued for slots.
-  batching::BatchResult processPromptBatchImpl(
-      const std::vector<Prompt>& prompts,
-      const SeqAssignedObserver& onSeqAssigned = {},
-      const SeqObserver& onSeqDone = {}, uint64_t groupTag = 0);
+  batching::BatchResult
+  processPromptBatchImpl(const std::vector<Prompt> &prompts,
+                         const SeqAssignedObserver &onSeqAssigned = {},
+                         const SeqObserver &onSeqDone = {},
+                         uint64_t groupTag = 0);
   std::unique_ptr<batching::BatchEntryGuard>
   enterBatchProcessing(ReloadableState &state);
   std::vector<batching::SubmitRequest> prepareBatchRequests(
@@ -353,22 +360,22 @@ private:
   /// its sequence for the next request on the key). Finetune and keyless
   /// prefill (whose sole product is warm state in the shared single context,
   /// which a lane cannot deliver) stay off the concurrent path.
-  static bool isConcurrentEligible(const Prompt& prompt);
+  static bool isConcurrentEligible(const Prompt &prompt);
 
   /// Route a single Prompt through the scheduler as a one-item batch, recording
   /// its assigned `seqId` against @p id for the lifetime of the run so
   /// `cancelById` can target this job. Reuses processPromptBatchImpl machinery.
-  std::string processConcurrent(
-      const Prompt& prompt, qvac_lib_inference_addon_cpp::JobId id);
+  std::string processConcurrent(const Prompt &prompt,
+                                qvac_lib_inference_addon_cpp::JobId id);
 
   /// Tagged group run (a runBatched call admitted as one multi-job): runs the
   /// prompts through the scheduler and leaves group-level observed figures
   /// behind for consumeJobStats (rates averaged, counts summed). Records the
   /// group's live seqIds against @p id so cancelById tears down exactly this
   /// group's slots — peers keep running.
-  std::vector<std::string> processConcurrentBatch(
-      const std::vector<Prompt>& prompts,
-      qvac_lib_inference_addon_cpp::JobId id);
+  std::vector<std::string>
+  processConcurrentBatch(const std::vector<Prompt> &prompts,
+                         qvac_lib_inference_addon_cpp::JobId id);
 
   /// Build the JS-facing `RuntimeStats` from the scheduler's live stats
   /// (single source of truth across all in-flight / queued batch work).
@@ -382,9 +389,9 @@ private:
   /// figures. Mirrors batchRuntimeStatsLocked's key set but reads no live
   /// scheduler or llama_context state, so a finishing job can never race a
   /// peer still decoding on the shared context.
-  qvac_lib_inference_addon_cpp::RuntimeStats jobTerminalStats(
-      const batching::RuntimeStatsSnapshot& stats,
-      const batching::ObservedRequestStats& observed) const;
+  qvac_lib_inference_addon_cpp::RuntimeStats
+  jobTerminalStats(const batching::RuntimeStatsSnapshot &stats,
+                   const batching::ObservedRequestStats &observed) const;
   /// Build the JS-facing `RuntimeStats` from `llama_perf_context` for
   /// single-prompt runs. Caller must hold `stateMtx_` shared.
   qvac_lib_inference_addon_cpp::RuntimeStats singleRuntimeStatsLocked() const;
@@ -465,13 +472,13 @@ private:
   /// Continuous-batching gate. Active when the user opted into multi-sequence
   /// decoding via `n_parallel >= 2` (which llama.cpp maps directly to
   /// `n_seq_max`); applies to text and multimodal models alike.
-  static bool isMultiBatchActivated(ReloadableState& state);
+  static bool isMultiBatchActivated(ReloadableState &state);
   /// Fails the load early when `cache_checkpoints_max_bytes` cannot hold
   /// `cache_checkpoints` checkpoints of the largest size this context allows.
-  static void validateCheckpointBudget(ReloadableState& state);
+  static void validateCheckpointBudget(ReloadableState &state);
 
   std::unique_ptr<batching::ContinuousBatchScheduler>
-  initBatchScheduler(ReloadableState& state);
+  initBatchScheduler(ReloadableState &state);
 
   struct ResolvedPrompt {
     std::vector<common_chat_msg> chatMsgs;
@@ -480,7 +487,7 @@ private:
     bool shouldResetAfterInference = false;
   };
 
-  ResolvedPrompt resolveChatAndTools(const Prompt& prompt);
+  ResolvedPrompt resolveChatAndTools(const Prompt &prompt);
 
   /**
    * The Format prompt method. It formats the prompt json to chat messages.
@@ -488,16 +495,16 @@ private:
    * @param input - input prompt.
    * @return formatted chat messages and tools.
    */
-  ParsedPromptPayload formatPrompt(const std::string& input);
+  ParsedPromptPayload formatPrompt(const std::string &input);
   void resetState(bool resetStats = true);
   std::unique_ptr<LlmContext> createContext(
-      std::string&& projectionPath, common_params& params,
+      std::string &&projectionPath, common_params &params,
       common_init_result_ptr llamaInit,
       std::unique_ptr<
           qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
           speculative);
 
-  bool loadMedia(const std::vector<uint8_t>& input);
+  bool loadMedia(const std::vector<uint8_t> &input);
 
   void setInitLoader(
       std::optional<InitLoader::LOADER_TYPE> loaderType = std::nullopt,
@@ -581,9 +588,8 @@ private:
   /// job's run returns, consumed (erased) by the output queue's jobEnded
   /// event right after; a throwing job writes nothing.
   mutable std::mutex jobStatsMtx_;
-  mutable std::unordered_map<
-      qvac_lib_inference_addon_cpp::JobId,
-      qvac_lib_inference_addon_cpp::RuntimeStats>
+  mutable std::unordered_map<qvac_lib_inference_addon_cpp::JobId,
+                             qvac_lib_inference_addon_cpp::RuntimeStats>
       jobStats_;
 
   /// Held by a single-prompt request for its whole run and by `saveCache`,

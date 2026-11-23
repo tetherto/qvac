@@ -459,3 +459,33 @@ test('draftModelSrc pairs with a spec_type from device defaults', (t) => {
     /draftModelSrc requires/
   )
 })
+
+test('a Core ML FFN cache in device defaults does not block loads that leave it off', (t) => {
+  const ctx: RuntimeContext = { platform: 'ios' }
+  const patterns: DevicePattern[] = [
+    {
+      name: 'Core ML cache',
+      match: { platform: 'ios' },
+      defaults: { [ModelType.llamacppCompletion]: { 'coreml-ffn-cache': '/app/cache/coreml-ffn' } }
+    }
+  ]
+
+  const plain = resolveModelConfigWithContext<Record<string, unknown>>(
+    ModelType.llamacppCompletion,
+    {},
+    ctx,
+    patterns,
+    []
+  )
+  t.is(plain['coreml-ffn-cache'], '/app/cache/coreml-ffn')
+
+  const enabled = resolveModelConfigWithContext<Record<string, unknown>>(
+    ModelType.llamacppCompletion,
+    { 'coreml-ffn': true },
+    ctx,
+    patterns,
+    []
+  )
+  t.is(enabled['coreml-ffn'], true)
+  t.is(enabled['coreml-ffn-cache'], '/app/cache/coreml-ffn')
+})

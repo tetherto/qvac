@@ -568,14 +568,15 @@ size_t MtmdLlmContext::countChatTokens(
 
 LlmContext::EvalMessageResult MtmdLlmContext::evalMessage(
     const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded,
-    bool prefill) {
-  return evalMessageWithTools(chatMsgs, {}, isCacheLoaded, prefill);
+    bool prefill, const CancelRequested& cancelRequested) {
+  return evalMessageWithTools(
+      chatMsgs, {}, isCacheLoaded, prefill, cancelRequested);
 }
 
 LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
     const std::vector<common_chat_msg>& chatMsgs,
     const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
-    bool prefill) {
+    bool prefill, const CancelRequested& cancelRequested) {
   // Clear per-inference rollback state before capturing this request's generic
   // prefill-entry checkpoint.
   requestRollback_.clear();
@@ -715,7 +716,10 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   const auto prefillStart = std::chrono::steady_clock::now();
 
   size_t ledgerEntryIndex = 0;
-  for (size_t i = 0; i < nChunks; i++) {
+  for (size_t i = 0; i < nChunks || stopGeneration_.load(); i++) {
+    if (cancelRequested && cancelRequested()) {
+      stopGeneration_.store(true);
+    }
     // Checked before every chunk, reused or not, so a cancel lands before
     // anything in it is decoded, the reconciled suffix decoded by hand below
     // included.
@@ -834,9 +838,16 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
                 "[MtmdLlm] failed to decode reconciled text suffix");
           }
           processSpeculativeBatch(*textBatch);
+          if (cancelRequested && cancelRequested()) {
+            stopGeneration_.store(true);
+            break;
+          }
           if (checkpointOffset.has_value() && offset == *checkpointOffset) {
             captureHistoryCheckpoint(nPastLocal);
           }
+        }
+        if (stopGeneration_.load()) {
+          continue;
         }
         continue;
       }
@@ -910,6 +921,9 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
           "[MtmdLlm] failed to eval chunk " + std::to_string(i);
       throw qvac_errors::StatusError(
           ADDON_ID, toString(EncoderFailed), errorMsg);
+    }
+    if (cancelRequested && cancelRequested()) {
+      stopGeneration_.store(true);
     }
   }
   current_.pos = nPastLocal;
@@ -1307,19 +1321,36 @@ void MtmdLlmContext::loadMedia(const std::vector<uint8_t>& media) {
         ADDON_ID, toString(UnableToLoadModel), errorMsg);
   }
 
+  // Rejects an image stb_image cannot size (WebP, a video), so mtmd never
+  // hands it to ffmpeg. mtmd then bounds the decode itself.
   try {
     image_pixel_limit::checkBuffer(media.data(), media.size(), maxImagePixels_);
   } catch (const qvac_errors::StatusError&) {
     resetMedia();
     throw;
   }
-  mtmd::bitmap bmp(mtmd_helper_bitmap_init_from_buf(
-                       visionContext(),
-                       media.data(),
-                       media.size(),
-                       /*placeholder=*/false,
-                       mtmd_helper_init_opt_default())
-                       .bitmap);
+  mtmd_helper_init_opt decodeOptions = mtmd_helper_init_opt_default();
+  decodeOptions.max_image_pixels = maxImagePixels_;
+  const mtmd_helper_bitmap_wrapper decoded = mtmd_helper_bitmap_init_from_buf(
+      visionContext(),
+      media.data(),
+      media.size(),
+      /*placeholder=*/false,
+      decodeOptions);
+  mtmd::bitmap bmp(decoded.bitmap);
+  if (decoded.status == MTMD_HELPER_BITMAP_IMAGE_TOO_LARGE) {
+    resetMedia();
+    const std::string errorMsg =
+        "[MtmdLlm] Image exceeds the " +
+        std::to_string(maxImagePixels_ / 1'000'000) +
+        " MP limit. Increase image-max-megapixels to allow larger images.";
+    QLOG_IF(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, errorMsg);
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        errorMsg);
+  }
   if (!bmp.ptr) {
     resetMedia();
     const char* errorMsg =

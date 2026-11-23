@@ -1,5 +1,31 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- `@qvac/fabric` and its platform dependencies move from `^0.31.0` to
+  `^0.32.0`, adopting the Linux x64 CUDA package split
+  ([#5824](https://github.com/tetherto/qvac/pull/5824)). CUDA is installed
+  automatically; installation and inference configuration remain unchanged.
+
+## [0.72.1] - 2026-11-23
+
+### Changed
+
+- `image-max-megapixels` is also passed to fabric's mtmd-helper, which checks it
+  against the size its own decoder reads
+  ([#5783](https://github.com/tetherto/qvac/pull/5783)). The header check before
+  the prompt is processed stays, so an oversized image is still rejected before
+  the session cache changes, and formats stb_image cannot read (WebP, video) are
+  still rejected rather than handed to ffmpeg.
+
+### Fixed
+
+- `assessFit` accepts `image-max-megapixels` (and `image_max_megapixels`), and
+  rejects an invalid value as the load does. Before, it rejected the key as an
+  unknown argument ([#5783](https://github.com/tetherto/qvac/pull/5783)).
+
 ## [0.72.0] - 2026-11-18
 
 ### Added

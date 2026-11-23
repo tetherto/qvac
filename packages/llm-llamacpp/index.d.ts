@@ -308,16 +308,16 @@ declare namespace LlmLlamacpp {
          * single response active at a time, batching disabled).
          *
          * Cost: `parallel` is a real resource commitment, sized upfront so a busy
-         * server is ready to serve at full concurrency with no warm-up. It sizes
-         * the native scheduler's worker pool one-to-one — that many OS threads are
-         * created at load and held for the model's lifetime, idle or not — and the
-         * KV cache is split evenly across the slots (each gets `ctx_size /
-         * parallel` tokens). Size it to the concurrency you actually intend to
-         * serve, not to a generous upper bound.
+         * server is ready to serve at full concurrency with no warm-up. The KV
+         * cache is split evenly across the slots (each gets `ctx_size / parallel`
+         * tokens). Native builds drive those slots from the scheduler's background
+         * worker; the no-thread browser build advances the same scheduler
+         * cooperatively between event-loop turns. Size it to the concurrency you
+         * actually intend to serve, not to a generous upper bound.
          *
          * Range `1..256`. The upper bound is the engine's own sequence limit
          * (`LLAMA_MAX_SEQ`): a larger value is rejected up front rather than
-         * spawning its whole thread pool and then failing the model load with a
+         * allocating an invalid slot layout and then failing the model load with a
          * generic error. `ctx_size / parallel` must also leave at least one token
          * per slot, so a `parallel` too large for the context is refused as an
          * `InvalidArgument` naming both knobs.

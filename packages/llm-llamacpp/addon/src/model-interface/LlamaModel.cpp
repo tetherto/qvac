@@ -56,8 +56,8 @@ using namespace qvac_lib_inference_addon_llama::logging;
 
 namespace {
 
-void requireDraftModelMatch(
-    const common_params& params, const std::string& modelPath) {
+void requireDraftModelMatch(const common_params &params,
+                            const std::string &modelPath) {
   const std::string mismatch =
       common_speculative_draft_mismatch(params, modelPath);
   if (mismatch.empty()) {
@@ -74,16 +74,16 @@ void requireDraftModelMatch(
 // llama-server's `draft_n` / `draft_n_accepted` timings, reported only when
 // the model decodes speculatively, and its acceptance log lines.
 void appendSpeculativeStats(
-    qvac_lib_inference_addon_cpp::RuntimeStats& stats, bool enabled,
-    const qvac_lib_inference_addon_llama::speculative::SpeculativeStats&
-        speculative) {
+    qvac_lib_inference_addon_cpp::RuntimeStats &stats, bool enabled,
+    const qvac_lib_inference_addon_llama::speculative::SpeculativeStats
+        &speculative) {
   if (!enabled) {
     return;
   }
-  stats.emplace_back(
-      "draftTokens", static_cast<int64_t>(speculative.draftTokens));
-  stats.emplace_back(
-      "draftAcceptedTokens", static_cast<int64_t>(speculative.draftAccepted));
+  stats.emplace_back("draftTokens",
+                     static_cast<int64_t>(speculative.draftTokens));
+  stats.emplace_back("draftAcceptedTokens",
+                     static_cast<int64_t>(speculative.draftAccepted));
   if (speculative.draftTokens == 0) {
     return;
   }
@@ -93,36 +93,34 @@ void appendSpeculativeStats(
   for (size_t i = 0;
        speculative.verifySteps > 0 && i < speculative.acceptedPerPos.size();
        ++i) {
-    perPos += string_format(
-        "%s%.3f",
-        i > 0 ? ", " : "",
-        static_cast<double>(speculative.acceptedPerPos[i]) / verifySteps);
+    perPos += string_format("%s%.3f", i > 0 ? ", " : "",
+                            static_cast<double>(speculative.acceptedPerPos[i]) /
+                                verifySteps);
   }
-  QLOG_IF(
-      Priority::DEBUG,
-      string_format(
-          "[Speculative] draft acceptance = %0.5f (%llu accepted / %llu "
-          "generated), mean len = %5.2f, acc per pos = (%s)\n",
-          static_cast<double>(speculative.draftAccepted) /
-              static_cast<double>(speculative.draftTokens),
-          static_cast<unsigned long long>(speculative.draftAccepted),
-          static_cast<unsigned long long>(speculative.draftTokens),
-          speculative.verifySteps > 0
-              ? 1.0 +
-                    static_cast<double>(speculative.draftAccepted) / verifySteps
-              : 1.0,
-          perPos.c_str()));
+  QLOG_IF(Priority::DEBUG,
+          string_format(
+              "[Speculative] draft acceptance = %0.5f (%llu accepted / %llu "
+              "generated), mean len = %5.2f, acc per pos = (%s)\n",
+              static_cast<double>(speculative.draftAccepted) /
+                  static_cast<double>(speculative.draftTokens),
+              static_cast<unsigned long long>(speculative.draftAccepted),
+              static_cast<unsigned long long>(speculative.draftTokens),
+              speculative.verifySteps > 0
+                  ? 1.0 + static_cast<double>(speculative.draftAccepted) /
+                              verifySteps
+                  : 1.0,
+              perPos.c_str()));
 }
 
 } // namespace
 
-static void preflightImagePixels(
-    const ParsedPromptPayload& parsed,
-    const std::vector<std::vector<uint8_t>>& media, uint64_t maxPixels) {
+static void preflightImagePixels(const ParsedPromptPayload &parsed,
+                                 const std::vector<std::vector<uint8_t>> &media,
+                                 uint64_t maxPixels) {
   validateByteBufferCount(parsed.mediaPlan, media.size());
-  for (const auto& step : computeMediaLoadOrder(parsed.mediaPlan)) {
+  for (const auto &step : computeMediaLoadOrder(parsed.mediaPlan)) {
     if (step.source == MediaSource::ByteBuffer) {
-      const auto& bytes = media[step.byteIndex];
+      const auto &bytes = media[step.byteIndex];
       image_pixel_limit::checkBuffer(bytes.data(), bytes.size(), maxPixels);
     } else {
       image_pixel_limit::checkFile(step.path, maxPixels);
@@ -131,12 +129,10 @@ static void preflightImagePixels(
 }
 
 LlamaModel::LlamaModel(
-    std::string&& modelPath, std::string&& projectionPath,
-    std::unordered_map<std::string, std::string>&& configFilemap)
-    : constructionArgs_{
-          std::move(modelPath),
-          std::move(projectionPath),
-          std::move(configFilemap)} {
+    std::string &&modelPath, std::string &&projectionPath,
+    std::unordered_map<std::string, std::string> &&configFilemap)
+    : constructionArgs_{std::move(modelPath), std::move(projectionPath),
+                        std::move(configFilemap)} {
   // This is an addon admission limit, not a common_params load setting.
   maxImagePixels_ =
       image_pixel_limit::takeMaxPixels(constructionArgs_.configFilemap);
@@ -179,16 +175,14 @@ void LlamaModel::flushResidentCaches() noexcept {
     if (state_->ramTier_) {
       state_->ramTier_->flushDirty();
     }
-  } catch (const std::exception& e) {
+  } catch (const std::exception &e) {
     QLOG_IF(
         Priority::WARNING,
-        string_format(
-            "[LlamaModel] flushing cached conversations failed: %s\n",
-            e.what()));
+        string_format("[LlamaModel] flushing cached conversations failed: %s\n",
+                      e.what()));
   } catch (...) {
-    QLOG_IF(
-        Priority::WARNING,
-        "[LlamaModel] flushing cached conversations failed\n");
+    QLOG_IF(Priority::WARNING,
+            "[LlamaModel] flushing cached conversations failed\n");
   }
 }
 
@@ -245,7 +239,7 @@ void LlamaModel::init(bool acquireLock) {
     return;
   }
 
-  const auto& modelPath = constructionArgs_.modelPath;
+  const auto &modelPath = constructionArgs_.modelPath;
   auto configFilemap = constructionArgs_.configFilemap;
 
   setVerbosityLevel(configFilemap);
@@ -253,12 +247,11 @@ void LlamaModel::init(bool acquireLock) {
   metadata_.parse(modelPath, ADDON_ID);
   {
     auto fileType = metadata_.tryGetU32("general.file_type");
-    QLOG_IF(
-        Priority::DEBUG,
-        string_format(
-            "[LlamaModel] general.file_type = %s\n",
-            fileType.has_value() ? std::to_string(*fileType).c_str()
-                                 : "unknown"));
+    QLOG_IF(Priority::DEBUG,
+            string_format("[LlamaModel] general.file_type = %s\n",
+                          fileType.has_value()
+                              ? std::to_string(*fileType).c_str()
+                              : "unknown"));
   }
 
   if (!snap.promoteToWrite()) {
@@ -302,9 +295,9 @@ void LlamaModel::init(bool acquireLock) {
             configFilemap);
     qvac_lib_inference_addon_llama::speculative::requireDraftModelFile(
         speculativeConfig);
-  } catch (const std::invalid_argument& e) {
-    throw qvac_errors::StatusError(
-        qvac_errors::general_error::InvalidArgument, e.what());
+  } catch (const std::invalid_argument &e) {
+    throw qvac_errors::StatusError(qvac_errors::general_error::InvalidArgument,
+                                   e.what());
   }
   // Disk snapshots only ever go to a private directory; one that cannot be
   // created fails the load here rather than a request later.
@@ -313,19 +306,15 @@ void LlamaModel::init(bool acquireLock) {
     try {
       qvac_lib_inference_addon_llama::utils::requireSnapshotDirectory(
           snap->cacheCheckpointPolicy_.directory);
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
       throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(qvac_errors::general_error::InvalidArgument),
+          ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
           std::string("cache_checkpoint_storage 'disk': ") + e.what());
     }
   }
 
   auto normalized = load_fit_normalization::normalizeLoadForFit(
-      modelPath,
-      std::move(configFilemap),
-      metadata_,
-      pendingFinetuneOverrides_,
+      modelPath, std::move(configFilemap), metadata_, pendingFinetuneOverrides_,
       load_fit_normalization::productionDependencies(
           LlamaModel::llamaLogCallback));
   snap->normalizedFitSnapshot_ = normalized.fitSnapshot;
@@ -334,9 +323,9 @@ void LlamaModel::init(bool acquireLock) {
   try {
     qvac_lib_inference_addon_llama::speculative::applySpeculativeConfig(
         speculativeConfig, params);
-  } catch (const std::invalid_argument& e) {
-    throw qvac_errors::StatusError(
-        qvac_errors::general_error::InvalidArgument, e.what());
+  } catch (const std::invalid_argument &e) {
+    throw qvac_errors::StatusError(qvac_errors::general_error::InvalidArgument,
+                                   e.what());
   }
   requireDraftModelMatch(params, modelPath);
 
@@ -358,11 +347,9 @@ void LlamaModel::init(bool acquireLock) {
   }
 
   snap->isTextLlm_ = constructionArgs_.projectionPath.empty();
-  snap->llmContext_ = createContext(
-      std::string(constructionArgs_.projectionPath),
-      params,
-      std::move(llamaInit),
-      std::move(speculative));
+  snap->llmContext_ =
+      createContext(std::string(constructionArgs_.projectionPath), params,
+                    std::move(llamaInit), std::move(speculative));
 
   if (snap->llmContext_) {
     snap->llmContext_->setCacheCheckpointPolicy(snap->cacheCheckpointPolicy_);
@@ -384,14 +371,14 @@ void LlamaModel::init(bool acquireLock) {
   }
 }
 
-void LlamaModel::validateCheckpointBudget(ReloadableState& state) {
+void LlamaModel::validateCheckpointBudget(ReloadableState &state) {
   namespace utils = qvac_lib_inference_addon_llama::utils;
-  const auto& policy = state.cacheCheckpointPolicy_;
+  const auto &policy = state.cacheCheckpointPolicy_;
   if (policy.maxBytes == 0 || policy.maxCount == 0) {
     return;
   }
-  llama_model* mdl = state.llmContext_->getModel();
-  llama_context* ctx = state.llmContext_->getCtx();
+  llama_model *mdl = state.llmContext_->getModel();
+  llama_context *ctx = state.llmContext_->getCtx();
   if (mdl == nullptr || ctx == nullptr) {
     return;
   }
@@ -402,7 +389,7 @@ void LlamaModel::validateCheckpointBudget(ReloadableState& state) {
       utils::getModelArchitecture(mdl);
   const bool isDeepSeekV4 = architecture.has_value() &&
                             utils::isDeepSeekV4Architecture(*architecture);
-  const auto& params = state.llmContext_->getParams();
+  const auto &params = state.llmContext_->getParams();
   const bool fullState = utils::needsFullStateSnapshot(
       llama_model_is_recurrent(mdl), llama_model_is_hybrid(mdl), isDeepSeekV4);
   const int32_t nSwa = llama_model_n_swa(mdl);
@@ -417,15 +404,12 @@ void LlamaModel::validateCheckpointBudget(ReloadableState& state) {
   const uint32_t perSeqTokens =
       slidingWindow ? utils::slidingWindowCheckpointCells(nSwa) : nCtxSeq;
   const uint64_t worstCase = utils::estimateMaxSequenceStateBytes(
-      ctx,
-      llama_model_get_vocab(mdl),
-      perSeqTokens,
+      ctx, llama_model_get_vocab(mdl), perSeqTokens,
       utils::untrimmableSnapshotScope());
   if (worstCase == 0) {
-    QLOG_IF(
-        Priority::WARNING,
-        "[LlamaModel] could not measure the sequence state size; "
-        "cache_checkpoints_max_bytes is enforced at runtime only\n");
+    QLOG_IF(Priority::WARNING,
+            "[LlamaModel] could not measure the sequence state size; "
+            "cache_checkpoints_max_bytes is enforced at runtime only\n");
     return;
   }
   const uint64_t needed = worstCase * static_cast<uint64_t>(policy.maxCount);
@@ -438,17 +422,14 @@ void LlamaModel::validateCheckpointBudget(ReloadableState& state) {
             "cache_checkpoints=%zu checkpoints: one checkpoint covering "
             "%u tokens takes up to %llu bytes, so %zu need %llu. "
             "Lower cache_checkpoints to %llu or raise the budget.",
-            static_cast<unsigned long long>(policy.maxBytes),
-            policy.maxCount,
-            perSeqTokens,
-            static_cast<unsigned long long>(worstCase),
-            policy.maxCount,
-            static_cast<unsigned long long>(needed),
+            static_cast<unsigned long long>(policy.maxBytes), policy.maxCount,
+            perSeqTokens, static_cast<unsigned long long>(worstCase),
+            policy.maxCount, static_cast<unsigned long long>(needed),
             static_cast<unsigned long long>(fit)));
   }
 }
 
-bool LlamaModel::isMultiBatchActivated(ReloadableState& state) {
+bool LlamaModel::isMultiBatchActivated(ReloadableState &state) {
   return state.llmContext_ && llama_n_seq_max(state.llmContext_->getCtx()) > 1;
 }
 
@@ -463,16 +444,12 @@ namespace {
 // Capability is queried via `visionContext()` rather than an RTTI cast, so a
 // future multimodal context is picked up without inheriting MtmdLlmContext.
 batching::DriverFactory buildDriverFactory(
-    LlmModelContext shared, mtmd_context* sharedVision,
+    LlmModelContext shared, mtmd_context *sharedVision,
     qvac_lib_inference_addon_llama::cache::CheckpointPolicy checkpointPolicy,
     bool sharesCacheAcrossKeys, uint64_t maxImagePixels) {
-  return [shared,
-          sharedVision,
-          checkpointPolicy,
-          sharesCacheAcrossKeys,
+  return [shared, sharedVision, checkpointPolicy, sharesCacheAcrossKeys,
           maxImagePixels](
-             const common_params& params,
-             uint32_t seqId,
+             const common_params &params, uint32_t seqId,
              llama_pos perSeqCtxCeiling) -> std::unique_ptr<SequenceDriver> {
     const auto sid = static_cast<llama_seq_id>(seqId);
     std::unique_ptr<SequenceDriver> driver;
@@ -480,8 +457,8 @@ batching::DriverFactory buildDriverFactory(
       driver = std::make_unique<MtmdLlmContext>(
           params, shared, sharedVision, sid, perSeqCtxCeiling, maxImagePixels);
     } else {
-      driver = std::make_unique<TextLlmContext>(
-          params, shared, sid, perSeqCtxCeiling);
+      driver = std::make_unique<TextLlmContext>(params, shared, sid,
+                                                perSeqCtxCeiling);
     }
     driver->setCacheCheckpointPolicy(checkpointPolicy);
     driver->setSharesCacheAcrossKeys(sharesCacheAcrossKeys);
@@ -492,10 +469,10 @@ batching::DriverFactory buildDriverFactory(
 } // namespace
 
 std::unique_ptr<batching::ContinuousBatchScheduler>
-LlamaModel::initBatchScheduler(ReloadableState& state) {
-  llama_context* ctx = state.llmContext_->getCtx();
-  llama_model* mdl = state.llmContext_->getModel();
-  const common_params& cparams = state.llmContext_->getParams();
+LlamaModel::initBatchScheduler(ReloadableState &state) {
+  llama_context *ctx = state.llmContext_->getCtx();
+  llama_model *mdl = state.llmContext_->getModel();
+  const common_params &cparams = state.llmContext_->getParams();
   const auto batchSize = static_cast<size_t>(llama_n_seq_max(ctx));
   const auto ctxTotalTokens = static_cast<unsigned>(llama_n_ctx(ctx));
   const auto batchCapacity = static_cast<int32_t>(cparams.n_batch);
@@ -527,21 +504,17 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
     scheduler->setRamTier(state.ramTier_);
     scheduler->setFileIndex(state.fileIndex_);
     return scheduler;
-  } catch (const std::invalid_argument& e) {
+  } catch (const std::invalid_argument &e) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
-        string_format(
-            "[LlamaModel] parallel=%zu is too large for this context "
-            "(ctx_size=%u, batch_size=%d): %s",
-            batchSize,
-            ctxTotalTokens,
-            batchCapacity,
-            e.what()));
+        string_format("[LlamaModel] parallel=%zu is too large for this context "
+                      "(ctx_size=%u, batch_size=%d): %s",
+                      batchSize, ctxTotalTokens, batchCapacity, e.what()));
   }
 }
 
 void LlamaModel::setWeightsForFile(
-    const std::string&, std::unique_ptr<std::basic_streambuf<char>>&&) {
+    const std::string &, std::unique_ptr<std::basic_streambuf<char>> &&) {
   throw qvac_errors::StatusError(
       qvac_errors::general_error::InvalidArgument,
       "Weight streaming is no longer supported. Pass a disk path; for a "
@@ -553,29 +526,29 @@ bool LlamaModel::isLoaded() {
   return static_cast<bool>(state_->llmContext_);
 }
 
-llama_context* LlamaModel::getContext() {
+llama_context *LlamaModel::getContext() {
   if (!state_->llmContext_) {
     return nullptr;
   }
   return state_->llmContext_->getCtx();
 }
 
-llama_model* LlamaModel::getModel() {
+llama_model *LlamaModel::getModel() {
   if (!state_->llmContext_) {
     return nullptr;
   }
   return state_->llmContext_->getModel();
 }
 
-common_params& LlamaModel::getCommonParams() {
+common_params &LlamaModel::getCommonParams() {
   if (!state_->llmContext_) {
     throw std::runtime_error("Model context not initialized");
   }
   return state_->llmContext_->getParams();
 }
 
-void LlamaModel::llamaLogCallback(
-    ggml_log_level level, const char* text, void* userData) {
+void LlamaModel::llamaLogCallback(ggml_log_level level, const char *text,
+                                  void *userData) {
   (void)userData;
   // Convert ggml_log_level to QLOG Priority
   Priority priority = Priority::DEBUG;
@@ -652,7 +625,7 @@ void LlamaModel::cancelImpl() const {
 
 void LlamaModel::setFinetuneCancelSavesCheckpoint(
     const bool save,
-    const std::vector<qvac_lib_inference_addon_cpp::JobId>& cancelledJobs) {
+    const std::vector<qvac_lib_inference_addon_cpp::JobId> &cancelledJobs) {
   std::scoped_lock lock(finetuneCancelMtx_);
   // Keyed by the snapshot itself, never by currentFinetuneJobId_: the
   // canceller can arm while its snapshotted finetune still sits between the
@@ -665,7 +638,7 @@ void LlamaModel::setFinetuneCancelSavesCheckpoint(
 }
 
 void LlamaModel::discardFinetuneCancelSaveModes(
-    const std::vector<qvac_lib_inference_addon_cpp::JobId>& cancelledJobs) {
+    const std::vector<qvac_lib_inference_addon_cpp::JobId> &cancelledJobs) {
   std::scoped_lock lock(finetuneCancelMtx_);
   for (const auto id : cancelledJobs) {
     finetuneCancelSaveModes_.erase(id);
@@ -715,21 +688,20 @@ void LlamaModel::jobStarting(const qvac_lib_inference_addon_cpp::JobId id) {
   liveJobs_.add(id);
 }
 
-std::any LlamaModel::process(const std::any& input) {
+std::any LlamaModel::process(const std::any &input) {
   std::shared_lock lock(stateMtx_);
   if (input.type() != typeid(Prompt) &&
       input.type() != typeid(std::vector<Prompt>)) {
     throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(qvac_errors::general_error::InvalidArgument),
+        ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
         "Invalid input type");
   }
   if (input.type() == typeid(std::vector<Prompt>)) {
-    const auto& prompts = std::any_cast<const std::vector<Prompt>&>(input);
+    const auto &prompts = std::any_cast<const std::vector<Prompt> &>(input);
     return {processPromptBatchImpl(prompts).outputs};
   }
   validateBitnetQuantization();
-  const auto& prompt = std::any_cast<const Prompt&>(input);
+  const auto &prompt = std::any_cast<const Prompt &>(input);
 #ifndef STANDALONE_TEST_BUILD
   if (prompt.finetuningParams.has_value()) {
     FinetuneTerminalResult::Stats stats{};
@@ -738,8 +710,8 @@ std::any LlamaModel::process(const std::any& input) {
     // admitted through MultiJobScheduler::runExclusiveJob, so no inference job
     // holds stateMtx_ while this one runs.
     lock.unlock();
-    std::string status = finetuner_.finetune(
-        *prompt.finetuningParams, &stats, prompt.progressCallback);
+    std::string status = finetuner_.finetune(*prompt.finetuningParams, &stats,
+                                             prompt.progressCallback);
     FinetuneTerminalResult result{"finetune", std::move(status)};
     if (stats.globalSteps > 0 || stats.epochsCompleted > 0) {
       result.stats = stats;
@@ -749,15 +721,14 @@ std::any LlamaModel::process(const std::any& input) {
 #else
   if (prompt.finetuningParams.has_value()) {
     throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(qvac_errors::general_error::InvalidArgument),
+        ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
         "Finetuning not available in standalone test build");
   }
 #endif
   return {processPromptImpl(prompt)};
 }
 
-bool LlamaModel::isConcurrentEligible(const Prompt& prompt) {
+bool LlamaModel::isConcurrentEligible(const Prompt &prompt) {
   if (prompt.finetuningParams.has_value()) {
     return false;
   }
@@ -768,8 +739,8 @@ bool LlamaModel::isConcurrentEligible(const Prompt& prompt) {
   return !prompt.prefill || !prompt.cacheKey.empty();
 }
 
-std::any LlamaModel::process(
-    const std::any& input, qvac_lib_inference_addon_cpp::JobId id) {
+std::any LlamaModel::process(const std::any &input,
+                             qvac_lib_inference_addon_cpp::JobId id) {
   const bool isSingle = input.type() == typeid(Prompt);
   const bool isBatch = input.type() == typeid(std::vector<Prompt>);
   // The scheduler registered this id at dequeue (jobStarting); make sure no
@@ -827,7 +798,7 @@ std::any LlamaModel::process(
     return process(input);
   };
   if (isSingle) {
-    const auto& prompt = std::any_cast<const Prompt&>(input);
+    const auto &prompt = std::any_cast<const Prompt &>(input);
     if (prompt.finetuningParams.has_value()) {
       beginFinetuneJob(id);
       ScopeGuard finetuneGuard([this] {
@@ -855,8 +826,7 @@ std::any LlamaModel::process(
         std::shared_lock rejectLock(stateMtx_);
         if (state_ && state_->batchScheduler_) {
           throw qvac_errors::StatusError(
-              ADDON_ID,
-              toString(qvac_errors::general_error::InvalidArgument),
+              ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
               "prefill without a cacheKey cannot run on a parallel model: "
               "its warmed context is unreachable by concurrent jobs; set a "
               "cacheKey or load with parallel=1");
@@ -872,13 +842,13 @@ std::any LlamaModel::process(
   }
   if (isBatch) {
     return {processConcurrentBatch(
-        std::any_cast<const std::vector<Prompt>&>(input), id)};
+        std::any_cast<const std::vector<Prompt> &>(input), id)};
   }
-  return {processConcurrent(std::any_cast<const Prompt&>(input), id)};
+  return {processConcurrent(std::any_cast<const Prompt &>(input), id)};
 }
 
 std::vector<std::string> LlamaModel::processConcurrentBatch(
-    const std::vector<Prompt>& prompts,
+    const std::vector<Prompt> &prompts,
     const qvac_lib_inference_addon_cpp::JobId id) {
   // Tag the scheduler group with the job id so a cancel can target it before
   // any admission. Job ids are minted monotonically and never reused, so a tag
@@ -915,7 +885,7 @@ std::vector<std::string> LlamaModel::processConcurrentBatch(
       slots->seqs.clear();
     }
     if (state_ && state_->batchScheduler_) {
-      for (const auto& [seqId, admissionId] : seqs) {
+      for (const auto &[seqId, admissionId] : seqs) {
         state_->batchScheduler_->cancel(seqId, admissionId);
       }
       // No-op once every request of the group holds a slot: the loop above
@@ -942,8 +912,8 @@ std::vector<std::string> LlamaModel::processConcurrentBatch(
   ScopeGuard mapGuard([this, id] { liveJobs_.remove(id); });
 
   const SeqAssignedObserver onSeqAssigned =
-      [this, id, slots, cancelGroup](
-          size_t, uint32_t seqId, uint64_t admissionId) {
+      [this, id, slots, cancelGroup](size_t, uint32_t seqId,
+                                     uint64_t admissionId) {
         {
           std::lock_guard<std::mutex> seqsLock(slots->mtx);
           if (slots->cancelled) {
@@ -983,8 +953,9 @@ std::vector<std::string> LlamaModel::processConcurrentBatch(
   return std::move(result.outputs);
 }
 
-std::string LlamaModel::processConcurrent(
-    const Prompt& prompt, qvac_lib_inference_addon_cpp::JobId id) {
+std::string
+LlamaModel::processConcurrent(const Prompt &prompt,
+                              qvac_lib_inference_addon_cpp::JobId id) {
   // Tagged like the batch path, so a cancel arriving while this request is
   // still queued behind a wider group settles it now instead of waiting for
   // that group to release a slot.
@@ -1044,8 +1015,8 @@ std::string LlamaModel::processConcurrent(
   ScopeGuard mapGuard([this, id] { liveJobs_.remove(id); });
 
   const SeqAssignedObserver onSeqAssigned =
-      [this, id, slot, cancelSingle](
-          size_t, uint32_t seqId, uint64_t admissionId) {
+      [this, id, slot, cancelSingle](size_t, uint32_t seqId,
+                                     uint64_t admissionId) {
         {
           std::lock_guard<std::mutex> slotLock(slot->mtx);
           if (slot->cancelled) {
@@ -1093,8 +1064,8 @@ std::string LlamaModel::processConcurrent(
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
-    const batching::RuntimeStatsSnapshot& stats,
-    const batching::ObservedRequestStats& observed) const {
+    const batching::RuntimeStatsSnapshot &stats,
+    const batching::ObservedRequestStats &observed) const {
   // batchRuntimeStatsLocked's key set with the job's own observed figures in
   // place of the aggregate values. Composed purely from the run's returned
   // snapshot — no live scheduler read, no llama_perf_context_reset: a peer
@@ -1127,8 +1098,8 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
   // aggregateObservedStats), which addon.js tolerates by mapping only a
   // numeric value.
   if (observed.stopReason.has_value()) {
-    terminal.emplace_back(
-        "stopReason", static_cast<int64_t>(*observed.stopReason));
+    terminal.emplace_back("stopReason",
+                          static_cast<int64_t>(*observed.stopReason));
   }
   if (state_->llmContext_->getSpeculative() != nullptr) {
     terminal.emplace_back("draftTokens", observed.draftTokens);
@@ -1162,9 +1133,9 @@ void LlamaModel::cancelById(qvac_lib_inference_addon_cpp::JobId id) const {
 }
 
 LlamaModel::ResolvedPrompt
-LlamaModel::resolveChatAndTools(const Prompt& prompt) {
+LlamaModel::resolveChatAndTools(const Prompt &prompt) {
   ResolvedPrompt resolved;
-  auto parseAndPreflight = [this, &prompt](const std::string& input) {
+  auto parseAndPreflight = [this, &prompt](const std::string &input) {
     auto parsed = formatPrompt(input);
     if (!state_->isTextLlm_) {
       // handleCache mutates the active session after parsing.
@@ -1174,35 +1145,33 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
   };
   // Load all prompt media (hoisted byte buffers and inline paths) in
   // prompt-marker order so each bitmap binds to its own MTMD marker.
-  auto validateAndLoadPlannedMedia =
-      [this, &prompt](const ParsedPromptPayload& parsed) {
-        // `tool_choice` is checked against the freshly parsed tool list here,
-        // before the first bitmap reaches the long-lived multimodal context.
-        // `bitmaps_` is drained only by `tokenizeChat`, so a choice rejected
-        // after the load would leave this request's media behind — and the next
-        // multimodal request would then hand `mtmd_tokenize` more bitmaps than
-        // its text has markers, which fabric refuses outright in
-        // `mtmd_tokenizer`'s constructor (tools/mtmd/mtmd.cpp). One caller's
-        // bad argument would cost the *following* request its turn. Both call
-        // sites below have the parsed tools in hand before they load anything,
-        // so the ordering costs nothing.
-        qvac_lib_inference_addon_llama::utils::validateToolChoice(
-            prompt.generationParams.tool_choice, parsed.tools);
-        if (state_->isTextLlm_ && !parsed.mediaPlan.empty()) {
-          throw qvac_errors::StatusError(
-              ADDON_ID,
-              toString(MediaNotSupported),
-              "Media not supported by text-only models");
-        }
-        validateByteBufferCount(parsed.mediaPlan, prompt.media.size());
-        for (const auto& step : computeMediaLoadOrder(parsed.mediaPlan)) {
-          if (step.source == MediaSource::ByteBuffer) {
-            loadMedia(prompt.media[step.byteIndex]);
-          } else {
-            state_->llmContext_->loadMedia(step.path);
-          }
-        }
-      };
+  auto validateAndLoadPlannedMedia = [this, &prompt](
+                                         const ParsedPromptPayload &parsed) {
+    // `tool_choice` is checked against the freshly parsed tool list here,
+    // before the first bitmap reaches the long-lived multimodal context.
+    // `bitmaps_` is drained only by `tokenizeChat`, so a choice rejected
+    // after the load would leave this request's media behind — and the next
+    // multimodal request would then hand `mtmd_tokenize` more bitmaps than
+    // its text has markers, which fabric refuses outright in
+    // `mtmd_tokenizer`'s constructor (tools/mtmd/mtmd.cpp). One caller's
+    // bad argument would cost the *following* request its turn. Both call
+    // sites below have the parsed tools in hand before they load anything,
+    // so the ordering costs nothing.
+    qvac_lib_inference_addon_llama::utils::validateToolChoice(
+        prompt.generationParams.tool_choice, parsed.tools);
+    if (state_->isTextLlm_ && !parsed.mediaPlan.empty()) {
+      throw qvac_errors::StatusError(ADDON_ID, toString(MediaNotSupported),
+                                     "Media not supported by text-only models");
+    }
+    validateByteBufferCount(parsed.mediaPlan, prompt.media.size());
+    for (const auto &step : computeMediaLoadOrder(parsed.mediaPlan)) {
+      if (step.source == MediaSource::ByteBuffer) {
+        loadMedia(prompt.media[step.byteIndex]);
+      } else {
+        state_->llmContext_->loadMedia(step.path);
+      }
+    }
+  };
   if (state_->cacheManager_.has_value()) {
     // The base key's file is a source like any file this model has used.
     if (state_->fileIndex_) {
@@ -1210,10 +1179,7 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
     }
     ParsedPromptPayload parsedPrompt;
     resolved.isCacheLoaded = state_->cacheManager_->handleCache(
-        parsedPrompt,
-        prompt.input,
-        parseAndPreflight,
-        prompt.cacheKey,
+        parsedPrompt, prompt.input, parseAndPreflight, prompt.cacheKey,
         prompt.ephemeral);
     validateAndLoadPlannedMedia(parsedPrompt);
     resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
@@ -1234,12 +1200,12 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
   return resolved;
 }
 
-std::string LlamaModel::processPrompt(const Prompt& prompt) {
+std::string LlamaModel::processPrompt(const Prompt &prompt) {
   std::shared_lock lock(stateMtx_);
   return processPromptImpl(prompt);
 }
 
-std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
+std::string LlamaModel::processPromptImpl(const Prompt &prompt) {
   // Held for the whole request so an explicit `saveCache` waits for it and
   // writes its committed result, never a request in progress.
   std::scoped_lock singleRunLock(singleRunMtx_);
@@ -1285,8 +1251,8 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   // whatever it returned: by then the drain has run or the throw has been
   // handled. `resetMedia()` on an already-drained list is an empty `clear()`,
   // and a no-op virtual on text-only contexts.
-  ScopeGuard mediaGuard(
-      [this] { state_->llmContext_->resetMedia(); }, "mediaGuard/staged-media");
+  ScopeGuard mediaGuard([this] { state_->llmContext_->resetMedia(); },
+                        "mediaGuard/staged-media");
 
   if (resolved.shouldResetAfterInference &&
       state_->llmContext_->getNPast() > 0) {
@@ -1339,20 +1305,18 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     const LlmContext::EvalMessageResult evalResult =
         resolved.tools.empty()
             ? state_->llmContext_->evalMessage(
-                  resolved.chatMsgs, resolved.isCacheLoaded, prompt.prefill)
+                  resolved.chatMsgs, resolved.isCacheLoaded, prompt.prefill,
+                  prompt.cancelRequested)
             : state_->llmContext_->evalMessageWithTools(
-                  resolved.chatMsgs,
-                  resolved.tools,
-                  resolved.isCacheLoaded,
-                  prompt.prefill);
+                  resolved.chatMsgs, resolved.tools, resolved.isCacheLoaded,
+                  prompt.prefill, prompt.cancelRequested);
     // Eval owns the media from here: `tokenizeChat` has drained it, or has
     // thrown past this line and left the guard to.
     mediaGuard.dismiss();
 
     if (!evalResult.ok) {
-      QLOG_IF(
-          Priority::DEBUG,
-          "Inference was interrupted during prompt evaluation\n");
+      QLOG_IF(Priority::DEBUG,
+              "Inference was interrupted during prompt evaluation\n");
       if (!evalResult.rollbackOk) {
         resetAndInvalidateActiveCache();
       }
@@ -1367,7 +1331,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
       std::ostringstream oss;
       auto callback = prompt.outputCallback;
       if (!prompt.outputCallback) {
-        callback = [&](const std::string& token) { oss << token; };
+        callback = [&](const std::string &token) { oss << token; };
       }
 
       const LlmContext::GenerateResponseResult generationResult =
@@ -1376,8 +1340,8 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
         resetState();
         std::string errorMsg =
             string_format("%s: context overflow\n", __func__);
-        throw qvac_errors::StatusError(
-            ADDON_ID, toString(ContextOverflow), errorMsg);
+        throw qvac_errors::StatusError(ADDON_ID, toString(ContextOverflow),
+                                       errorMsg);
       }
 
       if (!prompt.outputCallback) {
@@ -1411,18 +1375,16 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   return out;
 }
 
-void LlamaModel::saveCache(const std::string& cacheKey) {
+void LlamaModel::saveCache(const std::string &cacheKey) {
   if (cacheKey.empty()) {
     throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(qvac_errors::general_error::InvalidArgument),
+        ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
         "saveCache: cacheKey must be a non-empty string");
   }
   std::shared_lock lock(stateMtx_);
   if (!state_) {
     throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(qvac_errors::general_error::InvalidArgument),
+        ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
         "saveCache: the model is not loaded");
   }
   if (state_->fileIndex_) {
@@ -1468,23 +1430,20 @@ void LlamaModel::saveCache(const std::string& cacheKey) {
     return;
   }
   throw qvac_errors::StatusError(
-      ADDON_ID,
-      toString(qvac_errors::general_error::InvalidArgument),
+      ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
       "saveCache: no conversation is cached under '" + cacheKey + "'");
 }
 
-void LlamaModel::discardCache(const std::string& cacheKey) {
+void LlamaModel::discardCache(const std::string &cacheKey) {
   if (cacheKey.empty()) {
     throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(qvac_errors::general_error::InvalidArgument),
+        ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
         "discardCache: cacheKey must be a non-empty string");
   }
   std::shared_lock lock(stateMtx_);
   if (!state_) {
     throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(qvac_errors::general_error::InvalidArgument),
+        ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
         "discardCache: the model is not loaded");
   }
   if (state_->batchScheduler_) {
@@ -1501,8 +1460,46 @@ void LlamaModel::discardCache(const std::string& cacheKey) {
   }
 }
 
+std::future<LlamaModel::CooperativeCacheOutcome>
+LlamaModel::enqueueCooperativeCache(const std::string &cacheKey,
+                                    const bool discard) {
+  if (cacheKey.empty()) {
+    throw qvac_errors::StatusError(
+        ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
+        std::string(discard ? "discardCache" : "saveCache") +
+            ": cacheKey must be a non-empty string");
+  }
+  std::shared_lock lock(stateMtx_);
+  if (!state_ || !state_->batchScheduler_) {
+    throw qvac_errors::StatusError(
+        ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
+        std::string(discard ? "discardCache" : "saveCache") +
+            ": cooperative scheduler is not loaded");
+  }
+  if (!discard && state_->fileIndex_) {
+    state_->fileIndex_->note(cacheKey);
+  }
+  return discard ? state_->batchScheduler_->enqueueDiscardConversation(cacheKey)
+                 : state_->batchScheduler_->enqueueSaveConversation(cacheKey);
+}
+
+void LlamaModel::completeCooperativeCache(
+    const std::string &cacheKey, const bool discard,
+    const CooperativeCacheOutcome outcome) const {
+  if (discard || outcome != CooperativeCacheOutcome::NotHere) {
+    return;
+  }
+  std::error_code ec;
+  if (std::filesystem::file_size(cacheKey, ec) > 0 && !ec) {
+    return;
+  }
+  throw qvac_errors::StatusError(
+      ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
+      "saveCache: no conversation is cached under '" + cacheKey + "'");
+}
+
 std::vector<std::string>
-LlamaModel::processPromptBatch(const std::vector<Prompt>& prompts) {
+LlamaModel::processPromptBatch(const std::vector<Prompt> &prompts) {
   std::shared_lock lock(stateMtx_);
   return processPromptBatchImpl(prompts).outputs;
 }
@@ -1660,10 +1657,11 @@ unsigned LlamaModel::activeSlots() const {
   return state_->batchScheduler_->occupancy();
 }
 
-batching::BatchResult LlamaModel::processPromptBatchImpl(
-    const std::vector<Prompt>& prompts,
-    const SeqAssignedObserver& onSeqAssigned, const SeqObserver& onSeqDone,
-    const uint64_t groupTag) {
+batching::BatchResult
+LlamaModel::processPromptBatchImpl(const std::vector<Prompt> &prompts,
+                                   const SeqAssignedObserver &onSeqAssigned,
+                                   const SeqObserver &onSeqDone,
+                                   const uint64_t groupTag) {
   auto batchGuard = enterBatchProcessing(*state_);
 
   if (prompts.empty()) {
@@ -1672,12 +1670,11 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
 
   if (!state_->batchScheduler_) {
     throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(qvac_errors::general_error::InvalidArgument),
+        ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
         "Model is not configured for continuous batching: requires "
         "n_seq_max > 1");
   }
-  auto& scheduler = *state_->batchScheduler_;
+  auto &scheduler = *state_->batchScheduler_;
 
   std::vector<batching::SubmitRequest> requests =
       prepareBatchRequests(*state_, prompts, onSeqAssigned, onSeqDone);
@@ -1719,17 +1716,15 @@ std::vector<batching::SubmitRequest> LlamaModel::prepareBatchRequests(
   std::vector<batching::SubmitRequest> requests;
   requests.reserve(prompts.size());
   for (size_t i = 0; i < prompts.size(); i++) {
-    const Prompt& prompt = prompts[i];
+    const Prompt &prompt = prompts[i];
     if (!prompt.media.empty() && state.isTextLlm_) {
       throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(qvac_errors::general_error::InvalidArgument),
+          ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
           "processPromptBatch: media requires a multimodal model");
     }
     if (prompt.finetuningParams.has_value()) {
       throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(qvac_errors::general_error::InvalidArgument),
+          ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
           "processPromptBatch: finetuning is not a batch processing operation");
     }
     // Same keyless prefill policy as the single-prompt path: batch items
@@ -1737,8 +1732,7 @@ std::vector<batching::SubmitRequest> LlamaModel::prepareBatchRequests(
     // state at most anonymously, first to be evicted and never written.
     if (!isConcurrentEligible(prompt)) {
       throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(qvac_errors::general_error::InvalidArgument),
+          ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
           "processPromptBatch: prefill without a cacheKey cannot run on a "
           "parallel model: its warmed state would belong to no conversation; "
           "set a cacheKey or load with parallel=1");
@@ -1746,14 +1740,12 @@ std::vector<batching::SubmitRequest> LlamaModel::prepareBatchRequests(
     ParsedPromptPayload parsed = formatPrompt(prompt.input);
     if (parsed.chatMsgs.empty()) {
       throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(EmptyPrompt),
+          ADDON_ID, toString(EmptyPrompt),
           "processPromptBatch: prompt produced no chat messages");
     }
     if (!parsed.mediaPaths.empty() && state.isTextLlm_) {
       throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(qvac_errors::general_error::InvalidArgument),
+          ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
           "processPromptBatch: media requires a multimodal model");
     }
     if (!state.isTextLlm_) {
@@ -1780,8 +1772,8 @@ std::vector<batching::SubmitRequest> LlamaModel::prepareBatchRequests(
     // scheduler always fires onAdmitted first and the latches only close a
     // theoretical gap.
     auto seen = std::make_shared<std::atomic<bool>>(false);
-    auto notifySeq = [onSeqAssigned, seen, requestIndex = i](
-                         uint32_t seqId, uint64_t admissionId) {
+    auto notifySeq = [onSeqAssigned, seen,
+                      requestIndex = i](uint32_t seqId, uint64_t admissionId) {
       if (onSeqAssigned && !seen->exchange(true)) {
         return onSeqAssigned(requestIndex, seqId, admissionId);
       }
@@ -1789,19 +1781,19 @@ std::vector<batching::SubmitRequest> LlamaModel::prepareBatchRequests(
     };
     sr.streams.onAdmitted = notifySeq;
     sr.streams.onToken = [userCb = prompt.outputCallback,
-                          notifySeq](uint32_t seqId, const std::string& piece) {
+                          notifySeq](uint32_t seqId, const std::string &piece) {
       notifySeq(seqId, batching::K_UNKNOWN_ADMISSION_ID);
       if (userCb) {
         userCb(piece);
       }
     };
-    sr.streams.onDone =
-        [notifySeq, onSeqDone, requestIndex = i](uint32_t seqId) {
-          notifySeq(seqId, batching::K_UNKNOWN_ADMISSION_ID);
-          if (onSeqDone) {
-            onSeqDone(requestIndex, seqId);
-          }
-        };
+    sr.streams.onDone = [notifySeq, onSeqDone,
+                         requestIndex = i](uint32_t seqId) {
+      notifySeq(seqId, batching::K_UNKNOWN_ADMISSION_ID);
+      if (onSeqDone) {
+        onSeqDone(requestIndex, seqId);
+      }
+    };
 
     requests.push_back(std::move(sr));
   }
@@ -1848,10 +1840,9 @@ LlamaModel::batchRuntimeStatsLocked() const {
       // per-batch value would be misattributed / racy. See singleRuntimeStats.
       {"avgConcurrentSeq", stats.avgConcurrentSeq()},
       {"backendDevice", runtimeBackendDevice_}};
-  appendSpeculativeStats(
-      result,
-      state_->llmContext_->getSpeculative() != nullptr,
-      stats.speculative);
+  appendSpeculativeStats(result,
+                         state_->llmContext_->getSpeculative() != nullptr,
+                         stats.speculative);
   return result;
 }
 
@@ -1863,7 +1854,7 @@ LlamaModel::singleRuntimeStatsLocked() const {
   // Counted and timed where the work happens, not read from llama's perf
   // counters, which book a one-token decode (a fully cached prompt re-decoding
   // its last token) as generation. See `LlmContext::lastPromptTokenCount`.
-  const LlmContext& context = *state_->llmContext_;
+  const LlmContext &context = *state_->llmContext_;
   const double promptEvalMs = context.lastPromptEvalMs();
   const int64_t promptTokenCount = context.lastPromptTokenCount();
   const double timeToFirstToken = wasPrefill ? 0.0 : promptEvalMs;
@@ -1912,8 +1903,7 @@ LlamaModel::singleRuntimeStatsLocked() const {
       {"avgConcurrentSeq", 1.0},
       {"backendDevice", runtimeBackendDevice_}};
   appendSpeculativeStats(
-      stats,
-      state_->llmContext_->getSpeculative() != nullptr,
+      stats, state_->llmContext_->getSpeculative() != nullptr,
       wasPrefill
           ? qvac_lib_inference_addon_llama::speculative::SpeculativeStats{}
           : state_->llmContext_->speculativeStats());
@@ -1925,15 +1915,14 @@ namespace {
 // Prefix of the prompt parser's errors, as `run()` reports them.
 constexpr std::string_view K_PROMPT_PARSE_TAG = "formatPrompt";
 
-[[noreturn]] void throwInvalidToolTurn(const char* what) {
+[[noreturn]] void throwInvalidToolTurn(const char *what) {
   throw qvac_errors::StatusError(
-      ADDON_ID,
-      toString(InvalidInputFormat),
+      ADDON_ID, toString(InvalidInputFormat),
       string_format("%s: %s\n", K_PROMPT_PARSE_TAG.data(), what));
 }
 
-std::string optionalString(
-    const picojson::object& obj, const char* key, const char* typeError) {
+std::string optionalString(const picojson::object &obj, const char *key,
+                           const char *typeError) {
   auto it = obj.find(key);
   if (it == obj.end()) {
     return "";
@@ -1944,7 +1933,7 @@ std::string optionalString(
   return it->second.get<std::string>();
 }
 
-[[noreturn]] void throwInvalidContentPart(const std::string& what) {
+[[noreturn]] void throwInvalidContentPart(const std::string &what) {
   throwInvalidToolTurn(what.c_str());
 }
 
@@ -1953,20 +1942,20 @@ std::string optionalString(
 // position and records its source in the media plan, in marker order. This is
 // what lets a single message interleave text and images, which separate
 // `type: "media"` messages cannot express without splitting the turn.
-void appendContentParts(
-    const picojson::array& parts, const std::string& role, bool isTextLlm,
-    std::string& content, std::vector<PlannedMedia>& mediaPlan,
-    std::vector<std::string>& mediaPaths) {
-  for (const auto& partValue : parts) {
+void appendContentParts(const picojson::array &parts, const std::string &role,
+                        bool isTextLlm, std::string &content,
+                        std::vector<PlannedMedia> &mediaPlan,
+                        std::vector<std::string> &mediaPaths) {
+  for (const auto &partValue : parts) {
     if (!partValue.is<picojson::object>()) {
       throwInvalidContentPart("content parts must be objects");
     }
-    const picojson::object& part = partValue.get<picojson::object>();
+    const picojson::object &part = partValue.get<picojson::object>();
     auto typeIt = part.find("type");
     if (typeIt == part.end() || !typeIt->second.is<std::string>()) {
       throwInvalidContentPart("content parts require a string type");
     }
-    const std::string& type = typeIt->second.get<std::string>();
+    const std::string &type = typeIt->second.get<std::string>();
     if (type == "text") {
       auto textIt = part.find("text");
       if (textIt == part.end() || !textIt->second.is<std::string>()) {
@@ -1984,10 +1973,8 @@ void appendContentParts(
           "media content parts are only valid on user messages");
     }
     if (isTextLlm) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(MediaNotSupported),
-          "Media not supported by text-only models");
+      throw qvac_errors::StatusError(ADDON_ID, toString(MediaNotSupported),
+                                     "Media not supported by text-only models");
     }
     const auto partContentIt = part.find("content");
     if (partContentIt != part.end() &&
@@ -2017,14 +2004,14 @@ using qvac_lib_inference_addon_llama::utils::nestsTooDeep;
 
 // The same value in an order-preserving parse of the request, or null when
 // that parse failed or lacks it.
-const common_json* orderedChild(const common_json* parent, const char* key) {
+const common_json *orderedChild(const common_json *parent, const char *key) {
   if (parent == nullptr || !parent->is_object() || !parent->contains(key)) {
     return nullptr;
   }
   return &parent->at(key);
 }
 
-const common_json* orderedChild(const common_json* parent, size_t idx) {
+const common_json *orderedChild(const common_json *parent, size_t idx) {
   if (parent == nullptr || !parent->is_array() || idx >= parent->size()) {
     return nullptr;
   }
@@ -2037,8 +2024,8 @@ const common_json* orderedChild(const common_json* parent, size_t idx) {
 // a sorted schema rejects arguments written in the order the caller declared
 // them. `ordered` is the value from an order-preserving parse of the request;
 // without it the value keeps picojson's order.
-std::string serializeInCallerOrder(
-    const picojson::value& value, const common_json* ordered) {
+std::string serializeInCallerOrder(const picojson::value &value,
+                                   const common_json *ordered) {
   return ordered != nullptr ? ordered->dump() : value.serialize();
 }
 
@@ -2046,9 +2033,8 @@ std::string serializeInCallerOrder(
 // the chat template renders them in the model's own format instead of the
 // caller flattening them into `content`. `orderedMsg` is the same message from
 // an order-preserving parse, see serializeInCallerOrder.
-void readToolTurnFields(
-    const picojson::object& obj, const common_json* orderedMsg,
-    common_chat_msg& msg) {
+void readToolTurnFields(const picojson::object &obj,
+                        const common_json *orderedMsg, common_chat_msg &msg) {
   auto calls = obj.find("tool_calls");
   if (calls != obj.end()) {
     if (msg.role != "assistant") {
@@ -2057,14 +2043,14 @@ void readToolTurnFields(
     if (!calls->second.is<picojson::array>()) {
       throwInvalidToolTurn("tool_calls must be an array");
     }
-    const picojson::array& entries = calls->second.get<picojson::array>();
-    const common_json* orderedCalls = orderedChild(orderedMsg, "tool_calls");
+    const picojson::array &entries = calls->second.get<picojson::array>();
+    const common_json *orderedCalls = orderedChild(orderedMsg, "tool_calls");
     for (size_t idx = 0; idx < entries.size(); ++idx) {
-      const picojson::value& entry = entries[idx];
+      const picojson::value &entry = entries[idx];
       if (!entry.is<picojson::object>()) {
         throwInvalidToolTurn("each tool_calls entry must be an object");
       }
-      const picojson::object& call = entry.get<picojson::object>();
+      const picojson::object &call = entry.get<picojson::object>();
       common_chat_tool_call toolCall;
       toolCall.name =
           optionalString(call, "name", "tool_calls name must be a string");
@@ -2080,7 +2066,7 @@ void readToolTurnFields(
         // Must be a JSON object: a template that parses it would otherwise fall
         // back to a render without tools. The iterator overload catches
         // trailing text.
-        const std::string& text = args->second.get<std::string>();
+        const std::string &text = args->second.get<std::string>();
         if (nestsTooDeep(text)) {
           throwInvalidToolTurn("tool_calls arguments nest too deep");
         }
@@ -2089,8 +2075,8 @@ void readToolTurnFields(
         const auto stop =
             picojson::parse(parsedArgs, text.begin(), text.end(), &parseErr);
         if (!parseErr.empty() || !parsedArgs.is<picojson::object>() ||
-            text.find_first_not_of(
-                " \t\n\r", static_cast<size_t>(stop - text.begin())) !=
+            text.find_first_not_of(" \t\n\r",
+                                   static_cast<size_t>(stop - text.begin())) !=
                 std::string::npos) {
           throwInvalidToolTurn(
               "tool_calls arguments must be an object or a JSON object string");
@@ -2123,11 +2109,11 @@ void readToolTurnFields(
 // is set.
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 ParsedPromptPayload parsePromptPayload(
-    const std::string& input, bool isTextLlm,
-    const std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>&
-        reasoningTags,
-    const std::function<void()>& resetMedia, bool requireObjects = false) {
-  const char* const parseTag = K_PROMPT_PARSE_TAG.data();
+    const std::string &input, bool isTextLlm,
+    const std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>
+        &reasoningTags,
+    const std::function<void()> &resetMedia, bool requireObjects = false) {
+  const char *const parseTag = K_PROMPT_PARSE_TAG.data();
   if (input.empty()) {
     resetMedia();
     std::string errorMsg = string_format("%s: empty prompt\n", parseTag);
@@ -2137,12 +2123,12 @@ ParsedPromptPayload parsePromptPayload(
     resetMedia();
     std::string errorMsg = string_format(
         "%s: input nests deeper than %zu levels\n", parseTag, K_MAX_JSON_DEPTH);
-    throw qvac_errors::StatusError(
-        ADDON_ID, toString(InvalidInputFormat), errorMsg);
+    throw qvac_errors::StatusError(ADDON_ID, toString(InvalidInputFormat),
+                                   errorMsg);
   }
   ParsedPromptPayload parsed;
-  std::vector<common_chat_msg>& chatMsgs = parsed.chatMsgs;
-  std::vector<common_chat_tool>& tools = parsed.tools;
+  std::vector<common_chat_msg> &chatMsgs = parsed.chatMsgs;
+  std::vector<common_chat_tool> &tools = parsed.tools;
 
   picojson::value chatJson;
   std::string err;
@@ -2157,30 +2143,28 @@ ParsedPromptPayload parsePromptPayload(
     resetMedia();
     std::string errorMsg =
         string_format("%s: input has text after the JSON value\n", parseTag);
-    throw qvac_errors::StatusError(
-        ADDON_ID, toString(InvalidInputFormat), errorMsg);
+    throw qvac_errors::StatusError(ADDON_ID, toString(InvalidInputFormat),
+                                   errorMsg);
   }
-  const auto isObject = [](const picojson::value& item) {
+  const auto isObject = [](const picojson::value &item) {
     return item.is<picojson::object>();
   };
   if (requireObjects && err.empty() &&
       (!chatJson.is<picojson::array>() ||
-       !std::all_of(
-           chatJson.get<picojson::array>().begin(),
-           chatJson.get<picojson::array>().end(),
-           isObject))) {
+       !std::all_of(chatJson.get<picojson::array>().begin(),
+                    chatJson.get<picojson::array>().end(), isObject))) {
     resetMedia();
     std::string errorMsg =
         string_format("%s: input must be a JSON array of objects\n", parseTag);
-    throw qvac_errors::StatusError(
-        ADDON_ID, toString(InvalidInputFormat), errorMsg);
+    throw qvac_errors::StatusError(ADDON_ID, toString(InvalidInputFormat),
+                                   errorMsg);
   }
 
   if (err.empty() && chatJson.is<picojson::array>()) {
-    auto& obj = chatJson.get<picojson::array>();
+    auto &obj = chatJson.get<picojson::array>();
     // Only read for key order, see serializeInCallerOrder.
     const common_json orderedJson = common_json::parse_no_throw(input);
-    const common_json* ordered =
+    const common_json *ordered =
         orderedJson.is_discarded() ? nullptr : &orderedJson;
     if (ordered == nullptr) {
       // picojson accepts input common_json rejects: trailing text after the
@@ -2196,10 +2180,10 @@ ParsedPromptPayload parsePromptPayload(
     int addMediaPlaceholder = 0;
     bool isNextUser = false;
     for (size_t i = 0; i < obj.size(); ++i) {
-      const auto& subObj = obj[i];
+      const auto &subObj = obj[i];
       if (subObj.is<picojson::object>()) {
         picojson::object jsonObj = subObj.get<picojson::object>();
-        const common_json* orderedEntry = orderedChild(ordered, i);
+        const common_json *orderedEntry = orderedChild(ordered, i);
 
         const std::string type =
             optionalString(jsonObj, "type", "type must be a string");
@@ -2223,9 +2207,9 @@ ParsedPromptPayload parsePromptPayload(
 
         common_chat_msg newMsg;
         if (jsonObj.find("role") == jsonObj.end()) {
-          const char* errorMsg = "role is required in the input\n";
-          throw qvac_errors::StatusError(
-              ADDON_ID, toString(NoRoleProvided), errorMsg);
+          const char *errorMsg = "role is required in the input\n";
+          throw qvac_errors::StatusError(ADDON_ID, toString(NoRoleProvided),
+                                         errorMsg);
         }
         newMsg.role = optionalString(jsonObj, "role", "role must be a string");
 
@@ -2235,9 +2219,9 @@ ParsedPromptPayload parsePromptPayload(
         const bool contentMissing = contentIt == jsonObj.end() ||
                                     contentIt->second.is<picojson::null>();
         if (contentMissing && jsonObj.find("tool_calls") == jsonObj.end()) {
-          const char* errorMsg = "content is required in the input\n";
-          throw qvac_errors::StatusError(
-              ADDON_ID, toString(NoContentProvided), errorMsg);
+          const char *errorMsg = "content is required in the input\n";
+          throw qvac_errors::StatusError(ADDON_ID, toString(NoContentProvided),
+                                         errorMsg);
         }
         std::string content;
         if (contentMissing) {
@@ -2250,13 +2234,9 @@ ParsedPromptPayload parsePromptPayload(
             throwInvalidContentPart("media messages require string content");
           }
           try {
-            appendContentParts(
-                contentIt->second.get<picojson::array>(),
-                newMsg.role,
-                isTextLlm,
-                content,
-                parsed.mediaPlan,
-                parsed.mediaPaths);
+            appendContentParts(contentIt->second.get<picojson::array>(),
+                               newMsg.role, isTextLlm, content,
+                               parsed.mediaPlan, parsed.mediaPaths);
           } catch (...) {
             resetMedia();
             throw;
@@ -2265,13 +2245,13 @@ ParsedPromptPayload parsePromptPayload(
           std::string errorMsg = string_format(
               "%s: content must be a string or an array of content parts\n",
               parseTag);
-          throw qvac_errors::StatusError(
-              ADDON_ID, toString(InvalidInputFormat), errorMsg);
+          throw qvac_errors::StatusError(ADDON_ID, toString(InvalidInputFormat),
+                                         errorMsg);
         }
 
         if (type == "media") {
           if (isTextLlm) {
-            const char* errorMsg = "Media not supported by text-only models";
+            const char *errorMsg = "Media not supported by text-only models";
             throw qvac_errors::StatusError(
                 ADDON_ID, toString(MediaNotSupported), errorMsg);
           }
@@ -2295,10 +2275,10 @@ ParsedPromptPayload parsePromptPayload(
         }
         if (newMsg.role != "user" && isNextUser) {
           resetMedia();
-          std::string errorMsg = string_format(
-              "%s: Must append a user question after loading "
-              "media\n",
-              parseTag);
+          std::string errorMsg =
+              string_format("%s: Must append a user question after loading "
+                            "media\n",
+                            parseTag);
           throw qvac_errors::StatusError(
               ADDON_ID, toString(UserMessageNotProvided), errorMsg);
         }
@@ -2332,8 +2312,8 @@ ParsedPromptPayload parsePromptPayload(
     resetMedia();
     std::string errorMsg =
         string_format("%s: Invalid input format: %s\n", parseTag, err.c_str());
-    throw qvac_errors::StatusError(
-        ADDON_ID, toString(InvalidInputFormat), errorMsg);
+    throw qvac_errors::StatusError(ADDON_ID, toString(InvalidInputFormat),
+                                   errorMsg);
   }
   // An earlier answer comes back with its reasoning inline, as the addon
   // streamed it. Qwen's templates cut it out of `content` themselves; others
@@ -2351,8 +2331,8 @@ ParsedPromptPayload parsePromptPayload(
 // Rethrows @p error as calcTokens reports every rejection: `InvalidArgument`,
 // prefixed `calcTokens:` and, when given, the input @p field, instead of the
 // prompt parser's prefix.
-[[noreturn]] void
-throwCountError(const qvac_errors::StatusError& error, const char* field) {
+[[noreturn]] void throwCountError(const qvac_errors::StatusError &error,
+                                  const char *field) {
   std::string_view message = error.what();
   if (message.substr(0, K_PROMPT_PARSE_TAG.size()) == K_PROMPT_PARSE_TAG &&
       message.substr(K_PROMPT_PARSE_TAG.size(), 2) == ": ") {
@@ -2365,91 +2345,75 @@ throwCountError(const qvac_errors::StatusError& error, const char* field) {
                                  ? std::string("calcTokens: ")
                                  : string_format("calcTokens: %s: ", field);
   throw qvac_errors::StatusError(
-      ADDON_ID,
-      toString(qvac_errors::general_error::InvalidArgument),
+      ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
       prefix + std::string(message));
 }
 
 // Parses one calcTokens input, strictly and without touching staged media.
 ParsedPromptPayload parseCountInput(
-    const std::string& json, const char* field, bool isTextLlm,
-    const std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>&
-        reasoningTags) {
+    const std::string &json, const char *field, bool isTextLlm,
+    const std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>
+        &reasoningTags) {
   try {
     // Never resets media: a request running beside this one may have staged
     // it.
     return parsePromptPayload(
-        json,
-        isTextLlm,
-        reasoningTags,
-        [] {},
+        json, isTextLlm, reasoningTags, [] {},
         /* requireObjects = */ true);
-  } catch (const qvac_errors::StatusError& error) {
+  } catch (const qvac_errors::StatusError &error) {
     throwCountError(error, field);
   }
 }
 
 } // namespace
 
-ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
-  return parsePromptPayload(
-      input,
-      state_->isTextLlm_,
-      state_->llmContext_->historyReasoningTags(),
-      [this] { state_->llmContext_->resetMedia(); });
+ParsedPromptPayload LlamaModel::formatPrompt(const std::string &input) {
+  return parsePromptPayload(input, state_->isTextLlm_,
+                            state_->llmContext_->historyReasoningTags(),
+                            [this] { state_->llmContext_->resetMedia(); });
 }
 
-size_t LlamaModel::calcTokens(const CalcTokensRequest& request) const {
+size_t LlamaModel::calcTokens(const CalcTokensRequest &request) const {
   std::shared_lock lock(stateMtx_);
   if (!state_ || !state_->llmContext_) {
     throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(qvac_errors::general_error::InvalidArgument),
+        ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
         "calcTokens: the model is not loaded");
   }
-  LlmContext& context = *state_->llmContext_;
+  LlmContext &context = *state_->llmContext_;
   if (!request.text.has_value() && !request.history.has_value() &&
       !request.tools.has_value()) {
     throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(qvac_errors::general_error::InvalidArgument),
+        ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
         "calcTokens: pass text, history or tools");
   }
   if (!request.history.has_value() && !request.tools.has_value()) {
-    return ::common_tokenize(
-               llama_model_get_vocab(context.getModel()),
-               *request.text,
-               false,
-               true)
+    return ::common_tokenize(llama_model_get_vocab(context.getModel()),
+                             *request.text, false, true)
         .size();
   }
 
   ParsedPromptPayload conversation;
   if (request.history.has_value()) {
-    conversation = parseCountInput(
-        *request.history,
-        "history",
-        state_->isTextLlm_,
-        context.historyReasoningTags());
+    conversation =
+        parseCountInput(*request.history, "history", state_->isTextLlm_,
+                        context.historyReasoningTags());
   }
   if (request.tools.has_value()) {
     ParsedPromptPayload tools = parseCountInput(
         *request.tools, "tools", state_->isTextLlm_, std::nullopt);
     if (!tools.chatMsgs.empty()) {
       throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(qvac_errors::general_error::InvalidArgument),
+          ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
           "calcTokens: tools must hold only function definitions");
     }
-    conversation.tools.insert(
-        conversation.tools.end(),
-        std::make_move_iterator(tools.tools.begin()),
-        std::make_move_iterator(tools.tools.end()));
+    conversation.tools.insert(conversation.tools.end(),
+                              std::make_move_iterator(tools.tools.begin()),
+                              std::make_move_iterator(tools.tools.end()));
   }
   if (!conversation.mediaPlan.empty()) {
     throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(qvac_errors::general_error::InvalidArgument),
+        ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
         "calcTokens: media messages cannot be counted");
   }
   if (request.text.has_value()) {
@@ -2460,13 +2424,12 @@ size_t LlamaModel::calcTokens(const CalcTokensRequest& request) const {
   }
   if (conversation.chatMsgs.empty()) {
     throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(qvac_errors::general_error::InvalidArgument),
+        ADDON_ID, toString(qvac_errors::general_error::InvalidArgument),
         "calcTokens: history and text hold no message to count");
   }
   try {
     return context.countChatTokens(conversation.chatMsgs, conversation.tools);
-  } catch (const qvac_errors::StatusError& error) {
+  } catch (const qvac_errors::StatusError &error) {
     throwCountError(error, nullptr);
   }
 }
@@ -2476,7 +2439,7 @@ void LlamaModel::resetState(bool resetStats) {
 }
 
 std::unique_ptr<LlmContext> LlamaModel::createContext(
-    std::string&& projectionPath, common_params& params,
+    std::string &&projectionPath, common_params &params,
     common_init_result_ptr llamaInit,
     std::unique_ptr<
         qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
@@ -2486,17 +2449,15 @@ std::unique_ptr<LlmContext> LlamaModel::createContext(
     return std::make_unique<MtmdLlmContext>(
         params, std::move(llamaInit), maxImagePixels_, std::move(speculative));
   }
-  return std::make_unique<TextLlmContext>(
-      params, std::move(llamaInit), std::move(speculative));
+  return std::make_unique<TextLlmContext>(params, std::move(llamaInit),
+                                          std::move(speculative));
 }
 
-bool LlamaModel::loadMedia(const std::vector<uint8_t>& input) {
+bool LlamaModel::loadMedia(const std::vector<uint8_t> &input) {
   if (state_->isTextLlm_) {
     QLOG_IF(Priority::ERROR, "Media not supported by text-only models");
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(MediaNotSupported),
-        "Media not supported by text-only models");
+    throw qvac_errors::StatusError(ADDON_ID, toString(MediaNotSupported),
+                                   "Media not supported by text-only models");
   }
   state_->llmContext_->loadMedia(input);
   return true;
@@ -2507,7 +2468,7 @@ bool LlamaModel::isBitnetModel() const {
 }
 
 void LlamaModel::validateBitnetQuantization() {
-  llama_model* mdl = getModel();
+  llama_model *mdl = getModel();
   if (mdl == nullptr) {
     return;
   }

@@ -49,11 +49,12 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import kotlin.random.Random
 
+@Deprecated("Pass media as an ordered QvacContentPart.Media in QvacMessage.user(parts).")
 data class QvacAttachment(val path: String)
 
 /**
  * One ordered piece of a user turn. A [Media] part keeps its place next to the
- * text that refers to it; [QvacMessage.attachments] are always sent before the text.
+ * text that refers to it.
  */
 sealed class QvacContentPart {
     data class Text(val text: String) : QvacContentPart()
@@ -63,12 +64,14 @@ sealed class QvacContentPart {
 /**
  * A history entry. An assistant turn can carry the [toolCalls] it made, and a tool
  * turn the [toolCallId] / [toolName] it answers; the model's chat template renders
- * them in its own tool-call format. A user turn may send ordered [parts] in place
- * of [content] and [attachments].
+ * them in its own tool-call format. A user turn may send ordered text and media
+ * [parts] in place of [content].
  */
+@Suppress("DEPRECATION")
 data class QvacMessage(
     val role: String,
     val content: String,
+    @Deprecated("Pass media as ordered parts with QvacMessage.user(parts).")
     val attachments: List<QvacAttachment> = emptyList(),
     val toolCalls: List<QvacToolCall> = emptyList(),
     val toolCallId: String? = null,
@@ -90,6 +93,14 @@ data class QvacMessage(
 
     companion object {
         fun system(content: String) = QvacMessage("system", content)
+        fun user(content: String) = QvacMessage("user", content)
+
+        @Deprecated(
+            "Pass media as ordered parts.",
+            ReplaceWith(
+                "QvacMessage.user(attachments.map { QvacContentPart.Media(it.path) } + QvacContentPart.Text(content))",
+            ),
+        )
         fun user(content: String, attachments: List<QvacAttachment> = emptyList()) =
             QvacMessage("user", content, attachments)
         fun user(parts: List<QvacContentPart>) = QvacMessage("user", "", parts = parts)
@@ -601,6 +612,7 @@ private fun CompletionStreamResponseEventsItemCompletionStatsStats.toCompletionS
         raw = raw,
     )
 
+@Suppress("DEPRECATION")
 private fun QvacMessage.toStreamItem() = CompletionStreamRequestHistoryItem(
     role = role,
     content = if (parts.isEmpty()) {

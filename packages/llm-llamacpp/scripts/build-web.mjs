@@ -16,7 +16,7 @@ import {
   rmSync,
   writeFileSync
 } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { delimiter, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { validateWebPrebuild } from './validate-web-prebuild.mjs'
 
@@ -79,6 +79,41 @@ async function extract(name, source) {
   return dir
 }
 
+// Fetches one directory from a pinned monorepo commit without downloading the
+// repository's unrelated package history or release assets.
+function extractGitDirectory(name, source) {
+  const dir = join(scratch, 'src', `${name}-${source.tree}`, name)
+  if (existsSync(dir)) return dir
+
+  const repository = join(scratch, 'git', `${name}-${source.commit}`)
+  rmSync(repository, { recursive: true, force: true })
+  mkdirSync(repository, { recursive: true })
+  run('git', ['init', '--quiet'], { cwd: repository })
+  run('git', ['fetch', '--quiet', '--depth=1', '--filter=blob:none', source.url, source.commit], {
+    cwd: repository
+  })
+  const tree = execFileSync('git', ['rev-parse', `FETCH_HEAD:${source.subdir}`], {
+    cwd: repository,
+    encoding: 'utf8'
+  }).trim()
+  if (tree !== source.tree) {
+    throw new Error(`Git tree mismatch for ${source.subdir}: ${tree} != ${source.tree}`)
+  }
+
+  const archive = join(scratch, 'downloads', `${name}-${source.tree}.tar`)
+  mkdirSync(dirname(archive), { recursive: true })
+  run('git', ['archive', '--format=tar', `--output=${archive}`, 'FETCH_HEAD', source.subdir], {
+    cwd: repository
+  })
+  const staging = `${dir}.staging`
+  rmSync(staging, { recursive: true, force: true })
+  mkdirSync(staging, { recursive: true })
+  run('tar', ['-xf', archive, '--strip-components=3', '-C', staging])
+  renameSync(staging, dir)
+  rmSync(repository, { recursive: true, force: true })
+  return dir
+}
+
 function compilerVersion(command, env = process.env) {
   try {
     return execFileSync(command, ['--version'], { encoding: 'utf8', env }).split('\n')[0]
@@ -92,6 +127,18 @@ function emscriptenRoot(command, env) {
   const match = searchDirs.match(/^libraries: =(.+?)[\\/]cache[\\/]sysroot[\\/]/m)
   if (!match) throw new Error(`Unable to locate the Emscripten installation from ${command}`)
   return match[1]
+}
+
+function emsdkEnvironment(emsdk, env) {
+  const config = join(emsdk, '.emscripten')
+  const contents = readFileSync(config, 'utf8')
+  const match = contents.match(/^PYTHON = emsdk_path \+ ['"](.+)['"]$/m)
+  return {
+    ...env,
+    PATH: match ? `${dirname(join(emsdk, match[1]))}${delimiter}${env.PATH ?? ''}` : env.PATH,
+    EM_CONFIG: config,
+    EMSDK: emsdk
+  }
 }
 
 async function emscripten() {
@@ -109,7 +156,7 @@ async function emscripten() {
   const emsdk = await extract('emsdk', lock.emscripten)
   const emcc = join(emsdk, 'upstream', 'emscripten', 'emcc')
   const emcmake = join(emsdk, 'upstream', 'emscripten', 'emcmake')
-  const env = { ...process.env, EM_CONFIG: join(emsdk, '.emscripten'), EMSDK: emsdk }
+  let env = { ...process.env, EM_CONFIG: join(emsdk, '.emscripten'), EMSDK: emsdk }
   let version = compilerVersion(emcc, env)
   if (!version?.includes(` ${lock.emscripten.version} `)) {
     run('python3', [join(emsdk, 'emsdk.py'), 'install', lock.emscripten.version], {
@@ -120,6 +167,7 @@ async function emscripten() {
       cwd: emsdk,
       env
     })
+    env = emsdkEnvironment(emsdk, env)
     version = compilerVersion(emcc, env)
   }
   if (!version?.includes(` ${lock.emscripten.version} `)) {
@@ -132,6 +180,7 @@ async function emscripten() {
 
 const compiler = await emscripten()
 const fabric = await extract('fabric', lock.fabric)
+const inferenceAddonCpp = extractGitDirectory('inference-addon-cpp', lock.inferenceAddonCpp)
 const picojson = await extract('picojson', lock.picojson)
 const concurrentqueue = await extract('concurrentqueue', lock.concurrentqueue)
 const dawnArchive = await download(lock.dawn, `dawn-${lock.dawn.sha256}.zip`)
@@ -168,7 +217,7 @@ for (const variant of VARIANTS) {
       `-DEMDAWNWEBGPU_DIR=${join(dawn, 'emdawnwebgpu_pkg')}`,
       `-DPICOJSON_DIR=${picojson}`,
       `-DCONCURRENTQUEUE_DIR=${concurrentqueue}`,
-      `-DINFERENCE_ADDON_CPP_DIR=${resolve(root, '../inference-addon-cpp/src')}`,
+      `-DINFERENCE_ADDON_CPP_DIR=${inferenceAddonCpp}`,
       `-DOUTPUT_DIR=${output}`
     ],
     { env: compiler.env }

@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import npmCommand from './npm-command.cjs'
 
 const variants = ['llm-llamacpp', 'llm-llamacpp-64']
 
@@ -49,10 +50,12 @@ export function validatePackFiles(packResult) {
 
 export function validateWebPrebuild(root, output) {
   validateEngineFiles(output)
-  const packResult = execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
-    cwd: root,
-    encoding: 'utf8'
-  })
+  const { command, prefix } = npmCommand()
+  const packResult = execFileSync(
+    command,
+    [...prefix, 'pack', '--dry-run', '--json', '--ignore-scripts'],
+    { cwd: root, encoding: 'utf8' }
+  )
   validatePackFiles(packResult)
 }
 

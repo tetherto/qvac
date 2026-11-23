@@ -545,6 +545,7 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
   private readonly _rejectWhenBusy: boolean;
   private readonly _jobSinks: Map<number, JobSink>;
   private readonly _batchHandler: BatchHandler;
+  private readonly _pendingCleanup: Set<LlamaInterface>;
   private _checkpointSaveDir: string | null;
 
   constructor({ files, config, logger = null, opts = {} }: LlmLlamacppArgs) {
@@ -570,6 +571,7 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
     this._finetuneJob = createJobHandler({ cancel: () => this.addon?.cancel() });
     this._run = exclusiveRunQueue() as RunExclusive;
     this.addon = null;
+    this._pendingCleanup = new Set();
     this._checkpointSaveDir = null;
     // Concurrency is the caller's configured `parallel` (n_seq_max); values
     // >= 2 enable multi-job routing. Fixed for the model's lifetime, so it is
@@ -637,10 +639,13 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
       this.logger.error("Error during model load:", loadError);
       // Best-effort cleanup of the partially-initialized addon so a subsequent
       // load() does not leak a zombie native instance.
+      const partialAddon = this.addon;
       try {
-        await this.addon?.unload?.();
-      } catch {}
-      this.addon = null;
+        await partialAddon?.unload?.();
+      } catch {
+        if (partialAddon) this._pendingCleanup.add(partialAddon);
+      }
+      if (this.addon === partialAddon) this.addon = null;
       throw loadError;
     }
     this.logger.info("Model load completed successfully");
@@ -1051,13 +1056,28 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
         // Native cleanup is unconditional: whatever settlement does, the
         // addon must be released and the instance left cleanly unloaded.
         this._jobSinks.clear();
-        if (this.addon) {
-          await this.addon.unload();
-          // Null the addon reference so post-unload `cancel()` / `run()` calls hit the
-          // `if (!this.addon)` guard instead of dereferencing a disposed native handle.
-          this.addon = null;
+        const currentAddon = this.addon;
+        const cleanup = new Set(this._pendingCleanup);
+        if (currentAddon) cleanup.add(currentAddon);
+        this._pendingCleanup.clear();
+        let cleanupError: Error | null = null;
+        try {
+          for (const addon of cleanup) {
+            try {
+              await addon.unload();
+            } catch (error) {
+              this._pendingCleanup.add(addon);
+              cleanupError ??= error instanceof Error ? error : new Error(String(error));
+            }
+          }
+        } finally {
+          // Reset JavaScript state even when native cleanup reports an error.
+          // A later load must create a new addon instead of reusing a disposed
+          // or partially destroyed handle.
+          if (this.addon === currentAddon) this.addon = null;
+          this.state.configLoaded = false;
         }
-        this.state.configLoaded = false;
+        if (cleanupError) throw cleanupError;
       }
     });
   }
@@ -1389,16 +1409,16 @@ namespace LlmLlamacpp {
      * single response active at a time, batching disabled).
      *
      * Cost: `parallel` is a real resource commitment, sized upfront so a busy
-     * server is ready to serve at full concurrency with no warm-up. It sizes
-     * the native scheduler's worker pool one-to-one — that many OS threads are
-     * created at load and held for the model's lifetime, idle or not — and the
-     * KV cache is split evenly across the slots (each gets `ctx_size /
-     * parallel` tokens). Size it to the concurrency you actually intend to
-     * serve, not to a generous upper bound.
+     * server is ready to serve at full concurrency with no warm-up. The KV
+     * cache is split evenly across the slots (each gets `ctx_size / parallel`
+     * tokens). Native builds drive those slots from the scheduler's background
+     * worker; the no-thread browser build advances the same scheduler
+     * cooperatively between event-loop turns. Size it to the concurrency you
+     * actually intend to serve, not to a generous upper bound.
      *
      * Range `1..256`. The upper bound is the engine's own sequence limit
      * (`LLAMA_MAX_SEQ`): a larger value is rejected up front rather than
-     * spawning its whole thread pool and then failing the model load with a
+     * allocating an invalid slot layout and then failing the model load with a
      * generic error. `ctx_size / parallel` must also leave at least one token
      * per slot, so a `parallel` too large for the context is refused as an
      * `InvalidArgument` naming both knobs.

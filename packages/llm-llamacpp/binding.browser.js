@@ -24,11 +24,12 @@ let logCallback = null
 // call), so every native call goes through this chain in order.
 let queue = Promise.resolve()
 let queuedCalls = 0
+let legacyActiveJobs = 0
 let mountCount = 0
 let pumpRunning = false
 let pumpScheduled = false
 let pumpCursor = 0
-const instances = new Map()
+const engines = new Set()
 
 function log(line, fallback) {
   const match = /^\[(ERROR|WARNING|INFO|DEBUG)\]: ?([\s\S]*)$/.exec(line)
@@ -37,13 +38,17 @@ function log(line, fallback) {
   if (logCallback && message.trim() !== '') logCallback(priority, message)
 }
 
-const loadModule = retryableModule(() =>
-  createEngine({
+const loadEngine = retryableModule(async () => {
+  const engine = { module: null, handles: new Set(), instances: new Map(), failure: null }
+  engine.module = await createEngine({
     print: (line) => log(line, LOG_PRIORITY.INFO),
     printErr: (line) => log(line, LOG_PRIORITY.WARNING),
-    qvacEmit: (handle, jobId, event, payload) => emit(handle, jobId, event, payload)
+    qvacEmit: (handle, jobId, event, payload) => emit(engine, handle, jobId, event, payload),
+    qvacCancelled: (handle, jobId) => isCancelled(engine, handle, jobId)
   })
-)
+  engines.add(engine)
+  return engine
+})
 
 function enqueue(task) {
   queuedCalls++
@@ -59,30 +64,51 @@ function serializeHandle(handle, task) {
   return result
 }
 
-function emit(handle, jobId, event, payload) {
-  const instance = instances.get(handle)
+function emit(engine, handle, jobId, event, payload) {
+  const instance = engine.instances.get(handle)
   if (!instance) return 1
   const job = instance.jobs.get(jobId)
   if (!job) return 1
-  if (event === 'JobEnded' || event === 'Error') job.ended = true
-  try {
-    if (event === 'Output') {
-      instance.outputCb(instance.owner, 'Output', payload, null, jobId)
-    } else if (event === 'BatchOutput') {
-      // Match the native binding: streaming batch chunks route by their
-      // per-prompt string id, while only terminal group events carry jobId.
-      instance.outputCb(instance.owner, 'BatchOutput', JSON.parse(payload), null, undefined)
-    } else if (event === 'BatchResult') {
-      instance.outputCb(instance.owner, 'BatchResult', JSON.parse(payload), null, jobId)
-    } else if (event === 'JobEnded') {
-      instance.outputCb(instance.owner, 'JobEnded', JSON.parse(payload), null, jobId)
-    } else if (event === 'Error') {
-      instance.outputCb(instance.owner, 'Error', null, engineError(payload), jobId)
+  if (event === 'Output' || event === 'BatchOutput') {
+    try {
+      if (event === 'Output') {
+        instance.outputCb(instance.owner, 'Output', payload, null, jobId)
+      } else {
+        // Match the native binding: streaming batch chunks route by their
+        // per-prompt string id, while only terminal group events carry jobId.
+        instance.outputCb(instance.owner, 'BatchOutput', JSON.parse(payload), null, undefined)
+      }
+    } catch (error) {
+      job.callbackError = error
+      job.cancelled = true
     }
-  } catch (error) {
-    job.cancelled = true
+  } else if (event === 'BatchResult') {
+    job.terminals.push({ event, data: JSON.parse(payload), error: null })
+  } else if (event === 'JobEnded') {
+    job.ended = true
+    job.terminals.push({ event, data: JSON.parse(payload), error: null })
+  } else if (event === 'Error') {
+    job.ended = true
+    job.terminals.push({ event, data: null, error: engineError(payload) })
   }
   return job.cancelled ? 1 : 0
+}
+
+function isCancelled(engine, handle, jobId) {
+  return engine.instances.get(handle)?.jobs.get(jobId)?.cancelled === true
+}
+
+function deliverTerminals(handle, id, job) {
+  const terminals = job.callbackError
+    ? [{ event: 'Error', data: null, error: job.callbackError }]
+    : job.terminals.length > 0
+      ? job.terminals
+      : [{ event: 'Error', data: null, error: new Error('Job cancelled') }]
+  for (const terminal of terminals) {
+    try {
+      handle.outputCb(handle.owner, terminal.event, terminal.data, terminal.error, id)
+    } catch {}
+  }
 }
 
 function engineError(payload) {
@@ -104,19 +130,58 @@ function check(module, status) {
   return status
 }
 
-async function call(name, types, args, prepare) {
-  const module = await loadModule()
-  if (prepare) prepare(module)
-  const status = await module.ccall(name, 'number', types, args, {
-    async: true
-  })
-  return check(module, status)
+function engineFailure(error) {
+  const failure = new Error('The WebAssembly engine terminated and this model must be loaded again')
+  failure.cause = error
+  return failure
 }
 
-async function callSync(name, types, args, prepare) {
-  const module = await loadModule()
-  if (prepare) prepare(module)
-  return check(module, module.ccall(name, 'number', types, args))
+function poison(engine, error) {
+  if (!engine.failure) {
+    engine.failure = engineFailure(error)
+    for (const handle of engine.handles) handle.failure = engine.failure
+    engine.instances.clear()
+  }
+  loadEngine.reset()
+}
+
+function isFatalWasmError(error) {
+  return error instanceof WebAssembly.RuntimeError || error?.name === 'RuntimeError'
+}
+
+function usableEngine(handle) {
+  if (handle.failure) throw handle.failure
+  if (!handle.engine) throw new Error('Model is not loaded')
+  return handle.engine
+}
+
+async function call(handle, name, types, args, prepare) {
+  const engine = usableEngine(handle)
+  const { module } = engine
+  try {
+    if (prepare) prepare(module)
+    const status = await module.ccall(name, 'number', types, args, { async: true })
+    return check(module, status)
+  } catch (error) {
+    if (isFatalWasmError(error)) poison(engine, error)
+    throw error
+  }
+}
+
+function callSync(handle, name, types, args, prepare) {
+  const engine = usableEngine(handle)
+  const { module } = engine
+  try {
+    if (prepare) prepare(module)
+    return check(module, module.ccall(name, 'number', types, args))
+  } catch (error) {
+    if (isFatalWasmError(error)) poison(engine, error)
+    throw error
+  }
+}
+
+function validateJob(handle, messages) {
+  return callSync(handle, 'qvac_web_validate', ['number', 'string'], [handle.native, messages])
 }
 
 // Mounts one model, including all sibling GGUF shards, read-only and returns
@@ -143,13 +208,17 @@ function createInstance(owner, configurationParams, outputCb) {
     params: configurationParams,
     native: 0,
     jobs: new Map(),
+    pendingAdmissions: new Set(),
     nextJobId: 1,
+    nextCacheOperationId: 1,
     active: 0,
     activeSlots: 0,
     cooperative: false,
-    closing: false,
+    destroying: false,
     control: Promise.resolve(),
-    mounts: []
+    mounts: [],
+    engine: null,
+    failure: null
   }
   return handle
 }
@@ -157,23 +226,31 @@ function createInstance(owner, configurationParams, outputCb) {
 function activate(handle) {
   return serializeHandle(handle, () =>
     enqueue(async () => {
-      const module = await loadModule()
       const { config } = handle.params
       handle.cooperative = config?.parallel !== undefined && Number(config.parallel) > 1
-      const files = await mountLoadFiles(handle.params, (filePath) =>
-        mount(module, handle, filePath)
-      )
-      handle.native = check(
-        module,
-        module.ccall(
-          'qvac_web_create',
-          'number',
-          ['string', 'string', 'string'],
-          [files.modelPath, files.projectionPath, JSON.stringify(files.config)]
+      const engine = await loadEngine()
+      handle.engine = engine
+      engine.handles.add(handle)
+      const { module } = engine
+      try {
+        const files = await mountLoadFiles(handle.params, (filePath) =>
+          mount(module, handle, filePath)
         )
-      )
-      instances.set(handle.native, handle)
-      await call('qvac_web_activate', ['number'], [handle.native])
+        handle.native = check(
+          module,
+          module.ccall(
+            'qvac_web_create',
+            'number',
+            ['string', 'string', 'string'],
+            [files.modelPath, files.projectionPath, JSON.stringify(files.config)]
+          )
+        )
+        engine.instances.set(handle.native, handle)
+        await call(handle, 'qvac_web_activate', ['number'], [handle.native])
+      } catch (error) {
+        if (isFatalWasmError(error)) poison(engine, error)
+        throw error
+      }
     })
   )
 }
@@ -205,7 +282,7 @@ function stageMedia(module, handle, id, media) {
   }
 }
 
-function createJob(handle, id) {
+function createJob(handle, id, legacy = false, reserved = false) {
   let resolveSettled
   const settled = new Promise((resolve) => {
     resolveSettled = resolve
@@ -213,11 +290,15 @@ function createJob(handle, id) {
   const job = {
     cancelled: false,
     ended: false,
+    terminals: [],
+    callbackError: null,
+    legacy,
     settled,
     resolveSettled
   }
   handle.jobs.set(id, job)
   handle.active++
+  if (legacy && !reserved) legacyActiveJobs++
   return job
 }
 
@@ -231,18 +312,18 @@ function allocateJobId(handle) {
   throw new Error('No browser job ids are available')
 }
 
-function finishJob(handle, id, fallbackError = null) {
+function finishJob(handle, id, fallbackError = null, deliver = true) {
   const job = handle.jobs.get(id)
   if (!job) return
   if (!job.ended && fallbackError) {
     job.ended = true
-    try {
-      handle.outputCb(handle.owner, 'Error', null, fallbackError, id)
-    } catch {}
+    job.terminals.push({ event: 'Error', data: null, error: fallbackError })
   }
   handle.jobs.delete(id)
   handle.active--
+  if (job.legacy) legacyActiveJobs--
   job.resolveSettled()
+  if (deliver) deliverTerminals(handle, id, job)
 }
 
 function cleanupEnded(handle) {
@@ -252,9 +333,13 @@ function cleanupEnded(handle) {
 }
 
 function cooperativeHandles() {
-  return [...instances.values()].filter(
-    (handle) => handle.cooperative && handle.native !== 0 && handle.jobs.size > 0
-  )
+  const handles = []
+  for (const engine of engines) {
+    for (const handle of engine.handles) {
+      if (handle.cooperative && handle.native !== 0 && handle.jobs.size > 0) handles.push(handle)
+    }
+  }
+  return handles
 }
 
 function schedulePump() {
@@ -277,8 +362,13 @@ async function runPump() {
       pumpCursor = (pumpCursor + 1) % Math.max(handles.length, 1)
       try {
         await enqueue(async () => {
-          await call('qvac_web_step', ['number'], [handle.native])
-          handle.activeSlots = await callSync('qvac_web_active_slots', ['number'], [handle.native])
+          await call(handle, 'qvac_web_step', ['number'], [handle.native])
+          handle.activeSlots = callSync(
+            handle,
+            'qvac_web_active_slots',
+            ['number'],
+            [handle.native]
+          )
         })
         cleanupEnded(handle)
       } catch (error) {
@@ -294,11 +384,12 @@ async function runPump() {
 }
 
 function runLegacyJob(handle, id, job, prepared) {
-  enqueue(async () => {
+  const execution = enqueue(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     try {
       if (!job.cancelled) {
         await call(
+          handle,
           'qvac_web_run',
           ['number', 'number', 'string'],
           [handle.native, id, prepared.json],
@@ -311,42 +402,50 @@ function runLegacyJob(handle, id, job, prepared) {
     } catch (error) {
       if (!job.ended) {
         job.ended = true
-        try {
-          handle.outputCb(handle.owner, 'Error', null, error, id)
-        } catch {}
+        job.terminals.push({ event: 'Error', data: null, error })
       }
-    } finally {
-      if (!job.ended) {
-        job.ended = true
-        try {
-          handle.outputCb(handle.owner, 'Error', null, new Error('Job cancelled'), id)
-        } catch {}
-      }
-      finishJob(handle, id)
     }
   })
+  execution.then(() => finishJob(handle, id))
 }
 
 function runJob(handle, data) {
-  if (handle.closing) return Promise.reject(new Error('Model is being unloaded'))
+  if (handle.destroying) return Promise.reject(new Error('Model is not loaded'))
   const isBatch = data.length > 0 && Array.isArray(data[0].messages)
   if (isBatch && !handle.cooperative) {
     return Promise.reject(new Error('Batch run() requires the model loaded with parallel >= 2'))
   }
   const prepared = prepareRunData(data)
-  const id = allocateJobId(handle)
-  const job = createJob(handle, id)
+  if (!handle.cooperative && legacyActiveJobs > 0) return Promise.reject(busyError())
   if (!handle.cooperative) {
+    const pending = { cancelled: false }
+    handle.pendingAdmissions.add(pending)
+    legacyActiveJobs++
     return serializeHandle(handle, () => {
+      try {
+        if (pending.cancelled || handle.destroying) throw new Error('Job cancelled')
+        validateJob(handle, prepared.json)
+      } catch (error) {
+        handle.pendingAdmissions.delete(pending)
+        legacyActiveJobs--
+        throw error
+      }
+      handle.pendingAdmissions.delete(pending)
+      const id = allocateJobId(handle)
+      const job = createJob(handle, id, true, true)
       runLegacyJob(handle, id, job, prepared)
       return { accepted: true, id }
     })
   }
 
+  const id = allocateJobId(handle)
+  const job = createJob(handle, id)
+
   return serializeHandle(handle, () =>
     enqueue(async () => {
       try {
         await callSync(
+          handle,
           'qvac_web_submit',
           ['number', 'number', 'number', 'string'],
           [handle.native, id, isBatch ? 1 : 0, prepared.json],
@@ -356,11 +455,11 @@ function runJob(handle, data) {
           }
         )
         if (job.cancelled) {
-          await callSync('qvac_web_cancel_job', ['number', 'number'], [handle.native, id])
+          callSync(handle, 'qvac_web_cancel_job', ['number', 'number'], [handle.native, id])
         }
-        handle.activeSlots = await callSync('qvac_web_active_slots', ['number'], [handle.native])
+        handle.activeSlots = callSync(handle, 'qvac_web_active_slots', ['number'], [handle.native])
       } catch (error) {
-        finishJob(handle, id)
+        finishJob(handle, id, null, false)
         throw error
       }
       schedulePump()
@@ -375,32 +474,99 @@ async function cancelJob(handle, id) {
   if (!job) return
   job.cancelled = true
   if (handle.cooperative && handle.native) {
-    await enqueue(() => callSync('qvac_web_cancel_job', ['number', 'number'], [handle.native, id]))
+    await enqueue(() =>
+      callSync(handle, 'qvac_web_cancel_job', ['number', 'number'], [handle.native, id])
+    )
     schedulePump()
   }
   await job.settled
 }
 
 function cancel(handle) {
+  for (const pending of handle.pendingAdmissions) pending.cancelled = true
   const ids = [...handle.jobs.keys()]
   return Promise.all(ids.map((id) => cancelJob(handle, id))).then(() => {})
 }
 
+function cacheOperation(handle, cacheKey, discard) {
+  if (!handle.cooperative) {
+    return enqueue(() =>
+      call(
+        handle,
+        discard ? 'qvac_web_discard_cache' : 'qvac_web_save_cache',
+        ['number', 'string'],
+        [handle.native, cacheKey],
+        discard ? undefined : (module) => ensureParentDirectory(module, cacheKey)
+      )
+    )
+  }
+  return serializeHandle(handle, async () => {
+    const operationId = handle.nextCacheOperationId++
+    await enqueue(() => {
+      const module = usableEngine(handle).module
+      if (!discard) ensureParentDirectory(module, cacheKey)
+      callSync(
+        handle,
+        'qvac_web_cache_request',
+        ['number', 'number', 'string', 'number'],
+        [handle.native, operationId, cacheKey, discard ? 1 : 0]
+      )
+    })
+    schedulePump()
+    while (true) {
+      const status = await enqueue(() =>
+        callSync(handle, 'qvac_web_cache_poll', ['number', 'number'], [handle.native, operationId])
+      )
+      if (status === 0) return
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+  })
+}
+
 // Queued behind any running job, so the job still emits its terminal event.
 function destroyInstance(handle) {
-  handle.closing = true
+  handle.destroying = true
+  if (
+    !handle.native &&
+    handle.mounts.length === 0 &&
+    handle.jobs.size === 0 &&
+    handle.pendingAdmissions.size === 0
+  ) {
+    handle.engine?.handles.delete(handle)
+    handle.engine = null
+    return Promise.resolve()
+  }
   return cancel(handle).then(() =>
     serializeHandle(handle, () =>
-      enqueue(async () => {
+      enqueue(() => {
         // Read the resources only after earlier queued work has settled. In
         // particular, unload may be requested while activate() is still creating
         // the native instance and mounting its files.
+        const engine = handle.engine
         const native = handle.native
+        if (native && !handle.failure) {
+          try {
+            callSync(handle, 'qvac_web_destroy', ['number'], [native])
+          } catch (error) {
+            if (!handle.failure) throw error
+          }
+        }
         handle.native = 0
-        instances.delete(native)
-        if (native) await callSync('qvac_web_destroy', ['number'], [native])
-        const module = await loadModule()
-        unmountModelFiles(module, handle.mounts)
+        engine?.instances.delete(native)
+        let cleanupError = null
+        const module = engine?.module
+        if (module) {
+          try {
+            unmountModelFiles(module, handle.mounts)
+          } catch (error) {
+            if (!handle.failure) cleanupError = error
+            if (handle.failure) handle.mounts.length = 0
+          }
+        }
+        if (cleanupError) throw cleanupError
+        engine?.handles.delete(handle)
+        if (engine?.handles.size === 0) engines.delete(engine)
+        handle.engine = null
       })
     )
   )
@@ -416,30 +582,17 @@ module.exports = {
   activeJobs: (handle) => handle.active,
   activeSlots: (handle) => handle.activeSlots,
   assessFit: () => unsupported('assessFit'),
-  saveCache: (handle, cacheKey) => {
-    const jobs = [...handle.jobs.values()].map((job) => job.settled)
-    return serializeHandle(handle, async () => {
-      await Promise.all(jobs)
-      return enqueue(() =>
-        callSync('qvac_web_save_cache', ['number', 'string'], [handle.native, cacheKey], (module) =>
-          ensureParentDirectory(module, cacheKey)
-        )
-      )
-    })
-  },
-  discardCache: (handle, cacheKey) => {
-    const jobs = [...handle.jobs.values()].map((job) => job.settled)
-    return serializeHandle(handle, async () => {
-      await Promise.all(jobs)
-      return enqueue(() =>
-        callSync('qvac_web_discard_cache', ['number', 'string'], [handle.native, cacheKey])
-      )
-    })
-  },
+  saveCache: (handle, cacheKey) => cacheOperation(handle, cacheKey, false),
+  discardCache: (handle, cacheKey) => cacheOperation(handle, cacheKey, true),
   calcTokens: (handle, params) => {
     if (queuedCalls > 0 || handle.active > 0) return Promise.reject(busyError())
     return enqueue(() =>
-      call('qvac_web_calc_tokens', ['number', 'string'], [handle.native, JSON.stringify(params)])
+      call(
+        handle,
+        'qvac_web_calc_tokens',
+        ['number', 'string'],
+        [handle.native, JSON.stringify(params)]
+      )
     )
   },
   setLogger: (callback) => {
@@ -447,5 +600,9 @@ module.exports = {
   },
   releaseLogger: () => {
     logCallback = null
+  },
+  _setEngineFactoryForTest: (factory) => {
+    createEngine.setFactory(factory)
+    loadEngine.reset()
   }
 }

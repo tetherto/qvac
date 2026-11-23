@@ -55,8 +55,8 @@ namespace qvac_lib_inference_addon_llama::batching {
 /// persist cache MUST skip `saveCache` when this returns `false` so a
 /// failed rollback cannot leak the request into the on-disk cache.
 [[nodiscard]] bool finalizeTerminalDriver(
-    SequenceDriver& driver, StopReason reason, bool prefillOnly,
-    const std::function<void(const std::string&)>& outputCallback);
+    SequenceDriver &driver, StopReason reason, bool prefillOnly,
+    const std::function<void(const std::string &)> &outputCallback);
 
 /// Whether prompt + generation budget overruns the per-sequence cap at
 /// admission. `promptSize` is the position span and `promptKvSize` the KV-cell
@@ -64,9 +64,9 @@ namespace qvac_lib_inference_addon_llama::batching {
 /// KV-cell span is the binding quantity that must also leave room for
 /// `nPredict`. `nPredict <= 0` means "no scheduler cap" (the batcher's ceiling
 /// governs), so the budget is never exceeded in that case.
-[[nodiscard]] bool generationBudgetExceeded(
-    unsigned promptSize, unsigned promptKvSize, int nPredict,
-    unsigned perSeqMaxTokens);
+[[nodiscard]] bool generationBudgetExceeded(unsigned promptSize,
+                                            unsigned promptKvSize, int nPredict,
+                                            unsigned perSeqMaxTokens);
 
 /// Observed end-to-end figures for one finished request, computed from its
 /// wall-clock stamps at drain. This is what the submitting caller experienced
@@ -104,7 +104,7 @@ struct ObservedRequestStats {
 /// the caller handed the request to the scheduler (queue wait included).
 /// @p stopReason is the finalized driver's reason, when it is known.
 [[nodiscard]] ObservedRequestStats computeObservedStats(
-    std::chrono::steady_clock::time_point enqueuedAt, const Request& req,
+    std::chrono::steady_clock::time_point enqueuedAt, const Request &req,
     std::optional<GenerationStopReason> stopReason = std::nullopt);
 
 /// Group-level view of one submitted batch: TTFT and rate average across the
@@ -113,7 +113,7 @@ struct ObservedRequestStats {
 /// survives only when every request agrees (so a one-item group keeps its
 /// reason); a mixed group reports none rather than picking a winner.
 [[nodiscard]] ObservedRequestStats
-aggregateObservedStats(const std::vector<ObservedRequestStats>& all);
+aggregateObservedStats(const std::vector<ObservedRequestStats> &all);
 
 /// The never-matching admission id: no slot is ever stamped with it, so a
 /// cancel carrying it is always a no-op. Real admission ids start at 1.
@@ -122,7 +122,7 @@ inline constexpr uint64_t K_UNKNOWN_ADMISSION_ID = 0;
 /// Per-request streaming sinks. All are optional; missing callbacks
 /// are no-ops.
 struct StreamCallbacks {
-  std::function<void(uint32_t seqId, const std::string& text)> onToken;
+  std::function<void(uint32_t seqId, const std::string &text)> onToken;
   std::function<void(uint32_t seqId)> onDone;
   /// Fired once when the request is admitted into a slot, before that slot
   /// decodes anything. Runs with the scheduler lock held (on the worker
@@ -170,8 +170,8 @@ struct SubmitRequest {
       std::chrono::steady_clock::now();
 };
 
-using SchedulerDecodeFunc = std::function<int(llama_context*, llama_batch&)>;
-using SchedulerSynchronizeFunc = std::function<void(llama_context*)>;
+using SchedulerDecodeFunc = std::function<int(llama_context *, llama_batch &)>;
+using SchedulerSynchronizeFunc = std::function<void(llama_context *)>;
 
 struct TimedDecodeResult {
   int rc = 0;
@@ -180,9 +180,10 @@ struct TimedDecodeResult {
 
 /// Time one scheduler decode step through backend completion: llama_decode can
 /// run asynchronously, so synchronize before recording time or mutating state.
-[[nodiscard]] TimedDecodeResult timeDecodeStep(
-    llama_context* ctx, llama_batch& batch, const SchedulerDecodeFunc& decode,
-    const SchedulerSynchronizeFunc& synchronize);
+[[nodiscard]] TimedDecodeResult
+timeDecodeStep(llama_context *ctx, llama_batch &batch,
+               const SchedulerDecodeFunc &decode,
+               const SchedulerSynchronizeFunc &synchronize);
 
 /// Aggregated per-scheduler runtime stats. `avgConcurrentSeq`/`elapsedMs`
 /// are derived getters computed from live state, not stored.
@@ -198,21 +199,21 @@ struct RuntimeStatsSnapshot {
   /// prefill+decode steps are split proportionally by token count between
   /// the prefill and decode buckets, so batch TTFT / ppTPS reflect the
   /// prompt work that piggybacks a decode step during continuous batching.
-  void recordDecodeStep(
-      uint64_t numActiveSequences, uint64_t prefillTokens,
-      uint64_t decodeTokens, std::chrono::nanoseconds stepDuration);
+  void recordDecodeStep(uint64_t numActiveSequences, uint64_t prefillTokens,
+                        uint64_t decodeTokens,
+                        std::chrono::nanoseconds stepDuration);
 
   /// Fold one completed slot's contribution into the running totals. Every
   /// counter is required: a defaulted one would let a future caller drop a
   /// stat silently, with no compile error.
-  void accumulateSlot(int64_t nPast, int64_t toolsDropped, const Request& req);
+  void accumulateSlot(int64_t nPast, int64_t toolsDropped, const Request &req);
 
   /// Speculative steps feed the sample plus a draft but stream only the
   /// accepted tokens, and spend time drafting outside `llama_decode`.
   /// `tokenDelta` (streamed minus fed, <= 0) and `draftDuration` correct
   /// the decode bucket so `TPS` stays streamed tokens per second.
-  void recordSpeculativeStep(
-      int64_t tokenDelta, std::chrono::nanoseconds draftDuration);
+  void recordSpeculativeStep(int64_t tokenDelta,
+                             std::chrono::nanoseconds draftDuration);
 
   /// Speculative counters of every slot folded in this epoch.
   qvac_lib_inference_addon_llama::speculative::SpeculativeStats speculative;
@@ -281,7 +282,7 @@ struct BatchResult {
 /// factory, so the scheduler depends on no concrete driver type. `params`
 /// already carries the merged per-request sampling overrides.
 using DriverFactory = std::function<std::unique_ptr<SequenceDriver>(
-    const common_params& params, uint32_t seqId, llama_pos perSeqCtxCeiling)>;
+    const common_params &params, uint32_t seqId, llama_pos perSeqCtxCeiling)>;
 
 /// Continuous-batching driver: owns the underlying `MultiRequestBatcher`,
 /// per-slot `common_sampler` + UTF-8 buffers, and the production wiring
@@ -322,10 +323,11 @@ public:
                            DriverFactory driverFactory,
                            DriveMode driveMode = DriveMode::BackgroundThread);
 
-  ContinuousBatchScheduler(const ContinuousBatchScheduler&) = delete;
-  ContinuousBatchScheduler& operator=(const ContinuousBatchScheduler&) = delete;
-  ContinuousBatchScheduler(ContinuousBatchScheduler&&) = delete;
-  ContinuousBatchScheduler& operator=(ContinuousBatchScheduler&&) = delete;
+  ContinuousBatchScheduler(const ContinuousBatchScheduler &) = delete;
+  ContinuousBatchScheduler &
+  operator=(const ContinuousBatchScheduler &) = delete;
+  ContinuousBatchScheduler(ContinuousBatchScheduler &&) = delete;
+  ContinuousBatchScheduler &operator=(ContinuousBatchScheduler &&) = delete;
 
   ~ContinuousBatchScheduler();
 
@@ -335,8 +337,8 @@ public:
   /// `cancelGroupQueued` for as long as this call is on the stack; the tag must
   /// be unique among live groups and is forgotten when the call returns. Pass 0
   /// for an untargetable group.
-  [[nodiscard]] BatchResult
-  processBatch(std::vector<SubmitRequest>&& requests, uint64_t groupTag = 0);
+  [[nodiscard]] BatchResult processBatch(std::vector<SubmitRequest> &&requests,
+                                         uint64_t groupTag = 0);
 
   /// Queue a tagged group without starting the scheduler thread. The caller
   /// drives it with `stepCooperative()` and takes the terminal result with
@@ -372,7 +374,7 @@ public:
   /// `prompt + n_predict` exceeding the per-sequence cap. Caller is
   /// responsible for tearing down already-admitted slots (e.g. via
   /// `clear()`) when admitting a batch and any one request fails.
-  [[nodiscard]] uint32_t submit(SubmitRequest&& request);
+  [[nodiscard]] uint32_t submit(SubmitRequest &&request);
 
   [[nodiscard]] bool hasWork() const;
 
@@ -464,13 +466,21 @@ public:
   /// steps, after any request running on that key has finished, so it always
   /// writes a committed state. Blocks until done; a failed write throws
   /// `UnableToSaveSessionFile` and keeps the conversation, still unsaved.
-  SlotStateCache::SaveOutcome saveConversation(const std::string& cacheKey);
+  SlotStateCache::SaveOutcome saveConversation(const std::string &cacheKey);
+
+  /// No-thread equivalent used by browser cooperative driving. Queues the
+  /// operation and lets stepCooperative() service it before admitting a
+  /// queued request on the same key.
+  std::future<SlotStateCache::SaveOutcome>
+  enqueueSaveConversation(const std::string &cacheKey);
 
   /// The caller's explicit discard (`discardCache`): drops the conversation
   /// kept for `cacheKey` (parked sequence, RAM-tier entry, checkpoints)
   /// without writing it. Ordered like `saveConversation`: it waits for a
   /// request running on that key. Blocks until done.
-  void discardConversation(const std::string& cacheKey);
+  void discardConversation(const std::string &cacheKey);
+  std::future<SlotStateCache::SaveOutcome>
+  enqueueDiscardConversation(const std::string &cacheKey);
 
   /// Sequences that hold a parked conversation (a committed keyed request's
   /// state kept for the next request on its `cacheKey`).
@@ -503,7 +513,7 @@ public:
   using DecodeFunc = SchedulerDecodeFunc;
   using SynchronizeFunc = SchedulerSynchronizeFunc;
   using EvalMediaFunc =
-      std::function<llama_pos(SequenceDriver&, size_t, llama_pos)>;
+      std::function<llama_pos(SequenceDriver &, size_t, llama_pos)>;
 
 private:
   // Test peer (global namespace) sets decodeFunc_ and evalMediaFunc_ directly.
@@ -522,9 +532,8 @@ private:
   /// both ends.
   class StepUnlockGuard {
   public:
-    StepUnlockGuard(
-        ContinuousBatchScheduler& scheduler,
-        std::unique_lock<std::mutex>* lock);
+    StepUnlockGuard(ContinuousBatchScheduler &scheduler,
+                    std::unique_lock<std::mutex> *lock);
     /// `noexcept`, although re-acquiring `mutex_` is not. The only exception
     /// that step can raise is the `std::system_error` `std::mutex::lock()` is
     /// permitted to throw on an unrecoverable lock failure -- i.e. the OS
@@ -536,14 +545,14 @@ private:
     /// instead -- a clean stop at the point of failure rather than UB
     /// downstream.
     ~StepUnlockGuard() noexcept;
-    StepUnlockGuard(const StepUnlockGuard&) = delete;
-    StepUnlockGuard& operator=(const StepUnlockGuard&) = delete;
-    StepUnlockGuard(StepUnlockGuard&&) = delete;
-    StepUnlockGuard& operator=(StepUnlockGuard&&) = delete;
+    StepUnlockGuard(const StepUnlockGuard &) = delete;
+    StepUnlockGuard &operator=(const StepUnlockGuard &) = delete;
+    StepUnlockGuard(StepUnlockGuard &&) = delete;
+    StepUnlockGuard &operator=(StepUnlockGuard &&) = delete;
 
   private:
-    ContinuousBatchScheduler& scheduler_;
-    std::unique_lock<std::mutex>* lock_;
+    ContinuousBatchScheduler &scheduler_;
+    std::unique_lock<std::mutex> *lock_;
   };
 
   /// RAII that suspends deferred-teardown application while a step has
@@ -567,18 +576,18 @@ private:
   /// slot has since been freed.
   class TeardownDeferGuard {
   public:
-    explicit TeardownDeferGuard(ContinuousBatchScheduler& scheduler) noexcept
+    explicit TeardownDeferGuard(ContinuousBatchScheduler &scheduler) noexcept
         : scheduler_(scheduler) {
       scheduler_.teardownDeferred_ = true;
     }
     ~TeardownDeferGuard() noexcept { scheduler_.teardownDeferred_ = false; }
-    TeardownDeferGuard(const TeardownDeferGuard&) = delete;
-    TeardownDeferGuard& operator=(const TeardownDeferGuard&) = delete;
-    TeardownDeferGuard(TeardownDeferGuard&&) = delete;
-    TeardownDeferGuard& operator=(TeardownDeferGuard&&) = delete;
+    TeardownDeferGuard(const TeardownDeferGuard &) = delete;
+    TeardownDeferGuard &operator=(const TeardownDeferGuard &) = delete;
+    TeardownDeferGuard(TeardownDeferGuard &&) = delete;
+    TeardownDeferGuard &operator=(TeardownDeferGuard &&) = delete;
 
   private:
-    ContinuousBatchScheduler& scheduler_;
+    ContinuousBatchScheduler &scheduler_;
   };
 
   struct BatchGroup {
@@ -643,7 +652,7 @@ private:
   void enqueueGroupLocked(const std::shared_ptr<BatchGroup> &group,
                           std::vector<SubmitRequest> &&requests);
   void admitPendingIntoFreeSlotsLocked();
-  [[nodiscard]] uint32_t submitLocked(QueuedRequest&& queued);
+  [[nodiscard]] uint32_t submitLocked(QueuedRequest &&queued);
   /// Drives one fillBatch + decode + advance + sample iteration.
   /// Returns `true` on a successful decode *or* a no-op (no slot had
   /// tokens to feed). Returns `false` if `llama_decode` reported a
@@ -651,7 +660,7 @@ private:
   /// been finalised with `StopReason::DecodeError`, KV-cleared, and
   /// drained, so the caller's only obligation is to break out of its
   /// driving loop.
-  [[nodiscard]] bool stepLocked(std::unique_lock<std::mutex>* lock = nullptr);
+  [[nodiscard]] bool stepLocked(std::unique_lock<std::mutex> *lock = nullptr);
   /// Capture every slot stopped at its end-of-history checkpoint and let it
   /// resume. A capture that throws fails that slot only.
   void serviceCheckpointStopsLocked();
@@ -659,7 +668,7 @@ private:
   /// for all of them in one go, and attaches the drafts to the batcher so
   /// the next `fillBatch` feeds them (llama-server's draft phase of
   /// `update_slots`). No-op without a speculative runtime.
-  void prepareSpeculativeDraftsLocked(std::unique_lock<std::mutex>* lock);
+  void prepareSpeculativeDraftsLocked(std::unique_lock<std::mutex> *lock);
   /// Verifies the drafts the last step fed (llama-server's `post_decode`
   /// speculative branch), streaming the accepted tokens.
   void verifySpeculativeDraftsLocked();
@@ -667,7 +676,7 @@ private:
   /// via its driver, unlocking around the embedded `llama_decode`. A
   /// media failure only fails that slot's request, never the whole
   /// scheduler.
-  void serviceNextMediaSegmentLocked(std::unique_lock<std::mutex>* lock);
+  void serviceNextMediaSegmentLocked(std::unique_lock<std::mutex> *lock);
   void failSlotLocked(uint32_t seqId, std::exception_ptr error);
   [[nodiscard]] MultiRequestBatcher::PrefillCompleteFn prefillCompleteFn();
   /// Extract finished requests and run the full per-slot drain (terminal
@@ -675,7 +684,7 @@ private:
   /// cache-save throw is contained per slot: it fails only that slot's
   /// group (via failSlotLocked), never the sibling slots decoding for
   /// other groups.
-  void drainFinishedLocked(std::unique_lock<std::mutex>* lock);
+  void drainFinishedLocked(std::unique_lock<std::mutex> *lock);
   [[nodiscard]] bool hasWorkLocked() const noexcept;
   [[nodiscard]] unsigned numActiveLocked() const noexcept;
   /// One deferred targeted cancel, kept as the full (seqId, admissionId)
@@ -706,10 +715,10 @@ private:
   /// Whether `seqId` currently holds the admission identified by
   /// `admissionId`. False for free slots, out-of-range ids, and slots whose
   /// admission id differs (the seqId was recycled to a newer request).
-  [[nodiscard]] bool
-  slotOwnedByLocked(uint32_t seqId, uint64_t admissionId) const noexcept;
+  [[nodiscard]] bool slotOwnedByLocked(uint32_t seqId,
+                                       uint64_t admissionId) const noexcept;
   void
-  completeGroupRequestLocked(const std::shared_ptr<BatchGroup>& group) noexcept;
+  completeGroupRequestLocked(const std::shared_ptr<BatchGroup> &group) noexcept;
   void cancelPendingLocked();
   void clearLocked() noexcept;
   /// Policy for `cancelSlotLocked`. `Save` is the default and matches the
@@ -729,18 +738,18 @@ private:
   enum class SaveCachePolicy { Save, KeepAdopted, Skip };
 
   /// Settle `group` with `error` and tear down its slots with `savePolicy`.
-  void failGroupLocked(
-      const std::shared_ptr<BatchGroup>& group, std::exception_ptr error,
-      SaveCachePolicy savePolicy) noexcept;
+  void failGroupLocked(const std::shared_ptr<BatchGroup> &group,
+                       std::exception_ptr error,
+                       SaveCachePolicy savePolicy) noexcept;
 
   /// Tear down a single slot (cancel path). `noexcept`: callers run it from
   /// the StepUnlockGuard destructor and the worker loop, so the teardown itself
   /// must never throw. Every throwing step (driver finalize + cache save, and
   /// the onDone callback inside notifyDone) is contained; the cleanup tail
   /// (notifyDone/batcher cancel/freeSlot) always runs.
-  void cancelSlotLocked(
-      uint32_t seqId,
-      SaveCachePolicy savePolicy = SaveCachePolicy::Save) noexcept;
+  void
+  cancelSlotLocked(uint32_t seqId,
+                   SaveCachePolicy savePolicy = SaveCachePolicy::Save) noexcept;
   /// Apply teardown requests recorded by cancel()/clear() while the
   /// worker was mid-step. Must run before admitting pending requests so
   /// a deferred cancel can never hit a freed-and-reused slot. `noexcept` so the
@@ -763,9 +772,9 @@ private:
   /// busy. An evicted conversation's cells stay in the sequence and its
   /// ledger words are returned in `evicted`, so the request can reuse the
   /// prefix it shares with them.
-  [[nodiscard]] std::optional<uint32_t> chooseSeqIdLocked(
-      const std::string& cacheKey,
-      std::optional<std::vector<llama_token>>& evicted);
+  [[nodiscard]] std::optional<uint32_t>
+  chooseSeqIdLocked(const std::string &cacheKey,
+                    std::optional<std::vector<llama_token>> &evicted);
   /// Moves the conversation parked on `seqId` to the RAM tier or its file
   /// (see `evictParked`) and clears the sequence, unless `keepCells` is set:
   /// the cells then stay, and the ledger words describing them are returned.
@@ -778,29 +787,28 @@ private:
   /// called from its `preparePrefill` under the scheduler lock. A parked
   /// sequence, the RAM tier and the files each lend a copy; none of them
   /// changes.
-  bool offerDonorLocked(
-      llama_seq_id seqId, const cache::Ledger& prompt, bool trimmable,
-      size_t minimum, const cache::DonorAdopter& adopt);
+  bool offerDonorLocked(llama_seq_id seqId, const cache::Ledger &prompt,
+                        bool trimmable, size_t minimum,
+                        const cache::DonorAdopter &adopt);
   /// Writes the live state of `seqId`, described by `ledgerWords`, to
   /// `cacheKey` through a temp file, followed by the conversation's checkpoints
   /// for the next turn (see `cache::appendCheckpointSection`).
   /// Returns false (logged) on failure.
-  bool writeStateToFileLocked(
-      uint32_t seqId, const std::string& cacheKey,
-      const std::vector<llama_token>& ledgerWords,
-      const cache::Checkpoints& checkpoints) noexcept;
+  bool writeStateToFileLocked(uint32_t seqId, const std::string &cacheKey,
+                              const std::vector<llama_token> &ledgerWords,
+                              const cache::Checkpoints &checkpoints) noexcept;
   /// Throwing variant for the caller's explicit save.
-  void writeStateToFileOrThrowLocked(
-      uint32_t seqId, const std::string& cacheKey,
-      const std::vector<llama_token>& ledgerWords,
-      const cache::Checkpoints& checkpoints);
+  void
+  writeStateToFileOrThrowLocked(uint32_t seqId, const std::string &cacheKey,
+                                const std::vector<llama_token> &ledgerWords,
+                                const cache::Checkpoints &checkpoints);
   /// Runs the explicit saves whose key has no request in a slot.
   void serviceSaveJobsLocked() noexcept;
   /// Drops everything kept for `cacheKey` without writing it.
-  void discardKeyLocked(const std::string& cacheKey) noexcept;
+  void discardKeyLocked(const std::string &cacheKey) noexcept;
   /// Shared by `saveConversation` and `discardConversation`.
   std::future<SlotStateCache::SaveOutcome>
-  enqueueSaveJob(const std::string& cacheKey, bool discard);
+  enqueueSaveJob(const std::string &cacheKey, bool discard);
   [[nodiscard]] bool hasRunnableSaveJobLocked() const noexcept;
   /// Fails every pending explicit save (the scheduler is being torn down).
   void failSaveJobsLocked() noexcept;
@@ -810,10 +818,10 @@ private:
   /// Single home for the cleanup repeated across all slot-teardown paths.
   void clearSeqKv(uint32_t seqId) noexcept;
   void finalizeFinishedSequences();
-  std::function<void(const std::string&)>
-  getOutputCallback(SlotState& slot, uint32_t seqId);
-  std::function<bool(const Request&)> hasValidDriverF() const;
-  void accumulateSlotRuntimeStats(const SlotState& slot, const Request& req);
+  std::function<void(const std::string &)> getOutputCallback(SlotState &slot,
+                                                             uint32_t seqId);
+  std::function<bool(const Request &)> hasValidDriverF() const;
+  void accumulateSlotRuntimeStats(const SlotState &slot, const Request &req);
 
   LlmModelContext shared_;
 
@@ -873,8 +881,8 @@ private:
   uint64_t checkpointClock_ = 0;
   /// Keeps `checkpoints` for `cacheKey`, evicting the oldest stored key when
   /// the store already holds one set per slot.
-  void storeCheckpointsLocked(
-      const std::string& cacheKey, cache::Checkpoints&& checkpoints);
+  void storeCheckpointsLocked(const std::string &cacheKey,
+                              cache::Checkpoints &&checkpoints);
 
   /// A committed conversation kept in its sequence after its request ended,
   /// for the next request on the same `cacheKey` and as a state other

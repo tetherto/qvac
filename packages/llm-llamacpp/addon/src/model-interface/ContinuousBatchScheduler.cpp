@@ -42,8 +42,8 @@ namespace {
 // std::bad_alloc); doing that inside this swallowing try is what lets the
 // noexcept teardown paths log without risking std::terminate when logging
 // itself fails. `detail` may be null when no exception message is available.
-void logTeardownFailureNoexcept(
-    const char* what, uint32_t seqId, const char* detail) noexcept {
+void logTeardownFailureNoexcept(const char *what, uint32_t seqId,
+                                const char *detail) noexcept {
   try {
     std::string msg = std::string("[ContinuousBatch] ") + what + " for seqId " +
                       std::to_string(seqId);
@@ -57,14 +57,14 @@ void logTeardownFailureNoexcept(
   }
 }
 
-void logTeardownFailureNoexcept(const char* what) noexcept {
+void logTeardownFailureNoexcept(const char *what) noexcept {
   try {
     QLOG_IF(Priority::WARNING, std::string("[ContinuousBatch] ") + what);
   } catch (...) {
   }
 }
 
-bool isFileMissingOrEmpty(const std::filesystem::path& path) {
+bool isFileMissingOrEmpty(const std::filesystem::path &path) {
   std::error_code directoryErrorCode;
   if (std::filesystem::is_directory(path, directoryErrorCode)) {
     return false;
@@ -79,7 +79,7 @@ bool isFileMissingOrEmpty(const std::filesystem::path& path) {
          errorCode == std::errc::not_a_directory;
 }
 
-bool isParentDirectoryMissing(const std::filesystem::path& path) {
+bool isParentDirectoryMissing(const std::filesystem::path &path) {
   const auto parent = path.parent_path();
   if (parent.empty()) {
     return false;
@@ -90,7 +90,7 @@ bool isParentDirectoryMissing(const std::filesystem::path& path) {
   return !errorCode && !exists;
 }
 
-bool persistedCacheBackingStoreMissing(const std::string& cacheKey) {
+bool persistedCacheBackingStoreMissing(const std::string &cacheKey) {
   return isParentDirectoryMissing(cacheKey) || isFileMissingOrEmpty(cacheKey);
 }
 
@@ -122,8 +122,8 @@ GenerationStopReason toGenerationStopReason(StopReason reason) {
 } // namespace
 
 bool finalizeTerminalDriver(
-    SequenceDriver& driver, StopReason reason, bool prefillOnly,
-    const std::function<void(const std::string&)>& outputCallback) {
+    SequenceDriver &driver, StopReason reason, bool prefillOnly,
+    const std::function<void(const std::string &)> &outputCallback) {
   if (reason == StopReason::Cancelled) {
     return driver.onCancel(outputCallback);
   }
@@ -134,14 +134,13 @@ bool finalizeTerminalDriver(
     driver.onSequenceEnd(outputCallback);
     return true;
   } else {
-    return driver.onGenerationFinished(
-        outputCallback, toGenerationStopReason(reason));
+    return driver.onGenerationFinished(outputCallback,
+                                       toGenerationStopReason(reason));
   }
 }
 
-bool generationBudgetExceeded(
-    unsigned promptSize, unsigned promptKvSize, int nPredict,
-    unsigned perSeqMaxTokens) {
+bool generationBudgetExceeded(unsigned promptSize, unsigned promptKvSize,
+                              int nPredict, unsigned perSeqMaxTokens) {
   // promptKvSize >= promptSize always (KV cells >= positions), so the KV-cell
   // span is the binding budget and subsumes the position check.
   const auto budgetSize = std::max(promptSize, promptKvSize);
@@ -149,9 +148,9 @@ bool generationBudgetExceeded(
          budgetSize + static_cast<unsigned>(nPredict) > perSeqMaxTokens;
 }
 
-TimedDecodeResult timeDecodeStep(
-    llama_context* ctx, llama_batch& batch, const SchedulerDecodeFunc& decode,
-    const SchedulerSynchronizeFunc& synchronize) {
+TimedDecodeResult timeDecodeStep(llama_context *ctx, llama_batch &batch,
+                                 const SchedulerDecodeFunc &decode,
+                                 const SchedulerSynchronizeFunc &synchronize) {
   const auto decodeStart = std::chrono::steady_clock::now();
   const int rc = decode(ctx, batch);
   synchronize(ctx);
@@ -224,8 +223,9 @@ ContinuousBatchScheduler::~ContinuousBatchScheduler() {
   failSaveJobsLocked();
 }
 
-BatchResult ContinuousBatchScheduler::processBatch(
-    std::vector<SubmitRequest>&& requests, const uint64_t groupTag) {
+BatchResult
+ContinuousBatchScheduler::processBatch(std::vector<SubmitRequest> &&requests,
+                                       const uint64_t groupTag) {
   auto group = std::make_shared<BatchGroup>(requests.size());
   group->totalCount = requests.size();
   group->tag = groupTag;
@@ -266,10 +266,9 @@ BatchResult ContinuousBatchScheduler::processBatch(
   if (group->error) {
     std::rethrow_exception(group->error);
   }
-  return {
-      .outputs = std::move(group->outputs),
-      .stats = group->stats,
-      .requestStats = std::move(group->requestStats)};
+  return {.outputs = std::move(group->outputs),
+          .stats = group->stats,
+          .requestStats = std::move(group->requestStats)};
 }
 
 void ContinuousBatchScheduler::submitCooperative(
@@ -370,7 +369,7 @@ ContinuousBatchScheduler::takeCooperativeResult(const uint64_t groupTag) {
   return result;
 }
 
-uint32_t ContinuousBatchScheduler::submit(SubmitRequest&& request) {
+uint32_t ContinuousBatchScheduler::submit(SubmitRequest &&request) {
   std::scoped_lock lock(mutex_);
   return submitLocked(
       QueuedRequest{.request = std::move(request), .group = nullptr});
@@ -468,17 +467,17 @@ void ContinuousBatchScheduler::driveOneLocked(
 }
 
 void ContinuousBatchScheduler::admitPendingIntoFreeSlotsLocked() {
-  const auto admit = [this](QueuedRequest&& queued) {
+  const auto admit = [this](QueuedRequest &&queued) {
     const std::shared_ptr<BatchGroup> group = queued.group;
     try {
       const uint32_t seqId = submitLocked(std::move(queued));
       (void)seqId;
     } catch (...) {
-      failGroupLocked(
-          group, std::current_exception(), SaveCachePolicy::KeepAdopted);
+      failGroupLocked(group, std::current_exception(),
+                      SaveCachePolicy::KeepAdopted);
     }
   };
-  const auto keyBusy = [this](const QueuedRequest& queued) {
+  const auto keyBusy = [this](const QueuedRequest &queued) {
     return !queued.request.cacheKey.empty() &&
            busyKeys_.contains(queued.request.cacheKey);
   };
@@ -507,7 +506,7 @@ void ContinuousBatchScheduler::admitPendingIntoFreeSlotsLocked() {
     // One request per cacheKey at a time: a second one waits for the first
     // to end, so a conversation's state is never forked.
     if (keyBusy(queued) ||
-        std::ranges::any_of(keyDeferred_, [&](const QueuedRequest& waiting) {
+        std::ranges::any_of(keyDeferred_, [&](const QueuedRequest &waiting) {
           return waiting.request.cacheKey == queued.request.cacheKey &&
                  !queued.request.cacheKey.empty();
         })) {
@@ -518,8 +517,8 @@ void ContinuousBatchScheduler::admitPendingIntoFreeSlotsLocked() {
   }
 }
 
-uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
-  SubmitRequest& request = queued.request;
+uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest &&queued) {
+  SubmitRequest &request = queued.request;
   // Resolve per-request sampling/cap on a *local* common_params, reusing
   // applyGenerationParamsToContext's validation without touching context
   // state. Its restore lambda is discarded: destroying a std::function only
@@ -549,7 +548,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   // that did not use it.
   std::optional<SlotStateCacheEntry> kept;
   if (ramTier_ && ramTier_->enabled() && !request.cacheKey.empty() &&
-      std::ranges::none_of(parked_, [&](const auto& parked) {
+      std::ranges::none_of(parked_, [&](const auto &parked) {
         return parked.has_value() && parked->cacheKey == request.cacheKey;
       })) {
     kept = ramTier_->take(request.cacheKey);
@@ -559,8 +558,8 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
       try {
         (void)ramTier_->insert(request.cacheKey, std::move(*kept));
       } catch (...) {
-        logTeardownFailureNoexcept(
-            "returning an unused RAM-tier state failed", 0, nullptr);
+        logTeardownFailureNoexcept("returning an unused RAM-tier state failed",
+                                   0, nullptr);
       }
     }
   });
@@ -578,9 +577,8 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
             qvac_errors::general_error::InvalidArgument),
         "ContinuousBatchScheduler::submit: failed to add to batch "
         "(MultiRequestBatcher::AddStatus=" +
-            std::to_string(
-                static_cast<int>(
-                    MultiRequestBatcher::AddStatus::ErrNoFreeSlot)) +
+            std::to_string(static_cast<int>(
+                MultiRequestBatcher::AddStatus::ErrNoFreeSlot)) +
             ")");
   }
   const uint32_t seqId = *maybeSeqId;
@@ -596,9 +594,8 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
             qvac_errors::general_error::InvalidArgument),
         "ContinuousBatchScheduler::submit: failed to add to batch "
         "(MultiRequestBatcher::AddStatus=" +
-            std::to_string(
-                static_cast<int>(
-                    MultiRequestBatcher::AddStatus::ErrNoFreeSlot)) +
+            std::to_string(static_cast<int>(
+                MultiRequestBatcher::AddStatus::ErrNoFreeSlot)) +
             ")");
   }
   // Cells an eviction left in the sequence belong to no conversation until
@@ -621,7 +618,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   // sequence, the RAM tier, then the cacheKey file. A source whose file was
   // loaded and has since been deleted is dropped, as on the single-prompt
   // path: the caller deleted the cache.
-  const std::string& key = request.cacheKey;
+  const std::string &key = request.cacheKey;
   bool isCacheLoaded = false;
   bool activeCacheSavedToDisk = false;
   // A state with turns its file lacks must survive a failed admission.
@@ -652,12 +649,10 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
     keptGuard.dismiss();
     if (kept.has_value() && !(kept->activeCacheSavedToDisk &&
                               persistedCacheBackingStoreMissing(key))) {
-      const bool applied = llama_state_seq_set_data_ext(
-                               shared_.lctx,
-                               kept->state.data(),
-                               kept->state.size(),
-                               static_cast<llama_seq_id>(seqId),
-                               0) != 0;
+      const bool applied =
+          llama_state_seq_set_data_ext(
+              shared_.lctx, kept->state.data(), kept->state.size(),
+              static_cast<llama_seq_id>(seqId), 0) != 0;
       if (applied && driver->adoptResidentState(kept->ledgerWords)) {
         speculative::restoreDraftSequenceState(
             shared_.lctx, static_cast<llama_seq_id>(seqId), kept->draft, 0);
@@ -689,16 +684,15 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   if (!isCacheLoaded && evicted.has_value()) {
     (void)driver->adoptResidentState(*evicted);
   }
-  driver->setCacheReconciliationEnabled(
-      !key.empty() || driver->sharesCacheAcrossKeys());
+  driver->setCacheReconciliationEnabled(!key.empty() ||
+                                        driver->sharesCacheAcrossKeys());
   // Checkpoints travel with the state; a key whose state was only on disk
   // keeps them in `checkpointStore_`. They only describe prefixes, and the
   // driver checks each against the restored memory before use.
   if (adoptedCheckpoints.has_value()) {
     driver->adoptCheckpoints(std::move(*adoptedCheckpoints));
-  } else if (
-      const auto kept = checkpointStore_.find(key);
-      kept != checkpointStore_.end()) {
+  } else if (const auto kept = checkpointStore_.find(key);
+             kept != checkpointStore_.end()) {
     driver->adoptCheckpoints(std::move(kept->second.checkpoints));
     checkpointStore_.erase(kept);
   }
@@ -713,13 +707,8 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   // there was nothing). A rollback onto another conversation's state, or onto
   // nothing after a donor copy failed, is not the key's: its file keeps the
   // turns it has.
-  ScopeGuard cacheGuard([this,
-                         seqId,
-                         &driver,
-                         &key,
-                         adoptedDirtyState,
-                         adoptedEphemeral,
-                         activeCacheSavedToDisk]() noexcept {
+  ScopeGuard cacheGuard([this, seqId, &driver, &key, adoptedDirtyState,
+                         adoptedEphemeral, activeCacheSavedToDisk]() noexcept {
     if (adoptedDirtyState && driver) {
       try {
         if (driver->onFailure({}) && !driver->holdsBorrowedState() &&
@@ -729,14 +718,14 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
             // Never park a ledger whose totals disagree with its header: a
             // later write would replace the file with one that cannot load.
             (void)cache::deserialize(words.data(), words.size());
-            parked_[seqId] = ParkedState{
-                .cacheKey = key,
-                .ledgerWords = std::move(words),
-                .checkpoints = driver->releaseCheckpoints(),
-                .dirty = true,
-                .activeCacheSavedToDisk = activeCacheSavedToDisk,
-                .ephemeral = adoptedEphemeral,
-                .lastUse = ++parkClock_};
+            parked_[seqId] =
+                ParkedState{.cacheKey = key,
+                            .ledgerWords = std::move(words),
+                            .checkpoints = driver->releaseCheckpoints(),
+                            .dirty = true,
+                            .activeCacheSavedToDisk = activeCacheSavedToDisk,
+                            .ephemeral = adoptedEphemeral,
+                            .lastUse = ++parkClock_};
             return;
           }
         }
@@ -756,31 +745,23 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   // Donors are offered under this lock, during `preparePrefill` only. A
   // request the generation budget below refuses is offered none: the
   // sequence keeps its own state for the rollback.
-  driver->setCacheSourceProvider([this,
-                                  seqId = static_cast<llama_seq_id>(seqId),
-                                  nPredict = tmpParams.n_predict,
-                                  prefill = request.prefill](
-                                     const cache::Ledger& prompt,
-                                     llama_pos promptCells,
-                                     bool trimmable,
-                                     size_t minimum,
-                                     const cache::DonorAdopter& adopt) {
-    const auto cells = static_cast<unsigned>(promptCells);
-    if (!prefill &&
-        generationBudgetExceeded(cells, cells, nPredict, perSeqMaxTokens_)) {
-      return false;
-    }
-    return offerDonorLocked(seqId, prompt, trimmable, minimum, adopt);
-  });
+  driver->setCacheSourceProvider(
+      [this, seqId = static_cast<llama_seq_id>(seqId),
+       nPredict = tmpParams.n_predict, prefill = request.prefill](
+          const cache::Ledger &prompt, llama_pos promptCells, bool trimmable,
+          size_t minimum, const cache::DonorAdopter &adopt) {
+        const auto cells = static_cast<unsigned>(promptCells);
+        if (!prefill && generationBudgetExceeded(cells, cells, nPredict,
+                                                 perSeqMaxTokens_)) {
+          return false;
+        }
+        return offerDonorLocked(seqId, prompt, trimmable, minimum, adopt);
+      });
   ScopeGuard providerGuard(
       [&driver]() noexcept { driver->setCacheSourceProvider({}); });
-  PrefillPlan plan = driver->preparePrefill(
-      request.chatMsgs,
-      request.tools,
-      request.media,
-      request.mediaPlan,
-      isCacheLoaded,
-      request.prefill);
+  PrefillPlan plan =
+      driver->preparePrefill(request.chatMsgs, request.tools, request.media,
+                             request.mediaPlan, isCacheLoaded, request.prefill);
   providerGuard.dismiss();
   driver->setCacheSourceProvider({});
 
@@ -834,8 +815,8 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
             " (ctxTotalTokens / n_parallel)");
   }
   if (!request.prefill &&
-      generationBudgetExceeded(
-          promptSize, promptKvSize, tmpParams.n_predict, perSeqMaxTokens_)) {
+      generationBudgetExceeded(promptSize, promptKvSize, tmpParams.n_predict,
+                               perSeqMaxTokens_)) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         qvac_errors::general_error::toString(
@@ -854,12 +835,9 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   // below, so the regular drain still runs its teardown and cache save.
   const bool alreadyPrefilled =
       request.prefill && plan.tokens.empty() && plan.mediaBarriers.empty();
-  if (auto status = batcher_.addRequestAt(
-          seqId,
-          std::move(plan),
-          driver->getNPast(),
-          driver->getKvCellsUsed(),
-          alreadyPrefilled);
+  if (auto status =
+          batcher_.addRequestAt(seqId, std::move(plan), driver->getNPast(),
+                                driver->getKvCellsUsed(), alreadyPrefilled);
       status != MultiRequestBatcher::AddStatus::Ok) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -878,20 +856,19 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
     queued.group->admittedCount++;
   }
   slots_[seqId].emplace(
-      SlotState{
-          .streams = std::move(streamsLocal),
-          .driver = std::move(driver),
-          .cacheKey = std::move(request.cacheKey),
-          .group = std::move(queued.group),
-          .outputIndex = queued.outputIndex,
-          .ephemeral = request.ephemeral,
-          .activeCacheSavedToDisk = activeCacheSavedToDisk,
-          .prefillOnly = request.prefill,
-          .adoptedState = isCacheLoaded,
-          .adoptedDirty = adoptedDirtyState,
-          .adoptedEphemeral = adoptedEphemeral,
-          .enqueuedAt = request.enqueuedAt,
-          .admissionId = admissionId});
+      SlotState{.streams = std::move(streamsLocal),
+                .driver = std::move(driver),
+                .cacheKey = std::move(request.cacheKey),
+                .group = std::move(queued.group),
+                .outputIndex = queued.outputIndex,
+                .ephemeral = request.ephemeral,
+                .activeCacheSavedToDisk = activeCacheSavedToDisk,
+                .prefillOnly = request.prefill,
+                .adoptedState = isCacheLoaded,
+                .adoptedDirty = adoptedDirtyState,
+                .adoptedEphemeral = adoptedEphemeral,
+                .enqueuedAt = request.enqueuedAt,
+                .admissionId = admissionId});
   cacheGuard.dismiss();
   if (!slots_[seqId]->cacheKey.empty()) {
     busyKeys_.insert(slots_[seqId]->cacheKey);
@@ -919,14 +896,13 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
     if (slots_[seqId]->group && slots_[seqId]->group->totalCount > 1) {
       failGroupLocked(
           slots_[seqId]->group,
-          std::make_exception_ptr(
-              qvac_errors::StatusError(
-                  ADDON_ID,
-                  qvac_lib_inference_addon_llama::errors::toString(
-                      qvac_lib_inference_addon_llama::errors::Cancelled),
-                  "ContinuousBatchScheduler: request cancelled before it "
-                  "could run (queued behind the parallel limit when its "
-                  "group was cancelled)")),
+          std::make_exception_ptr(qvac_errors::StatusError(
+              ADDON_ID,
+              qvac_lib_inference_addon_llama::errors::toString(
+                  qvac_lib_inference_addon_llama::errors::Cancelled),
+              "ContinuousBatchScheduler: request cancelled before it "
+              "could run (queued behind the parallel limit when its "
+              "group was cancelled)")),
           SaveCachePolicy::Save);
     }
     // Not covered by failGroupLocked when the group was already settled by
@@ -937,16 +913,16 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   return seqId;
 }
 
-std::function<bool(const Request&)>
+std::function<bool(const Request &)>
 ContinuousBatchScheduler::hasValidDriverF() const {
-  return [this](const Request& req) {
+  return [this](const Request &req) {
     return slots_[req.seqId].has_value() && slots_[req.seqId]->driver;
   };
 }
 
-std::function<void(const std::string&)>
-ContinuousBatchScheduler::getOutputCallback(SlotState& slot, uint32_t seqId) {
-  return [&slot, seqId](const std::string& text) {
+std::function<void(const std::string &)>
+ContinuousBatchScheduler::getOutputCallback(SlotState &slot, uint32_t seqId) {
+  return [&slot, seqId](const std::string &text) {
     if (slot.group) {
       slot.group->outputs[slot.outputIndex] += text;
     }
@@ -958,9 +934,9 @@ ContinuousBatchScheduler::getOutputCallback(SlotState& slot, uint32_t seqId) {
 
 void ContinuousBatchScheduler::finalizeFinishedSequences() {
   auto finished = batcher_.extractFinished();
-  for (const auto& req : finished) {
+  for (const auto &req : finished) {
     if (hasValidDriverF()(req)) {
-      auto& slot = *slots_[req.seqId];
+      auto &slot = *slots_[req.seqId];
       // Sync the driver's live KV cursor to the batcher's authoritative
       // `req.currentPos` before finalize so `onCancel` / `onFailure` see
       // the partial prefill actually committed to live KV. Without this a
@@ -972,8 +948,8 @@ void ContinuousBatchScheduler::finalizeFinishedSequences() {
       slot.driver->syncPosition(req.currentPos);
       // Rollback-ok signal is intentionally discarded here: this path
       // is the scheduler-teardown drain and does not persist cache.
-      (void)finalizeTerminalDriver(
-          *slot.driver, req.stopReason, slot.prefillOnly, {});
+      (void)finalizeTerminalDriver(*slot.driver, req.stopReason,
+                                   slot.prefillOnly, {});
     }
     clearSeqKv(req.seqId);
     notifyDone(req.seqId);
@@ -990,7 +966,7 @@ ContinuousBatchScheduler::prefillCompleteFn() {
   // path.
   return
       [this](uint32_t seqId, llama_pos currentPos, size_t prefillTokenCount) {
-        auto& slot = slots_[seqId];
+        auto &slot = slots_[seqId];
         if (!slot.has_value() || !slot->driver) {
           throw qvac_errors::StatusError(
               ADDON_ID,
@@ -1008,15 +984,15 @@ ContinuousBatchScheduler::prefillCompleteFn() {
 }
 
 void ContinuousBatchScheduler::clearSeqKv(uint32_t seqId) noexcept {
-  auto* mem = llama_get_memory(shared_.lctx);
+  auto *mem = llama_get_memory(shared_.lctx);
   if (mem != nullptr) {
     llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
   }
 }
 
-void ContinuousBatchScheduler::failSlotLocked(
-    uint32_t seqId, std::exception_ptr error) {
-  auto& slot = slots_[seqId];
+void ContinuousBatchScheduler::failSlotLocked(uint32_t seqId,
+                                              std::exception_ptr error) {
+  auto &slot = slots_[seqId];
   if (!slot.has_value()) {
     return;
   }
@@ -1028,7 +1004,7 @@ void ContinuousBatchScheduler::failSlotLocked(
 }
 
 ContinuousBatchScheduler::StepUnlockGuard::StepUnlockGuard(
-    ContinuousBatchScheduler& scheduler, std::unique_lock<std::mutex>* lock)
+    ContinuousBatchScheduler &scheduler, std::unique_lock<std::mutex> *lock)
     : scheduler_(scheduler), lock_(lock) {
   if (lock_ != nullptr) {
     lock_->unlock();
@@ -1047,16 +1023,14 @@ ContinuousBatchScheduler::StepUnlockGuard::~StepUnlockGuard() noexcept {
     // lock. Stop cleanly at the point of failure instead: log and abort.
     try {
       lock_->lock();
-    } catch (const std::system_error& e) {
+    } catch (const std::system_error &e) {
       // Composing/emitting the message can itself throw (allocation); swallow
       // that so abort() always runs.
       try {
-        QLOG_IF(
-            Priority::ERROR,
-            std::string(
-                "[ContinuousBatch] fatal: unrecoverable failure "
-                "reacquiring scheduler mutex, aborting: ") +
-                e.what());
+        QLOG_IF(Priority::ERROR,
+                std::string("[ContinuousBatch] fatal: unrecoverable failure "
+                            "reacquiring scheduler mutex, aborting: ") +
+                    e.what());
       } catch (...) {
       }
       std::abort();
@@ -1065,12 +1039,12 @@ ContinuousBatchScheduler::StepUnlockGuard::~StepUnlockGuard() noexcept {
 }
 
 void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
-    std::unique_lock<std::mutex>* lock) {
+    std::unique_lock<std::mutex> *lock) {
   const auto awaiting = batcher_.nextAwaitingMedia();
   if (!awaiting.has_value()) {
     return;
   }
-  auto& slot = slots_[awaiting->seqId];
+  auto &slot = slots_[awaiting->seqId];
   if (!slot.has_value() || !slot->driver) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -1081,7 +1055,7 @@ void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
             std::to_string(awaiting->seqId));
   }
 
-  SequenceDriver& driver = *slot->driver;
+  SequenceDriver &driver = *slot->driver;
   llama_pos newPos = awaiting->currentPos;
   std::exception_ptr error;
   std::chrono::steady_clock::duration evalDuration{};
@@ -1099,16 +1073,12 @@ void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
       error = std::current_exception();
       try {
         synchronizeFunc_(shared_.lctx);
-      } catch (const std::exception& e) {
-        logTeardownFailureNoexcept(
-            "media eval error-path synchronize failed",
-            awaiting->seqId,
-            e.what());
+      } catch (const std::exception &e) {
+        logTeardownFailureNoexcept("media eval error-path synchronize failed",
+                                   awaiting->seqId, e.what());
       } catch (...) {
-        logTeardownFailureNoexcept(
-            "media eval error-path synchronize failed",
-            awaiting->seqId,
-            nullptr);
+        logTeardownFailureNoexcept("media eval error-path synchronize failed",
+                                   awaiting->seqId, nullptr);
       }
     }
     evalDuration = std::chrono::steady_clock::now() - evalStart;
@@ -1119,15 +1089,12 @@ void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
     applyDeferredTeardownLocked();
     return;
   }
-  assert(
-      newPos >= awaiting->currentPos &&
-      "media segment must not move the sequence position backwards");
+  assert(newPos >= awaiting->currentPos &&
+         "media segment must not move the sequence position backwards");
   const auto mediaPositions =
       static_cast<uint64_t>(newPos - awaiting->currentPos);
   stats_.recordDecodeStep(
-      numActiveLocked(),
-      mediaPositions,
-      0,
+      numActiveLocked(), mediaPositions, 0,
       std::chrono::duration_cast<std::chrono::nanoseconds>(evalDuration));
   batcher_.completeMediaBarrier(awaiting->seqId, newPos, prefillCompleteFn());
   // Only now does the slot's cursor include the segment, so a teardown
@@ -1136,10 +1103,10 @@ void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
 }
 
 void ContinuousBatchScheduler::drainFinishedLocked(
-    std::unique_lock<std::mutex>* lock) {
+    std::unique_lock<std::mutex> *lock) {
   auto finished = batcher_.extractFinished();
-  for (const auto& req : finished | std::views::filter(hasValidDriverF())) {
-    auto& slot = *slots_[req.seqId];
+  for (const auto &req : finished | std::views::filter(hasValidDriverF())) {
+    auto &slot = *slots_[req.seqId];
     auto outputCallback = getOutputCallback(slot, req.seqId);
     // Align the driver's KV cursor with the batcher's authoritative
     // `req.currentPos` before finalize. On pure-attention drivers a
@@ -1162,8 +1129,8 @@ void ContinuousBatchScheduler::drainFinishedLocked(
     {
       TeardownDeferGuard deferTeardown(*this);
       StepUnlockGuard unlockGuard(*this, lock);
-      rollbackOk = finalizeTerminalDriver(
-          *slot.driver, req.stopReason, slot.prefillOnly, outputCallback);
+      rollbackOk = finalizeTerminalDriver(*slot.driver, req.stopReason,
+                                          slot.prefillOnly, outputCallback);
     }
     accumulateSlotRuntimeStats(slot, req);
     // Committed and coherent: keep the conversation in its sequence for the
@@ -1182,7 +1149,7 @@ void ContinuousBatchScheduler::drainFinishedLocked(
       slot.parkAsAdopted = true;
     }
   }
-  for (const auto& req : finished) {
+  for (const auto &req : finished) {
     const bool park =
         slots_[req.seqId].has_value() && slots_[req.seqId]->parkable;
     if (!park) {
@@ -1197,7 +1164,7 @@ void ContinuousBatchScheduler::serviceCheckpointStopsLocked() {
   // Partial snapshots are small and the context is not shared with anything
   // else while the worker holds the lock, so capture in place.
   while (const auto awaiting = batcher_.nextAwaitingCheckpoint()) {
-    auto& slot = slots_[awaiting->seqId];
+    auto &slot = slots_[awaiting->seqId];
     if (slot.has_value() && slot->driver) {
       try {
         slot->driver->syncPosition(awaiting->currentPos);
@@ -1212,7 +1179,7 @@ void ContinuousBatchScheduler::serviceCheckpointStopsLocked() {
   }
 }
 
-bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
+bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex> *lock) {
   serviceNextMediaSegmentLocked(lock);
   // A media segment can complete right at a checkpoint stop.
   serviceCheckpointStopsLocked();
@@ -1264,17 +1231,15 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
       }
     }
 
-    auto decodeError = std::make_exception_ptr(
-        qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_lib_inference_addon_llama::errors::toString(
-                qvac_lib_inference_addon_llama::errors::FailedToDecode),
-            speculativeFailed
-                ? std::string("failed to process speculative batch")
-                : "llama_decode returned non-zero: " +
-                      std::to_string(decodeRc)));
+    auto decodeError = std::make_exception_ptr(qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_lib_inference_addon_llama::errors::toString(
+            qvac_lib_inference_addon_llama::errors::FailedToDecode),
+        speculativeFailed
+            ? std::string("failed to process speculative batch")
+            : "llama_decode returned non-zero: " + std::to_string(decodeRc)));
 
-    for (const auto& group : affectedGroups) {
+    for (const auto &group : affectedGroups) {
       failGroupLocked(group, decodeError, SaveCachePolicy::KeepAdopted);
     }
 
@@ -1283,8 +1248,7 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
   // Slots are budgeted individually, so the split comes back as exact sums
   // rather than one chunk size times a sequence count.
   stats_.recordDecodeStep(
-      fillResult.numActiveSequences,
-      fillResult.prefillTokens,
+      fillResult.numActiveSequences, fillResult.prefillTokens,
       fillResult.decodeTokens,
       std::chrono::duration_cast<std::chrono::nanoseconds>(decodeDuration));
 
@@ -1305,8 +1269,8 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
 
   if (!cancelRequested_.load()) {
     batcher_.sampleAndAppendIdle([this](uint32_t seqId, int logitIdx) {
-      auto& slot = slots_[seqId];
-      const Request* req = batcher_.requestAt(seqId);
+      auto &slot = slots_[seqId];
+      const Request *req = batcher_.requestAt(seqId);
       if (!slot.has_value() || !slot->driver || req == nullptr) {
         throw qvac_errors::StatusError(
             ADDON_ID,
@@ -1318,7 +1282,7 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
       }
       const unsigned generatedAfterAccept =
           static_cast<unsigned>(req->generatedTokens.size()) + 1u;
-      auto outputCallback = [&slot, seqId](const std::string& text) {
+      auto outputCallback = [&slot, seqId](const std::string &text) {
         if (slot->group) {
           slot->group->outputs[slot->outputIndex] += text;
         }
@@ -1334,9 +1298,8 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
         // failing the whole batch. Carry the driver's own reason through so
         // the caller can tell a full context from a prediction-limit cutoff.
         batcher_.markFinished(seqId, StopReason::ContextOverflow);
-      } else if (
-          result.finished &&
-          result.stopReason == GenerationStopReason::PredictionLimit) {
+      } else if (result.finished &&
+                 result.stopReason == GenerationStopReason::PredictionLimit) {
         // Carried through for the same reason `ContextOverflow` is: the
         // batcher cannot otherwise tell this sample from an EOG, and the two
         // are counted differently.
@@ -1360,12 +1323,12 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
 }
 
 void ContinuousBatchScheduler::prepareSpeculativeDraftsLocked(
-    std::unique_lock<std::mutex>* lock) {
+    std::unique_lock<std::mutex> *lock) {
   if (shared_.speculative == nullptr) {
     return;
   }
   const auto generating = [this](uint32_t seqId) {
-    const Request* req = batcher_.requestAt(seqId);
+    const Request *req = batcher_.requestAt(seqId);
     return slots_[seqId].has_value() && slots_[seqId]->driver &&
            slots_[seqId]->driver->speculativeEnabled() && req != nullptr &&
            req->isGenerationPending() && !req->generatedTokens.empty();
@@ -1375,10 +1338,9 @@ void ContinuousBatchScheduler::prepareSpeculativeDraftsLocked(
     if (!generating(seqId)) {
       continue;
     }
-    const Request* req = batcher_.requestAt(seqId);
+    const Request *req = batcher_.requestAt(seqId);
     if (slots_[seqId]->driver->prepareSpeculativeDraft(
-            req->currentPos,
-            req->generatedTokens.back(),
+            req->currentPos, req->generatedTokens.back(),
             static_cast<unsigned>(req->generatedTokens.size()))) {
       drafting.push_back(seqId);
     }
@@ -1393,9 +1355,8 @@ void ContinuousBatchScheduler::prepareSpeculativeDraftsLocked(
       speculative::SpeculativeSequence::draftPrepared(*shared_.speculative);
     }
     stats_.recordSpeculativeStep(
-        0,
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now() - draftStart));
+        0, std::chrono::duration_cast<std::chrono::nanoseconds>(
+               std::chrono::steady_clock::now() - draftStart));
     for (const uint32_t seqId : drafting) {
       if (slots_[seqId].has_value() && slots_[seqId]->driver) {
         slots_[seqId]->driver->finishSpeculativeDraft();
@@ -1413,12 +1374,10 @@ void ContinuousBatchScheduler::verifySpeculativeDraftsLocked() {
   if (shared_.speculative == nullptr) {
     return;
   }
-  batcher_.verifyDrafted([this](
-                             uint32_t seqId,
-                             int firstLogitIdx,
-                             llama_pos basePos) {
-    auto& slot = slots_[seqId];
-    const Request* req = batcher_.requestAt(seqId);
+  batcher_.verifyDrafted([this](uint32_t seqId, int firstLogitIdx,
+                                llama_pos basePos) {
+    auto &slot = slots_[seqId];
+    const Request *req = batcher_.requestAt(seqId);
     if (!slot.has_value() || !slot->driver || req == nullptr) {
       throw qvac_errors::StatusError(
           ADDON_ID,
@@ -1430,7 +1389,7 @@ void ContinuousBatchScheduler::verifySpeculativeDraftsLocked() {
     // Verification runs before deferred teardown, so a cancel recorded during
     // the decode has not been applied yet; nothing more is streamed for it,
     // as on the plain path, which samples only after teardown.
-    auto outputCallback = [this, &slot, seqId](const std::string& text) {
+    auto outputCallback = [this, &slot, seqId](const std::string &text) {
       if (teardownPendingForLocked(seqId)) {
         return;
       }
@@ -1443,13 +1402,11 @@ void ContinuousBatchScheduler::verifySpeculativeDraftsLocked() {
     };
     const llama_pos fed = req->currentPos - basePos;
     const DraftStepResult result = slot->driver->onDraftLogitsReady(
-        firstLogitIdx,
-        basePos,
-        static_cast<unsigned>(req->generatedTokens.size()),
-        outputCallback);
-    stats_.recordSpeculativeStep(
-        static_cast<int64_t>(result.tokens.size()) - fed,
-        std::chrono::nanoseconds{0});
+        firstLogitIdx, basePos,
+        static_cast<unsigned>(req->generatedTokens.size()), outputCallback);
+    stats_.recordSpeculativeStep(static_cast<int64_t>(result.tokens.size()) -
+                                     fed,
+                                 std::chrono::nanoseconds{0});
     MultiRequestBatcher::DraftOutcome outcome{
         .replay = result.replay,
         .newPos = result.newPos,
@@ -1492,7 +1449,7 @@ unsigned ContinuousBatchScheduler::occupancy() const {
 
 unsigned ContinuousBatchScheduler::numActiveLocked() const noexcept {
   unsigned count = 0;
-  for (const auto& s : slots_) {
+  for (const auto &s : slots_) {
     if (s.has_value()) {
       count++;
     }
@@ -1556,8 +1513,8 @@ void RuntimeStatsSnapshot::recordSpeculativeStep(
       static_cast<decltype(decodeTokenCount_)>(std::max<int64_t>(0, delta));
 }
 
-void RuntimeStatsSnapshot::accumulateSlot(
-    int64_t nPast, int64_t toolsDropped, const Request& req) {
+void RuntimeStatsSnapshot::accumulateSlot(int64_t nPast, int64_t toolsDropped,
+                                          const Request &req) {
   cacheTokens += nPast;
   toolDefinitionsDropped += toolsDropped;
   generatedTokens += static_cast<int64_t>(req.generatedTokens.size());
@@ -1706,17 +1663,15 @@ void ContinuousBatchScheduler::applyGroupQueuedCancelLocked(
   // releases its blocked processBatch immediately; the stale pending_ entries
   // are discarded by admitPendingIntoFreeSlotsLocked's done-check when a slot
   // next frees.
-  failGroupLocked(
-      group,
-      std::make_exception_ptr(
-          qvac_errors::StatusError(
-              ADDON_ID,
-              qvac_lib_inference_addon_llama::errors::toString(
-                  qvac_lib_inference_addon_llama::errors::Cancelled),
-              "ContinuousBatchScheduler: request cancelled before it "
-              "could run (queued behind the parallel limit when its "
-              "group was cancelled)")),
-      SaveCachePolicy::Save);
+  failGroupLocked(group,
+                  std::make_exception_ptr(qvac_errors::StatusError(
+                      ADDON_ID,
+                      qvac_lib_inference_addon_llama::errors::toString(
+                          qvac_lib_inference_addon_llama::errors::Cancelled),
+                      "ContinuousBatchScheduler: request cancelled before it "
+                      "could run (queued behind the parallel limit when its "
+                      "group was cancelled)")),
+                  SaveCachePolicy::Save);
 }
 
 void ContinuousBatchScheduler::recordPendingGroupCancel(
@@ -1725,8 +1680,8 @@ void ContinuousBatchScheduler::recordPendingGroupCancel(
   pendingGroupCancels_.push_back(groupTag);
 }
 
-void ContinuousBatchScheduler::recordPendingSlotCancel(
-    uint32_t seqId, uint64_t admissionId) {
+void ContinuousBatchScheduler::recordPendingSlotCancel(uint32_t seqId,
+                                                       uint64_t admissionId) {
   std::scoped_lock pendingLock(pendingCancelsMtx_);
   pendingSlotCancels_.push_back(
       PendingSlotCancel{.seqId = seqId, .admissionId = admissionId});
@@ -1750,15 +1705,15 @@ bool ContinuousBatchScheduler::teardownPendingForLocked(uint32_t seqId) const {
   if (seqId >= slots_.size() || !slots_[seqId].has_value()) {
     return true;
   }
-  const SlotState& slot = *slots_[seqId];
+  const SlotState &slot = *slots_[seqId];
   std::scoped_lock pendingLock(pendingCancelsMtx_);
-  for (const PendingSlotCancel& pending : pendingSlotCancels_) {
+  for (const PendingSlotCancel &pending : pendingSlotCancels_) {
     if (pending.seqId == seqId && pending.admissionId == slot.admissionId) {
       return true;
     }
   }
   // Same condition `applyGroupQueuedCancelLocked` fails the group on.
-  const auto& group = slot.group;
+  const auto &group = slot.group;
   if (group && group->tag != 0 && !group->done &&
       group->admittedCount < group->totalCount) {
     for (const uint64_t tag : pendingGroupCancels_) {
@@ -1776,7 +1731,7 @@ void ContinuousBatchScheduler::cancelSlotLocked(
   if (!occupied) {
     return;
   }
-  const Request* req = batcher_.requestAt(seqId);
+  const Request *req = batcher_.requestAt(seqId);
   if (slots_[seqId]->driver) {
     // Best-effort driver teardown on a cancelled slot. onCancel restores the
     // slot's pre-request KV state; the state is kept only when the driver
@@ -1814,7 +1769,7 @@ void ContinuousBatchScheduler::cancelSlotLocked(
       // ended in a rollback (`shouldPersistAfterFinalize()` false), and a
       // failed request, keep the conversation the request started from.
       if (savePolicy != SaveCachePolicy::Skip && rollbackOk) {
-        auto& cancelled = *slots_[seqId];
+        auto &cancelled = *slots_[seqId];
         if (!failed && cancelled.driver->shouldPersistAfterFinalize()) {
           cancelled.parkable = !cancelled.cacheKey.empty() ||
                                cancelled.driver->sharesCacheAcrossKeys();
@@ -1823,7 +1778,7 @@ void ContinuousBatchScheduler::cancelSlotLocked(
           cancelled.parkAsAdopted = true;
         }
       }
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
       logTeardownFailureNoexcept("cancel teardown failed", seqId, e.what());
     } catch (...) {
       logTeardownFailureNoexcept("cancel teardown failed", seqId, nullptr);
@@ -1880,7 +1835,7 @@ void ContinuousBatchScheduler::applyDeferredTeardownLocked() noexcept {
   for (const uint64_t groupTag : pendingGroups) {
     applyGroupQueuedCancelLocked(groupTag);
   }
-  for (const PendingSlotCancel& pending : pendingCancels) {
+  for (const PendingSlotCancel &pending : pendingCancels) {
     // Apply-time ownership re-check: the slot may have drained (and been
     // re-admitted) between record and apply; a stale record must not tear
     // down the seqId's next occupant.
@@ -1919,12 +1874,12 @@ void ContinuousBatchScheduler::clearLocked() noexcept {
         // may throw; contain it so this noexcept teardown cannot terminate.
         try {
           slots_[seqId]->driver->onSequenceEnd({});
-        } catch (const std::exception& e) {
-          logTeardownFailureNoexcept(
-              "clear: onSequenceEnd threw", seqId, e.what());
+        } catch (const std::exception &e) {
+          logTeardownFailureNoexcept("clear: onSequenceEnd threw", seqId,
+                                     e.what());
         } catch (...) {
-          logTeardownFailureNoexcept(
-              "clear: onSequenceEnd threw", seqId, nullptr);
+          logTeardownFailureNoexcept("clear: onSequenceEnd threw", seqId,
+                                     nullptr);
         }
       }
       notifyDoneNoexcept(seqId);
@@ -1953,7 +1908,7 @@ void ContinuousBatchScheduler::clearLocked() noexcept {
 }
 
 void ContinuousBatchScheduler::completeGroupRequestLocked(
-    const std::shared_ptr<BatchGroup>& group) noexcept {
+    const std::shared_ptr<BatchGroup> &group) noexcept {
   if (!group || group->done) {
     return;
   }
@@ -1966,7 +1921,7 @@ void ContinuousBatchScheduler::completeGroupRequestLocked(
 }
 
 void ContinuousBatchScheduler::failGroupLocked(
-    const std::shared_ptr<BatchGroup>& group, std::exception_ptr error,
+    const std::shared_ptr<BatchGroup> &group, std::exception_ptr error,
     SaveCachePolicy savePolicy) noexcept {
   if (!group || group->done) {
     return;
@@ -2004,14 +1959,13 @@ void ContinuousBatchScheduler::cancelPendingLocked() {
     if (queued.group) {
       failGroupLocked(
           queued.group,
-          std::make_exception_ptr(
-              qvac_errors::StatusError(
-                  ADDON_ID,
-                  qvac_lib_inference_addon_llama::errors::toString(
-                      qvac_lib_inference_addon_llama::errors::Cancelled),
-                  "ContinuousBatchScheduler: request cancelled before it "
-                  "could run (queued behind the parallel limit when cancel "
-                  "was requested)")),
+          std::make_exception_ptr(qvac_errors::StatusError(
+              ADDON_ID,
+              qvac_lib_inference_addon_llama::errors::toString(
+                  qvac_lib_inference_addon_llama::errors::Cancelled),
+              "ContinuousBatchScheduler: request cancelled before it "
+              "could run (queued behind the parallel limit when cancel "
+              "was requested)")),
           SaveCachePolicy::Save);
     }
   }
@@ -2021,18 +1975,17 @@ void ContinuousBatchScheduler::cancelPendingLocked() {
 void ContinuousBatchScheduler::cancelKeyDeferredLocked() noexcept {
   std::deque<QueuedRequest> waiting;
   waiting.swap(keyDeferred_);
-  for (QueuedRequest& queued : waiting) {
+  for (QueuedRequest &queued : waiting) {
     if (queued.group) {
       failGroupLocked(
           queued.group,
-          std::make_exception_ptr(
-              qvac_errors::StatusError(
-                  ADDON_ID,
-                  qvac_lib_inference_addon_llama::errors::toString(
-                      qvac_lib_inference_addon_llama::errors::Cancelled),
-                  "ContinuousBatchScheduler: request cancelled before it "
-                  "could run (waiting for an earlier request on its "
-                  "cacheKey when cancel was requested)")),
+          std::make_exception_ptr(qvac_errors::StatusError(
+              ADDON_ID,
+              qvac_lib_inference_addon_llama::errors::toString(
+                  qvac_lib_inference_addon_llama::errors::Cancelled),
+              "ContinuousBatchScheduler: request cancelled before it "
+              "could run (waiting for an earlier request on its "
+              "cacheKey when cancel was requested)")),
           SaveCachePolicy::Save);
     }
   }
@@ -2051,14 +2004,14 @@ void ContinuousBatchScheduler::setFileIndex(
 }
 
 bool ContinuousBatchScheduler::offerDonorLocked(
-    llama_seq_id seqId, const cache::Ledger& prompt, bool trimmable,
-    size_t minimum, const cache::DonorAdopter& adopt) {
+    llama_seq_id seqId, const cache::Ledger &prompt, bool trimmable,
+    size_t minimum, const cache::DonorAdopter &adopt) {
   // Another parked sequence wins a tie: its state is copied without a file
   // read.
   std::optional<uint32_t> parkedDonor;
   size_t inParked = minimum;
   for (uint32_t donor = 0; donor < parked_.size(); ++donor) {
-    const auto& parked = parked_[donor];
+    const auto &parked = parked_[donor];
     if (static_cast<llama_seq_id>(donor) == seqId || !parked.has_value() ||
         !isFreeLocked(donor) ||
         (parked->activeCacheSavedToDisk &&
@@ -2074,19 +2027,17 @@ bool ContinuousBatchScheduler::offerDonorLocked(
         inParked = reusable;
         parkedDonor = donor;
       }
-    } catch (const std::exception&) {
+    } catch (const std::exception &) {
       continue;
     }
   }
-  bool adopted = cache::offerStoredState(
-      ramTier_.get(), fileIndex_.get(), "", prompt, trimmable, inParked, adopt);
+  bool adopted = cache::offerStoredState(ramTier_.get(), fileIndex_.get(), "",
+                                         prompt, trimmable, inParked, adopt);
   if (!adopted && parkedDonor.has_value()) {
-    const ParkedState& parked = *parked_[*parkedDonor];
-    adopted = adopt(
-        cache::sequenceDonor(
-            static_cast<llama_seq_id>(*parkedDonor),
-            parked.ledgerWords,
-            parked.checkpoints));
+    const ParkedState &parked = *parked_[*parkedDonor];
+    adopted =
+        adopt(cache::sequenceDonor(static_cast<llama_seq_id>(*parkedDonor),
+                                   parked.ledgerWords, parked.checkpoints));
   }
   if (adopted) {
     ++donorHits_;
@@ -2102,7 +2053,7 @@ void ContinuousBatchScheduler::flushForUnload() {
     return;
   }
   for (uint32_t seqId = 0; seqId < parked_.size(); ++seqId) {
-    auto& parked = parked_[seqId];
+    auto &parked = parked_[seqId];
     if (!parked.has_value() || !parked->dirty || parked->ephemeral) {
       continue;
     }
@@ -2110,11 +2061,8 @@ void ContinuousBatchScheduler::flushForUnload() {
         persistedCacheBackingStoreMissing(parked->cacheKey)) {
       continue;
     }
-    if (writeStateToFileLocked(
-            seqId,
-            parked->cacheKey,
-            parked->ledgerWords,
-            parked->checkpoints)) {
+    if (writeStateToFileLocked(seqId, parked->cacheKey, parked->ledgerWords,
+                               parked->checkpoints)) {
       parked->dirty = false;
       parked->activeCacheSavedToDisk = true;
     }
@@ -2176,8 +2124,8 @@ bool ContinuousBatchScheduler::isFreeLocked(uint32_t seqId) const {
 }
 
 std::optional<uint32_t> ContinuousBatchScheduler::chooseSeqIdLocked(
-    const std::string& cacheKey,
-    std::optional<std::vector<llama_token>>& evicted) {
+    const std::string &cacheKey,
+    std::optional<std::vector<llama_token>> &evicted) {
   const auto isFree = [this](uint32_t seqId) { return isFreeLocked(seqId); };
   const auto nSeq = static_cast<uint32_t>(slots_.size());
   if (!cacheKey.empty()) {
@@ -2217,8 +2165,8 @@ std::optional<uint32_t> ContinuousBatchScheduler::chooseSeqIdLocked(
 }
 
 std::optional<std::vector<llama_token>>
-ContinuousBatchScheduler::evictParkedLocked(
-    uint32_t seqId, bool keepCells) noexcept {
+ContinuousBatchScheduler::evictParkedLocked(uint32_t seqId,
+                                            bool keepCells) noexcept {
   if (seqId >= parked_.size() || !parked_[seqId].has_value()) {
     return std::nullopt;
   }
@@ -2239,12 +2187,12 @@ ContinuousBatchScheduler::evictParkedLocked(
       SlotStateCacheEntry entry;
       try {
         entry.state.resize(size);
-      } catch (const std::bad_alloc&) {
+      } catch (const std::bad_alloc &) {
         entry.state.clear();
       }
       if (size > 0 && entry.state.size() == size &&
-          llama_state_seq_get_data_ext(
-              shared_.lctx, entry.state.data(), size, seq, 0) == size) {
+          llama_state_seq_get_data_ext(shared_.lctx, entry.state.data(), size,
+                                       seq, 0) == size) {
         entry.draft =
             speculative::captureDraftSequenceState(shared_.lctx, seq, 0);
         entry.ledgerWords = parked.ledgerWords;
@@ -2262,8 +2210,8 @@ ContinuousBatchScheduler::evictParkedLocked(
     // single-prompt path does when it switches keys, so nothing is lost. An
     // ephemeral conversation is dropped instead.
     if (!dropped && !inRam && parked.dirty && !parked.ephemeral) {
-      writeStateToFileLocked(
-          seqId, parked.cacheKey, parked.ledgerWords, parked.checkpoints);
+      writeStateToFileLocked(seqId, parked.cacheKey, parked.ledgerWords,
+                             parked.checkpoints);
     }
     if (!dropped && !inRam && !parked.checkpoints.empty() &&
         !parked.cacheKey.empty()) {
@@ -2276,57 +2224,49 @@ ContinuousBatchScheduler::evictParkedLocked(
       return kept;
     }
   } catch (...) {
-    logTeardownFailureNoexcept(
-        "evicting a parked cache state failed", seqId, nullptr);
+    logTeardownFailureNoexcept("evicting a parked cache state failed", seqId,
+                               nullptr);
   }
   clearSeqKv(seqId);
   return std::nullopt;
 }
 
 bool ContinuousBatchScheduler::writeStateToFileLocked(
-    uint32_t seqId, const std::string& cacheKey,
-    const std::vector<llama_token>& ledgerWords,
-    const cache::Checkpoints& checkpoints) noexcept {
+    uint32_t seqId, const std::string &cacheKey,
+    const std::vector<llama_token> &ledgerWords,
+    const cache::Checkpoints &checkpoints) noexcept {
   try {
     const std::string tmp = cacheKey + ".tmp";
     const size_t written = llama_state_seq_save_file(
-        shared_.lctx,
-        tmp.c_str(),
-        static_cast<llama_seq_id>(seqId),
-        ledgerWords.data(),
-        ledgerWords.size());
+        shared_.lctx, tmp.c_str(), static_cast<llama_seq_id>(seqId),
+        ledgerWords.data(), ledgerWords.size());
     if (!CacheManager::savedCompletely(tmp, written)) {
       std::error_code ec;
       std::filesystem::remove(tmp, ec);
       logTeardownFailureNoexcept(
-          "writing an evicted cache state to its cacheKey failed",
-          seqId,
+          "writing an evicted cache state to its cacheKey failed", seqId,
           cacheKey.c_str());
       return false;
     }
     (void)cache::appendCheckpointSection(tmp, checkpoints);
     CacheManager::atomicPromoteFile(tmp, cacheKey);
     return true;
-  } catch (const std::exception& e) {
+  } catch (const std::exception &e) {
     logTeardownFailureNoexcept(
-        "writing an evicted cache state to its cacheKey failed",
-        seqId,
+        "writing an evicted cache state to its cacheKey failed", seqId,
         e.what());
     return false;
   }
 }
 
 void ContinuousBatchScheduler::writeStateToFileOrThrowLocked(
-    uint32_t seqId, const std::string& cacheKey,
-    const std::vector<llama_token>& ledgerWords,
-    const cache::Checkpoints& checkpoints) {
+    uint32_t seqId, const std::string &cacheKey,
+    const std::vector<llama_token> &ledgerWords,
+    const cache::Checkpoints &checkpoints) {
   const std::string tmp = cacheKey + ".tmp";
   const size_t written = llama_state_seq_save_file(
-      shared_.lctx,
-      tmp.c_str(),
-      static_cast<llama_seq_id>(seqId),
-      ledgerWords.data(),
-      ledgerWords.size());
+      shared_.lctx, tmp.c_str(), static_cast<llama_seq_id>(seqId),
+      ledgerWords.data(), ledgerWords.size());
   if (!CacheManager::savedCompletely(tmp, written)) {
     std::error_code ec;
     std::filesystem::remove(tmp, ec);
@@ -2341,8 +2281,8 @@ void ContinuousBatchScheduler::writeStateToFileOrThrowLocked(
 }
 
 std::future<SlotStateCache::SaveOutcome>
-ContinuousBatchScheduler::enqueueSaveJob(
-    const std::string& cacheKey, bool discard) {
+ContinuousBatchScheduler::enqueueSaveJob(const std::string &cacheKey,
+                                         bool discard) {
   auto job = std::make_shared<SaveJob>();
   job->cacheKey = cacheKey;
   job->discard = discard;
@@ -2358,14 +2298,6 @@ ContinuousBatchScheduler::enqueueSaveJob(
               ": the model is being unloaded");
     }
     if (driveMode_ == DriveMode::Cooperative) {
-      if (busyKeys_.contains(cacheKey)) {
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            std::string(discard ? "discardCache" : "saveCache") +
-                ": the conversation is still in use");
-      }
       saveJobs_.push_back(std::move(job));
       serviceSaveJobsLocked();
       return done;
@@ -2378,17 +2310,28 @@ ContinuousBatchScheduler::enqueueSaveJob(
 }
 
 SlotStateCache::SaveOutcome
-ContinuousBatchScheduler::saveConversation(const std::string& cacheKey) {
+ContinuousBatchScheduler::saveConversation(const std::string &cacheKey) {
   return enqueueSaveJob(cacheKey, /*discard=*/false).get();
 }
 
+std::future<SlotStateCache::SaveOutcome>
+ContinuousBatchScheduler::enqueueSaveConversation(const std::string &cacheKey) {
+  return enqueueSaveJob(cacheKey, /*discard=*/false);
+}
+
 void ContinuousBatchScheduler::discardConversation(
-    const std::string& cacheKey) {
+    const std::string &cacheKey) {
   (void)enqueueSaveJob(cacheKey, /*discard=*/true).get();
 }
 
+std::future<SlotStateCache::SaveOutcome>
+ContinuousBatchScheduler::enqueueDiscardConversation(
+    const std::string &cacheKey) {
+  return enqueueSaveJob(cacheKey, /*discard=*/true);
+}
+
 void ContinuousBatchScheduler::discardKeyLocked(
-    const std::string& cacheKey) noexcept {
+    const std::string &cacheKey) noexcept {
   for (uint32_t seqId = 0; seqId < parked_.size(); ++seqId) {
     if (parked_[seqId].has_value() && parked_[seqId]->cacheKey == cacheKey) {
       parked_[seqId].reset();
@@ -2402,7 +2345,7 @@ void ContinuousBatchScheduler::discardKeyLocked(
 }
 
 bool ContinuousBatchScheduler::hasRunnableSaveJobLocked() const noexcept {
-  return std::ranges::any_of(saveJobs_, [this](const auto& job) {
+  return std::ranges::any_of(saveJobs_, [this](const auto &job) {
     return !busyKeys_.contains(job->cacheKey);
   });
 }
@@ -2426,7 +2369,7 @@ void ContinuousBatchScheduler::serviceSaveJobsLocked() noexcept {
       SlotStateCache::SaveOutcome outcome =
           SlotStateCache::SaveOutcome::NotHere;
       for (uint32_t seqId = 0; seqId < parked_.size(); ++seqId) {
-        auto& parked = parked_[seqId];
+        auto &parked = parked_[seqId];
         if (!parked.has_value() || parked->cacheKey != job->cacheKey) {
           continue;
         }
@@ -2434,11 +2377,9 @@ void ContinuousBatchScheduler::serviceSaveJobsLocked() noexcept {
             !persistedCacheBackingStoreMissing(parked->cacheKey)) {
           outcome = SlotStateCache::SaveOutcome::Current;
         } else {
-          writeStateToFileOrThrowLocked(
-              seqId,
-              parked->cacheKey,
-              parked->ledgerWords,
-              parked->checkpoints);
+          writeStateToFileOrThrowLocked(seqId, parked->cacheKey,
+                                        parked->ledgerWords,
+                                        parked->checkpoints);
           parked->dirty = false;
           parked->activeCacheSavedToDisk = true;
           outcome = SlotStateCache::SaveOutcome::Written;
@@ -2459,16 +2400,14 @@ void ContinuousBatchScheduler::serviceSaveJobsLocked() noexcept {
 }
 
 void ContinuousBatchScheduler::failSaveJobsLocked() noexcept {
-  for (const auto& job : saveJobs_) {
+  for (const auto &job : saveJobs_) {
     try {
-      job->done.set_exception(
-          std::make_exception_ptr(
-              qvac_errors::StatusError(
-                  ADDON_ID,
-                  qvac_errors::general_error::toString(
-                      qvac_errors::general_error::InvalidArgument),
-                  std::string(job->discard ? "discardCache" : "saveCache") +
-                      ": the model was unloaded before it ran")));
+      job->done.set_exception(std::make_exception_ptr(qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          std::string(job->discard ? "discardCache" : "saveCache") +
+              ": the model was unloaded before it ran")));
     } catch (...) {
     }
   }
@@ -2483,7 +2422,7 @@ void ContinuousBatchScheduler::notifyDone(uint32_t seqId) {
   // is benign and only happens when onDone itself threw: the re-run sees an
   // already-finalized request and an already-flushed UTF-8 buffer, recovery's
   // onCancel({}) re-emits nothing, and saveCache just rewrites the same file.
-  auto& slot = slots_[seqId];
+  auto &slot = slots_[seqId];
   if (slot.has_value() && slot->streams.onDone) {
     slot->streams.onDone(seqId);
   }
@@ -2493,7 +2432,7 @@ void ContinuousBatchScheduler::notifyDone(uint32_t seqId) {
 }
 
 void ContinuousBatchScheduler::notifyDoneNoexcept(uint32_t seqId) noexcept {
-  auto& slot = slots_[seqId];
+  auto &slot = slots_[seqId];
   if (slot.has_value() && slot->streams.onDone) {
     // The onDone stream callback is caller/JS-provided and may throw. Contain
     // it here, not at the call site: this keeps the noexcept teardown contract
@@ -2502,7 +2441,7 @@ void ContinuousBatchScheduler::notifyDoneNoexcept(uint32_t seqId) noexcept {
     // the submitting caller blocked forever on the group.
     try {
       slot->streams.onDone(seqId);
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
       logTeardownFailureNoexcept("onDone callback threw", seqId, e.what());
     } catch (...) {
       logTeardownFailureNoexcept("onDone callback threw", seqId, nullptr);
@@ -2514,7 +2453,7 @@ void ContinuousBatchScheduler::notifyDoneNoexcept(uint32_t seqId) noexcept {
 }
 
 void ContinuousBatchScheduler::storeCheckpointsLocked(
-    const std::string& cacheKey, cache::Checkpoints&& checkpoints) {
+    const std::string &cacheKey, cache::Checkpoints &&checkpoints) {
   checkpointStore_.erase(cacheKey);
   while (!checkpointStore_.empty() &&
          checkpointStore_.size() >= std::max<size_t>(1, slots_.size())) {
@@ -2528,15 +2467,13 @@ void ContinuousBatchScheduler::storeCheckpointsLocked(
     checkpointStore_.erase(oldest);
   }
   checkpointStore_.emplace(
-      cacheKey,
-      StoredCheckpoints{
-          .checkpoints = std::move(checkpoints),
-          .storedAt = ++checkpointClock_});
+      cacheKey, StoredCheckpoints{.checkpoints = std::move(checkpoints),
+                                  .storedAt = ++checkpointClock_});
 }
 
 void ContinuousBatchScheduler::freeSlot(uint32_t seqId) noexcept {
   if (seqId < slots_.size()) {
-    auto& slot = slots_[seqId];
+    auto &slot = slots_[seqId];
     // Every teardown path frees here, after the driver finalized, so this is
     // where the request's state and checkpoints outlive its driver: parked
     // in the sequence when the request committed coherent keyed state,
@@ -2579,8 +2516,8 @@ void ContinuousBatchScheduler::freeSlot(uint32_t seqId) noexcept {
           }
         }
       } catch (...) {
-        logTeardownFailureNoexcept(
-            "free: keeping the cache state failed", seqId, nullptr);
+        logTeardownFailureNoexcept("free: keeping the cache state failed",
+                                   seqId, nullptr);
         parked_[seqId].reset();
         clearSeqKv(seqId);
       }
@@ -2589,9 +2526,10 @@ void ContinuousBatchScheduler::freeSlot(uint32_t seqId) noexcept {
   }
 }
 
-ObservedRequestStats computeObservedStats(
-    const std::chrono::steady_clock::time_point enqueuedAt, const Request& req,
-    const std::optional<GenerationStopReason> stopReason) {
+ObservedRequestStats
+computeObservedStats(const std::chrono::steady_clock::time_point enqueuedAt,
+                     const Request &req,
+                     const std::optional<GenerationStopReason> stopReason) {
   ObservedRequestStats observed;
   observed.stopReason = stopReason;
   observed.generatedTokens = static_cast<int64_t>(req.generatedTokens.size());
@@ -2625,14 +2563,14 @@ ObservedRequestStats computeObservedStats(
 }
 
 ObservedRequestStats
-aggregateObservedStats(const std::vector<ObservedRequestStats>& all) {
+aggregateObservedStats(const std::vector<ObservedRequestStats> &all) {
   ObservedRequestStats agg;
   double ttftSum = 0.0;
   double tpsSum = 0.0;
   int64_t ttftCount = 0;
   int64_t tpsCount = 0;
   bool stopReasonAgrees = true;
-  for (const ObservedRequestStats& stats : all) {
+  for (const ObservedRequestStats &stats : all) {
     agg.generatedTokens += stats.generatedTokens;
     agg.promptTokens += stats.promptTokens;
     // Summed like the token counts rather than averaged: a multi-item group's
@@ -2669,8 +2607,8 @@ aggregateObservedStats(const std::vector<ObservedRequestStats>& all) {
   return agg;
 }
 
-void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
-    const SlotState& slot, const Request& req) {
+void ContinuousBatchScheduler::accumulateSlotRuntimeStats(const SlotState &slot,
+                                                          const Request &req) {
   int64_t nPast = 0;
   int64_t toolsDropped = 0;
   // Read after the caller has finalized the driver, so a finished sequence

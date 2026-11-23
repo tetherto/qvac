@@ -100,7 +100,11 @@ async function mountModelFiles(module, mounts, mountpoint, path) {
   try {
     module.FS.mount(module.FS.filesystems.WORKERFS, { files }, mountpoint)
   } catch (error) {
-    module.FS.rmdir(mountpoint)
+    try {
+      module.FS.rmdir(mountpoint)
+    } catch {
+      mounts.push({ mountpoint, mounted: false })
+    }
     throw error
   }
   mounts.push(mountpoint)
@@ -110,17 +114,22 @@ async function mountModelFiles(module, mounts, mountpoint, path) {
 function unmountModelFiles(module, mounts) {
   const pending = mounts.splice(0)
   let firstError = null
-  for (const mountpoint of pending) {
-    try {
-      module.FS.unmount(mountpoint)
-    } catch (error) {
-      mounts.push(mountpoint)
-      firstError ??= error
-      continue
+  for (const entry of pending) {
+    const state = typeof entry === 'string' ? { mountpoint: entry, mounted: true } : entry
+    if (state.mounted) {
+      try {
+        module.FS.unmount(state.mountpoint)
+        state.mounted = false
+      } catch (error) {
+        mounts.push(state)
+        firstError ??= error
+        continue
+      }
     }
     try {
-      module.FS.rmdir(mountpoint)
+      module.FS.rmdir(state.mountpoint)
     } catch (error) {
+      mounts.push(state)
       firstError ??= error
     }
   }
