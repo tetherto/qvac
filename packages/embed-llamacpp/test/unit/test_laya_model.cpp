@@ -416,9 +416,14 @@ TEST_F(LayaModelTest, RuntimeStatsDescribeLastRequest) {
   EXPECT_GT(stats.at("total_tokens"), 0.0);
   EXPECT_GT(stats.at("total_time_ms"), 0.0);
   EXPECT_EQ(stats.at("batch_size"), 2048.0);
-  EXPECT_FALSE(
-      test_common::getStatString(model_->runtimeStats(), "backendName")
-          .empty());
+  const std::string backendName =
+      test_common::getStatString(model_->runtimeStats(), "backendName");
+  const std::string expectedBackendName = test_common::getTestBackendName();
+  if (expectedBackendName.empty()) {
+    EXPECT_FALSE(backendName.empty());
+  } else {
+    EXPECT_EQ(backendName, expectedBackendName);
+  }
 }
 
 TEST(LayaModelBatchTest, BatchSizeSetsTheContext) {

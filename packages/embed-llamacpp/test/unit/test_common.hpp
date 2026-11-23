@@ -23,6 +23,17 @@ inline const char* getTestGpuLayers() {
 #endif
 }
 
+// Empty off Apple, where the backend depends on the runner's GPU.
+inline const char* getTestBackendName() {
+#if defined(__APPLE__) && defined(__x86_64__)
+  return "cpu";
+#elif defined(__APPLE__)
+  return "metal";
+#else
+  return "";
+#endif
+}
+
 inline std::string getStatString(
     const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
     const std::string& key) {
