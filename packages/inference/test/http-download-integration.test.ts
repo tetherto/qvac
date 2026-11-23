@@ -1,12 +1,20 @@
 import test from 'brittle'
 import http from 'bare-http1'
 import fs from 'bare-fs'
+import path from 'bare-path'
+import crypto from 'bare-crypto'
 import Buffer from 'bare-buffer'
-import { downloadModelFromHttp, isResumableTransferError } from '@/handlers/load-model/http'
+import AbortController from 'bare-abort-controller'
+import {
+  downloadHttpFileToPath,
+  downloadModelFromHttp,
+  isResumableTransferError
+} from '@/handlers/load-model/http'
 import { partialDownloadPath } from '@/handlers/load-model/download-lock'
 import {
   ChecksumUnavailableError,
   ChecksumValidationFailedError,
+  DownloadCancelledError,
   HTTPError,
   InsecureModelSourceError,
   PartialDownloadOfflineError
@@ -30,11 +38,15 @@ function bytesEqual(a: Buffer, b: Buffer): boolean {
 interface Server {
   base: string
   served206: () => boolean
+  requestedRange: () => boolean
+  truncated: () => boolean
   close: () => Promise<void>
 }
 
 async function startServer(): Promise<Server> {
   let sent206 = false
+  let sawRange = false
+  let truncated = false
   const server = http.createServer((req, res) => {
     const url = req.url ?? '/'
     if (url === '/redirect') {
@@ -48,6 +60,24 @@ async function startServer(): Promise<Server> {
       return
     }
     const range = req.headers['range']
+    if (range !== undefined) sawRange = true
+    if (url === '/ignore-range') {
+      res.writeHead(200, { 'content-length': String(CONTENT.length) })
+      res.end(CONTENT)
+      return
+    }
+    if (url === '/truncate-once' && range === undefined && !truncated) {
+      truncated = true
+      res.writeHead(200, { 'content-length': String(CONTENT.length) })
+      res.end(CONTENT.subarray(0, CONTENT.length / 2))
+      return
+    }
+    if (url === '/slow-cancel' && range === undefined) {
+      res.writeHead(200, { 'content-length': String(CONTENT.length) })
+      res.write(CONTENT.subarray(0, CONTENT.length / 2))
+      setTimeout(() => res.end(CONTENT.subarray(CONTENT.length / 2)), 100)
+      return
+    }
     if (range !== undefined) {
       const match = /bytes=(\d+)-/.exec(String(range))
       const start = match && match[1] ? parseInt(match[1]) : 0
@@ -68,8 +98,16 @@ async function startServer(): Promise<Server> {
   return {
     base: `http://127.0.0.1:${port}`,
     served206: () => sent206,
+    requestedRange: () => sawRange,
+    truncated: () => truncated,
     close: () => new Promise<void>((resolve) => server.close(() => resolve()))
   }
+}
+
+function sha256(bytes: Uint8Array): string {
+  const hash = crypto.createHash('sha-256')
+  hash.update(Buffer.from(bytes))
+  return hash.digest('hex')
 }
 
 test('downloadModelFromHttp: follows a redirect and streams the body to disk intact', async (t) => {
@@ -111,6 +149,149 @@ test('downloadModelFromHttp: resumes a partial download via a Range/206 request'
     'resumed file is complete and correct'
   )
   t.absent(fs.existsSync(partialDownloadPath(modelPath)), 'the partial file was moved into place')
+})
+
+test('downloadModelFromHttp: replaces a partial when the server ignores Range with 200', async (t) => {
+  const cacheDir = useTestCacheDir()
+  fs.rmSync(cacheDir, { recursive: true, force: true })
+  const server = await startServer()
+  t.teardown(async () => {
+    await server.close()
+    fs.rmSync(cacheDir, { recursive: true, force: true })
+  })
+
+  const url = `${server.base}/ignore-range`
+  const modelPath = await downloadModelFromHttp(url)
+  fs.rmSync(modelPath)
+  fs.writeFileSync(partialDownloadPath(modelPath), CONTENT.subarray(0, CONTENT.length / 2))
+  await downloadModelFromHttp(url)
+
+  t.ok(server.requestedRange(), 'the existing partial caused a Range request')
+  t.ok(
+    bytesEqual(fs.readFileSync(modelPath) as Buffer, CONTENT),
+    'the 200 body replaced the partial'
+  )
+})
+
+test('downloadHttpFileToPath: retries a cleanly truncated response before publishing', async (t) => {
+  const cacheDir = useTestCacheDir()
+  fs.rmSync(cacheDir, { recursive: true, force: true })
+  fs.mkdirSync(cacheDir, { recursive: true })
+  const server = await startServer()
+  t.teardown(async () => {
+    await server.close()
+    fs.rmSync(cacheDir, { recursive: true, force: true })
+  })
+
+  const finalPath = path.join(cacheDir, 'truncated.gguf')
+  await downloadHttpFileToPath({
+    url: `${server.base}/truncate-once`,
+    finalPath,
+    downloadKey: 'truncated',
+    expectedSize: CONTENT.length,
+    expectedChecksum: sha256(CONTENT)
+  })
+
+  t.ok(server.truncated(), 'the first response ended before its declared length')
+  t.ok(
+    bytesEqual(fs.readFileSync(finalPath) as Buffer, CONTENT),
+    'only the verified file was published'
+  )
+})
+
+test('downloadHttpFileToPath: rejects an invalid digest and publishes nothing', async (t) => {
+  const cacheDir = useTestCacheDir()
+  fs.rmSync(cacheDir, { recursive: true, force: true })
+  fs.mkdirSync(cacheDir, { recursive: true })
+  const server = await startServer()
+  t.teardown(async () => {
+    await server.close()
+    fs.rmSync(cacheDir, { recursive: true, force: true })
+  })
+
+  const finalPath = path.join(cacheDir, 'invalid-digest.gguf')
+  let error: unknown
+  try {
+    await downloadHttpFileToPath({
+      url: `${server.base}/model.gguf`,
+      finalPath,
+      downloadKey: 'invalid-digest',
+      expectedSize: CONTENT.length,
+      expectedChecksum: '0'.repeat(64)
+    })
+  } catch (caught) {
+    error = caught
+  }
+  t.ok(error instanceof ChecksumValidationFailedError, 'the digest mismatch is typed')
+  t.absent(fs.existsSync(finalPath), 'the rejected file was never published')
+  t.absent(fs.existsSync(partialDownloadPath(finalPath)), 'the rejected partial was deleted')
+})
+
+test('downloadHttpFileToPath: cancellation publishes nothing and a later call resumes', async (t) => {
+  const cacheDir = useTestCacheDir()
+  fs.rmSync(cacheDir, { recursive: true, force: true })
+  fs.mkdirSync(cacheDir, { recursive: true })
+  const server = await startServer()
+  t.teardown(async () => {
+    await server.close()
+    fs.rmSync(cacheDir, { recursive: true, force: true })
+  })
+
+  const finalPath = path.join(cacheDir, 'cancel-resume.gguf')
+  const controller = new AbortController()
+  let cancelled = false
+  await t.exception(
+    downloadHttpFileToPath({
+      url: `${server.base}/slow-cancel`,
+      finalPath,
+      downloadKey: 'cancel-resume',
+      expectedSize: CONTENT.length,
+      expectedChecksum: sha256(CONTENT),
+      signal: controller.signal,
+      progressCallback: () => {
+        if (!cancelled) {
+          cancelled = true
+          setTimeout(() => controller.abort(undefined), 0)
+        }
+      }
+    }),
+    DownloadCancelledError
+  )
+  t.absent(fs.existsSync(finalPath), 'a cancelled partial is not published')
+
+  await downloadHttpFileToPath({
+    url: `${server.base}/slow-cancel`,
+    finalPath,
+    downloadKey: 'cancel-resume',
+    expectedSize: CONTENT.length,
+    expectedChecksum: sha256(CONTENT)
+  })
+  t.ok(server.requestedRange(), 'the later call resumed from the cancelled partial')
+  t.ok(bytesEqual(fs.readFileSync(finalPath) as Buffer, CONTENT))
+})
+
+test('downloadHttpFileToPath: streams, verifies, and publishes 20 times in one process', async (t) => {
+  const cacheDir = useTestCacheDir()
+  fs.rmSync(cacheDir, { recursive: true, force: true })
+  fs.mkdirSync(cacheDir, { recursive: true })
+  const server = await startServer()
+  t.teardown(async () => {
+    await server.close()
+    fs.rmSync(cacheDir, { recursive: true, force: true })
+  })
+
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const finalPath = path.join(cacheDir, `stress-${iteration}.gguf`)
+    await downloadHttpFileToPath({
+      url: `${server.base}/model.gguf`,
+      finalPath,
+      downloadKey: `stress-${iteration}`,
+      expectedSize: CONTENT.length,
+      expectedChecksum: sha256(CONTENT)
+    })
+    t.ok(bytesEqual(fs.readFileSync(finalPath) as Buffer, CONTENT))
+    t.absent(fs.existsSync(partialDownloadPath(finalPath)))
+  }
 })
 
 test('downloadModelFromHttp: offline with only a partial download fails as an offline partial', async (t) => {

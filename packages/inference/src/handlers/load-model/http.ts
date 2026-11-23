@@ -47,6 +47,7 @@ import {
 } from '@/errors/index'
 import { getEngineLogger } from '@/logging/index'
 import { joinWithinBase } from '@/utils/path-security'
+import { measureChecksum } from '@/utils/checksum'
 import type { DownloadHooks, DownloadSecurityOptions } from '@/handlers/load-model/types'
 
 const logger = getEngineLogger()
@@ -435,6 +436,12 @@ async function performHttpDownload(
     throw error instanceof Error ? error : new Error(String(error))
   }
 
+  if (totalBytes > 0 && downloadedBytes !== totalBytes) {
+    throw new Error(
+      `HTTP transfer ended early: expected ${totalBytes} bytes, received ${downloadedBytes}`
+    )
+  }
+
   return meta
 }
 
@@ -573,6 +580,45 @@ async function downloadVerifyAndPublish(
   )
   await verifyHttpModelFile(url, partialPath, meta.hubSha256, requireChecksum, hooks)
   await publishDownload(finalPath)
+}
+
+export interface HttpFileDownloadOptions {
+  url: string
+  finalPath: string
+  downloadKey: string
+  expectedSize: number
+  expectedChecksum: string
+  progressCallback?: ((progress: ModelProgressUpdate) => void) | undefined
+  signal?: AbortSignal | undefined
+  hooks?: DownloadHooks | undefined
+}
+
+/** Download one known file through the normal resumable HTTP path, then publish it. */
+export async function downloadHttpFileToPath(options: HttpFileDownloadOptions): Promise<void> {
+  const partialPath = partialDownloadPath(options.finalPath)
+  await performHttpDownloadWithResume(
+    options.url,
+    partialPath,
+    options.downloadKey,
+    true,
+    options.progressCallback,
+    options.signal
+  )
+
+  const size = (await fsPromises.stat(partialPath)).size
+  if (options.expectedSize > 0 && size !== options.expectedSize) {
+    if (size > options.expectedSize) await fsPromises.unlink(partialPath).catch(() => {})
+    throw new Error(
+      `Downloaded file size mismatch: expected ${options.expectedSize} bytes, received ${size}`
+    )
+  }
+
+  const actualChecksum = await measureChecksum(partialPath, options.hooks)
+  if (actualChecksum !== options.expectedChecksum) {
+    await fsPromises.unlink(partialPath).catch(() => {})
+    throw new ChecksumValidationFailedError(options.url)
+  }
+  await publishDownload(options.finalPath)
 }
 
 export async function downloadModelFromHttp(
