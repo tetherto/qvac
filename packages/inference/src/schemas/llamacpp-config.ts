@@ -351,6 +351,26 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       "On-demand reading of large tensors such as per-layer embeddings, which requires mmap: `'on'` reads their rows from disk instead of keeping them resident, `'off'` always keeps them resident, `'auto'` (default) applies `'on'` above 4 GiB."
     ),
+  'coreml-ffn': z
+    .boolean()
+    .optional()
+    .describe(
+      'Run part of each prompt-processing FFN through a Core ML sidecar on macOS and iOS, with the rest on Metal; decode stays on Metal. Fabric picks the split from the model. Only prompt batches of 256 or more tokens use it, so keep `ubatch-size` at 256 or above. The first load exports and compiles the sidecar into `coreml-ffn-cache` from the GGUF, and later loads reuse it. The sidecar stays resident beside the GGUF, 3 GB or more on the larger models, and model fit checks do not count it. A model fabric has no Core ML FFN template for, a split GGUF, finetuning, a layer off Metal or a build without Core ML FFN logs a warning and runs on Metal. Default false.'
+    ),
+  'coreml-ffn-split': z
+    .string()
+    .regex(/^[1-9]\d*x[12]$/, 'Expected METALxN, such as 2048x1 or 8192x2')
+    .optional()
+    .describe(
+      "Overrides the automatic Core ML FFN split as `METALxN`: FFN channels kept on Metal, then Core ML programs per layer (1 or 2). A split the model does not support logs a warning and runs on Metal. Requires `'coreml-ffn': true`."
+    ),
+  'coreml-ffn-cache': z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Writable directory for the compiled Core ML FFN programs. Unset uses `$LLAMA_CACHE/coreml-ffn`, else `~/Library/Caches/llama.cpp/coreml-ffn`. Pass an absolute path private to the app: programs already in it are loaded without verification and never pruned. Ignored unless `'coreml-ffn'` is true, so it can be set once in device defaults."
+    ),
   fit: z
     .boolean()
     .optional()
@@ -474,6 +494,13 @@ export const llmConfigSchema = llmConfigBaseSchema
         code: 'custom',
         path: ['draftModelSrc'],
         message: "draftModelSrc requires spec_type 'draft-mtp' or 'draft-dflash'."
+      })
+    }
+    if (data['coreml-ffn'] !== true && data['coreml-ffn-split'] !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['coreml-ffn-split'],
+        message: "coreml-ffn-split requires 'coreml-ffn': true."
       })
     }
   })
