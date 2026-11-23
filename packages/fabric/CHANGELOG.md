@@ -1,5 +1,54 @@
 # Changelog
 
+## [0.33.0] - 2026-11-23
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11739.5.0` -> `12032.0.0`, which rebases
+  fabric from upstream b11739 onto b12032
+  ([qvac-fabric-llm.cpp#506](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/506)).
+- RPC protocol 117 -> 118. `GGML_OP_TOP_K_MASK` goes in before
+  `GGML_OP_UNARY`, so every later op id moves, and the ragged ops now come
+  before the ConvRot ops. An 11739 RPC peer and a 12032 one cannot connect:
+  `@qvac/ggml-rpc-server` and its clients move to this release together.
+- `common.h`: `common_control_vector_load` takes `n_layer`,
+  `fs_path_to_utf8` is removed, and `common_params` gains fields, among them
+  `common_params_speculative_draft::n_max_explicit`. Native consumers must
+  rebuild against these headers, and every addon loaded in one process must
+  resolve the same `@qvac/fabric` minor.
+
+### Added
+
+- ggml API: `ggml_top_k_mask`, `ggml_backend_tensor_copy_n`,
+  `ggml_backend_tensor_set_n`, `ggml_backend_tensor_get_n`,
+  `ggml_prec_get_acc` and `ggml_prec_get_src`.
+- The CUDA 13 modules (linux-x64, linux-arm64, win32-x64) carry fabric's
+  CUTLASS MXFP4/NVFP4 matmuls, which run only on Blackwell GPUs (compute
+  capability 12.x); other GPUs and the Jetson module behave as before
+  ([qvac-registry-vcpkg#502](https://github.com/tetherto/qvac-registry-vcpkg/pull/502)).
+
+### Changed
+
+- `draft-dflash` drafts 5 tokens per step when the draft length is not set,
+  instead of 3. The CLI argument parser applies it; callers that fill
+  `common_params` themselves call `common_speculative_set_default_n_max` once
+  the spec types are final. Other spec types keep 3
+  ([qvac-fabric-llm.cpp#557](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/557)).
+- CUDA and Vulkan mat-muls with 9-32 columns are faster: 16-row few-row MMQ
+  tiles on DGX Spark with bit-identical results, and narrow-N coopmat tiles
+  on NVIDIA Vulkan devices, which `GGML_VK_DISABLE_NARROW_MUL_MAT` turns off.
+  Other Vulkan vendors keep the base tiles
+  ([qvac-fabric-llm.cpp#555](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/555)).
+
+### Fixed
+
+- WebGPU: K-quant weights are rebuilt in `f32`, so Intel GPUs that flush
+  subnormal `f16` values no longer produce corrupted output
+  ([qvac-fabric-llm.cpp#567](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/567)).
+- WebGPU browser builds: the logger runs without pthreads, device creation
+  keeps the adapter that passed validation, and the Memory64 build compiles
+  ([qvac-fabric-llm.cpp#554](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/554)).
+
 ## [0.32.0] - 2026-11-23
 
 This release splits the Linux x64 CUDA backend into its own automatically
