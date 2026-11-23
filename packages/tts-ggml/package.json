@@ -1,10 +1,7 @@
 {
   "name": "@qvac/tts-ggml",
-  "version": "0.15.1",
+  "version": "0.16.1",
   "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic + parler + cosyvoice3 + audio8 + moss + moss-sfx + moss-speech + Pocket engines from tts-cpp)",
-  "qvac": {
-    "ggml-speech": "2026-10-27#1"
-  },
   "engines": {
     "bare": ">=1.19.0"
   },
@@ -35,9 +32,7 @@
   "scripts": {
     "build": "npm run build:ts && npm run build:native",
     "build:native": "bare-make generate -D BUILD_FUZZING=OFF && bare-make build && bare-make install && npm run link:platform",
-    "build:native:cuda": "bare-make generate -D ENABLE_CUDA=ON -D BUILD_FUZZING=OFF && bare-make build && bare-make install && npm run link:platform",
     "link:platform": "node ../../scripts/ci/slice-platform-packages.mjs --link-local --workdir .",
-    "build:cuda": "npm run build:ts && npm run build:native:cuda",
     "build:ts": "tsc -p tsconfig.build.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "check:generated": "node scripts/check-generated.mjs",
@@ -200,7 +195,7 @@
     "typescript-eslint": "^8.63.0",
     "cmake-npm": "^1.1.0",
     "bare-url": "^2.1.6",
-    "bare-https": "^3.0.0",
+    "bare-https": "^4.0.0",
     "bare-stream": "^2.7.0",
     "bare-subprocess": "^6.2.1",
     "brittle": "^3.17.0",
@@ -211,7 +206,9 @@
     "cmake-runtime": "^4.1.1",
     "llvm-runtime": "^23.1.0",
     "nasm-runtime": "^3.2.0",
-    "ninja-runtime": "^1.13.1"
+    "ninja-runtime": "^1.13.1",
+    "@qvac/fabric-android-arm64": "^0.31.0",
+    "@qvac/fabric-ios": "^0.31.0"
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
@@ -219,19 +216,37 @@
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.6",
-    "bare-https": "^3.0.0",
+    "bare-https": "^4.0.0",
     "bare-os": "^3.8.0",
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2",
     "bare-stream": "^2.7.0",
-    "bare-url": "^2.4.3"
+    "bare-url": "^2.4.3",
+    "@qvac/fabric": "^0.31.0"
   },
   "optionalDependencies": {
     "@qvac/tts-ggml-linux-x64": "0.11.0",
     "@qvac/tts-ggml-linux-arm64": "0.11.0",
     "@qvac/tts-ggml-darwin-arm64": "0.11.0",
     "@qvac/tts-ggml-darwin-x64": "0.11.0",
-    "@qvac/tts-ggml-win32-x64": "0.11.0"
+    "@qvac/tts-ggml-win32-x64": "0.11.0",
+    "@qvac/fabric-linux-x64": "^0.31.0",
+    "@qvac/fabric-linux-arm64": "^0.31.0",
+    "@qvac/fabric-darwin-arm64": "^0.31.0",
+    "@qvac/fabric-darwin-x64": "^0.31.0",
+    "@qvac/fabric-win32-x64": "^0.31.0"
   },
-  "types": "index.d.ts"
+  "types": "index.d.ts",
+  "peerDependencies": {
+    "@qvac/fabric-android-arm64": "^0.31.0",
+    "@qvac/fabric-ios": "^0.31.0"
+  },
+  "peerDependenciesMeta": {
+    "@qvac/fabric-android-arm64": {
+      "optional": true
+    },
+    "@qvac/fabric-ios": {
+      "optional": true
+    }
+  }
 }

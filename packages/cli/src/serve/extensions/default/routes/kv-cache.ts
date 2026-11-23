@@ -2,7 +2,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 import { deleteCache } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
-import { responsesKvCacheRetention } from '@/serve/lib/responses-kv-cache'
+import { namedKvCacheRetention } from '@/serve/lib/named-kv-cache'
 
 const reclaimResult = z.object({
   object: z.literal('kv_cache.reclaim'),
@@ -24,10 +24,10 @@ Removes every automatic cache no in-flight request is using. Deleting one costs
 the next turn a full prefill instead of a partial one; no conversation content
 is lost, since a KV cache is derived data.
 
-\`/v1/responses\` caches (selected by \`X-QVAC-KV-Cache-Key\`,
-\`metadata.qvac_kv_cache_key\` or \`prompt_cache_key\`) follow the same quota
-and TTL, and this endpoint removes every one this server has used and no
-request is using now. Responses caches of other processes are left to the TTL,
+Caches named on \`/v1/chat/completions\` or \`/v1/responses\` (with
+\`X-QVAC-KV-Cache-Key\`, \`metadata.qvac_kv_cache_key\` or \`prompt_cache_key\`)
+follow the same quota and TTL, and this endpoint removes every one this server
+has used and no request is using now. Those of other processes are left to the TTL,
 and a cache any running QVAC process is using is never deleted.
 
 Other caller-owned *named* caches (\`completion({ kvCache: "my-session" })\`) sit
@@ -57,7 +57,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     async () => {
       try {
         await deleteCache({ auto: true })
-        await responsesKvCacheRetention.sweep({ all: true })
+        await namedKvCacheRetention.sweep({ all: true })
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         app.qvac.logger.error(`  kv-cache reclaim failed: ${message}`)

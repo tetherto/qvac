@@ -222,7 +222,7 @@ Most users interact with the package through `index.js`. From that entrypoint we
 | `config.parakeetConfig` | `maxThreads` | CPU threads (default: `4`); `0` defers to the engine's `hardware_concurrency` |
 | | `useGPU` | Enable the linked ggml GPU backend (default: `false`) |
 | | `streaming` | Open a long-lived `StreamSession` / `SortformerStreamSession` so speaker IDs stay stable across appends and EOU `<EOU>` boundaries surface as segments. Cross-append state is preserved only within a single `run()` call -- separate `run()` invocations on the same instance start a fresh session. For continuous live capture, drive a single long-running `run()` from a pushable stream, or use the duplex `runStreaming()` API which owns one streaming session for the lifetime of the call. Default: `false` (offline `transcribe_samples` / `diarize_samples`). |
-| | `streamingChunkMs` | Streaming chunk cadence in ms (default: 2000) |
+| | `streamingChunkMs` | Model-specific decode window in ms. Offline TDT push streams default to 30,000 ms and require at least 30,000 ms. |
 | | `streamingHistoryMs` | Sortformer rolling-history window in ms (default: 30000) |
 | | `streamingEmitPartials` | Emit partials before chunk boundaries (default: `true`) |
 | | `streamingEnergyVad` | CTC/TDT energy-VAD events (default: `false`) |
@@ -367,6 +367,9 @@ emits them. The session stays open across chunks, so the rolling
 encoder context, EOU detector, and Sortformer speaker history are all
 preserved (no chunk-boundary state resets).
 
+For TDT v3, leave `streamingChunkMs` unset to use the 30,000 ms decode window.
+Explicit decode windows below 30,000 ms are rejected. Smaller PCM writes are supported.
+
 ```javascript
 // Construct with `streaming: true` so the addon configures the
 // duplex-friendly defaults at load time:
@@ -375,7 +378,6 @@ const model = new TranscriptionParakeet({
   config: {
     parakeetConfig: {
       streaming: true,
-      streamingChunkMs: 2000,
       useGPU: true
     }
   }
@@ -391,11 +393,7 @@ const audio = pushableStream()
 captureProcess.stdout.on('data', chunk => audio.push(chunk))
 captureProcess.on('exit', () => audio.end())
 
-const response = await model.runStreaming(audio, {
-  // optional per-call overrides; omitted fields fall back to the
-  // matching `parakeetConfig.streaming*` value used at load time
-  chunkMs: 2000
-})
+const response = await model.runStreaming(audio)
 
 await response
   .onUpdate(segments => {
@@ -446,6 +444,9 @@ await response.onUpdate(() => {}).await()
 // response.stats.encoderUsedCoreml // offline ASR and batch diarization only:
 //                                  //   1 when every call in the job ran its
 //                                  //   encoder on Core ML, 0 when any ran on ggml
+// response.stats.decoderUsedCoreml // offline ASR only: 1 when every
+//                                  //   transcription decoded on the Core ML TDT
+//                                  //   decoder sidecar, 0 when any decoded on ggml
 // response.stats.audioDurationMs, encoderMs, decoderMs, melSpecMs, totalEncodedFrames, ...
 ```
 

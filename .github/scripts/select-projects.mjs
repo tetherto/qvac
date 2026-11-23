@@ -64,6 +64,7 @@ const METADATA = {
   prebuildExtraDirs: ['publish'],
   secrets: ['test:integration', 'test:backend', 'benchmark', 'test:mobile', 'cpp:tests', 'cache:models'],
   // A model directory no manifest lists: { path, keyFiles }, relative to the package; cache:models fills it.
+  // { path, plan: true } instead: the target plans its own models (_desktop.yml).
   modelCache: ['test:integration'],
   baseline: ['cpp:tests'],
   perfReport: ['test:integration'],
@@ -91,14 +92,16 @@ export const SECRETS = [
 ]
 // platformPackages publishes one npm package per platform before the meta; nameTransform renames the GPR build;
 // githubRelease names the GitHub release created after the npm publish; releaseGuard checks the release PR
-// (pr-checks.yml); releaseNotes needs the version's CHANGELOG section before the npm publish.
+// (pr-checks.yml); releaseNotes needs the version's CHANGELOG section before the npm publish; maxTarballBytes warns on a
+// platform package packed over that many bytes and publishes it first.
 const PUBLISH_KEYS = [
   'tagPrefix',
   'platformPackages',
   'nameTransform',
   'githubRelease',
   'releaseGuard',
-  'releaseNotes'
+  'releaseNotes',
+  'maxTarballBytes'
 ]
 const MOBILE_KEYS = [
   'devicefarmProject',
@@ -214,15 +217,24 @@ export function checkMetadata(project, target) {
       `${project.name} ${target}: metadata.secrets takes ${SECRETS.join(', ')}, found ${unknownSecrets.join(', ')}`
     )
   if (meta.modelCache) {
-    const { path, keyFiles, ...extra } = meta.modelCache
-    if (typeof path !== 'string' || !Array.isArray(keyFiles) || !keyFiles.length || Object.keys(extra).length)
-      throw new Error(`${project.name} ${target}: metadata.modelCache takes path and a non-empty keyFiles`)
+    const { path, keyFiles, plan, ...extra } = meta.modelCache
+    const keyed = Array.isArray(keyFiles) && keyFiles.length > 0 && plan === undefined
+    const planned = plan === true && keyFiles === undefined
+    if (typeof path !== 'string' || !(keyed || planned) || Object.keys(extra).length)
+      throw new Error(
+        `${project.name} ${target}: metadata.modelCache takes path and either a non-empty keyFiles or plan: true`
+      )
   }
   if (meta.publish) {
     const extra = Object.keys(meta.publish).filter((k) => !PUBLISH_KEYS.includes(k))
     if (extra.length)
       throw new Error(
         `${project.name} ${target}: metadata.publish takes ${PUBLISH_KEYS.join(', ')}, found ${extra.join(', ')}`
+      )
+    const max = meta.publish.maxTarballBytes
+    if (max !== undefined && !(Number.isSafeInteger(max) && max > 0 && meta.publish.platformPackages))
+      throw new Error(
+        `${project.name} ${target}: metadata.publish.maxTarballBytes is a positive byte count and needs platformPackages`
       )
   }
   return meta
@@ -294,7 +306,8 @@ export const nativeBuild = (n) =>
 export const jsBuild = (n) => Boolean(n.data.targets.build) && !nativeBuild(n)
 
 // configs, when set, keeps only those configurations: a mobile dispatch runs its one platform. prLabels and baseRef
-// route the configurations that declare ci.labels; see routeLabelled.
+// route the configurations that declare ci.labels; see routeLabelled. releasedProviders builds consumers against
+// their providers' installed npm release: no provider rows for them, and no provider prebuilds to restore.
 export function select({
   graph,
   affected,
@@ -305,7 +318,8 @@ export function select({
   prLabels = [],
   baseRef = '',
   dispatch = false,
-  tags = [TAG]
+  tags = [TAG],
+  releasedProviders = false
 }) {
   // tags names the groups a workflow serves.
   const tagged = Object.values(graph.nodes).filter((n) => n.data.tags?.some((t) => tags.includes(t)))
@@ -328,7 +342,7 @@ export function select({
       key: gate[dir] ?? '',
       // The npm name whose platform packages provide the addon's symbols, and the slugs whose prebuilds it restores.
       provider: providers.length ? npmName(graph.nodes[providers[0]]) : '',
-      providers: providers.map((p) => graph.nodes[p].data.root.split('/').pop()),
+      providers: releasedProviders ? [] : providers.map((p) => graph.nodes[p].data.root.split('/').pop()),
       targets: ['build'],
       // A package without a native build has no prebuilds to restore.
       hasBuild: nativeBuild(n),
@@ -387,7 +401,7 @@ export function select({
       'cpp:lint:providers': lint
     }
     for (const [name, consumers] of Object.entries(feeds))
-      out.matrices[name] = providerRows(graph, consumers, { labels, common })
+      out.matrices[name] = providerRows(graph, releasedProviders ? [] : consumers, { labels, common })
     // A selected provider's own build rows move into its provider rows, so each configuration builds once.
     const id = (r) => `${r.project}@${r.config}`
     for (const [name, into] of [
@@ -665,6 +679,7 @@ function main(env) {
     dispatch: !pr && env.GITHUB_EVENT_NAME === 'workflow_dispatch',
     tags: (env.TAGS || TAG).split(/[\s,]+/).filter(Boolean),
     configs: (env.CONFIGS || '').split(/[\s,]+/).filter(Boolean),
+    releasedProviders: env.RELEASED_PROVIDERS === 'true',
     gate: gateKeys(readFileSync('.github/workflows/pr-gate-merge.yml', 'utf8'))
   })
   Object.assign(result.matrices, combine(result.matrices, env.COMBINE))

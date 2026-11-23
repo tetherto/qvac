@@ -4,6 +4,7 @@ import { llmPlugin } from '@qvac/inference/llamacpp-completion/plugin'
 import { decisionPlugin } from '@qvac/inference/llamacpp-decision/plugin'
 import { rerankPlugin } from '@qvac/inference/llamacpp-rerank/plugin'
 import { imageEmbeddingPlugin } from '@qvac/inference/ggml-image-embedding/plugin'
+import { stereoDepthPlugin } from '@qvac/inference/ggml-stereo-depth/plugin'
 import { embeddingsPlugin } from '@qvac/inference/llamacpp-embedding/plugin'
 import { whisperPlugin } from '@qvac/inference/whispercpp-transcription/plugin'
 import { bciPlugin } from '@qvac/inference/bci-whispercpp-transcription/plugin'
@@ -23,6 +24,7 @@ export default function start(ipc: Duplex, ready: () => void) {
       llmPlugin,
       embeddingsPlugin,
       imageEmbeddingPlugin,
+      stereoDepthPlugin,
       decisionPlugin,
       rerankPlugin,
       whisperPlugin,

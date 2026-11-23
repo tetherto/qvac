@@ -73,6 +73,7 @@ class AssessModelFitRequestModelsItemModelSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -181,6 +182,7 @@ class AssessModelFitRequestModelsItemModelType(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -419,7 +421,7 @@ class ModelFitModelResult(GeneratedBaseModel):
     status: Annotated[
         ModelFitModelResultStatus,
         Field(
-            description="The engine fitter's verdict for this model alone.",
+            description="This model's verdict alone: the engine fitter's, and `does-not-fit` when its rows sharing one memory pool take more than 90% of that pool's free memory.",
             title="ModelFitModelResultStatus",
         ),
     ]
@@ -433,6 +435,12 @@ class ModelFitModelResult(GeneratedBaseModel):
         LlamaFitStats | dict[str, Any],
         Field(description="The resolved load of a llama.cpp verdict. Empty otherwise."),
     ]
+    reason: Annotated[
+        str | None,
+        Field(
+            description="Why the model has no verdict, or why devices that each fit do not fit together. Present when `status` is `unknown`, and when it is `does-not-fit` because devices sharing one memory pool overflow it."
+        ),
+    ] = None
 
 
 class AssessModelFitResponse(GeneratedBaseModel):
@@ -2439,7 +2447,10 @@ class BatchCompletionStreamRequestPromptsItemHistoryItem(GeneratedBaseModel):
     ] = None
     attachments: Annotated[
         list[BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem] | None,
-        Field(description="Optional file attachments for multimodal models."),
+        Field(
+            deprecated=True,
+            description="Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+        ),
     ] = None
     tool_calls: Annotated[
         list[BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItem] | None,
@@ -4270,6 +4281,7 @@ class CancelRequestBroadKind(Enum):
     batch_completion = "batchCompletion"
     embeddings = "embeddings"
     image_embedding = "imageEmbedding"
+    stereo_depth = "stereoDepth"
     decision = "decision"
     rerank = "rerank"
     transcribe = "transcribe"
@@ -4505,7 +4517,10 @@ class CompletionOrchestrateRequestHistoryItem(GeneratedBaseModel):
     ] = None
     attachments: Annotated[
         list[CompletionOrchestrateRequestHistoryItemAttachmentsItem] | None,
-        Field(description="Optional file attachments for multimodal models."),
+        Field(
+            deprecated=True,
+            description="Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+        ),
     ] = None
     tool_calls: Annotated[
         list[CompletionOrchestrateRequestHistoryItemToolCallsItem] | None,
@@ -5247,7 +5262,10 @@ class CompletionStreamRequestHistoryItem(GeneratedBaseModel):
     ] = None
     attachments: Annotated[
         list[CompletionStreamRequestHistoryItemAttachmentsItem] | None,
-        Field(description="Optional file attachments for multimodal models."),
+        Field(
+            deprecated=True,
+            description="Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+        ),
     ] = None
     tool_calls: Annotated[
         list[CompletionStreamRequestHistoryItemToolCallsItem] | None,
@@ -5924,6 +5942,7 @@ class ModelType(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
 
 
@@ -5933,6 +5952,7 @@ class PluginId(Enum):
     decision = "@qvac/sdk/llamacpp-decision/plugin"
     rerank = "@qvac/sdk/llamacpp-rerank/plugin"
     image_embedding = "@qvac/sdk/ggml-image-embedding/plugin"
+    stereo_depth = "@qvac/sdk/ggml-stereo-depth/plugin"
     whisper = "@qvac/sdk/whispercpp-transcription/plugin"
     bci = "@qvac/sdk/bci-whispercpp-transcription/plugin"
     moss_transcribe = "@qvac/sdk/moss-transcribe/plugin"
@@ -8183,6 +8203,138 @@ class ErrorResponse(GeneratedBaseModel):
     ] = None
 
 
+class EstimateDisparityRequest(GeneratedBaseModel):
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="Loaded `ggml-stereo-depth` model.",
+            min_length=1,
+        ),
+    ]
+    left: Annotated[
+        str,
+        Field(
+            description="Rectified left view: JPEG/PNG bytes, or packed RGB bytes, encoded as base64. Both views must have the same size.",
+            json_schema_extra={"contentEncoding": "base64"},
+            min_length=1,
+            pattern="^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+        ),
+    ]
+    right: Annotated[
+        str,
+        Field(
+            description="Rectified right view: JPEG/PNG bytes, or packed RGB bytes, encoded as base64. Both views must have the same size.",
+            json_schema_extra={"contentEncoding": "base64"},
+            min_length=1,
+            pattern="^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+        ),
+    ]
+    width: Annotated[
+        int | None,
+        Field(
+            description="Packed RGB width of both views in pixels, from 32 to 4096. Supply width, height and channels together for raw RGB, or omit all three for JPEG/PNG.",
+            ge=32,
+            le=4096,
+        ),
+    ] = None
+    height: Annotated[
+        int | None,
+        Field(
+            description="Packed RGB height of both views in pixels, from 32 to 4096. Supply width, height and channels together for raw RGB, or omit all three for JPEG/PNG.",
+            ge=32,
+            le=4096,
+        ),
+    ] = None
+    channels: Annotated[
+        Literal[3] | None, Field(description="Packed RGB channel count. Must be 3.")
+    ] = None
+    type: Literal["estimateDisparity"] = "estimateDisparity"
+    session_id: Annotated[
+        str | None,
+        Field(
+            alias="sessionId",
+            description="Identifier of the caller session this request belongs to. Omitted for requests made by the runtime owner.",
+            min_length=1,
+        ),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight request, generated by the caller at call time. Surfaces on the returned handle so the caller can target it with `cancel({ requestId })`. Optional: the engine generates one when the field is missing. Scoped to the caller session; another session cannot address it.",
+            min_length=1,
+        ),
+    ] = None
+
+
+class EstimateDisparityResponseStats(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    total_time: Annotated[
+        float | None,
+        Field(alias="totalTime", description="Native inference time in milliseconds."),
+    ] = None
+    backend_id: Annotated[
+        int | None,
+        Field(
+            alias="backendId",
+            description="Native backend ID: CPU=0, Metal=1, CUDA=2, Vulkan=3, OpenCL=4, other=99.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    cpu_fallback_nodes: Annotated[
+        int | None,
+        Field(
+            alias="cpuFallbackNodes",
+            description="Graph nodes the scheduler placed on the CPU while a GPU was selected. 0 on Metal, CUDA and Vulkan.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    weight_bytes: Annotated[
+        float | None,
+        Field(alias="weightBytes", description="Allocated model weight bytes.", ge=0.0),
+    ] = None
+
+
+class EstimateDisparityResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["estimateDisparity"] = "estimateDisparity"
+    width: Annotated[
+        int,
+        Field(
+            description="Disparity map width, equal to the input width.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ]
+    height: Annotated[
+        int,
+        Field(
+            description="Disparity map height, equal to the input height.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ]
+    disparity: Annotated[
+        str,
+        Field(
+            description="Disparity of the left view in input pixels, row-major `[height, width]`, as base64 of little-endian float32 values (`width * height * 4` bytes).",
+            json_schema_extra={"contentEncoding": "base64"},
+            pattern="^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+        ),
+    ]
+    stats: Annotated[
+        EstimateDisparityResponseStats | None,
+        Field(title="EstimateDisparityResponseStats"),
+    ] = None
+
+
 class FinetuneRunRequestOptionsValidationNone(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -8651,7 +8803,7 @@ class ModelFitProbeModel(GeneratedBaseModel):
     status: Annotated[
         ModelFitProbeModelStatus,
         Field(
-            description="The engine fitter's verdict for this model alone.",
+            description="This model's verdict alone: the engine fitter's, and `does-not-fit` when its rows sharing one memory pool take more than 90% of that pool's free memory.",
             title="ModelFitProbeModelStatus",
         ),
     ]
@@ -8665,6 +8817,12 @@ class ModelFitProbeModel(GeneratedBaseModel):
         ModelFitProbeLlamaStats | dict[str, Any],
         Field(description="The resolved load of a llama.cpp verdict. Empty otherwise."),
     ]
+    reason: Annotated[
+        str | None,
+        Field(
+            description="Why the model has no verdict, or why devices that each fit do not fit together. Present when `status` is `unknown`, and when it is `does-not-fit` because devices sharing one memory pool overflow it."
+        ),
+    ] = None
 
 
 class ModelFitProbe(GeneratedBaseModel):
@@ -12600,6 +12758,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(En
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -12712,6 +12871,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -13193,6 +13353,29 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
             title="LoadModelSrcRequestLlamacppCompletionModelConfigTensorReadLazy",
         ),
     ] = None
+    coreml_ffn: Annotated[
+        bool | None,
+        Field(
+            alias="coreml-ffn",
+            description="Run part of each prompt-processing FFN through a Core ML sidecar on macOS and iOS, with the rest on Metal; decode stays on Metal. Fabric picks the split from the model. Only prompt batches of 256 or more tokens use it, so keep `ubatch-size` at 256 or above. The first load exports and compiles the sidecar into `coreml-ffn-cache` from the GGUF, and later loads reuse it. The sidecar stays resident beside the GGUF, 3 GB or more on the larger models, and model fit checks do not count it. A model fabric has no Core ML FFN template for, a split GGUF, finetuning, a layer off Metal or a build without Core ML FFN logs a warning and runs on Metal. Default false.",
+        ),
+    ] = None
+    coreml_ffn_split: Annotated[
+        str | None,
+        Field(
+            alias="coreml-ffn-split",
+            description="Overrides the automatic Core ML FFN split as `METALxN`: FFN channels kept on Metal, then Core ML programs per layer (1 or 2). A split the model does not support logs a warning and runs on Metal. Requires `'coreml-ffn': true`.",
+            pattern="^[1-9]\\d*x[12]$",
+        ),
+    ] = None
+    coreml_ffn_cache: Annotated[
+        str | None,
+        Field(
+            alias="coreml-ffn-cache",
+            description="Writable directory for the compiled Core ML FFN programs. Unset uses `$LLAMA_CACHE/coreml-ffn`, else `~/Library/Caches/llama.cpp/coreml-ffn`. Pass an absolute path private to the app: programs already in it are loaded without verification and never pruned. Ignored unless `'coreml-ffn'` is true, so it can be set once in device defaults.",
+            min_length=1,
+        ),
+    ] = None
     fit: Annotated[
         bool | None,
         Field(
@@ -13511,6 +13694,7 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(Enum
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -14106,6 +14290,7 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAd
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -14345,6 +14530,7 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfigSpeakerAttributionModel
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -14561,7 +14747,7 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
         int | None,
         Field(
             alias="streamingChunkMs",
-            description="Streaming chunk cadence in ms. Defaults to 320 for Nemotron and 2000 for existing models. Nemotron supports 80, 160, 320, 560, or 1120.",
+            description="Streaming decode window in ms. Omit to use the model default. Offline TDT push streams, including Parakeet TDT v3, default to 30000 and require at least 30000. Full TranscribePsy EU defaults to 2000. Nemotron defaults to 320 and supports 80, 160, 320, 560, or 1120.",
             gt=0,
             le=9007199254740991,
         ),
@@ -14992,6 +15178,7 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon(Enu
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -15928,6 +16115,112 @@ class LoadModelSrcRequestGgmlImageEmbedding(GeneratedBaseModel):
     ] = None
 
 
+class LoadModelSrcRequestGgmlStereoDepthModelFitPolicy(Enum):
+    log = "log"
+    refuse = "refuse"
+    off = "off"
+
+
+class LoadModelSrcRequestGgmlStereoDepthModelConfig(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    backend: Annotated[
+        str | None,
+        Field(
+            description="Exact GGML device name, such as CPU, CUDA0, Vulkan0 or MTL0. Omit to select GPU, then CPU. Metal and Metal0 are accepted aliases. An unavailable explicit device fails to load.",
+            min_length=1,
+        ),
+    ] = None
+    threads: Annotated[
+        int | None,
+        Field(
+            description="CPU thread count, from 1 to 1024. Omit to use the native default.",
+            ge=1,
+            le=1024,
+        ),
+    ] = None
+    backends_dir: Annotated[
+        str | None,
+        Field(
+            alias="backendsDir",
+            description="Directory of GGML backend modules. Omit to use the modules shipped with Fabric.",
+            min_length=1,
+        ),
+    ] = None
+
+
+class LoadModelSrcRequestGgmlStereoDepth(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["loadModel"] = "loadModel"
+    model_src: Annotated[
+        str,
+        Field(
+            alias="modelSrc",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models.",
+        ),
+    ]
+    model_name: Annotated[str | None, Field(alias="modelName")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
+    seed: bool | None = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
+    ] = None
+    require_http_checksum: Annotated[
+        bool | None,
+        Field(
+            alias="requireHttpChecksum",
+            description="Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+        ),
+    ] = None
+    require_secure_transport: Annotated[
+        bool | None,
+        Field(
+            alias="requireSecureTransport",
+            description="Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+        ),
+    ] = None
+    model_fit_policy: Annotated[
+        LoadModelSrcRequestGgmlStereoDepthModelFitPolicy | None,
+        Field(
+            alias="modelFitPolicy",
+            description="What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+            title="LoadModelSrcRequestGgmlStereoDepthModelFitPolicy",
+        ),
+    ] = None
+    session_id: Annotated[
+        str | None,
+        Field(
+            alias="sessionId",
+            description="Identifier of the caller session this request belongs to. Omitted for requests made by the runtime owner.",
+            min_length=1,
+        ),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight request, generated by the caller at call time. Surfaces on the returned handle so the caller can target it with `cancel({ requestId })`. Optional: the engine generates one when the field is missing. Scoped to the caller session; another session cannot address it.",
+            min_length=1,
+        ),
+    ] = None
+    model_type: Annotated[Literal["ggml-stereo-depth"], Field(alias="modelType")] = (
+        "ggml-stereo-depth"
+    )
+    model_config_: Annotated[
+        LoadModelSrcRequestGgmlStereoDepthModelConfig | None,
+        Field(
+            alias="modelConfig", title="LoadModelSrcRequestGgmlStereoDepthModelConfig"
+        ),
+    ] = None
+
+
 class LoadModelSrcRequestNmtcppTranslationModelFitPolicy(Enum):
     log = "log"
     refuse = "refuse"
@@ -16069,6 +16362,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon(En
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -16181,6 +16475,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon(En
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -16299,6 +16594,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcA
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -16413,6 +16709,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabS
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -16527,6 +16824,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabS
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -17036,6 +17334,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -17146,6 +17445,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon(Enum
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -17258,6 +17558,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -17368,6 +17669,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -17478,6 +17780,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -17590,6 +17893,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -18150,6 +18454,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -18262,6 +18567,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -18392,6 +18698,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicVoiceJsonSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -18502,6 +18809,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicNoiseNpySrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -18978,6 +19286,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon(Enu
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -19090,6 +19399,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon(Enu
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -19564,6 +19874,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -19676,6 +19987,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -19806,6 +20118,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon(Enum
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -19918,6 +20231,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddo
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -20032,6 +20346,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcA
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -20370,6 +20685,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -20482,6 +20798,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -20594,6 +20911,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -20837,6 +21155,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon(Enu
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -20949,6 +21268,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon(Enu
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -21061,6 +21381,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -21171,6 +21492,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon(En
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -21571,6 +21893,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAddo
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -21856,6 +22179,7 @@ class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -22207,6 +22531,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -22317,6 +22642,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -22427,6 +22753,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -22537,6 +22864,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -22647,6 +22975,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon(Enum)
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -22759,6 +23088,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -22871,6 +23201,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAdd
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -22983,6 +23314,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -23093,6 +23425,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigTokenizerSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -23203,6 +23536,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(Enum)
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -23315,6 +23649,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -23427,6 +23762,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcA
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -23539,6 +23875,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -23649,6 +23986,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -23879,6 +24217,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -24369,6 +24708,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon(Enum
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -24481,6 +24821,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -24591,6 +24932,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -24701,6 +25043,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -24934,6 +25277,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -25044,6 +25388,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -25655,6 +26000,7 @@ class LoadModelSrcRequest(
         | LoadModelSrcRequestLlamacppDecision
         | LoadModelSrcRequestLlamacppRerank
         | LoadModelSrcRequestGgmlImageEmbedding
+        | LoadModelSrcRequestGgmlStereoDepth
         | LoadModelSrcRequestNmtcppTranslation
         | LoadModelSrcRequestTtsGgml
         | LoadModelSrcRequestGgmlOcr
@@ -25675,6 +26021,7 @@ class LoadModelSrcRequest(
         | LoadModelSrcRequestLlamacppDecision
         | LoadModelSrcRequestLlamacppRerank
         | LoadModelSrcRequestGgmlImageEmbedding
+        | LoadModelSrcRequestGgmlStereoDepth
         | LoadModelSrcRequestNmtcppTranslation
         | LoadModelSrcRequestTtsGgml
         | LoadModelSrcRequestGgmlOcr
@@ -25818,6 +26165,7 @@ class ReloadConfigRequestModelConfigVadModelSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -26360,6 +26708,7 @@ class ModelRegistryGetModelResponseModelEngine(Enum):
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     onnx_vad = "onnx-vad"
 
 
@@ -26519,6 +26868,7 @@ class ModelRegistryListResponseModelsItemEngine(Enum):
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     onnx_vad = "onnx-vad"
 
 
@@ -26700,6 +27050,7 @@ class ModelRegistrySearchResponseModelsItemEngine(Enum):
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     onnx_vad = "onnx-vad"
 
 
@@ -27807,6 +28158,7 @@ class TextToSpeechRequestReferenceAudioSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -28537,6 +28889,7 @@ class TextToSpeechStreamRequestReferenceAudioSrcAddon(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_image_embedding = "ggml-image-embedding"
+    ggml_stereo_depth = "ggml-stereo-depth"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -32021,6 +32374,7 @@ class Request(
         | DownloadAssetRequest
         | Request_4
         | EmbedBatchRequest
+        | EstimateDisparityRequest
         | Request_5
         | GetLoadedModelInfoRequest
         | GetModelInfoRequest
@@ -32076,6 +32430,7 @@ class Request(
         | DownloadAssetRequest
         | Request_4
         | EmbedBatchRequest
+        | EstimateDisparityRequest
         | Request_5
         | GetLoadedModelInfoRequest
         | GetModelInfoRequest
@@ -32167,6 +32522,7 @@ class Response(
         | EmbedResponse
         | EmbedBatchResponse
         | ErrorResponse
+        | EstimateDisparityResponse
         | FinetuneResponse
         | FinetuneProgressResponse
         | GetLoadedModelInfoResponse
@@ -32226,6 +32582,7 @@ class Response(
         | EmbedResponse
         | EmbedBatchResponse
         | ErrorResponse
+        | EstimateDisparityResponse
         | FinetuneResponse
         | FinetuneProgressResponse
         | GetLoadedModelInfoResponse

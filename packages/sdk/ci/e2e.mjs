@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // The sdk's test:integration, one leg of main's desktop, python, electron or snap family: this commit's inference and
 // test-suite packed into the sdk and sdk-e2e npm installs, the consumer and the producer over MQTT, the results checked
-// and compared with the newest dispatch run on the base branch. Usage: node ci/e2e.mjs <family|cache>.
+// and compared with the newest dispatch run on the base branch. Usage: node ci/e2e.mjs <family|cache|seed>.
+// CI_MODELS_PHASE=plan installs and plans the leg's models; the run then reuses the install (see _desktop.yml).
 
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import {
@@ -17,7 +18,7 @@ import {
   appendFileSync
 } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, relative, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 export const ROOT = fileURLToPath(new URL('../../..', import.meta.url))
@@ -86,10 +87,9 @@ export function summary(text) {
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${text}\n`)
 }
 
-// main's MQTT certificate step: each set secret into a file the test config reads by path.
+// main's MQTT certificate step: each set secret into a file the test config reads by path, in a fresh 0700 directory.
 export function mqttCerts(env) {
-  const dir = join(tmpdir(), 'mqtt-certs')
-  mkdirSync(dir, { recursive: true })
+  const dir = mkdtempSync(join(env.RUNNER_TEMP || tmpdir(), 'mqtt-certs-'))
   const out = {}
   for (const [secret, file, name] of [
     ['MQTT_CA_CERT', 'ca.crt', 'MQTT_CA_PATH'],
@@ -98,7 +98,7 @@ export function mqttCerts(env) {
   ]) {
     const value = (env[secret] || '').trim()
     if (!value) continue
-    writeFileSync(join(dir, file), value)
+    writeFileSync(join(dir, file), value, { mode: 0o600 })
     out[name] = join(dir, file)
   }
   return { ...env, ...out }
@@ -106,7 +106,13 @@ export function mqttCerts(env) {
 
 // The npm installs main's e2e jobs made: registries, this commit's inference and test-suite as tarballs, the sdk
 // built, then the sdk-e2e consumer installed against it and built. pnpm's node_modules go first.
-export function prepare(env) {
+export function buildSdk(env, afterSdkBuild = () => {}, execute = run) {
+  execute('npm', ['install', '--ignore-scripts'], { cwd: SDK, env })
+  execute('npm', ['run', 'build'], { cwd: SDK, env })
+  afterSdkBuild()
+}
+
+export function prepare(env, afterSdkBuild = () => {}) {
   if (!env.GITHUB_TOKEN) throw new Error('GITHUB_TOKEN is empty; the @tetherto registry needs it')
   for (const dir of ['sdk', 'sdk-e2e', 'inference', 'test-suite']) {
     rmSync(join(ROOT, 'packages', dir, 'node_modules'), { recursive: true, force: true })
@@ -145,8 +151,7 @@ export function prepare(env) {
       env: { ...step, GITHUB_OUTPUT: '', [`${prefix}_DEPENDENCY_SPEC`]: spec }
     })
   }
-  run('npm', ['install', '--ignore-scripts'], { cwd: SDK, env })
-  run('npm', ['run', 'build'], { cwd: SDK, env })
+  buildSdk(env, afterSdkBuild)
   writeFileSync(join(E2E, '.npmrc'), npmrc)
   run('npm', ['install', '--install-links'], { cwd: E2E, env })
   run('npm', ['run', 'build'], { cwd: E2E, env })
@@ -406,7 +411,7 @@ export function seedSnapModels(from = join(E2E, '.qvac-cache'), home = homedir()
   console.log(`Seeded the Snap's models from ${from}`)
 }
 
-// The model cache the consumers download into: test:integration's metadata.modelCache, which cache-warm saves.
+// The model cache the consumers download into.
 function modelCache(env) {
   const dir = join(E2E, '.qvac-cache')
   mkdirSync(dir, { recursive: true })
@@ -415,12 +420,99 @@ function modelCache(env) {
   return { ...env, QVAC_CONFIG_PATH: config }
 }
 
+// Relative to the workspace the cache action runs in.
+export function cacheRoot(env, dir = join(E2E, '.qvac-cache')) {
+  return relative(env.GITHUB_WORKSPACE || ROOT, dir)
+    .split(sep)
+    .join('/')
+}
+
+export function planArgs({
+  env,
+  families,
+  os,
+  options = {},
+  tests = '',
+  out,
+  include = includeFile
+}) {
+  return [
+    'scripts/model-cache-plan.mjs',
+    `--family=${families}`,
+    ...(os ? [`--os=${os}`] : []),
+    `--cache-root=${cacheRoot(env)}`,
+    `--out=${out}`,
+    ...(options.suite ? [`--suite=${options.suite}`] : []),
+    ...(options.exclude ? [`--exclude-suite=${options.exclude}`] : []),
+    ...(tests ? [`--filter=${tests}`] : []),
+    ...(options.include ? [`--include-file=${include(options.include)}`] : [])
+  ]
+}
+
+const preparedMarker = (env) =>
+  join(env.RUNNER_TEMP || tmpdir(), `sdk-e2e-prepared-${env.CONFIG || 'local'}`)
+const head = () => run('git', ['rev-parse', 'HEAD'], { capture: true }).trim()
+
+function readPlan(env) {
+  if (!env.MODELS_PLAN || !existsSync(env.MODELS_PLAN)) return null
+  return JSON.parse(readFileSync(env.MODELS_PLAN, 'utf8'))
+}
+
+// Downloads only what the restore missed; without a plan, everything.
+function bootstrap(family, env, plan) {
+  if (plan && env.MODELS_COMPLETE === 'true') {
+    return console.log(
+      'The per-model cache restored every model this leg needs; skipping the bootstrap'
+    )
+  }
+  const missing = { QVAC_E2E_BOOTSTRAP_MODELS: env.MODELS_MISSING || '' }
+  if (family === 'snap') {
+    const deps = plan?.legs?.[0]?.deps
+    if (deps && !deps.length) {
+      return console.log('The plan names no model deps; skipping the bootstrap')
+    }
+    const narrowed = deps ? { ...missing, QVAC_E2E_BOOTSTRAP_DEPS: JSON.stringify(deps) } : {}
+    return run(
+      'npx',
+      ['qvac-test', 'run:bootstrap:snap', '--config=.', '--skip-build', '--skip-snap-install'],
+      { cwd: E2E, env: { ...env, ...narrowed } }
+    )
+  }
+  if (plan) {
+    return run('node', ['scripts/model-cache-bootstrap.mjs', '--plan', env.MODELS_PLAN], {
+      cwd: E2E,
+      env: { ...env, ...missing }
+    })
+  }
+  run(
+    'npx',
+    ['qvac-test', `run:bootstrap:${family === 'python' ? 'desktop' : family}`, '--config=.'],
+    {
+      cwd: E2E,
+      env
+    }
+  )
+}
+
 async function main(family, env) {
-  // cache:models: the desktop bootstrap alone, the model set the desktop and python legs restore.
+  // sdk-python's cache:models: the desktop bootstrap alone.
   if (family === 'cache') {
     const e = modelCache(prepare(env))
     run('npm', ['run', 'bundle:sdk'], { cwd: E2E, env: e })
     run('npx', ['qvac-test', 'run:bootstrap:desktop', '--config=.'], { cwd: E2E, env: e })
+    return
+  }
+  // on-merge-sdk-e2e-model-cache.yml: install and plan every family it seeds.
+  if (family === 'seed') {
+    const e = modelCache(prepare(env))
+    run('npm', ['run', 'bundle:sdk'], { cwd: E2E, env: e })
+    if (env.GITHUB_ENV) appendFileSync(env.GITHUB_ENV, `QVAC_CONFIG_PATH=${e.QVAC_CONFIG_PATH}\n`)
+    const out = join(env.RUNNER_TEMP || tmpdir(), 'sdk-e2e-model-cache-plan.json')
+    const families = list('families', env.SEED_FAMILIES)
+    run('node', planArgs({ env: e, families, os: env.SEED_OS, out }), {
+      cwd: E2E,
+      env: e
+    })
     return
   }
   if (!FAMILIES.includes(family)) throw new Error(`family must be one of ${FAMILIES.join(', ')}`)
@@ -431,7 +523,39 @@ async function main(family, env) {
   const tests = list('tests', env.CI_TESTS)
   const label = `${family}-${platform}`
   const reports = join(E2E, 'reports')
-  let e = prepare(env)
+  const {
+    prepareSpeechPreflight,
+    installSpeechPreflight,
+    verifySpeechPreflight,
+    collectNativeCrashes
+  } = await import('./speech-preflight.mjs')
+  if (env.CI_MODELS_PHASE === 'plan') {
+    // A speech preflight installs its own build in the run.
+    if (family === 'desktop' && existsSync(join(SDK, 'ci/speech-preflight.json'))) {
+      return console.log(
+        'Speech preflight: no model plan; the run installs and downloads everything'
+      )
+    }
+    const e = prepare(env)
+    writeFileSync(preparedMarker(env), `${head()}\n`)
+    const out = join(env.RUNNER_TEMP || tmpdir(), `sdk-e2e-model-cache-plan-${label}.json`)
+    run('node', planArgs({ env, families: family, os: platform, options, tests, out }), {
+      cwd: E2E,
+      env: e
+    })
+    return
+  }
+  const speechPreflight = family === 'desktop' ? await prepareSpeechPreflight(ROOT, env) : null
+  const marker = preparedMarker(env)
+  const prepared =
+    !speechPreflight && existsSync(marker) && readFileSync(marker, 'utf8').trim() === head()
+  if (prepared) console.log('Reusing the plan phase install')
+  let e = prepared
+    ? mqttCerts(env)
+    : prepare(env, () => installSpeechPreflight(ROOT, env, speechPreflight))
+  verifySpeechPreflight(E2E, speechPreflight)
+  const plan = readPlan(env)
+  const startedAt = Date.now()
   let status = 1
   try {
     if (family === 'python') pythonVenv(e)
@@ -445,23 +569,10 @@ async function main(family, env) {
       }
       snapBuild(e)
       seedSnapModels()
-      run(
-        'npx',
-        ['qvac-test', 'run:bootstrap:snap', '--config=.', '--skip-build', '--skip-snap-install'],
-        { cwd: E2E, env: e }
-      )
+      bootstrap(family, e, plan)
     } else {
       e = modelCache(e)
-      // As main: an exact hit already holds the desktop bootstrap's models.
-      if (env.MODELS_CACHE_HIT === 'true' && (family === 'desktop' || family === 'python')) {
-        console.log('Models restored from the cache; skipping the bootstrap')
-      } else {
-        run(
-          'npx',
-          ['qvac-test', `run:bootstrap:${family === 'python' ? 'desktop' : family}`, '--config=.'],
-          { cwd: E2E, env: e }
-        )
-      }
+      bootstrap(family, e, plan)
     }
     if (family === 'electron') {
       run('npx', ['qvac-test', 'build:consumer:electron', '--config=.', '--skip-install'], {
@@ -494,6 +605,13 @@ async function main(family, env) {
             .filter((f) => f.endsWith('.snap'))
             .map((f) => join(dist, f))
         : []
+    if (speechPreflight && process.platform === 'darwin') {
+      collectNativeCrashes(
+        join(homedir(), 'Library/Logs/DiagnosticReports'),
+        join(reports, 'native-crashes'),
+        startedAt
+      )
+    }
     keepResults(join(SDK, 'test/results/e2e', label), [
       reports,
       join(E2E, 'consumer.log'),

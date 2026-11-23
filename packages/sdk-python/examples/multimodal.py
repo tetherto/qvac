@@ -1,9 +1,9 @@
 """Multimodal completion — Python port of
 packages/sdk/examples/llamacpp-multimodal.ts.
 
-Load a multimodal LLM together with its matching projection model, then hang
-`attachments` off a user turn: one image first, then both images in a single
-request so the model can compare them.
+Load a multimodal LLM together with its matching projection model, then pass
+images as ordered `content` parts on a user turn: one image first, then two
+labeled images in a single request so the text can name each one.
 
 RUN: python examples/multimodal.py <image path> [<second image path>]
 """
@@ -50,21 +50,21 @@ async def main() -> int:
                 t,
                 model_src=SMOLVLM2_500M_MULTIMODAL_Q8_0,
                 model_config={
-                    # An image is tiled into hundreds of context units before a
-                    # single word of the prompt is counted, and the comparison
-                    # below sends two at once.
+                    # Each image takes hundreds of context tokens, and the
+                    # comparison below sends two at once.
                     "ctx_size": 8192,
                     "projectionModelSrc": MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
                 },
                 on_progress=print_progress,
             )
 
-            # Using one particular media
             history = [
                 {
                     "role": "user",
-                    "content": "What's in this image?",
-                    "attachments": [{"path": image_file_path}],
+                    "content": [
+                        {"type": "media", "path": image_file_path},
+                        {"type": "text", "text": "What's in this image?"},
+                    ],
                 }
             ]
             run = completion(t, model_id=model_id, history=history, stream=True)
@@ -78,20 +78,23 @@ async def main() -> int:
             print("\n▸ Performance Stats:", final.stats)
             print("▸ --------------------------------")
 
-            # Using multiple media
             if len(sys.argv) < 3:
                 print("▸ Only one image provided, terminating")
                 return 0
 
             image_file_path2 = sys.argv[2]
 
+            # Each image keeps its position in the turn, so the text can name
+            # the picture next to it.
             history2 = [
                 {
                     "role": "user",
-                    "content": "Compare the two newspaper articles",
-                    "attachments": [
-                        {"path": image_file_path},
-                        {"path": image_file_path2},
+                    "content": [
+                        {"type": "text", "text": "Image A: "},
+                        {"type": "media", "path": image_file_path},
+                        {"type": "text", "text": "\nImage B: "},
+                        {"type": "media", "path": image_file_path2},
+                        {"type": "text", "text": "\nWhich image is a newspaper?"},
                     ],
                 }
             ]

@@ -43,7 +43,10 @@ function buildRAGSchema(schemaDir: string = SCHEMA_DIR) {
       { name: 'nextNativeId', type: 'buffer', required: true },
       { name: 'createdAt', type: 'date', required: true },
       // Absent on namespaces created before the index existed; read as 'q8'.
-      { name: 'indexStorage', type: 'string', required: false }
+      { name: 'indexStorage', type: 'string', required: false },
+      // 16 random bytes naming this namespace's history; generations are only
+      // comparable within one lineage. Set on the first write when absent.
+      { name: 'lineageId', type: 'buffer', required: false }
     ]
   })
 
@@ -56,7 +59,10 @@ function buildRAGSchema(schemaDir: string = SCHEMA_DIR) {
       { name: 'chunkCount', type: 'uint', required: true },
       { name: 'contentHash', type: 'string', required: true },
       { name: 'metadata', type: 'json', required: false },
-      { name: 'updatedAt', type: 'date', required: true }
+      { name: 'updatedAt', type: 'date', required: true },
+      // The namespace revision that committed this generation. Absent on
+      // documents written before it was recorded; read as 0.
+      { name: 'revision', type: 'uint', required: false }
     ]
   })
 
@@ -98,6 +104,18 @@ function buildRAGSchema(schemaDir: string = SCHEMA_DIR) {
     ]
   })
 
+  // The last generation of a deleted document, so a later ingest of the same ID
+  // continues past it instead of reusing a generation.
+  rag.register({
+    name: 'tombstones',
+    fields: [
+      { name: 'namespace', type: 'string', required: true },
+      { name: 'documentId', type: 'string', required: true },
+      { name: 'generation', type: 'uint', required: true },
+      { name: 'deletedAt', type: 'date', required: true }
+    ]
+  })
+
   Hyperschema.toDisk(schema, { esm: false })
 
   console.log('RAG HyperDB schema generated')
@@ -128,6 +146,11 @@ function buildRAGDatabase(schemaDir: string = SCHEMA_DIR, dbDir: string = DB_DIR
     name: 'mutations',
     schema: '@rag/mutations',
     key: ['namespace', 'revision']
+  })
+  dbNs.collections.register({
+    name: 'tombstones',
+    schema: '@rag/tombstones',
+    key: ['namespace', 'documentId']
   })
 
   HyperDB.toDisk(db, { esm: false })

@@ -69,16 +69,6 @@ using parler::ParlerModel;
 using pocket::PocketModel;
 using supertonic::SupertonicModel;
 
-// One process-wide install of the native log sink. tts_cpp_log_set passes the
-// callback to ggml_log_set, so ggml-origin lines (backend selection, device
-// enumeration, ...) reach the JS logger instead of raw stderr. Engine
-// diagnostics that tts-cpp still prints with fprintf(stderr) bypass it until
-// tts-cpp routes them through its own log sink.
-inline void installNativeLogForwarderOnce() {
-  static std::once_flag once;
-  std::call_once(once, [] { tts_cpp_log_set(&forwardGgmlLog, nullptr); });
-}
-
 struct JsAudioOutputHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
           std::vector<int16_t>> {
@@ -200,8 +190,6 @@ struct JsStreamingPcmHandler
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
-
-  installNativeLogForwarderOnce();
 
   JsArgsParser args(env, info);
   auto configurationParams = args.getJsObject(1, "configurationParams");

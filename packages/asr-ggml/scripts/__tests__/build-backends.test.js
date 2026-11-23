@@ -9,105 +9,108 @@ const packageRoot = path.resolve(__dirname, '..', '..')
 const packageJson = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'))
 const vcpkgManifest = JSON.parse(fs.readFileSync(path.join(packageRoot, 'vcpkg.json'), 'utf8'))
 const cmakeSource = fs.readFileSync(path.join(packageRoot, 'CMakeLists.txt'), 'utf8')
+const speechCmakeSource = fs.readFileSync(
+  path.resolve(packageRoot, '../../cmake/qvac-addon/speech-engines.cmake'),
+  'utf8'
+)
+const testCmakeSource = fs.readFileSync(
+  path.join(packageRoot, 'addon/tests/CMakeLists.txt'),
+  'utf8'
+)
+const bindingSource = fs.readFileSync(path.join(packageRoot, 'binding.js'), 'utf8')
 const projectJson = JSON.parse(fs.readFileSync(path.join(packageRoot, 'project.json'), 'utf8'))
 const whisperModelSource = fs.readFileSync(
   path.join(packageRoot, 'addon/src/model-interface/whisper/WhisperModel.cpp'),
   'utf8'
 )
 
-const CUDA_CMAKE_OPTION = 'ASR_CUDA'
-const PUBLISHED_CUDA_HOST = 'linux-x64'
-const CUDA_MANIFEST_FEATURE = 'cuda'
-const SPEECH_PORT = 'speech-cpp'
-const DESKTOP_PLATFORM = '!(osx | ios | android)'
+const FABRIC = '@qvac/fabric'
+const DESKTOP_HOSTS = ['linux-x64', 'linux-arm64', 'darwin-arm64', 'darwin-x64', 'win32-x64']
+const MOBILE_HOSTS = ['android-arm64', 'ios']
+const RETIRED_BUILD_OPTIONS = ['ASR_CUDA', 'ASR_WEBGPU']
+const RETIRED_BUILD_SCRIPTS = ['build:cuda', 'build:native:cuda']
 const GPU_TEST_FILES = [
   'test/integration/gpu.test.js',
   'test/integration/parakeet-gpu-smoke.test.js'
 ]
 
-function speechDependencies(dependencies) {
-  return dependencies.filter((dependency) => dependency.name === SPEECH_PORT)
-}
-
-function desktopSpeechDependency() {
-  return speechDependencies(vcpkgManifest.dependencies).find(
-    (dependency) => dependency.platform === DESKTOP_PLATFORM
+test('the ggml runtime is the shared @qvac/fabric prebuild', () => {
+  assert.match(cmakeSource, /qvac_addon_use_fabric\(\)/)
+  assert.match(cmakeSource, /qvac_addon_link_fabric\(/)
+  assert.match(cmakeSource, /qvac_addon_finalize\(/)
+  assert.equal(
+    /find_package\(ggml/.test(cmakeSource),
+    false,
+    'ggml comes from fabric, not from a vcpkg port'
   )
-}
-
-function cudaFeature() {
-  return vcpkgManifest.features[CUDA_MANIFEST_FEATURE]
-}
-
-function cudaSpeechDependency() {
-  return speechDependencies(cudaFeature().dependencies)[0]
-}
-
-// The CI contract: each platform's build configuration args, and the hosts nx.json sets CUDA up on.
-function buildArgs(host) {
-  return projectJson.targets.build.configurations[host]?.args ?? ''
-}
-
-function cudaHosts() {
-  const nxJson = JSON.parse(fs.readFileSync(path.join(packageRoot, '..', '..', 'nx.json'), 'utf8'))
-  const { hostSetup } = nxJson.targetDefaults.build.metadata.toolchain
-  return Object.keys(hostSetup).filter((h) => hostSetup[h].includes('cuda'))
-}
-
-function versionFloorOf(dependency) {
-  return dependency['version>=']
-}
-
-function overridesOf(port) {
-  return (vcpkgManifest.overrides ?? []).filter((entry) => entry.name === port)
-}
-
-test('the CUDA build is opt-in behind a dedicated CMake option', () => {
-  assert.match(cmakeSource, new RegExp(`option\\(${CUDA_CMAKE_OPTION} "[^"]+" OFF\\)`))
-  assert.equal(packageJson.scripts['build:native'].includes(CUDA_CMAKE_OPTION), false)
+  assert.equal(
+    /GGML_AVAILABLE_BACKENDS/.test(cmakeSource),
+    false,
+    'fabric ships and loads its own backends'
+  )
+  assert.equal(/qvac-speech-ggml/.test(cmakeSource), false, 'no ggml-speech module pickup remains')
 })
 
-test('the CUDA CMake option selects the cuda vcpkg manifest feature', () => {
+test('both engine packages link the fabric headers in place of the ggml archives', () => {
+  assert.match(cmakeSource, /qvac_addon_speech_engines\(whisper parakeet\)/)
+  assert.equal(/ggml::/.test(cmakeSource), false, 'no ggml target is linked by hand')
+})
+
+test('speech source updates refresh extracted timestamps so incremental builds recompile', () => {
   assert.match(
-    cmakeSource,
-    new RegExp(
-      `if\\(${CUDA_CMAKE_OPTION}\\)\\s*\\n\\s*list\\(APPEND VCPKG_MANIFEST_FEATURES "${CUDA_MANIFEST_FEATURE}"\\)`
+    speechCmakeSource,
+    /FetchContent_Declare\(qvac_speech\b[^)]*\bDOWNLOAD_EXTRACT_TIMESTAMP\s+FALSE\b/
+  )
+})
+
+test('the C++ tests link and stage the fabric runtime next to the test binary', () => {
+  assert.match(cmakeSource, /add_subdirectory\(addon\/tests\)/)
+  assert.match(testCmakeSource, /\$\{qvac_fabric_target\}_module/)
+  assert.match(testCmakeSource, /qvac_addon_stage_fabric_for_test\(asr_ggml_tests /)
+  assert.equal(/ggml::/.test(testCmakeSource), false)
+  assert.equal(
+    /RUNTIME_OUTPUT_DIRECTORY/.test(testCmakeSource),
+    false,
+    'the binary must stay in the directory the runtime is staged in'
+  )
+})
+
+test('binding.js pre-loads @qvac/fabric before the addon resolves its runtime', () => {
+  const preload = bindingSource.indexOf("require('@qvac/fabric')")
+  const addon = bindingSource.indexOf("require('#host-addon')")
+  assert.ok(preload >= 0 && addon > preload)
+})
+
+test('package.json declares the fabric runtime and its platform packages at one range', () => {
+  const range = packageJson.dependencies[FABRIC]
+  assert.ok(range, `${FABRIC} must be a dependency`)
+  DESKTOP_HOSTS.forEach((host) =>
+    assert.equal(packageJson.optionalDependencies[`${FABRIC}-${host}`], range, host)
+  )
+  MOBILE_HOSTS.forEach((host) => {
+    assert.equal(packageJson.peerDependencies[`${FABRIC}-${host}`], range, host)
+    assert.equal(packageJson.peerDependenciesMeta[`${FABRIC}-${host}`].optional, true, host)
+    assert.equal(packageJson.devDependencies[`${FABRIC}-${host}`], range, host)
+  })
+  assert.equal(
+    packageJson.qvac,
+    undefined,
+    'no ggml-speech build is recorded: the runtime is fabric'
+  )
+})
+
+test('CI restores Fabric before building or linting speech', () => {
+  for (const name of ['build', 'cpp:lint', 'cpp:build']) {
+    assert.ok(
+      projectJson.targets[name].dependsOn.some(
+        (dependency) =>
+          dependency.target === 'link:platform' && dependency.projects.includes(FABRIC)
+      )
     )
-  )
+  }
 })
 
-test('the CUDA build scripts turn the CMake option on', () => {
-  assert.match(packageJson.scripts['build:native:cuda'], /bare-make generate -D ASR_CUDA=ON/)
-  assert.equal(packageJson.scripts['build:cuda'], 'npm run build:ts && npm run build:native:cuda')
-})
-
-test('the cuda feature forwards to the speech-cpp CUDA backend', () => {
-  assert.deepEqual(cudaSpeechDependency().features, [CUDA_MANIFEST_FEATURE])
-  assert.equal(cudaSpeechDependency()['default-features'], false)
-})
-
-test('the cuda feature is confined to the platforms that have NVIDIA GPUs', () => {
-  assert.equal(cudaFeature().supports, DESKTOP_PLATFORM)
-  assert.equal(cudaSpeechDependency().platform, DESKTOP_PLATFORM)
-})
-
-test('the cuda feature takes the speech-cpp that the overrides pin', () => {
-  assert.equal(overridesOf(SPEECH_PORT).length, 1)
-  assert.equal(versionFloorOf(cudaSpeechDependency()), undefined)
-  assert.equal(versionFloorOf(desktopSpeechDependency()), undefined)
-})
-
-test('the speech override includes the explicit MOSS backend API', () => {
-  const [speech] = overridesOf(SPEECH_PORT)
-  assert.ok(speech, 'MOSS load/fit require an explicitly pinned speech port')
-  const version = speech.version
-  assert.ok(
-    version > '2026-10-12' || (version === '2026-10-12' && (speech['port-version'] ?? 0) >= 1),
-    'speech-cpp before 2026-10-12#1 lacks TranscribeOptions.backend'
-  )
-})
-
-test('no direct CUDA linkage - the hybrid MODULE backend carries its own', () => {
+test('no direct CUDA linkage - the fabric runtime carries its own backend module', () => {
   assert.equal(
     /CUDA::/.test(cmakeSource),
     false,
@@ -115,7 +118,7 @@ test('no direct CUDA linkage - the hybrid MODULE backend carries its own', () =>
   )
 })
 
-test('the whisper backend loader covers every hybrid GGML_BACKEND_DL platform', () => {
+test('the whisper backend loader covers every host that loads backends as modules', () => {
   assert.match(
     whisperModelSource,
     /#if defined\(__ANDROID__\) \|\| defined\(__linux__\) \|\| defined\(_WIN32\)/,
@@ -128,17 +131,9 @@ test('the whisper backend loader covers every hybrid GGML_BACKEND_DL platform', 
   )
 })
 
-test('the CMake loose pickup stages Windows .dll modules on CUDA builds', () => {
-  assert.match(
-    cmakeSource,
-    /\(WIN32 AND ASR_CUDA\)/,
-    'a win32 ASR_CUDA build must enter the loose module pickup'
-  )
-  assert.match(
-    cmakeSource,
-    /qvac-speech-ggml-\*\.dll/,
-    'the loose pickup glob must match the Windows backend module names'
-  )
+test('whisper loads the backends fabric ships unless a directory is configured', () => {
+  assert.match(whisperModelSource, /qvac_fabric_load_backends\(\)/)
+  assert.match(whisperModelSource, /ggml_backend_load_all_from_path\(backendsDir\.c_str\(\)\)/)
 })
 
 test('the GPU integration tests accept CUDA as a desktop backend', () => {
@@ -148,7 +143,17 @@ test('the GPU integration tests accept CUDA as a desktop backend', () => {
   })
 })
 
-test('the published linux-x64 prebuild builds the CUDA backend', () => {
-  assert.ok(cudaHosts().includes(PUBLISHED_CUDA_HOST))
-  assert.match(buildArgs(PUBLISHED_CUDA_HOST), new RegExp(`-D ${CUDA_CMAKE_OPTION}=ON`))
+test('vcpkg cannot acquire an independent speech or ggml runtime', () => {
+  const manifest = vcpkgManifest
+  const names = manifest.dependencies.map((dependency) =>
+    typeof dependency === 'string' ? dependency : dependency.name
+  )
+  for (const name of ['ggml-speech', 'qvac-fabric', 'speech-cpp']) {
+    assert.equal(names.includes(name), false)
+  }
+})
+
+test('backend build switches belong to Fabric', () => {
+  for (const option of RETIRED_BUILD_OPTIONS) assert.equal(cmakeSource.includes(option), false)
+  for (const script of RETIRED_BUILD_SCRIPTS) assert.equal(packageJson.scripts[script], undefined)
 })

@@ -16,10 +16,6 @@
 #
 # Imports are unaffected -- `local: *;` constrains what this module defines, not
 # what it resolves from fabric.
-#
-# packages/asr-ggml/symbols.map is this same list, applied by hand for the same
-# reason; that package does not use this template, so the two are kept in step
-# by hand.
 {
   global:
     # bare_register_module_v0 and bare_get_module_name_v0. The "v0" suffix is the

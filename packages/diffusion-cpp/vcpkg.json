@@ -7,7 +7,7 @@
     "picojson",
     {
       "name": "qvac-lib-inference-addon-cpp",
-      "version>=": "1.5.0"
+      "version>=": "1.7.0"
     },
     {
       "name": "qvac-lint-cpp",
@@ -15,7 +15,13 @@
     },
     {
       "name": "stable-diffusion-cpp",
-      "version>=": "2026-11-01"
+      "version>=": "2026-11-01#3",
+      "features": [
+        {
+          "name": "coreml",
+          "platform": "osx | ios"
+        }
+      ]
     },
     "stb"
   ],

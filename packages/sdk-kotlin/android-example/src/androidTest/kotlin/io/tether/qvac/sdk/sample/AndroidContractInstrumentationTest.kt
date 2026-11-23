@@ -16,7 +16,9 @@ import io.tether.qvac.sdk.generated.schema.CompletionStreamRequest
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestGenerationParams
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItem
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContent
-import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemAttachmentsItem
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContentItemMedia
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContentItemText
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContentVariant2Item
 import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItem
 import io.tether.qvac.sdk.generated.schema.TranscribeRequest
 import io.tether.qvac.sdk.generated.schema.TranscribeRequestAudioChunk
@@ -260,8 +262,16 @@ class AndroidContractInstrumentationTest {
                     history = listOf(
                         CompletionStreamRequestHistoryItem(
                             role = "user",
-                            content = CompletionStreamRequestHistoryItemContent.Variant1("Name the dominant color in one word."),
-                            attachments = listOf(CompletionStreamRequestHistoryItemAttachmentsItem(path = imageFile.absolutePath)),
+                            content = CompletionStreamRequestHistoryItemContent.Variant2(
+                                listOf(
+                                    CompletionStreamRequestHistoryItemContentVariant2Item.CompletionStreamRequestHistoryItemContentItemMedia(
+                                        CompletionStreamRequestHistoryItemContentItemMedia(path = imageFile.absolutePath),
+                                    ),
+                                    CompletionStreamRequestHistoryItemContentVariant2Item.CompletionStreamRequestHistoryItemContentItemText(
+                                        CompletionStreamRequestHistoryItemContentItemText(text = "Name the dominant color in one word."),
+                                    ),
+                                ),
+                            ),
                         ),
                     ),
                     modelId = requireNotNull(modelId),

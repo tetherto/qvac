@@ -84,6 +84,7 @@ export type ScheduleType =
   | 'kl_optimal'
   | 'bong_tangent'
   | 'ltx2'
+  | 'flux'
 
 export type PredictionType = 'auto' | 'eps' | 'v' | 'edm_v' | 'flow' | 'flux2_flow'
 
@@ -103,6 +104,12 @@ export interface SdConfig {
   vae_decode_only?: boolean
   vae_tiling?: boolean
   flash_attn?: boolean
+  /** Validated model/device profiles; explicit low-level options take precedence. */
+  performance_profile?: 'auto' | 'off'
+  /** Optional video output limits. Declare all three to permit bounded memory profiles. */
+  performance_max_width?: NumericLike
+  performance_max_height?: NumericLike
+  performance_max_frames?: NumericLike
   diffusion_fa?: boolean
   mmap?: boolean
   offload_to_cpu?: boolean
@@ -141,6 +148,12 @@ export interface DiffusionFiles {
   /** External tokenizer.json, required by MOSS-Image's Qwen3.5 encoder. */
   tokenizer?: string
   vae?: string
+  /** Replaces the full VAE for all encoding and decoding (SD/SDXL). */
+  taesd?: string
+  /** Apple Core ML SD 1.x/2.x UNet sidecar (.mlmodelc directory). */
+  coremlUnet?: string
+  /** Apple Core ML tiny decoder sidecar; requires SDXS or taesd weights. */
+  coremlTaeDecoder?: string
   esrgan?: string
   highNoiseDiffusionModel?: string
   uncondModel?: string

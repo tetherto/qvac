@@ -68,6 +68,9 @@
           "$ref": "#/$defs/embedBatch.request"
         },
         {
+          "$ref": "#/$defs/estimateDisparity.request"
+        },
+        {
           "$ref": "#/$defs/finetune.request"
         },
         {
@@ -231,6 +234,9 @@
         },
         {
           "$ref": "#/$defs/error.response"
+        },
+        {
+          "$ref": "#/$defs/estimateDisparity.response"
         },
         {
           "$ref": "#/$defs/finetune.response"
@@ -452,6 +458,7 @@
                               "audiogen-ggml",
                               "ggml-vla",
                               "ggml-image-embedding",
+                              "ggml-stereo-depth",
                               "ggml-classification",
                               "llm",
                               "whisper",
@@ -500,6 +507,7 @@
                   "audiogen-ggml",
                   "ggml-vla",
                   "ggml-image-embedding",
+                  "ggml-stereo-depth",
                   "ggml-classification",
                   "llm",
                   "whisper",
@@ -640,7 +648,7 @@
               "status": {
                 "type": "string",
                 "enum": ["fits", "does-not-fit", "unknown"],
-                "description": "The engine fitter's verdict for this model alone.",
+                "description": "This model's verdict alone: the engine fitter's, and `does-not-fit` when its rows sharing one memory pool take more than 90% of that pool's free memory.",
                 "title": "ModelFitModelResultStatus"
               },
               "devices": {
@@ -709,6 +717,10 @@
                   }
                 ],
                 "description": "The resolved load of a llama.cpp verdict. Empty otherwise."
+              },
+              "reason": {
+                "description": "Why the model has no verdict, or why devices that each fit do not fit together. Present when `status` is `unknown`, and when it is `does-not-fit` because devices sharing one memory pool overflow it.",
+                "type": "string"
               }
             },
             "required": ["status", "devices", "stats"],
@@ -2602,7 +2614,8 @@
                       ]
                     },
                     "attachments": {
-                      "description": "Optional file attachments for multimodal models.",
+                      "description": "Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+                      "deprecated": true,
                       "type": "array",
                       "items": {
                         "type": "object",
@@ -4470,6 +4483,7 @@
                 "batchCompletion",
                 "embeddings",
                 "imageEmbedding",
+                "stereoDepth",
                 "decision",
                 "rerank",
                 "transcribe",
@@ -4724,7 +4738,8 @@
                 ]
               },
               "attachments": {
-                "description": "Optional file attachments for multimodal models.",
+                "description": "Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+                "deprecated": true,
                 "type": "array",
                 "items": {
                   "type": "object",
@@ -5508,7 +5523,8 @@
                 ]
               },
               "attachments": {
-                "description": "Optional file attachments for multimodal models.",
+                "description": "Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+                "deprecated": true,
                 "type": "array",
                 "items": {
                   "type": "object",
@@ -6298,6 +6314,7 @@
         "audiogen-ggml",
         "ggml-vla",
         "ggml-image-embedding",
+        "ggml-stereo-depth",
         "ggml-classification"
       ],
       "x-enum-varnames": [
@@ -6317,6 +6334,7 @@
         "audiogenGgml",
         "ggmlVla",
         "ggmlImageEmbedding",
+        "ggmlStereoDepth",
         "ggmlClassification"
       ]
     },
@@ -6329,6 +6347,7 @@
         "@qvac/sdk/llamacpp-decision/plugin",
         "@qvac/sdk/llamacpp-rerank/plugin",
         "@qvac/sdk/ggml-image-embedding/plugin",
+        "@qvac/sdk/ggml-stereo-depth/plugin",
         "@qvac/sdk/whispercpp-transcription/plugin",
         "@qvac/sdk/bci-whispercpp-transcription/plugin",
         "@qvac/sdk/moss-transcribe/plugin",
@@ -6346,6 +6365,7 @@
         "DECISION",
         "RERANK",
         "IMAGE_EMBEDDING",
+        "STEREO_DEPTH",
         "WHISPER",
         "BCI",
         "MOSS_TRANSCRIBE",
@@ -9127,6 +9147,124 @@
       "required": ["type", "message"],
       "additionalProperties": false
     },
+    "estimateDisparity.request": {
+      "title": "EstimateDisparityRequest",
+      "type": "object",
+      "properties": {
+        "modelId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Loaded `ggml-stereo-depth` model."
+        },
+        "left": {
+          "type": "string",
+          "minLength": 1,
+          "format": "base64",
+          "contentEncoding": "base64",
+          "pattern": "^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+          "description": "Rectified left view: JPEG/PNG bytes, or packed RGB bytes, encoded as base64. Both views must have the same size."
+        },
+        "right": {
+          "type": "string",
+          "minLength": 1,
+          "format": "base64",
+          "contentEncoding": "base64",
+          "pattern": "^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+          "description": "Rectified right view: JPEG/PNG bytes, or packed RGB bytes, encoded as base64. Both views must have the same size."
+        },
+        "width": {
+          "description": "Packed RGB width of both views in pixels, from 32 to 4096. Supply width, height and channels together for raw RGB, or omit all three for JPEG/PNG.",
+          "type": "integer",
+          "minimum": 32,
+          "maximum": 4096
+        },
+        "height": {
+          "description": "Packed RGB height of both views in pixels, from 32 to 4096. Supply width, height and channels together for raw RGB, or omit all three for JPEG/PNG.",
+          "type": "integer",
+          "minimum": 32,
+          "maximum": 4096
+        },
+        "channels": {
+          "description": "Packed RGB channel count. Must be 3.",
+          "type": "number",
+          "const": 3
+        },
+        "type": {
+          "type": "string",
+          "const": "estimateDisparity"
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the caller session this request belongs to. Omitted for requests made by the runtime owner."
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable identifier for this in-flight request, generated by the caller at call time. Surfaces on the returned handle so the caller can target it with `cancel({ requestId })`. Optional: the engine generates one when the field is missing. Scoped to the caller session; another session cannot address it."
+        }
+      },
+      "required": ["modelId", "left", "right", "type"]
+    },
+    "estimateDisparity.response": {
+      "title": "EstimateDisparityResponse",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "estimateDisparity"
+        },
+        "width": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Disparity map width, equal to the input width."
+        },
+        "height": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Disparity map height, equal to the input height."
+        },
+        "disparity": {
+          "type": "string",
+          "format": "base64",
+          "contentEncoding": "base64",
+          "pattern": "^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+          "description": "Disparity of the left view in input pixels, row-major `[height, width]`, as base64 of little-endian float32 values (`width * height * 4` bytes)."
+        },
+        "stats": {
+          "type": "object",
+          "properties": {
+            "totalTime": {
+              "description": "Native inference time in milliseconds.",
+              "type": "number"
+            },
+            "backendId": {
+              "description": "Native backend ID: CPU=0, Metal=1, CUDA=2, Vulkan=3, OpenCL=4, other=99.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "cpuFallbackNodes": {
+              "description": "Graph nodes the scheduler placed on the CPU while a GPU was selected. 0 on Metal, CUDA and Vulkan.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "weightBytes": {
+              "description": "Allocated model weight bytes.",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "title": "EstimateDisparityResponseStats"
+        }
+      },
+      "required": ["type", "width", "height", "disparity"],
+      "additionalProperties": false
+    },
     "finetune.request": {
       "title": "FinetuneRequest",
       "anyOf": [
@@ -9882,7 +10020,7 @@
                       "status": {
                         "type": "string",
                         "enum": ["fits", "does-not-fit", "unknown"],
-                        "description": "The engine fitter's verdict for this model alone.",
+                        "description": "This model's verdict alone: the engine fitter's, and `does-not-fit` when its rows sharing one memory pool take more than 90% of that pool's free memory.",
                         "title": "ModelFitProbeModelStatus"
                       },
                       "devices": {
@@ -9951,6 +10089,10 @@
                           }
                         ],
                         "description": "The resolved load of a llama.cpp verdict. Empty otherwise."
+                      },
+                      "reason": {
+                        "description": "Why the model has no verdict, or why devices that each fit do not fit together. Present when `status` is `unknown`, and when it is `does-not-fit` because devices sharing one memory pool overflow it.",
+                        "type": "string"
                       }
                     },
                     "required": ["status", "devices", "stats"],
@@ -14487,6 +14629,20 @@
                       "enum": ["on", "auto", "off"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigTensorReadLazy"
                     },
+                    "coreml-ffn": {
+                      "description": "Run part of each prompt-processing FFN through a Core ML sidecar on macOS and iOS, with the rest on Metal; decode stays on Metal. Fabric picks the split from the model. Only prompt batches of 256 or more tokens use it, so keep `ubatch-size` at 256 or above. The first load exports and compiles the sidecar into `coreml-ffn-cache` from the GGUF, and later loads reuse it. The sidecar stays resident beside the GGUF, 3 GB or more on the larger models, and model fit checks do not count it. A model fabric has no Core ML FFN template for, a split GGUF, finetuning, a layer off Metal or a build without Core ML FFN logs a warning and runs on Metal. Default false.",
+                      "type": "boolean"
+                    },
+                    "coreml-ffn-split": {
+                      "description": "Overrides the automatic Core ML FFN split as `METALxN`: FFN channels kept on Metal, then Core ML programs per layer (1 or 2). A split the model does not support logs a warning and runs on Metal. Requires `'coreml-ffn': true`.",
+                      "type": "string",
+                      "pattern": "^[1-9]\\d*x[12]$"
+                    },
+                    "coreml-ffn-cache": {
+                      "description": "Writable directory for the compiled Core ML FFN programs. Unset uses `$LLAMA_CACHE/coreml-ffn`, else `~/Library/Caches/llama.cpp/coreml-ffn`. Pass an absolute path private to the app: programs already in it are loaded without verification and never pruned. Ignored unless `'coreml-ffn'` is true, so it can be set once in device defaults.",
+                      "type": "string",
+                      "minLength": 1
+                    },
                     "fit": {
                       "description": "Adjust the arguments left unset so the model fits device memory. Default true. It chooses layer offload, tensor split and tensor buffer overrides, and the context size only when `ctx_size` is 0. Setting `gpu_layers` pins the layer count and makes fit abort, leaving every argument unchanged. Incompatible with `split-mode: tensor`, which disables it.",
                       "type": "boolean"
@@ -14616,6 +14772,7 @@
                                     "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-image-embedding",
+                                    "ggml-stereo-depth",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -14715,6 +14872,7 @@
                                     "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-image-embedding",
+                                    "ggml-stereo-depth",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -15168,6 +15326,7 @@
                                     "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-image-embedding",
+                                    "ggml-stereo-depth",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -15456,6 +15615,7 @@
                                     "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-image-embedding",
+                                    "ggml-stereo-depth",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -15635,6 +15795,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -15716,7 +15877,7 @@
                       "type": "boolean"
                     },
                     "streamingChunkMs": {
-                      "description": "Streaming chunk cadence in ms. Defaults to 320 for Nemotron and 2000 for existing models. Nemotron supports 80, 160, 320, 560, or 1120.",
+                      "description": "Streaming decode window in ms. Omit to use the model default. Offline TDT push streams, including Parakeet TDT v3, default to 30000 and require at least 30000. Full TranscribePsy EU defaults to 2000. Nemotron defaults to 320 and supports 80, 160, 320, 560, or 1120.",
                       "type": "integer",
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
@@ -16079,6 +16240,7 @@
                                     "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-image-embedding",
+                                    "ggml-stereo-depth",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -16666,6 +16828,86 @@
                   "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
                   "type": "string",
                   "enum": ["log", "refuse", "off"],
+                  "title": "LoadModelSrcRequestGgmlStereoDepthModelFitPolicy"
+                },
+                "sessionId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Identifier of the caller session this request belongs to. Omitted for requests made by the runtime owner."
+                },
+                "requestId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Stable identifier for this in-flight request, generated by the caller at call time. Surfaces on the returned handle so the caller can target it with `cancel({ requestId })`. Optional: the engine generates one when the field is missing. Scoped to the caller session; another session cannot address it."
+                },
+                "modelType": {
+                  "type": "string",
+                  "const": "ggml-stereo-depth"
+                },
+                "modelConfig": {
+                  "type": "object",
+                  "properties": {
+                    "backend": {
+                      "description": "Exact GGML device name, such as CPU, CUDA0, Vulkan0 or MTL0. Omit to select GPU, then CPU. Metal and Metal0 are accepted aliases. An unavailable explicit device fails to load.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "threads": {
+                      "description": "CPU thread count, from 1 to 1024. Omit to use the native default.",
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1024
+                    },
+                    "backendsDir": {
+                      "description": "Directory of GGML backend modules. Omit to use the modules shipped with Fabric.",
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false,
+                  "title": "LoadModelSrcRequestGgmlStereoDepthModelConfig"
+                }
+              },
+              "required": ["type", "modelSrc", "modelType"],
+              "additionalProperties": false,
+              "title": "LoadModelSrcRequestGgmlStereoDepth"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "loadModel"
+                },
+                "modelSrc": {
+                  "type": "string",
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
+                },
+                "modelName": {
+                  "type": "string"
+                },
+                "withProgress": {
+                  "type": "boolean"
+                },
+                "seed": {
+                  "type": "boolean"
+                },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
+                },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "modelFitPolicy": {
+                  "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+                  "type": "string",
+                  "enum": ["log", "refuse", "off"],
                   "title": "LoadModelSrcRequestNmtcppTranslationModelFitPolicy"
                 },
                 "sessionId": {
@@ -16923,6 +17165,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -17022,6 +17265,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -17166,6 +17410,7 @@
                                             "audiogen-ggml",
                                             "ggml-vla",
                                             "ggml-image-embedding",
+                                            "ggml-stereo-depth",
                                             "ggml-classification",
                                             "llm",
                                             "whisper",
@@ -17266,6 +17511,7 @@
                                             "audiogen-ggml",
                                             "ggml-vla",
                                             "ggml-image-embedding",
+                                            "ggml-stereo-depth",
                                             "ggml-classification",
                                             "llm",
                                             "whisper",
@@ -17365,6 +17611,7 @@
                                             "audiogen-ggml",
                                             "ggml-vla",
                                             "ggml-image-embedding",
+                                            "ggml-stereo-depth",
                                             "ggml-classification",
                                             "llm",
                                             "whisper",
@@ -17851,6 +18098,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -17950,6 +18198,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -18049,6 +18298,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -18148,6 +18398,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -18247,6 +18498,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -18346,6 +18598,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -18694,6 +18947,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -18793,6 +19047,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -18914,6 +19169,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -19013,6 +19269,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -19308,6 +19565,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -19407,6 +19665,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -19689,6 +19948,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -19788,6 +20048,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -19909,6 +20170,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -20008,6 +20270,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -20107,6 +20370,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -20288,6 +20552,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -20388,6 +20653,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -20487,6 +20753,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -20698,6 +20965,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -20798,6 +21066,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -20897,6 +21166,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -21000,6 +21270,7 @@
                                           "audiogen-ggml",
                                           "ggml-vla",
                                           "ggml-image-embedding",
+                                          "ggml-stereo-depth",
                                           "ggml-classification",
                                           "llm",
                                           "whisper",
@@ -21217,6 +21488,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -21454,6 +21726,7 @@
                                     "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-image-embedding",
+                                    "ggml-stereo-depth",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -21763,6 +22036,7 @@
                                     "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-image-embedding",
+                                    "ggml-stereo-depth",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -21862,6 +22136,7 @@
                                     "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-image-embedding",
+                                    "ggml-stereo-depth",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -21961,6 +22236,7 @@
                                     "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-image-embedding",
+                                    "ggml-stereo-depth",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -22060,6 +22336,7 @@
                                     "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-image-embedding",
+                                    "ggml-stereo-depth",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -22159,6 +22436,7 @@
                                     "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-image-embedding",
+                                    "ggml-stereo-depth",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -22258,6 +22536,7 @@
                                     "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-image-embedding",
+                                    "ggml-stereo-depth",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -22357,6 +22636,7 @@
                                     "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-image-embedding",
+                                    "ggml-stereo-depth",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -22456,6 +22736,7 @@
                                     "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-image-embedding",
+                                    "ggml-stereo-depth",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -22555,6 +22836,7 @@
                                     "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-image-embedding",
+                                    "ggml-stereo-depth",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -22654,6 +22936,7 @@
                                     "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-image-embedding",
+                                    "ggml-stereo-depth",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -22753,6 +23036,7 @@
                                     "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-image-embedding",
+                                    "ggml-stereo-depth",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -22852,6 +23136,7 @@
                                     "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-image-embedding",
+                                    "ggml-stereo-depth",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -22951,6 +23236,7 @@
                                     "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-image-embedding",
+                                    "ggml-stereo-depth",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -23050,6 +23336,7 @@
                                     "audiogen-ggml",
                                     "ggml-vla",
                                     "ggml-image-embedding",
+                                    "ggml-stereo-depth",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -23268,6 +23555,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -23516,6 +23804,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -23615,6 +23904,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -23714,6 +24004,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -23813,6 +24104,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -23974,6 +24266,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -24073,6 +24366,7 @@
                                         "audiogen-ggml",
                                         "ggml-vla",
                                         "ggml-image-embedding",
+                                        "ggml-stereo-depth",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -24772,6 +25066,7 @@
                                 "audiogen-ggml",
                                 "ggml-vla",
                                 "ggml-image-embedding",
+                                "ggml-stereo-depth",
                                 "ggml-classification",
                                 "llm",
                                 "whisper",
@@ -25094,6 +25389,7 @@
                 "ggml-vla",
                 "ggml-classification",
                 "ggml-image-embedding",
+                "ggml-stereo-depth",
                 "onnx-vad"
               ],
               "description": "Canonical inference engine identifier.",
@@ -25253,6 +25549,7 @@
                   "ggml-vla",
                   "ggml-classification",
                   "ggml-image-embedding",
+                  "ggml-stereo-depth",
                   "onnx-vad"
                 ],
                 "description": "Canonical inference engine identifier.",
@@ -25443,6 +25740,7 @@
                   "ggml-vla",
                   "ggml-classification",
                   "ggml-image-embedding",
+                  "ggml-stereo-depth",
                   "onnx-vad"
                 ],
                 "description": "Canonical inference engine identifier.",
@@ -27035,6 +27333,7 @@
                         "audiogen-ggml",
                         "ggml-vla",
                         "ggml-image-embedding",
+                        "ggml-stereo-depth",
                         "ggml-classification",
                         "llm",
                         "whisper",
@@ -27671,6 +27970,7 @@
                         "audiogen-ggml",
                         "ggml-vla",
                         "ggml-image-embedding",
+                        "ggml-stereo-depth",
                         "ggml-classification",
                         "llm",
                         "whisper",

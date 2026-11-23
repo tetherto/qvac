@@ -8,7 +8,7 @@ plugins {
 
 /**
  * Stages `assets/e2e` as one generated source directory, so AGP wires it only into tasks that read
- * assets: compiling and unit-testing the app need neither npm nor the e2e package installed.
+ * assets: compiling the app needs neither npm nor the e2e package installed.
  */
 abstract class StageE2eAssets : DefaultTask() {
     @get:InputDirectory
@@ -166,10 +166,6 @@ android {
             merges += setOf("META-INF/services/**")
         }
     }
-
-    testOptions {
-        unitTests.isReturnDefaultValues = true
-    }
 }
 
 dependencies {
@@ -179,7 +175,4 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
     implementation("org.eclipse.paho:org.eclipse.paho.mqttv5.client:1.2.5")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.4.20")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
-    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 }

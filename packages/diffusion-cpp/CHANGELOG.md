@@ -1,8 +1,79 @@
 # Changelog
 
-## [Unreleased]
+## [0.38.0] - 2026-11-22
 
-## [0.35.2] - 2026-11-13
+### Features
+
+- Add Fibo 2.0 Edit Turbo image editing with a checksum-verified model
+  downloader, a four-step editing example, and setup documentation
+  ([#5892](https://github.com/tetherto/qvac/pull/5892)).
+- Expose the `flux` scheduler in the addon API and TypeScript declarations
+  ([#5892](https://github.com/tetherto/qvac/pull/5892)).
+
+### Fixes
+
+- Route Fibo input images through the engine's reference-image path, enabling
+  single-image editing and multiple references
+  ([#5892](https://github.com/tetherto/qvac/pull/5892),
+  [engine #74](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/74)).
+
+### Changed
+
+- Require `stable-diffusion-cpp` `2026-11-01#3` for the Fibo reference-image
+  capability fix ([#5892](https://github.com/tetherto/qvac/pull/5892),
+  [registry #507](https://github.com/tetherto/qvac-registry-vcpkg/pull/507)).
+
+## [0.37.1] - 2026-11-20
+
+### Features
+
+- Add optional Core ML UNet and tiny-decoder sidecars for SD 1.x/2.x image
+  generation on macOS and iOS through `files.coremlUnet` and
+  `files.coremlTaeDecoder`. Text encoding and scheduling remain on ggml;
+  tiled decoding uses the ggml tiny autoencoder. See the
+  [Core ML guide](README.md#core-ml-sidecars-on-apple) for compatible exports
+  and compute policies ([#5857](https://github.com/tetherto/qvac/pull/5857)).
+- Expose `files.taesd` to replace the full VAE for encoding and decoding with
+  a tiny autoencoder. Core ML loads return `unknown` from `assessFit()`
+  because the ggml planner cannot size sidecar memory
+  ([#5857](https://github.com/tetherto/qvac/pull/5857)).
+
+### Fixes
+
+- Check that workspace consumers retain matching desktop binary packages
+  when using a published diffusion fallback, while local source builds use
+  their staged binaries ([#5829](https://github.com/tetherto/qvac/pull/5829)).
+
+### Changed
+
+- Require `stable-diffusion-cpp` `2026-11-01#2` for the Core ML sidecars,
+  retaining the existing registry baseline
+  ([#5857](https://github.com/tetherto/qvac/pull/5857)).
+- Raise the `qvac-lib-inference-addon-cpp` floor from `1.5.0` to `1.7.0`.
+  Version 1.6.0 supports string runtime-stat values, and 1.7.0 adds
+  `JsAsyncTask::runOn` for addon-owned executors. This compile-time update
+  does not change the package's API or runtime behavior
+  ([#5812](https://github.com/tetherto/qvac/pull/5812)).
+
+## [0.36.0] - 2026-11-17
+
+### Features
+
+- Add bounded automatic performance profiles for supported FLUX.2 Klein,
+  MiniMax-H3 and LTX-2.3 checkpoints and devices. Explicit caller settings take
+  precedence; `performance_profile: 'off'` retains current engine defaults
+  ([#5578](https://github.com/tetherto/qvac/pull/5578)).
+- Add optional video output bounds, enforced by generation and fit probes, and
+  recognize supported metadata-only checkpoints during fit assessment
+  ([#5578](https://github.com/tetherto/qvac/pull/5578)).
+
+### Changed
+
+- Require `stable-diffusion-cpp` `2026-11-01#1` from the existing default registry
+  ([#5578](https://github.com/tetherto/qvac/pull/5578),
+  [registry #496](https://github.com/tetherto/qvac-registry-vcpkg/pull/496)).
+
+## [0.35.2] - 2026-11-17
 
 ### Fixes
 
@@ -11,6 +82,11 @@
   field, and with flash attention enabled, large images such as SD 2.1 at
   768x768 came out as a mosaic
   ([#5722](https://github.com/tetherto/qvac/pull/5722)).
+
+### Changed
+
+- Require `inference-addon-cpp` 1.6.0 for the shared runtime-stat value type
+  ([#5812](https://github.com/tetherto/qvac/pull/5812)).
 
 ## [0.35.1] - 2026-11-09
 
