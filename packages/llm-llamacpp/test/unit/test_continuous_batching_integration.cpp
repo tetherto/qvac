@@ -279,7 +279,7 @@ TEST_F(
     ContinuousBatchingIntegrationTest,
     CooperativeCallbackCanCancelItsOwnJobWithoutDeadlock) {
   REQUIRE_MODEL(model_);
-  config_["n_predict"] = "256";
+  config_["n_predict"] = "128";
   auto model = loadModel();
   auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr);
@@ -308,7 +308,7 @@ TEST_F(
       << "the cancellation callback must run exactly once";
   ASSERT_TRUE(output.has_value());
   ASSERT_EQ(output->size(), 1u);
-  EXPECT_LT(steps, 256u)
+  EXPECT_LT(steps, 128u)
       << "the job ran to its generation cap instead of applying cancellation";
   EXPECT_EQ(model->activeSlots(), 0u);
 }
