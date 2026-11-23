@@ -1,6 +1,6 @@
 ---
 name: release-fabric-consumers
-description: Release the qvac-fabric consumers to npm after the bundled version-bump PR merges — one release branch + `publish-npm.yml` dispatch per consumer, stopping at the npm approval gate. Supports --exclude to hold packages back. Phase C after rollout-phase-b.
+description: Release the qvac-fabric consumers to npm after the bundled version-bump PR merges — follow the publish runs addon-auto-release.yml starts per consumer to the npm approval gate, and hand off the links. Supports --exclude to hold packages back. Phase C after rollout-phase-b.
 argument-hint: "[base-branch] [--exclude <pkg>[,<pkg>...]]"
 disable-model-invocation: true
 ---
@@ -13,10 +13,12 @@ version-bump PR (vcpkg `version>=` + `package.json` + `CHANGELOG.md` for the ful
 has merged to `main`. It applies the single-package `release` workflow to every consumer
 in the release set at once.
 
-It reuses the same mechanics as `/release` (cut a `release-*` branch → dispatch the package's
-release workflow with the package as an input → it builds prebuilds, publishes to npm with the
-`latest` tag, and creates a git tag), but for the whole release
-set, and it is aware of the per-consumer quirks and the mandatory human approval gate.
+Merging the bump PR starts the releases: `addon-auto-release.yml` cuts `release-<pkg>-<ver>`
+from the merge commit for every bumped consumer and starts `publish-npm.yml` on it, which
+builds prebuilds, pauses for npm approval, publishes with the `latest` tag, and creates a git
+tag. This skill does not cut branches or dispatch `publish-npm.yml`; it checks that every
+consumer in the release set got its run, follows them to the approval gate, holds back
+`--exclude` packages, and verifies the publish.
 
 **The release set** is the full consumer roster (see the table below) minus anything named
 in `--exclude`. Every step below operates on the release set, not the roster.
@@ -33,13 +35,13 @@ in `--exclude`. Every step below operates on the release set, not the roster.
 
 - `[base-branch]` — optional; the branch the version bumps landed on. Defaults to `main`.
 - `--exclude <pkg>[,<pkg>...]` — optional; comma-separated **`packages/` directory names**
-  (the first column of the consumer table) to hold back from this pass. Everything else in
-  the roster is released.
+  (the first column of the consumer table) to hold back from this pass. Their publish runs are
+  cancelled before anyone approves them (Step 2); everything else in the roster is released.
 
 **Validate `--exclude` before touching anything.** A value that does not match a `packages/`
 dir name in the table is a **hard error, not a silent no-op** — a typo like
 `--exclude modelfit` would otherwise quietly release the very package the user meant to hold
-back. Report the unmatched name and stop **before** creating any release branch. Excluding
+back. Report the unmatched name and stop **before** cancelling or approving anything. Excluding
 every consumer is likewise an error, not an empty success.
 
 ## Prerequisites
@@ -81,7 +83,7 @@ before dispatch:
    the rollout bump. Do not bump past an unpublished version without asking — that silently burns a
    version number.
 
-Until both are settled, hold it back with **`--exclude <pkg>`** rather than dispatching it and
+Until both are settled, hold it back with **`--exclude <pkg>`** rather than approving its run and
 dealing with a failed `release-merge-guard`. That is the supported way to release the rest of the
 roster on schedule while a first-publish package waits.
 
@@ -103,29 +105,28 @@ The git-tag column is **not** uniform. Use the package's entry when checking a r
 
 `classification-ggml` is **not** in this list. It dropped the `qvac-fabric` vcpkg
 dependency and now consumes the published npm package `@qvac/fabric`, so it is not part
-of a fabric rollout — see *Release `fabric` first* below for the one follow-up it needs.
+of a fabric rollout — see *`fabric` publishes first* below for the one follow-up it needs.
 
-## Working repo & the golden guardrail
+## Working repo
 
 - Run all `git`/`gh` operations in the **code working repo** (e.g. `~/repo/qvac`) — NOT a
   stale/read-only worktree. Verify the repo is on the right remote (`tetherto/qvac`).
-- Base every release branch on **`origin/<base-branch>`**, never on local `HEAD` (local
-  `main` is often behind).
-- **GOLDEN RULE — a release branch modifies ZERO files.** It is an exact copy of
-  `origin/<base-branch>`. Create it without a checkout, then assert an empty diff before
-  pushing. **Never** edit anything under `.github/workflows/**`. If the diff is non-empty,
-  STOP and report — do not push.
+- Read target versions from **`origin/<base-branch>`**, never local `HEAD` (local `main` is
+  often behind).
+- Never create, push or edit a `release-*` branch here; `addon-auto-release.yml` cuts each one
+  as an exact copy of the merge commit.
 
 ## Workflow
 
-Do the whole release set in parallel unless told otherwise (version-only bumps were already
-build-validated on the fabric sync PR; a canary-first order is a fine alternative).
-
-### Release `fabric` first
+### `fabric` publishes first
 
 `@qvac/fabric` is the shared runtime addon the others build against, and it is also a
-**caret dependency of `@qvac/classification-ggml`**. Publish it ahead of the rest so
-downstream installs resolve against the new build rather than the previous one.
+**caret dependency of `@qvac/classification-ggml`**. The consumers build against the
+released `@qvac/fabric`, so `addon-auto-release.yml` orders this itself: a consumer whose
+`@qvac/fabric` range has no version on npm gets its release branch at merge time but no
+publish run, and the workflow starts it after the Fabric publish succeeds (it re-checks
+after every `publish-npm.yml` run and hourly). Approve `fabric` first; the consumer runs
+appear after it publishes.
 
 Then check the caret. Read both values rather than assuming either — they move every
 release, so any version written here would be wrong by the time you read it:
@@ -142,43 +143,42 @@ automatically but will **not** cross to `0.<m+1>.0`. So if this release moves
 release**, not as part of the rollout PR. This has happened before and is expected to
 recur; `packages/classification-ggml/CHANGELOG.md` records each crossing.
 
-If `fabric` is in `--exclude`, this ordering step does not apply to that pass and the
-`classification-ggml` caret follow-up does not arise — release the rest of the set in
-parallel and say in the report that the ordering constraint was moot.
+If `fabric` is in `--exclude` and a consumer needs the new Fabric, that consumer stays
+waiting until Fabric is released; say so in the report.
 
-### Step 1 — Sync and read target versions
+### Step 1 — Read target versions and find the auto-release run
 ```bash
 git -C <repo> fetch origin <base-branch>
+gh run list --repo tetherto/qvac --workflow addon-auto-release.yml --limit 10
 ```
 Resolve the release set first (roster minus `--exclude`, with `--exclude` validated per Usage),
 then for each consumer **in the release set** read the version off `origin/<base-branch>`
 (`git -C <repo> show origin/<base-branch>:packages/<pkg>/package.json`) and confirm
-`npm view @qvac/<pkg> version` is lower. Also confirm no target `release-*` branch already
-exists on the remote (`git -C <repo> ls-remote --heads origin "release-<pkg>-<ver>"`).
+`npm view @qvac/<pkg> version` is lower.
 
-State the resolved release set and the excluded packages before proceeding, so the user can
-catch a wrong set before any branch is pushed.
+Open the `addon-auto-release.yml` run for the merge commit: its summary lists every bumped
+addon and whether its publish started, is waiting for Fabric, or was skipped and why. State
+the resolved release set, the excluded packages and that summary before proceeding.
 
-### Step 2 — Create + assert + push each release branch
+If a consumer in the release set is missing from the summary, or its row failed, start the
+workflow for the merge commit (dry run first) rather than cutting the branch by hand:
 ```bash
-git -C <repo> branch release-<pkg>-<ver> origin/<base-branch>    # no checkout
-git -C <repo> diff --stat origin/<base-branch>..release-<pkg>-<ver>   # MUST be empty
-git -C <repo> push origin release-<pkg>-<ver>                    # non-force, non-main
+gh workflow run addon-auto-release.yml --repo tetherto/qvac -f sha=<merge-commit> -f dry_run=true
+gh workflow run addon-auto-release.yml --repo tetherto/qvac -f sha=<merge-commit>
 ```
 
-### Step 3 — Dispatch the release workflow
+### Step 2 — Hold back `--exclude` packages
+For each excluded package with a run on `release-<pkg>-<ver>`, cancel it before anyone
+approves it:
 ```bash
-gh workflow run publish-npm.yml --repo tetherto/qvac \
-  --ref release-<pkg>-<ver> -f packages=<pkg>
+gh run list --repo tetherto/qvac --workflow publish-npm.yml --branch release-<pkg>-<ver> --limit 1 --json databaseId
+gh run cancel <run-id> --repo tetherto/qvac
 ```
-Both inputs take the package **directory** name, the same string the branch carries.
+The automation never restarts a cancelled run. To release the package later, re-run that run
+from its page. An excluded package still waiting for Fabric has no run yet; the auto-release
+scan starts it after Fabric publishes, so check again then and cancel it.
 
-Pushing a fresh `release-*` branch usually does **not** auto-trigger (path filter sees no
-new commits), so the explicit dispatch is the trigger — but check
-`gh run list --branch release-<pkg>-<ver>` and, if a push-triggered run already exists, do
-NOT double-dispatch.
-
-### Step 4 — Monitor to the approval gate (do NOT approve)
+### Step 3 — Monitor to the approval gate (do NOT approve)
 Poll until each run pauses at `publish`. Read the run URL straight from `gh` rather than
 hand-assembling it from a run id:
 ```bash
@@ -224,7 +224,7 @@ runs are already pending approval. That is context; the list is the hand-off art
 **Never approve the deployment yourself** (the automation token has `can_approve=false` anyway;
 only a `qvac-internal-release` member can).
 
-### Step 5 — After the user approves, verify
+### Step 4 — After the user approves, verify
 Once `publish-npm` + `create-tag` complete for a consumer:
 ```bash
 npm view @qvac/<pkg> dist-tags.latest                 # == <ver>
@@ -235,7 +235,7 @@ bare registry `.npmrc` and an **isolated `HOME`** (so the user's token is never 
 `--ignore-scripts --no-package-lock`; confirm the installed `package.json` version matches.
 Put this loop in a script file and run `bash <file>` (see Bash discipline).
 
-### Step 6 — Report
+### Step 5 — Report
 Consolidated table: package, npm `latest`, git tag, public-install ✓, CI run link. Release
 branches are never merged back to `main`; offer to delete the leftover local branches.
 
@@ -269,21 +269,21 @@ indistinguishable later from one that dropped a package by accident.
   tags only. `gh release view <tag>` returns "release not found" — that is EXPECTED, not a
   failure. (The `create-github-release.yml` workflow is unrelated/defunct on another
   branch.) Do not treat a missing GitHub Release as an error.
-- **Release branches never merge back to `main`;** local copies remain after the run —
-  offer to clean them up. If a target `release-*` branch already exists on the remote, ask
-  the user before reusing or aborting.
+- **Release branches never merge back to `main`.** `addon-auto-release.yml` creates them on
+  the remote only. Do not cut or push them by hand: a hand-cut branch at another commit makes
+  the automation skip that package, and a second dispatch queues a duplicate publish run.
 - **Bash discipline (repo `CLAUDE.md`).** In direct commands: no heredocs, no `$()`
   command substitution, no `&&`/`||`/`;` chaining, no pipes or redirects. Put polling
   loops / the public-install check in a script file and run `bash <file>`. Use `git -C
   <path>` and `gh --repo <repo>` instead of `cd`.
-- **Sequencing.** All-6-in-parallel is safe for version-only fabric bumps (already
-  build-validated on the fabric sync PR). Canary-first (release one, verify, then fan out)
-  is a valid slower alternative if the fabric change was risky.
+- **Sequencing.** The consumers start together once Fabric is on npm. For a canary-first
+  pass, approve one consumer's run, verify it, then approve the rest.
 
 ## Error handling
 
 - `release-merge-guard` fails → version not bumped or `CHANGELOG.md` missing the
-  `## [<version>] - <date>` section. Fix on `main` (new PR) and re-dispatch.
+  `## [<version>] - <date>` section. Fix on `main` with a new bump PR; its merge starts a new
+  release.
 - A prebuild platform fails → `gh run view <run-id> --repo tetherto/qvac --log-failed`.
 - npm publish fails → the version may already exist (someone released it) or `NPM_TOKEN`
   is invalid; check `npm view @qvac/<pkg> versions`.

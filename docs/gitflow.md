@@ -108,11 +108,9 @@ labels and fork trust, and [TEAMS.md](ci/TEAMS.md) for approval ownership.
      does not push-trigger on `main`, `feature-*` or `tmp-*`, because a push to a `feature-*`/`tmp-*` branch would start a 9-platform
      matrix off an open PR's branch. Every non-release addon build is a
      `publish-gpr.yml` dispatch on the branch.
-   - **An addon release branch cut from `main` also needs a dispatch.** When the version
-     bump already merged to `main` and `release-<package>-<x.y.z>` is created from that
-     commit, the push carries no new commits, so the `paths` filter never matches and
-     nothing publishes. Start it with
-     `gh workflow run publish-npm.yml --ref release-<package>-<x.y.z> -f packages=<package>`.
+   - **A native addon version bump merged to `main` starts its own release.**
+     `addon-auto-release.yml` cuts the release branch and starts `publish-npm.yml`;
+     see [Native addon releases](#native-addon-releases-from-main).
 
 ### Daily dev loop (preferred: org branch → org main)
 
@@ -220,6 +218,35 @@ enforcement works.
 ---
 
 ## Release flow (new version x.y.z)
+
+### Native addon releases from `main`
+
+A native addon (a `ci:addons` package that `publish-npm.yml` publishes) releases from `main`:
+
+1. Open a PR into `main` that bumps `packages/<package>/package.json` to `x.y.z` and adds the
+   `## [x.y.z]` section to its `CHANGELOG.md`. One PR may bump several addons.
+2. Merge it. `addon-auto-release.yml` cuts `release-<package>-<x.y.z>` from the merge commit for
+   each bumped addon and starts `publish-npm.yml` on it. Its run summary lists what it started
+   and why it skipped anything.
+3. A `qvac-internal-release` member approves the `npm` environment on each publish run. That
+   approval is the release decision: reject it, or cancel the run, to hold a bump back. A
+   cancelled or failed publish is restarted from its own run page.
+
+Do not cut these branches or dispatch `publish-npm.yml` by hand for them. The workflow leaves
+alone a version already on npm, a version `main` has since moved past, and a release branch
+that points at another commit. A branch at the merge commit that already has a publish run
+is reported with that run's link, not started again.
+
+An addon whose `@qvac/*` dependency range has no version on npm yet, such as consumers bumped
+together with Fabric, gets its branch at merge time but no publish run. The same workflow
+starts it once that dependency publishes: it re-checks after every successful `publish-npm.yml`
+run and every hour, and `gh workflow run addon-auto-release.yml` with no inputs runs that
+check now. To release a bump that merged before this workflow existed, or whose run failed,
+run it with `-f sha=<merge commit>`; add `-f dry_run=true` to see the plan first.
+
+No backmerge is needed: the version and changelog are already on `main`. Patch releases of
+an older addon line follow [Patch flow](#patch-flow-xyz--xyz1). The SDK pod and the other
+packages follow the steps below.
 
 ![Release flow](../.github/docs/gitflow/images/release-flow.png)
 
@@ -470,11 +497,13 @@ To reflect branch intent correctly and keep fork PRs safe:
 
 ### New release (x.y.z)
 
-- Maintainer: create upstream `release-<package>-<x.y.z>` from `main`
-- Contributor: PR from a separate org working branch or personal fork into upstream `release-<package>-<x.y.z>` with:
-  - `package.json` bumped to `x.y.z`
-  - changelog updated
-- Merge → CI publishes to NPM and tags `<package>-v<x.y.z>`
+- Native addon: PR into `main` with `package.json` bumped and changelog updated → merge → `addon-auto-release.yml` starts the publish → a release team member approves npm
+- Other packages:
+  - Maintainer: create upstream `release-<package>-<x.y.z>` from `main`
+  - Contributor: PR from a separate org working branch or personal fork into upstream `release-<package>-<x.y.z>` with:
+    - `package.json` bumped to `x.y.z`
+    - changelog updated
+  - Merge → CI publishes to NPM and tags `<package>-v<x.y.z>`
 
 ### Patch release (x.y.z → x.y.(z+1))
 

@@ -105,6 +105,7 @@ jobs:
           .github/scripts/test/download-artifact-retry.test.mjs
           .github/scripts/test/integration-test-script.test.mjs
           .github/scripts/test/release-train.test.mjs
+          .github/scripts/test/addon-auto-release.test.mjs
           .github/scripts/test/linux-module-cxx-runtime.test.mjs
           .agents/skills/_lib/sdk/agent-stack-plan.test.mjs
 
