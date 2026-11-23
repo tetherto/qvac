@@ -22,6 +22,13 @@ import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
  */
 const DEFAULT_VIDEO_FRAMES = 33
 
+/**
+ * The largest workload the fitter sizes. A load accepts larger declared output
+ * limits, and the fitter rejects a workload above these.
+ */
+const FIT_MAX_DIMENSION = 65536
+const FIT_MAX_VIDEO_FRAMES = 4096
+
 /** The diffusion fit request for a load: the files and config each mode loads. */
 export function sdcppFitRequest(load: FitLoad): FitRequestPlan {
   if (load.isShardedModel) {
@@ -76,6 +83,14 @@ export function sdcppFitRequest(load: FitLoad): FitRequestPlan {
         height: config.performance_max_height,
         videoFrames: config.performance_max_frames
       }
+    if (
+      boundedVideo &&
+      (boundedVideo.width > FIT_MAX_DIMENSION ||
+        boundedVideo.height > FIT_MAX_DIMENSION ||
+        boundedVideo.videoFrames > FIT_MAX_VIDEO_FRAMES)
+    ) {
+      return { unknown: 'the declared output limits exceed the largest workload the fitter sizes' }
+    }
     const request: DiffusionFitRequest = {
       files: videoFilesFor(load.modelPath, artifacts),
       config: videoConfigFor(config),

@@ -125,6 +125,29 @@ test('bounded video fit requests assess the maximum declared output', (t) => {
   }
 })
 
+test('video fit is unknown when declared limits exceed what the fitter sizes', (t) => {
+  for (const bounds of [
+    { performance_max_width: 512, performance_max_height: 320, performance_max_frames: 4097 },
+    { performance_max_width: 65537, performance_max_height: 320, performance_max_frames: 97 },
+    { performance_max_width: 512, performance_max_height: 65537, performance_max_frames: 97 }
+  ]) {
+    const modelConfig = sdcppLoadConfigSchema.parse({ mode: 'video', ...bounds })
+    t.ok('unknown' in fitPlan(modelConfig), JSON.stringify(bounds))
+  }
+  t.alike(
+    requestOf(
+      fitPlan({
+        mode: 'video',
+        performance_max_width: 65536,
+        performance_max_height: 65536,
+        performance_max_frames: 4096
+      })
+    )?.workload,
+    { width: 65536, height: 65536, videoFrames: 4096 },
+    'the largest sized limits still build a request'
+  )
+})
+
 test('unbounded video and image fit requests retain their defaults', (t) => {
   t.alike(requestOf(fitPlan({ mode: 'video' }))?.workload, { videoFrames: 33 })
   t.alike(
