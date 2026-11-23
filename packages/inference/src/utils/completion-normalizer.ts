@@ -350,6 +350,15 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     return taken
   }
 
+  // An unfinished bare block naming a declared tool is a cut-off call, not prose.
+  function namesDeclaredTool(raw: string, frame: FrameSpec) {
+    const rest = raw.slice(frame.open.length)
+    const nameLength = bareFunctionNameLength(rest)
+    if (nameLength <= 0) return false
+    const name = rest.slice(0, nameLength - 1).trim()
+    return config.tools.some((tool) => tool.name === name)
+  }
+
   function flushToolBuffer(events: CompletionEvent[], closed: boolean) {
     const { raw, frame, openedInThinking } = takeToolFrame()
 
@@ -394,6 +403,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     }
 
     if (frame.bare && toolCalls.length === 0 && errors.length === 0) {
+      if (!closed && namesDeclaredTool(raw, frame)) releaseTrailingCalls(events)
       emitContent(events, raw)
       return
     }
@@ -444,7 +454,10 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
       state = 'thinkingFraming'
       return
     }
-    if (frame?.bare) return emitContent(events, raw)
+    if (frame?.bare) {
+      if (namesDeclaredTool(raw, frame)) releaseTrailingCalls(events)
+      return emitContent(events, raw)
+    }
 
     releaseTrailingCalls(events)
     events.push({

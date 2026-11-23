@@ -43,16 +43,33 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+// Keys as they appear in the text: quoted or bare, followed by a colon.
+const WRITTEN_KEY =
+  /"((?:[^"\\\n]|\\.)*)"\s*:|'((?:[^'\\\n]|\\.)*)'\s*:|(?<![\w$-])([A-Za-z_$][\w$-]*)\s*:/g
+// Keys the one-pass scan can miss (spaces, odd quoting) get a regex search each, up to this many.
+const MAX_LOOSE_KEY_CHECKS = 32
+
 // jsonrepair turns stray words into keys (`{bad json` -> `{"bad json":null}`);
 // a repair is kept only when every key it produced was written as a key.
 function keysWritten(value: unknown, text: string): boolean {
-  if (Array.isArray(value)) return value.every((item) => keysWritten(item, text))
-  if (!isPlainObject(value)) return true
-  return Object.entries(value).every(
-    ([key, child]) =>
-      new RegExp(`(?:["']${escapeRegExp(key)}["']|\\b${escapeRegExp(key)})\\s*:`).test(text) &&
-      keysWritten(child, text)
-  )
+  const written = new Set<string>()
+  for (const match of text.matchAll(WRITTEN_KEY)) written.add(match[1] ?? match[2] ?? match[3]!)
+  let looseChecks = 0
+
+  function writtenLoosely(key: string): boolean {
+    if (++looseChecks > MAX_LOOSE_KEY_CHECKS) return false
+    return new RegExp(`(?:["']${escapeRegExp(key)}["']|\\b${escapeRegExp(key)})\\s*:`).test(text)
+  }
+
+  function check(node: unknown): boolean {
+    if (Array.isArray(node)) return node.every(check)
+    if (!isPlainObject(node)) return true
+    return Object.entries(node).every(
+      ([key, child]) => (written.has(key) || writtenLoosely(key)) && check(child)
+    )
+  }
+
+  return check(value)
 }
 
 function read(text: string): unknown {

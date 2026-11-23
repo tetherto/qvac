@@ -266,6 +266,20 @@ test('an unfinished tag after a call at the end of the turn is shown and makes i
   t.is(glue.content, '')
 })
 
+test('a call cut off after a complete one keeps the complete one made', (t) => {
+  const block = '<function=login><parameter=password>a</parameter></function>'
+  const cut = '<function=login><parameter=password>trunc'
+  const text = `${block}\n${cut}`
+  for (let split = 0; split <= text.length; split++) {
+    const r = run([text.slice(0, split), text.slice(split)], [LOGIN])
+    t.alike(argsOf(r), [['login', { password: 'a' }]], `split ${split}: call`)
+    t.is(r.content, cut, `split ${split}: cut-off block shown`)
+  }
+
+  const prose = run([block, '\n<function=unknown> is how it looks'], [LOGIN])
+  t.is(prose.calls.length + prose.finalCalls.length, 0, 'an undeclared name is still prose')
+})
+
 test('an optional non-null qwen35 parameter written as null is left out', (t) => {
   const search: Tool = {
     type: 'function',
@@ -459,4 +473,16 @@ test('adversarial bare markup stays linear at one megabyte', (t) => {
     t.is(r.calls.length, 0)
     t.ok(elapsed < BUDGET_MS, `${text.length} chars in ${elapsed}ms`)
   }
+})
+
+test('repairing an object with many keys stays linear', (t) => {
+  const keys = Array.from({ length: 50_000 }, (_, i) => `"k${i}": ${i}`).join(', ')
+  const started = Date.now()
+  const r = repairToolArguments(
+    { payload: `{${keys},}` },
+    { type: 'object', properties: { payload: { type: 'object' } } }
+  )
+  const elapsed = Date.now() - started
+  t.is(Object.keys(r.payload as object).length, 50_000)
+  t.ok(elapsed < BUDGET_MS, `${keys.length} chars in ${elapsed}ms`)
 })
