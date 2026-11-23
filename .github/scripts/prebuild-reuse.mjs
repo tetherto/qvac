@@ -51,11 +51,20 @@ export const cacheName = (row, key, pr = '') =>
 // branch but builds a PR, so its artifacts never count as the default branch's.
 export const BRANCH_EVENTS = ['push', 'schedule', 'workflow_dispatch']
 
-// Whether an artifact's run may be reused: a PR name only from a workflow_run build of this repository, a branch name
-// only from a branch event on this branch or the default branch. `run` is the artifact's run from the API.
-export function trusted(run, { pr = '', branch = '', defaultBranch = '' }) {
+// The only producer of PR-named artifacts. Its run-name carries the PR head it built: `PR build and test <sha>`.
+export const PR_BUILD = '.github/workflows/pr-build-test.yml'
+export const builtSha = (run) => /^PR build and test ([0-9a-f]{40})$/.exec(run?.display_title ?? '')?.[1] ?? ''
+
+// Whether an artifact's run may be reused: a PR name only from a workflow_run PR_BUILD run of this repository whose
+// built commit belongs to that PR (prsOf lists a commit's PR numbers), a branch name only from a branch event on this
+// branch or the default branch. `run` is the artifact's run from the API.
+export async function trusted(run, { pr = '', branch = '', defaultBranch = '' }, prsOf) {
   if (!run || run.head_repository?.id !== run.repository?.id) return false
-  if (pr) return run.event === 'workflow_run'
+  if (pr) {
+    const sha = builtSha(run)
+    if (run.event !== 'workflow_run' || run.path !== PR_BUILD || !sha) return false
+    return (await prsOf(sha)).includes(Number(pr))
+  }
   return (
     BRANCH_EVENTS.includes(run.event) &&
     [branch, defaultBranch].filter(Boolean).includes(run.head_branch)
@@ -63,10 +72,10 @@ export function trusted(run, { pr = '', branch = '', defaultBranch = '' }) {
 }
 
 // The first unexpired artifact whose run passes trusted(); getRun looks a run up by id.
-export async function pick(artifacts, scope, getRun) {
+export async function pick(artifacts, scope, getRun, prsOf) {
   for (const a of artifacts) {
     if (a.expired || !a.workflow_run?.id) continue
-    if (trusted(await getRun(a.workflow_run.id), scope)) return a
+    if (await trusted(await getRun(a.workflow_run.id), scope, prsOf)) return a
   }
   return null
 }
@@ -84,7 +93,7 @@ export function legs({ slugs, configs, dirs, runners, providers = [] }) {
 
 // Legs to build go back as their row index, which _build reads the full row by. A PR run looks for its own leg first,
 // then the default branch's; it uploads under its own name only.
-export async function plan(rows, { tree, list, getRun, reuse, pr = '', branch = '', defaultBranch = '' }) {
+export async function plan(rows, { tree, list, getRun, prsOf, reuse, pr = '', branch = '', defaultBranch = '' }) {
   const build = []
   const reused = []
   for (const [i, row] of rows.entries()) {
@@ -93,10 +102,10 @@ export async function plan(rows, { tree, list, getRun, reuse, pr = '', branch = 
     let hit = null
     let name = own
     if (reuse) {
-      hit = await pick(await list(own), { pr, branch, defaultBranch }, getRun)
+      hit = await pick(await list(own), { pr, branch, defaultBranch }, getRun, prsOf)
       if (!hit && pr) {
         name = cacheName(row, key)
-        hit = await pick(await list(name), { defaultBranch }, getRun)
+        hit = await pick(await list(name), { defaultBranch }, getRun, prsOf)
       }
     }
     if (hit) reused.push({ slug: row.slug, config: row.config, name, runId: hit.workflow_run.id })
@@ -131,6 +140,15 @@ async function main(env) {
     }
     return runs.get(id)
   }
+  // A failed lookup matches no PR, so the leg builds.
+  const prs = new Map()
+  const prsOf = async (sha) => {
+    if (!prs.has(sha)) {
+      const res = await api(`commits/${sha}/pulls?per_page=100`)
+      prs.set(sha, res.ok ? (await res.json()).map((p) => p.number) : [])
+    }
+    return prs.get(sha)
+  }
   const slugs = JSON.parse(env.SLUGS)
   const providers = JSON.parse(env.PROVIDERS || '[]')
   // A list that does not line up with the rows would key legs on the wrong providers, so nothing is reused then.
@@ -148,6 +166,7 @@ async function main(env) {
     tree,
     list,
     getRun,
+    prsOf,
     reuse,
     pr: /^\d+$/.test(env.PR || '') ? env.PR : '',
     branch: env.BRANCH,

@@ -36,6 +36,8 @@ jobs:
     permissions:
       contents: read
       actions: read
+      # prebuild-reuse.mjs checks a PR artifact's built commit belongs to that PR.
+      pull-requests: read
     outputs:
       build: ${{ steps.plan.outputs.build }}
       reused: ${{ steps.plan.outputs.reused }}

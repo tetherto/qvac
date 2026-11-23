@@ -153,6 +153,7 @@ jobs:
       contents: read
       actions: read
       id-token: write
+      pull-requests: read
     uses: ./.github/workflows/_build.yml
     secrets: inherit
     with:
@@ -165,6 +166,7 @@ jobs:
       contents: read
       actions: read
       id-token: write
+      pull-requests: read
     uses: ./.github/workflows/_build.yml
     secrets: inherit
     with:

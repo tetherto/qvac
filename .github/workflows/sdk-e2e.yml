@@ -58,11 +58,8 @@ permissions: {}
 # PR code never saves to the default branch's Actions cache.
 cache-mode: read
 
-# One run per PR, keyed on the trigger's head: the trigger does not say which label was applied, so any label cancels
-# the PR's run in progress. Dispatches never cancel each other.
-concurrency:
-  group: sdk-e2e-${{ github.event.workflow_run.head_repository.full_name || github.run_id }}-${{ github.event.workflow_run.head_branch }}-${{ inputs.platform || 'none' }}
-  cancel-in-progress: true
+# No workflow-level group: the label is known only after context, so desktop and mobile take one group per kind of
+# run (context's kind, main's on-pr-test-sdk.yml mapping). An ignored label runs no suite and cancels nothing.
 
 jobs:
   # The PR from the API, if it touches main's SDK paths; nothing else in the trigger is read.
@@ -86,6 +83,13 @@ jobs:
       action: ${{ steps.pr.outputs.action }}
       label: ${{ steps.pr.outputs.label }}
       event: ${{ steps.pr.outputs.event }}
+      kind: >-
+        ${{ steps.pr.outputs.action != 'labeled' && 'base'
+          || (steps.pr.outputs.label == 'test-e2e-rerun-failed' && 'rerun')
+          || (steps.pr.outputs.label == 'test-e2e-smoke' && 'base')
+          || (steps.pr.outputs.label == 'test-e2e-full' && 'base')
+          || (steps.pr.outputs.label == 'test-e2e-python' && 'probe')
+          || format('ignored-{0}', steps.pr.outputs.label) }}
     steps:
       - name: Checkout actions
         uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
@@ -99,7 +103,6 @@ jobs:
           github-token: ${{ github.token }}
           branches: main, release-*, feature-*, tmp-*
           paths: packages/sdk/ packages/sdk-e2e/ packages/inference/ packages/test-suite/ packages/sdk-python/ packages/sdk-kotlin/
-          labels: test-e2e-smoke, test-e2e-full, test-e2e-python, test-e2e-rerun-failed
           status-context: qvac/sdk-e2e
 
   select:
@@ -266,6 +269,10 @@ jobs:
     needs: [context, plan]
     # always(): impacted runs only on smoke labels, and its skip would otherwise skip every job after plan.
     if: always() && !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.desktop != '' && needs.plan.outputs.desktop != '[]'
+    # A newer run of the same kind cancels this one; a dispatch's group is its own run.
+    concurrency:
+      group: sdk-e2e-${{ needs.context.outputs.pr || github.run_id }}-${{ inputs.platform || 'none' }}-${{ needs.context.outputs.kind }}-desktop
+      cancel-in-progress: true
     cache-mode: read
     permissions:
       contents: read
@@ -287,6 +294,9 @@ jobs:
     # always(): impacted runs only on smoke labels, and its skip would otherwise skip every job after plan.
     if: always() && !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.mobile != '' && needs.plan.outputs.mobile != '[]'
     name: mobile / ${{ matrix.row.slug }} ${{ matrix.row.config }}
+    concurrency:
+      group: sdk-e2e-${{ needs.context.outputs.pr || github.run_id }}-${{ inputs.platform || 'none' }}-${{ needs.context.outputs.kind }}-mobile-${{ matrix.row.slug }}-${{ matrix.row.config }}
+      cancel-in-progress: true
     runs-on: ${{ matrix.row.runner }}
     environment: release
     timeout-minutes: ${{ matrix.row.timeout || 280 }}

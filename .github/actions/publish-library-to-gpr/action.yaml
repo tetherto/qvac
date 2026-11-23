@@ -147,6 +147,7 @@ runs:
         REF: ${{ github.ref }}
         REF_NAME: ${{ github.ref_name }}
         HEAD_REF: ${{ github.head_ref }}
+        LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
       run: |
         SHOULD_PUBLISH=false
 
@@ -185,7 +186,7 @@ runs:
 
         # PR label "publish"
         if [[ "$EVENT_NAME" == "pull_request" ]]; then
-          if [[ "${{ toJSON(github.event.pull_request.labels.*.name) }}" =~ "publish" ]]; then
+          if jq -e 'index("publish")' <<<"$LABELS" > /dev/null; then
             echo "✅ Publishing: PR has publish label"
             SHOULD_PUBLISH=true
           fi

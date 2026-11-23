@@ -33,6 +33,11 @@ on:
 permissions:
   contents: read
 
+# Publishes on one ref queue instead of cancelling, so a run never stops mid-publish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   PKG_DIR: packages/registry-server
   NAME_SUFFIX: "-mono"
@@ -243,9 +248,11 @@ jobs:
       - name: Configure npm for GitHub Package Registry
         shell: bash
         working-directory: ${{ env.PKG_DIR }}
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=$GPR_TOKEN" >> ~/.npmrc
 
       - name: Publish to GitHub Package Registry
         uses: ./.github/actions/publish-library-to-gpr
@@ -294,9 +301,11 @@ jobs:
       - name: Configure npm for GitHub Package Registry
         shell: bash
         working-directory: ${{ env.PKG_DIR }}
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=$GPR_TOKEN" >> ~/.npmrc
 
       - name: Determine dist-tag
         id: dist-tag
@@ -373,10 +382,11 @@ jobs:
         shell: bash
         working-directory: ${{ env.PKG_DIR }}/client
         env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=$GPR_TOKEN" >> ~/.npmrc
           echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
           if [ -n "$NPM_TOKEN" ]; then echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc; fi
 
@@ -434,11 +444,14 @@ jobs:
       - name: Configure npm for package registries
         shell: bash
         working-directory: ${{ env.PKG_DIR }}
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=$GPR_TOKEN" >> ~/.npmrc
           echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
+          echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
 
       - name: Publish to GitHub Package Registry
         uses: ./.github/actions/publish-library-to-gpr
@@ -488,11 +501,14 @@ jobs:
       - name: Configure npm for package registries
         shell: bash
         working-directory: ${{ env.PKG_DIR }}
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=$GPR_TOKEN" >> ~/.npmrc
           echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
+          echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
 
       - name: Determine dist-tag
         id: dist-tag-2
