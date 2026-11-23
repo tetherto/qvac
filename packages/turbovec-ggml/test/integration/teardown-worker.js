@@ -1,6 +1,6 @@
 'use strict'
 
-// Worker env for the env shutdown test in id-map-index-async.test.js. Starts a
+// Worker env for the env shutdown test in id-map-index-desktop.test.js. Starts a
 // long IVF build on one index, then a write on a second index, which waits
 // behind the build on the addon's thread for long work. It then creates the
 // ready file and idles, so the main env can terminate this env while the
