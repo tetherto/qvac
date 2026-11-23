@@ -4228,8 +4228,10 @@ TEST(CrossKeyPrefixTest, BatchRequestsWithoutAKeyShareTheirPrefix) {
 
 // A hybrid model's recurrent state is shared by the copy until the new
 // sequence decodes: answering on the copy must leave the parked primed state
-// intact, so a question on the primed key answers as it does on a model that
-// never made the copy.
+// intact. The primed sequence's state is compared byte for byte, not the text a
+// later question generates: in the unified KV pool a sequence's greedy output
+// depends on where the other sequences' cells sit, so it can change while the
+// state stays the same.
 TEST(CrossKeyPrefixTest, BatchHybridCopyLeavesThePrimedStateIntact) {
   const test_common::TestModelPath modelPath = hybridModelPath();
   if (!modelPath.found()) {
@@ -4237,41 +4239,51 @@ TEST(CrossKeyPrefixTest, BatchHybridCopyLeavesThePrimedStateIntact) {
   }
   const std::vector<std::string> keys = {
       "cross_batch_hybrid_primed.bin", "cross_batch_hybrid_q.bin"};
-  const auto prime = [&keys](LlamaModel& model) {
-    LlamaModel::Prompt prompt;
-    prompt.input = chatInput({{"system", fruitStallRules()}});
-    prompt.cacheKey = keys[0];
-    prompt.prefill = true;
-    model.processPromptBatch({prompt});
-    return getStatValue(model.runtimeStats(), "CacheTokens");
-  };
   for (const auto& key : keys) {
     fs::remove(key);
   }
-  std::string reference;
-  {
-    auto model = loadHybridChatModel(modelPath, "2");
-    ASSERT_TRUE(model->isLoaded());
-    BatchedCacheHarness harness(*model);
-    ASSERT_GT(prime(*model), 0);
-    reference = harness.run(fruitQuestion("banana"), keys[0]).output;
-  }
-  fs::remove(keys[0]);
 
   auto model = loadHybridChatModel(modelPath, "2");
   ASSERT_TRUE(model->isLoaded());
   BatchedCacheHarness harness(*model);
-  const double primedTokens = prime(*model);
+  // Attention cells and recurrent state of one sequence; the per-sequence
+  // format holds no cell indices or other sequences' ids.
+  const auto seqState = [&model](llama_seq_id seqId) {
+    llama_context* ctx = model->getContext();
+    std::vector<uint8_t> state(llama_state_seq_get_size(ctx, seqId));
+    state.resize(
+        llama_state_seq_get_data(ctx, state.data(), state.size(), seqId));
+    return state;
+  };
+
+  LlamaModel::Prompt prime;
+  prime.input = chatInput({{"system", fruitStallRules()}});
+  prime.cacheKey = keys[0];
+  prime.prefill = true;
+  model->processPromptBatch({prime});
+  const double primedTokens =
+      getStatValue(model->runtimeStats(), "CacheTokens");
   ASSERT_GT(primedTokens, 0);
+  const std::vector<uint32_t> parked = harness.scheduler().parkedSeqIds();
+  ASSERT_EQ(parked.size(), 1u) << "the primed conversation was not parked";
+  const auto primedSeq = static_cast<llama_seq_id>(parked[0]);
+  const std::vector<uint8_t> primedState = seqState(primedSeq);
+  ASSERT_FALSE(primedState.empty());
 
   const BatchedTurn onCopy = harness.run(fruitQuestion("apple"), keys[1]);
   EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 1u);
   EXPECT_EQ(onCopy.reuse, static_cast<size_t>(primedTokens))
       << "the new key did not continue from the primed system prompt";
+  const std::vector<uint32_t> parkedAfter = harness.scheduler().parkedSeqIds();
+  ASSERT_NE(
+      std::ranges::find(parkedAfter, static_cast<uint32_t>(primedSeq)),
+      parkedAfter.end())
+      << "the primed conversation left its sequence";
+  EXPECT_TRUE(seqState(primedSeq) == primedState)
+      << "answering on the copy changed the primed state";
+
   const BatchedTurn onPrimed = harness.run(fruitQuestion("banana"), keys[0]);
   EXPECT_EQ(onPrimed.reuse, static_cast<size_t>(primedTokens));
-  EXPECT_EQ(onPrimed.output, reference)
-      << "answering on the copy changed the primed state";
   model.reset();
   for (const auto& key : keys) {
     fs::remove(key);
