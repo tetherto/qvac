@@ -578,8 +578,12 @@ alone or any pool would use more than 90% of its free memory.
 verdict alone, which is `does-not-fit` when rows sharing one pool, such as a Metal GPU and the
 CPU, would together use more than 90% of its free memory; one row per
 device the load uses (the host last), and its `stats`: the context size and GPU layers for a
-llama.cpp load with a verdict, empty otherwise. A row's `id` is the PCI bus ID
-where the backend reports one, so the same GPU matches across engines.
+llama.cpp load with a verdict, empty otherwise. An `unknown` entry carries a `reason` saying why
+it has no verdict, and so does a `does-not-fit` from a shared pool, naming the pool. A row's `id`
+is the PCI bus ID where the backend reports one, so the same GPU matches across engines.
+
+[`qvac fit`](/cli#qvac-fit) answers the same question from the terminal, with the same answer for
+the same input.
 
 ```bash
 curl -sS http://localhost:11435/qvac/v1/models/fit \

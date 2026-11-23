@@ -70,7 +70,13 @@ const modelResult = z.looseObject({
       }),
       z.object({}).strict()
     ])
-    .describe('The resolved load of a llama.cpp verdict. Empty otherwise.')
+    .describe('The resolved load of a llama.cpp verdict. Empty otherwise.'),
+  reason: z
+    .string()
+    .optional()
+    .describe(
+      'Why the model has no verdict, or why devices that each fit do not fit together. Present when `status` is `unknown`, and when it is `does-not-fit` because devices sharing one memory pool overflow it.'
+    )
 })
 
 export const modelFitResult = z.looseObject({
