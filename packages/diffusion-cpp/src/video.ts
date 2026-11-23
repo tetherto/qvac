@@ -308,6 +308,10 @@ export default class VideoStableDiffusion {
       llmVisionPath: this._files.llmVision || '',
       tokenizerPath: this._files.tokenizer || '',
       vaePath: this._files.vae || '',
+      // Image-only sidecars and tiny-autoencoder overrides stay disabled in video mode.
+      taesdPath: '',
+      coremlUnetPath: '',
+      coremlTaeDecoderPath: '',
       clipVisionPath: this._files.clipVision || '',
       esrganPath: this._files.esrgan || '',
       audioVaePath: this._files.audioVae || '',

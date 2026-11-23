@@ -47,6 +47,7 @@ export interface OpenIndex {
 
 interface Entry {
   namespace: string
+  dir: string | undefined
   store: SnapshotStore | null
   snapshotEvery: number
   native: NativeIndex | null
@@ -81,6 +82,9 @@ export interface IndexRegistry {
     vectors: () => Float32Array,
     removed: bigint[]
   ): Promise<void>
+  // Forgets a dropped namespace's index and deletes its snapshot. A snapshot
+  // left behind never loads: a re-created namespace has another identity.
+  drop(namespace: string, createdAt: number, config: IndexConfig): Promise<void>
   close(): Promise<void>
 }
 
@@ -92,7 +96,22 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
   // flush ends a HyperDB transaction, so pruning rides on the next one instead
   // of the commit that triggered the snapshot.
   const prunable = new Map<string, number>()
+  // A dropped entry's late write must not prune a re-created namespace.
+  const dropped = new WeakSet<Entry>()
+  // Snapshot writes and removals of one namespace run in order, so a removal
+  // never reads one sidecar and deletes another written in between.
+  const disk = new Map<string, Promise<unknown>>()
   let closed = false
+
+  function onDisk<T>(namespace: string, run: () => Promise<T>): Promise<T> {
+    const next = (disk.get(namespace) ?? Promise.resolve()).then(run)
+    const settled = next.catch(() => {})
+    disk.set(namespace, settled)
+    void settled.then(() => {
+      if (disk.get(namespace) === settled) disk.delete(namespace)
+    })
+    return next
+  }
 
   function entryFor(namespace: string, config: IndexConfig): Entry {
     const key = `${config.dir ?? ''}\0${namespace}`
@@ -100,6 +119,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     if (!entry) {
       entry = {
         namespace,
+        dir: config.dir,
         store: config.dir ? createSnapshotStore(config.dir, coreKey) : null,
         snapshotEvery: config.snapshotEvery,
         native: null,
@@ -340,12 +360,14 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     const { store, native, identity } = entry
     if (!store || !native || !identity) return
     if (entry.revision <= entry.persistedRevision) return
-    const revision = await store.write(identity, native, () => {
-      // A rebuild may swap the index while the store awaits the filesystem.
-      if (entry.native !== native) throw new Error('index replaced during snapshot')
-      return entry.revision
-    })
-    if (entry.native !== native) return
+    const revision = await onDisk(entry.namespace, () =>
+      store.write(identity, native, () => {
+        // A rebuild may swap the index while the store awaits the filesystem.
+        if (entry.native !== native) throw new Error('index replaced during snapshot')
+        return entry.revision
+      })
+    )
+    if (entry.native !== native || dropped.has(entry)) return
     entry.persistedRevision = Math.max(entry.persistedRevision, revision)
     prunable.set(entry.namespace, Math.max(prunable.get(entry.namespace) ?? 0, revision))
   }
@@ -375,6 +397,33 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     prunable.delete(namespace)
   }
 
+  // Entries leave the map before any await, so a namespace re-created while
+  // an old snapshot write finishes gets a fresh entry, never the old index.
+  async function drop(namespace: string, createdAt: number, config: IndexConfig): Promise<void> {
+    const detached: Entry[] = []
+    for (const [key, entry] of entries) {
+      if (entry.namespace !== namespace) continue
+      entries.delete(key)
+      dropped.add(entry)
+      detached.push(entry)
+    }
+    prunable.delete(namespace)
+    for (const entry of detached) {
+      while (entry.syncing) await entry.syncing.catch(() => {})
+      await entry.persisting
+      discard(entry)
+    }
+    // Every directory an index of this namespace used, not only the caller's.
+    const dirs = new Set([config.dir, ...detached.map((entry) => entry.dir)])
+    dirs.delete(undefined)
+    // Snapshots exist only where the addon loads; this also keeps Node off bare-fs.
+    if (dirs.size === 0 || !(await loadNativeIndex())) return
+    for (const dir of dirs as Set<string>) {
+      const store = createSnapshotStore(dir, coreKey)
+      await onDisk(namespace, () => store.remove(namespace, createdAt))
+    }
+  }
+
   async function close(): Promise<void> {
     closed = true
     for (const entry of entries.values()) {
@@ -394,7 +443,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     }
   }
 
-  return { open, prune, apply, close }
+  return { open, prune, apply, drop, close }
 }
 
 function install(entry: Entry, native: NativeIndex, revision: number): void {
