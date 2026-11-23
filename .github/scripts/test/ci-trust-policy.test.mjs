@@ -1865,6 +1865,7 @@ const ADVISORY_WORKFLOWS = new Map([
   ["on-pr-close.yml", "Cleans up after a closed PR; not a check."],
   ["on-pr-community-label.yml", "Labels community PRs; not a check."],
   ["on-pr-shared-ci-infra.yml", "Exercises shared CI infrastructure changes."],
+  ["pr-events.yml", "Only starts Check Approvals, which the ruleset requires on its own."],
   ["pr-models-validation-registry-server.yml", "Registry-server model validation."],
   ["publish-registry-server.yml", "Registry-server publish dry run."],
   ["release-train.yml", "Release train checks on its own branches."],
@@ -1901,21 +1902,42 @@ test("merge rules: every PR workflow is required or listed as advisory", () => {
   }
 });
 
-test("merge rules: every job pattern names a job its workflow defines", () => {
+// The names GitHub gives a workflow's jobs: an expression in a name stands in as "x", and a job calling a local
+// reusable workflow is "<caller> / <its job>".
+function jobDisplayNames(file) {
+  const source = read(file);
+  return [...source.matchAll(/^ {2}([a-z][a-z0-9-]*):$/gm)].flatMap(([, id]) => {
+    const block = jobBlock(source, id);
+    const name = (block.match(/^ {4}name: (.+)$/m)?.[1] ?? id).replace(/\$\{\{[^}]*\}\}/g, "x");
+    const called = block.match(/^ {4}uses: \.\/(\.github\/workflows\/[^@\s]+)/m)?.[1];
+    return called ? jobDisplayNames(called).map((inner) => `${name} / ${inner}`) : [name];
+  });
+}
+
+test("merge rules: every job pattern names a job its workflow defines", async () => {
+  // The guard's own full-name match, so a pattern that only starts like a job name fails here, not on every PR.
+  const { nameMatches } = await import(pathToFileURL(join(root, ".github/scripts/merge-guard/evaluate.mjs")).href);
   for (const rule of mergeRules())
     for (const check of rule.checks) {
-      const source = read(`.github/workflows/${check.workflow}`);
-      const names = [...source.matchAll(/^ {2}([a-z][a-z0-9-]*):$/gm)].flatMap(([, id]) => {
-        const block = jobBlock(source, id);
-        const name = block.match(/^ {4}name: (.+)$/m)?.[1].replace(/\$\{\{[^}]*\}\}/g, "*");
-        return /^ {4}uses: /m.test(block) ? [`${id} / *`] : [name ?? id];
-      });
-      const prefix = check.job.split("*")[0];
+      const names = jobDisplayNames(`.github/workflows/${check.workflow}`);
       assert.ok(
-        names.some((n) => n.startsWith(prefix) || prefix.startsWith(n.split("*")[0])),
-        `${rule.name}: ${check.workflow} defines no job matching "${check.job}"`,
+        names.some((n) => nameMatches(check.job, n)),
+        `${rule.name}: ${check.workflow} defines no job named like "${check.job}" (it has: ${names.join(", ")})`,
       );
     }
+  assert.ok(!nameMatches("error-code-range", "error-code-ranges"), "a shortened name must not match");
+});
+
+test("merge rules: shared CI files select every package in PR checks and are gated", async () => {
+  // The rule gates them, and PR checks' all-on makes its checks cover every package; one list drifting from the other
+  // either gates on checks that select nothing or checks everything without gating.
+  const rule = mergeRules().find((r) => r.name === "Shared CI");
+  assert.ok(rule, "merge-rules.yml has a Shared CI rule");
+  const allOn = read(".github/workflows/pr-checks.yml").match(/^\s+all-on: (.+)$/m)?.[1].split(/,\s*/);
+  assert.deepEqual([...allOn].sort(), [...rule.patterns].sort());
+  const { touchesAny } = await import(pathToFileURL(join(root, ".github/scripts/select-projects.mjs")).href);
+  assert.ok(touchesAny(allOn, [".github/workflows/_build.yml"]));
+  assert.ok(!touchesAny(allOn, [".github/workflows/pr-gate-merge.yml"]));
 });
 
 test("merge rules: the SDK pod rule covers the packages tagged ci:sdk", () => {

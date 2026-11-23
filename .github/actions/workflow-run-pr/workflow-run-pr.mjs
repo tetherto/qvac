@@ -106,8 +106,9 @@ const status = (gh, env, sha, state, description) =>
 // A `/merge-guard accept <sha>` naming this head, from someone with write access, as Merge Guard reads it.
 export async function accepted(gh, repo, number, headSha) {
   for (const c of await gh.all(`repos/${repo}/issues/${number}/comments`)) {
-    const sha = /^\/merge-guard accept ([0-9a-f]{7,40})\b/.exec(c.body?.trim() ?? '')?.[1]
-    if (!sha || !headSha.startsWith(sha)) continue
+    // The full SHA: a short prefix can be matched by another commit a fork author searches for.
+    const sha = /^\/merge-guard accept ([0-9a-f]{40})\b/.exec(c.body?.trim() ?? '')?.[1]
+    if (sha !== headSha) continue
     const { permission } = await gh.get(
       `repos/${repo}/collaborators/${encodeURIComponent(c.user.login)}/permission`
     )
@@ -211,7 +212,7 @@ async function main(env) {
     (touchesCi(files) || files.length >= 3000) &&
     !(await accepted(gh, repo, pr.number, headSha))
   ) {
-    const reason = `Fork PR changes .github/; after review, a maintainer comments /merge-guard accept ${headSha.slice(0, 7)}`
+    const reason = `Fork PR changes .github/; after review, a maintainer comments /merge-guard accept ${headSha}`
     console.log(`::error title=Fork PR changes CI files::${reason}`)
     await status(gh, env, headSha, 'failure', reason)
     return write(env, { ok: 'false', refused: reason, pr: String(pr.number), sha: headSha })

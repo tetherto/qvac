@@ -476,6 +476,20 @@ export function combine(matrices, spec = '') {
 
 const git = (args) =>
   execFileSync('git', args, { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }).trim()
+
+// Whether a changed path matches one of the globs (* within a directory, ** across them).
+export function touchesAny(globs, paths) {
+  const res = globs.map(
+    (g) =>
+      new RegExp(
+        `^${g
+          .split('**')
+          .map((part) => part.split('*').map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('[^/]*'))
+          .join('.*')}$`
+      )
+  )
+  return paths.some((p) => res.some((re) => re.test(p)))
+}
 const ZERO = /^0+$/
 
 // Which commits a run compares. A pull request, on either PR event, is compared from its common ancestor with the
@@ -625,6 +639,15 @@ function main(env) {
       console.log(
         `::warning::could not compare ${range.base}..${range.head}, selecting every tagged package: ${e.message}`
       )
+    }
+  }
+  // Shared CI files belong to no package, so nx affects none; a caller that lists them checks every package, as main's
+  // Merge Guard ran sanity checks across every addon for them.
+  const allOn = (env.ALL_ON || '').split(/[\s,]+/).filter(Boolean)
+  if (affected !== null && allOn.length && compared.base) {
+    if (touchesAny(allOn, git(['diff', '--name-only', compared.base, compared.head]).split('\n'))) {
+      console.log('::notice::shared CI files changed; selecting every tagged package')
+      affected = null
     }
   }
   const labels = parseRunnerLabels(

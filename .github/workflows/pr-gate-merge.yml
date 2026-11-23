@@ -15,7 +15,7 @@ on:
         description: The PR head the caller ran for; groups evaluations of one commit
         type: string
         default: ""
-  # /merge-guard from a member re-runs it for the PR head; /merge-guard accept <sha> also accepts a fork's .github/ edits.
+  # /merge-guard from a writer re-runs it for the PR head; /merge-guard accept <full sha> also accepts a fork's .github/ edits.
   issue_comment:
     types: [created]
 
@@ -57,9 +57,9 @@ jobs:
             *) echo "::notice::$LOGIN has $PERMISSION access; /merge-guard needs write"; exit 0 ;;
           esac
           read -r SHA FORK < <(gh pr view "$PR" --json headRefOid,isCrossRepository --jq '"\(.headRefOid) \(.isCrossRepository)"')
-          ACCEPT=$(printf '%s' "$BODY" | sed -nE '1s#^/merge-guard accept ([0-9a-f]{7,40})([[:space:]].*)?$#\1#p')
+          ACCEPT=$(printf '%s' "$BODY" | sed -nE '1s#^/merge-guard accept ([0-9a-f]{40})([[:space:]].*)?$#\1#p')
           # An accept of this head starts the build that a fork's .github/ changes stopped; context checks it again.
-          if [ "$FORK" = true ] && [ -n "$ACCEPT" ] && [ "${SHA#"$ACCEPT"}" != "$SHA" ]; then
+          if [ "$FORK" = true ] && [ "$ACCEPT" = "$SHA" ]; then
             gh workflow run pr-build-test.yml --ref "$REF" -f pr="$PR" -f sha="$SHA"
           fi
           gh workflow run pr-gate-merge.yml --ref "$REF" -f pr="$PR" -f sha="$SHA"

@@ -35,6 +35,8 @@ jobs:
       targets: lint,typecheck,test:unit,verify:generated,verify:deps
       packages: ${{ inputs.packages }}
       tags: ci:addons,ci:libs
+      # Shared CI files: a change to one checks every package. Kept in step with merge-rules.yml's Shared CI rule.
+      all-on: .github/workflows/_*.yml, .github/workflows/pr-build-test.yml, .github/workflows/pr-checks.yml, .github/workflows/mobile-tests.yml, .github/workflows/cache-warm.yml, .github/scripts/select-projects.mjs
 
   # A range on a workspace package that excludes its workspace version makes pnpm install the npm copy instead, so a
   # bump updates its dependents' ranges in the same pull request.

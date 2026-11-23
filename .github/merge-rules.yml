@@ -10,6 +10,19 @@
   checks:
     - { workflow: security-baseline.yml, job: policy-tests }
 
+# Main's shared-ci list: these affect every package but name none, so PR checks selects every package for them.
+- name: Shared CI
+  patterns:
+    - ".github/workflows/_*.yml"
+    - ".github/workflows/pr-build-test.yml"
+    - ".github/workflows/pr-checks.yml"
+    - ".github/workflows/mobile-tests.yml"
+    - ".github/workflows/cache-warm.yml"
+    - ".github/scripts/select-projects.mjs"
+  checks:
+    - { workflow: pr-checks.yml, job: "select / *" }
+    - { workflow: pr-checks.yml, job: "checks (*)", skipped: pass }
+
 - name: Addon packages
   patterns: ["packages/**", "cmake/qvac-addon/**"]
   checks:

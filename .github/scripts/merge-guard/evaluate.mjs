@@ -141,23 +141,38 @@ async function findPr(gh, env, event) {
 async function acceptedBy(gh, env, pr) {
   const repo = env.GITHUB_REPOSITORY
   for (const c of await gh.all(`repos/${repo}/issues/${pr.number}/comments`)) {
-    const sha = /^\/merge-guard accept ([0-9a-f]{7,40})\b/.exec(c.body?.trim() ?? '')?.[1]
-    if (!sha || !pr.head.sha.startsWith(sha)) continue
+    // The full SHA: a short prefix can be matched by another commit a fork author searches for.
+    const sha = /^\/merge-guard accept ([0-9a-f]{40})\b/.exec(c.body?.trim() ?? '')?.[1]
+    if (sha !== pr.head.sha) continue
     const { permission } = await gh.get(`repos/${repo}/collaborators/${encodeURIComponent(c.user.login)}/permission`)
     if (['admin', 'write'].includes(permission)) return true
   }
   return false
 }
 
+// No run for a commit starts before the commit exists: its committer date, or now if a fork dated it in the future.
+async function headSince(gh, env, pr) {
+  pr.since ??= (async () => {
+    const { commit } = await gh.get(`repos/${env.GITHUB_REPOSITORY}/commits/${pr.head.sha}`)
+    const date = Math.min(Date.parse(commit.committer.date), Date.now()) - 3600_000
+    return new Date(date).toISOString().replace(/\.\d{3}Z$/, 'Z')
+  })()
+  return pr.since
+}
+
 // pull_request runs by head SHA; workflow_run runs, and the PR builds an accept dispatches, by the head SHA in their
-// run-name.
+// run-name, from every page since the head commit, so a build from a day ago is still found.
 async function producerRuns(gh, env, file, pr) {
   const repo = env.GITHUB_REPOSITORY
   const path = `.github/workflows/${file}`
+  const since = encodeURIComponent(`>=${await headSince(gh, env, pr)}`)
   const named = async (event) =>
-    (await gh.get(`repos/${repo}/actions/workflows/${file}/runs?event=${event}&per_page=100`)).workflow_runs.filter(
-      (r) => r.head_branch === env.DEFAULT_BRANCH && r.display_title.includes(pr.head.sha)
-    )
+    (
+      await gh.all(
+        `repos/${repo}/actions/workflows/${file}/runs?event=${event}&branch=${env.DEFAULT_BRANCH}&created=${since}`,
+        'workflow_runs'
+      )
+    ).filter((r) => r.head_branch === env.DEFAULT_BRANCH && r.display_title.includes(pr.head.sha))
   const runs = [
     ...(await gh.get(`repos/${repo}/actions/workflows/${file}/runs?event=pull_request&head_sha=${pr.head.sha}&per_page=100`))
       .workflow_runs.filter((r) => r.head_repository?.full_name === pr.head.repo?.full_name),
@@ -224,7 +239,7 @@ async function main(env) {
   const forkEditsCi = pr.head.repo?.full_name !== env.GITHUB_REPOSITORY && files.some((f) => f.startsWith('.github/'))
   const result =
     forkEditsCi && !(await acceptedBy(gh, env, pr))
-      ? { state: 'failure', description: `fork PR changes .github/; after review, a maintainer comments /merge-guard accept ${sha.slice(0, 7)}` }
+      ? { state: 'failure', description: `fork PR changes .github/; after review, a maintainer comments /merge-guard accept ${sha}` }
       : verdict(resolved)
   appendFileSync(env.GITHUB_STEP_SUMMARY, summary(pr, rules, resolved, result))
 
