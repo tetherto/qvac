@@ -176,7 +176,7 @@ async function loadBatchImageAssets() {
   return batchImageAssets
 }
 
-async function resolveBatchAttachmentPath(inputPath: string) {
+async function resolveBatchMediaPath(inputPath: string) {
   const images = await loadBatchImageAssets()
   const fileName = inputPath.split('/').pop()
   if (!fileName) return inputPath
@@ -206,7 +206,7 @@ export const executor = createExecutor({
     // Real executors
     new ModelLoadingExecutor(resources),
     new BatchCompletionExecutor(resources, {
-      resolveAttachmentPath: resolveBatchAttachmentPath
+      resolveMediaPath: resolveBatchMediaPath
     }),
     new CompletionExecutor(resources),
     new CalcTokensExecutor(resources),

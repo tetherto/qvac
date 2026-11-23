@@ -15,7 +15,7 @@ schemaType: HowTo
 - **Optimizes resources:** all prompts share one loaded model — you don't load the model multiple times to run prompts side by side.
 - **Lower total run time:** the prompts run together rather than one after another, so the whole set finishes faster than the equivalent sequence of `completion()` calls.
 
-To use it, load the model with `modelConfig.parallel >= 2` (this is what lets it handle more than one prompt at a time), then pass an array of `prompts` — each with its own `history` and, optionally, `generationParams`, `responseFormat`, `tools`, `mcp`, and multimodal `attachments`.
+To use it, load the model with `modelConfig.parallel >= 2` (this is what lets it handle more than one prompt at a time), then pass an array of `prompts` — each with its own `history` and, optionally, `generationParams`, `responseFormat`, `tools` and `mcp`. A prompt's `history` can carry images as ordered media `content` parts.
 
 <Callout type="info">
 Batch processing is specific to **LLM text generation**. It does not apply to other capabilities such as embeddings or transcription.
@@ -39,7 +39,7 @@ For how to use each function, see [SDK — API reference](/sdk/reference/api/).
 You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible text-generation/chat model (same models as [Text generation](/sdk/ai-capabilities/text-generation)). Model file format: `*.gguf`.
 
 - Per-prompt `tools`/`mcp` require a tool-capable model loaded with `modelConfig.tools: true`.
-- Per-prompt `attachments` require a multimodal-capable model plus its matching `projectionModelSrc` — see [Multimodal](/sdk/ai-capabilities/multimodal).
+- Media parts require a multimodal-capable model plus its matching `projectionModelSrc` — see [Multimodal](/sdk/ai-capabilities/multimodal).
 - For models available as constants, see [SDK — Models](/sdk#models).
 
 ## Features

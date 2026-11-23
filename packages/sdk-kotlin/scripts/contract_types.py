@@ -262,6 +262,8 @@ class TypeGraph:
                         out += ["    @EncodeDefault(EncodeDefault.Mode.ALWAYS)"]
                     elif not required:
                         default = " = null"
+                    if prop.get("deprecated") is True:
+                        out += [f"    @Deprecated({literal(prop.get('description', 'Deprecated.'))})"]
                     out += [f"    @SerialName({literal(key)}) val `{identifier}`: {typ}{default},"]
                 if d.fields:
                     out += [")"]
