@@ -20,57 +20,91 @@ export interface CombinedFit {
   pools: ModelFitPool[]
 }
 
+interface PoolSum extends ModelFitPool {
+  /** How many rows the pool holds. */
+  rows: number
+}
+
+interface PoolTally {
+  usedBytes: number
+  rows: number
+  free: number[]
+  total: number[]
+}
+
 function lowest(figures: readonly number[]): number | undefined {
   return figures.length > 0 ? Math.min(...figures) : undefined
 }
 
-/**
- * Sums what a set of models takes on each memory pool and judges the set
- * against what is free.
- *
- * A device joins the pool of its `id`, or the host pool when `unified`. A
- * pool's free and total memory are the lowest figures reported for it.
- *
- * A single model's verdict is its addon's own, which applies the engine's
- * margin. A set does not fit when any pool takes more than
- * `USABLE_SHARE` of its free memory or any model does not fit alone. Usage
- * known so far is a lower bound, so either holds whatever the unknown models
- * add. Otherwise the set is `unknown` when any model is unknown or any pool has
- * no free figure.
- */
-export function combineFits(models: readonly ModelAnswer[]): CombinedFit {
-  const totals = new Map<string, { usedBytes: number; free: number[]; total: number[] }>()
+function isOver(pool: ModelFitPool): boolean {
+  return pool.freeBytes !== undefined && pool.usedBytes > pool.freeBytes * USABLE_SHARE
+}
 
-  for (const model of models) {
-    for (const device of model.devices) {
-      const key = device.unified ? HOST_POOL : device.id
-      const pool = totals.get(key) ?? { usedBytes: 0, free: [], total: [] }
-      pool.usedBytes += device.usedBytes
-      if (device.freeBytes !== undefined) pool.free.push(device.freeBytes)
-      if (device.totalBytes !== undefined) pool.total.push(device.totalBytes)
-      totals.set(key, pool)
-    }
+/**
+ * Sums rows into memory pools. A device joins the pool of its `id`, or the host
+ * pool when `unified`. A pool's free and total memory are the lowest figures
+ * reported for it.
+ */
+function sumPools(devices: readonly AddonFitDevice[]): PoolSum[] {
+  const totals = new Map<string, PoolTally>()
+  for (const device of devices) {
+    const key = device.unified ? HOST_POOL : device.id
+    const pool = totals.get(key) ?? { usedBytes: 0, rows: 0, free: [], total: [] }
+    pool.usedBytes += device.usedBytes
+    pool.rows += 1
+    if (device.freeBytes !== undefined) pool.free.push(device.freeBytes)
+    if (device.totalBytes !== undefined) pool.total.push(device.totalBytes)
+    totals.set(key, pool)
   }
 
-  const pools: ModelFitPool[] = [...totals].map(([id, { usedBytes, free, total }]) => {
+  return [...totals].map(([id, { usedBytes, rows, free, total }]) => {
     const freeBytes = lowest(free)
     const totalBytes = lowest(total)
     return {
       id,
       unified: id === HOST_POOL,
       usedBytes,
+      rows,
       ...(freeBytes !== undefined && { freeBytes }),
       ...(totalBytes !== undefined && { totalBytes })
     }
   })
+}
+
+/**
+ * The pool two or more of a model's rows share and overflow, if any. An addon
+ * judges each device apart with its engine's margin, so a model whose rows
+ * share one pool, such as a Metal GPU and the CPU drawing on the host's memory,
+ * can fit each device and still take more than `USABLE_SHARE` of the pool's
+ * free memory. A row alone in its pool keeps the addon's answer.
+ */
+export function sharedPoolOverflow(model: ModelAnswer): ModelFitPool | undefined {
+  const overflowing = sumPools(model.devices).find((pool) => pool.rows > 1 && isOver(pool))
+  if (overflowing === undefined) return undefined
+  const { rows: _rows, ...pool } = overflowing
+  return pool
+}
+
+/**
+ * Sums what a set of models takes on each memory pool and judges the set
+ * against what is free. Each model's `status` is its verdict alone, which
+ * counts a `sharedPoolOverflow` as `does-not-fit`.
+ *
+ * One model's verdict is its `status`. A set does not fit when any pool takes
+ * more than `USABLE_SHARE` of its free memory or any model does not fit alone.
+ * Usage known so far is a lower bound, so either holds whatever the unknown
+ * models add. Otherwise the set is `unknown` when any model is unknown or any
+ * pool has no free figure.
+ */
+export function combineFits(models: readonly ModelAnswer[]): CombinedFit {
+  const pools: ModelFitPool[] = sumPools(models.flatMap((model) => model.devices)).map(
+    ({ rows: _rows, ...pool }) => pool
+  )
 
   const [only] = models
   if (models.length === 1 && only !== undefined) return { verdict: only.status, pools }
 
-  const over = pools.some(
-    (pool) => pool.freeBytes !== undefined && pool.usedBytes > pool.freeBytes * USABLE_SHARE
-  )
-  if (over || models.some((model) => model.status === 'does-not-fit')) {
+  if (pools.some(isOver) || models.some((model) => model.status === 'does-not-fit')) {
     return { verdict: 'does-not-fit', pools }
   }
 
