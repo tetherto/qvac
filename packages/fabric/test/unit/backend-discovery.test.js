@@ -19,6 +19,7 @@ test(
     const run = (command, args, options = {}) => {
       const result = spawnSync(command, args, { cwd: root, encoding: 'utf8', ...options })
       assert.equal(result.status, 0, result.error?.message || result.stderr || result.stdout)
+      assert.equal(result.stderr, '', 'backend discovery should remain quiet')
       return result.stdout.trim().split('\n')
     }
     write(
@@ -81,6 +82,7 @@ int main(int argc, char** argv) {
       '-shared',
       '-fPIC',
       '-DQVAC_FABRIC_BUILD',
+      '-DNDEBUG',
       '-DQVAC_FABRIC_MODULE_NAME="qvac__fabric-linux-x64"',
       path.join(addon, 'backends.cpp'),
       'ggml.cpp',
@@ -108,6 +110,21 @@ int main(int argc, char** argv) {
         '-o',
         carrier
       ])
+      const payloadDir = path.join(dir, name)
+      write('driver.cpp', 'int fakeDriver() { return 0; }\n')
+      write('backend.cpp', 'extern int fakeDriver(); int backendProbe() { return fakeDriver(); }\n')
+      run(cxx, ['-shared', '-fPIC', 'driver.cpp', '-o', path.join(payloadDir, 'libtestdriver.so')])
+      run(cxx, [
+        '-shared',
+        '-fPIC',
+        'backend.cpp',
+        '-L',
+        payloadDir,
+        '-ltestdriver',
+        '-Wl,-rpath,$ORIGIN',
+        '-o',
+        path.join(payloadDir, 'libqvac-ggml-cuda.so')
+      ])
       carriers.push(carrier)
     }
     run(cxx, [
@@ -121,6 +138,7 @@ int main(int argc, char** argv) {
     ])
     const env = { ...process.env }
     delete env.QVAC_FABRIC_BACKENDS_DIR
+    delete env.GGML_DISABLE_CUDA
     const output = run(path.join(runtimeDir, 'test'), carriers, { env })
     assert.deepEqual(output, [
       path.join(installed, 'cuda/qvac__fabric-linux-x64-cuda/libqvac-ggml-cuda.so'),
@@ -133,6 +151,18 @@ int main(int argc, char** argv) {
       }),
       ['/explicit/backends', 'count=1']
     )
+    const baseOnly = [path.join(runtimeDir, 'qvac__fabric-linux-x64'), 'count=1']
+    for (const value of ['', '0', '1']) {
+      assert.deepEqual(
+        run(path.join(runtimeDir, 'test'), carriers, { env: { ...env, GGML_DISABLE_CUDA: value } }),
+        baseOnly
+      )
+    }
+    // A real ELF module with an unavailable driver must be skipped silently.
+    const driver = path.join(installed, 'cuda/qvac__fabric-linux-x64-cuda/libtestdriver.so')
+    fs.renameSync(driver, driver + '.hidden')
+    assert.deepEqual(run(path.join(runtimeDir, 'test'), carriers, { env }), baseOnly)
+    fs.renameSync(driver + '.hidden', driver)
     for (const file of [runtime, ...carriers, path.join(runtimeDir, 'test')]) {
       fs.copyFileSync(file, path.join(flat, path.basename(file)))
     }

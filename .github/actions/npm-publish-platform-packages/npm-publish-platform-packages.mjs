@@ -71,6 +71,19 @@ export function bySize(slices, sizeOf, max) {
   return { order: [...over, ...sized.filter((x) => !x.over)].map((x) => x.slice), sized }
 }
 
+// Backends referenced only by a platform slice must exist before that slice
+// becomes installable through existing meta-package semver ranges.
+export function backendsFirst(slices, meta) {
+  const platforms = new Set([
+    ...Object.keys(meta.optionalDependencies || {}),
+    ...Object.keys(meta.peerDependencies || {})
+  ])
+  return [
+    ...slices.filter((slice) => !platforms.has(slice.name)),
+    ...slices.filter((slice) => platforms.has(slice.name))
+  ]
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const env = process.env
   const npm = (args, cwd) => spawnSync('npm', args, { cwd, encoding: 'utf8' })
@@ -130,6 +143,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       appendFileSync(env.GITHUB_STEP_SUMMARY, [...summary, ...rows, ''].join('\n'))
     publish = order
   }
+  if (meta.name === '@qvac/fabric') publish = backendsFirst(publish, meta)
   for (const s of publish) {
     console.log(
       `${env.DRY_RUN === 'true' ? 'Would publish' : 'Publishing'} ${s.name}@${s.version} with tag ${env.DIST_TAG}`

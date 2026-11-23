@@ -131,8 +131,24 @@ extern "C" size_t qvac_fabric_load_backends(void) {
     // only the split modules here, so GGML_BACKEND_PATH is processed once by
     // the usual load-all call. Flattened layouts already contain every module.
     for (const auto& package : g_packages) {
-      if (package.dir != path)
-        ggml_backend_load(package.file.c_str());
+      if (package.dir == path)
+        continue;
+      // Match ggml's disable switch: presence, including an empty value, is
+      // enough.
+      if (fs::path(package.file).filename() == "libqvac-ggml-cuda.so" &&
+          std::getenv("GGML_DISABLE_CUDA") != nullptr)
+        continue;
+#if defined(NDEBUG) && !defined(_WIN32)
+      // ggml's release loader silently skips unavailable drivers. Keep the
+      // probe handle open during registration so constructors run only once.
+      void* handle = dlopen(package.file.c_str(), RTLD_NOW | RTLD_LOCAL);
+      if (handle == nullptr)
+        continue;
+      ggml_backend_load(package.file.c_str());
+      dlclose(handle);
+#else
+      ggml_backend_load(package.file.c_str());
+#endif
     }
     ggml_backend_load_all_from_path(*path != '\0' ? path : nullptr);
   });

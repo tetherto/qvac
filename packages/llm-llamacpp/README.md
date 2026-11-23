@@ -785,7 +785,10 @@ packages with the production slicer, publishes them to a temporary Verdaccio
 registry, installs a fresh application, and runs two completions. The CPU and
 CUDA configurations verify the requested inference device, one shared runtime,
 and the installed backend locations; CUDA also requires explicit CUDA selection.
-The registry cannot proxy Fabric or LLM packages from npm. HIP's payload is
+The registry cannot proxy Fabric or LLM packages from npm. Verdaccio is installed
+from the workspace's frozen lockfile, the sample's direct helper versions are
+exact, and subprocess environments omit ambient CI/OIDC, GitHub, npm, and AWS
+credentials. HIP's payload is
 checked on both hosts; HIP inference is not exercised.
 
 The `run-desktop-addon-tests` PR label runs both configurations. Results, packed

@@ -120,6 +120,17 @@ async function ready(registry, child) {
   throw new Error('Verdaccio did not become ready')
 }
 
+export function childEnvironment(source) {
+  return Object.fromEntries(
+    Object.entries(source).filter(
+      ([key]) =>
+        !/^(AWS_|ACTIONS_|GITHUB_TOKEN$|GH_TOKEN$|NODE_AUTH_TOKEN$|NPM_TOKEN$|NPM_AUTH_TOKEN$)/i.test(
+          key
+        )
+    )
+  )
+}
+
 export async function smoke({ consumerDir, backend, model, results }) {
   assert.equal(process.platform + '-' + process.arch, 'linux-x64')
   assert.ok(['cpu', 'cuda'].includes(backend), 'backend must be cpu or cuda')
@@ -133,7 +144,7 @@ export async function smoke({ consumerDir, backend, model, results }) {
   // An independent npm config/cache prevents workspace links and registry auth
   // from influencing the test. The local token stays in memory, never in reports.
   const env = {
-    ...process.env,
+    ...childEnvironment(process.env),
     NODE_AUTH_TOKEN: '',
     NPM_CONFIG_CACHE: path.join(root, 'cache'),
     NPM_CONFIG_USERCONFIG: path.join(root, 'npmrc'),
@@ -172,21 +183,8 @@ export async function smoke({ consumerDir, backend, model, results }) {
         integrity
       }))
     )
-    await command(
-      'npm',
-      [
-        'install',
-        '--prefix',
-        path.join(root, 'tools'),
-        '--ignore-scripts',
-        '--no-audit',
-        '--no-fund',
-        '--registry',
-        'https://registry.npmjs.org/',
-        'verdaccio@7.1.1'
-      ],
-      'install-registry'
-    )
+    // Installed by the workspace's frozen lockfile, never fetched at runtime.
+    const verdaccio = path.join(consumerDir, 'node_modules/verdaccio/bin/verdaccio')
     const port = await freePort()
     const registry = 'http://127.0.0.1:' + port
     // Fabric and the consumer have NO uplink: a missing local package must fail.
@@ -207,13 +205,7 @@ export async function smoke({ consumerDir, backend, model, results }) {
     registryLog = fs.openSync(path.join(results, 'registry.log'), 'w')
     registryProcess = spawn(
       process.execPath,
-      [
-        path.join(root, 'tools/node_modules/verdaccio/bin/verdaccio'),
-        '--config',
-        path.join(root, 'verdaccio.yaml'),
-        '--listen',
-        '127.0.0.1:' + port
-      ],
+      [verdaccio, '--config', path.join(root, 'verdaccio.yaml'), '--listen', '127.0.0.1:' + port],
       { env, stdio: ['ignore', registryLog, registryLog] }
     )
     registryProcess.on('error', () => {}) // ready() surfaces startup failures with the registry log.
@@ -268,8 +260,8 @@ export async function smoke({ consumerDir, backend, model, results }) {
       private: true,
       dependencies: {
         '@qvac/llm-llamacpp': consumer.version,
-        'bare-fs': '^4.5.1',
-        'bare-process': '^4.2.2'
+        'bare-fs': '4.5.1',
+        'bare-process': '4.2.2'
       }
     })
     fs.copyFileSync(

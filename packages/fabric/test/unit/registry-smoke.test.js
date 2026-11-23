@@ -90,3 +90,34 @@ test('registry runner keeps npm JSON separate from process warnings', async (t) 
   assert.deepEqual(JSON.parse(fs.readFileSync(log)), [{ size: 123 }])
   assert.match(fs.readFileSync(log + '.stderr', 'utf8'), /warning/)
 })
+
+test('registry subprocesses do not inherit CI or cloud credentials', async (t) => {
+  const f = await fixture(t)
+  const { childEnvironment, run } =
+    await import('../../../llm-llamacpp/ci/fabric-package-smoke.mjs')
+  const source = {
+    ...process.env,
+    ACTIONS_ID_TOKEN_REQUEST_URL: 'oidc-url',
+    ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'oidc-token',
+    ACTIONS_RUNTIME_TOKEN: 'runtime-token',
+    GITHUB_TOKEN: 'github-token',
+    GH_TOKEN: 'gh-token',
+    AWS_ACCESS_KEY_ID: 'aws-key',
+    AWS_SECRET_ACCESS_KEY: 'aws-secret',
+    AWS_SESSION_TOKEN: 'aws-session',
+    NODE_AUTH_TOKEN: 'npm-token'
+  }
+  const env = childEnvironment(source)
+  const log = path.join(f.root, 'env.log')
+  await run(
+    process.execPath,
+    [
+      '-e',
+      'console.log(JSON.stringify(Object.keys(process.env).filter(k => /^(AWS_|ACTIONS_|GITHUB_TOKEN$|GH_TOKEN$|NODE_AUTH_TOKEN$)/.test(k))))'
+    ],
+    { cwd: f.root, env, log }
+  )
+  assert.deepEqual(JSON.parse(fs.readFileSync(log)), [])
+  assert.equal(env.PATH, source.PATH)
+  assert.equal(source.GITHUB_TOKEN, 'github-token')
+})
