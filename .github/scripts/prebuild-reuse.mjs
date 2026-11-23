@@ -14,7 +14,7 @@ export const NATIVE =
   /\.(c|cc|cpp|cxx|h|hh|hpp|hxx|inl|ipp|cu|cuh|m|mm|S|asm|map|def)$|(^|\/)CMakeLists\.txt$|\.cmake$|\.cmake\.in$|(^|\/)exports\.txt$|(^|\/)vcpkg(-configuration)?\.json$|\/vcpkg\/|(^|\/)(package|project)\.json$|(^|\/)ci\/(build|verify)-[^/]+$/
 
 export const WEB =
-  /(^|\/)addon\/src\/js-interface\/web\/|(^|\/)web\/|(^|\/)scripts\/(build-web\.mjs|validate-web-prebuild\.mjs|npm-command\.cjs)$/
+  /^packages\/llm-llamacpp\/(addon\/src\/js-interface\/web\/|web\/|scripts\/(build-web\.mjs|validate-web-prebuild\.mjs|npm-command\.cjs)$)/
 
 // Build inputs, every file: shared CMake and vcpkg code, toolchain pins, lockfile and install layout, and the CI code
 // the build runs.

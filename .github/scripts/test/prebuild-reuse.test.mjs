@@ -44,29 +44,38 @@ test('browser engine inputs participate in native prebuild reuse keys', () => {
 })
 
 test('browser engine inputs do not invalidate native-only prebuilds', () => {
-  const nativeOnlyRows = [
-    { ...row, config: 'darwin-arm64' },
-    { ...row, slug: 'embed-llamacpp' }
-  ]
+  const nativeOnlyRow = { ...row, config: 'darwin-arm64' }
   const tree = (paths) => {
     if (paths.includes('packages/llm-llamacpp')) {
       return inputs.map((path) => `base\t${path}`).join('\n')
     }
     return 'shared\tpnpm-lock.yaml'
   }
-  for (const nativeOnlyRow of nativeOnlyRows) {
-    const baseline = legKey(nativeOnlyRow, tree)
+  const baseline = legKey(nativeOnlyRow, tree)
 
-    for (const changed of inputs) {
-      const changedTree = (paths) => {
-        if (paths.includes('packages/llm-llamacpp')) {
-          return inputs
-            .map((path) => `${path === changed ? 'changed' : 'base'}\t${path}`)
-            .join('\n')
-        }
-        return 'shared\tpnpm-lock.yaml'
+  for (const changed of inputs) {
+    const changedTree = (paths) => {
+      if (paths.includes('packages/llm-llamacpp')) {
+        return inputs.map((path) => `${path === changed ? 'changed' : 'base'}\t${path}`).join('\n')
       }
-      assert.equal(legKey(nativeOnlyRow, changedTree), baseline, `${nativeOnlyRow.slug} ${changed}`)
+      return 'shared\tpnpm-lock.yaml'
     }
+    assert.equal(legKey(nativeOnlyRow, changedTree), baseline, changed)
   }
+})
+
+test("another addon's web CMake file remains a native prebuild input", () => {
+  const otherRow = {
+    ...row,
+    slug: 'embed-llamacpp',
+    dir: 'packages/embed-llamacpp'
+  }
+  const input = 'packages/embed-llamacpp/web/CMakeLists.txt'
+  const tree = (paths) =>
+    paths.includes(otherRow.dir) ? `base\t${input}` : 'shared\tpnpm-lock.yaml'
+  const changedTree = (paths) =>
+    paths.includes(otherRow.dir) ? `changed\t${input}` : 'shared\tpnpm-lock.yaml'
+
+  assert.doesNotMatch(input, WEB)
+  assert.notEqual(legKey(otherRow, changedTree), legKey(otherRow, tree))
 })
