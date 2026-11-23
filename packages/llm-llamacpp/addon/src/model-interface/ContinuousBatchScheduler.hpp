@@ -68,6 +68,11 @@ namespace qvac_lib_inference_addon_llama::batching {
     unsigned promptSize, unsigned promptKvSize, int nPredict,
     unsigned perSeqMaxTokens);
 
+/// Per-sequence hard ceiling: the slot's even share of the pool,
+/// `ctxTotalTokens / batchSize`. When the KV cache is one shared pool, this
+/// ceiling, not the cache, keeps a slot to its share.
+[[nodiscard]] unsigned perSeqCeiling(unsigned ctxTotalTokens, size_t batchSize);
+
 /// Observed end-to-end figures for one finished request, computed from its
 /// wall-clock stamps at drain. This is what the submitting caller experienced
 /// (queue wait + shared-GPU decode) — NOT the request's isolated compute
@@ -159,8 +164,8 @@ struct SubmitRequest {
   /// slot reuses its pre-built base sampler; otherwise the scheduler
   /// builds a per-request override sampler via
   /// `applyGenerationParamsToContext`. The merged `n_predict` is enforced
-  /// strictly against the scheduler's per-seq ceiling (`ctxTotalTokens /
-  /// batchSize`); requests with `prompt + n_predict` over that ceiling
+  /// strictly against the scheduler's per-seq ceiling (`perSeqCeiling`);
+  /// requests with `prompt + n_predict` over that ceiling
   /// are rejected at admission rather than silently truncated.
   GenerationParams overrides;
   StreamCallbacks streams;
@@ -305,9 +310,8 @@ public:
   /// @param maxChunkSize       Tokens fed per slot per step (typically
   /// n_batch).
   /// @param ctxTotalTokens     Whole-pool KV-cache size (== llama_n_ctx).
-  ///                            Partitioned uniformly across `batchSize`
-  ///                            slots; per-seq ceiling is
-  ///                            `ctxTotalTokens / batchSize`.
+  ///                            Shared by the `batchSize` slots; per-seq
+  ///                            ceiling is `perSeqCeiling`.
   /// @param batchSize          Concurrent slots (== llama_n_seq_max).
   /// @param batchCapacity      Underlying llama_batch token capacity.
   /// @param baseParams          Baseline llama/common params copied into each
@@ -835,7 +839,7 @@ private:
   common_params baseParams_;
   DriverFactory driverFactory_;
 
-  /// Per-seq hard ceiling = ctxTotalTokens / batchSize. Drives prompt-size
+  /// Per-seq hard ceiling, from `perSeqCeiling`. Drives prompt-size
   /// admission and per-request `prompt + n_predict` validation.
   unsigned perSeqMaxTokens_;
   MultiRequestBatcher batcher_;

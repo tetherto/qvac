@@ -94,19 +94,6 @@ bool persistedCacheBackingStoreMissing(const std::string& cacheKey) {
   return isParentDirectoryMissing(cacheKey) || isFileMissingOrEmpty(cacheKey);
 }
 
-/// Partition the whole-context KV pool uniformly across slots. Mirrors
-/// llama.cpp's `server` example which uses `n_ctx_slot = n_ctx /
-/// n_parallel` as the per-sequence hard ceiling.
-unsigned perSeqCeiling(unsigned ctxTotalTokens, size_t batchSize) {
-  bool valid = ctxTotalTokens > 0 && batchSize > 0;
-  if (!valid) {
-    throw std::invalid_argument(
-        "ContinuousBatchScheduler: ctxTotalTokens and batchSize must be "
-        ">= 1");
-  }
-  return ctxTotalTokens / static_cast<unsigned>(batchSize);
-}
-
 /// Terminal reason a driver should record for a scheduler-imposed stop.
 /// `ContextOverflow` survives `stopReasonAfterRequestRollback`, so a recurrent
 /// driver rolls back the current request.
@@ -147,6 +134,16 @@ bool generationBudgetExceeded(
   const auto budgetSize = std::max(promptSize, promptKvSize);
   return nPredict > 0 &&
          budgetSize + static_cast<unsigned>(nPredict) > perSeqMaxTokens;
+}
+
+unsigned perSeqCeiling(unsigned ctxTotalTokens, size_t batchSize) {
+  bool valid = ctxTotalTokens > 0 && batchSize > 0;
+  if (!valid) {
+    throw std::invalid_argument(
+        "ContinuousBatchScheduler: ctxTotalTokens and batchSize must be "
+        ">= 1");
+  }
+  return ctxTotalTokens / static_cast<unsigned>(batchSize);
 }
 
 TimedDecodeResult timeDecodeStep(
