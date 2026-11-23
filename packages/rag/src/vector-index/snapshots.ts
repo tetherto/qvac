@@ -30,6 +30,9 @@ export interface SnapshotStore {
   // `revision` is read right before the synchronous native write, so the file
   // and its sidecar always describe the same state. Returns that revision.
   write(identity: SnapshotIdentity, index: NativeIndex, revision: () => number): Promise<number>
+  // Deletes the namespace's sidecar and the snapshot it names, unless they
+  // belong to a later namespace of the same name.
+  remove(namespace: string, createdAt: number): Promise<void>
 }
 
 interface FileSystem {
@@ -103,6 +106,16 @@ export function createSnapshotStore(dir: string, coreKey: string): SnapshotStore
         await files.unlink(`${root}/${previous.file}`).catch(() => {})
       }
       return revision
+    },
+
+    async remove(namespace, createdAt) {
+      const files = await fileSystem()
+      const sidecar = await readSidecar(namespace)
+      if (sidecar && sidecar.createdAt !== createdAt) return
+      await files.unlink(`${root}/${base(namespace)}.json`).catch(() => {})
+      if (sidecar && typeof sidecar.file === 'string' && !sidecar.file.includes('/')) {
+        await files.unlink(`${root}/${sidecar.file}`).catch(() => {})
+      }
     }
   }
 }

@@ -12,6 +12,7 @@ import {
   type NativeIndex,
   type NativeIndexModule
 } from '../../src/vector-index/native.js'
+import { createSnapshotStore, type SnapshotIdentity } from '../../src/vector-index/snapshots.js'
 import { SPACE, countNativeCalls, doc, inspect, rejectsWithCode, type Test } from './helpers.js'
 import type {
   EmbeddedDocumentInput,
@@ -717,4 +718,25 @@ test('replay compacts the rows it removes', async (t) => {
   t.alike(contents(await search(reopened, spaceId, [1, 1, 1])).sort(), ['a2', 'b'])
   t.is(calls.loads, 1, 'replayed from the snapshot')
   t.is(calls.compacts, compactsBefore + 1, 'one removed row of two')
+})
+
+test('removing a dropped namespace keeps the snapshot of its re-created successor', async (t) => {
+  const store = createSnapshotStore(await tmp(t), 'core')
+  const index = {
+    write: (path: string) => fs.writeFileSync(path, 'snapshot')
+  } as unknown as NativeIndex
+  const identity = (createdAt: number): SnapshotIdentity => ({
+    namespace: 'ns',
+    createdAt,
+    spaceId: 'space',
+    storage: 'f32',
+    dimensions: 4
+  })
+  await store.write(identity(2), index, () => 1)
+
+  await store.remove('ns', 1)
+  t.ok(await store.read(identity(2)), 'a removal for the old namespace leaves it')
+
+  await store.remove('ns', 2)
+  t.is(await store.read(identity(2)), null, 'a removal for its own namespace deletes it')
 })

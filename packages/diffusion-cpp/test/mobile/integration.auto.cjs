@@ -14,6 +14,10 @@ async function runApiBehaviorTest (options = {}) { // eslint-disable-line no-unu
   return runIntegrationModule('../integration/api-behavior.test.js', options)
 }
 
+async function runCoremlTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/coreml.test.js', options)
+}
+
 async function runEsrganBackendDeviceTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/esrgan-backend-device.test.js', options)
 }
@@ -44,6 +48,10 @@ async function runGenerateImageFlux2I2iTest (options = {}) { // eslint-disable-l
 
 async function runGenerateImageFlux2Test (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/generate-image-flux2.test.js', options)
+}
+
+async function runGenerateImageFlux3I2iTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/generate-image-flux3-i2i.test.js', options)
 }
 
 async function runGenerateImageIdeogramTest (options = {}) { // eslint-disable-line no-unused-vars
@@ -101,6 +109,7 @@ async function runPrebuildDynamicLinkingTest (options = {}) { // eslint-disable-
 module.exports = {
   runAbotWorldTest,
   runApiBehaviorTest,
+  runCoremlTest,
   runEsrganBackendDeviceTest,
   runFitTest,
   runGenerateImageEsrganUpscaleTest,
@@ -109,6 +118,7 @@ module.exports = {
   runGenerateImageFlux2I2iLargeTest,
   runGenerateImageFlux2I2iTest,
   runGenerateImageFlux2Test,
+  runGenerateImageFlux3I2iTest,
   runGenerateImageIdeogramTest,
   runGenerateImageSd3I2iTest,
   runGenerateImageSd3Test,
