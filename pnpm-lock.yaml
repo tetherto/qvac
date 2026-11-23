@@ -111,7 +111,7 @@ importers:
         version: 0.1.1
       '@qvac/fabric':
         specifier: ^0.31.0
-        version: link:../fabric
+        version: 0.31.2(@qvac/fabric-android-arm64@0.31.0)(@qvac/fabric-ios@0.31.0)
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -230,7 +230,7 @@ importers:
         version: 0.1.1
       '@qvac/fabric':
         specifier: ^0.31.0
-        version: link:../fabric
+        version: 0.31.2(@qvac/fabric-android-arm64@0.31.0)(@qvac/fabric-ios@0.31.0)
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -346,7 +346,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.31.0
-        version: link:../fabric
+        version: 0.31.2(@qvac/fabric-android-arm64@0.31.0)(@qvac/fabric-ios@0.31.0)
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -720,7 +720,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.31.0
-        version: link:../fabric
+        version: 0.31.2(@qvac/fabric-android-arm64@0.31.0)(@qvac/fabric-ios@0.31.0)
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -899,7 +899,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.31.0
-        version: link:../fabric
+        version: 0.31.2(@qvac/fabric-android-arm64@0.31.0)(@qvac/fabric-ios@0.31.0)
       bare-net:
         specifier: ^2.3.2
         version: 2.3.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1203,7 +1203,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.31.2
-        version: link:../fabric
+        version: 0.31.2(@qvac/fabric-android-arm64@0.31.2)(@qvac/fabric-ios@0.31.2)
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -1353,7 +1353,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.31.0
-        version: link:../fabric
+        version: 0.31.2(@qvac/fabric-android-arm64@0.31.0)(@qvac/fabric-ios@0.31.0)
       bare-fs:
         specifier: ^4.5.1
         version: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1466,7 +1466,7 @@ importers:
         version: 0.1.1
       '@qvac/fabric':
         specifier: ^0.31.0
-        version: link:../fabric
+        version: 0.31.2(@qvac/fabric-android-arm64@0.31.0)(@qvac/fabric-ios@0.31.0)
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -2185,7 +2185,7 @@ importers:
         version: 0.1.1
       '@qvac/fabric':
         specifier: ^0.31.0
-        version: link:../fabric
+        version: 0.31.2(@qvac/fabric-android-arm64@0.31.0)(@qvac/fabric-ios@0.31.0)
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -2310,7 +2310,7 @@ importers:
         version: 0.1.1
       '@qvac/fabric':
         specifier: ^0.31.0
-        version: link:../fabric
+        version: 0.31.2(@qvac/fabric-android-arm64@0.31.0)(@qvac/fabric-ios@0.31.0)
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -2444,7 +2444,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.31.0
-        version: link:../fabric
+        version: 0.31.2(@qvac/fabric-android-arm64@0.31.0)(@qvac/fabric-ios@0.31.0)
     devDependencies:
       '@qvac/fabric-android-arm64':
         specifier: ^0.31.0
@@ -2560,7 +2560,7 @@ importers:
         version: 0.1.1
       '@qvac/fabric':
         specifier: ^0.31.0
-        version: link:../fabric
+        version: 0.31.2(@qvac/fabric-android-arm64@0.31.0)(@qvac/fabric-ios@0.31.0)
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -5481,6 +5481,18 @@ packages:
     peerDependencies:
       '@qvac/fabric-android-arm64': 0.29.1
       '@qvac/fabric-ios': 0.29.1
+    peerDependenciesMeta:
+      '@qvac/fabric-android-arm64':
+        optional: true
+      '@qvac/fabric-ios':
+        optional: true
+
+  '@qvac/fabric@0.31.2':
+    resolution: {integrity: sha512-iy3kfvApiEJ8dYPWDbYjOv5MFq50RPbXiAFNT2iCFZO6yP0AOOzL4WGsAI65HZt3MPuFbj84pTrsr11KBavIUA==}
+    engines: {bare: '>=1.24.0'}
+    peerDependencies:
+      '@qvac/fabric-android-arm64': 0.31.2
+      '@qvac/fabric-ios': 0.31.2
     peerDependenciesMeta:
       '@qvac/fabric-android-arm64':
         optional: true
@@ -16100,6 +16112,26 @@ snapshots:
       '@qvac/fabric-linux-arm64': 0.29.1
       '@qvac/fabric-linux-x64': 0.29.1
       '@qvac/fabric-win32-x64': 0.29.1
+
+  '@qvac/fabric@0.31.2(@qvac/fabric-android-arm64@0.31.0)(@qvac/fabric-ios@0.31.0)':
+    optionalDependencies:
+      '@qvac/fabric-android-arm64': 0.31.0
+      '@qvac/fabric-darwin-arm64': 0.31.2
+      '@qvac/fabric-darwin-x64': 0.31.2
+      '@qvac/fabric-ios': 0.31.0
+      '@qvac/fabric-linux-arm64': 0.31.2
+      '@qvac/fabric-linux-x64': 0.31.2
+      '@qvac/fabric-win32-x64': 0.31.2
+
+  '@qvac/fabric@0.31.2(@qvac/fabric-android-arm64@0.31.2)(@qvac/fabric-ios@0.31.2)':
+    optionalDependencies:
+      '@qvac/fabric-android-arm64': 0.31.2
+      '@qvac/fabric-darwin-arm64': 0.31.2
+      '@qvac/fabric-darwin-x64': 0.31.2
+      '@qvac/fabric-ios': 0.31.2
+      '@qvac/fabric-linux-arm64': 0.31.2
+      '@qvac/fabric-linux-x64': 0.31.2
+      '@qvac/fabric-win32-x64': 0.31.2
 
   '@qvac/ggml-rpc-server@0.9.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
     dependencies:
