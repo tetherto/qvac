@@ -288,9 +288,10 @@ using DriverFactory = std::function<std::unique_ptr<SequenceDriver>(
 /// to `llama_decode`, `common_sampler_*`, `common_token_to_piece`,
 /// `llama_vocab_is_eog` and `llama_memory_seq_rm`.
 ///
-/// Callers enqueue request groups and wait for their result. A scheduler-owned
-/// worker thread admits queued requests into free slots, runs decode chunks,
-/// and refills slots as soon as completed requests are drained.
+/// In background-thread mode callers enqueue request groups and wait while a
+/// scheduler-owned worker admits requests, decodes chunks and refills free
+/// slots. In cooperative mode the caller drives the same state machine with
+/// `stepCooperative()` and drains completed groups with `takeCooperative()`.
 ///
 /// It is also where an admitted request looks for a conversation that serves
 /// more of its prompt than its own sequence (`cache::CacheSourceProvider`):
@@ -315,6 +316,7 @@ public:
   ///                            non-empty: the model layer owns the single
   ///                            text-vs-multimodal selection, so the scheduler
   ///                            never names a concrete driver type.
+  /// @param driveMode          Background worker or caller-driven execution.
   ContinuousBatchScheduler(
       LlmModelContext shared, unsigned maxChunkSize, unsigned ctxTotalTokens,
       size_t batchSize, int32_t batchCapacity, const common_params& baseParams,
