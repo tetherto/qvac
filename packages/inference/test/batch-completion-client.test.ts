@@ -221,23 +221,16 @@ test('batchCompletion client: stream errors reject existing and late byId finals
   }
 })
 
-test('batchCompletion client: preserves multimodal attachments in stream request', async (t) => {
+test('batchCompletion client: preserves media content parts in stream request', async (t) => {
   let capturedRequest: BatchCompletionStreamRequest | undefined
+  const content = [
+    { type: 'media' as const, path: '/tmp/elephant.jpg' },
+    { type: 'text' as const, text: 'What animal is in this image?' }
+  ]
   const run = createBatchCompletionRun(
     {
       modelId: 'vision',
-      prompts: [
-        {
-          id: 'image',
-          history: [
-            {
-              role: 'user',
-              content: 'What animal is in this image?',
-              attachments: [{ path: '/tmp/elephant.jpg' }]
-            }
-          ]
-        }
-      ]
+      prompts: [{ id: 'image', history: [{ role: 'user', content }] }]
     },
     function streamFactory(request) {
       capturedRequest = request
@@ -260,7 +253,7 @@ test('batchCompletion client: preserves multimodal attachments in stream request
   await collect(run.events)
   t.ok(capturedRequest, 'request was sent')
   if (!capturedRequest) return
-  t.alike(capturedRequest.prompts[0]?.history[0]?.attachments, [{ path: '/tmp/elephant.jpg' }])
+  t.alike(capturedRequest.prompts[0]?.history[0]?.content, content)
 })
 
 test('batchCompletion client: resolves per-prompt tools and routes handlers by id', async (t) => {

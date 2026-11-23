@@ -419,7 +419,7 @@ class ModelFitModelResult(GeneratedBaseModel):
     status: Annotated[
         ModelFitModelResultStatus,
         Field(
-            description="The engine fitter's verdict for this model alone.",
+            description="This model's verdict alone: the engine fitter's, and `does-not-fit` when its rows sharing one memory pool take more than 90% of that pool's free memory.",
             title="ModelFitModelResultStatus",
         ),
     ]
@@ -433,6 +433,12 @@ class ModelFitModelResult(GeneratedBaseModel):
         LlamaFitStats | dict[str, Any],
         Field(description="The resolved load of a llama.cpp verdict. Empty otherwise."),
     ]
+    reason: Annotated[
+        str | None,
+        Field(
+            description="Why the model has no verdict, or why devices that each fit do not fit together. Present when `status` is `unknown`, and when it is `does-not-fit` because devices sharing one memory pool overflow it."
+        ),
+    ] = None
 
 
 class AssessModelFitResponse(GeneratedBaseModel):
@@ -2439,7 +2445,10 @@ class BatchCompletionStreamRequestPromptsItemHistoryItem(GeneratedBaseModel):
     ] = None
     attachments: Annotated[
         list[BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem] | None,
-        Field(description="Optional file attachments for multimodal models."),
+        Field(
+            deprecated=True,
+            description="Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+        ),
     ] = None
     tool_calls: Annotated[
         list[BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItem] | None,
@@ -4505,7 +4514,10 @@ class CompletionOrchestrateRequestHistoryItem(GeneratedBaseModel):
     ] = None
     attachments: Annotated[
         list[CompletionOrchestrateRequestHistoryItemAttachmentsItem] | None,
-        Field(description="Optional file attachments for multimodal models."),
+        Field(
+            deprecated=True,
+            description="Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+        ),
     ] = None
     tool_calls: Annotated[
         list[CompletionOrchestrateRequestHistoryItemToolCallsItem] | None,
@@ -5247,7 +5259,10 @@ class CompletionStreamRequestHistoryItem(GeneratedBaseModel):
     ] = None
     attachments: Annotated[
         list[CompletionStreamRequestHistoryItemAttachmentsItem] | None,
-        Field(description="Optional file attachments for multimodal models."),
+        Field(
+            deprecated=True,
+            description="Deprecated. Pass media as ordered `content` parts instead: `[{ type: 'text', text }, { type: 'media', path }]`. Attachments are sent before the text, so the model cannot tell which image the text refers to.",
+        ),
     ] = None
     tool_calls: Annotated[
         list[CompletionStreamRequestHistoryItemToolCallsItem] | None,
@@ -8651,7 +8666,7 @@ class ModelFitProbeModel(GeneratedBaseModel):
     status: Annotated[
         ModelFitProbeModelStatus,
         Field(
-            description="The engine fitter's verdict for this model alone.",
+            description="This model's verdict alone: the engine fitter's, and `does-not-fit` when its rows sharing one memory pool take more than 90% of that pool's free memory.",
             title="ModelFitProbeModelStatus",
         ),
     ]
@@ -8665,6 +8680,12 @@ class ModelFitProbeModel(GeneratedBaseModel):
         ModelFitProbeLlamaStats | dict[str, Any],
         Field(description="The resolved load of a llama.cpp verdict. Empty otherwise."),
     ]
+    reason: Annotated[
+        str | None,
+        Field(
+            description="Why the model has no verdict, or why devices that each fit do not fit together. Present when `status` is `unknown`, and when it is `does-not-fit` because devices sharing one memory pool overflow it."
+        ),
+    ] = None
 
 
 class ModelFitProbe(GeneratedBaseModel):
