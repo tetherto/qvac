@@ -28,6 +28,9 @@ outputs:
   fill:
     description: true when the target's metadata.modelCache names the directory, which the package's cache:models fills
     value: ${{ steps.resolve.outputs.fill }}
+  plan:
+    description: true when the target's metadata.modelCache.plan is set, so the target plans and restores its own models
+    value: ${{ steps.resolve.outputs.plan }}
 
 runs:
   using: composite
