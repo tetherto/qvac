@@ -11,7 +11,7 @@ import { pathToFileURL } from 'node:url'
 // addon and project.json holds the build commands and per-configuration settings. Linker maps, export lists and config
 // templates shape the module, and the ci/build-* and ci/verify-* scripts are the build commands' own steps.
 export const NATIVE =
-  /\.(c|cc|cpp|cxx|h|hh|hpp|hxx|inl|ipp|cu|cuh|m|mm|S|asm|map|def)$|(^|\/)CMakeLists\.txt$|\.cmake$|\.cmake\.in$|(^|\/)exports\.txt$|(^|\/)vcpkg(-configuration)?\.json$|\/vcpkg\/|(^|\/)(package|project)\.json$|(^|\/)ci\/(build|verify)-[^/]+$/
+  /\.(c|cc|cpp|cxx|h|hh|hpp|hxx|inl|ipp|cu|cuh|m|mm|S|asm|map|def)$|(^|\/)CMakeLists\.txt$|\.cmake$|\.cmake\.in$|(^|\/)exports\.txt$|(^|\/)vcpkg(-configuration)?\.json$|\/vcpkg\/|(^|\/)(package|project)\.json$|(^|\/)ci\/(build|verify)-[^/]+$|(^|\/)scripts\/(build-web|validate-web-prebuild)\.mjs$|(^|\/)web\/source-lock\.json$/
 
 // Build inputs, every file: shared CMake and vcpkg code, toolchain pins, lockfile and install layout, and the CI code
 // the build runs.
