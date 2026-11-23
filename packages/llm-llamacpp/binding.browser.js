@@ -142,6 +142,20 @@ async function call(handle, name, types, args, prepare) {
   }
 }
 
+function validateJob(handle, messages) {
+  const engine = usableEngine(handle)
+  const { module } = engine
+  try {
+    return check(
+      module,
+      module.ccall('qvac_web_validate', 'number', ['number', 'string'], [handle.native, messages])
+    )
+  } catch (error) {
+    if (isFatalWasmError(error)) poison(engine, error)
+    throw error
+  }
+}
+
 // Mounts one model, including all sibling GGUF shards, read-only and returns
 // the primary file's path inside the engine.
 async function mount(module, handle, path) {
@@ -201,11 +215,13 @@ function createInstance(owner, configurationParams, outputCb) {
     params: configurationParams,
     native: 0,
     jobs: new Map(),
+    pendingAdmissions: new Set(),
     nextJobId: 1,
     active: 0,
     mounts: [],
     engine: null,
-    failure: null
+    failure: null,
+    destroying: false
   }
   return handle
 }
@@ -243,6 +259,7 @@ function activate(handle) {
 }
 
 function runJob(handle, data) {
+  if (handle.destroying) return Promise.reject(new Error('Model is not loaded'))
   if (data.length > 0 && Array.isArray(data[0].messages)) {
     return unsupported('Batch inference')
   }
@@ -255,15 +272,36 @@ function runJob(handle, data) {
     }
     return value
   })
-  const id = handle.nextJobId++
-  const job = { cancelled: false, terminal: null, callbackError: null }
-  handle.jobs.set(id, job)
-  handle.active++
+  let resolveAdmission
+  let rejectAdmission
+  const admission = new Promise((resolve, reject) => {
+    resolveAdmission = resolve
+    rejectAdmission = reject
+  })
+  let id
+  let job
+  let admissionError
+  const pending = { cancelled: false }
+  handle.pendingAdmissions.add(pending)
   activeJobCount++
-  // The caller registers its output sink for `id` only after this admission
-  // promise settles, so the job starts on a later task: the engine can emit
-  // its first token before yielding (always so on CPU).
   const execution = enqueue(async () => {
+    try {
+      if (pending.cancelled) throw new Error('Job cancelled')
+      validateJob(handle, messages)
+      handle.pendingAdmissions.delete(pending)
+      id = handle.nextJobId++
+      job = { cancelled: false, terminal: null, callbackError: null }
+      handle.jobs.set(id, job)
+      handle.active++
+      resolveAdmission({ accepted: true, id })
+    } catch (error) {
+      handle.pendingAdmissions.delete(pending)
+      activeJobCount--
+      admissionError = error
+      return
+    }
+    // The caller registers its output sink for `id` only after the admission
+    // promise settles, so yield before the engine can emit its first token.
     await new Promise((resolve) => setTimeout(resolve, 0))
     try {
       if (!job.cancelled) {
@@ -285,8 +323,14 @@ function runJob(handle, data) {
       activeJobCount--
     }
   })
-  execution.then(() => deliverTerminal(handle, id, job))
-  return Promise.resolve({ accepted: true, id })
+  execution.then(() => {
+    if (job) {
+      deliverTerminal(handle, id, job)
+    } else {
+      rejectAdmission(admissionError)
+    }
+  })
+  return admission
 }
 
 function cancelJob(handle, id) {
@@ -298,11 +342,13 @@ function cancelJob(handle, id) {
 
 function cancel(handle) {
   for (const job of handle.jobs.values()) job.cancelled = true
+  for (const pending of handle.pendingAdmissions) pending.cancelled = true
   return Promise.resolve()
 }
 
 // Queued behind any running job, so the job still emits its terminal event.
 function destroyInstance(handle) {
+  handle.destroying = true
   cancel(handle)
   if (!handle.native && handle.mounts.length === 0 && handle.jobs.size === 0) {
     handle.engine?.handles.delete(handle)

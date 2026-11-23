@@ -16,7 +16,7 @@ import {
   rmSync,
   writeFileSync
 } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { delimiter, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { validateWebPrebuild } from './validate-web-prebuild.mjs'
 
@@ -129,6 +129,18 @@ function emscriptenRoot(command, env) {
   return match[1]
 }
 
+function emsdkEnvironment(emsdk, env) {
+  const config = join(emsdk, '.emscripten')
+  const contents = readFileSync(config, 'utf8')
+  const match = contents.match(/^PYTHON = emsdk_path \+ ['"](.+)['"]$/m)
+  return {
+    ...env,
+    PATH: match ? `${dirname(join(emsdk, match[1]))}${delimiter}${env.PATH ?? ''}` : env.PATH,
+    EM_CONFIG: config,
+    EMSDK: emsdk
+  }
+}
+
 async function emscripten() {
   const active = compilerVersion('emcc')
   if (active?.includes(` ${lock.emscripten.version} `)) {
@@ -144,7 +156,7 @@ async function emscripten() {
   const emsdk = await extract('emsdk', lock.emscripten)
   const emcc = join(emsdk, 'upstream', 'emscripten', 'emcc')
   const emcmake = join(emsdk, 'upstream', 'emscripten', 'emcmake')
-  const env = { ...process.env, EM_CONFIG: join(emsdk, '.emscripten'), EMSDK: emsdk }
+  let env = { ...process.env, EM_CONFIG: join(emsdk, '.emscripten'), EMSDK: emsdk }
   let version = compilerVersion(emcc, env)
   if (!version?.includes(` ${lock.emscripten.version} `)) {
     run('python3', [join(emsdk, 'emsdk.py'), 'install', lock.emscripten.version], {
@@ -155,6 +167,7 @@ async function emscripten() {
       cwd: emsdk,
       env
     })
+    env = emsdkEnvironment(emsdk, env)
     version = compilerVersion(emcc, env)
   }
   if (!version?.includes(` ${lock.emscripten.version} `)) {

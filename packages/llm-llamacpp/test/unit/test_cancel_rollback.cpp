@@ -628,8 +628,8 @@ TEST_F(TextLlmContextCancelTest, PrefillCancelAtEntryReturnsFalseOnHybrid) {
 // The browser cannot call back into a suspended Asyncify export to invoke
 // stop(). It supplies a cancellation predicate instead. Verify that predicate
 // enters the same rollback path before any prompt tokens are retained.
-TEST_F(TextLlmContextCancelTest,
-       PrefillCancellationPredicateRollsBackOnHybrid) {
+TEST_F(
+    TextLlmContextCancelTest, PrefillCancellationPredicateRollsBackOnHybrid) {
   auto model = loadTextModel(qwen35HybridModelPath());
   if (!model) {
     GTEST_SKIP() << "Qwen3.5 hybrid model not found";
@@ -641,14 +641,15 @@ TEST_F(TextLlmContextCancelTest,
   std::vector<common_chat_msg> chatMsgs = {makeMsg("user", "Hi")};
   int checks = 0;
 
-  const LlmContext::EvalMessageResult result =
-      driver.evalMessageWithTools(chatMsgs,
-                                  /*tools=*/{},
-                                  /*isCacheLoaded=*/false,
-                                  /*prefill=*/true, [&checks] {
-                                    checks++;
-                                    return true;
-                                  });
+  const LlmContext::EvalMessageResult result = driver.evalMessageWithTools(
+      chatMsgs,
+      /*tools=*/{},
+      /*isCacheLoaded=*/false,
+      /*prefill=*/true,
+      [&checks] {
+        checks++;
+        return true;
+      });
 
   EXPECT_GT(checks, 0);
   EXPECT_FALSE(result.ok);

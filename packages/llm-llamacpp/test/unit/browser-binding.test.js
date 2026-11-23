@@ -1,7 +1,9 @@
 'use strict'
 
 const test = require('brittle')
+const { LlamaInterface } = require('../../addon.js')
 const binding = require('../../binding.browser.js')
+const LlmLlamacpp = require('../../index.js')
 const {
   ensureMessageCacheDirectories,
   ensureParentDirectory
@@ -31,6 +33,21 @@ function fakeEngine(onRun) {
       return 0
     }
   })
+}
+
+async function publicModel(isolated) {
+  const model = new LlmLlamacpp({
+    files: { model: ['/tmp/test.gguf'] },
+    config: { device: 'gpu', ctx_size: '256', parallel: 1 },
+    logger: { info() {}, warn() {}, error() {}, debug() {} }
+  })
+  model.addon = new LlamaInterface(
+    isolated,
+    { path: '', projectionPath: '', config: { parallel: 1 } },
+    model._addonOutputCallback.bind(model)
+  )
+  await model.addon.activate()
+  return model
 }
 
 test('browser binding rolls back admission when serialization throws', (t) => {
@@ -65,6 +82,143 @@ test('browser binding rejects non-finite generation values before admission', (t
       t.ok(/reasoning_budget must be a finite number/.test(error?.message))
       t.is(binding.activeJobs(handle), 0)
     }
+  }
+})
+
+test('browser binding validates inputs before admission', async (t) => {
+  let result = '{}'
+  let runs = 0
+  const isolated = isolatedBinding(() => ({
+    FS: {},
+    ccall(name, _returnType, _types, args) {
+      if (name === 'qvac_web_create') return 1
+      if (name === 'qvac_web_validate') {
+        const [{ type, generationParams }] = JSON.parse(args[1])
+        if (type !== 'text') {
+          result = JSON.stringify({
+            error: `Unknown input type: ${type}`,
+            code: 'INVALID_ARGUMENT'
+          })
+          return -1
+        }
+        if (generationParams?.temp === 'invalid') {
+          result = JSON.stringify({
+            error: 'Expected property temp to be of type number',
+            code: 'INVALID_ARGUMENT'
+          })
+          return -1
+        }
+      }
+      if (name === 'qvac_web_run') runs++
+      if (name === 'qvac_web_result') return result
+      return 0
+    }
+  }))
+  const events = []
+  const handle = isolated.createInstance({}, {}, (...event) => events.push(event))
+  await isolated.activate(handle)
+
+  for (let iteration = 0; iteration < 20; iteration++) {
+    await t.exception.all(
+      () => isolated.runJob(handle, [{ type: 'unknown' }]),
+      /Unknown input type: unknown/
+    )
+    await t.exception.all(
+      () =>
+        isolated.runJob(handle, [
+          { type: 'text', input: '[]', generationParams: { temp: 'invalid' } }
+        ]),
+      /Expected property temp to be of type number/
+    )
+    t.is(isolated.activeJobs(handle), 0, `active jobs, iteration ${iteration + 1}`)
+    t.is(events.length, 0, `no events, iteration ${iteration + 1}`)
+  }
+  t.is(runs, 0)
+  await isolated.destroyInstance(handle)
+})
+
+test('browser admission reserves worker capacity before validation', async (t) => {
+  let runs = 0
+  const isolated = isolatedBinding((options) => ({
+    FS: {},
+    async ccall(name, _returnType, _types, args) {
+      if (name === 'qvac_web_create') return 1
+      if (name === 'qvac_web_run') {
+        runs++
+        await delay()
+        options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+      }
+      if (name === 'qvac_web_result') return '{}'
+      return 0
+    }
+  }))
+
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const first = await publicModel(isolated)
+    const second = await publicModel(isolated)
+    const running = first.run([{ role: 'user', content: 'first' }])
+    const rejected = second.run([{ role: 'user', content: 'second' }])
+    const response = await running
+    await t.exception(rejected, /already set or being processed/, `iteration ${iteration + 1}`)
+    await response.await()
+    t.is(runs, iteration + 1, `only the admitted request ran, iteration ${iteration + 1}`)
+    await first.unload()
+    await second.unload()
+  }
+})
+
+test('failed browser validation releases its admission reservation', async (t) => {
+  let result = '{}'
+  const isolated = isolatedBinding((options) => ({
+    FS: {},
+    ccall(name, _returnType, _types, args) {
+      if (name === 'qvac_web_create') return 1
+      if (name === 'qvac_web_validate' && JSON.parse(args[1])[0].type !== 'text') {
+        result = JSON.stringify({ error: 'invalid input', code: 'INVALID_ARGUMENT' })
+        return -1
+      }
+      if (name === 'qvac_web_run') options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+      if (name === 'qvac_web_result') return result
+      return 0
+    }
+  }))
+
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const handle = isolated.createInstance({}, {}, () => {})
+    await isolated.activate(handle)
+    await t.exception.all(
+      () => isolated.runJob(handle, [{ type: 'invalid' }]),
+      /invalid input/,
+      `iteration ${iteration + 1}`
+    )
+    t.is(isolated.activeJobs(handle), 0, `reservation released, iteration ${iteration + 1}`)
+    await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
+    await delay()
+    t.is(isolated.activeJobs(handle), 0, `valid follow-up settled, iteration ${iteration + 1}`)
+    await isolated.destroyInstance(handle)
+  }
+})
+
+test('browser binding rejects an unactivated handle before admission', async (t) => {
+  const isolated = isolatedBinding(
+    fakeEngine((emit, [native, id]) => {
+      emit(native, id, 'JobEnded', '{}')
+      return 0
+    })
+  )
+
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const handle = isolated.createInstance({}, {}, () => {})
+    await t.exception.all(
+      () => isolated.runJob(handle, [{ type: 'text', input: '[]' }]),
+      /Model is not loaded/
+    )
+    t.is(isolated.activeJobs(handle), 0, `active jobs, iteration ${iteration + 1}`)
+    await isolated.activate(handle)
+    const admission = await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
+    t.is(admission.id, 1, `first id, iteration ${iteration + 1}`)
+    await delay()
+    await isolated.destroyInstance(handle)
   }
 })
 
@@ -160,6 +314,71 @@ test('browser binding publishes job completion after releasing the engine queue'
     await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
     await delay()
     t.is(await tokenCounts[iteration], 3, `iteration ${iteration + 1}`)
+  }
+})
+
+test('browser binding preserves invocation order after job admission', async (t) => {
+  const calls = []
+  const isolated = isolatedBinding((options) => ({
+    FS: { mkdirTree() {} },
+    async ccall(name, _returnType, _types, args) {
+      if (name === 'qvac_web_create') return 1
+      if (name === 'qvac_web_run') {
+        calls.push(JSON.parse(args[2])[0].input)
+        await delay()
+        options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+      }
+      if (name === 'qvac_web_save_cache') calls.push('save')
+      if (name === 'qvac_web_result') return '{}'
+      return 0
+    }
+  }))
+  const handle = isolated.createInstance({}, {}, () => {})
+  await isolated.activate(handle)
+
+  for (let iteration = 0; iteration < 20; iteration++) {
+    await isolated.runJob(handle, [{ type: 'text', input: 'run1' }])
+    const second = isolated.runJob(handle, [{ type: 'text', input: 'run2' }])
+    const saved = isolated.saveCache(handle, '/cache/state.bin')
+    await second
+    await saved
+    t.alike(
+      calls.slice(iteration * 3, iteration * 3 + 3),
+      ['run1', 'run2', 'save'],
+      `iteration ${iteration + 1}`
+    )
+  }
+  await isolated.destroyInstance(handle)
+})
+
+test('browser unload cancels a job waiting for admission', async (t) => {
+  const runs = []
+  const isolated = isolatedBinding((options) => ({
+    FS: {},
+    async ccall(name, _returnType, _types, args) {
+      if (name === 'qvac_web_create') return 1
+      if (name === 'qvac_web_run') {
+        const input = JSON.parse(args[2])[0].input
+        runs.push(input)
+        while (!options.qvacCancelled(args[0], args[1])) await delay()
+        options.qvacEmit(args[0], args[1], 'JobEnded', '{}')
+      }
+      if (name === 'qvac_web_result') return '{}'
+      return 0
+    }
+  }))
+
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const handle = isolated.createInstance({}, {}, () => {})
+    await isolated.activate(handle)
+    await isolated.runJob(handle, [{ type: 'text', input: 'run1' }])
+    await delay()
+    const second = isolated.runJob(handle, [{ type: 'text', input: 'run2' }])
+    const destroyed = isolated.destroyInstance(handle)
+    await t.exception.all(() => second, /Job cancelled/)
+    await destroyed
+    t.alike(runs.slice(iteration, iteration + 1), ['run1'], `iteration ${iteration + 1}`)
+    t.is(isolated.activeJobs(handle), 0, `active jobs, iteration ${iteration + 1}`)
   }
 })
 
@@ -360,6 +579,12 @@ test('fatal WebAssembly errors invalidate their engine generation', async (t) =>
 
     t.is(terminal[0].event, 'Error', `fatal terminal, iteration ${iteration + 1}`)
     t.is(terminal[0].error.message, 'aborted')
+    await t.exception.all(
+      () => isolated.runJob(failed, [{ type: 'text', input: '[]' }]),
+      /engine terminated/
+    )
+    t.is(terminal.length, 1, `no rejected-job event, iteration ${iteration + 1}`)
+    t.is(isolated.activeJobs(failed), 0, `no rejected active job, iteration ${iteration + 1}`)
     await t.exception.all(() => isolated.calcTokens(failed, { text: 'hello' }), /engine terminated/)
     await isolated.destroyInstance(failed)
 
@@ -374,16 +599,26 @@ test('fatal WebAssembly errors invalidate their engine generation', async (t) =>
 })
 
 test('browser binding reports worker-wide jobs to every model', async (t) => {
-  const first = instance()
-  const second = instance()
+  const isolated = isolatedBinding(
+    fakeEngine((emit, [native, id]) => {
+      emit(native, id, 'JobEnded', '{}')
+      return 0
+    })
+  )
+  const first = isolated.createInstance({}, {}, () => {})
+  const second = isolated.createInstance({}, {}, () => {})
+  await isolated.activate(first)
+  await isolated.activate(second)
 
   for (let iteration = 0; iteration < 20; iteration++) {
-    const admission = await binding.runJob(first, [{ type: 'text', input: '[]' }])
-    t.is(binding.activeJobs(second), 1, `iteration ${iteration + 1}`)
-    await binding.cancelJob(first, admission.id)
+    const admission = await isolated.runJob(first, [{ type: 'text', input: '[]' }])
+    t.is(isolated.activeJobs(second), 1, `iteration ${iteration + 1}`)
+    await isolated.cancelJob(first, admission.id)
     await delay()
-    t.is(binding.activeJobs(second), 0, `settled iteration ${iteration + 1}`)
+    t.is(isolated.activeJobs(second), 0, `settled iteration ${iteration + 1}`)
   }
+  await isolated.destroyInstance(first)
+  await isolated.destroyInstance(second)
 })
 
 test('browser binding rejects path and ordered-part media before admission', async (t) => {
@@ -424,19 +659,28 @@ test('browser binding rejects projection models before loading the engine', asyn
 })
 
 test('browser calcTokens fails fast while the engine queue is busy', async (t) => {
-  const handle = instance()
-  const admission = await binding.runJob(handle, [{ type: 'text', input: '[]' }])
+  const isolated = isolatedBinding(
+    fakeEngine(async (emit, [native, id]) => {
+      await delay()
+      emit(native, id, 'JobEnded', '{}')
+      return 0
+    })
+  )
+  const handle = isolated.createInstance({}, {}, () => {})
+  await isolated.activate(handle)
+  const admission = await isolated.runJob(handle, [{ type: 'text', input: '[]' }])
 
   for (let iteration = 0; iteration < 20; iteration++) {
     let error = null
     try {
-      await binding.calcTokens(handle, { text: 'hello' })
+      await isolated.calcTokens(handle, { text: 'hello' })
     } catch (cause) {
       error = cause
     }
     t.is(error?.code, 'RUN_BUSY', `iteration ${iteration + 1}`)
   }
-  await binding.cancelJob(handle, admission.id)
+  await isolated.cancelJob(handle, admission.id)
   await delay()
-  t.is(binding.activeJobs(handle), 0)
+  t.is(isolated.activeJobs(handle), 0)
+  await isolated.destroyInstance(handle)
 })

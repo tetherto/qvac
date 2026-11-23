@@ -28,26 +28,29 @@ using qvac_lib_inference_addon_llama::GenerationParamSource;
 // The ggml backends are linked statically and register themselves, so there
 // is no backends directory to load from. Bare gets these from @qvac/fabric.
 extern "C" size_t qvac_fabric_load_backends(void) { return 0; }
-extern "C" const char *qvac_fabric_backends_dir(void) { return ""; }
+extern "C" const char* qvac_fabric_backends_dir(void) { return ""; }
 
 // Delivers one event to binding.browser.js. A nonzero return asks the running
 // job to stop. Pointers arrive as BigInt in the Memory64 build, hence Number().
-EM_JS(int, qvac_web_emit,
-      (int handle, int jobId, const char *event, int eventSize,
-       const char *payload, int payloadSize),
-      {
-        return Module.qvacEmit(
-                   handle, jobId,
-                   UTF8ToString(Number(event), Number(eventSize), true),
-                   UTF8ToString(Number(payload), Number(payloadSize), true))
-                   ? 1
-                   : 0;
-      });
+EM_JS(
+    int, qvac_web_emit,
+    (int handle, int jobId, const char* event, int eventSize,
+     const char* payload, int payloadSize),
+    {
+      return Module.qvacEmit(
+                 handle,
+                 jobId,
+                 UTF8ToString(Number(event), Number(eventSize), true),
+                 UTF8ToString(Number(payload), Number(payloadSize), true))
+                 ? 1
+                 : 0;
+    });
 
 // Reads cancellation state owned by binding.browser.js without entering
 // WebAssembly again while qvac_web_run is suspended.
-EM_JS(int, qvac_web_cancelled, (int handle, int jobId),
-      { return Module.qvacCancelled(handle, jobId) ? 1 : 0; });
+EM_JS(int, qvac_web_cancelled, (int handle, int jobId), {
+  return Module.qvacCancelled(handle, jobId) ? 1 : 0;
+});
 
 namespace {
 
@@ -61,10 +64,10 @@ std::unordered_map<int, std::unique_ptr<LlamaModel>> instances;
 int nextHandle = 1;
 std::string lastResult = "{}";
 
-json errorJson(const std::exception &error) {
+json errorJson(const std::exception& error) {
   json result{{"error", error.what()}};
-  if (const auto *status =
-          dynamic_cast<const qvac_errors::StatusError *>(&error)) {
+  if (const auto* status =
+          dynamic_cast<const qvac_errors::StatusError*>(&error)) {
     result["code"] = status->codeString();
   } else {
     result["code"] = "INTERNAL_ERROR";
@@ -72,52 +75,52 @@ json errorJson(const std::exception &error) {
   return result;
 }
 
-int fail(const std::exception &error) {
+int fail(const std::exception& error) {
   lastResult = errorJson(error).dump();
   return -1;
 }
 
-LlamaModel &instance(int handle) {
+LlamaModel& instance(int handle) {
   auto it = instances.find(handle);
   if (it == instances.end() || it->second == nullptr) {
-    throw qvac_errors::StatusError(qvac_errors::general_error::InvalidArgument,
-                                   "Model is not loaded");
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument, "Model is not loaded");
   }
   return *it->second;
 }
 
-[[noreturn]] void wrongType(const char *key, const char *expected) {
-  throw qvac_errors::StatusError(qvac_errors::general_error::InvalidArgument,
-                                 std::string("Expected property ") + key +
-                                     " to be of type " + expected);
+[[noreturn]] void wrongType(const char* key, const char* expected) {
+  throw qvac_errors::StatusError(
+      qvac_errors::general_error::InvalidArgument,
+      std::string("Expected property ") + key + " to be of type " + expected);
 }
 
 // Mirrors JsArgsParser::getOptionalProperty: null and absent read as unset,
 // any other type mismatch is an InvalidArgument.
-GenerationParamSource jsonSource(const json &obj) {
-  auto lookup = [&obj](const char *key) -> const json * {
+GenerationParamSource jsonSource(const json& obj) {
+  auto lookup = [&obj](const char* key) -> const json* {
     auto it = obj.find(key);
     return it == obj.end() || it->is_null() ? nullptr : &*it;
   };
   return GenerationParamSource{
-      .number = [lookup](const char *key) -> std::optional<double> {
-        const json *value = lookup(key);
+      .number = [lookup](const char* key) -> std::optional<double> {
+        const json* value = lookup(key);
         if (value == nullptr)
           return std::nullopt;
         if (!value->is_number())
           wrongType(key, "number");
         return value->get<double>();
       },
-      .string = [lookup](const char *key) -> std::optional<std::string> {
-        const json *value = lookup(key);
+      .string = [lookup](const char* key) -> std::optional<std::string> {
+        const json* value = lookup(key);
         if (value == nullptr)
           return std::nullopt;
         if (!value->is_string())
           wrongType(key, "string");
         return value->get<std::string>();
       },
-      .boolean = [lookup](const char *key) -> std::optional<bool> {
-        const json *value = lookup(key);
+      .boolean = [lookup](const char* key) -> std::optional<bool> {
+        const json* value = lookup(key);
         if (value == nullptr)
           return std::nullopt;
         if (!value->is_boolean())
@@ -128,20 +131,20 @@ GenerationParamSource jsonSource(const json &obj) {
 
 // Same rules as parsePromptInputs in AddonJs.hpp; media arrives as a byte
 // array because JSON has no binary type.
-LlamaModel::Prompt parsePrompt(const json &messages) {
+LlamaModel::Prompt parsePrompt(const json& messages) {
   using qvac_errors::StatusError;
   namespace general_error = qvac_errors::general_error;
   if (!messages.is_array()) {
-    throw StatusError(general_error::InvalidArgument,
-                      "Expected an array of messages");
+    throw StatusError(
+        general_error::InvalidArgument, "Expected an array of messages");
   }
   LlamaModel::Prompt prompt;
-  for (const auto &message : messages) {
+  for (const auto& message : messages) {
     const std::string type = message.value("type", "");
     if (type == "text") {
       if (!prompt.input.empty()) {
-        throw StatusError(general_error::InvalidArgument,
-                          "Only one text input is allowed");
+        throw StatusError(
+            general_error::InvalidArgument, "Only one text input is allowed");
       }
       prompt.input = message.at("input").get<std::string>();
       prompt.prefill = message.value("prefill", false);
@@ -157,20 +160,21 @@ LlamaModel::Prompt parsePrompt(const json &messages) {
     } else if (type == "media") {
       prompt.media.push_back(message.at("content").get<std::vector<uint8_t>>());
     } else {
-      throw StatusError(general_error::InvalidArgument,
-                        "Unknown input type: " + type);
+      throw StatusError(
+          general_error::InvalidArgument, "Unknown input type: " + type);
     }
   }
   if (prompt.input.empty() && prompt.media.empty()) {
-    throw StatusError(general_error::InvalidArgument,
-                      "At least one of text or media input is required");
+    throw StatusError(
+        general_error::InvalidArgument,
+        "At least one of text or media input is required");
   }
   return prompt;
 }
 
-json statsJson(const qvac_lib_inference_addon_cpp::RuntimeStats &stats) {
+json statsJson(const qvac_lib_inference_addon_cpp::RuntimeStats& stats) {
   json out = json::object();
-  for (const auto &[key, value] : stats) {
+  for (const auto& [key, value] : stats) {
     std::visit([&out, &key](auto number) { out[key] = number; }, value);
   }
   return out;
@@ -180,18 +184,17 @@ json statsJson(const qvac_lib_inference_addon_cpp::RuntimeStats &stats) {
 
 extern "C" {
 
-EMSCRIPTEN_KEEPALIVE const char *qvac_web_result() {
+EMSCRIPTEN_KEEPALIVE const char* qvac_web_result() {
   return lastResult.c_str();
 }
 
 // Returns a handle (> 0) or -1 with the error in qvac_web_result().
-EMSCRIPTEN_KEEPALIVE int qvac_web_create(const char *path,
-                                         const char *projectionPath,
-                                         const char *config) {
+EMSCRIPTEN_KEEPALIVE int qvac_web_create(
+    const char* path, const char* projectionPath, const char* config) {
   try {
     std::unordered_map<std::string, std::string> map;
     const json parsed = json::parse(config);
-    for (const auto &[key, value] : parsed.items()) {
+    for (const auto& [key, value] : parsed.items()) {
       // Same contract as the Bare binding's config submap.
       if (!value.is_string())
         wrongType(key.c_str(), "string");
@@ -202,7 +205,7 @@ EMSCRIPTEN_KEEPALIVE int qvac_web_create(const char *path,
     const int handle = nextHandle++;
     instances.emplace(handle, std::move(model));
     return handle;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     return fail(error);
   }
 }
@@ -211,17 +214,27 @@ EMSCRIPTEN_KEEPALIVE int qvac_web_activate(int handle) {
   try {
     instance(handle).waitForLoadInitialization();
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
+    return fail(error);
+  }
+}
+
+EMSCRIPTEN_KEEPALIVE int qvac_web_validate(int handle, const char* messages) {
+  try {
+    instance(handle);
+    parsePrompt(json::parse(messages));
+    return 0;
+  } catch (const std::exception& error) {
     return fail(error);
   }
 }
 
 // Runs one job to completion, streaming `Output` events and ending with a
 // `JobEnded` (runtime stats) or `Error` event, all tagged with @p jobId.
-EMSCRIPTEN_KEEPALIVE int qvac_web_run(int handle, int jobId,
-                                      const char *messages) {
+EMSCRIPTEN_KEEPALIVE int
+qvac_web_run(int handle, int jobId, const char* messages) {
   try {
-    LlamaModel &model = instance(handle);
+    LlamaModel& model = instance(handle);
     LlamaModel::Prompt prompt = parsePrompt(json::parse(messages));
     auto lastYield = Clock::now();
     auto cancelRequested = [handle, jobId, &lastYield] {
@@ -232,55 +245,69 @@ EMSCRIPTEN_KEEPALIVE int qvac_web_run(int handle, int jobId,
       return qvac_web_cancelled(handle, jobId) != 0;
     };
     prompt.cancelRequested = cancelRequested;
-    prompt.outputCallback = [&model, handle, jobId,
-                             cancelRequested](const std::string &text) {
-      bool stop =
-          qvac_web_emit(handle, jobId, "Output", sizeof("Output") - 1,
-                        text.data(), static_cast<int>(text.size())) != 0;
-      if (!stop)
-        stop = cancelRequested();
-      if (stop)
-        model.cancel();
-    };
+    prompt.outputCallback =
+        [&model, handle, jobId, cancelRequested](const std::string& text) {
+          bool stop = qvac_web_emit(
+                          handle,
+                          jobId,
+                          "Output",
+                          sizeof("Output") - 1,
+                          text.data(),
+                          static_cast<int>(text.size())) != 0;
+          if (!stop)
+            stop = cancelRequested();
+          if (stop)
+            model.cancel();
+        };
     model.process(std::any(std::move(prompt)));
     const std::string payload = statsJson(model.runtimeStats()).dump();
-    qvac_web_emit(handle, jobId, "JobEnded", sizeof("JobEnded") - 1,
-                  payload.data(), static_cast<int>(payload.size()));
+    qvac_web_emit(
+        handle,
+        jobId,
+        "JobEnded",
+        sizeof("JobEnded") - 1,
+        payload.data(),
+        static_cast<int>(payload.size()));
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     const std::string payload = errorJson(error).dump();
-    qvac_web_emit(handle, jobId, "Error", sizeof("Error") - 1, payload.data(),
-                  static_cast<int>(payload.size()));
+    qvac_web_emit(
+        handle,
+        jobId,
+        "Error",
+        sizeof("Error") - 1,
+        payload.data(),
+        static_cast<int>(payload.size()));
     return fail(error);
   }
 }
 
-EMSCRIPTEN_KEEPALIVE int qvac_web_save_cache(int handle, const char *cacheKey) {
+EMSCRIPTEN_KEEPALIVE int qvac_web_save_cache(int handle, const char* cacheKey) {
   try {
     instance(handle).saveCache(cacheKey);
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     return fail(error);
   }
 }
 
-EMSCRIPTEN_KEEPALIVE int qvac_web_discard_cache(int handle,
-                                                const char *cacheKey) {
+EMSCRIPTEN_KEEPALIVE int
+qvac_web_discard_cache(int handle, const char* cacheKey) {
   try {
     instance(handle).discardCache(cacheKey);
     return 0;
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     return fail(error);
   }
 }
 
-EMSCRIPTEN_KEEPALIVE double qvac_web_calc_tokens(int handle,
-                                                 const char *params) {
+EMSCRIPTEN_KEEPALIVE double
+qvac_web_calc_tokens(int handle, const char* params) {
   try {
     const json parsed = json::parse(params);
     if (!parsed.is_object())
       wrongType("params", "object");
-    const auto optionalString = [&parsed](const char *key) {
+    const auto optionalString = [&parsed](const char* key) {
       const auto it = parsed.find(key);
       if (it == parsed.end() || it->is_null())
         return std::optional<std::string>{};
@@ -293,7 +320,7 @@ EMSCRIPTEN_KEEPALIVE double qvac_web_calc_tokens(int handle,
         .history = optionalString("history"),
         .tools = optionalString("tools")};
     return static_cast<double>(instance(handle).calcTokens(request));
-  } catch (const std::exception &error) {
+  } catch (const std::exception& error) {
     return fail(error);
   }
 }

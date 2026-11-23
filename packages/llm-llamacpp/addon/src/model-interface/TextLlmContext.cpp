@@ -521,18 +521,17 @@ size_t TextLlmContext::countChatTokens(
       });
 }
 
-LlmContext::EvalMessageResult
-TextLlmContext::evalMessage(const std::vector<common_chat_msg> &chatMsgs,
-                            bool isCacheLoaded, bool prefill,
-                            const CancelRequested &cancelRequested) {
-  return evalMessageWithTools(chatMsgs, {}, isCacheLoaded, prefill,
-                              cancelRequested);
+LlmContext::EvalMessageResult TextLlmContext::evalMessage(
+    const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded,
+    bool prefill, const CancelRequested& cancelRequested) {
+  return evalMessageWithTools(
+      chatMsgs, {}, isCacheLoaded, prefill, cancelRequested);
 }
 
 LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
-    const std::vector<common_chat_msg> &chatMsgs,
-    const std::vector<common_chat_tool> &tools, bool isCacheLoaded,
-    bool prefill, const CancelRequested &cancelRequested) {
+    const std::vector<common_chat_msg>& chatMsgs,
+    const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
+    bool prefill, const CancelRequested& cancelRequested) {
   // Clear per-inference rollback state before capturing this request's generic
   // prefill-entry checkpoint.
   requestRollback_.clear();

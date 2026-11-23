@@ -186,9 +186,9 @@ public:
    * cancellation could not restore the pre-request recurrent state and callers
    * must reset live state and invalidate cache persistence for this request.
    */
-  virtual EvalMessageResult
-  evalMessage(const std::vector<common_chat_msg> &chatMsgs, bool isCacheLoaded,
-              bool prefill, const CancelRequested &cancelRequested = {}) = 0;
+  virtual EvalMessageResult evalMessage(
+      const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded,
+      bool prefill, const CancelRequested& cancelRequested = {}) = 0;
 
   /**
    * The eval message with tools method. It evaluates the message with tools and
@@ -200,11 +200,10 @@ public:
    * @param prefill - whether to only prefill context without generation setup.
    * @return - eval result (success / cancellation / rollback status).
    */
-  virtual EvalMessageResult
-  evalMessageWithTools(const std::vector<common_chat_msg> &chatMsgs,
-                       const std::vector<common_chat_tool> &tools,
-                       bool isCacheLoaded, bool prefill,
-                       const CancelRequested &cancelRequested = {}) = 0;
+  virtual EvalMessageResult evalMessageWithTools(
+      const std::vector<common_chat_msg>& chatMsgs,
+      const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
+      bool prefill, const CancelRequested& cancelRequested = {}) = 0;
 
   struct GenerateResponseResult {
     bool ok = true;

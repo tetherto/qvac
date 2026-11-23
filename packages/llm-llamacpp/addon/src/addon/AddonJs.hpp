@@ -265,18 +265,18 @@ inline void parseGenerationParams(
   if (!configObj.has_value()) {
     return;
   }
-  js::Object &obj = *configObj;
+  js::Object& obj = *configObj;
   const GenerationParamSource source{
       .number =
-          [env, &obj](const char *key) {
+          [env, &obj](const char* key) {
             return obj.getOptionalPropertyAs<js::Number, double>(env, key);
           },
       .string =
-          [env, &obj](const char *key) {
+          [env, &obj](const char* key) {
             return obj.getOptionalPropertyAs<js::String, std::string>(env, key);
           },
       .boolean =
-          [env, &obj](const char *key) {
+          [env, &obj](const char* key) {
             return obj.getOptionalPropertyAs<js::Boolean, bool>(env, key);
           }};
   applyGenerationParamHandlers(source, prompt.generationParams);
