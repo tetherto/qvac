@@ -4,6 +4,7 @@
   "dependencies": [
     {
       "name": "opencv4",
+      "version>=": "4.12.0",
       "default-features": false,
       "features": [
         "jpeg",
