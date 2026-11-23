@@ -11,8 +11,24 @@
 namespace {
 
 using qvac_lib_inference_addon_llama::batching::generationBudgetExceeded;
+using qvac_lib_inference_addon_llama::batching::perSeqCeiling;
 
 } // namespace
+
+/// Without kv_unified_per_slot every slot gets an even share of the pool.
+TEST(PerSeqCeiling, EvenShareWithoutPerSlotCap) {
+  EXPECT_EQ(perSeqCeiling(4096, 4, 0), 1024U);
+}
+
+/// kv_unified_per_slot lowers the share, as llama-server's n_ctx_slot() does.
+TEST(PerSeqCeiling, PerSlotCapLowersTheShare) {
+  EXPECT_EQ(perSeqCeiling(4096, 4, 512), 512U);
+}
+
+/// A cap above the share never raises it: slots stay within the pool.
+TEST(PerSeqCeiling, PerSlotCapAboveTheShareHasNoEffect) {
+  EXPECT_EQ(perSeqCeiling(4096, 4, 2048), 1024U);
+}
 
 /// MTMD hole: a media-heavy prompt whose KV-cell span leaves no room for
 /// n_predict must be rejected, even though its position span does. With the

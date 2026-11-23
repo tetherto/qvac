@@ -1,5 +1,6 @@
 #include "CacheManager.hpp"
 
+#include <algorithm>
 #include <filesystem>
 #include <system_error>
 
@@ -10,6 +11,7 @@
 #include "model-interface/CacheDonors.hpp"
 #include "model-interface/CacheFileIndex.hpp"
 #include "model-interface/CacheLedger.hpp"
+#include "model-interface/ContinuousBatchScheduler.hpp"
 #include "model-interface/SequenceDriver.hpp"
 #include "model-interface/SlotStateCache.hpp"
 #include "utils/LoggingMacros.hpp"
@@ -297,14 +299,23 @@ bool CacheManager::acceptLoadedState(
             source.c_str(),
             ex.what()));
   }
-  if (llmContext_->getNPast() > llama_n_ctx(ctx)) {
+  // The same limit the context generates against, on positions and KV cells
+  // (they diverge for M-RoPE images).
+  const unsigned ceiling =
+      qvac_lib_inference_addon_llama::batching::perSeqCeiling(
+          llama_n_ctx(ctx),
+          llama_n_seq_max(ctx),
+          llmContext_->getParams().kv_unified_per_slot);
+  const llama_pos used =
+      std::max(llmContext_->getNPast(), llmContext_->getCacheTokens());
+  if (used > static_cast<llama_pos>(ceiling)) {
     std::string errorMsg = string_format(
-        "%s: cache file '%s' contains %zu tokens, which exceeds the current "
-        "context size of %d tokens\n",
+        "%s: cache file '%s' contains %zu tokens, which exceeds the context "
+        "limit of %u tokens\n",
         __func__,
         source.c_str(),
-        static_cast<size_t>(llmContext_->getNPast()),
-        llama_n_ctx(ctx));
+        static_cast<size_t>(used),
+        ceiling);
     throw qvac_errors::StatusError(
         ADDON_ID, toString(ContextLengthExeeded), errorMsg);
   }
