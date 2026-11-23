@@ -157,6 +157,10 @@
     "./ggml-image-embedding/plugin": {
       "types": "./dist/plugins/builtin/ggml-image-embedding/plugin.d.ts",
       "import": "./dist/plugins/builtin/ggml-image-embedding/plugin.js"
+    },
+    "./ggml-stereo-depth/plugin": {
+      "types": "./dist/plugins/builtin/ggml-stereo-depth/plugin.d.ts",
+      "import": "./dist/plugins/builtin/ggml-stereo-depth/plugin.js"
     }
   },
   "files": [

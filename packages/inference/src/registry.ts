@@ -83,6 +83,11 @@ export const registry: Record<string, HandlerEntry> = {
   embedBatch: { type: 'reply', pluginOp: true, handler: pluginReply('embedBatch') },
   decide: { type: 'reply', pluginOp: true, handler: pluginReply('decide') },
   rerank: { type: 'reply', pluginOp: true, handler: pluginReply('rerank') },
+  estimateDisparity: {
+    type: 'reply',
+    pluginOp: true,
+    handler: pluginReply('estimateDisparity')
+  },
   cancel: {
     type: 'reply',
     handler: cancelHandler

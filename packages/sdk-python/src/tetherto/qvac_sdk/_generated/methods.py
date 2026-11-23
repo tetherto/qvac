@@ -55,6 +55,8 @@ from . import (
     EmbedBatchResponse,
     EmbedRequest,
     EmbedResponse,
+    EstimateDisparityRequest,
+    EstimateDisparityResponse,
     FinetuneProgressResponse,
     FinetuneRequest,
     FinetuneResponse,
@@ -284,6 +286,13 @@ async def embed_batch(
 ) -> EmbedBatchResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     return EmbedBatchResponse.model_validate(await transport.call(payload))
+
+
+async def estimate_disparity(
+    transport: Transport, params: EstimateDisparityRequest
+) -> EstimateDisparityResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return EstimateDisparityResponse.model_validate(await transport.call(payload))
 
 
 async def finetune(transport: Transport, params: FinetuneRequest) -> FinetuneResponse:
@@ -583,6 +592,7 @@ __all__ = [
     "download_asset_with_progress",
     "embed",
     "embed_batch",
+    "estimate_disparity",
     "finetune",
     "finetune_with_progress",
     "get_loaded_model_info",
