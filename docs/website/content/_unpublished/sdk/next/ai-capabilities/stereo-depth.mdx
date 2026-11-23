@@ -44,7 +44,7 @@ BridgeDepth is not in the model registry yet, so there is no model constant. Con
 
 ## Cancellation
 
-Calls queue FIFO per model, with one active call and at most 64 waiting. The returned promise exposes `requestId` immediately. Use [`cancel({ requestId })`](/sdk/reference/api#cancel) to cancel that call, or `cancel({ modelId, kind: "stereoDepth" })` for all matching calls.
+Calls queue FIFO per model, with one active call and at most 8 waiting. A call beyond that rejects with `RequestRejectedByPolicyError`. The returned promise exposes `requestId` immediately. Use [`cancel({ requestId })`](/sdk/reference/api#cancel) to cancel that call, or `cancel({ modelId, kind: "stereoDepth" })` for all matching calls.
 
 Cancelling a queued call prevents native inference from starting. Cancelling an active call discards its result after native inference finishes and rejects with `InferenceCancelledError`. The next call waits until that work finishes.
 
