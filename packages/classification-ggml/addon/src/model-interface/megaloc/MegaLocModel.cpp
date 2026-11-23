@@ -470,7 +470,11 @@ std::unique_ptr<GgmlBackends> makeBackends(const Config& config) {
       config.threads > 0 && config.threads <= 1024,
       "threads must be between 1 and 1024");
   return std::make_unique<GgmlBackends>(
-      config.backend, config.backendsDir, config.threads, "MegaLoc");
+      config.backend,
+      config.backendsDir,
+      config.threads,
+      "MegaLoc",
+      GgmlBackends::OpenClPolicy::Disallow);
 }
 } // namespace
 

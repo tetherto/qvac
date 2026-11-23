@@ -11,8 +11,15 @@
 namespace {
 
 using qvac_lib_inference_addon_llama::batching::generationBudgetExceeded;
+using qvac_lib_inference_addon_llama::batching::perSeqCeiling;
 
 } // namespace
+
+/// Every slot gets an even share of the pool.
+TEST(PerSeqCeiling, EvenShareOfThePool) {
+  EXPECT_EQ(perSeqCeiling(4096, 4), 1024U);
+  EXPECT_EQ(perSeqCeiling(4096, 1), 4096U);
+}
 
 /// MTMD hole: a media-heavy prompt whose KV-cell span leaves no room for
 /// n_predict must be rejected, even though its position span does. With the
