@@ -127,6 +127,12 @@ dependencies. Hence each kind of declaration:
   manifest change. When one is missing, configure fails and names the package
   to add.
 
+A consumer that is itself split into platform packages keeps its `.bare` in
+those packages, not in the meta that carries the declarations above. The
+publish-time slicer repeats the matching one on each of the consumer's platform
+packages as an optional peer (`@qvac/fabric-ios` on `<consumer>-ios`), so
+bare-link finds it next to the binary it has to rewrite.
+
 After `npm install`, the headers and CMake config are under
 `node_modules/@qvac/fabric/prebuilds/`, and the host's prebuilt `.bare` and ggml
 backends are in its platform package (see

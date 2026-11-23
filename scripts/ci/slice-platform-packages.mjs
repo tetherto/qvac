@@ -122,7 +122,27 @@ export function buildSliceManifest (metaManifest, definition) {
   if (definition.os) manifest.os = definition.os
   if (definition.cpu) manifest.cpu = definition.cpu
   if (definition.libc) manifest.libc = definition.libc
-  return manifest
+  return { ...manifest, ...buildLinkedAddonPeers(metaManifest, definition) }
+}
+
+function mergeDeclaredDependencies (manifest) {
+  return { ...manifest.dependencies, ...manifest.optionalDependencies, ...manifest.peerDependencies }
+}
+
+// A slice's binary links the same-host slice of every split addon the meta
+// depends on (qvac__fabric-<suffix>@<major>.bare for a fabric consumer), and
+// bare-link rewrites that reference only when the package holding the binary
+// declares the addon it names. Each slice therefore repeats the meta's range
+// as an optional peer: the meta or the application still installs the runtime.
+export function buildLinkedAddonPeers (metaManifest, definition) {
+  const ownSlice = slicePackageName(metaManifest.name, definition)
+  const linked = Object.entries(mergeDeclaredDependencies(metaManifest))
+    .filter(([name]) => name !== ownSlice && name.endsWith('-' + definition.suffix))
+  if (linked.length === 0) return {}
+  return {
+    peerDependencies: Object.fromEntries(linked),
+    peerDependenciesMeta: Object.fromEntries(linked.map(([name]) => [name, { optional: true }]))
+  }
 }
 
 export function buildSliceReadme (metaManifest, definition) {

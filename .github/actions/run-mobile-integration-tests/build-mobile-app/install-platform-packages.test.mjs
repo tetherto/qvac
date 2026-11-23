@@ -11,12 +11,14 @@ import path from 'node:path';
 import {
   PLATFORM_INDEX_SOURCE as slicerIndexSource,
   SLICE_DEFINITIONS,
+  buildLinkedAddonPeers as slicerLinkedAddonPeers,
   mangledAddonName as slicerMangledAddonName,
 } from '../../../../scripts/ci/slice-platform-packages.mjs';
 
 import {
   PLATFORM_INDEX_SOURCE,
   TARGET_HOSTS,
+  buildLinkedAddonPeers,
   enableInstallLinks,
   findHostAddonPackages,
   installPlatformPackages,
@@ -60,9 +62,20 @@ function unslicedPrebuilds(module, hosts) {
   return files;
 }
 
-function writeSplit(root, name, version, files = {}) {
-  return writePackage(root, { name, version, imports: { '#host-addon': hostAddonMap(name) } }, files);
+function writeSplit(root, name, version, files = {}, dependencies = {}) {
+  const manifest = { name, version, imports: { '#host-addon': hostAddonMap(name) }, ...dependencies };
+  return writePackage(root, manifest, files);
 }
+
+const FABRIC_RANGE = '^0.31.0';
+
+// How a fabric consumer declares the runtime: desktop slices as optional
+// dependencies, the cross-built ones as peers.
+const FABRIC_CONSUMER_DEPENDENCIES = {
+  dependencies: { '@qvac/fabric': FABRIC_RANGE },
+  optionalDependencies: { '@qvac/fabric-linux-x64': FABRIC_RANGE },
+  peerDependencies: { '@qvac/fabric-android-arm64': FABRIC_RANGE, '@qvac/fabric-ios': FABRIC_RANGE },
+};
 
 function writeFabric(modules, version, files = {}) {
   return writeSplit(path.join(modules, '@qvac/fabric'), '@qvac/fabric', version, files);
@@ -195,6 +208,60 @@ test('installPlatformPackages assembles the addon under test from its own prebui
   assert.ok(fs.existsSync(path.join(slice, 'prebuilds/ios-arm64-simulator/qvac__tts-ggml-ios/libqvac-ggml-cpu.so')));
   assert.ok(!fs.existsSync(path.join(slice, 'prebuilds/ios-x64-simulator')));
   assert.equal(fs.readFileSync(path.join(appDir, '.npmrc'), 'utf8'), 'install-links=true\n');
+});
+
+test('an assembled fabric consumer declares the fabric runtime bare-link has to rewrite', (t) => {
+  const { appDir } = workspace(t);
+  const addonDir = writeSplit(
+    path.join(path.dirname(appDir), 'asr'),
+    '@qvac/asr-ggml',
+    '0.13.1',
+    {
+      ...unslicedPrebuilds('qvac__asr-ggml-android-arm64', TARGET_HOSTS.android),
+      ...unslicedPrebuilds('qvac__asr-ggml-ios', TARGET_HOSTS.ios),
+    },
+    FABRIC_CONSUMER_DEPENDENCIES,
+  );
+
+  installPlatformPackages({ appDir, addonDir, install: recordInstalls().install, log: () => {} });
+
+  for (const suffix of ['android-arm64', 'ios']) {
+    const slice = path.join(appDir, `.qvac-platform-packages/qvac__asr-ggml-${suffix}`);
+    const manifest = JSON.parse(fs.readFileSync(path.join(slice, 'package.json'), 'utf8'));
+    assert.deepEqual(manifest.peerDependencies, { [`@qvac/fabric-${suffix}`]: FABRIC_RANGE });
+    assert.deepEqual(manifest.peerDependenciesMeta, { [`@qvac/fabric-${suffix}`]: { optional: true } });
+  }
+});
+
+test('an assembled addon that links no split addon declares no peers', (t) => {
+  const { appDir } = workspace(t);
+  const addonDir = writeSplit(path.join(path.dirname(appDir), 'tts'), '@qvac/tts-ggml', '0.11.0', {
+    ...unslicedPrebuilds('qvac__tts-ggml-ios', TARGET_HOSTS.ios),
+  });
+
+  installPlatformPackages({ appDir, addonDir, install: recordInstalls().install, log: () => {} });
+
+  const slice = path.join(appDir, '.qvac-platform-packages/qvac__tts-ggml-ios');
+  const manifest = JSON.parse(fs.readFileSync(path.join(slice, 'package.json'), 'utf8'));
+  assert.equal(manifest.peerDependencies, undefined);
+  assert.equal(manifest.peerDependenciesMeta, undefined);
+});
+
+test('assembled peers match the publish-time slicer', () => {
+  const metaManifest = { name: '@qvac/asr-ggml', version: '0.13.1', ...FABRIC_CONSUMER_DEPENDENCIES };
+  const declaredDependencies = {
+    ...metaManifest.dependencies,
+    ...metaManifest.optionalDependencies,
+    ...metaManifest.peerDependencies,
+  };
+  for (const definition of SLICE_DEFINITIONS.filter((slice) => slice.crossBuilt)) {
+    const entry = {
+      name: metaManifest.name,
+      platformPackage: `${metaManifest.name}-${definition.suffix}`,
+      declaredDependencies,
+    };
+    assert.deepEqual(buildLinkedAddonPeers(entry), slicerLinkedAddonPeers(metaManifest, definition));
+  }
 });
 
 test('installPlatformPackages fetches what the prebuilds do not cover', (t) => {
