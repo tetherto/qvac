@@ -429,7 +429,7 @@ test('healthy unload retains failed filesystem cleanup for retry', async (t) => 
     t.ok(failed.engine, `engine retained iteration ${iteration + 1}`)
     t.alike(
       failed.mounts,
-      [`/qvac-files/${iteration}`],
+      [{ mountpoint: `/qvac-files/${iteration}`, mounted: true }],
       `mount retained iteration ${iteration + 1}`
     )
     await isolated.destroyInstance(failed)

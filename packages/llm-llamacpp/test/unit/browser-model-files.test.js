@@ -294,7 +294,7 @@ test('browser model unmount continues after an unmount failure and retains it fo
     t.alike(module.unmounted, ['/qvac-files/2', '/qvac-files/3', '/qvac-files/4'])
     t.alike(module.removed, ['/qvac-files/2', '/qvac-files/3', '/qvac-files/4'])
     t.alike([...module.active], ['/qvac-files/1'])
-    t.alike(mounts, ['/qvac-files/1'])
+    t.alike(mounts, [{ mountpoint: '/qvac-files/1', mounted: true }])
 
     module.allowCleanup()
     unmountModelFiles(module, mounts)
@@ -303,7 +303,7 @@ test('browser model unmount continues after an unmount failure and retains it fo
   }
 })
 
-test('browser model unmount continues after a directory removal failure', (t) => {
+test('browser model unmount retains a failed directory removal for retry', (t) => {
   for (let iteration = 0; iteration < 20; iteration++) {
     const module = mockModule({ failRmdirAt: 1 })
     const mounts = ['/qvac-files/1', '/qvac-files/2', '/qvac-files/3', '/qvac-files/4']
@@ -313,6 +313,33 @@ test('browser model unmount continues after a directory removal failure', (t) =>
     t.alike(module.unmounted, ['/qvac-files/1', '/qvac-files/2', '/qvac-files/3', '/qvac-files/4'])
     t.alike(module.removed, ['/qvac-files/2', '/qvac-files/3', '/qvac-files/4'])
     t.is(module.active.size, 0, `iteration ${iteration + 1}`)
+    t.alike(mounts, [{ mountpoint: '/qvac-files/1', mounted: false }])
+
+    module.allowCleanup()
+    unmountModelFiles(module, mounts)
+    t.alike(module.unmounted, ['/qvac-files/1', '/qvac-files/2', '/qvac-files/3', '/qvac-files/4'])
+    t.alike(mounts, [], `iteration ${iteration + 1}`)
+  }
+})
+
+test('browser model mount failure retains failed directory cleanup for retry', async (t) => {
+  t.teardown(() => delete globalThis[MOUNTED_FILES_KEY])
+  mount([['/models/main.gguf', file('main.gguf')]])
+
+  for (let iteration = 0; iteration < 20; iteration++) {
+    const module = mockModule({ failMountAt: 1, failRmdirAt: 1 })
+    const mounts = []
+
+    await t.exception.all(
+      () => mountModelFiles(module, mounts, '/qvac-files/1', '/models/main.gguf'),
+      /mount failed/
+    )
+    t.alike(mounts, [{ mountpoint: '/qvac-files/1', mounted: false }])
+
+    module.allowCleanup()
+    unmountModelFiles(module, mounts)
+    t.alike(module.unmounted, [], `never-mounted path is not unmounted, iteration ${iteration + 1}`)
+    t.alike(module.removed, ['/qvac-files/1'], `directory retried, iteration ${iteration + 1}`)
     t.alike(mounts, [], `iteration ${iteration + 1}`)
   }
 })
