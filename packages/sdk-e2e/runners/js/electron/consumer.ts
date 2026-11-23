@@ -46,6 +46,7 @@ import { ModelInfoExecutor } from '../shared/executors/model-info-executor.js'
 import { ModelFitExecutor } from '../shared/executors/model-fit-executor.js'
 import { WrongModelExecutor } from '../shared/executors/wrong-model-executor.js'
 import { ErrorExecutor } from '../shared/executors/error-executor.js'
+import { PathTraversalExecutor } from '../shared/executors/path-traversal-executor.js'
 import { TtsExecutor } from '../shared/executors/tts-executor.js'
 import { ParakeetStreamExecutor } from '../shared/executors/node/parakeet-stream-executor.js'
 import { ParakeetExecutor } from '../shared/executors/node/parakeet-executor.js'
@@ -181,6 +182,7 @@ export const executor = createExecutor({
     new ModelFitExecutor(resources),
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
+    new PathTraversalExecutor(),
     new ToolsExecutor(resources),
     new DeferredToolsExecutor(resources),
 
