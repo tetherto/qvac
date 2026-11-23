@@ -1,6 +1,6 @@
 import test from 'brittle'
 
-import { combineFits, HOST_POOL, type ModelAnswer } from '@/model-fit/sum'
+import { combineFits, HOST_POOL, sharedPoolOverflow, type ModelAnswer } from '@/model-fit/sum'
 import type { AddonFitDevice } from '@/model-fit/run/engine'
 
 const GIB = 1024 ** 3
@@ -29,7 +29,26 @@ function fits(...devices: AddonFitDevice[]): ModelAnswer {
   return { status: 'fits', devices }
 }
 
-test('a single model keeps its addon verdict, however close to free memory', (t) => {
+test('a model whose Metal and CPU rows each fit overflows the pool they share', (t) => {
+  const overflow = sharedPoolOverflow(fits(gpu('MTL0', 16.5, 17.7, true), host(2.7, 19)))
+  t.is(overflow?.id, HOST_POOL, '19.2 GiB is over 90% of 17.7')
+  t.is(overflow?.usedBytes, 19.2 * GIB)
+})
+
+test('a row alone in its pool overflows nothing, however close to free memory', (t) => {
+  t.is(
+    sharedPoolOverflow(fits(gpu('0000:01:00.0', 38, 41), host(1, 64))),
+    undefined,
+    'a discrete GPU at 93%'
+  )
+  t.is(
+    sharedPoolOverflow(fits(gpu('MTL0', 17, 17.7, true))),
+    undefined,
+    'a Metal GPU with no CPU row'
+  )
+})
+
+test("a single model's verdict is its status", (t) => {
   t.is(combineFits([fits(gpu('0000:01:00.0', 15, 16), host(1, 32))]).verdict, 'fits')
   t.is(combineFits([{ status: 'does-not-fit', devices: [host(1, 32)] }]).verdict, 'does-not-fit')
   t.is(combineFits([{ status: 'unknown', devices: [] }]).verdict, 'unknown')
@@ -45,7 +64,6 @@ test('a set that stays within 90% of every pool fits', (t) => {
 
 test('models on one device add up against its free memory', (t) => {
   const alone = fits(gpu('0000:01:00.0', 8, 16), host(1, 32))
-  t.is(combineFits([alone]).verdict, 'fits')
   t.is(combineFits([alone, alone]).verdict, 'does-not-fit', '16 GiB is over 90% of 16')
 })
 

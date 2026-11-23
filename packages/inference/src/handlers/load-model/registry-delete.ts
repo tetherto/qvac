@@ -22,6 +22,7 @@ import {
   waitForDownloadLocksHere
 } from '@/handlers/load-model/download-lock'
 import { getLegacyCompanionSetPaths } from '@/handlers/load-model/registry-companion-set'
+import { acceptsLegacyFlatCache } from '@/utils/cache/layout'
 import {
   findLocallyCachedCoremlCompanionSet,
   getCoremlSetKey,
@@ -157,7 +158,7 @@ async function planCatalogued(entry: RegistryItem): Promise<DeletePlan> {
     return {
       targets: [
         getCompanionSetCacheDir(entry.companionSet.setKey),
-        ...getLegacyCompanionSetPaths(entry.companionSet, entry.addon === 'nmt')
+        ...getLegacyCompanionSetPaths(entry.companionSet, acceptsLegacyFlatCache(entry.addon))
       ],
       bindings: entry.companionSet.files.map(buildBlobBinding),
       registryPaths: entry.companionSet.files.map((file) => file.registryPath)
