@@ -4,7 +4,11 @@ import { getRequestRegistry } from '@/runtime/request-context'
 import { estimateDisparity } from '@/plugins/builtin/ggml-stereo-depth/ops/estimate-disparity'
 import { stereoDepthPlugin } from '@/plugins/builtin/ggml-stereo-depth/plugin'
 import { ModelType, decodeFloat32Base64 } from '@/schemas/index'
-import { InferenceCancelledError, InvalidResponseError } from '@/errors/index'
+import {
+  InferenceCancelledError,
+  InvalidResponseError,
+  RequestRejectedByPolicyError
+} from '@/errors/index'
 import { buildOperationEvent } from '@/profiling'
 
 const stats = { total_time_ms: 40, backend_id: 1, cpu_fallback_nodes: 0, weight_bytes: 196 }
@@ -214,6 +218,31 @@ test('BridgeDepth queues per model, cancels queued work and drops active cancell
   t.is((await next).width, 1)
   t.absent(getRequestRegistry().get('stereo-active'))
   t.absent(getRequestRegistry().get('stereo-next'))
+})
+
+test('BridgeDepth rejects a request beyond 8 waiting per model', async (t) => {
+  let finish: (value: unknown) => void = () => {}
+  fixture(t, 'stereo-depth-cap', async () => {
+    return new Promise((resolve) => {
+      finish = resolve
+    })
+  })
+  const request = { type: 'estimateDisparity' as const, modelId: 'stereo-depth-cap', ...pair }
+  const active = estimateDisparity({ ...request, requestId: 'stereo-cap-active' })
+  await new Promise<void>((resolve) => setTimeout(() => resolve(), 5))
+  const waiting = Array.from({ length: 8 }, (_, i) =>
+    estimateDisparity({ ...request, requestId: `stereo-cap-${i}` })
+  )
+  await t.exception(
+    () => estimateDisparity({ ...request, requestId: 'stereo-cap-overflow' }),
+    RequestRejectedByPolicyError as unknown as new () => Error
+  )
+  for (let i = 0; i < waiting.length; i++) {
+    getRequestRegistry().cancel({ requestId: `stereo-cap-${i}` })
+  }
+  await Promise.allSettled(waiting)
+  finish(disparityMap(1, 1))
+  t.is((await active).width, 1)
 })
 
 test('BridgeDepth op releases the request when the addon throws', async (t) => {
